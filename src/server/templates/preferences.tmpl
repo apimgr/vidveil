@@ -1,0 +1,212 @@
+{{define "preferences"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    {{template "head" .}}
+</head>
+<body>
+    {{template "header" .}}
+    <main class="preferences">
+        <h1>Preferences</h1>
+        <form id="preferences-form">
+            <section>
+                <h2>Appearance</h2>
+                <label>
+                    Theme:
+                    <select id="theme" name="theme">
+                        <option value="dark">Dark (Dracula)</option>
+                        <option value="light">Light</option>
+                    </select>
+                </label>
+            </section>
+
+            <section>
+                <h2>Search Settings</h2>
+                <label>
+                    Results per page:
+                    <select id="results-per-page" name="resultsPerPage">
+                        <option value="20">20</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                </label>
+
+                <label>
+                    Minimum video duration:
+                    <select id="min-duration" name="minDuration">
+                        <option value="0">No minimum</option>
+                        <option value="60">1 minute</option>
+                        <option value="180">3 minutes</option>
+                        <option value="300">5 minutes</option>
+                        <option value="600">10 minutes</option>
+                        <option value="1200">20 minutes</option>
+                        <option value="1800">30 minutes</option>
+                    </select>
+                </label>
+
+                <label>
+                    <input type="checkbox" id="open-new-tab" name="openNewTab" checked>
+                    Open links in new tab
+                </label>
+            </section>
+
+            <section>
+                <h2>Privacy</h2>
+                <label>
+                    <input type="checkbox" id="use-tor" name="useTor">
+                    Use Tor for all searches (requires Tor running)
+                </label>
+                <label>
+                    <input type="checkbox" id="proxy-images" name="proxyImages">
+                    Proxy thumbnails through server
+                </label>
+            </section>
+
+            <section>
+                <h2>Search Engines</h2>
+                <p class="section-description">Select which engines to use for searches:</p>
+                <div class="engine-tiers">
+                    {{range .Engines}}
+                    <label class="engine-toggle">
+                        <input type="checkbox" name="engines" value="{{.Name}}" {{if .Enabled}}checked{{end}}>
+                        {{.DisplayName}}
+                    </label>
+                    {{end}}
+                </div>
+                <div class="engine-actions">
+                    <button type="button" onclick="selectAllEngines()">Select All</button>
+                    <button type="button" onclick="selectNoneEngines()">Select None</button>
+                </div>
+            </section>
+
+            <div class="form-actions">
+                <button type="submit" class="primary">Save Preferences</button>
+                <button type="button" onclick="resetPreferences()">Reset to Defaults</button>
+            </div>
+        </form>
+    </main>
+    {{template "footer" .}}
+    <div id="toast" class="toast"></div>
+    <script>
+    (function() {
+        const STORAGE_KEY = 'vidveil_prefs';
+        const form = document.getElementById('preferences-form');
+
+        // Default preferences
+        const defaults = {
+            theme: 'dark',
+            resultsPerPage: '50',
+            minDuration: '0',
+            openNewTab: true,
+            useTor: false,
+            proxyImages: false,
+            engines: []
+        };
+
+        // Load preferences from localStorage on page load
+        function loadPreferences() {
+            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            const prefs = { ...defaults, ...saved };
+
+            // Set theme
+            document.getElementById('theme').value = prefs.theme;
+            document.documentElement.setAttribute('data-theme', prefs.theme);
+
+            // Set results per page
+            document.getElementById('results-per-page').value = prefs.resultsPerPage;
+
+            // Set minimum duration
+            document.getElementById('min-duration').value = prefs.minDuration;
+
+            // Set checkboxes
+            document.getElementById('open-new-tab').checked = prefs.openNewTab;
+            document.getElementById('use-tor').checked = prefs.useTor;
+            document.getElementById('proxy-images').checked = prefs.proxyImages;
+
+            // Set engines if saved
+            if (prefs.engines && prefs.engines.length > 0) {
+                const engineCheckboxes = document.querySelectorAll('input[name="engines"]');
+                engineCheckboxes.forEach(cb => {
+                    cb.checked = prefs.engines.includes(cb.value);
+                });
+            }
+        }
+
+        // Save preferences to localStorage
+        function savePreferences(e) {
+            e.preventDefault();
+
+            const engines = [];
+            document.querySelectorAll('input[name="engines"]:checked').forEach(cb => {
+                engines.push(cb.value);
+            });
+
+            const prefs = {
+                theme: document.getElementById('theme').value,
+                resultsPerPage: document.getElementById('results-per-page').value,
+                minDuration: document.getElementById('min-duration').value,
+                openNewTab: document.getElementById('open-new-tab').checked,
+                useTor: document.getElementById('use-tor').checked,
+                proxyImages: document.getElementById('proxy-images').checked,
+                engines: engines
+            };
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+
+            // Apply theme immediately
+            document.documentElement.setAttribute('data-theme', prefs.theme);
+
+            showToast('Preferences saved!', 'success');
+
+            // Redirect to home after brief delay
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1500);
+        }
+
+        // Show toast notification
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => {
+                toast.className = 'toast';
+            }, 3000);
+        }
+
+        // Reset to defaults
+        window.resetPreferences = function() {
+            localStorage.removeItem(STORAGE_KEY);
+            loadPreferences();
+            showToast('Preferences reset to defaults', 'info');
+        };
+
+        // Select all engines
+        window.selectAllEngines = function() {
+            document.querySelectorAll('input[name="engines"]').forEach(cb => {
+                cb.checked = true;
+            });
+        };
+
+        // Select no engines
+        window.selectNoneEngines = function() {
+            document.querySelectorAll('input[name="engines"]').forEach(cb => {
+                cb.checked = false;
+            });
+        };
+
+        // Theme change preview
+        document.getElementById('theme').addEventListener('change', function() {
+            document.documentElement.setAttribute('data-theme', this.value);
+        });
+
+        // Form submit handler
+        form.addEventListener('submit', savePreferences);
+
+        // Load preferences on page load
+        loadPreferences();
+    })();
+    </script>
+</body>
+</html>
+{{end}}

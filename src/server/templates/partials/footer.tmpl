@@ -1,0 +1,24 @@
+{{define "footer"}}
+<footer class="site-footer">
+    <div class="app-footer">
+        <p><a href="/">Vidveil</a></p>
+        <p class="page-footer__links">
+            <a href="https://github.com/apimgr/vidveil" target="_blank">GitHub</a>
+            <span class="page-footer__divider">&#8226;</span>
+            <span>Made with <span class="text-red">&#10084;</span> by apimgr</span>
+            {{if .Version}}<span class="page-footer__divider">&#8226;</span>
+            <span>v{{.Version}}</span>{{end}}
+        </p>
+    </div>
+    <span class="footer-timestamp">Last update: {{.BuildDateTime}}</span>
+    <div class="footer-links">
+        <a href="/">Home</a>
+        <span class="page-footer__divider">&#8226;</span>
+        <a href="/about">About</a>
+        <span class="page-footer__divider">&#8226;</span>
+        <a href="/privacy">Privacy</a>
+        <span class="page-footer__divider">&#8226;</span>
+        <a href="/preferences">Preferences</a>
+    </div>
+</footer>
+{{end}}

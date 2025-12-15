@@ -1,0 +1,15 @@
+Subject: Verify Your Email - {app_name}
+---
+Hello,
+
+Please verify your email address by clicking the link below:
+
+{verification_link}
+
+This link expires in 24 hours.
+
+If you did not create an account, please ignore this email.
+
+--
+{app_name}
+{app_url}

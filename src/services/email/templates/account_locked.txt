@@ -1,0 +1,17 @@
+Subject: Account Locked - {app_name}
+---
+Hello,
+
+Your account has been temporarily locked due to multiple failed login attempts.
+
+Time: {timestamp}
+IP: {ip}
+
+To unlock your account, please use the password reset feature:
+{reset_link}
+
+If this was not you, please contact support.
+
+--
+{app_name}
+{app_url}

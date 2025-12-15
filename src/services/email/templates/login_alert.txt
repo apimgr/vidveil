@@ -1,0 +1,18 @@
+Subject: New Login Detected - {app_name}
+---
+Hello,
+
+A new login to your account was detected.
+
+Time: {timestamp}
+IP: {ip}
+Location: {location}
+Device: {user_agent}
+
+If this was you, no action is needed.
+
+If this was not you, please change your password immediately.
+
+--
+{app_name}
+{app_url}

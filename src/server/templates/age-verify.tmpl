@@ -1,0 +1,33 @@
+{{define "age-verify"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128269;</text></svg>">
+</head>
+<body>
+    <div class="age-gate">
+        <div class="age-gate-box">
+            <div class="warning-icon">&#9888;&#65039;</div>
+            <h1>Age Verification Required</h1>
+            <p>This website contains adult content and is intended for users who are <strong>18 years of age or older</strong>.</p>
+            <p>By clicking "I am 18+" you confirm that you are at least 18 years old and legally permitted to view adult content in your jurisdiction.</p>
+            <div class="age-buttons">
+                <form method="POST" action="/age-verify" class="d-inline">
+                    <input type="hidden" name="redirect" value="{{.Redirect}}">
+                    <button type="submit" class="btn-yes">I am 18+</button>
+                </form>
+                <button class="btn-no" onclick="window.location.href='https://www.google.com'">Exit</button>
+            </div>
+            <p class="legal">
+                By entering, you agree to our Terms of Service and confirm you are of legal age to view adult content in your country/region.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+binaries/
+releases/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation
+*.md
+!README.md
+
+# Tests
+tests/
+*_test.go
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+
+# Development
+.env
+*.local

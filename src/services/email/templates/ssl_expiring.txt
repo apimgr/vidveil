@@ -1,0 +1,14 @@
+Subject: SSL Certificate Expiring - {app_name}
+---
+Hello,
+
+Your SSL certificate for {domain} is expiring soon.
+
+Expiry Date: {expiry_date}
+Days Remaining: {days_remaining}
+
+Please renew your certificate to avoid service interruption.
+
+--
+{app_name}
+{app_url}

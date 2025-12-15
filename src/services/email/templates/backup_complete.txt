@@ -1,0 +1,16 @@
+Subject: Backup Complete - {app_name}
+---
+Hello,
+
+A backup has been completed successfully.
+
+Backup ID: {backup_id}
+Time: {timestamp}
+Size: {backup_size}
+Type: {backup_type}
+
+Your data is safe.
+
+--
+{app_name}
+{app_url}

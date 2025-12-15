@@ -1,0 +1,25 @@
+# Binaries
+binaries/
+releases/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.test
+*.out
+coverage.html
+vendor/
+go.work
+
+# Local config
+*.local
+.env

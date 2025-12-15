@@ -1,0 +1,15 @@
+Subject: Scheduled Maintenance - {app_name}
+---
+Hello,
+
+Scheduled maintenance is planned for {app_name}.
+
+Start Time: {start_time}
+Expected Duration: {duration}
+Reason: {reason}
+
+The service may be unavailable during this time.
+
+--
+{app_name}
+{app_url}

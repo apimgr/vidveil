@@ -1,0 +1,31 @@
+services:
+  vidveil:
+    image: ghcr.io/apimgr/vidveil:latest
+    container_name: vidveil
+    restart: unless-stopped
+    ports:
+      - "172.17.0.1:64888:80"
+    volumes:
+      - ./rootfs/config/vidveil:/config:ro
+      - ./rootfs/data/vidveil:/data
+    environment:
+      - CONFIG_DIR=/config
+      - DATA_DIR=/data
+      - MODE=production
+    networks:
+      - vidveil
+
+  # Optional: Tor proxy for private searches
+  tor:
+    image: dperson/torproxy:latest
+    container_name: vidveil-tor
+    restart: unless-stopped
+    networks:
+      - vidveil
+    profiles:
+      - tor
+
+networks:
+  vidveil:
+    name: vidveil
+    external: false

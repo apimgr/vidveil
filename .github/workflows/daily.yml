@@ -1,0 +1,132 @@
+name: Daily
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: ''
+          - goos: linux
+            goarch: arm64
+            suffix: ''
+          - goos: darwin
+            goarch: amd64
+            suffix: ''
+          - goos: darwin
+            goarch: arm64
+            suffix: ''
+          - goos: windows
+            goarch: amd64
+            suffix: '.exe'
+          - goos: windows
+            goarch: arm64
+            suffix: '.exe'
+          - goos: freebsd
+            goarch: amd64
+            suffix: ''
+          - goos: freebsd
+            goarch: arm64
+            suffix: ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(date -u '+%Y%m%d%H%M')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.version }}" \
+            -o vidveil-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} ./src
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vidveil-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: vidveil-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(date -u '+%Y%m%d%H%M')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            cp "$dir"* release/ 2>/dev/null || true
+          done
+          chmod +x release/vidveil-* 2>/dev/null || true
+
+      - name: Create checksums
+        run: |
+          cd release
+          sha256sum * > checksums.txt
+
+      - name: Create source archive
+        run: |
+          git archive --format=tar.gz --prefix=vidveil-${{ steps.version.outputs.version }}/ HEAD \
+            > release/vidveil-${{ steps.version.outputs.version }}-source.tar.gz
+
+      - name: Delete existing daily release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete ${{ steps.version.outputs.version }} --yes || true
+
+      - name: Create pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "Vidveil Daily ${{ steps.version.outputs.version }}" \
+            --prerelease \
+            --notes "Daily build from main branch" \
+            release/*
+
+      - name: Cleanup old daily releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Keep only the last 7 daily releases (exclude beta and tagged releases)
+          gh release list --limit 100 | grep -E '^[0-9]{12}[[:space:]]' | tail -n +8 | awk '{print $1}' | while read tag; do
+            gh release delete "$tag" --yes || true
+          done

@@ -1,0 +1,28 @@
+{{define "home"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    {{template "head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <main class="home" id="main-content" role="main">
+        <h1>Vidveil</h1>
+        <p>{{.Description}}</p>
+        <form action="/search" method="get" class="search-form" role="search" aria-label="Video search" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Searching...'">
+            <label for="search-input" class="visually-hidden">Search query</label>
+            <input type="text" id="search-input" name="q" placeholder="Search videos..." autofocus required aria-required="true" aria-label="Enter search terms">
+            <button type="submit" aria-label="Submit search">Search</button>
+        </form>
+        <div class="engine-stats" role="contentinfo" aria-label="Service statistics">
+            <span class="stat"><strong>{{.EngineCount}}</strong> engines</span>
+            <span class="divider" aria-hidden="true">|</span>
+            <span class="stat">No tracking</span>
+            <span class="divider" aria-hidden="true">|</span>
+            <span class="stat">Tor support</span>
+        </div>
+    </main>
+    {{template "footer" .}}
+</body>
+</html>
+{{end}}

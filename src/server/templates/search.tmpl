@@ -1,0 +1,363 @@
+{{define "search"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    {{template "head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    {{template "header" .}}
+    <main class="results" id="main-content" role="main" aria-label="Search results">
+        <div class="initial-loading" id="initial-loading" role="status" aria-live="polite">
+            <div class="spinner large" aria-hidden="true"></div>
+            <p>Searching {{len .EnginesUsed}} engines...</p>
+        </div>
+        <p class="meta hidden" id="search-meta" aria-live="polite"><span id="result-count">0</span> results in <span id="search-time">{{.SearchTime}}</span>ms</p>
+        <div class="filters hidden" id="filters" role="group" aria-label="Filter and sort options">
+            <label for="filter-duration" class="visually-hidden">Filter by duration</label>
+            <select id="filter-duration" onchange="filterByDuration(this.value)" aria-label="Filter by video duration">
+                <option value="">Duration: Any</option>
+                <option value="short">Under 10 min</option>
+                <option value="medium">10-30 min</option>
+                <option value="long">Over 30 min</option>
+            </select>
+            <label for="filter-source" class="visually-hidden">Filter by source</label>
+            <select id="filter-source" onchange="filterBySource(this.value)" aria-label="Filter by video source">
+                <option value="">Source: All</option>
+            </select>
+            <label for="sort-by" class="visually-hidden">Sort results</label>
+            <select id="sort-by" onchange="sortResults(this.value)" aria-label="Sort results by">
+                <option value="">Sort: Relevance</option>
+                <option value="duration-desc">Longest</option>
+                <option value="duration-asc">Shortest</option>
+                <option value="views">Most Viewed</option>
+            </select>
+        </div>
+        <div class="video-grid" id="video-grid" role="list" aria-label="Video results"></div>
+        <div class="loading" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>Loading more...</span></div>
+    </main>
+    {{template "footer" .}}
+    <div class="status-bar" id="status-bar">
+        <span id="status-text">Searching...</span>
+        <span id="engine-status"></span>
+    </div>
+    <script>
+    (function() {
+        const query = '{{.Query}}';
+        const RESULTS_PER_BATCH = 20;
+        let allResults = [];
+        let filteredResults = [];
+        let displayedCount = 0;
+        let isSearching = true;
+        const totalEngines = {{len .EnginesUsed}};
+        const sourcesSet = new Set();
+        let currentDurationFilter = '';
+        let currentSourceFilter = '';
+        let currentSort = '';
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+        // Load preferences from localStorage
+        const prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}');
+        const minDuration = parseInt(prefs.minDuration) || 0;
+
+        // Initial results from server
+        const initialResults = {{.ResultsJSON}};
+        if (initialResults && initialResults.length > 0) {
+            allResults = filterByMinDuration(sortByRelevance(initialResults, query));
+            isSearching = false;
+            showResults();
+        } else {
+            fetchResults();
+        }
+
+        function filterByMinDuration(results) {
+            if (minDuration <= 0) return results;
+            return results.filter(r => {
+                const dur = r.duration_seconds || 0;
+                return dur >= minDuration;
+            });
+        }
+
+        function showResults() {
+            document.getElementById('initial-loading').classList.add('hidden');
+            document.getElementById('search-meta').classList.remove('hidden');
+            document.getElementById('filters').classList.remove('hidden');
+            displayResults();
+            updateStatus();
+        }
+
+        function fetchResults() {
+            fetch('/api/v1/search?q=' + encodeURIComponent(query))
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.data.results) {
+                        allResults = filterByMinDuration(sortByRelevance(data.data.results, query));
+                    }
+                    isSearching = false;
+                    showResults();
+                })
+                .catch(err => {
+                    isSearching = false;
+                    document.getElementById('initial-loading').innerHTML = '<p>Search failed. Please try again.</p>';
+                });
+        }
+
+        function sortByRelevance(arr, searchQuery) {
+            const queryWords = searchQuery.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+            return [...arr].sort((a, b) => {
+                const aTitle = (a.title || '').toLowerCase();
+                const bTitle = (b.title || '').toLowerCase();
+                let aScore = 0, bScore = 0;
+                for (const word of queryWords) {
+                    if (aTitle.includes(word)) aScore++;
+                    if (bTitle.includes(word)) bScore++;
+                }
+                if (bScore !== aScore) return bScore - aScore;
+                return (b.views_count || 0) - (a.views_count || 0);
+            });
+        }
+
+        function displayResults() {
+            const grid = document.getElementById('video-grid');
+            const endIdx = Math.min(displayedCount + RESULTS_PER_BATCH, allResults.length);
+
+            for (let i = displayedCount; i < endIdx; i++) {
+                const r = allResults[i];
+                const card = document.createElement('div');
+                card.className = 'video-card';
+
+                let duration = r.duration || '';
+                if (duration && !duration.includes(':')) {
+                    const secs = parseInt(duration);
+                    if (!isNaN(secs)) {
+                        const mins = Math.floor(secs / 60);
+                        const s = secs % 60;
+                        duration = mins + ':' + (s < 10 ? '0' : '') + s;
+                    }
+                }
+
+                card.dataset.source = r.source || '';
+                card.dataset.duration = r.duration_seconds || 0;
+                card.dataset.views = r.views_count || 0;
+
+                const previewUrl = r.preview_url || '';
+                const hasPreview = previewUrl && previewUrl.length > 0;
+
+                let html = '<a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer nofollow" class="card-link">';
+                html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtml(previewUrl) + '"' : '') + '>';
+                html += '<img class="thumb-static" src="' + escapeHtml(r.thumbnail || '/static/img/placeholder.svg') + '" alt="' + escapeHtml(r.title) + '" loading="lazy" onerror="this.src=\'/static/img/placeholder.svg\'">';
+
+                if (hasPreview) {
+                    html += '<video class="thumb-preview" muted loop playsinline preload="none">';
+                    html += '<source src="' + escapeHtml(previewUrl) + '" type="video/mp4">';
+                    html += '</video>';
+                    if (isTouchDevice) {
+                        html += '<div class="swipe-hint">Swipe to preview</div>';
+                    }
+                }
+
+                if (duration) html += '<span class="duration">' + escapeHtml(duration) + '</span>';
+                if (r.quality) html += '<span class="quality-badge">' + escapeHtml(r.quality) + '</span>';
+                html += '</div></a>';
+                html += '<div class="info">';
+                html += '<h3><a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + escapeHtml(r.title || 'Untitled') + '</a></h3>';
+                html += '<div class="meta"><span class="source">' + escapeHtml(r.source_display || r.source || '') + '</span>';
+                if (r.views) html += '<span>' + escapeHtml(r.views) + '</span>';
+                html += '</div></div>';
+
+                card.innerHTML = html;
+                grid.appendChild(card);
+
+                // Setup video preview for this card
+                setupCardPreview(card);
+
+                const source = r.source || '';
+                if (source && !sourcesSet.has(source)) {
+                    sourcesSet.add(source);
+                    const opt = document.createElement('option');
+                    opt.value = source;
+                    opt.textContent = r.source_display || source;
+                    document.getElementById('filter-source').appendChild(opt);
+                }
+            }
+            displayedCount = endIdx;
+            document.getElementById('result-count').textContent = allResults.length;
+
+            if (displayedCount >= allResults.length && !isSearching) {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function setupCardPreview(card) {
+            const container = card.querySelector('.thumb-container[data-preview]');
+            if (!container) return;
+
+            const video = container.querySelector('.thumb-preview');
+            const staticImg = container.querySelector('.thumb-static');
+            const swipeHint = container.querySelector('.swipe-hint');
+            if (!video) return;
+
+            let isPlaying = false;
+            let hoverTimeout;
+            let touchStartX = 0;
+            let touchStartY = 0;
+
+            if (!isTouchDevice) {
+                // Desktop: hover behavior
+                container.addEventListener('mouseenter', () => {
+                    hoverTimeout = setTimeout(() => {
+                        video.classList.add('preview-active');
+                        staticImg.classList.add('preview-active');
+                        video.play().catch(() => {});
+                        isPlaying = true;
+                    }, 200);
+                });
+                container.addEventListener('mouseleave', () => {
+                    clearTimeout(hoverTimeout);
+                    video.classList.remove('preview-active');
+                    staticImg.classList.remove('preview-active');
+                    video.pause();
+                    video.currentTime = 0;
+                    isPlaying = false;
+                });
+            } else {
+                // Mobile: swipe right to preview
+                container.addEventListener('touchstart', (e) => {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                }, { passive: true });
+
+                container.addEventListener('touchend', (e) => {
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+                    const deltaX = touchEndX - touchStartX;
+                    const deltaY = Math.abs(touchEndY - touchStartY);
+
+                    // Swipe right detected (horizontal movement > 50px, not too vertical)
+                    if (deltaX > 50 && deltaY < 50) {
+                        e.preventDefault();
+                        if (!isPlaying) {
+                            video.classList.add('preview-active');
+                            staticImg.classList.add('preview-active');
+                            if (swipeHint) swipeHint.classList.add('hidden');
+                            video.play().catch(() => {});
+                            isPlaying = true;
+                            // Auto-stop after 8 seconds
+                            setTimeout(() => {
+                                if (isPlaying) {
+                                    video.classList.remove('preview-active');
+                                    staticImg.classList.remove('preview-active');
+                                    video.pause();
+                                    video.currentTime = 0;
+                                    isPlaying = false;
+                                }
+                            }, 8000);
+                        }
+                    }
+                    // Swipe left to stop preview
+                    else if (deltaX < -50 && deltaY < 50 && isPlaying) {
+                        e.preventDefault();
+                        video.classList.remove('preview-active');
+                        staticImg.classList.remove('preview-active');
+                        video.pause();
+                        video.currentTime = 0;
+                        isPlaying = false;
+                    }
+                }, { passive: false });
+            }
+        }
+
+        function updateStatus() {
+            const statusText = document.getElementById('status-text');
+            const engineStatus = document.getElementById('engine-status');
+            if (isSearching) {
+                statusText.textContent = 'Searching all engines...';
+            } else {
+                let msg = allResults.length + ' results found';
+                if (minDuration > 0) {
+                    msg += ' (min ' + Math.floor(minDuration / 60) + ' min)';
+                }
+                statusText.textContent = msg;
+            }
+            engineStatus.textContent = totalEngines + ' engines';
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        window.filterByDuration = function(value) {
+            currentDurationFilter = value;
+            applyFiltersAndSort();
+        };
+
+        window.filterBySource = function(value) {
+            currentSourceFilter = value;
+            applyFiltersAndSort();
+        };
+
+        window.sortResults = function(value) {
+            currentSort = value;
+            applyFiltersAndSort();
+        };
+
+        function applyFiltersAndSort() {
+            const cards = document.querySelectorAll('.video-card');
+            cards.forEach(card => {
+                const duration = parseInt(card.dataset.duration) || 0;
+                const source = card.dataset.source || '';
+                let show = true;
+
+                if (currentDurationFilter === 'short' && duration >= 600) show = false;
+                else if (currentDurationFilter === 'medium' && (duration < 600 || duration > 1800)) show = false;
+                else if (currentDurationFilter === 'long' && duration <= 1800) show = false;
+
+                if (currentSourceFilter && source !== currentSourceFilter) show = false;
+
+                if (show) {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            if (currentSort) {
+                const grid = document.getElementById('video-grid');
+                const cardArray = Array.from(grid.querySelectorAll('.video-card'));
+                cardArray.sort((a, b) => {
+                    const aDur = parseInt(a.dataset.duration) || 0;
+                    const bDur = parseInt(b.dataset.duration) || 0;
+                    const aViews = parseInt(a.dataset.views) || 0;
+                    const bViews = parseInt(b.dataset.views) || 0;
+                    if (currentSort === 'duration-desc') return bDur - aDur;
+                    if (currentSort === 'duration-asc') return aDur - bDur;
+                    if (currentSort === 'views') return bViews - aViews;
+                    return 0;
+                });
+                cardArray.forEach(card => grid.appendChild(card));
+            }
+        }
+
+        // Infinite scroll
+        let scrollTimeout;
+        window.addEventListener('scroll', function() {
+            if (scrollTimeout) return;
+            scrollTimeout = setTimeout(function() {
+                scrollTimeout = null;
+                const scrollY = window.scrollY + window.innerHeight;
+                const docHeight = document.documentElement.scrollHeight;
+                if (scrollY >= docHeight - 500 && displayedCount < allResults.length) {
+                    displayResults();
+                }
+            }, 100);
+        });
+
+        if (allResults.length === 0 && !isSearching) {
+            document.getElementById('loading').innerHTML = '<p>No results found.</p>';
+        }
+    })();
+    </script>
+</body>
+</html>
+{{end}}

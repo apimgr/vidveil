@@ -3,67 +3,95 @@ package engines
 
 import (
 	"context"
+	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/models"
-	"github.com/apimgr/vidveil/src/services/parsers"
+	"github.com/apimgr/vidveil/src/services/parser"
 	"github.com/apimgr/vidveil/src/services/tor"
 )
 
 // YouPornEngine searches YouPorn
-type YouPornEngine struct {
-	*BaseEngine
-	parser *parsers.YouPornParser
-}
+type YouPornEngine struct{ *BaseEngine }
 
 // NewYouPornEngine creates a new YouPorn engine
 func NewYouPornEngine(cfg *config.Config, torClient *tor.Client) *YouPornEngine {
-	return &YouPornEngine{
-		BaseEngine: NewBaseEngine("youporn", "YouPorn", "https://www.youporn.com", 1, cfg, torClient),
-		parser:     parsers.NewYouPornParser(),
-	}
+	e := &YouPornEngine{NewBaseEngine("youporn", "YouPorn", "https://www.youporn.com", 2, cfg, torClient)}
+	// Don't use spoofed TLS - standard client works for YouPorn
+	return e
 }
 
 // Search performs a search on YouPorn
 func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]models.Result, error) {
-	searchURL := e.BuildSearchURL("/search/?query={query}&page={page}", query, page)
+	// YouPorn search URL format
+	searchURL := fmt.Sprintf("%s/search/?query=%s&page=%d", e.baseURL, url.QueryEscape(query), page)
+
 	resp, err := e.MakeRequest(ctx, searchURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse HTML: %w", err)
 	}
 
 	var results []models.Result
-	doc.Find(e.parser.ItemSelector()).Each(func(i int, s *goquery.Selection) {
-		item := e.parser.Parse(s)
-		if item != nil && item.Title != "" && item.URL != "" && !item.IsPremium {
-			results = append(results, e.convertToResult(item))
-		}
-	})
-	return results, nil
-}
 
-func (e *YouPornEngine) convertToResult(item *parsers.VideoItem) models.Result {
-	return models.Result{
-		ID:              GenerateResultID(item.URL, e.Name()),
-		URL:             item.URL,
-		Title:           item.Title,
-		Thumbnail:       item.Thumbnail,
-		PreviewURL:      item.PreviewURL,
-		Duration:        item.Duration,
-		DurationSeconds: item.DurationSeconds,
-		Views:           item.Views,
-		ViewsCount:      item.ViewsCount,
-		Description:     item.Quality,
-		Source:          e.Name(),
-		SourceDisplay:   e.DisplayName(),
-	}
+	// YouPorn uses .video-box for video containers
+	doc.Find(".video-box").Each(func(i int, s *goquery.Selection) {
+		// Get the video link
+		link := s.Find("a.video-box-image, a.tm_video_link").First()
+		href, exists := link.Attr("href")
+		if !exists || href == "" {
+			return
+		}
+
+		// Build full URL
+		videoURL := href
+		if !strings.HasPrefix(href, "http") {
+			videoURL = e.baseURL + href
+		}
+
+		// Get title
+		title := parser.CleanText(s.Find(".video-title-text").First().Text())
+		if title == "" {
+			title, _ = link.Attr("title")
+		}
+		if title == "" {
+			return
+		}
+
+		// Get thumbnail
+		img := s.Find("img.thumb-image").First()
+		thumbnail := parser.ExtractAttr(img, "data-src", "data-thumb", "src")
+		if thumbnail != "" && strings.HasPrefix(thumbnail, "//") {
+			thumbnail = "https:" + thumbnail
+		}
+
+		// Get duration
+		duration := parser.CleanText(s.Find(".video-duration").First().Text())
+
+		// Get views (if available)
+		views := parser.CleanText(s.Find(".video-views").First().Text())
+
+		results = append(results, models.Result{
+			ID:            GenerateResultID(videoURL, e.Name()),
+			URL:           videoURL,
+			Title:         title,
+			Thumbnail:     thumbnail,
+			Duration:      duration,
+			Views:         views,
+			Source:        e.Name(),
+			SourceDisplay: e.DisplayName(),
+		})
+	})
+
+	return results, nil
 }
 
 // SupportsFeature returns whether the engine supports a feature

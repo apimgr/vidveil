@@ -42,16 +42,14 @@ func (m *Manager) InitializeEngines() {
 
 	// Tier 1 - Major Sites (always enabled by default)
 	m.engines["pornhub"] = NewPornHubEngine(m.cfg, m.torClient)
-	m.engines["xhamster"] = NewXHamsterEngine(m.cfg, m.torClient)
 	m.engines["xvideos"] = NewXVideosEngine(m.cfg, m.torClient)
 	m.engines["xnxx"] = NewXNXXEngine(m.cfg, m.torClient)
-	m.engines["youporn"] = NewYouPornEngine(m.cfg, m.torClient)
 	m.engines["redtube"] = NewRedTubeEngine(m.cfg, m.torClient)
-	m.engines["spankbang"] = NewSpankBangEngine(m.cfg, m.torClient)
+	m.engines["xhamster"] = NewXHamsterEngine(m.cfg, m.torClient)
 
 	// Tier 2 - Popular Sites (enabled by default)
 	m.engines["eporner"] = NewEpornerEngine(m.cfg, m.torClient)
-	m.engines["beeg"] = NewBeegEngine(m.cfg, m.torClient)
+	m.engines["youporn"] = NewYouPornEngine(m.cfg, m.torClient)
 	m.engines["pornmd"] = NewPornMDEngine(m.cfg, m.torClient)
 
 	// Tier 3 - Additional Sites (disabled by default, enable via config)
@@ -98,6 +96,13 @@ func (m *Manager) InitializeEngines() {
 	m.engines["superporn"] = NewSuperPornEngine(m.cfg, m.torClient)
 	m.engines["tubegalore"] = NewTubeGaloreEngine(m.cfg, m.torClient)
 	m.engines["motherless"] = NewMotherlessEngine(m.cfg, m.torClient)
+
+	// Tier 6 - Additional engines
+	m.engines["keezmovies"] = NewKeezMoviesEngine(m.cfg, m.torClient)
+	m.engines["spankwire"] = NewSpankWireEngine(m.cfg, m.torClient)
+	m.engines["extremetube"] = NewExtremeTubeEngine(m.cfg, m.torClient)
+	m.engines["3movs"] = NewThreeMovsEngine(m.cfg, m.torClient)
+	m.engines["sleazyneasy"] = NewSleazyNeasyEngine(m.cfg, m.torClient)
 
 	// Apply configuration
 	m.applyConfig()
@@ -213,35 +218,100 @@ func (m *Manager) Search(ctx context.Context, query string, page int, engineName
 	}
 }
 
-// sortByRelevance sorts results by how many query words appear in the title
+// sortByRelevance sorts results by relevance score
 func sortByRelevance(results []models.Result, query string) {
-	queryWords := strings.Fields(strings.ToLower(query))
+	queryLower := strings.ToLower(query)
+	queryWords := strings.Fields(queryLower)
 	if len(queryWords) == 0 {
 		return
 	}
 
+	// Pre-calculate scores for all results
+	scores := make([]float64, len(results))
+	for i, r := range results {
+		scores[i] = calculateRelevanceScore(r, queryLower, queryWords)
+	}
+
 	sort.SliceStable(results, func(i, j int) bool {
-		titleI := strings.ToLower(results[i].Title)
-		titleJ := strings.ToLower(results[j].Title)
-
-		// Count matching words for each result
-		scoreI, scoreJ := 0, 0
-		for _, word := range queryWords {
-			if strings.Contains(titleI, word) {
-				scoreI++
-			}
-			if strings.Contains(titleJ, word) {
-				scoreJ++
-			}
-		}
-
-		// Higher score = more relevant = should come first
-		if scoreI != scoreJ {
-			return scoreI > scoreJ
-		}
-		// Tie-breaker: prefer higher view counts
-		return results[i].ViewsCount > results[j].ViewsCount
+		return scores[i] > scores[j]
 	})
+}
+
+// calculateRelevanceScore computes a relevance score for a result
+func calculateRelevanceScore(r models.Result, queryLower string, queryWords []string) float64 {
+	titleLower := strings.ToLower(r.Title)
+	score := 0.0
+
+	// Exact match bonus (highest priority)
+	if strings.Contains(titleLower, queryLower) {
+		score += 100.0
+	}
+
+	// Word match scoring
+	matchedWords := 0
+	for _, word := range queryWords {
+		if len(word) < 2 {
+			continue
+		}
+		if strings.Contains(titleLower, word) {
+			matchedWords++
+			// Bonus for word at start of title
+			if strings.HasPrefix(titleLower, word) {
+				score += 5.0
+			}
+		}
+	}
+
+	// Percentage of query words matched
+	if len(queryWords) > 0 {
+		matchRatio := float64(matchedWords) / float64(len(queryWords))
+		score += matchRatio * 50.0
+	}
+
+	// Quality bonus (HD/4K content ranked higher)
+	quality := strings.ToUpper(r.Quality)
+	if strings.Contains(quality, "4K") || strings.Contains(quality, "2160") {
+		score += 10.0
+	} else if strings.Contains(quality, "1080") || strings.Contains(quality, "HD") {
+		score += 5.0
+	} else if strings.Contains(quality, "720") {
+		score += 2.0
+	}
+
+	// Views bonus (logarithmic scale to prevent domination)
+	if r.ViewsCount > 0 {
+		// log10(1000) = 3, log10(1000000) = 6
+		viewScore := 0.0
+		if r.ViewsCount >= 1000000 {
+			viewScore = 6.0
+		} else if r.ViewsCount >= 100000 {
+			viewScore = 5.0
+		} else if r.ViewsCount >= 10000 {
+			viewScore = 4.0
+		} else if r.ViewsCount >= 1000 {
+			viewScore = 3.0
+		} else if r.ViewsCount >= 100 {
+			viewScore = 2.0
+		} else {
+			viewScore = 1.0
+		}
+		score += viewScore
+	}
+
+	// Duration preference (mid-length videos often preferred)
+	if r.DurationSeconds > 0 {
+		// Prefer 5-30 minute videos
+		if r.DurationSeconds >= 300 && r.DurationSeconds <= 1800 {
+			score += 2.0
+		}
+	}
+
+	// Shorter titles often more relevant (less filler)
+	if len(r.Title) > 0 && len(r.Title) < 60 {
+		score += 1.0
+	}
+
+	return score
 }
 
 // getEnginesToUse returns the engines to use for search
@@ -313,6 +383,70 @@ type engineResult struct {
 	engine  string
 	results []models.Result
 	err     error
+}
+
+// StreamResult represents a single result sent via SSE
+type StreamResult struct {
+	Result models.Result `json:"result,omitempty"`
+	Engine string        `json:"engine"`
+	Done   bool          `json:"done"`
+	Error  string        `json:"error,omitempty"`
+}
+
+// SearchStream performs a search across enabled engines and streams results via channel
+func (m *Manager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
+	resultsChan := make(chan StreamResult, 100)
+
+	go func() {
+		defer close(resultsChan)
+
+		m.mu.RLock()
+		enginesToUse := m.getEnginesToUse(engineNames)
+		m.mu.RUnlock()
+
+		var wg sync.WaitGroup
+		minDuration := m.cfg.Search.MinDurationSeconds
+
+		for _, engine := range enginesToUse {
+			wg.Add(1)
+			go func(e Engine) {
+				defer wg.Done()
+
+				results, err := e.Search(ctx, query, page)
+				if err != nil {
+					select {
+					case resultsChan <- StreamResult{Engine: e.Name(), Error: err.Error()}:
+					case <-ctx.Done():
+					}
+					return
+				}
+
+				// Stream each result individually
+				for _, r := range results {
+					// Skip if duration is known and below minimum
+					if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
+						continue
+					}
+
+					select {
+					case resultsChan <- StreamResult{Result: r, Engine: e.Name()}:
+					case <-ctx.Done():
+						return
+					}
+				}
+
+				// Signal engine completion
+				select {
+				case resultsChan <- StreamResult{Engine: e.Name(), Done: true}:
+				case <-ctx.Done():
+				}
+			}(engine)
+		}
+
+		wg.Wait()
+	}()
+
+	return resultsChan
 }
 
 // getFeatures returns the features supported by an engine

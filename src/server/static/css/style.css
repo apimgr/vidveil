@@ -1149,6 +1149,19 @@ header .search-form {
     to { transform: rotate(360deg); }
 }
 
+/* Button spinner (inline) */
+.btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
 .initial-loading {
     text-align: center;
     padding: 4rem 2rem;
@@ -1447,5 +1460,203 @@ a:focus-visible {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+}
+
+/* ===========================================
+   BANG AUTOCOMPLETE
+   =========================================== */
+
+.search-wrapper {
+    position: relative;
+    flex: 1;
+}
+
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 4px 12px var(--shadow);
+    z-index: 1000;
+    max-height: 300px;
+    overflow-y: auto;
+    display: none;
+}
+
+.autocomplete-dropdown.visible {
+    display: block;
+}
+
+.autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+    background: var(--bg-tertiary);
+}
+
+.autocomplete-item .bang-code {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.9rem;
+    color: var(--accent);
+    font-weight: 600;
+    min-width: 60px;
+}
+
+.autocomplete-item .bang-name {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* Bang hint below search box */
+.bang-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+.bang-hint code {
+    background: var(--bg-tertiary);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+}
+
+/* Search results bang indicator */
+.bang-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--accent);
+    color: var(--bg-primary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-right: 0.5rem;
+}
+
+.bang-indicator::before {
+    content: "!";
+    font-weight: 700;
+}
+
+/* Search History */
+.search-history {
+    margin-top: 2rem;
+    max-width: 500px;
+    width: 100%;
+    display: none;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.history-header span {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.history-clear {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.history-clear:hover {
+    background: var(--bg-tertiary);
+    color: var(--error);
+}
+
+.history-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.history-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+}
+
+.history-item:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent);
+}
+
+.history-link {
+    color: var(--text-primary);
+    text-decoration: none;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-link:hover {
+    color: var(--accent);
+}
+
+.history-time {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
+.history-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+
+.history-remove:hover {
+    opacity: 1;
+    color: var(--error);
+}
+
+/* Hide time on mobile to save space */
+@media (max-width: 480px) {
+    .history-time {
+        display: none;
+    }
+    .history-link {
+        max-width: 150px;
     }
 }

@@ -50,17 +50,17 @@ type ConfigurableEngine interface {
 
 // BaseEngine provides common functionality for all engines
 type BaseEngine struct {
-	name           string
-	displayName    string
-	baseURL        string
-	tier           int
-	enabled        bool
-	timeout        time.Duration
-	useTor         bool
-	useSpoofedTLS  bool
-	httpClient     *http.Client
-	spoofedClient  *http.Client
-	torClient      *tor.Client
+	name          string
+	displayName   string
+	baseURL       string
+	tier          int
+	enabled       bool
+	timeout       time.Duration
+	useTor        bool
+	useSpoofedTLS bool
+	httpClient    *http.Client
+	spoofedClient *http.Client
+	torClient     *tor.Client
 }
 
 // NewBaseEngine creates a new base engine
@@ -142,20 +142,19 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 		return nil, err
 	}
 
-	// Set comprehensive browser-like headers to help bypass Cloudflare and similar protections
-	ua := getRandomUserAgent()
-	req.Header.Set("User-Agent", ua)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	req.Header.Set("Cache-Control", "max-age=0")
-	req.Header.Set("Sec-Ch-Ua", `"Chromium";v="120", "Not_A Brand";v="24", "Google Chrome";v="120"`)
-	req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
-	req.Header.Set("Sec-Ch-Ua-Platform", `"Windows"`)
+	// Set Firefox-like headers for consistency with StandardUserAgent
+	// Note: Don't set Accept-Encoding - Go handles gzip/deflate automatically
+	req.Header.Set("User-Agent", StandardUserAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	req.Header.Set("DNT", "1")
+	req.Header.Set("Sec-GPC", "1")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
 	req.Header.Set("Sec-Fetch-Dest", "document")
 	req.Header.Set("Sec-Fetch-Mode", "navigate")
 	req.Header.Set("Sec-Fetch-Site", "none")
 	req.Header.Set("Sec-Fetch-User", "?1")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
 
 	// Apply custom modifier if provided
 	if mod != nil {
@@ -299,19 +298,11 @@ func createHTTPClient(timeoutSecs int) *http.Client {
 	}
 }
 
-// getRandomUserAgent returns a random user agent string
+// StandardUserAgent is the single user agent used for all requests
+// Windows 11 Firefox x86_64 - consistent fingerprint for reliability
+const StandardUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
+
+// getRandomUserAgent returns the standard user agent string
 func getRandomUserAgent() string {
-	userAgents := []string{
-		// Edge on Windows 11 - most common modern browser
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
-		// Chrome on Windows 11
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-		// Edge on Windows 10
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0",
-		// Chrome on Mac
-		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-		// Firefox on Windows 11
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
-	}
-	return userAgents[time.Now().UnixNano()%int64(len(userAgents))]
+	return StandardUserAgent
 }

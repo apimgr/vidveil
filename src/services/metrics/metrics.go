@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/apimgr/vidveil/config"
+	"github.com/apimgr/vidveil/src/config"
 )
 
 // Manager handles Prometheus-compatible metrics collection

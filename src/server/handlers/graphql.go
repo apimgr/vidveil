@@ -123,6 +123,14 @@ func (h *GraphQLHandler) executeQuery(req GraphQLRequest) GraphQLResponse {
 	if strings.Contains(query, "search(") || strings.Contains(query, "search {") {
 		return h.handleSearch(req)
 	}
+	// Check for bangs query (must check before health)
+	if strings.Contains(query, "bangs {") || strings.Contains(query, "bangs{") || strings.Contains(query, "bangs") {
+		return h.handleBangs()
+	}
+	// Check for autocomplete query
+	if strings.Contains(query, "autocomplete(") || strings.Contains(query, "autocomplete {") {
+		return h.handleAutocomplete(req)
+	}
 	// Check for health query (must check before engines because "enginesEnabled" would match "engines")
 	if strings.Contains(query, "health {") || strings.Contains(query, "health{") || (strings.Contains(query, "health") && !strings.Contains(query, "engines {")) {
 		return h.handleHealth()
@@ -226,6 +234,59 @@ func (h *GraphQLHandler) handleHealth() GraphQLResponse {
 	}
 }
 
+func (h *GraphQLHandler) handleBangs() GraphQLResponse {
+	bangs := engines.ListBangs()
+
+	gqlBangs := make([]map[string]interface{}, len(bangs))
+	for i, b := range bangs {
+		gqlBangs[i] = map[string]interface{}{
+			"bang":        b.Bang,
+			"engineName":  b.EngineName,
+			"displayName": b.DisplayName,
+			"shortCode":   b.ShortCode,
+		}
+	}
+
+	return GraphQLResponse{
+		Data: map[string]interface{}{
+			"bangs": gqlBangs,
+		},
+	}
+}
+
+func (h *GraphQLHandler) handleAutocomplete(req GraphQLRequest) GraphQLResponse {
+	prefix := ""
+	if v, ok := req.Variables["prefix"].(string); ok {
+		prefix = v
+	}
+
+	if prefix == "" {
+		return GraphQLResponse{
+			Data: map[string]interface{}{
+				"autocomplete": []interface{}{},
+			},
+		}
+	}
+
+	suggestions := engines.Autocomplete(prefix)
+
+	gqlSuggestions := make([]map[string]interface{}, len(suggestions))
+	for i, s := range suggestions {
+		gqlSuggestions[i] = map[string]interface{}{
+			"bang":        s.Bang,
+			"engineName":  s.EngineName,
+			"displayName": s.DisplayName,
+			"shortCode":   s.ShortCode,
+		}
+	}
+
+	return GraphQLResponse{
+		Data: map[string]interface{}{
+			"autocomplete": gqlSuggestions,
+		},
+	}
+}
+
 func (h *GraphQLHandler) handleIntrospection(query string) GraphQLResponse {
 	schema := h.getSchema()
 
@@ -262,6 +323,18 @@ func (h *GraphQLHandler) getSchema() map[string]interface{} {
 							{"name": "engines", "type": map[string]interface{}{"name": "String", "kind": "SCALAR"}},
 						},
 						"type": map[string]interface{}{"name": "SearchResult", "kind": "OBJECT"},
+					},
+					{
+						"name": "bangs",
+						"args": []map[string]interface{}{},
+						"type": map[string]interface{}{"kind": "LIST", "ofType": map[string]interface{}{"name": "Bang", "kind": "OBJECT"}},
+					},
+					{
+						"name": "autocomplete",
+						"args": []map[string]interface{}{
+							{"name": "prefix", "type": map[string]interface{}{"name": "String", "kind": "SCALAR"}},
+						},
+						"type": map[string]interface{}{"kind": "LIST", "ofType": map[string]interface{}{"name": "Bang", "kind": "OBJECT"}},
 					},
 					{
 						"name": "engines",
@@ -334,6 +407,16 @@ func (h *GraphQLHandler) getSchema() map[string]interface{} {
 					{"name": "enginesEnabled", "type": map[string]interface{}{"name": "Int", "kind": "SCALAR"}},
 				},
 			},
+			{
+				"name": "Bang",
+				"kind": "OBJECT",
+				"fields": []map[string]interface{}{
+					{"name": "bang", "type": map[string]interface{}{"name": "String", "kind": "SCALAR"}},
+					{"name": "engineName", "type": map[string]interface{}{"name": "String", "kind": "SCALAR"}},
+					{"name": "displayName", "type": map[string]interface{}{"name": "String", "kind": "SCALAR"}},
+					{"name": "shortCode", "type": map[string]interface{}{"name": "String", "kind": "SCALAR"}},
+				},
+			},
 			{"name": "String", "kind": "SCALAR"},
 			{"name": "Int", "kind": "SCALAR"},
 			{"name": "Float", "kind": "SCALAR"},
@@ -347,6 +430,8 @@ func (h *GraphQLHandler) GraphQLSchema(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Write([]byte(`type Query {
   search(query: String!, page: Int, engines: String): SearchResult
+  bangs: [Bang]
+  autocomplete(prefix: String!): [Bang]
   engines: [Engine]
   health: Health
 }
@@ -372,6 +457,13 @@ type Result {
   source: String!
   sourceDisplay: String
   description: String
+}
+
+type Bang {
+  bang: String!
+  engineName: String!
+  displayName: String!
+  shortCode: String!
 }
 
 type Engine {

@@ -218,6 +218,51 @@ func generateOpenAPISpec(cfg *config.Config) string {
         }
       }
     },
+    "/bangs": {
+      "get": {
+        "summary": "List bang shortcuts",
+        "description": "Get all available bang shortcuts for engine selection (e.g., !ph for PornHub)",
+        "operationId": "listBangs",
+        "tags": ["Bangs"],
+        "responses": {
+          "200": {
+            "description": "List of bang shortcuts",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BangsResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/autocomplete": {
+      "get": {
+        "summary": "Autocomplete suggestions",
+        "description": "Get autocomplete suggestions for bang shortcuts while typing",
+        "operationId": "autocomplete",
+        "tags": ["Bangs"],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Current search input (e.g., '!po' for suggestions starting with 'po')",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Autocomplete suggestions",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AutocompleteResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/stats": {
       "get": {
         "summary": "Get server statistics",
@@ -503,6 +548,37 @@ func generateOpenAPISpec(cfg *config.Config) string {
           "success": { "type": "boolean" },
           "error": { "type": "string" }
         }
+      },
+      "BangsResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BangInfo" }
+          },
+          "count": { "type": "integer" }
+        }
+      },
+      "BangInfo": {
+        "type": "object",
+        "properties": {
+          "bang": { "type": "string", "description": "Full bang command (e.g., !pornhub)" },
+          "engine_name": { "type": "string", "description": "Engine identifier" },
+          "display_name": { "type": "string", "description": "Human-readable engine name" },
+          "short_code": { "type": "string", "description": "Short bang command (e.g., !ph)" }
+        }
+      },
+      "AutocompleteResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "suggestions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BangInfo" }
+          },
+          "type": { "type": "string", "description": "Type of suggestions (bang, bang_start, none)" }
+        }
       }
     },
     "securitySchemes": {
@@ -516,6 +592,7 @@ func generateOpenAPISpec(cfg *config.Config) string {
   },
   "tags": [
     { "name": "Search", "description": "Search operations" },
+    { "name": "Bangs", "description": "Bang shortcuts for engine selection" },
     { "name": "Engines", "description": "Engine management" },
     { "name": "Stats", "description": "Server statistics" },
     { "name": "Health", "description": "Health checks" },
@@ -644,6 +721,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /bangs:
+    get:
+      summary: List bang shortcuts
+      description: Get all available bang shortcuts for engine selection (e.g., !ph for PornHub)
+      operationId: listBangs
+      tags:
+        - Bangs
+      responses:
+        "200":
+          description: List of bang shortcuts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BangsResponse"
+  /autocomplete:
+    get:
+      summary: Autocomplete suggestions
+      description: Get autocomplete suggestions for bang shortcuts while typing
+      operationId: autocomplete
+      tags:
+        - Bangs
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Current search input (e.g., '!po' for suggestions starting with 'po')
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Autocomplete suggestions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutocompleteResponse"
   /stats:
     get:
       summary: Get server statistics
@@ -919,6 +1031,44 @@ components:
           type: boolean
         error:
           type: string
+    BangsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BangInfo"
+        count:
+          type: integer
+    BangInfo:
+      type: object
+      properties:
+        bang:
+          type: string
+          description: Full bang command (e.g., !pornhub)
+        engine_name:
+          type: string
+          description: Engine identifier
+        display_name:
+          type: string
+          description: Human-readable engine name
+        short_code:
+          type: string
+          description: Short bang command (e.g., !ph)
+    AutocompleteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        suggestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/BangInfo"
+        type:
+          type: string
+          description: Type of suggestions (bang, bang_start, none)
   securitySchemes:
     apiToken:
       type: apiKey
@@ -928,6 +1078,8 @@ components:
 tags:
   - name: Search
     description: Search operations
+  - name: Bangs
+    description: Bang shortcuts for engine selection
   - name: Engines
     description: Engine management
   - name: Stats

@@ -254,7 +254,12 @@ func (s *Server) setupRoutes() {
 	s.router.Route("/api/v1", func(r chi.Router) {
 		// Search endpoints (public)
 		r.Get("/search", h.APISearch)
+		r.Get("/search/stream", h.APISearchStream) // SSE streaming search
 		r.Get("/search.txt", h.APISearchText)
+
+		// Bang endpoints (public)
+		r.Get("/bangs", h.APIBangs)
+		r.Get("/autocomplete", h.APIAutocomplete)
 
 		// Engine endpoints (public)
 		r.Get("/engines", h.APIEngines)

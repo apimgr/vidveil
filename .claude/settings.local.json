@@ -53,7 +53,16 @@
       "Bash(head -10 echo echo '3. Email templates count:' ls /root/Projects/github/casjaysdevdocker/xxxsearch/src/services/email/templates/*.txt)",
       "Bash(head -5 echo echo '7. Admin handlers:' grep -c \"func.*Page\\|func.*API\" /root/Projects/github/casjaysdevdocker/xxxsearch/src/server/handlers/admin.go 2)",
       "Bash(/dev/null echo echo '8. Server/Auth/User handlers:' ls /root/Projects/github/casjaysdevdocker/xxxsearch/src/server/handlers/*.go)",
-      "Bash(GOPRIVATE=github.com/apimgr/*:*)"
+      "Bash(GOPRIVATE=github.com/apimgr/*:*)",
+      "Bash(go run:*)",
+      "Bash(\"UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\")",
+      "Bash(timeout 10 curl:*)",
+      "Bash(tree:*)",
+      "Bash(timeout 3:*)",
+      "Bash(1 echo \"\" echo \"=== --status ===\")",
+      "Bash(__NEW_LINE__ echo \"\")",
+      "Bash(time curl -s 'http://127.0.0.1:64888/api/v1/search?q=test&engines=eporner')",
+      "Bash(timeout 15 curl:*)"
     ],
     "deny": [],
     "ask": []

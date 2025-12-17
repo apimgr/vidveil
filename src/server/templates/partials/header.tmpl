@@ -1,7 +1,7 @@
 {{define "header"}}
 <header>
     <a href="/" class="logo">Vidveil</a>
-    <form class="search-form" action="/search" method="GET" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Searching...'">
+    <form class="search-form" action="/search" method="GET" onsubmit="return handleSearchSubmit(this)">
         <input type="text" name="q" value="{{.Query}}" placeholder="Search videos..." autocomplete="off" required>
         <button type="submit">Search</button>
     </form>
@@ -9,4 +9,13 @@
         <a href="/preferences" title="Preferences">Settings</a>
     </div>
 </header>
+<script>
+function handleSearchSubmit(form) {
+    var btn = form.querySelector('button[type="submit"]');
+    if (btn.disabled) return false;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span> Searching...';
+    return true;
+}
+</script>
 {{end}}

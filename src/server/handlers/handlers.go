@@ -17,6 +17,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/models"
+	"github.com/apimgr/vidveil/src/services/cache"
 	"github.com/apimgr/vidveil/src/services/engines"
 )
 
@@ -35,15 +36,20 @@ const (
 
 // Handler holds dependencies for HTTP handlers
 type Handler struct {
-	cfg       *config.Config
-	engineMgr *engines.Manager
+	cfg         *config.Config
+	engineMgr   *engines.Manager
+	searchCache *cache.SearchCache
 }
 
 // New creates a new handler instance
 func New(cfg *config.Config, engineMgr *engines.Manager) *Handler {
+	// Initialize cache with 5 minute TTL and 1000 max entries
+	searchCache := cache.New(5*time.Minute, 1000)
+
 	return &Handler{
-		cfg:       cfg,
-		engineMgr: engineMgr,
+		cfg:         cfg,
+		engineMgr:   engineMgr,
+		searchCache: searchCache,
 	}
 }
 
@@ -220,14 +226,24 @@ func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get engine names if specified
-	var engineNames []string
-	if e := r.URL.Query().Get("engines"); e != "" {
-		engineNames = strings.Split(e, ",")
+	// Parse bangs from query (e.g., "!ph amateur" -> search pornhub for "amateur")
+	parsed := engines.ParseBangs(query)
+	searchQuery := parsed.Query
+	if searchQuery == "" {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
 	}
 
-	// Perform parallel search across all engines
-	results := h.engineMgr.Search(r.Context(), query, 1, engineNames)
+	// Get engine names - bangs take priority, then URL param
+	engineNames := parsed.Engines
+	if len(engineNames) == 0 {
+		if e := r.URL.Query().Get("engines"); e != "" {
+			engineNames = strings.Split(e, ",")
+		}
+	}
+
+	// Perform parallel search across engines
+	results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames)
 
 	// Convert results to JSON for the JavaScript
 	resultsJSON, _ := json.Marshal(results.Data.Results)
@@ -235,10 +251,13 @@ func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	h.renderTemplate(w, "search", map[string]interface{}{
 		"Title":       query + " - " + h.cfg.Server.Title,
 		"Query":       query,
+		"SearchQuery": searchQuery,
 		"ResultsJSON": template.JS(resultsJSON), // Safe JSON for script
 		"EnginesUsed": results.Data.EnginesUsed,
 		"SearchTime":  results.Data.SearchTimeMS,
 		"Theme":       h.cfg.Web.UI.Theme,
+		"HasBang":     parsed.HasBang,
+		"BangEngines": parsed.Engines,
 	})
 }
 
@@ -386,11 +405,74 @@ func (h *Handler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(sitemap))
 }
 
+// APISearchStream handles SSE streaming search API requests
+func (h *Handler) APISearchStream(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		h.jsonError(w, "Query parameter 'q' is required", "MISSING_QUERY", http.StatusBadRequest)
+		return
+	}
+
+	// Parse bangs from query
+	parsed := engines.ParseBangs(query)
+	searchQuery := parsed.Query
+	if searchQuery == "" {
+		h.jsonError(w, "Query cannot be empty after bang parsing", "EMPTY_QUERY", http.StatusBadRequest)
+		return
+	}
+
+	// Get engine names - bangs take priority, then URL param
+	engineNames := parsed.Engines
+	if len(engineNames) == 0 {
+		if e := r.URL.Query().Get("engines"); e != "" {
+			engineNames = strings.Split(e, ",")
+		}
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.jsonError(w, "Streaming not supported", "STREAMING_ERROR", http.StatusInternalServerError)
+		return
+	}
+
+	// Stream results
+	ctx := r.Context()
+	resultsChan := h.engineMgr.SearchStream(ctx, searchQuery, 1, engineNames)
+
+	for result := range resultsChan {
+		data, err := json.Marshal(result)
+		if err != nil {
+			continue
+		}
+
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+
+	// Send final done message
+	fmt.Fprintf(w, "data: {\"done\":true,\"engine\":\"all\"}\n\n")
+	flusher.Flush()
+}
+
 // APISearch handles search API requests
 func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
 		h.jsonError(w, "Query parameter 'q' is required", "MISSING_QUERY", http.StatusBadRequest)
+		return
+	}
+
+	// Parse bangs from query (e.g., "!ph amateur" -> search pornhub for "amateur")
+	parsed := engines.ParseBangs(query)
+	searchQuery := parsed.Query
+	if searchQuery == "" {
+		h.jsonError(w, "Query cannot be empty after bang parsing", "EMPTY_QUERY", http.StatusBadRequest)
 		return
 	}
 
@@ -401,12 +483,40 @@ func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var engineNames []string
-	if e := r.URL.Query().Get("engines"); e != "" {
-		engineNames = strings.Split(e, ",")
+	// Get engine names - bangs take priority, then URL param
+	engineNames := parsed.Engines
+	if len(engineNames) == 0 {
+		if e := r.URL.Query().Get("engines"); e != "" {
+			engineNames = strings.Split(e, ",")
+		}
 	}
 
-	results := h.engineMgr.Search(r.Context(), query, page, engineNames)
+	// Check cache first (skip cache param allows bypassing)
+	skipCache := r.URL.Query().Get("nocache") == "1"
+	cacheKey := cache.CacheKey(searchQuery, page, engineNames)
+
+	var results *models.SearchResponse
+	if !skipCache {
+		if cached, ok := h.searchCache.Get(cacheKey); ok {
+			results = cached
+			results.Data.Cached = true
+		}
+	}
+
+	// If not cached, perform search
+	if results == nil {
+		results = h.engineMgr.Search(r.Context(), searchQuery, page, engineNames)
+		results.Data.Cached = false
+		// Cache the results
+		h.searchCache.Set(cacheKey, results)
+	}
+
+	// Add bang info to response
+	results.Data.Query = query // Keep original query with bangs
+	results.Data.SearchQuery = searchQuery
+	results.Data.HasBang = parsed.HasBang
+	results.Data.BangEngines = parsed.Engines
+
 	h.jsonResponse(w, results)
 }
 
@@ -420,6 +530,16 @@ func (h *Handler) APISearchText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse bangs from query
+	parsed := engines.ParseBangs(query)
+	searchQuery := parsed.Query
+	if searchQuery == "" {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Error: Query cannot be empty after bang parsing"))
+		return
+	}
+
 	page := 1
 	if p := r.URL.Query().Get("page"); p != "" {
 		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
@@ -427,12 +547,15 @@ func (h *Handler) APISearchText(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var engineNames []string
-	if e := r.URL.Query().Get("engines"); e != "" {
-		engineNames = strings.Split(e, ",")
+	// Get engine names - bangs take priority, then URL param
+	engineNames := parsed.Engines
+	if len(engineNames) == 0 {
+		if e := r.URL.Query().Get("engines"); e != "" {
+			engineNames = strings.Split(e, ",")
+		}
 	}
 
-	results := h.engineMgr.Search(r.Context(), query, page, engineNames)
+	results := h.engineMgr.Search(r.Context(), searchQuery, page, engineNames)
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	for _, result := range results.Data.Results {
@@ -441,6 +564,79 @@ func (h *Handler) APISearchText(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Duration: " + result.Duration + " | Source: " + result.SourceDisplay + "\n"))
 		w.Write([]byte("\n"))
 	}
+}
+
+// APIBangs returns list of available bang shortcuts
+func (h *Handler) APIBangs(w http.ResponseWriter, r *http.Request) {
+	bangs := engines.ListBangs()
+	h.jsonResponse(w, map[string]interface{}{
+		"success": true,
+		"data":    bangs,
+		"count":   len(bangs),
+	})
+}
+
+// APIAutocomplete returns autocomplete suggestions for bangs
+func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		h.jsonResponse(w, map[string]interface{}{
+			"success":     true,
+			"suggestions": []interface{}{},
+		})
+		return
+	}
+
+	// Check if query starts with "!" for bang autocomplete
+	if strings.HasPrefix(q, "!") && len(q) > 1 {
+		prefix := q[1:] // Remove the "!"
+		suggestions := engines.Autocomplete(prefix)
+		h.jsonResponse(w, map[string]interface{}{
+			"success":     true,
+			"suggestions": suggestions,
+			"type":        "bang",
+		})
+		return
+	}
+
+	// If query ends with " !" (space bang), suggest starting a bang
+	if strings.HasSuffix(q, " !") {
+		bangs := engines.ListBangs()
+		// Return first 10 bangs as suggestions
+		if len(bangs) > 10 {
+			bangs = bangs[:10]
+		}
+		h.jsonResponse(w, map[string]interface{}{
+			"success":     true,
+			"suggestions": bangs,
+			"type":        "bang_start",
+		})
+		return
+	}
+
+	// Check for partial bang at end of query (e.g., "amateur !p")
+	words := strings.Fields(q)
+	if len(words) > 0 {
+		lastWord := words[len(words)-1]
+		if strings.HasPrefix(lastWord, "!") && len(lastWord) > 1 {
+			prefix := lastWord[1:]
+			suggestions := engines.Autocomplete(prefix)
+			h.jsonResponse(w, map[string]interface{}{
+				"success":     true,
+				"suggestions": suggestions,
+				"type":        "bang",
+				"replace":     lastWord, // What to replace in query
+			})
+			return
+		}
+	}
+
+	// No bang autocomplete needed
+	h.jsonResponse(w, map[string]interface{}{
+		"success":     true,
+		"suggestions": []interface{}{},
+		"type":        "none",
+	})
 }
 
 // APIEngines returns list of available engines

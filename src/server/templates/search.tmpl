@@ -10,9 +10,9 @@
     <main class="results" id="main-content" role="main" aria-label="Search results">
         <div class="initial-loading" id="initial-loading" role="status" aria-live="polite">
             <div class="spinner large" aria-hidden="true"></div>
-            <p>Searching {{len .EnginesUsed}} engines...</p>
+            <p id="loading-text">Connecting to engines...</p>
         </div>
-        <p class="meta hidden" id="search-meta" aria-live="polite"><span id="result-count">0</span> results in <span id="search-time">{{.SearchTime}}</span>ms</p>
+        <p class="meta hidden" id="search-meta" aria-live="polite"><span id="result-count">0</span> results <span id="search-time-container">(streaming...)</span></p>
         <div class="filters hidden" id="filters" role="group" aria-label="Filter and sort options">
             <label for="filter-duration" class="visually-hidden">Filter by duration</label>
             <select id="filter-duration" onchange="filterByDuration(this.value)" aria-label="Filter by video duration">
@@ -20,6 +20,13 @@
                 <option value="short">Under 10 min</option>
                 <option value="medium">10-30 min</option>
                 <option value="long">Over 30 min</option>
+            </select>
+            <label for="filter-quality" class="visually-hidden">Filter by quality</label>
+            <select id="filter-quality" onchange="filterByQuality(this.value)" aria-label="Filter by video quality">
+                <option value="">Quality: Any</option>
+                <option value="4k">4K</option>
+                <option value="1080">1080p HD</option>
+                <option value="720">720p</option>
             </select>
             <label for="filter-source" class="visually-hidden">Filter by source</label>
             <select id="filter-source" onchange="filterBySource(this.value)" aria-label="Filter by video source">
@@ -31,14 +38,15 @@
                 <option value="duration-desc">Longest</option>
                 <option value="duration-asc">Shortest</option>
                 <option value="views">Most Viewed</option>
+                <option value="quality">Best Quality</option>
             </select>
         </div>
         <div class="video-grid" id="video-grid" role="list" aria-label="Video results"></div>
-        <div class="loading" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>Loading more...</span></div>
+        <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>Loading more...</span></div>
     </main>
     {{template "footer" .}}
     <div class="status-bar" id="status-bar">
-        <span id="status-text">Searching...</span>
+        <span id="status-text">Connecting...</span>
         <span id="engine-status"></span>
     </div>
     <script>
@@ -46,28 +54,109 @@
         const query = '{{.Query}}';
         const RESULTS_PER_BATCH = 20;
         let allResults = [];
-        let filteredResults = [];
         let displayedCount = 0;
         let isSearching = true;
-        const totalEngines = {{len .EnginesUsed}};
+        let enginesCompleted = 0;
+        let enginesWithResults = new Set();
         const sourcesSet = new Set();
         let currentDurationFilter = '';
+        let currentQualityFilter = '';
         let currentSourceFilter = '';
         let currentSort = '';
+
+        // Save to search history
+        saveSearchHistory(query);
         const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        let startTime = Date.now();
 
         // Load preferences from localStorage
         const prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}');
         const minDuration = parseInt(prefs.minDuration) || 0;
 
-        // Initial results from server
-        const initialResults = {{.ResultsJSON}};
-        if (initialResults && initialResults.length > 0) {
-            allResults = filterByMinDuration(sortByRelevance(initialResults, query));
-            isSearching = false;
-            showResults();
-        } else {
-            fetchResults();
+        // Use SSE streaming for results
+        streamResults();
+
+        function streamResults() {
+            const eventSource = new EventSource('/api/v1/search/stream?q=' + encodeURIComponent(query));
+            let firstResult = true;
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+
+                // Final done message
+                if (data.done && data.engine === 'all') {
+                    eventSource.close();
+                    isSearching = false;
+                    const elapsed = Date.now() - startTime;
+                    document.getElementById('search-time-container').textContent = 'in ' + elapsed + 'ms';
+                    updateStatus();
+                    if (allResults.length === 0) {
+                        document.getElementById('initial-loading').innerHTML = '<p>No results found.</p>';
+                        document.getElementById('initial-loading').classList.remove('hidden');
+                    }
+                    return;
+                }
+
+                // Engine completed
+                if (data.done) {
+                    enginesCompleted++;
+                    updateStatus();
+                    return;
+                }
+
+                // Error from engine
+                if (data.error) {
+                    enginesCompleted++;
+                    updateStatus();
+                    return;
+                }
+
+                // Got a result
+                if (data.result && data.result.title) {
+                    const r = data.result;
+
+                    // Apply min duration filter
+                    if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
+                        return;
+                    }
+
+                    // Show UI on first result
+                    if (firstResult) {
+                        firstResult = false;
+                        document.getElementById('initial-loading').classList.add('hidden');
+                        document.getElementById('search-meta').classList.remove('hidden');
+                        document.getElementById('filters').classList.remove('hidden');
+                    }
+
+                    // Add to results and display immediately
+                    allResults.push(r);
+                    enginesWithResults.add(data.engine);
+                    addResultCard(r);
+                    document.getElementById('result-count').textContent = allResults.length;
+
+                    // Add to source filter if new
+                    const source = r.source || '';
+                    if (source && !sourcesSet.has(source)) {
+                        sourcesSet.add(source);
+                        const opt = document.createElement('option');
+                        opt.value = source;
+                        opt.textContent = r.source_display || source;
+                        document.getElementById('filter-source').appendChild(opt);
+                    }
+                }
+            };
+
+            eventSource.onerror = function(err) {
+                eventSource.close();
+                isSearching = false;
+                if (allResults.length === 0) {
+                    document.getElementById('initial-loading').innerHTML = '<p>Search failed. Please try again.</p>';
+                }
+                updateStatus();
+            };
+
+            // Update loading text
+            document.getElementById('loading-text').textContent = 'Searching engines...';
         }
 
         function filterByMinDuration(results) {
@@ -76,30 +165,6 @@
                 const dur = r.duration_seconds || 0;
                 return dur >= minDuration;
             });
-        }
-
-        function showResults() {
-            document.getElementById('initial-loading').classList.add('hidden');
-            document.getElementById('search-meta').classList.remove('hidden');
-            document.getElementById('filters').classList.remove('hidden');
-            displayResults();
-            updateStatus();
-        }
-
-        function fetchResults() {
-            fetch('/api/v1/search?q=' + encodeURIComponent(query))
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success && data.data.results) {
-                        allResults = filterByMinDuration(sortByRelevance(data.data.results, query));
-                    }
-                    isSearching = false;
-                    showResults();
-                })
-                .catch(err => {
-                    isSearching = false;
-                    document.getElementById('initial-loading').innerHTML = '<p>Search failed. Please try again.</p>';
-                });
         }
 
         function sortByRelevance(arr, searchQuery) {
@@ -117,75 +182,58 @@
             });
         }
 
-        function displayResults() {
+        // Add a single result card (for streaming)
+        function addResultCard(r) {
             const grid = document.getElementById('video-grid');
-            const endIdx = Math.min(displayedCount + RESULTS_PER_BATCH, allResults.length);
+            const card = document.createElement('div');
+            card.className = 'video-card';
 
-            for (let i = displayedCount; i < endIdx; i++) {
-                const r = allResults[i];
-                const card = document.createElement('div');
-                card.className = 'video-card';
-
-                let duration = r.duration || '';
-                if (duration && !duration.includes(':')) {
-                    const secs = parseInt(duration);
-                    if (!isNaN(secs)) {
-                        const mins = Math.floor(secs / 60);
-                        const s = secs % 60;
-                        duration = mins + ':' + (s < 10 ? '0' : '') + s;
-                    }
-                }
-
-                card.dataset.source = r.source || '';
-                card.dataset.duration = r.duration_seconds || 0;
-                card.dataset.views = r.views_count || 0;
-
-                const previewUrl = r.preview_url || '';
-                const hasPreview = previewUrl && previewUrl.length > 0;
-
-                let html = '<a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer nofollow" class="card-link">';
-                html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtml(previewUrl) + '"' : '') + '>';
-                html += '<img class="thumb-static" src="' + escapeHtml(r.thumbnail || '/static/img/placeholder.svg') + '" alt="' + escapeHtml(r.title) + '" loading="lazy" onerror="this.src=\'/static/img/placeholder.svg\'">';
-
-                if (hasPreview) {
-                    html += '<video class="thumb-preview" muted loop playsinline preload="none">';
-                    html += '<source src="' + escapeHtml(previewUrl) + '" type="video/mp4">';
-                    html += '</video>';
-                    if (isTouchDevice) {
-                        html += '<div class="swipe-hint">Swipe to preview</div>';
-                    }
-                }
-
-                if (duration) html += '<span class="duration">' + escapeHtml(duration) + '</span>';
-                if (r.quality) html += '<span class="quality-badge">' + escapeHtml(r.quality) + '</span>';
-                html += '</div></a>';
-                html += '<div class="info">';
-                html += '<h3><a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + escapeHtml(r.title || 'Untitled') + '</a></h3>';
-                html += '<div class="meta"><span class="source">' + escapeHtml(r.source_display || r.source || '') + '</span>';
-                if (r.views) html += '<span>' + escapeHtml(r.views) + '</span>';
-                html += '</div></div>';
-
-                card.innerHTML = html;
-                grid.appendChild(card);
-
-                // Setup video preview for this card
-                setupCardPreview(card);
-
-                const source = r.source || '';
-                if (source && !sourcesSet.has(source)) {
-                    sourcesSet.add(source);
-                    const opt = document.createElement('option');
-                    opt.value = source;
-                    opt.textContent = r.source_display || source;
-                    document.getElementById('filter-source').appendChild(opt);
+            let duration = r.duration || '';
+            if (duration && !duration.includes(':')) {
+                const secs = parseInt(duration);
+                if (!isNaN(secs)) {
+                    const mins = Math.floor(secs / 60);
+                    const s = secs % 60;
+                    duration = mins + ':' + (s < 10 ? '0' : '') + s;
                 }
             }
-            displayedCount = endIdx;
-            document.getElementById('result-count').textContent = allResults.length;
 
-            if (displayedCount >= allResults.length && !isSearching) {
-                document.getElementById('loading').classList.add('hidden');
+            card.dataset.source = r.source || '';
+            card.dataset.duration = r.duration_seconds || 0;
+            card.dataset.views = r.views_count || 0;
+            card.dataset.quality = r.quality || '';
+
+            const previewUrl = r.preview_url || '';
+            const hasPreview = previewUrl && previewUrl.length > 0;
+
+            let html = '<a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer nofollow" class="card-link">';
+            html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtml(previewUrl) + '"' : '') + '>';
+            html += '<img class="thumb-static" src="' + escapeHtml(r.thumbnail || '/static/img/placeholder.svg') + '" alt="' + escapeHtml(r.title) + '" loading="lazy" onerror="this.src=\'/static/img/placeholder.svg\'">';
+
+            if (hasPreview) {
+                html += '<video class="thumb-preview" muted loop playsinline preload="none">';
+                html += '<source src="' + escapeHtml(previewUrl) + '" type="video/mp4">';
+                html += '</video>';
+                if (isTouchDevice) {
+                    html += '<div class="swipe-hint">Swipe to preview</div>';
+                }
             }
+
+            if (duration) html += '<span class="duration">' + escapeHtml(duration) + '</span>';
+            if (r.quality) html += '<span class="quality-badge">' + escapeHtml(r.quality) + '</span>';
+            html += '</div></a>';
+            html += '<div class="info">';
+            html += '<h3><a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + escapeHtml(r.title || 'Untitled') + '</a></h3>';
+            html += '<div class="meta"><span class="source">' + escapeHtml(r.source_display || r.source || '') + '</span>';
+            if (r.views) html += '<span>' + escapeHtml(r.views) + '</span>';
+            html += '</div></div>';
+
+            card.innerHTML = html;
+            grid.appendChild(card);
+
+            // Setup video preview for this card
+            setupCardPreview(card);
+            displayedCount++;
         }
 
         function setupCardPreview(card) {
@@ -271,15 +319,16 @@
             const statusText = document.getElementById('status-text');
             const engineStatus = document.getElementById('engine-status');
             if (isSearching) {
-                statusText.textContent = 'Searching all engines...';
+                statusText.textContent = allResults.length + ' results (streaming...)';
+                engineStatus.textContent = enginesWithResults.size + ' engines responding';
             } else {
                 let msg = allResults.length + ' results found';
                 if (minDuration > 0) {
                     msg += ' (min ' + Math.floor(minDuration / 60) + ' min)';
                 }
                 statusText.textContent = msg;
+                engineStatus.textContent = enginesWithResults.size + ' engines';
             }
-            engineStatus.textContent = totalEngines + ' engines';
         }
 
         function escapeHtml(str) {
@@ -289,6 +338,11 @@
 
         window.filterByDuration = function(value) {
             currentDurationFilter = value;
+            applyFiltersAndSort();
+        };
+
+        window.filterByQuality = function(value) {
+            currentQualityFilter = value;
             applyFiltersAndSort();
         };
 
@@ -302,17 +356,48 @@
             applyFiltersAndSort();
         };
 
+        // Search history functions
+        function saveSearchHistory(q) {
+            if (!q || q.trim() === '') return;
+            const key = 'vidveil_history';
+            let history = JSON.parse(localStorage.getItem(key) || '[]');
+            // Remove if already exists (will re-add at top)
+            history = history.filter(h => h.query !== q);
+            // Add to beginning
+            history.unshift({ query: q, timestamp: Date.now() });
+            // Keep only last 50
+            if (history.length > 50) history = history.slice(0, 50);
+            localStorage.setItem(key, JSON.stringify(history));
+        }
+
+        function getSearchHistory() {
+            const key = 'vidveil_history';
+            return JSON.parse(localStorage.getItem(key) || '[]');
+        }
+
+        function clearSearchHistory() {
+            localStorage.removeItem('vidveil_history');
+        }
+
         function applyFiltersAndSort() {
             const cards = document.querySelectorAll('.video-card');
             cards.forEach(card => {
                 const duration = parseInt(card.dataset.duration) || 0;
                 const source = card.dataset.source || '';
+                const quality = (card.dataset.quality || '').toUpperCase();
                 let show = true;
 
+                // Duration filter
                 if (currentDurationFilter === 'short' && duration >= 600) show = false;
                 else if (currentDurationFilter === 'medium' && (duration < 600 || duration > 1800)) show = false;
                 else if (currentDurationFilter === 'long' && duration <= 1800) show = false;
 
+                // Quality filter
+                if (currentQualityFilter === '4k' && !quality.includes('4K') && !quality.includes('2160')) show = false;
+                else if (currentQualityFilter === '1080' && !quality.includes('1080') && !quality.includes('HD')) show = false;
+                else if (currentQualityFilter === '720' && !quality.includes('720')) show = false;
+
+                // Source filter
                 if (currentSourceFilter && source !== currentSourceFilter) show = false;
 
                 if (show) {
@@ -330,32 +415,35 @@
                     const bDur = parseInt(b.dataset.duration) || 0;
                     const aViews = parseInt(a.dataset.views) || 0;
                     const bViews = parseInt(b.dataset.views) || 0;
+                    const aQuality = (a.dataset.quality || '').toUpperCase();
+                    const bQuality = (b.dataset.quality || '').toUpperCase();
+
                     if (currentSort === 'duration-desc') return bDur - aDur;
                     if (currentSort === 'duration-asc') return aDur - bDur;
                     if (currentSort === 'views') return bViews - aViews;
+                    if (currentSort === 'quality') {
+                        // 4K > 1080p > 720p > unknown
+                        const getQualityScore = (q) => {
+                            if (q.includes('4K') || q.includes('2160')) return 4;
+                            if (q.includes('1080')) return 3;
+                            if (q.includes('720')) return 2;
+                            if (q.includes('480')) return 1;
+                            return 0;
+                        };
+                        return getQualityScore(bQuality) - getQualityScore(aQuality);
+                    }
                     return 0;
                 });
                 cardArray.forEach(card => grid.appendChild(card));
             }
+
+            // Update visible count
+            const visibleCards = document.querySelectorAll('.video-card:not(.hidden)');
+            const countEl = document.getElementById('result-count');
+            if (countEl) countEl.textContent = visibleCards.length;
         }
 
-        // Infinite scroll
-        let scrollTimeout;
-        window.addEventListener('scroll', function() {
-            if (scrollTimeout) return;
-            scrollTimeout = setTimeout(function() {
-                scrollTimeout = null;
-                const scrollY = window.scrollY + window.innerHeight;
-                const docHeight = document.documentElement.scrollHeight;
-                if (scrollY >= docHeight - 500 && displayedCount < allResults.length) {
-                    displayResults();
-                }
-            }, 100);
-        });
-
-        if (allResults.length === 0 && !isSearching) {
-            document.getElementById('loading').innerHTML = '<p>No results found.</p>';
-        }
+        // Note: Infinite scroll removed - results now stream in real-time via SSE
     })();
     </script>
 </body>

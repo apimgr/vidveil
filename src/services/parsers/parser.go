@@ -46,13 +46,9 @@ func GetParser(name string) Parser {
 func init() {
 	Register("pornhub", NewPornHubParser())
 	Register("xvideos", NewXVideosParser())
-	Register("xhamster", NewXHamsterParser())
 	Register("xnxx", NewXNXXParser())
 	Register("redtube", NewRedTubeParser())
-	Register("youporn", NewYouPornParser())
-	Register("spankbang", NewSpankBangParser())
 	Register("eporner", NewEpornerParser())
-	Register("beeg", NewBeegParser())
 	Register("pornmd", NewPornMDParser())
 }
 

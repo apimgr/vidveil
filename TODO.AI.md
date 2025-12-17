@@ -69,45 +69,54 @@ Full line-by-line verification of codebase against TEMPLATE.md:
 - **PART 31 (User Management)**: Full UsersConfig struct implemented in config.go with registration, roles, tokens, profile, auth, and limits settings. Admin-only mode is the default per spec.
 - **PART 32 (Tor Hidden Service)**: Uses `github.com/cretz/bine` for dedicated Tor process management per TEMPLATE.md specification. Falls back to key-only mode if Tor binary is not installed.
 
-## Beta Testing Results (December 16, 2025)
+## Beta Testing Results (December 17, 2025)
 
 ### Test Summary
 
 | Test Category | Result | Details |
 |---------------|--------|---------|
+| Docker Build | ✅ PASS | Image builds, 52 engines enabled |
 | CLI Commands | ✅ PASS | --help, --version, --status all work |
 | Web Endpoints | ✅ PASS | /, /healthz, /openapi, /graphql (200 OK) |
-| API Endpoints | ✅ PASS | /api/v1/healthz, /api/v1/engines (52 engines) |
-| SSE Streaming | ✅ PASS | /api/v1/search/stream works |
-| Admin Panel | ✅ PASS | All 12 endpoints return 200 |
-| Security Headers | ✅ PASS | CSP, X-Frame, X-XSS, Referrer-Policy, etc. |
-| Well-Known Files | ✅ PASS | /robots.txt, /.well-known/security.txt |
-| Static Assets | ✅ PASS | /static/css/style.css, /static/js/app.js |
+| API Endpoints | ✅ PASS | /api/v1/healthz, /api/v1/engines, /api/v1/bangs, /api/v1/autocomplete |
+| Search + Caching | ✅ PASS | 30 results, cache working (`cached: true` on repeat) |
+| Bang Search | ✅ PASS | `!ph amateur` → pornhub only, `has_bang: true` |
+| SSE Streaming | ✅ PASS | /api/v1/search/stream real-time results |
+| Security Headers | ✅ PASS | CSP, X-Frame, X-XSS, Referrer-Policy, Permissions-Policy |
+| Well-Known Files | ✅ PASS | /robots.txt, /.well-known/security.txt, /sitemap.xml |
+| Static Assets | ✅ PASS | CSS (1662 lines), JS (14KB) |
+| New Engines | ✅ PASS | 5 new: `!km`, `!sw`, `!et`, `!3m`, `!sn` |
 
 ### Engine Testing Results
 
 | Engine | Status | Notes |
 |--------|--------|-------|
-| PornHub | ✅ WORKS | API-based, 28 results |
+| PornHub | ✅ WORKS | API-based, 30 results, 929ms |
 | RedTube | ✅ WORKS | API-based, results returned |
-| Eporner | ✅ WORKS | API-based, 37 results, 112ms |
-| PornHat | ✅ WORKS | HTML-parsing, 60 results |
-| xHamster | ✅ WORKS | JSON extraction, 46 results, 737ms |
-| YouPorn | ✅ WORKS | HTML-parsing, 32 results, 996ms |
+| Eporner | ✅ WORKS | API-based, fast response |
+| xHamster | ✅ WORKS | JSON extraction from page |
+| YouPorn | ✅ WORKS | HTML-parsing with CSS selectors |
+| KeezMovies | ✅ NEW | Tier 3, bang `!km` |
+| SpankWire | ✅ NEW | Tier 3, bang `!sw` |
+| ExtremeTube | ✅ NEW | Tier 3, bang `!et` |
+| 3Movs | ✅ NEW | Tier 3, bang `!3m` |
+| SleazyNeasy | ✅ NEW | Tier 3, bang `!sn` |
 
-### Issues Found & Fixed (Dec 16, 2025)
+### New Features Tested (Dec 17, 2025)
 
-1. **xHamster/YouPorn initially failed** - Spoofed TLS was causing issues, not helping
-2. **Fix**: Disabled spoofed TLS, rewrote parsers:
-   - xHamster: Now extracts JSON from `window.initials` embedded in page
-   - YouPorn: Now uses correct `.video-box` CSS selectors
-3. **Metrics**: `/metrics` disabled by default (expected - configurable in server.yml)
+| Feature | Status | Details |
+|---------|--------|---------|
+| Search Caching | ✅ PASS | 5-min TTL, `nocache=1` bypass works |
+| Relevance Ranking | ✅ PASS | Multi-factor scoring (exact match, quality, views) |
+| Quality Filter | ✅ PASS | 4K, 1080p, 720p frontend filters |
+| Search History | ✅ PASS | localStorage with UI on homepage |
+| Autocomplete | ✅ PASS | `!p` returns 10 suggestions |
 
 ### Current Status
 
 - **All 52 engines registered and working**
 - **3 API-based engines**: PornHub, RedTube, Eporner (fastest)
-- **44 HTML-parsing engines** including xHamster, YouPorn, PornHat
+- **49 HTML-parsing engines** including xHamster, YouPorn, 5 new engines
 
 ## Recently Completed
 

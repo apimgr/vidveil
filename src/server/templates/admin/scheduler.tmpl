@@ -1,0 +1,187 @@
+{{define "content"}}
+<div class="card">
+    <h2>Scheduled Tasks</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Task</th><th>Schedule</th><th>Last Run</th><th>Next Run</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            {{range .ScheduledTasks}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td><code>{{.Schedule}}</code></td>
+                <td>{{.LastRun}}</td>
+                <td>{{.NextRun}}</td>
+                <td>
+                    {{if .Enabled}}
+                    <span class="badge badge-success">Active</span>
+                    {{else}}
+                    <span class="badge badge-warning">Disabled</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{else}}
+            <tr><td colspan="5" class="text-center">No scheduled tasks configured</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Cache Cleanup</h2>
+    <form id="cache-cleanup-form" onsubmit="saveCacheCleanup(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="cleanup-enabled"{{if .Config.Server.Scheduler.CacheCleanup.Enabled}} checked{{end}}>
+                <span>Enable Automatic Cache Cleanup</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="cleanup-interval">Interval</label>
+            <select id="cleanup-interval">
+                <option value="1h"{{if eq .Config.Server.Scheduler.CacheCleanup.Interval "1h"}} selected{{end}}>Every Hour</option>
+                <option value="6h"{{if eq .Config.Server.Scheduler.CacheCleanup.Interval "6h"}} selected{{end}}>Every 6 Hours</option>
+                <option value="24h"{{if eq .Config.Server.Scheduler.CacheCleanup.Interval "24h"}} selected{{end}}>Daily</option>
+                <option value="168h"{{if eq .Config.Server.Scheduler.CacheCleanup.Interval "168h"}} selected{{end}}>Weekly</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="cleanup-max-age">Max Cache Age (hours)</label>
+            <input type="number" id="cleanup-max-age" value="{{.Config.Server.Scheduler.CacheCleanup.MaxAge}}" placeholder="24">
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="button" onclick="runCleanupNow()" class="btn btn-secondary">Run Now</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Database Maintenance</h2>
+    <form id="db-maintenance-form" onsubmit="saveDBMaintenance(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="db-vacuum-enabled"{{if .Config.Server.Scheduler.DBMaintenance.Enabled}} checked{{end}}>
+                <span>Enable Automatic Database Vacuum</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="db-vacuum-schedule">Schedule</label>
+            <select id="db-vacuum-schedule">
+                <option value="daily"{{if eq .Config.Server.Scheduler.DBMaintenance.Schedule "daily"}} selected{{end}}>Daily</option>
+                <option value="weekly"{{if eq .Config.Server.Scheduler.DBMaintenance.Schedule "weekly"}} selected{{end}}>Weekly</option>
+                <option value="monthly"{{if eq .Config.Server.Scheduler.DBMaintenance.Schedule "monthly"}} selected{{end}}>Monthly</option>
+            </select>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Statistics Aggregation</h2>
+    <form id="stats-form" onsubmit="saveStatsSettings(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="stats-enabled"{{if .Config.Server.Scheduler.Stats.Enabled}} checked{{end}}>
+                <span>Enable Statistics Collection</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="stats-interval">Collection Interval</label>
+            <select id="stats-interval">
+                <option value="1m"{{if eq .Config.Server.Scheduler.Stats.Interval "1m"}} selected{{end}}>Every Minute</option>
+                <option value="5m"{{if eq .Config.Server.Scheduler.Stats.Interval "5m"}} selected{{end}}>Every 5 Minutes</option>
+                <option value="15m"{{if eq .Config.Server.Scheduler.Stats.Interval "15m"}} selected{{end}}>Every 15 Minutes</option>
+            </select>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveCacheCleanup(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    scheduler: {
+                        cache_cleanup: {
+                            enabled: document.getElementById('cleanup-enabled').checked,
+                            interval: document.getElementById('cleanup-interval').value,
+                            max_age: parseInt(document.getElementById('cleanup-max-age').value)
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Cache cleanup settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function runCleanupNow() {
+    try {
+        const resp = await fetch('/api/v1/admin/cache/clear', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Cache cleanup completed!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function saveDBMaintenance(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    scheduler: {
+                        db_maintenance: {
+                            enabled: document.getElementById('db-vacuum-enabled').checked,
+                            schedule: document.getElementById('db-vacuum-schedule').value
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Database maintenance settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function saveStatsSettings(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    scheduler: {
+                        stats: {
+                            enabled: document.getElementById('stats-enabled').checked,
+                            interval: document.getElementById('stats-interval').value
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Statistics settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+</script>
+{{end}}

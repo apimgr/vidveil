@@ -21,6 +21,9 @@ const (
 	ProjectName = "vidveil"
 )
 
+// Version is set at build time via ldflags
+var Version = "dev"
+
 // Config holds all application configuration per BASE.md spec
 type Config struct {
 	Server ServerConfig `yaml:"server"`
@@ -169,6 +172,7 @@ type SSLConfig struct {
 // LetsEncryptConfig holds Let's Encrypt settings
 type LetsEncryptConfig struct {
 	Enabled         bool   `yaml:"enabled"`
+	Domain          string `yaml:"domain"`
 	Email           string `yaml:"email"`
 	Challenge       string `yaml:"challenge"`
 	DNSProviderType string `yaml:"dns_provider_type"`
@@ -826,21 +830,7 @@ func Load(configDir, dataDir string) (*Config, string, error) {
 			return nil, "", fmt.Errorf("failed to save default config: %w", err)
 		}
 
-		// Show credentials on first run
-		fmt.Printf("\n")
-		fmt.Printf("🔐 First Run - Save these credentials!\n")
-		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-		fmt.Printf("📝 Config: %s\n", configPath)
-		fmt.Printf("\n")
-		fmt.Printf("🔑 Admin Panel (/admin):\n")
-		fmt.Printf("   Username: %s\n", cfg.Server.Admin.Username)
-		fmt.Printf("   Password: %s\n", cfg.Server.Admin.Password)
-		fmt.Printf("\n")
-		fmt.Printf("🔗 API Token (/api/v1/admin):\n")
-		fmt.Printf("   Token: %s\n", cfg.Server.Admin.Token)
-		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-		fmt.Printf("⚠️  These will NOT be shown again!\n")
-		fmt.Printf("\n")
+		// Console output is handled in main.go per TEMPLATE.md PART 31
 
 		return cfg, configPath, nil
 	}
@@ -1247,34 +1237,125 @@ func (w *ConfigWatcher) Reload() error {
 	return nil
 }
 
-// GetDisplayHost returns the appropriate host for display per TEMPLATE.md PART 13
+// GetDisplayHost returns the appropriate host for display per TEMPLATE.md lines 2333-2457
 // Never shows: 0.0.0.0, 127.0.0.1, localhost, [::]
-// Returns FQDN or hostname if available
-func GetDisplayHost(cfg *Config) string {
-	addr := cfg.Server.Address
+// Uses global IP if dev TLD or localhost detected
+func GetDisplayHost(_ *Config) string {
+	fqdn := GetFQDN()
 
-	// These should never be shown per TEMPLATE.md
-	hiddenAddrs := map[string]bool{
-		"[::]":      true,
-		"0.0.0.0":   true,
-		"":          true,
-		"127.0.0.1": true,
-		"localhost": true,
-		"[::1]":     true,
+	// If valid production FQDN and not localhost, use it (lines 2443-2445)
+	if !isDevTLD(fqdn) && !isLoopback(fqdn) {
+		return fqdn
 	}
 
-	if hiddenAddrs[addr] {
-		// Priority: FQDN > hostname
-		if cfg.Server.FQDN != "" && IsValidHost(cfg.Server.FQDN, cfg.IsDevelopmentMode()) {
-			return cfg.Server.FQDN
-		}
-		hostname, err := os.Hostname()
-		if err == nil && hostname != "" {
+	// Dev TLD or localhost - use global IP instead (lines 2448-2454)
+	if ipv6 := getGlobalIPv6(); ipv6 != "" {
+		return "[" + ipv6 + "]"
+	}
+	if ipv4 := getGlobalIPv4(); ipv4 != "" {
+		return ipv4
+	}
+
+	// Last resort (line 2457)
+	return fqdn
+}
+
+// GetFQDN returns the FQDN per TEMPLATE.md lines 2333-2366
+func GetFQDN() string {
+	// 1. DOMAIN env var (explicit user override)
+	if domain := os.Getenv("DOMAIN"); domain != "" {
+		return domain
+	}
+
+	// 2. os.Hostname() - cross-platform
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		if !isLoopback(hostname) {
 			return hostname
 		}
-		// Fallback - should only happen in unusual environments
-		return "localhost"
 	}
 
-	return addr
+	// 3. $HOSTNAME env var (skip loopback)
+	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
+		if !isLoopback(hostname) {
+			return hostname
+		}
+	}
+
+	// 4. Global IPv6 (preferred for modern networks)
+	if ipv6 := getGlobalIPv6(); ipv6 != "" {
+		return ipv6
+	}
+
+	// 5. Global IPv4
+	if ipv4 := getGlobalIPv4(); ipv4 != "" {
+		return ipv4
+	}
+
+	// Last resort (not recommended)
+	return "localhost"
+}
+
+// isLoopback checks if host is a loopback address per TEMPLATE.md lines 2368-2377
+func isLoopback(host string) bool {
+	lower := strings.ToLower(host)
+	if lower == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
+// isDevTLD checks if FQDN is a dev TLD per TEMPLATE.md lines 2420-2432
+func isDevTLD(fqdn string) bool {
+	lower := strings.ToLower(fqdn)
+	if lower == "localhost" {
+		return true
+	}
+
+	devSuffixes := []string{
+		".local", ".test", ".example", ".invalid",
+		".localhost", ".lan", ".internal", ".home", ".localdomain",
+		".home.arpa", ".intranet", ".corp", ".private",
+		"." + ProjectName, // Dynamic dev TLD
+	}
+	for _, suffix := range devSuffixes {
+		if strings.HasSuffix(lower, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// getGlobalIPv6 returns first global unicast IPv6 address per TEMPLATE.md lines 2379-2392
+func getGlobalIPv6() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			if ipnet.IP.To4() == nil && ipnet.IP.IsGlobalUnicast() {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return ""
+}
+
+// getGlobalIPv4 returns first global unicast IPv4 address per TEMPLATE.md lines 2394-2407
+func getGlobalIPv4() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			if ip4 := ipnet.IP.To4(); ip4 != nil && ipnet.IP.IsGlobalUnicast() {
+				return ip4.String()
+			}
+		}
+	}
+	return ""
 }

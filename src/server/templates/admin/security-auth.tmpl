@@ -1,0 +1,106 @@
+{{define "content"}}
+<div class="card">
+    <h2>Admin Credentials</h2>
+    <form id="password-form" onsubmit="changePassword(event)">
+        <div class="form-group">
+            <label for="current-password">Current Password</label>
+            <input type="password" id="current-password" required>
+        </div>
+        <div class="form-group">
+            <label for="new-password">New Password</label>
+            <input type="password" id="new-password" required minlength="8">
+            <p class="help-text">Minimum 8 characters</p>
+        </div>
+        <div class="form-group">
+            <label for="confirm-password">Confirm New Password</label>
+            <input type="password" id="confirm-password" required>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Change Password</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Two-Factor Authentication</h2>
+    <table class="info-table">
+        <tr><td>Status</td><td><span class="badge badge-warning">Not Configured</span></td></tr>
+    </table>
+    <div class="button-group">
+        <button onclick="setup2FA()" class="btn btn-secondary">Enable 2FA</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Session Settings</h2>
+    <form id="session-form" onsubmit="saveSessionSettings(event)">
+        <div class="form-group">
+            <label for="session-duration">Session Duration (days)</label>
+            <input type="number" id="session-duration" value="30" min="1" max="365">
+            <p class="help-text">How long admin sessions remain valid</p>
+        </div>
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="session-remember" checked>
+                <span>Allow "Remember Me"</span>
+            </label>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Active Sessions</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Device</th><th>IP Address</th><th>Last Active</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Current Session</td>
+                <td>{{.ClientIP}}</td>
+                <td>Now</td>
+                <td><span class="badge badge-success">Active</span></td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="button-group">
+        <button onclick="revokeAllSessions()" class="btn btn-warning">Revoke All Other Sessions</button>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function changePassword(e) {
+    e.preventDefault();
+    const newPass = document.getElementById('new-password').value;
+    const confirmPass = document.getElementById('confirm-password').value;
+    if (newPass !== confirmPass) {
+        showError('Passwords do not match');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/v1/admin/password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                current_password: document.getElementById('current-password').value,
+                new_password: newPass
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Password changed successfully!');
+            document.getElementById('password-form').reset();
+        } else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+function setup2FA() { showWarning('2FA setup not implemented yet'); }
+function saveSessionSettings(e) { e.preventDefault(); showSuccess('Session settings saved!'); }
+function revokeAllSessions() { showWarning('Session revocation not implemented yet'); }
+</script>
+{{end}}

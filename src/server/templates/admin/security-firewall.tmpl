@@ -1,0 +1,84 @@
+{{define "content"}}
+<div class="card">
+    <h2>Firewall Status</h2>
+    <table class="info-table">
+        <tr><td>Status</td><td><span class="badge badge-success">Active</span></td></tr>
+        <tr><td>Blocked IPs</td><td>0</td></tr>
+        <tr><td>Allowed IPs</td><td>0</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>IP Allowlist</h2>
+    <p class="text-muted">IPs in the allowlist bypass all blocking rules.</p>
+    <form id="allowlist-form" onsubmit="saveAllowlist(event)">
+        <div class="form-group">
+            <label for="allowlist">Allowed IPs</label>
+            <textarea id="allowlist" rows="6" placeholder="One IP or CIDR per line&#10;Example:&#10;192.168.1.100&#10;10.0.0.0/8"></textarea>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Allowlist</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>IP Blocklist</h2>
+    <p class="text-muted">Blocked IPs receive 403 Forbidden responses.</p>
+    <form id="blocklist-form" onsubmit="saveBlocklist(event)">
+        <div class="form-group">
+            <label for="blocklist">Blocked IPs</label>
+            <textarea id="blocklist" rows="6" placeholder="One IP or CIDR per line"></textarea>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Blocklist</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Recent Blocks</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>IP Address</th><th>Reason</th><th>Time</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="4" class="text-center">No recent blocks</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Auto-Block Rules</h2>
+    <form id="autoblock-form" onsubmit="saveAutoBlock(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="autoblock-enabled" checked>
+                <span>Enable Auto-Blocking</span>
+            </label>
+            <p class="help-text">Automatically block IPs that trigger security rules</p>
+        </div>
+        <div class="form-group">
+            <label for="autoblock-threshold">Block Threshold</label>
+            <input type="number" id="autoblock-threshold" value="10" min="1">
+            <p class="help-text">Number of violations before auto-block</p>
+        </div>
+        <div class="form-group">
+            <label for="autoblock-duration">Block Duration (hours)</label>
+            <input type="number" id="autoblock-duration" value="24" min="1">
+            <p class="help-text">How long to block offending IPs</p>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </div>
+    </form>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function saveAllowlist(e) { e.preventDefault(); showSuccess('Allowlist saved!'); }
+function saveBlocklist(e) { e.preventDefault(); showSuccess('Blocklist saved!'); }
+function saveAutoBlock(e) { e.preventDefault(); showSuccess('Auto-block settings saved!'); }
+</script>
+{{end}}

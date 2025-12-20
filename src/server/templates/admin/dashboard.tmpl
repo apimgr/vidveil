@@ -1,0 +1,40 @@
+{{define "content"}}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{.EnabledCount}}</div>
+        <div class="stat-label">Engines Active</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.EngineCount}}</div>
+        <div class="stat-label">Total Engines</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.MemoryMB}} MB</div>
+        <div class="stat-label">Memory Usage</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{.Goroutines}}</div>
+        <div class="stat-label">Goroutines</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>System Info</h2>
+    <table class="info-table">
+        <tr><td>Mode</td><td>{{.Mode}}</td></tr>
+        <tr><td>Go Version</td><td>{{.GoVersion}}</td></tr>
+        <tr><td>OS / Arch</td><td>{{.OS}} / {{.Arch}}</td></tr>
+        <tr><td>Server Port</td><td>{{.Port}}</td></tr>
+        <tr><td>Tor Enabled</td><td>{{.TorEnabled}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Quick Actions</h2>
+    <div class="button-group">
+        <button onclick="location.href='/admin/system/backup'" class="btn btn-primary">Create Backup</button>
+        <button onclick="location.href='/admin/engines'" class="btn btn-secondary">Manage Engines</button>
+        <button onclick="location.href='/admin/server/logs'" class="btn btn-secondary">View Logs</button>
+    </div>
+</div>
+{{end}}

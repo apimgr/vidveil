@@ -1,0 +1,219 @@
+{{define "content"}}
+<div class="card">
+    <h2>Backup Configuration</h2>
+    <form id="backup-form" onsubmit="saveBackupSettings(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="backup-enabled"{{if .Config.Server.Backup.Enabled}} checked{{end}}>
+                <span>Enable Automatic Backups</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="backup-schedule">Schedule</label>
+            <select id="backup-schedule">
+                <option value="hourly"{{if eq .Config.Server.Backup.Schedule "hourly"}} selected{{end}}>Hourly</option>
+                <option value="daily"{{if eq .Config.Server.Backup.Schedule "daily"}} selected{{end}}>Daily</option>
+                <option value="weekly"{{if eq .Config.Server.Backup.Schedule "weekly"}} selected{{end}}>Weekly</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="backup-retention">Retention (days)</label>
+            <input type="number" id="backup-retention" value="{{.Config.Server.Backup.Retention}}" placeholder="30">
+        </div>
+        <div class="form-group">
+            <label for="backup-path">Backup Directory</label>
+            <input type="text" id="backup-path" value="{{.Config.Server.Backup.Path}}" placeholder="/var/lib/vidveil/backups">
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="button" onclick="createBackup()" class="btn btn-secondary">Create Backup Now</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Backup Contents</h2>
+    <div class="form-group">
+        <label class="toggle-label">
+            <input type="checkbox" id="backup-config" checked>
+            <span>Configuration</span>
+        </label>
+    </div>
+    <div class="form-group">
+        <label class="toggle-label">
+            <input type="checkbox" id="backup-database" checked>
+            <span>Database</span>
+        </label>
+    </div>
+    <div class="form-group">
+        <label class="toggle-label">
+            <input type="checkbox" id="backup-logs">
+            <span>Logs</span>
+        </label>
+    </div>
+    <div class="form-group">
+        <label class="toggle-label">
+            <input type="checkbox" id="backup-onion">
+            <span>Onion Service Keys</span>
+        </label>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Available Backups</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Date</th><th>Size</th><th>Type</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            {{range .Backups}}
+            <tr>
+                <td>{{.Date}}</td>
+                <td>{{.Size}}</td>
+                <td>{{.Type}}</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="downloadBackup('{{.ID}}')">Download</button>
+                    <button class="btn btn-sm btn-primary" onclick="restoreBackup('{{.ID}}')">Restore</button>
+                    <button class="btn btn-sm btn-error" onclick="deleteBackup('{{.ID}}')">Delete</button>
+                </td>
+            </tr>
+            {{else}}
+            <tr><td colspan="4" class="text-center">No backups available</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Restore from File</h2>
+    <form id="restore-form" onsubmit="uploadRestore(event)">
+        <div class="form-group">
+            <label for="restore-file">Backup File</label>
+            <input type="file" id="restore-file" accept=".tar.gz,.tgz,.zip">
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-warning">Upload & Restore</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Export/Import Configuration</h2>
+    <div class="button-group">
+        <button onclick="exportConfig()" class="btn btn-secondary">Export Config</button>
+        <button onclick="document.getElementById('import-file').click()" class="btn btn-secondary">Import Config</button>
+        <input type="file" id="import-file" accept=".yml,.yaml,.json" style="display:none" onchange="importConfig(event)">
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveBackupSettings(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    backup: {
+                        enabled: document.getElementById('backup-enabled').checked,
+                        schedule: document.getElementById('backup-schedule').value,
+                        retention: parseInt(document.getElementById('backup-retention').value),
+                        path: document.getElementById('backup-path').value
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Backup settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function createBackup() {
+    try {
+        showInfo('Creating backup...');
+        const resp = await fetch('/api/v1/admin/backup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                include_config: document.getElementById('backup-config').checked,
+                include_database: document.getElementById('backup-database').checked,
+                include_logs: document.getElementById('backup-logs').checked,
+                include_onion: document.getElementById('backup-onion').checked
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Backup created successfully!'); location.reload(); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+function downloadBackup(id) {
+    window.location.href = '/api/v1/admin/backup/' + id + '/download';
+}
+
+async function restoreBackup(id) {
+    if (!confirm('Are you sure? This will restore the server to this backup state. The server will restart.')) return;
+    try {
+        showInfo('Restoring backup...');
+        const resp = await fetch('/api/v1/admin/backup/' + id + '/restore', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Restore initiated. Server will restart...'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function deleteBackup(id) {
+    if (!confirm('Delete this backup?')) return;
+    try {
+        const resp = await fetch('/api/v1/admin/backup/' + id, { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Backup deleted!'); location.reload(); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function uploadRestore(e) {
+    e.preventDefault();
+    const file = document.getElementById('restore-file').files[0];
+    if (!file) { showError('Please select a backup file'); return; }
+    if (!confirm('Are you sure? This will restore the server from this backup. The server will restart.')) return;
+    const formData = new FormData();
+    formData.append('backup', file);
+    try {
+        showInfo('Uploading and restoring...');
+        const resp = await fetch('/api/v1/admin/backup/upload', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Restore initiated. Server will restart...'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+function exportConfig() {
+    window.location.href = '/api/v1/admin/config/export';
+}
+
+async function importConfig(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!confirm('Import this configuration? Current settings will be overwritten.')) return;
+    const formData = new FormData();
+    formData.append('config', file);
+    try {
+        const resp = await fetch('/api/v1/admin/config/import', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Configuration imported!'); location.reload(); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+function showInfo(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = 'toast show info';
+}
+</script>
+{{end}}

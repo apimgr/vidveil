@@ -1,0 +1,131 @@
+{{define "content"}}
+<div class="card">
+    <h2>Security Headers</h2>
+    <table class="info-table">
+        <tr><td>Content-Security-Policy</td><td><span class="badge badge-success">Enabled</span></td></tr>
+        <tr><td>X-Frame-Options</td><td><span class="badge badge-success">DENY</span></td></tr>
+        <tr><td>X-Content-Type-Options</td><td><span class="badge badge-success">nosniff</span></td></tr>
+        <tr><td>X-XSS-Protection</td><td><span class="badge badge-success">1; mode=block</span></td></tr>
+        <tr><td>Referrer-Policy</td><td><span class="badge badge-success">strict-origin-when-cross-origin</span></td></tr>
+        <tr><td>Permissions-Policy</td><td><span class="badge badge-success">Enabled</span></td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Rate Limiting</h2>
+    <form id="rate-limit-form" onsubmit="saveRateLimit(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="rate-enabled"{{if .Config.Server.RateLimit.Enabled}} checked{{end}}>
+                <span>Enable Rate Limiting</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="rate-requests">Requests per Window</label>
+            <input type="number" id="rate-requests" value="{{.Config.Server.RateLimit.Requests}}" placeholder="120">
+        </div>
+        <div class="form-group">
+            <label for="rate-window">Window (seconds)</label>
+            <input type="number" id="rate-window" value="{{.Config.Server.RateLimit.Window}}" placeholder="60">
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Admin Credentials</h2>
+    <form id="password-form" onsubmit="changePassword(event)">
+        <div class="form-group">
+            <label for="current-password">Current Password</label>
+            <input type="password" id="current-password" required>
+        </div>
+        <div class="form-group">
+            <label for="new-password">New Password</label>
+            <input type="password" id="new-password" required minlength="8">
+        </div>
+        <div class="form-group">
+            <label for="confirm-password">Confirm New Password</label>
+            <input type="password" id="confirm-password" required>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Change Password</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>API Token</h2>
+    <p class="text-muted">Your API token is used for programmatic access to the admin API.</p>
+    <div class="form-group">
+        <label>Token Prefix</label>
+        <input type="text" value="{{.TokenPrefix}}..." readonly>
+    </div>
+    <div class="button-group">
+        <button onclick="regenerateToken()" class="btn btn-warning">Regenerate Token</button>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveRateLimit(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    rate_limit: {
+                        enabled: document.getElementById('rate-enabled').checked,
+                        requests: parseInt(document.getElementById('rate-requests').value),
+                        window: parseInt(document.getElementById('rate-window').value)
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Rate limit settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function changePassword(e) {
+    e.preventDefault();
+    const newPass = document.getElementById('new-password').value;
+    const confirmPass = document.getElementById('confirm-password').value;
+    if (newPass !== confirmPass) {
+        showError('Passwords do not match');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/v1/admin/password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                current_password: document.getElementById('current-password').value,
+                new_password: newPass
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Password changed successfully!');
+            document.getElementById('password-form').reset();
+        } else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function regenerateToken() {
+    if (!confirm('Are you sure? This will invalidate your current API token.')) return;
+    try {
+        const resp = await fetch('/api/v1/admin/token/regenerate', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Token regenerated! New token: ' + data.data.token);
+        } else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+</script>
+{{end}}

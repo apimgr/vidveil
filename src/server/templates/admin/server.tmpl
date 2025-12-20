@@ -1,0 +1,101 @@
+{{define "content"}}
+<div class="card">
+    <h2>Server Settings</h2>
+    <form id="server-form" onsubmit="saveServerSettings(event)">
+        <div class="form-group">
+            <label for="address">Listen Address</label>
+            <input type="text" id="address" value="{{.Config.Server.Address}}" placeholder="0.0.0.0">
+            <p class="help-text">IP address to bind to (0.0.0.0 for all interfaces)</p>
+        </div>
+        <div class="form-group">
+            <label for="port">Port</label>
+            <input type="number" id="port" value="{{.Config.Server.Port}}" placeholder="80">
+            <p class="help-text">Port number (requires restart to change)</p>
+        </div>
+        <div class="form-group">
+            <label for="mode">Mode</label>
+            <select id="mode">
+                <option value="production"{{if eq .Config.Server.Mode "production"}} selected{{end}}>Production</option>
+                <option value="development"{{if eq .Config.Server.Mode "development"}} selected{{end}}>Development</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="debug"{{if .Config.Server.Debug}} checked{{end}}>
+                <span>Enable Debug Mode</span>
+            </label>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Request Limits</h2>
+    <form id="limits-form" onsubmit="saveLimits(event)">
+        <div class="form-group">
+            <label for="max-body">Max Body Size</label>
+            <input type="text" id="max-body" value="{{.Config.Server.Limits.MaxBodySize}}" placeholder="10MB">
+        </div>
+        <div class="form-group">
+            <label for="read-timeout">Read Timeout</label>
+            <input type="text" id="read-timeout" value="{{.Config.Server.Limits.ReadTimeout}}" placeholder="30s">
+        </div>
+        <div class="form-group">
+            <label for="write-timeout">Write Timeout</label>
+            <input type="text" id="write-timeout" value="{{.Config.Server.Limits.WriteTimeout}}" placeholder="30s">
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveServerSettings(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    address: document.getElementById('address').value,
+                    port: parseInt(document.getElementById('port').value),
+                    mode: document.getElementById('mode').value,
+                    debug: document.getElementById('debug').checked
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Server settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function saveLimits(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    limits: {
+                        max_body_size: document.getElementById('max-body').value,
+                        read_timeout: document.getElementById('read-timeout').value,
+                        write_timeout: document.getElementById('write-timeout').value
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Limits saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+</script>
+{{end}}

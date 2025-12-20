@@ -1,0 +1,226 @@
+{{define "content"}}
+<div class="card">
+    <h2>Log Configuration</h2>
+    <form id="log-form" onsubmit="saveLogSettings(event)">
+        <div class="form-group">
+            <label for="log-level">Log Level</label>
+            <select id="log-level">
+                <option value="debug"{{if eq .Config.Server.Logging.Level "debug"}} selected{{end}}>Debug</option>
+                <option value="info"{{if eq .Config.Server.Logging.Level "info"}} selected{{end}}>Info</option>
+                <option value="warn"{{if eq .Config.Server.Logging.Level "warn"}} selected{{end}}>Warning</option>
+                <option value="error"{{if eq .Config.Server.Logging.Level "error"}} selected{{end}}>Error</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="log-format">Log Format</label>
+            <select id="log-format">
+                <option value="json"{{if eq .Config.Server.Logging.Format "json"}} selected{{end}}>JSON</option>
+                <option value="text"{{if eq .Config.Server.Logging.Format "text"}} selected{{end}}>Text</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="log-output">Output</label>
+            <select id="log-output">
+                <option value="stdout"{{if eq .Config.Server.Logging.Output "stdout"}} selected{{end}}>Standard Output</option>
+                <option value="file"{{if eq .Config.Server.Logging.Output "file"}} selected{{end}}>File</option>
+                <option value="both"{{if eq .Config.Server.Logging.Output "both"}} selected{{end}}>Both</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="log-path">Log File Path</label>
+            <input type="text" id="log-path" value="{{.Config.Server.Logging.Path}}" placeholder="/var/log/vidveil/app.log">
+        </div>
+        <div class="form-group">
+            <label for="log-max-size">Max File Size (MB)</label>
+            <input type="number" id="log-max-size" value="{{.Config.Server.Logging.MaxSize}}" placeholder="100">
+        </div>
+        <div class="form-group">
+            <label for="log-max-backups">Max Backups</label>
+            <input type="number" id="log-max-backups" value="{{.Config.Server.Logging.MaxBackups}}" placeholder="5">
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Log Viewer</h2>
+    <div class="log-controls">
+        <div class="form-group inline">
+            <label for="log-filter">Filter</label>
+            <select id="log-filter" onchange="refreshLogs()">
+                <option value="all">All</option>
+                <option value="error">Errors Only</option>
+                <option value="warn">Warnings+</option>
+                <option value="info">Info+</option>
+            </select>
+        </div>
+        <div class="form-group inline">
+            <label for="log-lines">Lines</label>
+            <select id="log-lines" onchange="refreshLogs()">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+            </select>
+        </div>
+        <button onclick="refreshLogs()" class="btn btn-secondary">Refresh</button>
+        <button onclick="downloadLogs()" class="btn btn-secondary">Download</button>
+        <button onclick="clearLogs()" class="btn btn-warning">Clear Logs</button>
+    </div>
+    <div id="log-container" class="log-viewer">
+        <pre id="log-output">Loading logs...</pre>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Access Logs</h2>
+    <form id="access-log-form" onsubmit="saveAccessLogSettings(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="access-enabled"{{if .Config.Server.Logging.Access.Enabled}} checked{{end}}>
+                <span>Enable Access Logging</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="access-anonymize"{{if .Config.Server.Logging.Access.Anonymize}} checked{{end}}>
+                <span>Anonymize IP Addresses</span>
+            </label>
+            <p class="help-text">Hash IP addresses for privacy</p>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.log-viewer {
+    background: #1e1e2e;
+    border-radius: 8px;
+    padding: 1rem;
+    max-height: 500px;
+    overflow-y: auto;
+}
+.log-viewer pre {
+    margin: 0;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.log-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+.form-group.inline {
+    margin-bottom: 0;
+}
+.log-line-error { color: #f38ba8; }
+.log-line-warn { color: #fab387; }
+.log-line-info { color: #89dceb; }
+.log-line-debug { color: #a6adc8; }
+</style>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveLogSettings(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    logging: {
+                        level: document.getElementById('log-level').value,
+                        format: document.getElementById('log-format').value,
+                        output: document.getElementById('log-output').value,
+                        path: document.getElementById('log-path').value,
+                        max_size: parseInt(document.getElementById('log-max-size').value),
+                        max_backups: parseInt(document.getElementById('log-max-backups').value)
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Log settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function saveAccessLogSettings(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    logging: {
+                        access: {
+                            enabled: document.getElementById('access-enabled').checked,
+                            anonymize: document.getElementById('access-anonymize').checked
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Access log settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function refreshLogs() {
+    const filter = document.getElementById('log-filter').value;
+    const lines = document.getElementById('log-lines').value;
+    try {
+        const resp = await fetch(`/api/v1/admin/logs?level=${filter}&lines=${lines}`);
+        const data = await resp.json();
+        if (data.success) {
+            const output = document.getElementById('log-output');
+            output.innerHTML = data.data.logs.map(line => {
+                let cls = 'log-line-info';
+                if (line.includes('ERROR') || line.includes('"level":"error"')) cls = 'log-line-error';
+                else if (line.includes('WARN') || line.includes('"level":"warn"')) cls = 'log-line-warn';
+                else if (line.includes('DEBUG') || line.includes('"level":"debug"')) cls = 'log-line-debug';
+                return `<span class="${cls}">${escapeHtml(line)}</span>`;
+            }).join('\n') || 'No logs found';
+        } else { showError('Error: ' + data.error); }
+    } catch (e) {
+        document.getElementById('log-output').textContent = 'Error loading logs: ' + e.message;
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function downloadLogs() {
+    window.location.href = '/api/v1/admin/logs/download';
+}
+
+async function clearLogs() {
+    if (!confirm('Are you sure you want to clear all logs?')) return;
+    try {
+        const resp = await fetch('/api/v1/admin/logs/clear', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Logs cleared!'); refreshLogs(); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+// Load logs on page load
+document.addEventListener('DOMContentLoaded', refreshLogs);
+</script>
+{{end}}

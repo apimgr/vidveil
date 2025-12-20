@@ -10,12 +10,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server"
+	"github.com/apimgr/vidveil/src/services/admin"
+	"github.com/apimgr/vidveil/src/services/database"
 	"github.com/apimgr/vidveil/src/services/engines"
 	"github.com/apimgr/vidveil/src/services/maintenance"
 	"github.com/apimgr/vidveil/src/services/service"
@@ -202,12 +205,36 @@ func main() {
 		cfg.Server.Mode = config.NormalizeMode(cfg.Server.Mode)
 	}
 
+	// Initialize database per TEMPLATE.md PART 24
+	paths := config.GetPaths(configDir, dataDir)
+	dbPath := filepath.Join(paths.Data, "db", "vidveil.db")
+	migrationMgr, err := database.NewMigrationManager(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Failed to initialize database: %v\n", err)
+		os.Exit(1)
+	}
+	defer migrationMgr.Close()
+
+	// Register and run migrations
+	migrationMgr.RegisterDefaultMigrations()
+	if err := migrationMgr.RunMigrations(); err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Failed to run migrations: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize admin service per TEMPLATE.md PART 31
+	adminSvc := admin.NewService(migrationMgr.GetDB())
+	if err := adminSvc.Initialize(); err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Failed to initialize admin service: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Initialize search engines
 	engineMgr := engines.NewManager(cfg)
 	engineMgr.InitializeEngines()
 
-	// Create server
-	srv := server.New(cfg, engineMgr)
+	// Create server with admin service
+	srv := server.New(cfg, engineMgr, adminSvc)
 
 	// Start live config watcher per TEMPLATE.md PART 1 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, cfg)
@@ -222,39 +249,73 @@ func main() {
 	go func() {
 		// Build listen address properly handling IPv6
 		listenAddr := cfg.Server.Address + ":" + cfg.Server.Port
+		// Per TEMPLATE.md line 6197-6199: Never show localhost, 127.0.0.1, 0.0.0.0
+		// Show only one address, the most relevant
 		displayAddr := getDisplayAddress(cfg)
 
-		fmt.Printf("\n")
-
-		// Mode-specific startup output per BASE.md spec lines 375-392
-		if cfg.IsDevelopmentMode() {
-			fmt.Printf("🔧 Vidveil v%s [DEVELOPMENT MODE]\n", Version)
-			fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-			fmt.Printf("⚠️  Debug endpoints enabled\n")
-			fmt.Printf("⚠️  Verbose error messages enabled\n")
-			fmt.Printf("⚠️  Template caching disabled\n")
-			fmt.Printf("   Mode: development\n")
-		} else {
-			fmt.Printf("🚀 Vidveil v%s\n", Version)
-			fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-			fmt.Printf("   Mode: production\n")
+		// Console output per TEMPLATE.md PART 31 lines 10230-10258
+		isFirstRun := adminSvc.IsFirstRun()
+		statusText := "Running"
+		if isFirstRun {
+			statusText = "Running (first run - setup available)"
 		}
 
-		fmt.Printf("🌐 Server:  http://%s\n", displayAddr)
-		fmt.Printf("📝 Config:  %s\n", configPath)
-		fmt.Printf("📚 Engines: %d enabled\n", engineMgr.EnabledCount())
+		// Check SMTP status per TEMPLATE.md PART 31 lines 10267-10306
+		smtpStatus := "Not detected (email features disabled)"
+		smtpInfo := ""
+		if cfg.Server.Email.Enabled {
+			smtpHost := cfg.Server.Email.Host
+			smtpPort := cfg.Server.Email.Port
+			if smtpHost != "" && smtpPort > 0 {
+				smtpStatus = fmt.Sprintf("Auto-detected (%s:%d)", smtpHost, smtpPort)
+				smtpInfo = fmt.Sprintf("%s:%d (enabled)", smtpHost, smtpPort)
+			}
+		}
 
+		fmt.Println()
+		fmt.Println("╔══════════════════════════════════════════════════════════════════════╗")
+		fmt.Println("║                                                                      ║")
+		fmt.Printf("║   VIDVEIL v%-58s ║\n", Version)
+		fmt.Println("║                                                                      ║")
+		fmt.Printf("║   Status: %-60s ║\n", statusText)
+		fmt.Println("║                                                                      ║")
+		fmt.Println("╠══════════════════════════════════════════════════════════════════════╣")
+		fmt.Println("║                                                                      ║")
+		fmt.Println("║   🌐 Web Interface:                                                   ║")
+		fmt.Printf("║      http://%-58s ║\n", displayAddr)
+		fmt.Println("║                                                                      ║")
+		fmt.Println("║   🔧 Admin Panel:                                                     ║")
+		fmt.Printf("║      http://%-58s ║\n", displayAddr+"/admin")
+		fmt.Println("║                                                                      ║")
+		if isFirstRun {
+			setupToken := adminSvc.GetSetupToken()
+			if setupToken != "" {
+				fmt.Println("║   🔑 Setup Token (use at /admin):                                     ║")
+				fmt.Printf("║      %-64s ║\n", setupToken)
+				fmt.Println("║                                                                      ║")
+			}
+		}
+		fmt.Printf("║   📧 SMTP: %-59s ║\n", smtpStatus)
+		if !cfg.Server.Email.Enabled {
+			fmt.Println("║      Configure manually at /admin/server/email                       ║")
+		}
+		fmt.Println("║                                                                      ║")
+		if isFirstRun {
+			fmt.Println("║   ⚠️  Save the setup token! It will not be shown again.               ║")
+			fmt.Println("║                                                                      ║")
+		}
 		if cfg.Search.Tor.Enabled {
-			fmt.Printf("🧅 Tor:     %s\n", cfg.Search.Tor.Proxy)
+			fmt.Printf("║   🧅 Tor: %-60s ║\n", cfg.Search.Tor.Proxy)
+			fmt.Println("║                                                                      ║")
 		}
-
-		if cfg.IsDevelopmentMode() {
-			fmt.Printf("🔧 Debug:   http://%s/debug/pprof/\n", displayAddr)
+		fmt.Println("╚══════════════════════════════════════════════════════════════════════╝")
+		fmt.Println()
+		fmt.Printf("[INFO] Server started successfully\n")
+		fmt.Printf("[INFO] Listening on %s\n", listenAddr)
+		if smtpInfo != "" {
+			fmt.Printf("[INFO] SMTP auto-detected: %s\n", smtpInfo)
 		}
-
-		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-		fmt.Printf("Press Ctrl+C to stop\n")
-		fmt.Printf("\n")
+		fmt.Println()
 
 		if err := srv.ListenAndServe(listenAddr); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "❌ Server error: %v\n", err)

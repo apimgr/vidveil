@@ -1,0 +1,362 @@
+{{define "admin"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Admin - {{.SiteTitle}}</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --border: #334155;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+        .admin-nav {
+            width: 240px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .nav-brand { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .nav-brand a { color: var(--text-primary); text-decoration: none; font-weight: bold; font-size: 1.1rem; }
+        .nav-links { flex: 1; overflow-y: auto; padding: 0.5rem 0; }
+        .nav-link {
+            display: block;
+            padding: 0.625rem 1rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            font-size: 0.875rem;
+        }
+        .nav-link:hover { background: var(--bg-primary); color: var(--text-primary); }
+        .nav-link.active { background: var(--bg-primary); color: var(--accent); border-left-color: var(--accent); }
+
+        /* Collapsible sections */
+        .nav-section { margin-bottom: 0.25rem; }
+        .nav-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.625rem 1rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            user-select: none;
+        }
+        .nav-section-header:hover { color: var(--text-primary); }
+        .nav-section-header .chevron {
+            transition: transform 0.2s;
+            font-size: 0.625rem;
+        }
+        .nav-section.collapsed .chevron { transform: rotate(-90deg); }
+        .nav-section.collapsed .nav-section-links { display: none; }
+        .nav-section-links { padding-left: 0.5rem; }
+        .nav-section-links .nav-link { font-size: 0.8125rem; }
+
+        .nav-footer { border-top: 1px solid var(--border); padding: 0.5rem 0; }
+        .nav-logout { color: var(--error) !important; }
+
+        .admin-main {
+            flex: 1;
+            padding: 2rem;
+            margin-left: 240px;
+            max-width: 1200px;
+        }
+        .admin-main h1 { margin-bottom: 1.5rem; font-size: 1.75rem; }
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .card h2 { margin-bottom: 1rem; font-size: 1.25rem; color: var(--text-primary); }
+        .card h3 { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--text-secondary); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .stat-value { font-size: 2rem; font-weight: bold; color: var(--accent); }
+        .stat-label { color: var(--text-secondary); margin-top: 0.5rem; }
+        .info-table { width: 100%; border-collapse: collapse; }
+        .info-table td { padding: 0.75rem; border-bottom: 1px solid var(--border); }
+        .info-table td:first-child { color: var(--text-secondary); width: 40%; }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th, .data-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        .data-table th { background: var(--bg-primary); color: var(--text-secondary); font-weight: 500; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
+        .badge-success { background: var(--success); color: white; }
+        .badge-warning { background: var(--warning); color: black; }
+        .badge-error { background: var(--error); color: white; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-secondary { background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn-warning { background: var(--warning); color: black; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-secondary); }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .toggle-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+        .toggle-label input { width: auto; }
+        .button-group { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+        .text-muted { color: var(--text-secondary); }
+        .text-center { text-align: center; }
+        .help-text { font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem; }
+        .code-block { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; padding: 1rem; overflow-x: auto; }
+        .code-block pre { margin: 0; font-family: monospace; font-size: 0.875rem; }
+        .code-block code { color: var(--text-primary); }
+        code { background: var(--bg-primary); padding: 0.125rem 0.25rem; border-radius: 2px; font-size: 0.875rem; }
+        .alert { padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
+        .alert-info { background: rgba(59, 130, 246, 0.2); border: 1px solid var(--accent); }
+        .alert-warning { background: rgba(245, 158, 11, 0.2); border: 1px solid var(--warning); }
+        .alert-error { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--error); }
+        .logo-preview { padding: 1rem; background: var(--bg-primary); border-radius: 4px; display: inline-block; }
+        .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 10000; display: flex; flex-direction: column; gap: 0.5rem; }
+        .toast { padding: 1rem 2rem 1rem 1rem; border-radius: 4px; color: #fff; display: flex; align-items: center; gap: 1rem; opacity: 0; transform: translateX(100%); transition: all 0.3s ease; max-width: 400px; }
+        .toast.show { opacity: 1; transform: translateX(0); }
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        .toast-warning { background: var(--warning); }
+        .toast-info { background: var(--accent); }
+        .toast-close { background: none; border: none; color: inherit; cursor: pointer; font-size: 1.2rem; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .admin-nav { width: 200px; }
+            .admin-main { margin-left: 200px; padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="admin-nav">
+        <div class="nav-brand">
+            <a href="/admin">{{.SiteTitle}} Admin</a>
+        </div>
+        <div class="nav-links">
+            <a href="/admin" class="nav-link{{if eq .ActiveNav "dashboard"}} active{{end}}">Dashboard</a>
+
+            <!-- Server Section -->
+            <div class="nav-section" id="section-server">
+                <div class="nav-section-header" onclick="toggleSection('server')">
+                    <span>Server</span>
+                    <span class="chevron">▼</span>
+                </div>
+                <div class="nav-section-links">
+                    <a href="/admin/server/settings" class="nav-link{{if eq .ActiveNav "server"}} active{{end}}">Settings</a>
+                    <a href="/admin/server/branding" class="nav-link{{if eq .ActiveNav "branding"}} active{{end}}">Branding</a>
+                    <a href="/admin/server/ssl" class="nav-link{{if eq .ActiveNav "ssl"}} active{{end}}">SSL/TLS</a>
+                    <a href="/admin/server/scheduler" class="nav-link{{if eq .ActiveNav "scheduler"}} active{{end}}">Scheduler</a>
+                    <a href="/admin/server/email" class="nav-link{{if eq .ActiveNav "email"}} active{{end}}">Email</a>
+                    <a href="/admin/server/logs" class="nav-link{{if eq .ActiveNav "logs"}} active{{end}}">Logs</a>
+                    <a href="/admin/server/database" class="nav-link{{if eq .ActiveNav "database"}} active{{end}}">Database</a>
+                    <a href="/admin/server/web" class="nav-link{{if eq .ActiveNav "web"}} active{{end}}">Web</a>
+                </div>
+            </div>
+
+            <!-- Security Section -->
+            <div class="nav-section" id="section-security">
+                <div class="nav-section-header" onclick="toggleSection('security')">
+                    <span>Security</span>
+                    <span class="chevron">▼</span>
+                </div>
+                <div class="nav-section-links">
+                    <a href="/admin/security/auth" class="nav-link{{if eq .ActiveNav "security-auth"}} active{{end}}">Authentication</a>
+                    <a href="/admin/security/tokens" class="nav-link{{if eq .ActiveNav "security-tokens"}} active{{end}}">API Tokens</a>
+                    <a href="/admin/security/ratelimit" class="nav-link{{if eq .ActiveNav "security-ratelimit"}} active{{end}}">Rate Limiting</a>
+                    <a href="/admin/security/firewall" class="nav-link{{if eq .ActiveNav "security-firewall"}} active{{end}}">Firewall</a>
+                </div>
+            </div>
+
+            <!-- Network Section -->
+            <div class="nav-section" id="section-network">
+                <div class="nav-section-header" onclick="toggleSection('network')">
+                    <span>Network</span>
+                    <span class="chevron">▼</span>
+                </div>
+                <div class="nav-section-links">
+                    <a href="/admin/network/tor" class="nav-link{{if eq .ActiveNav "tor"}} active{{end}}">Tor</a>
+                    <a href="/admin/network/geoip" class="nav-link{{if eq .ActiveNav "geoip"}} active{{end}}">GeoIP</a>
+                    <a href="/admin/network/blocklists" class="nav-link{{if eq .ActiveNav "blocklists"}} active{{end}}">Blocklists</a>
+                </div>
+            </div>
+
+            <!-- System Section -->
+            <div class="nav-section" id="section-system">
+                <div class="nav-section-header" onclick="toggleSection('system')">
+                    <span>System</span>
+                    <span class="chevron">▼</span>
+                </div>
+                <div class="nav-section-links">
+                    <a href="/admin/system/backup" class="nav-link{{if eq .ActiveNav "backup"}} active{{end}}">Backup</a>
+                    <a href="/admin/system/maintenance" class="nav-link{{if eq .ActiveNav "maintenance"}} active{{end}}">Maintenance</a>
+                    <a href="/admin/system/updates" class="nav-link{{if eq .ActiveNav "updates"}} active{{end}}">Updates</a>
+                    <a href="/admin/system/info" class="nav-link{{if eq .ActiveNav "system"}} active{{end}}">System Info</a>
+                </div>
+            </div>
+
+            <a href="/admin/engines" class="nav-link{{if eq .ActiveNav "engines"}} active{{end}}">Engines</a>
+            <a href="/admin/help" class="nav-link{{if eq .ActiveNav "help"}} active{{end}}">Help</a>
+        </div>
+        <div class="nav-footer">
+            <a href="/admin/logout" class="nav-link nav-logout">Logout</a>
+        </div>
+    </nav>
+    <main class="admin-main">
+        <h1>{{.Title}}</h1>
+        {{template "content" .}}
+    </main>
+    <div id="toast-container" class="toast-container"></div>
+    <script>
+    // Section collapse state management
+    function toggleSection(name) {
+        var section = document.getElementById('section-' + name);
+        section.classList.toggle('collapsed');
+        saveCollapsedState();
+    }
+
+    function saveCollapsedState() {
+        var collapsed = [];
+        document.querySelectorAll('.nav-section.collapsed').forEach(function(el) {
+            collapsed.push(el.id.replace('section-', ''));
+        });
+        localStorage.setItem('adminCollapsed', JSON.stringify(collapsed));
+    }
+
+    function loadCollapsedState() {
+        try {
+            var collapsed = JSON.parse(localStorage.getItem('adminCollapsed')) || [];
+            collapsed.forEach(function(name) {
+                var section = document.getElementById('section-' + name);
+                if (section) section.classList.add('collapsed');
+            });
+        } catch(e) {}
+
+        // Auto-expand section containing active link
+        var activeLink = document.querySelector('.nav-section-links .nav-link.active');
+        if (activeLink) {
+            var section = activeLink.closest('.nav-section');
+            if (section) section.classList.remove('collapsed');
+        }
+    }
+
+    loadCollapsedState();
+
+    // Toast notification system
+    function showToast(message, type) {
+        type = type || 'info';
+        var container = document.getElementById('toast-container');
+        var toast = document.createElement('div');
+        toast.className = 'toast toast-' + type;
+        toast.innerHTML = '<span>' + message + '</span><button class="toast-close" onclick="this.parentElement.remove()">&times;</button>';
+        container.appendChild(toast);
+        setTimeout(function() { toast.classList.add('show'); }, 10);
+        setTimeout(function() {
+            toast.classList.remove('show');
+            setTimeout(function() { toast.remove(); }, 300);
+        }, 5000);
+    }
+    function showSuccess(msg) { showToast(msg, 'success'); }
+    function showError(msg) { showToast(msg, 'error'); }
+    function showWarning(msg) { showToast(msg, 'warning'); }
+    function showInfo(msg) { showToast(msg, 'info'); }
+
+    // Keyboard shortcuts per TEMPLATE.md PART 15
+    var keySequence = '';
+    var keyTimeout = null;
+    document.addEventListener('keydown', function(e) {
+        // Skip if in input/textarea
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+        // Ctrl+S: Save current form
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            var saveBtn = document.querySelector('button[type="submit"], .btn-primary');
+            if (saveBtn) saveBtn.click();
+            return;
+        }
+
+        // Escape: Close modal/menu
+        if (e.key === 'Escape') {
+            var modal = document.querySelector('.modal.show, .modal[open]');
+            if (modal) modal.remove();
+            return;
+        }
+
+        // /: Focus search
+        if (e.key === '/') {
+            e.preventDefault();
+            var search = document.querySelector('input[type="search"], input[name="search"], input[name="q"]');
+            if (search) search.focus();
+            return;
+        }
+
+        // ?: Show shortcuts help
+        if (e.key === '?') {
+            window.location.href = '/admin/help';
+            return;
+        }
+
+        // Handle g + key sequences
+        clearTimeout(keyTimeout);
+        keySequence += e.key.toLowerCase();
+        keyTimeout = setTimeout(function() { keySequence = ''; }, 500);
+
+        if (keySequence === 'gd') {
+            window.location.href = '/admin/dashboard';
+        } else if (keySequence === 'gs') {
+            window.location.href = '/admin/server/settings';
+        } else if (keySequence === 'gl') {
+            window.location.href = '/admin/server/logs';
+        }
+    });
+    </script>
+    {{block "scripts" .}}{{end}}
+</body>
+</html>
+{{end}}

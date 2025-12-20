@@ -1,0 +1,91 @@
+{{define "content"}}
+<div class="card">
+    <h2>Documentation</h2>
+    <p>Welcome to the Vidveil admin panel. Use the sidebar to navigate between sections.</p>
+
+    <h3>Quick Links</h3>
+    <ul>
+        <li><a href="https://github.com/apimgr/vidveil" target="_blank">GitHub Repository</a></li>
+        <li><a href="https://github.com/apimgr/vidveil/wiki" target="_blank">Wiki Documentation</a></li>
+        <li><a href="https://github.com/apimgr/vidveil/issues" target="_blank">Report Issues</a></li>
+    </ul>
+</div>
+
+<div class="card">
+    <h2>Admin Panel Sections</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Section</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>Dashboard</strong></td><td>System overview, quick stats, and health status</td></tr>
+            <tr><td><strong>Server Settings</strong></td><td>Core server configuration (host, port, timeouts)</td></tr>
+            <tr><td><strong>Branding</strong></td><td>Site title, description, logo, and SEO settings</td></tr>
+            <tr><td><strong>SSL/TLS</strong></td><td>HTTPS configuration and certificate management</td></tr>
+            <tr><td><strong>Authentication</strong></td><td>Admin password, 2FA, and session settings</td></tr>
+            <tr><td><strong>API Tokens</strong></td><td>API token management for programmatic access</td></tr>
+            <tr><td><strong>Rate Limiting</strong></td><td>Request throttling and abuse prevention</td></tr>
+            <tr><td><strong>Firewall</strong></td><td>IP allowlist/blocklist management</td></tr>
+            <tr><td><strong>Tor</strong></td><td>Tor hidden service configuration</td></tr>
+            <tr><td><strong>GeoIP</strong></td><td>Geographic IP filtering</td></tr>
+            <tr><td><strong>Blocklists</strong></td><td>External blocklist sources</td></tr>
+            <tr><td><strong>Engines</strong></td><td>Search engine configuration and status</td></tr>
+            <tr><td><strong>Backup</strong></td><td>Configuration backup and restore</td></tr>
+            <tr><td><strong>Maintenance</strong></td><td>Maintenance mode and cache management</td></tr>
+            <tr><td><strong>Updates</strong></td><td>Version info and update management</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>API Access</h2>
+    <p>The admin API allows programmatic access to all settings. See the <a href="/admin/security/tokens">API Tokens</a> page for authentication details.</p>
+
+    <h3>Example Request</h3>
+    <div class="code-block">
+        <pre><code>curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost/api/v1/admin/status</code></pre>
+    </div>
+
+    <p>Full API documentation is available at <a href="/openapi" target="_blank">/openapi</a></p>
+</div>
+
+<div class="card">
+    <h2>Keyboard Shortcuts</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Shortcut</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><code>?</code></td><td>Show this help page</td></tr>
+            <tr><td><code>g d</code></td><td>Go to Dashboard</td></tr>
+            <tr><td><code>g s</code></td><td>Go to Server Settings</td></tr>
+            <tr><td><code>g e</code></td><td>Go to Engines</td></tr>
+            <tr><td><code>Esc</code></td><td>Close dialogs</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Support</h2>
+    <p>For support, please:</p>
+    <ol>
+        <li>Check the <a href="https://github.com/apimgr/vidveil/wiki" target="_blank">documentation</a></li>
+        <li>Search <a href="https://github.com/apimgr/vidveil/issues" target="_blank">existing issues</a></li>
+        <li>Open a new issue if your problem isn't already reported</li>
+    </ol>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (e.key === '?') {
+        window.location.href = '/admin/help';
+    }
+});
+</script>
+{{end}}

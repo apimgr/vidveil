@@ -1,0 +1,35 @@
+# Vidveil Docker Compose (Production)
+# Per TEMPLATE.md PART 19: No build, no version, hardcoded defaults
+# Location: ./docker/docker-compose.yml
+#
+# USAGE (per TEMPLATE.md PART 19 - NEVER run in project directory):
+#   TEMP_DIR="/tmp/vidveil-$(date +%s)"
+#   mkdir -p "$TEMP_DIR/rootfs/config/vidveil" "$TEMP_DIR/rootfs/data/vidveil"
+#   cp ./docker/docker-compose.yml "$TEMP_DIR/"
+#   cd "$TEMP_DIR" && docker compose up -d
+
+name: vidveil
+
+services:
+  vidveil:
+    image: ghcr.io/apimgr/vidveil:latest
+    container_name: vidveil
+    restart: unless-stopped
+    environment:
+      # Hardcoded with sane defaults - NO .env files
+      - MODE=production
+      - TZ=America/New_York
+      # ENABLE_TOR=true is default, no need to specify
+    ports:
+      # Production: bound to Docker bridge only
+      - "172.17.0.1:64888:80"
+    volumes:
+      - ./rootfs/config/vidveil:/config
+      - ./rootfs/data/vidveil:/data
+    networks:
+      - vidveil
+
+networks:
+  vidveil:
+    name: vidveil
+    external: false

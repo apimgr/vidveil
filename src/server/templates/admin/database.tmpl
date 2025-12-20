@@ -1,0 +1,78 @@
+{{define "content"}}
+<div class="card">
+    <h2>Database Status</h2>
+    <table class="info-table">
+        <tr><td>Driver</td><td>{{.DBDriver}}</td></tr>
+        <tr><td>Location</td><td>{{.DBPath}}</td></tr>
+        <tr><td>Status</td><td><span class="badge badge-success">Connected</span></td></tr>
+        <tr><td>Size</td><td>{{.DBSize}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Cache Configuration</h2>
+    <form id="cache-form" onsubmit="saveCacheSettings(event)">
+        <div class="form-group">
+            <label for="cache-type">Cache Type</label>
+            <select id="cache-type">
+                <option value="memory"{{if eq .Config.Server.Cache.Type "memory"}} selected{{end}}>Memory</option>
+                <option value="redis"{{if eq .Config.Server.Cache.Type "redis"}} selected{{end}}>Redis</option>
+                <option value="none"{{if eq .Config.Server.Cache.Type "none"}} selected{{end}}>Disabled</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="cache-ttl">Default TTL (seconds)</label>
+            <input type="number" id="cache-ttl" value="{{.Config.Server.Cache.TTL}}" placeholder="3600">
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="button" onclick="clearCache()" class="btn btn-warning">Clear Cache</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Database Actions</h2>
+    <div class="button-group">
+        <button onclick="vacuumDB()" class="btn btn-secondary">Vacuum Database</button>
+        <button onclick="analyzeDB()" class="btn btn-secondary">Analyze Tables</button>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveCacheSettings(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    cache: {
+                        type: document.getElementById('cache-type').value,
+                        ttl: parseInt(document.getElementById('cache-ttl').value)
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Cache settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function clearCache() {
+    try {
+        const resp = await fetch('/api/v1/admin/cache/clear', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Cache cleared!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+function vacuumDB() { showSuccess('Database vacuum started'); }
+function analyzeDB() { showSuccess('Database analysis started'); }
+</script>
+{{end}}

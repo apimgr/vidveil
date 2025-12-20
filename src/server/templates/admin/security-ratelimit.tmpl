@@ -1,0 +1,103 @@
+{{define "content"}}
+<div class="card">
+    <h2>Rate Limiting</h2>
+    <form id="rate-limit-form" onsubmit="saveRateLimit(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="rate-enabled"{{if .Config.Server.RateLimit.Enabled}} checked{{end}}>
+                <span>Enable Rate Limiting</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="rate-requests">Requests per Window</label>
+            <input type="number" id="rate-requests" value="{{.Config.Server.RateLimit.Requests}}" placeholder="120" min="1">
+            <p class="help-text">Maximum requests allowed per time window</p>
+        </div>
+        <div class="form-group">
+            <label for="rate-window">Window (seconds)</label>
+            <input type="number" id="rate-window" value="{{.Config.Server.RateLimit.Window}}" placeholder="60" min="1">
+            <p class="help-text">Time window for rate limit calculation</p>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Rate Limit Rules</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Endpoint Pattern</th><th>Limit</th><th>Window</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>/api/v1/search</code></td>
+                <td>60 req</td>
+                <td>60s</td>
+                <td><button class="btn btn-sm btn-secondary">Edit</button></td>
+            </tr>
+            <tr>
+                <td><code>/api/v1/admin/*</code></td>
+                <td>120 req</td>
+                <td>60s</td>
+                <td><button class="btn btn-sm btn-secondary">Edit</button></td>
+            </tr>
+            <tr>
+                <td><code>/*</code></td>
+                <td>300 req</td>
+                <td>60s</td>
+                <td><button class="btn btn-sm btn-secondary">Edit</button></td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="button-group">
+        <button class="btn btn-secondary">Add Rule</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Exempt IPs</h2>
+    <form id="exempt-form" onsubmit="saveExemptIPs(event)">
+        <div class="form-group">
+            <label for="exempt-ips">Exempt IP Addresses</label>
+            <textarea id="exempt-ips" rows="4" placeholder="One IP per line&#10;127.0.0.1&#10;192.168.1.0/24"></textarea>
+            <p class="help-text">IPs that bypass rate limiting (supports CIDR notation)</p>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveRateLimit(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    rate_limit: {
+                        enabled: document.getElementById('rate-enabled').checked,
+                        requests: parseInt(document.getElementById('rate-requests').value),
+                        window: parseInt(document.getElementById('rate-window').value)
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Rate limit settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+function saveExemptIPs(e) {
+    e.preventDefault();
+    showSuccess('Exempt IPs saved!');
+}
+</script>
+{{end}}

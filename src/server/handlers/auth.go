@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -12,7 +13,8 @@ import (
 
 // AuthHandler handles authentication routes per TEMPLATE.md PART 31
 type AuthHandler struct {
-	cfg *config.Config
+	cfg      *config.Config
+	adminHdl *AdminHandler
 }
 
 // NewAuthHandler creates a new auth handler
@@ -22,16 +24,103 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 	}
 }
 
-// LoginPage renders the login form (web route)
+// SetAdminHandler sets the admin handler reference for authentication
+func (h *AuthHandler) SetAdminHandler(adminHdl *AdminHandler) {
+	h.adminHdl = adminHdl
+}
+
+// LoginPage renders the login form and handles authentication per TEMPLATE.md PART 31
 func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		// Render login form - for now redirect to admin login
-		http.Redirect(w, r, "/admin/login", http.StatusFound)
-		return
+	// Check if admin already logged in
+	if h.adminHdl != nil {
+		if cookie, err := r.Cookie("vidveil_admin_session"); err == nil {
+			if h.adminHdl.validateSession(cookie.Value) {
+				http.Redirect(w, r, "/admin", http.StatusFound)
+				return
+			}
+		}
 	}
 
-	// POST: Handle login
-	h.APILogin(w, r)
+	errorMsg := ""
+	if r.Method == http.MethodPost {
+		username := r.FormValue("username")
+		password := r.FormValue("password")
+
+		// Authenticate admin using admin handler
+		if h.adminHdl != nil {
+			sessionID, err := h.adminHdl.AuthenticateAdmin(username, password)
+			if err == nil && sessionID != "" {
+				http.SetCookie(w, &http.Cookie{
+					Name:     "vidveil_admin_session",
+					Value:    sessionID,
+					Path:     "/admin",
+					MaxAge:   int(24 * time.Hour / time.Second),
+					HttpOnly: true,
+					SameSite: http.SameSiteLaxMode,
+				})
+				http.Redirect(w, r, "/admin", http.StatusFound)
+				return
+			}
+		}
+		errorMsg = "Invalid username or password"
+	}
+
+	h.renderLoginPage(w, errorMsg)
+}
+
+// renderLoginPage renders the login form
+func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	errorHtml := ""
+	if errorMsg != "" {
+		errorHtml = fmt.Sprintf(`<div class="error">%s</div>`, errorMsg)
+	}
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - %s</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .login-container { max-width: 400px; margin: 100px auto; padding: 20px; }
+        .login-box { background: #1a1a2e; border-radius: 8px; padding: 30px; }
+        .login-title { text-align: center; margin-bottom: 20px; }
+        .error { color: #e74c3c; margin-bottom: 15px; text-align: center; padding: 10px; background: rgba(231,76,60,0.1); border-radius: 4px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; }
+        .form-group input { width: 100%%; padding: 10px; border-radius: 4px; border: 1px solid #333; background: #0f0f1a; color: #fff; }
+        .btn-primary { width: 100%%; padding: 12px; background: #6c5ce7; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary:hover { background: #5b4bc7; }
+        .back-link { text-align: center; margin-top: 20px; }
+        .back-link a { color: #888; text-decoration: none; }
+        .back-link a:hover { color: #6c5ce7; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <h1 class="login-title">Login</h1>
+            %s
+            <form method="POST">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn-primary">Login</button>
+            </form>
+            <div class="back-link">
+                <a href="/">← Back to Search</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`, h.cfg.Server.Title, errorHtml)
+	w.Write([]byte(html))
 }
 
 // LogoutPage handles logout (web route)

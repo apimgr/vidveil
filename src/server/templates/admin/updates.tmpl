@@ -1,0 +1,84 @@
+{{define "content"}}
+<div class="card">
+    <h2>Current Version</h2>
+    <table class="info-table">
+        <tr><td>Version</td><td><strong>{{.CurrentVersion}}</strong></td></tr>
+        <tr><td>Build Date</td><td>-</td></tr>
+        <tr><td>Go Version</td><td>-</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Update Status</h2>
+    {{if .UpdateAvailable}}
+    <div class="alert alert-info">
+        A new version ({{.LatestVersion}}) is available!
+    </div>
+    <div class="button-group">
+        <button onclick="viewChangelog()" class="btn btn-secondary">View Changelog</button>
+        <button onclick="startUpdate()" class="btn btn-primary">Update Now</button>
+    </div>
+    {{else}}
+    <p class="text-muted">You are running the latest version.</p>
+    <div class="button-group">
+        <button onclick="checkUpdates()" class="btn btn-secondary">Check for Updates</button>
+    </div>
+    {{end}}
+</div>
+
+<div class="card">
+    <h2>Auto-Update Settings</h2>
+    <form id="autoupdate-form" onsubmit="saveAutoUpdate(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="autoupdate-check">
+                <span>Automatically check for updates</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="autoupdate-notify">
+                <span>Notify when updates are available</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="update-channel">Update Channel</label>
+            <select id="update-channel">
+                <option value="stable" selected>Stable</option>
+                <option value="beta">Beta</option>
+                <option value="dev">Development</option>
+            </select>
+            <p class="help-text">Stable is recommended for production use</p>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Update History</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Version</th><th>Date</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="3" class="text-center">No update history</td></tr>
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function checkUpdates() {
+    showInfo('Checking for updates...');
+    // TODO: Implement update check
+    setTimeout(() => showSuccess('You are running the latest version'), 1500);
+}
+
+function viewChangelog() { showWarning('Changelog not available'); }
+function startUpdate() { showWarning('Auto-update not implemented yet'); }
+function saveAutoUpdate(e) { e.preventDefault(); showSuccess('Auto-update settings saved!'); }
+</script>
+{{end}}

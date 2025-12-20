@@ -1,0 +1,58 @@
+{{define "content"}}
+<div class="card">
+    <h2>API Token</h2>
+    <p class="text-muted">Your API token is used for programmatic access to the admin API.</p>
+    <table class="info-table">
+        <tr><td>Token Prefix</td><td><code>{{.TokenPrefix}}...</code></td></tr>
+        <tr><td>Created</td><td>On first run</td></tr>
+    </table>
+    <div class="button-group">
+        <button onclick="regenerateToken()" class="btn btn-warning">Regenerate Token</button>
+    </div>
+    <p class="help-text">Regenerating will invalidate the current token immediately.</p>
+</div>
+
+<div class="card">
+    <h2>Token Usage</h2>
+    <div class="code-block">
+        <pre><code># Using curl
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost/api/v1/admin/status
+
+# Or with X-API-Token header
+curl -H "X-API-Token: YOUR_TOKEN" \
+  http://localhost/api/v1/admin/status</code></pre>
+    </div>
+</div>
+
+<div class="card">
+    <h2>API Endpoints</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><code>/api/v1/admin/status</code></td><td>GET</td><td>Server status</td></tr>
+            <tr><td><code>/api/v1/admin/health</code></td><td>GET</td><td>Detailed health check</td></tr>
+            <tr><td><code>/api/v1/admin/server/settings</code></td><td>GET/PATCH</td><td>Server settings</td></tr>
+            <tr><td><code>/api/v1/admin/server/tor</code></td><td>GET/PATCH</td><td>Tor settings</td></tr>
+            <tr><td><code>/api/v1/admin/server/backup</code></td><td>GET/POST</td><td>Backup management</td></tr>
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function regenerateToken() {
+    if (!confirm('Are you sure? This will invalidate your current API token.')) return;
+    try {
+        const resp = await fetch('/api/v1/admin/token/regenerate', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Token regenerated! New token: ' + data.data.token);
+        } else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+</script>
+{{end}}

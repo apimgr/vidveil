@@ -1,0 +1,71 @@
+{{define "content"}}
+<div class="card">
+    <h2>GeoIP Database</h2>
+    <table class="info-table">
+        <tr><td>Status</td><td><span class="badge badge-success">Active</span></td></tr>
+        <tr><td>Database</td><td>MaxMind GeoLite2</td></tr>
+        <tr><td>Last Updated</td><td>Not available</td></tr>
+        <tr><td>Total Records</td><td>-</td></tr>
+    </table>
+    <div class="button-group">
+        <button onclick="updateGeoIP()" class="btn btn-secondary">Update Database</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>GeoIP Settings</h2>
+    <form id="geoip-form" onsubmit="saveGeoIP(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="geoip-enabled">
+                <span>Enable GeoIP Filtering</span>
+            </label>
+            <p class="help-text">Block or allow access based on geographic location</p>
+        </div>
+        <div class="form-group">
+            <label for="geoip-mode">Filtering Mode</label>
+            <select id="geoip-mode">
+                <option value="allowlist">Allowlist (only allow listed countries)</option>
+                <option value="blocklist">Blocklist (block listed countries)</option>
+            </select>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Country List</h2>
+    <form id="countries-form" onsubmit="saveCountries(event)">
+        <div class="form-group">
+            <label for="countries">Countries</label>
+            <textarea id="countries" rows="6" placeholder="One country code per line&#10;Example:&#10;US&#10;CA&#10;GB"></textarea>
+            <p class="help-text">Use ISO 3166-1 alpha-2 country codes</p>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Countries</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Recent GeoIP Blocks</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>IP Address</th><th>Country</th><th>Time</th></tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="3" class="text-center">No recent blocks</td></tr>
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function updateGeoIP() { showWarning('GeoIP database update not implemented yet'); }
+function saveGeoIP(e) { e.preventDefault(); showSuccess('GeoIP settings saved!'); }
+function saveCountries(e) { e.preventDefault(); showSuccess('Country list saved!'); }
+</script>
+{{end}}

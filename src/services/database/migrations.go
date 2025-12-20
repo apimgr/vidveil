@@ -442,4 +442,100 @@ func (mm *MigrationManager) RegisterDefaultMigrations() {
 		_, err := tx.Exec("DROP TABLE IF EXISTS notifications")
 		return err
 	})
+
+	// Migration 9: Create admin_credentials table per TEMPLATE.md PART 31
+	// Admin credentials stored in database, NOT config file
+	mm.RegisterMigration(9, "create_admin_credentials_table", "Create admin credentials table per PART 31", func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			CREATE TABLE IF NOT EXISTS admin_credentials (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				username TEXT UNIQUE NOT NULL,
+				password_hash TEXT NOT NULL,
+				totp_secret TEXT,
+				totp_enabled INTEGER DEFAULT 0,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				last_login DATETIME,
+				login_count INTEGER DEFAULT 0,
+				is_primary INTEGER DEFAULT 0,
+				invited_by INTEGER,
+				invite_token TEXT,
+				invite_expires DATETIME,
+				FOREIGN KEY (invited_by) REFERENCES admin_credentials(id)
+			)
+		`)
+		return err
+	}, func(tx *sql.Tx) error {
+		_, err := tx.Exec("DROP TABLE IF EXISTS admin_credentials")
+		return err
+	})
+
+	// Migration 10: Create setup_tokens table per TEMPLATE.md PART 31
+	// One-time setup tokens for first run
+	mm.RegisterMigration(10, "create_setup_tokens_table", "Create setup tokens table per PART 31", func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			CREATE TABLE IF NOT EXISTS setup_tokens (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				token TEXT UNIQUE NOT NULL,
+				purpose TEXT NOT NULL,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				expires_at DATETIME NOT NULL,
+				used_at DATETIME,
+				used_by TEXT
+			)
+		`)
+		return err
+	}, func(tx *sql.Tx) error {
+		_, err := tx.Exec("DROP TABLE IF EXISTS setup_tokens")
+		return err
+	})
+
+	// Migration 11: Create api_tokens table per TEMPLATE.md PART 31
+	// API tokens for programmatic access
+	mm.RegisterMigration(11, "create_api_tokens_table", "Create API tokens table per PART 31", func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			CREATE TABLE IF NOT EXISTS api_tokens (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				admin_id INTEGER NOT NULL,
+				name TEXT NOT NULL,
+				token_hash TEXT UNIQUE NOT NULL,
+				token_prefix TEXT NOT NULL,
+				permissions TEXT DEFAULT '*',
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				expires_at DATETIME,
+				last_used DATETIME,
+				use_count INTEGER DEFAULT 0,
+				FOREIGN KEY (admin_id) REFERENCES admin_credentials(id)
+			)
+		`)
+		return err
+	}, func(tx *sql.Tx) error {
+		_, err := tx.Exec("DROP TABLE IF EXISTS api_tokens")
+		return err
+	})
+
+	// Migration 12: Create smtp_config table per TEMPLATE.md PART 31
+	// SMTP configuration stored in database
+	mm.RegisterMigration(12, "create_smtp_config_table", "Create SMTP config table per PART 31", func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			CREATE TABLE IF NOT EXISTS smtp_config (
+				id INTEGER PRIMARY KEY CHECK (id = 1),
+				host TEXT,
+				port INTEGER DEFAULT 587,
+				username TEXT,
+				password_encrypted TEXT,
+				from_address TEXT,
+				from_name TEXT,
+				encryption TEXT DEFAULT 'tls',
+				verified INTEGER DEFAULT 0,
+				verified_at DATETIME,
+				auto_detected INTEGER DEFAULT 0,
+				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		return err
+	}, func(tx *sql.Tx) error {
+		_, err := tx.Exec("DROP TABLE IF EXISTS smtp_config")
+		return err
+	})
 }

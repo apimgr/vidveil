@@ -1,0 +1,188 @@
+{{define "content"}}
+<div class="card">
+    <h2>System Information</h2>
+    <table class="info-table">
+        <tr><td>Version</td><td>{{.Version}}</td></tr>
+        <tr><td>Go Version</td><td>{{.GoVersion}}</td></tr>
+        <tr><td>Build Date</td><td>{{.BuildDate}}</td></tr>
+        <tr><td>Git Commit</td><td><code>{{.GitCommit}}</code></td></tr>
+        <tr><td>Uptime</td><td>{{.Uptime}}</td></tr>
+        <tr><td>Started</td><td>{{.StartTime}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Resource Usage</h2>
+    <table class="info-table">
+        <tr><td>Memory (Heap)</td><td>{{.MemoryHeap}}</td></tr>
+        <tr><td>Memory (System)</td><td>{{.MemorySystem}}</td></tr>
+        <tr><td>Goroutines</td><td>{{.Goroutines}}</td></tr>
+        <tr><td>GC Cycles</td><td>{{.GCCycles}}</td></tr>
+        <tr><td>CPU Cores</td><td>{{.CPUCores}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Host Information</h2>
+    <table class="info-table">
+        <tr><td>Hostname</td><td>{{.Hostname}}</td></tr>
+        <tr><td>OS</td><td>{{.OS}}</td></tr>
+        <tr><td>Architecture</td><td>{{.Arch}}</td></tr>
+        <tr><td>Disk Usage</td><td>{{.DiskUsage}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Search Engines</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Engine</th><th>Status</th><th>Last Check</th><th>Success Rate</th></tr>
+        </thead>
+        <tbody>
+            {{range .Engines}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td>
+                    {{if .Enabled}}
+                        {{if .Healthy}}
+                        <span class="badge badge-success">Healthy</span>
+                        {{else}}
+                        <span class="badge badge-error">Unhealthy</span>
+                        {{end}}
+                    {{else}}
+                    <span class="badge badge-warning">Disabled</span>
+                    {{end}}
+                </td>
+                <td>{{.LastCheck}}</td>
+                <td>{{.SuccessRate}}%</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Server Actions</h2>
+    <div class="button-group">
+        <button onclick="restartServer()" class="btn btn-warning">Restart Server</button>
+        <button onclick="reloadConfig()" class="btn btn-secondary">Reload Configuration</button>
+        <button onclick="gcRun()" class="btn btn-secondary">Force GC</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Updates</h2>
+    <table class="info-table">
+        <tr><td>Current Version</td><td>{{.Version}}</td></tr>
+        <tr><td>Latest Version</td><td>{{if .LatestVersion}}{{.LatestVersion}}{{else}}Unknown{{end}}</td></tr>
+        <tr><td>Status</td><td>
+            {{if .UpdateAvailable}}
+            <span class="badge badge-info">Update Available</span>
+            {{else}}
+            <span class="badge badge-success">Up to Date</span>
+            {{end}}
+        </td></tr>
+    </table>
+    <div class="button-group">
+        <button onclick="checkUpdates()" class="btn btn-secondary">Check for Updates</button>
+        {{if .UpdateAvailable}}
+        <button onclick="applyUpdate()" class="btn btn-primary">Apply Update</button>
+        {{end}}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Debug Tools</h2>
+    <div class="button-group">
+        <a href="/debug/pprof/" class="btn btn-secondary" target="_blank">pprof</a>
+        <button onclick="downloadDiagnostics()" class="btn btn-secondary">Download Diagnostics</button>
+        <button onclick="testAllEngines()" class="btn btn-secondary">Test All Engines</button>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function restartServer() {
+    if (!confirm('Are you sure you want to restart the server?')) return;
+    try {
+        showInfo('Restarting server...');
+        const resp = await fetch('/api/v1/admin/server/restart', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Server restarting...');
+            setTimeout(() => { location.reload(); }, 3000);
+        } else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function reloadConfig() {
+    try {
+        const resp = await fetch('/api/v1/admin/config/reload', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Configuration reloaded!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function gcRun() {
+    try {
+        const resp = await fetch('/api/v1/admin/server/gc', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Garbage collection completed!'); location.reload(); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function checkUpdates() {
+    try {
+        showInfo('Checking for updates...');
+        const resp = await fetch('/api/v1/admin/updates/check', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            if (data.data.update_available) {
+                showSuccess('Update available: ' + data.data.latest_version);
+            } else {
+                showSuccess('You are running the latest version!');
+            }
+            location.reload();
+        } else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function applyUpdate() {
+    if (!confirm('Apply update? The server will restart after updating.')) return;
+    try {
+        showInfo('Applying update...');
+        const resp = await fetch('/api/v1/admin/updates/apply', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Update applied! Server restarting...'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+function downloadDiagnostics() {
+    window.location.href = '/api/v1/admin/diagnostics';
+}
+
+async function testAllEngines() {
+    try {
+        showInfo('Testing all engines...');
+        const resp = await fetch('/api/v1/admin/engines/test', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            const results = data.data.results;
+            const passed = results.filter(r => r.success).length;
+            showSuccess(`Engine test complete: ${passed}/${results.length} passed`);
+            location.reload();
+        } else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+function showInfo(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = 'toast show info';
+}
+</script>
+{{end}}

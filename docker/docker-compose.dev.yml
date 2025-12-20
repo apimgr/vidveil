@@ -1,0 +1,35 @@
+# Vidveil Docker Compose (Development)
+# Per TEMPLATE.md PART 19: Development mode with accessible ports
+# Location: ./docker/docker-compose.dev.yml
+#
+# USAGE (per TEMPLATE.md PART 19 - NEVER run in project directory):
+#   TEMP_DIR="/tmp/vidveil-$(date +%s)"
+#   mkdir -p "$TEMP_DIR/rootfs/config/vidveil" "$TEMP_DIR/rootfs/data/vidveil"
+#   cp ./docker/docker-compose.dev.yml "$TEMP_DIR/docker-compose.yml"
+#   cd "$TEMP_DIR" && docker compose up -d
+
+name: vidveil
+
+services:
+  vidveil:
+    image: ghcr.io/apimgr/vidveil:latest
+    container_name: vidveil
+    restart: unless-stopped
+    environment:
+      # Hardcoded with sane defaults - NO .env files
+      - MODE=development
+      - TZ=America/New_York
+      - ENABLE_TOR=false
+    ports:
+      # Development: accessible from all interfaces
+      - "64888:80"
+    volumes:
+      - ./rootfs/config/vidveil:/config
+      - ./rootfs/data/vidveil:/data
+    networks:
+      - vidveil
+
+networks:
+  vidveil:
+    name: vidveil
+    external: false

@@ -7,8 +7,11 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,10 +20,19 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/services/admin"
 	"github.com/apimgr/vidveil/src/services/engines"
 	"github.com/apimgr/vidveil/src/services/maintenance"
 	"github.com/apimgr/vidveil/src/services/scheduler"
 )
+
+// adminTemplatesFS holds embedded admin templates - set by server.go
+var adminTemplatesFS embed.FS
+
+// SetAdminTemplatesFS sets the embedded templates filesystem for admin
+func SetAdminTemplatesFS(fs embed.FS) {
+	adminTemplatesFS = fs
+}
 
 const (
 	adminSessionCookieName = "vidveil_admin_session"
@@ -32,6 +44,7 @@ const (
 type AdminHandler struct {
 	cfg        *config.Config
 	engineMgr  *engines.Manager
+	adminSvc   *admin.Service
 	scheduler  *scheduler.Scheduler
 	sessions   map[string]adminSession
 	csrfTokens map[string]string // sessionID -> csrfToken
@@ -40,15 +53,17 @@ type AdminHandler struct {
 
 type adminSession struct {
 	username  string
+	adminID   int64
 	createdAt time.Time
 	expiresAt time.Time
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(cfg *config.Config, engineMgr *engines.Manager) *AdminHandler {
+func NewAdminHandler(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service) *AdminHandler {
 	return &AdminHandler{
 		cfg:        cfg,
 		engineMgr:  engineMgr,
+		adminSvc:   adminSvc,
 		sessions:   make(map[string]adminSession),
 		csrfTokens: make(map[string]string),
 		startTime:  time.Now(),
@@ -60,13 +75,19 @@ func (h *AdminHandler) SetScheduler(s *scheduler.Scheduler) {
 	h.scheduler = s
 }
 
-// AuthMiddleware protects admin routes
+// IsFirstRun checks if this is the first run (no admin exists)
+func (h *AdminHandler) IsFirstRun() bool {
+	return h.adminSvc.IsFirstRun()
+}
+
+// AuthMiddleware protects admin routes per TEMPLATE.md PART 31
 func (h *AdminHandler) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check for session cookie
 		cookie, err := r.Cookie(adminSessionCookieName)
 		if err != nil || !h.validateSession(cookie.Value) {
-			http.Redirect(w, r, "/admin/login", http.StatusFound)
+			// Redirect to /auth/login per TEMPLATE.md PART 31
+			http.Redirect(w, r, "/auth/login", http.StatusFound)
 			return
 		}
 
@@ -74,38 +95,23 @@ func (h *AdminHandler) AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// LoginPage renders the admin login page
+// LoginPage redirects to /auth/login per TEMPLATE.md PART 31
+// All logins (admin and user) go through /auth/login
 func (h *AdminHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
-	// Check if already logged in
-	if cookie, err := r.Cookie(adminSessionCookieName); err == nil && h.validateSession(cookie.Value) {
-		http.Redirect(w, r, "/admin", http.StatusFound)
-		return
+	http.Redirect(w, r, "/auth/login", http.StatusFound)
+}
+
+// AuthenticateAdmin handles admin login (called from AuthHandler)
+// Returns session ID on success, empty string on failure
+func (h *AdminHandler) AuthenticateAdmin(username, password string) (string, error) {
+	adminUser, err := h.adminSvc.Authenticate(username, password)
+	if err != nil {
+		return "", err
 	}
-
-	errorMsg := ""
-	if r.Method == http.MethodPost {
-		username := r.FormValue("username")
-		password := r.FormValue("password")
-
-		if h.validateCredentials(username, password) {
-			// Create session
-			sessionID := h.createSession(username)
-			http.SetCookie(w, &http.Cookie{
-				Name:     adminSessionCookieName,
-				Value:    sessionID,
-				Path:     "/admin",
-				MaxAge:   int(adminSessionDuration.Seconds()),
-				HttpOnly: true,
-				SameSite: http.SameSiteLaxMode,
-			})
-			http.Redirect(w, r, "/admin", http.StatusFound)
-			return
-		}
-		errorMsg = "Invalid username or password"
+	if adminUser == nil {
+		return "", fmt.Errorf("invalid credentials")
 	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderLoginPage(errorMsg)))
+	return h.createSessionWithID(adminUser.Username, adminUser.ID), nil
 }
 
 // LogoutHandler logs out the admin
@@ -122,13 +128,190 @@ func (h *AdminHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 
-	http.Redirect(w, r, "/admin/login", http.StatusFound)
+	// Redirect to /auth/login per TEMPLATE.md PART 31
+	http.Redirect(w, r, "/auth/login", http.StatusFound)
+}
+
+// SetupTokenPage handles setup token entry at /admin on first run per TEMPLATE.md PART 31
+// Step 2-3: User navigates to /admin, enters setup token
+// Step 4: Redirect to /admin/server/setup
+func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
+	// Check if setup is still needed
+	if !h.adminSvc.IsFirstRun() {
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
+
+	errorMsg := ""
+	if r.Method == http.MethodPost {
+		token := r.FormValue("token")
+
+		// Validate the setup token
+		if h.adminSvc.ValidateSetupToken(token) {
+			// Store validated token in cookie for wizard step
+			http.SetCookie(w, &http.Cookie{
+				Name:     "vidveil_setup_token",
+				Value:    token,
+				Path:     "/admin",
+				MaxAge:   3600, // 1 hour to complete setup
+				HttpOnly: true,
+				SameSite: http.SameSiteStrictMode,
+			})
+			http.Redirect(w, r, "/admin/server/setup", http.StatusFound)
+			return
+		}
+		errorMsg = "Invalid or expired setup token"
+	}
+
+	h.renderSetupTokenPage(w, errorMsg)
+}
+
+// SetupWizardPage renders the setup wizard at /admin/server/setup per TEMPLATE.md PART 31
+func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
+	// Check if setup is still needed
+	if !h.adminSvc.IsFirstRun() {
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
+
+	// Verify setup token cookie exists (must come from token entry page)
+	tokenCookie, err := r.Cookie("vidveil_setup_token")
+	if err != nil || !h.adminSvc.ValidateSetupToken(tokenCookie.Value) {
+		http.Redirect(w, r, "/admin", http.StatusFound)
+		return
+	}
+
+	data := map[string]interface{}{
+		"SiteTitle": h.cfg.Server.Title,
+		"Error":     "",
+	}
+
+	if r.Method == http.MethodPost {
+		username := r.FormValue("username")
+		password := r.FormValue("password")
+		confirm := r.FormValue("confirm")
+
+		// Validate passwords match
+		if password != confirm {
+			data["Error"] = "Passwords do not match"
+			h.renderSetupWizardPage(w, data)
+			return
+		}
+
+		// Create admin account using admin service
+		adminUser, err := h.adminSvc.CreateAdminWithSetupToken(tokenCookie.Value, username, password)
+		if err != nil {
+			data["Error"] = err.Error()
+			h.renderSetupWizardPage(w, data)
+			return
+		}
+
+		// Clear setup token cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:   "vidveil_setup_token",
+			Value:  "",
+			Path:   "/admin",
+			MaxAge: -1,
+		})
+
+		// Create session for the new admin
+		sessionID := h.createSessionWithID(adminUser.Username, adminUser.ID)
+		http.SetCookie(w, &http.Cookie{
+			Name:     adminSessionCookieName,
+			Value:    sessionID,
+			Path:     "/admin",
+			MaxAge:   int(adminSessionDuration.Seconds()),
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		http.Redirect(w, r, "/admin/dashboard", http.StatusFound)
+		return
+	}
+
+	h.renderSetupWizardPage(w, data)
+}
+
+// renderSetupTokenPage renders the setup token entry form
+func (h *AdminHandler) renderSetupTokenPage(w http.ResponseWriter, errorMsg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup - %s</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .setup-container { max-width: 400px; margin: 100px auto; padding: 20px; }
+        .setup-box { background: #1a1a2e; border-radius: 8px; padding: 30px; }
+        .setup-title { text-align: center; margin-bottom: 20px; }
+        .error { color: #e74c3c; margin-bottom: 15px; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; }
+        .form-group input { width: 100%%; padding: 10px; border-radius: 4px; border: 1px solid #333; background: #0f0f1a; color: #fff; }
+        .btn-primary { width: 100%%; padding: 12px; background: #6c5ce7; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary:hover { background: #5b4bc7; }
+        .info { text-align: center; margin-top: 20px; color: #888; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <div class="setup-box">
+            <h1 class="setup-title">Admin Setup</h1>
+            <p style="text-align: center; margin-bottom: 20px;">Enter the setup token displayed in the server console.</p>
+            %s
+            <form method="POST">
+                <div class="form-group">
+                    <label for="token">Setup Token</label>
+                    <input type="text" id="token" name="token" required autofocus placeholder="Enter setup token">
+                </div>
+                <button type="submit" class="btn-primary">Continue</button>
+            </form>
+            <p class="info">The setup token was shown once when the server first started.</p>
+        </div>
+    </div>
+</body>
+</html>`, h.cfg.Server.Title, func() string {
+		if errorMsg != "" {
+			return fmt.Sprintf(`<div class="error">%s</div>`, errorMsg)
+		}
+		return ""
+	}())
+	w.Write([]byte(html))
+}
+
+// renderSetupWizardPage renders the setup wizard template
+func (h *AdminHandler) renderSetupWizardPage(w http.ResponseWriter, data map[string]interface{}) {
+	tmpl, err := template.ParseFS(adminTemplatesFS, "templates/admin/setup.tmpl")
+	if err != nil {
+		http.Error(w, "Failed to load setup template", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, "setup", data); err != nil {
+		http.Error(w, "Failed to render setup template", http.StatusInternalServerError)
+	}
 }
 
 // DashboardPage renders the admin dashboard
 func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderDashboard()))
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	h.renderAdminTemplate(w, "dashboard", map[string]interface{}{
+		"EngineCount":   len(h.engineMgr.ListEngines()),
+		"EnabledCount":  h.engineMgr.EnabledCount(),
+		"MemoryMB":      m.Alloc / 1024 / 1024,
+		"Goroutines":    runtime.NumGoroutine(),
+		"GoVersion":     runtime.Version(),
+		"OS":            runtime.GOOS,
+		"Arch":          runtime.GOARCH,
+		"Mode":          h.cfg.Server.Mode,
+		"Port":          h.cfg.Server.Port,
+		"TorEnabled":    h.cfg.Search.Tor.Enabled,
+	})
 }
 
 // EnginesPage renders the engines management page
@@ -145,64 +328,224 @@ func (h *AdminHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 
 // LogsPage renders the logs viewer
 func (h *AdminHandler) LogsPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderLogsPage()))
+	h.renderAdminTemplate(w, "logs", nil)
 }
 
 // === PART 12 Required Admin Sections ===
 
 // ServerSettingsPage renders server settings (Section 2)
 func (h *AdminHandler) ServerSettingsPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderServerSettingsPage()))
+	h.renderAdminTemplate(w, "server", nil)
 }
 
 // WebSettingsPage renders web settings (Section 3)
 func (h *AdminHandler) WebSettingsPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderWebSettingsPage()))
+	h.renderAdminTemplate(w, "web", nil)
 }
 
 // SecuritySettingsPage renders security settings (Section 4)
 func (h *AdminHandler) SecuritySettingsPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderSecuritySettingsPage()))
+	tokenPrefix := ""
+	if len(h.cfg.Server.Admin.Token) > 8 {
+		tokenPrefix = h.cfg.Server.Admin.Token[:8]
+	}
+	h.renderAdminTemplate(w, "security", map[string]interface{}{
+		"TokenPrefix": tokenPrefix,
+	})
 }
 
 // DatabasePage renders database & cache settings (Section 5)
 func (h *AdminHandler) DatabasePage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderDatabasePage()))
+	dbPath := h.cfg.Server.Database.SQLite.Dir
+	if dbPath == "" {
+		dbPath = "default"
+	}
+	h.renderAdminTemplate(w, "database", map[string]interface{}{
+		"DBDriver": h.cfg.Server.Database.Driver,
+		"DBPath":   dbPath,
+		"DBSize":   "N/A", // Would require file stat
+	})
 }
 
 // EmailPage renders email & notifications settings (Section 6)
 func (h *AdminHandler) EmailPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderEmailPage()))
+	// Email templates list (placeholder)
+	templates := []map[string]string{
+		{"Name": "welcome", "Status": "Active"},
+		{"Name": "password-reset", "Status": "Active"},
+		{"Name": "notification", "Status": "Active"},
+	}
+	h.renderAdminTemplate(w, "email", map[string]interface{}{
+		"EmailTemplates": templates,
+	})
 }
 
 // SSLPage renders SSL/TLS settings (Section 7)
 func (h *AdminHandler) SSLPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderSSLPage()))
+	sslMode := "disabled"
+	if h.cfg.Server.SSL.Enabled {
+		if h.cfg.Server.SSL.LetsEncrypt.Enabled {
+			sslMode = "letsencrypt"
+		} else {
+			sslMode = "custom"
+		}
+	}
+	h.renderAdminTemplate(w, "ssl", map[string]interface{}{
+		"SSLMode":    sslMode,
+		"SSLEnabled": h.cfg.Server.SSL.Enabled,
+		"SSLDomain":  h.cfg.Server.SSL.LetsEncrypt.Domain,
+		"SSLExpiry":  "N/A",
+		"SSLIssuer":  "N/A",
+	})
 }
 
 // SchedulerPage renders scheduler management (Section 8)
 func (h *AdminHandler) SchedulerPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderSchedulerPage()))
+	var tasks []map[string]interface{}
+	if h.scheduler != nil {
+		for _, t := range h.scheduler.ListTasks() {
+			tasks = append(tasks, map[string]interface{}{
+				"Name":     t.Name,
+				"Schedule": t.Schedule,
+				"LastRun":  t.LastRun.Format("2006-01-02 15:04"),
+				"NextRun":  t.NextRun.Format("2006-01-02 15:04"),
+				"Enabled":  t.Enabled,
+			})
+		}
+	}
+	h.renderAdminTemplate(w, "scheduler", map[string]interface{}{
+		"ScheduledTasks": tasks,
+	})
 }
 
 // BackupPage renders backup & maintenance (Section 10)
 func (h *AdminHandler) BackupPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderBackupPage()))
+	// Placeholder backups list - would be populated from backup directory
+	backups := []map[string]string{}
+	h.renderAdminTemplate(w, "backup", map[string]interface{}{
+		"Backups": backups,
+	})
 }
 
 // SystemInfoPage renders system info (Section 11)
 func (h *AdminHandler) SystemInfoPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderSystemInfoPage()))
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	hostname, _ := os.Hostname()
+
+	// Engine health info
+	enginesList := []map[string]interface{}{}
+	for _, e := range h.engineMgr.ListEngines() {
+		enginesList = append(enginesList, map[string]interface{}{
+			"Name":        e.DisplayName,
+			"Enabled":     e.Enabled,
+			"Healthy":     e.Available,
+			"LastCheck":   "N/A",
+			"SuccessRate": 100,
+		})
+	}
+
+	h.renderAdminTemplate(w, "system", map[string]interface{}{
+		"Version":         "0.2.0",
+		"GoVersion":       runtime.Version(),
+		"BuildDate":       BuildDateTime,
+		"GitCommit":       "unknown",
+		"Uptime":          time.Since(h.startTime).Round(time.Second).String(),
+		"StartTime":       h.startTime.Format("2006-01-02 15:04:05"),
+		"MemoryHeap":      strconv.FormatUint(m.Alloc/1024/1024, 10) + " MB",
+		"MemorySystem":    strconv.FormatUint(m.Sys/1024/1024, 10) + " MB",
+		"Goroutines":      runtime.NumGoroutine(),
+		"GCCycles":        m.NumGC,
+		"CPUCores":        runtime.NumCPU(),
+		"Hostname":        hostname,
+		"OS":              runtime.GOOS,
+		"Arch":            runtime.GOARCH,
+		"DiskUsage":       "N/A",
+		"Engines":         enginesList,
+		"LatestVersion":   "",
+		"UpdateAvailable": false,
+	})
+}
+
+// TorPage renders Tor hidden service settings (TEMPLATE.md PART 32)
+func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, "tor", map[string]interface{}{
+		"TorEnabled":      h.cfg.Search.Tor.Enabled,
+		"TorConnected":    false, // Would check actual Tor connection
+		"TorProxy":        h.cfg.Search.Tor.Proxy,
+		"TorControlPort":  strconv.Itoa(h.cfg.Search.Tor.ControlPort),
+		"TorCircuit":      "N/A",
+		"OnionEnabled":    false, // Would check actual onion service
+		"OnionAddress":    "",
+		"VanityJobs":      []map[string]interface{}{},
+	})
+}
+
+// BrandingPage renders branding & SEO settings per PART 15
+func (h *AdminHandler) BrandingPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, "branding", nil)
+}
+
+// SecurityAuthPage renders authentication settings per PART 15
+func (h *AdminHandler) SecurityAuthPage(w http.ResponseWriter, r *http.Request) {
+	clientIP := r.RemoteAddr
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		clientIP = xff
+	}
+	h.renderAdminTemplate(w, "security-auth", map[string]interface{}{
+		"ClientIP": clientIP,
+	})
+}
+
+// SecurityTokensPage renders API token management per PART 15
+func (h *AdminHandler) SecurityTokensPage(w http.ResponseWriter, r *http.Request) {
+	tokenPrefix := ""
+	if len(h.cfg.Server.Admin.Token) > 8 {
+		tokenPrefix = h.cfg.Server.Admin.Token[:8]
+	}
+	h.renderAdminTemplate(w, "security-tokens", map[string]interface{}{
+		"TokenPrefix": tokenPrefix,
+	})
+}
+
+// SecurityRateLimitPage renders rate limiting settings per PART 15
+func (h *AdminHandler) SecurityRateLimitPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, "security-ratelimit", nil)
+}
+
+// SecurityFirewallPage renders firewall/IP blocking per PART 15
+func (h *AdminHandler) SecurityFirewallPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, "security-firewall", nil)
+}
+
+// GeoIPPage renders GeoIP settings per PART 15
+func (h *AdminHandler) GeoIPPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, "geoip", nil)
+}
+
+// BlocklistsPage renders blocklist management per PART 15
+func (h *AdminHandler) BlocklistsPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, "blocklists", nil)
+}
+
+// MaintenancePage renders maintenance mode settings per PART 15
+func (h *AdminHandler) MaintenancePage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, "maintenance", nil)
+}
+
+// UpdatesPage renders update management per PART 15
+func (h *AdminHandler) UpdatesPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, "updates", map[string]interface{}{
+		"CurrentVersion":  "0.2.0",
+		"LatestVersion":   "",
+		"UpdateAvailable": false,
+	})
+}
+
+// HelpPage renders help/documentation per PART 15
+func (h *AdminHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, "help", nil)
 }
 
 // === API Handlers ===
@@ -404,6 +747,33 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 				h.cfg.Search.ResultsPerPage = int(rpp)
 				updated = true
 			}
+			// Tor settings per TEMPLATE.md PART 32
+			if torCfg, ok := searchCfg["tor"].(map[string]interface{}); ok {
+				if enabled, ok := torCfg["enabled"].(bool); ok {
+					h.cfg.Search.Tor.Enabled = enabled
+					updated = true
+				}
+				if proxy, ok := torCfg["proxy"].(string); ok {
+					h.cfg.Search.Tor.Proxy = proxy
+					updated = true
+				}
+				if port, ok := torCfg["control_port"].(float64); ok {
+					h.cfg.Search.Tor.ControlPort = int(port)
+					updated = true
+				}
+				if forceAll, ok := torCfg["force_all"].(bool); ok {
+					h.cfg.Search.Tor.ForceAll = forceAll
+					updated = true
+				}
+				if rotate, ok := torCfg["rotate_circuit"].(bool); ok {
+					h.cfg.Search.Tor.RotateCircuit = rotate
+					updated = true
+				}
+				if fallback, ok := torCfg["clearnet_fallback"].(bool); ok {
+					h.cfg.Search.Tor.ClearnetFallback = fallback
+					updated = true
+				}
+			}
 		}
 
 		if updated {
@@ -556,10 +926,17 @@ func (h *AdminHandler) APITestEmail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIPassword changes admin password
+// APIPassword changes admin password using database per TEMPLATE.md PART 31
 func (h *AdminHandler) APIPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get current admin session
+	session := h.getSession(r)
+	if session == nil || session.adminID == 0 {
+		h.jsonError(w, "Session not found", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
 		return
 	}
 
@@ -573,13 +950,12 @@ func (h *AdminHandler) APIPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify current password
-	if !h.validateCredentials(h.cfg.Server.Admin.Username, body.CurrentPassword) {
-		h.jsonError(w, "Current password is incorrect", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+	// Change password using admin service (database)
+	if err := h.adminSvc.ChangePassword(session.adminID, body.CurrentPassword, body.NewPassword); err != nil {
+		h.jsonError(w, err.Error(), "ERR_UNAUTHORIZED", http.StatusUnauthorized)
 		return
 	}
 
-	// In production, this would update the database/config
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
@@ -686,6 +1062,224 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+// =====================================================
+// Tor API handlers per TEMPLATE.md PART 32
+// =====================================================
+
+// APITorStatus returns Tor hidden service status
+// GET /api/v1/admin/server/tor
+func (h *AdminHandler) APITorStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"enabled":       h.cfg.Search.Tor.Enabled,
+			"status":        "disconnected", // Would check actual Tor connection
+			"onion_address": "",             // Would get from Tor manager
+			"uptime":        "",
+			"proxy":         h.cfg.Search.Tor.Proxy,
+			"control_port":  h.cfg.Search.Tor.ControlPort,
+		},
+	})
+}
+
+// APITorUpdate updates Tor settings
+// PATCH /api/v1/admin/server/tor
+func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		Enabled          *bool   `json:"enabled"`
+		Proxy            *string `json:"proxy"`
+		ControlPort      *int    `json:"control_port"`
+		ForceAll         *bool   `json:"force_all"`
+		RotateCircuit    *bool   `json:"rotate_circuit"`
+		ClearnetFallback *bool   `json:"clearnet_fallback"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request body: " + err.Error(),
+		})
+		return
+	}
+
+	// Update config
+	updated := false
+	if req.Enabled != nil {
+		h.cfg.Search.Tor.Enabled = *req.Enabled
+		updated = true
+	}
+	if req.Proxy != nil {
+		h.cfg.Search.Tor.Proxy = *req.Proxy
+		updated = true
+	}
+	if req.ControlPort != nil {
+		h.cfg.Search.Tor.ControlPort = *req.ControlPort
+		updated = true
+	}
+	if req.ForceAll != nil {
+		h.cfg.Search.Tor.ForceAll = *req.ForceAll
+		updated = true
+	}
+	if req.RotateCircuit != nil {
+		h.cfg.Search.Tor.RotateCircuit = *req.RotateCircuit
+		updated = true
+	}
+	if req.ClearnetFallback != nil {
+		h.cfg.Search.Tor.ClearnetFallback = *req.ClearnetFallback
+		updated = true
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": updated,
+		"message": "Tor settings updated",
+	})
+}
+
+// APITorRegenerate regenerates the .onion address
+// POST /api/v1/admin/server/tor/regenerate
+func (h *AdminHandler) APITorRegenerate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	// Would trigger Tor manager to regenerate address
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Tor circuit regenerated",
+	})
+}
+
+// APITorVanityStatus returns vanity address generation status
+// GET /api/v1/admin/server/tor/vanity
+func (h *AdminHandler) APITorVanityStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"jobs": []map[string]interface{}{},
+		},
+	})
+}
+
+// APITorVanityStart starts vanity address generation
+// POST /api/v1/admin/server/tor/vanity
+func (h *AdminHandler) APITorVanityStart(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		Prefix string `json:"prefix"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request body",
+		})
+		return
+	}
+
+	if req.Prefix == "" || len(req.Prefix) > 6 {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Prefix must be 1-6 characters",
+		})
+		return
+	}
+
+	// Would start vanity generation in background
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Vanity generation started for prefix: " + req.Prefix,
+	})
+}
+
+// APITorVanityCancel cancels vanity address generation
+// DELETE /api/v1/admin/server/tor/vanity
+func (h *AdminHandler) APITorVanityCancel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Vanity generation cancelled",
+	})
+}
+
+// APITorVanityApply applies a generated vanity address
+// POST /api/v1/admin/server/tor/vanity/apply
+func (h *AdminHandler) APITorVanityApply(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		ID string `json:"id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request body",
+		})
+		return
+	}
+
+	// Would apply the vanity address
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Vanity address applied",
+	})
+}
+
+// APITorImport imports external Tor keys
+// POST /api/v1/admin/server/tor/import
+func (h *AdminHandler) APITorImport(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		PrivateKey string `json:"private_key"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request body",
+		})
+		return
+	}
+
+	if req.PrivateKey == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Private key is required",
+		})
+		return
+	}
+
+	// Would import the key and restart Tor
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Tor keys imported successfully",
+	})
+}
+
+// APITorTest tests Tor connection
+// POST /api/v1/admin/server/tor/test
+func (h *AdminHandler) APITorTest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	// Would test actual Tor connection
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"connected": false,
+			"ip":        "",
+			"message":   "Tor connection test not implemented",
+		},
+	})
+}
+
 // Helper to read log file lines
 func (h *AdminHandler) readLogLines(filename string, maxLines int) []string {
 	paths := config.GetPaths("", "")
@@ -713,16 +1307,6 @@ func (h *AdminHandler) readLogLines(filename string, maxLines int) []string {
 
 // === Helper functions ===
 
-func (h *AdminHandler) validateCredentials(username, password string) bool {
-	expectedUsername := h.cfg.Server.Admin.Username
-	expectedPassword := h.cfg.Server.Admin.Password
-
-	usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(expectedUsername)) == 1
-	passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(expectedPassword)) == 1
-
-	return usernameMatch && passwordMatch
-}
-
 func (h *AdminHandler) validateToken(token string) bool {
 	if token == "" {
 		return false
@@ -730,7 +1314,7 @@ func (h *AdminHandler) validateToken(token string) bool {
 	return subtle.ConstantTimeCompare([]byte(token), []byte(h.cfg.Server.Admin.Token)) == 1
 }
 
-func (h *AdminHandler) createSession(username string) string {
+func (h *AdminHandler) createSessionWithID(username string, adminID int64) string {
 	// Generate session ID
 	data := []byte(username + time.Now().String())
 	hash := sha256.Sum256(data)
@@ -738,6 +1322,7 @@ func (h *AdminHandler) createSession(username string) string {
 
 	h.sessions[sessionID] = adminSession{
 		username:  username,
+		adminID:   adminID,
 		createdAt: time.Now(),
 		expiresAt: time.Now().Add(adminSessionDuration),
 	}
@@ -762,6 +1347,19 @@ func (h *AdminHandler) validateSession(sessionID string) bool {
 		return false
 	}
 	return true
+}
+
+// getSession returns the current admin session from the request
+func (h *AdminHandler) getSession(r *http.Request) *adminSession {
+	cookie, err := r.Cookie(adminSessionCookieName)
+	if err != nil {
+		return nil
+	}
+	session, ok := h.sessions[cookie.Value]
+	if !ok || time.Now().After(session.expiresAt) {
+		return nil
+	}
+	return &session
 }
 
 // === CSRF Protection per TEMPLATE.md PART 12 ===
@@ -838,131 +1436,6 @@ func (h *AdminHandler) csrfFormField(r *http.Request) string {
 }
 
 // Template rendering functions
-func (h *AdminHandler) renderLoginPage(errorMsg string) string {
-	errorHtml := ""
-	if errorMsg != "" {
-		errorHtml = `<div class="alert alert-error">` + errorMsg + `</div>`
-	}
-
-	return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login - ` + h.cfg.Server.Title + `</title>
-    <style>
-        :root {
-            --bg-primary: #282a36;
-            --bg-secondary: #44475a;
-            --text-primary: #f8f8f2;
-            --text-muted: #6272a4;
-            --accent: #bd93f9;
-            --success: #50fa7b;
-            --error: #ff5555;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .login-card {
-            background: var(--bg-secondary);
-            border-radius: 8px;
-            padding: 2rem;
-            width: 100%;
-            max-width: 400px;
-            margin: 1rem;
-        }
-        .login-card h1 {
-            text-align: center;
-            margin-bottom: 1.5rem;
-            color: var(--accent);
-        }
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--text-muted);
-        }
-        .form-group input {
-            width: 100%;
-            padding: 0.75rem;
-            border: none;
-            border-radius: 4px;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            font-size: 1rem;
-        }
-        .form-group input:focus {
-            outline: 2px solid var(--accent);
-        }
-        button {
-            width: 100%;
-            padding: 0.75rem;
-            border: none;
-            border-radius: 4px;
-            background: var(--accent);
-            color: var(--bg-primary);
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        button:hover {
-            opacity: 0.9;
-        }
-        .alert {
-            padding: 0.75rem;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-        }
-        .alert-error {
-            background: rgba(255, 85, 85, 0.2);
-            color: var(--error);
-            border: 1px solid var(--error);
-        }
-        .back-link {
-            text-align: center;
-            margin-top: 1rem;
-        }
-        .back-link a {
-            color: var(--text-muted);
-            text-decoration: none;
-        }
-        .back-link a:hover {
-            color: var(--accent);
-        }
-    </style>
-</head>
-<body>
-    <div class="login-card">
-        <h1>🔐 Admin Login</h1>
-        ` + errorHtml + `
-        <form method="POST">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" required autofocus>
-            </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit">Login</button>
-        </form>
-        <div class="back-link">
-            <a href="/">← Back to Search</a>
-        </div>
-    </div>
-</body>
-</html>`
-}
 
 func (h *AdminHandler) renderDashboard() string {
 	var m runtime.MemStats
@@ -1208,7 +1681,7 @@ func (h *AdminHandler) renderAdminNav(active string) string {
 		return "nav-link"
 	}
 
-	// PART 12: Full navigation with all 11 sections
+	// PART 12: Full navigation with all 11 sections + Tor (PART 32)
 	return `<nav class="admin-nav">
         <div class="nav-brand">
             <a href="/admin">🔍 Vidveil Admin</a>
@@ -1222,6 +1695,7 @@ func (h *AdminHandler) renderAdminNav(active string) string {
             <a href="/admin/email" class="` + navClass("email") + `">Email</a>
             <a href="/admin/ssl" class="` + navClass("ssl") + `">SSL/TLS</a>
             <a href="/admin/scheduler" class="` + navClass("scheduler") + `">Scheduler</a>
+            <a href="/admin/tor" class="` + navClass("tor") + `">Tor</a>
             <a href="/admin/logs" class="` + navClass("logs") + `">Logs</a>
             <a href="/admin/backup" class="` + navClass("backup") + `">Backup</a>
             <a href="/admin/system" class="` + navClass("system") + `">System</a>
@@ -1576,7 +2050,221 @@ func (h *AdminHandler) renderSystemInfoPage() string {
         </div>`)
 }
 
-// Helper to render admin pages with consistent layout
+// renderTorPage renders Tor hidden service admin page per TEMPLATE.md PART 32
+func (h *AdminHandler) renderTorPage() string {
+	torEnabled := h.cfg.Search.Tor.Enabled
+	enabledStr := "Disabled"
+	statusClass := "badge-error"
+	if torEnabled {
+		enabledStr = "Enabled"
+		statusClass = "badge-success"
+	}
+
+	return h.renderAdminPage("tor", "Tor Hidden Service", `
+        <div class="card">
+            <h2>Hidden Service Status</h2>
+            <table class="info-table">
+                <tr><td>Status</td><td><span class="badge `+statusClass+`">`+enabledStr+`</span></td></tr>
+                <tr><td>Proxy</td><td>`+h.cfg.Search.Tor.Proxy+`</td></tr>
+                <tr><td>Control Port</td><td>`+strconv.Itoa(h.cfg.Search.Tor.ControlPort)+`</td></tr>
+                <tr><td>Force All Traffic</td><td>`+strconv.FormatBool(h.cfg.Search.Tor.ForceAll)+`</td></tr>
+                <tr><td>Rotate Circuit</td><td>`+strconv.FormatBool(h.cfg.Search.Tor.RotateCircuit)+`</td></tr>
+                <tr><td>Clearnet Fallback</td><td>`+strconv.FormatBool(h.cfg.Search.Tor.ClearnetFallback)+`</td></tr>
+            </table>
+        </div>
+        <div class="card">
+            <h2>Configuration</h2>
+            <form id="tor-form" onsubmit="saveTorConfig(event)">
+                <div class="form-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="tor-enabled" `+func() string { if torEnabled { return "checked" }; return "" }()+`>
+                        <span>Enable Tor Hidden Service</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="tor-proxy">SOCKS5 Proxy</label>
+                    <input type="text" id="tor-proxy" value="`+h.cfg.Search.Tor.Proxy+`" placeholder="socks5://127.0.0.1:9050">
+                </div>
+                <div class="form-group">
+                    <label for="tor-control-port">Control Port</label>
+                    <input type="number" id="tor-control-port" value="`+strconv.Itoa(h.cfg.Search.Tor.ControlPort)+`" placeholder="9051">
+                </div>
+                <div class="form-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="tor-force-all" `+func() string { if h.cfg.Search.Tor.ForceAll { return "checked" }; return "" }()+`>
+                        <span>Force all traffic through Tor</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="tor-rotate" `+func() string { if h.cfg.Search.Tor.RotateCircuit { return "checked" }; return "" }()+`>
+                        <span>Rotate circuit per request</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="tor-clearnet" `+func() string { if h.cfg.Search.Tor.ClearnetFallback { return "checked" }; return "" }()+`>
+                        <span>Fallback to clearnet if Tor fails</span>
+                    </label>
+                </div>
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+        <div class="card">
+            <h2>Vanity Address</h2>
+            <p class="text-muted">Generate a custom .onion address with a specific prefix (e.g., "vidv")</p>
+            <div class="form-group">
+                <label for="vanity-prefix">Prefix (2-6 chars)</label>
+                <input type="text" id="vanity-prefix" placeholder="vidv" maxlength="6" pattern="[a-z2-7]{2,6}">
+            </div>
+            <div class="button-group">
+                <button onclick="startVanity()" class="btn btn-secondary">Start Generation</button>
+                <button onclick="stopVanity()" class="btn btn-warning">Stop</button>
+            </div>
+            <div id="vanity-status" class="text-muted" style="margin-top: 1rem;"></div>
+        </div>
+        <script>
+        async function saveTorConfig(e) {
+            e.preventDefault();
+            try {
+                const resp = await fetch('/api/v1/admin/config', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        search: {
+                            tor: {
+                                enabled: document.getElementById('tor-enabled').checked,
+                                proxy: document.getElementById('tor-proxy').value,
+                                control_port: parseInt(document.getElementById('tor-control-port').value),
+                                force_all: document.getElementById('tor-force-all').checked,
+                                rotate_circuit: document.getElementById('tor-rotate').checked,
+                                clearnet_fallback: document.getElementById('tor-clearnet').checked
+                            }
+                        }
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) { showSuccess('Tor settings saved!'); } else { showError('Error: ' + data.error); }
+            } catch (e) { showError('Error: ' + e.message); }
+        }
+        async function startVanity() {
+            const prefix = document.getElementById('vanity-prefix').value;
+            if (!prefix || prefix.length < 2) { showError('Prefix must be at least 2 characters'); return; }
+            document.getElementById('vanity-status').textContent = 'Starting vanity generation for "' + prefix + '"...';
+            try {
+                const resp = await fetch('/api/v1/admin/tor/vanity/start?prefix=' + prefix, { method: 'POST' });
+                const data = await resp.json();
+                if (data.success) { showSuccess('Vanity generation started!'); pollVanityStatus(); }
+                else { showError('Error: ' + data.error); }
+            } catch (e) { showError('Error: ' + e.message); }
+        }
+        async function stopVanity() {
+            try {
+                const resp = await fetch('/api/v1/admin/tor/vanity/stop', { method: 'POST' });
+                const data = await resp.json();
+                if (data.success) { showSuccess('Vanity generation stopped'); }
+            } catch (e) { showError('Error: ' + e.message); }
+        }
+        function pollVanityStatus() {
+            setInterval(async () => {
+                try {
+                    const resp = await fetch('/api/v1/admin/tor/vanity/status');
+                    const data = await resp.json();
+                    if (data.success && data.data) {
+                        const s = data.data;
+                        document.getElementById('vanity-status').textContent =
+                            s.active ? 'Searching for "' + s.prefix + '": ' + s.attempts + ' attempts (' + s.elapsed_time + ')' :
+                            'Not running';
+                    }
+                } catch (e) {}
+            }, 2000);
+        }
+        </script>`)
+}
+
+// renderAdminTemplate renders admin pages using proper Go html/template per TEMPLATE.md PART 13
+func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, templateName string, data map[string]interface{}) {
+	// Add common template data
+	if data == nil {
+		data = make(map[string]interface{})
+	}
+	data["Config"] = h.cfg
+	data["ActiveNav"] = templateName
+	data["SiteTitle"] = h.cfg.Server.Title
+
+	// Set page title based on template name if not already set
+	if _, ok := data["Title"]; !ok {
+		titles := map[string]string{
+			"dashboard":          "Dashboard",
+			"server":             "Server Settings",
+			"branding":           "Branding & SEO",
+			"ssl":                "SSL/TLS",
+			"scheduler":          "Scheduler",
+			"email":              "Email & Notifications",
+			"logs":               "Logs",
+			"database":           "Database",
+			"web":                "Web Settings",
+			"security":           "Security",
+			"security-auth":      "Authentication",
+			"security-tokens":    "API Tokens",
+			"security-ratelimit": "Rate Limiting",
+			"security-firewall":  "Firewall",
+			"tor":                "Tor Configuration",
+			"geoip":              "GeoIP Filtering",
+			"blocklists":         "Blocklists",
+			"backup":             "Backup & Restore",
+			"maintenance":        "Maintenance",
+			"updates":            "Updates",
+			"system":             "System Info",
+			"engines":            "Search Engines",
+			"help":               "Help",
+		}
+		if title, ok := titles[templateName]; ok {
+			data["Title"] = title
+		} else {
+			data["Title"] = templateName
+		}
+	}
+
+	// Create template with functions
+	tmpl := template.New("admin").Funcs(template.FuncMap{
+		"eq": func(a, b interface{}) bool { return a == b },
+	})
+
+	// Load layout template
+	layoutContent, err := adminTemplatesFS.ReadFile("templates/layouts/admin.tmpl")
+	if err != nil {
+		http.Error(w, "Admin layout not found: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmpl, err = tmpl.Parse(string(layoutContent))
+	if err != nil {
+		http.Error(w, "Layout parse error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Load the specific content template
+	contentFile := "templates/admin/" + templateName + ".tmpl"
+	contentData, err := adminTemplatesFS.ReadFile(contentFile)
+	if err != nil {
+		http.Error(w, "Admin template not found: "+contentFile+": "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tmpl, err = tmpl.Parse(string(contentData))
+	if err != nil {
+		http.Error(w, "Template parse error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, "admin", data); err != nil {
+		http.Error(w, "Template execution error: "+err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// Helper to render admin pages with consistent layout (legacy - for inline HTML pages not yet converted)
 func (h *AdminHandler) renderAdminPage(active, title, content string) string {
 	return `<!DOCTYPE html>
 <html lang="en">

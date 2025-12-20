@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/models"
+	"github.com/apimgr/vidveil/src/services/retry"
 	"github.com/apimgr/vidveil/src/services/tor"
 	"github.com/apimgr/vidveil/src/services/utls"
 )
@@ -50,34 +52,60 @@ type ConfigurableEngine interface {
 
 // BaseEngine provides common functionality for all engines
 type BaseEngine struct {
-	name          string
-	displayName   string
-	baseURL       string
-	tier          int
-	enabled       bool
-	timeout       time.Duration
-	useTor        bool
-	useSpoofedTLS bool
-	httpClient    *http.Client
-	spoofedClient *http.Client
-	torClient     *tor.Client
+	name           string
+	displayName    string
+	baseURL        string
+	tier           int
+	enabled        bool
+	timeout        time.Duration
+	useTor         bool
+	useSpoofedTLS  bool
+	httpClient     *http.Client
+	spoofedClient  *http.Client
+	torClient      *tor.Client
+	circuitBreaker *retry.CircuitBreaker
+	retryConfig    *retry.Config
 }
 
 // NewBaseEngine creates a new base engine
 func NewBaseEngine(name, displayName, baseURL string, tier int, cfg *config.Config, torClient *tor.Client) *BaseEngine {
 	timeout := time.Duration(cfg.Search.EngineTimeout) * time.Second
+
+	// Create circuit breaker for this engine
+	cbConfig := retry.DefaultCircuitBreakerConfig(name)
+	cbConfig.FailureThreshold = 5  // Open after 5 failures
+	cbConfig.SuccessThreshold = 2  // Close after 2 successes in half-open
+	cbConfig.Timeout = 30 * time.Second
+
+	// Create retry config for transient errors
+	retryConfig := &retry.Config{
+		MaxAttempts:  3,
+		InitialDelay: 100 * time.Millisecond,
+		MaxDelay:     2 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       0.1,
+		RetryableErrors: []error{
+			retry.ErrTemporary,
+			retry.ErrTimeout,
+			retry.ErrNetworkError,
+			retry.ErrServerError,
+		},
+	}
+
 	return &BaseEngine{
-		name:          name,
+		name:           name,
 		displayName:   displayName,
 		baseURL:       baseURL,
 		tier:          tier,
 		enabled:       true,
 		timeout:       timeout,
 		useTor:        false,
-		useSpoofedTLS: cfg.Search.SpoofTLS, // Use config setting
+		useSpoofedTLS: cfg.Search.SpoofTLS,
 		httpClient:    createHTTPClient(cfg.Search.EngineTimeout),
 		spoofedClient: utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
 		torClient:     torClient,
+		circuitBreaker: retry.NewCircuitBreaker(cbConfig),
+		retryConfig:    retryConfig,
 	}
 }
 
@@ -136,33 +164,120 @@ func (e *BaseEngine) MakeRequest(ctx context.Context, reqURL string) (*http.Resp
 }
 
 // MakeRequestWithMod performs an HTTP request with optional modifier
+// Uses circuit breaker and retry logic for resilience
 func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod RequestModifier) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	// Check circuit breaker first
+	if !e.circuitBreaker.AllowRequest() {
+		return nil, retry.ErrCircuitOpen
+	}
+
+	var resp *http.Response
+	var lastErr error
+
+	// Execute with retry logic
+	err := retry.Do(ctx, e.retryConfig, func() error {
+		req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+		if err != nil {
+			return err
+		}
+
+		// Set Firefox-like headers for consistency with StandardUserAgent
+		req.Header.Set("User-Agent", StandardUserAgent)
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+		req.Header.Set("DNT", "1")
+		req.Header.Set("Sec-GPC", "1")
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Upgrade-Insecure-Requests", "1")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		req.Header.Set("Sec-Fetch-Site", "none")
+		req.Header.Set("Sec-Fetch-User", "?1")
+
+		// Apply custom modifier if provided
+		if mod != nil {
+			mod(req)
+		}
+
+		client := e.GetClient()
+		resp, lastErr = client.Do(req)
+		if lastErr != nil {
+			// Classify error for retry logic
+			return classifyHTTPError(lastErr)
+		}
+
+		// Check for server errors that should trigger retry
+		if resp.StatusCode >= 500 {
+			// Close the body to allow retry
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			return retry.ErrServerError
+		}
+
+		// Check for rate limiting
+		if resp.StatusCode == 429 {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			return retry.ErrRateLimit
+		}
+
+		return nil
+	})
+
 	if err != nil {
+		e.circuitBreaker.RecordFailure()
+		if lastErr != nil {
+			return nil, lastErr
+		}
 		return nil, err
 	}
 
-	// Set Firefox-like headers for consistency with StandardUserAgent
-	// Note: Don't set Accept-Encoding - Go handles gzip/deflate automatically
-	req.Header.Set("User-Agent", StandardUserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	req.Header.Set("DNT", "1")
-	req.Header.Set("Sec-GPC", "1")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Site", "none")
-	req.Header.Set("Sec-Fetch-User", "?1")
+	e.circuitBreaker.RecordSuccess()
+	return resp, nil
+}
 
-	// Apply custom modifier if provided
-	if mod != nil {
-		mod(req)
+// classifyHTTPError converts an HTTP error to a retryable error type
+func classifyHTTPError(err error) error {
+	if err == nil {
+		return nil
 	}
 
-	client := e.GetClient()
-	return client.Do(req)
+	errStr := err.Error()
+
+	// Check for timeout errors
+	if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
+		return fmt.Errorf("%w: %v", retry.ErrTimeout, err)
+	}
+
+	// Check for network errors
+	if strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "network is unreachable") ||
+		strings.Contains(errStr, "connection reset") {
+		return fmt.Errorf("%w: %v", retry.ErrNetworkError, err)
+	}
+
+	// Check for temporary errors
+	if retry.IsTemporaryError(err) {
+		return fmt.Errorf("%w: %v", retry.ErrTemporary, err)
+	}
+
+	return err
+}
+
+// CircuitBreakerState returns the current circuit breaker state for this engine
+func (e *BaseEngine) CircuitBreakerState() retry.State {
+	return e.circuitBreaker.State()
+}
+
+// ResetCircuitBreaker resets the circuit breaker to closed state
+func (e *BaseEngine) ResetCircuitBreaker() {
+	e.circuitBreaker.Reset()
+}
+
+// IsCircuitOpen returns true if the circuit breaker is open
+func (e *BaseEngine) IsCircuitOpen() bool {
+	return e.circuitBreaker.State() == retry.StateOpen
 }
 
 // AddCookies is a helper to add cookies to a request

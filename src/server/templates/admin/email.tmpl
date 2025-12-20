@@ -1,0 +1,110 @@
+{{define "content"}}
+<div class="card">
+    <h2>Email Configuration</h2>
+    <form id="email-form" onsubmit="saveEmailSettings(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="email-enabled"{{if .Config.Server.Notifications.Email.Enabled}} checked{{end}}>
+                <span>Enable Email Notifications</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="smtp-host">SMTP Host</label>
+            <input type="text" id="smtp-host" value="{{.Config.Server.Notifications.Email.SMTP.Host}}" placeholder="smtp.example.com">
+        </div>
+        <div class="form-group">
+            <label for="smtp-port">SMTP Port</label>
+            <input type="number" id="smtp-port" value="{{.Config.Server.Notifications.Email.SMTP.Port}}" placeholder="587">
+        </div>
+        <div class="form-group">
+            <label for="smtp-username">Username</label>
+            <input type="text" id="smtp-username" value="{{.Config.Server.Notifications.Email.SMTP.Username}}" placeholder="">
+        </div>
+        <div class="form-group">
+            <label for="smtp-password">Password</label>
+            <input type="password" id="smtp-password" placeholder="••••••••">
+        </div>
+        <div class="form-group">
+            <label for="smtp-from">From Address</label>
+            <input type="email" id="smtp-from" value="{{.Config.Server.Notifications.Email.SMTP.From}}" placeholder="noreply@example.com">
+        </div>
+        <div class="form-group">
+            <label for="smtp-tls">TLS Mode</label>
+            <select id="smtp-tls">
+                <option value="auto"{{if eq .Config.Server.Notifications.Email.SMTP.TLS "auto"}} selected{{end}}>Auto</option>
+                <option value="required"{{if eq .Config.Server.Notifications.Email.SMTP.TLS "required"}} selected{{end}}>Required</option>
+                <option value="none"{{if eq .Config.Server.Notifications.Email.SMTP.TLS "none"}} selected{{end}}>None</option>
+            </select>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="button" onclick="testEmail()" class="btn btn-secondary">Send Test Email</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Email Templates</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Template</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            {{range .EmailTemplates}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td><span class="badge badge-success">{{.Status}}</span></td>
+                <td><button class="btn btn-sm btn-secondary" onclick="editTemplate('{{.Name}}')">Edit</button></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveEmailSettings(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    notifications: {
+                        email: {
+                            enabled: document.getElementById('email-enabled').checked,
+                            smtp: {
+                                host: document.getElementById('smtp-host').value,
+                                port: parseInt(document.getElementById('smtp-port').value),
+                                username: document.getElementById('smtp-username').value,
+                                password: document.getElementById('smtp-password').value,
+                                from: document.getElementById('smtp-from').value,
+                                tls: document.getElementById('smtp-tls').value
+                            }
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Email settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function testEmail() {
+    try {
+        const resp = await fetch('/api/v1/admin/test/email', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Test email sent!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+function editTemplate(name) {
+    window.location.href = '/admin/email/templates/' + name;
+}
+</script>
+{{end}}

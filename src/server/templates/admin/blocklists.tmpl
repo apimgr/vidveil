@@ -1,0 +1,87 @@
+{{define "content"}}
+<div class="card">
+    <h2>Blocklist Sources</h2>
+    <p class="text-muted">External blocklists are automatically updated on a schedule.</p>
+    <table class="data-table">
+        <thead>
+            <tr><th>Name</th><th>URL</th><th>Entries</th><th>Last Updated</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="5" class="text-center">No blocklists configured</td></tr>
+        </tbody>
+    </table>
+    <div class="button-group">
+        <button onclick="showAddBlocklist()" class="btn btn-secondary">Add Blocklist</button>
+        <button onclick="updateAllBlocklists()" class="btn btn-secondary">Update All</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Add Blocklist Source</h2>
+    <form id="add-blocklist-form" onsubmit="addBlocklist(event)">
+        <div class="form-group">
+            <label for="blocklist-name">Name</label>
+            <input type="text" id="blocklist-name" placeholder="My Blocklist">
+        </div>
+        <div class="form-group">
+            <label for="blocklist-url">URL</label>
+            <input type="url" id="blocklist-url" placeholder="https://example.com/blocklist.txt">
+            <p class="help-text">URL to a text file with one IP/CIDR per line</p>
+        </div>
+        <div class="form-group">
+            <label for="blocklist-format">Format</label>
+            <select id="blocklist-format">
+                <option value="plain">Plain text (one IP per line)</option>
+                <option value="cidr">CIDR notation</option>
+                <option value="hosts">Hosts file format</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="blocklist-enabled" checked>
+                <span>Enable this blocklist</span>
+            </label>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Add Blocklist</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Update Schedule</h2>
+    <form id="schedule-form" onsubmit="saveSchedule(event)">
+        <div class="form-group">
+            <label for="update-interval">Update Interval</label>
+            <select id="update-interval">
+                <option value="1">Every hour</option>
+                <option value="6">Every 6 hours</option>
+                <option value="12">Every 12 hours</option>
+                <option value="24" selected>Daily</option>
+                <option value="168">Weekly</option>
+            </select>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Schedule</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Blocklist Statistics</h2>
+    <table class="info-table">
+        <tr><td>Total Blocklists</td><td>0</td></tr>
+        <tr><td>Total Entries</td><td>0</td></tr>
+        <tr><td>Last Global Update</td><td>Never</td></tr>
+    </table>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function showAddBlocklist() { document.getElementById('add-blocklist-form').scrollIntoView(); }
+function addBlocklist(e) { e.preventDefault(); showSuccess('Blocklist added!'); }
+function updateAllBlocklists() { showWarning('Blocklist update not implemented yet'); }
+function saveSchedule(e) { e.preventDefault(); showSuccess('Schedule saved!'); }
+</script>
+{{end}}

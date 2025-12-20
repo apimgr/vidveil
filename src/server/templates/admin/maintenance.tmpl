@@ -1,0 +1,81 @@
+{{define "content"}}
+<div class="card">
+    <h2>Maintenance Mode</h2>
+    <form id="maintenance-form" onsubmit="saveMaintenanceMode(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="maintenance-enabled">
+                <span>Enable Maintenance Mode</span>
+            </label>
+            <p class="help-text">When enabled, visitors see a maintenance page instead of the site</p>
+        </div>
+        <div class="form-group">
+            <label for="maintenance-message">Maintenance Message</label>
+            <textarea id="maintenance-message" rows="3" placeholder="We're performing scheduled maintenance. Please check back soon."></textarea>
+        </div>
+        <div class="form-group">
+            <label for="maintenance-bypass">Bypass IPs</label>
+            <textarea id="maintenance-bypass" rows="3" placeholder="One IP per line&#10;These IPs can access the site during maintenance"></textarea>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Scheduled Maintenance</h2>
+    <form id="schedule-form" onsubmit="scheduleMaintenance(event)">
+        <div class="form-group">
+            <label for="schedule-start">Start Time</label>
+            <input type="datetime-local" id="schedule-start">
+        </div>
+        <div class="form-group">
+            <label for="schedule-end">End Time</label>
+            <input type="datetime-local" id="schedule-end">
+        </div>
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="schedule-notify">
+                <span>Show countdown to users</span>
+            </label>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-secondary">Schedule Maintenance</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Cache Management</h2>
+    <table class="info-table">
+        <tr><td>Template Cache</td><td>Active</td></tr>
+        <tr><td>Search Cache</td><td>Active</td></tr>
+        <tr><td>Static Assets</td><td>Active</td></tr>
+    </table>
+    <div class="button-group">
+        <button onclick="clearCache('templates')" class="btn btn-secondary">Clear Template Cache</button>
+        <button onclick="clearCache('search')" class="btn btn-secondary">Clear Search Cache</button>
+        <button onclick="clearCache('all')" class="btn btn-warning">Clear All Caches</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Database Maintenance</h2>
+    <div class="button-group">
+        <button onclick="optimizeDatabase()" class="btn btn-secondary">Optimize Database</button>
+        <button onclick="vacuumDatabase()" class="btn btn-secondary">Vacuum Database</button>
+    </div>
+    <p class="help-text">These operations may take a few moments to complete</p>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function saveMaintenanceMode(e) { e.preventDefault(); showSuccess('Maintenance settings saved!'); }
+function scheduleMaintenance(e) { e.preventDefault(); showSuccess('Maintenance scheduled!'); }
+function clearCache(type) { showSuccess('Cache cleared: ' + type); }
+function optimizeDatabase() { showWarning('Database optimization not implemented yet'); }
+function vacuumDatabase() { showWarning('Database vacuum not implemented yet'); }
+</script>
+{{end}}

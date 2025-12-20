@@ -62,7 +62,12 @@
       "Bash(1 echo \"\" echo \"=== --status ===\")",
       "Bash(__NEW_LINE__ echo \"\")",
       "Bash(time curl -s 'http://127.0.0.1:64888/api/v1/search?q=test&engines=eporner')",
-      "Bash(timeout 15 curl:*)"
+      "Bash(timeout 15 curl:*)",
+      "Bash(PASS=\"89410980a600fd06fc0999ea3191b90c\" curl -sL -c /tmp/cookies.txt -b /tmp/cookies.txt 'http://127.0.0.1:64888/admin/login' -d \"username=administrator&password=$PASS\")",
+      "Bash(docker port:*)",
+      "Bash(/tmp/apimgr-build/vidveil/vidveil:*)",
+      "Bash(go test:*)",
+      "Bash(source ~/.bashrc)"
     ],
     "deny": [],
     "ask": []

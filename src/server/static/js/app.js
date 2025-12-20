@@ -395,6 +395,37 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 // ============================================================================
+// Mobile Navigation - TEMPLATE.md PART 13
+// Slides in from RIGHT edge
+// ============================================================================
+function toggleNav() {
+    const panel = document.getElementById('nav-panel');
+    const overlay = document.getElementById('nav-overlay');
+    if (panel && overlay) {
+        panel.classList.toggle('open');
+        overlay.classList.toggle('open');
+        document.body.style.overflow = panel.classList.contains('open') ? 'hidden' : '';
+    }
+}
+
+function closeNav() {
+    const panel = document.getElementById('nav-panel');
+    const overlay = document.getElementById('nav-overlay');
+    if (panel && overlay) {
+        panel.classList.remove('open');
+        overlay.classList.remove('open');
+        document.body.style.overflow = '';
+    }
+}
+
+// Close nav on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeNav();
+    }
+});
+
+// ============================================================================
 // Export for global access
 // ============================================================================
 window.Vidveil = {
@@ -410,5 +441,11 @@ window.Vidveil = {
     filterBySource,
     filterByDuration,
     showNotification,
-    fetchAPI
+    fetchAPI,
+    toggleNav,
+    closeNav
 };
+
+// Make nav functions globally available for onclick handlers
+window.toggleNav = toggleNav;
+window.closeNav = closeNav;

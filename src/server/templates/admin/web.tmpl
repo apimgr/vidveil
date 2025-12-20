@@ -1,0 +1,120 @@
+{{define "content"}}
+<div class="card">
+    <h2>Web Settings</h2>
+    <form id="web-form" onsubmit="saveWebSettings(event)">
+        <div class="form-group">
+            <label for="cors">CORS Origins</label>
+            <input type="text" id="cors" value="{{.Config.Web.CORS}}" placeholder="*">
+            <p class="help-text">Comma-separated origins or * for all</p>
+        </div>
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="csrf-enabled"{{if .Config.Web.CSRF.Enabled}} checked{{end}}>
+                <span>Enable CSRF Protection</span>
+            </label>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Branding</h2>
+    <form id="branding-form" onsubmit="saveBranding(event)">
+        <div class="form-group">
+            <label for="title">Site Title</label>
+            <input type="text" id="title" value="{{.Config.Server.Branding.Title}}" placeholder="Vidveil">
+        </div>
+        <div class="form-group">
+            <label for="tagline">Tagline</label>
+            <input type="text" id="tagline" value="{{.Config.Server.Branding.Tagline}}" placeholder="">
+        </div>
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" rows="3" placeholder="Site description for SEO">{{.Config.Server.Branding.Description}}</textarea>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Announcements</h2>
+    <form id="announcement-form" onsubmit="saveAnnouncement(event)">
+        <div class="form-group">
+            <label class="toggle-label">
+                <input type="checkbox" id="announcements-enabled"{{if .Config.Web.Announcements.Enabled}} checked{{end}}>
+                <span>Enable Announcements</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label for="announcement-type">Type</label>
+            <select id="announcement-type">
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+                <option value="error">Error</option>
+                <option value="success">Success</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="announcement-message">Message</label>
+            <textarea id="announcement-message" rows="2" placeholder="Announcement message"></textarea>
+        </div>
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Announcement</button>
+        </div>
+    </form>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveWebSettings(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                web: {
+                    cors: document.getElementById('cors').value,
+                    csrf: { enabled: document.getElementById('csrf-enabled').checked }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Web settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function saveBranding(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch('/api/v1/admin/config', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    branding: {
+                        title: document.getElementById('title').value,
+                        tagline: document.getElementById('tagline').value,
+                        description: document.getElementById('description').value
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Branding saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function saveAnnouncement(e) {
+    e.preventDefault();
+    showSuccess('Announcement saved!');
+}
+</script>
+{{end}}

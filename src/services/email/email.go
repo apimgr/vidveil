@@ -387,16 +387,21 @@ func (s *Service) sendTLS(addr, host string, auth smtp.Auth, from, to string, ms
 	return client.Quit()
 }
 
-// autodetectSMTP tries to find an SMTP server
+// autodetectSMTP tries to find an SMTP server per TEMPLATE.md PART 31 lines 10267-10284
 func (s *Service) autodetectSMTP() (string, int) {
 	hosts := s.cfg.Server.Email.AutodetectHost
 	if len(hosts) == 0 {
-		hosts = []string{"localhost", "172.17.0.1"}
+		// Per TEMPLATE.md PART 31: Check localhost, 127.0.0.1, Docker host, gateway
+		hosts = []string{"localhost", "127.0.0.1", "172.17.0.1"}
+		// Try to get gateway IP
+		if gw := getGatewayIP(); gw != "" {
+			hosts = append(hosts, gw)
+		}
 	}
 
 	ports := s.cfg.Server.Email.AutodetectPort
 	if len(ports) == 0 {
-		ports = []int{25, 465, 587}
+		ports = []int{25, 587, 465}
 	}
 
 	for _, host := range hosts {
@@ -411,6 +416,25 @@ func (s *Service) autodetectSMTP() (string, int) {
 	}
 
 	return "", 0
+}
+
+// getGatewayIP attempts to determine the default gateway IP
+func getGatewayIP() string {
+	// Try to connect to an external address to find the gateway
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	// Gateway is typically at .1 of the same subnet
+	ip := localAddr.IP.To4()
+	if ip == nil {
+		return ""
+	}
+	ip[3] = 1
+	return ip.String()
 }
 
 // SendTest sends a test email

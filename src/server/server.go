@@ -14,11 +14,12 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/handlers"
+	"github.com/apimgr/vidveil/src/services/admin"
 	"github.com/apimgr/vidveil/src/services/engines"
 	"github.com/apimgr/vidveil/src/services/ratelimit"
 )
 
-//go:embed static/css/* static/js/* static/img/* templates/*.tmpl templates/partials/*.tmpl templates/layouts/*.tmpl
+//go:embed static/css/* static/js/* static/img/* templates/*.tmpl templates/partials/*.tmpl templates/layouts/*.tmpl templates/admin/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -30,15 +31,17 @@ func GetTemplatesFS() embed.FS {
 type Server struct {
 	cfg         *config.Config
 	engineMgr   *engines.Manager
+	adminSvc    *admin.Service
 	router      *chi.Mux
 	srv         *http.Server
 	rateLimiter *ratelimit.Limiter
 }
 
 // New creates a new server instance
-func New(cfg *config.Config, engineMgr *engines.Manager) *Server {
+func New(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service) *Server {
 	// Set templates filesystem for handlers
 	handlers.SetTemplatesFS(embeddedFS)
+	handlers.SetAdminTemplatesFS(embeddedFS)
 
 	// Create rate limiter per PART 16
 	limiter := ratelimit.New(
@@ -50,6 +53,7 @@ func New(cfg *config.Config, engineMgr *engines.Manager) *Server {
 	s := &Server{
 		cfg:         cfg,
 		engineMgr:   engineMgr,
+		adminSvc:    adminSvc,
 		router:      chi.NewRouter(),
 		rateLimiter: limiter,
 	}
@@ -123,7 +127,7 @@ func (s *Server) setupMiddleware() {
 // setupRoutes configures all routes
 func (s *Server) setupRoutes() {
 	h := handlers.New(s.cfg, s.engineMgr)
-	admin := handlers.NewAdminHandler(s.cfg, s.engineMgr)
+	admin := handlers.NewAdminHandler(s.cfg, s.engineMgr, s.adminSvc)
 	metrics := handlers.NewMetrics(s.cfg, s.engineMgr)
 
 	// Maintenance mode middleware (applied globally, but allows admin access)
@@ -198,6 +202,7 @@ func (s *Server) setupRoutes() {
 
 	// Auth routes per TEMPLATE.md PART 31
 	auth := handlers.NewAuthHandler(s.cfg)
+	auth.SetAdminHandler(admin) // Link admin handler for authentication
 	s.router.Route("/auth", func(r chi.Router) {
 		r.Get("/login", auth.LoginPage)
 		r.Post("/login", auth.LoginPage)
@@ -222,30 +227,98 @@ func (s *Server) setupRoutes() {
 		r.Get("/security/2fa", user.SecurityPage)
 	})
 
-	// Admin panel routes - PART 12 compliant with all 11 sections
+	// Admin panel routes - PART 15 and PART 31 compliant
 	s.router.Route("/admin", func(r chi.Router) {
-		// Login page (no auth required, CSRF not needed for login itself)
+		// Login redirects to /auth/login per TEMPLATE.md PART 31
 		r.Get("/login", admin.LoginPage)
 		r.Post("/login", admin.LoginPage)
 
-		// Protected admin routes - all 11 sections per TEMPLATE.md PART 12
-		// Uses both AuthMiddleware and CSRFMiddleware for PART 12 compliance
+		// Logout handler
+		r.Get("/logout", admin.LogoutHandler)
+		r.Post("/logout", admin.LogoutHandler)
+
+		// Root: Setup token entry (first run) or dashboard (authenticated)
+		// Per TEMPLATE.md PART 31: User navigates to /admin, enters setup token
+		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+			if admin.IsFirstRun() {
+				admin.SetupTokenPage(w, req)
+				return
+			}
+			// After setup, apply auth middleware and show dashboard
+			admin.AuthMiddleware(http.HandlerFunc(admin.DashboardPage)).ServeHTTP(w, req)
+		})
+		r.Post("/", func(w http.ResponseWriter, req *http.Request) {
+			if admin.IsFirstRun() {
+				admin.SetupTokenPage(w, req)
+				return
+			}
+			admin.AuthMiddleware(http.HandlerFunc(admin.DashboardPage)).ServeHTTP(w, req)
+		})
+
+		// Protected admin routes per TEMPLATE.md PART 15
 		r.Group(func(r chi.Router) {
 			r.Use(admin.AuthMiddleware)
-			r.Use(admin.CSRFMiddleware) // CSRF protection per PART 12
-			r.Get("/", admin.DashboardPage)          // Section 1: Dashboard
-			r.Get("/server", admin.ServerSettingsPage) // Section 2: Server Settings
-			r.Get("/web", admin.WebSettingsPage)     // Section 3: Web Settings
-			r.Get("/security", admin.SecuritySettingsPage) // Section 4: Security
-			r.Get("/database", admin.DatabasePage)   // Section 5: Database & Cache
-			r.Get("/email", admin.EmailPage)         // Section 6: Email & Notifications
-			r.Get("/ssl", admin.SSLPage)             // Section 7: SSL/TLS
-			r.Get("/scheduler", admin.SchedulerPage) // Section 8: Scheduler
-			r.Get("/engines", admin.EnginesPage)     // Section 9: Engines (project-specific)
-			r.Get("/logs", admin.LogsPage)           // Section 9: Logs
-			r.Get("/backup", admin.BackupPage)       // Section 10: Backup & Maintenance
-			r.Get("/system", admin.SystemInfoPage)   // Section 11: System Info
-			r.Get("/settings", admin.SettingsPage)   // Legacy settings page
+			r.Use(admin.CSRFMiddleware)
+
+			// Dashboard
+			r.Get("/dashboard", admin.DashboardPage)
+
+			// Server section - includes setup wizard
+			r.Route("/server", func(r chi.Router) {
+				r.Get("/", admin.ServerSettingsPage)       // Redirect to settings
+				r.Get("/settings", admin.ServerSettingsPage)
+				r.Get("/branding", admin.BrandingPage)
+				r.Get("/ssl", admin.SSLPage)
+				r.Get("/scheduler", admin.SchedulerPage)
+				r.Get("/email", admin.EmailPage)
+				r.Get("/logs", admin.LogsPage)
+				r.Get("/database", admin.DatabasePage)
+				r.Get("/web", admin.WebSettingsPage)
+			})
+		})
+
+		// Setup wizard at /admin/server/setup (no auth, but requires valid token cookie)
+		r.Get("/server/setup", admin.SetupWizardPage)
+		r.Post("/server/setup", admin.SetupWizardPage)
+
+		// Protected admin routes per TEMPLATE.md PART 15
+		r.Group(func(r chi.Router) {
+			r.Use(admin.AuthMiddleware)
+			r.Use(admin.CSRFMiddleware)
+
+			// Security section
+			r.Route("/security", func(r chi.Router) {
+				r.Get("/", admin.SecurityAuthPage)         // Redirect to auth
+				r.Get("/auth", admin.SecurityAuthPage)
+				r.Get("/tokens", admin.SecurityTokensPage)
+				r.Get("/ratelimit", admin.SecurityRateLimitPage)
+				r.Get("/firewall", admin.SecurityFirewallPage)
+			})
+
+			// Network section
+			r.Route("/network", func(r chi.Router) {
+				r.Get("/", admin.TorPage)                  // Redirect to tor
+				r.Get("/tor", admin.TorPage)
+				r.Get("/geoip", admin.GeoIPPage)
+				r.Get("/blocklists", admin.BlocklistsPage)
+			})
+
+			// System section
+			r.Route("/system", func(r chi.Router) {
+				r.Get("/", admin.BackupPage)               // Redirect to backup
+				r.Get("/backup", admin.BackupPage)
+				r.Get("/maintenance", admin.MaintenancePage)
+				r.Get("/updates", admin.UpdatesPage)
+				r.Get("/info", admin.SystemInfoPage)
+			})
+
+			// Project-specific
+			r.Get("/engines", admin.EnginesPage)
+
+			// Help
+			r.Get("/help", admin.HelpPage)
+
+			// Logout
 			r.Get("/logout", admin.LogoutHandler)
 		})
 	})
@@ -301,27 +374,92 @@ func (s *Server) setupRoutes() {
 			r.Get("/2fa", user.API2FA)
 		})
 
-		// Admin API (token required) - PART 12 compliant
+		// Admin API (token required) - PART 12 & PART 31 compliant
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(admin.APITokenMiddleware)
-			// Existing endpoints
+
+			// Legacy endpoints (kept for backwards compatibility)
 			r.Get("/stats", admin.APIStats)
 			r.Get("/engines", admin.APIEngines)
-			r.Post("/backup", admin.APIBackup)
-			r.Post("/maintenance", admin.APIMaintenanceMode)
-			// PART 12 required endpoints
+			r.Get("/status", admin.APIStatus)
+			r.Get("/health", admin.APIHealth)
+
+			// Server settings per TEMPLATE.md PART 31
+			r.Route("/server", func(r chi.Router) {
+				// Settings
+				r.Get("/settings", admin.APIConfig)
+				r.Patch("/settings", admin.APIConfig)
+				r.Get("/status", admin.APIStatus)
+				r.Get("/health", admin.APIHealth)
+				r.Post("/restart", admin.APIMaintenanceMode)
+
+				// SSL per PART 31
+				r.Route("/ssl", func(r chi.Router) {
+					r.Get("/", admin.APIConfig) // SSL status
+					r.Patch("/", admin.APIConfig)
+					r.Post("/renew", admin.APIConfig) // Force renewal
+				})
+
+				// Tor per PART 32
+				r.Route("/tor", func(r chi.Router) {
+					r.Get("/", admin.APITorStatus)
+					r.Patch("/", admin.APITorUpdate)
+					r.Post("/regenerate", admin.APITorRegenerate)
+					r.Post("/test", admin.APITorTest)
+					r.Get("/vanity", admin.APITorVanityStatus)
+					r.Post("/vanity", admin.APITorVanityStart)
+					r.Delete("/vanity", admin.APITorVanityCancel)
+					r.Post("/vanity/apply", admin.APITorVanityApply)
+					r.Post("/import", admin.APITorImport)
+				})
+
+				// Email per PART 31
+				r.Route("/email", func(r chi.Router) {
+					r.Get("/", admin.APIConfig)
+					r.Patch("/", admin.APIConfig)
+					r.Post("/test", admin.APITestEmail)
+				})
+
+				// Scheduler per PART 31
+				r.Route("/scheduler", func(r chi.Router) {
+					r.Get("/", admin.APISchedulerTasks)
+					r.Get("/{id}", admin.APISchedulerTasks)
+					r.Patch("/{id}", admin.APISchedulerTasks)
+					r.Post("/{id}/run", admin.APISchedulerRunTask)
+					r.Post("/{id}/enable", admin.APISchedulerTasks)
+					r.Post("/{id}/disable", admin.APISchedulerTasks)
+				})
+
+				// Backup per PART 31
+				r.Route("/backup", func(r chi.Router) {
+					r.Get("/", admin.APIBackup)
+					r.Post("/", admin.APIBackup)
+					r.Get("/{id}", admin.APIBackup)
+					r.Delete("/{id}", admin.APIBackup)
+					r.Get("/{id}/download", admin.APIBackup)
+					r.Post("/restore", admin.APIRestore)
+				})
+
+				// Logs per PART 31
+				r.Route("/logs", func(r chi.Router) {
+					r.Get("/", admin.APILogsAccess)
+					r.Get("/{type}", admin.APILogsAccess)
+					r.Get("/{type}/download", admin.APILogsAccess)
+				})
+			})
+
+			// Legacy routes (kept for backwards compatibility)
 			r.Get("/config", admin.APIConfig)
 			r.Put("/config", admin.APIConfig)
 			r.Patch("/config", admin.APIConfig)
-			r.Get("/status", admin.APIStatus)
-			r.Get("/health", admin.APIHealth)
+			r.Post("/backup", admin.APIBackup)
+			r.Post("/maintenance", admin.APIMaintenanceMode)
 			r.Get("/logs/access", admin.APILogsAccess)
 			r.Get("/logs/error", admin.APILogsError)
 			r.Post("/restore", admin.APIRestore)
 			r.Post("/test/email", admin.APITestEmail)
 			r.Post("/password", admin.APIPassword)
 			r.Post("/token/regenerate", admin.APITokenRegenerate)
-			// Scheduler API
 			r.Get("/scheduler/tasks", admin.APISchedulerTasks)
 			r.Post("/scheduler/run", admin.APISchedulerRunTask)
 			r.Get("/scheduler/history", admin.APISchedulerHistory)

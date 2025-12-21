@@ -300,7 +300,7 @@ func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	h.renderAdminTemplate(w, "dashboard", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "dashboard", map[string]interface{}{
 		"EngineCount":   len(h.engineMgr.ListEngines()),
 		"EnabledCount":  h.engineMgr.EnabledCount(),
 		"MemoryMB":      m.Alloc / 1024 / 1024,
@@ -328,19 +328,19 @@ func (h *AdminHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 
 // LogsPage renders the logs viewer
 func (h *AdminHandler) LogsPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "logs", nil)
+	h.renderAdminTemplate(w, r, "logs", nil)
 }
 
 // === PART 12 Required Admin Sections ===
 
 // ServerSettingsPage renders server settings (Section 2)
 func (h *AdminHandler) ServerSettingsPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "server", nil)
+	h.renderAdminTemplate(w, r, "server", nil)
 }
 
 // WebSettingsPage renders web settings (Section 3)
 func (h *AdminHandler) WebSettingsPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "web", nil)
+	h.renderAdminTemplate(w, r, "web", nil)
 }
 
 // SecuritySettingsPage renders security settings (Section 4)
@@ -349,7 +349,7 @@ func (h *AdminHandler) SecuritySettingsPage(w http.ResponseWriter, r *http.Reque
 	if len(h.cfg.Server.Admin.Token) > 8 {
 		tokenPrefix = h.cfg.Server.Admin.Token[:8]
 	}
-	h.renderAdminTemplate(w, "security", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "security", map[string]interface{}{
 		"TokenPrefix": tokenPrefix,
 	})
 }
@@ -360,7 +360,7 @@ func (h *AdminHandler) DatabasePage(w http.ResponseWriter, r *http.Request) {
 	if dbPath == "" {
 		dbPath = "default"
 	}
-	h.renderAdminTemplate(w, "database", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "database", map[string]interface{}{
 		"DBDriver": h.cfg.Server.Database.Driver,
 		"DBPath":   dbPath,
 		"DBSize":   "N/A", // Would require file stat
@@ -375,7 +375,7 @@ func (h *AdminHandler) EmailPage(w http.ResponseWriter, r *http.Request) {
 		{"Name": "password-reset", "Status": "Active"},
 		{"Name": "notification", "Status": "Active"},
 	}
-	h.renderAdminTemplate(w, "email", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "email", map[string]interface{}{
 		"EmailTemplates": templates,
 	})
 }
@@ -390,7 +390,7 @@ func (h *AdminHandler) SSLPage(w http.ResponseWriter, r *http.Request) {
 			sslMode = "custom"
 		}
 	}
-	h.renderAdminTemplate(w, "ssl", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "ssl", map[string]interface{}{
 		"SSLMode":    sslMode,
 		"SSLEnabled": h.cfg.Server.SSL.Enabled,
 		"SSLDomain":  h.cfg.Server.SSL.LetsEncrypt.Domain,
@@ -413,7 +413,7 @@ func (h *AdminHandler) SchedulerPage(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	h.renderAdminTemplate(w, "scheduler", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "scheduler", map[string]interface{}{
 		"ScheduledTasks": tasks,
 	})
 }
@@ -422,7 +422,7 @@ func (h *AdminHandler) SchedulerPage(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) BackupPage(w http.ResponseWriter, r *http.Request) {
 	// Placeholder backups list - would be populated from backup directory
 	backups := []map[string]string{}
-	h.renderAdminTemplate(w, "backup", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "backup", map[string]interface{}{
 		"Backups": backups,
 	})
 }
@@ -446,7 +446,7 @@ func (h *AdminHandler) SystemInfoPage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	h.renderAdminTemplate(w, "system", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "system", map[string]interface{}{
 		"Version":         "0.2.0",
 		"GoVersion":       runtime.Version(),
 		"BuildDate":       BuildDateTime,
@@ -468,9 +468,26 @@ func (h *AdminHandler) SystemInfoPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// NodesPage renders cluster nodes management (TEMPLATE.md PART 24)
+func (h *AdminHandler) NodesPage(w http.ResponseWriter, r *http.Request) {
+	hostname, _ := os.Hostname()
+
+	// In single instance mode, show limited info
+	h.renderAdminTemplate(w, r, "nodes", map[string]interface{}{
+		"NodeID":         hostname,
+		"IsPrimary":      true,
+		"ClusterEnabled": false,
+		"TotalNodes":     1,
+		"ActiveNodes":    1,
+		"ActiveLocks":    0,
+		"Nodes":          nil,
+		"Locks":          nil,
+	})
+}
+
 // TorPage renders Tor hidden service settings (TEMPLATE.md PART 32)
 func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "tor", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "tor", map[string]interface{}{
 		"TorEnabled":      h.cfg.Search.Tor.Enabled,
 		"TorConnected":    false, // Would check actual Tor connection
 		"TorProxy":        h.cfg.Search.Tor.Proxy,
@@ -484,7 +501,7 @@ func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
 
 // BrandingPage renders branding & SEO settings per PART 15
 func (h *AdminHandler) BrandingPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "branding", nil)
+	h.renderAdminTemplate(w, r, "branding", nil)
 }
 
 // SecurityAuthPage renders authentication settings per PART 15
@@ -493,7 +510,7 @@ func (h *AdminHandler) SecurityAuthPage(w http.ResponseWriter, r *http.Request) 
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		clientIP = xff
 	}
-	h.renderAdminTemplate(w, "security-auth", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "security-auth", map[string]interface{}{
 		"ClientIP": clientIP,
 	})
 }
@@ -504,39 +521,39 @@ func (h *AdminHandler) SecurityTokensPage(w http.ResponseWriter, r *http.Request
 	if len(h.cfg.Server.Admin.Token) > 8 {
 		tokenPrefix = h.cfg.Server.Admin.Token[:8]
 	}
-	h.renderAdminTemplate(w, "security-tokens", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "security-tokens", map[string]interface{}{
 		"TokenPrefix": tokenPrefix,
 	})
 }
 
 // SecurityRateLimitPage renders rate limiting settings per PART 15
 func (h *AdminHandler) SecurityRateLimitPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "security-ratelimit", nil)
+	h.renderAdminTemplate(w, r, "security-ratelimit", nil)
 }
 
 // SecurityFirewallPage renders firewall/IP blocking per PART 15
 func (h *AdminHandler) SecurityFirewallPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "security-firewall", nil)
+	h.renderAdminTemplate(w, r, "security-firewall", nil)
 }
 
 // GeoIPPage renders GeoIP settings per PART 15
 func (h *AdminHandler) GeoIPPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "geoip", nil)
+	h.renderAdminTemplate(w, r, "geoip", nil)
 }
 
 // BlocklistsPage renders blocklist management per PART 15
 func (h *AdminHandler) BlocklistsPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "blocklists", nil)
+	h.renderAdminTemplate(w, r, "blocklists", nil)
 }
 
 // MaintenancePage renders maintenance mode settings per PART 15
 func (h *AdminHandler) MaintenancePage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "maintenance", nil)
+	h.renderAdminTemplate(w, r, "maintenance", nil)
 }
 
 // UpdatesPage renders update management per PART 15
 func (h *AdminHandler) UpdatesPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "updates", map[string]interface{}{
+	h.renderAdminTemplate(w, r, "updates", map[string]interface{}{
 		"CurrentVersion":  "0.2.0",
 		"LatestVersion":   "",
 		"UpdateAvailable": false,
@@ -545,10 +562,399 @@ func (h *AdminHandler) UpdatesPage(w http.ResponseWriter, r *http.Request) {
 
 // HelpPage renders help/documentation per PART 15
 func (h *AdminHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, "help", nil)
+	h.renderAdminTemplate(w, r, "help", nil)
+}
+
+// ProfilePage renders admin profile page per TEMPLATE.md PART 31
+func (h *AdminHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
+	// Get current admin from session
+	cookie, err := r.Cookie(adminSessionCookieName)
+	if err != nil {
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
+
+	session, ok := h.sessions[cookie.Value]
+	if !ok {
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
+
+	// Get admin details
+	admin, err := h.adminSvc.GetAdmin(session.adminID)
+	if err != nil {
+		h.renderAdminTemplate(w, r, "profile", map[string]interface{}{
+			"Error": "Failed to load profile",
+		})
+		return
+	}
+
+	// Get token info
+	tokenPrefix, tokenLastUsed, tokenUseCount, _ := h.adminSvc.GetAPITokenInfo(session.adminID)
+
+	h.renderAdminTemplate(w, r, "profile", map[string]interface{}{
+		"Admin":         admin,
+		"TokenPrefix":   tokenPrefix,
+		"TokenLastUsed": tokenLastUsed,
+		"TokenUseCount": tokenUseCount,
+	})
+}
+
+// APIProfilePassword handles password change via API per TEMPLATE.md PART 31
+func (h *AdminHandler) APIProfilePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get admin ID from session
+	adminID := h.getSessionAdminID(r)
+	if adminID == 0 {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.jsonError(w, "Invalid request body", "ERR_INVALID_REQUEST", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.adminSvc.ChangePassword(adminID, body.CurrentPassword, body.NewPassword); err != nil {
+		h.jsonError(w, err.Error(), "ERR_PASSWORD_CHANGE", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Password updated successfully",
+	})
+}
+
+// APIProfileToken regenerates API token per TEMPLATE.md PART 31
+func (h *AdminHandler) APIProfileToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get admin ID from session
+	adminID := h.getSessionAdminID(r)
+	if adminID == 0 {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	token, err := h.adminSvc.RegenerateAPIToken(adminID)
+	if err != nil {
+		h.jsonError(w, err.Error(), "ERR_TOKEN_REGENERATE", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"token": token,
+		},
+	})
+}
+
+// getSessionAdminID returns the admin ID from the current session
+func (h *AdminHandler) getSessionAdminID(r *http.Request) int64 {
+	cookie, err := r.Cookie(adminSessionCookieName)
+	if err != nil {
+		return 0
+	}
+	session, ok := h.sessions[cookie.Value]
+	if !ok {
+		return 0
+	}
+	return session.adminID
+}
+
+// APIRecoveryKeysStatus returns the status of recovery keys per TEMPLATE.md PART 31
+func (h *AdminHandler) APIRecoveryKeysStatus(w http.ResponseWriter, r *http.Request) {
+	adminID := h.getSessionAdminID(r)
+	if adminID == 0 {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	status, err := h.adminSvc.GetRecoveryKeysStatus(adminID)
+	if err != nil {
+		h.jsonError(w, err.Error(), "ERR_RECOVERY_KEYS", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"data":    status,
+	})
+}
+
+// APIRecoveryKeysGenerate generates new recovery keys per TEMPLATE.md PART 31
+func (h *AdminHandler) APIRecoveryKeysGenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		return
+	}
+
+	adminID := h.getSessionAdminID(r)
+	if adminID == 0 {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	keys, err := h.adminSvc.GenerateRecoveryKeys(adminID)
+	if err != nil {
+		h.jsonError(w, err.Error(), "ERR_RECOVERY_KEYS", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"keys":    keys,
+			"warning": "These keys will only be shown once. Save them securely.",
+		},
+	})
+}
+
+// UsersAdminsPage renders the admin users management page per TEMPLATE.md PART 31
+func (h *AdminHandler) UsersAdminsPage(w http.ResponseWriter, r *http.Request) {
+	// Get current admin from session
+	cookie, err := r.Cookie(adminSessionCookieName)
+	if err != nil {
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
+
+	session, ok := h.sessions[cookie.Value]
+	if !ok {
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
+
+	// Get admin count
+	adminCount, _ := h.adminSvc.GetAdminCount()
+
+	// Get online admins (those with active sessions)
+	onlineAdmins := h.getOnlineAdmins()
+
+	h.renderAdminTemplate(w, r, "users-admins", map[string]interface{}{
+		"CurrentAdmin": session.username,
+		"AdminCount":   adminCount,
+		"OnlineAdmins": onlineAdmins,
+	})
+}
+
+// getOnlineAdmins returns a comma-separated list of currently online admin usernames
+func (h *AdminHandler) getOnlineAdmins() string {
+	names := make(map[string]bool)
+	now := time.Now()
+	for _, sess := range h.sessions {
+		if sess.expiresAt.After(now) {
+			names[sess.username] = true
+		}
+	}
+
+	result := ""
+	for name := range names {
+		if result != "" {
+			result += ", "
+		}
+		result += name
+	}
+	if result == "" {
+		result = "None"
+	}
+	return result
+}
+
+// getOnlineCount returns the number of currently online admins
+func (h *AdminHandler) getOnlineCount() int {
+	count := 0
+	now := time.Now()
+	seen := make(map[string]bool)
+	for _, sess := range h.sessions {
+		if sess.expiresAt.After(now) && !seen[sess.username] {
+			seen[sess.username] = true
+			count++
+		}
+	}
+	return count
+}
+
+// AdminInvitePage handles the invite acceptance flow per TEMPLATE.md PART 31
+func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		// Try to extract from path
+		path := r.URL.Path
+		if idx := len("/admin/invite/"); idx < len(path) {
+			token = path[idx:]
+		}
+	}
+
+	data := map[string]interface{}{
+		"SiteTitle": h.cfg.Server.Title,
+		"Token":     token,
+		"Valid":     false,
+	}
+
+	// Validate invite token
+	invite, err := h.adminSvc.ValidateInviteToken(token)
+	if err != nil || invite == nil {
+		data["Error"] = "This invite link is invalid or has expired."
+		h.renderInvitePage(w, data)
+		return
+	}
+
+	data["Valid"] = true
+	data["Username"] = invite.Username
+
+	if r.Method == http.MethodPost {
+		password := r.FormValue("password")
+		confirm := r.FormValue("confirm")
+
+		if password != confirm {
+			data["Error"] = "Passwords do not match"
+			h.renderInvitePage(w, data)
+			return
+		}
+
+		// Create the admin account
+		_, err := h.adminSvc.CreateAdminWithInvite(token, invite.Username, password)
+		if err != nil {
+			data["Error"] = err.Error()
+			h.renderInvitePage(w, data)
+			return
+		}
+
+		data["Valid"] = false
+		data["Success"] = "Account created successfully! You can now log in."
+	}
+
+	h.renderInvitePage(w, data)
+}
+
+// renderInvitePage renders the invite acceptance template
+func (h *AdminHandler) renderInvitePage(w http.ResponseWriter, data map[string]interface{}) {
+	tmpl, err := template.ParseFS(adminTemplatesFS, "templates/admin/invite.tmpl")
+	if err != nil {
+		http.Error(w, "Failed to load invite template", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, "invite", data); err != nil {
+		http.Error(w, "Failed to render invite template", http.StatusInternalServerError)
+	}
+}
+
+// APIUsersAdminsInvite creates an admin invite per TEMPLATE.md PART 31
+func (h *AdminHandler) APIUsersAdminsInvite(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get admin ID from session
+	adminID := h.getSessionAdminID(r)
+	if adminID == 0 {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	var body struct {
+		Username     string `json:"username"`
+		ExpiresHours int    `json:"expires_hours"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.jsonError(w, "Invalid request body", "ERR_INVALID_REQUEST", http.StatusBadRequest)
+		return
+	}
+
+	if body.Username == "" {
+		h.jsonError(w, "Username is required", "ERR_INVALID_REQUEST", http.StatusBadRequest)
+		return
+	}
+
+	if body.ExpiresHours <= 0 {
+		body.ExpiresHours = 24
+	}
+
+	// Generate invite token
+	token, err := h.adminSvc.CreateAdminInvite(adminID, body.Username, time.Duration(body.ExpiresHours)*time.Hour)
+	if err != nil {
+		h.jsonError(w, err.Error(), "ERR_INVITE_FAILED", http.StatusBadRequest)
+		return
+	}
+
+	// Build invite URL
+	scheme := "https"
+	if h.cfg.Server.Mode == "development" {
+		scheme = "http"
+	}
+	host := h.cfg.Server.FQDN
+	if host == "" {
+		host = fmt.Sprintf("localhost:%s", h.cfg.Server.Port)
+	}
+	inviteURL := fmt.Sprintf("%s://%s/admin/invite/%s", scheme, host, token)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"invite_url": inviteURL,
+			"expires_in": fmt.Sprintf("%d hours", body.ExpiresHours),
+		},
+	})
 }
 
 // === API Handlers ===
+
+// SessionOrTokenMiddleware allows either session cookie or API token authentication
+// Used for profile endpoints that can be accessed from both web UI and API
+func (h *AdminHandler) SessionOrTokenMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// First, try session cookie
+		if cookie, err := r.Cookie(adminSessionCookieName); err == nil {
+			if h.validateSession(cookie.Value) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// Then, try API token
+		token := r.Header.Get("X-API-Token")
+		if token == "" {
+			token = r.Header.Get("Authorization")
+			if len(token) > 7 && token[:7] == "Bearer " {
+				token = token[7:]
+			}
+		}
+
+		if token != "" && h.validateToken(token) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Authentication required",
+		})
+	})
+}
 
 // APITokenMiddleware validates API tokens
 func (h *AdminHandler) APITokenMiddleware(next http.Handler) http.Handler {
@@ -2185,7 +2591,7 @@ func (h *AdminHandler) renderTorPage() string {
 }
 
 // renderAdminTemplate renders admin pages using proper Go html/template per TEMPLATE.md PART 13
-func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, templateName string, data map[string]interface{}) {
+func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Request, templateName string, data map[string]interface{}) {
 	// Add common template data
 	if data == nil {
 		data = make(map[string]interface{})
@@ -2194,10 +2600,22 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, templateName s
 	data["ActiveNav"] = templateName
 	data["SiteTitle"] = h.cfg.Server.Title
 
+	// Add session info for header display per TEMPLATE.md PART 31
+	if r != nil {
+		if sess := h.getSession(r); sess != nil {
+			data["AdminUsername"] = sess.username
+		}
+	}
+	data["OnlineCount"] = h.getOnlineCount()
+
 	// Set page title based on template name if not already set
 	if _, ok := data["Title"]; !ok {
 		titles := map[string]string{
 			"dashboard":          "Dashboard",
+			"profile":            "Profile",
+			"users-admins":       "Administrators",
+			"invite":             "Admin Invite",
+			"nodes":              "Cluster Nodes",
 			"server":             "Server Settings",
 			"branding":           "Branding & SEO",
 			"ssl":                "SSL/TLS",

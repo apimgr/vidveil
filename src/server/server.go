@@ -274,6 +274,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/logs", admin.LogsPage)
 				r.Get("/database", admin.DatabasePage)
 				r.Get("/web", admin.WebSettingsPage)
+				r.Get("/nodes", admin.NodesPage) // PART 24 cluster nodes
 			})
 		})
 
@@ -318,9 +319,21 @@ func (s *Server) setupRoutes() {
 			// Help
 			r.Get("/help", admin.HelpPage)
 
+			// Profile per TEMPLATE.md PART 31
+			r.Get("/profile", admin.ProfilePage)
+
+			// Users section per TEMPLATE.md PART 31
+			r.Route("/users", func(r chi.Router) {
+				r.Get("/admins", admin.UsersAdminsPage)
+			})
+
 			// Logout
 			r.Get("/logout", admin.LogoutHandler)
 		})
+
+		// Admin invite page (public, token validated in handler)
+		r.Get("/invite/{token}", admin.AdminInvitePage)
+		r.Post("/invite/{token}", admin.AdminInvitePage)
 	})
 
 	// API v1 routes
@@ -374,9 +387,21 @@ func (s *Server) setupRoutes() {
 			r.Get("/2fa", user.API2FA)
 		})
 
+		// Admin Profile API (session or token) - PART 31 compliant
+		r.Route("/admin/profile", func(r chi.Router) {
+			r.Use(admin.SessionOrTokenMiddleware)
+			r.Post("/password", admin.APIProfilePassword)
+			r.Post("/token", admin.APIProfileToken)
+			r.Get("/recovery-keys", admin.APIRecoveryKeysStatus)
+			r.Post("/recovery-keys/generate", admin.APIRecoveryKeysGenerate)
+		})
+
 		// Admin API (token required) - PART 12 & PART 31 compliant
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(admin.APITokenMiddleware)
+
+			// Users management per TEMPLATE.md PART 31
+			r.Post("/users/admins/invite", admin.APIUsersAdminsInvite)
 
 			// Legacy endpoints (kept for backwards compatibility)
 			r.Get("/stats", admin.APIStats)

@@ -538,4 +538,23 @@ func (mm *MigrationManager) RegisterDefaultMigrations() {
 		_, err := tx.Exec("DROP TABLE IF EXISTS smtp_config")
 		return err
 	})
+
+	// Migration 13: Create recovery_keys table per TEMPLATE.md PART 31
+	// Recovery keys for 2FA backup access
+	mm.RegisterMigration(13, "create_recovery_keys_table", "Create recovery keys table for 2FA backup", func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			CREATE TABLE IF NOT EXISTS recovery_keys (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				admin_id INTEGER NOT NULL,
+				key_hash TEXT NOT NULL,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				used_at DATETIME,
+				FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE CASCADE
+			)
+		`)
+		return err
+	}, func(tx *sql.Tx) error {
+		_, err := tx.Exec("DROP TABLE IF EXISTS recovery_keys")
+		return err
+	})
 }

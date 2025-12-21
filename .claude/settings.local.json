@@ -67,7 +67,10 @@
       "Bash(docker port:*)",
       "Bash(/tmp/apimgr-build/vidveil/vidveil:*)",
       "Bash(go test:*)",
-      "Bash(source ~/.bashrc)"
+      "Bash(source ~/.bashrc)",
+      "Bash(export PATH=$PATH:/usr/local/go/bin)",
+      "Bash(go version:*)",
+      "Bash(make test:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,0 +1,260 @@
+{{define "content"}}
+<div class="card">
+    <h2>Account Information</h2>
+    <table class="info-table">
+        <tr><td>Username</td><td>{{.Admin.Username}}</td></tr>
+        <tr><td>Role</td><td>{{if .Admin.IsPrimary}}Primary Admin{{else}}Admin{{end}}</td></tr>
+        <tr><td>Account Created</td><td>{{.Admin.CreatedAt.Format "Jan 02, 2006 15:04"}}</td></tr>
+        <tr><td>Last Login</td><td>{{if .Admin.LastLogin}}{{.Admin.LastLogin.Format "Jan 02, 2006 15:04"}}{{else}}Never{{end}}</td></tr>
+        <tr><td>Login Count</td><td>{{.Admin.LoginCount}}</td></tr>
+        <tr><td>2FA Status</td><td>{{if .Admin.TOTPEnabled}}<span class="badge badge-success">Enabled</span>{{else}}<span class="badge badge-warning">Disabled</span>{{end}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Change Password</h2>
+    <form id="password-form" onsubmit="changePassword(event)">
+        <div class="form-group">
+            <label for="current_password">Current Password</label>
+            <input type="password" id="current_password" name="current_password" required class="form-input">
+        </div>
+        <div class="form-group">
+            <label for="new_password">New Password</label>
+            <input type="password" id="new_password" name="new_password" required class="form-input" minlength="8">
+            <span class="help-text">Minimum 8 characters</span>
+        </div>
+        <div class="form-group">
+            <label for="confirm_password">Confirm New Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" required class="form-input">
+        </div>
+        <button type="submit" class="btn btn-primary">Update Password</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>API Token</h2>
+    <p class="text-muted">Your API token provides programmatic access to the admin API.</p>
+    <table class="info-table">
+        <tr><td>Token Prefix</td><td>{{if .TokenPrefix}}<code>{{.TokenPrefix}}...</code>{{else}}<em>No token generated</em>{{end}}</td></tr>
+        {{if .TokenLastUsed}}<tr><td>Last Used</td><td>{{.TokenLastUsed.Format "Jan 02, 2006 15:04"}}</td></tr>{{end}}
+        <tr><td>Use Count</td><td>{{.TokenUseCount}}</td></tr>
+    </table>
+    <div class="button-group">
+        <button onclick="regenerateToken()" class="btn btn-warning">Regenerate Token</button>
+    </div>
+    <p class="help-text">Regenerating will invalidate the current token immediately. The new token will be shown only once.</p>
+</div>
+
+<div class="card">
+    <h2>Two-Factor Authentication</h2>
+    {{if .Admin.TOTPEnabled}}
+    <p class="text-success">Two-factor authentication is enabled on your account.</p>
+    <button onclick="disable2FA()" class="btn btn-danger">Disable 2FA</button>
+    {{else}}
+    <p class="text-muted">Add an extra layer of security to your account.</p>
+    <button onclick="enable2FA()" class="btn btn-primary">Enable 2FA</button>
+    {{end}}
+</div>
+
+<div class="card">
+    <h2>Recovery Keys</h2>
+    <p class="text-muted">Recovery keys can be used to access your account if you lose your 2FA device.</p>
+    <div id="recovery-keys-status">
+        <p>Loading recovery keys status...</p>
+    </div>
+    <div class="button-group">
+        <button onclick="generateRecoveryKeys()" class="btn btn-warning">Generate New Recovery Keys</button>
+    </div>
+    <p class="help-text">Generating new keys will invalidate all previous recovery keys. Store them securely.</p>
+</div>
+
+<div id="recovery-keys-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Recovery Keys Generated</h3>
+            <button class="modal-close" onclick="closeRecoveryModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p class="text-warning">Save these keys now. They will not be shown again.</p>
+            <div class="recovery-keys-list" id="recovery-keys-list"></div>
+            <button onclick="copyRecoveryKeys()" class="btn btn-sm" style="margin-top: 1rem;">Copy All Keys</button>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeRecoveryModal()" class="btn btn-primary">Done</button>
+        </div>
+    </div>
+</div>
+
+<div id="token-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>New API Token Generated</h3>
+            <button class="modal-close" onclick="closeTokenModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p class="text-warning">Copy this token now. It will not be shown again.</p>
+            <div class="token-display">
+                <code id="new-token"></code>
+                <button onclick="copyToken()" class="btn btn-sm">Copy</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeTokenModal()" class="btn btn-primary">Done</button>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function changePassword(e) {
+    e.preventDefault();
+    const current = document.getElementById('current_password').value;
+    const newPass = document.getElementById('new_password').value;
+    const confirm = document.getElementById('confirm_password').value;
+
+    if (newPass !== confirm) {
+        showError('Passwords do not match');
+        return;
+    }
+
+    if (newPass.length < 8) {
+        showError('Password must be at least 8 characters');
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/v1/admin/profile/password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                current_password: current,
+                new_password: newPass
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Password updated successfully');
+            document.getElementById('password-form').reset();
+        } else {
+            showError(data.error || 'Failed to update password');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+async function regenerateToken() {
+    if (!confirm('Are you sure? This will invalidate your current API token.')) return;
+
+    try {
+        const resp = await fetch('/api/v1/admin/profile/token', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('new-token').textContent = data.data.token;
+            document.getElementById('token-modal').style.display = 'flex';
+        } else {
+            showError(data.error || 'Failed to regenerate token');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+function closeTokenModal() {
+    document.getElementById('token-modal').style.display = 'none';
+    location.reload();
+}
+
+function copyToken() {
+    const token = document.getElementById('new-token').textContent;
+    navigator.clipboard.writeText(token).then(() => {
+        showSuccess('Token copied to clipboard');
+    });
+}
+
+async function enable2FA() {
+    window.location.href = '/admin/security/auth?action=enable2fa';
+}
+
+async function disable2FA() {
+    if (!confirm('Are you sure you want to disable two-factor authentication?')) return;
+
+    try {
+        const resp = await fetch('/api/v1/admin/profile/2fa', {
+            method: 'DELETE'
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Two-factor authentication disabled');
+            location.reload();
+        } else {
+            showError(data.error || 'Failed to disable 2FA');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+// Recovery Keys Functions
+let recoveryKeysData = [];
+
+async function loadRecoveryKeysStatus() {
+    try {
+        const resp = await fetch('/api/v1/admin/profile/recovery-keys');
+        const data = await resp.json();
+        if (data.success) {
+            const status = data.data;
+            const statusDiv = document.getElementById('recovery-keys-status');
+            if (status.total === 0) {
+                statusDiv.innerHTML = '<p class="text-warning">No recovery keys generated yet.</p>';
+            } else {
+                statusDiv.innerHTML = '<table class="info-table">' +
+                    '<tr><td>Total Keys</td><td>' + status.total + '</td></tr>' +
+                    '<tr><td>Keys Remaining</td><td>' + status.remaining + '</td></tr>' +
+                    '<tr><td>Keys Used</td><td>' + status.used + '</td></tr>' +
+                    '</table>';
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load recovery keys status:', e);
+    }
+}
+
+async function generateRecoveryKeys() {
+    if (!confirm('Generate new recovery keys? This will invalidate all existing keys.')) return;
+
+    try {
+        const resp = await fetch('/api/v1/admin/profile/recovery-keys/generate', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            recoveryKeysData = data.data.keys;
+            const listDiv = document.getElementById('recovery-keys-list');
+            listDiv.innerHTML = data.data.keys.map((key, i) =>
+                '<div class="recovery-key"><span>' + (i + 1) + '.</span> <code>' + key + '</code></div>'
+            ).join('');
+            document.getElementById('recovery-keys-modal').style.display = 'flex';
+        } else {
+            showError(data.error || 'Failed to generate recovery keys');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+function closeRecoveryModal() {
+    document.getElementById('recovery-keys-modal').style.display = 'none';
+    loadRecoveryKeysStatus();
+}
+
+function copyRecoveryKeys() {
+    const text = recoveryKeysData.join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+        showSuccess('Recovery keys copied to clipboard');
+    });
+}
+
+// Load recovery keys status on page load
+document.addEventListener('DOMContentLoaded', loadRecoveryKeysStatus);
+</script>
+{{end}}

@@ -683,6 +683,34 @@ func handleMaintenanceCommand(cmd, arg string) {
 			os.Exit(1)
 		}
 
+	case "setup":
+		// Admin recovery per TEMPLATE.md PART 26
+		// Clears admin password and API token, generates new setup token
+		fmt.Println()
+		fmt.Println("╔══════════════════════════════════════════════════════════════════╗")
+		fmt.Println("║                     ADMIN CREDENTIALS RESET                      ║")
+		fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
+
+		setupToken, err := maint.ResetAdminCredentials()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Failed to reset admin credentials: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("║  Admin password and API token have been cleared.                 ║")
+		fmt.Println("║                                                                  ║")
+		fmt.Println("║  NEW SETUP TOKEN (copy this now, shown ONCE):                    ║")
+		fmt.Println("║  ┌────────────────────────────────────────────────────────────┐  ║")
+		fmt.Printf("║  │  %-56s  │  ║\n", setupToken)
+		fmt.Println("║  └────────────────────────────────────────────────────────────┘  ║")
+		fmt.Println("║                                                                  ║")
+		fmt.Println("║  1. Start the service: vidveil --service start                   ║")
+		fmt.Println("║  2. Go to: http://{host}:{port}/admin                            ║")
+		fmt.Println("║  3. Enter the setup token above                                  ║")
+		fmt.Println("║  4. Create new admin account via setup wizard                    ║")
+		fmt.Println("╚══════════════════════════════════════════════════════════════════╝")
+		fmt.Println()
+
 	default:
 		fmt.Printf("❌ Unknown maintenance command: %s\n", cmd)
 		fmt.Println(`
@@ -690,7 +718,8 @@ Maintenance Commands:
   vidveil --maintenance backup [file]     Create backup
   vidveil --maintenance restore [file]    Restore from backup
   vidveil --maintenance update            Check and apply updates
-  vidveil --maintenance mode <on|off>     Enable/disable maintenance mode`)
+  vidveil --maintenance mode <on|off>     Enable/disable maintenance mode
+  vidveil --maintenance setup             Reset admin credentials (recovery)`)
 		os.Exit(1)
 	}
 }

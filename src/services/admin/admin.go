@@ -335,6 +335,106 @@ func (s *Service) GetAdminCount() (int, error) {
 	return count, err
 }
 
+// AdminInvite represents an admin invite
+type AdminInvite struct {
+	Username  string
+	ExpiresAt time.Time
+	CreatedBy int64
+}
+
+// CreateAdminInvite creates an invite for a new admin per TEMPLATE.md PART 31
+func (s *Service) CreateAdminInvite(createdBy int64, username string, expiresIn time.Duration) (string, error) {
+	// Validate username
+	if err := validation.ValidateUsername(username, true); err != nil {
+		return "", err
+	}
+
+	// Check if username already exists
+	var exists int
+	s.db.QueryRow("SELECT COUNT(*) FROM admin_credentials WHERE username = ?", username).Scan(&exists)
+	if exists > 0 {
+		return "", fmt.Errorf("username already exists")
+	}
+
+	token, err := generateSecureToken(32)
+	if err != nil {
+		return "", err
+	}
+
+	expires := time.Now().Add(expiresIn)
+
+	_, err = s.db.Exec(`
+		INSERT INTO setup_tokens (token, purpose, username, expires_at, created_by)
+		VALUES (?, 'admin_invite', ?, ?, ?)
+	`, hashToken(token), username, expires, createdBy)
+	if err != nil {
+		return "", fmt.Errorf("failed to create invite: %w", err)
+	}
+
+	return token, nil
+}
+
+// ValidateInviteToken validates an admin invite token per TEMPLATE.md PART 31
+func (s *Service) ValidateInviteToken(token string) (*AdminInvite, error) {
+	var invite AdminInvite
+	var usedAt sql.NullTime
+	var createdBy sql.NullInt64
+
+	err := s.db.QueryRow(`
+		SELECT username, expires_at, used_at, created_by FROM setup_tokens
+		WHERE token = ? AND purpose = 'admin_invite'
+	`, hashToken(token)).Scan(&invite.Username, &invite.ExpiresAt, &usedAt, &createdBy)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("invalid token")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Token already used
+	if usedAt.Valid {
+		return nil, fmt.Errorf("token already used")
+	}
+
+	// Token expired
+	if time.Now().After(invite.ExpiresAt) {
+		return nil, fmt.Errorf("token expired")
+	}
+
+	if createdBy.Valid {
+		invite.CreatedBy = createdBy.Int64
+	}
+
+	return &invite, nil
+}
+
+// CreateAdminWithInvite creates an admin account from an invite token per TEMPLATE.md PART 31
+func (s *Service) CreateAdminWithInvite(token, username, password string) (*Admin, error) {
+	// Validate the token
+	invite, err := s.ValidateInviteToken(token)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure username matches
+	if invite.Username != username {
+		return nil, fmt.Errorf("username mismatch")
+	}
+
+	// Mark token as used
+	_, err = s.db.Exec(`
+		UPDATE setup_tokens SET used_at = ?, used_by = ?
+		WHERE token = ? AND purpose = 'admin_invite'
+	`, time.Now(), username, hashToken(token))
+	if err != nil {
+		return nil, fmt.Errorf("failed to mark token as used: %w", err)
+	}
+
+	// Create the admin (non-primary)
+	return s.CreateAdmin(username, password, false)
+}
+
 // Helper functions
 
 func generateSecureToken(length int) (string, error) {
@@ -379,6 +479,81 @@ func hashPassword(password string) (string, error) {
 		argon2.Version, argonMemory, argonTime, argonThreads, b64Salt, b64Hash), nil
 }
 
+// GetAdmin retrieves admin details by ID
+func (s *Service) GetAdmin(adminID int64) (*Admin, error) {
+	var admin Admin
+	var lastLogin sql.NullTime
+
+	err := s.db.QueryRow(`
+		SELECT id, username, totp_enabled, created_at, last_login, login_count, is_primary
+		FROM admin_credentials WHERE id = ?
+	`, adminID).Scan(&admin.ID, &admin.Username, &admin.TOTPEnabled,
+		&admin.CreatedAt, &lastLogin, &admin.LoginCount, &admin.IsPrimary)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("admin not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+
+	if lastLogin.Valid {
+		admin.LastLogin = &lastLogin.Time
+	}
+
+	return &admin, nil
+}
+
+// GetAPITokenInfo returns info about admin's API token
+func (s *Service) GetAPITokenInfo(adminID int64) (prefix string, lastUsed *time.Time, useCount int, err error) {
+	var lu sql.NullTime
+
+	err = s.db.QueryRow(`
+		SELECT token_prefix, last_used, use_count FROM api_tokens
+		WHERE admin_id = ? ORDER BY created_at DESC LIMIT 1
+	`, adminID).Scan(&prefix, &lu, &useCount)
+
+	if err == sql.ErrNoRows {
+		return "", nil, 0, nil
+	}
+	if err != nil {
+		return "", nil, 0, err
+	}
+
+	if lu.Valid {
+		lastUsed = &lu.Time
+	}
+	return prefix, lastUsed, useCount, nil
+}
+
+// RegenerateAPIToken creates a new API token, replacing any existing one
+func (s *Service) RegenerateAPIToken(adminID int64) (string, error) {
+	// Delete existing tokens for this admin
+	_, err := s.db.Exec("DELETE FROM api_tokens WHERE admin_id = ?", adminID)
+	if err != nil {
+		return "", fmt.Errorf("failed to remove old tokens: %w", err)
+	}
+
+	// Create new token
+	token, err := generateSecureToken(32)
+	if err != nil {
+		return "", err
+	}
+
+	prefix := token[:8]
+	hash := hashToken(token)
+
+	_, err = s.db.Exec(`
+		INSERT INTO api_tokens (admin_id, name, token_hash, token_prefix, permissions, created_at)
+		VALUES (?, 'Primary API Token', ?, ?, 'admin', ?)
+	`, adminID, hash, prefix, time.Now())
+	if err != nil {
+		return "", fmt.Errorf("failed to create API token: %w", err)
+	}
+
+	return token, nil
+}
+
 // verifyPassword verifies a password against an Argon2id hash
 func verifyPassword(password, encodedHash string) (bool, error) {
 	// Parse PHC string format
@@ -419,4 +594,112 @@ func verifyPassword(password, encodedHash string) (bool, error) {
 
 	// Constant-time comparison
 	return subtle.ConstantTimeCompare(computedHash, expectedHash) == 1, nil
+}
+
+// RecoveryKeyInfo contains info about recovery keys
+type RecoveryKeyInfo struct {
+	Total     int `json:"total"`
+	Remaining int `json:"remaining"`
+	Used      int `json:"used"`
+}
+
+// GenerateRecoveryKeys generates 10 recovery keys for an admin
+// Returns the plaintext keys (only shown once) and stores hashes in database
+func (s *Service) GenerateRecoveryKeys(adminID int64) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Delete any existing recovery keys for this admin
+	_, err := s.db.Exec("DELETE FROM recovery_keys WHERE admin_id = ?", adminID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to clear old recovery keys: %w", err)
+	}
+
+	// Generate 10 new recovery keys
+	keys := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		// Generate 8-byte random key (16 hex chars)
+		keyBytes := make([]byte, 8)
+		if _, err := rand.Read(keyBytes); err != nil {
+			return nil, fmt.Errorf("failed to generate recovery key: %w", err)
+		}
+
+		// Format as XXXX-XXXX-XXXX-XXXX (16 hex chars with dashes)
+		keyHex := hex.EncodeToString(keyBytes)
+		keys[i] = fmt.Sprintf("%s-%s-%s-%s", keyHex[0:4], keyHex[4:8], keyHex[8:12], keyHex[12:16])
+
+		// Store hash in database
+		keyHash := hashToken(strings.ReplaceAll(keys[i], "-", ""))
+		_, err := s.db.Exec(`
+			INSERT INTO recovery_keys (admin_id, key_hash)
+			VALUES (?, ?)
+		`, adminID, keyHash)
+		if err != nil {
+			return nil, fmt.Errorf("failed to store recovery key: %w", err)
+		}
+	}
+
+	return keys, nil
+}
+
+// ValidateRecoveryKey validates a recovery key and marks it as used if valid
+// Returns true if the key was valid and unused
+func (s *Service) ValidateRecoveryKey(adminID int64, key string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Normalize key (remove dashes, lowercase)
+	normalizedKey := strings.ToLower(strings.ReplaceAll(key, "-", ""))
+	keyHash := hashToken(normalizedKey)
+
+	// Look for unused key matching this hash
+	var keyID int64
+	err := s.db.QueryRow(`
+		SELECT id FROM recovery_keys
+		WHERE admin_id = ? AND key_hash = ? AND used_at IS NULL
+	`, adminID, keyHash).Scan(&keyID)
+
+	if err == sql.ErrNoRows {
+		return false, nil // Key not found or already used
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to validate recovery key: %w", err)
+	}
+
+	// Mark key as used
+	_, err = s.db.Exec(`
+		UPDATE recovery_keys SET used_at = ? WHERE id = ?
+	`, time.Now(), keyID)
+	if err != nil {
+		return false, fmt.Errorf("failed to mark recovery key as used: %w", err)
+	}
+
+	return true, nil
+}
+
+// GetRecoveryKeysStatus returns info about an admin's recovery keys
+func (s *Service) GetRecoveryKeysStatus(adminID int64) (*RecoveryKeyInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var total, used int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM recovery_keys WHERE admin_id = ?
+	`, adminID).Scan(&total)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count recovery keys: %w", err)
+	}
+
+	err = s.db.QueryRow(`
+		SELECT COUNT(*) FROM recovery_keys WHERE admin_id = ? AND used_at IS NOT NULL
+	`, adminID).Scan(&used)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count used keys: %w", err)
+	}
+
+	return &RecoveryKeyInfo{
+		Total:     total,
+		Remaining: total - used,
+		Used:      used,
+	}, nil
 }

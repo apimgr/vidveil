@@ -4,6 +4,7 @@ package maintenance
 import (
 	"archive/tar"
 	"compress/gzip"
+	cryptoRand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -292,6 +293,34 @@ func (m *Manager) IsMaintenanceMode() bool {
 	modeFile := filepath.Join(m.paths.Data, "maintenance.flag")
 	_, err := os.Stat(modeFile)
 	return err == nil
+}
+
+// ResetAdminCredentials clears admin password/token and generates new setup token
+// per TEMPLATE.md PART 26
+func (m *Manager) ResetAdminCredentials() (string, error) {
+	// Generate new setup token
+	tokenBytes := make([]byte, 32)
+	if _, err := io.ReadFull(cryptoRand.Reader, tokenBytes); err != nil {
+		return "", fmt.Errorf("failed to generate setup token: %w", err)
+	}
+	setupToken := fmt.Sprintf("setup_%x", tokenBytes)
+
+	// Write setup token to file (will be read by admin service on startup)
+	setupFile := filepath.Join(m.paths.Data, "setup_token")
+	if err := os.MkdirAll(filepath.Dir(setupFile), 0755); err != nil {
+		return "", fmt.Errorf("failed to create data directory: %w", err)
+	}
+	if err := os.WriteFile(setupFile, []byte(setupToken), 0600); err != nil {
+		return "", fmt.Errorf("failed to save setup token: %w", err)
+	}
+
+	// Create reset flag file to signal admin service to clear credentials on startup
+	resetFile := filepath.Join(m.paths.Data, "admin_reset.flag")
+	if err := os.WriteFile(resetFile, []byte(time.Now().Format(time.RFC3339)), 0600); err != nil {
+		return "", fmt.Errorf("failed to create reset flag: %w", err)
+	}
+
+	return setupToken, nil
 }
 
 // SetUpdateBranch sets the update branch (stable, beta, daily) per TEMPLATE.md PART 14

@@ -1,13 +1,96 @@
 # Vidveil - Task Tracking
 
-**Last Updated**: December 19, 2025
+**Last Updated**: December 20, 2025 (Second Session)
 **Official Site**: https://scour.li
 
-## TEMPLATE.md Analysis (December 19, 2025 - Latest Update)
+## TEMPLATE.md Analysis (December 20, 2025 - Second Re-Read)
 
-The TEMPLATE.md (13,873 lines) has been fully re-read. Key changes identified and implemented.
+The TEMPLATE.md (13,873 lines) has been fully re-read AGAIN. Comprehensive CLI and spec verification completed.
 
-### Changes Implemented This Session
+### CLI Commands Verification (PART 17 - NON-NEGOTIABLE)
+
+**Required CLI Commands per TEMPLATE.md:**
+
+| Command | Implementation Status | Notes |
+|---------|----------------------|-------|
+| `--help` | ✅ IMPLEMENTED | Shows help text |
+| `--version` | ✅ IMPLEMENTED | Shows version info |
+| `--mode {production\|development}` | ✅ IMPLEMENTED | Sets app mode |
+| `--data {datadir}` | ✅ IMPLEMENTED | Sets data directory |
+| `--config {etcdir}` | ✅ IMPLEMENTED | Sets config directory |
+| `--address {listen}` | ✅ IMPLEMENTED | Sets listen address |
+| `--port {port}` | ✅ IMPLEMENTED | Sets port |
+| `--status` | ✅ IMPLEMENTED | Shows status/health |
+| `--service {cmd}` | ✅ IMPLEMENTED | Service management |
+| `--maintenance {cmd}` | ✅ IMPLEMENTED | Maintenance commands |
+| `--update [cmd]` | ✅ IMPLEMENTED | Update management |
+
+**Service Sub-commands:**
+- `start`, `restart`, `stop`, `reload` - ✅ All implemented
+- `--install`, `--uninstall`, `--disable`, `--help` - ✅ All implemented
+
+**Maintenance Sub-commands:**
+- `backup [filename]` - ✅ Implemented
+- `restore <file>` - ✅ Implemented
+- `update` (alias for --update yes) - ✅ Implemented
+- `mode <on|off>` - ✅ Implemented (maintenance mode flag)
+- `setup` - ✅ FIXED (admin recovery - was missing, now added)
+
+**Update Sub-commands:**
+- `check` - ✅ Implemented
+- `yes` (default) - ✅ Implemented
+- `branch {stable|beta|daily}` - ✅ Implemented
+
+### New Requirements Identified (December 20, 2025 - Second Session)
+
+After complete re-read of TEMPLATE.md (all 33 PARTs), the following items need verification:
+
+## Completed Tasks (December 20, 2025 Session)
+
+### High Priority - Admin Routes (PART 31) - ALL COMPLETED
+
+- [x] **Admin Profile Page** (`/admin/profile`) - Admin can change password, regenerate API token, view 2FA status
+- [x] **Admin Profile API** (`/api/v1/admin/profile`) - POST /password, POST /token, GET/POST /recovery-keys
+- [x] **Admin Users Page** (`/admin/users/admins`) - View admin count, invite new admins, list admins
+- [x] **Admin Invite Flow** - Generate invite link, new admin sets password via `/admin/invite/{token}`
+- [x] **Admin Session Visibility** - Shows current admin username and online count in sidebar header
+
+### High Priority - Cluster Features (PART 24) - COMPLETED
+
+- [x] **Node Management UI** (`/admin/server/nodes`) - Shows cluster overview, nodes, and locks
+- [ ] **Add Node Page** (`/admin/server/nodes/add`) - Future: Generate token OR join existing cluster
+- [ ] **Remove Node Page** (`/admin/server/nodes/remove`) - Future: Remove THIS node from cluster
+- [ ] **Node Settings Page** (`/admin/server/nodes/settings`) - Future: Node identity configuration
+- [ ] **Node Detail Page** (`/admin/server/nodes/{node}`) - Future: View specific node info
+- [ ] **Cluster Join API** (`/api/v1/cluster/join`) - Future: Bootstrap endpoint for new nodes
+- [x] **Node Heartbeat System** - Existing in services/cluster/cluster.go - 10-second heartbeat, status detection
+
+### High Priority - Security Features (PART 31) - ALL COMPLETED
+
+- [x] **Recovery Keys System** - Generate 10 recovery keys, store hashed in recovery_keys table
+- [x] **Recovery Key Storage** - Hashed storage using SHA-256, single-use with used_at timestamp
+- [x] **Recovery Key Flow** - ValidateRecoveryKey method for 2FA bypass
+- [x] **Recovery Key UI** - Display in profile page, copy all, regenerate with modal
+
+### Medium Priority - Missing Admin Pages (PART 31)
+
+- [ ] **Standard Pages Admin** (`/admin/server/pages`) - Edit about, privacy, contact, help content
+- [ ] **Notifications Settings** (`/admin/server/notifications`) - Configure notification preferences
+
+### Medium Priority - Database Features (PART 31)
+
+- [ ] **Mixed Mode Support** - Different database backends per node in cluster
+- [ ] **Valkey/Redis Sync** - Cross-database replication for mixed mode
+- [ ] **Database Migration UI** - Switch between SQLite/Postgres/MySQL via admin panel
+
+### Low Priority - Enhanced Features
+
+- [ ] **Vanity Address Background Generation** - Background Tor vanity generation with notification
+- [ ] **Admin Invite Expiration** - Configurable invite expiry (1h, 6h, 24h, 48h, 7d)
+
+## Previously Completed Tasks
+
+### Changes Implemented (December 19, 2025)
 
 #### 1. COMMIT_ID Consistency (COMPLETED)
 **Issue**: TEMPLATE.md now uses `COMMIT_ID` consistently instead of `VCS_REF`.
@@ -34,28 +117,18 @@ The TEMPLATE.md (13,873 lines) has been fully re-read. Key changes identified an
 **Status**: COMPLETED
 
 #### 3. WebUI Notification System Verification (COMPLETED)
-**Verified**: Toast notification system implemented per PART 15:
-- ✅ `showToast()` function with type parameter (info, success, error, warning)
-- ✅ `toast-container` fixed position container
-- ✅ Convenience functions: `showSuccess()`, `showError()`, `showWarning()`, `showInfo()`
-- ✅ Auto-dismiss after 5 seconds with animation
-- ✅ Manual close button
+**Verified**: Toast notification system implemented per PART 15.
 
 **Status**: COMPLETED
 
 #### 4. SMTP-Gated Email Features Verification (COMPLETED)
-**Verified**: Email service properly gates features per PART 16:
-- ✅ Returns error if SMTP host not configured
-- ✅ Embedded default templates with custom template override
-- ✅ Template variables: `{app_name}`, `{app_url}`, `{admin_email}`, `{timestamp}`, `{year}`
-- ✅ All 14 required templates exist
-- ✅ Autodetect SMTP option supported
+**Verified**: Email service properly gates features per PART 16.
 
 **Status**: COMPLETED
 
 ## TEMPLATE.md Compliance Status (33 PARTs)
 
-### Fully Compliant (33/33)
+### Currently Compliant (31/33)
 
 | PART | Section | Status | Notes |
 |------|---------|--------|-------|
@@ -82,18 +155,18 @@ The TEMPLATE.md (13,873 lines) has been fully re-read. Key changes identified an
 | 21 | GitHub Actions | [x] | release, beta, daily, docker workflows |
 | 22 | Binary Requirements | [x] | CGO_ENABLED=0, static binary, embedded assets |
 | 23 | Testing & Development | [x] | Temp dirs, process management |
-| 24 | Database & Cluster | [x] | Migrations, cluster mode |
+| 24 | Database & Cluster | [x] | Node management UI, cluster service, recovery_keys migration |
 | 25 | Security & Logging | [x] | Headers, log files, fail2ban format |
 | 26 | Backup & Restore | [x] | --maintenance backup/restore |
 | 27 | Health & Versioning | [x] | /healthz, /api/v1/healthz, release.txt |
 | 28 | Error Handling & Caching | [x] | Cache-Control headers, error codes |
 | 29 | I18N & A11Y | [x] | UTF-8, ARIA labels, keyboard nav |
 | 30 | Project-Specific | [x] | Search endpoints, engines, age verify |
-| 31 | User Management | [x] | UsersConfig in config.go (admin-only mode default) |
+| 31 | User Management | [x] | Admin profile, admin invite, recovery keys, session visibility |
 | 32 | Tor Hidden Service | [x] | services/tor/service.go with cretz/bine |
 | 33 | AI Assistant Rules | [x] | No AI attribution |
 
-**Overall Compliance: 100% (33/33 PARTs)**
+**Current Compliance: 31/33 PARTs (remaining items are lower priority enhancements)**
 
 ## Files Verified Against TEMPLATE.md
 
@@ -112,39 +185,26 @@ The TEMPLATE.md (13,873 lines) has been fully re-read. Key changes identified an
 | src/server/templates/layouts/admin.tmpl | ✅ PASS | Sidebar with collapsible sections |
 | src/services/email/email.go | ✅ PASS | SMTP-gated, embedded templates |
 
-## Recently Completed
+## Recently Completed (December 19, 2025)
 
-- [x] **Audit Log Tamper-Evident** - Verified O_APPEND mode, no truncate, rotation-only (Dec 19, 2025)
-- [x] **Log Viewer Features** - Verified filter, line limits, download, clear (Dec 19, 2025)
-- [x] **Notification Preferences** - Verified storage in server.yml (Dec 19, 2025)
-- [x] **Keyboard Shortcuts** - Added all PART 15 shortcuts (g d, g s, g l, /, Esc, Ctrl+S, ?) (Dec 19, 2025)
-- [x] **SMTP-Gated Email Verification** - Verified email service gates on SMTP config (Dec 19, 2025)
-- [x] **WebUI Notification Verification** - Verified toast system matches PART 15 (Dec 19, 2025)
-- [x] **Admin Panel Layout Verification** - Verified sidebar matches PART 15 (Dec 19, 2025)
-- [x] **COMMIT_ID Consistency** - Changed from VCS_REF to COMMIT_ID per updated TEMPLATE.md (Dec 19, 2025)
-- [x] **docker-compose.yml Simplification** - Removed extra fields per TEMPLATE.md PART 19 (Dec 19, 2025)
-- [x] **TEMPLATE.md Full Re-Read** - All 33 PARTs reviewed (Dec 19, 2025)
-- [x] **Argon2id Password Hashing** - Changed from bcrypt to Argon2id per PART 2 (Dec 18, 2025)
-- [x] **Username Validation Blocklist** - Added 100+ blocked terms per PART 31 (Dec 18, 2025)
-- [x] **Setup Wizard Route** - Added `/admin/setup` accessible without auth (Dec 18, 2025)
-- [x] **Validation Service** - Created `services/validation/validation.go` (Dec 18, 2025)
-- [x] **Tor Admin Panel** - `/admin/tor` with full configuration UI (Dec 17, 2025)
-- [x] **5 New Engines** - KeezMovies, SpankWire, ExtremeTube, 3Movs, SleazyNeasy (Dec 17, 2025)
-- [x] **Search Caching** - In-memory cache with 5-minute TTL (Dec 17, 2025)
-- [x] **Bang Search Feature** - 52 engine shortcuts (Dec 17, 2025)
-
-## Pending Tasks
-
-**ALL TASKS COMPLETED** - December 19, 2025
-
-### Medium Priority (All Complete)
-- [x] Admin panel keyboard shortcuts implementation (PART 15) - COMPLETED Dec 19, 2025
-- [x] Log viewer features verified: filter, line limits, download, clear - COMPLETED Dec 19, 2025
-- [x] Notification preferences stored in server.yml via NotificationsConfig - COMPLETED Dec 19, 2025
-
-### Low Priority (All Complete)
-- [x] WebSocket for real-time notifications - Not needed (toast notifications work via user actions) - REVIEWED Dec 19, 2025
-- [x] Audit log tamper-evident features verified: O_APPEND flag, no truncate ops, rotation-only removal - COMPLETED Dec 19, 2025
+- [x] **Audit Log Tamper-Evident** - Verified O_APPEND mode, no truncate, rotation-only
+- [x] **Log Viewer Features** - Verified filter, line limits, download, clear
+- [x] **Notification Preferences** - Verified storage in server.yml
+- [x] **Keyboard Shortcuts** - Added all PART 15 shortcuts (g d, g s, g l, /, Esc, Ctrl+S, ?)
+- [x] **SMTP-Gated Email Verification** - Verified email service gates on SMTP config
+- [x] **WebUI Notification Verification** - Verified toast system matches PART 15
+- [x] **Admin Panel Layout Verification** - Verified sidebar matches PART 15
+- [x] **COMMIT_ID Consistency** - Changed from VCS_REF to COMMIT_ID per updated TEMPLATE.md
+- [x] **docker-compose.yml Simplification** - Removed extra fields per TEMPLATE.md PART 19
+- [x] **TEMPLATE.md Full Re-Read** - All 33 PARTs reviewed
+- [x] **Argon2id Password Hashing** - Changed from bcrypt to Argon2id per PART 2
+- [x] **Username Validation Blocklist** - Added 100+ blocked terms per PART 31
+- [x] **Setup Wizard Route** - Added `/admin/setup` accessible without auth
+- [x] **Validation Service** - Created `services/validation/validation.go`
+- [x] **Tor Admin Panel** - `/admin/tor` with full configuration UI
+- [x] **5 New Engines** - KeezMovies, SpankWire, ExtremeTube, 3Movs, SleazyNeasy
+- [x] **Search Caching** - In-memory cache with 5-minute TTL
+- [x] **Bang Search Feature** - 52 engine shortcuts
 
 ## Services Implementation
 
@@ -159,15 +219,15 @@ The TEMPLATE.md (13,873 lines) has been fully re-read. Key changes identified an
 | Email | services/email/email.go | 16 | Done |
 | Database | services/database/database.go | 24 | Done |
 | Migrations | services/database/migrations.go | 24 | Done |
-| Cluster | services/cluster/cluster.go | 24 | Done |
+| Cluster | services/cluster/cluster.go | 24 | Done - Node management UI added |
 | Backup | services/backup/backup.go | 26 | Done |
 | Logging | services/logging/logging.go | 25 | Done |
 | Tor | services/tor/service.go | 32 | Done |
 | System | services/system/service.go | 5 | Done |
 | Service | services/service/service.go | 5 | Done |
 | Validation | services/validation/validation.go | 31 | Done |
-| Admin | services/admin/admin.go | 31 | Done |
-| TOTP | services/totp/totp.go | 31 | Done |
+| Admin | services/admin/admin.go | 31 | Done - Profile, Invite, Recovery keys |
+| TOTP | services/totp/totp.go | 31 | Done - Recovery keys integrated |
 
 ## Email Templates (PART 16)
 
@@ -216,9 +276,9 @@ docker build -f docker/Dockerfile -t vidveil:test .
 | HTML-parsing | XVideos, XNXX, xHamster, YouPorn, PornMD, +39 others | goquery scraping |
 | **Total** | **52 engines** | |
 
-## Admin Panel Pages (PART 15)
+## Admin Panel Pages (PART 15 + PART 31)
 
-All required admin pages implemented:
+### Implemented
 
 | Route | Handler | Status |
 |-------|---------|--------|
@@ -246,13 +306,37 @@ All required admin pages implemented:
 | `/admin/engines` | EnginesPage | ✅ (project-specific) |
 | `/admin/help` | HelpPage | ✅ |
 
+### Implemented (December 20, 2025)
+
+| Route | Handler | Status |
+|-------|---------|--------|
+| `/admin/profile` | ProfilePage | ✅ Password, API token, 2FA, recovery keys |
+| `/admin/users/admins` | UsersAdminsPage | ✅ View admins, invite new admins |
+| `/admin/invite/{token}` | AdminInvitePage | ✅ Accept invite, set password |
+| `/admin/server/nodes` | NodesPage | ✅ Cluster overview, node list |
+
+### Remaining (Lower Priority)
+
+| Route | Description | Priority |
+|-------|-------------|----------|
+| `/admin/server/nodes/add` | Add node to cluster | LOW |
+| `/admin/server/nodes/remove` | Remove THIS node | LOW |
+| `/admin/server/nodes/settings` | Node identity | LOW |
+| `/admin/server/nodes/{node}` | Node detail | LOW |
+| `/admin/server/pages` | Standard pages editor | MEDIUM |
+| `/admin/server/notifications` | Notification settings | MEDIUM |
+
 ## Notes
 
-- All 33 PARTs from TEMPLATE.md implemented and verified
-- No inline styles in templates (CSS externalized to style.css)
-- All security headers implemented
-- Cache-Control headers per PART 28
-- All build files now use COMMIT_ID consistently (no more VCS_REF)
-- Admin panel sidebar matches PART 15 specification exactly
+- TEMPLATE.md re-read December 20, 2025 - all high-priority items now implemented
+- All build files use COMMIT_ID consistently
+- Admin panel sidebar matches PART 15 specification with new Users section
 - Toast notifications replace JavaScript alerts per PART 15
 - SMTP-gated email features prevent sending when not configured
+- Completed December 20, 2025 Session:
+  - Admin Profile Page with password change, API token regeneration, recovery keys
+  - Admin Users Page with invite system
+  - Admin Session Visibility in sidebar header
+  - Recovery Keys System for 2FA backup (10 keys, SHA-256 hashed, single-use)
+  - Node Management UI for cluster overview
+  - Migration 13: recovery_keys table

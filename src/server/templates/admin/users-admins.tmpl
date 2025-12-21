@@ -1,0 +1,122 @@
+{{define "content"}}
+<div class="card">
+    <h2>Server Administrators</h2>
+    <table class="info-table">
+        <tr><td>Your Account</td><td>{{.CurrentAdmin}}</td></tr>
+        <tr><td>Total Admins</td><td>{{.AdminCount}}</td></tr>
+        <tr><td>Currently Online</td><td>{{.OnlineAdmins}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Invite New Admin</h2>
+    <p class="text-muted">Create an invite link for a new server administrator.</p>
+    <form id="invite-form" onsubmit="generateInvite(event)">
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required class="form-input" placeholder="new-admin">
+            <span class="help-text">Username for the new admin account</span>
+        </div>
+        <div class="form-group">
+            <label for="expires">Invite Expires In</label>
+            <select id="expires" name="expires" class="form-input">
+                <option value="1">1 hour</option>
+                <option value="6">6 hours</option>
+                <option value="24" selected>24 hours</option>
+                <option value="48">48 hours</option>
+                <option value="168">7 days</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Generate Invite</button>
+    </form>
+</div>
+
+{{if .Admins}}
+<div class="card">
+    <h2>Admin Accounts</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Type</th>
+                <th>Last Login</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Admins}}
+            <tr>
+                <td>{{.Username}}</td>
+                <td>{{if .IsPrimary}}<span class="badge badge-primary">Primary</span>{{else}}<span class="badge">Admin</span>{{end}}</td>
+                <td>{{if .LastLogin}}{{.LastLogin.Format "Jan 02, 2006 15:04"}}{{else}}Never{{end}}</td>
+                <td>{{if .IsOnline}}<span class="badge badge-success">Online</span>{{else}}<span class="badge badge-secondary">Offline</span>{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+<div id="invite-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Admin Invite Created</h3>
+            <button class="modal-close" onclick="closeInviteModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p><strong>Username:</strong> <span id="invite-username"></span></p>
+            <p class="text-muted">Share this invite URL with the new admin:</p>
+            <div class="token-display">
+                <code id="invite-url"></code>
+                <button onclick="copyInviteUrl()" class="btn btn-sm">Copy</button>
+            </div>
+            <p class="text-warning">This link will only work ONCE and expires in <span id="invite-expiry"></span>.</p>
+            <p class="text-muted">The new admin will set their own password on first use.</p>
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeInviteModal()" class="btn btn-primary">Done</button>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function generateInvite(e) {
+    e.preventDefault();
+    const username = document.getElementById('username').value;
+    const expires = document.getElementById('expires').value;
+
+    try {
+        const resp = await fetch('/api/v1/admin/users/admins/invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, expires_hours: parseInt(expires) })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('invite-username').textContent = username;
+            document.getElementById('invite-url').textContent = data.data.invite_url;
+            document.getElementById('invite-expiry').textContent = expires + ' hours';
+            document.getElementById('invite-modal').style.display = 'flex';
+            document.getElementById('invite-form').reset();
+        } else {
+            showError(data.error || 'Failed to create invite');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+function closeInviteModal() {
+    document.getElementById('invite-modal').style.display = 'none';
+}
+
+function copyInviteUrl() {
+    const url = document.getElementById('invite-url').textContent;
+    navigator.clipboard.writeText(url).then(() => {
+        showSuccess('Invite URL copied to clipboard');
+    });
+}
+</script>
+{{end}}

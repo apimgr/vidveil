@@ -3,9 +3,21 @@
 **Project Name**: vidveil
 **Project Org**: apimgr
 **Version**: 0.2.0
-**Last Updated**: December 17, 2025
+**Last Updated**: December 20, 2025
 **Official Site**: https://scour.li
 **Repository**: https://github.com/apimgr/vidveil
+
+## December 20, 2025 - TEMPLATE.md Re-Verification Complete
+
+All CLI commands verified against TEMPLATE.md PART 17:
+- `--help`, `--version`, `--status` ✅
+- `--mode`, `--data`, `--config`, `--address`, `--port` ✅
+- `--service {start,restart,stop,reload,--install,--uninstall,--disable,--help}` ✅
+- `--maintenance {backup,restore,update,mode,setup}` ✅ (setup was missing, now fixed)
+- `--update [check|yes|branch {stable|beta|daily}]` ✅
+
+All admin panel routes verified against TEMPLATE.md PART 15 and PART 31.
+All 33 PARTs of TEMPLATE.md have been reviewed for compliance.
 
 ---
 

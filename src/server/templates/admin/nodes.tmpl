@@ -1,0 +1,113 @@
+{{define "content"}}
+<div class="card">
+    <h2>Cluster Overview</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{.TotalNodes}}</div>
+            <div class="stat-label">Total Nodes</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{.ActiveNodes}}</div>
+            <div class="stat-label">Active Nodes</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{.ActiveLocks}}</div>
+            <div class="stat-label">Active Locks</div>
+        </div>
+    </div>
+    <table class="info-table">
+        <tr><td>This Node ID</td><td><code>{{.NodeID}}</code></td></tr>
+        <tr><td>This Node Status</td><td>{{if .IsPrimary}}<span class="badge badge-success">Primary</span>{{else}}<span class="badge">Secondary</span>{{end}}</td></tr>
+        <tr><td>Cluster Mode</td><td>{{if .ClusterEnabled}}<span class="badge badge-success">Enabled</span>{{else}}<span class="badge badge-warning">Single Instance</span>{{end}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Cluster Nodes</h2>
+    {{if .Nodes}}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Node ID</th>
+                <th>Hostname</th>
+                <th>Address</th>
+                <th>Status</th>
+                <th>Role</th>
+                <th>Last Heartbeat</th>
+                <th>Joined</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Nodes}}
+            <tr>
+                <td><code>{{.ID}}</code></td>
+                <td>{{.Hostname}}</td>
+                <td>{{.Address}}:{{.Port}}</td>
+                <td>
+                    {{if eq .Status "active"}}<span class="badge badge-success">Active</span>{{end}}
+                    {{if eq .Status "inactive"}}<span class="badge badge-warning">Inactive</span>{{end}}
+                    {{if eq .Status "failed"}}<span class="badge badge-error">Failed</span>{{end}}
+                </td>
+                <td>{{if .IsPrimary}}<span class="badge badge-success">Primary</span>{{else}}<span class="badge">Secondary</span>{{end}}</td>
+                <td>{{.LastHeartbeat.Format "Jan 02, 15:04:05"}}</td>
+                <td>{{.JoinedAt.Format "Jan 02, 2006 15:04"}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="text-muted">No cluster nodes registered. Running in single instance mode.</p>
+    {{end}}
+</div>
+
+{{if .Locks}}
+<div class="card">
+    <h2>Distributed Locks</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Lock Name</th>
+                <th>Holder Node</th>
+                <th>Acquired</th>
+                <th>Expires</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Locks}}
+            <tr>
+                <td><code>{{.Name}}</code></td>
+                <td><code>{{.HolderID}}</code></td>
+                <td>{{.AcquiredAt.Format "Jan 02, 15:04:05"}}</td>
+                <td>{{.ExpiresAt.Format "Jan 02, 15:04:05"}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+<div class="card">
+    <h2>Cluster Configuration</h2>
+    <p class="text-muted">Cluster mode enables multiple instances to work together for high availability.</p>
+    <div class="alert alert-info">
+        <strong>Note:</strong> Cluster configuration is managed via environment variables or config file.
+        See the documentation for setup instructions.
+    </div>
+    <table class="info-table">
+        <tr><td>Config Parameter</td><td>Description</td></tr>
+        <tr><td><code>CLUSTER_ENABLED</code></td><td>Enable cluster mode (true/false)</td></tr>
+        <tr><td><code>CLUSTER_JOIN</code></td><td>Comma-separated list of peer addresses</td></tr>
+        <tr><td><code>CLUSTER_HEARTBEAT</code></td><td>Heartbeat interval (default: 10s)</td></tr>
+        <tr><td><code>CLUSTER_FAILOVER</code></td><td>Failover timeout (default: 30s)</td></tr>
+    </table>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+// Auto-refresh nodes status every 30 seconds
+setTimeout(function() {
+    location.reload();
+}, 30000);
+</script>
+{{end}}

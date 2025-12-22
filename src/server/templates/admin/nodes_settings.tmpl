@@ -1,0 +1,154 @@
+{{define "content"}}
+<div class="card">
+    <h2>Node Identity</h2>
+    <p class="text-muted">Configure this node's identity within the cluster.</p>
+
+    <form id="node-settings-form" onsubmit="saveNodeSettings(event)">
+        <div class="form-group">
+            <label for="node-id">Node ID</label>
+            <input type="text" id="node-id" value="{{.NodeID}}" readonly>
+            <span class="help-text">Unique identifier for this node (auto-generated)</span>
+        </div>
+
+        <div class="form-group">
+            <label for="node-name">Display Name</label>
+            <input type="text" id="node-name" name="name" value="{{.NodeName}}" placeholder="e.g., Primary Server">
+            <span class="help-text">Human-friendly name for this node</span>
+        </div>
+
+        <div class="form-group">
+            <label for="node-hostname">Hostname</label>
+            <input type="text" id="node-hostname" value="{{.Hostname}}" readonly>
+            <span class="help-text">System hostname (read-only)</span>
+        </div>
+
+        <div class="form-group">
+            <label for="node-address">Advertised Address</label>
+            <input type="text" id="node-address" name="address" value="{{.AdvertisedAddress}}" placeholder="e.g., 192.168.1.100 or node1.example.com">
+            <span class="help-text">Address other nodes use to reach this node</span>
+        </div>
+
+        <div class="form-group">
+            <label for="node-port">Advertised Port</label>
+            <input type="number" id="node-port" name="port" value="{{.AdvertisedPort}}" min="1" max="65535">
+            <span class="help-text">Port other nodes use to reach this node</span>
+        </div>
+
+        <div class="form-group">
+            <label for="node-priority">Election Priority</label>
+            <input type="number" id="node-priority" name="priority" value="{{.Priority}}" min="0" max="100">
+            <span class="help-text">Higher priority nodes are preferred as primary (0-100)</span>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="node-voter" name="voter" {{if .IsVoter}}checked{{end}}>
+                Participate in Leader Elections
+            </label>
+            <span class="help-text">Non-voting nodes replicate data but don't participate in elections</span>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Node Status</h2>
+    <table class="info-table">
+        <tr><td>Role</td><td>{{if .IsPrimary}}<span class="badge badge-success">Primary</span>{{else}}<span class="badge">Secondary</span>{{end}}</td></tr>
+        <tr><td>Status</td><td><span class="badge badge-success">{{.Status}}</span></td></tr>
+        <tr><td>Uptime</td><td>{{.Uptime}}</td></tr>
+        <tr><td>Last Heartbeat</td><td>{{.LastHeartbeat}}</td></tr>
+        <tr><td>Connected Nodes</td><td>{{.ConnectedNodes}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Node Capabilities</h2>
+    <table class="info-table">
+        <tr><td>CPU Cores</td><td>{{.CPUCores}}</td></tr>
+        <tr><td>Memory</td><td>{{.Memory}}</td></tr>
+        <tr><td>Disk Space</td><td>{{.DiskSpace}}</td></tr>
+        <tr><td>Go Version</td><td>{{.GoVersion}}</td></tr>
+        <tr><td>App Version</td><td>{{.AppVersion}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Danger Zone</h2>
+    <div class="alert alert-warning">
+        These actions can affect cluster stability. Use with caution.
+    </div>
+    <div class="button-group">
+        <button onclick="stepDown()" class="btn btn-warning">Step Down as Primary</button>
+        <button onclick="regenerateNodeID()" class="btn btn-error">Regenerate Node ID</button>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveNodeSettings(e) {
+    e.preventDefault();
+    const data = {
+        name: document.getElementById('node-name').value,
+        address: document.getElementById('node-address').value,
+        port: parseInt(document.getElementById('node-port').value),
+        priority: parseInt(document.getElementById('node-priority').value),
+        voter: document.getElementById('node-voter').checked
+    };
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/nodes/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Node settings saved');
+        } else {
+            showError('Error: ' + result.error);
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+async function stepDown() {
+    if (!confirm('Step down as primary? Another node will be elected as the new primary.')) return;
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/nodes/stepdown', { method: 'POST' });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Stepped down as primary');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showError('Error: ' + result.error);
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+async function regenerateNodeID() {
+    if (!confirm('Regenerate node ID? This will require re-joining the cluster.')) return;
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/nodes/regenerate-id', { method: 'POST' });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Node ID regenerated: ' + result.data.node_id);
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showError('Error: ' + result.error);
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+</script>
+{{end}}

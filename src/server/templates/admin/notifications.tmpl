@@ -1,0 +1,171 @@
+{{define "content"}}
+<div class="card">
+    <h2>Notification Settings</h2>
+    <p class="text-muted">Configure how and when you receive notifications about server events.</p>
+</div>
+
+<form id="notifications-form" onsubmit="saveNotifications(event)">
+    <div class="card">
+        <h3>General Settings</h3>
+
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="enabled" name="enabled" {{if .Config.Server.Notifications.Enabled}}checked{{end}}>
+                Enable Notifications
+            </label>
+            <span class="help-text">Master switch for all notification features</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Notification Channels</h3>
+        <p class="text-muted">Choose how you want to receive notifications.</p>
+
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="email" name="email" {{if .Config.Server.Notifications.Email}}checked{{end}}>
+                Email Notifications
+            </label>
+            <span class="help-text">Send notifications to admin email address (requires SMTP configured)</span>
+        </div>
+
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="bell" name="bell" {{if .Config.Server.Notifications.Bell}}checked{{end}}>
+                In-App Bell Notifications
+            </label>
+            <span class="help-text">Show notifications in the admin panel header bell icon</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Notification Types</h3>
+        <p class="text-muted">Select which events should trigger notifications.</p>
+
+        <div class="notification-types-grid">
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="type_startup" name="type_startup" {{if .Config.Server.Notifications.Types.Startup}}checked{{end}}>
+                    Server Startup
+                </label>
+                <span class="help-text">Notify when the server starts</span>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="type_shutdown" name="type_shutdown" {{if .Config.Server.Notifications.Types.Shutdown}}checked{{end}}>
+                    Server Shutdown
+                </label>
+                <span class="help-text">Notify when the server stops</span>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="type_error" name="type_error" {{if .Config.Server.Notifications.Types.Error}}checked{{end}}>
+                    Errors
+                </label>
+                <span class="help-text">Notify on critical errors</span>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="type_security" name="type_security" {{if .Config.Server.Notifications.Types.Security}}checked{{end}}>
+                    Security Events
+                </label>
+                <span class="help-text">Notify on security-related events (failed logins, blocks, etc.)</span>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="type_update" name="type_update" {{if .Config.Server.Notifications.Types.Update}}checked{{end}}>
+                    Updates Available
+                </label>
+                <span class="help-text">Notify when a new version is available</span>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="type_cert_expiry" name="type_cert_expiry" {{if .Config.Server.Notifications.Types.CertExpiry}}checked{{end}}>
+                    Certificate Expiry
+                </label>
+                <span class="help-text">Notify when SSL certificates are about to expire</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Test Notification</h3>
+        <p class="text-muted">Send a test notification to verify your settings work correctly.</p>
+
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="sendTestNotification()">Send Test Notification</button>
+        </div>
+    </div>
+
+    <div class="form-actions" style="margin-top: 1.5rem;">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </div>
+</form>
+
+<style>
+.notification-types-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+}
+</style>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function saveNotifications(e) {
+    e.preventDefault();
+
+    const data = {
+        enabled: document.getElementById('enabled').checked,
+        email: document.getElementById('email').checked,
+        bell: document.getElementById('bell').checked,
+        types: {
+            startup: document.getElementById('type_startup').checked,
+            shutdown: document.getElementById('type_shutdown').checked,
+            error: document.getElementById('type_error').checked,
+            security: document.getElementById('type_security').checked,
+            update: document.getElementById('type_update').checked,
+            cert_expiry: document.getElementById('type_cert_expiry').checked
+        }
+    };
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/notifications', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Notification settings saved successfully');
+        } else {
+            showError(result.error || 'Failed to save notification settings');
+        }
+    } catch (err) {
+        showError('Error: ' + err.message);
+    }
+}
+
+async function sendTestNotification() {
+    try {
+        const resp = await fetch('/api/v1/admin/server/notifications/test', {
+            method: 'POST'
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Test notification sent successfully');
+        } else {
+            showError(result.error || 'Failed to send test notification');
+        }
+    } catch (err) {
+        showError('Error: ' + err.message);
+    }
+}
+</script>
+{{end}}

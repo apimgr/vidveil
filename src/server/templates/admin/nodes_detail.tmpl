@@ -1,0 +1,167 @@
+{{define "content"}}
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Node: {{.Node.Name}}</h2>
+        <a href="/admin/server/nodes" class="btn btn-secondary">Back to Nodes</a>
+    </div>
+
+    <table class="info-table">
+        <tr><td>Node ID</td><td><code>{{.Node.ID}}</code></td></tr>
+        <tr><td>Display Name</td><td>{{.Node.Name}}</td></tr>
+        <tr><td>Hostname</td><td>{{.Node.Hostname}}</td></tr>
+        <tr><td>Address</td><td>{{.Node.Address}}:{{.Node.Port}}</td></tr>
+        <tr>
+            <td>Role</td>
+            <td>
+                {{if .Node.IsPrimary}}
+                <span class="badge badge-success">Primary</span>
+                {{else}}
+                <span class="badge">Secondary</span>
+                {{end}}
+            </td>
+        </tr>
+        <tr>
+            <td>Status</td>
+            <td>
+                {{if eq .Node.Status "active"}}
+                <span class="badge badge-success">Active</span>
+                {{else if eq .Node.Status "inactive"}}
+                <span class="badge badge-warning">Inactive</span>
+                {{else}}
+                <span class="badge badge-error">{{.Node.Status}}</span>
+                {{end}}
+            </td>
+        </tr>
+        <tr><td>Last Seen</td><td>{{.Node.LastSeen}}</td></tr>
+        <tr><td>Uptime</td><td>{{.Node.Uptime}}</td></tr>
+        <tr><td>Version</td><td>{{.Node.Version}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>System Resources</h2>
+    <table class="info-table">
+        <tr><td>CPU Usage</td><td>{{.Node.CPUUsage}}%</td></tr>
+        <tr><td>Memory Usage</td><td>{{.Node.MemoryUsage}}% ({{.Node.MemoryUsed}} / {{.Node.MemoryTotal}})</td></tr>
+        <tr><td>Disk Usage</td><td>{{.Node.DiskUsage}}% ({{.Node.DiskUsed}} / {{.Node.DiskTotal}})</td></tr>
+        <tr><td>Load Average</td><td>{{.Node.LoadAverage}}</td></tr>
+        <tr><td>Goroutines</td><td>{{.Node.Goroutines}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Network Stats</h2>
+    <table class="info-table">
+        <tr><td>Latency to Primary</td><td>{{.Node.Latency}}</td></tr>
+        <tr><td>Requests Handled</td><td>{{.Node.RequestsHandled}}</td></tr>
+        <tr><td>Active Connections</td><td>{{.Node.ActiveConnections}}</td></tr>
+        <tr><td>Bytes Sent</td><td>{{.Node.BytesSent}}</td></tr>
+        <tr><td>Bytes Received</td><td>{{.Node.BytesReceived}}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Cluster Participation</h2>
+    <table class="info-table">
+        <tr><td>Is Voter</td><td>{{if .Node.IsVoter}}Yes{{else}}No (observer only){{end}}</td></tr>
+        <tr><td>Election Priority</td><td>{{.Node.Priority}}</td></tr>
+        <tr><td>Heartbeat Interval</td><td>{{.Node.HeartbeatInterval}}</td></tr>
+        <tr><td>Missed Heartbeats</td><td>{{.Node.MissedHeartbeats}}</td></tr>
+    </table>
+</div>
+
+{{if .Node.Locks}}
+<div class="card">
+    <h2>Held Locks</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Lock Name</th>
+                <th>Acquired At</th>
+                <th>TTL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Node.Locks}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td>{{.AcquiredAt}}</td>
+                <td>{{.TTL}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+<div class="card">
+    <h2>Recent Events</h2>
+    {{if .Node.Events}}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Event</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Node.Events}}
+            <tr>
+                <td>{{.Time}}</td>
+                <td>{{.Event}}</td>
+                <td>{{.Details}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="text-muted">No recent events</p>
+    {{end}}
+</div>
+
+{{if not .IsThisNode}}
+<div class="card">
+    <h2>Actions</h2>
+    <div class="button-group">
+        <button onclick="pingNode()" class="btn btn-secondary">Ping Node</button>
+        <button onclick="removeNode()" class="btn btn-error">Remove from Cluster</button>
+    </div>
+</div>
+{{end}}
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function pingNode() {
+    try {
+        const resp = await fetch('/api/v1/admin/server/nodes/{{.Node.ID}}/ping', { method: 'POST' });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Ping successful: ' + result.data.latency);
+        } else {
+            showError('Ping failed: ' + result.error);
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+async function removeNode() {
+    if (!confirm('Remove this node from the cluster? This cannot be undone.')) return;
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/nodes/{{.Node.ID}}', { method: 'DELETE' });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Node removed');
+            setTimeout(() => window.location.href = '/admin/server/nodes', 2000);
+        } else {
+            showError('Error: ' + result.error);
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+</script>
+{{end}}

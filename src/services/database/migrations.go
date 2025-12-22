@@ -557,4 +557,38 @@ func (mm *MigrationManager) RegisterDefaultMigrations() {
 		_, err := tx.Exec("DROP TABLE IF EXISTS recovery_keys")
 		return err
 	})
+
+	// Migration 14: Create pages table per TEMPLATE.md PART 31
+	// Standard pages content (about, privacy, contact, help)
+	mm.RegisterMigration(14, "create_pages_table", "Create pages table for standard page content", func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			CREATE TABLE IF NOT EXISTS pages (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				slug TEXT NOT NULL UNIQUE,
+				title TEXT NOT NULL,
+				content TEXT NOT NULL,
+				meta_description TEXT,
+				enabled INTEGER DEFAULT 1,
+				updated_by INTEGER,
+				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				FOREIGN KEY (updated_by) REFERENCES admin_credentials(id)
+			)
+		`)
+		if err != nil {
+			return err
+		}
+
+		// Insert default pages
+		_, err = tx.Exec(`
+			INSERT OR IGNORE INTO pages (slug, title, content, meta_description) VALUES
+			('about', 'About', 'Welcome to our service. This page describes what we do and our mission.', 'About our service'),
+			('privacy', 'Privacy Policy', 'Your privacy is important to us. This policy describes how we handle your data.', 'Privacy policy'),
+			('contact', 'Contact Us', 'Get in touch with us using the form below or via email.', 'Contact information'),
+			('help', 'Help & FAQ', 'Find answers to common questions and get help with our service.', 'Help and frequently asked questions')
+		`)
+		return err
+	}, func(tx *sql.Tx) error {
+		_, err := tx.Exec("DROP TABLE IF EXISTS pages")
+		return err
+	})
 }

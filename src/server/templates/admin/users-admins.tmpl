@@ -31,6 +31,22 @@
     </form>
 </div>
 
+<div class="card" id="pending-invites-card" style="display: none;">
+    <h2>Pending Invites</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Expires</th>
+                <th>Created By</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="pending-invites-body">
+        </tbody>
+    </table>
+</div>
+
 {{if .Admins}}
 <div class="card">
     <h2>Admin Accounts</h2>
@@ -82,6 +98,59 @@
 
 {{define "scripts"}}
 <script>
+// Load pending invites on page load
+document.addEventListener('DOMContentLoaded', loadPendingInvites);
+
+async function loadPendingInvites() {
+    try {
+        const resp = await fetch('/api/v1/admin/users/admins/invites');
+        const data = await resp.json();
+        if (data.success && data.data && data.data.length > 0) {
+            const card = document.getElementById('pending-invites-card');
+            const tbody = document.getElementById('pending-invites-body');
+            tbody.innerHTML = '';
+
+            data.data.forEach(invite => {
+                const expires = new Date(invite.expires_at);
+                const now = new Date();
+                const hoursLeft = Math.ceil((expires - now) / (1000 * 60 * 60));
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${invite.username}</td>
+                    <td>${hoursLeft <= 0 ? '<span class="badge badge-error">Expired</span>' : hoursLeft + ' hours'}</td>
+                    <td>${invite.created_by}</td>
+                    <td><button onclick="revokeInvite(${invite.id})" class="btn btn-sm btn-warning">Revoke</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            card.style.display = 'block';
+        }
+    } catch (e) {
+        console.error('Failed to load pending invites:', e);
+    }
+}
+
+async function revokeInvite(id) {
+    if (!confirm('Are you sure you want to revoke this invite?')) return;
+
+    try {
+        const resp = await fetch('/api/v1/admin/users/admins/invites/' + id, {
+            method: 'DELETE'
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Invite revoked');
+            loadPendingInvites();
+        } else {
+            showError(data.error || 'Failed to revoke invite');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
 async function generateInvite(e) {
     e.preventDefault();
     const username = document.getElementById('username').value;
@@ -100,6 +169,7 @@ async function generateInvite(e) {
             document.getElementById('invite-expiry').textContent = expires + ' hours';
             document.getElementById('invite-modal').style.display = 'flex';
             document.getElementById('invite-form').reset();
+            loadPendingInvites(); // Refresh the list
         } else {
             showError(data.error || 'Failed to create invite');
         }

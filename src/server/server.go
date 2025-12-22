@@ -29,16 +29,24 @@ func GetTemplatesFS() embed.FS {
 
 // Server represents the HTTP server
 type Server struct {
-	cfg         *config.Config
-	engineMgr   *engines.Manager
-	adminSvc    *admin.Service
-	router      *chi.Mux
-	srv         *http.Server
-	rateLimiter *ratelimit.Limiter
+	cfg          *config.Config
+	engineMgr    *engines.Manager
+	adminSvc     *admin.Service
+	migrationMgr MigrationManager
+	router       *chi.Mux
+	srv          *http.Server
+	rateLimiter  *ratelimit.Limiter
+}
+
+// MigrationManager interface for database migrations
+type MigrationManager interface {
+	GetMigrationStatus() ([]map[string]interface{}, error)
+	RunMigrations() error
+	RollbackMigration() error
 }
 
 // New creates a new server instance
-func New(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service) *Server {
+func New(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager) *Server {
 	// Set templates filesystem for handlers
 	handlers.SetTemplatesFS(embeddedFS)
 	handlers.SetAdminTemplatesFS(embeddedFS)
@@ -51,11 +59,12 @@ func New(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service
 	)
 
 	s := &Server{
-		cfg:         cfg,
-		engineMgr:   engineMgr,
-		adminSvc:    adminSvc,
-		router:      chi.NewRouter(),
-		rateLimiter: limiter,
+		cfg:          cfg,
+		engineMgr:    engineMgr,
+		adminSvc:     adminSvc,
+		migrationMgr: migrationMgr,
+		router:       chi.NewRouter(),
+		rateLimiter:  limiter,
 	}
 
 	s.setupMiddleware()
@@ -127,7 +136,7 @@ func (s *Server) setupMiddleware() {
 // setupRoutes configures all routes
 func (s *Server) setupRoutes() {
 	h := handlers.New(s.cfg, s.engineMgr)
-	admin := handlers.NewAdminHandler(s.cfg, s.engineMgr, s.adminSvc)
+	admin := handlers.NewAdminHandler(s.cfg, s.engineMgr, s.adminSvc, s.migrationMgr)
 	metrics := handlers.NewMetrics(s.cfg, s.engineMgr)
 
 	// Maintenance mode middleware (applied globally, but allows admin access)
@@ -274,7 +283,14 @@ func (s *Server) setupRoutes() {
 				r.Get("/logs", admin.LogsPage)
 				r.Get("/database", admin.DatabasePage)
 				r.Get("/web", admin.WebSettingsPage)
+				r.Get("/pages", admin.PagesPage) // Standard pages management
+				r.Get("/notifications", admin.NotificationsPage) // Notification settings
 				r.Get("/nodes", admin.NodesPage) // PART 24 cluster nodes
+				r.Get("/nodes/add", admin.AddNodePage)
+				r.Post("/nodes/add", admin.AddNodePage)
+				r.Get("/nodes/remove", admin.RemoveNodePage)
+				r.Get("/nodes/settings", admin.NodeSettingsPage)
+				r.Get("/nodes/{node}", admin.NodeDetailPage)
 			})
 		})
 
@@ -402,6 +418,8 @@ func (s *Server) setupRoutes() {
 
 			// Users management per TEMPLATE.md PART 31
 			r.Post("/users/admins/invite", admin.APIUsersAdminsInvite)
+			r.Get("/users/admins/invites", admin.APIUsersAdminsInvites)
+			r.Delete("/users/admins/invites/{id}", admin.APIUsersAdminsInviteRevoke)
 
 			// Legacy endpoints (kept for backwards compatibility)
 			r.Get("/stats", admin.APIStats)
@@ -470,6 +488,50 @@ func (s *Server) setupRoutes() {
 					r.Get("/", admin.APILogsAccess)
 					r.Get("/{type}", admin.APILogsAccess)
 					r.Get("/{type}/download", admin.APILogsAccess)
+				})
+
+				// Pages per PART 31
+				r.Route("/pages", func(r chi.Router) {
+					r.Get("/", admin.APIPagesGet)
+					r.Put("/{slug}", admin.APIPageUpdate)
+					r.Post("/{slug}/reset", admin.APIPageReset)
+				})
+
+				// Notifications per PART 16
+				r.Route("/notifications", func(r chi.Router) {
+					r.Get("/", admin.APINotificationsGet)
+					r.Put("/", admin.APINotificationsUpdate)
+					r.Post("/test", admin.APINotificationsTest)
+				})
+
+				// Database per PART 31
+				r.Route("/database", func(r chi.Router) {
+					r.Get("/migrations", admin.APIDatabaseMigrations)
+					r.Post("/migrate", admin.APIDatabaseMigrate)
+					r.Post("/vacuum", admin.APIDatabaseVacuum)
+					r.Post("/analyze", admin.APIDatabaseAnalyze)
+					r.Post("/test", admin.APIDatabaseTest)       // Test external DB connection
+					r.Put("/backend", admin.APIDatabaseBackend) // Switch database backend
+				})
+
+				// Nodes per PART 24
+				r.Route("/nodes", func(r chi.Router) {
+					r.Get("/", admin.APINodesGet)
+					r.Post("/", admin.APINodeAdd)
+					r.Post("/test", admin.APINodeTest)
+					r.Post("/token", admin.APINodeTokenRegenerate)
+					r.Post("/leave", admin.APINodeLeave)
+					r.Put("/settings", admin.APINodeSettings)
+					r.Post("/stepdown", admin.APINodeStepDown)
+					r.Post("/regenerate-id", admin.APINodeRegenerateID)
+					r.Post("/{id}/ping", admin.APINodePing)
+					r.Delete("/{id}", admin.APINodeRemove)
+				})
+
+				// Updates per PART 18
+				r.Route("/updates", func(r chi.Router) {
+					r.Get("/", admin.APIUpdatesStatus)
+					r.Post("/check", admin.APIUpdatesCheck)
 				})
 			})
 

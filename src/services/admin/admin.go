@@ -47,6 +47,11 @@ func NewService(db *sql.DB) *Service {
 	}
 }
 
+// GetDB returns the database connection for admin-related queries
+func (s *Service) GetDB() *sql.DB {
+	return s.db
+}
+
 // Initialize checks for first run and generates setup token if needed
 // Per TEMPLATE.md PART 31: App is FULLY FUNCTIONAL before setup
 func (s *Service) Initialize() error {
@@ -433,6 +438,71 @@ func (s *Service) CreateAdminWithInvite(token, username, password string) (*Admi
 
 	// Create the admin (non-primary)
 	return s.CreateAdmin(username, password, false)
+}
+
+// PendingInvite represents a pending admin invite
+type PendingInvite struct {
+	ID        int64     `json:"id"`
+	Username  string    `json:"username"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+	CreatedBy string    `json:"created_by"`
+}
+
+// ListPendingInvites returns all pending (unused, unexpired) admin invites
+func (s *Service) ListPendingInvites() ([]PendingInvite, error) {
+	rows, err := s.db.Query(`
+		SELECT st.id, st.username, st.expires_at, st.created_at, COALESCE(ac.username, 'System') as created_by
+		FROM setup_tokens st
+		LEFT JOIN admin_credentials ac ON st.created_by = ac.id
+		WHERE st.purpose = 'admin_invite'
+		AND st.used_at IS NULL
+		AND st.expires_at > ?
+		ORDER BY st.created_at DESC
+	`, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var invites []PendingInvite
+	for rows.Next() {
+		var invite PendingInvite
+		if err := rows.Scan(&invite.ID, &invite.Username, &invite.ExpiresAt, &invite.CreatedAt, &invite.CreatedBy); err != nil {
+			continue
+		}
+		invites = append(invites, invite)
+	}
+	return invites, nil
+}
+
+// RevokeInvite revokes a pending admin invite
+func (s *Service) RevokeInvite(inviteID int64) error {
+	result, err := s.db.Exec(`
+		DELETE FROM setup_tokens
+		WHERE id = ? AND purpose = 'admin_invite' AND used_at IS NULL
+	`, inviteID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke invite: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("invite not found or already used")
+	}
+	return nil
+}
+
+// CleanupExpiredInvites removes expired invites (called by scheduler)
+func (s *Service) CleanupExpiredInvites() (int64, error) {
+	result, err := s.db.Exec(`
+		DELETE FROM setup_tokens
+		WHERE purpose = 'admin_invite' AND expires_at < ?
+	`, time.Now())
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 // Helper functions

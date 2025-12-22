@@ -386,8 +386,14 @@ type CacheConfig struct {
 
 // DatabaseConfig holds database settings
 type DatabaseConfig struct {
-	Driver  string        `yaml:"driver"`
-	SQLite  SQLiteConfig  `yaml:"sqlite"`
+	Driver   string       `yaml:"driver"`
+	SQLite   SQLiteConfig `yaml:"sqlite"`
+	Host     string       `yaml:"host"`     // For Postgres/MySQL
+	Port     int          `yaml:"port"`     // For Postgres/MySQL
+	Name     string       `yaml:"name"`     // Database name for Postgres/MySQL
+	User     string       `yaml:"user"`     // For Postgres/MySQL
+	Password string       `yaml:"password"` // For Postgres/MySQL
+	SSLMode  string       `yaml:"ssl_mode"` // disable, require, verify-ca, verify-full
 }
 
 // SQLiteConfig holds SQLite settings

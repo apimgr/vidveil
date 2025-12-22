@@ -86,44 +86,52 @@
 
 <div class="card">
     <h2>Vanity Address Generator</h2>
-    <p class="text-muted">Generate a custom .onion address with a specific prefix.</p>
+    <p class="text-muted">Generate a custom .onion address with a specific prefix. Runs in background.</p>
+
+    <div id="vanity-status" style="display: none; margin-bottom: 1rem;">
+        <div class="alert alert-info">
+            <strong>Generation in progress:</strong>
+            <span id="vanity-prefix-display"></span>
+            <br>
+            <span id="vanity-attempts"></span> attempts |
+            <span id="vanity-elapsed"></span> elapsed
+            <div style="margin-top: 0.5rem;">
+                <button onclick="cancelVanity()" class="btn btn-sm btn-warning">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="vanity-ready" style="display: none; margin-bottom: 1rem;">
+        <div class="alert alert-success">
+            <strong>Vanity address ready!</strong>
+            Prefix: <code id="vanity-ready-prefix"></code>
+            <br>
+            <span id="vanity-ready-attempts"></span> attempts |
+            <span id="vanity-ready-elapsed"></span>
+            <div style="margin-top: 0.5rem;">
+                <button onclick="applyVanity()" class="btn btn-sm btn-primary">Apply Address</button>
+                <button onclick="cancelVanity()" class="btn btn-sm btn-warning">Discard</button>
+            </div>
+        </div>
+    </div>
+
     <form id="vanity-form" onsubmit="generateVanity(event)">
         <div class="form-group">
             <label for="vanity-prefix">Desired Prefix</label>
-            <input type="text" id="vanity-prefix" placeholder="vidveil" maxlength="8" pattern="[a-z2-7]+">
-            <p class="help-text">Use only lowercase a-z and digits 2-7. Longer prefixes take exponentially longer.</p>
+            <input type="text" id="vanity-prefix" placeholder="vidv" maxlength="6" pattern="[a-z2-7]+">
+            <p class="help-text">Use only lowercase a-z and digits 2-7 (max 6 chars). Longer = slower.</p>
         </div>
+        <table class="info-table" style="margin: 1rem 0;">
+            <tr><td>1-2 chars</td><td>Instant - few seconds</td></tr>
+            <tr><td>3 chars</td><td>Minutes</td></tr>
+            <tr><td>4 chars</td><td>~1 hour</td></tr>
+            <tr><td>5 chars</td><td>~1 day</td></tr>
+            <tr><td>6 chars</td><td>~1 month</td></tr>
+        </table>
         <div class="button-group">
-            <button type="submit" class="btn btn-primary">Start Generation</button>
+            <button type="submit" class="btn btn-primary" id="vanity-start-btn">Start Generation</button>
         </div>
     </form>
-    {{if .VanityJobs}}
-    <h3>Generation Jobs</h3>
-    <table class="data-table">
-        <thead>
-            <tr><th>Prefix</th><th>Progress</th><th>Status</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-            {{range .VanityJobs}}
-            <tr>
-                <td><code>{{.Prefix}}</code></td>
-                <td>{{.Attempts}} attempts</td>
-                <td>
-                    {{if eq .Status "running"}}<span class="badge badge-info">Running</span>
-                    {{else if eq .Status "complete"}}<span class="badge badge-success">Complete</span>
-                    {{else}}<span class="badge badge-warning">{{.Status}}</span>{{end}}
-                </td>
-                <td>
-                    {{if eq .Status "complete"}}
-                    <button class="btn btn-sm btn-primary" onclick="applyVanity('{{.ID}}')">Apply</button>
-                    {{end}}
-                    <button class="btn btn-sm btn-error" onclick="cancelVanity('{{.ID}}')">Cancel</button>
-                </td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
-    {{end}}
 </div>
 
 <div class="card">
@@ -212,10 +220,70 @@ async function regenerateOnion() {
     } catch (e) { showError('Error: ' + e.message); }
 }
 
+// Vanity generation status polling
+let vanityPollInterval = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    checkVanityStatus();
+    vanityPollInterval = setInterval(checkVanityStatus, 3000);
+});
+
+async function checkVanityStatus() {
+    try {
+        const resp = await fetch('/api/v1/admin/server/tor/vanity');
+        const data = await resp.json();
+        if (!data.success) return;
+
+        const statusDiv = document.getElementById('vanity-status');
+        const readyDiv = document.getElementById('vanity-ready');
+        const startBtn = document.getElementById('vanity-start-btn');
+
+        if (data.data.active) {
+            // Generation in progress
+            statusDiv.style.display = 'block';
+            readyDiv.style.display = 'none';
+            startBtn.disabled = true;
+            startBtn.textContent = 'Generation in progress...';
+
+            document.getElementById('vanity-prefix-display').textContent = data.data.prefix;
+            document.getElementById('vanity-attempts').textContent = data.data.attempts.toLocaleString();
+            document.getElementById('vanity-elapsed').textContent = data.data.elapsed_time || '0s';
+        } else if (data.data.pending_ready) {
+            // Generation complete, ready to apply
+            statusDiv.style.display = 'none';
+            readyDiv.style.display = 'block';
+            startBtn.disabled = true;
+            startBtn.textContent = 'Address ready - apply or discard first';
+
+            document.getElementById('vanity-ready-prefix').textContent = data.data.prefix;
+            document.getElementById('vanity-ready-attempts').textContent = data.data.attempts.toLocaleString();
+            document.getElementById('vanity-ready-elapsed').textContent = data.data.elapsed_time || '';
+
+            // Show notification
+            if (Notification && Notification.permission === 'granted') {
+                new Notification('Vanity Address Ready!', {
+                    body: 'Your vanity .onion address with prefix "' + data.data.prefix + '" is ready.'
+                });
+            }
+        } else {
+            // No generation
+            statusDiv.style.display = 'none';
+            readyDiv.style.display = 'none';
+            startBtn.disabled = false;
+            startBtn.textContent = 'Start Generation';
+        }
+    } catch (e) {
+        console.error('Failed to check vanity status:', e);
+    }
+}
+
 async function generateVanity(e) {
     e.preventDefault();
-    const prefix = document.getElementById('vanity-prefix').value;
+    const prefix = document.getElementById('vanity-prefix').value.toLowerCase();
     if (!prefix) { showError('Please enter a prefix'); return; }
+    if (prefix.length > 6) { showError('Prefix must be 6 characters or less'); return; }
+    if (!/^[a-z2-7]+$/.test(prefix)) { showError('Prefix must only contain a-z and 2-7'); return; }
+
     try {
         const resp = await fetch('/api/v1/admin/server/tor/vanity', {
             method: 'POST',
@@ -223,30 +291,43 @@ async function generateVanity(e) {
             body: JSON.stringify({ prefix: prefix })
         });
         const data = await resp.json();
-        if (data.success) { showSuccess('Vanity generation started!'); location.reload(); }
-        else { showError('Error: ' + data.error); }
+        if (data.success) {
+            showSuccess('Vanity generation started for "' + prefix + '"!');
+            // Request notification permission
+            if (Notification && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+            checkVanityStatus();
+        } else {
+            showError('Error: ' + data.error);
+        }
     } catch (e) { showError('Error: ' + e.message); }
 }
 
-async function applyVanity(id) {
+async function applyVanity() {
+    if (!confirm('Apply this vanity address? This will replace your current .onion address.')) return;
     try {
-        const resp = await fetch('/api/v1/admin/server/tor/vanity/apply', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: id })
-        });
+        const resp = await fetch('/api/v1/admin/server/tor/vanity/apply', { method: 'POST' });
         const data = await resp.json();
-        if (data.success) { showSuccess('Vanity address applied!'); location.reload(); }
-        else { showError('Error: ' + data.error); }
+        if (data.success) {
+            showSuccess('Vanity address applied! Restart Tor service to use new address.');
+            checkVanityStatus();
+        } else {
+            showError('Error: ' + data.error);
+        }
     } catch (e) { showError('Error: ' + e.message); }
 }
 
-async function cancelVanity(id) {
+async function cancelVanity() {
     try {
-        const resp = await fetch('/api/v1/admin/server/tor/vanity/' + id, { method: 'DELETE' });
+        const resp = await fetch('/api/v1/admin/server/tor/vanity', { method: 'DELETE' });
         const data = await resp.json();
-        if (data.success) { showSuccess('Job cancelled!'); location.reload(); }
-        else { showError('Error: ' + data.error); }
+        if (data.success) {
+            showSuccess('Vanity generation cancelled');
+            checkVanityStatus();
+        } else {
+            showError('Error: ' + data.error);
+        }
     } catch (e) { showError('Error: ' + e.message); }
 }
 

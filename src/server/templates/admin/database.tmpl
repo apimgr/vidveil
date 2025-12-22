@@ -2,11 +2,121 @@
 <div class="card">
     <h2>Database Status</h2>
     <table class="info-table">
-        <tr><td>Driver</td><td>{{.DBDriver}}</td></tr>
-        <tr><td>Location</td><td>{{.DBPath}}</td></tr>
+        <tr><td>Driver</td><td><span class="badge">{{.DBDriver}}</span></td></tr>
+        <tr><td>Location</td><td><code>{{.DBPath}}</code></td></tr>
         <tr><td>Status</td><td><span class="badge badge-success">Connected</span></td></tr>
         <tr><td>Size</td><td>{{.DBSize}}</td></tr>
+        <tr><td>Tables</td><td>{{.TableCount}}</td></tr>
+        <tr><td>Last Backup</td><td>{{if .LastBackup}}{{.LastBackup}}{{else}}Never{{end}}</td></tr>
     </table>
+</div>
+
+<div class="card">
+    <h2>Database Backend</h2>
+    <p class="text-muted">Switch between database backends. Data will be migrated automatically.</p>
+
+    <form id="backend-form" onsubmit="switchBackend(event)">
+        <div class="form-group">
+            <label for="db-driver">Database Driver</label>
+            <select id="db-driver" onchange="toggleBackendSettings()">
+                <option value="sqlite"{{if eq .DBDriver "sqlite3"}} selected{{end}}>SQLite (Default)</option>
+                <option value="postgres"{{if eq .DBDriver "postgres"}} selected{{end}}>PostgreSQL</option>
+                <option value="mysql"{{if eq .DBDriver "mysql"}} selected{{end}}>MySQL/MariaDB</option>
+            </select>
+            <span class="help-text">SQLite for single instance, PostgreSQL/MySQL for cluster mode</span>
+        </div>
+
+        <div id="external-db-settings" style="{{if eq .DBDriver "sqlite3"}}display: none;{{end}}">
+            <div class="form-group">
+                <label for="db-host">Host</label>
+                <input type="text" id="db-host" value="{{.DBHost}}" placeholder="localhost">
+            </div>
+            <div class="form-group">
+                <label for="db-port">Port</label>
+                <input type="number" id="db-port" value="{{.DBPort}}" placeholder="5432">
+            </div>
+            <div class="form-group">
+                <label for="db-name">Database Name</label>
+                <input type="text" id="db-name" value="{{.DBName}}" placeholder="vidveil">
+            </div>
+            <div class="form-group">
+                <label for="db-user">Username</label>
+                <input type="text" id="db-user" value="{{.DBUser}}" placeholder="vidveil">
+            </div>
+            <div class="form-group">
+                <label for="db-pass">Password</label>
+                <input type="password" id="db-pass" placeholder="••••••••">
+            </div>
+            <div class="form-group">
+                <label for="db-ssl">SSL Mode</label>
+                <select id="db-ssl">
+                    <option value="disable"{{if eq .DBSSLMode "disable"}} selected{{end}}>Disable</option>
+                    <option value="require"{{if eq .DBSSLMode "require"}} selected{{end}}>Require</option>
+                    <option value="verify-ca"{{if eq .DBSSLMode "verify-ca"}} selected{{end}}>Verify CA</option>
+                    <option value="verify-full"{{if eq .DBSSLMode "verify-full"}} selected{{end}}>Verify Full</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button type="button" onclick="testConnection()" class="btn btn-secondary">Test Connection</button>
+            <button type="submit" class="btn btn-primary">Save & Migrate</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Database Migrations</h2>
+    <p class="text-muted">
+        <strong>{{.AppliedCount}}</strong> applied,
+        <strong>{{.PendingCount}}</strong> pending,
+        <strong>{{.TotalCount}}</strong> total
+    </p>
+
+    {{if .Migrations}}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Version</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Applied At</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Migrations}}
+            <tr>
+                <td>{{.version}}</td>
+                <td>{{.name}}</td>
+                <td>{{.description}}</td>
+                <td>
+                    {{if .applied}}
+                    <span class="badge badge-success">Applied</span>
+                    {{else}}
+                    <span class="badge badge-warning">Pending</span>
+                    {{end}}
+                </td>
+                <td>
+                    {{if .applied_at}}
+                    {{.applied_at}}
+                    {{else}}
+                    -
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="text-muted">No migrations registered.</p>
+    {{end}}
+
+    {{if gt .PendingCount 0}}
+    <div class="form-actions" style="margin-top: 1rem;">
+        <button onclick="runMigrations()" class="btn btn-primary">Run Pending Migrations</button>
+    </div>
+    {{end}}
 </div>
 
 <div class="card">
@@ -17,8 +127,10 @@
             <select id="cache-type">
                 <option value="memory"{{if eq .Config.Server.Cache.Type "memory"}} selected{{end}}>Memory</option>
                 <option value="redis"{{if eq .Config.Server.Cache.Type "redis"}} selected{{end}}>Redis</option>
+                <option value="valkey"{{if eq .Config.Server.Cache.Type "valkey"}} selected{{end}}>Valkey</option>
                 <option value="none"{{if eq .Config.Server.Cache.Type "none"}} selected{{end}}>Disabled</option>
             </select>
+            <span class="help-text">Use Valkey/Redis for cluster or mixed mode deployments</span>
         </div>
         <div class="form-group">
             <label for="cache-ttl">Default TTL (seconds)</label>
@@ -42,6 +154,95 @@
 
 {{define "scripts"}}
 <script>
+function toggleBackendSettings() {
+    const driver = document.getElementById('db-driver').value;
+    const settings = document.getElementById('external-db-settings');
+    settings.style.display = (driver === 'sqlite') ? 'none' : 'block';
+
+    // Update default port based on driver
+    const portInput = document.getElementById('db-port');
+    if (driver === 'postgres' && !portInput.value) {
+        portInput.placeholder = '5432';
+    } else if (driver === 'mysql' && !portInput.value) {
+        portInput.placeholder = '3306';
+    }
+}
+
+async function testConnection() {
+    const driver = document.getElementById('db-driver').value;
+    if (driver === 'sqlite') {
+        showSuccess('SQLite connection is local and always available');
+        return;
+    }
+
+    const data = {
+        driver: driver,
+        host: document.getElementById('db-host').value,
+        port: parseInt(document.getElementById('db-port').value) || (driver === 'postgres' ? 5432 : 3306),
+        database: document.getElementById('db-name').value,
+        user: document.getElementById('db-user').value,
+        password: document.getElementById('db-pass').value,
+        ssl_mode: document.getElementById('db-ssl').value
+    };
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/database/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Connection successful! Database version: ' + (result.data?.version || 'unknown'));
+        } else {
+            showError('Connection failed: ' + result.error);
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+async function switchBackend(e) {
+    e.preventDefault();
+    const driver = document.getElementById('db-driver').value;
+
+    const msg = driver === 'sqlite'
+        ? 'Switch to SQLite? All data will be migrated from the current database.'
+        : 'Switch to ' + driver.toUpperCase() + '? This will migrate all data and requires a restart.';
+
+    if (!confirm(msg)) return;
+
+    const data = {
+        driver: driver
+    };
+
+    if (driver !== 'sqlite') {
+        data.host = document.getElementById('db-host').value;
+        data.port = parseInt(document.getElementById('db-port').value) || (driver === 'postgres' ? 5432 : 3306);
+        data.database = document.getElementById('db-name').value;
+        data.user = document.getElementById('db-user').value;
+        data.password = document.getElementById('db-pass').value;
+        data.ssl_mode = document.getElementById('db-ssl').value;
+    }
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/database/backend', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Database backend changed! Server will restart...');
+            setTimeout(() => location.reload(), 3000);
+        } else {
+            showError('Failed to switch backend: ' + result.error);
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
 async function saveCacheSettings(e) {
     e.preventDefault();
     try {
@@ -72,7 +273,36 @@ async function clearCache() {
     } catch (e) { showError('Error: ' + e.message); }
 }
 
-function vacuumDB() { showSuccess('Database vacuum started'); }
-function analyzeDB() { showSuccess('Database analysis started'); }
+async function runMigrations() {
+    if (!confirm('Run all pending database migrations? This action cannot be undone.')) return;
+    try {
+        const resp = await fetch('/api/v1/admin/server/database/migrate', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Migrations completed successfully!');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showError('Migration failed: ' + data.error);
+        }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function vacuumDB() {
+    try {
+        const resp = await fetch('/api/v1/admin/server/database/vacuum', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Database vacuum completed!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
+
+async function analyzeDB() {
+    try {
+        const resp = await fetch('/api/v1/admin/server/database/analyze', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) { showSuccess('Database analysis completed!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (e) { showError('Error: ' + e.message); }
+}
 </script>
 {{end}}

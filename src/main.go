@@ -233,8 +233,8 @@ func main() {
 	engineMgr := engines.NewManager(cfg)
 	engineMgr.InitializeEngines()
 
-	// Create server with admin service
-	srv := server.New(cfg, engineMgr, adminSvc)
+	// Create server with admin service and migration manager
+	srv := server.New(cfg, engineMgr, adminSvc, migrationMgr)
 
 	// Start live config watcher per TEMPLATE.md PART 1 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, cfg)

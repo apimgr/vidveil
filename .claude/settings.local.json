@@ -70,7 +70,8 @@
       "Bash(source ~/.bashrc)",
       "Bash(export PATH=$PATH:/usr/local/go/bin)",
       "Bash(go version:*)",
-      "Bash(make test:*)"
+      "Bash(make test:*)",
+      "Bash(/usr/local/go/bin/go build:*)"
     ],
     "deny": [],
     "ask": []

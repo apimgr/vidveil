@@ -23,7 +23,10 @@
 </div>
 
 <div class="card">
-    <h2>Cluster Nodes</h2>
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Cluster Nodes</h2>
+        <a href="/admin/server/nodes/add" class="btn btn-primary">Add Node</a>
+    </div>
     {{if .Nodes}}
     <table class="data-table">
         <thead>
@@ -100,6 +103,14 @@
         <tr><td><code>CLUSTER_HEARTBEAT</code></td><td>Heartbeat interval (default: 10s)</td></tr>
         <tr><td><code>CLUSTER_FAILOVER</code></td><td>Failover timeout (default: 30s)</td></tr>
     </table>
+</div>
+
+<div class="card">
+    <h2>Node Actions</h2>
+    <div class="button-group">
+        <a href="/admin/server/nodes/settings" class="btn btn-secondary">Node Settings</a>
+        <a href="/admin/server/nodes/remove" class="btn btn-warning">Leave Cluster</a>
+    </div>
 </div>
 {{end}}
 

@@ -1,0 +1,166 @@
+{{define "content"}}
+<div class="card">
+    <h2>Add Cluster Node</h2>
+    <p class="text-muted">Add a new node to the cluster. The node must be running and accessible from this server.</p>
+
+    {{if .Error}}
+    <div class="alert alert-error">{{.Error}}</div>
+    {{end}}
+    {{if .Success}}
+    <div class="alert alert-success">{{.Success}}</div>
+    {{end}}
+
+    <form id="add-node-form" method="POST" action="/admin/server/nodes/add">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+        <div class="form-group">
+            <label for="node-address">Node Address</label>
+            <input type="text" id="node-address" name="address" placeholder="192.168.1.100 or node2.example.com" required>
+            <span class="help-text">IP address or hostname of the remote node</span>
+        </div>
+
+        <div class="form-group">
+            <label for="node-port">Port</label>
+            <input type="number" id="node-port" name="port" value="{{.DefaultPort}}" min="1" max="65535" required>
+            <span class="help-text">HTTP port the node is listening on</span>
+        </div>
+
+        <div class="form-group">
+            <label for="node-token">Join Token</label>
+            <input type="password" id="node-token" name="token" placeholder="Cluster join token" required>
+            <span class="help-text">The cluster join token from the remote node</span>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="verify-ssl" name="verify_ssl" checked>
+                Verify SSL Certificate
+            </label>
+            <span class="help-text">Uncheck for self-signed certificates (not recommended for production)</span>
+        </div>
+
+        <div class="form-actions">
+            <button type="button" onclick="testConnection()" class="btn btn-secondary">Test Connection</button>
+            <button type="submit" class="btn btn-primary">Add Node</button>
+            <a href="/admin/server/nodes" class="btn">Cancel</a>
+        </div>
+    </form>
+
+    <div id="test-result" style="margin-top: 1rem; display: none;">
+        <div class="alert" id="test-alert"></div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Join Token for This Node</h2>
+    <p class="text-muted">Share this token with other nodes to allow them to join this cluster.</p>
+    <div class="form-group">
+        <label>Current Join Token</label>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="password" id="join-token" value="{{.JoinToken}}" readonly style="flex: 1;">
+            <button type="button" onclick="toggleTokenVisibility()" class="btn btn-secondary">Show</button>
+            <button type="button" onclick="copyToken()" class="btn btn-secondary">Copy</button>
+        </div>
+    </div>
+    <div class="form-actions">
+        <button type="button" onclick="regenerateToken()" class="btn btn-warning">Regenerate Token</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Cluster Requirements</h2>
+    <ul style="margin: 0; padding-left: 1.5rem;">
+        <li>All nodes must be running the same version</li>
+        <li>Network connectivity between nodes on the specified port</li>
+        <li>Time synchronization (NTP recommended)</li>
+        <li>Shared database configuration for state management</li>
+    </ul>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function toggleTokenVisibility() {
+    const input = document.getElementById('join-token');
+    const btn = event.target;
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = 'Hide';
+    } else {
+        input.type = 'password';
+        btn.textContent = 'Show';
+    }
+}
+
+function copyToken() {
+    const input = document.getElementById('join-token');
+    const originalType = input.type;
+    input.type = 'text';
+    input.select();
+    document.execCommand('copy');
+    input.type = originalType;
+    showSuccess('Token copied to clipboard');
+}
+
+async function testConnection() {
+    const address = document.getElementById('node-address').value;
+    const port = document.getElementById('node-port').value;
+    const token = document.getElementById('node-token').value;
+    const verifySSL = document.getElementById('verify-ssl').checked;
+
+    if (!address || !port) {
+        showError('Please enter node address and port');
+        return;
+    }
+
+    const resultDiv = document.getElementById('test-result');
+    const alertDiv = document.getElementById('test-alert');
+    resultDiv.style.display = 'block';
+    alertDiv.className = 'alert alert-info';
+    alertDiv.textContent = 'Testing connection...';
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/nodes/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address, port: parseInt(port), token, verify_ssl: verifySSL })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alertDiv.className = 'alert alert-success';
+            alertDiv.innerHTML = '<strong>Connection successful!</strong><br>' +
+                'Node ID: ' + data.data.node_id + '<br>' +
+                'Version: ' + data.data.version + '<br>' +
+                'Hostname: ' + data.data.hostname;
+        } else {
+            alertDiv.className = 'alert alert-error';
+            alertDiv.textContent = 'Connection failed: ' + data.error;
+        }
+    } catch (e) {
+        alertDiv.className = 'alert alert-error';
+        alertDiv.textContent = 'Error: ' + e.message;
+    }
+}
+
+async function regenerateToken() {
+    if (!confirm('Regenerate the cluster join token? Existing nodes using the old token will need to be updated.')) {
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/nodes/token', {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('join-token').value = data.data.token;
+            showSuccess('Join token regenerated');
+        } else {
+            showError('Error: ' + data.error);
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+</script>
+{{end}}

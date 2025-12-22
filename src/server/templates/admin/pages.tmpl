@@ -1,0 +1,155 @@
+{{define "content"}}
+<div class="card">
+    <h2>Standard Pages</h2>
+    <p class="text-muted">Edit the content of standard pages (About, Privacy, Contact, Help).</p>
+</div>
+
+<div class="card">
+    <div class="tabs">
+        <button class="tab-btn active" onclick="showTab('about')">About</button>
+        <button class="tab-btn" onclick="showTab('privacy')">Privacy</button>
+        <button class="tab-btn" onclick="showTab('contact')">Contact</button>
+        <button class="tab-btn" onclick="showTab('help')">Help</button>
+    </div>
+
+    {{range .Pages}}
+    <div id="tab-{{.Slug}}" class="tab-content{{if eq .Slug "about"}} active{{end}}">
+        <form id="form-{{.Slug}}" onsubmit="savePage(event, '{{.Slug}}')">
+            <div class="form-group">
+                <label for="title-{{.Slug}}">Page Title</label>
+                <input type="text" id="title-{{.Slug}}" name="title" value="{{.Title}}" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label for="meta-{{.Slug}}">Meta Description</label>
+                <input type="text" id="meta-{{.Slug}}" name="meta_description" value="{{.MetaDescription}}" class="form-input" placeholder="Brief description for search engines">
+                <span class="help-text">Used for SEO - appears in search engine results</span>
+            </div>
+            <div class="form-group">
+                <label for="content-{{.Slug}}">Page Content</label>
+                <textarea id="content-{{.Slug}}" name="content" class="form-input content-editor" rows="15">{{.Content}}</textarea>
+                <span class="help-text">Supports Markdown formatting</span>
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="enabled-{{.Slug}}" name="enabled" {{if .Enabled}}checked{{end}}>
+                    Page Enabled
+                </label>
+                <span class="help-text">Disabled pages return 404</span>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <button type="button" class="btn btn-secondary" onclick="resetPage('{{.Slug}}')">Reset to Default</button>
+            </div>
+            {{if .UpdatedAt}}
+            <p class="text-muted" style="margin-top: 1rem; font-size: 0.85rem;">
+                Last updated: {{.UpdatedAt.Format "Jan 02, 2006 15:04"}}
+            </p>
+            {{end}}
+        </form>
+    </div>
+    {{end}}
+</div>
+
+<style>
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+}
+.tab-btn {
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    transition: all 0.2s;
+}
+.tab-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+.tab-btn.active {
+    background: var(--primary);
+    color: #fff;
+}
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
+.content-editor {
+    font-family: monospace;
+    min-height: 300px;
+}
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+</style>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function showTab(slug) {
+    // Hide all tabs and deactivate buttons
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+    // Show selected tab and activate button
+    document.getElementById('tab-' + slug).classList.add('active');
+    event.target.classList.add('active');
+}
+
+async function savePage(e, slug) {
+    e.preventDefault();
+
+    const form = document.getElementById('form-' + slug);
+    const data = {
+        title: document.getElementById('title-' + slug).value,
+        meta_description: document.getElementById('meta-' + slug).value,
+        content: document.getElementById('content-' + slug).value,
+        enabled: document.getElementById('enabled-' + slug).checked
+    };
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/pages/' + slug, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Page saved successfully');
+        } else {
+            showError(result.error || 'Failed to save page');
+        }
+    } catch (err) {
+        showError('Error: ' + err.message);
+    }
+}
+
+async function resetPage(slug) {
+    if (!confirm('Reset this page to default content? This cannot be undone.')) return;
+
+    try {
+        const resp = await fetch('/api/v1/admin/server/pages/' + slug + '/reset', {
+            method: 'POST'
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess('Page reset to default');
+            location.reload();
+        } else {
+            showError(result.error || 'Failed to reset page');
+        }
+    } catch (err) {
+        showError('Error: ' + err.message);
+    }
+}
+</script>
+{{end}}

@@ -68,41 +68,42 @@
     <p class="help-text">Generating new keys will invalidate all previous recovery keys. Store them securely.</p>
 </div>
 
-<div id="recovery-keys-modal" class="modal" style="display: none;">
+<!-- TEMPLATE.md PART 16: Modal Accessibility with native <dialog> -->
+<dialog id="recovery-keys-modal" class="modal-dialog" aria-labelledby="recovery-modal-title">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>Recovery Keys Generated</h3>
-            <button class="modal-close" onclick="closeRecoveryModal()">&times;</button>
+            <h3 id="recovery-modal-title">Recovery Keys Generated</h3>
+            <button type="button" class="modal-close" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
         </div>
         <div class="modal-body">
             <p class="text-warning">Save these keys now. They will not be shown again.</p>
             <div class="recovery-keys-list" id="recovery-keys-list"></div>
-            <button onclick="copyRecoveryKeys()" class="btn btn-sm" style="margin-top: 1rem;">Copy All Keys</button>
+            <button type="button" onclick="copyRecoveryKeys()" class="btn btn-sm" style="margin-top: 1rem;">Copy All Keys</button>
         </div>
         <div class="modal-footer">
-            <button onclick="closeRecoveryModal()" class="btn btn-primary">Done</button>
+            <button type="button" onclick="this.closest('dialog').close()" class="btn btn-primary" autofocus>Done</button>
         </div>
     </div>
-</div>
+</dialog>
 
-<div id="token-modal" class="modal" style="display: none;">
+<dialog id="token-modal" class="modal-dialog" aria-labelledby="token-modal-title">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>New API Token Generated</h3>
-            <button class="modal-close" onclick="closeTokenModal()">&times;</button>
+            <h3 id="token-modal-title">New API Token Generated</h3>
+            <button type="button" class="modal-close" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
         </div>
         <div class="modal-body">
             <p class="text-warning">Copy this token now. It will not be shown again.</p>
             <div class="token-display">
                 <code id="new-token"></code>
-                <button onclick="copyToken()" class="btn btn-sm">Copy</button>
+                <button type="button" onclick="copyToken()" class="btn btn-sm">Copy</button>
             </div>
         </div>
         <div class="modal-footer">
-            <button onclick="closeTokenModal()" class="btn btn-primary">Done</button>
+            <button type="button" onclick="this.closest('dialog').close()" class="btn btn-primary" autofocus>Done</button>
         </div>
     </div>
-</div>
+</dialog>
 {{end}}
 
 {{define "scripts"}}
@@ -152,7 +153,7 @@ async function regenerateToken() {
         const data = await resp.json();
         if (data.success) {
             document.getElementById('new-token').textContent = data.data.token;
-            document.getElementById('token-modal').style.display = 'flex';
+            document.getElementById('token-modal').showModal(); // Native dialog API
         } else {
             showError(data.error || 'Failed to regenerate token');
         }
@@ -162,7 +163,7 @@ async function regenerateToken() {
 }
 
 function closeTokenModal() {
-    document.getElementById('token-modal').style.display = 'none';
+    document.getElementById('token-modal').close(); // Native dialog API
     location.reload();
 }
 
@@ -233,7 +234,7 @@ async function generateRecoveryKeys() {
             listDiv.innerHTML = data.data.keys.map((key, i) =>
                 '<div class="recovery-key"><span>' + (i + 1) + '.</span> <code>' + key + '</code></div>'
             ).join('');
-            document.getElementById('recovery-keys-modal').style.display = 'flex';
+            document.getElementById('recovery-keys-modal').showModal(); // Native dialog API
         } else {
             showError(data.error || 'Failed to generate recovery keys');
         }
@@ -243,7 +244,7 @@ async function generateRecoveryKeys() {
 }
 
 function closeRecoveryModal() {
-    document.getElementById('recovery-keys-modal').style.display = 'none';
+    document.getElementById('recovery-keys-modal').close(); // Native dialog API
     loadRecoveryKeysStatus();
 }
 

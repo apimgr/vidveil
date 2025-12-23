@@ -1880,3 +1880,100 @@ a:focus-visible {
         max-width: 150px;
     }
 }
+
+/* ===========================================
+   PWA Offline Indicator (TEMPLATE.md PART 16)
+   =========================================== */
+.offline-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: var(--warning);
+    color: #000;
+    text-align: center;
+    padding: 0.75rem;
+    font-weight: 500;
+    z-index: 9999;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+/* Respect reduced motion preference (TEMPLATE.md PART 16) */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ===========================================
+   Native Dialog Modals (TEMPLATE.md PART 16)
+   =========================================== */
+.modal-dialog {
+    border: none;
+    border-radius: 8px;
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    box-shadow: 0 4px 20px var(--shadow);
+}
+
+.modal-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(2px);
+}
+
+.modal-dialog .modal-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-dialog .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-dialog .modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.modal-dialog .modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.modal-dialog .modal-close:hover {
+    color: var(--text-primary);
+}
+
+.modal-dialog .modal-body {
+    padding: 1.5rem;
+}
+
+.modal-dialog .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+}

@@ -1,3 +1,28 @@
 {{define "scripts"}}
 <script src="/static/js/app.js"></script>
+<script>
+// PWA Service Worker Registration (TEMPLATE.md PART 16)
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/js/sw.js')
+        .then(reg => console.log('SW registered'))
+        .catch(err => console.log('SW registration failed:', err));
+}
+
+// Offline indicator (TEMPLATE.md PART 16)
+window.addEventListener('online', () => {
+    const indicator = document.getElementById('offline-indicator');
+    if (indicator) indicator.hidden = true;
+});
+window.addEventListener('offline', () => {
+    let indicator = document.getElementById('offline-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'offline-indicator';
+        indicator.className = 'offline-banner';
+        indicator.textContent = 'You are offline. Some features may be unavailable.';
+        document.body.insertBefore(indicator, document.body.firstChild);
+    }
+    indicator.hidden = false;
+});
+</script>
 {{end}}

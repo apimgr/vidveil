@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // SyncEventType represents the type of sync event
@@ -354,21 +356,38 @@ func (m *MemorySyncChannel) Close() error {
 
 // ValkeySyncChannel implements SyncChannel using Valkey/Redis
 type ValkeySyncChannel struct {
-	addr     string
-	channel  string
-	mu       sync.RWMutex
-	closed   bool
+	client  *redis.Client
+	channel string
+	mu      sync.RWMutex
+	closed  bool
 }
 
 // NewValkeySyncChannel creates a new Valkey/Redis sync channel
-func NewValkeySyncChannel(addr, channel string) *ValkeySyncChannel {
+func NewValkeySyncChannel(addr, password string, db int, channel string) (*ValkeySyncChannel, error) {
+	if addr == "" {
+		addr = "localhost:6379"
+	}
 	if channel == "" {
 		channel = "vidveil:sync"
 	}
-	return &ValkeySyncChannel{
-		addr:    addr,
-		channel: channel,
+
+	client := redis.NewClient(&redis.Options{
+		Addr:     addr,
+		Password: password,
+		DB:       db,
+	})
+
+	// Test connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
+
+	return &ValkeySyncChannel{
+		client:  client,
+		channel: channel,
+	}, nil
 }
 
 // Publish sends an event via Valkey/Redis pub/sub
@@ -385,24 +404,51 @@ func (v *ValkeySyncChannel) Publish(ctx context.Context, event *SyncEvent) error
 		return err
 	}
 
-	// In production: use go-redis/redis or valkey-io/valkey-go
-	// For now, just log what would be published
-	_ = data
-	return fmt.Errorf("Valkey/Redis client not yet implemented - add github.com/redis/go-redis/v9 to go.mod")
+	return v.client.Publish(ctx, v.channel, data).Err()
 }
 
 // Subscribe listens for events via Valkey/Redis pub/sub
 func (v *ValkeySyncChannel) Subscribe(ctx context.Context, handler func(*SyncEvent)) error {
-	// In production: use go-redis/redis or valkey-io/valkey-go
-	// For now, just block until context is done
-	<-ctx.Done()
-	return ctx.Err()
+	v.mu.RLock()
+	if v.closed {
+		v.mu.RUnlock()
+		return fmt.Errorf("channel closed")
+	}
+	v.mu.RUnlock()
+
+	pubsub := v.client.Subscribe(ctx, v.channel)
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case msg := <-ch:
+			if msg == nil {
+				continue
+			}
+			var event SyncEvent
+			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+				continue
+			}
+			handler(&event)
+		}
+	}
 }
 
 // Close closes the Valkey/Redis connection
 func (v *ValkeySyncChannel) Close() error {
 	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if v.closed {
+		return nil
+	}
 	v.closed = true
-	v.mu.Unlock()
+
+	if v.client != nil {
+		return v.client.Close()
+	}
 	return nil
 }

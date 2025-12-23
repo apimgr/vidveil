@@ -13,10 +13,17 @@ VERSION ?= $(shell cat release.txt 2>/dev/null || echo "0.1.0")
 BUILD_DATE := $(shell date +"%a %b %d, %Y at %H:%M:%S %Z")
 COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-# Linker flags to embed build info
+# Linker flags to embed build info (server)
 LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
+	-X 'main.BuildDate=$(BUILD_DATE)'
+
+# Linker flags for CLI client (TEMPLATE.md PART 33)
+CLI_LDFLAGS := -s -w \
+	-X 'main.ProjectName=$(PROJECT)' \
+	-X 'main.Version=$(VERSION)' \
+	-X 'main.Commit=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)'
 
 # Directories
@@ -44,6 +51,7 @@ GO_DOCKER := docker run --rm \
 
 # =============================================================================
 # BUILD - Build all platforms + host binary (via Docker with cached modules)
+# Per TEMPLATE.md PART 33: Build CLI client if src/client exists
 # =============================================================================
 build: clean
 	@mkdir -p $(BINDIR)
@@ -54,22 +62,43 @@ build: clean
 	@echo "Downloading Go modules..."
 	@$(GO_DOCKER) go mod download
 
-	# Build for host OS/ARCH
-	@echo "Building host binary..."
+	# Build server for host OS/ARCH
+	@echo "Building server host binary..."
 	@$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
 		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT) ./src"
 
-	# Build all platforms
+	# Build CLI client if src/client exists (TEMPLATE.md PART 33)
+	@if [ -d "src/client" ]; then \
+		echo "Building CLI client host binary..."; \
+		$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
+			go build -ldflags \"$(CLI_LDFLAGS)\" -o $(BINDIR)/$(PROJECT)-cli ./src/client"; \
+	fi
+
+	# Build server for all platforms
 	@for platform in $(PLATFORMS); do \
 		OS=$${platform%/*}; \
 		ARCH=$${platform#*/}; \
 		OUTPUT=$(BINDIR)/$(PROJECT)-$$OS-$$ARCH; \
 		[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
-		echo "Building $$OS/$$ARCH..."; \
+		echo "Building server $$OS/$$ARCH..."; \
 		$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
 			go build -ldflags \"$(LDFLAGS)\" \
 			-o $$OUTPUT ./src" || exit 1; \
 	done
+
+	# Build CLI client for all platforms if src/client exists
+	@if [ -d "src/client" ]; then \
+		for platform in $(PLATFORMS); do \
+			OS=$${platform%/*}; \
+			ARCH=$${platform#*/}; \
+			OUTPUT=$(BINDIR)/$(PROJECT)-cli-$$OS-$$ARCH; \
+			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
+			echo "Building CLI $$OS/$$ARCH..."; \
+			$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
+				go build -ldflags \"$(CLI_LDFLAGS)\" \
+				-o $$OUTPUT ./src/client" || exit 1; \
+		done; \
+	fi
 
 	@echo "Build complete: $(BINDIR)/"
 

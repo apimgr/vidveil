@@ -8,6 +8,10 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	// Database drivers - imported for side effects
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 )
 
 // Driver represents a database driver type
@@ -114,12 +118,16 @@ func openPostgres(cfg Config) (*sql.DB, error) {
 		port = 5432
 	}
 
-	// DSN format for PostgreSQL: host=%s port=%d user=%s password=%s dbname=%s sslmode=%s
-	// In production, would use github.com/lib/pq or pgx with this DSN
-	_ = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, port, cfg.User, cfg.Password, cfg.Name, sslMode)
+	host := cfg.Host
+	if host == "" {
+		host = "localhost"
+	}
 
-	return nil, fmt.Errorf("PostgreSQL driver not yet implemented - add github.com/lib/pq to go.mod")
+	// DSN format for PostgreSQL: host=%s port=%d user=%s password=%s dbname=%s sslmode=%s
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		host, port, cfg.User, cfg.Password, cfg.Name, sslMode)
+
+	return sql.Open("postgres", dsn)
 }
 
 // openMySQL opens a MySQL/MariaDB database connection
@@ -129,12 +137,16 @@ func openMySQL(cfg Config) (*sql.DB, error) {
 		port = 3306
 	}
 
-	// DSN format for MySQL: %s:%s@tcp(%s:%d)/%s?parseTime=true
-	// In production, would use github.com/go-sql-driver/mysql with this DSN
-	_ = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
-		cfg.User, cfg.Password, cfg.Host, port, cfg.Name)
+	host := cfg.Host
+	if host == "" {
+		host = "localhost"
+	}
 
-	return nil, fmt.Errorf("MySQL driver not yet implemented - add github.com/go-sql-driver/mysql to go.mod")
+	// DSN format for MySQL: user:password@tcp(host:port)/dbname?parseTime=true
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
+		cfg.User, cfg.Password, host, port, cfg.Name)
+
+	return sql.Open("mysql", dsn)
 }
 
 // DB returns the underlying *sql.DB connection

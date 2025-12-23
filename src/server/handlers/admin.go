@@ -57,6 +57,15 @@ type TorService interface {
 	CancelVanityGeneration()
 	ApplyVanityAddress() error
 	GetInfo() map[string]interface{}
+	TestConnection() *TorTestResult
+}
+
+// TorTestResult holds the result of a Tor connection test
+type TorTestResult struct {
+	Connected    bool   `json:"connected"`
+	OnionAddress string `json:"onion_address,omitempty"`
+	Status       string `json:"status"`
+	Message      string `json:"message"`
 }
 
 // VanityStatus tracks vanity address generation progress
@@ -454,11 +463,23 @@ func (h *AdminHandler) DatabasePage(w http.ResponseWriter, r *http.Request) {
 
 // EmailPage renders email & notifications settings (Section 6)
 func (h *AdminHandler) EmailPage(w http.ResponseWriter, r *http.Request) {
-	// Email templates list (placeholder)
+	// Email templates list per TEMPLATE.md PART 16
+	// 10 required templates + 4 additional templates = 14 total
 	templates := []map[string]string{
-		{"Name": "welcome", "Status": "Active"},
-		{"Name": "password-reset", "Status": "Active"},
-		{"Name": "notification", "Status": "Active"},
+		{"Name": "welcome", "Description": "New user/admin welcome", "Status": "Active"},
+		{"Name": "password_reset", "Description": "Password reset request", "Status": "Active"},
+		{"Name": "backup_complete", "Description": "Backup completed notification", "Status": "Active"},
+		{"Name": "backup_failed", "Description": "Backup failure alert", "Status": "Active"},
+		{"Name": "ssl_expiring", "Description": "SSL certificate expiring warning", "Status": "Active"},
+		{"Name": "ssl_renewed", "Description": "SSL certificate renewed notification", "Status": "Active"},
+		{"Name": "login_alert", "Description": "New login from unknown device", "Status": "Active"},
+		{"Name": "security_alert", "Description": "Security event notification", "Status": "Active"},
+		{"Name": "scheduler_error", "Description": "Scheduled task failure", "Status": "Active"},
+		{"Name": "test", "Description": "Test email template", "Status": "Active"},
+		{"Name": "account_locked", "Description": "Account locked notification", "Status": "Active"},
+		{"Name": "email_verification", "Description": "Email verification request", "Status": "Active"},
+		{"Name": "maintenance_scheduled", "Description": "Scheduled maintenance notice", "Status": "Active"},
+		{"Name": "password_changed", "Description": "Password changed confirmation", "Status": "Active"},
 	}
 	h.renderAdminTemplate(w, r, "email", map[string]interface{}{
 		"EmailTemplates": templates,
@@ -2306,14 +2327,21 @@ func (h *AdminHandler) APITorImport(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/admin/server/tor/test
 func (h *AdminHandler) APITorTest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	// Would test actual Tor connection
+
+	// Check if Tor service is available
+	if h.torSvc == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Tor service not initialized",
+		})
+		return
+	}
+
+	// Test the Tor connection
+	result := h.torSvc.TestConnection()
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"data": map[string]interface{}{
-			"connected": false,
-			"ip":        "",
-			"message":   "Tor connection test not implemented",
-		},
+		"data":    result,
 	})
 }
 

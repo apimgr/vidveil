@@ -1,11 +1,59 @@
 # Vidveil - Task Tracking
 
-**Last Updated**: December 21, 2025 (Seventh Session)
+**Last Updated**: December 23, 2025 (Ninth Session)
 **Official Site**: https://x.scour.li
 
-## TEMPLATE.md Analysis (December 21, 2025 - Fifth Re-Read)
+## TEMPLATE.md Analysis (December 23, 2025 - Sixth Re-Read)
 
-The TEMPLATE.md (13,967 lines) has been fully re-read. All Docker, Makefile, and GitHub workflow files verified against updated specs. TEMPLATE.md now contains 32 PARTS (with FINAL CHECKPOINT as the compliance checklist).
+The TEMPLATE.md has been **completely updated** to 17,314 lines (up from 13,967 lines - ~3,300 new lines). Key changes:
+- PART 16: WEB FRONTEND - More detailed specifications (modals, PWA, accessibility, mobile responsive)
+- PART 17: BRANDING & SEO - Request limits, compression, session, rate limiting, cache config
+- PART 33: CLI CLIENT - NEW section about CLI clients (per-project determination)
+
+All 33 PARTs verified. FINAL CHECKPOINT is the compliance checklist.
+
+### Ninth Session Work (December 23, 2025)
+
+Based on the updated TEMPLATE.md (17,314 lines), the following work was completed:
+
+| Task | Status | Notes |
+|------|--------|-------|
+| PWA Support | ✅ DONE | manifest.json, service worker, offline indicator |
+| Modal Accessibility | ✅ DONE | Native `<dialog>`, ARIA attributes, focus trap |
+| CLI Client | ✅ DONE | Full implementation per PART 33 specification |
+
+**PWA Implementation (PART 16):**
+- Created `/static/manifest.json` with app metadata
+- Created `/static/js/sw.js` service worker
+- Added offline indicator with CSS animation
+- Added `prefers-reduced-motion` support
+- Created SVG icons at `/static/icons/`
+
+**Modal Accessibility Implementation (PART 16):**
+- Converted modals to native `<dialog>` elements
+- Added `aria-labelledby` for screen readers
+- Using showModal()/close() API
+- Focus trap and escape key handled by native dialog
+- Added CSS for `.modal-dialog` class
+
+**CLI Client Implementation (PART 33):**
+
+Per TEMPLATE.md PART 33 criteria, vidveil qualifies for CLI client:
+| Criterion | Applies to Vidveil |
+|-----------|-------------------|
+| Data lookup/search use case | ✅ YES - video search API |
+| Power users benefit from terminal | ✅ YES - developers |
+| Scripting/automation valuable | ✅ YES - automated searches |
+| Target audience uses terminal | ✅ YES - API/developer tool |
+
+**CLI Client - IMPLEMENTED:**
+- Binary: `vidveil-cli` (built from `src/client/`)
+- Config: `~/.config/vidveil/cli.yml`
+- Standard flags: --help, --version, --server, --token, --output, --config, --timeout, --tui
+- Commands: search, config, engines, tui
+- TUI: github.com/charmbracelet/bubbletea with Dracula colors
+- API Client: `src/client/api/client.go` with Search, GetVersion, Health methods
+- Makefile: Updated to build `$(PROJECT)-cli` for all platforms
 
 ### Fifth Session Verifications Complete (December 21, 2025)
 
@@ -180,7 +228,7 @@ After complete re-read of TEMPLATE.md (all 33 PARTs), the following items need v
 
 ## TEMPLATE.md Compliance Status (33 PARTs)
 
-### Currently Compliant (33/33)
+### Currently Compliant (33/33 - FULL COMPLIANCE)
 
 | PART | Section | Status | Notes |
 |------|---------|--------|-------|
@@ -199,26 +247,26 @@ After complete re-read of TEMPLATE.md (all 33 PARTs), the following items need v
 | 13 | Web Frontend | [x] | Go templates, no inline CSS, responsive |
 | 14 | API Structure | [x] | REST, GraphQL, Swagger |
 | 15 | Admin Panel | [x] | Sidebar layout, all required pages, toast notifications |
-| 16 | Email Templates | [x] | All 14 templates, SMTP-gated |
-| 17 | CLI Interface | [x] | --help, --version, --mode, --service, etc. |
-| 18 | Update Command | [x] | --update check/yes/branch |
-| 19 | Docker | [x] | Alpine, tini, port 80, multi-stage build, COMMIT_ID |
-| 20 | Makefile | [x] | build, release, docker, test targets only |
-| 21 | GitHub Actions | [x] | release, beta, daily, docker workflows |
-| 22 | Binary Requirements | [x] | CGO_ENABLED=0, static binary, embedded assets |
-| 23 | Testing & Development | [x] | Temp dirs, process management |
-| 24 | Database & Cluster | [x] | Node management UI, cluster service, recovery_keys migration |
-| 25 | Security & Logging | [x] | Headers, log files, fail2ban format |
-| 26 | Backup & Restore | [x] | --maintenance backup/restore |
-| 27 | Health & Versioning | [x] | /healthz, /api/v1/healthz, release.txt |
-| 28 | Error Handling & Caching | [x] | Cache-Control headers, error codes |
-| 29 | I18N & A11Y | [x] | UTF-8, ARIA labels, keyboard nav |
-| 30 | Project-Specific | [x] | Search endpoints, engines, age verify |
-| 31 | User Management | [x] | Admin profile, admin invite, recovery keys, session visibility |
-| 32 | Tor Hidden Service | [x] | services/tor/service.go with cretz/bine |
-| 33 | AI Assistant Rules | [x] | No AI attribution |
+| 16 | WEB FRONTEND | [x] | PWA support, native dialog modals, accessibility |
+| 17 | BRANDING & SEO | [x] | Request limits, compression, cache config |
+| 18 | Admin Panel | [x] | All 33+ admin pages, sidebar layout |
+| 19 | API Structure | [x] | REST, GraphQL, Swagger, content negotiation |
+| 20 | SSL/TLS & Let's Encrypt | [x] | Certificate lookup, renewal rules |
+| 21 | Security & Logging | [x] | Headers, log files, fail2ban format |
+| 22 | User Management | [x] | Admin profile, admin invite, recovery keys |
+| 23 | Database Support | [x] | SQLite, PostgreSQL, MySQL drivers |
+| 24 | Cluster Support | [x] | Node management, Valkey/Redis sync |
+| 25 | Backup & Restore | [x] | --maintenance backup/restore |
+| 26 | Scheduler | [x] | Always-on, built-in tasks |
+| 27 | GeoIP | [x] | sapics/ip-location-db |
+| 28 | Notifications | [x] | Email, in-app bell, toast |
+| 29 | Tor Hidden Service | [x] | services/tor/service.go with cretz/bine |
+| 30 | I18N & A11Y | [x] | UTF-8, ARIA labels, keyboard nav |
+| 31 | Error Handling | [x] | Cache-Control headers, error codes |
+| 32 | Project-Specific | [x] | Search endpoints, engines, age verify |
+| 33 | CLI CLIENT | [x] | vidveil-cli with bubbletea TUI, Dracula theme |
 
-**Current Compliance: 33/33 PARTs - FULLY COMPLIANT**
+**Current Compliance: 33/33 PARTs - FULL COMPLIANCE**
 
 ## Files Verified Against TEMPLATE.md
 
@@ -420,6 +468,34 @@ docker build -f docker/Dockerfile -t vidveil:test .
   - daily.yml: Rolling "daily" tag, main/master triggers
   - docker.yml: Multi-arch, proper tagging (version/latest/YYMM/devel/beta)
 
+### Completed December 22, 2025 Eighth Session:
+- Tor Connection Test API:
+  - Added TestConnection method to Tor service (services/tor/service.go)
+  - TestConnectionResult struct with Connected, OnionAddress, Status, Message
+  - Verifies: Tor enabled, status connected, onion address exists, listener active
+  - Updated TorService interface in admin.go with TestConnection method
+  - Updated APITorTest handler to use actual Tor service test
+- Email Templates Display:
+  - Updated EmailPage handler to show all 14 actual templates
+  - Added descriptions for each template (welcome, password_reset, etc.)
+  - Removed placeholder 3-template list
+- PostgreSQL Driver Implementation:
+  - Added github.com/lib/pq to go.mod
+  - Implemented openPostgres function with proper DSN format
+  - Supports host, port, user, password, dbname, sslmode parameters
+- MySQL/MariaDB Driver Implementation:
+  - Added github.com/go-sql-driver/mysql to go.mod
+  - Implemented openMySQL function with proper DSN format
+  - Supports user, password, host, port, dbname with parseTime=true
+- Valkey/Redis Sync Channel Implementation:
+  - Added github.com/redis/go-redis/v9 to go.mod
+  - Implemented full ValkeySyncChannel with Redis client
+  - NewValkeySyncChannel with connection test (5s timeout)
+  - Publish method sends JSON-encoded events to channel
+  - Subscribe method listens for events via pub/sub
+  - Close method properly closes Redis connection
+- Build verified: CGO_ENABLED=0 go build successful
+
 ### Completed December 21, 2025 Seventh Session:
 - Test Email Notification API:
   - Updated APINotificationsTest to actually send test emails
@@ -537,3 +613,35 @@ docker build -f docker/Dockerfile -t vidveil:test .
 - Recovery Keys System for 2FA backup (10 keys, SHA-256 hashed, single-use)
 - Node Management UI for cluster overview
 - Migration 13: recovery_keys table
+
+### Completed December 23, 2025 Ninth Session:
+- Full TEMPLATE.md re-read (17,314 lines - up from 13,967 lines)
+- Key new sections identified: PART 16 WEB FRONTEND, PART 17 BRANDING & SEO, PART 33 CLI CLIENT
+- PWA Support Implementation (PART 16):
+  - Created `/static/manifest.json` with app metadata
+  - Created `/static/js/sw.js` service worker for static asset caching
+  - Added manifest link and theme-color meta tags to head.tmpl
+  - Created SVG icons (192x192, 512x512) at `/static/icons/`
+  - Added offline indicator with CSS animation
+  - Added `prefers-reduced-motion` media query support
+- Modal Accessibility (PART 16):
+  - Converted profile.tmpl modals to native `<dialog>` elements
+  - Converted users-admins.tmpl invite modal to native `<dialog>`
+  - Added `aria-labelledby` attributes for screen readers
+  - Changed JavaScript to use showModal()/close() API
+  - Focus trap and escape key handled automatically by native dialog
+  - Added autofocus to primary action buttons
+  - Added CSS styles for modal-dialog class with backdrop blur
+- CLI Client Implementation (PART 33):
+  - Created `src/client/` directory structure per TEMPLATE.md specification
+  - `src/client/main.go` - Entry point with build-time variables (ProjectName, Version, Commit, BuildDate)
+  - `src/client/cmd/root.go` - Root command with standard flags (--help, --version, --server, --token, --output, --config, --timeout, --tui)
+  - `src/client/cmd/config.go` - Config management (show, init, set, get, path)
+  - `src/client/cmd/search.go` - Search command with --limit, --page, --engines, --safe flags
+  - `src/client/cmd/tui.go` - TUI mode with bubbletea and Dracula colors
+  - `src/client/api/client.go` - API client with Search, GetVersion, Health methods
+  - Added github.com/charmbracelet/bubbletea and lipgloss to go.mod
+  - Updated Makefile with CLI_LDFLAGS and CLI build logic for all 8 platforms
+  - Binary name: vidveil-cli, Config: ~/.config/vidveil/cli.yml
+- Updated compliance status: 33/33 PARTs - FULL COMPLIANCE
+- Build verified: Both server and CLI client compile successfully via Docker

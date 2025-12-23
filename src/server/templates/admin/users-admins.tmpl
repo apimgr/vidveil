@@ -73,27 +73,28 @@
 </div>
 {{end}}
 
-<div id="invite-modal" class="modal" style="display: none;">
+<!-- TEMPLATE.md PART 16: Modal Accessibility with native <dialog> -->
+<dialog id="invite-modal" class="modal-dialog" aria-labelledby="invite-modal-title">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>Admin Invite Created</h3>
-            <button class="modal-close" onclick="closeInviteModal()">&times;</button>
+            <h3 id="invite-modal-title">Admin Invite Created</h3>
+            <button type="button" class="modal-close" aria-label="Close" onclick="this.closest('dialog').close()">&times;</button>
         </div>
         <div class="modal-body">
             <p><strong>Username:</strong> <span id="invite-username"></span></p>
             <p class="text-muted">Share this invite URL with the new admin:</p>
             <div class="token-display">
                 <code id="invite-url"></code>
-                <button onclick="copyInviteUrl()" class="btn btn-sm">Copy</button>
+                <button type="button" onclick="copyInviteUrl()" class="btn btn-sm">Copy</button>
             </div>
             <p class="text-warning">This link will only work ONCE and expires in <span id="invite-expiry"></span>.</p>
             <p class="text-muted">The new admin will set their own password on first use.</p>
         </div>
         <div class="modal-footer">
-            <button onclick="closeInviteModal()" class="btn btn-primary">Done</button>
+            <button type="button" onclick="this.closest('dialog').close()" class="btn btn-primary" autofocus>Done</button>
         </div>
     </div>
-</div>
+</dialog>
 {{end}}
 
 {{define "scripts"}}
@@ -167,7 +168,7 @@ async function generateInvite(e) {
             document.getElementById('invite-username').textContent = username;
             document.getElementById('invite-url').textContent = data.data.invite_url;
             document.getElementById('invite-expiry').textContent = expires + ' hours';
-            document.getElementById('invite-modal').style.display = 'flex';
+            document.getElementById('invite-modal').showModal(); // Native dialog API
             document.getElementById('invite-form').reset();
             loadPendingInvites(); // Refresh the list
         } else {
@@ -179,7 +180,7 @@ async function generateInvite(e) {
 }
 
 function closeInviteModal() {
-    document.getElementById('invite-modal').style.display = 'none';
+    document.getElementById('invite-modal').close(); // Native dialog API
 }
 
 function copyInviteUrl() {

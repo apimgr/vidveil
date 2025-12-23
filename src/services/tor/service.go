@@ -685,6 +685,54 @@ func (s *Service) Restart(ctx context.Context) error {
 	return s.Start(ctx, localPort)
 }
 
+// TestConnectionResult holds the result of a Tor connection test
+type TestConnectionResult struct {
+	Connected    bool   `json:"connected"`
+	OnionAddress string `json:"onion_address,omitempty"`
+	Status       string `json:"status"`
+	Message      string `json:"message"`
+}
+
+// TestConnection tests if the Tor hidden service is working
+func (s *Service) TestConnection() *TestConnectionResult {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := &TestConnectionResult{
+		Status: string(s.status),
+	}
+
+	// Check if Tor is enabled
+	if !s.cfg.Enabled {
+		result.Message = "Tor is disabled in configuration"
+		return result
+	}
+
+	// Check if Tor is running
+	if s.status != StatusConnected {
+		result.Message = fmt.Sprintf("Tor is not connected (status: %s)", s.status)
+		return result
+	}
+
+	// Check if we have an onion address
+	if s.onionAddress == "" {
+		result.Message = "Tor is running but no onion address is available"
+		return result
+	}
+
+	// Check if the onion service listener is active
+	if s.onionSvc == nil {
+		result.Message = "Tor onion service listener is not active"
+		return result
+	}
+
+	// All checks passed
+	result.Connected = true
+	result.OnionAddress = s.onionAddress
+	result.Message = "Tor hidden service is running and accessible"
+	return result
+}
+
 // copyFile copies a file from src to dst
 func copyFile(src, dst string) error {
 	sourceFile, err := os.Open(src)

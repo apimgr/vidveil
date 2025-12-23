@@ -1,16 +1,86 @@
 # Vidveil - Task Tracking
 
-**Last Updated**: December 23, 2025 (Ninth Session)
+**Last Updated**: December 23, 2025 (Tenth Session)
 **Official Site**: https://x.scour.li
 
-## TEMPLATE.md Analysis (December 23, 2025 - Sixth Re-Read)
+## TEMPLATE.md Analysis (December 23, 2025 - Seventh Re-Read)
 
-The TEMPLATE.md has been **completely updated** to 17,314 lines (up from 13,967 lines - ~3,300 new lines). Key changes:
-- PART 16: WEB FRONTEND - More detailed specifications (modals, PWA, accessibility, mobile responsive)
-- PART 17: BRANDING & SEO - Request limits, compression, session, rate limiting, cache config
-- PART 33: CLI CLIENT - NEW section about CLI clients (per-project determination)
+The TEMPLATE.md has been **updated again** to 17,376 lines (up from 17,314 lines - ~62 new lines). Key changes observed:
+- PART 0: Added `.git/COMMIT_MESS` file requirement for AI commit messages
+- PART 0: Enhanced code style rules - comments MUST be placed ABOVE code (never inline)
+- PART 33: CLI CLIENT - More detailed implementation guidance
 
-All 33 PARTs verified. FINAL CHECKPOINT is the compliance checklist.
+All 33 PARTs verified. Vidveil is **FULLY COMPLIANT** (33/33).
+
+### Current Compliance Status: 33/33 PARTs ✅
+
+### Tenth Session Work (December 23, 2025)
+
+TEMPLATE.md re-read (17,376 lines - up 62 lines from 17,314). **SIGNIFICANT CHANGES identified:**
+
+#### New PART 0 Rules (NON-NEGOTIABLE):
+
+**1. COMMIT_MESS File Requirement (lines 546-632)**
+```
+File: {projectdir}/.git/COMMIT_MESS
+Purpose: AI assistants CANNOT run git add/commit/push
+Workflow: Write commit message to this file, user commits with:
+  git commit -F .git/COMMIT_MESS
+```
+
+Format:
+```
+{emoji} Title message (max 64 chars) {emoji}
+
+{detailed description}
+
+- Bullet points
+```
+
+Commit Type Emojis:
+| Emoji | Type | Use For |
+|-------|------|---------|
+| ✨ | feat | New feature |
+| 🐛 | fix | Bug fix |
+| 📝 | docs | Documentation |
+| 🎨 | style | Formatting |
+| ♻️ | refactor | Code refactoring |
+| ⚡ | perf | Performance |
+| ✅ | test | Adding tests |
+| 🔧 | chore | Config, build |
+| 🔒 | security | Security fix |
+
+**2. Code Style - Comment Placement (lines 648-696)**
+- Comments MUST be placed ABOVE the code they describe
+- NEVER inline (same line) or below
+- Applies to Go AND YAML
+
+**3. Attribution Rules (lines 615-622)**
+- NEVER include AI attribution in code, comments, commits, or docs
+- No "authored by Claude", "Co-Authored-By: Claude", etc.
+
+**4. Tool Access (lines 623-632)**
+- PROHIBITED: `git add`, `git commit`, `git push`
+- ALLOWED: `git status`, `git diff`, `git log`, `git branch` (read-only)
+- REQUIRED: Write `.git/COMMIT_MESS` for user to commit
+
+#### Compliance Tasks:
+
+| Task | Status | Notes |
+|------|--------|-------|
+| COMMIT_MESS workflow | ✅ ACKNOWLEDGED | AI workflow change only |
+| Comment placement audit | ✅ FIXED | Moved inline comments above code |
+| Attribution removal | ✅ N/A | No AI attribution in code |
+
+**Files Fixed for Comment Placement:**
+- `src/server/handlers/admin.go` - 11 inline comments fixed
+- `src/server/handlers/handlers.go` - 5 inline comments fixed
+- `src/server/server.go` - 9 inline comments fixed
+- `src/models/result.go` - 4 inline comments fixed
+
+**Build verified successful after all fixes.**
+
+**Vidveil remains fully compliant at 33/33 PARTs.**
 
 ### Ninth Session Work (December 23, 2025)
 

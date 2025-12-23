@@ -34,16 +34,20 @@ type SearchResponse struct {
 }
 
 // SearchData holds the search results and metadata
+// SearchQuery is the query after bang parsing
+// HasBang indicates whether bangs were used
+// BangEngines contains engines from bang parsing
+// Cached indicates whether results came from cache
 type SearchData struct {
 	Query         string   `json:"query"`
-	SearchQuery   string   `json:"search_query,omitempty"`    // Query after bang parsing
+	SearchQuery   string   `json:"search_query,omitempty"`
 	Results       []Result `json:"results"`
 	EnginesUsed   []string `json:"engines_used"`
 	EnginesFailed []string `json:"engines_failed"`
 	SearchTimeMS  int64    `json:"search_time_ms"`
-	HasBang       bool     `json:"has_bang,omitempty"`        // Whether bangs were used
-	BangEngines   []string `json:"bang_engines,omitempty"`    // Engines from bang parsing
-	Cached        bool     `json:"cached,omitempty"`          // Whether results came from cache
+	HasBang       bool     `json:"has_bang,omitempty"`
+	BangEngines   []string `json:"bang_engines,omitempty"`
+	Cached        bool     `json:"cached,omitempty"`
 }
 
 // PaginationData holds pagination information

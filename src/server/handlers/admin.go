@@ -86,7 +86,8 @@ type AdminHandler struct {
 	torSvc       TorService
 	scheduler    *scheduler.Scheduler
 	sessions     map[string]adminSession
-	csrfTokens   map[string]string // sessionID -> csrfToken
+	// csrfTokens maps sessionID to csrfToken
+	csrfTokens   map[string]string
 	startTime    time.Time
 }
 
@@ -194,11 +195,12 @@ func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
 		// Validate the setup token
 		if h.adminSvc.ValidateSetupToken(token) {
 			// Store validated token in cookie for wizard step
+			// 1 hour to complete setup
 			http.SetCookie(w, &http.Cookie{
 				Name:     "vidveil_setup_token",
 				Value:    token,
 				Path:     "/admin",
-				MaxAge:   3600, // 1 hour to complete setup
+				MaxAge:   3600,
 				HttpOnly: true,
 				SameSite: http.SameSiteStrictMode,
 			})
@@ -443,12 +445,13 @@ func (h *AdminHandler) DatabasePage(w http.ResponseWriter, r *http.Request) {
 		dbSSLMode = "disable"
 	}
 
+	// DBSize would require file stat, LastBackup would come from backup service
 	h.renderAdminTemplate(w, r, "database", map[string]interface{}{
 		"DBDriver":     h.cfg.Server.Database.Driver,
 		"DBPath":       dbPath,
-		"DBSize":       "N/A", // Would require file stat
+		"DBSize":       "N/A",
 		"TableCount":   tableCount,
-		"LastBackup":   "", // Would come from backup service
+		"LastBackup":   "",
 		"DBHost":       dbHost,
 		"DBPort":       dbPort,
 		"DBName":       dbName,
@@ -842,14 +845,15 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 }
 
 // TorPage renders Tor hidden service settings (TEMPLATE.md PART 32)
+// TorConnected and OnionEnabled would check actual Tor connection/service
 func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "tor", map[string]interface{}{
 		"TorEnabled":      h.cfg.Search.Tor.Enabled,
-		"TorConnected":    false, // Would check actual Tor connection
+		"TorConnected":    false,
 		"TorProxy":        h.cfg.Search.Tor.Proxy,
 		"TorControlPort":  strconv.Itoa(h.cfg.Search.Tor.ControlPort),
 		"TorCircuit":      "N/A",
-		"OnionEnabled":    false, // Would check actual onion service
+		"OnionEnabled":    false,
 		"OnionAddress":    "",
 		"VanityJobs":      []map[string]interface{}{},
 	})
@@ -1611,6 +1615,7 @@ func (h *AdminHandler) APIDatabaseTest(w http.ResponseWriter, r *http.Request) {
 
 	// Test connection (in production, actually test the connection with sql.Open)
 	// For now, return a simulated success
+	// Version would be actual version from DB
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "Connection successful",
@@ -1618,7 +1623,7 @@ func (h *AdminHandler) APIDatabaseTest(w http.ResponseWriter, r *http.Request) {
 			"driver":  req.Driver,
 			"host":    req.Host,
 			"port":    req.Port,
-			"version": "15.4", // Would be actual version from DB
+			"version": "15.4",
 		},
 	})
 }
@@ -2093,14 +2098,15 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 
 // APITorStatus returns Tor hidden service status
 // GET /api/v1/admin/server/tor
+// Status and onion_address would check actual Tor connection/manager
 func (h *AdminHandler) APITorStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"enabled":       h.cfg.Search.Tor.Enabled,
-			"status":        "disconnected", // Would check actual Tor connection
-			"onion_address": "",             // Would get from Tor manager
+			"status":        "disconnected",
+			"onion_address": "",
 			"uptime":        "",
 			"proxy":         h.cfg.Search.Tor.Proxy,
 			"control_port":  h.cfg.Search.Tor.ControlPort,
@@ -3653,7 +3659,8 @@ func (h *AdminHandler) AddNodePage(w http.ResponseWriter, r *http.Request) {
 	hostname, _ := os.Hostname()
 
 	// Generate join token if not exists
-	joinToken := hex.EncodeToString(make([]byte, 16)) // Placeholder - would be stored in config
+	// Placeholder - would be stored in config in production
+	joinToken := hex.EncodeToString(make([]byte, 16))
 
 	data := map[string]interface{}{
 		"DefaultPort": h.cfg.Server.Port,
@@ -3835,12 +3842,13 @@ func (h *AdminHandler) APINodeRemove(w http.ResponseWriter, r *http.Request) {
 }
 
 // RemoveNodePage renders the remove node confirmation page
+// IsPrimary would check actual status in production
 func (h *AdminHandler) RemoveNodePage(w http.ResponseWriter, r *http.Request) {
 	hostname, _ := os.Hostname()
 
 	h.renderAdminTemplate(w, r, "nodes_remove", map[string]interface{}{
 		"NodeID":         hostname,
-		"IsPrimary":      true, // In production: check actual status
+		"IsPrimary":      true,
 		"ClusterEnabled": false,
 		"TotalNodes":     1,
 		"ActiveNodes":    1,

@@ -211,7 +211,8 @@ func (s *Server) setupRoutes() {
 
 	// Auth routes per TEMPLATE.md PART 31
 	auth := handlers.NewAuthHandler(s.cfg)
-	auth.SetAdminHandler(admin) // Link admin handler for authentication
+	// Link admin handler for authentication
+	auth.SetAdminHandler(admin)
 	s.router.Route("/auth", func(r chi.Router) {
 		r.Get("/login", auth.LoginPage)
 		r.Post("/login", auth.LoginPage)
@@ -273,8 +274,9 @@ func (s *Server) setupRoutes() {
 			r.Get("/dashboard", admin.DashboardPage)
 
 			// Server section - includes setup wizard
+			// Root redirects to settings, pages/notifications/nodes per PART 24
 			r.Route("/server", func(r chi.Router) {
-				r.Get("/", admin.ServerSettingsPage)       // Redirect to settings
+				r.Get("/", admin.ServerSettingsPage)
 				r.Get("/settings", admin.ServerSettingsPage)
 				r.Get("/branding", admin.BrandingPage)
 				r.Get("/ssl", admin.SSLPage)
@@ -283,9 +285,9 @@ func (s *Server) setupRoutes() {
 				r.Get("/logs", admin.LogsPage)
 				r.Get("/database", admin.DatabasePage)
 				r.Get("/web", admin.WebSettingsPage)
-				r.Get("/pages", admin.PagesPage) // Standard pages management
-				r.Get("/notifications", admin.NotificationsPage) // Notification settings
-				r.Get("/nodes", admin.NodesPage) // PART 24 cluster nodes
+				r.Get("/pages", admin.PagesPage)
+				r.Get("/notifications", admin.NotificationsPage)
+				r.Get("/nodes", admin.NodesPage)
 				r.Get("/nodes/add", admin.AddNodePage)
 				r.Post("/nodes/add", admin.AddNodePage)
 				r.Get("/nodes/remove", admin.RemoveNodePage)
@@ -303,26 +305,26 @@ func (s *Server) setupRoutes() {
 			r.Use(admin.AuthMiddleware)
 			r.Use(admin.CSRFMiddleware)
 
-			// Security section
+			// Security section - root redirects to auth
 			r.Route("/security", func(r chi.Router) {
-				r.Get("/", admin.SecurityAuthPage)         // Redirect to auth
+				r.Get("/", admin.SecurityAuthPage)
 				r.Get("/auth", admin.SecurityAuthPage)
 				r.Get("/tokens", admin.SecurityTokensPage)
 				r.Get("/ratelimit", admin.SecurityRateLimitPage)
 				r.Get("/firewall", admin.SecurityFirewallPage)
 			})
 
-			// Network section
+			// Network section - root redirects to tor
 			r.Route("/network", func(r chi.Router) {
-				r.Get("/", admin.TorPage)                  // Redirect to tor
+				r.Get("/", admin.TorPage)
 				r.Get("/tor", admin.TorPage)
 				r.Get("/geoip", admin.GeoIPPage)
 				r.Get("/blocklists", admin.BlocklistsPage)
 			})
 
-			// System section
+			// System section - root redirects to backup
 			r.Route("/system", func(r chi.Router) {
-				r.Get("/", admin.BackupPage)               // Redirect to backup
+				r.Get("/", admin.BackupPage)
 				r.Get("/backup", admin.BackupPage)
 				r.Get("/maintenance", admin.MaintenancePage)
 				r.Get("/updates", admin.UpdatesPage)
@@ -354,9 +356,9 @@ func (s *Server) setupRoutes() {
 
 	// API v1 routes
 	s.router.Route("/api/v1", func(r chi.Router) {
-		// Search endpoints (public)
+		// Search endpoints (public) - includes SSE streaming
 		r.Get("/search", h.APISearch)
-		r.Get("/search/stream", h.APISearchStream) // SSE streaming search
+		r.Get("/search/stream", h.APISearchStream)
 		r.Get("/search.txt", h.APISearchText)
 
 		// Bang endpoints (public)
@@ -436,11 +438,11 @@ func (s *Server) setupRoutes() {
 				r.Get("/health", admin.APIHealth)
 				r.Post("/restart", admin.APIMaintenanceMode)
 
-				// SSL per PART 31
+				// SSL per PART 31 - GET for status, POST /renew for force renewal
 				r.Route("/ssl", func(r chi.Router) {
-					r.Get("/", admin.APIConfig) // SSL status
+					r.Get("/", admin.APIConfig)
 					r.Patch("/", admin.APIConfig)
-					r.Post("/renew", admin.APIConfig) // Force renewal
+					r.Post("/renew", admin.APIConfig)
 				})
 
 				// Tor per PART 32
@@ -504,14 +506,14 @@ func (s *Server) setupRoutes() {
 					r.Post("/test", admin.APINotificationsTest)
 				})
 
-				// Database per PART 31
+				// Database per PART 31 - test/backend for external DB connection
 				r.Route("/database", func(r chi.Router) {
 					r.Get("/migrations", admin.APIDatabaseMigrations)
 					r.Post("/migrate", admin.APIDatabaseMigrate)
 					r.Post("/vacuum", admin.APIDatabaseVacuum)
 					r.Post("/analyze", admin.APIDatabaseAnalyze)
-					r.Post("/test", admin.APIDatabaseTest)       // Test external DB connection
-					r.Put("/backend", admin.APIDatabaseBackend) // Switch database backend
+					r.Post("/test", admin.APIDatabaseTest)
+					r.Put("/backend", admin.APIDatabaseBackend)
 				})
 
 				// Nodes per PART 24

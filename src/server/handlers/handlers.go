@@ -192,15 +192,16 @@ func (h *Handler) AgeVerifySubmit(w http.ResponseWriter, r *http.Request) {
 
 // setAgeVerifyCookie sets/renews the age verification cookie
 func (h *Handler) setAgeVerifyCookie(w http.ResponseWriter) {
+	// 30 days in seconds, Secure should be true if using HTTPS
 	http.SetCookie(w, &http.Cookie{
 		Name:     ageVerifyCookieName,
 		Value:    "1",
 		Path:     "/",
-		MaxAge:   ageVerifyCookieDays * 24 * 60 * 60, // 30 days in seconds
+		MaxAge:   ageVerifyCookieDays * 24 * 60 * 60,
 		Expires:  time.Now().Add(ageVerifyCookieDays * 24 * time.Hour),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   false, // Set to true if using HTTPS
+		Secure:   false,
 	})
 }
 
@@ -248,11 +249,12 @@ func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	// Convert results to JSON for the JavaScript
 	resultsJSON, _ := json.Marshal(results.Data.Results)
 
+	// ResultsJSON is safe JSON for script template use
 	h.renderTemplate(w, "search", map[string]interface{}{
 		"Title":       query + " - " + h.cfg.Server.Title,
 		"Query":       query,
 		"SearchQuery": searchQuery,
-		"ResultsJSON": template.JS(resultsJSON), // Safe JSON for script
+		"ResultsJSON": template.JS(resultsJSON),
 		"EnginesUsed": results.Data.EnginesUsed,
 		"SearchTime":  results.Data.SearchTimeMS,
 		"Theme":       h.cfg.Web.UI.Theme,
@@ -512,7 +514,8 @@ func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add bang info to response
-	results.Data.Query = query // Keep original query with bangs
+	// Keep original query with bangs
+	results.Data.Query = query
 	results.Data.SearchQuery = searchQuery
 	results.Data.HasBang = parsed.HasBang
 	results.Data.BangEngines = parsed.Engines
@@ -589,7 +592,8 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 
 	// Check if query starts with "!" for bang autocomplete
 	if strings.HasPrefix(q, "!") && len(q) > 1 {
-		prefix := q[1:] // Remove the "!"
+		// Remove the "!" prefix
+		prefix := q[1:]
 		suggestions := engines.Autocomplete(prefix)
 		h.jsonResponse(w, map[string]interface{}{
 			"success":     true,
@@ -621,11 +625,12 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(lastWord, "!") && len(lastWord) > 1 {
 			prefix := lastWord[1:]
 			suggestions := engines.Autocomplete(prefix)
+			// replace indicates what to replace in query
 			h.jsonResponse(w, map[string]interface{}{
 				"success":     true,
 				"suggestions": suggestions,
 				"type":        "bang",
-				"replace":     lastWord, // What to replace in query
+				"replace":     lastWord,
 			})
 			return
 		}

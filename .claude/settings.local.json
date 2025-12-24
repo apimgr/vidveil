@@ -72,7 +72,8 @@
       "Bash(go version:*)",
       "Bash(make test:*)",
       "Bash(/usr/local/go/bin/go build:*)",
-      "Bash(git -C /root/Projects/github/apimgr/vidveil status --short)"
+      "Bash(git -C /root/Projects/github/apimgr/vidveil status --short)",
+      "Bash(gh run:*)"
     ],
     "deny": [],
     "ask": []

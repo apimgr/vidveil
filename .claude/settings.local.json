@@ -71,7 +71,8 @@
       "Bash(export PATH=$PATH:/usr/local/go/bin)",
       "Bash(go version:*)",
       "Bash(make test:*)",
-      "Bash(/usr/local/go/bin/go build:*)"
+      "Bash(/usr/local/go/bin/go build:*)",
+      "Bash(git -C /root/Projects/github/apimgr/vidveil status --short)"
     ],
     "deny": [],
     "ask": []

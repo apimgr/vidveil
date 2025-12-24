@@ -88,27 +88,27 @@
     <h2>Vanity Address Generator</h2>
     <p class="text-muted">Generate a custom .onion address with a specific prefix. Runs in background.</p>
 
-    <div id="vanity-status" style="display: none; margin-bottom: 1rem;">
+    <div id="vanity-status" class="d-none mb-md">
         <div class="alert alert-info">
             <strong>Generation in progress:</strong>
             <span id="vanity-prefix-display"></span>
             <br>
             <span id="vanity-attempts"></span> attempts |
             <span id="vanity-elapsed"></span> elapsed
-            <div style="margin-top: 0.5rem;">
+            <div class="mt-sm">
                 <button onclick="cancelVanity()" class="btn btn-sm btn-warning">Cancel</button>
             </div>
         </div>
     </div>
 
-    <div id="vanity-ready" style="display: none; margin-bottom: 1rem;">
+    <div id="vanity-ready" class="d-none mb-md">
         <div class="alert alert-success">
             <strong>Vanity address ready!</strong>
             Prefix: <code id="vanity-ready-prefix"></code>
             <br>
             <span id="vanity-ready-attempts"></span> attempts |
             <span id="vanity-ready-elapsed"></span>
-            <div style="margin-top: 0.5rem;">
+            <div class="mt-sm">
                 <button onclick="applyVanity()" class="btn btn-sm btn-primary">Apply Address</button>
                 <button onclick="cancelVanity()" class="btn btn-sm btn-warning">Discard</button>
             </div>
@@ -121,7 +121,7 @@
             <input type="text" id="vanity-prefix" placeholder="vidv" maxlength="6" pattern="[a-z2-7]+">
             <p class="help-text">Use only lowercase a-z and digits 2-7 (max 6 chars). Longer = slower.</p>
         </div>
-        <table class="info-table" style="margin: 1rem 0;">
+        <table class="info-table my-md">
             <tr><td>1-2 chars</td><td>Instant - few seconds</td></tr>
             <tr><td>3 chars</td><td>Minutes</td></tr>
             <tr><td>4 chars</td><td>~1 hour</td></tr>
@@ -240,8 +240,8 @@ async function checkVanityStatus() {
 
         if (data.data.active) {
             // Generation in progress
-            statusDiv.style.display = 'block';
-            readyDiv.style.display = 'none';
+            statusDiv.classList.remove('d-none');
+            readyDiv.classList.add('d-none');
             startBtn.disabled = true;
             startBtn.textContent = 'Generation in progress...';
 
@@ -250,8 +250,8 @@ async function checkVanityStatus() {
             document.getElementById('vanity-elapsed').textContent = data.data.elapsed_time || '0s';
         } else if (data.data.pending_ready) {
             // Generation complete, ready to apply
-            statusDiv.style.display = 'none';
-            readyDiv.style.display = 'block';
+            statusDiv.classList.add('d-none');
+            readyDiv.classList.remove('d-none');
             startBtn.disabled = true;
             startBtn.textContent = 'Address ready - apply or discard first';
 
@@ -267,8 +267,8 @@ async function checkVanityStatus() {
             }
         } else {
             // No generation
-            statusDiv.style.display = 'none';
-            readyDiv.style.display = 'none';
+            statusDiv.classList.add('d-none');
+            readyDiv.classList.add('d-none');
             startBtn.disabled = false;
             startBtn.textContent = 'Start Generation';
         }

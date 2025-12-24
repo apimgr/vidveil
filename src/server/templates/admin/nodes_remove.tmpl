@@ -11,7 +11,7 @@
     <div class="alert alert-error">
         <strong>Warning: This action is irreversible!</strong>
         <p>Removing this node from the cluster will:</p>
-        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+        <ul class="list-styled-spaced">
             <li>Notify other cluster nodes of this node's departure</li>
             <li>Release any distributed locks held by this node</li>
             <li>Clear cluster-related configuration</li>
@@ -26,7 +26,7 @@
     </table>
 
     {{if .IsPrimary}}
-    <div class="alert alert-warning" style="margin-top: 1rem;">
+    <div class="alert alert-warning mt-md">
         <strong>Primary Node Warning</strong>
         <p>This node is currently the primary. Removing it will trigger a leadership election among remaining nodes.</p>
     </div>
@@ -35,7 +35,7 @@
     <form id="remove-form" onsubmit="removeNode(event)">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 
-        <div class="form-group" style="margin-top: 1rem;">
+        <div class="form-group mt-md">
             <label for="confirm-text">Type "REMOVE" to confirm</label>
             <input type="text" id="confirm-text" name="confirm" placeholder="REMOVE" required>
         </div>

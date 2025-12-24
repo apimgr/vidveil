@@ -31,7 +31,7 @@
     </form>
 </div>
 
-<div class="card" id="pending-invites-card" style="display: none;">
+<div class="card d-none" id="pending-invites-card">
     <h2>Pending Invites</h2>
     <table class="data-table">
         <thead>
@@ -126,7 +126,7 @@ async function loadPendingInvites() {
                 tbody.appendChild(tr);
             });
 
-            card.style.display = 'block';
+            card.classList.remove('d-none');
         }
     } catch (e) {
         console.error('Failed to load pending invites:', e);

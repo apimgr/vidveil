@@ -46,7 +46,7 @@
         </div>
     </form>
 
-    <div id="test-result" style="margin-top: 1rem; display: none;">
+    <div id="test-result" class="mt-md d-none">
         <div class="alert" id="test-alert"></div>
     </div>
 </div>
@@ -56,8 +56,8 @@
     <p class="text-muted">Share this token with other nodes to allow them to join this cluster.</p>
     <div class="form-group">
         <label>Current Join Token</label>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <input type="password" id="join-token" value="{{.JoinToken}}" readonly style="flex: 1;">
+        <div class="flex-row">
+            <input type="password" id="join-token" value="{{.JoinToken}}" readonly class="flex-grow">
             <button type="button" onclick="toggleTokenVisibility()" class="btn btn-secondary">Show</button>
             <button type="button" onclick="copyToken()" class="btn btn-secondary">Copy</button>
         </div>
@@ -69,7 +69,7 @@
 
 <div class="card">
     <h2>Cluster Requirements</h2>
-    <ul style="margin: 0; padding-left: 1.5rem;">
+    <ul class="list-styled">
         <li>All nodes must be running the same version</li>
         <li>Network connectivity between nodes on the specified port</li>
         <li>Time synchronization (NTP recommended)</li>
@@ -115,7 +115,7 @@ async function testConnection() {
 
     const resultDiv = document.getElementById('test-result');
     const alertDiv = document.getElementById('test-alert');
-    resultDiv.style.display = 'block';
+    resultDiv.classList.remove('d-none');
     alertDiv.className = 'alert alert-info';
     alertDiv.textContent = 'Testing connection...';
 

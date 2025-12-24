@@ -30,11 +30,11 @@
             {{end}}
             {{if .Success}}
             <div class="success">{{.Success}}</div>
-            <p style="text-align: center; margin-top: 20px;">
-                <a href="/auth/login" class="btn-primary" style="display: inline-block; text-decoration: none;">Go to Login</a>
+            <p class="text-center mt-lg">
+                <a href="/auth/login" class="btn-primary d-inline-block text-decoration-none">Go to Login</a>
             </p>
             {{else if .Valid}}
-            <p style="text-align: center; margin-bottom: 20px;">Set a password for your admin account.</p>
+            <p class="text-center mb-lg">Set a password for your admin account.</p>
             <form method="POST">
                 <div class="form-group">
                     <label for="username">Username</label>
@@ -53,9 +53,9 @@
                 <button type="submit" class="btn-primary">Create Account</button>
             </form>
             {{else}}
-            <p style="text-align: center;">This invite link is invalid or has expired.</p>
-            <p style="text-align: center; margin-top: 20px;">
-                <a href="/" style="color: #6c5ce7;">Return to Home</a>
+            <p class="text-center">This invite link is invalid or has expired.</p>
+            <p class="text-center mt-lg">
+                <a href="/" class="text-accent">Return to Home</a>
             </p>
             {{end}}
         </div>

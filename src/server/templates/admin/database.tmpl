@@ -26,7 +26,7 @@
             <span class="help-text">SQLite for single instance, PostgreSQL/MySQL for cluster mode</span>
         </div>
 
-        <div id="external-db-settings" style="{{if eq .DBDriver "sqlite3"}}display: none;{{end}}">
+        <div id="external-db-settings" class="{{if eq .DBDriver "sqlite3"}}d-none{{end}}">
             <div class="form-group">
                 <label for="db-host">Host</label>
                 <input type="text" id="db-host" value="{{.DBHost}}" placeholder="localhost">
@@ -113,7 +113,7 @@
     {{end}}
 
     {{if gt .PendingCount 0}}
-    <div class="form-actions" style="margin-top: 1rem;">
+    <div class="form-actions mt-md">
         <button onclick="runMigrations()" class="btn btn-primary">Run Pending Migrations</button>
     </div>
     {{end}}
@@ -157,7 +157,7 @@
 function toggleBackendSettings() {
     const driver = document.getElementById('db-driver').value;
     const settings = document.getElementById('external-db-settings');
-    settings.style.display = (driver === 'sqlite') ? 'none' : 'block';
+    settings.classList.toggle('d-none', driver === 'sqlite');
 
     // Update default port based on driver
     const portInput = document.getElementById('db-port');

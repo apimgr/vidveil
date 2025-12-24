@@ -1977,3 +1977,53 @@ a:focus-visible {
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--border);
 }
+
+/* ===========================================
+   UTILITY CLASSES (TEMPLATE.md PART 16)
+   =========================================== */
+
+/* Text alignment */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+/* Margin utilities */
+.mt-sm { margin-top: 0.5rem; }
+.mt-md { margin-top: 1rem; }
+.mt-lg { margin-top: 1.5rem; }
+.mt-xl { margin-top: 2rem; }
+.mb-sm { margin-bottom: 0.5rem; }
+.mb-md { margin-bottom: 1rem; }
+.mb-lg { margin-bottom: 1.5rem; }
+.mb-xl { margin-bottom: 2rem; }
+.my-md { margin-top: 1rem; margin-bottom: 1rem; }
+.mx-0 { margin-left: 0; margin-right: 0; }
+
+/* Padding utilities */
+.pl-md { padding-left: 1.5rem; }
+
+/* Display utilities */
+.d-none { display: none; }
+.d-block { display: block; }
+.d-inline-block { display: inline-block; }
+.d-flex { display: flex; }
+
+/* Flex utilities */
+.flex-row { display: flex; gap: 0.5rem; align-items: center; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.flex-grow { flex: 1; }
+.gap-sm { gap: 0.5rem; }
+
+/* Typography utilities */
+.text-sm { font-size: 0.85rem; }
+.text-muted { color: var(--text-muted); }
+.text-accent { color: var(--accent); }
+.text-decoration-none { text-decoration: none; }
+
+/* Component utilities */
+.logo-preview { max-height: 64px; }
+.list-styled { margin: 0; padding-left: 1.5rem; }
+.list-styled-spaced { margin: 0.5rem 0; padding-left: 1.5rem; }
+
+/* File input hidden */
+.file-input-hidden { display: none; }

@@ -157,10 +157,9 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
 	s.router.Get("/.well-known/change-password", handlers.ChangePasswordRedirect)
 
-	// OpenAPI/Swagger documentation (TEMPLATE.md PART 11)
+	// OpenAPI/Swagger documentation (TEMPLATE.md PART 19: JSON only, no YAML)
 	s.router.Get("/openapi", handlers.SwaggerUI(s.cfg))
 	s.router.Get("/openapi.json", handlers.OpenAPISpec(s.cfg))
-	s.router.Get("/openapi.yaml", handlers.OpenAPISpecYAML(s.cfg))
 	s.router.Get("/swagger", handlers.SwaggerUI(s.cfg))
 	s.router.Get("/api-docs", handlers.SwaggerUI(s.cfg))
 

@@ -4,9 +4,10 @@
 const CACHE_NAME = 'vidveil-v1';
 const STATIC_ASSETS = [
   '/',
-  '/static/css/style.css',
+  '/static/css/common.css',
   '/static/js/app.js',
-  '/static/manifest.json'
+  '/static/manifest.json',
+  '/static/img/placeholder.svg'
 ];
 
 // Install event - cache static assets

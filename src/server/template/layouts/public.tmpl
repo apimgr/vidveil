@@ -1,0 +1,18 @@
+{{define "public"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    {{template "public/header" .}}
+    {{template "public/nav" .}}
+    <main id="main-content" role="main">
+        {{template "content" .}}
+    </main>
+    {{template "public/footer" .}}
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

@@ -17,12 +17,12 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server"
-	"github.com/apimgr/vidveil/src/services/admin"
-	"github.com/apimgr/vidveil/src/services/database"
-	"github.com/apimgr/vidveil/src/services/engines"
-	"github.com/apimgr/vidveil/src/services/maintenance"
-	"github.com/apimgr/vidveil/src/services/scheduler"
-	"github.com/apimgr/vidveil/src/services/service"
+	"github.com/apimgr/vidveil/src/service/admin"
+	"github.com/apimgr/vidveil/src/service/database"
+	"github.com/apimgr/vidveil/src/service/engines"
+	"github.com/apimgr/vidveil/src/service/maintenance"
+	"github.com/apimgr/vidveil/src/service/scheduler"
+	"github.com/apimgr/vidveil/src/service/service"
 )
 
 var (

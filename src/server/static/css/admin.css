@@ -66,6 +66,43 @@ body {
     margin-left: 0.25rem;
 }
 
+/* Notification Bell - TEMPLATE.md PART 25 */
+.nav-brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.notification-bell {
+    position: relative;
+    color: var(--text-secondary);
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.notification-bell:hover {
+    color: var(--accent);
+    background: var(--bg-primary);
+}
+
+.notification-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--error);
+    color: white;
+    font-size: 0.6rem;
+    font-weight: bold;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
 .nav-links {
     flex: 1;
     overflow-y: auto;

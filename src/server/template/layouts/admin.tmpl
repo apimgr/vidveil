@@ -1,0 +1,19 @@
+{{define "admin"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {{template "admin/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    {{template "admin/sidebar" .}}
+    <main id="main-content" class="admin-main" role="main">
+        <h1>{{.Title}}</h1>
+        {{template "content" .}}
+    </main>
+    <div id="toast-container" class="toast-container"></div>
+    {{template "admin/scripts" .}}
+    {{block "scripts" .}}{{end}}
+</body>
+</html>
+{{end}}

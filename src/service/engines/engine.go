@@ -1,0 +1,425 @@
+// SPDX-License-Identifier: MIT
+package engines
+
+import (
+	"context"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/model"
+	"github.com/apimgr/vidveil/src/service/retry"
+	"github.com/apimgr/vidveil/src/service/tor"
+	"github.com/apimgr/vidveil/src/service/utls"
+)
+
+// Feature represents optional engine capabilities
+type Feature int
+
+const (
+	FeaturePagination Feature = iota
+	FeatureSorting
+	FeatureFiltering
+	FeatureThumbnailPreview
+)
+
+// Engine interface defines what a search engine must implement
+type Engine interface {
+	Name() string
+	DisplayName() string
+	Search(ctx context.Context, query string, page int) ([]model.Result, error)
+	IsAvailable() bool
+	SupportsFeature(feature Feature) bool
+	Tier() int
+}
+
+// ConfigurableEngine interface for engines that support configuration
+type ConfigurableEngine interface {
+	Engine
+	SetEnabled(enabled bool)
+	SetUseTor(useTor bool)
+}
+
+// BaseEngine provides common functionality for all engines
+type BaseEngine struct {
+	name           string
+	displayName    string
+	baseURL        string
+	tier           int
+	enabled        bool
+	timeout        time.Duration
+	useTor         bool
+	useSpoofedTLS  bool
+	httpClient     *http.Client
+	spoofedClient  *http.Client
+	torClient      *tor.Client
+	circuitBreaker *retry.CircuitBreaker
+	retryConfig    *retry.Config
+}
+
+// NewBaseEngine creates a new base engine
+func NewBaseEngine(name, displayName, baseURL string, tier int, cfg *config.Config, torClient *tor.Client) *BaseEngine {
+	timeout := time.Duration(cfg.Search.EngineTimeout) * time.Second
+
+	// Create circuit breaker for this engine
+	cbConfig := retry.DefaultCircuitBreakerConfig(name)
+	// Open after 5 failures
+	cbConfig.FailureThreshold = 5
+	// Close after 2 successes in half-open
+	cbConfig.SuccessThreshold = 2
+	cbConfig.Timeout = 30 * time.Second
+
+	// Create retry config for transient errors
+	retryConfig := &retry.Config{
+		MaxAttempts:  3,
+		InitialDelay: 100 * time.Millisecond,
+		MaxDelay:     2 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       0.1,
+		RetryableErrors: []error{
+			retry.ErrTemporary,
+			retry.ErrTimeout,
+			retry.ErrNetworkError,
+			retry.ErrServerError,
+		},
+	}
+
+	return &BaseEngine{
+		name:           name,
+		displayName:   displayName,
+		baseURL:       baseURL,
+		tier:          tier,
+		enabled:       true,
+		timeout:       timeout,
+		useTor:        false,
+		useSpoofedTLS: cfg.Search.SpoofTLS,
+		httpClient:    createHTTPClient(cfg.Search.EngineTimeout),
+		spoofedClient: utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
+		torClient:     torClient,
+		circuitBreaker: retry.NewCircuitBreaker(cbConfig),
+		retryConfig:    retryConfig,
+	}
+}
+
+// Name returns the engine identifier
+func (e *BaseEngine) Name() string {
+	return e.name
+}
+
+// DisplayName returns the human-readable name
+func (e *BaseEngine) DisplayName() string {
+	return e.displayName
+}
+
+// Tier returns the engine tier (1=major, 2=popular, 3=additional)
+func (e *BaseEngine) Tier() int {
+	return e.tier
+}
+
+// IsAvailable checks if the engine is currently working
+func (e *BaseEngine) IsAvailable() bool {
+	return e.enabled
+}
+
+// SetEnabled sets the enabled state
+func (e *BaseEngine) SetEnabled(enabled bool) {
+	e.enabled = enabled
+}
+
+// SetUseTor sets whether to use Tor for requests
+func (e *BaseEngine) SetUseTor(useTor bool) {
+	e.useTor = useTor
+}
+
+// SetUseSpoofedTLS sets whether to use spoofed TLS fingerprint for Cloudflare bypass
+func (e *BaseEngine) SetUseSpoofedTLS(use bool) {
+	e.useSpoofedTLS = use
+}
+
+// GetClient returns the appropriate HTTP client
+func (e *BaseEngine) GetClient() *http.Client {
+	if e.useTor && e.torClient != nil {
+		return e.torClient.HTTPClient()
+	}
+	if e.useSpoofedTLS && e.spoofedClient != nil {
+		return e.spoofedClient
+	}
+	return e.httpClient
+}
+
+// RequestModifier is a function that can modify a request before it's sent
+type RequestModifier func(*http.Request)
+
+// MakeRequest performs an HTTP request with proper headers
+func (e *BaseEngine) MakeRequest(ctx context.Context, reqURL string) (*http.Response, error) {
+	return e.MakeRequestWithMod(ctx, reqURL, nil)
+}
+
+// MakeRequestWithMod performs an HTTP request with optional modifier
+// Uses circuit breaker and retry logic for resilience
+func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod RequestModifier) (*http.Response, error) {
+	// Check circuit breaker first
+	if !e.circuitBreaker.AllowRequest() {
+		return nil, retry.ErrCircuitOpen
+	}
+
+	var resp *http.Response
+	var lastErr error
+
+	// Execute with retry logic
+	err := retry.Do(ctx, e.retryConfig, func() error {
+		req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+		if err != nil {
+			return err
+		}
+
+		// Set Firefox-like headers for consistency with StandardUserAgent
+		req.Header.Set("User-Agent", StandardUserAgent)
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+		req.Header.Set("DNT", "1")
+		req.Header.Set("Sec-GPC", "1")
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Upgrade-Insecure-Requests", "1")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		req.Header.Set("Sec-Fetch-Site", "none")
+		req.Header.Set("Sec-Fetch-User", "?1")
+
+		// Apply custom modifier if provided
+		if mod != nil {
+			mod(req)
+		}
+
+		client := e.GetClient()
+		resp, lastErr = client.Do(req)
+		if lastErr != nil {
+			// Classify error for retry logic
+			return classifyHTTPError(lastErr)
+		}
+
+		// Check for server errors that should trigger retry
+		if resp.StatusCode >= 500 {
+			// Close the body to allow retry
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			return retry.ErrServerError
+		}
+
+		// Check for rate limiting
+		if resp.StatusCode == 429 {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			return retry.ErrRateLimit
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		e.circuitBreaker.RecordFailure()
+		if lastErr != nil {
+			return nil, lastErr
+		}
+		return nil, err
+	}
+
+	e.circuitBreaker.RecordSuccess()
+	return resp, nil
+}
+
+// classifyHTTPError converts an HTTP error to a retryable error type
+func classifyHTTPError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	errStr := err.Error()
+
+	// Check for timeout errors
+	if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
+		return fmt.Errorf("%w: %v", retry.ErrTimeout, err)
+	}
+
+	// Check for network errors
+	if strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "network is unreachable") ||
+		strings.Contains(errStr, "connection reset") {
+		return fmt.Errorf("%w: %v", retry.ErrNetworkError, err)
+	}
+
+	// Check for temporary errors
+	if retry.IsTemporaryError(err) {
+		return fmt.Errorf("%w: %v", retry.ErrTemporary, err)
+	}
+
+	return err
+}
+
+// CircuitBreakerState returns the current circuit breaker state for this engine
+func (e *BaseEngine) CircuitBreakerState() retry.State {
+	return e.circuitBreaker.State()
+}
+
+// ResetCircuitBreaker resets the circuit breaker to closed state
+func (e *BaseEngine) ResetCircuitBreaker() {
+	e.circuitBreaker.Reset()
+}
+
+// IsCircuitOpen returns true if the circuit breaker is open
+func (e *BaseEngine) IsCircuitOpen() bool {
+	return e.circuitBreaker.State() == retry.StateOpen
+}
+
+// AddCookies is a helper to add cookies to a request
+func AddCookies(cookies map[string]string) RequestModifier {
+	return func(req *http.Request) {
+		for name, value := range cookies {
+			req.AddCookie(&http.Cookie{Name: name, Value: value})
+		}
+	}
+}
+
+// BuildSearchURL builds the search URL with query and page
+func (e *BaseEngine) BuildSearchURL(path string, query string, page int) string {
+	return fmt.Sprintf("%s%s", e.baseURL, strings.ReplaceAll(strings.ReplaceAll(path, "{query}", url.QueryEscape(query)), "{page}", strconv.Itoa(page)))
+}
+
+// GenerateResultID generates a unique ID for a result
+func GenerateResultID(url, source string) string {
+	hash := sha256.Sum256([]byte(url + source))
+	return hex.EncodeToString(hash[:8])
+}
+
+// ParseDuration parses various duration formats to seconds
+func ParseDuration(duration string) int {
+	duration = strings.TrimSpace(duration)
+	if duration == "" {
+		return 0
+	}
+
+	// Handle formats like "12:34" or "1:23:45"
+	parts := strings.Split(duration, ":")
+	switch len(parts) {
+	case 2: // mm:ss
+		m, _ := strconv.Atoi(parts[0])
+		s, _ := strconv.Atoi(parts[1])
+		return m*60 + s
+	case 3: // hh:mm:ss
+		h, _ := strconv.Atoi(parts[0])
+		m, _ := strconv.Atoi(parts[1])
+		s, _ := strconv.Atoi(parts[2])
+		return h*3600 + m*60 + s
+	}
+
+	// Try to parse "12 min" or "12min" format
+	re := regexp.MustCompile(`(\d+)\s*min`)
+	if matches := re.FindStringSubmatch(duration); len(matches) > 1 {
+		m, _ := strconv.Atoi(matches[1])
+		return m * 60
+	}
+
+	return 0
+}
+
+// ParseViews parses view counts like "1.2M" or "500K" to integers
+func ParseViews(views string) int64 {
+	views = strings.TrimSpace(strings.ToUpper(views))
+	if views == "" {
+		return 0
+	}
+
+	// Remove "views" suffix
+	views = strings.TrimSuffix(views, " VIEWS")
+	views = strings.TrimSuffix(views, "VIEWS")
+
+	multiplier := int64(1)
+	if strings.HasSuffix(views, "K") {
+		multiplier = 1000
+		views = strings.TrimSuffix(views, "K")
+	} else if strings.HasSuffix(views, "M") {
+		multiplier = 1000000
+		views = strings.TrimSuffix(views, "M")
+	} else if strings.HasSuffix(views, "B") {
+		multiplier = 1000000000
+		views = strings.TrimSuffix(views, "B")
+	}
+
+	// Parse the number
+	views = strings.ReplaceAll(views, ",", "")
+	views = strings.ReplaceAll(views, " ", "")
+
+	if f, err := strconv.ParseFloat(views, 64); err == nil {
+		return int64(f * float64(multiplier))
+	}
+
+	return 0
+}
+
+// createHTTPClient creates an HTTP client with timeout and browser-like TLS
+func createHTTPClient(timeoutSecs int) *http.Client {
+	// Create a cookie jar to persist cookies across requests
+	jar, _ := cookiejar.New(nil)
+
+	// Use a transport with browser-like TLS settings
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			MaxVersion: tls.VersionTLS13,
+			// Use cipher suites that match Chrome
+			CipherSuites: []uint16{
+				tls.TLS_AES_128_GCM_SHA256,
+				tls.TLS_AES_256_GCM_SHA384,
+				tls.TLS_CHACHA20_POLY1305_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+			},
+		},
+		MaxIdleConns:        100,
+		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  false,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
+	return &http.Client{
+		Timeout:   time.Duration(timeoutSecs) * time.Second,
+		Transport: transport,
+		Jar:       jar,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("too many redirects")
+			}
+			// Preserve headers on redirect
+			for key, val := range via[0].Header {
+				if _, ok := req.Header[key]; !ok {
+					req.Header[key] = val
+				}
+			}
+			return nil
+		},
+	}
+}
+
+// StandardUserAgent is the single user agent used for all requests
+// Windows 11 Firefox x86_64 - consistent fingerprint for reliability
+const StandardUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
+
+// getRandomUserAgent returns the standard user agent string
+func getRandomUserAgent() string {
+	return StandardUserAgent
+}

@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: MIT
+package engines
+
+import (
+	"context"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/model"
+	"github.com/apimgr/vidveil/src/service/tor"
+)
+
+// NubilesPornEngine searches NubilesPorn
+type NubilesPornEngine struct{ *BaseEngine }
+
+// NewNubilesPornEngine creates a new NubilesPorn engine
+func NewNubilesPornEngine(cfg *config.Config, torClient *tor.Client) *NubilesPornEngine {
+	return &NubilesPornEngine{NewBaseEngine("nubilesporn", "NubilesPorn", "https://nubiles-porn.com", 4, cfg, torClient)}
+}
+
+// Search performs a search on NubilesPorn
+func (e *NubilesPornEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+	searchURL := e.BuildSearchURL("/search/{query}/?page={page}", query, page)
+	return genericSearch(ctx, e.BaseEngine, searchURL, "div.scene, article.video, div.video-item")
+}
+
+// SupportsFeature returns whether the engine supports a feature
+func (e *NubilesPornEngine) SupportsFeature(feature Feature) bool {
+	return feature == FeaturePagination
+}

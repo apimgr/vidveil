@@ -447,12 +447,19 @@ type SQLiteConfig struct {
 // WebConfig holds frontend settings per TEMPLATE.md
 type WebConfig struct {
 	UI            UIConfig            `yaml:"ui"`
+	Branding      BrandingConfig      `yaml:"branding"`
 	Announcements AnnouncementsConfig `yaml:"announcements"`
 	Robots        RobotsConfig        `yaml:"robots"`
 	Security      WebSecurityConfig   `yaml:"security"`
 	CORS          string              `yaml:"cors"`
 	CSRF          CSRFConfig          `yaml:"csrf"`
 	Footer        FooterConfig        `yaml:"footer"`
+}
+
+// BrandingConfig holds branding settings
+type BrandingConfig struct {
+	AppName string `yaml:"app_name"`
+	Tagline string `yaml:"tagline"`
 }
 
 // UIConfig holds UI settings
@@ -934,28 +941,25 @@ func Save(cfg *Config, path string) error {
 // Helper functions
 
 // ParseBool parses a boolean value from various string representations
-// per TEMPLATE.md PART 6 NON-NEGOTIABLE
-// Truthy: 1, yes, true, enable, enabled, on
-// Falsy: 0, no, false, disable, disabled, off, "" (empty)
+// Uses the full truthy/falsy value set from bool.go per TEMPLATE.md PART 4
+// Returns false for empty or invalid values (backwards compatible)
 func ParseBool(value string) bool {
-	v := strings.ToLower(strings.TrimSpace(value))
-	switch v {
-	case "1", "yes", "true", "enable", "enabled", "on":
-		return true
-	case "0", "no", "false", "disable", "disabled", "off", "":
-		return false
-	default:
-		return false
-	}
+	val, _ := ParseBoolWithDefault(value, false)
+	return val
 }
 
 // ParseBoolEnv parses a boolean value from an environment variable
+// Uses the full truthy/falsy value set from bool.go per TEMPLATE.md PART 4
 func ParseBoolEnv(key string, defaultVal bool) bool {
 	val := os.Getenv(key)
 	if val == "" {
 		return defaultVal
 	}
-	return ParseBool(val)
+	result, err := ParseBoolWithDefault(val, defaultVal)
+	if err != nil {
+		return defaultVal
+	}
+	return result
 }
 
 func getHostname() string {

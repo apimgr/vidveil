@@ -13,14 +13,14 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/apimgr/vidveil/src/config"
-	"github.com/apimgr/vidveil/src/server/handlers"
-	"github.com/apimgr/vidveil/src/services/admin"
-	"github.com/apimgr/vidveil/src/services/engines"
-	"github.com/apimgr/vidveil/src/services/ratelimit"
-	"github.com/apimgr/vidveil/src/services/scheduler"
+	"github.com/apimgr/vidveil/src/server/handler"
+	"github.com/apimgr/vidveil/src/service/admin"
+	"github.com/apimgr/vidveil/src/service/engines"
+	"github.com/apimgr/vidveil/src/service/ratelimit"
+	"github.com/apimgr/vidveil/src/service/scheduler"
 )
 
-//go:embed static/css/* static/js/* static/img/* templates/*.tmpl templates/partials/public/*.tmpl templates/partials/admin/*.tmpl templates/layouts/*.tmpl templates/admin/*.tmpl
+//go:embed static/css/* static/js/* static/img/* template/*.tmpl template/partials/public/*.tmpl template/partials/admin/*.tmpl template/layouts/*.tmpl template/admin/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -50,8 +50,8 @@ type MigrationManager interface {
 // New creates a new server instance
 func New(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager, sched *scheduler.Scheduler) *Server {
 	// Set templates filesystem for handlers
-	handlers.SetTemplatesFS(embeddedFS)
-	handlers.SetAdminTemplatesFS(embeddedFS)
+	handler.SetTemplatesFS(embeddedFS)
+	handler.SetAdminTemplatesFS(embeddedFS)
 
 	// Create rate limiter per PART 16
 	limiter := ratelimit.New(
@@ -138,11 +138,11 @@ func (s *Server) setupMiddleware() {
 
 // setupRoutes configures all routes
 func (s *Server) setupRoutes() {
-	h := handlers.New(s.cfg, s.engineMgr)
-	admin := handlers.NewAdminHandler(s.cfg, s.engineMgr, s.adminSvc, s.migrationMgr)
+	h := handler.New(s.cfg, s.engineMgr)
+	admin := handler.NewAdminHandler(s.cfg, s.engineMgr, s.adminSvc, s.migrationMgr)
 	// Set scheduler for admin panel management per TEMPLATE.md PART 26
 	admin.SetScheduler(s.scheduler)
-	metrics := handlers.NewMetrics(s.cfg, s.engineMgr)
+	metrics := handler.NewMetrics(s.cfg, s.engineMgr)
 
 	// Maintenance mode middleware (applied globally, but allows admin access)
 	s.router.Use(h.MaintenanceModeMiddleware)
@@ -160,16 +160,17 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/robots.txt", h.RobotsTxt)
 	s.router.Get("/sitemap.xml", h.SitemapXML)
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
-	s.router.Get("/.well-known/change-password", handlers.ChangePasswordRedirect)
+	s.router.Get("/.well-known/change-password", handler.ChangePasswordRedirect)
+	s.router.Get("/humans.txt", h.HumansTxt)
 
 	// OpenAPI/Swagger documentation (TEMPLATE.md PART 19: JSON only, no YAML)
-	s.router.Get("/openapi", handlers.SwaggerUI(s.cfg))
-	s.router.Get("/openapi.json", handlers.OpenAPISpec(s.cfg))
-	s.router.Get("/swagger", handlers.SwaggerUI(s.cfg))
-	s.router.Get("/api-docs", handlers.SwaggerUI(s.cfg))
+	s.router.Get("/openapi", handler.SwaggerUI(s.cfg))
+	s.router.Get("/openapi.json", handler.OpenAPISpec(s.cfg))
+	s.router.Get("/swagger", handler.SwaggerUI(s.cfg))
+	s.router.Get("/api-docs", handler.SwaggerUI(s.cfg))
 
 	// GraphQL endpoint
-	gql := handlers.NewGraphQLHandler(s.cfg, s.engineMgr)
+	gql := handler.NewGraphQLHandler(s.cfg, s.engineMgr)
 	s.router.HandleFunc("/graphql", gql.Handle)
 	s.router.Get("/graphiql", gql.GraphiQL)
 	s.router.Get("/graphql/schema", gql.GraphQLSchema)
@@ -182,13 +183,13 @@ func (s *Server) setupRoutes() {
 	// Debug endpoints (development mode only per TEMPLATE.md spec)
 	if s.cfg.IsDevelopmentMode() {
 		s.router.Route("/debug", func(r chi.Router) {
-			r.Get("/vars", handlers.DebugVars)
-			r.Get("/pprof/", handlers.DebugPprof)
-			r.Get("/pprof/cmdline", handlers.DebugPprofCmdline)
-			r.Get("/pprof/profile", handlers.DebugPprofProfile)
-			r.Get("/pprof/symbol", handlers.DebugPprofSymbol)
-			r.Get("/pprof/trace", handlers.DebugPprofTrace)
-			r.Get("/pprof/{name}", handlers.DebugPprofHandler)
+			r.Get("/vars", handler.DebugVars)
+			r.Get("/pprof/", handler.DebugPprof)
+			r.Get("/pprof/cmdline", handler.DebugPprofCmdline)
+			r.Get("/pprof/profile", handler.DebugPprofProfile)
+			r.Get("/pprof/symbol", handler.DebugPprofSymbol)
+			r.Get("/pprof/trace", handler.DebugPprofTrace)
+			r.Get("/pprof/{name}", handler.DebugPprofHandler)
 		})
 	}
 
@@ -204,7 +205,7 @@ func (s *Server) setupRoutes() {
 	})
 
 	// Server routes per TEMPLATE.md PART 31
-	server := handlers.NewServerHandler(s.cfg)
+	server := handler.NewServerHandler(s.cfg)
 	s.router.Route("/server", func(r chi.Router) {
 		r.Get("/about", server.AboutPage)
 		r.Get("/privacy", server.PrivacyPage)
@@ -214,7 +215,7 @@ func (s *Server) setupRoutes() {
 	})
 
 	// Auth routes per TEMPLATE.md PART 31
-	auth := handlers.NewAuthHandler(s.cfg)
+	auth := handler.NewAuthHandler(s.cfg)
 	// Link admin handler for authentication
 	auth.SetAdminHandler(admin)
 	s.router.Route("/auth", func(r chi.Router) {
@@ -231,7 +232,7 @@ func (s *Server) setupRoutes() {
 	})
 
 	// User routes per TEMPLATE.md PART 31
-	user := handlers.NewUserHandler(s.cfg)
+	user := handler.NewUserHandler(s.cfg)
 	s.router.Route("/user", func(r chi.Router) {
 		r.Get("/profile", user.ProfilePage)
 		r.Get("/settings", user.SettingsPage)
@@ -563,6 +564,9 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/api/search", h.APISearch)
 	s.router.Get("/api/engines", h.APIEngines)
 	s.router.Get("/api/health", h.APIHealthCheck)
+
+	// Custom 404 handler per TEMPLATE.md PART 30
+	s.router.NotFound(h.NotFoundHandler)
 }
 
 // ListenAndServe starts the HTTP server

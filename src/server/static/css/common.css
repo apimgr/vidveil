@@ -2027,3 +2027,97 @@ a:focus-visible {
 
 /* File input hidden */
 .file-input-hidden { display: none; }
+
+/* ===========================================
+   PRINT STYLES (TEMPLATE.md PART 16)
+   =========================================== */
+@media print {
+    /* Reset for print */
+    * {
+        background: white !important;
+        color: black !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    /* Hide non-essential elements */
+    .site-header,
+    .site-nav,
+    .site-footer,
+    .nav-panel,
+    .nav-overlay,
+    .nav-toggle,
+    .skip-link,
+    .toast,
+    .modal,
+    .status-bar,
+    .offline-banner,
+    .search-history,
+    .autocomplete-dropdown,
+    .age-gate,
+    .form-actions,
+    .pagination {
+        display: none !important;
+    }
+
+    /* Optimize content for print */
+    body {
+        font-size: 12pt;
+        line-height: 1.5;
+    }
+
+    main {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Show URLs after links */
+    a[href]::after {
+        content: " (" attr(href) ")";
+        font-size: 0.8em;
+        color: #666;
+    }
+
+    a[href^="#"]::after,
+    a[href^="javascript:"]::after {
+        content: none;
+    }
+
+    /* Prevent page breaks inside elements */
+    h1, h2, h3, h4, h5, h6 {
+        page-break-after: avoid;
+        page-break-inside: avoid;
+    }
+
+    img, video, .video-card {
+        page-break-inside: avoid;
+    }
+
+    /* Video cards in print mode */
+    .video-grid {
+        display: block;
+    }
+
+    .video-card {
+        border: 1px solid #ccc;
+        margin-bottom: 1rem;
+        page-break-inside: avoid;
+    }
+
+    .video-card img {
+        max-width: 200px;
+    }
+
+    .video-card .duration,
+    .video-card .quality-badge {
+        color: #666;
+        background: #f0f0f0;
+    }
+
+    /* Preferences/About pages */
+    .preferences section,
+    .about section {
+        border: 1px solid #ccc;
+    }
+}

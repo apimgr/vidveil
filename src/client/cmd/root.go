@@ -15,7 +15,7 @@ import (
 var (
 	ProjectName = "vidveil"
 	Version     = "dev"
-	Commit      = "unknown"
+	CommitID    = "unknown"
 	BuildDate   = "unknown"
 	BinaryName  = "vidveil-cli"
 )
@@ -248,5 +248,5 @@ Use "%s [command] --help" for more information about a command.
 }
 
 func printVersion() {
-	fmt.Printf("%s v%s (%s) built %s\n", BinaryName, Version, Commit, BuildDate)
+	fmt.Printf("%s v%s (%s) built %s\n", BinaryName, Version, CommitID, BuildDate)
 }

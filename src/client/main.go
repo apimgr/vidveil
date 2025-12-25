@@ -14,7 +14,7 @@ import (
 var (
 	ProjectName = "vidveil"
 	Version     = "dev"
-	Commit      = "unknown"
+	CommitID    = "unknown"
 	BuildDate   = "unknown"
 )
 
@@ -22,7 +22,7 @@ func main() {
 	// Set build info for commands
 	cmd.ProjectName = ProjectName
 	cmd.Version = Version
-	cmd.Commit = Commit
+	cmd.CommitID = CommitID
 	cmd.BuildDate = BuildDate
 	cmd.BinaryName = filepath.Base(os.Args[0])
 

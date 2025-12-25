@@ -27,8 +27,8 @@ import (
 
 var (
 	Version   = "0.2.0"
-	BuildTime = "unknown"
-	GitCommit = "unknown"
+	BuildDate = "unknown"
+	CommitID  = "unknown"
 )
 
 func main() {
@@ -524,8 +524,8 @@ Source: https://github.com/apimgr/vidveil
 
 func printVersion() {
 	fmt.Printf("Vidveil v%s\n", Version)
-	fmt.Printf("Build: %s\n", BuildTime)
-	fmt.Printf("Commit: %s\n", GitCommit)
+	fmt.Printf("Build: %s\n", BuildDate)
+	fmt.Printf("Commit: %s\n", CommitID)
 }
 
 func checkStatus() int {

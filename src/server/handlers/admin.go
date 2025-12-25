@@ -559,7 +559,7 @@ func (h *AdminHandler) SystemInfoPage(w http.ResponseWriter, r *http.Request) {
 		"Version":         "0.2.0",
 		"GoVersion":       runtime.Version(),
 		"BuildDate":       BuildDateTime,
-		"GitCommit":       "unknown",
+		"CommitID":        "unknown",
 		"Uptime":          time.Since(h.startTime).Round(time.Second).String(),
 		"StartTime":       h.startTime.Format("2006-01-02 15:04:05"),
 		"MemoryHeap":      strconv.FormatUint(m.Alloc/1024/1024, 10) + " MB",

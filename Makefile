@@ -23,7 +23,7 @@ LDFLAGS := -s -w \
 CLI_LDFLAGS := -s -w \
 	-X 'main.ProjectName=$(PROJECT)' \
 	-X 'main.Version=$(VERSION)' \
-	-X 'main.Commit=$(COMMIT_ID)' \
+	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)'
 
 # Directories

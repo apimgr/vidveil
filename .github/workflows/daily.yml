@@ -37,7 +37,7 @@ jobs:
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
 
-      - name: Build
+      - name: Build server
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -46,11 +46,28 @@ jobs:
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECT }}-${{ matrix.goos }}-${{ matrix.goarch }} ./src
 
-      - name: Upload artifact
+      - name: Build CLI client
+        if: hashFiles('src/client/') != ''
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          CLI_LDFLAGS="-s -w -X 'main.ProjectName=${{ env.PROJECT }}' -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          go build -ldflags "${CLI_LDFLAGS}" -o ${{ env.PROJECT }}-cli-${{ matrix.goos }}-${{ matrix.goarch }} ./src/client
+
+      - name: Upload server artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PROJECT }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ env.PROJECT }}-${{ matrix.goos }}-${{ matrix.goarch }}
+
+      - name: Upload CLI artifact
+        if: hashFiles('src/client/') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECT }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
 
   release:
     needs: build

@@ -1004,7 +1004,8 @@ func getDefaultConfigDir(isRoot bool) string {
 			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName)
 		}
 		return filepath.Join(os.Getenv("APPDATA"), ProjectOrg, ProjectName)
-	default: // BSD
+	// BSD and other Unix-like systems
+	default:
 		if isRoot {
 			return fmt.Sprintf("/usr/local/etc/%s/%s", ProjectOrg, ProjectName)
 		}
@@ -1032,7 +1033,8 @@ func getDefaultDataDir(isRoot bool) string {
 			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName, "data")
 		}
 		return filepath.Join(os.Getenv("LocalAppData"), ProjectOrg, ProjectName)
-	default: // BSD
+	// BSD and other Unix-like systems
+	default:
 		if isRoot {
 			return fmt.Sprintf("/var/db/%s/%s", ProjectOrg, ProjectName)
 		}
@@ -1060,7 +1062,8 @@ func getDefaultLogDir(isRoot bool) string {
 			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName, "logs")
 		}
 		return filepath.Join(os.Getenv("LocalAppData"), ProjectOrg, ProjectName, "logs")
-	default: // BSD
+	// BSD and other Unix-like systems
+	default:
 		if isRoot {
 			return fmt.Sprintf("/var/log/%s/%s", ProjectOrg, ProjectName)
 		}
@@ -1088,7 +1091,8 @@ func getDefaultBackupDir(isRoot bool) string {
 			return filepath.Join(os.Getenv("ProgramData"), "Backups", ProjectOrg, ProjectName)
 		}
 		return filepath.Join(os.Getenv("LocalAppData"), "Backups", ProjectOrg, ProjectName)
-	default: // BSD
+	// BSD and other Unix-like systems
+	default:
 		if isRoot {
 			return fmt.Sprintf("/var/backups/%s/%s", ProjectOrg, ProjectName)
 		}

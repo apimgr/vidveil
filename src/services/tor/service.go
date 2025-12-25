@@ -54,8 +54,10 @@ type Service struct {
 
 // Config holds Tor service configuration per TEMPLATE.md PART 32
 type Config struct {
-	Enabled bool   `yaml:"enabled"` // Default: true (enabled by default per PART 32)
-	DataDir string `yaml:"-"`       // Set from paths.GetDataDir() + "/tor"
+	// Default: true (enabled by default per PART 32)
+	Enabled bool `yaml:"enabled"`
+	// Set from paths.GetDataDir() + "/tor"
+	DataDir string `yaml:"-"`
 }
 
 // Status represents Tor service status
@@ -67,7 +69,8 @@ const (
 	StatusConnected    Status = "connected"
 	StatusDisconnected Status = "disconnected"
 	StatusError        Status = "error"
-	StatusNoTorBinary  Status = "no_tor_binary" // Tor binary not found
+	// Tor binary not found
+	StatusNoTorBinary Status = "no_tor_binary"
 )
 
 // VanityStatus tracks vanity address generation progress

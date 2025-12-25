@@ -1,0 +1,66 @@
+site_name: Vidveil Documentation
+site_description: Privacy-respecting adult video meta search engine
+site_url: https://vidveil.apimgr.us
+repo_url: https://github.com/apimgr/vidveil
+repo_name: apimgr/vidveil
+
+theme:
+  name: material
+  palette:
+    # Dracula theme per TEMPLATE.md
+    scheme: slate
+    primary: deep purple
+    accent: purple
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Configuration: getting-started/configuration.md
+    - Docker: getting-started/docker.md
+  - User Guide:
+    - Search: user-guide/search.md
+    - Bang Commands: user-guide/bangs.md
+    - Preferences: user-guide/preferences.md
+  - Admin Guide:
+    - Dashboard: admin-guide/dashboard.md
+    - Server Settings: admin-guide/server.md
+    - Security: admin-guide/security.md
+    - Backup & Restore: admin-guide/backup.md
+  - API Reference:
+    - REST API: api/rest.md
+    - GraphQL: api/graphql.md
+    - Authentication: api/authentication.md
+  - Development:
+    - Building: development/building.md
+    - Contributing: development/contributing.md
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/apimgr/vidveil

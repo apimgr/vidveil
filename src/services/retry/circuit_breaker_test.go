@@ -175,7 +175,8 @@ func TestCircuitBreakerReset(t *testing.T) {
 		Name:             "test",
 		FailureThreshold: 1,
 		SuccessThreshold: 1,
-		Timeout:          1 * time.Hour, // Long timeout
+		// Long timeout for testing
+		Timeout: 1 * time.Hour,
 	}
 
 	cb := NewCircuitBreaker(cfg)

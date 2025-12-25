@@ -1,0 +1,26 @@
+Subject: Enable Two-Factor Authentication - {app_name}
+---
+Hello,
+
+Your account on {app_name} does not have two-factor authentication (2FA) enabled.
+
+Enabling 2FA adds an extra layer of security to your account by requiring a verification code in addition to your password when signing in.
+
+To enable 2FA:
+1. Log in to your account
+2. Go to Security Settings
+3. Click "Enable Two-Factor Authentication"
+4. Follow the setup instructions
+
+Benefits of 2FA:
+- Protects against password theft
+- Prevents unauthorized access
+- Meets security best practices
+
+Enable 2FA now: {settings_url}
+
+--
+{app_name}
+{app_url}
+
+This is an automated reminder. You received this because your account does not have 2FA enabled.

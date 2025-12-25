@@ -1,0 +1,24 @@
+Subject: Two-Factor Authentication Enabled - {app_name}
+---
+Hello,
+
+Two-factor authentication (2FA) has been successfully enabled on your {app_name} account.
+
+Time: {timestamp}
+IP Address: {ip_address}
+Location: {location}
+
+Your account is now protected with an additional layer of security. You will need to enter a verification code from your authenticator app each time you sign in.
+
+IMPORTANT: Save your recovery keys in a secure location. If you lose access to your authenticator app, you will need these keys to regain access to your account.
+
+If you did not enable 2FA, your account may be compromised. Please:
+1. Change your password immediately
+2. Review your active sessions
+3. Contact support
+
+--
+{app_name}
+{app_url}
+
+This is a security notification for your account: {user_email}

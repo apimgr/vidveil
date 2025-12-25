@@ -32,8 +32,9 @@ func (p *RedTubeParser) Parse(s *goquery.Selection) *VideoItem {
 	if item.Title == "" {
 		item.Title = CleanText(titleElem.Text())
 	}
+	// No title = skip this item
 	if item.Title == "" {
-		return nil // No title = skip this item
+		return nil
 	}
 
 	// URL from title link or thumbnail link

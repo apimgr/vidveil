@@ -188,8 +188,9 @@ func (sm *ServiceManager) installLinux() error {
 func (sm *ServiceManager) createLinuxUser() error {
 	// Check if user exists
 	_, err := exec.Command("id", sm.user).CombinedOutput()
+	// User already exists
 	if err == nil {
-		return nil // User already exists
+		return nil
 	}
 
 	// Find available UID in 100-999 range per TEMPLATE.md PART 4
@@ -198,14 +199,20 @@ func (sm *ServiceManager) createLinuxUser() error {
 	// Create group
 	exec.Command("groupadd", "-g", strconv.Itoa(uid), sm.group).Run()
 
-	// Create system user
+	// Create system user with:
+	// -r: System account
+	// -u: UID
+	// -g: Primary group
+	// -d: Home directory
+	// -s: No login shell
+	// -c: Comment/description
 	cmd := exec.Command("useradd",
-		"-r",                     // System account
-		"-u", strconv.Itoa(uid), // UID
-		"-g", sm.group,          // Primary group
-		"-d", sm.dataDir,        // Home directory
-		"-s", "/sbin/nologin",   // No login shell
-		"-c", sm.description,    // Comment
+		"-r",
+		"-u", strconv.Itoa(uid),
+		"-g", sm.group,
+		"-d", sm.dataDir,
+		"-s", "/sbin/nologin",
+		"-c", sm.description,
 		sm.user,
 	)
 	if err := cmd.Run(); err != nil {
@@ -365,8 +372,9 @@ func (sm *ServiceManager) installDarwin() error {
 func (sm *ServiceManager) createDarwinUser() error {
 	// Check if user exists
 	_, err := exec.Command("dscl", ".", "-read", fmt.Sprintf("/Users/%s", sm.user)).CombinedOutput()
+	// User already exists
 	if err == nil {
-		return nil // User already exists
+		return nil
 	}
 
 	// Find available UID

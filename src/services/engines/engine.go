@@ -73,8 +73,10 @@ func NewBaseEngine(name, displayName, baseURL string, tier int, cfg *config.Conf
 
 	// Create circuit breaker for this engine
 	cbConfig := retry.DefaultCircuitBreakerConfig(name)
-	cbConfig.FailureThreshold = 5  // Open after 5 failures
-	cbConfig.SuccessThreshold = 2  // Close after 2 successes in half-open
+	// Open after 5 failures
+	cbConfig.FailureThreshold = 5
+	// Close after 2 successes in half-open
+	cbConfig.SuccessThreshold = 2
 	cbConfig.Timeout = 30 * time.Second
 
 	// Create retry config for transient errors

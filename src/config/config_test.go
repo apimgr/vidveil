@@ -128,18 +128,20 @@ func TestIsValidHost(t *testing.T) {
 		devMode  bool
 		expected bool
 	}{
-		// Production mode
+		// Production mode - valid domains
 		{"example.com", false, true},
 		{"api.example.com", false, true},
-		{"localhost", false, false},        // Not allowed in prod
-		{"test.local", false, false},       // Dev TLD
-		{"192.168.1.1", false, false},      // IP not allowed
-		{"::1", false, false},              // IPv6 loopback
-		// Development mode
-		{"localhost", true, true},          // Allowed in dev
-		{"test.local", true, true},         // Dev TLD allowed
+		// Production mode - not allowed
+		{"localhost", false, false},
+		{"test.local", false, false},
+		{"192.168.1.1", false, false},
+		{"::1", false, false},
+		// Development mode - allowed
+		{"localhost", true, true},
+		{"test.local", true, true},
 		{"example.com", true, true},
-		{"192.168.1.1", true, false},       // IPs never allowed
+		// IPs never allowed even in dev
+		{"192.168.1.1", true, false},
 	}
 
 	for _, tt := range tests {

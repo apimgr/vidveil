@@ -1,0 +1,47 @@
+Subject: [URGENT] Security Breach Detected - {app_name}
+---
+URGENT: SECURITY BREACH DETECTED
+
+A potential security breach has been detected on your {app_name} instance.
+
+INCIDENT DETAILS
+================
+Incident ID: {incident_id}
+Severity: {severity}
+Detection Time: {timestamp}
+Detection Method: {detection_method}
+
+BREACH INFORMATION
+==================
+Type: {breach_type}
+Source IP: {source_ip}
+Affected Systems: {affected_systems}
+Affected Users: {affected_user_count}
+
+INDICATORS
+==========
+{indicators}
+
+IMMEDIATE ACTIONS REQUIRED
+==========================
+1. Review the incident in the admin panel: {admin_url}/security/incidents/{incident_id}
+2. Assess the scope of the breach
+3. Contain the threat (block IPs, disable accounts if needed)
+4. Preserve evidence for investigation
+5. Determine notification requirements (GDPR: 72 hours, etc.)
+
+COMPLIANCE NOTES
+================
+Enabled Standards: {compliance_standards}
+Notification Deadline: {notification_deadline}
+Regulatory Contact Required: {regulatory_contact_required}
+
+AUTOMATED RESPONSES TAKEN
+=========================
+{automated_responses}
+
+--
+{app_name} Security System
+{app_url}
+
+This is an automated security alert. Do not ignore.

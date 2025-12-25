@@ -269,7 +269,8 @@ func (s *Service) GenerateInviteToken(invitedBy int64) (string, error) {
 		return "", err
 	}
 
-	expires := time.Now().Add(7 * 24 * time.Hour) // 7 days
+	// Token valid for 7 days
+	expires := time.Now().Add(7 * 24 * time.Hour)
 
 	_, err = s.db.Exec(`
 		INSERT INTO setup_tokens (token, purpose, expires_at)
@@ -522,11 +523,16 @@ func hashToken(token string) string {
 
 // Argon2id parameters per TEMPLATE.md PART 2 (OWASP 2023 recommendations)
 const (
-	argonTime    = 3         // iterations
-	argonMemory  = 64 * 1024 // 64 MB
-	argonThreads = 4         // parallelism
-	argonKeyLen  = 32        // output length in bytes
-	argonSaltLen = 16        // salt length in bytes
+	// iterations
+	argonTime = 3
+	// 64 MB memory
+	argonMemory = 64 * 1024
+	// parallelism
+	argonThreads = 4
+	// output length in bytes
+	argonKeyLen = 32
+	// salt length in bytes
+	argonSaltLen = 16
 )
 
 // hashPassword hashes a password using Argon2id per TEMPLATE.md PART 2
@@ -730,7 +736,8 @@ func (s *Service) ValidateRecoveryKey(adminID int64, key string) (bool, error) {
 	`, adminID, keyHash).Scan(&keyID)
 
 	if err == sql.ErrNoRows {
-		return false, nil // Key not found or already used
+		// Key not found or already used
+		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("failed to validate recovery key: %w", err)
@@ -772,4 +779,38 @@ func (s *Service) GetRecoveryKeysStatus(adminID int64) (*RecoveryKeyInfo, error)
 		Remaining: total - used,
 		Used:      used,
 	}, nil
+}
+
+// CleanupExpiredSessions removes expired admin sessions (called by scheduler)
+// Per TEMPLATE.md PART 26: session.cleanup runs hourly
+func (s *Service) CleanupExpiredSessions() error {
+	_, err := s.db.Exec(`
+		DELETE FROM admin_sessions WHERE expires_at < ?
+	`, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired sessions: %w", err)
+	}
+	return nil
+}
+
+// CleanupExpiredTokens removes expired API tokens and reset tokens (called by scheduler)
+// Per TEMPLATE.md PART 26: token.cleanup runs daily
+func (s *Service) CleanupExpiredTokens() error {
+	// Clean up expired setup tokens (password reset, invites, etc.)
+	_, err := s.db.Exec(`
+		DELETE FROM setup_tokens WHERE expires_at < ?
+	`, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired setup tokens: %w", err)
+	}
+
+	// Clean up expired API tokens
+	_, err = s.db.Exec(`
+		DELETE FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at < ?
+	`, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired API tokens: %w", err)
+	}
+
+	return nil
 }

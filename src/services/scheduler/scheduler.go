@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 9: Built-in Scheduler
+// TEMPLATE.md PART 26: Built-in Scheduler
 package scheduler
 
 import (
@@ -15,19 +15,21 @@ type TaskFunc func(ctx context.Context) error
 
 // Task represents a scheduled task
 type Task struct {
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Schedule    string        `json:"schedule"` // hourly, daily, weekly, monthly, or cron
-	Enabled     bool          `json:"enabled"`
-	LastRun     time.Time     `json:"last_run"`
-	LastResult  string        `json:"last_result"` // success, failure, running, pending
-	LastError   string        `json:"last_error,omitempty"`
-	NextRun     time.Time     `json:"next_run"`
-	RunCount    int64         `json:"run_count"`
-	FailCount   int64         `json:"fail_count"`
-	Interval    time.Duration `json:"-"`
-	fn          TaskFunc
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Schedule format: hourly, daily, weekly, monthly, or cron expression
+	Schedule   string    `json:"schedule"`
+	Enabled    bool      `json:"enabled"`
+	LastRun    time.Time `json:"last_run"`
+	// LastResult: success, failure, running, or pending
+	LastResult string    `json:"last_result"`
+	LastError  string    `json:"last_error,omitempty"`
+	NextRun    time.Time `json:"next_run"`
+	RunCount   int64     `json:"run_count"`
+	FailCount  int64     `json:"fail_count"`
+	Interval   time.Duration `json:"-"`
+	fn         TaskFunc
 }
 
 // TaskHistory represents a historical run of a task
@@ -56,7 +58,8 @@ func New() *Scheduler {
 	return &Scheduler{
 		tasks:   make(map[string]*Task),
 		history: make([]TaskHistory, 0),
-		maxHist: 100, // Keep last 100 history entries
+		// Keep last 100 history entries
+		maxHist: 100,
 	}
 }
 
@@ -97,7 +100,8 @@ func parseSchedule(schedule string) (time.Duration, error) {
 		return 7 * 24 * time.Hour, nil
 	case "monthly":
 		return 30 * 24 * time.Hour, nil
-	case "minutely": // For testing
+	// For testing purposes
+	case "minutely":
 		return time.Minute, nil
 	default:
 		// Try parsing as duration
@@ -370,38 +374,126 @@ func (s *Scheduler) Stats() map[string]interface{} {
 	}
 }
 
-// DefaultTasks registers default scheduled tasks per TEMPLATE.md
+// BuiltinTaskFuncs holds all built-in task functions per TEMPLATE.md PART 26
+type BuiltinTaskFuncs struct {
+	// ssl.renewal - Daily, renew certs 7 days before expiry
+	SSLRenewal TaskFunc
+	// geoip.update - Weekly, update GeoIP databases
+	GeoIPUpdate TaskFunc
+	// blocklist.update - Daily, update IP/domain blocklists
+	BlocklistUpdate TaskFunc
+	// cve.update - Daily, update CVE/security databases
+	CVEUpdate TaskFunc
+	// session.cleanup - Hourly, remove expired sessions
+	SessionCleanup TaskFunc
+	// token.cleanup - Daily, remove expired tokens
+	TokenCleanup TaskFunc
+	// log.rotation - Daily, rotate and compress logs
+	LogRotation TaskFunc
+	// backup.auto - Disabled by default, automatic backups
+	BackupAuto TaskFunc
+	// healthcheck.self - Every 5 minutes, self-health check
+	HealthcheckSelf TaskFunc
+	// tor.health - Every 10 minutes, check Tor connectivity
+	TorHealth TaskFunc
+	// cluster.heartbeat - Every 30 seconds, cluster heartbeat
+	ClusterHeartbeat TaskFunc
+}
+
+// RegisterBuiltinTasks registers all built-in scheduled tasks per TEMPLATE.md PART 26
+func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
+	// ssl.renewal - Daily (runs check, renews if within 7 days of expiry)
+	if funcs.SSLRenewal != nil {
+		s.RegisterTask("ssl.renewal", "SSL Certificate Renewal",
+			"Check and renew SSL certificates if needed (7 days before expiry)",
+			"daily", funcs.SSLRenewal)
+	}
+
+	// geoip.update - Weekly
+	if funcs.GeoIPUpdate != nil {
+		s.RegisterTask("geoip.update", "GeoIP Database Update",
+			"Download and update GeoIP databases from sapics/ip-location-db",
+			"weekly", funcs.GeoIPUpdate)
+	}
+
+	// blocklist.update - Daily
+	if funcs.BlocklistUpdate != nil {
+		s.RegisterTask("blocklist.update", "Blocklist Update",
+			"Download and update IP/domain blocklists",
+			"daily", funcs.BlocklistUpdate)
+	}
+
+	// cve.update - Daily
+	if funcs.CVEUpdate != nil {
+		s.RegisterTask("cve.update", "CVE Database Update",
+			"Download and update CVE/security vulnerability databases",
+			"daily", funcs.CVEUpdate)
+	}
+
+	// session.cleanup - Hourly
+	if funcs.SessionCleanup != nil {
+		s.RegisterTask("session.cleanup", "Session Cleanup",
+			"Remove expired user and admin sessions",
+			"hourly", funcs.SessionCleanup)
+	}
+
+	// token.cleanup - Daily
+	if funcs.TokenCleanup != nil {
+		s.RegisterTask("token.cleanup", "Token Cleanup",
+			"Remove expired API tokens and reset tokens",
+			"daily", funcs.TokenCleanup)
+	}
+
+	// log.rotation - Daily
+	if funcs.LogRotation != nil {
+		s.RegisterTask("log.rotation", "Log Rotation",
+			"Rotate and compress old log files",
+			"daily", funcs.LogRotation)
+	}
+
+	// backup.auto - Disabled by default (registered but disabled)
+	if funcs.BackupAuto != nil {
+		s.RegisterTask("backup.auto", "Automatic Backup",
+			"Create automatic backups of configuration and databases",
+			"daily", funcs.BackupAuto)
+		// Disable by default per TEMPLATE.md PART 26
+		s.DisableTask("backup.auto")
+	}
+
+	// healthcheck.self - Every 5 minutes
+	if funcs.HealthcheckSelf != nil {
+		s.RegisterTask("healthcheck.self", "Self Health Check",
+			"Perform internal health verification",
+			"5m", funcs.HealthcheckSelf)
+	}
+
+	// tor.health - Every 10 minutes (only when Tor is installed/enabled)
+	if funcs.TorHealth != nil {
+		s.RegisterTask("tor.health", "Tor Health Check",
+			"Check Tor connectivity and restart if needed",
+			"10m", funcs.TorHealth)
+	}
+
+	// cluster.heartbeat - Every 30 seconds (only in cluster mode)
+	if funcs.ClusterHeartbeat != nil {
+		s.RegisterTask("cluster.heartbeat", "Cluster Heartbeat",
+			"Send heartbeat to cluster nodes",
+			"30s", funcs.ClusterHeartbeat)
+	}
+}
+
+// RegisterDefaultTasks is deprecated, use RegisterBuiltinTasks instead
+// Kept for backwards compatibility
 func (s *Scheduler) RegisterDefaultTasks(
 	certRenewal TaskFunc,
 	notificationCheck TaskFunc,
 	cleanup TaskFunc,
 	healthCheck TaskFunc,
 ) {
-	// Certificate renewal - daily by default
-	if certRenewal != nil {
-		s.RegisterTask("cert_renewal", "Certificate Renewal",
-			"Check and renew SSL certificates if needed",
-			"daily", certRenewal)
+	funcs := BuiltinTaskFuncs{
+		SSLRenewal:      certRenewal,
+		SessionCleanup:  cleanup,
+		HealthcheckSelf: healthCheck,
 	}
-
-	// Notification check - hourly by default
-	if notificationCheck != nil {
-		s.RegisterTask("notification_check", "Notification Check",
-			"Check for pending notifications and send alerts",
-			"hourly", notificationCheck)
-	}
-
-	// Cleanup - weekly by default
-	if cleanup != nil {
-		s.RegisterTask("cleanup", "Cleanup",
-			"Clean up old logs, temp files, and expired sessions",
-			"weekly", cleanup)
-	}
-
-	// Health check - every 5 minutes
-	if healthCheck != nil {
-		s.RegisterTask("health_check", "Health Check",
-			"Perform internal health checks",
-			"5m", healthCheck)
-	}
+	s.RegisterBuiltinTasks(funcs)
 }

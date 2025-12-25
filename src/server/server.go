@@ -17,9 +17,10 @@ import (
 	"github.com/apimgr/vidveil/src/services/admin"
 	"github.com/apimgr/vidveil/src/services/engines"
 	"github.com/apimgr/vidveil/src/services/ratelimit"
+	"github.com/apimgr/vidveil/src/services/scheduler"
 )
 
-//go:embed static/css/* static/js/* static/img/* templates/*.tmpl templates/partials/*.tmpl templates/layouts/*.tmpl templates/admin/*.tmpl
+//go:embed static/css/* static/js/* static/img/* templates/*.tmpl templates/partials/public/*.tmpl templates/partials/admin/*.tmpl templates/layouts/*.tmpl templates/admin/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -33,6 +34,7 @@ type Server struct {
 	engineMgr    *engines.Manager
 	adminSvc     *admin.Service
 	migrationMgr MigrationManager
+	scheduler    *scheduler.Scheduler
 	router       *chi.Mux
 	srv          *http.Server
 	rateLimiter  *ratelimit.Limiter
@@ -46,7 +48,7 @@ type MigrationManager interface {
 }
 
 // New creates a new server instance
-func New(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager) *Server {
+func New(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager, sched *scheduler.Scheduler) *Server {
 	// Set templates filesystem for handlers
 	handlers.SetTemplatesFS(embeddedFS)
 	handlers.SetAdminTemplatesFS(embeddedFS)
@@ -63,6 +65,7 @@ func New(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service
 		engineMgr:    engineMgr,
 		adminSvc:     adminSvc,
 		migrationMgr: migrationMgr,
+		scheduler:    sched,
 		router:       chi.NewRouter(),
 		rateLimiter:  limiter,
 	}
@@ -137,6 +140,8 @@ func (s *Server) setupMiddleware() {
 func (s *Server) setupRoutes() {
 	h := handlers.New(s.cfg, s.engineMgr)
 	admin := handlers.NewAdminHandler(s.cfg, s.engineMgr, s.adminSvc, s.migrationMgr)
+	// Set scheduler for admin panel management per TEMPLATE.md PART 26
+	admin.SetScheduler(s.scheduler)
 	metrics := handlers.NewMetrics(s.cfg, s.engineMgr)
 
 	// Maintenance mode middleware (applied globally, but allows admin access)
@@ -174,7 +179,7 @@ func (s *Server) setupRoutes() {
 		s.router.Get(s.cfg.Server.Metrics.Endpoint, metrics.Handler())
 	}
 
-	// Debug endpoints (development mode only per BASE.md spec)
+	// Debug endpoints (development mode only per TEMPLATE.md spec)
 	if s.cfg.IsDevelopmentMode() {
 		s.router.Route("/debug", func(r chi.Router) {
 			r.Get("/vars", handlers.DebugVars)

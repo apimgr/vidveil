@@ -11,7 +11,7 @@ import (
 
 	// Database drivers - imported for side effects
 	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Driver represents a database driver type
@@ -127,7 +127,7 @@ func openPostgres(cfg Config) (*sql.DB, error) {
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		host, port, cfg.User, cfg.Password, cfg.Name, sslMode)
 
-	return sql.Open("postgres", dsn)
+	return sql.Open("pgx", dsn)
 }
 
 // openMySQL opens a MySQL/MariaDB database connection

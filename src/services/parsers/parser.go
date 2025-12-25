@@ -100,12 +100,14 @@ func ParseDuration(duration string) (string, int) {
 	// Handle formats like "12:34" or "1:23:45"
 	parts := strings.Split(duration, ":")
 	switch len(parts) {
-	case 2: // mm:ss
+	// mm:ss
+	case 2:
 		m, _ := strconv.Atoi(parts[0])
 		s, _ := strconv.Atoi(parts[1])
 		secs := m*60 + s
 		return duration, secs
-	case 3: // hh:mm:ss
+	// hh:mm:ss
+	case 3:
 		h, _ := strconv.Atoi(parts[0])
 		m, _ := strconv.Atoi(parts[1])
 		s, _ := strconv.Atoi(parts[2])

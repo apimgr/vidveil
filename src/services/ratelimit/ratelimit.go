@@ -10,11 +10,13 @@ import (
 
 // Limiter implements a sliding window rate limiter per PART 16
 type Limiter struct {
-	mu       sync.RWMutex
-	enabled  bool
-	requests int           // Max requests per window
-	window   time.Duration // Time window
-	clients  map[string]*clientInfo
+	mu      sync.RWMutex
+	enabled bool
+	// Max requests per window
+	requests int
+	// Time window
+	window  time.Duration
+	clients map[string]*clientInfo
 }
 
 type clientInfo struct {
@@ -25,11 +27,13 @@ type clientInfo struct {
 // New creates a new rate limiter
 // Default: 120 requests per 60 seconds (from config)
 func New(enabled bool, requests int, windowSeconds int) *Limiter {
+	// Default per TEMPLATE.md PART 16
 	if requests <= 0 {
-		requests = 120 // Default per PART 16
+		requests = 120
 	}
+	// Default per TEMPLATE.md PART 16
 	if windowSeconds <= 0 {
-		windowSeconds = 60 // Default per PART 16
+		windowSeconds = 60
 	}
 
 	l := &Limiter{
@@ -149,7 +153,8 @@ func (l *Limiter) cleanup() {
 	for range ticker.C {
 		l.mu.Lock()
 		now := time.Now()
-		cutoff := now.Add(-l.window * 2) // Keep entries for 2x window
+		// Keep entries for 2x window
+		cutoff := now.Add(-l.window * 2)
 
 		for ip, client := range l.clients {
 			client.mu.Lock()

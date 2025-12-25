@@ -1,0 +1,26 @@
+Subject: Two-Factor Authentication Disabled - {app_name}
+---
+SECURITY WARNING
+
+Two-factor authentication (2FA) has been disabled on your {app_name} account.
+
+Time: {timestamp}
+IP Address: {ip_address}
+Location: {location}
+
+Your account is now less secure. We strongly recommend re-enabling 2FA to protect your account.
+
+If you did not disable 2FA, your account may be compromised. Take immediate action:
+1. Change your password immediately
+2. Re-enable two-factor authentication
+3. Review your active sessions
+4. Check for unauthorized changes
+5. Contact support if needed
+
+Re-enable 2FA: {settings_url}
+
+--
+{app_name}
+{app_url}
+
+This is a security notification for your account: {user_email}

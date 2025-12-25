@@ -13,23 +13,25 @@ import (
 
 // VideoMetadata holds extracted video information
 type VideoMetadata struct {
-	Title           string
-	URL             string
-	Thumbnail       string
-	ThumbnailPreview string // Animated/hover thumbnail if available
-	Duration        string
-	DurationSeconds int
-	Views           string
-	ViewsCount      int64
-	Rating          string
-	RatingPercent   float64
-	Author          string
-	AuthorURL       string
-	Description     string
-	Categories      []string
-	Tags            []string
-	UploadDate      time.Time
-	Quality         string // HD, 4K, etc.
+	Title    string
+	URL      string
+	Thumbnail string
+	// Animated/hover thumbnail if available
+	ThumbnailPreview string
+	Duration         string
+	DurationSeconds  int
+	Views            string
+	ViewsCount       int64
+	Rating           string
+	RatingPercent    float64
+	Author           string
+	AuthorURL        string
+	Description      string
+	Categories       []string
+	Tags             []string
+	UploadDate       time.Time
+	// HD, 4K, etc.
+	Quality string
 }
 
 // ParseDuration converts various duration formats to seconds

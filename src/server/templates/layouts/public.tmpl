@@ -1,0 +1,17 @@
+{{define "public"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    {{template "public/header" .}}
+    {{template "public/nav" .}}
+    <main>
+        {{template "content" .}}
+    </main>
+    {{template "public/footer" .}}
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

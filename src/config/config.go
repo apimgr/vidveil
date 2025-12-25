@@ -24,14 +24,14 @@ const (
 // Version is set at build time via ldflags
 var Version = "dev"
 
-// Config holds all application configuration per BASE.md spec
+// Config holds all application configuration per TEMPLATE.md spec
 type Config struct {
 	Server ServerConfig `yaml:"server"`
 	Web    WebConfig    `yaml:"web"`
 	Search SearchConfig `yaml:"search"`
 }
 
-// ServerConfig holds server-related settings per BASE.md
+// ServerConfig holds server-related settings per TEMPLATE.md
 type ServerConfig struct {
 	// Port: single (HTTP) or dual (HTTP,HTTPS) e.g., "8090" or "8090,64453"
 	Port    string `yaml:"port"`
@@ -116,10 +116,14 @@ type AdminConfig struct {
 
 // TwoFactorConfig holds 2FA settings per TEMPLATE.md PART 31
 type TwoFactorConfig struct {
-	Enabled            bool     `yaml:"enabled"`              // 2FA is enabled for this admin
-	Secret             string   `yaml:"secret,omitempty"`     // TOTP secret (stored securely)
-	BackupCodes        []string `yaml:"backup_codes,omitempty"` // One-time backup codes
-	RememberDeviceDays int      `yaml:"remember_device_days"` // Trust device for N days
+	// 2FA is enabled for this admin
+	Enabled bool `yaml:"enabled"`
+	// TOTP secret (stored securely)
+	Secret string `yaml:"secret,omitempty"`
+	// One-time backup codes
+	BackupCodes []string `yaml:"backup_codes,omitempty"`
+	// Trust device for N days
+	RememberDeviceDays int `yaml:"remember_device_days"`
 }
 
 // EmailConfig holds SMTP settings
@@ -205,68 +209,98 @@ type GeoIPDatabasesConfig struct {
 
 // UsersConfig holds user management settings per TEMPLATE.md PART 31
 type UsersConfig struct {
-	Enabled      bool               `yaml:"enabled"`      // Enable multi-user mode (default: false = admin-only)
-	Registration RegistrationConfig `yaml:"registration"` // Registration settings
-	Roles        RolesConfig        `yaml:"roles"`        // Role configuration
-	Tokens       TokensConfig       `yaml:"tokens"`       // API token settings
-	Profile      ProfileConfig      `yaml:"profile"`      // Profile settings
-	Auth         UserAuthConfig     `yaml:"auth"`         // Authentication settings
-	Limits       UserLimitsConfig   `yaml:"limits"`       // Per-user rate limits
+	// Enable multi-user mode (default: false = admin-only)
+	Enabled bool `yaml:"enabled"`
+	// Registration settings
+	Registration RegistrationConfig `yaml:"registration"`
+	// Role configuration
+	Roles RolesConfig `yaml:"roles"`
+	// API token settings
+	Tokens TokensConfig `yaml:"tokens"`
+	// Profile settings
+	Profile ProfileConfig `yaml:"profile"`
+	// Authentication settings
+	Auth UserAuthConfig `yaml:"auth"`
+	// Per-user rate limits
+	Limits UserLimitsConfig `yaml:"limits"`
 }
 
 // RegistrationConfig holds user registration settings
 type RegistrationConfig struct {
-	Enabled                  bool     `yaml:"enabled"`                    // Allow public registration
-	RequireEmailVerification bool     `yaml:"require_email_verification"` // Require email verification
-	RequireApproval          bool     `yaml:"require_approval"`           // Admin must approve new users
-	AllowedDomains           []string `yaml:"allowed_domains"`            // Allowed email domains (empty = all)
-	BlockedDomains           []string `yaml:"blocked_domains"`            // Blocked email domains
+	// Allow public registration
+	Enabled bool `yaml:"enabled"`
+	// Require email verification
+	RequireEmailVerification bool `yaml:"require_email_verification"`
+	// Admin must approve new users
+	RequireApproval bool `yaml:"require_approval"`
+	// Allowed email domains (empty = all)
+	AllowedDomains []string `yaml:"allowed_domains"`
+	// Blocked email domains
+	BlockedDomains []string `yaml:"blocked_domains"`
 }
 
 // RolesConfig holds role configuration
 type RolesConfig struct {
-	Available []string `yaml:"available"` // Available roles
-	Default   string   `yaml:"default"`   // Default role for new users
+	// Available roles
+	Available []string `yaml:"available"`
+	// Default role for new users
+	Default string `yaml:"default"`
 }
 
 // TokensConfig holds API token settings
 type TokensConfig struct {
-	Enabled        bool `yaml:"enabled"`         // Allow users to generate API tokens
-	MaxPerUser     int  `yaml:"max_per_user"`    // Maximum tokens per user
-	ExpirationDays int  `yaml:"expiration_days"` // Token expiration (0 = never)
+	// Allow users to generate API tokens
+	Enabled bool `yaml:"enabled"`
+	// Maximum tokens per user
+	MaxPerUser int `yaml:"max_per_user"`
+	// Token expiration (0 = never)
+	ExpirationDays int `yaml:"expiration_days"`
 }
 
 // ProfileConfig holds user profile settings
 type ProfileConfig struct {
-	AllowAvatar      bool `yaml:"allow_avatar"`       // Allow users to upload avatars
-	AllowDisplayName bool `yaml:"allow_display_name"` // Allow users to set display name
-	AllowBio         bool `yaml:"allow_bio"`          // Allow users to set bio
+	// Allow users to upload avatars
+	AllowAvatar bool `yaml:"allow_avatar"`
+	// Allow users to set display name
+	AllowDisplayName bool `yaml:"allow_display_name"`
+	// Allow users to set bio
+	AllowBio bool `yaml:"allow_bio"`
 }
 
 // UserAuthConfig holds user authentication settings
 type UserAuthConfig struct {
-	SessionDuration          string `yaml:"session_duration"`           // Session duration (e.g., "30d")
-	Require2FA               bool   `yaml:"require_2fa"`                // Require 2FA for all users
-	Allow2FA                 bool   `yaml:"allow_2fa"`                  // Allow 2FA (user choice)
-	PasswordMinLength        int    `yaml:"password_min_length"`        // Minimum password length
-	PasswordRequireUppercase bool   `yaml:"password_require_uppercase"` // Require uppercase
-	PasswordRequireNumber    bool   `yaml:"password_require_number"`    // Require number
-	PasswordRequireSpecial   bool   `yaml:"password_require_special"`   // Require special character
+	// Session duration (e.g., "30d")
+	SessionDuration string `yaml:"session_duration"`
+	// Require 2FA for all users
+	Require2FA bool `yaml:"require_2fa"`
+	// Allow 2FA (user choice)
+	Allow2FA bool `yaml:"allow_2fa"`
+	// Minimum password length
+	PasswordMinLength int `yaml:"password_min_length"`
+	// Require uppercase
+	PasswordRequireUppercase bool `yaml:"password_require_uppercase"`
+	// Require number
+	PasswordRequireNumber bool `yaml:"password_require_number"`
+	// Require special character
+	PasswordRequireSpecial bool `yaml:"password_require_special"`
 }
 
 // UserLimitsConfig holds per-user rate limit settings
 type UserLimitsConfig struct {
-	RequestsPerMinute int `yaml:"requests_per_minute"` // Rate limit per minute (0 = use global)
-	RequestsPerDay    int `yaml:"requests_per_day"`    // Rate limit per day (0 = use global)
+	// Rate limit per minute (0 = use global)
+	RequestsPerMinute int `yaml:"requests_per_minute"`
+	// Rate limit per day (0 = use global)
+	RequestsPerDay int `yaml:"requests_per_day"`
 }
 
 // LogsConfig holds logging settings per TEMPLATE.md PART 21
 type LogsConfig struct {
-	Level    string            `yaml:"level"`
-	Debug    DebugLogConfig    `yaml:"debug"`
-	Access   AccessLogConfig   `yaml:"access"`
-	Server   ServerLogConfig   `yaml:"server"`
-	Error    ErrorLogConfig    `yaml:"error"` // TEMPLATE.md PART 21: error.log
+	Level  string         `yaml:"level"`
+	Debug  DebugLogConfig `yaml:"debug"`
+	Access AccessLogConfig `yaml:"access"`
+	Server ServerLogConfig `yaml:"server"`
+	// TEMPLATE.md PART 21: error.log
+	Error    ErrorLogConfig    `yaml:"error"`
 	Audit    AuditLogConfig    `yaml:"audit"`
 	Security SecurityLogConfig `yaml:"security"`
 }
@@ -386,14 +420,20 @@ type CacheConfig struct {
 
 // DatabaseConfig holds database settings
 type DatabaseConfig struct {
-	Driver   string       `yaml:"driver"`
-	SQLite   SQLiteConfig `yaml:"sqlite"`
-	Host     string       `yaml:"host"`     // For Postgres/MySQL
-	Port     int          `yaml:"port"`     // For Postgres/MySQL
-	Name     string       `yaml:"name"`     // Database name for Postgres/MySQL
-	User     string       `yaml:"user"`     // For Postgres/MySQL
-	Password string       `yaml:"password"` // For Postgres/MySQL
-	SSLMode  string       `yaml:"ssl_mode"` // disable, require, verify-ca, verify-full
+	Driver string       `yaml:"driver"`
+	SQLite SQLiteConfig `yaml:"sqlite"`
+	// For Postgres/MySQL
+	Host string `yaml:"host"`
+	// For Postgres/MySQL
+	Port int `yaml:"port"`
+	// Database name for Postgres/MySQL
+	Name string `yaml:"name"`
+	// For Postgres/MySQL
+	User string `yaml:"user"`
+	// For Postgres/MySQL
+	Password string `yaml:"password"`
+	// disable, require, verify-ca, verify-full
+	SSLMode string `yaml:"ssl_mode"`
 }
 
 // SQLiteConfig holds SQLite settings
@@ -404,7 +444,7 @@ type SQLiteConfig struct {
 	BusyTimeout int    `yaml:"busy_timeout"`
 }
 
-// WebConfig holds frontend settings per BASE.md
+// WebConfig holds frontend settings per TEMPLATE.md
 type WebConfig struct {
 	UI            UIConfig            `yaml:"ui"`
 	Announcements AnnouncementsConfig `yaml:"announcements"`
@@ -466,16 +506,19 @@ type CookieConsentConfig struct {
 
 // SearchConfig holds search-specific settings (project-specific)
 type SearchConfig struct {
-	DefaultEngines     []string              `yaml:"default_engines"`
-	ConcurrentRequests int                   `yaml:"concurrent_requests"`
-	EngineTimeout      int                   `yaml:"engine_timeout"`
-	ResultsPerPage     int                   `yaml:"results_per_page"`
-	MaxPages           int                   `yaml:"max_pages"`
-	MinDurationSeconds int                   `yaml:"min_duration_seconds"` // Minimum video duration (default 300 = 5 min)
-	FilterPremium      bool                  `yaml:"filter_premium"`       // Filter out premium/gold content
-	SpoofTLS           bool                  `yaml:"spoof_tls"`            // Use spoofed TLS fingerprint (Chrome) to bypass Cloudflare
-	Tor                TorConfig             `yaml:"tor"`
-	AgeVerification    AgeVerificationConfig `yaml:"age_verification"`
+	DefaultEngines     []string `yaml:"default_engines"`
+	ConcurrentRequests int      `yaml:"concurrent_requests"`
+	EngineTimeout      int      `yaml:"engine_timeout"`
+	ResultsPerPage     int      `yaml:"results_per_page"`
+	MaxPages           int      `yaml:"max_pages"`
+	// Minimum video duration (default 300 = 5 min)
+	MinDurationSeconds int `yaml:"min_duration_seconds"`
+	// Filter out premium/gold content
+	FilterPremium bool `yaml:"filter_premium"`
+	// Use spoofed TLS fingerprint (Chrome) to bypass Cloudflare
+	SpoofTLS        bool                  `yaml:"spoof_tls"`
+	Tor             TorConfig             `yaml:"tor"`
+	AgeVerification AgeVerificationConfig `yaml:"age_verification"`
 }
 
 // TorConfig holds Tor proxy settings
@@ -504,7 +547,7 @@ type Paths struct {
 	Backup string
 }
 
-// Default returns a Config with sensible defaults per BASE.md
+// Default returns a Config with sensible defaults per TEMPLATE.md
 func Default() *Config {
 	fqdn := getHostname()
 	randomPort := findUnusedPort()
@@ -648,10 +691,11 @@ func Default() *Config {
 			},
 			Session: SessionConfig{
 				CookieName: "session_id",
-				MaxAge:     2592000, // 30 days
-				Secure:     "auto",
-				HTTPOnly:   true,
-				SameSite:   "lax",
+				// 30 days
+				MaxAge:   2592000,
+				Secure:   "auto",
+				HTTPOnly: true,
+				SameSite: "lax",
 			},
 			Cache: CacheConfig{
 				Type:   "memory",
@@ -681,8 +725,9 @@ func Default() *Config {
 					City:    false,
 				},
 			},
+			// Admin-only mode by default per TEMPLATE.md
 			Users: UsersConfig{
-				Enabled: false, // Admin-only mode by default per TEMPLATE.md
+				Enabled: false,
 				Registration: RegistrationConfig{
 					Enabled:                  false,
 					RequireEmailVerification: true,
@@ -695,9 +740,10 @@ func Default() *Config {
 					Default:   "user",
 				},
 				Tokens: TokensConfig{
-					Enabled:        true,
-					MaxPerUser:     5,
-					ExpirationDays: 0, // Never expire
+					Enabled:    true,
+					MaxPerUser: 5,
+					// Never expire
+					ExpirationDays: 0,
 				},
 				Profile: ProfileConfig{
 					AllowAvatar:      true,
@@ -713,9 +759,10 @@ func Default() *Config {
 					PasswordRequireNumber:    false,
 					PasswordRequireSpecial:   false,
 				},
+				// Use global rate limits
 				Limits: UserLimitsConfig{
-					RequestsPerMinute: 0, // Use global
-					RequestsPerDay:    0, // Use global
+					RequestsPerMinute: 0,
+					RequestsPerDay:    0,
 				},
 			},
 		},
@@ -757,9 +804,12 @@ func Default() *Config {
 			EngineTimeout:      15,
 			ResultsPerPage:     50,
 			MaxPages:           10,
-			MinDurationSeconds: 0, // No minimum duration by default
+			// No minimum duration by default
+			MinDurationSeconds: 0,
 			FilterPremium:      true,
-			SpoofTLS: false, // Disabled by default - can cause issues with some engines; enable only for Cloudflare-protected sites
+			// Disabled by default - can cause issues with some engines
+			// Enable only for Cloudflare-protected sites
+			SpoofTLS: false,
 			Tor: TorConfig{
 				Enabled:          false,
 				Proxy:            "socks5://127.0.0.1:9050",
@@ -847,7 +897,8 @@ func Load(configDir, dataDir string) (*Config, string, error) {
 		return nil, "", fmt.Errorf("failed to read config: %w", err)
 	}
 
-	cfg := Default() // Start with defaults
+	// Start with defaults
+	cfg := Default()
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, "", fmt.Errorf("failed to parse config: %w", err)
 	}
@@ -866,7 +917,7 @@ func Save(cfg *Config, path string) error {
 	header := `# =============================================================================
 # Vidveil Configuration
 # =============================================================================
-# This file follows the apimgr BASE.md specification
+# This file follows the apimgr TEMPLATE.md specification
 # Documentation: https://github.com/apimgr/vidveil
 # =============================================================================
 
@@ -924,7 +975,8 @@ func findUnusedPort() int {
 			return port
 		}
 	}
-	return 64080 // Fallback
+	// Fallback
+	return 64080
 }
 
 func generateToken(length int) string {
@@ -1102,9 +1154,9 @@ func IsValidHost(host string, devMode bool) bool {
 		return false
 	}
 
-	// Handle localhost
+	// Handle localhost - only valid in dev mode
 	if lower == "localhost" {
-		return devMode // Only valid in dev mode
+		return devMode
 	}
 
 	// Must contain at least one dot (except localhost in dev)
@@ -1320,11 +1372,12 @@ func isDevTLD(fqdn string) bool {
 		return true
 	}
 
+	// Development TLD suffixes including dynamic project TLD
 	devSuffixes := []string{
 		".local", ".test", ".example", ".invalid",
 		".localhost", ".lan", ".internal", ".home", ".localdomain",
 		".home.arpa", ".intranet", ".corp", ".private",
-		"." + ProjectName, // Dynamic dev TLD
+		"." + ProjectName,
 	}
 	for _, suffix := range devSuffixes {
 		if strings.HasSuffix(lower, suffix) {

@@ -32,9 +32,10 @@ type Cache interface {
 
 // Config holds cache configuration
 type Config struct {
-	Type    CacheType `yaml:"type"`
-	TTL     int       `yaml:"ttl"`      // Seconds
-	MaxSize int       `yaml:"max_size"`
+	Type CacheType `yaml:"type"`
+	// TTL in seconds
+	TTL     int `yaml:"ttl"`
+	MaxSize int `yaml:"max_size"`
 	// Valkey/Redis settings
 	Addr     string `yaml:"addr"`
 	Password string `yaml:"password"`

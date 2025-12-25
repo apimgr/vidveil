@@ -78,7 +78,7 @@ COPY docker/Dockerfile /root/Dockerfile
 RUN chmod 755 /usr/local/bin/*
 
 # Set environment
-ENV MODE=development \
+ENV MODE=production \
     TZ=America/New_York \
     ENABLE_TOR=true
 

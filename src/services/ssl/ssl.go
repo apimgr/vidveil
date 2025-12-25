@@ -28,13 +28,16 @@ import (
 
 // Manager handles SSL/TLS certificates including Let's Encrypt
 type Manager struct {
-	cfg            *config.Config
-	certPath       string
-	mu             sync.RWMutex
-	certificate    *tls.Certificate
-	httpChallenge  map[string]string // token -> keyAuth for HTTP-01
-	autocertMgr    *autocert.Manager // For Let's Encrypt ACME
-	useAutocert    bool              // Whether to use autocert for certificate management
+	cfg         *config.Config
+	certPath    string
+	mu          sync.RWMutex
+	certificate *tls.Certificate
+	// token -> keyAuth for HTTP-01
+	httpChallenge map[string]string
+	// For Let's Encrypt ACME
+	autocertMgr *autocert.Manager
+	// Whether to use autocert for certificate management
+	useAutocert bool
 }
 
 // CertInfo contains certificate information

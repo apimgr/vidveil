@@ -18,7 +18,8 @@ func TestValidateUsername(t *testing.T) {
 		{"valid-user", false, false, ""},
 		{"user123", false, false, ""},
 		{"abc", false, false, ""},
-		{strings.Repeat("a", 32), false, false, ""}, // max length
+		// max length
+		{strings.Repeat("a", 32), false, false, ""},
 
 		// Invalid - too short
 		{"ab", false, true, "at least 3 characters"},
@@ -77,7 +78,8 @@ func TestValidatePassword(t *testing.T) {
 		{"password123", false, ""},
 		{"StrongP@ss1", false, ""},
 		{"12345678", false, ""},
-		{strings.Repeat("a", 8), false, ""},  // min length
+		// min length
+		{strings.Repeat("a", 8), false, ""},
 
 		// Invalid - too short
 		{"short", true, "at least 8 characters"},
@@ -200,7 +202,8 @@ func TestUsernameFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateUsername(tt.name, true) // Use admin to skip blocklist
+			// Use admin to skip blocklist
+			err := ValidateUsername(tt.name, true)
 			if tt.valid && err != nil {
 				t.Errorf("ValidateUsername(%q) should be valid, got error: %v", tt.name, err)
 			}

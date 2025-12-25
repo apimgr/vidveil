@@ -12,12 +12,18 @@ import (
 
 // Config holds retry configuration
 type Config struct {
-	MaxAttempts     int           // Maximum number of attempts (default: 3)
-	InitialDelay    time.Duration // Initial delay between retries (default: 100ms)
-	MaxDelay        time.Duration // Maximum delay between retries (default: 30s)
-	Multiplier      float64       // Backoff multiplier (default: 2.0)
-	Jitter          float64       // Random jitter factor 0-1 (default: 0.1)
-	RetryableErrors []error       // Errors that should trigger retry
+	// Maximum number of attempts (default: 3)
+	MaxAttempts int
+	// Initial delay between retries (default: 100ms)
+	InitialDelay time.Duration
+	// Maximum delay between retries (default: 30s)
+	MaxDelay time.Duration
+	// Backoff multiplier (default: 2.0)
+	Multiplier float64
+	// Random jitter factor 0-1 (default: 0.1)
+	Jitter float64
+	// Errors that should trigger retry
+	RetryableErrors []error
 }
 
 // DefaultConfig returns default retry configuration
@@ -171,7 +177,8 @@ func addJitter(d time.Duration, factor float64) time.Duration {
 		return d
 	}
 
-	jitter := float64(d) * factor * (rand.Float64()*2 - 1) // -factor to +factor
+	// -factor to +factor
+	jitter := float64(d) * factor * (rand.Float64()*2 - 1)
 	return time.Duration(float64(d) + jitter)
 }
 

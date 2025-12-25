@@ -19,7 +19,8 @@ const DefaultLocale = "en"
 
 // Translator handles translations per TEMPLATE.md PART 25
 type Translator struct {
-	translations map[string]map[string]string // locale -> key -> translation
+	// translations: locale -> key -> translation
+	translations map[string]map[string]string
 	fallback     string
 	mu           sync.RWMutex
 }

@@ -126,10 +126,14 @@ var BangMapping = map[string]string{
 
 // ParsedQuery represents a query after bang parsing
 type ParsedQuery struct {
-	Query       string   // The search query without bangs
-	Engines     []string // Engine names to search (empty = all)
-	HasBang     bool     // Whether a bang was detected
-	InvalidBang string   // If a bang was not recognized
+	// The search query without bangs
+	Query string
+	// Engine names to search (empty = all)
+	Engines []string
+	// Whether a bang was detected
+	HasBang bool
+	// If a bang was not recognized
+	InvalidBang string
 }
 
 // ParseBangs extracts bang commands from a query
@@ -151,7 +155,8 @@ func ParseBangs(query string) ParsedQuery {
 
 	words := strings.Fields(query)
 	var queryWords []string
-	engineSet := make(map[string]bool) // Deduplicate engines
+	// Deduplicate engines
+	engineSet := make(map[string]bool)
 
 	for _, word := range words {
 		if strings.HasPrefix(word, "!") && len(word) > 1 {
@@ -299,7 +304,8 @@ type AutocompleteSuggestion struct {
 	EngineName  string `json:"engine_name"`
 	DisplayName string `json:"display_name"`
 	ShortCode   string `json:"short_code"`
-	Score       int    `json:"-"` // For sorting, not exposed
+	// For sorting, not exposed
+	Score int `json:"-"`
 }
 
 // Autocomplete returns bang suggestions for a partial input
@@ -324,8 +330,9 @@ func Autocomplete(prefix string) []AutocompleteSuggestion {
 		engineLower := strings.ToLower(engine)
 
 		score := 0
+		// Shorter = better
 		if strings.HasPrefix(bangLower, prefix) {
-			score = 100 - len(bang) // Shorter = better
+			score = 100 - len(bang)
 		} else if strings.HasPrefix(engineLower, prefix) {
 			score = 50 - len(engine)
 		} else if strings.Contains(bangLower, prefix) || strings.Contains(engineLower, prefix) {

@@ -73,7 +73,13 @@
       "Bash(make test:*)",
       "Bash(/usr/local/go/bin/go build:*)",
       "Bash(git -C /root/Projects/github/apimgr/vidveil status --short)",
-      "Bash(gh run:*)"
+      "Bash(gh run:*)",
+      "Bash(do echo \"=== /admin/$page ===\" docker exec vidveil-test sh -c \"curl -s -b /tmp/c.txt ''''http://127.0.0.1:64000/admin/$page''''\")",
+      "Bash(make build:*)",
+      "Bash(TOKEN=d80b1aa1ec99f3c17cf8f7e829b18c5bbb4dd5bfb021e2ea77fc5933121c5897)",
+      "Bash(TOKEN=\"6868ca37d1d0f23e934409899a707426cce2f5a78620341a754f2755cb83dbbb\" docker exec vidveil-test curl -sL -c /tmp/c.txt -b /tmp/c.txt \"http://127.0.0.1:64000/admin/setup\" -d \"token=$TOKEN&username=admin&email=admin@test.com&password=TestPass123!\")",
+      "Bash(CGO_ENABLED=0 /usr/local/go/bin/go build:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

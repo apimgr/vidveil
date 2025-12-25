@@ -849,13 +849,16 @@ func (h *Handler) renderTemplate(w http.ResponseWriter, name string, data map[st
 	// Create base template with partials
 	tmpl := template.New(templateName)
 
-	// Load all partials first
+	// Load all partials first (public and admin)
 	partialFiles := []string{
-		"templates/partials/head.tmpl",
-		"templates/partials/header.tmpl",
-		"templates/partials/nav.tmpl",
-		"templates/partials/footer.tmpl",
-		"templates/partials/scripts.tmpl",
+		"templates/partials/public/head.tmpl",
+		"templates/partials/public/header.tmpl",
+		"templates/partials/public/nav.tmpl",
+		"templates/partials/public/footer.tmpl",
+		"templates/partials/public/scripts.tmpl",
+		"templates/partials/admin/head.tmpl",
+		"templates/partials/admin/sidebar.tmpl",
+		"templates/partials/admin/scripts.tmpl",
 	}
 
 	for _, pf := range partialFiles {

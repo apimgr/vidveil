@@ -42,7 +42,8 @@ func TestNewDisabled(t *testing.T) {
 }
 
 func TestAllow(t *testing.T) {
-	limiter := New(true, 5, 1) // 5 requests per second
+	// 5 requests per second
+	limiter := New(true, 5, 1)
 
 	ip := "192.168.1.1"
 
@@ -96,7 +97,8 @@ func TestAllowDifferentIPs(t *testing.T) {
 }
 
 func TestWindowReset(t *testing.T) {
-	limiter := New(true, 2, 1) // 2 requests per 1 second
+	// 2 requests per 1 second
+	limiter := New(true, 2, 1)
 
 	ip := "192.168.1.1"
 
@@ -179,9 +181,10 @@ func TestMiddlewareXForwardedFor(t *testing.T) {
 	}
 
 	// Second request from same X-Forwarded-For should be limited
+	// Different proxy IP, same client IP
 	req2 := httptest.NewRequest("GET", "/test", nil)
-	req2.RemoteAddr = "10.0.0.2:12345" // Different proxy IP
-	req2.Header.Set("X-Forwarded-For", "203.0.113.1") // Same client IP
+	req2.RemoteAddr = "10.0.0.2:12345"
+	req2.Header.Set("X-Forwarded-For", "203.0.113.1")
 	rr2 := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr2, req2)

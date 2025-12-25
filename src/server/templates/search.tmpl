@@ -2,11 +2,11 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="{{.Theme}}">
 <head>
-    {{template "head" .}}
+    {{template "public/head" .}}
 </head>
 <body>
     <a href="#main-content" class="skip-link">Skip to main content</a>
-    {{template "header" .}}
+    {{template "public/header" .}}
     <main class="results" id="main-content" role="main" aria-label="Search results">
         <div class="initial-loading" id="initial-loading" role="status" aria-live="polite">
             <div class="spinner large" aria-hidden="true"></div>
@@ -44,12 +44,12 @@
         <div class="video-grid" id="video-grid" role="list" aria-label="Video results"></div>
         <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>Loading more...</span></div>
     </main>
-    {{template "footer" .}}
+    {{template "public/footer" .}}
     <div class="status-bar" id="status-bar">
         <span id="status-text">Connecting...</span>
         <span id="engine-status"></span>
     </div>
-    <script src="/static/js/search.js"></script>
+    {{template "public/scripts" .}}
 </body>
 </html>
 {{end}}

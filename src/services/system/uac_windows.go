@@ -179,8 +179,9 @@ func RequireAdmin(operation string) (bool, error) {
 	switch result {
 	case ElevationAlreadyAdmin:
 		return false, nil
+	// Exit this process, elevated one is starting
 	case ElevationSuccess:
-		return true, nil // Exit this process, elevated one is starting
+		return true, nil
 	case ElevationCanceled:
 		return false, fmt.Errorf("UAC elevation was canceled by user")
 	case ElevationFailed:
@@ -200,8 +201,9 @@ func GetWindowsServiceAccount(serviceName string) string {
 func IsRunningAsService() bool {
 	// Check if stdin is attached - services don't have stdin
 	fi, err := os.Stdin.Stat()
+	// Probably a service
 	if err != nil {
-		return true // Probably a service
+		return true
 	}
 
 	// If no character device (no console), likely a service

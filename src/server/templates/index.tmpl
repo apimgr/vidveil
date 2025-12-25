@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="{{.Theme}}">
 <head>
-    {{template "head" .}}
+    {{template "public/head" .}}
 </head>
 <body>
     <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -19,7 +19,7 @@
         </form>
         <p class="bang-hint">Use bangs to search specific sites: <code>!ph</code> PornHub, <code>!rt</code> RedTube, <code>!xv</code> XVideos, <code>!xh</code> xHamster</p>
         <div id="search-history" class="search-history" role="region" aria-label="Recent searches"></div>
-        <script src="/static/js/home.js"></script>
+        {{template "public/scripts" .}}
         <div class="engine-stats" role="contentinfo" aria-label="Service statistics">
             <span class="stat"><strong>{{.EngineCount}}</strong> engines</span>
             <span class="divider" aria-hidden="true">|</span>
@@ -28,7 +28,7 @@
             <span class="stat">Tor support</span>
         </div>
     </main>
-    {{template "footer" .}}
+    {{template "public/footer" .}}
 </body>
 </html>
 {{end}}

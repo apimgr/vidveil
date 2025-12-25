@@ -188,7 +188,8 @@ func TestBackoff(t *testing.T) {
 		InitialDelay: 100 * time.Millisecond,
 		MaxDelay:     10 * time.Second,
 		Multiplier:   2.0,
-		Jitter:       0, // No jitter for predictable testing
+		// No jitter for predictable testing
+		Jitter: 0,
 	}
 
 	tests := []struct {

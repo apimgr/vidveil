@@ -12,9 +12,12 @@ import (
 type State int
 
 const (
-	StateClosed   State = iota // Normal operation, requests pass through
-	StateOpen                  // Circuit is open, requests fail immediately
-	StateHalfOpen              // Testing if service recovered
+	// Normal operation, requests pass through
+	StateClosed State = iota
+	// Circuit is open, requests fail immediately
+	StateOpen
+	// Testing if service recovered
+	StateHalfOpen
 )
 
 func (s State) String() string {
@@ -41,19 +44,25 @@ type CircuitBreaker struct {
 	lastFailureTime time.Time
 
 	// Configuration
-	failureThreshold int           // Failures before opening circuit
-	successThreshold int           // Successes in half-open before closing
-	timeout          time.Duration // Time to wait before half-open
-	onStateChange    func(name string, from, to State)
+	// Failures before opening circuit
+	failureThreshold int
+	// Successes in half-open before closing
+	successThreshold int
+	// Time to wait before half-open
+	timeout       time.Duration
+	onStateChange func(name string, from, to State)
 }
 
 // CircuitBreakerConfig holds circuit breaker configuration
 type CircuitBreakerConfig struct {
-	Name             string
-	FailureThreshold int           // Default: 5
-	SuccessThreshold int           // Default: 2
-	Timeout          time.Duration // Default: 30s
-	OnStateChange    func(name string, from, to State)
+	Name string
+	// Default: 5
+	FailureThreshold int
+	// Default: 2
+	SuccessThreshold int
+	// Default: 30s
+	Timeout       time.Duration
+	OnStateChange func(name string, from, to State)
 }
 
 // DefaultCircuitBreakerConfig returns default configuration

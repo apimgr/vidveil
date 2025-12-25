@@ -82,7 +82,8 @@ func (m *Manager) Restore(backupFile string) error {
 		if err != nil || len(files) == 0 {
 			return fmt.Errorf("no backup files found in %s", m.paths.Backup)
 		}
-		backupFile = files[len(files)-1] // Most recent by name
+		// Most recent by name
+		backupFile = files[len(files)-1]
 	}
 
 	// Open backup file
@@ -350,8 +351,9 @@ func (m *Manager) SetUpdateBranch(branch string) error {
 func (m *Manager) GetUpdateBranch() string {
 	branchFile := filepath.Join(m.paths.Config, "update-branch")
 	data, err := os.ReadFile(branchFile)
+	// Default per TEMPLATE.md
 	if err != nil {
-		return "stable" // Default per TEMPLATE.md
+		return "stable"
 	}
 	branch := strings.TrimSpace(string(data))
 	if branch == "" {

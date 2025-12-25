@@ -32,23 +32,33 @@ const (
 // RotatingFile implements io.Writer with automatic rotation
 // TEMPLATE.md PART 21: Built-in rotation support (no external logrotate needed)
 type RotatingFile struct {
-	mu           sync.Mutex
-	path         string
-	file         *os.File
-	maxSize      int64            // Max size in bytes before rotation
-	interval     RotationInterval // Time-based rotation interval
-	compress     bool             // Whether to gzip rotated files
-	currentSize  int64            // Current file size
-	lastRotation time.Time        // Last rotation time
-	keepCount    int              // Number of rotated files to keep (0 = delete immediately)
+	mu   sync.Mutex
+	path string
+	file *os.File
+	// Max size in bytes before rotation
+	maxSize int64
+	// Time-based rotation interval
+	interval RotationInterval
+	// Whether to gzip rotated files
+	compress bool
+	// Current file size
+	currentSize int64
+	// Last rotation time
+	lastRotation time.Time
+	// Number of rotated files to keep (0 = delete immediately)
+	keepCount int
 }
 
 // RotationConfig holds rotation settings per PART 21
 type RotationConfig struct {
-	MaxSize  string // e.g., "50MB", "100KB"
-	Interval string // e.g., "daily", "weekly", "hourly"
-	Compress bool   // Whether to gzip rotated files
-	Keep     int    // Number of rotated files to keep (0 = delete immediately)
+	// e.g., "50MB", "100KB"
+	MaxSize string
+	// e.g., "daily", "weekly", "hourly"
+	Interval string
+	// Whether to gzip rotated files
+	Compress bool
+	// Number of rotated files to keep (0 = delete immediately)
+	Keep int
 }
 
 // NewRotatingFile creates a new rotating file writer
@@ -62,8 +72,9 @@ func NewRotatingFile(path string, cfg RotationConfig) (*RotatingFile, error) {
 
 	// Parse max size (e.g., "50MB", "100KB")
 	rf.maxSize = parseSize(cfg.MaxSize)
+	// Default 50MB
 	if rf.maxSize == 0 {
-		rf.maxSize = 50 * 1024 * 1024 // Default 50MB
+		rf.maxSize = 50 * 1024 * 1024
 	}
 
 	// Parse interval
@@ -437,11 +448,13 @@ func (l *Logger) addFileOutput(name, path, rotate string, keep int) error {
 // parseRotationString parses rotation string like "weekly,50MB" per PART 21
 // Supports: "weekly,50MB" = rotate on weekly OR 50MB, whichever comes first
 func parseRotationString(s string) RotationConfig {
+	// Default per PART 21
 	cfg := RotationConfig{
-		MaxSize:  "50MB", // Default per PART 21
+		MaxSize:  "50MB",
 		Interval: "",
 		Compress: false,
-		Keep:     0, // Delete immediately after rotation (default per PART 21)
+		// Delete immediately after rotation (default per PART 21)
+		Keep: 0,
 	}
 
 	if s == "" {
@@ -470,8 +483,9 @@ func parseRotationString(s string) RotationConfig {
 
 // parseKeepString parses keep string to number of files to keep
 func parseKeepString(s string) int {
+	// Delete immediately (default)
 	if s == "" {
-		return 0 // Delete immediately (default)
+		return 0
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(s))
 	if err != nil {

@@ -2,10 +2,10 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="{{.Theme}}">
 <head>
-    {{template "head" .}}
+    {{template "public/head" .}}
 </head>
 <body>
-    {{template "header" .}}
+    {{template "public/header" .}}
     <main class="privacy">
         <h1>Privacy Policy</h1>
         <section>
@@ -45,7 +45,7 @@
             <p><a href="https://github.com/apimgr/vidveil" target="_blank">View Source Code on GitHub</a></p>
         </section>
     </main>
-    {{template "footer" .}}
+    {{template "public/footer" .}}
 </body>
 </html>
 {{end}}

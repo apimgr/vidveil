@@ -1,0 +1,38 @@
+Subject: Security Incident Notification - {app_name}
+---
+IMPORTANT SECURITY NOTICE
+
+We are writing to inform you of a security incident that may have affected your {app_name} account.
+
+WHAT HAPPENED
+{breach_description}
+
+WHEN IT HAPPENED
+Date Discovered: {discovery_date}
+Incident Period: {incident_period}
+
+WHAT INFORMATION WAS INVOLVED
+{affected_data}
+
+WHAT WE ARE DOING
+{remediation_steps}
+
+WHAT YOU CAN DO
+1. Change your password immediately: {password_reset_url}
+2. Enable two-factor authentication if not already enabled
+3. Review your account activity for unauthorized access
+4. Be cautious of phishing attempts referencing this incident
+5. Monitor your accounts for suspicious activity
+
+CONTACT INFORMATION
+If you have questions or concerns, please contact us:
+{contact_info}
+
+We sincerely apologize for any inconvenience this may cause and are committed to protecting your information.
+
+--
+{app_name}
+{app_url}
+
+Reference: {incident_id}
+This notification was sent to: {user_email}

@@ -22,7 +22,8 @@ type Node struct {
 	IsPrimary     bool      `json:"is_primary"`
 	LastHeartbeat time.Time `json:"last_heartbeat"`
 	JoinedAt      time.Time `json:"joined_at"`
-	Status        string    `json:"status"` // active, inactive, failed
+	// Status: active, inactive, or failed
+	Status string `json:"status"`
 }
 
 // Lock represents a distributed lock
@@ -115,8 +116,10 @@ func (m *Manager) Stop() {
 // registerNode registers this node in the cluster
 func (m *Manager) registerNode() error {
 	hostname, _ := os.Hostname()
-	address := "0.0.0.0" // Will be updated from config
-	port := 0           // Will be updated from config
+	// Will be updated from config
+	address := "0.0.0.0"
+	// Will be updated from config
+	port := 0
 
 	_, err := m.db.Exec(`
 		INSERT OR REPLACE INTO cluster_nodes (id, hostname, address, port, last_heartbeat, status)

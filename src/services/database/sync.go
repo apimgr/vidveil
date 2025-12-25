@@ -53,8 +53,10 @@ type SyncManager struct {
 	cancel    context.CancelFunc
 	enabled   bool
 	version   int64
-	tables    map[string]bool // Tables to sync
-	pending   []*SyncEvent    // Events pending sync
+	// Tables to sync
+	tables map[string]bool
+	// Events pending sync
+	pending   []*SyncEvent
 	pendingMu sync.Mutex
 }
 
@@ -126,7 +128,8 @@ func (sm *SyncManager) RecordChange(eventType SyncEventType, table string, prima
 
 	if !sm.tables[table] {
 		sm.mu.RUnlock()
-		return nil // Table not registered for sync
+		// Table not registered for sync
+		return nil
 	}
 	sm.mu.RUnlock()
 

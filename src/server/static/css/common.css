@@ -7,7 +7,7 @@
     --bg-tertiary: #1e1f29;
     --bg-card: #383a4a;
     --text-primary: #f8f8f2;
-    --text-secondary: #6272a4;
+    --text-secondary: #7585b8;
     --text-muted: #888;
     --accent: #bd93f9;
     --accent-hover: #ff79c6;
@@ -30,7 +30,7 @@
     --bg-tertiary: #e8e8e8;
     --bg-card: #ffffff;
     --text-primary: #282a36;
-    --text-secondary: #6272a4;
+    --text-secondary: #7585b8;
     --text-muted: #888;
     --accent: #7c3aed;
     --accent-hover: #5b21b6;
@@ -188,7 +188,7 @@ main {
 }
 
 .site-footer .footer-timestamp {
-    color: skyblue;
+    color: #a9d9f5;
     margin-top: 1rem;
     font-size: 0.8rem;
 }
@@ -238,8 +238,8 @@ a:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -334,7 +334,9 @@ a:hover {
 /* Mobile hamburger toggle - hidden on desktop */
 .nav-toggle {
     display: none;
-    padding: 0.5rem;
+    padding: 0.75rem;
+    min-width: 44px;
+    min-height: 44px;
     background: none;
     border: none;
     color: var(--text-primary);
@@ -379,7 +381,12 @@ a:hover {
     font-size: 1.5rem;
     color: var(--text-secondary);
     cursor: pointer;
-    padding: 0.25rem 0.5rem;
+    padding: 0.75rem 1rem;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .nav-panel-close:hover {

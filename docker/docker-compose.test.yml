@@ -1,0 +1,36 @@
+# Vidveil Docker Compose (Testing)
+# Per AI.md PART 13: Testing mode with debug endpoints enabled
+# Location: ./docker/docker-compose.test.yml
+#
+# USAGE (per AI.md PART 13 - NEVER run in project directory):
+#   TEMP_DIR="/tmp/vidveil-test-$(date +%s)"
+#   mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
+#   cp ./docker/docker-compose.test.yml "$TEMP_DIR/docker-compose.yml"
+#   cd "$TEMP_DIR" && docker compose up -d
+
+name: vidveil-test
+
+services:
+  vidveil:
+    image: ghcr.io/apimgr/vidveil:latest
+    container_name: vidveil-test
+    restart: unless-stopped
+    environment:
+      # Testing mode with debug endpoints enabled
+      - MODE=development
+      - DEBUG=true
+      - TZ=America/New_York
+      - ENABLE_TOR=false
+    ports:
+      # Testing: accessible from all interfaces
+      - "64889:80"
+    volumes:
+      - ./rootfs/config:/config:z
+      - ./rootfs/data:/data:z
+    networks:
+      - vidveil-test
+
+networks:
+  vidveil-test:
+    name: vidveil-test
+    external: false

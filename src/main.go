@@ -11,11 +11,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server"
 	"github.com/apimgr/vidveil/src/service/admin"
 	"github.com/apimgr/vidveil/src/service/database"
@@ -42,7 +44,8 @@ func main() {
 		pidFile     string
 		address     string
 		port        string
-		mode        string
+		modeFlag        string
+		debug       bool
 		daemon      bool
 		serviceCmd  string
 		maintCmd    string
@@ -106,11 +109,14 @@ func main() {
 				port = args[i]
 			}
 
-		case "--mode":
+		case "--modeFlag":
 			if i+1 < len(args) {
 				i++
-				mode = args[i]
+				modeFlag = args[i]
 			}
+
+		case "--debug":
+			debug = true
 
 		case "--service":
 			if i+1 < len(args) {
@@ -155,8 +161,8 @@ func main() {
 				address = strings.TrimPrefix(arg, "--address=")
 			} else if strings.HasPrefix(arg, "--port=") {
 				port = strings.TrimPrefix(arg, "--port=")
-			} else if strings.HasPrefix(arg, "--mode=") {
-				mode = strings.TrimPrefix(arg, "--mode=")
+			} else if strings.HasPrefix(arg, "--modeFlag=") {
+				modeFlag = strings.TrimPrefix(arg, "--modeFlag=")
 			}
 		}
 		i++
@@ -204,16 +210,20 @@ func main() {
 
 	// MODE env var is runtime - always checked per TEMPLATE.md
 	// Priority: CLI flag > env var > config file
-	if mode == "" && os.Getenv("MODE") != "" {
-		mode = os.Getenv("MODE")
+	if modeFlag == "" && os.Getenv("MODE") != "" {
+		modeFlag = os.Getenv("MODE")
 	}
 
-	// Handle daemon mode per TEMPLATE.md PART 4
+	// Initialize modeFlag and debug per TEMPLATE.md PART 5
+	// This must happen before starting the server
+	mode.Initialize(modeFlag, debug)
+
+	// Handle daemon modeFlag per TEMPLATE.md PART 4
 	if daemon {
 		// Daemonize: fork to background
-		// For now, just log that daemon mode was requested
+		// For now, just log that daemon modeFlag was requested
 		// Full implementation requires platform-specific code
-		fmt.Println("🔄 Running in daemon mode...")
+		fmt.Println("🔄 Running in daemon modeFlag...")
 	}
 
 	// Load configuration
@@ -248,9 +258,9 @@ func main() {
 		cfg.Server.Port = port
 	}
 
-	// Apply mode (CLI > env > config, normalized)
-	if mode != "" {
-		cfg.Server.Mode = config.NormalizeMode(mode)
+	// Apply modeFlag (CLI > env > config, normalized)
+	if modeFlag != "" {
+		cfg.Server.Mode = config.NormalizeMode(modeFlag)
 	} else if cfg.Server.Mode == "" {
 		cfg.Server.Mode = "production"
 	} else {
@@ -341,9 +351,9 @@ func main() {
 			return nil
 		},
 		ClusterHeartbeat: func(ctx context.Context) error {
-			// Cluster heartbeat - only in cluster mode
+			// Cluster heartbeat - only in cluster modeFlag
 			// TODO: Enable when cluster config is implemented
-			// Cluster mode is disabled by default
+			// Cluster modeFlag is disabled by default
 			return nil
 		},
 	})
@@ -470,13 +480,14 @@ Options:
   --help              Show this help message
   --version           Show version information
   --status            Check server status and health
-  --mode <mode>       Set application mode (prod/production or dev/development)
+  --modeFlag <modeFlag>       Set application modeFlag (prod/production or dev/development)
   --config <dir>      Set configuration directory
   --data <dir>        Set data directory
   --log <dir>         Set log directory
   --pid <file>        Set PID file path
   --address <addr>    Set listen address
   --port <port>       Set port (e.g., 8888 or 80,443)
+  --debug             Enable debug modeFlag (enables /debug/pprof endpoints)
   --daemon            Run in background (daemonize)
 
 Update (TEMPLATE.md PART 14):
@@ -499,11 +510,11 @@ Maintenance:
   --maintenance backup [file]     Create backup
   --maintenance restore [file]    Restore from backup
   --maintenance update            Alias for --update yes
-  --maintenance mode <on|off>     Enable/disable maintenance mode
+  --maintenance modeFlag <on|off>     Enable/disable maintenance modeFlag
   --maintenance setup             Reset admin credentials (recovery)
 
 Environment Variables:
-  MODE                Application mode (runtime, always checked)
+  MODE                Application modeFlag (runtime, always checked)
 
   Initialization only (used once on first run):
   CONFIG_DIR          Configuration directory
@@ -523,9 +534,12 @@ Source: https://github.com/apimgr/vidveil
 }
 
 func printVersion() {
-	fmt.Printf("Vidveil v%s\n", Version)
-	fmt.Printf("Build: %s\n", BuildDate)
+	// Per AI.md PART 15: --version Output
+	fmt.Printf("vidveil v%s\n", Version)
+	fmt.Printf("Built: %s\n", BuildDate)
 	fmt.Printf("Commit: %s\n", CommitID)
+	fmt.Printf("Go: %s\n", runtime.Version())
+	fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 }
 
 func checkStatus() int {
@@ -781,10 +795,10 @@ func handleMaintenanceCommand(cmd, arg string) {
 			os.Exit(1)
 		}
 
-	case "mode":
+	case "modeFlag":
 		if arg == "" {
-			fmt.Println("❌ Missing mode argument")
-			fmt.Println("   Usage: vidveil --maintenance mode <on|off>")
+			fmt.Println("❌ Missing modeFlag argument")
+			fmt.Println("   Usage: vidveil --maintenance modeFlag <on|off>")
 			os.Exit(1)
 		}
 
@@ -796,7 +810,7 @@ func handleMaintenanceCommand(cmd, arg string) {
 		case "0", "no", "false", "disable", "disabled", "off":
 			enabled = false
 		default:
-			fmt.Printf("❌ Invalid mode value: %s\n", arg)
+			fmt.Printf("❌ Invalid modeFlag value: %s\n", arg)
 			fmt.Println("   Valid values: on, off, true, false, yes, no, enable, disable")
 			os.Exit(1)
 		}
@@ -841,7 +855,7 @@ Maintenance Commands:
   vidveil --maintenance backup [file]     Create backup
   vidveil --maintenance restore [file]    Restore from backup
   vidveil --maintenance update            Check and apply updates
-  vidveil --maintenance mode <on|off>     Enable/disable maintenance mode
+  vidveil --maintenance modeFlag <on|off>     Enable/disable maintenance modeFlag
   vidveil --maintenance setup             Reset admin credentials (recovery)`)
 		os.Exit(1)
 	}

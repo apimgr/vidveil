@@ -11,28 +11,28 @@
         <form id="preferences-form">
             <section>
                 <h2>Appearance</h2>
-                <label>
-                    Theme:
+                <div class="form-group">
+                    <label for="theme">Theme:</label>
                     <select id="theme" name="theme">
                         <option value="dark">Dark (Dracula)</option>
                         <option value="light">Light</option>
                     </select>
-                </label>
+                </div>
             </section>
 
             <section>
                 <h2>Search Settings</h2>
-                <label>
-                    Results per page:
+                <div class="form-group">
+                    <label for="results-per-page">Results per page:</label>
                     <select id="results-per-page" name="resultsPerPage">
                         <option value="20">20</option>
                         <option value="50" selected>50</option>
                         <option value="100">100</option>
                     </select>
-                </label>
+                </div>
 
-                <label>
-                    Minimum video duration:
+                <div class="form-group">
+                    <label for="min-duration">Minimum video duration:</label>
                     <select id="min-duration" name="minDuration">
                         <option value="0">No minimum</option>
                         <option value="60">1 minute</option>
@@ -42,22 +42,27 @@
                         <option value="1200">20 minutes</option>
                         <option value="1800">30 minutes</option>
                     </select>
-                </label>
+                </div>
 
-                <label>
-                    <input type="checkbox" id="open-new-tab" name="openNewTab" checked>
-                    Open links in new tab
-                </label>
+                <div class="form-group">
+                    <label for="open-new-tab">
+                        <input type="checkbox" id="open-new-tab" name="openNewTab" checked>
+                        Open links in new tab
+                    </label>
+                </div>
             </section>
 
             <section>
                 <h2>Privacy</h2>
-                <label>
-                    <input type="checkbox" id="use-tor" name="useTor">
-                    Use Tor for all searches (requires Tor running)
-                </label>
-                <label>
-                    <input type="checkbox" id="proxy-images" name="proxyImages">
+                <div class="form-group">
+                    <label for="use-tor">
+                        <input type="checkbox" id="use-tor" name="useTor">
+                        Use Tor for all searches (requires Tor running)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="proxy-images">
+                        <input type="checkbox" id="proxy-images" name="proxyImages">
                     Proxy thumbnails through server
                 </label>
             </section>

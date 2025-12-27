@@ -8,18 +8,15 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/paths"
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	ProjectOrg  = "apimgr"
-	ProjectName = "vidveil"
-)
+// paths.ProjectOrg and paths.ProjectName are defined in paths package
 
 // Version is set at build time via ldflags
 var Version = "dev"
@@ -547,12 +544,8 @@ type AgeVerificationConfig struct {
 }
 
 // Paths holds resolved directory paths
-type Paths struct {
-	Config string
-	Data   string
-	Log    string
-	Backup string
-}
+// Paths is now defined in paths package
+type Paths = paths.Paths
 
 // Default returns a Config with sensible defaults per TEMPLATE.md
 func Default() *Config {
@@ -834,28 +827,9 @@ func Default() *Config {
 	}
 }
 
-// GetPaths returns OS-appropriate paths
+// GetPaths returns OS-appropriate paths (delegated to paths package)
 func GetPaths(configDir, dataDir string) *Paths {
-	isRoot := os.Geteuid() == 0
-
-	paths := &Paths{}
-
-	if configDir != "" {
-		paths.Config = configDir
-	} else {
-		paths.Config = getDefaultConfigDir(isRoot)
-	}
-
-	if dataDir != "" {
-		paths.Data = dataDir
-	} else {
-		paths.Data = getDefaultDataDir(isRoot)
-	}
-
-	paths.Log = getDefaultLogDir(isRoot)
-	paths.Backup = getDefaultBackupDir(isRoot)
-
-	return paths
+	return paths.Get(configDir, dataDir)
 }
 
 // Load loads configuration from file or creates default
@@ -989,121 +963,9 @@ func generateToken(length int) string {
 	return hex.EncodeToString(bytes)
 }
 
-func getDefaultConfigDir(isRoot bool) string {
-	switch runtime.GOOS {
-	case "linux":
-		if isRoot {
-			return fmt.Sprintf("/etc/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", ProjectOrg, ProjectName)
-	case "darwin":
-		if isRoot {
-			return fmt.Sprintf("/Library/Application Support/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", ProjectOrg, ProjectName)
-	case "windows":
-		if isRoot {
-			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName)
-		}
-		return filepath.Join(os.Getenv("APPDATA"), ProjectOrg, ProjectName)
-	// BSD and other Unix-like systems
-	default:
-		if isRoot {
-			return fmt.Sprintf("/usr/local/etc/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".config", ProjectOrg, ProjectName)
-	}
-}
 
-func getDefaultDataDir(isRoot bool) string {
-	switch runtime.GOOS {
-	case "linux":
-		if isRoot {
-			return fmt.Sprintf("/var/lib/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName)
-	case "darwin":
-		if isRoot {
-			return fmt.Sprintf("/Library/Application Support/%s/%s/data", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", ProjectOrg, ProjectName)
-	case "windows":
-		if isRoot {
-			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName, "data")
-		}
-		return filepath.Join(os.Getenv("LocalAppData"), ProjectOrg, ProjectName)
-	// BSD and other Unix-like systems
-	default:
-		if isRoot {
-			return fmt.Sprintf("/var/db/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName)
-	}
-}
 
-func getDefaultLogDir(isRoot bool) string {
-	switch runtime.GOOS {
-	case "linux":
-		if isRoot {
-			return fmt.Sprintf("/var/log/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, "logs")
-	case "darwin":
-		if isRoot {
-			return fmt.Sprintf("/Library/Logs/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Logs", ProjectOrg, ProjectName)
-	case "windows":
-		if isRoot {
-			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName, "logs")
-		}
-		return filepath.Join(os.Getenv("LocalAppData"), ProjectOrg, ProjectName, "logs")
-	// BSD and other Unix-like systems
-	default:
-		if isRoot {
-			return fmt.Sprintf("/var/log/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, "logs")
-	}
-}
 
-func getDefaultBackupDir(isRoot bool) string {
-	switch runtime.GOOS {
-	case "linux":
-		if isRoot {
-			return fmt.Sprintf("/mnt/Backups/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "backups", ProjectOrg, ProjectName)
-	case "darwin":
-		if isRoot {
-			return fmt.Sprintf("/Library/Backups/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Backups", ProjectOrg, ProjectName)
-	case "windows":
-		if isRoot {
-			return filepath.Join(os.Getenv("ProgramData"), "Backups", ProjectOrg, ProjectName)
-		}
-		return filepath.Join(os.Getenv("LocalAppData"), "Backups", ProjectOrg, ProjectName)
-	// BSD and other Unix-like systems
-	default:
-		if isRoot {
-			return fmt.Sprintf("/var/backups/%s/%s", ProjectOrg, ProjectName)
-		}
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "backups", ProjectOrg, ProjectName)
-	}
-}
 
 // IsContainer detects if running in a container (tini as PID 1)
 func IsContainer() bool {
@@ -1385,7 +1247,7 @@ func isDevTLD(fqdn string) bool {
 		".local", ".test", ".example", ".invalid",
 		".localhost", ".lan", ".internal", ".home", ".localdomain",
 		".home.arpa", ".intranet", ".corp", ".private",
-		"." + ProjectName,
+		"." + paths.ProjectName,
 	}
 	for _, suffix := range devSuffixes {
 		if strings.HasSuffix(lower, suffix) {

@@ -4,11 +4,23 @@
 
 ---
 
-# TERMINOLOGY
+# PROJECT DESCRIPTION
 
-**"Project", "App", and "Application" are used interchangeably throughout this document.**
+**{Provide a brief description of what this project does and its primary purpose}**
 
-They all refer to the same thing: the complete codebase including all files, configuration, and functionality.
+Example:
+- A REST API service that provides random jokes
+- A timezone conversion API with city lookup
+- A GitHub .gitignore template generator
+
+**Key Features:**
+- {Feature 1}
+- {Feature 2}
+- {Feature 3}
+
+**Target Users:**
+- {Who uses this?}
+- {What problem does it solve?}
 
 ---
 
@@ -30,6 +42,178 @@ They all refer to the same thing: the complete codebase including all files, con
 - If the spec says X, you do X - not Y, not "improved X", not "X but slightly different"
 
 **If something seems wrong or suboptimal in this spec, follow it anyway and flag it for review. Do NOT silently "fix" it.**
+
+## ⚠️ CRITICAL: File Paths and Project Root ⚠️
+
+**THIS TEMPLATE FILE CAN LIVE ANYWHERE. YOUR PROJECT FILES DO NOT.**
+
+When using this template to build or modify a project:
+
+| ❌ WRONG | ✅ CORRECT |
+|----------|-----------|
+| Create files relative to TEMPLATE.md location | Create files relative to PROJECT root directory |
+| `/root/Projects/github/apimgr/src/` | `{project_root}/src/` |
+| Where this template lives | Where the project being built lives |
+
+**Common Mistake Example:**
+```
+User: "Use TEMPLATE.md to build myproject in ~/Documents/myproject"
+AI (WRONG): Creates files in /root/Projects/github/apimgr/src/
+AI (RIGHT): Creates files in ~/Documents/myproject/src/
+```
+
+**Rules:**
+- **TEMPLATE.md location** = Reference document (can be anywhere: ~/Projects/github/apimgr/, ~/, etc.)
+- **Project root** = Where YOUR project lives (can be anywhere: ~/Documents/myproject, ~/myproject, /workspace/project, etc.)
+- **ALL file operations** = Relative to PROJECT root, NOT template location
+- **Use `git rev-parse --show-toplevel`** when in a git repo to find project root
+- **Never assume** cwd or template location is the project root
+
+## ⚠️ CRITICAL: NEVER Reference TEMPLATE.md in Generated Files ⚠️
+
+**When generating code, comments, or documentation for a project:**
+
+| ❌ NEVER Write This | ✅ Always Write This |
+|---------------------|---------------------|
+| `// See TEMPLATE.md for details` | `// See AI.md for details` |
+| `# Based on TEMPLATE.md` | `# Based on AI.md` |
+| `Read TEMPLATE.md` | `Read AI.md` |
+| `Check TEMPLATE.md` | `Check AI.md` |
+| `Consult TEMPLATE.md` | `Consult AI.md` |
+| `From TEMPLATE.md` | `From AI.md` |
+
+**Why?** Projects don't have TEMPLATE.md - they have AI.md (the project-specific spec created from TEMPLATE.md). Writing "TEMPLATE.md" in project files creates broken references.
+
+**Rule:** In ALL generated code, comments, documentation, and messages, reference **AI.md**, never TEMPLATE.md.
+
+## ⚠️ CRITICAL: NEVER Overwrite AI.md (Unless Explicitly Told) ⚠️
+
+**AI.md IS THE SOURCE OF TRUTH. DO NOT REGENERATE OR OVERWRITE IT DURING NORMAL WORK.**
+
+**During normal development work:**
+
+| ❌ NEVER Do This | ✅ Always Do This |
+|------------------|-------------------|
+| Regenerate AI.md from TEMPLATE.md | Update only PART 36 in AI.md |
+| Overwrite entire AI.md | Edit specific sections that changed |
+| "Refresh" AI.md on your own | Keep AI.md intact, update targeted content only |
+| Delete and recreate AI.md | Preserve all existing content |
+
+**Exception:** If user explicitly says "re-read template and update AI.md", then copy TEMPLATE.md → AI.md and immediately update PART 36 with current project info (see details below).
+
+**AI.md Structure:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ AI.md = ENTIRE TEMPLATE (COMPLETE COPY) + PROJECT INFO         │
+│                                                                 │
+│ ⚠️  CRITICAL: DO NOT REMOVE ANYTHING FROM PARTS 1-35           │
+│                                                                 │
+│ ✓ Template sections (PARTS 1-35):  MUST STAY IDENTICAL        │
+│     → Copy completely, do NOT shorten or remove ANY content    │
+│     → Keep every line, every section, every word               │
+│                                                                 │
+│ ✓ Project-specific (PART 36):  FILL IN WITH PROJECT DETAILS   │
+│     → Replace template placeholders with actual project info   │
+│     → Add all endpoints, features, configurations              │
+│     → This section will be LARGER than template version        │
+│                                                                 │
+│ Size: AI.md will be AT LEAST ~1.1MB (TEMPLATE.md size)           │
+│       Often LARGER due to detailed PART 36 content             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**What "Stay in Sync" Means:**
+
+| File/Section | Must Match Reality | Update When |
+|--------------|-------------------|-------------|
+| **AI.md PART 36** | Actual project code/features | Code changes, features added/removed |
+| **README.md** | Current functionality | Features, usage, installation changes |
+| **docs/** (ReadTheDocs) | Current API/config/usage | Any user-facing changes |
+| **Swagger annotations** | Actual API endpoints | Routes/handlers added/removed/changed |
+| **GraphQL schema** | Actual GraphQL types/queries | Schema changes |
+
+**Rules for Updating Documentation:**
+
+1. **AI.md PART 36**: Update business logic, data models, features (NOT implementation patterns)
+   - Add new business rules
+   - Update data structures/models
+   - Document new features and their purpose
+   - Do NOT add route formats, HTML patterns, etc. (those are in PARTS 1-35)
+2. **README.md**: Keep feature list, usage examples, and installation steps current
+3. **docs/**: Update relevant .md files when config options, API routes, or behavior changes
+4. **Swagger**: Add/update/remove annotations when endpoints change
+5. **GraphQL**: Update schema and resolvers when types/queries change
+
+**NEVER:**
+- Regenerate AI.md from scratch
+- Overwrite template sections (PARTS 1-35) in AI.md
+- Let documentation drift from actual code
+- Reference features in docs that don't exist in code
+- Keep outdated API documentation
+
+**Example - Adding a New Feature:**
+
+```
+✓ CORRECT:
+1. Write the code (new handler, service, etc.)
+2. Update AI.md PART 36 - add feature description
+3. Update README.md - add feature to list
+4. Update docs/api.md - document new endpoints
+5. Add Swagger annotations to new handlers
+6. Update GraphQL schema if applicable
+
+✗ WRONG:
+1. Write the code
+2. Regenerate AI.md from TEMPLATE.md (loses project-specific content!)
+3. Leave README.md unchanged (documentation now lies)
+```
+
+### Exception: Refreshing AI.md from Template
+
+**There is ONE exception to "never overwrite AI.md":**
+
+When the user **explicitly asks** to refresh/update AI.md from the template:
+
+```
+User: "Re-read the template and update AI.md"
+User: "Refresh AI.md from TEMPLATE.md"
+User: "Update AI.md with latest template"
+```
+
+**In this case, the workflow is:**
+
+```
+✓ CORRECT WORKFLOW:
+1. Copy ENTIRE TEMPLATE.md → AI.md (COMPLETE file, ~1.1MB, ALL sections)
+   ⚠️  DO NOT shorten, summarize, or remove ANY sections from PARTS 1-35
+   ⚠️  AI.md will be AT LEAST ~1.1MB (often larger when PART 36 is filled in)
+2. Replace vidveil, apimgr, VIDVEIL variables
+3. IMMEDIATELY update PART 36 with current project-specific info:
+   - Read actual project code
+   - Document actual features/endpoints/config
+   - Reflect current project state
+4. Delete "HOW TO USE THIS TEMPLATE" section ONLY
+5. Result: COMPLETE template (PARTS 1-35 unchanged) + Current project info (PART 36)
+
+✗ WRONG WORKFLOW:
+1. Copy and shorten/summarize template (AI.md becomes tiny!)
+2. Remove sections you think aren't needed (BREAKS THE SPEC!)
+3. Create condensed version (NOT ALLOWED!)
+
+⚠️  CRITICAL: AI.md is the COMPLETE project specification, not a summary!
+```
+
+**Why this is allowed:**
+- TEMPLATE.md gets improvements and updates over time
+- Refreshing brings bug fixes, new features, better organization
+- PART 36 gets repopulated with current project reality
+- No information is lost if PART 36 is updated immediately
+
+**When NOT to do this:**
+- Don't refresh during normal development work
+- Don't refresh just because code changed (update PART 36 only)
+- Only refresh when template has significant updates
 
 ## Build & Binary Rules
 
@@ -54,7 +238,7 @@ They all refer to the same thing: the complete codebase including all files, con
 | **STOPSIGNAL** | `SIGRTMIN+3` |
 | **ENTRYPOINT** | `["tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh"]` |
 | **NEVER modify ENTRYPOINT/CMD** | All customization via entrypoint.sh |
-| **Required packages** | `curl`, `bash`, `tini`, `tor` |
+| **Required packages** | `git`, `curl`, `bash`, `tini`, `tor` |
 | **Tor** | Auto-enabled if `tor` binary installed (Docker image always has Tor) |
 
 ### Container Port Behavior (NON-NEGOTIABLE)
@@ -85,7 +269,7 @@ They all refer to the same thing: the complete codebase including all files, con
 |------|-------------|
 | **NEVER use Makefile in CI** | Workflows have explicit commands with all env vars |
 | **GitHub/Gitea/Jenkins must match** | Same platforms, same env vars, same logic |
-| **VERSION from tag** | Strip `v` prefix: `v1.2.3` → `1.2.3` |
+| **VERSION from tag** | Strip `v` prefix from semver only: `v1.2.3` → `1.2.3`, `dev` → `dev` |
 | **LDFLAGS** | `-s -w -X 'main.Version=...' -X 'main.CommitID=...' -X 'main.BuildDate=...'` |
 | **Docker builds on EVERY push** | Any branch push triggers Docker image build |
 | **Docker tags** | Any push → `devel`, `{commit}`; beta → adds `beta`; tag → `{version}`, `latest`, `YYMM`, `{commit}` |
@@ -139,7 +323,7 @@ releases/                   # Release artifacts (gitignored)
 ```
 
 **Notes:**
-- `src/client/` is only present if the project includes a CLI client. See PART 33 for CLI details.
+- `src/client/` is only present if the project includes a CLI client. See PART 34 for CLI details.
 - `docker/rootfs/` is for BUILD-TIME container overlay (copied into image). Runtime volumes (`./rootfs/config`, `./rootfs/data`) are NEVER in the repo - they exist only where docker-compose runs (production server or temp dir).
 
 ## File & Directory Naming Conventions (NON-NEGOTIABLE)
@@ -181,6 +365,7 @@ src/
 ├── server/
 │   ├── server.go              # Server setup, routes, middleware
 │   ├── middleware.go          # HTTP middleware (auth, logging, etc.)
+│   ├── theme.go               # Project-wide theme detection & switching
 │   ├── handler/               # HTTP handlers by domain
 │   │   ├── health.go          # Health check handlers
 │   │   ├── auth.go            # Authentication handlers
@@ -204,6 +389,15 @@ src/
 │       ├── layout/            # Base layouts
 │       ├── page/              # Full pages
 │       └── partial/           # Reusable components
+├── swagger/                   # OpenAPI/Swagger (REQUIRED - always relative to src/)
+│   ├── swagger.go             # Swagger handler & spec generation
+│   ├── annotations.go         # Swagger annotations (generated or manual)
+│   └── theme.go               # Swagger UI theming (light/dark/auto)
+├── graphql/                   # GraphQL API (REQUIRED - always relative to src/)
+│   ├── graphql.go             # GraphQL handler & schema
+│   ├── schema.go              # GraphQL schema generation
+│   ├── resolvers.go           # GraphQL resolvers
+│   └── theme.go               # GraphiQL theming (light/dark/auto)
 ├── mode/
 │   └── mode.go                # Application mode (production/development)
 ├── paths/
@@ -240,6 +434,8 @@ src/
 | `template/` | HTML templates | Go templates for web UI |
 | `static/` | Static assets | CSS, JS, images (embedded) |
 | `migration/` | DB migrations | SQL migration files |
+| `swagger/` | OpenAPI/Swagger | Spec generation, UI handler, theming (always `src/swagger/`) |
+| `graphql/` | GraphQL API | Schema, resolvers, UI handler, theming (always `src/graphql/`) |
 
 ### File Content Guidelines
 
@@ -306,7 +502,7 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 | `CONTRIBUTING.md` in root | Belongs in `.github/` |
 | `CODE_OF_CONDUCT.md` in root | Belongs in `.github/` |
 | `SECURITY.md` in root | Belongs in `.github/` |
-| `PULL_REQUEST_AI.md` in root | Belongs in `.github/` |
+| `PULL_REQUEST_TEMPLATE.md` in root | Belongs in `.github/` |
 | `*.example.*` | No example files (defaults in binary) |
 | `*.sample.*` | No sample files |
 | `.env*` | No .env files |
@@ -331,6 +527,19 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 | `mkdocs.yml` | ✓ | MkDocs configuration |
 | `.readthedocs.yaml` | ✓ | ReadTheDocs configuration |
 
+### AI-Specific Files and Directories
+
+| File/Directory | Required | Purpose |
+|----------------|:--------:|---------|
+| `.claude/` | Optional | Claude AI configuration directory |
+| `.cursor/` | Optional | Cursor AI configuration directory |
+| `.aider/` | Optional | Aider AI configuration directory |
+| `.ai/` | Optional | Generic AI configuration directory |
+| `.windsurf/` | Optional | Windsurf AI configuration directory |
+| Other AI config dirs | Optional | Any AI assistant configuration directories |
+
+**Note:** AI configuration directories are allowed in project root for tool-specific settings.
+
 ### GitHub-Specific Files (`.github/` directory)
 
 | File | Location |
@@ -340,7 +549,7 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 | `SECURITY.md` | `.github/SECURITY.md` |
 | `FUNDING.yml` | `.github/FUNDING.yml` |
 | `ISSUE_TEMPLATE/` | `.github/ISSUE_TEMPLATE/` |
-| `PULL_REQUEST_AI.md` | `.github/PULL_REQUEST_AI.md` |
+| `PULL_REQUEST_TEMPLATE.md` | `.github/PULL_REQUEST_TEMPLATE.md` |
 | `workflows/*.yml` | `.github/workflows/` |
 
 ### Gitea-Specific Files (`.gitea/` directory)
@@ -348,7 +557,7 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 | File | Location |
 |------|----------|
 | `ISSUE_TEMPLATE/` | `.gitea/ISSUE_TEMPLATE/` |
-| `PULL_REQUEST_AI.md` | `.gitea/PULL_REQUEST_AI.md` |
+| `PULL_REQUEST_TEMPLATE.md` | `.gitea/PULL_REQUEST_TEMPLATE.md` |
 | `workflows/*.yml` | `.gitea/workflows/` |
 
 **RULE: If a file doesn't appear in the allowed list, it probably shouldn't exist.**
@@ -361,9 +570,11 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 
 ## Core Terms
 
+**Note:** "Project", "App", and "Application" are used interchangeably throughout this document - they all refer to the complete codebase including all files, configuration, and functionality.
+
 | Term | Definition |
 |------|------------|
-| **App / Application** | The server binary you are building (`vidveil`) |
+| **Project / App / Application** | The server binary you are building (`vidveil`) - used interchangeably |
 | **App Instance** | A single running copy of the app (one process) |
 | **Server** | The machine (physical, VM, or container) running an app instance |
 
@@ -435,30 +646,72 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 
 # AI ASSISTANT INSTRUCTIONS (READ THIS ENTIRE SECTION)
 
-## CRITICAL: AI.md vs AI.md - Know The Difference
+## ⚠️ STEP 1: CHECK WHICH FILE TO USE ⚠️
+
+**BEFORE doing ANYTHING, determine which file to use:**
+
+```bash
+# Check if AI.md exists in the project directory
+if [ -f "AI.md" ]; then
+    # ✓ AI.md EXISTS → Use AI.md, DO NOT use TEMPLATE.md
+    # Exception: Only use TEMPLATE.md if user explicitly says:
+    #   "re-read template", "refresh from template", etc.
+else
+    # ✗ AI.md MISSING → Use TEMPLATE.md to create AI.md
+fi
+```
+
+**Decision Logic:**
+
+| Situation | File to Use | Action |
+|-----------|-------------|--------|
+| **AI.md exists** | **Use AI.md** | Read AI.md for ALL project work, ignore TEMPLATE.md |
+| **AI.md exists** + user says "refresh from template" | **Use TEMPLATE.md** | Copy TEMPLATE.md → AI.md, update PART 36 |
+| **AI.md missing** | **Use TEMPLATE.md** | Create AI.md from TEMPLATE.md |
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    ⚠️  CRITICAL RULE  ⚠️                                │
+│                                                                         │
+│   IF AI.md EXISTS in project:                                           │
+│     → Use AI.md ONLY (ignore TEMPLATE.md)                              │
+│     → Do NOT reference TEMPLATE.md                                      │
+│     → Do NOT look at TEMPLATE.md                                        │
+│     → Do NOT compare against TEMPLATE.md                                │
+│                                                                         │
+│   EXCEPTION - Only use TEMPLATE.md if user explicitly says:            │
+│     → "Re-read the template"                                            │
+│     → "Refresh AI.md from template"                                     │
+│     → "Update AI.md with latest template"                               │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## CRITICAL: TEMPLATE.md vs AI.md - Know The Difference
 
 **STOP. Understand this before doing ANYTHING.**
 
 ### The Two Files
 
-| File | What It Is | Location | Modify? |
-|------|------------|----------|---------|
-| **AI.md** | Master template (this file) | Organization/shared location | **NEVER** |
-| **AI.md** | Project specification | Each project repository | **YES** |
+| File | What It Is | Location | Use When? |
+|------|------------|----------|-----------|
+| **TEMPLATE.md** | Master template (this file) | Organization/shared location | **ONLY when AI.md missing OR user says "refresh"** |
+| **AI.md** | Project specification | Each project repository | **ALWAYS (if it exists)** |
 
 ### The Rule
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
-│   AI.md is used ONCE to CREATE AI.md.                            │
-│   After that, AI.md IS THE SPEC. AI.md is NEVER used again.      │
+│   TEMPLATE.md is used to CREATE AI.md (when AI.md doesn't exist)       │
+│   After AI.md exists, AI.md IS THE SPEC. Use AI.md, not TEMPLATE.md    │
 │                                                                         │
-│   When working on a project:                                            │
+│   When working on a project with AI.md:                                 │
 │     ✓ Read and follow AI.md (the project spec)                         │
-│     ✗ Do NOT reference AI.md                                      │
-│     ✗ Do NOT compare against AI.md                                │
-│     ✗ Do NOT "sync" with AI.md                                    │
+│     ✗ Do NOT reference TEMPLATE.md                                      │
+│     ✗ Do NOT compare against TEMPLATE.md                                │
+│     ✗ Do NOT look at TEMPLATE.md                                        │
+│     ✗ Do NOT check TEMPLATE.md for updates                              │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -466,150 +719,191 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 ### Workflow
 
 ```
-AI.md (this file)
+TEMPLATE.md (this file ~1.1MB)
     │
-    │  ONE-TIME COPY (only if AI.md doesn't exist)
-    │  - Copy AI.md → AI.md
+    │  INITIAL COPY (when AI.md doesn't exist)
+    │  - Copy ENTIRE TEMPLATE.md → AI.md (~1.1MB complete copy)
+    │  - ⚠️  DO NOT shorten, summarize, or remove ANY sections
     │  - Replace vidveil, apimgr variables
-    │  - Fill in PART 32 (project-specific sections)
-    │  - Delete "HOW TO USE THIS TEMPLATE" section
+    │  - Fill in PART 36 (project-specific sections)
+    │  - Delete "HOW TO USE THIS TEMPLATE" section ONLY
     │
     ▼
-AI.md (project specification)
+AI.md (project specification ~1.1MB+)
     │
-    │  THIS IS NOW YOUR SPEC
+    │  THIS IS NOW YOUR SPEC - DON'T OVERWRITE DURING NORMAL WORK
+    │  - PARTS 1-35 MUST stay IDENTICAL to template (no removal)
+    │  - PART 36 will be LARGER (filled with project details)
     │  - Read AI.md for all project work
-    │  - Update AI.md when project changes
-    │  - NEVER go back to AI.md
+    │  - Update ONLY PART 36 when project changes
+    │  - NEVER regenerate on your own
+    │  - Keep template sections (PARTS 1-35) intact and complete
+    │
+    │  ◄─────────────────────┐
+    │                        │
+    │  EXCEPTION: Template Refresh (when user explicitly requests)
+    │  - User says: "Re-read template and update AI.md"
+    │  - Copy ENTIRE TEMPLATE.md → AI.md (complete fresh copy)
+    │  - ⚠️  DO NOT shorten or summarize
+    │  - Immediately update PART 36 with current project info
+    │  - Result: Complete latest template + current project details
     │
     ▼
 Project Implementation
+    │
+    │  KEEP DOCUMENTATION IN SYNC
+    │  - Update AI.md PART 36 when features change (business logic only)
+    │  - Implementation follows PARTS 1-35 standards (no custom patterns)
+    │  - Update README.md when functionality changes
+    │  - Update docs/ when API/config changes
+    │  - Update Swagger annotations when routes change
+    │  - Update GraphQL schema when types change
+    │
+    ▼
+All Documentation Reflects Current Code
 ```
 
 ### How to Know Which File You're In
 
-| You're in AI.md if... | You're in AI.md if... |
+| You're in TEMPLATE.md if... | You're in AI.md if... |
 |-----------------------------|----------------------|
 | File contains `vidveil` variables | Variables are replaced with real values |
 | Has "HOW TO USE THIS TEMPLATE" section | That section is deleted |
 | Located in organization/shared folder | Located in project repository |
-| ~850KB / ~24,000 lines | Smaller (project-specific content only) |
+| ~1.1MB / ~30,000 lines | ~1.1MB+ / ~29,000+ lines (at least same size, often larger) |
 
 ### What To Do
 
 | Scenario | Action |
 |----------|--------|
-| Project has AI.md | **Use AI.md only** - ignore AI.md |
-| Project missing AI.md | Create AI.md from AI.md (one-time) |
-| Asked to update spec | Update AI.md, never AI.md |
-| Asked to check compliance | Check against AI.md, not AI.md |
+| **Starting work on project** | **Check if AI.md exists - if YES, use AI.md ONLY** |
+| Project has AI.md | **Use AI.md only** - DO NOT open/read TEMPLATE.md |
+| Project missing AI.md | Create AI.md from TEMPLATE.md (one-time) |
+| Asked to update spec | Update AI.md PART 36 only, never overwrite entire file |
+| Asked to check compliance | Check against AI.md, NOT TEMPLATE.md |
+| Asked for rules/requirements | Read AI.md, NOT TEMPLATE.md |
 | Template was updated | Does NOT affect existing AI.md files |
+| Code changes | Update AI.md PART 36, README.md, docs/, Swagger, GraphQL |
+| Feature added | Update all documentation to match new reality |
+| Feature removed | Update all documentation to remove references |
+| **User says "re-read template"** | **Copy ENTIRE TEMPLATE.md → AI.md, then update PART 36** |
 
 ### Common Mistakes
 
 | Mistake | Why It's Wrong | Correct Action |
 |---------|----------------|----------------|
-| Reading AI.md for project work | Project spec is AI.md | Read AI.md instead |
-| "Syncing" AI.md with AI.md | AI.md is standalone after creation | Keep AI.md independent |
-| Updating AI.md | Template is read-only | Ask maintainer for template changes |
-| Referencing AI.md line numbers | AI.md has different line numbers | Use AI.md line numbers |
+| **Using TEMPLATE.md when AI.md exists** | **AI.md IS the project spec** | **Check if AI.md exists first, use AI.md** |
+| **Looking at TEMPLATE.md during project work** | **TEMPLATE.md is not the project spec** | **Use AI.md only** |
+| **Checking TEMPLATE.md for rules** | **Rules are in AI.md (project copy)** | **Read AI.md instead** |
+| Reading TEMPLATE.md for project work | Project spec is AI.md | Read AI.md instead |
+| "Syncing" AI.md with TEMPLATE.md | AI.md is standalone after creation | Keep AI.md independent |
+| Updating TEMPLATE.md | Template is read-only | Ask maintainer for template changes |
+| Referencing TEMPLATE.md line numbers | AI.md has different line numbers | Use AI.md line numbers |
+| **Shortening/summarizing AI.md** | **AI.md MUST be ≥1MB (complete PARTS 1-35)** | **Copy ENTIRE template, do NOT remove from PARTS 1-35** |
+| **Removing sections from PARTS 1-35** | **Breaks the complete specification** | **Keep ALL template sections identical** |
+| **Regenerating AI.md from TEMPLATE.md** | **Loses all project-specific content** | **NEVER do this - update PART 36 only** |
+| **Overwriting entire AI.md** | **Destroys the source of truth** | **Edit specific sections only** |
+| **Leaving docs out of sync** | **Documentation lies about features** | **Update README, docs/, Swagger, GraphQL** |
 
 ---
 
 ## CRITICAL: How to Handle This Large File
 
-**This template file is ~850KB and ~24,000 lines. You CANNOT read it all at once. Follow these procedures.**
+**This template file is ~1.1MB and ~30,000 lines. You CANNOT read it all at once. Follow these procedures.**
 
-**NOTE: This section applies when you ARE reading AI.md (to create AI.md for a new project). For existing projects, read AI.md instead - it's smaller and project-specific.**
+**NOTE: This section applies when you ARE reading TEMPLATE.md (to create AI.md for a new project). For existing projects, read AI.md instead - it's the complete project spec created from this template (at least ~1.1MB, often larger with project details).**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
-| File size | ~850KB |
-| Line count | ~24,000 lines |
+| File size | ~1.1MB (~1100KB) |
+| Line count | ~30,000 lines |
 | Read limit | ~500 lines per read |
-| Full reads needed | ~48 reads (impractical) |
+| Full reads needed | ~60 reads (impractical) |
 
 **You MUST read strategically, not sequentially.**
 
 ### PART Index (Quick Reference)
 
-Use this index to find what you need. Line numbers are approximate - use `grep -n "^# PART" AI.md` for exact values.
+**⚠️ IMPORTANT: Line numbers in this index are approximate and may drift as the template is updated.**
+
+**ALWAYS use `grep -n "^# PART" TEMPLATE.md` to get exact current line numbers.**
+
+Use this index for general navigation only. Do not rely on these line numbers for precise location.
 
 | PART | Lines | Topic | When to Read |
 |------|-------|-------|--------------|
-| 0 | 849-1188 | AI Assistant Rules | **ALWAYS READ FIRST** |
-| — | 1189-1378 | Migrating Existing Projects | When migrating existing app |
-| — | 1379-1574 | AI Migration Behavior Rules | **READ BEFORE ANY MIGRATION** |
-| — | 1575-1786 | AI New Project Rules | **READ BEFORE NEW PROJECT** |
-| 1 | 1787-2390 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | 2391-3084 | Project Structure | Setting up new project |
-| 3 | 3085-3249 | OS-Specific Paths | Path handling |
-| 4 | 3250-4257 | Configuration | Config file work |
-| 5 | 4258-4859 | Application Modes & Debug | Mode handling, debug endpoints |
-| 6 | 4860-7245 | Server Binary CLI | CLI flags/commands |
-| 7 | 7246-7300 | Update Command | Update feature |
-| 8 | 7301-7685 | Privilege Escalation | Service/privilege work |
-| 9 | 7686-7702 | Service Support | Systemd/service |
-| 10 | 7703-7858 | Binary Requirements | Binary building |
-| 11 | 7859-8320 | Makefile | Build system |
-| 12 | 8321-8754 | Testing & Development | Testing/dev workflow |
-| 13 | 8755-9708 | Docker | Docker/containers |
-| 14 | 9709-11871 | CI/CD Workflows | GitHub/Gitea Actions |
-| 15 | 11872-11994 | Health & Versioning | Health endpoints |
-| 16 | 11995-13697 | Web Frontend | Frontend/UI work |
-| 17 | 13698-13935 | Server Configuration | Server settings |
-| 18 | 13936-14637 | Admin Panel | Admin UI |
-| 19 | 14638-15045 | API Structure | REST/GraphQL API |
-| 20 | 15046-15722 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 21 | 15723-17197 | Security & Logging | Security features |
-| 22 | 17198-20122 | User Management | Users/auth/sessions |
-| 23 | 20123-20254 | Database & Cluster | Database work |
-| 24 | 20255-20658 | Backup & Restore | Backup features |
-| 25 | 20659-21991 | Email & Notifications | Email/SMTP |
-| 26 | 21992-22318 | Scheduler | Background tasks |
-| 27 | 22319-22390 | GeoIP | GeoIP features |
-| 28 | 22391-23410 | Metrics | Metrics/monitoring |
-| 29 | 23411-24002 | Tor Hidden Service | Tor support |
-| 30 | 24003-24059 | Error Handling & Caching | Error/cache |
-| 31 | 24060-24081 | I18N & A11Y | Internationalization |
-| 32 | 24082-24143 | Project-Specific Sections | Project customization |
-| 33 | 24144-24705 | CLI Client | **OPTIONAL** - CLI tool |
-| 34 | 24706-25620 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 35 | 25621-26250 | ReadTheDocs Documentation | Documentation |
-| FINAL | 26251-26468 | Compliance Checklist | Final verification |
+| 0 | 1175-2238 | AI Assistant Rules | **ALWAYS READ FIRST** |
+| 1 | 2239-2843 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | 2844-3214 | License & Attribution | License requirements |
+| 3 | 3215-3976 | Project Structure | Setting up new project |
+| 4 | 3977-4142 | OS-Specific Paths | Path handling |
+| 5 | 4143-5178 | Configuration | Config file work |
+| 6 | 5179-5782 | Application Modes | Mode handling, debug endpoints |
+| 7 | 5783-8169 | Server Binary CLI | CLI flags/commands |
+| 8 | 8170-8225 | Update Command | Update feature |
+| 9 | 8226-8611 | Privilege Escalation & Service | Service/privilege work |
+| 10 | 8612-8629 | Service Support | Systemd/service |
+| 11 | 8630-8786 | Binary Requirements | Binary building |
+| 12 | 8787-9311 | Makefile | Build system |
+| 13 | 9312-10420 | Testing & Development | Testing/dev workflow |
+| 14 | 10421-11381 | Docker | Docker/containers |
+| 15 | 11382-13545 | CI/CD Workflows | GitHub/Gitea Actions |
+| 16 | 13546-13669 | Health & Versioning | Health endpoints |
+| 17 | 13670-15563 | Web Frontend | Frontend/UI work |
+| 18 | 15564-15802 | Server Configuration | Server settings |
+| 19 | 15803-16523 | Admin Panel | Admin UI |
+| 20 | 16524-17543 | API Structure | REST/GraphQL/Compatibility API |
+| 21 | 17544-18221 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 22 | 18222-19697 | Security & Logging | Security features |
+| 23 | 19698-22744 | User Management | Users/auth/sessions |
+| 24 | 22745-22877 | Database & Cluster | Database work |
+| 25 | 22878-23282 | Backup & Restore | Backup features |
+| 26 | 23283-24616 | Email & Notifications | Email/SMTP |
+| 27 | 24617-24944 | Scheduler | Background tasks |
+| 28 | 24945-25017 | GeoIP | GeoIP features |
+| 29 | 25018-26038 | Metrics | Metrics/monitoring |
+| 30 | 26039-26631 | Tor Hidden Service | Tor support |
+| 31 | 26632-26689 | Error Handling & Caching | Error/cache |
+| 32 | 26690-26712 | I18N & A11Y | Internationalization |
+| 33 | 26713-27429 | ReadTheDocs Documentation | Documentation |
+| 34 | 27430-27992 | CLI Client | **OPTIONAL** - CLI tool |
+| 35 | 27993-28926 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 36 | 28927-29151 | Project-Specific Sections | Business logic only |
+| FINAL | 29152-29933 | Compliance Checklist | Final verification |
 
 ### How to Read This File
+
+**Note:** Line numbers below are approximate. Use `grep -n` for exact locations.
 
 **Step 1: Always read these first (MANDATORY)**
 
 ```
-Read lines 1-260      # Critical rules summary (includes file naming conventions)
-Read lines 502-595    # AI.md vs AI.md distinction (CRITICAL)
-Read lines 849-1050   # AI rules (PART 0 start)
-Read lines 1787-2000  # Critical rules (PART 1 start)
+Read lines 1-220      # Critical rules summary (includes file naming conventions)
+Read lines 635-900    # HOW TO USE + TEMPLATE.md vs AI.md distinction (CRITICAL)
+Read lines 1170-1400  # AI rules (PART 0 start)
+Read lines 2143-2400  # Critical rules (PART 1 start)
 ```
 
 **Step 1b: For migrations, ALSO read:**
 
 ```
-Read lines 1189-1378  # Migrating Existing Projects
-Read lines 1379-1574  # AI Migration Behavior Rules (CRITICAL - prevents deviation)
+Read lines 700-710    # For Existing Projects section
 ```
 
 **Step 1c: For new projects, ALSO read:**
 
 ```
-Read lines 1575-1786  # AI New Project Rules (CRITICAL - ensures complete implementation)
+Read lines 671-700    # For New Projects section
 ```
 
 **Step 2: Read sections relevant to your task**
 
 Use `grep` to find the PART you need:
 ```bash
-grep -n "^# PART" AI.md    # List all PARTs with line numbers
-grep -n "keyword" AI.md    # Find specific content
+grep -n "^# PART" TEMPLATE.md    # List all PARTs with line numbers
+grep -n "keyword" TEMPLATE.md    # Find specific content
 ```
 
 **Step 3: Read the specific PART completely**
@@ -617,15 +911,15 @@ grep -n "keyword" AI.md    # Find specific content
 Once you identify the PART, read ALL of it:
 ```
 # Example: Working on Docker
-Read lines 8755-9708  # PART 13: Docker (complete section)
+Read lines 9921-10881  # PART 14: Docker (complete section)
 ```
 
 ### Reading Strategy by Task Type
 
 | Task | Read These PARTs |
 |------|------------------|
-| **Migrating existing app** | 0, Migration sections (1189-1574), 1, 2, 6, 13 |
-| **New project/app setup** | 0, New Project Rules (1575-1786), 1, 2, 11, 13, 35 |
+| **Migrating existing app** | 0, Migration sections (1234-1577), 1, 2, 6, 13 |
+| **New project/app setup** | 0, New Project Rules (1578-1780), 1, 2, 11, 13, 35 |
 | **CLI implementation** | 0, 1, 6, 7, 8 |
 | **API development** | 0, 1, 15, 19, 21 |
 | **Frontend/UI work** | 0, 1, 16, 18 |
@@ -645,16 +939,16 @@ Read lines 8755-9708  # PART 13: Docker (complete section)
 
 ```bash
 # Find specific topics
-grep -n "rate limit" AI.md
-grep -n "CSRF" AI.md
-grep -n "server.yml" AI.md
+grep -n "rate limit" TEMPLATE.md
+grep -n "CSRF" TEMPLATE.md
+grep -n "server.yml" TEMPLATE.md
 
 # Find code examples
-grep -n "```go" AI.md
-grep -n "```yaml" AI.md
+grep -n "```go" TEMPLATE.md
+grep -n "```yaml" TEMPLATE.md
 
 # Find tables
-grep -n "^|" AI.md | head -50
+grep -n "^|" TEMPLATE.md | head -50
 ```
 
 ### Common Mistakes When Reading This File
@@ -789,6 +1083,7 @@ BEFORE writing ANY code:
 | TODO.AI.md | Project repo | Task tracking | Yes |
 | README.md | Project repo | User docs | Yes |
 
+
 # PART 0: AI ASSISTANT RULES (READ FIRST - NON-NEGOTIABLE)
 
 **These rules govern how AI assistants work on projects using this specification.**
@@ -803,11 +1098,52 @@ BEFORE writing ANY code:
 
 **This drift is the #1 cause of specification violations. Combat it actively.**
 
+## CRITICAL: Always Reference The Relevant Section
+
+**BEFORE implementing ANY feature, ALWAYS read the specific PART that covers it.**
+
+**Rule: NEVER guess, assume, or work from memory - ALWAYS read the spec section.**
+
+| Task | Read For Business Logic | Read For Implementation | Example |
+|------|-------------------------|------------------------|---------|
+| Implementing users/auth | PART 36 (if custom logic) | PART 23: User Management | "Reading PART 36 for business rules, PART 23 for implementation..." |
+| Setting up UI/frontend | PART 36 (what to display) | PART 17: Web Frontend | "PART 36 defines content, PART 17 defines UI patterns..." |
+| Configuring SSL | N/A | PART 21: SSL/TLS & Let's Encrypt | "Following PART 21 for SSL setup..." |
+| Adding API endpoints | PART 36 (endpoint purpose) | PART 20: API Structure | "PART 36 defines what endpoints do, PART 20 defines how..." |
+| Writing tests | PART 36 (what to test) | PART 13: Testing & Development | "PART 36 lists features to test, PART 13 defines test structure..." |
+| Creating Dockerfile | N/A | PART 14: Docker | "Implementing per PART 14 Docker rules..." |
+| Adding config options | PART 36 (what settings) | PART 5: Configuration | "PART 36 defines settings needed, PART 5 defines YAML format..." |
+| CLI commands | N/A | PART 7: Server Binary CLI | "Following PART 7 for CLI structure..." |
+
+**Workflow:**
+```
+1. User: "Add joke rating feature"
+2. AI: Reads PART 36 for business logic (what a joke rating means, validation rules)
+3. AI: Reads PART 20 for API patterns (how to structure endpoints)
+4. AI: Reads PART 17 for frontend patterns (how to display ratings)
+5. AI: Implements using standards from PARTS 17, 20 with logic from PART 36
+6. AI: Updates PART 36 with new feature, updates README.md, docs/
+```
+
+**Key Principle:**
+- **PART 36 = WHAT** (business logic, data, rules)
+- **PARTS 1-35 = HOW** (implementation patterns, standards)
+- **AI combines both** to build features correctly
+
+**DO NOT:**
+- Guess how features should work
+- Implement based on "standard practices"
+- Work from memory of the spec
+- Create patterns not in the spec
+- Write verbose documentation explaining what you're doing (the spec is the documentation)
+
+**The spec defines it. TODO.AI.md tracks it. No additional documentation needed.**
+
 ## Template File vs AI.md
 
 | File | Action | Description |
 |------|--------|-------------|
-| **Template file** | **NEVER MODIFY** | Read-only master (may be named AI.md, SPEC.md, etc.) |
+| **Template file** | **NEVER MODIFY** | Read-only master (may be named TEMPLATE.md, SPEC.md, etc.) |
 | **AI.md** | Create/Update | Project-specific specification |
 | **TODO.AI.md** | Create/Update | Task tracking |
 
@@ -822,26 +1158,26 @@ BEFORE writing ANY code:
 2. If `AI.md` exists → Read it (it is the complete standalone spec for this project)
 3. If old spec files exist in project repo → Merge into `AI.md`, DELETE old files
 
-**Important:** AI.md is created from AI.md **once**. After creation, AI.md is the complete standalone spec and does NOT reference or sync with AI.md.
+**Important:** AI.md is created from TEMPLATE.md **once**. After creation, AI.md is the complete standalone spec and does NOT reference or sync with TEMPLATE.md.
 
-**Migration Rules (when copying AI.md → AI.md):**
+**Migration Rules (when copying TEMPLATE.md → AI.md):**
 
 | Priority | Action | Description |
 |----------|--------|-------------|
-| 1 | **Copy template** | Copy AI.md to project as AI.md |
+| 1 | **Copy template** | Copy TEMPLATE.md to project as AI.md |
 | 2 | **Replace variables** | `vidveil`, `apimgr` with actual values |
-| 3 | **Replace references** | `AI.md` → `AI.md`, `TEMPLATE` → `AI` |
-| 4 | **Update project sections** | Fill in PART 32 with actual project details |
+| 3 | **Replace references** | `TEMPLATE.md` → `AI.md`, `TEMPLATE` → `AI` |
+| 4 | **Update project sections** | Fill in PART 36 with actual project details |
 
 **Variable Replacements:**
 | Find | Replace With | Example |
 |------|--------------|---------|
 | `vidveil` | Actual project name | `jokes` |
 | `apimgr` | Actual org name | `apimgr` |
-| `AI.md` | `AI.md` | References to this file |
+| `TEMPLATE.md` | `AI.md` | References to this file |
 | `TEMPLATE` (as document name) | `AI` | "read the TEMPLATE" → "read the AI" |
 
-**Project-Specific Sections (PART 32) - MUST be updated:**
+**Project-Specific Sections (PART 36) - MUST be updated:**
 - Project description, purpose, and intent
 - Project-specific API endpoints
 - Project-specific data files and their structure
@@ -1025,7 +1361,7 @@ Implemented core server functionality and admin panel.
 
 | Action | Reason |
 |--------|--------|
-| **Modifying AI.md** | **Read-only master template - NEVER modify** |
+| **Modifying TEMPLATE.md** | **Read-only master template - NEVER modify** |
 | `git add` | AI cannot stage files - write COMMIT_MESS instead |
 | `git commit` | AI cannot commit - write COMMIT_MESS instead |
 | `git push` | AI cannot push - user must do this |
@@ -1079,15 +1415,17 @@ type Config struct {
 # Enable multi-user mode
 enabled: false
 
-# Allow public registration
+# User registration mode
+# Options: disabled, public, private, approval
 registration:
-  enabled: false
+  mode: disabled
 ```
 
 ### Code Quality Rules
 
 | Rule | Description |
 |------|-------------|
+| **No inline comments** | Comments ALWAYS go above code, NEVER on same line |
 | **No magic numbers** | Use named constants |
 | **No hardcoded strings** | Use constants or config |
 | **Error handling** | Always handle errors, never ignore |
@@ -1095,6 +1433,88 @@ registration:
 | **SQL injection** | Use parameterized queries only |
 | **XSS prevention** | Escape all output in templates |
 | **CSRF protection** | All forms must have CSRF tokens |
+
+**Comment Style (NON-NEGOTIABLE):**
+
+```yaml
+# WRONG: Inline comments
+enabled: true  # Enable feature
+port: 8080     # Server port
+
+# CORRECT: Comments above
+# Enable feature
+enabled: true
+
+# Server port
+port: 8080
+```
+
+```go
+// WRONG: Inline comments
+var port = 8080  // Server port
+db.Exec(query, id)  // Delete user
+
+// CORRECT: Comments above
+// Server port
+var port = 8080
+
+// Delete user
+db.Exec(query, id)
+```
+
+**Rule: ALL comments go on lines ABOVE the code, NEVER inline. This prevents confusion and improves readability.**
+
+### Formatting and Indentation (NON-NEGOTIABLE)
+
+**ALL code, responses, and files MUST be properly formatted.**
+
+| File Type | Indentation | Trailing Newline | Format Tool |
+|-----------|-------------|------------------|-------------|
+| **Go** | Tabs | Single `\n` | `gofmt`, `go fmt` |
+| **HTML** | 2 spaces | Single `\n` | Manual or prettier |
+| **JSON** | 2 spaces | Single `\n` | `json.MarshalIndent(data, "", "  ")` |
+| **YAML** | 2 spaces | Single `\n` | Manual |
+| **CSS** | 2 spaces | Single `\n` | Manual or prettier |
+| **JavaScript** | 2 spaces | Single `\n` | Manual or prettier |
+| **Makefile** | Tabs (required) | Single `\n` | Manual |
+| **Shell scripts** | 2 spaces | Single `\n` | shellcheck/shfmt |
+| **Text responses** | N/A | Single `\n` | `fmt.Fprintf(w, "%s\n", text)` |
+
+**Universal Rules:**
+- **Every file** ends with exactly ONE newline character
+- **Every response** (JSON, TXT, HTML, XML) ends with exactly ONE newline
+- **No trailing whitespace** on any line
+- **Consistent indentation** throughout each file
+- **2 spaces** is default (except Go and Makefiles which use tabs)
+
+**Examples:**
+
+HTML (2 spaces):
+```html
+<html>
+  <head>
+    <title>Title</title>
+  </head>
+</html>
+⏎
+```
+
+JSON (2 spaces):
+```json
+{
+  "name": "value"
+}
+⏎
+```
+
+YAML (2 spaces):
+```yaml
+server:
+  port: 80
+⏎
+```
+
+**See PART 20 (API Structure) for detailed response formatting rules.**
 
 ### File Organization
 
@@ -1586,7 +2006,7 @@ ls -la docker/
 
 ### Optional Section Decision Guide
 
-**PART 33: CLI Client**
+**PART 34: CLI Client**
 
 | Include | Skip | Reason |
 |---------|------|--------|
@@ -1594,7 +2014,7 @@ ls -la docker/
 | DevOps/admin tools | Consumer mobile app | Automation requires CLI |
 | Database management | Static content site | Bulk operations via CLI |
 
-**PART 34: Custom Domains** (see PART 34 for full decision table)
+**PART 35: Custom Domains** (see PART 35 for full decision table)
 
 | Include | Skip | Reason |
 |---------|------|--------|
@@ -1709,8 +2129,8 @@ ls -la docker/
 
 ### Optional (if included)
 ```
-□ CLI client follows SPEC (if PART 33 included)
-□ Custom domains follows SPEC (if PART 34 included)
+□ CLI client follows SPEC (if PART 34 included)
+□ Custom domains follows SPEC (if PART 35 included)
 ```
 
 ## What To Do When Stuck
@@ -1726,6 +2146,7 @@ ls -la docker/
 **Remember: Every project, no matter how "simple", implements the full SPEC. There is no "lite" version.**
 
 ---
+
 
 # PART 1: CRITICAL RULES (NON-NEGOTIABLE)
 
@@ -2020,7 +2441,7 @@ func gUBE(e string) (*U, error) {
 | **AI.md** | Project repository | Project-specific specification | **YES** |
 | **TODO.AI.md** | Project repository | Task tracking (>2 tasks) | **YES** |
 
-**Note:** Template file may be named `AI.md`, `SPEC.md`, `CLAUDE.md`, or other. Location varies (project root, org root, ~/, etc.). Identify by content: unreplaced `{variables}`, "HOW TO USE" section, multiple PART X: sections.
+**Note:** Template file may be named `TEMPLATE.md`, `SPEC.md`, `CLAUDE.md`, or other. Location varies (project root, org root, ~/, etc.). Identify by content: unreplaced `{variables}`, "HOW TO USE" section, multiple PART X: sections.
 
 ### Documentation Rules (NON-NEGOTIABLE)
 
@@ -2331,7 +2752,379 @@ Before proceeding, confirm you understand:
 
 ---
 
-# PART 2: PROJECT STRUCTURE (NON-NEGOTIABLE)
+
+# PART 2: LICENSE & ATTRIBUTION (NON-NEGOTIABLE)
+
+## Project License
+
+**All projects MUST use the MIT License.**
+
+| Requirement | Value |
+|-------------|-------|
+| License type | MIT License |
+| License file | `LICENSE.md` (REQUIRED in project root) |
+| Copyright holder | `apimgr` or individual/organization name |
+| Year | Current year or year of first publication |
+
+## LICENSE.md Structure (NON-NEGOTIABLE)
+
+```markdown
+MIT License
+
+Copyright (c) {YEAR} apimgr
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Embedded Licenses
+
+This software includes the following third-party libraries:
+
+{LIST OF DEPENDENCIES WITH THEIR LICENSES - see below for format}
+```
+
+## Embedded License Attribution (NON-NEGOTIABLE)
+
+**All third-party dependencies MUST have their licenses attributed in LICENSE.md.**
+
+### Which Dependencies Require Attribution
+
+| License Type | Attribution Required | Example Libraries |
+|--------------|---------------------|-------------------|
+| **MIT** | ✓ YES | Most Go libraries |
+| **Apache 2.0** | ✓ YES | Many Google libraries |
+| **BSD (2/3-clause)** | ✓ YES | Various libraries |
+| **ISC** | ✓ YES | Similar to MIT |
+| **MPL 2.0** | ✓ YES | Mozilla libraries |
+| **Public Domain/Unlicense** | Optional (recommended) | CC0, WTFPL |
+| **GPL/AGPL/LGPL** | ⚠️ AVOID | Copyleft licenses - do not use |
+
+**NEVER use GPL/AGPL/LGPL licensed dependencies** - they require derivative works to be open-sourced under the same license.
+
+### How to Identify Dependencies
+
+For Go projects, use `go.mod` and license scanning tools:
+
+```bash
+# List all dependencies
+go list -m all
+
+# Use go-licenses tool (recommended)
+go install github.com/google/go-licenses@latest
+go-licenses csv ./... > licenses.csv
+go-licenses save ./... --save_path=third_party_licenses
+```
+
+For Node.js projects:
+
+```bash
+# Use license-checker
+npm install -g license-checker
+license-checker --production --json > licenses.json
+```
+
+### Embedded License Format
+
+**Each embedded license MUST include:**
+
+1. **Library name and version**
+2. **Copyright holder(s)**
+3. **License type**
+4. **Full license text**
+
+**Template:**
+
+```markdown
+---
+
+## Embedded Licenses
+
+This software includes the following third-party libraries:
+
+---
+
+### {library-name} v{version}
+
+**Copyright:** {copyright-holder}
+**License:** {license-type}
+**Repository:** https://github.com/{org}/{repo}
+
+```
+{FULL LICENSE TEXT FROM THE LIBRARY}
+```
+
+---
+
+### {library-name-2} v{version}
+
+**Copyright:** {copyright-holder}
+**License:** {license-type}
+**Repository:** https://github.com/{org}/{repo}
+
+```
+{FULL LICENSE TEXT FROM THE LIBRARY}
+```
+
+---
+```
+
+### Example Embedded License Section
+
+```markdown
+---
+
+## Embedded Licenses
+
+This software includes the following third-party libraries:
+
+---
+
+### github.com/go-chi/chi/v5 v5.0.10
+
+**Copyright:** Copyright (c) 2015-present Peter Kieltyka (https://github.com/pkieltyka), Google Inc.
+**License:** MIT License
+**Repository:** https://github.com/go-chi/chi
+
+```
+MIT License
+
+Copyright (c) 2015-present Peter Kieltyka (https://github.com/pkieltyka), Google Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+---
+
+### github.com/mattn/go-sqlite3 v1.14.18
+
+**Copyright:** Copyright (c) 2014 Yasuhiro Matsumoto
+**License:** MIT License
+**Repository:** https://github.com/mattn/go-sqlite3
+
+```
+MIT License
+
+Copyright (c) 2014 Yasuhiro Matsumoto
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+```
+
+## Maintenance Requirements (NON-NEGOTIABLE)
+
+### When to Update LICENSE.md
+
+| Event | Action Required |
+|-------|----------------|
+| **New dependency added** | Add its license to LICENSE.md embedded section |
+| **Dependency removed** | Remove its license from LICENSE.md |
+| **Dependency upgraded** | Verify license hasn't changed; update version number |
+| **Major dependency update** | Re-check license compatibility |
+
+### Automated License Checking
+
+**Projects SHOULD automate license verification:**
+
+```yaml
+# .github/workflows/licenses.yml
+name: License Check
+
+on: [push, pull_request]
+
+jobs:
+  check-licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@latest
+
+      - name: Check licenses
+        run: |
+          # Verify no GPL/AGPL/LGPL licenses
+          if go-licenses csv ./... | grep -iE 'GPL|AGPL|LGPL'; then
+            echo "ERROR: Copyleft license detected!"
+            exit 1
+          fi
+
+      - name: Save license report
+        run: go-licenses save ./... --save_path=third_party_licenses
+```
+
+### License Verification Script
+
+**Include in project repository:**
+
+```bash
+#!/bin/bash
+# scripts/verify-licenses.sh
+
+set -e
+
+echo "Checking for incompatible licenses..."
+
+# Install go-licenses if not present
+if ! command -v go-licenses &> /dev/null; then
+    echo "Installing go-licenses..."
+    go install github.com/google/go-licenses@latest
+fi
+
+# Check for copyleft licenses
+echo "Scanning dependencies..."
+if go-licenses csv ./... | grep -iE 'GPL|AGPL|LGPL'; then
+    echo "ERROR: Copyleft license detected!"
+    echo "Remove the dependency or find an alternative."
+    exit 1
+fi
+
+echo "✓ All licenses are compatible"
+
+# Generate license report
+echo "Generating license report..."
+go-licenses csv ./... > licenses.csv
+go-licenses save ./... --save_path=third_party_licenses
+
+echo "✓ License report saved to licenses.csv and third_party_licenses/"
+echo ""
+echo "Next steps:"
+echo "1. Review licenses.csv"
+echo "2. Update LICENSE.md with any new dependencies"
+echo "3. Commit the changes"
+```
+
+## README.md License Badge (REQUIRED)
+
+**Every README.md MUST include a license badge:**
+
+```markdown
+[![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
+```
+
+This badge should appear in the badges section near the top of README.md.
+
+## Docker Labels (REQUIRED)
+
+**Dockerfile MUST include license label:**
+
+```dockerfile
+LABEL org.opencontainers.image.licenses="MIT"
+```
+
+See PART 13: DOCKER for complete label requirements.
+
+## Go Module License Field
+
+**go.mod does NOT have a license field**, but projects SHOULD document the license in:
+
+1. `LICENSE.md` file (REQUIRED)
+2. README.md badge (REQUIRED)
+3. Package documentation comments (RECOMMENDED)
+
+**Example package doc:**
+
+```go
+// Package jokes provides a REST API for random jokes.
+//
+// This software is licensed under the MIT License.
+// See LICENSE.md for details.
+package main
+```
+
+## Common Mistakes (AVOID)
+
+| Mistake | Why It's Wrong | Correct Approach |
+|---------|----------------|------------------|
+| No LICENSE.md file | Legally ambiguous | Always include LICENSE.md |
+| Missing embedded licenses | License violation | Include ALL dependency licenses |
+| Using GPL dependencies | Forces project to be GPL | Use MIT/Apache/BSD alternatives |
+| Outdated license attributions | Inaccurate legal compliance | Update when dependencies change |
+| Only listing library names | Incomplete attribution | Include full license text |
+| Mixing incompatible licenses | Legal conflicts | Verify compatibility |
+| No automation | Manual errors | Use CI checks |
+
+## License Compatibility Matrix
+
+| Project License | Can Use Dependencies Licensed As |
+|----------------|----------------------------------|
+| **MIT** | MIT, Apache 2.0, BSD, ISC, Public Domain |
+| **MIT** | ❌ **CANNOT use:** GPL, AGPL, LGPL |
+
+**When in doubt:** Choose MIT/Apache 2.0/BSD licensed alternatives.
+
+## Resources
+
+- MIT License Template: https://opensource.org/licenses/MIT
+- License Compatibility: https://www.gnu.org/licenses/license-compatibility.html
+- go-licenses tool: https://github.com/google/go-licenses
+- license-checker (Node.js): https://github.com/davglass/license-checker
+- OSI Approved Licenses: https://opensource.org/licenses
+
+---
+
+**REMEMBER:**
+1. Always include LICENSE.md in project root
+2. Always embed third-party licenses at bottom of LICENSE.md
+3. Never use GPL/AGPL/LGPL dependencies
+4. Update LICENSE.md when dependencies change
+5. Automate license checking in CI/CD
+
+---
+
+# PART 3: PROJECT STRUCTURE (NON-NEGOTIABLE)
 
 ## Project Information
 
@@ -2367,24 +3160,27 @@ Before proceeding, confirm you understand:
 
 ### Inferring Variables from Path (NON-NEGOTIABLE)
 
-**NEVER hardcode `vidveil` or `apimgr` - always infer from path or git remote.**
+**NEVER hardcode `vidveil` or `apimgr` - always infer from git remote or directory path.**
 
-**Path structure:** `~/Projects/github/apimgr/vidveil`
+**Recommended path structure:** `~/Projects/github/apimgr/vidveil` (but works with any location)
 
 ```bash
-# Infer from current directory path
-PROJECTNAME=$(basename "$PWD")                    # jokes
-PROJECTORG=$(basename "$(dirname "$PWD")")        # apimgr
-
-# Or from git remote (preferred if available)
+# Method 1: Infer from git remote (PREFERRED - works regardless of directory location)
 # github.com/apimgr/jokes.git → PROJECTORG=apimgr, PROJECTNAME=jokes
 PROJECTNAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$|\1|')
 PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$|\1|')
 
-# Combined: git first, fallback to path
+# Method 2: Infer from current directory path (fallback if no git remote)
+# Works with any path structure: ~/Documents/myproject, ~/myproject, etc.
+PROJECTNAME=$(basename "$PWD")                    # myproject
+PROJECTORG=$(basename "$(dirname "$PWD")")        # Documents (or parent dir name)
+
+# Method 3: Combined approach (git first, fallback to path)
 PROJECTNAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$|\1|' || basename "$PWD")
 PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$|\1|' || basename "$(dirname "$PWD")")
 ```
+
+**Note:** When using path-based inference, `PROJECTORG` will be the parent directory name, which may not match the git organization unless you follow the recommended `~/Projects/github/apimgr/vidveil` structure. Git remote inference is always more reliable.
 
 ### Variable Capitalization
 
@@ -2395,26 +3191,32 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 | `{Projectname}` | PascalCase (Go types, display names) | `type JokesServer struct` |
 | `VIDVEIL` | UPPERCASE (env vars, Makefile vars) | `PROJECTNAME=jokes` |
 
-**Examples:**
+**Examples (assuming no git remote, inferred from path):**
 
-| Path | `PROJECTORG` | `PROJECTNAME` |
-|------|--------------|---------------|
-| `~/Projects/github/apimgr/jokes` | `apimgr` | `jokes` |
-| `~/Projects/gitlab/casapps/cassearch` | `casapps` | `cassearch` |
-| `~/Projects/private/myorg/myproject` | `myorg` | `myproject` |
+| Path | `PROJECTORG` | `PROJECTNAME` | Notes |
+|------|--------------|---------------|-------|
+| `~/Projects/github/apimgr/jokes` | `apimgr` | `jokes` | Recommended structure |
+| `~/Projects/gitlab/casapps/cassearch` | `casapps` | `cassearch` | Recommended structure |
+| `~/Documents/myproject` | `Documents` | `myproject` | Simple structure - org is parent dir |
+| `~/myproject` | `~` | `myproject` | Home directory - org is home |
+| `/opt/projects/myproject` | `projects` | `myproject` | Custom location - org is parent dir |
 
-## Local Project Path Structure (NON-NEGOTIABLE)
+**With git remote (preferred):** Variables are inferred from remote URL regardless of directory location.
 
-**Format:** `~/Projects/github/apimgr/vidveil`
+## Local Project Path Structure (RECOMMENDED)
+
+**IMPORTANT: Project root can be located ANYWHERE on your system. This section describes a RECOMMENDED organizational structure, not a requirement.**
+
+**Recommended Format:** `~/Projects/github/apimgr/vidveil`
 
 | Component | Description | Examples |
 |-----------|-------------|----------|
-| `~/Projects/` | Base projects directory | Always `~/Projects/` |
+| `~/Projects/` | Base projects directory (recommended) | Can be `~/Projects/`, `~/Documents/`, `/opt/`, etc. |
 | `github` | Git hosting provider or `local` | `github`, `gitlab`, `bitbucket`, `private`, `local` |
 | `apimgr` | Organization/username (inferred) | `apimgr`, `casjay`, `myorg` |
 | `vidveil` | Project name (inferred) | `jokes`, `icons`, `myproject` |
 
-**Examples:**
+**Examples of recommended structure:**
 ```
 ~/Projects/github/apimgr/jokes        # ORG=apimgr, PROJECT=jokes
 ~/Projects/gitlab/casjay/icons        # ORG=casjay, PROJECT=icons
@@ -2423,25 +3225,35 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 ~/Projects/local/apimgr/prototype     # ORG=apimgr, PROJECT=prototype
 ```
 
+**But any of these are equally valid:**
+```
+~/Documents/myproject                 # Simple home directory structure
+~/myproject                           # Project in home directory
+/opt/projects/myproject               # System-wide location
+/workspace/dev/myproject              # Custom workspace
+```
+
 ### Special: `local` Provider
 
-`~/Projects/local/apimgr/vidveil` is used for:
+`~/Projects/local/apimgr/vidveil` (or any other location) is used for:
 - **Prototyping** - Quick experiments and proof-of-concept
 - **Bootstrapping** - Initial project setup before pushing to VCS
 - **Local-only development** - Projects not intended for remote hosting
 - **No VCS required** - May not have git initialized
 - **No Docker registry** - May not push to container registries
 
-**This is the LOCAL development path, not the deployed path.**
+**Note:** The paths shown here are LOCAL development examples, not deployed paths.
 
 ---
 
 ## Directory Structure (NON-NEGOTIABLE)
 
-**The root Project directory is**: `./`
+**This section defines the INTERNAL structure of your project, not its location.**
+
+**The root Project directory is**: `./` (relative paths shown below - can be located anywhere on your system)
 
 ```
-./                          # Root project directory
+./                          # Root project directory (git top-level)
 ├── .github/                # GitHub Actions (if using GitHub)
 │   └── workflows/
 │       ├── release.yml     # Stable releases
@@ -2454,17 +3266,28 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 │       ├── beta.yml        # Beta releases
 │       ├── daily.yml       # Daily builds
 │       └── docker.yml      # Docker images
-├── docs/                   # ReadTheDocs documentation (MkDocs)
+├── .claude/                # Claude AI configuration (optional)
+├── .cursor/                # Cursor AI configuration (optional)
+├── .aider/                 # Aider AI configuration (optional)
+├── .ai/                    # Generic AI configuration (optional)
+├── docs/                   # ReadTheDocs documentation ONLY (MkDocs)
 │   ├── index.md            # Documentation homepage
 │   ├── installation.md     # Installation guide
 │   ├── configuration.md    # Configuration reference
 │   ├── api.md              # API documentation
 │   ├── cli.md              # CLI reference (if applicable)
 │   ├── admin.md            # Admin panel guide
-│   └── development.md      # Development guide
+│   ├── development.md      # Development guide
+│   ├── stylesheets/        # MkDocs theme customization
+│   │   ├── dark.css        # Dark theme customization for ReadTheDocs
+│   │   └── light.css       # Light theme customization for ReadTheDocs (optional)
+│   └── requirements.txt    # Python dependencies for MkDocs
 ├── src/                    # All source files
 ├── scripts/                # All production/install scripts
 ├── tests/                  # All development/test scripts and files
+│   ├── run_tests.sh        # Auto-detect and run tests (REQUIRED)
+│   ├── docker.sh           # Beta testing with Docker (REQUIRED)
+│   └── incus.sh            # Beta testing with Incus (REQUIRED)
 ├── docker/                 # Docker files
 │   ├── Dockerfile          # Production Dockerfile
 │   ├── Dockerfile.dev      # Development Dockerfile (optional)
@@ -2484,7 +3307,7 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 ├── releases/               # Release binaries (gitignored)
 ├── README.md               # Production first, dev last
 ├── LICENSE.md              # MIT + embedded licenses
-├── AI.md                   # Project specification (from AI.md)
+├── AI.md                   # Project specification (from TEMPLATE.md)
 ├── TODO.AI.md              # Task tracking for >2 tasks
 ├── Jenkinsfile             # Jenkins pipeline
 └── release.txt             # Version tracking
@@ -2617,6 +3440,13 @@ rootfs/
 .vscode/
 *.swp
 *.swo
+
+# AI config directories (keep these - they're committed, not ignored)
+# .claude/
+# .cursor/
+# .aider/
+# .ai/
+# .windsurf/
 ```
 
 ### .dockerignore (REQUIRED)
@@ -2644,6 +3474,13 @@ releases/
 .idea/
 .vscode/
 
+# AI config directories
+.claude/
+.cursor/
+.aider/
+.ai/
+.windsurf/
+
 # Docs
 *.md
 ```
@@ -2655,6 +3492,29 @@ releases/
 ## Path Convention (NON-NEGOTIABLE)
 
 **ALL paths are ALWAYS relative to PROJECT ROOT, never the current working directory.**
+
+**⚠️ IMPORTANT: Project root ≠ Template location ≠ Current working directory**
+
+If you're reading this TEMPLATE.md from `/root/Projects/github/apimgr/TEMPLATE.md` to build a project in `~/Documents/myproject`, all file operations must be in `~/Documents/myproject/`, NOT in `/root/Projects/github/apimgr/`.
+
+### Defining Project Root
+
+**Project root** is the top-level directory of your project, determined by:
+
+1. **Git repository top-level** (preferred): Run `git rev-parse --show-toplevel` to find it
+2. **Directory containing project structure**: The directory with `go.mod`, `src/`, `docker/`, etc.
+
+**Project root can be located ANYWHERE on your system:**
+
+| Valid Project Root | Example |
+|-------------------|---------|
+| Structured projects dir | `~/Projects/github/casapps/myproject` |
+| Documents folder | `~/Documents/myproject` |
+| Home directory | `~/myproject` |
+| Any arbitrary location | `/opt/projects/myproject` |
+| Custom workspace | `/workspace/dev/myproject` |
+
+**Rule: ALL file paths in code, documentation, and scripts MUST be relative to THIS project root, regardless of where it's located.**
 
 | Path | Means | NOT |
 |------|-------|-----|
@@ -3025,7 +3885,8 @@ Before proceeding, confirm you understand:
 
 ---
 
-# PART 3: OS-SPECIFIC PATHS (NON-NEGOTIABLE)
+
+# PART 4: OS-SPECIFIC PATHS (NON-NEGOTIABLE)
 
 ## Linux
 
@@ -3190,7 +4051,35 @@ Before proceeding, confirm you understand:
 - [ ] All paths follow the apimgr/vidveil pattern
 
 ---
-# PART 4: CONFIGURATION (NON-NEGOTIABLE)
+
+# PART 5: CONFIGURATION (NON-NEGOTIABLE)
+
+## YAML Comment Style (NON-NEGOTIABLE)
+
+**CRITICAL: ALL comments in YAML files MUST go ABOVE the setting, NEVER inline.**
+
+**WRONG:**
+```yaml
+enabled: true  # Enable feature
+port: 8080     # Server port
+```
+
+**CORRECT:**
+```yaml
+# Enable feature
+enabled: true
+
+# Server port
+port: 8080
+```
+
+**Reason:** Inline comments create confusion, make YAML harder to parse visually, and can cause issues with some YAML parsers. Comments above are clear and unambiguous.
+
+**This applies to:**
+- `server.yml` configuration
+- `docker-compose.yml` files
+- All YAML in the project
+- All code examples in documentation
 
 ## Configuration Storage
 
@@ -4198,7 +5087,8 @@ Before proceeding, confirm you understand:
 
 ---
 
-# PART 5: APPLICATION MODES (NON-NEGOTIABLE)
+
+# PART 6: APPLICATION MODES (NON-NEGOTIABLE)
 
 ## Mode and Debug Detection Priority
 
@@ -4261,6 +5151,7 @@ Before proceeding, confirm you understand:
 
 | Setting | Behavior |
 |---------|----------|
+| **Admin authentication** | **BYPASSED** (for manual dev only - NOT for automated tests) |
 | Debug endpoints | **Enabled** (`/debug/*`) |
 | pprof endpoints | **Enabled** (`/debug/pprof/*`) |
 | expvar endpoints | **Enabled** (`/debug/vars`) |
@@ -4800,7 +5691,8 @@ func FromEnv() {
 
 ---
 
-# PART 6: SERVER BINARY CLI (NON-NEGOTIABLE)
+
+# PART 7: SERVER BINARY CLI (NON-NEGOTIABLE)
 
 **These are the command-line flags for the SERVER binary (`vidveil`), NOT the CLI client (`vidveil-cli`).**
 
@@ -4847,7 +5739,7 @@ User-Agent: jokes/1.0.0             # Hardcoded project name
 Default config: /etc/apimgr/jokes/  # Hardcoded project name
 ```
 
-**For CLI client flags, see PART 33.**
+**For CLI client flags, see PART 34.**
 
 **THESE SERVER COMMANDS CANNOT BE CHANGED. This is the complete command set.**
 
@@ -7186,7 +8078,8 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 
 ---
 
-# PART 7: UPDATE COMMAND (NON-NEGOTIABLE)
+
+# PART 8: UPDATE COMMAND (NON-NEGOTIABLE)
 
 ## --update Command
 
@@ -7241,7 +8134,8 @@ vidveil --update branch stable
 ---
 
 
-# PART 8: PRIVILEGE ESCALATION & SERVICE (NON-NEGOTIABLE)
+
+# PART 9: PRIVILEGE ESCALATION & SERVICE (NON-NEGOTIABLE)
 
 ## Overview
 
@@ -7626,7 +8520,8 @@ func installWindowsService() error {
 
 ---
 
-# PART 9: SERVICE SUPPORT (NON-NEGOTIABLE)
+
+# PART 10: SERVICE SUPPORT (NON-NEGOTIABLE)
 
 ## Built-in Service Support
 
@@ -7643,7 +8538,8 @@ func installWindowsService() error {
 ---
 
 
-# PART 10: BINARY REQUIREMENTS (NON-NEGOTIABLE)
+
+# PART 11: BINARY REQUIREMENTS (NON-NEGOTIABLE)
 
 ## Single Static Binary
 
@@ -7669,7 +8565,7 @@ func installWindowsService() error {
 
 | Asset Type | Location |
 |------------|----------|
-| Templates | `src/server/template/` |
+| Templates | `src/server/templates/` |
 | Static files | `src/server/static/` |
 | Application data | `src/data/` (JSON files) |
 
@@ -7799,7 +8695,8 @@ data:
 
 ---
 
-# PART 11: MAKEFILE (NON-NEGOTIABLE)
+
+# PART 12: MAKEFILE (NON-NEGOTIABLE)
 
 **Four targets only. DO NOT ADD MORE.**
 
@@ -7824,37 +8721,72 @@ data:
 
 ### Version Tag `v` Prefix Rules (NON-NEGOTIABLE)
 
-**Only add `v` prefix if BOTH conditions are met:**
-1. Tag does NOT already start with `v`
-2. Tag IS a semantic version (matches `X.Y.Z` pattern)
+**CRITICAL: Only add `v` prefix to NUMERIC semantic versions, NEVER to text versions.**
 
-| Tag Input | Is Semver? | Has `v`? | Display As |
-|-----------|------------|----------|------------|
-| `1.2.0` | ✓ | ✗ | `v1.2.0` |
-| `v1.2.0` | ✓ | ✓ | `v1.2.0` |
-| `1.2.3-rc1` | ✓ | ✗ | `v1.2.3-rc1` |
-| `dev` | ✗ | - | `dev` |
-| `beta` | ✗ | - | `beta` |
-| `daily` | ✗ | - | `daily` |
-| `20251218060432` | ✗ | - | `20251218060432` |
-| `20251218060432-beta` | ✗ | - | `20251218060432-beta` |
+**Rule: Add `v` prefix ONLY if tag is a NUMBER (semantic version X.Y.Z), NEVER if it's TEXT.**
+
+**When creating git tags:**
+- ✓ Numeric versions: `git tag v0.2.0` or `git tag 0.2.0` (both become v0.2.0)
+- ✓ Text versions: `git tag dev` or `git tag beta` (stay as dev, beta - NO v)
+- ✗ NEVER create: `git tag vdev`, `git tag vbeta` (wrong!)
+
+**When extracting VERSION variable from tag:**
+- Git tag `v1.2.3` → VERSION=`1.2.3` (strip v for internal use)
+- Git tag `dev` → VERSION=`dev` (no v to strip)
+- Git tag `beta` → VERSION=`beta` (no v to strip)
+
+| Tag Input | Type | Add `v`? | Display As | Why |
+|-----------|------|----------|------------|-----|
+| `0.2.0` | Number (semver) | ✓ YES | `v0.2.0` | Numeric version gets v |
+| `1.2.3` | Number (semver) | ✓ YES | `v1.2.3` | Numeric version gets v |
+| `v1.2.0` | Number (has v) | ✗ NO | `v1.2.0` | Already has v |
+| `1.2.3-rc1` | Number (semver+suffix) | ✓ YES | `v1.2.3-rc1` | Numeric version gets v |
+| `dev` | Text | ✗ NO | `dev` | Text version NO v |
+| `beta` | Text | ✗ NO | `beta` | Text version NO v |
+| `daily` | Text | ✗ NO | `daily` | Text version NO v |
+| `20251218060432` | Timestamp | ✗ NO | `20251218060432` | Not semver NO v |
+| `20251218060432-beta` | Timestamp+text | ✗ NO | `20251218060432-beta` | Not semver NO v |
+
+**Examples of WRONG:**
+- ❌ `vdev` - NEVER add v to text
+- ❌ `vbeta` - NEVER add v to text
+- ❌ `v20251218` - NEVER add v to timestamps
+- ❌ `vv0.3.0` - NEVER double the v prefix
+
+**Examples of CORRECT:**
+- ✓ `dev` - Text version, no v
+- ✓ `beta` - Text version, no v
+- ✓ `v0.2.0` - Numeric version, has v (input: 0.2.0 or v0.2.0)
+- ✓ `v1.2.3` - Numeric version, has v (input: 1.2.3 or v1.2.3)
+- ✓ `20251218-beta` - Timestamp+text, no v
 
 ```bash
-# Shell function to format version tag
+# Shell function to format version tag (prevents vv prefix, only adds v to numbers)
 format_version_tag() {
     local tag="$1"
-    # Check if already starts with v
+
+    # Step 1: If already starts with v, return as-is (prevents vv0.3.0)
     if [[ "$tag" == v* ]]; then
         echo "$tag"
         return
     fi
-    # Check if it's a semantic version (X.Y.Z with optional suffix)
+
+    # Step 2: If it's a semantic version (starts with digit.digit.digit), add v
+    # Matches: 0.2.0, 1.2.3, 10.5.2-rc1
+    # Does NOT match: dev, beta, daily, 20251218
     if [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-        echo "v$tag"
+        echo "v$tag"        # 0.2.0 → v0.2.0
     else
-        echo "$tag"
+        echo "$tag"         # dev → dev (no v)
     fi
 }
+
+# Usage examples:
+# format_version_tag "0.2.0"         → "v0.2.0"
+# format_version_tag "v0.2.0"        → "v0.2.0" (not vv0.2.0)
+# format_version_tag "dev"           → "dev" (not vdev)
+# format_version_tag "beta"          → "beta" (not vbeta)
+# format_version_tag "20251218-beta" → "20251218-beta" (not v...)
 ```
 
 ### Version Priority
@@ -8209,38 +9141,65 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 | Property | Value |
 |----------|-------|
-| Trigger | Git tag push (`v*`, `*.*.*`) |
-| Version format | Semantic (`X.Y.Z`) |
-| Release name | `{tag}` or `v{tag}` if semver without `v` (see v prefix rules) |
-| version.txt | `{version}` (without `v` prefix) |
+| Trigger | Git tag push with semver pattern (`v*`, `*.*.*`) |
+| Version format | Semantic (`X.Y.Z`) - NUMBERS only |
+| Git tag | `v1.2.3`, `v0.2.0`, or `1.2.3` (numeric versions) |
+| Release name | `v{version}` (always with v: `v1.2.3`, `v0.2.0`) |
+| version.txt | `{version}` (without `v`: `1.2.3`, `0.2.0`) |
 | GitHub release | Yes, marked as latest |
+
+**Examples:**
+- Git tag `v1.2.3` → Release `v1.2.3`, version.txt `1.2.3`
+- Git tag `0.2.0` → Release `v0.2.0`, version.txt `0.2.0`
 
 ### Beta Release
 
 | Property | Value |
 |----------|-------|
 | Trigger | Push to `beta` branch |
-| Version format | `{YYYYMMDDHHMMSS}-beta` (e.g., `20251205143022-beta`) |
-| Release name | `{YYYYMMDDHHMMSS}-beta` |
+| Version format | `{YYYYMMDDHHMMSS}-beta` - TEXT, NO `v` prefix |
+| Release name | `{YYYYMMDDHHMMSS}-beta` (e.g., `20251205143022-beta`) |
 | version.txt | `{YYYYMMDDHHMMSS}-beta` |
 | GitHub release | Yes, marked as pre-release |
+
+**Example:**
+- Beta build → Release `20251205143022-beta`, version.txt `20251205143022-beta`
+- NO `v` prefix (not a semantic version)
 
 ### Daily Build
 
 | Property | Value |
 |----------|-------|
 | Trigger | Daily schedule (3am UTC) + push to main/master |
-| Version format | `{YYYYMMDDHHMMSS}` (e.g., `20251218060432`) |
+| Version format | `{YYYYMMDDHHMMSS}` - TIMESTAMP, NO `v` prefix |
 | Release name | `daily` (single rolling release) |
-| version.txt | `{YYYYMMDDHHMMSS}` |
+| version.txt | `{YYYYMMDDHHMMSS}` (e.g., `20251218060432`) |
 | GitHub release | Yes, **replaces previous daily** |
 | Max releases | **1** (always overwrites previous daily) |
+
+**Example:**
+- Daily build → Release name `daily`, version.txt `20251218060432`
+- NO `v` prefix (not a semantic version)
 
 **Daily Build Rules:**
 - Only ONE daily release exists at any time
 - Each daily build **deletes and replaces** the previous `daily` release
 - Prevents accumulation of thousands of releases
-- Users always get the latest daily build
+
+## Version Tag Summary (Quick Reference)
+
+| Release Type | Git Tag | Has `v` Prefix? | Release Name | version.txt |
+|--------------|---------|-----------------|--------------|-------------|
+| **Stable** | `v1.2.3` or `1.2.3` | ✓ YES (numbers) | `v1.2.3` | `1.2.3` |
+| **Stable** | `v0.2.0` or `0.2.0` | ✓ YES (numbers) | `v0.2.0` | `0.2.0` |
+| **Beta** | (branch push) | ✗ NO (timestamp) | `20251205-beta` | `20251205-beta` |
+| **Daily** | (branch push) | ✗ NO (timestamp) | `daily` | `20251218` |
+| **Dev** | `dev` | ✗ NO (text) | `dev` | `dev` |
+
+**NEVER:**
+- ❌ `vdev`, `vbeta`, `vdaily` (text versions never get v)
+- ❌ `v20251218` (timestamps never get v)
+- ❌ `vv1.2.3` (don't double the v)
 
 ## Version Files
 
@@ -8261,7 +9220,8 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 ---
 
-# PART 12: TESTING & DEVELOPMENT (NON-NEGOTIABLE)
+
+# PART 13: TESTING & DEVELOPMENT (NON-NEGOTIABLE)
 
 ## NEVER Use Project Directory for Testing (NON-NEGOTIABLE)
 
@@ -8312,7 +9272,18 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 ## Temporary Directory Structure (NON-NEGOTIABLE)
 
-**NEVER hardcode `/tmp` - always use the OS temp directory with org prefix.**
+**CRITICAL: NEVER use `/tmp` root directory directly. ALWAYS use `/tmp/apimgr/vidveil-XXXXXX` structure.**
+
+**FORBIDDEN:**
+- ❌ `/tmp/myfile` - Root tmp directory
+- ❌ `/tmp/vidveil` - Missing org prefix
+- ❌ `mktemp -d` - No org/project structure
+- ❌ `/tmp/test-data` - Generic paths
+
+**REQUIRED:**
+- ✓ `/tmp/apimgr/vidveil-XXXXXX/` - Full structure
+- ✓ `/tmp/apimgr/jokes-aB3xY9/` - Org + project + random
+- ✓ `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` - Proper command
 
 **See "Inferring Variables from Path" section for how to detect `ORG` and `PROJECT`.**
 
@@ -8367,11 +9338,47 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 
 ### Correct vs Incorrect
 
-| WRONG | RIGHT |
-|-------|-------|
-| `mktemp -d` | `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX"` |
-| `/tmp/jokes` | `os.MkdirTemp(os.TempDir(), projectOrg+".")` |
-| Hardcoded org | Detect from git remote or path |
+| WRONG | RIGHT | Why |
+|-------|-------|-----|
+| `/tmp/` | `/tmp/apimgr/vidveil-XXXXXX/` | NEVER use root tmp |
+| `/tmp/myfile` | `/tmp/apimgr/jokes-aB3xY9/myfile` | Always use org/project structure |
+| `/tmp/jokes` | `/tmp/apimgr/jokes-kL9mN2/` | Missing org, missing random suffix |
+| `/tmp/test-data/` | `/tmp/apimgr/jokes-Qw5rT1/test-data/` | Generic path not allowed |
+| `mktemp -d` | `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` | Must include org/project |
+| `os.TempDir()` alone | `os.MkdirTemp(filepath.Join(os.TempDir(), projectOrg), projectName+"-")` | Must nest under org |
+| Hardcoded org name | Detect from git remote or path | Auto-detect, never hardcode |
+
+**Rule: ALL temp directories MUST be under `/tmp/apimgr/vidveil-XXXXXX/` - no exceptions.**
+
+### Summary: Temp Directory Rules
+
+**The ONLY acceptable temp directory pattern:**
+```
+/tmp/apimgr/vidveil-XXXXXX/
+```
+
+**Breaking it down:**
+- `/tmp/` or `$TMPDIR` - OS temp directory base
+- `apimgr/` - Organization directory (apimgr, casapps, etc.)
+- `vidveil-XXXXXX` - Project directory with random suffix
+
+**Examples of CORRECT paths:**
+- `/tmp/apimgr/jokes-aB3xY9/` ✓
+- `/tmp/casapps/linktree-k9mN2p/` ✓
+- `/tmp/myorg/myproject-Qw5rT1/` ✓
+
+**Examples of WRONG paths:**
+- `/tmp/jokes/` ❌ (missing org)
+- `/tmp/myfile` ❌ (no structure at all)
+- `/tmp/test-data/` ❌ (generic path)
+- `/tmp/apimgr/` ❌ (no project directory)
+
+**Why this structure:**
+- Prevents conflicts between projects
+- Makes cleanup easy (`rm -rf /tmp/apimgr.*`)
+- Identifies which project created temp files
+- Prevents pollution of root `/tmp` directory
+- Multiple projects can run simultaneously
 
 ## Container Usage (NON-NEGOTIABLE)
 
@@ -8397,34 +9404,215 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 | **Container testing** | Docker | `alpine:latest` | Quick tests, CI/CD |
 | **Full OS testing** | Incus | `debian:latest` | Systemd, services, integration |
 
+### Testing Strategy
+
+**Two types of tests are REQUIRED:**
+
+| Test Type | Files | Run With | Tests |
+|-----------|-------|----------|-------|
+| **Go Unit Tests** | `*_test.go` | `go test` | Function/package logic, no server |
+| **Integration Tests** | `tests/*.sh` | Shell scripts | Full server, API endpoints, auth |
+
+**Go Unit Tests (`*_test.go`):**
+- Test individual functions and packages
+- No server running required
+- Fast, run frequently during development
+- Run with `docker run ... golang:alpine go test ./...`
+
+**Integration Tests (`tests/*.sh`):**
+- Test complete running server
+- Test API endpoints, .txt extension, Accept headers
+- Test authentication, admin routes
+- Test project-specific functionality (from PART 36)
+- Run with `./tests/run_tests.sh`
+
+### Testing Requirements Summary
+
+**BOTH types of tests are REQUIRED for all projects:**
+
+1. **Go Unit Tests** (`*_test.go`) - Test package logic
+2. **Integration Tests** (`tests/*.sh`) - Test full running application
+
+**Integration tests MUST be comprehensive:**
+- ✓ Test ALL project-specific endpoints (PART 36)
+- ✓ If project has CRUD → Test full CRUD (Create, Read, Update, Delete)
+- ✓ Test both API endpoints (`/api/v1/*`) AND frontend routes (`/**`)
+- ✓ Test API .txt extension (for simplicity)
+- ✓ Test Accept headers (application/json, text/plain, text/html)
+- ✓ Test frontend smart detection (browser → HTML, CLI → text)
+- ✓ Test authentication (admin, user if applicable)
+
+**Example: User management project MUST test:**
+```bash
+# API CRUD (JSON)
+POST   /api/v1/users           # Create user (API JSON)
+GET    /api/v1/users/1         # Read user (API JSON)
+PUT    /api/v1/users/1         # Update user (API JSON)
+DELETE /api/v1/users/1         # Delete user (API)
+
+# API .txt extension (for simplicity)
+GET    /api/v1/users/1.txt     # Read user (API plain text)
+
+# Frontend routes (smart detection)
+curl /users                    # CLI → plain text (smart detection)
+browser /users                 # Browser → HTML page (smart detection)
+curl -H "Accept: text/plain" /users/1   # Plain text (Accept header)
+curl -H "Accept: text/html" /users/1    # HTML (Accept header)
+```
+
+**Example: Jokes API (read-only) MUST test:**
+```bash
+# API endpoints
+GET /api/v1/jokes/random             # Random joke (JSON)
+GET /api/v1/jokes/random.txt         # Random joke (text)
+GET /api/v1/jokes/programming        # Category filter (JSON)
+GET /api/v1/jokes/search?q=bug       # Search (JSON)
+
+# Frontend endpoints (smart detection)
+curl /jokes/random                   # CLI auto-detects → text
+curl /jokes                          # CLI → text list
+curl -H "Accept: text/html" /jokes   # Browser → HTML
+```
+
+**Example: Weather API (external integration) MUST test:**
+```bash
+# API endpoints with location params
+GET /api/v1/weather/current/New%20York        # Current weather (JSON)
+GET /api/v1/weather/current/New%20York.txt    # Current weather (text)
+GET /api/v1/weather/forecast/10001            # ZIP code forecast (JSON)
+GET /api/v1/weather/alerts/40.7128,-74.0060   # Lat/long alerts (JSON)
+
+# Test caching behavior
+GET /api/v1/weather/current/Chicago           # First call (cache miss)
+GET /api/v1/weather/current/Chicago           # Second call (cache hit, faster)
+
+# Frontend (smart detection)
+curl /weather/Chicago                # CLI → text
+curl /weather/forecast/90210         # CLI → text forecast
+```
+
+**Example: Link Shortener (URL mapping) MUST test:**
+```bash
+# API CRUD for short links
+POST   /api/v1/links -d '{"url":"https://example.com/long/url"}'  # Create
+GET    /api/v1/links/abc123         # Get link details (JSON)
+PUT    /api/v1/links/abc123 -d '{"url":"https://new.com"}'        # Update
+DELETE /api/v1/links/abc123         # Delete
+
+# Redirect resolution
+GET /abc123                          # Should redirect to destination
+GET /abc123/stats                    # Link statistics (JSON or HTML)
+
+# Frontend (smart detection)
+curl /links                          # User's links list (text)
+curl /links/abc123                   # Link details (text)
+```
+
+### Go Unit Test Requirements
+
+**Every package with logic SHOULD have unit tests:**
+
+| Package | Test File | What to Test |
+|---------|-----------|--------------|
+| `config/` | `config_test.go` | Config loading, validation, defaults |
+| `server/` | `server_test.go` | Route registration, middleware |
+| `server/handler/` | `*_handler_test.go` | Handler logic (mock requests) |
+| `mode/` | `mode_test.go` | Mode detection, behavior |
+| `ssl/` | `ssl_test.go` | Certificate loading, validation |
+| `paths/` | `paths_test.go` | Path resolution |
+
+**What to test in unit tests:**
+- ✓ Function inputs/outputs
+- ✓ Edge cases and error handling
+- ✓ Validation logic
+- ✓ Data transformations
+- ✓ Business logic without dependencies
+
+**What NOT to test in unit tests:**
+- ✗ Full HTTP requests (use integration tests)
+- ✗ Database operations (use integration tests)
+- ✗ External services (use integration tests)
+- ✗ Authentication flows (use integration tests)
+
+**Running Go tests:**
+```bash
+# Run all unit tests (via Docker)
+make test
+
+# Or directly:
+docker run --rm -v $(pwd):/build -w /build golang:alpine go test -v -cover ./...
+
+# Run specific package tests
+docker run --rm -v $(pwd):/build -w /build golang:alpine go test -v ./src/config/
+
+# Run with coverage
+docker run --rm -v $(pwd):/build -w /build golang:alpine go test -cover ./...
+```
+
+**When to run which tests:**
+
+| When | Run This | Purpose |
+|------|----------|---------|
+| **During development** | `make test` (Go unit tests) | Fast feedback, verify logic |
+| **Before committing** | `make test` + `./tests/run_tests.sh` | Verify all tests pass |
+| **Before release** | `make test` + `./tests/incus.sh` | Full systemd testing |
+| **In CI/CD** | Both Go tests and integration tests | Automated verification |
+
+**Test Execution Order:**
+```bash
+1. make test                    # Go unit tests (fast)
+2. ./tests/run_tests.sh         # Integration tests (slower, full coverage)
+```
+
+### Integration Testing Strategy
+
+**Preferred: Incus with Debian** (if available)
+- Full systemd support
+- Complete OS environment
+- Service installation testing
+- Full integration tests
+
+**Fallback: Docker with golang:alpine**
+- When Incus not available
+- CI/CD environments
+- Quick validation tests
+
 ### Incus vs Docker
 
-| Aspect | Docker | Incus |
-|--------|--------|-------|
-| **Use for** | Container/app testing | Full OS/systemd testing |
-| **Image** | `alpine:latest` | `debian:latest` |
-| **Init system** | None (single process) | Full systemd |
-| **Best for** | Quick tests, CI | Service install, integration |
-| **Startup** | Fast (~1s) | Slower (~5s) |
+| Aspect | Incus (Preferred) | Docker (Fallback) |
+|--------|-------------------|-------------------|
+| **Use for** | Full OS/systemd testing | Container/app testing |
+| **Image** | `debian:latest` | `golang:alpine` or `alpine:latest` |
+| **Init system** | Full systemd | None (single process) |
+| **Best for** | Service install, integration | Quick tests, CI/CD |
+| **Startup** | ~5s | Fast (~1s) |
+| **Availability** | May not be installed | Always available |
 
 ### Testing Workflow
 
 ```bash
-# Build in Docker
+# 1. Build in Docker (always use Docker for builds)
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
   golang:alpine go build -o /build/binaries/vidveil src
 
-# Quick test in Docker (container testing)
-docker run --rm -v $(pwd)/binaries:/app alpine:latest \
-  /app/vidveil --help
-
-# Full OS test in Incus (systemd, services)
-incus launch images:debian/12 test-vidveil
-incus file push binaries/vidveil test-vidveil/usr/local/bin/
-incus exec test-vidveil -- vidveil --help
-incus exec test-vidveil -- vidveil --service --install
-incus delete test-vidveil --force
+# 2. Test (prefer Incus, fallback to Docker)
+if command -v incus &>/dev/null; then
+  # PREFERRED: Full OS test in Incus (debian + systemd)
+  echo "Testing with Incus (Debian + systemd)..."
+  incus launch images:debian/12 test-vidveil
+  incus file push binaries/vidveil test-vidveil/usr/local/bin/
+  incus exec test-vidveil -- chmod +x /usr/local/bin/vidveil
+  incus exec test-vidveil -- vidveil --help
+  incus exec test-vidveil -- vidveil --service --install
+  incus exec test-vidveil -- systemctl status vidveil
+  incus delete test-vidveil --force
+else
+  # FALLBACK: Quick test in Docker (alpine, no systemd)
+  echo "Incus not available, testing with Docker..."
+  docker run --rm -v $(pwd)/binaries:/app alpine:latest \
+    /app/vidveil --help
+fi
 ```
 
 ### Why Containerized Everything?
@@ -8437,21 +9625,467 @@ incus delete test-vidveil --force
 | **Full OS testing** | Incus provides real systemd for service tests |
 | **No pollution** | Host system stays pristine |
 
+### Test Scripts (tests/ directory)
+
+**ALL projects MUST have these test scripts in `tests/` directory:**
+
+| Script | Purpose | Container | Tests |
+|--------|---------|-----------|-------|
+| `tests/run_tests.sh` | Auto-detect runtime and run tests | Auto-detect | Runs incus.sh or docker.sh |
+| `tests/docker.sh` | Beta testing with Docker | `alpine:latest` | Full integration tests |
+| `tests/incus.sh` | Beta testing with Incus | `debian:latest` | Full integration + systemd tests |
+
+**docker.sh and incus.sh MUST:**
+1. Build binary using Docker (golang:alpine) in temp directory
+2. Copy binary to test container
+3. Run full beta test suite:
+   - Version and help checks
+   - Binary info verification
+   - Start server and test API endpoints
+   - Test API .txt extension (for simplicity)
+   - Test frontend smart detection (browser → HTML, CLI → text)
+   - Test Accept headers (application/json, text/plain, text/html)
+   - Test project-specific endpoints (from PART 36)
+   - Test admin authentication (see "Testing Admin Routes")
+4. Clean up on exit
+
+#### tests/docker.sh
+
+**Purpose:** Full integration testing in Docker Alpine container
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Detect project info
+PROJECTNAME=$(basename "$PWD")
+PROJECTORG=$(basename "$(dirname "$PWD")")
+
+# Create temp directory for build
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+trap "rm -rf $BUILD_DIR" EXIT
+
+echo "Building binary in Docker..."
+docker run --rm \
+  -v "$(pwd):/build" \
+  -w /build \
+  -e CGO_ENABLED=0 \
+  golang:alpine go build -o "$BUILD_DIR/$VIDVEIL" src
+
+echo "Testing in Docker (Alpine)..."
+docker run --rm \
+  -v "$BUILD_DIR:/app" \
+  alpine:latest sh -c "
+    set -e
+    chmod +x /app/$VIDVEIL
+
+    echo '=== Version Check ==='
+    /app/$VIDVEIL --version
+
+    echo '=== Help Check ==='
+    /app/$VIDVEIL --help
+
+    echo '=== Binary Info ==='
+    ls -lh /app/$VIDVEIL
+    file /app/$VIDVEIL
+
+    echo '=== Starting Server for API Tests ==='
+    /app/$VIDVEIL --port 64580 &
+    SERVER_PID=\$!
+    sleep 3
+
+    echo '=== API Endpoint Tests ==='
+    # Test JSON response (default)
+    curl -f http://localhost:64580/api/v1/healthz || echo 'FAILED: /api/v1/healthz'
+
+    # Test .txt extension (plain text)
+    curl -f http://localhost:64580/api/v1/healthz.txt || echo 'FAILED: /api/v1/healthz.txt'
+
+    # Test Accept header: application/json
+    curl -f -H 'Accept: application/json' http://localhost:64580/healthz || echo 'FAILED: Accept JSON'
+
+    # Test Accept header: text/plain
+    curl -f -H 'Accept: text/plain' http://localhost:64580/healthz || echo 'FAILED: Accept text/plain'
+
+    echo '=== Project-Specific Endpoint Tests ==='
+    # MUST test ALL endpoints from PART 36 - both API and frontend
+    # Test FULL CRUD if project has CRUD operations
+    #
+    # Example for jokes API (API routes with .txt extension):
+    #   curl -f http://localhost:64580/api/v1/jokes/random || echo 'FAILED: API JSON'
+    #   curl -f http://localhost:64580/api/v1/jokes/random.txt || echo 'FAILED: API .txt'
+    #   curl -f -H 'Accept: text/plain' http://localhost:64580/api/v1/jokes/random || echo 'FAILED: API Accept text'
+    #
+    # Example for jokes frontend (smart detection, no .txt - test with text for simplicity):
+    #   JOKE=\$(curl -s http://localhost:64580/jokes/random)  # CLI auto-detects text
+    #   if echo "\$JOKE" | grep -q "Why"; then echo '✓ Frontend text works'; else echo 'FAILED: Frontend text'; fi
+    #   # Optional: verify HTML is served to browsers
+    #   curl -f -s -I -H 'Accept: text/html' http://localhost:64580/jokes/random | grep -q 'text/html' || echo 'FAILED: Frontend HTML'
+    #
+    # Example for user CRUD (full test suite):
+    #   # API CRUD
+    #   curl -f -X POST -H 'Content-Type: application/json' -d '{\"username\":\"test\"}' http://localhost:64580/api/v1/users || echo 'FAILED: CREATE user API'
+    #   curl -f http://localhost:64580/api/v1/users/1 || echo 'FAILED: READ user API JSON'
+    #   curl -f http://localhost:64580/api/v1/users/1.txt || echo 'FAILED: READ user API .txt'
+    #   curl -f -X PUT -H 'Content-Type: application/json' -d '{\"email\":\"new@test.com\"}' http://localhost:64580/api/v1/users/1 || echo 'FAILED: UPDATE user API'
+    #   curl -f -X DELETE http://localhost:64580/api/v1/users/1 || echo 'FAILED: DELETE user API'
+    #   # Frontend (smart detection - test with text for simplicity)
+    #   USERS=\$(curl -s http://localhost:64580/users)  # CLI auto-detects text
+    #   if echo "\$USERS" | grep -q "testuser"; then echo '✓ Frontend user list'; else echo 'FAILED: Frontend user list'; fi
+    #   USER=\$(curl -s http://localhost:64580/users/1)  # CLI auto-detects text
+    #   if echo "\$USER" | grep -q "testuser"; then echo '✓ Frontend user profile'; else echo 'FAILED: Frontend user'; fi
+    #
+    # Test ALL project-specific endpoints defined in PART 36
+
+    echo '=== Stopping Server ==='
+    kill \$SERVER_PID
+    wait \$SERVER_PID 2>/dev/null || true
+
+    echo '=== All tests passed ==='
+"
+
+echo "Docker tests completed successfully"
+```
+
+#### tests/incus.sh
+
+**Purpose:** Full integration + systemd testing in Incus Debian container
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Check if incus is available
+if ! command -v incus &>/dev/null; then
+    echo "ERROR: incus not found. Install incus or use tests/docker.sh"
+    exit 1
+fi
+
+# Detect project info
+PROJECTNAME=$(basename "$PWD")
+PROJECTORG=$(basename "$(dirname "$PWD")")
+CONTAINER_NAME="test-$VIDVEIL-$$"
+
+# Create temp directory for build
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+trap "rm -rf $BUILD_DIR; incus delete $CONTAINER_NAME --force 2>/dev/null || true" EXIT
+
+echo "Building binary in Docker..."
+docker run --rm \
+  -v "$(pwd):/build" \
+  -w /build \
+  -e CGO_ENABLED=0 \
+  golang:alpine go build -o "$BUILD_DIR/$VIDVEIL" src
+
+echo "Launching Incus container (Debian + systemd)..."
+incus launch images:debian/12 "$CONTAINER_NAME"
+
+# Wait for container to be ready
+sleep 2
+
+echo "Copying binary to container..."
+incus file push "$BUILD_DIR/$VIDVEIL" "$CONTAINER_NAME/usr/local/bin/"
+incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/$VIDVEIL"
+
+echo "Running tests in Incus..."
+incus exec "$CONTAINER_NAME" -- bash -c "
+    set -e
+
+    echo '=== Version Check ==='
+    $VIDVEIL --version
+
+    echo '=== Help Check ==='
+    $VIDVEIL --help
+
+    echo '=== Binary Info ==='
+    ls -lh /usr/local/bin/$VIDVEIL
+    file /usr/local/bin/$VIDVEIL
+
+    echo '=== Service Install Test ==='
+    $VIDVEIL --service --install
+
+    echo '=== Service Status ==='
+    systemctl status $VIDVEIL || true
+
+    echo '=== Service Start Test ==='
+    systemctl start $VIDVEIL
+    sleep 2
+    systemctl status $VIDVEIL
+
+    echo '=== API Endpoint Tests ==='
+    # Test JSON response (default)
+    curl -f http://localhost:80/api/v1/healthz || echo 'FAILED: /api/v1/healthz'
+
+    # Test .txt extension (plain text)
+    curl -f http://localhost:80/api/v1/healthz.txt || echo 'FAILED: /api/v1/healthz.txt'
+
+    # Test Accept header: application/json
+    curl -f -H 'Accept: application/json' http://localhost:80/healthz || echo 'FAILED: Accept JSON'
+
+    # Test Accept header: text/plain
+    curl -f -H 'Accept: text/plain' http://localhost:80/healthz || echo 'FAILED: Accept text/plain'
+
+    echo '=== Project-Specific Endpoint Tests ==='
+    # MUST test ALL endpoints from PART 36 - both API and frontend
+    # Test FULL CRUD if project has CRUD operations
+    #
+    # Example for jokes API (API routes with .txt extension):
+    #   curl -f http://localhost:80/api/v1/jokes/random || echo 'FAILED: API JSON'
+    #   curl -f http://localhost:80/api/v1/jokes/random.txt || echo 'FAILED: API .txt'
+    #   curl -f -H 'Accept: text/plain' http://localhost:80/api/v1/jokes/random || echo 'FAILED: API Accept text'
+    #
+    # Example for jokes frontend (smart detection, no .txt - test with text for simplicity):
+    #   JOKE=\$(curl -s http://localhost:80/jokes/random)  # CLI auto-detects text
+    #   if echo "\$JOKE" | grep -q "Why"; then echo '✓ Frontend text works'; else echo 'FAILED: Frontend text'; fi
+    #   # Optional: verify HTML is served to browsers
+    #   curl -f -s -I -H 'Accept: text/html' http://localhost:80/jokes/random | grep -q 'text/html' || echo 'FAILED: Frontend HTML'
+    #
+    # Example for user CRUD (full test suite):
+    #   # API CRUD
+    #   curl -f -X POST -H 'Content-Type: application/json' -d '{\"username\":\"test\"}' http://localhost:80/api/v1/users || echo 'FAILED: CREATE user API'
+    #   curl -f http://localhost:80/api/v1/users/1 || echo 'FAILED: READ user API JSON'
+    #   curl -f http://localhost:80/api/v1/users/1.txt || echo 'FAILED: READ user API .txt'
+    #   curl -f -X PUT -H 'Content-Type: application/json' -d '{\"email\":\"new@test.com\"}' http://localhost:80/api/v1/users/1 || echo 'FAILED: UPDATE user API'
+    #   curl -f -X DELETE http://localhost:80/api/v1/users/1 || echo 'FAILED: DELETE user API'
+    #   # Frontend (smart detection - test with text for simplicity)
+    #   USERS=\$(curl -s http://localhost:80/users)  # CLI auto-detects text
+    #   if echo "\$USERS" | grep -q "testuser"; then echo '✓ Frontend user list'; else echo 'FAILED: Frontend user list'; fi
+    #   USER=\$(curl -s http://localhost:80/users/1)  # CLI auto-detects text
+    #   if echo "\$USER" | grep -q "testuser"; then echo '✓ Frontend user profile'; else echo 'FAILED: Frontend user'; fi
+    #
+    # Test ALL project-specific endpoints defined in PART 36
+
+    echo '=== Service Stop Test ==='
+    systemctl stop $VIDVEIL
+
+    echo '=== All tests passed ==='
+"
+
+echo "Incus tests completed successfully"
+```
+
+#### tests/run_tests.sh
+
+**Purpose:** Automatic test runner - detects available container runtime and runs appropriate test
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Detect available container runtime and run appropriate test
+if command -v incus &>/dev/null; then
+    echo "Incus detected - running full systemd tests..."
+    exec "$(dirname "$0")/incus.sh"
+elif command -v docker &>/dev/null; then
+    echo "Docker detected - running container tests..."
+    exec "$(dirname "$0")/docker.sh"
+else
+    echo "ERROR: Neither incus nor docker found"
+    echo "Please install one of the following:"
+    echo "  - Incus (preferred): https://linuxcontainers.org/incus/"
+    echo "  - Docker (fallback): https://docker.com/"
+    exit 1
+fi
+```
+
+**Test Script Rules:**
+
+| Rule | Requirement |
+|------|-------------|
+| **Location** | `tests/run_tests.sh`, `tests/docker.sh`, `tests/incus.sh` |
+| **Permissions** | Executable (`chmod +x tests/*.sh`) |
+| **Build method** | ALWAYS use Docker (golang:alpine) |
+| **Build location** | ALWAYS use temp directory |
+| **API endpoint testing** | MUST test .txt extension and Accept headers on API routes |
+| **Frontend testing** | MUST test smart detection (CLI → text, browser → HTML) |
+| **Content negotiation** | Test JSON, text/plain, and text/html responses |
+| **Project-specific tests** | MUST test ALL endpoints from PART 36 (CRUD, API, frontend) |
+| **Admin authentication** | Test setup token, login, and rejection (no bypass) |
+| **Cleanup** | ALWAYS use `trap` for cleanup |
+| **Exit codes** | 0 = success, non-zero = failure |
+| **Output** | Clear progress messages with `echo` |
+| **Error handling** | `set -euo pipefail` at top |
+
+## Testing Admin Routes (NON-NEGOTIABLE)
+
+**Admin routes (`/admin/**`) require authentication. Tests MUST verify authentication works.**
+
+**CRITICAL: Do NOT bypass authentication in tests - TEST that it works!**
+
+### Proper Admin Testing Approach
+
+**Tests should verify the authentication system, not skip it:**
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo '=== Admin Authentication Tests ==='
+
+# Start server normally (authentication required)
+/app/$VIDVEIL --port 64580 &
+SERVER_PID=$!
+sleep 3
+
+# 1. Test that unauthenticated access is REJECTED
+echo "Testing unauthenticated access is blocked..."
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:64580/admin)
+if [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "401" ]; then
+    echo "✓ Unauthenticated access properly rejected"
+else
+    echo "✗ FAILED: Admin routes not protected (got HTTP $HTTP_CODE)"
+    kill $SERVER_PID
+    exit 1
+fi
+
+# 2. Get setup token from server logs
+SETUP_TOKEN=$(grep -oP 'Setup Token.*:\s*\K[a-f0-9]+' /tmp/server.log | head -1)
+
+if [ -z "$SETUP_TOKEN" ]; then
+    echo "✗ FAILED: No setup token found in logs"
+    kill $SERVER_PID
+    exit 1
+fi
+
+echo "✓ Setup token found: ${SETUP_TOKEN:0:8}..."
+
+# 3. Test admin routes WITH authentication (setup token)
+echo "Testing admin access with setup token..."
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "X-Setup-Token: $SETUP_TOKEN" \
+    http://localhost:64580/admin)
+
+if [ "$HTTP_CODE" = "200" ]; then
+    echo "✓ Admin access works with setup token"
+else
+    echo "✗ FAILED: Admin access with token returned HTTP $HTTP_CODE"
+    kill $SERVER_PID
+    exit 1
+fi
+
+# 4. Complete setup wizard (create admin account)
+echo "Creating admin account via API..."
+curl -s -X POST \
+    -H "X-Setup-Token: $SETUP_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"username":"testadmin","password":"TestPass123!"}' \
+    http://localhost:64580/api/v1/admin/setup
+
+# 5. Test login with created admin
+echo "Testing admin login..."
+SESSION=$(curl -s -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"username":"testadmin","password":"TestPass123!"}' \
+    http://localhost:64580/api/v1/admin/login | jq -r '.session_token')
+
+if [ -z "$SESSION" ] || [ "$SESSION" = "null" ]; then
+    echo "✗ FAILED: Admin login failed"
+    kill $SERVER_PID
+    exit 1
+fi
+
+echo "✓ Admin login successful"
+
+# 6. Test admin routes with valid session
+echo "Testing admin routes with session..."
+curl -s -H "Authorization: Bearer $SESSION" \
+    http://localhost:64580/api/v1/admin/users > /dev/null
+
+echo "✓ Admin routes work with authentication"
+
+# 7. Test that invalid credentials are rejected
+echo "Testing invalid credentials are rejected..."
+INVALID=$(curl -s -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"username":"testadmin","password":"wrongpassword"}' \
+    -w "%{http_code}" \
+    http://localhost:64580/api/v1/admin/login)
+
+if echo "$INVALID" | grep -q "401\|403"; then
+    echo "✓ Invalid credentials properly rejected"
+else
+    echo "✗ FAILED: Invalid credentials not rejected"
+    kill $SERVER_PID
+    exit 1
+fi
+
+# Cleanup
+kill $SERVER_PID
+wait $SERVER_PID 2>/dev/null || true
+
+echo '=== All admin authentication tests passed ==='
+```
+
+### Debug Mode - ONLY for Manual Development
+
+**Debug mode auth bypass exists ONLY for quick manual testing during development:**
+
+```go
+// In admin middleware
+func AdminAuthMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Debug mode: bypass authentication ONLY for manual dev work
+        // NEVER use this in automated tests!
+        if os.Getenv("DEBUG") == "true" || config.IsDebug() {
+            log.Println("[DEBUG] Admin auth bypassed (debug mode - manual dev only)")
+            next.ServeHTTP(w, r)
+            return
+        }
+
+        // Normal: require valid admin session
+        session := validateAdminSession(r)
+        if session == nil {
+            http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+            return
+        }
+
+        next.ServeHTTP(w, r)
+    })
+}
+```
+
+**Debug bypass is for:**
+- ✓ Quick manual UI testing during development
+- ✓ Exploring admin panel while coding
+- ✓ Debugging admin routes interactively
+
+**Debug bypass is NOT for:**
+- ✗ Automated test scripts
+- ✗ Beta testing
+- ✗ CI/CD pipelines
+- ✗ Verifying authentication works
+
+### Admin Testing Rules
+
+| Rule | Requirement |
+|------|-------------|
+| **Test authentication** | Tests MUST verify auth works, not bypass it |
+| **Use setup token** | First-run setup token for initial admin access |
+| **Create test admin** | Create admin account via setup API |
+| **Test login flow** | Verify credentials, sessions, and access control |
+| **Test rejection** | Verify unauthenticated and invalid credentials are rejected |
+| **Debug mode** | ONLY for manual development, NEVER in automated tests |
+
 ### Container Images
 
-| Purpose | Image | Why |
-|---------|-------|-----|
-| Building Go | `golang:alpine` | Latest Go on Alpine, small image |
-| Container runtime | `alpine:latest` | Minimal, fast, good for quick tests |
-| Full OS runtime | `debian:latest` (Incus) | Full systemd, realistic environment |
+| Purpose | Image | Required Packages | Why |
+|---------|-------|-------------------|-----|
+| Building Go | `golang:alpine` | `git`, `bash` | Latest Go, dependencies need git |
+| Container runtime | `alpine:latest` | `git`, `bash`, `curl`, `tini`, `tor` | Minimal, all runtime tools included |
+| Full OS runtime | `debian:latest` (Incus) | Full OS | Complete systemd, realistic environment |
 
 ### Common Docker Commands
 
 **All Go commands MUST be run through Docker. Here are the patterns:**
 
 ```bash
-# Set project path (adjust as needed)
-PROJECT_PATH="/root/Projects/github/apimgr/vidveil"
+# Set project path to YOUR actual project location (examples shown below)
+# Use git top-level if in a git repo: PROJECT_PATH="$(git rev-parse --show-toplevel)"
+# Or use absolute path to your project directory
+PROJECT_PATH="/root/Projects/github/apimgr/vidveil"  # Example 1
+# PROJECT_PATH="~/Documents/myproject"                     # Example 2
+# PROJECT_PATH="~/myproject"                               # Example 3
+# PROJECT_PATH="/workspace/dev/myproject"                  # Example 4
 
 # Build (outputs to binaries/ which can be mounted into test containers)
 docker run --rm -v $PROJECT_PATH:/build -w /build -e CGO_ENABLED=0 \
@@ -8695,7 +10329,8 @@ Before running any `rm -rf`:
 
 ---
 
-# PART 13: DOCKER (NON-NEGOTIABLE)
+
+# PART 14: DOCKER (NON-NEGOTIABLE)
 
 ## Docker Directory Structure (NON-NEGOTIABLE)
 
@@ -8737,7 +10372,7 @@ docker/
 | Builder stage | `golang:alpine` |
 | Runtime stage | `alpine:latest` |
 | Meta labels | All OCI labels (see below) |
-| Required packages | curl, bash, tini, **tor** |
+| Required packages | git, curl, bash, tini, **tor** |
 | Binary location | `/usr/local/bin/vidveil` |
 | Entrypoint script | `/usr/local/bin/entrypoint.sh` |
 | Init system | **tini** |
@@ -8825,6 +10460,9 @@ See the docker.yml workflow for the complete list of required annotations.
 # =============================================================================
 FROM golang:alpine AS builder
 
+# Install git and bash (git: required for go mod download; bash: for build scripts)
+RUN apk add --no-cache git bash
+
 ARG TARGETARCH
 ARG VERSION=dev
 ARG BUILD_DATE
@@ -8875,6 +10513,7 @@ LABEL org.opencontainers.image.licenses="${LICENSE}" \
 
 # Install required packages including Tor
 RUN apk add --no-cache \
+    git \
     curl \
     bash \
     tini \
@@ -9304,7 +10943,9 @@ $TEMP_DIR/
 
 ```bash
 # Setup (uses OS temp dir: {ostempdir}/apimgr/vidveil-XXXXXX/)
-PROJECT_ROOT="/path/to/project"
+# Set PROJECT_ROOT to your actual project location
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"  # Use git top-level
+# Or use absolute path: PROJECT_ROOT="/path/to/your/project"
 mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
 TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
@@ -9649,7 +11290,8 @@ networks:
 
 ---
 
-# PART 14: CI/CD WORKFLOWS (NON-NEGOTIABLE)
+
+# PART 15: CI/CD WORKFLOWS (NON-NEGOTIABLE)
 
 **All projects MUST have CI/CD workflows appropriate for their git hosting platform.**
 
@@ -10809,7 +12451,7 @@ stages:
 .go-build-template: &go-build
   image: golang:alpine
   before_script:
-    - apk add --no-cache git
+    - apk add --no-cache git bash
     - export VERSION="${CI_COMMIT_TAG#v}"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
@@ -11021,7 +12663,7 @@ build:beta:linux:
     GOOS: linux
     GOARCH: amd64
   before_script:
-    - apk add --no-cache git
+    - apk add --no-cache git bash
     - export VERSION="$(date +%Y%m%d%H%M%S)-beta"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
@@ -11047,7 +12689,7 @@ build:daily:linux:
     GOOS: linux
     GOARCH: amd64
   before_script:
-    - apk add --no-cache git
+    - apk add --no-cache git bash
     - export VERSION="$(date +%Y%m%d%H%M%S)"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
@@ -11812,7 +13454,8 @@ Before proceeding, confirm you understand:
 | Self-hosted | No | Yes | Yes | Yes |
 
 ---
-# PART 15: HEALTH & VERSIONING (NON-NEGOTIABLE)
+
+# PART 16: HEALTH & VERSIONING (NON-NEGOTIABLE)
 
 ## Health Checks
 
@@ -11935,7 +13578,8 @@ OS/Arch: linux/amd64
 
 ---
 
-# PART 16: WEB FRONTEND (NON-NEGOTIABLE)
+
+# PART 17: WEB FRONTEND (NON-NEGOTIABLE)
 
 ## Requirements
 
@@ -11950,6 +13594,140 @@ OS/Arch: linux/amd64
 | **UX** | Readable, navigable, intuitive, user-friendly, self-explanatory |
 | **PWA Support** | Progressive Web App - installable, offline-capable |
 | **CORS** | `Access-Control-Allow-Origin: *` for API endpoints |
+
+## Smart Content Detection (NON-NEGOTIABLE)
+
+**Frontend routes (`/**`) MUST automatically detect request type and respond appropriately.**
+
+### Detection Logic (MUST Support Full CRUD)
+
+**ALL frontend routes with CRUD operations MUST work in BOTH modes:**
+
+```go
+func detectClientType(r *http.Request) string {
+    // 1. Check Accept header first (explicit preference)
+    accept := r.Header.Get("Accept")
+
+    if strings.Contains(accept, "text/html") {
+        return "html"
+    }
+    if strings.Contains(accept, "text/plain") {
+        return "text"
+    }
+    if strings.Contains(accept, "application/json") {
+        return "json" // Rare for frontend, but support it
+    }
+
+    // 2. Check User-Agent for browser detection
+    ua := r.Header.Get("User-Agent")
+
+    // Browser User-Agents (common patterns)
+    browsers := []string{
+        "Mozilla/", "Chrome/", "Safari/", "Edge/", "Firefox/",
+        "Opera/", "MSIE", "Trident/",
+    }
+
+    for _, browser := range browsers {
+        if strings.Contains(ua, browser) {
+            return "html"
+        }
+    }
+
+    // 3. CLI tools (curl, wget, httpie, etc.)
+    cliTools := []string{
+        "curl/", "Wget/", "HTTPie/", "python-requests/",
+        "Go-http-client/", "node-fetch/",
+    }
+
+    for _, tool := range cliTools {
+        if strings.Contains(ua, tool) {
+            return "text"
+        }
+    }
+
+    // 4. Empty or unknown User-Agent
+    if ua == "" {
+        return "text" // Default to text for programmatic access
+    }
+
+    // 5. Default: HTML (safest fallback)
+    return "html"
+}
+```
+
+### Response by Client Type
+
+**Frontend routes MUST respond differently based on client:**
+
+| Route | Browser | curl/CLI | Accept: text/plain | Accept: text/html | Accept: application/json |
+|-------|---------|----------|-------------------|-------------------|--------------------------|
+| `/` | HTML page | Text | Text | HTML | JSON |
+| `/users` | HTML list | Text list | Text list | HTML list | JSON array |
+| `/users/123` | HTML profile | Text (username) | Text | HTML profile | JSON object |
+| `/jokes/random` | HTML joke page | Just the joke | Just the joke | HTML page | JSON object |
+
+### CRUD Operations MUST Work in All Modes
+
+**ALL CRUD operations must be accessible via:**
+
+1. **HTML Forms** (browser users):
+   ```html
+   <form action="/users" method="POST">...</form>
+   <form action="/users/123" method="POST">
+     <input type="hidden" name="_method" value="PUT">
+   </form>
+   ```
+
+2. **API Endpoints** (programmatic):
+   ```bash
+   curl -X POST /api/v1/users -d '{"username":"test"}'
+   curl -X PUT /api/v1/users/123 -d '{"email":"new@test.com"}'
+   curl -X DELETE /api/v1/users/123
+   ```
+
+3. **Frontend Direct** (CLI/scripting):
+   ```bash
+   curl -X POST /users -d 'username=test'  # Form-encoded
+   curl /users/123  # Returns text (auto-detected)
+   ```
+
+**Rule:** CRUD must work for browsers (HTML forms), APIs (JSON), and CLI (text/form-encoded).
+
+### Frontend Testing Best Practice
+
+**For automated testing, use text responses (much simpler than HTML parsing):**
+
+```bash
+# Easy: Test text output (no HTML parsing needed)
+curl /users/123                           # Auto-detects CLI, returns text
+curl -H "Accept: text/plain" /users/123  # Explicitly request text
+
+# Hard: Testing HTML requires parsing
+curl -H "Accept: text/html" /users/123 | grep "<title>"  # Fragile
+```
+
+**Recommended testing approach:**
+- ✓ Use Accept: text/plain for frontend route testing
+- ✓ Or rely on CLI auto-detection (curl returns text automatically)
+- ✓ Verify text output contains expected data
+- ✗ Avoid parsing HTML in test scripts (complex and fragile)
+
+**Test scripts should:**
+```bash
+# Test frontend returns text for CLI
+RESULT=$(curl -s http://localhost:80/users/123)
+if echo "$RESULT" | grep -q "testuser"; then
+    echo "✓ Frontend returns user data"
+else
+    echo "✗ FAILED: User data not returned"
+fi
+
+# Test frontend returns HTML for browser (optional, just check Content-Type)
+CONTENT_TYPE=$(curl -s -H "Accept: text/html" -I http://localhost:80/users/123 | grep -i "content-type")
+if echo "$CONTENT_TYPE" | grep -q "text/html"; then
+    echo "✓ Frontend serves HTML to browsers"
+fi
+```
 
 ## Responsive Layout (NON-NEGOTIABLE)
 
@@ -12340,15 +14118,15 @@ See **JavaScript Rules** section below for `app.js` structure.
 
 | Location | Purpose |
 |----------|---------|
-| `src/server/template/` | All `.tmpl` template files |
-| `src/server/template/partials/` | Reusable template partials |
-| `src/server/template/layouts/` | Base layouts |
-| `src/server/template/pages/` | Page-specific templates |
+| `src/server/templates/` | All `.tmpl` template files |
+| `src/server/templates/partials/` | Reusable template partials |
+| `src/server/templates/layouts/` | Base layouts |
+| `src/server/templates/pages/` | Page-specific templates |
 | `src/server/static/` | Static assets (CSS, JS, images) |
 
 **Template Structure (all files use `.tmpl` extension):**
 ```
-src/server/template/
+src/server/templates/
 ├── layouts/
 │   ├── public.tmpl         # Public-facing layout (/, /auth/*, /server/*)
 │   └── admin.tmpl          # Admin panel layout (/admin/*)
@@ -12982,7 +14760,7 @@ See **Template Structure** above for mandatory partials (`partials/public/*`, `p
 
 Projects add app-specific partials alongside the mandatory ones:
 ```
-src/server/template/partials/
+src/server/templates/partials/
 ├── public/                  # MANDATORY (see Template Structure)
 ├── admin/                   # MANDATORY (see Template Structure)
 ├── head.tmpl                # MANDATORY
@@ -13144,13 +14922,69 @@ var staticFS embed.FS
 | < 720px | 98% (1% margins) |
 | Footer | Always centered, always at bottom |
 
-## Themes
+## Themes (NON-NEGOTIABLE - PROJECT-WIDE)
 
-| Theme | Description |
-|-------|-------------|
-| **Dark** | Based on Dracula - **DEFAULT** |
-| **Light** | Based on popular light theme |
-| **Auto** | Based on user's system |
+**Theme system applies to THE ENTIRE PROJECT:**
+- Web interface (HTML pages)
+- Admin panel
+- Swagger UI
+- GraphiQL interface
+- ReadTheDocs documentation (if possible)
+- All interactive elements
+
+**Three Required Themes:**
+
+| Theme | When Active | Default | Color Scheme |
+|-------|-------------|---------|--------------|
+| **Dark** | User selects dark OR system dark + auto mode | **YES** | Dark theme colors (see `dark.css`) |
+| **Light** | User selects light OR system light + auto mode | No | Light theme colors (see `light.css`) |
+| **Auto** | Follows system preference (light/dark) | No | System `prefers-color-scheme` |
+
+**Critical Theme Rules (APPLY TO ENTIRE PROJECT):**
+- **BOTH light AND dark themes MUST be easy to read**
+- **NO color conflicts** - nothing should be invisible or unreadable in either theme
+- **Sufficient contrast ratio** - minimum WCAG AA compliance (4.5:1) in both themes
+- **Theme applies everywhere** - web UI, admin panel, Swagger, GraphQL, etc.
+- **Theme switching MUST work seamlessly** without page reload
+- **All interactive elements MUST be clearly visible** in both themes
+- **Syntax highlighting MUST adapt** to theme (use appropriate colors for each theme)
+- **User preference persisted** in localStorage or cookie
+- **Default to dark** if no preference set
+
+**Theme Implementation Location:**
+
+| Component | File Location | Purpose |
+|-----------|---------------|---------|
+| Theme core logic | `src/server/theme.go` | Theme detection, switching, persistence |
+| Swagger theming | `src/swagger/theme.go` | Swagger UI theme application |
+| GraphQL theming | `src/graphql/theme.go` | GraphiQL theme application |
+| Web UI theming | `src/server/template/` | HTML template theme classes |
+| CSS variables | Embedded in templates | Theme-specific CSS custom properties |
+
+**Theme Detection Flow:**
+```
+1. Check user preference in localStorage/cookie
+2. If no preference OR preference is "auto":
+   - Check system preference via prefers-color-scheme media query
+   - Apply matching theme (light or dark)
+3. If preference is "light" or "dark":
+   - Apply selected theme directly
+4. Default to dark if all detection fails
+```
+
+**Theme Switching:**
+- Provide theme toggle in UI (☀️ Light / 🌙 Dark / 🔄 Auto)
+- Store preference in `localStorage.theme` or cookie
+- Apply theme class to `<html>` element: `theme-light`, `theme-dark`
+- NO page reload required - instant switching via CSS classes
+- All components (Swagger, GraphQL, admin) switch simultaneously
+
+**Accessibility Requirements:**
+- Both themes MUST pass WCAG AA contrast requirements (4.5:1 minimum)
+- Focus indicators MUST be visible in both themes
+- Keyboard navigation MUST work identically in both themes
+- Screen readers MUST work correctly in both themes
+- No information conveyed by color alone
 
 ## Branding & SEO (NON-NEGOTIABLE)
 
@@ -13638,7 +15472,8 @@ server:
 
 ---
 
-# PART 17: SERVER CONFIGURATION (NON-NEGOTIABLE)
+
+# PART 18: SERVER CONFIGURATION (NON-NEGOTIABLE)
 
 ## Request Limits
 
@@ -13876,7 +15711,8 @@ All settings above MUST be configurable via admin panel:
 ---
 
 
-# PART 18: ADMIN PANEL (NON-NEGOTIABLE)
+
+# PART 19: ADMIN PANEL (NON-NEGOTIABLE)
 
 **ALL projects MUST have a full admin panel.**
 
@@ -13902,6 +15738,24 @@ All settings above MUST be configurable via admin panel:
 
 **Admin credentials are stored in `users.db` (admins table), NOT in config file.**
 
+### Testing Admin Routes
+
+**Admin authentication MUST be tested, not bypassed:**
+
+| Testing Approach | Use For | Method |
+|------------------|---------|--------|
+| **Proper testing** | Automated tests, beta testing, CI/CD | Use setup token → create admin → test login |
+| **Manual dev only** | Quick UI exploration while coding | Use `--debug` flag (bypasses auth) |
+
+**Automated tests MUST:**
+1. Verify unauthenticated requests are blocked
+2. Use setup token to create admin account
+3. Test login with valid credentials
+4. Verify admin routes work with session
+5. Verify invalid credentials are rejected
+
+**See PART 13: Testing & Development for complete admin authentication testing examples.**
+
 ### Why Isolated?
 
 - Security: Admin panel not discoverable
@@ -13917,7 +15771,7 @@ All settings above MUST be configurable via admin panel:
 | Pretty | Clean, modern, professional design |
 | Intuitive | Self-explanatory, no manual needed |
 | Easy Navigation | Logical grouping, breadcrumbs, search |
-| Frontend Rules | Dracula theme (default), responsive, accessible |
+| Frontend Rules | Dark theme (default), light/dark/auto themes, responsive, accessible |
 | No JS Alerts | Custom modals, toasts, confirmations |
 | Real-time Feedback | Show save status, validation errors inline |
 | Mobile-Friendly | Works on all screen sizes |
@@ -14578,12 +16432,13 @@ The admin panel MUST include a scheduler section with:
 
 ---
 
-# PART 19: API STRUCTURE (NON-NEGOTIABLE)
+
+# PART 20: API STRUCTURE (NON-NEGOTIABLE)
 
 **Note:** This section covers API structure and requirements. For specific route listings, see:
 - Admin Web Routes: PART 18 (Admin Panel)
 - Admin API Routes: PART 18 (Admin Panel → API Routes)
-- Project-specific Routes: PART 32 (Project-Specific Sections)
+- Project-specific Routes: PART 36 (Project-Specific Sections)
 
 ## API Versioning
 
@@ -14624,6 +16479,180 @@ GET /api/v1/users?status=active&role=admin ✓ Multiple filters
 | **No redundancy** | Don't duplicate path params as query params |
 | **Clean URLs** | Prefer `/jokes/random` over `/jokes?type=random` |
 
+## Response Formatting (NON-NEGOTIABLE)
+
+**ALL responses and ALL code MUST be properly formatted.**
+
+### Universal Formatting Rules
+
+**These rules apply to EVERYTHING: responses, code files, templates, configs.**
+
+| Rule | Applies To | Requirement |
+|------|-----------|-------------|
+| **Single trailing newline** | JSON, TXT, HTML, XML, YAML, Go, all files | End with exactly one `\n` |
+| **2-space indentation** | HTML, JSON, YAML, JavaScript, CSS | Use 2 spaces per level |
+| **Tab indentation** | Go code, Makefiles | Use tabs where required by language |
+| **Proper nesting** | All structured formats | Each level indented correctly |
+| **No trailing whitespace** | All files | No spaces/tabs at end of lines |
+
+### JSON Formatting (API Responses)
+
+```go
+// ALL JSON responses MUST be indented and end with newline
+data, _ := json.MarshalIndent(response, "", "  ")  // 2-space indent
+w.Header().Set("Content-Type", "application/json")
+w.Write(data)
+w.Write([]byte("\n"))  // Single trailing newline
+```
+
+**Output:**
+```json
+{
+  "id": "123",
+  "name": "Test User",
+  "items": [
+    {
+      "id": "1"
+    }
+  ]
+}
+⏎
+```
+
+### Text Formatting (TXT Responses)
+
+```go
+// ALL text responses MUST end with single newline
+w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+fmt.Fprintf(w, "%s\n", text)  // Single trailing newline
+```
+
+**Output:**
+```
+This is the response text.
+⏎
+```
+
+### HTML Formatting (Frontend Responses)
+
+```go
+// ALL HTML MUST be indented with 2 spaces and end with newline
+```
+
+**Output:**
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Title</title>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Heading</h1>
+      <p>Paragraph text here.</p>
+      <ul>
+        <li>Item 1</li>
+        <li>Item 2</li>
+      </ul>
+    </div>
+  </body>
+</html>
+⏎
+```
+
+### YAML Formatting (Config Files)
+
+```yaml
+# 2-space indentation, single trailing newline
+server:
+  address: 0.0.0.0
+  port: 80
+
+  users:
+    enabled: false
+    registration:
+      mode: disabled
+⏎
+```
+
+### Go Code Formatting
+
+```go
+// Use tabs for indentation (gofmt standard)
+func Handler(w http.ResponseWriter, r *http.Request) {
+	// Tab indent
+	if err := validate(r); err != nil {
+		// Tab indent
+		http.Error(w, "Invalid", 400)
+		return
+	}
+
+	// Response
+	fmt.Fprintf(w, "OK\n")
+}
+⏎
+```
+
+### CSS Formatting
+
+```css
+/* 2-space indentation */
+.container {
+  width: 90%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+@media (min-width: 720px) {
+  .container {
+    width: 98%;
+  }
+}
+⏎
+```
+
+### JavaScript Formatting
+
+```javascript
+// 2-space indentation
+function handleClick(event) {
+  event.preventDefault();
+
+  const data = {
+    id: 123,
+    name: "test"
+  };
+
+  fetch('/api/v1/users', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+}
+⏎
+```
+
+### Formatting Rules Summary
+
+**Indentation:**
+- **2 spaces**: HTML, JSON, YAML, CSS, JavaScript
+- **Tabs**: Go code, Makefiles
+- **NEVER mix**: Use consistent indentation throughout file
+
+**Newlines:**
+- **Every file**: Ends with exactly one newline
+- **Every response**: Ends with exactly one newline
+- **No extra blank lines**: At end of files/responses
+
+**Validation:**
+```bash
+# Check file ends with single newline
+tail -c 2 file.txt | od -An -tx1
+# Should show: '0a' (one newline) or 'XX 0a' (char + newline)
+# Should NOT show: '0a 0a' (two newlines) or no '0a' (no newline)
+```
+
 ## Content Negotiation (NON-NEGOTIABLE)
 
 **All endpoints respond based on how they are accessed.**
@@ -14647,23 +16676,89 @@ GET /api/v1/users?status=active&role=admin ✓ Multiple filters
 | `/healthz` | HTML | HTML | Text | JSON (if Accept: application/json) |
 | `*.txt` extension | Text | Text | Text | Text |
 
-### The `.txt` Extension (NON-NEGOTIABLE)
+### Smart Content Negotiation (NON-NEGOTIABLE)
 
-**ALL endpoints support `.txt` extension for plain text output.**
+**Frontend routes (`/**`) have BUILT-IN smart detection:**
+- Browser request → HTML
+- CLI/curl → text (via User-Agent or lack of browser headers)
+- Accept: text/plain → text
+- Accept: text/html → HTML
 
-| Endpoint | Returns |
-|----------|---------|
-| `/api/v1/jokes/random` | JSON (default) |
-| `/api/v1/jokes/random.txt` | Plain text |
-| `/healthz` | HTML (default) |
-| `/healthz.txt` | Plain text |
-| `/api/v1/status` | JSON (default) |
-| `/api/v1/status.txt` | Plain text |
+**Frontend routes do NOT need `.txt` extension - smart detection handles it.**
+
+### The `.txt` Extension for API Routes (NON-NEGOTIABLE)
+
+**ALL API endpoints MUST support `.txt` extension for simplicity.**
+
+**`.txt` extension is ONLY for API routes:**
+- ✓ ALL `/api/v1/*` endpoints
+- ✓ Health API endpoints (`/api/v1/healthz`)
+- ✓ Project-specific API endpoints
+- ✓ Admin API endpoints (`/api/v1/admin/*`)
+
+**Frontend routes (`/**`) do NOT use `.txt` extension - they use smart detection instead.**
+
+**API Routes (support .txt extension):**
+
+| Endpoint | Default | With `.txt` | Smart Detection |
+|----------|---------|-------------|-----------------|
+| `/api/v1/jokes/random` | JSON | Plain text | Accept: text/plain → text |
+| `/api/v1/healthz` | JSON | Plain text | Accept: text/plain → text |
+| `/api/v1/status` | JSON | Plain text | Accept: text/plain → text |
+| `/api/v1/users/123` | JSON | Plain text | Accept: text/plain → text |
+
+**Frontend Routes (smart detection only, no .txt extension):**
+
+| Endpoint | Browser | CLI/curl | Accept: text/plain | Accept: text/html |
+|----------|---------|----------|-------------------|-------------------|
+| `/jokes/random` | HTML | Text | Text | HTML |
+| `/users/123` | HTML | Text | Text | HTML |
+| `/healthz` | HTML | Text | Text | HTML |
+| `/` | HTML | Text | Text | HTML |
 
 **Use cases:**
+
+**API with `.txt` extension:**
 - `curl https://api.example.com/api/v1/joke/random.txt` → Just the joke text
-- `curl https://api.example.com/healthz.txt` → "OK" or "ERROR: ..."
+- `curl https://api.example.com/api/v1/healthz.txt` → "OK" or "ERROR: ..."
 - Scripts that need plain output without JSON parsing
+
+**Frontend with smart detection:**
+- `curl https://example.com/joke/random` → Auto-detects CLI, returns text (no .txt needed)
+- `curl -H "Accept: text/plain" https://example.com/users/123` → Plain text
+- Browser visit to `/joke/random` → HTML page
+- Command-line tools get text automatically
+
+**Testing:** Test scripts MUST verify:
+- API `.txt` extension works
+- Frontend smart detection works (browser → HTML, CLI → text)
+- Accept headers work on both API and frontend (see PART 13: Testing)
+
+### Content Negotiation Priority (NON-NEGOTIABLE)
+
+**For API routes (`/api/v1/*`), response format is determined in this order:**
+
+| Priority | Method | Example | Returns |
+|----------|--------|---------|---------|
+| **1** | `.txt` extension | `/api/v1/joke.txt` | Plain text (ALWAYS) |
+| **2** | `Accept: application/json` header | `Accept: application/json` | JSON |
+| **3** | `Accept: text/plain` header | `Accept: text/plain` | Plain text |
+| **4** | Default | `/api/v1/joke` | JSON |
+
+**For frontend routes (`/**`), response format is determined in this order:**
+
+| Priority | Method | Example | Returns |
+|----------|--------|---------|---------|
+| **1** | `Accept: text/html` header | `Accept: text/html` | HTML |
+| **2** | `Accept: text/plain` header | `Accept: text/plain` | Plain text |
+| **3** | User-Agent (browser detection) | Browser visit | HTML |
+| **4** | CLI/curl (no browser UA) | `curl /joke` | Plain text |
+| **5** | Default | Any request | HTML |
+
+**Summary:**
+- API routes: Support .txt extension + Accept headers + smart defaults
+- Frontend routes: Smart detection only (User-Agent + Accept headers)
+- No .txt extension needed on frontend - smart detection handles it
 
 ### Content Negotiation Implementation
 
@@ -14744,7 +16839,22 @@ Why do programmers prefer dark mode? Because light attracts bugs.
 | **Build-time generation** | Specs regenerated on every build |
 | **JSON only** | OpenAPI spec uses JSON format only (NO YAML) |
 | **Single source of truth** | Code is the source, specs are generated output |
-| **Match site theme** | Both UIs styled to match site theme (Dracula dark) |
+| **Match site theme** | Both UIs styled to match site theme (light/dark/auto) |
+| **Standardized locations** | ALWAYS `src/swagger/` and `src/graphql/` (NEVER in root `.`) |
+
+**Standardized File Locations (NON-NEGOTIABLE):**
+
+| Component | Location | Never Use |
+|-----------|----------|-----------|
+| Swagger handler | `src/swagger/swagger.go` | `./swagger.go`, `swagger/swagger.go` |
+| Swagger theming | `src/swagger/theme.go` | `./theme.go`, `public/swagger-theme.css` |
+| Swagger annotations | `src/swagger/annotations.go` | `./docs/`, anywhere else |
+| GraphQL handler | `src/graphql/graphql.go` | `./graphql.go`, `graphql/graphql.go` |
+| GraphQL schema | `src/graphql/schema.go` | `./schema.graphql`, `graph/schema.graphqls` |
+| GraphQL resolvers | `src/graphql/resolvers.go` | `./resolvers.go`, anywhere else |
+| GraphQL theming | `src/graphql/theme.go` | `./theme.go`, `public/graphql-theme.css` |
+
+**All paths MUST be relative to `src/` directory. Files in project root (`.`) are FORBIDDEN.**
 
 **Sync Flow:**
 ```
@@ -14753,9 +16863,9 @@ Code Changes (handlers, routes, types)
          ▼
 Build Process
          │
-         ├──► Generate OpenAPI JSON from code annotations
+         ├──► src/swagger/swagger.go → Generate OpenAPI JSON from code annotations
          │
-         └──► Generate GraphQL schema from code annotations
+         └──► src/graphql/schema.go → Generate GraphQL schema from code annotations
          │
          ▼
 Both specs automatically in sync with project
@@ -14767,6 +16877,7 @@ Both specs automatically in sync with project
 - Generate GraphQL schema from same structs
 - Embed generated specs in binary
 - Serve at runtime from embedded files
+- All implementation files in `src/swagger/` and `src/graphql/`
 
 **Why both?**
 - Swagger: Industry standard, tooling support, code generation
@@ -14777,110 +16888,464 @@ Both specs automatically in sync with project
 - Manually edit GraphQL schema files
 - Let specs drift from actual API
 - Have endpoints not documented in both
+- Put swagger/graphql files in project root (`.`)
+- Use relative paths from project root
 
 ### Swagger & GraphQL Theming (NON-NEGOTIABLE)
 
-**Both Swagger UI and GraphiQL MUST match the site theme while remaining easy to read.**
+**Both Swagger UI and GraphiQL MUST match the PROJECT-WIDE theme system.**
+
+See the **"Themes (NON-NEGOTIABLE - PROJECT-WIDE)"** section for the complete theme system that applies to the entire project, including Swagger and GraphQL.
+
+**Key Points:**
+- Swagger/GraphQL UIs automatically use the same theme as the rest of the application
+- Theme switching is synchronized across all components (no page reload)
+- BOTH light AND dark themes MUST be easy to read with no color conflicts
+- File locations: `src/swagger/theme.go` and `src/graphql/theme.go`
+
+---
+
+**Dark Theme - DEFAULT:**
+
+**Color Palette:**
+```css
+/* Dark Theme Colors */
+--dark-bg: #282a36;           /* Background */
+--dark-bg-alt: #1e1f29;       /* Alternate background (topbar, etc.) */
+--dark-bg-elevated: #44475a;  /* Elevated elements (inputs, buttons) */
+--dark-text: #f8f8f2;         /* Primary text */
+--dark-text-muted: #6272a4;   /* Muted text, borders */
+--dark-accent-cyan: #8be9fd;  /* Links, GET methods */
+--dark-accent-green: #50fa7b; /* Success, POST methods */
+--dark-accent-orange: #ffb86c; /* Warning, PUT methods */
+--dark-accent-red: #ff5555;   /* Error, DELETE methods */
+--dark-accent-purple: #bd93f9; /* Primary accent */
+--dark-accent-pink: #ff79c6;  /* Secondary accent */
+--dark-accent-yellow: #f1fa8c; /* Highlights */
+```
 
 | Element | Style |
 |---------|-------|
-| Background | Dark (`#282a36` - Dracula background) |
-| Text | Light (`#f8f8f2` - Dracula foreground) |
-| Links/Accents | Dracula colors (cyan, green, purple) |
-| Code blocks | Syntax highlighted (Dracula scheme) |
-| Inputs | Dark background, light text, visible borders |
-| Buttons | Match site button styles |
+| Background | `#282a36` (--dark-bg) |
+| Text | `#f8f8f2` (--dark-text) |
+| Links/Accents | Cyan `#8be9fd`, Green `#50fa7b`, Purple `#bd93f9` |
+| Code blocks | Syntax highlighted with dark theme colors |
+| Inputs | Dark background `#44475a`, light text `#f8f8f2`, visible borders `#6272a4` |
+| Buttons | Accent colors from dark palette |
 
-**Swagger UI Customization:**
+**Swagger UI - Dark Theme:**
 
 ```css
-/* Swagger UI - Dracula Theme */
-.swagger-ui {
+/* Swagger UI - Dark Theme */
+.swagger-ui.theme-dark {
   background: #282a36;
   color: #f8f8f2;
 }
 
-.swagger-ui .topbar {
+.swagger-ui.theme-dark .topbar {
   background: #1e1f29;
 }
 
-.swagger-ui .info .title,
-.swagger-ui .opblock-tag {
+.swagger-ui.theme-dark .info .title,
+.swagger-ui.theme-dark .opblock-tag {
   color: #f8f8f2;
 }
 
-.swagger-ui .opblock.opblock-get {
+.swagger-ui.theme-dark .opblock.opblock-get {
   background: rgba(139, 233, 253, 0.1);
   border-color: #8be9fd;
 }
 
-.swagger-ui .opblock.opblock-post {
+.swagger-ui.theme-dark .opblock.opblock-post {
   background: rgba(80, 250, 123, 0.1);
   border-color: #50fa7b;
 }
 
-.swagger-ui .opblock.opblock-put {
+.swagger-ui.theme-dark .opblock.opblock-put {
   background: rgba(255, 184, 108, 0.1);
   border-color: #ffb86c;
 }
 
-.swagger-ui .opblock.opblock-delete {
+.swagger-ui.theme-dark .opblock.opblock-delete {
   background: rgba(255, 85, 85, 0.1);
   border-color: #ff5555;
 }
 
-.swagger-ui input, .swagger-ui textarea, .swagger-ui select {
+.swagger-ui.theme-dark input,
+.swagger-ui.theme-dark textarea,
+.swagger-ui.theme-dark select {
   background: #44475a;
   color: #f8f8f2;
   border: 1px solid #6272a4;
 }
 
-.swagger-ui .btn {
+.swagger-ui.theme-dark .btn {
   background: #6272a4;
   color: #f8f8f2;
 }
 ```
 
-**GraphiQL Customization:**
+**GraphiQL - Dark Theme:**
 
 ```css
-/* GraphiQL - Dracula Theme */
-.graphiql-container {
+/* GraphiQL - Dark Theme */
+.graphiql-container.theme-dark {
   background: #282a36;
   color: #f8f8f2;
 }
 
-.graphiql-container .CodeMirror {
+.graphiql-container.theme-dark .CodeMirror {
   background: #282a36;
   color: #f8f8f2;
 }
 
-.graphiql-container .CodeMirror-gutters {
+.graphiql-container.theme-dark .CodeMirror-gutters {
   background: #1e1f29;
   border-right: 1px solid #44475a;
 }
 
-.graphiql-container .result-window {
+.graphiql-container.theme-dark .result-window {
   background: #282a36;
 }
 
-.graphiql-container .execute-button {
+.graphiql-container.theme-dark .execute-button {
   background: #50fa7b;
   color: #282a36;
 }
 
-.graphiql-container .toolbar-button {
+.graphiql-container.theme-dark .toolbar-button {
   background: #44475a;
   color: #f8f8f2;
 }
 ```
 
-**Theming Rules:**
-- NEVER use default light themes
-- MUST match site's Dracula dark theme
-- Text MUST be readable (sufficient contrast)
-- Syntax highlighting MUST use Dracula colors
-- Interactive elements MUST be clearly visible
+---
+
+**Light Theme:**
+
+**Color Palette:**
+```css
+/* Light Theme Colors */
+--light-bg: #ffffff;           /* Background */
+--light-bg-alt: #f5f5f5;       /* Alternate background (topbar, etc.) */
+--light-bg-elevated: #e0e0e0;  /* Elevated elements, borders */
+--light-text: #1a1a1a;         /* Primary text */
+--light-text-muted: #666666;   /* Muted text */
+--light-accent-blue: #0066cc;  /* Links, GET methods */
+--light-accent-green: #008000; /* Success, POST methods */
+--light-accent-orange: #ff8c00; /* Warning, PUT methods */
+--light-accent-red: #cc0000;   /* Error, DELETE methods */
+--light-accent-purple: #6600cc; /* Primary accent */
+--light-accent-teal: #008080;  /* Secondary accent */
+```
+
+| Element | Style |
+|---------|-------|
+| Background | `#ffffff` (--light-bg) |
+| Text | `#1a1a1a` (--light-text) |
+| Links/Accents | Blue `#0066cc`, Green `#008000`, Purple `#6600cc` |
+| Code blocks | Syntax highlighted with light theme colors |
+| Inputs | White background, dark text, visible borders `#cccccc` |
+| Buttons | Accent colors with sufficient contrast (4.5:1 minimum) |
+
+**Swagger UI - Light Theme:**
+
+```css
+/* Swagger UI - Light Theme */
+.swagger-ui.theme-light {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.swagger-ui.theme-light .topbar {
+  background: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.swagger-ui.theme-light .info .title,
+.swagger-ui.theme-light .opblock-tag {
+  color: #1a1a1a;
+}
+
+.swagger-ui.theme-light .opblock.opblock-get {
+  background: rgba(0, 102, 204, 0.05);
+  border-color: #0066cc;
+}
+
+.swagger-ui.theme-light .opblock.opblock-post {
+  background: rgba(0, 128, 0, 0.05);
+  border-color: #008000;
+}
+
+.swagger-ui.theme-light .opblock.opblock-put {
+  background: rgba(255, 140, 0, 0.05);
+  border-color: #ff8c00;
+}
+
+.swagger-ui.theme-light .opblock.opblock-delete {
+  background: rgba(204, 0, 0, 0.05);
+  border-color: #cc0000;
+}
+
+.swagger-ui.theme-light input,
+.swagger-ui.theme-light textarea,
+.swagger-ui.theme-light select {
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid #cccccc;
+}
+
+.swagger-ui.theme-light .btn {
+  background: #0066cc;
+  color: #ffffff;
+}
+```
+
+**GraphiQL - Light Theme:**
+
+```css
+/* GraphiQL - Light Theme */
+.graphiql-container.theme-light {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.graphiql-container.theme-light .CodeMirror {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.graphiql-container.theme-light .CodeMirror-gutters {
+  background: #f5f5f5;
+  border-right: 1px solid #e0e0e0;
+}
+
+.graphiql-container.theme-light .result-window {
+  background: #ffffff;
+}
+
+.graphiql-container.theme-light .execute-button {
+  background: #008000;
+  color: #ffffff;
+}
+
+.graphiql-container.theme-light .toolbar-button {
+  background: #f5f5f5;
+  color: #1a1a1a;
+  border: 1px solid #cccccc;
+}
+```
+
+---
+
+**Theme Implementation Requirements:**
+
+1. **Theme Detection:**
+   - Check `localStorage` or cookie for user preference
+   - Fall back to `prefers-color-scheme` media query if auto mode
+   - Default to dark if no preference set
+
+2. **Theme Switching:**
+   - Provide theme toggle in UI (light/dark/auto)
+   - Store preference in `localStorage` or cookie
+   - Apply theme class to root element (`theme-light`, `theme-dark`)
+   - NO page reload required
+
+3. **Accessibility:**
+   - Both themes MUST pass WCAG AA contrast requirements
+   - Focus indicators MUST be visible in both themes
+   - Keyboard navigation MUST work identically in both themes
+
+## External API Compatibility (NON-NEGOTIABLE)
+
+**Focus on create/init endpoint compatibility and response format matching - NOT replicating entire APIs.**
+
+When the user requests compatibility with external services (e.g., "compatible with pastebin.com", "support microbin clients", "work with opengist"), you MUST focus on **creation endpoints and response formats** - not hundreds of redundant routes.
+
+### Why Limited Compatibility?
+
+**Problem:** Replicating entire external APIs creates hundreds of routes that do mostly the same thing, adding massive complexity for minimal benefit.
+
+**Solution:** Implement ONLY the create/init endpoints and match response formats. This allows existing clients to work while keeping our codebase clean.
+
+### Compatibility Implementation (NON-NEGOTIABLE)
+
+**1. Research the target service:**
+   - Look up official API documentation
+   - Identify the **create/init endpoint** (how resources are created)
+   - Document the **response format** (fields, structure, content-type: JSON/XML/text)
+   - Note required request parameters and authentication (if any)
+
+**2. Implement create/init compatibility:**
+   - Match the exact URL path for creating resources
+   - Support same request method (POST, PUT, etc.)
+   - Accept same parameters (query params, form fields, JSON body)
+   - Return response in same format with matching field names
+   - Preserve response content-type (JSON, XML, plain text, etc.)
+
+**3. Use our standard routes for everything else:**
+   - View: Use our standard `/api/v1/{resource}/{id}` pattern
+   - List: Use our standard `/api/v1/{resource}` pattern
+   - Search: Use our standard `/api/v1/{resource}/search` pattern
+   - DO NOT replicate their entire API surface
+
+**Example - Pastebin Compatibility:**
+
+```
+User: "Make it compatible with pastebin.com"
+
+AI Research:
+- Create endpoint: POST /api/api_post.php
+- Parameters: api_paste_code, api_paste_format, api_paste_expire_date
+- Response: Plain text paste ID or URL
+
+AI Implementation:
+✓ POST /api/api_post.php → Create paste (compatible)
+✓ Response format matches (plain text ID)
+✗ Skip their /api/list, /api/trends, /api/raw/{id} (use our routes instead)
+
+Result:
+- pastebin.com clients can CREATE pastes using familiar endpoint
+- Viewing/listing uses OUR standard API routes
+- Clean codebase without route duplication
+```
+
+**Rules:**
+| Rule | Description |
+|------|-------------|
+| **Research first** | NEVER guess - look up actual API documentation |
+| **Create/init only** | Implement creation endpoints, skip view/list/search/delete duplicates |
+| **Match response format** | Field names, structure, content-type must match target exactly |
+| **Standard routes for rest** | Use our `/api/v1/*` patterns for all other operations |
+| **Avoid complexity** | Do NOT add hundreds of redundant routes |
+| **Document compatibility** | List what IS and ISN'T compatible in AI.md |
+
+**What to implement:**
+- ✓ Create/init endpoints
+- ✓ Response format matching
+- ✓ Required authentication if applicable
+
+**What NOT to implement:**
+- ✗ View/retrieve endpoints (use our routes)
+- ✗ List/search endpoints (use our routes)
+- ✗ Delete endpoints (use our routes)
+- ✗ Pagination variants (use our standard pagination)
+- ✗ Any route that duplicates our functionality
+
+### RFC-Based Applications (CRITICAL - NON-NEGOTIABLE)
+
+**IF THE APPLICATION ITSELF IMPLEMENTS AN RFC-DEFINED PROTOCOL, YOU MUST FOLLOW ALL RELEVANT RFCs COMPLETELY.**
+
+This is NOT optional. This is NOT about "adding compatibility." If you're building a protocol implementation, you MUST be RFC-compliant or the application is fundamentally broken.
+
+| Application Type | Required RFCs | Compliance Level |
+|------------------|---------------|------------------|
+| **DNS Server** | RFC 1034, 1035, 2181, 6891 (EDNS), etc. | FULL - ALL DNS RFCs |
+| **DHCP Server** | RFC 2131, 2132, 3046, etc. | FULL - ALL DHCP RFCs |
+| **SMTP Server** | RFC 5321, 5322, 6531, etc. | FULL - ALL SMTP RFCs |
+| **HTTP Server** | RFC 7230-7235, 9110-9114, etc. | FULL - ALL HTTP RFCs |
+| **FTP Server** | RFC 959, 2428, 4217, etc. | FULL - ALL FTP RFCs |
+| **NTP Server** | RFC 5905, 5906, etc. | FULL - ALL NTP RFCs |
+| **LDAP Server** | RFC 4510-4519, etc. | FULL - ALL LDAP RFCs |
+| **WebDAV Server** | RFC 4918, etc. | FULL - ALL WebDAV RFCs |
+
+**Why this is critical:**
+- DNS server that violates DNS RFCs = broken DNS, network failures
+- SMTP server that violates SMTP RFCs = rejected by mail servers
+- DHCP server that violates DHCP RFCs = clients can't get IP addresses
+- HTTP server that violates HTTP RFCs = browsers/clients break
+
+**Implementation requirements:**
+1. **Research ALL relevant RFCs** for the protocol being implemented
+2. **Implement ALL required behavior** per specifications
+3. **Follow exact message formats, response codes, headers, etc.**
+4. **Handle edge cases and error conditions** as specified
+5. **Document which RFCs are implemented** in AI.md
+
+**Example:**
+```
+User: "Build a DNS server"
+
+AI Response:
+"A DNS server MUST comply with DNS RFCs. I'll implement:
+- RFC 1034: Domain Names - Concepts and Facilities
+- RFC 1035: Domain Names - Implementation and Specification
+- RFC 2181: Clarifications to the DNS Specification
+- RFC 6891: Extension Mechanisms for DNS (EDNS)
+- Additional RFCs for DNSSEC, dynamic updates, etc.
+
+This is mandatory - DNS clients expect RFC-compliant behavior."
+```
+
+**This is different from optional compatibility** (see next section).
+
+### Exceptions: Full Compatibility Required
+
+**Some cases require complete API/protocol implementation:**
+
+| Case | Action | Example |
+|------|--------|---------|
+| **Protocol compliance** | Implement ALL required endpoints | Matrix, ActivityPub, XMPP |
+| **Adding RFC feature to existing app** | Follow RFC specification exactly | Adding WebDAV to file server |
+| **Explicit user request** | User specifies which endpoints needed | "Also need delete and list endpoints" |
+
+**How to determine:**
+
+**1. Full protocol/standard (Matrix, ActivityPub, WebDAV, etc.):**
+```
+User: "Build a Matrix homeserver"
+
+AI Response:
+"Matrix is a complete protocol requiring full specification compliance.
+I'll implement ALL Matrix Client-Server API endpoints per the spec:
+- Account registration and login
+- Room creation and management
+- Event sending and syncing
+- Media uploads
+- Presence and typing indicators
+This is NOT optional - Matrix clients expect the full protocol."
+```
+
+**2. RFC compliance:**
+```
+User: "Add WebDAV support"
+
+AI Response:
+"WebDAV is defined by RFC 4918 which requires specific HTTP methods
+and behavior. I'll implement:
+- PROPFIND, PROPPATCH (property management)
+- MKCOL (collection creation)
+- COPY, MOVE (resource operations)
+- LOCK, UNLOCK (locking mechanism)
+All endpoints required for RFC compliance."
+```
+
+**3. Simple service compatibility (pastebin, URL shortener, etc.):**
+```
+User: "Compatible with pastebin.com"
+
+AI Response:
+"Pastebin.com is a simple service, not a protocol.
+I'll implement:
+✓ POST /api/api_post.php (create endpoint)
+✗ Skip view/list/delete (use our /api/v1/* routes)
+
+Need additional compatible endpoints?"
+```
+
+**Smart determination rules:**
+
+| If compatibility target is... | Then... |
+|-------------------------------|---------|
+| Full protocol (Matrix, XMPP, ActivityPub) | Implement complete spec |
+| RFC-defined standard (WebDAV, CalDAV, CardDAV) | Follow RFC exactly |
+| Simple web service (pastebin, URL shortener) | Create/init endpoint only |
+| Unclear/ambiguous | Ask user: "Do you need full protocol compliance or just create endpoint compatibility?" |
+
+**When in doubt, ASK the user:**
+- "This appears to be a full protocol. Do you need complete specification compliance?"
+- "I found 25 endpoints in their API. Do you need all of them, or just create/init compatibility?"
+- "RFC 4918 defines 9 required methods. Should I implement the full RFC?"
 
 ## Root-Level Endpoints (NON-NEGOTIABLE)
 
@@ -14980,13 +17445,15 @@ Both specs automatically in sync with project
 Before proceeding, confirm you understand:
 - [ ] Frontend is required for ALL projects
 - [ ] NO inline CSS, NO JS alerts
-- [ ] Dark theme (Dracula) is default
+- [ ] Project-wide theme system: light/dark/auto (dark is default)
+- [ ] Themes apply to entire project: web UI, admin, Swagger, GraphQL
 - [ ] All 3 API types required: REST, Swagger, GraphQL (Swagger & GraphQL in sync)
 - [ ] Standard endpoints must exist (/healthz, /openapi, /openapi.json, /graphql, /admin)
 - [ ] OpenAPI uses JSON only (no YAML)
 
 ---
-# PART 20: SSL/TLS & LET'S ENCRYPT (NON-NEGOTIABLE)
+
+# PART 21: SSL/TLS & LET'S ENCRYPT (NON-NEGOTIABLE)
 
 ## Built-in Let's Encrypt Support
 
@@ -15033,11 +17500,11 @@ Before proceeding, confirm you understand:
 
 **Note:** Full provider list from [lego DNS providers](https://go-acme.github.io/lego/dns/). Fields are determined dynamically at runtime.
 
-**See PART 34: CUSTOM DOMAINS for user/org custom domain support (optional per-project feature).**
+**See PART 35: CUSTOM DOMAINS for user/org custom domain support (optional per-project feature).**
 
 ### FQDN Resolution (NON-NEGOTIABLE)
 
-**See PART 5: URL Variables for complete `{proto}`, `{fqdn}`, `{port}` resolution.**
+**See PART 7: URL Variables for complete `{proto}`, `{fqdn}`, `{port}` resolution.**
 
 **Summary - `{fqdn}` resolution order:**
 
@@ -15663,7 +18130,8 @@ Startup (for configured FQDN)
 
 ---
 
-# PART 21: SECURITY & LOGGING (NON-NEGOTIABLE)
+
+# PART 22: SECURITY & LOGGING (NON-NEGOTIABLE)
 
 ## Security Headers
 
@@ -17138,7 +19606,8 @@ const (
 
 ---
 
-# PART 22: USER MANAGEMENT (NON-NEGOTIABLE)
+
+# PART 23: USER MANAGEMENT (NON-NEGOTIABLE)
 
 ## Overview
 
@@ -17182,6 +19651,84 @@ const (
 | `/auth/login` | Login page |
 | `/auth/logout` | Logout |
 | Public routes (`/`, `/server/*`, etc.) | Guest view (no user-specific content) |
+
+## Registration Modes (Multi-User Apps Only)
+
+**Multi-user apps use a SINGLE setting to control registration behavior.**
+
+**Config setting:**
+```yaml
+users:
+  # Enable multi-user mode
+  enabled: true
+
+  registration:
+    # Registration mode: disabled, public, private, approval
+    mode: disabled
+```
+
+### Registration Mode Definitions
+
+| Mode | Who Can Register | Use Case | Admin Action Required |
+|------|------------------|----------|----------------------|
+| **disabled** | No one | Admin-created accounts only | Admin creates all users |
+| **public** | Anyone | Open community, public service | None (auto-active after email verify) |
+| **private** | Invite code holders only | Controlled growth, beta testing | Users generate invite codes |
+| **approval** | Anyone (pending approval) | Moderated community | Admin approves each registration |
+
+### Mode: disabled
+
+**No registration allowed. Admin creates all user accounts.**
+
+- `/auth/register` → 404 or redirect to `/auth/login`
+- Registration form not shown anywhere
+- Only admins can create users via `/admin/server/users/create`
+- Use for: Internal tools, admin-only services
+
+### Mode: public
+
+**Anyone can register with valid email. Immediate access after email verification.**
+
+- `/auth/register` → Registration form
+- User submits username, email, password
+- Email verification sent (if `require_email_verification: true`)
+- After verification → account immediately active
+- No admin approval needed
+- Use for: Public services, open communities
+
+### Mode: private
+
+**Invite-only registration. Users need an invite code.**
+
+- Existing users generate invite codes at `/user/invites/create`
+- Invite code has expiration (`invite_expiration_days` config)
+- New user visits `/auth/register?invite={code}`
+- Invite code validated, user submits registration form
+- Email verification sent (if `require_email_verification: true`)
+- After verification → account active
+- Invite code consumed (one-time use)
+- Use for: Controlled growth, beta testing, exclusive communities
+
+**Invite code management:**
+- Users can create up to `max_invites_per_user` codes
+- Invite codes expire after `invite_expiration_days`
+- Track who invited whom (referral tracking)
+- Admin can see all invites at `/admin/server/users/invites`
+
+### Mode: approval
+
+**Anyone can register, but admin must approve before account is active.**
+
+- `/auth/register` → Registration form
+- User submits registration form
+- Email verification sent (if `require_email_verification: true`)
+- After verification → account created as **pending**
+- Admin notified of pending user
+- Admin reviews at `/admin/server/users/pending`
+- Admin approves/rejects
+- If approved → account active, user notified
+- If rejected → account deleted, user notified
+- Use for: Moderated communities, quality control
 
 **Server Admin Setup (Setup Wizard Flow):**
 
@@ -18399,16 +20946,23 @@ server:
     enabled: false
 
     registration:
-      # Allow public registration
-      enabled: false
-      # Require email verification before account is active
+      # Registration mode: disabled, public, private, approval
+      # - disabled: No registration allowed (admin creates users only)
+      # - public: Anyone can register (open registration)
+      # - private: Invite-only (requires invite code)
+      # - approval: Anyone can register, admin must approve
+      mode: disabled
+
+      # Email verification (applies to all modes except disabled)
       require_email_verification: true
-      # Admin must approve new users
-      require_approval: false
-      # Allowed email domains (empty = all allowed)
-      allowed_domains: []
-      # Blocked email domains
-      blocked_domains: []
+
+      # Email domain restrictions (applies to public/approval modes)
+      allowed_domains: []      # Empty = all domains allowed
+      blocked_domains: []      # Block specific domains
+
+      # Invite settings (for private mode)
+      invite_expiration_days: 7     # How long invite codes are valid
+      max_invites_per_user: 10      # How many invites each user can create
 
     roles:
       # Available roles
@@ -18485,17 +21039,53 @@ server:
 
 ## User Features
 
-### Registration Flow
+### Registration Modes (NON-NEGOTIABLE)
 
+**Single setting controls all registration behavior:**
+
+| Mode | Description | Who Can Register | Workflow |
+|------|-------------|------------------|----------|
+| **disabled** | No registration | No one (admin creates users only) | Registration form hidden |
+| **public** | Open registration | Anyone with valid email | Submit form → verify email → active |
+| **private** | Invite-only | Users with invite code only | Enter code → submit form → verify email → active |
+| **approval** | Admin approval required | Anyone, but admin must approve | Submit form → verify email → admin approves → active |
+
+### Registration Flow by Mode
+
+**Mode: disabled**
 ```
-1. User submits registration form
-   ├─ If require_email_verification: Send verification email
-   │   └─ User clicks link → account verified
-   ├─ If require_approval: Admin notified
-   │   └─ Admin approves → account active
-   └─ If neither: Account immediately active
+/auth/register → 404 or redirect to login
+No registration allowed, admin creates users manually
+```
 
-2. User can now log in
+**Mode: public**
+```
+1. User visits /auth/register
+2. Submits registration form (username, email, password)
+3. Email verification sent (if require_email_verification: true)
+4. User clicks verification link
+5. Account active → user can log in
+```
+
+**Mode: private**
+```
+1. Existing user generates invite code (/user/invites/create)
+2. New user visits /auth/register?invite={code}
+3. Submits registration form
+4. Email verification sent (if require_email_verification: true)
+5. User clicks verification link
+6. Account active → user can log in
+```
+
+**Mode: approval**
+```
+1. User visits /auth/register
+2. Submits registration form
+3. Email verification sent (if require_email_verification: true)
+4. User clicks verification link
+5. Admin notified of pending user
+6. Admin approves user at /admin/server/users/pending
+7. Account active → user can log in
 ```
 
 ### Authentication Methods
@@ -20063,7 +22653,8 @@ When using remote database, the same tables are created but with appropriate typ
 
 ---
 
-# PART 23: DATABASE & CLUSTER (NON-NEGOTIABLE)
+
+# PART 24: DATABASE & CLUSTER (NON-NEGOTIABLE)
 
 ## Database Schema
 
@@ -20076,7 +22667,7 @@ When using remote database, the same tables are created but with appropriate typ
 | Schema changes | Use `ALTER TABLE` inline when needed |
 | No migrations table | Keep it simple |
 
-See **Database Schema** section in PART 4 for full table definitions.
+See **Database Schema for Configuration** section in PART 5 for full table definitions.
 
 ## Cluster Support (NON-NEGOTIABLE)
 
@@ -20195,7 +22786,8 @@ Most apps (Jokes, Quotes, Airports, etc.) do NOT need HA - clustering with confi
 
 ---
 
-# PART 24: BACKUP & RESTORE (NON-NEGOTIABLE)
+
+# PART 25: BACKUP & RESTORE (NON-NEGOTIABLE)
 
 ## Backup Command
 
@@ -20599,7 +23191,8 @@ vidveil --service start
 
 ---
 
-# PART 25: EMAIL & NOTIFICATIONS (NON-NEGOTIABLE)
+
+# PART 26: EMAIL & NOTIFICATIONS (NON-NEGOTIABLE)
 
 ## Overview
 
@@ -21932,7 +24525,8 @@ server:
 
 ---
 
-# PART 26: SCHEDULER (NON-NEGOTIABLE)
+
+# PART 27: SCHEDULER (NON-NEGOTIABLE)
 
 ## Built-in Scheduler
 
@@ -22259,7 +24853,8 @@ Shutdown complete
 
 ---
 
-# PART 27: GEOIP (NON-NEGOTIABLE)
+
+# PART 28: GEOIP (NON-NEGOTIABLE)
 
 ## Overview
 
@@ -22331,7 +24926,8 @@ All databases from [sapics/ip-location-db](https://github.com/sapics/ip-location
 
 ---
 
-# PART 28: METRICS (NON-NEGOTIABLE)
+
+# PART 29: METRICS (NON-NEGOTIABLE)
 
 ## Overview
 
@@ -23351,7 +25947,8 @@ groups:
 
 ---
 
-# PART 29: TOR HIDDEN SERVICE (NON-NEGOTIABLE)
+
+# PART 30: TOR HIDDEN SERVICE (NON-NEGOTIABLE)
 
 ## Overview
 
@@ -23943,7 +26540,8 @@ Tor Hidden Service: Connected
 
 ---
 
-# PART 30: ERROR HANDLING & CACHING (NON-NEGOTIABLE)
+
+# PART 31: ERROR HANDLING & CACHING (NON-NEGOTIABLE)
 
 ## Error Handling
 
@@ -24000,7 +26598,8 @@ See **PART 17: SERVER CONFIGURATION** for full Valkey/Redis setup.
 
 ---
 
-# PART 31: I18N & A11Y (NON-NEGOTIABLE)
+
+# PART 32: I18N & A11Y (NON-NEGOTIABLE)
 
 ## Internationalization (i18n)
 
@@ -24022,133 +26621,725 @@ See **PART 17: SERVER CONFIGURATION** for full Valkey/Redis setup.
 
 ---
 
-# PART 32: PROJECT-SPECIFIC SECTIONS
 
-## Project-Specific API Endpoints
+# PART 33: READTHEDOCS DOCUMENTATION (NON-NEGOTIABLE)
 
-VidVeil provides a privacy-focused meta search API for adult video content aggregation.
+## Overview
 
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/api/v1/search` | GET | None | Search across all enabled engines with SSE streaming |
-| `/api/v1/bangs` | GET | None | List available bang shortcuts (!ph, !xh, etc.) |
-| `/api/v1/engines` | GET | None | List all 47+ search engines and their status |
-| `/api/v1/autocomplete` | GET | None | Search query autocomplete suggestions |
+**Every project MUST have documentation hosted on ReadTheDocs.**
 
-**Key Features:**
-- **Privacy First**: No tracking, logging, or analytics
-- **47+ Search Engines**: Aggregate results from major adult video platforms
-- **Bang Search**: Quick shortcuts like !ph (PornHub), !xh (xHamster), !rt (RedTube)
-- **SSE Streaming**: Real-time result streaming via Server-Sent Events
-- **Tor Support**: Built-in Tor proxy support for enhanced anonymity
-- **Admin Panel**: Web-based administration interface
+**CRITICAL:** The `docs/` directory is **ONLY** for ReadTheDocs files (MkDocs documentation). **NEVER** put other files in `docs/` - use `src/` for source code, `scripts/` for scripts, etc.
 
-## Project-Specific Data Files
+Documentation uses MkDocs Material theme with built-in light/dark/auto switching that matches the project-wide theme system.
 
-| File | Location | Description |
-|------|----------|-------------|
-| `engines.json` | `src/data/` | Configuration for 47+ adult video search engines |
-| `bangs.json` | `src/data/` | Bang shortcut definitions (!ph, !xh, !rt, etc.) |
+| Attribute | Value |
+|-----------|-------|
+| Documentation engine | MkDocs (Markdown-based) |
+| Theme | MkDocs Material with palette toggle (light/dark/auto) |
+| Default theme | Dark theme |
+| Hosting | ReadTheDocs |
+| URL format | `https://apimgr-vidveil.readthedocs.io` |
+| Source directory | `docs/` (ONLY ReadTheDocs files) |
 
-## Project-Specific Configuration
+**Theme Support:**
+- **Dark theme** (default) - Dark color scheme (see `docs/stylesheets/dark.css`)
+- **Light theme** - Light color scheme (see `docs/stylesheets/light.css`)
+- **Auto theme** - Follows system preference
+- User can toggle between themes via UI button
+- Preference persisted in browser localStorage
+- Consistent with project-wide theme system
+
+## Required Files
+
+### Project Root Files
+
+| File | Purpose |
+|------|---------|
+| `mkdocs.yml` | MkDocs configuration |
+| `.readthedocs.yaml` | ReadTheDocs build configuration |
+
+### Documentation Directory (`docs/`)
+
+| File | Required | Purpose |
+|------|:--------:|---------|
+| `index.md` | ✓ | Documentation homepage |
+| `installation.md` | ✓ | Installation guide (Docker, binary, systemd) |
+| `configuration.md` | ✓ | Configuration reference (all settings) |
+| `api.md` | ✓ | API documentation (endpoints, formats) |
+| `cli.md` | If applicable | CLI reference (flags, commands) |
+| `admin.md` | ✓ | Admin panel guide |
+| `development.md` | ✓ | Development/contributing guide |
+| `stylesheets/dark.css` | Optional | Dark theme customization |
+| `stylesheets/light.css` | Optional | Light theme customization |
+| `requirements.txt` | ✓ | Python dependencies for MkDocs |
+
+## mkdocs.yml Template (NON-NEGOTIABLE)
 
 ```yaml
-# VidVeil-specific settings
-vidveil:
-  # Search engine configuration
-  engines:
-    timeout: 10s
-    max_concurrent: 10
+site_name: VIDVEIL
+site_url: https://apimgr-vidveil.readthedocs.io
+site_description: "{Project description}"
+site_author: apimgr
 
-  # SSE streaming settings
-  sse:
-    keepalive: 30s
-    buffer_size: 1024
+repo_name: apimgr/vidveil
+repo_url: https://github.com/apimgr/vidveil
+edit_uri: edit/main/docs/
 
-  # Tor proxy configuration
-  tor:
-    enabled: false
-    socks_proxy: "127.0.0.1:9050"
+theme:
+  name: material
+  palette:
+    # Light/Dark/Auto theme toggle
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to auto mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  font:
+    text: Roboto
+    code: Roboto Mono
+  icon:
+    repo: fontawesome/brands/github
 
-  # Admin panel
-  admin:
-    enabled: true
-    path: "/admin"
+extra_css:
+  - stylesheets/dark.css
+  - stylesheets/light.css
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - meta
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: apimgr
+      repo: vidveil
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Configuration: configuration.md
+  - Usage:
+    - API Reference: api.md
+    - CLI Reference: cli.md
+    - Admin Panel: admin.md
+  - Development:
+    - Contributing: development.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/apimgr/vidveil
+  generator: false
 ```
 
-## Extended Node Functions (If Applicable)
+## .readthedocs.yaml Template (NON-NEGOTIABLE)
 
-**Only define if nodes do MORE than config sync. Most projects leave this empty.**
+```yaml
+# ReadTheDocs configuration
+# https://docs.readthedocs.io/en/stable/config-file/v2.html
 
-{Describe what nodes manage beyond config sync, if anything}
+version: 2
 
-| Function | Description |
-|----------|-------------|
-| {function} | {what nodes do} |
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.11"
 
-**Examples:**
-- Watchtower-type: Nodes manage Docker hosts (update containers, monitor health)
-- Monitoring app: Nodes monitor remote servers (collect metrics, send alerts)
-- DNS server: Nodes provide HA failover (automatic DNS resolution failover)
+mkdocs:
+  configuration: mkdocs.yml
 
-## High Availability Requirements (If Applicable)
+python:
+  install:
+    - requirements: docs/requirements.txt
+```
 
-**Only define if this app requires HA. Most projects (Jokes, Quotes, etc.) do NOT need HA.**
+## docs/requirements.txt (NON-NEGOTIABLE)
 
-{Describe HA requirements if this is a specialized app}
+```
+mkdocs>=1.5.0
+mkdocs-material>=9.5.0
+mkdocs-minify-plugin>=0.7.0
+pymdown-extensions>=10.0
+```
 
-| Requirement | Description |
-|-------------|-------------|
-| Failover type | {automatic/manual} |
-| Recovery time | {target RTO} |
-| Data sync | {sync strategy} |
+## Theme CSS Files (OPTIONAL)
 
-**Leave empty for apps that only need clustering (config sync).**
+**Note:** MkDocs Material includes built-in light/dark/auto theme toggle. The CSS files below are OPTIONAL for additional customization.
 
-## Notes
+### Dark Theme CSS
 
-### Architecture Overview
+**File:** `docs/stylesheets/dark.css`
 
-**Project Description:** Privacy-respecting meta search engine for adult video content
+```css
+/* Dark Theme Customization for MkDocs Material (OPTIONAL) */
+/* MkDocs Material's built-in 'slate' scheme already provides a dark theme */
+/* This file adds additional dark theme customization */
 
-**Purpose:** Aggregate search results from 47+ adult video sites with strict privacy focus (no tracking, logging, or analytics)
+:root {
+  /* Dark theme color palette */
+  --dark-bg: #282a36;
+  --dark-bg-alt: #44475a;
+  --dark-text: #f8f8f2;
+  --dark-text-muted: #6272a4;
+  --dark-accent-cyan: #8be9fd;
+  --dark-accent-green: #50fa7b;
+  --dark-accent-orange: #ffb86c;
+  --dark-accent-pink: #ff79c6;
+  --dark-accent-purple: #bd93f9;
+  --dark-accent-red: #ff5555;
+  --dark-accent-yellow: #f1fa8c;
+}
 
-### Technical Architecture
+/* Apply dark theme customization */
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: var(--dark-bg);
+  --md-default-fg-color: var(--dark-text);
+  --md-default-fg-color--light: var(--dark-text-muted);
+  --md-default-fg-color--lighter: var(--dark-bg-alt);
+  --md-default-fg-color--lightest: var(--dark-bg-alt);
 
-**Search Integration Methods:**
+  --md-primary-fg-color: var(--dark-accent-purple);
+  --md-primary-fg-color--light: var(--dark-accent-pink);
+  --md-primary-fg-color--dark: var(--dark-accent-purple);
+  --md-primary-bg-color: var(--dark-text);
+  --md-primary-bg-color--light: var(--dark-text);
 
-1. **Direct API Integration** (Preferred):
-   - PornHub API
-   - RedTube API
-   - Eporner API
-   - Provides structured JSON responses
+  --md-accent-fg-color: var(--dark-accent-pink);
+  --md-accent-fg-color--transparent: rgba(255, 121, 198, 0.1);
+  --md-accent-bg-color: var(--dark-accent-pink);
 
-2. **HTML Scraping** (Fallback):
-   - Used for sites without public APIs
-   - Robust parsing with fallback strategies
-   - Rate limiting and respect for robots.txt
+  --md-code-fg-color: var(--dark-text);
+  --md-code-bg-color: var(--dark-bg-alt);
 
-**SSE Streaming Architecture:**
-- Real-time result streaming via Server-Sent Events
-- Results streamed as they arrive from each engine
-- Non-blocking concurrent requests to multiple engines
-- Client receives progressive results for better UX
+  --md-code-hl-color: rgba(255, 184, 108, 0.2);
+  --md-code-hl-number-color: var(--dark-accent-purple);
+  --md-code-hl-special-color: var(--dark-accent-pink);
+  --md-code-hl-function-color: var(--dark-accent-green);
+  --md-code-hl-constant-color: var(--dark-accent-purple);
+  --md-code-hl-keyword-color: var(--dark-accent-pink);
+  --md-code-hl-string-color: var(--dark-accent-yellow);
+  --md-code-hl-name-color: var(--dark-text);
+  --md-code-hl-operator-color: var(--dark-accent-pink);
+  --md-code-hl-punctuation-color: var(--dark-text);
+  --md-code-hl-comment-color: var(--dark-text-muted);
+  --md-code-hl-generic-color: var(--dark-text);
+  --md-code-hl-variable-color: var(--dark-text);
 
-**Privacy Implementation:**
-- No user tracking or session storage
-- No analytics or telemetry
-- No request logging (except errors)
-- Optional Tor proxy support for enhanced anonymity
-- All search queries are ephemeral
+  --md-typeset-color: var(--dark-text);
+  --md-typeset-a-color: var(--dark-accent-cyan);
 
-**Bang Search System:**
-- Quick shortcuts for direct engine search (!ph, !xh, !rt, etc.)
-- Bypasses aggregation, goes directly to specific engine
-- Configured in src/data/bangs.json
+  --md-typeset-kbd-color: var(--dark-text);
+  --md-typeset-kbd-accent-color: var(--dark-bg-alt);
+  --md-typeset-kbd-border-color: var(--dark-text-muted);
+
+  --md-typeset-mark-color: rgba(241, 250, 140, 0.3);
+
+  --md-typeset-table-color: var(--dark-bg-alt);
+
+  --md-admonition-fg-color: var(--dark-text);
+  --md-admonition-bg-color: var(--dark-bg-alt);
+
+  --md-footer-bg-color: var(--dark-bg-alt);
+  --md-footer-bg-color--dark: var(--dark-bg);
+}
+
+/* Navigation and sidebar */
+[data-md-color-scheme="slate"] .md-nav__link {
+  color: var(--dark-text);
+}
+
+[data-md-color-scheme="slate"] .md-nav__link:hover {
+  color: var(--dark-accent-cyan);
+}
+
+[data-md-color-scheme="slate"] .md-nav__link--active {
+  color: var(--dark-accent-pink);
+}
+
+/* Search */
+[data-md-color-scheme="slate"] .md-search__input {
+  background-color: var(--dark-bg-alt);
+  color: var(--dark-text);
+}
+
+[data-md-color-scheme="slate"] .md-search__input::placeholder {
+  color: var(--dark-text-muted);
+}
+
+/* Tables */
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+  background-color: var(--dark-bg-alt);
+  color: var(--dark-accent-purple);
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) tr:hover {
+  background-color: rgba(68, 71, 90, 0.5);
+}
+
+/* Code blocks */
+[data-md-color-scheme="slate"] .highlight {
+  background-color: var(--dark-bg-alt);
+}
+
+[data-md-color-scheme="slate"] code {
+  background-color: var(--dark-bg-alt);
+  color: var(--dark-text);
+}
+
+/* Admonitions */
+[data-md-color-scheme="slate"] .md-typeset .admonition,
+[data-md-color-scheme="slate"] .md-typeset details {
+  border-color: var(--dark-accent-purple);
+  background-color: var(--dark-bg-alt);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset summary {
+  background-color: rgba(189, 147, 249, 0.1);
+}
+
+/* Note admonition */
+[data-md-color-scheme="slate"] .md-typeset .admonition.note,
+[data-md-color-scheme="slate"] .md-typeset details.note {
+  border-color: var(--dark-accent-cyan);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .note > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset .note > summary {
+  background-color: rgba(139, 233, 253, 0.1);
+}
+
+/* Warning admonition */
+[data-md-color-scheme="slate"] .md-typeset .admonition.warning,
+[data-md-color-scheme="slate"] .md-typeset details.warning {
+  border-color: var(--dark-accent-orange);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .warning > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset .warning > summary {
+  background-color: rgba(255, 184, 108, 0.1);
+}
+
+/* Danger/Error admonition */
+[data-md-color-scheme="slate"] .md-typeset .admonition.danger,
+[data-md-color-scheme="slate"] .md-typeset .admonition.error,
+[data-md-color-scheme="slate"] .md-typeset details.danger,
+[data-md-color-scheme="slate"] .md-typeset details.error {
+  border-color: var(--dark-accent-red);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .danger > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset .error > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset .danger > summary,
+[data-md-color-scheme="slate"] .md-typeset .error > summary {
+  background-color: rgba(255, 85, 85, 0.1);
+}
+
+/* Tip/Success admonition */
+[data-md-color-scheme="slate"] .md-typeset .admonition.tip,
+[data-md-color-scheme="slate"] .md-typeset .admonition.success,
+[data-md-color-scheme="slate"] .md-typeset details.tip,
+[data-md-color-scheme="slate"] .md-typeset details.success {
+  border-color: var(--dark-accent-green);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .tip > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset .success > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset .tip > summary,
+[data-md-color-scheme="slate"] .md-typeset .success > summary {
+  background-color: rgba(80, 250, 123, 0.1);
+}
+```
+
+### Light Theme CSS
+
+**File:** `docs/stylesheets/light.css`
+
+```css
+/* Light Theme Customization for MkDocs Material (OPTIONAL) */
+/* MkDocs Material's built-in 'default' scheme already provides a light theme */
+/* This file adds additional light theme customization */
+
+:root {
+  /* Light theme color palette */
+  --light-bg: #ffffff;
+  --light-bg-alt: #f5f5f5;
+  --light-bg-elevated: #e0e0e0;
+  --light-text: #1a1a1a;
+  --light-text-muted: #666666;
+  --light-accent-blue: #0066cc;
+  --light-accent-green: #008000;
+  --light-accent-orange: #ff8c00;
+  --light-accent-red: #cc0000;
+  --light-accent-purple: #6600cc;
+  --light-accent-teal: #008080;
+}
+
+/* Apply light theme customization */
+[data-md-color-scheme="default"] {
+  --md-default-bg-color: var(--light-bg);
+  --md-default-fg-color: var(--light-text);
+  --md-default-fg-color--light: var(--light-text-muted);
+  --md-default-fg-color--lighter: var(--light-bg-elevated);
+  --md-default-fg-color--lightest: var(--light-bg-alt);
+
+  --md-primary-fg-color: var(--light-accent-purple);
+  --md-primary-fg-color--light: var(--light-accent-blue);
+  --md-primary-fg-color--dark: var(--light-accent-purple);
+  --md-primary-bg-color: var(--light-bg);
+  --md-primary-bg-color--light: var(--light-bg-alt);
+
+  --md-accent-fg-color: var(--light-accent-blue);
+  --md-accent-fg-color--transparent: rgba(0, 102, 204, 0.1);
+  --md-accent-bg-color: var(--light-accent-blue);
+
+  --md-code-fg-color: var(--light-text);
+  --md-code-bg-color: var(--light-bg-alt);
+
+  --md-typeset-a-color: var(--light-accent-blue);
+  --md-typeset-mark-color: rgba(255, 235, 59, 0.5);
+}
+
+/* Navigation */
+[data-md-color-scheme="default"] .md-nav__link:hover {
+  color: var(--light-accent-blue);
+}
+
+[data-md-color-scheme="default"] .md-nav__link--active {
+  color: var(--light-accent-purple);
+}
+
+/* Admonitions */
+[data-md-color-scheme="default"] .md-typeset .admonition.note,
+[data-md-color-scheme="default"] .md-typeset details.note {
+  border-color: var(--light-accent-blue);
+}
+
+[data-md-color-scheme="default"] .md-typeset .admonition.warning,
+[data-md-color-scheme="default"] .md-typeset details.warning {
+  border-color: var(--light-accent-orange);
+}
+
+[data-md-color-scheme="default"] .md-typeset .admonition.danger,
+[data-md-color-scheme="default"] .md-typeset .admonition.error,
+[data-md-color-scheme="default"] .md-typeset details.danger,
+[data-md-color-scheme="default"] .md-typeset details.error {
+  border-color: var(--light-accent-red);
+}
+
+[data-md-color-scheme="default"] .md-typeset .admonition.tip,
+[data-md-color-scheme="default"] .md-typeset .admonition.success,
+[data-md-color-scheme="default"] .md-typeset details.tip,
+[data-md-color-scheme="default"] .md-typeset details.success {
+  border-color: var(--light-accent-green);
+}
+```
+
+## Documentation Templates
+
+### docs/index.md
+
+```markdown
+# VIDVEIL
+
+{Brief project description}
+
+## Quick Start
+
+```bash
+# Docker
+docker run -p 64580:80 ghcr.io/apimgr/vidveil:latest
+
+# Binary
+./vidveil-linux-amd64 --config server.yml
+```
+
+## Features
+
+- {Feature 1}
+- {Feature 2}
+- {Feature 3}
+
+## Documentation
+
+- [Installation](installation.md) - How to install and run
+- [Configuration](configuration.md) - All configuration options
+- [API Reference](api.md) - REST API, Swagger, GraphQL
+- [Admin Panel](admin.md) - Web UI administration
+- [Development](development.md) - Contributing guide
+
+## Links
+
+- [GitHub Repository](https://github.com/apimgr/vidveil)
+- [Live Demo](https://vidveil.apimgr.us) (if applicable)
+- [API Documentation](/openapi) (Swagger UI)
+- [GraphQL Playground](/graphql)
+
+## License
+
+MIT - See [LICENSE.md](https://github.com/apimgr/vidveil/blob/main/LICENSE.md)
+```
+
+### docs/installation.md
+
+```markdown
+# Installation
+
+## Docker (Recommended)
+
+```bash
+docker run -d \
+  --name vidveil \
+  -p 64580:80 \
+  -v vidveil-data:/data \
+  ghcr.io/apimgr/vidveil:latest
+```
+
+## Binary
+
+Download from [releases](https://github.com/apimgr/vidveil/releases):
+
+```bash
+# Linux AMD64
+wget https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
+chmod +x vidveil-linux-amd64
+./vidveil-linux-amd64
+```
+
+## Systemd Service
+
+```bash
+sudo ./vidveil --service install
+sudo systemctl start vidveil
+sudo systemctl enable vidveil
+```
+
+## Configuration
+
+See [Configuration](configuration.md) for all options.
+```
+
+### docs/configuration.md
+
+```markdown
+# Configuration
+
+## Config File
+
+Default location: `/etc/vidveil/server.yml`
+
+```yaml
+server:
+  address: 0.0.0.0
+  port: 80
+
+database:
+  type: sqlite
+  path: /data/db/server.db
+
+# ... (all configuration options)
+```
+
+## Environment Variables
+
+All settings can be overridden via environment:
+
+```bash
+VIDVEIL_SERVER_PORT=8080
+VIDVEIL_DATABASE_TYPE=postgres
+```
+
+## Admin Panel
+
+All settings are configurable via the web UI at `/admin`.
+```
+
+### docs/api.md
+
+```markdown
+# API Reference
+
+## REST API
+
+Base URL: `/api/v1/`
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/healthz` | GET | Health check |
+| `/api/v1/{resource}` | GET | List resources |
+
+## Swagger UI
+
+Interactive API documentation: [/openapi](/openapi)
+
+## GraphQL
+
+GraphQL playground: [/graphql](/graphql)
+
+### Schema
+
+```graphql
+# ... (GraphQL schema)
+```
+```
+
+### docs/admin.md
+
+```markdown
+# Admin Panel
+
+## Access
+
+- URL: `/admin`
+- First-run setup wizard creates admin account
+- Session-based authentication
+
+## Features
+
+- Server configuration
+- User management
+- Database management
+- Backup/restore
+- SSL/TLS management
+- Monitoring & logs
+
+## Admin API
+
+Programmatic access via `/api/v1/admin/` with bearer token authentication.
+```
+
+### docs/development.md
+
+```markdown
+# Development Guide
+
+## Prerequisites
+
+- Go 1.21+
+- Make
+- Docker (optional)
+
+## Build
+
+```bash
+git clone https://github.com/apimgr/vidveil
+cd vidveil
+make build
+```
+
+## Run Locally
+
+```bash
+./binaries/vidveil --config server.yml --debug
+```
+
+## Testing
+
+```bash
+make test
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch
+3. Make changes
+4. Run tests
+5. Submit pull request
+
+## Code Style
+
+- Follow Go standard formatting
+- Add tests for new features
+- Update documentation
+```
 
 ---
 
-# PART 33: CLI CLIENT (PER-PROJECT)
+## Project-Specific Customization
+
+**The theme colors defined above are DEFAULT values.** Individual projects MAY customize colors to match their branding, but MUST:
+
+- Maintain WCAG AA contrast ratios (4.5:1 minimum)
+- Keep both light and dark themes readable
+- Update `docs/stylesheets/dark.css` and `docs/stylesheets/light.css` accordingly
+- Document color choices in project's AI.md file
+
+**Example project-specific customization:**
+- Change accent colors to match project branding
+- Adjust background shades for better contrast
+- Add project logo colors to palette
+- Ensure all changes work in BOTH themes
+
+---
+
+# PART 34: CLI CLIENT (PER-PROJECT)
 
 ## Overview
 
@@ -24621,10 +27812,10 @@ vidveil/
 
 ### TUI Theme
 
-**TUI MUST use Dracula color scheme to match server frontend.**
+**TUI MUST use dark theme color scheme to match server frontend.**
 
 ```go
-// Dracula colors for TUI
+// Dark theme colors for TUI
 var (
     Background = lipgloss.Color("#282a36")
     Foreground = lipgloss.Color("#f8f8f2")
@@ -24710,7 +27901,8 @@ Build Info:
 
 ---
 
-# PART 34: CUSTOM DOMAINS (OPTIONAL PER-PROJECT)
+
+# PART 35: CUSTOM DOMAINS (OPTIONAL PER-PROJECT)
 
 ## Overview
 
@@ -24749,15 +27941,32 @@ Build Info:
 server:
   features:
     custom_domains:
-      enabled: false                    # Enable custom domain support
-      max_domains_per_user: 5           # Limit per user (0 = unlimited)
-      max_domains_per_org: 20           # Limit per org (0 = unlimited)
-      require_ssl: true                 # Require SSL for all custom domains
-      allow_apex: true                  # Allow apex domains (example.com)
-      allow_subdomain: true             # Allow subdomains (sub.example.com)
-      allow_wildcard: false             # Allow wildcard domains (*.example.com)
-      verification_ttl: 86400           # Verification token TTL (24 hours)
-      ssl_renewal_days: 7               # Renew SSL certs N days before expiry
+      # Enable custom domain support
+      enabled: false
+
+      # Limit per user (0 = unlimited)
+      max_domains_per_user: 5
+
+      # Limit per org (0 = unlimited)
+      max_domains_per_org: 20
+
+      # Require SSL for all custom domains
+      require_ssl: true
+
+      # Allow apex domains (example.com)
+      allow_apex: true
+
+      # Allow subdomains (sub.example.com)
+      allow_subdomain: true
+
+      # Allow wildcard domains (*.example.com)
+      allow_wildcard: false
+
+      # Verification token TTL (24 hours)
+      verification_ttl: 86400
+
+      # Renew SSL certs N days before expiry
+      ssl_renewal_days: 7
 
       # Reserved domains that cannot be used
       reserved:
@@ -24768,8 +27977,9 @@ server:
         - "*.invalid"
 
       # Blocked patterns (regex)
+      # Government/military/education TLDs
       blocked_patterns:
-        - ".*\\.(gov|mil|edu)$"         # Government/military/education TLDs
+        - ".*\\.(gov|mil|edu)$"
 ```
 
 **Environment variable override:**
@@ -25625,633 +28835,318 @@ When implementing custom domains for a project:
 
 ---
 
-# PART 35: READTHEDOCS DOCUMENTATION (NON-NEGOTIABLE)
 
-## Overview
+# PART 36: PROJECT-SPECIFIC SECTIONS
 
-**Every project MUST have documentation hosted on ReadTheDocs.** Documentation lives in the `docs/` directory and uses MkDocs with the Dracula theme.
+**This section defines WHAT your project does (business logic, intent, unique features), NOT HOW to implement it.**
 
-| Attribute | Value |
-|-----------|-------|
-| Documentation engine | MkDocs (Markdown-based) |
-| Theme | Dracula (dark theme, easy to read) |
-| Hosting | ReadTheDocs |
-| URL format | `https://apimgr-vidveil.readthedocs.io` |
-| Source directory | `docs/` |
+## ⚠️ CRITICAL: Business Logic Only
 
-## Required Files
+**PARTS 1-35 define HOW to build (standards, patterns, structure).**
+**PART 36 defines WHAT this project does (business logic, unique features).**
 
-### Project Root Files
+**PART 36 should contain:**
+- ✓ Business purpose and intent
+- ✓ Unique data structures and models
+- ✓ Business rules and validation logic
+- ✓ Data sources and content
+- ✓ Special algorithms or logic
+- ✓ Project-specific features
 
-| File | Purpose |
-|------|---------|
-| `mkdocs.yml` | MkDocs configuration |
-| `.readthedocs.yaml` | ReadTheDocs build configuration |
+**PART 36 should NOT contain:**
+- ✗ Route implementation details (follow PART 20: API Structure)
+- ✗ HTML/CSS/frontend patterns (follow PART 17: Web Frontend)
+- ✗ Config file format/structure (follow PART 5: Configuration)
+- ✗ Database table schemas (follow PART 24: Database)
+- ✗ Authentication patterns (follow PART 23: User Management)
+- ✗ Testing approaches (follow PART 13: Testing)
 
-### Documentation Directory (`docs/`)
+**Rule: AI reads PART 36 for business logic, then implements using standards from PARTS 1-35.**
 
-| File | Required | Purpose |
-|------|:--------:|---------|
-| `index.md` | ✓ | Documentation homepage |
-| `installation.md` | ✓ | Installation guide (Docker, binary, systemd) |
-| `configuration.md` | ✓ | Configuration reference (all settings) |
-| `api.md` | ✓ | API documentation (endpoints, formats) |
-| `cli.md` | If applicable | CLI reference (flags, commands) |
-| `admin.md` | ✓ | Admin panel guide |
-| `development.md` | ✓ | Development/contributing guide |
+---
 
-## mkdocs.yml Template (NON-NEGOTIABLE)
+## Project Business Purpose
 
-```yaml
-site_name: VIDVEIL
-site_url: https://apimgr-vidveil.readthedocs.io
-site_description: "{Project description}"
-site_author: apimgr
+Purpose: Privacy-respecting meta search engine for adult video content
 
-repo_name: apimgr/vidveil
-repo_url: https://github.com/apimgr/vidveil
-edit_uri: edit/main/docs/
+Vidveil is a self-hosted meta search engine that aggregates adult video search results from 47+ major adult content sites. It provides a unified search experience with bang shortcuts, real-time streaming results, and zero tracking.
 
-theme:
-  name: material
-  palette:
-    scheme: dracula
-    primary: deep purple
-    accent: purple
-  features:
-    - navigation.instant
-    - navigation.tracking
-    - navigation.tabs
-    - navigation.sections
-    - navigation.expand
-    - navigation.top
-    - search.suggest
-    - search.highlight
-    - content.code.copy
-    - content.action.edit
-  font:
-    text: Roboto
-    code: Roboto Mono
-  icon:
-    repo: fontawesome/brands/github
+Target Users:
+- Privacy-conscious users seeking adult content without tracking
+- Users who want to search multiple adult sites simultaneously
+- Developers building adult content discovery applications
+- Self-hosters wanting complete control over their search data
 
-extra_css:
-  - stylesheets/dracula.css
+Unique Value:
+- Aggregates results from 47+ major adult video sites in one search
+- Bang shortcuts for instant single-site searches (!ph, !xh, !rt, etc.)
+- Server-Sent Events (SSE) for real-time result streaming
+- Direct API integration with PornHub, RedTube, Eporner
+- Zero tracking, zero logging, zero analytics
+- Built-in Tor support for maximum anonymity
+- Complete self-hosting - no external dependencies
+- Single static binary with embedded assets
 
-plugins:
-  - search
-  - minify:
-      minify_html: true
+## Business Logic & Rules
 
-markdown_extensions:
-  - abbr
-  - admonition
-  - attr_list
-  - def_list
-  - footnotes
-  - meta
-  - md_in_html
-  - tables
-  - toc:
-      permalink: true
-      toc_depth: 3
-  - pymdownx.arithmatex:
-      generic: true
-  - pymdownx.betterem:
-      smart_enable: all
-  - pymdownx.caret
-  - pymdownx.details
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
-  - pymdownx.highlight:
-      anchor_linenums: true
-      line_spans: __span
-      pygments_lang_class: true
-  - pymdownx.inlinehilite
-  - pymdownx.keys
-  - pymdownx.magiclink:
-      repo_url_shorthand: true
-      user: apimgr
-      repo: vidveil
-  - pymdownx.mark
-  - pymdownx.smartsymbols
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
-  - pymdownx.tabbed:
-      alternate_style: true
-  - pymdownx.tasklist:
-      custom_checkbox: true
-  - pymdownx.tilde
+Business Rules:
+- Minimum video duration filter (default: 300 seconds / 5 minutes) - configurable
+- Premium/gold content filtering - exclude paid/premium results when enabled
+- Bang shortcuts take precedence: "!ph amateur" only searches PornHub
+- Multiple bangs allowed: "!ph !rt amateur" searches both PornHub and RedTube
+- Default engines used when no bangs specified (configurable list)
+- Concurrent engine requests (configurable, default: 10)
+- Engine timeout (configurable, default: 10 seconds)
+- Results cached per query+page combination (configurable TTL)
+- Age verification can be enforced (configurable, disabled by default)
+- Tor routing can be forced for all engines or specific ones
+- TLS fingerprint spoofing (Chrome) to bypass Cloudflare protection
 
-nav:
-  - Home: index.md
-  - Getting Started:
-    - Installation: installation.md
-    - Configuration: configuration.md
-  - Usage:
-    - API Reference: api.md
-    - CLI Reference: cli.md
-    - Admin Panel: admin.md
-  - Development:
-    - Contributing: development.md
+Search Behavior:
+- Bang parser extracts !xx patterns from query
+- If bangs found: use ONLY those engines
+- If no bangs: use configured default_engines list
+- Results streamed via SSE as each engine responds
+- Results deduplicated by URL (same video from multiple sources)
+- Results sorted by relevance, then views, then rating
+- Pagination: results_per_page (default 30), max_pages (default 10)
 
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/apimgr/vidveil
-  generator: false
-```
+Validation:
+- Query cannot be empty
+- Page number must be >= 1
+- Engine names must exist in supported engines list
+- Bang shortcuts validated against registered bangs
+- Duration filter must be >= 0 seconds
 
-## .readthedocs.yaml Template (NON-NEGOTIABLE)
+Privacy Rules:
+- NO search query logging
+- NO user tracking or analytics
+- NO cookies except admin session
+- NO external analytics or tracking scripts
+- Tor hidden service support built-in
+- All external engine requests go through configurable proxy (if enabled)
 
-```yaml
-# ReadTheDocs configuration
-# https://docs.readthedocs.io/en/stable/config-file/v2.html
+## Data Models
 
-version: 2
-
-build:
-  os: ubuntu-22.04
-  tools:
-    python: "3.11"
-
-mkdocs:
-  configuration: mkdocs.yml
-
-python:
-  install:
-    - requirements: docs/requirements.txt
-```
-
-## docs/requirements.txt (NON-NEGOTIABLE)
-
-```
-mkdocs>=1.5.0
-mkdocs-material>=9.5.0
-mkdocs-minify-plugin>=0.7.0
-pymdown-extensions>=10.0
-```
-
-## Dracula Theme CSS (`docs/stylesheets/dracula.css`)
-
-```css
-/* Dracula Theme for MkDocs Material */
-/* https://draculatheme.com/contribute */
-
-:root {
-  /* Dracula color palette */
-  --dracula-background: #282a36;
-  --dracula-current-line: #44475a;
-  --dracula-foreground: #f8f8f2;
-  --dracula-comment: #6272a4;
-  --dracula-cyan: #8be9fd;
-  --dracula-green: #50fa7b;
-  --dracula-orange: #ffb86c;
-  --dracula-pink: #ff79c6;
-  --dracula-purple: #bd93f9;
-  --dracula-red: #ff5555;
-  --dracula-yellow: #f1fa8c;
+```go
+// Result represents a single video search result
+type Result struct {
+    ID              string    `json:"id"`               // Unique identifier from source
+    Title           string    `json:"title"`            // Video title
+    URL             string    `json:"url"`              // Video page URL
+    Thumbnail       string    `json:"thumbnail"`        // Thumbnail image URL
+    PreviewURL      string    `json:"preview_url"`      // Video preview/trailer URL (optional)
+    Duration        string    `json:"duration"`         // Human-readable duration (e.g., "12:34")
+    DurationSeconds int       `json:"duration_seconds"` // Duration in seconds for filtering
+    Views           string    `json:"views"`            // Human-readable view count (e.g., "1.2M")
+    ViewsCount      int64     `json:"views_count"`      // Numeric view count for sorting
+    Rating          float64   `json:"rating"`           // Video rating (0.0-5.0) - optional
+    Quality         string    `json:"quality"`          // Video quality (HD, 4K, etc.) - optional
+    Source          string    `json:"source"`           // Engine name (lowercase ID)
+    SourceDisplay   string    `json:"source_display"`   // Human-readable engine name
+    Published       time.Time `json:"published"`        // Publication date - optional
+    Description     string    `json:"description"`      // Video description - optional
 }
 
-/* Apply Dracula scheme */
-[data-md-color-scheme="dracula"] {
-  --md-default-bg-color: var(--dracula-background);
-  --md-default-fg-color: var(--dracula-foreground);
-  --md-default-fg-color--light: var(--dracula-comment);
-  --md-default-fg-color--lighter: var(--dracula-current-line);
-  --md-default-fg-color--lightest: var(--dracula-current-line);
-
-  --md-primary-fg-color: var(--dracula-purple);
-  --md-primary-fg-color--light: var(--dracula-pink);
-  --md-primary-fg-color--dark: var(--dracula-purple);
-  --md-primary-bg-color: var(--dracula-foreground);
-  --md-primary-bg-color--light: var(--dracula-foreground);
-
-  --md-accent-fg-color: var(--dracula-pink);
-  --md-accent-fg-color--transparent: rgba(255, 121, 198, 0.1);
-  --md-accent-bg-color: var(--dracula-pink);
-
-  --md-code-fg-color: var(--dracula-foreground);
-  --md-code-bg-color: var(--dracula-current-line);
-
-  --md-code-hl-color: rgba(255, 184, 108, 0.2);
-  --md-code-hl-number-color: var(--dracula-purple);
-  --md-code-hl-special-color: var(--dracula-pink);
-  --md-code-hl-function-color: var(--dracula-green);
-  --md-code-hl-constant-color: var(--dracula-purple);
-  --md-code-hl-keyword-color: var(--dracula-pink);
-  --md-code-hl-string-color: var(--dracula-yellow);
-  --md-code-hl-name-color: var(--dracula-foreground);
-  --md-code-hl-operator-color: var(--dracula-pink);
-  --md-code-hl-punctuation-color: var(--dracula-foreground);
-  --md-code-hl-comment-color: var(--dracula-comment);
-  --md-code-hl-generic-color: var(--dracula-foreground);
-  --md-code-hl-variable-color: var(--dracula-foreground);
-
-  --md-typeset-color: var(--dracula-foreground);
-  --md-typeset-a-color: var(--dracula-cyan);
-
-  --md-typeset-kbd-color: var(--dracula-foreground);
-  --md-typeset-kbd-accent-color: var(--dracula-current-line);
-  --md-typeset-kbd-border-color: var(--dracula-comment);
-
-  --md-typeset-mark-color: rgba(241, 250, 140, 0.3);
-
-  --md-typeset-table-color: var(--dracula-current-line);
-
-  --md-admonition-fg-color: var(--dracula-foreground);
-  --md-admonition-bg-color: var(--dracula-current-line);
-
-  --md-footer-bg-color: var(--dracula-current-line);
-  --md-footer-bg-color--dark: var(--dracula-background);
+// SearchResponse represents the API response for a search
+type SearchResponse struct {
+    Success    bool             `json:"success"`
+    Data       SearchData       `json:"data"`
+    Pagination PaginationData   `json:"pagination"`
+    Error      string           `json:"error,omitempty"`
+    Code       string           `json:"code,omitempty"`
 }
 
-/* Navigation and sidebar */
-[data-md-color-scheme="dracula"] .md-nav__link {
-  color: var(--dracula-foreground);
+// SearchData holds the search results and metadata
+type SearchData struct {
+    Query         string   `json:"query"`              // Original query string
+    SearchQuery   string   `json:"search_query"`       // Query after bang parsing
+    Results       []Result `json:"results"`            // Search results
+    EnginesUsed   []string `json:"engines_used"`       // Successfully queried engines
+    EnginesFailed []string `json:"engines_failed"`     // Failed engine names
+    SearchTimeMS  int64    `json:"search_time_ms"`     // Total search time
+    HasBang       bool     `json:"has_bang"`           // Whether bang shortcuts were used
+    BangEngines   []string `json:"bang_engines"`       // Engines from bang parsing
+    Cached        bool     `json:"cached"`             // Whether results came from cache
 }
 
-[data-md-color-scheme="dracula"] .md-nav__link:hover {
-  color: var(--dracula-cyan);
+// PaginationData holds pagination information
+type PaginationData struct {
+    Page  int `json:"page"`   // Current page number
+    Limit int `json:"limit"`  // Results per page
+    Total int `json:"total"`  // Total results count
+    Pages int `json:"pages"`  // Total pages available
 }
 
-[data-md-color-scheme="dracula"] .md-nav__link--active {
-  color: var(--dracula-pink);
+// EngineInfo represents information about a search engine
+type EngineInfo struct {
+    Name        string   `json:"name"`         // Engine ID (lowercase)
+    DisplayName string   `json:"display_name"` // Human-readable name
+    Enabled     bool     `json:"enabled"`      // Enabled in config
+    Available   bool     `json:"available"`    // Currently reachable
+    Features    []string `json:"features"`     // Supported features (api, streaming, etc.)
+    Tier        int      `json:"tier"`         // Engine tier (1=API, 2=JSON, 3=HTML)
 }
 
-/* Search */
-[data-md-color-scheme="dracula"] .md-search__input {
-  background-color: var(--dracula-current-line);
-  color: var(--dracula-foreground);
-}
-
-[data-md-color-scheme="dracula"] .md-search__input::placeholder {
-  color: var(--dracula-comment);
-}
-
-/* Tables */
-[data-md-color-scheme="dracula"] .md-typeset table:not([class]) th {
-  background-color: var(--dracula-current-line);
-  color: var(--dracula-purple);
-}
-
-[data-md-color-scheme="dracula"] .md-typeset table:not([class]) tr:hover {
-  background-color: rgba(68, 71, 90, 0.5);
-}
-
-/* Code blocks */
-[data-md-color-scheme="dracula"] .highlight {
-  background-color: var(--dracula-current-line);
-}
-
-[data-md-color-scheme="dracula"] code {
-  background-color: var(--dracula-current-line);
-  color: var(--dracula-foreground);
-}
-
-/* Admonitions */
-[data-md-color-scheme="dracula"] .md-typeset .admonition,
-[data-md-color-scheme="dracula"] .md-typeset details {
-  border-color: var(--dracula-purple);
-  background-color: var(--dracula-current-line);
-}
-
-[data-md-color-scheme="dracula"] .md-typeset .admonition-title,
-[data-md-color-scheme="dracula"] .md-typeset summary {
-  background-color: rgba(189, 147, 249, 0.1);
-}
-
-/* Note admonition */
-[data-md-color-scheme="dracula"] .md-typeset .admonition.note,
-[data-md-color-scheme="dracula"] .md-typeset details.note {
-  border-color: var(--dracula-cyan);
-}
-
-[data-md-color-scheme="dracula"] .md-typeset .note > .admonition-title,
-[data-md-color-scheme="dracula"] .md-typeset .note > summary {
-  background-color: rgba(139, 233, 253, 0.1);
-}
-
-/* Warning admonition */
-[data-md-color-scheme="dracula"] .md-typeset .admonition.warning,
-[data-md-color-scheme="dracula"] .md-typeset details.warning {
-  border-color: var(--dracula-orange);
-}
-
-[data-md-color-scheme="dracula"] .md-typeset .warning > .admonition-title,
-[data-md-color-scheme="dracula"] .md-typeset .warning > summary {
-  background-color: rgba(255, 184, 108, 0.1);
-}
-
-/* Danger/Error admonition */
-[data-md-color-scheme="dracula"] .md-typeset .admonition.danger,
-[data-md-color-scheme="dracula"] .md-typeset .admonition.error,
-[data-md-color-scheme="dracula"] .md-typeset details.danger,
-[data-md-color-scheme="dracula"] .md-typeset details.error {
-  border-color: var(--dracula-red);
-}
-
-[data-md-color-scheme="dracula"] .md-typeset .danger > .admonition-title,
-[data-md-color-scheme="dracula"] .md-typeset .error > .admonition-title,
-[data-md-color-scheme="dracula"] .md-typeset .danger > summary,
-[data-md-color-scheme="dracula"] .md-typeset .error > summary {
-  background-color: rgba(255, 85, 85, 0.1);
-}
-
-/* Tip/Success admonition */
-[data-md-color-scheme="dracula"] .md-typeset .admonition.tip,
-[data-md-color-scheme="dracula"] .md-typeset .admonition.success,
-[data-md-color-scheme="dracula"] .md-typeset details.tip,
-[data-md-color-scheme="dracula"] .md-typeset details.success {
-  border-color: var(--dracula-green);
-}
-
-[data-md-color-scheme="dracula"] .md-typeset .tip > .admonition-title,
-[data-md-color-scheme="dracula"] .md-typeset .success > .admonition-title,
-[data-md-color-scheme="dracula"] .md-typeset .tip > summary,
-[data-md-color-scheme="dracula"] .md-typeset .success > summary {
-  background-color: rgba(80, 250, 123, 0.1);
+// BangInfo represents a bang shortcut
+type BangInfo struct {
+    Shortcut    string `json:"shortcut"`     // Bang shortcut (!ph, !xh, etc.)
+    Engine      string `json:"engine"`       // Engine ID
+    DisplayName string `json:"display_name"` // Human-readable engine name
 }
 ```
 
-## Documentation Templates
-
-### docs/index.md
-
-```markdown
-# VIDVEIL
-
-Welcome to the official documentation for **vidveil**.
-
-{Brief description of what the project does - 2-3 sentences}
-
-## Quick Start
-
-=== "Docker (Recommended)"
-
-    ```bash
-    docker run -d \
-      --name vidveil \
-      -p 64580:80 \
-      -v ./rootfs/config:/config:z \
-      -v ./rootfs/data:/data:z \
-      ghcr.io/apimgr/vidveil:latest
-    ```
-
-=== "Binary"
-
-    ```bash
-    curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
-    chmod +x vidveil-linux-amd64
-    ./vidveil-linux-amd64
-    ```
-
-## Features
-
-- Feature 1: Description
-- Feature 2: Description
-- Feature 3: Description
-
-## Navigation
-
-- [Installation](installation.md) - Get up and running
-- [Configuration](configuration.md) - Configure the application
-- [API Reference](api.md) - API endpoints and usage
-- [Admin Panel](admin.md) - Server administration
-
-## Links
-
-- [GitHub Repository](https://github.com/apimgr/vidveil)
-- [Issue Tracker](https://github.com/apimgr/vidveil/issues)
-- [Releases](https://github.com/apimgr/vidveil/releases)
-```
-
-### docs/installation.md
-
-```markdown
-# Installation
-
-This guide covers all methods of installing vidveil.
-
-## Requirements
-
-- **OS**: Linux, macOS, Windows, FreeBSD
-- **Architecture**: AMD64, ARM64
-- **Docker**: 20.10+ (for container deployment)
-
-## Docker (Recommended)
-
-### Using Docker Run
-
-```bash
-docker run -d \
-  --name vidveil \
-  -p 64580:80 \
-  -v ./rootfs/config:/config:z \
-  -v ./rootfs/data:/data:z \
-  ghcr.io/apimgr/vidveil:latest
-```
-
-### Using Docker Compose
-
-```bash
-# Download docker-compose.yml
-curl -O https://raw.githubusercontent.com/apimgr/vidveil/main/docker/docker-compose.yml
-
-# Start the container
-docker compose up -d
-```
-
-## Binary Installation
-
-### Download
-
-Download the appropriate binary for your platform:
-
-| OS | Architecture | Download |
-|---|---|---|
-| Linux | AMD64 | [vidveil-linux-amd64](https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64) |
-| Linux | ARM64 | [vidveil-linux-arm64](https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-arm64) |
-| macOS | AMD64 | [vidveil-darwin-amd64](https://github.com/apimgr/vidveil/releases/latest/download/vidveil-darwin-amd64) |
-| macOS | ARM64 | [vidveil-darwin-arm64](https://github.com/apimgr/vidveil/releases/latest/download/vidveil-darwin-arm64) |
-| Windows | AMD64 | [vidveil-windows-amd64.exe](https://github.com/apimgr/vidveil/releases/latest/download/vidveil-windows-amd64.exe) |
-| Windows | ARM64 | [vidveil-windows-arm64.exe](https://github.com/apimgr/vidveil/releases/latest/download/vidveil-windows-arm64.exe) |
-| FreeBSD | AMD64 | [vidveil-freebsd-amd64](https://github.com/apimgr/vidveil/releases/latest/download/vidveil-freebsd-amd64) |
-| FreeBSD | ARM64 | [vidveil-freebsd-arm64](https://github.com/apimgr/vidveil/releases/latest/download/vidveil-freebsd-arm64) |
-
-### Install
-
-```bash
-# Download
-curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
-
-# Make executable
-chmod +x vidveil-linux-amd64
-
-# Move to PATH (optional)
-sudo mv vidveil-linux-amd64 /usr/local/bin/vidveil
-
-# Run
-vidveil
-```
-
-## Systemd Service
-
-Create `/etc/systemd/system/vidveil.service`:
-
-```ini
-[Unit]
-Description=VIDVEIL Server
-After=network.target
-
-[Service]
-Type=simple
-User=vidveil
-ExecStart=/usr/local/bin/vidveil --mode production
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable vidveil
-sudo systemctl start vidveil
-```
-
-## First Run
-
-After installation, access the web interface at `http://localhost:64580` (or your configured port).
-
-On first run, you'll be prompted to complete the setup wizard to create an admin account.
-```
-
-### docs/configuration.md
-
-```markdown
-# Configuration
-
-vidveil can be configured via:
-
-1. Configuration file (`server.yml`)
-2. Environment variables
-3. CLI flags
-4. Admin panel (web UI)
-
-**Priority**: CLI flags > Environment > Config file
-
-## Configuration File
-
-Default location: `/etc/vidveil/server.yml` (or `./config/server.yml` in Docker)
-
-### Server Settings
-
-```yaml
-server:
-  # Listen address and port
-  address: ":64580"
-
-  # Application mode: production or development
-  mode: production
-
-  # Base URL for the application
-  base_url: "https://example.com"
-```
-
-### Logging
-
-```yaml
-logging:
-  # Log level: debug, info, warn, error
-  level: info
-
-  # Log format: json, text
-  format: json
-
-  # Log file path (empty = stdout)
-  file: ""
-```
-
-{Add project-specific configuration sections}
-
-## Environment Variables
-
-All configuration can be set via environment variables with the `VIDVEIL_` prefix:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VIDVEIL_ADDRESS` | Listen address | `:64580` |
-| `VIDVEIL_MODE` | Application mode | `production` |
-| `VIDVEIL_LOG_LEVEL` | Log level | `info` |
-
-## CLI Flags
-
-```bash
-vidveil --help
-
-Usage: vidveil [options]
-
-Options:
-  --help                 Show help
-  --version              Show version
-  --mode MODE            Application mode (production|development)
-  --config DIR           Config directory
-  --data DIR             Data directory
-  --log DIR              Log directory
-  --address ADDR         Listen address
-  --port PORT            Listen port
-```
-
-## Admin Panel
-
-All settings can be configured via the admin panel at `/admin/settings`.
-
-See [Admin Panel](admin.md) for details.
-```
-
-## Implementation Checklist
-
-When implementing documentation for a project:
-
-- [ ] Create `docs/` directory structure
-- [ ] Create `mkdocs.yml` in project root
-- [ ] Create `.readthedocs.yaml` in project root
-- [ ] Create `docs/requirements.txt`
-- [ ] Create `docs/stylesheets/dracula.css`
-- [ ] Create `docs/index.md` (homepage)
-- [ ] Create `docs/installation.md` (installation guide)
-- [ ] Create `docs/configuration.md` (all settings)
-- [ ] Create `docs/api.md` (API documentation)
-- [ ] Create `docs/cli.md` (if project has CLI)
-- [ ] Create `docs/admin.md` (admin panel guide)
-- [ ] Create `docs/development.md` (contributing guide)
-- [ ] Connect repository to ReadTheDocs
-- [ ] Verify build succeeds on ReadTheDocs
-- [ ] Add documentation badge to README.md
-
-## ReadTheDocs Setup
-
-1. Go to [ReadTheDocs](https://readthedocs.org)
-2. Import your repository
-3. Configure project name as `apimgr-vidveil`
-4. Build will use `.readthedocs.yaml` configuration
-5. Documentation available at `https://apimgr-vidveil.readthedocs.io`
-
-## README Badge
-
-Add to README.md:
-
-```markdown
-[![Documentation](https://readthedocs.org/projects/apimgr-vidveil/badge/?version=latest)](https://apimgr-vidveil.readthedocs.io/en/latest/)
-```
+## Data Sources
+
+Data Sources:
+- 47 external adult video search engines (live scraping/API calls)
+- PornHub Webmasters API (direct JSON API integration)
+- RedTube Public API (direct JSON API integration)
+- Eporner v2 JSON API (direct JSON API integration)
+- XVideos, XNXX, xHamster (JSON extraction from embedded data)
+- 40+ additional sites (HTML parsing with CSS selectors)
+
+Engine Tiers:
+1. Tier 1 (6 engines): Major sites with API or direct JSON access
+   - pornhub, redtube, eporner, xvideos, xnxx, xhamster
+2. Tier 2 (10 engines): Popular sites with JSON endpoints
+   - youporn, pornmd, pornhat, tube8, xtube, etc.
+3. Tier 3+ (31 engines): Additional sites with HTML parsing
+   - fourtube, fux, porntube, youjizz, sunporno, txxx, etc.
+
+Update Strategy:
+- Engines queried in real-time per search request
+- No local database of videos (privacy: no stored searches)
+- Results cached per query+page for configured TTL
+- Engine availability checked via periodic health checks
+- Bang shortcuts hardcoded in binary (src/service/engines/bangs.go)
+
+Data Location:
+- src/service/engines/*.go - Engine implementations
+- src/service/engines/bangs.go - Bang shortcut mappings
+- src/service/parsers/*.go - HTML/JSON parsers
+- No committed video data files (all data fetched live)
+
+Privacy Design:
+- Zero persistent storage of search queries
+- Zero logging of user searches
+- Cache uses query hash as key (no readable queries stored)
+- All external requests proxiable through Tor
+- No user profiles or accounts (except admin)
+
+## Project-Specific Endpoints Summary
+
+**Implementation of these endpoints MUST follow PART 20 (API Structure) and PART 17 (Web Frontend) rules.**
+
+Endpoints Purpose:
+- Search: Meta search across 47+ adult video sites with bang support
+- Search Stream: SSE streaming of search results as engines respond
+- Autocomplete: Bang shortcut suggestions for partial input
+- Bangs: List all available bang shortcuts
+- Engines: List and manage search engines
+- Engine details: Get information about specific engine
+
+Business Behavior:
+
+**Search (GET /api/v1/search)**
+- Accepts query, page, engines parameters
+- Parses bang shortcuts from query (!ph, !xh, !rt, etc.)
+- If bangs found: uses ONLY those engines
+- If no bangs: uses configured default_engines list
+- Multiple bangs supported: "!ph !rt query" searches both
+- Results filtered by minimum duration
+- Premium content filtered if enabled
+- Results cached per query+page combination
+- Returns JSON with results, metadata, timing
+
+**Search Stream (GET /api/v1/search/stream)**
+- Server-Sent Events (SSE) streaming
+- Results sent as each engine responds
+- Format: `data: {JSON}\n\n` per result batch
+- Engines queried concurrently with configurable limit
+- Client receives results in real-time (faster UX)
+- Final event sent when all engines complete or timeout
+
+**Autocomplete (GET /api/v1/autocomplete)**
+- Suggests bang shortcuts as user types
+- Input "!p" returns: !ph (PornHub), !pmd (PornMD), !phat (PornHat), etc.
+- Case-insensitive matching
+- Returns bang shortcut, engine name, display name
+- Used by frontend for search box autocomplete
+
+**Bangs (GET /api/v1/bangs)**
+- Lists all 47+ bang shortcuts
+- Returns bang code, engine ID, display name
+- Used for documentation and bang discovery
+- Alphabetically sorted
+
+**Engines (GET /api/v1/engines)**
+- Lists all search engines with status
+- Shows: name, display name, enabled, available, features, tier
+- Includes health check status
+- Can be filtered by enabled/tier
+
+**Engine Details (GET /api/v1/engines/{name})**
+- Returns detailed info about specific engine
+- Shows configuration, features, last health check
+- Includes success/failure statistics
+
+Web UI Endpoints:
+- / - Homepage with search box
+- /search - Search results page
+- /about - About and engine list
+- /admin - Admin panel (authentication required)
+
+Admin Features:
+- Enable/disable engines
+- Configure default engines
+- Set search parameters (timeout, concurrent requests, etc.)
+- View engine health and statistics
+- Configure Tor settings
+- Manage age verification
+- View logs and metrics
+
+## Extended Node Functions (If Applicable)
+
+**Not applicable for Vidveil.** This project only requires standard clustering (config sync). No managed nodes or extended node functions.
+
+## High Availability Requirements (If Applicable)
+
+**Not applicable for Vidveil.** This is a stateless search aggregator that only needs standard clustering (config sync). No HA failover required.
+
+## Notes
+
+Technical Implementation Notes:
+- TLS fingerprint spoofing using uTLS library to bypass Cloudflare
+- Concurrent HTTP requests with configurable limits (default: 10)
+- Engine-specific parsers in src/service/parsers/
+- Bang parser uses regex for pattern extraction
+- SSE implementation uses chunked transfer encoding
+- Cache implementation uses Valkey/Redis when available, fallback to memory
+- Tor circuit rotation for enhanced privacy when enabled
+- Age verification uses simple cookie-based system (not legally compliant, use reverse proxy for real compliance)
+
+Configuration Files:
+- server.yml - Main configuration
+- Key sections: search, search.tor, web.security, search.age_verification
+- All search engines enabled by default
+- Tor disabled by default (enable in search.tor.enabled)
+
+CLI Client:
+- Includes optional CLI client (vidveil-cli) for terminal searches
+- TUI mode with interactive search interface
+- Supports all API features (search, bangs, autocomplete)
+- See PART 34 for CLI client details
+
+Supported Adult Sites (47+):
+Tier 1: pornhub, redtube, eporner, xvideos, xnxx, xhamster
+Tier 2: youporn, pornmd, pornhat, tube8, xtube, keezmovies, extremetube, spankwire, sleazyneasy, youjizz
+Tier 3+: fourtube, fux, porntube, sunporno, txxx, nuvid, tnaflix, drtuber, empflix, hellporno, alphaporno, pornflip, zenporn, gotporn, hdzog, xxxymovies, lovehomeporn, pornerbros, nonktube, nubilesporn, pornbox, porntop, pornotube, vporn, pornhd, xbabe, pornone, porntrex, hqporner, vjav, flyflv, anyporn, superporn, tubegalore, motherless, threemovs
+
+Project Status:
+- Feature-complete for v1.0
+- Active development on engine improvements
+- Regular updates to adapt to site changes
 
 ---
 
@@ -26266,9 +29161,9 @@ Add to README.md:
 ### Document Rules
 
 - [ ] **AI.md is the ONLY project specification** - nothing else
-- [ ] **AI.md does NOT exist in projects** - it lives only in apimgr repo
-- [ ] **NEVER reference AI.md** - projects don't have it, don't need it
-- [ ] If AI.md missing, ask human to create it (or create from AI.md in apimgr)
+- [ ] **TEMPLATE.md does NOT exist in projects** - it lives only in apimgr repo
+- [ ] **NEVER reference TEMPLATE.md** - projects don't have it, don't need it
+- [ ] If AI.md missing, ask human to create it (or create from TEMPLATE.md in apimgr)
 - [ ] Keep AI.md in sync with PROJECT STATE
 - [ ] Migrate old files: `CLAUDE.md`, `SPEC.md` → merge into `AI.md`, DELETE old files
 - [ ] Use TODO.AI.md for tasks when more than 2 items
@@ -26304,7 +29199,7 @@ Add to README.md:
 7. Verify consistency with related sections
 8. Update TODO.AI.md when tasks complete
 
-**Note:** AI.md does NOT exist in projects. AI.md IS the spec.
+**Note:** TEMPLATE.md does NOT exist in projects. AI.md IS the spec.
 
 ---
 
@@ -26321,7 +29216,7 @@ Add to README.md:
 - [ ] `go.mod` / `go.sum` - Go modules (required)
 - [ ] `.github/workflows/` or `.gitea/workflows/` - CI/CD (required)
 
-**Note:** No AI.md, SPEC.md, or CLAUDE.md in projects. Only AI.md.
+**Note:** No TEMPLATE.md, SPEC.md, or CLAUDE.md in projects. Only AI.md.
 
 ### Development
 
@@ -26342,11 +29237,12 @@ Add to README.md:
 ### Frontend
 
 - [ ] Frontend required for ALL projects
-- [ ] Dark theme (Dracula) is default
+- [ ] Project-wide theme system: light/dark/auto (dark is default)
+- [ ] Themes apply everywhere: web UI, admin, Swagger, GraphQL, ReadTheDocs
 - [ ] NO inline CSS - external stylesheets only
 - [ ] NO JavaScript alerts - use toast notifications
 - [ ] Mobile-first responsive design
-- [ ] WCAG 2.1 AA accessibility
+- [ ] WCAG 2.1 AA accessibility (both light and dark themes)
 
 ### API
 
@@ -26432,11 +29328,13 @@ Add to README.md:
 
 ### Documentation
 
-- [ ] `docs/` directory with MkDocs documentation
+- [ ] `docs/` directory ONLY for ReadTheDocs (MkDocs) - nothing else
 - [ ] `mkdocs.yml` in project root
 - [ ] `.readthedocs.yaml` in project root
 - [ ] `docs/requirements.txt` with dependencies
-- [ ] `docs/stylesheets/dracula.css` theme
+- [ ] MkDocs Material theme with light/dark/auto toggle (dark default)
+- [ ] `docs/stylesheets/dark.css` (OPTIONAL for dark theme customization)
+- [ ] `docs/stylesheets/light.css` (OPTIONAL for light theme customization)
 - [ ] Required pages: index, installation, configuration, api, admin, development
 - [ ] ReadTheDocs URL: `https://apimgr-vidveil.readthedocs.io`
 - [ ] Documentation badge in README.md
@@ -26447,7 +29345,7 @@ Add to README.md:
 - [ ] Same version as server
 - [ ] Standard CLI + TUI modes
 - [ ] Config: `~/.config/vidveil/cli.yml`
-- [ ] Dracula theme for TUI
+- [ ] Dark theme for TUI (matching project theme)
 - [ ] Built alongside server
 
 ### Tor (if tor binary installed)
@@ -26473,3 +29371,564 @@ Add to README.md:
 **When in doubt:**
 - **AI:** Re-read AI.md and TODO.AI.md. Ask questions. Never assume.
 - **Humans:** Re-read AI.md. Update TODO.AI.md. Ask AI to clarify.
+
+---
+
+# APPENDIX A: INTEGRATION NOTES
+
+# Integration Notes for Existing Projects
+
+**Use this prompt when integrating this specification into an EXISTING project.**
+
+---
+
+## Prompt for AI Assistants
+
+When integrating this specification into an existing project:
+
+### Phase 1: Assessment (Read-Only)
+
+1. **Read the entire AI.md specification** (this file)
+2. **Read the existing project codebase** - understand current structure
+3. **Identify gaps** between current state and specification requirements
+4. **Create TODO.AI.md** with comprehensive task list organized by priority:
+   - **Critical (P0)**: Security issues, data loss risks, broken functionality
+   - **High (P1)**: Missing NON-NEGOTIABLE requirements
+   - **Medium (P2)**: Structural improvements, standardization
+   - **Low (P3)**: Nice-to-have features, documentation improvements
+
+### Phase 2: Planning
+
+1. **Do NOT start making changes yet**
+2. **Review TODO.AI.md with the human** - get approval on priorities
+3. **Ask clarifying questions:**
+   - Are there existing features that should be preserved?
+   - Are there breaking changes acceptable?
+   - What is the migration timeline (can it be done incrementally)?
+   - Are there production systems that need careful migration?
+4. **Create a migration plan** for each major change
+5. **Identify risks** - data migration, API breaking changes, downtime requirements
+
+### Phase 3: Incremental Implementation
+
+**NEVER attempt to fix everything at once. Work incrementally:**
+
+1. **Start with Critical (P0) items**
+   - Security vulnerabilities
+   - Data integrity issues
+   - Broken functionality
+
+2. **Then High (P1) NON-NEGOTIABLE items**
+   - Work in small, testable increments
+   - One subsystem at a time
+   - Ensure each change is tested before moving on
+
+3. **Then Medium (P2) improvements**
+   - Structural reorganization
+   - Standardization of patterns
+
+4. **Finally Low (P3) enhancements**
+   - Documentation
+   - Nice-to-have features
+
+### Phase 4: Validation
+
+After each significant change:
+
+1. **Test thoroughly** - verify nothing broke
+2. **Update TODO.AI.md** - mark items complete
+3. **Update AI.md** - reflect current project state
+4. **Document breaking changes** - if any
+5. **Get human approval** before proceeding to next phase
+
+---
+
+## Common Integration Patterns
+
+### Pattern 1: File Structure Migration
+
+**If project has non-standard structure:**
+
+1. Create new `src/` directory structure per spec
+2. Move files incrementally (one package at a time)
+3. Update imports after each move
+4. Test after each move
+5. Delete old structure only when new structure is fully working
+
+### Pattern 2: Configuration Migration
+
+**If project uses different config format:**
+
+1. Keep old config format working alongside new format
+2. Add config migration utility: `--migrate-config old.conf new.yml`
+3. Warn users about old format deprecation
+4. Provide migration guide in docs
+5. Eventually remove old format support (with proper notice)
+
+### Pattern 3: API Versioning
+
+**If project has existing API that doesn't match spec:**
+
+1. Implement new spec-compliant API at `/api/v2/`
+2. Keep old API at `/api/v1/` with deprecation warnings
+3. Add migration guide for API consumers
+4. Set deprecation timeline
+5. Eventually remove old API version
+
+### Pattern 4: Database Schema Migration
+
+**If project has existing database:**
+
+1. **NEVER break existing data**
+2. Create migration scripts in `src/migration/`
+3. Use proper migration tool or SQL migration files
+4. Test migrations on backup data first
+5. Provide rollback capability
+6. Document breaking schema changes
+
+---
+
+## Critical Rules for Integration
+
+| Rule | Description |
+|------|-------------|
+| **NEVER break production** | Integration should be incremental and safe |
+| **NEVER lose data** | Migrations must preserve all existing data |
+| **NEVER remove features** | Unless explicitly approved by human |
+| **ALWAYS test** | Every change must be tested before proceeding |
+| **ALWAYS backup** | Before major structural changes |
+| **ALWAYS document** | Breaking changes, migrations, deprecations |
+| **ALWAYS ask** | When unsure about preserving existing behavior |
+
+---
+
+## Red Flags (Stop and Ask Human)
+
+Stop immediately and ask the human if you encounter:
+
+- Existing data that might be lost
+- Breaking API changes affecting external users
+- Configuration changes requiring manual migration
+- File structure changes affecting deployed systems
+- Security changes that might break authentication
+- Database schema changes without clear migration path
+- Removal of features currently in use
+
+---
+
+## Integration Checklist
+
+Before starting integration:
+
+- [ ] Have you read the ENTIRE AI.md specification?
+- [ ] Have you read and understood the existing codebase?
+- [ ] Have you created a comprehensive TODO.AI.md with prioritized tasks?
+- [ ] Have you reviewed the TODO.AI.md with the human?
+- [ ] Have you identified all risks and breaking changes?
+- [ ] Have you planned for data migration (if needed)?
+- [ ] Have you planned for incremental rollout?
+- [ ] Do you have a rollback plan for each major change?
+
+**If you answered NO to any of the above, DO NOT START IMPLEMENTATION.**
+
+---
+
+## Example TODO.AI.md for Integration
+
+```markdown
+# Integration Tasks for vidveil
+
+## Critical (P0) - Do First
+
+- [ ] Fix SQL injection vulnerability in user search (line 234)
+- [ ] Add missing input validation on admin endpoints
+- [ ] Fix session management security issue
+
+## High (P1) - NON-NEGOTIABLE Requirements
+
+### File Structure
+- [ ] Create src/ directory structure per spec
+- [ ] Move main.go to src/main.go
+- [ ] Create src/config/ package
+- [ ] Create src/server/ package
+- [ ] Create src/swagger/ package (NEW)
+- [ ] Create src/graphql/ package (NEW)
+- [ ] Update all imports
+
+### Configuration
+- [ ] Migrate config.json to server.yml format
+- [ ] Add environment variable support
+- [ ] Add CLI flag overrides
+- [ ] Create migration utility
+
+### API
+- [ ] Add Swagger/OpenAPI support (NEW)
+- [ ] Add GraphQL support (NEW)
+- [ ] Ensure REST API matches spec patterns
+
+## Medium (P2) - Standardization
+
+- [ ] Standardize error handling per spec
+- [ ] Add comprehensive logging per spec
+- [ ] Implement project-wide theme system (light/dark/auto)
+- [ ] Add health check endpoint format per spec
+
+## Low (P3) - Documentation
+
+- [ ] Create docs/ directory for ReadTheDocs
+- [ ] Write docs/index.md
+- [ ] Write docs/installation.md
+- [ ] Configure mkdocs.yml
+```
+
+---
+
+## Remember
+
+**Integration is a PROCESS, not a single change.**
+
+- Work incrementally
+- Test continuously
+- Document everything
+- Get approval at each phase
+- Preserve existing functionality unless explicitly changing it
+- NEVER rush integration to "get it done faster"
+
+---
+
+---
+
+# APPENDIX B: BOOTSTRAP NOTES
+
+# Bootstrap Notes for New Projects
+
+**Use this prompt when creating a NEW project from scratch.**
+
+---
+
+## Prompt for AI Assistants
+
+When bootstrapping a new project from this specification:
+
+### Phase 1: Project Initialization
+
+1. **Confirm project details:**
+   - Project name: `vidveil`
+   - Organization: `apimgr`
+   - Description: What does this project do?
+   - Primary purpose: What problem does it solve?
+
+2. **Create directory structure:**
+   ```bash
+   mkdir -p vidveil
+   cd vidveil
+
+   # Create all required directories
+   mkdir -p src/{config,server,swagger,graphql,mode,paths,ssl,scheduler,service,admin}
+   mkdir -p src/server/{handler,service,model,store,template}
+   mkdir -p docker/rootfs/usr/local/bin
+   mkdir -p docs/stylesheets
+   mkdir -p tests
+   mkdir -p scripts
+   mkdir -p .github/workflows
+   ```
+
+3. **Create AI.md from TEMPLATE.md:**
+   - Copy TEMPLATE.md from apimgr repo
+   - Replace all `VIDVEIL` with actual project name
+   - Replace all `vidveil` with actual project name
+   - Replace all `apimgr` with actual organization
+   - Fill in PROJECT DESCRIPTION section
+   - Fill in PART 36: PROJECT-SPECIFIC SECTIONS
+   - Save as AI.md
+
+4. **Create foundational files:**
+   ```bash
+   # Required files
+   touch README.md
+   touch LICENSE.md
+   touch Makefile
+   touch Jenkinsfile
+   touch release.txt
+   touch TODO.AI.md
+   touch .gitignore
+
+   # Docker files
+   touch docker/Dockerfile
+   touch docker/docker-compose.yml
+   touch docker/docker-compose.dev.yml
+   touch docker/docker-compose.test.yml
+   touch docker/rootfs/usr/local/bin/entrypoint.sh
+
+   # ReadTheDocs files
+   touch mkdocs.yml
+   touch .readthedocs.yaml
+   touch docs/index.md
+   touch docs/installation.md
+   touch docs/configuration.md
+   touch docs/api.md
+   touch docs/admin.md
+   touch docs/development.md
+   touch docs/requirements.txt
+   touch docs/stylesheets/dark.css
+   touch docs/stylesheets/light.css
+
+   # CI/CD
+   touch .github/workflows/release.yml
+   touch .github/workflows/beta.yml
+   touch .github/workflows/daily.yml
+   touch .github/workflows/docker.yml
+   ```
+
+### Phase 2: Core Implementation Order
+
+**Implement in this specific order for best results:**
+
+#### Step 1: Basic Structure (PARTS 1-5)
+
+1. **Initialize Go module:**
+   ```bash
+   go mod init github.com/apimgr/vidveil
+   ```
+
+2. **Create src/main.go** - Minimal entry point
+3. **Create src/config/config.go** - Configuration loading
+4. **Create src/mode/mode.go** - Application mode detection
+5. **Create src/paths/paths.go** - Path resolution
+
+**Test:** Binary should compile and show version
+
+#### Step 2: Server Foundation (PARTS 6-10)
+
+1. **Create src/server/server.go** - HTTP server setup
+2. **Create src/server/handler/health.go** - Health check
+3. **Add CLI flags** per PART 6 specification
+4. **Add service support** per PART 9
+5. **Create Makefile** per PART 11
+
+**Test:** Server starts and responds to `/healthz`
+
+#### Step 3: Docker & CI/CD (PARTS 11-14)
+
+1. **Create docker/Dockerfile** - Multi-stage build
+2. **Create docker-compose files** - Production, dev, test
+3. **Create entrypoint.sh** - Container initialization
+4. **Create .github/workflows/** - All CI/CD workflows
+5. **Create Makefile targets** - build, docker, release
+
+**Test:** Docker build succeeds, container runs
+
+#### Step 4: Web Frontend (PART 16)
+
+1. **Create src/server/template/** - HTML templates
+2. **Embed templates in server.go**
+3. **Implement theme system** (light/dark/auto)
+4. **Create homepage route** - `/` endpoint
+5. **Test responsive design**
+
+**Test:** Homepage loads with working theme toggle
+
+#### Step 5: Admin Panel (PART 18)
+
+1. **Create src/admin/admin.go** - Admin package
+2. **Create admin templates** - UI pages
+3. **Create admin handlers** - Routes and logic
+4. **Implement first-run setup wizard**
+5. **Add all admin configuration pages**
+
+**Test:** Admin panel accessible at `/admin`
+
+#### Step 6: API Layer (PART 19)
+
+1. **Create src/server/handler/api.go** - REST API handlers
+2. **Create src/swagger/swagger.go** - OpenAPI/Swagger
+3. **Create src/graphql/graphql.go** - GraphQL API
+4. **Ensure all three APIs are in sync**
+5. **Apply theme to Swagger/GraphQL UIs**
+
+**Test:** All three APIs work (REST, Swagger, GraphQL)
+
+#### Step 7: Core Features (PARTS 20-28)
+
+Implement in order:
+1. **PART 20:** SSL/TLS & Let's Encrypt
+2. **PART 21:** Security & Logging
+3. **PART 22:** User Management
+4. **PART 23:** Database & Cluster
+5. **PART 24:** Backup & Restore
+6. **PART 25:** Email & Notifications
+7. **PART 26:** Scheduler
+8. **PART 27:** GeoIP
+9. **PART 28:** Metrics
+
+**Test after each part:** Verify the feature works before moving to next
+
+#### Step 8: Optional Features (PARTS 29-34)
+
+Implement as needed:
+1. **PART 29:** Tor Hidden Service (if tor installed)
+2. **PART 30:** Error Handling & Caching
+3. **PART 31:** I18N & A11Y
+4. **PART 34:** CLI Client (if applicable)
+5. **PART 35:** Custom Domains (if applicable)
+
+#### Step 9: Documentation (PART 33)
+
+1. **Create all docs/*.md files**
+2. **Configure mkdocs.yml**
+3. **Configure .readthedocs.yaml**
+4. **Add docs/requirements.txt**
+5. **Create theme CSS files**
+6. **Test local MkDocs build:** `mkdocs serve`
+
+**Test:** Documentation builds and deploys to ReadTheDocs
+
+#### Step 10: Project-Specific (PART 36)
+
+1. **Fill in PART 36 in AI.md** - Define project-specific endpoints, data, config
+2. **Implement project-specific features**
+3. **Add project-specific tests**
+4. **Update documentation with project specifics**
+
+**Test:** All project-specific functionality works
+
+### Phase 3: Polish & Release
+
+1. **Run full test suite** - Ensure everything works
+2. **Build all 8 platforms** - Verify cross-platform builds
+3. **Test Docker images** - All compose files work
+4. **Complete README.md** - Production-first documentation
+5. **Complete LICENSE.md** - Include all embedded licenses
+6. **Final compliance check** - Review FINAL CHECKPOINT checklist
+7. **Create initial release** - Tag v0.1.0
+
+---
+
+## Bootstrap Checklist
+
+### Before You Start
+
+- [ ] Have you read the ENTIRE AI.md specification?
+- [ ] Do you understand the project purpose and scope?
+- [ ] Have you confirmed all project details (name, org, description)?
+- [ ] Have you asked clarifying questions about project-specific requirements?
+
+### Foundation (Must Complete First)
+
+- [ ] Directory structure created per spec
+- [ ] AI.md created and customized
+- [ ] go.mod initialized
+- [ ] .gitignore created with proper rules
+- [ ] Basic src/main.go exists
+- [ ] src/config/config.go exists
+- [ ] Project compiles successfully
+
+### Core Features (In Order)
+
+- [ ] Server starts and responds to requests
+- [ ] Health check endpoint works
+- [ ] CLI flags work per spec
+- [ ] Configuration loading works (file, env, flags)
+- [ ] Logging configured properly
+- [ ] Admin panel accessible
+- [ ] First-run setup wizard works
+- [ ] REST API endpoints defined
+- [ ] Swagger UI accessible at /openapi
+- [ ] GraphQL accessible at /graphql
+- [ ] All three APIs in sync
+
+### Infrastructure
+
+- [ ] Docker builds successfully
+- [ ] Docker Compose files work (prod, dev, test)
+- [ ] CI/CD workflows configured
+- [ ] Automated builds work
+- [ ] Multi-platform builds work (8 platforms)
+
+### Documentation
+
+- [ ] README.md complete
+- [ ] LICENSE.md complete with embedded licenses
+- [ ] docs/ directory structure created
+- [ ] All required .md files in docs/
+- [ ] mkdocs.yml configured
+- [ ] ReadTheDocs configured
+- [ ] Documentation builds successfully
+
+### Final Validation
+
+- [ ] All NON-NEGOTIABLE requirements met
+- [ ] All FINAL CHECKPOINT items checked
+- [ ] No TODO items marked as critical/blocker
+- [ ] All tests pass
+- [ ] All 8 platform builds succeed
+- [ ] Docker images build and run
+- [ ] Documentation published
+
+---
+
+## Common Mistakes When Bootstrapping
+
+| Mistake | Why It's Wrong | Correct Approach |
+|---------|----------------|------------------|
+| Starting with project-specific features | Wastes time if foundation is wrong | Build foundation first (config, server, admin) |
+| Skipping admin panel | Hard to configure without UI | Build admin panel early |
+| Implementing all APIs at once | Easy to get out of sync | Start with REST, then add Swagger, then GraphQL |
+| Not testing incrementally | Find bugs too late | Test after each major component |
+| Hardcoding values | Makes project inflexible | Use configuration from day 1 |
+| Skipping documentation | Users can't use the project | Write docs as you build |
+| Building for one platform only | Fails CI/CD | Test multi-platform early |
+| Ignoring theme system | Hard to retrofit later | Implement themes from start |
+
+---
+
+## Time-Saving Tips
+
+1. **Use existing projects as reference:**
+   - Look at jokes, quotes, or other apimgr projects
+   - Copy patterns that match the spec
+   - Adapt to your project's needs
+
+2. **Leverage templates:**
+   - Use spec templates for Docker, CI/CD, configs
+   - Don't reinvent - copy and customize
+
+3. **Build iteratively:**
+   - Get basic version working first
+   - Add features incrementally
+   - Test continuously
+
+4. **Focus on NON-NEGOTIABLE items first:**
+   - Optional features can wait
+   - Core requirements must be solid
+
+---
+
+## Success Criteria
+
+A successfully bootstrapped project should:
+
+✅ Compile to a single static binary for all 8 platforms
+✅ Run in Docker with proper configuration
+✅ Have working web UI with theme support (light/dark/auto)
+✅ Have working admin panel with all config options
+✅ Expose REST, Swagger, AND GraphQL APIs (all in sync)
+✅ Have comprehensive documentation on ReadTheDocs
+✅ Pass all CI/CD workflows
+✅ Follow every NON-NEGOTIABLE requirement in AI.md
+✅ Be ready for v0.1.0 release
+
+---
+
+## Getting Help
+
+When stuck:
+
+1. **Re-read the relevant PART** in AI.md
+2. **Check existing projects** in apimgr for working examples
+3. **Ask specific questions** about unclear requirements
+4. **Propose solutions** for human review
+
+**NEVER guess or assume** - always ask when uncertain.
+
+---

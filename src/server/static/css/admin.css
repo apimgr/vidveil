@@ -6,7 +6,7 @@
     --bg-secondary: #44475a;
     --bg-tertiary: #1e1f29;
     --text-primary: #f8f8f2;
-    --text-secondary: #6272a4;
+    --text-secondary: #7585b8;
     --accent: #bd93f9;
     --accent-hover: #ff79c6;
     --accent-alt: #8be9fd;
@@ -76,7 +76,12 @@ body {
 .notification-bell {
     position: relative;
     color: var(--text-secondary);
-    padding: 0.25rem;
+    padding: 12px;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 4px;
     transition: all 0.2s;
 }
@@ -140,6 +145,11 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0.625rem 1rem;
+    min-height: 44px;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
     color: var(--text-secondary);
     cursor: pointer;
     font-size: 0.75rem;

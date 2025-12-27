@@ -293,18 +293,70 @@ func (h *Handler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HealthCheck returns health status as HTML
+// detectResponseFormat returns the response format based on Accept header
+// Per AI.md PART 19: Content Negotiation
+func detectResponseFormat(r *http.Request) string {
+	// 1. Check for .txt extension
+	if strings.HasSuffix(r.URL.Path, ".txt") {
+		return "text/plain"
+	}
+
+	// 2. Check Accept header
+	accept := r.Header.Get("Accept")
+
+	switch {
+	case strings.Contains(accept, "application/json"):
+		return "application/json"
+	case strings.Contains(accept, "text/plain"):
+		return "text/plain"
+	case strings.Contains(accept, "text/html"):
+		return "text/html"
+	default:
+		// 3. Default based on endpoint type
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			return "application/json"
+		}
+		return "text/html"
+	}
+}
+
+// HealthCheck returns health status with content negotiation
+// Per AI.md PART 19: Supports HTML (default), JSON (Accept: application/json), and Text
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
+	format := detectResponseFormat(r)
+
+	enabledEngines := h.engineMgr.EnabledCount()
+	status := "healthy"
+
+	switch format {
+	case "application/json":
+		// JSON format per AI.md PART 15
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]interface{}{
+			"status":  status,
+			"version": h.cfg.Server.Title,
+			"engines": enabledEngines,
+		}
+		json.NewEncoder(w).Encode(response)
+
+	case "text/plain":
+		// Plain text format for curl/CLI
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "Status: %s\nEngines: %d enabled\n", status, enabledEngines)
+
+	default:
+		// HTML format (default)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!DOCTYPE html>
 <html>
 <head><title>Health Check</title></head>
 <body>
 <h1>Vidveil Health Check</h1>
 <p>Status: <strong class="text-green">OK</strong></p>
-<p>Engines: ` + strconv.Itoa(h.engineMgr.EnabledCount()) + ` enabled</p>
+<p>Engines: ` + strconv.Itoa(enabledEngines) + ` enabled</p>
 </body>
 </html>`))
+	}
 }
 
 // RobotsTxt returns robots.txt
@@ -719,11 +771,9 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIHealthCheck returns health status as JSON per TEMPLATE.md PART 23
+// APIHealthCheck returns health status as JSON per AI.md PART 15
 // Returns comprehensive health status with checks object for database/cache/disk/engines
 func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
-	startTime := time.Now()
-
 	// Build checks object with individual component health
 	checks := make(map[string]interface{})
 	overallHealthy := true
@@ -794,23 +844,32 @@ func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	checks["engines"] = enginesStatus
 
 	// Overall status
-	overallStatus := "ok"
+	overallStatus := "healthy"
 	if !overallHealthy {
 		overallStatus = "degraded"
 	}
 
-	// Build response
+	// Get hostname
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
+
+	// Build response per AI.md PART 15
 	response := map[string]interface{}{
-		"success": true,
-		"data": map[string]interface{}{
-			"status":    overallStatus,
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
-			"version":   "0.2.0",
-			"mode":      h.cfg.Server.Mode,
-			"uptime":    getUptime(),
-			"checks":    checks,
-			"response_time_ms": time.Since(startTime).Milliseconds(),
+		"status":    overallStatus,
+		"version":   "0.2.0",
+		"mode":      h.cfg.Server.Mode,
+		"uptime":    getUptime(),
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"node": map[string]interface{}{
+			"id":       "standalone",
+			"hostname": hostname,
 		},
+		"cluster": map[string]interface{}{
+			"enabled": false,
+		},
+		"checks": checks,
 	}
 
 	h.jsonResponse(w, response)

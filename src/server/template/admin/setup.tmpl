@@ -207,7 +207,20 @@
         const confirm = document.getElementById('confirm').value;
         if (pass !== confirm) {
             e.preventDefault();
-            alert('Passwords do not match');
+            // Show error message in the UI instead of alert()
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.setAttribute('role', 'alert');
+            errorDiv.textContent = 'Passwords do not match';
+            errorDiv.style.cssText = 'color: var(--error); padding: 0.5rem; margin: 1rem 0; border: 1px solid var(--error); border-radius: 4px; background: rgba(255, 85, 85, 0.1);';
+
+            // Remove any existing error messages
+            const existing = document.querySelector('.error-message');
+            if (existing) existing.remove();
+
+            // Insert error before submit button
+            const form = document.getElementById('setup-form');
+            form.insertBefore(errorDiv, form.querySelector('button[type="submit"]'));
         }
     });
     </script>

@@ -4,18 +4,18 @@
     <form id="branding-form" onsubmit="saveBranding(event)">
         <div class="form-group">
             <label for="site-title">Site Title</label>
-            <input type="text" id="site-title" value="{{.Config.Server.Title}}" placeholder="Vidveil">
-            <p class="help-text">Displayed in browser tab and header</p>
+            <input type="text" id="site-title" value="{{.Config.Server.Title}}" placeholder="Vidveil" aria-describedby="site-title-help">
+            <p class="help-text" id="site-title-help">Displayed in browser tab and header</p>
         </div>
         <div class="form-group">
             <label for="site-tagline">Tagline</label>
-            <input type="text" id="site-tagline" value="{{.Config.Server.Branding.Tagline}}" placeholder="Privacy-First Video Search">
-            <p class="help-text">Short description shown below title</p>
+            <input type="text" id="site-tagline" value="{{.Config.Server.Branding.Tagline}}" placeholder="Privacy-First Video Search" aria-describedby="site-tagline-help">
+            <p class="help-text" id="site-tagline-help">Short description shown below title</p>
         </div>
         <div class="form-group">
             <label for="site-description">Description</label>
-            <textarea id="site-description" rows="3" placeholder="Meta description for SEO">{{.Config.Server.Description}}</textarea>
-            <p class="help-text">Used for SEO meta tags</p>
+            <textarea id="site-description" rows="3" placeholder="Meta description for SEO" aria-describedby="site-description-help">{{.Config.Server.Description}}</textarea>
+            <p class="help-text" id="site-description-help">Used for SEO meta tags</p>
         </div>
         <div class="button-group">
             <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -55,13 +55,13 @@
         </div>
         <div class="form-group">
             <label for="logo-file">Upload New Logo</label>
-            <input type="file" id="logo-file" accept=".svg,.png,.jpg,.jpeg">
-            <p class="help-text">SVG recommended, max 512KB</p>
+            <input type="file" id="logo-file" accept=".svg,.png,.jpg,.jpeg" aria-describedby="logo-help">
+            <p class="help-text" id="logo-help">SVG recommended, max 512KB</p>
         </div>
         <div class="form-group">
             <label for="favicon-file">Upload Favicon</label>
-            <input type="file" id="favicon-file" accept=".ico,.png">
-            <p class="help-text">ICO or PNG, 32x32 or 64x64</p>
+            <input type="file" id="favicon-file" accept=".ico,.png" aria-describedby="favicon-help">
+            <p class="help-text" id="favicon-help">ICO or PNG, 32x32 or 64x64</p>
         </div>
         <div class="button-group">
             <button type="submit" class="btn btn-secondary">Upload</button>

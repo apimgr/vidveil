@@ -897,18 +897,35 @@ func getUptime() string {
 
 func (h *Handler) jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	// Per PART 20: JSON must be indented with 2 spaces and end with single newline
+	formatted, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		h.jsonError(w, "Failed to encode response", "ENCODING_ERROR", http.StatusInternalServerError)
+		return
+	}
+	w.Write(formatted)
+	w.Write([]byte("\n"))
 }
 
 func (h *Handler) jsonError(w http.ResponseWriter, message, code string, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	errorResponse := map[string]interface{}{
 		"success": false,
 		"error":   message,
 		"code":    code,
 		"status":  status,
-	})
+	}
+	// Per PART 20: JSON must be indented with 2 spaces and end with single newline
+	formatted, err := json.MarshalIndent(errorResponse, "", "  ")
+	if err != nil {
+		// Fallback if marshaling fails
+		w.Write([]byte(`{"success":false,"error":"Internal error","code":"ENCODING_ERROR"}`))
+		w.Write([]byte("\n"))
+		return
+	}
+	w.Write(formatted)
+	w.Write([]byte("\n"))
 }
 
 // RenderErrorPage renders a custom error page per TEMPLATE.md PART 30

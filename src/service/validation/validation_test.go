@@ -74,17 +74,23 @@ func TestValidatePassword(t *testing.T) {
 		shouldError bool
 		errorMsg    string
 	}{
-		// Valid passwords
-		{"password123", false, ""},
+		// Valid passwords (must have upper, lower, number, special)
 		{"StrongP@ss1", false, ""},
-		{"12345678", false, ""},
-		// min length
-		{strings.Repeat("a", 8), false, ""},
+		{"Valid123!", false, ""},
+		{"MyP@ssw0rd", false, ""},
 
 		// Invalid - too short
 		{"short", true, "at least 8 characters"},
 		{"1234567", true, "at least 8 characters"},
 		{"", true, "at least 8 characters"},
+
+		// Invalid - missing requirements
+		{"password123", true, "uppercase letter"},
+		{"12345678", true, "uppercase letter"},
+		{strings.Repeat("a", 8), true, "uppercase letter"},
+		{"PASSWORD123", true, "lowercase letter"},
+		{"PasswordABC", true, "number"},
+		{"Password123", true, "special character"},
 	}
 
 	for _, tt := range tests {

@@ -100,6 +100,9 @@ type ServerConfig struct {
 
 	// Users (PART 31)
 	Users UsersConfig `yaml:"users"`
+
+	// Security (PART 22) - Blocklists, CVE, etc
+	Security SecurityConfig `yaml:"security"`
 }
 
 // AdminConfig holds admin panel settings
@@ -394,6 +397,35 @@ type SecurityHeadersConfig struct {
 	ReferrerPolicy      string `yaml:"referrer_policy"`
 	CSP                 string `yaml:"csp"`
 }
+
+// SecurityConfig holds security-related settings per PART 22
+type SecurityConfig struct {
+	Dir        string          `yaml:"dir"`
+	Blocklists BlocklistsConfig `yaml:"blocklists"`
+	CVE        CVEConfig       `yaml:"cve"`
+}
+
+// BlocklistsConfig holds IP/domain blocklist settings per PART 22
+type BlocklistsConfig struct {
+	Enabled bool                `yaml:"enabled"`
+	Sources []BlocklistSource   `yaml:"sources"`
+}
+
+// BlocklistSource represents a blocklist source per PART 22
+type BlocklistSource struct {
+	Name    string `yaml:"name"`
+	URL     string `yaml:"url"`
+	Type    string `yaml:"type"`    // "ip" or "domain"
+	Enabled bool   `yaml:"enabled"`
+}
+
+// CVEConfig holds CVE database settings per PART 22
+type CVEConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	Source       string `yaml:"source"`
+	FilterByCPE  bool   `yaml:"filter_by_cpe"`
+}
+
 
 // SessionConfig holds session settings
 type SessionConfig struct {

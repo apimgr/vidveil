@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+"io"
+"net/url"
 
 	"github.com/go-chi/chi/v5"
 
@@ -1036,4 +1038,60 @@ func (h *Handler) renderTemplate(w http.ResponseWriter, name string, data map[st
 	if err := tmpl.ExecuteTemplate(w, templateName, data); err != nil {
 		http.Error(w, "Template execution error: "+err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// ProxyThumbnail proxies external thumbnails to prevent tracking
+// Per AI.md PART 36 lines 29497-29507
+func (h *Handler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
+// Get URL parameter
+encodedURL := r.URL.Query().Get("url")
+if encodedURL == "" {
+http.Error(w, "Missing url parameter", http.StatusBadRequest)
+return
+}
+
+// Decode URL
+thumbURL, err := url.QueryUnescape(encodedURL)
+if err != nil {
+http.Error(w, "Invalid url parameter", http.StatusBadRequest)
+return
+}
+
+// Validate URL
+parsedURL, err := url.Parse(thumbURL)
+if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+http.Error(w, "Invalid thumbnail URL", http.StatusBadRequest)
+return
+}
+
+
+// Fetch thumbnail
+client := &http.Client{
+Timeout: 10 * time.Second,
+}
+
+resp, err := client.Get(thumbURL)
+if err != nil {
+http.Error(w, "Failed to fetch thumbnail", http.StatusBadGateway)
+return
+}
+defer resp.Body.Close()
+
+if resp.StatusCode != http.StatusOK {
+http.Error(w, "Thumbnail not found", http.StatusNotFound)
+return
+}
+
+// Copy content type
+contentType := resp.Header.Get("Content-Type")
+if contentType == "" {
+contentType = "image/jpeg" // Default
+}
+w.Header().Set("Content-Type", contentType)
+
+// Cache control per AI.md PART 36: 1 hour
+w.Header().Set("Cache-Control", "public, max-age=3600")
+
+// Proxy the image
+io.Copy(w, resp.Body)
 }

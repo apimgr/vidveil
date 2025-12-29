@@ -762,7 +762,7 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 
 ---
 
-# HOW TO USE THIS TEMPLATE
+
 # AI ASSISTANT INSTRUCTIONS (READ THIS ENTIRE SECTION)
 
 ## ⚠️ STEP 1: CHECK WHICH FILE TO USE ⚠️
@@ -953,44 +953,44 @@ Use this index for general navigation only. Do not rely on these line numbers fo
 
 | PART | Lines | Topic | When to Read |
 |------|-------|-------|--------------|
-| 0 | 1175-2238 | AI Assistant Rules | **ALWAYS READ FIRST** |
-| 1 | 2239-2843 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | 2844-3214 | License & Attribution | License requirements |
-| 3 | 3215-3976 | Project Structure | Setting up new project |
-| 4 | 3977-4142 | OS-Specific Paths | Path handling |
-| 5 | 4143-5178 | Configuration | Config file work |
-| 6 | 5179-5782 | Application Modes | Mode handling, debug endpoints |
-| 7 | 5783-8169 | Server Binary CLI | CLI flags/commands |
-| 8 | 8170-8225 | Update Command | Update feature |
-| 9 | 8226-8611 | Privilege Escalation & Service | Service/privilege work |
-| 10 | 8612-8629 | Service Support | Systemd/service |
-| 11 | 8630-8786 | Binary Requirements | Binary building |
-| 12 | 8787-9311 | Makefile | Build system |
-| 13 | 9312-10420 | Testing & Development | Testing/dev workflow |
-| 14 | 10421-11381 | Docker | Docker/containers |
-| 15 | 11382-13545 | CI/CD Workflows | GitHub/Gitea Actions |
-| 16 | 13546-13669 | Health & Versioning | Health endpoints |
-| 17 | 13670-15563 | Web Frontend | Frontend/UI work |
-| 18 | 15564-15802 | Server Configuration | Server settings |
-| 19 | 15803-16523 | Admin Panel | Admin UI |
-| 20 | 16524-17543 | API Structure | REST/GraphQL/Compatibility API |
-| 21 | 17544-18221 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 22 | 18222-19697 | Security & Logging | Security features |
-| 23 | 19698-22744 | User Management | Users/auth/sessions |
-| 24 | 22745-22877 | Database & Cluster | Database work |
-| 25 | 22878-23282 | Backup & Restore | Backup features |
-| 26 | 23283-24616 | Email & Notifications | Email/SMTP |
-| 27 | 24617-24944 | Scheduler | Background tasks |
-| 28 | 24945-25017 | GeoIP | GeoIP features |
-| 29 | 25018-26038 | Metrics | Metrics/monitoring |
-| 30 | 26039-26631 | Tor Hidden Service | Tor support |
-| 31 | 26632-26689 | Error Handling & Caching | Error/cache |
-| 32 | 26690-26712 | I18N & A11Y | Internationalization |
-| 33 | 26713-27429 | ReadTheDocs Documentation | Documentation |
-| 34 | 27430-27992 | CLI Client | **OPTIONAL** - CLI tool |
-| 35 | 27993-28926 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 36 | 28927-29151 | Project-Specific Sections | Business logic only |
-| FINAL | 29152-29933 | Compliance Checklist | Final verification |
+| 0 | 1296-2446 | AI Assistant Rules | **ALWAYS READ FIRST** |
+| 1 | 2447-3052 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | 3053-3423 | License & Attribution | License requirements |
+| 3 | 3424-4191 | Project Structure | Setting up new project |
+| 4 | 4192-4357 | OS-Specific Paths | Path handling |
+| 5 | 4358-5394 | Configuration | Config file work |
+| 6 | 5395-6002 | Application Modes | Mode handling, debug endpoints |
+| 7 | 6003-8407 | Server Binary CLI | CLI flags/commands |
+| 8 | 8408-8463 | Update Command | Update feature |
+| 9 | 8464-8850 | Privilege Escalation & Service | Service/privilege work |
+| 10 | 8851-8868 | Service Support | Systemd/service |
+| 11 | 8869-9025 | Binary Requirements | Binary building |
+| 12 | 9026-9550 | Makefile | Build system |
+| 13 | 9551-10659 | Testing & Development | Testing/dev workflow |
+| 14 | 10660-11620 | Docker | Docker/containers |
+| 15 | 11621-13784 | CI/CD Workflows | GitHub/Gitea Actions |
+| 16 | 13785-13908 | Health & Versioning | Health endpoints |
+| 17 | 13909-15804 | Web Frontend | Frontend/UI work |
+| 18 | 15805-16043 | Server Configuration | Server settings |
+| 19 | 16044-16764 | Admin Panel | Admin UI |
+| 20 | 16765-17787 | API Structure | REST/GraphQL/Compatibility API |
+| 21 | 17788-18473 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 22 | 18474-19959 | Security & Logging | Security features |
+| 23 | 19960-23006 | User Management | Users/auth/sessions |
+| 24 | 23007-23139 | Database & Cluster | Database work |
+| 25 | 23140-23546 | Backup & Restore | Backup features |
+| 26 | 23547-24880 | Email & Notifications | Email/SMTP |
+| 27 | 24881-25208 | Scheduler | Background tasks |
+| 28 | 25209-25281 | GeoIP | GeoIP features |
+| 29 | 25282-26302 | Metrics | Metrics/monitoring |
+| 30 | 26303-26896 | Tor Hidden Service | Tor support |
+| 31 | 26897-26954 | Error Handling & Caching | Error/cache |
+| 32 | 26955-26977 | I18N & A11Y | Internationalization |
+| 33 | 26978-27694 | ReadTheDocs Documentation | Documentation |
+| 34 | 27695-28354 | CLI Client | **OPTIONAL** - CLI tool |
+| 35 | 28355-29293 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 36 | 29294-29528 | Project-Specific Sections | Business logic only (NON-NEGOTIABLE) |
+| FINAL | 29529-30311 | Compliance Checklist | Final verification |
 
 ### How to Read This File
 
@@ -1208,6 +1208,127 @@ BEFORE writing ANY code:
 
 **These rules govern how AI assistants work on projects using this specification.**
 
+## FIRST STEP: AI.md Setup (Token Optimization)
+
+**Template source can be any filename** (TEMPLATE.md, AI.md from another project, downloaded spec, etc.).
+**Destination is ALWAYS AI.md** in the project directory.
+
+**Before ANY other work, set up AI.md. Do NOT fully read the template - copy it first.**
+
+**If working file IS AI.md (existing project):**
+```bash
+# Already have the project spec - just read and work
+# 1. Read AI.md (this IS the spec)
+# 2. Begin work
+# 3. Update PART 36 as project evolves
+```
+No copying needed. AI.md is the complete standalone spec for this project.
+
+## ⛔ CRITICAL: STOP READING TEMPLATE AFTER SETUP COMPLETE
+
+**Once AI.md is set up and ready, NEVER read the template source again.**
+
+| AI.md Status | Action |
+|--------------|--------|
+| **Exists and ready** | Read AI.md ONLY. Template source does not exist for you. |
+| **Does not exist** | Copy → Edit → Then AI.md ONLY (see workflow below). |
+
+**Complete workflow when AI.md does NOT exist:**
+```bash
+# 1. Copy template to AI.md (no full read of template needed)
+cp <template_source> AI.md
+
+# 2. NOW read AI.md (not the template source)
+
+# 3. Replace ALL variables in AI.md:
+#    - vidveil → actual project name (e.g., jokes)
+#    - apimgr → actual org name (e.g., apimgr)
+#    - VIDVEIL → uppercase (e.g., JOKES)
+#    - Any other {variables}
+
+# 4. Update PART 36 in AI.md with project-specific content:
+#    - Project description and purpose
+#    - Business data models
+#    - API endpoint purposes
+#    - Validation rules
+#    - Project-specific features
+
+# 5. STOP - AI.md is now complete
+# 6. FROM THIS POINT: Read AI.md ONLY, template source is dead
+```
+
+**After AI.md setup is complete:**
+1. ✅ Close/forget template source completely
+2. ✅ All reads from AI.md only
+3. ✅ All updates to AI.md only
+4. ❌ NEVER go back to the template source
+5. ❌ NEVER reference template source line numbers
+6. ❌ NEVER compare AI.md to template source
+
+**Why this matters:** Reading both files causes confusion. Template has `{variables}`, AI.md has real values. Template is generic, AI.md is project-specific. Pick ONE - always AI.md.
+
+**Rule: Once AI.md setup is complete, the template source is dead to you.**
+
+**If AI.md ALREADY exists but needs template update/refresh:**
+```bash
+# 1. Create temp directory per project standards
+BACKUP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG:-apimgr}.XXXXXX")
+
+# 2. Extract PART 36 from existing AI.md (preserve business logic)
+#    Save everything from "# PART 36:" to "# FINAL CHECKPOINT:"
+#    to ${BACKUP_DIR}/part36_backup.md
+
+# 3. Copy fresh template
+cp <template_source> AI.md
+
+# 4. Restore PART 36 from backup
+#    Replace PART 36 section in AI.md with saved content from ${BACKUP_DIR}/part36_backup.md
+
+# 5. Verify {variables} are replaced
+# 6. Read AI.md (NOT the template source)
+# 7. STOP - template source is now dead to you
+# 8. Continue work using AI.md only
+# 9. Temp dir auto-cleans on reboot (or rm -rf ${BACKUP_DIR} when done)
+```
+
+**If migrating from old spec files (CLAUDE.md, SPEC.md, or outdated AI.md):**
+
+Extract ONLY the **WHAT** (business logic), NOT the **HOW** (implementation patterns).
+
+| Extract (WHAT) | Ignore (HOW) |
+|----------------|--------------|
+| Project purpose/description | Directory structure rules |
+| Business data models | Config file format |
+| API endpoint purposes | CLI flag patterns |
+| Validation rules | Docker patterns |
+| Project-specific features | CI/CD workflows |
+| Data sources | Testing patterns |
+| Business workflows | Security implementation |
+
+```bash
+# 1. Copy fresh template first
+cp <template_source> AI.md
+
+# 2. From old file, extract ONLY business logic:
+#    - Project description
+#    - What endpoints DO (not how they're structured)
+#    - Data models and their PURPOSE
+#    - Business rules and validation
+#    - Project-specific features
+
+# 3. Put extracted content into PART 36 of AI.md
+
+# 4. Replace {variables} in AI.md
+
+# 5. DELETE old spec file (CLAUDE.md, SPEC.md, etc.)
+
+# 6. Read AI.md (NOT the template source)
+
+# 7. STOP - template source is now dead to you
+```
+
+**Rule:** The template's PARTS 1-35 define ALL implementation patterns. Old spec files may have outdated or conflicting patterns - ignore them. Only preserve the business logic. Once AI.md is ready, NEVER read the template source again.
+
 ## CRITICAL: Specification Drift is Unacceptable
 
 **AI assistants drift from specifications over time.** This means:
@@ -1319,15 +1440,15 @@ See PART 36 in AI.md for the full project breakdown.
 2. If `AI.md` exists → Read it (it is the complete standalone spec for this project)
 3. If old spec files exist in project repo → Merge into `AI.md`, DELETE old files
 
-**Important:** AI.md is created from TEMPLATE.md **once**. After creation, AI.md is the complete standalone spec and does NOT reference or sync with TEMPLATE.md.
+**Important:** AI.md is created from the template **once**. After creation, AI.md is the complete standalone spec and does NOT reference or sync with the template source.
 
-**Migration Rules (when copying TEMPLATE.md → AI.md):**
+**Migration Rules (when copying template → AI.md):**
 
 | Priority | Action | Description |
 |----------|--------|-------------|
-| 1 | **Copy template** | Copy TEMPLATE.md to project as AI.md |
+| 1 | **Copy template** | Copy template source to project as AI.md |
 | 2 | **Replace variables** | `vidveil`, `apimgr` with actual values |
-| 3 | **Replace references** | `TEMPLATE.md` → `AI.md`, `TEMPLATE` → `AI` |
+| 3 | **Replace references** | `TEMPLATE.md` → `AI.md`, `TEMPLATE` → `AI` (if present) |
 | 4 | **Update project sections** | Fill in PART 36 with actual project details |
 
 **Variable Replacements:**
@@ -1335,8 +1456,8 @@ See PART 36 in AI.md for the full project breakdown.
 |------|--------------|---------|
 | `vidveil` | Actual project name | `jokes` |
 | `apimgr` | Actual org name | `apimgr` |
-| `TEMPLATE.md` | `AI.md` | References to this file |
-| `TEMPLATE` (as document name) | `AI` | "read the TEMPLATE" → "read the AI" |
+| `TEMPLATE.md` | `AI.md` | References to template file (if present) |
+| `TEMPLATE` (as document name) | `AI` | "read the TEMPLATE" → "read the AI" (if present) |
 
 **Project-Specific Sections (PART 36) - MUST be updated:**
 - Project description, purpose, and intent
@@ -2124,46 +2245,49 @@ ls -la docker/
 |------|---------|----------|
 | 0 | AI Assistant Rules | ✅ Follow always |
 | 1 | Critical Rules | ✅ Follow always |
-| 2 | Project Structure | ✅ Implement fully |
-| 3 | OS-Specific Paths | ✅ Implement fully |
-| 4 | Configuration | ✅ Implement fully |
-| 5 | Application Modes & Debug | ✅ Implement fully |
-| 6 | Server Binary CLI | ✅ Implement fully |
-| 7 | Update Command | ✅ Implement fully |
-| 8 | Privilege Escalation | ✅ Implement fully |
-| 9 | Service Support | ✅ Implement fully |
-| 10 | Binary Requirements | ✅ Implement fully |
-| 11 | Makefile | ✅ Implement fully |
-| 12 | Testing & Development | ✅ Implement fully |
-| 13 | Docker | ✅ Implement fully |
-| 14 | CI/CD Workflows | ✅ Implement fully |
-| 15 | Health & Versioning | ✅ Implement fully |
-| 16 | Web Frontend | ✅ Implement fully |
-| 17 | Server Configuration | ✅ Implement fully |
-| 18 | Admin Panel | ✅ Implement fully |
-| 19 | API Structure | ✅ Implement fully |
-| 20 | SSL/TLS & Let's Encrypt | ✅ Implement fully |
-| 21 | Security & Logging | ✅ Implement fully |
-| 22 | User Management | ✅ Implement fully |
-| 23 | Database & Cluster | ✅ Implement fully |
-| 24 | Backup & Restore | ✅ Implement fully |
-| 25 | Email & Notifications | ✅ Implement fully |
-| 26 | Scheduler | ✅ Implement fully |
-| 27 | GeoIP | ✅ Implement fully |
-| 28 | Metrics | ✅ Implement fully |
-| 29 | Tor Hidden Service | ✅ Implement fully |
-| 30 | Error Handling & Caching | ✅ Implement fully |
-| 31 | I18N & A11Y | ✅ Implement fully |
-| 32 | Project-Specific Sections | ✅ Customize for project |
-| 35 | ReadTheDocs Documentation | ✅ Implement fully |
+| 2 | License & Attribution | ✅ Implement fully |
+| 3 | Project Structure | ✅ Implement fully |
+| 4 | OS-Specific Paths | ✅ Implement fully |
+| 5 | Configuration | ✅ Implement fully |
+| 6 | Application Modes | ✅ Implement fully |
+| 7 | Server Binary CLI | ✅ Implement fully |
+| 8 | Update Command | ✅ Implement fully |
+| 9 | Privilege Escalation & Service | ✅ Implement fully |
+| 10 | Service Support | ✅ Implement fully |
+| 11 | Binary Requirements | ✅ Implement fully |
+| 12 | Makefile | ✅ Implement fully |
+| 13 | Testing & Development | ✅ Implement fully |
+| 14 | Docker | ✅ Implement fully |
+| 15 | CI/CD Workflows | ✅ Implement fully |
+| 16 | Health & Versioning | ✅ Implement fully |
+| 17 | Web Frontend | ✅ Implement fully |
+| 18 | Server Configuration | ✅ Implement fully |
+| 19 | Admin Panel | ✅ Implement fully |
+| 20 | API Structure | ✅ Implement fully |
+| 21 | SSL/TLS & Let's Encrypt | ✅ Implement fully |
+| 22 | Security & Logging | ✅ Implement fully |
+| 23 | User Management | ✅ Implement fully |
+| 24 | Database & Cluster | ✅ Implement fully |
+| 25 | Backup & Restore | ✅ Implement fully |
+| 26 | Email & Notifications | ✅ Implement fully |
+| 27 | Scheduler | ✅ Implement fully |
+| 28 | GeoIP | ✅ Implement fully |
+| 29 | Metrics | ✅ Implement fully |
+| 30 | Tor Hidden Service | ✅ Implement fully |
+| 31 | Error Handling & Caching | ✅ Implement fully |
+| 32 | I18N & A11Y | ✅ Implement fully |
+| 33 | ReadTheDocs Documentation | ✅ Implement fully |
+| 36 | Project-Specific Sections | ✅ Customize for project (NON-NEGOTIABLE) |
 | FINAL | Compliance Checklist | ✅ Verify all items |
 
-### OPTIONAL Sections (AI Must Decide)
+### OPTIONAL Sections (Become NON-NEGOTIABLE When Implemented)
+
+**IMPORTANT:** Optional sections are a per-project decision. However, once a project implements an optional feature, that entire PART becomes NON-NEGOTIABLE and must be followed exactly.
 
 | PART | Section | When to Include |
 |------|---------|-----------------|
-| 33 | CLI Client | If project needs command-line client tool |
-| 34 | Custom Domains | If users/orgs need branded domains (see decision table below) |
+| 34 | CLI Client | If project needs command-line client tool |
+| 35 | Custom Domains | If users/orgs need branded domains (see decision table below) |
 
 ### Optional Section Decision Guide
 
@@ -2176,6 +2300,8 @@ ls -la docker/
 | Database management | Static content site | Bulk operations via CLI |
 
 **PART 35: Custom Domains** (see PART 35 for full decision table)
+
+**Once implemented, the optional PART becomes NON-NEGOTIABLE.**
 
 | Include | Skip | Reason |
 |---------|------|--------|
@@ -2355,7 +2481,7 @@ make dev                    # Quick build to {tempdir}/apimgr.XXXXXX/vidveil
 make build                  # Full build to binaries/
 
 # ALSO CORRECT - Direct Docker (for one-offs, use random temp dir)
-PROJECTORG=$(basename "$(dirname "$(pwd)")") && BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX") && docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/vidveil src
+PROJECTORG=$(basename "$(dirname "$(pwd)")") && BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/$APIMGR.XXXXXX") && docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/vidveil src
 
 # WRONG - Never run go directly on host
 go build -o binary/vidveil src
@@ -8993,7 +9119,7 @@ format_version_tag() {
 |---------|------|---------|
 | Host Build | `binaries/vidveil` | `binaries/jokes` |
 | Distribution | `vidveil-{os}-{arch}` | `jokes-linux-amd64` |
-| Local/Testing | `$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")/vidveil` | Org-prefixed temp dir |
+| Local/Testing | `$(mktemp -d "${TMPDIR:-/tmp}/$APIMGR.XXXXXX")/vidveil` | Org-prefixed temp dir |
 
 **If built with musl → strip binary before release. Final name has NO `-musl` suffix.**
 
@@ -9262,7 +9388,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 3. No `-ldflags` (version info not embedded)
 4. Outputs to `{tempdir}/apimgr.XXXXXX/vidveil` (isolated, org-identifiable)
 5. Uses Docker (`golang:alpine`) - keeps host clean
-6. Easy cleanup: `rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/` or auto-deleted on reboot
+6. Easy cleanup: `rm -rf "${TMPDIR:-/tmp}"/$APIMGR.*/` or auto-deleted on reboot
 
 **When to use:**
 
@@ -9475,7 +9601,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 **REQUIRED:**
 - ✓ `/tmp/apimgr/vidveil-XXXXXX/` - Full structure
 - ✓ `/tmp/apimgr/jokes-aB3xY9/` - Org + project + random
-- ✓ `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` - Proper command
+- ✓ `mktemp -d "${TMPDIR:-/tmp}/$APIMGR/$VIDVEIL-XXXXXX"` - Proper command
 
 **See "Inferring Variables from Path" section for how to detect `ORG` and `PROJECT`.**
 
@@ -9485,7 +9611,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 | Language | How to Create Prefixed Temp Dir |
 |----------|--------------------------------|
-| Shell | `mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}" && mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` |
+| Shell | `mkdir -p "${TMPDIR:-/tmp}/$APIMGR" && mktemp -d "${TMPDIR:-/tmp}/$APIMGR/$VIDVEIL-XXXXXX"` |
 | Go | `os.MkdirAll(filepath.Join(os.TempDir(), projectOrg), 0755); os.MkdirTemp(filepath.Join(os.TempDir(), projectOrg), projectName+"-")` |
 | Python | `os.makedirs(f"{tempfile.gettempdir()}/{project_org}", exist_ok=True); tempfile.mkdtemp(prefix=f"{project_name}-", dir=f"{tempfile.gettempdir()}/{project_org}")` |
 
@@ -9522,10 +9648,10 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 ```bash
 # Find all temp dirs for this org
-ls -la "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
+ls -la "${TMPDIR:-/tmp}"/$APIMGR.*/
 
 # Clean all temp dirs for this org
-rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
+rm -rf "${TMPDIR:-/tmp}"/$APIMGR.*/
 ```
 
 ### Correct vs Incorrect
@@ -9536,7 +9662,7 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 | `/tmp/myfile` | `/tmp/apimgr/jokes-aB3xY9/myfile` | Always use org/project structure |
 | `/tmp/jokes` | `/tmp/apimgr/jokes-kL9mN2/` | Missing org, missing random suffix |
 | `/tmp/test-data/` | `/tmp/apimgr/jokes-Qw5rT1/test-data/` | Generic path not allowed |
-| `mktemp -d` | `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` | Must include org/project |
+| `mktemp -d` | `mktemp -d "${TMPDIR:-/tmp}/$APIMGR/$VIDVEIL-XXXXXX"` | Must include org/project |
 | `os.TempDir()` alone | `os.MkdirTemp(filepath.Join(os.TempDir(), projectOrg), projectName+"-")` | Must nest under org |
 | Hardcoded org name | Detect from git remote or path | Auto-detect, never hardcode |
 
@@ -9784,7 +9910,7 @@ docker run --rm -v $(pwd):/build -w /build golang:alpine go test -cover ./...
 
 ```bash
 # 1. Build in Docker (always use Docker for builds)
-BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/$APIMGR.XXXXXX")
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
   golang:alpine go build -o /build/binaries/vidveil src
 
@@ -9854,7 +9980,7 @@ PROJECTNAME=$(basename "$PWD")
 PROJECTORG=$(basename "$(dirname "$PWD")")
 
 # Create temp directory for build
-BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/$APIMGR.XXXXXX")
 trap "rm -rf $BUILD_DIR" EXIT
 
 echo "Building binary in Docker..."
@@ -9959,7 +10085,7 @@ PROJECTORG=$(basename "$(dirname "$PWD")")
 CONTAINER_NAME="test-$VIDVEIL-$$"
 
 # Create temp directory for build
-BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/$APIMGR.XXXXXX")
 trap "rm -rf $BUILD_DIR; incus delete $CONTAINER_NAME --force 2>/dev/null || true" EXIT
 
 echo "Building binary in Docker..."
@@ -10130,8 +10256,8 @@ else
     exit 1
 fi
 
-# 2. Get setup token from server logs
-SETUP_TOKEN=$(grep -oP 'Setup Token.*:\s*\K[a-f0-9]+' /tmp/server.log | head -1)
+# 2. Get setup token from server logs (using proper temp dir structure)
+SETUP_TOKEN=$(grep -oP 'Setup Token.*:\s*\K[a-f0-9]+' "${TMPDIR:-/tmp}/$APIMGR/$VIDVEIL/server.log" | head -1)
 
 if [ -z "$SETUP_TOKEN" ]; then
     echo "✗ FAILED: No setup token found in logs"
@@ -10335,7 +10461,7 @@ incus delete test-vidveil --force
 
 ```bash
 # Create prefixed temp dir for test data
-TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/$APIMGR.XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build to binaries/
@@ -10365,7 +10491,7 @@ rm -rf $TEST_DIR
 
 ```bash
 # Create prefixed temp dir
-TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/$APIMGR.XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build
@@ -10496,7 +10622,7 @@ rm -rf $TEST_DIR
 | Project binaries | `rm -rf binaries/vidveil*` |
 | Project releases | `rm -rf releases/vidveil*` |
 
-**Note:** Always use `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX"` and save the path to a variable for cleanup. Temp dirs are auto-cleaned on reboot.
+**Note:** Always use `mktemp -d "${TMPDIR:-/tmp}/$APIMGR.XXXXXX"` and save the path to a variable for cleanup. Temp dirs are auto-cleaned on reboot.
 
 ### NEVER Delete Without Confirmation
 
@@ -11138,8 +11264,8 @@ $TEMP_DIR/
 # Set PROJECT_ROOT to your actual project location
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"  # Use git top-level
 # Or use absolute path: PROJECT_ROOT="/path/to/your/project"
-mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/$APIMGR"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/$APIMGR/$VIDVEIL-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
 
 # Copy docker-compose.yml
@@ -12937,8 +13063,8 @@ docker:build:
         --build-arg VERSION="${VERSION}" \
         --build-arg COMMIT_ID="${CI_COMMIT_SHORT_SHA}" \
         --build-arg BUILD_DATE="${BUILD_DATE}" \
-        --label "org.opencontainers.image.vendor=${PROJECTORG}" \
-        --label "org.opencontainers.image.authors=${PROJECTORG}" \
+        --label "org.opencontainers.image.vendor=$APIMGR" \
+        --label "org.opencontainers.image.authors=$APIMGR" \
         --label "org.opencontainers.image.title=$VIDVEIL" \
         --label "org.opencontainers.image.base.name=$VIDVEIL" \
         --label "org.opencontainers.image.description=Containerized version of $VIDVEIL" \
@@ -12949,8 +13075,8 @@ docker:build:
         --label "org.opencontainers.image.url=${CI_PROJECT_URL}" \
         --label "org.opencontainers.image.source=${CI_PROJECT_URL}" \
         --label "org.opencontainers.image.documentation=${CI_PROJECT_URL}" \
-        --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
-        --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
+        --annotation "manifest:org.opencontainers.image.vendor=$APIMGR" \
+        --annotation "manifest:org.opencontainers.image.authors=$APIMGR" \
         --annotation "manifest:org.opencontainers.image.title=$VIDVEIL" \
         --annotation "manifest:org.opencontainers.image.description=Containerized version of $VIDVEIL" \
         --annotation "manifest:org.opencontainers.image.licenses=MIT" \
@@ -13054,8 +13180,8 @@ pipeline {
         PROJECTORG = 'apimgr'
         BINDIR = 'binaries'
         RELDIR = 'releases'
-        GOCACHE = '/tmp/go-cache'
-        GOMODCACHE = '/tmp/go-mod-cache'
+        GOCACHE = "/tmp/$APIMGR/go-cache"
+        GOMODCACHE = "/tmp/$APIMGR/go-mod-cache"
 
         // =========================================================================
         // GIT PROVIDER CONFIGURATION
@@ -13065,22 +13191,22 @@ pipeline {
         // ----- GITHUB (default) -----
         GIT_FQDN = 'github.com'
         GIT_TOKEN = credentials('github-token')  // Jenkins credentials ID
-        REGISTRY = "ghcr.io/${PROJECTORG}/$VIDVEIL"
+        REGISTRY = "ghcr.io/$APIMGR/$VIDVEIL"
 
         // ----- GITEA / FORGEJO (self-hosted) -----
         // GIT_FQDN = 'git.example.com'  // Your Gitea/Forgejo domain
         // GIT_TOKEN = credentials('gitea-token')  // Jenkins credentials ID
-        // REGISTRY = "${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
+        // REGISTRY = "${GIT_FQDN}/$APIMGR/$VIDVEIL"
 
         // ----- GITLAB (gitlab.com or self-hosted) -----
         // GIT_FQDN = 'gitlab.com'  // or your self-hosted GitLab domain
         // GIT_TOKEN = credentials('gitlab-token')  // Jenkins credentials ID
-        // REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
+        // REGISTRY = "registry.${GIT_FQDN}/$APIMGR/$VIDVEIL"
 
         // ----- DOCKER HUB -----
         // GIT_FQDN = 'github.com'  // Git host (separate from registry)
         // GIT_TOKEN = credentials('github-token')
-        // REGISTRY = "docker.io/${PROJECTORG}/$VIDVEIL"
+        // REGISTRY = "docker.io/$APIMGR/$VIDVEIL"
 
         // =========================================================================
     }
@@ -13510,7 +13636,7 @@ pipeline {
                     // Login to container registry
                     // Works with: ghcr.io, registry.gitlab.com, gitea/forgejo, docker.io
                     sh """
-                        echo "\${GIT_TOKEN}" | docker login ${REGISTRY.split('/')[0]} -u ${PROJECTORG} --password-stdin
+                        echo "\${GIT_TOKEN}" | docker login ${REGISTRY.split('/')[0]} -u $APIMGR --password-stdin
                     """
 
                     // Build multi-arch with OCI labels and manifest annotations
@@ -13522,8 +13648,8 @@ pipeline {
                             --build-arg VERSION="${VERSION}" \
                             --build-arg COMMIT_ID="${COMMIT_ID}" \
                             --build-arg BUILD_DATE="${BUILD_DATE}" \
-                            --label "org.opencontainers.image.vendor=${PROJECTORG}" \
-                            --label "org.opencontainers.image.authors=${PROJECTORG}" \
+                            --label "org.opencontainers.image.vendor=$APIMGR" \
+                            --label "org.opencontainers.image.authors=$APIMGR" \
                             --label "org.opencontainers.image.title=$VIDVEIL" \
                             --label "org.opencontainers.image.base.name=$VIDVEIL" \
                             --label "org.opencontainers.image.description=Containerized version of $VIDVEIL" \
@@ -13531,20 +13657,20 @@ pipeline {
                             --label "org.opencontainers.image.version=${VERSION}" \
                             --label "org.opencontainers.image.created=${BUILD_DATE}" \
                             --label "org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
-                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
-                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
-                            --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
-                            --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
+                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/$APIMGR/$VIDVEIL" \
+                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/$APIMGR/$VIDVEIL" \
+                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/$APIMGR/$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.vendor=$APIMGR" \
+                            --annotation "manifest:org.opencontainers.image.authors=$APIMGR" \
                             --annotation "manifest:org.opencontainers.image.title=$VIDVEIL" \
                             --annotation "manifest:org.opencontainers.image.description=Containerized version of $VIDVEIL" \
                             --annotation "manifest:org.opencontainers.image.licenses=MIT" \
                             --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
                             --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
                             --annotation "manifest:org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
-                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
-                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/$APIMGR/$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/$APIMGR/$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/$APIMGR/$VIDVEIL" \
                             ${tags} \
                             --push \
                             .
@@ -13571,7 +13697,7 @@ pipeline {
 | Agent labels | `amd64` and `arm64` MUST be available |
 | Docker | Required on all agents (builds use golang:alpine) |
 | Docker buildx | Required on amd64 agent for multi-arch builds |
-| Go caches | `/tmp/go-cache` and `/tmp/go-mod-cache` |
+| Go caches | `/tmp/apimgr/go-cache` and `/tmp/apimgr/go-mod-cache` |
 
 ### Credentials Setup (Jenkins → Credentials → Add Credentials)
 
@@ -13602,17 +13728,17 @@ In the Jenkinsfile, uncomment the appropriate block:
 // ----- GITHUB (default) -----
 GIT_FQDN = 'github.com'
 GIT_TOKEN = credentials('github-token')
-REGISTRY = "ghcr.io/${PROJECTORG}/$VIDVEIL"
+REGISTRY = "ghcr.io/$APIMGR/$VIDVEIL"
 
 // ----- GITEA / FORGEJO (self-hosted) -----
 // GIT_FQDN = 'git.example.com'
 // GIT_TOKEN = credentials('gitea-token')
-// REGISTRY = "${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
+// REGISTRY = "${GIT_FQDN}/$APIMGR/$VIDVEIL"
 
 // ----- GITLAB (gitlab.com or self-hosted) -----
 // GIT_FQDN = 'gitlab.com'
 // GIT_TOKEN = credentials('gitlab-token')
-// REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
+// REGISTRY = "registry.${GIT_FQDN}/$APIMGR/$VIDVEIL"
 ```
 
 ### Triggers Comparison
@@ -27557,11 +27683,13 @@ make test
 
 ---
 
-# PART 34: CLI CLIENT (PER-PROJECT)
+# PART 34: CLI CLIENT (OPTIONAL - NON-NEGOTIABLE WHEN IMPLEMENTED)
 
 ## Overview
 
 **CLI client is a PER-PROJECT determination.** Not all projects require a CLI client.
+
+**IMPORTANT: Once a project implements a CLI client, this entire PART becomes NON-NEGOTIABLE.** The CLI must follow all standards defined here exactly.
 
 When a project includes a CLI client, it provides a terminal-based interface for interacting with the server. The CLI supports both standard command-line usage and an interactive TUI (Terminal User Interface) mode.
 
@@ -28215,11 +28343,13 @@ Build Info:
 ---
 
 
-# PART 35: CUSTOM DOMAINS (OPTIONAL PER-PROJECT)
+# PART 35: CUSTOM DOMAINS (OPTIONAL - NON-NEGOTIABLE WHEN IMPLEMENTED)
 
 ## Overview
 
 **Custom domains is an OPTIONAL feature that allows users or organizations to use their own domains with the application.** Not all projects need this feature.
+
+**IMPORTANT: Once a project implements custom domains, this entire PART becomes NON-NEGOTIABLE.** The implementation must follow all standards defined here exactly.
 
 | Attribute | Description |
 |-----------|-------------|
@@ -29154,477 +29284,165 @@ When implementing custom domains for a project:
 
 # PART 36: PROJECT-SPECIFIC SECTIONS
 
-**This section defines WHAT your project does (business logic, intent, unique features), NOT HOW to implement it.**
-
-## ⚠️ CRITICAL: Business Logic Only
-
-**PARTS 1-35 define HOW to build (standards, patterns, structure).**
-**PART 36 defines WHAT this project does (business logic, unique features).**
-
-**PART 36 should contain:**
-- ✓ Business purpose and intent
-- ✓ Unique data structures and models
-- ✓ Business rules and validation logic
-- ✓ Data sources and content
-- ✓ Special algorithms or logic
-- ✓ Project-specific features
-
-**PART 36 should NOT contain:**
-- ✗ Route implementation details (follow PART 20: API Structure)
-- ✗ HTML/CSS/frontend patterns (follow PART 17: Web Frontend)
-- ✗ Config file format/structure (follow PART 5: Configuration)
-- ✗ Database table schemas (follow PART 24: Database)
-- ✗ Authentication patterns (follow PART 23: User Management)
-- ✗ Testing approaches (follow PART 13: Testing)
-
-**Rule: AI reads PART 36 for business logic, then implements using standards from PARTS 1-35.**
-
----
+**VidVeil: Privacy-respecting meta search for adult video content**
 
 ## Project Business Purpose
 
 **Purpose:** Privacy-respecting meta search for adult video content by aggregating results from 47+ adult video sites without tracking or logging user activity.
 
 **Target Users:**
-- Privacy-conscious users seeking adult content without tracking or logging
-- Users wanting to search multiple adult video sites simultaneously  
-- Users requiring anonymous access via Tor hidden services
-- Self-hosters wanting private adult content search infrastructure
-- Developers building adult content aggregation services
+- Privacy-conscious users seeking adult content without tracking
+- Users wanting to search multiple sites simultaneously
+- Users requiring anonymous access via Tor
+- Self-hosters wanting private search infrastructure
+- Developers building adult content services
 
 **Unique Value:**
-- Zero tracking: No user activity logging, no analytics, no cookies (except admin sessions)
-- 47 search engines: Aggregates results from major and niche adult video sites
-- Bang shortcuts: Type `!phamateur`tosearchPornHubdirectly,orcombinemultiplebangs
-- Fast API integration: Direct JSON APIs for PornHub, RedTube, Eporner (no scraping needed)
-- SSE streaming: Real-time result delivery as each engine responds (progressive results)
-- Autocomplete: Bang shortcuts autocomplete as you type for quick access
-- Tor support: Built-in Tor hidden service for anonymous access
-- Single binary: No external dependencies, all assets embedded
-- Self-hosted: Complete control, no external data sharing
+- Zero tracking (no logging, no analytics, no cookies except admin)
+- 52 search engines (major + niche adult video sites)
+- Bang shortcuts (`!phamateur`forPornHub)
+- API integration (PornHub, RedTube, Eporner APIs)
+- SSE streaming (progressive results)
+- Autocomplete for bang shortcuts
+- Tor support
+- Single binary (no dependencies)
+- Self-hosted
 
 ## Business Logic & Rules
 
 **Privacy Rules (CRITICAL):**
-- NO user tracking: No analytics, no cookies (except admin session), no logging of search queries
-- NO data collection: Search queries are processed in memory and immediately discarded
-- NO IP logging: IP addresses not stored for search requests (only for admin panel rate limiting)
-- NO user profiles: No user accounts, no registration, no sign-in required for search
-- Admin sessions only: Session cookies ONLY for admin panel authentication (not public search)
-- Rate limiting: Applied per-IP but IPs not stored permanently (in-memory only)
+- NO user tracking/analytics/cookies (except admin session)
+- NO data collection (queries in-memory only)
+- NO IP logging (rate limiting in-memory)
+- NO user profiles/accounts/registration
+- Admin sessions only (not public search)
+- Rate limiting per-IP (in-memory, expires)
 
 **Search Engine Integration:**
-- Tier 1 engines (API-based): PornHub, RedTube, Eporner use official JSON APIs
-- Tier 2/3 engines (scraping): HTML parsing with proper error handling and fallback
-- Engine failures: Individual engine timeouts don't block other engines
-- Result aggregation: Deduplicate by video URL, prefer API results over scraped
-- Timeout: 10 seconds per engine maximum, 30 seconds total search timeout
-- Concurrent requests: All engines queried simultaneously, results streamed as they arrive
+- Tier 1 (API): PornHub, RedTube, Eporner
+- Tier 2/3 (Scraping): 49 additional engines
+- Engine failures don't block others
+- Deduplicate by URL, prefer API results
+- 10s timeout per engine, 30s total
+- Concurrent queries, streamed results
 
-**Bang Search Rules:**
-- Bang format: `!xx`wherexxistheengineshortcode(e.g.,`!ph`forPornHub)
-- Multiple bangs: `!ph!rtamateur`searchesbothPornHubandRedTube
-- No bang: All enabled engines searched
-- Bang validation: Invalid bangs ignored, search continues with valid bangs or all engines
-- Case insensitive: `!PH`,`!ph`,`!Ph`allwork
-- Autocomplete: Bang shortcuts autocomplete as you type (starts after `!`character)
+**Bang Search:**
+- Format: `!xx`(e.g.,`!ph`forPornHub)
+- Multiple: `!ph!rtamateur`(bothengines)
+- No bang: all enabled engines
+- Case insensitive
+- Autocomplete after `!`
 
-**Result Processing:**
-- Deduplication: Same video URL from multiple engines shown once
-- Title cleaning: Remove site branding, normalize encoding
-- Thumbnail proxying: All thumbnails proxied through vidveil (prevent tracking)
-- Safe title generation: Generate safe, descriptive titles for videos with missing data
-- Result sorting: By relevance (default) or date (if available from engine)
-- Pagination: Client-side only (engines don't support consistent pagination)
+**Rate Limiting:**
+- 30 searches per 5 minutes per IP
+- 5 burst allowance
+- 5 minute cooldown
+- Admin: 5 login attempts per 15 min
+- In-memory only (no permanent storage)
 
-**Search Query Validation:**
-- Minimum length: 2 characters (prevent abuse)
-- Maximum length: 200 characters
-- Allowed characters: Letters, numbers, spaces, common punctuation, bang prefix
-- Sanitization: HTML encode all user input, strip script tags
-- Query not stored: Processed in memory, immediately discarded after response
-
-**Engine Configuration:**
-- Enable/disable: Each engine can be enabled or disabled via admin panel
-- Timeout per engine: Configurable (default 10 seconds)
-- Retry logic: No automatic retries (fail fast, don't delay results)
-- Health checks: Optional periodic engine health monitoring
-- Engine metadata: Name, URL, bang shortcut, tier, API vs scraping
-
-**Rate Limiting (Public Search):**
-- Anonymous users: 30 searches per 5 minutes per IP
-- Burst allowance: 5 additional searches allowed before hard limit
-- Cooldown: 5 minutes before limits reset
-- Admin panel: Separate rate limits (5 login attempts per 15 minutes)
-- No permanent IP storage: Rate limit counters in-memory only
-
-**Content Safety:**
-- All content is adult: No content filtering by default (adult search engine)
-- No illegal content: Engines known for illegal content explicitly excluded
-- User responsibility: Users responsible for legal compliance in their jurisdiction
-- No content hosting: All results are links to external sites, no content stored locally
-- Disclaimer: Clear disclaimer on first page about legal responsibility
-
-**SSE Streaming Behavior:**
-- Progressive results: Results streamed as each engine responds
-- Event types: `engine_start`, `result`, `engine_complete`, `search_complete`
-- Partial results: Users see results immediately without waiting for all engines
-- Connection timeout: 30 seconds maximum, then stream closes
-- Error handling: Engine failures reported as events, don't stop stream
+**SSE Streaming:**
+- Events: engine_start, result, engine_complete, search_complete
+- 30s max connection
+- Progressive results
+- Error handling doesn't stop stream
 
 ## Data Models
 
-**Search Result (from engines):**
 ```go
-// SearchResult represents a single video result from an engine
-type SearchResult struct {
-    // Unique identifier (video URL hash)
-    ID string `json:"id"`
-    // Video title
-    Title string `json:"title"`
-    // Video URL (on external site)
-    URL string `json:"url"`
-    // Thumbnail URL (proxied through vidveil)
-    Thumbnail string `json:"thumbnail"`
-    // Video duration in seconds
-    Duration int `json:"duration"`
-    // Engine that provided this result
-    Engine string `json:"engine"`
-    // Upload date (if available)
-    UploadDate string `json:"upload_date,omitempty"`
-    // View count (if available)
-    Views int64 `json:"views,omitempty"`
-    // Rating (if available, 0-5 scale)
-    Rating float64 `json:"rating,omitempty"`
-    // NSFW flag (always true for adult content)
-    NSFW bool `json:"nsfw"`
+// Result - single video search result
+type Result struct {
+    ID              string
+    Title           string
+    URL             string
+    Thumbnail       string
+    Duration        string
+    DurationSeconds int
+    Views           string
+    ViewsCount      int64
+    Rating          float64
+    Source          string
 }
 
-// SearchRequest represents a search query
-type SearchRequest struct {
-    // Search query text
-    Query string `json:"query"`
-    // Page number (client-side pagination)
-    Page int `json:"page"`
-    // Specific engines to search (empty = all enabled)
-    Engines []string `json:"engines,omitempty"`
-    // Bang shortcuts parsed from query
-    Bangs []string `json:"bangs,omitempty"`
-    // Actual search query (with bangs removed)
-    SearchQuery string `json:"search_query"`
-}
-
-// SearchResponse represents search results
+// SearchResponse - API response
 type SearchResponse struct {
-    // Search query submitted
-    Query string `json:"query"`
-    // Actual search query used (with bangs removed)
-    SearchQuery string `json:"search_query"`
-    // Whether bang shortcuts were detected
-    HasBang bool `json:"has_bang"`
-    // Bang engines requested
-    BangEngines []string `json:"bang_engines,omitempty"`
-    // Search results
-    Results []SearchResult `json:"results"`
-    // Engines that responded successfully
-    EnginesUsed []string `json:"engines_used"`
-    // Search time in milliseconds
-    SearchTimeMs int64 `json:"search_time_ms"`
-    // Page number
-    Page int `json:"page"`
-    // Total results (estimated)
-    TotalResults int `json:"total_results,omitempty"`
+    Success    bool
+    Data       SearchData
+    Pagination PaginationData
 }
 
-// Engine represents a search engine configuration
+// SearchData - results + metadata
+type SearchData struct {
+    Query        string
+    SearchQuery  string
+    Results      []Result
+    EnginesUsed  []string
+    SearchTimeMS int64
+    HasBang      bool
+    BangEngines  []string
+}
+
+// Engine - search engine config
 type Engine struct {
-    // Unique identifier
-    ID string `json:"id"`
-    // Display name
-    Name string `json:"name"`
-    // Bang shortcut (!ph,!rt,etc.)
-    Bang string `json:"bang"`
-    // Engine base URL
-    BaseURL string `json:"base_url"`
-    // Engine tier (1=API, 2=major scraping, 3=minor scraping)
-    Tier int `json:"tier"`
-    // Whether engine uses official API
-    HasAPI bool `json:"has_api"`
-    // Whether engine is enabled
-    Enabled bool `json:"enabled"`
-    // Timeout in seconds
-    Timeout int `json:"timeout"`
-    // Last health check status
-    Healthy bool `json:"healthy"`
-    // Last health check time
-    LastCheck string `json:"last_check,omitempty"`
-}
-
-// BangShortcut represents an autocomplete suggestion
-type BangShortcut struct {
-    // Bang shortcut
-    Bang string `json:"bang"`
-    // Engine name
-    Name string `json:"name"`
-    // Engine tier
-    Tier int `json:"tier"`
-    // Whether engine has official API
-    HasAPI bool `json:"has_api"`
-}
-
-// SSEEvent represents a Server-Sent Event
-type SSEEvent struct {
-    // Event type (engine_start, result, engine_complete, search_complete, error)
-    Event string `json:"event"`
-    // Event data (varies by event type)
-    Data interface{} `json:"data"`
+    ID      string
+    Name    string
+    Bang    string
+    BaseURL string
+    Tier    int
+    HasAPI  bool
+    Enabled bool
+    Timeout int
 }
 ```
 
 ## Data Sources
 
-**Engine Configuration:**
-- `src/engines/engines.json` - List of all 47 search engines (embedded in binary)
-- Updated at build time only
-- Contains: engine ID, name, bang, base URL, tier, API flag, default timeout
-- User can enable/disable engines via admin panel (stored in database)
-- Cannot add new engines at runtime (requires new release)
-
-**Engine API Endpoints:**
-- PornHub Webmasters API: `https://www.pornhub.com/webmasters/search?search={query}`
-- RedTube Public API: `https://api.redtube.com/?data=redtube.Videos.searchVideos&search={query}`
-- Eporner v2 API: `https://www.eporner.com/api/v2/video/search/?query={query}`
-- All other engines: HTML scraping with CSS selectors (no official API)
-
-**Thumbnail Proxying:**
-- External thumbnails: Proxied through `/api/v1/proxy/thumbnail?url={encoded_url}`
-- Prevents tracking: External sites don't see user IPs
-- Cached locally: Thumbnails cached in memory for 1 hour (reduces external requests)
-- No storage: Thumbnails not saved to disk (memory cache only)
-
-**GeoIP Data (for blocking/analytics - OPTIONAL feature):**
-- ip2location-db: Community-maintained IP-to-country database
-- Downloaded on first run if enabled: `https://github.com/sapics/ip-location-db`
-- Updated weekly via scheduler if enabled
-- Optional feature: Admin can enable country-based access control
-- No user tracking: Only used for access control if enabled, not analytics
-
-**Blocklist (OPTIONAL feature):**
-- Admin-defined IP/country blocklist stored in database
-- Can block by: IP address, IP range, country code
-- Applied at request level before search processing
-- No user tracking: Block decisions not logged permanently
-
-**Rate Limit Data:**
-- In-memory only: No persistent storage of IP addresses or search queries
-- TTL-based: Rate limit counters expire after timeout period
-- No logs: Rate limit events not logged permanently (only live stats)
-
-**Update Strategy:**
-- Engine list: Updates require new release (hardcoded engine configurations)
-- Engine enable/disable: Runtime configuration via admin panel (stored in database)
-- GeoIP database: Weekly automatic updates via scheduler (if feature enabled)
-- Application: Self-update via `--update` command (GitHub releases API)
-
-**Data Location:**
-- `src/engines/engines.json` - Engine configurations (embedded, read-only)
-- Database: User settings, admin sessions, engine enable/disable, blocklist (if used)
-- Memory cache: Thumbnail cache, rate limit counters, search result deduplication
-- No persistent logs: Search queries never written to disk or database
-
-## Project-Specific Endpoints Summary
-
-**Implementation of these endpoints MUST follow PART 20 (API Structure) and PART 17 (Web Frontend) rules.**
-
-### Public Search Endpoints
-
-**Search (Standard):**
-- Purpose: Search across all enabled engines or specific engines via bang shortcuts
-- Input: Query string, optional engines filter, page number
-- Output: Aggregated results from all responding engines
-- Business Behavior:
-  - All enabled engines queried concurrently
-  - Results deduplicated by video URL
-  - 10 second timeout per engine, 30 seconds total
-  - Engines that timeout don't block results from faster engines
-  - Query not logged or stored
-  - Rate limited: 30 searches per 5 minutes per IP
-
-**Search Stream (SSE):**
-- Purpose: Real-time progressive result streaming as engines respond
-- Input: Query string, optional engines filter
-- Output: Server-Sent Events with progressive results
-- Business Behavior:
-  - Connection stays open until all engines respond or timeout
-  - Events: `engine_start`, `result`, `engine_complete`, `search_complete`, `error`
-  - Users see results immediately without waiting
-  - 30 second maximum connection time
-  - Query not logged or stored
-  - Rate limited: Same as standard search
-
-**Autocomplete:**
-- Purpose: Suggest bang shortcuts as user types
-- Input: Partial bang text (e.g., `!po`)
-- Output: List of matching engines with bangs
-- Business Behavior:
-  - Triggered when user types `!`followedby1+characters
-  - Case-insensitive matching
-  - Returns engine name, bang, tier, API flag
-  - No rate limiting (low cost operation)
-  - Not logged
-
-**Bangs List:**
-- Purpose: Get all available bang shortcuts
-- Input: None
-- Output: Complete list of engines with bang shortcuts
-- Business Behavior:
-  - Returns all 47 engines with their bang shortcuts
-  - Includes only enabled engines (or all if admin authenticated)
-  - Not logged
-  - No rate limiting (read-only, cached)
-
-**Engines List:**
-- Purpose: Get all search engines with metadata
-- Input: None
-- Output: List of all engines with status
-- Business Behavior:
-  - Returns engine ID, name, bang, tier, API flag, enabled status
-  - Public endpoint shows only enabled engines
-  - Admin endpoint shows all engines with health status
-  - Not logged
-  - No rate limiting (read-only, cached)
+**52 Search Engines:**
+- Tier 1 APIs: pornhub.go, redtube.go, eporner.go
+- Tier 2/3 Scraping: alphaporno, anyporn, drtuber, empflix, extremetube, flyflv, fourtube, fux, gotporn, hdzog, hellporno, hqporner, keezmovies, lovehomeporn, motherless, nonktube, nubilesporn, nuvid, pornbox, pornerbros, pornflip, pornhat, pornhd, pornmd, pornone, pornotube, porntop, porntrex, porntube, sleazyneasy, spankwire, sunporno, superporn, threemovs, tnaflix, tube8, tubegalore, txxx, vjav, vporn, xbabe, xhamster, xnxx, xtube, xvideos, xxxymovies, youjizz, youporn, zenporn
 
 **Thumbnail Proxy:**
-- Purpose: Proxy external thumbnails to prevent tracking
-- Input: Encoded thumbnail URL from external site
-- Output: Proxied thumbnail image
-- Business Behavior:
-  - Fetches thumbnail from external site
-  - Caches in memory for 1 hour
-  - Returns image to client (prevents external site seeing user IP)
-  - Cache miss: fetch from external, cache, return
-  - Cache hit: return from memory
-  - Rate limited: 100 requests per minute per IP
+- `/api/v1/proxy/thumbnail?url={url}`
+- Prevents tracking
+- Cache: 1 hour
+- 10s timeout
+- http/https only
 
-### Admin Panel Endpoints
+## Project-Specific Endpoints
 
-**Engine Management:**
-- Purpose: Enable/disable search engines, view engine health
-- Input: Engine ID, enabled/disabled flag
-- Output: Updated engine configuration
-- Business Behavior:
-  - Admin can enable/disable any of the 47 engines
-  - Changes apply immediately to new searches
-  - Health check shows last successful query time
-  - Can trigger manual health check for all engines
+**Public:**
+- `GET /api/v1/search` - Standard search
+- `GET /api/v1/search/stream` - SSE streaming
+- `GET /api/v1/autocomplete` - Bang suggestions
+- `GET /api/v1/bangs` - All bangs list
+- `GET /api/v1/engines` - Engines list
+- `GET /api/v1/proxy/thumbnail` - Thumbnail proxy
 
-**Search Analytics (OPTIONAL, disabled by default):**
-- Purpose: View aggregate search statistics (no query logging)
-- Input: Date range
-- Output: Aggregate statistics (searches per day, engines used, response times)
-- Business Behavior:
-  - Only counts/aggregates, NO query text or IPs stored
-  - Tracks: total searches, searches per engine, average response time
-  - NO user tracking, NO query logging, NO IP storage
-  - Feature must be explicitly enabled by admin
-  - Default: DISABLED (privacy-first)
+**Admin:**
+- `/admin/engines` - Enable/disable engines
+- `/admin/settings` - Rate limit config
 
-**Rate Limit Management:**
-- Purpose: Configure rate limits for public search
-- Input: Rate limit values (searches per window, window duration)
-- Output: Updated rate limit configuration
-- Business Behavior:
-  - Configurable: searches per time window, burst allowance, cooldown period
-  - Applied per-IP but IPs not stored permanently
-  - Changes apply immediately to new requests
+## Extended Node Functions
 
-**Blocklist Management (OPTIONAL):**
-- Purpose: Block access by IP, IP range, or country
-- Input: IP address, IP range, or country code
-- Output: Updated blocklist
-- Business Behavior:
-  - Admin can add/remove blocked IPs, ranges, or countries
-  - Blocking applied at request level (before search processing)
-  - NO permanent logging of blocked requests
-  - Optional feature (disabled by default)
+None. Standard clustering only (config sync via database).
 
-## Extended Node Functions (If Applicable)
+## High Availability Requirements
 
-**Vidveil does NOT have extended node functions beyond standard clustering.**
-
-Vidveil implements standard clustering (config sync via shared database) but does NOT manage external nodes or resources. Each cluster node is a vidveil instance sharing configuration - there are no "managed nodes" that vidveil controls.
-
-| Function | Description |
-|----------|-------------|
-| N/A | No extended node functions - standard clustering only |
-
-**Note:** Vidveil uses clustering only for config synchronization across multiple vidveil instances. It does NOT manage external resources like Docker hosts, servers, or infrastructure.
-
-## High Availability Requirements (If Applicable)
-
-**Vidveil does NOT require High Availability.**
-
-Vidveil is a stateless search aggregation service. Standard clustering (config sync) is sufficient. There is no need for automatic failover, health monitoring, or HA-specific features.
-
-| Requirement | Description |
-|-------------|-------------|
-| HA Required | NO - standard clustering is sufficient |
-| Failover | Not needed - load balancer handles traffic distribution |
-| State | Stateless search - no session state to sync |
-
-**Note:** Multiple vidveil instances can run behind a load balancer for horizontal scaling, but this is standard clustering, not HA. Each instance operates independently and shares only configuration via the database.
+None. Stateless service, standard clustering sufficient.
 
 ## Notes
 
-**Privacy-First Design:**
-Vidveil is built with privacy as the #1 priority. This means:
-- No query logging: Search queries are never written to disk or database
-- No IP logging: IP addresses used only for rate limiting (in-memory, expires quickly)
-- No user tracking: No accounts, no profiles, no cookies (except admin sessions)
-- No analytics: No usage statistics collected by default (optional aggregate stats can be enabled)
-- Thumbnail proxying: All thumbnails proxied to prevent external tracking
-- Tor support: Built-in Tor hidden service for anonymous access
+**Privacy-First:**
+- No query logging
+- No IP logging (rate limiting in-memory)
+- No user tracking
+- Thumbnail proxying
+- Tor support
 
-**Content Responsibility:**
-Vidveil is a search aggregation service, not a content provider. All results link to external sites. Users are responsible for legal compliance in their jurisdiction.
+**52 Engines:**
+Exceeds 47 requirement. Tier 1 uses APIs, Tier 2/3 use scraping.
 
-**Engine Selection:**
-The 47 engines were selected based on:
-- Popularity: Major and well-known adult video sites
-- Reliability: Sites with consistent availability
-- API availability: Preference for sites with official APIs (PornHub, RedTube, Eporner)
-- Legal standing: Only sites operating within legal frameworks
-- Diversity: Mix of professional, amateur, and niche content sources
-
-**Search Quality:**
-- Deduplication: Same video URL from multiple engines shown once
-- API preference: API results prioritized over scraped results (more reliable)
-- Timeout handling: Fast engines don't wait for slow engines
-- Progressive results: SSE streaming shows results as they arrive (better UX)
-
-**Performance Considerations:**
-- Concurrent queries: All engines queried simultaneously (not sequential)
-- Timeout: 10 seconds per engine, 30 seconds total search
-- Caching: Thumbnails cached in memory (1 hour), results never cached (always fresh)
-- Rate limiting: Prevents abuse without requiring authentication
-
-**Tor Hidden Service:**
-- Optional feature: Can be enabled via admin panel
-- Automatic setup: If Tor installed, hidden service auto-configured
-- Anonymous access: Users can access vidveil via .onion address
-- No logging: Same privacy guarantees apply to Tor traffic
-
-**Clustering:**
-- Standard clustering: Multiple instances share config via database
-- Load balancing: Use external load balancer (nginx, HAProxy, Cloudflare)
-- Stateless: Each instance operates independently, no state to sync
-- Config sync: Changes in admin panel propagate to all instances immediately
-
-**Legal Considerations:**
-- Age verification: Site shows 18+ disclaimer, user must confirm
-- DMCA compliance: All content hosted externally, vidveil only provides links
-- Jurisdiction: Users responsible for legal compliance in their location
-- No content storage: Vidveil does not store, cache, or host any video content
+**Content:**
+Search aggregation only (links to external sites). Users responsible for legal compliance.
 
 ---
 

@@ -50,7 +50,7 @@ func main() {
 		pidFile     string
 		address     string
 		port        string
-		mode        string
+		modeStr     string
 		debug       bool
 		daemon      bool
 		serviceCmd  string
@@ -118,7 +118,7 @@ func main() {
 		case "--mode":
 			if i+1 < len(args) {
 				i++
-				mode = args[i]
+				modeStr = args[i]
 			}
 
 		case "--debug":
@@ -168,7 +168,7 @@ func main() {
 			} else if strings.HasPrefix(arg, "--port=") {
 				port = strings.TrimPrefix(arg, "--port=")
 			} else if strings.HasPrefix(arg, "--mode=") {
-				mode = strings.TrimPrefix(arg, "--mode=")
+				modeStr = strings.TrimPrefix(arg, "--mode=")
 			}
 		}
 		i++
@@ -216,13 +216,13 @@ func main() {
 
 	// MODE env var is runtime - always checked per AI.md
 	// Priority: CLI flag > env var > config file
-	if mode == "" && os.Getenv("MODE") != "" {
-		mode = os.Getenv("MODE")
+	if modeStr == "" && os.Getenv("MODE") != "" {
+		modeStr = os.Getenv("MODE")
 	}
 
 	// Initialize mode and debug per AI.md PART 5
 	// This must happen before starting the server
-	mode.Initialize(mode, debug)
+	mode.Initialize(modeStr, debug)
 
 	// Handle daemon mode per AI.md PART 4
 	if daemon {
@@ -265,8 +265,8 @@ func main() {
 	}
 
 	// Apply mode (CLI > env > config, normalized)
-	if mode != "" {
-		cfg.Server.Mode = config.NormalizeMode(mode)
+	if modeStr != "" {
+		cfg.Server.Mode = config.NormalizeMode(modeStr)
 	} else if cfg.Server.Mode == "" {
 		cfg.Server.Mode = "production"
 	} else {
@@ -432,7 +432,7 @@ func main() {
 	defer sched.Stop()
 
 	// Create server with admin service, migration manager, and scheduler
-	srv := server.New(cfg, engineMgr, adminSvc, migrationMgr, sched)
+	srv := server.New(cfg, configDir, dataDir, engineMgr, adminSvc, migrationMgr, sched)
 
 	// Start live config watcher per AI.md PART 1 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, cfg)

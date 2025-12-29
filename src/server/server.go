@@ -31,6 +31,8 @@ func GetTemplatesFS() embed.FS {
 // Server represents the HTTP server
 type Server struct {
 	cfg          *config.Config
+	configDir    string
+	dataDir      string
 	engineMgr    *engines.Manager
 	adminSvc     *admin.Service
 	migrationMgr MigrationManager
@@ -48,7 +50,7 @@ type MigrationManager interface {
 }
 
 // New creates a new server instance
-func New(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager, sched *scheduler.Scheduler) *Server {
+func New(cfg *config.Config, configDir, dataDir string, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager, sched *scheduler.Scheduler) *Server {
 	// Set templates filesystem for handlers
 	handler.SetTemplatesFS(embeddedFS)
 	handler.SetAdminTemplatesFS(embeddedFS)
@@ -139,7 +141,7 @@ func (s *Server) setupMiddleware() {
 // setupRoutes configures all routes
 func (s *Server) setupRoutes() {
 	h := handler.New(s.cfg, s.engineMgr)
-	admin := handler.NewAdminHandler(s.cfg, s.engineMgr, s.adminSvc, s.migrationMgr)
+	admin := handler.NewAdminHandler(s.cfg, s.configDir, s.dataDir, s.engineMgr, s.adminSvc, s.migrationMgr)
 	// Set scheduler for admin panel management per AI.md PART 26
 	admin.SetScheduler(s.scheduler)
 	metrics := handler.NewMetrics(s.cfg, s.engineMgr)
@@ -368,6 +370,7 @@ func (s *Server) setupRoutes() {
 
 		// Bang endpoints (public)
 		r.Get("/bangs", h.APIBangs)
+r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 		r.Get("/autocomplete", h.APIAutocomplete)
 
 		// Engine endpoints (public)

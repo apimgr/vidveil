@@ -413,3 +413,10 @@ func (s *SingleInstanceManager) Stop()               {}
 func (s *SingleInstanceManager) AcquireLock(name string, ttl time.Duration) (bool, error) { return true, nil }
 func (s *SingleInstanceManager) ReleaseLock(name string) error { return nil }
 func (s *SingleInstanceManager) WithLock(name string, ttl time.Duration, fn func() error) error { return fn() }
+
+// GenerateJoinToken generates a secure random join token for cluster
+func GenerateJoinToken() string {
+b := make([]byte, 16)
+rand.Read(b)
+return hex.EncodeToString(b)
+}

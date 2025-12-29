@@ -22,6 +22,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/service/admin"
+	"github.com/apimgr/vidveil/src/service/cluster"
 	"github.com/apimgr/vidveil/src/service/email"
 	"github.com/apimgr/vidveil/src/service/engines"
 	"github.com/apimgr/vidveil/src/service/maintenance"
@@ -80,6 +81,8 @@ type VanityStatus struct {
 // AdminHandler handles admin panel routes per AI.md PART 12
 type AdminHandler struct {
 	cfg          *config.Config
+	configDir    string
+	dataDir      string
 	engineMgr    *engines.Manager
 	adminSvc     *admin.Service
 	migrationMgr MigrationManager
@@ -99,9 +102,11 @@ type adminSession struct {
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(cfg *config.Config, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager) *AdminHandler {
+func NewAdminHandler(cfg *config.Config, configDir, dataDir string, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager) *AdminHandler {
 	return &AdminHandler{
 		cfg:          cfg,
+		configDir:    configDir,
+		dataDir:      dataDir,
 		engineMgr:    engineMgr,
 		adminSvc:     adminSvc,
 		migrationMgr: migrationMgr,
@@ -529,8 +534,22 @@ func (h *AdminHandler) SchedulerPage(w http.ResponseWriter, r *http.Request) {
 
 // BackupPage renders backup & maintenance (Section 10)
 func (h *AdminHandler) BackupPage(w http.ResponseWriter, r *http.Request) {
-	// Placeholder backups list - would be populated from backup directory
+	// Get list of available backups from maintenance service
+	maint := maintenance.New(h.configDir, h.dataDir, "")
+	backupInfos, err := maint.ListBackups()
+	
+	// Convert to map format for template
 	backups := []map[string]string{}
+	if err == nil {
+		for _, b := range backupInfos {
+			backups = append(backups, map[string]string{
+				"Filename": b.Filename,
+				"Size":     b.SizeHuman,
+				"Modified": b.Modified.Format("2006-01-02 15:04:05"),
+			})
+		}
+	}
+	
 	h.renderAdminTemplate(w, r, "backup", map[string]interface{}{
 		"Backups": backups,
 	})
@@ -3432,9 +3451,8 @@ func adminStyles() string {
 func (h *AdminHandler) AddNodePage(w http.ResponseWriter, r *http.Request) {
 	hostname, _ := os.Hostname()
 
-	// Generate join token if not exists
-	// Placeholder - would be stored in config in production
-	joinToken := hex.EncodeToString(make([]byte, 16))
+	// Generate join token using cluster service
+	joinToken := cluster.GenerateJoinToken()
 
 	data := map[string]interface{}{
 		"DefaultPort": h.cfg.Server.Port,

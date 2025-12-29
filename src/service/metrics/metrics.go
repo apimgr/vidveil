@@ -1,4 +1,4 @@
-// Package metrics provides Prometheus-compatible metrics per TEMPLATE.md PART 11
+// Package metrics provides Prometheus-compatible metrics per AI.md PART 11
 package metrics
 
 import (

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 //go:build windows
 
-// TEMPLATE.md PART 4: Windows UAC Elevation
+// AI.md PART 4: Windows UAC Elevation
 package system
 
 import (
@@ -32,7 +32,7 @@ const (
 )
 
 // IsElevated checks if the current process has administrator privileges
-// per TEMPLATE.md PART 4 Windows requirements
+// per AI.md PART 4 Windows requirements
 func IsElevated() bool {
 	var token syscall.Token
 	currentProcess, _ := syscall.GetCurrentProcess()
@@ -81,7 +81,7 @@ const (
 )
 
 // RequestElevation attempts to restart the current process with admin privileges
-// per TEMPLATE.md PART 4: "UAC prompt (requires GUI)"
+// per AI.md PART 4: "UAC prompt (requires GUI)"
 func RequestElevation(args ...string) ElevationResult {
 	if IsElevated() {
 		return ElevationAlreadyAdmin
@@ -166,7 +166,7 @@ func RunAsAdmin(command string, args ...string) error {
 
 // RequireAdmin checks if admin privileges are required and requests elevation if needed
 // Returns true if the program should exit (because a new elevated process was started)
-// per TEMPLATE.md PART 4 flow
+// per AI.md PART 4 flow
 func RequireAdmin(operation string) (bool, error) {
 	if IsElevated() {
 		return false, nil
@@ -192,7 +192,7 @@ func RequireAdmin(operation string) (bool, error) {
 }
 
 // GetWindowsServiceAccount returns the Virtual Service Account name
-// per TEMPLATE.md PART 4: "NT SERVICE\vidveil"
+// per AI.md PART 4: "NT SERVICE\vidveil"
 func GetWindowsServiceAccount(serviceName string) string {
 	return fmt.Sprintf("NT SERVICE\\%s", serviceName)
 }

@@ -226,6 +226,124 @@ User: "Update AI.md with latest template"
 | **NEVER use -musl suffix** | Alpine builds are NOT musl-specific |
 | **Build source** | ALWAYS `src` directory |
 
+## Runtime Detection Rules (NON-NEGOTIABLE)
+
+**All host-dependent settings MUST be detected at runtime on the deployment host, NEVER from the dev machine.**
+
+| Setting | Detection Method | NEVER Do |
+|---------|------------------|----------|
+| **Hostname/FQDN** | `os.Hostname()` at startup | Hardcode dev machine hostname |
+| **IP addresses** | Detect from network interfaces | Embed dev machine IPs |
+| **CPU cores** | `runtime.NumCPU()` | Hardcode dev machine core count |
+| **Available memory** | Detect from system at runtime | Hardcode dev machine memory |
+| **Disk space** | Detect from filesystem at runtime | Hardcode dev machine disk size |
+| **Network interfaces** | Detect usable interfaces (see rules below) | Assume dev network config |
+| **OS/Architecture** | `runtime.GOOS`, `runtime.GOARCH` | Assume dev environment |
+| **Timezone** | System timezone or `TZ` env var | Hardcode dev timezone |
+| **User/Group** | Running process UID/GID | Assume dev user |
+| **Paths** | Resolve at runtime per OS | Hardcode dev machine paths |
+
+**Rules:**
+- Host-specific values are NEVER written to config files during build
+- Host-specific values are NEVER embedded in the binary
+- All detection happens at application startup on the target host
+- Config files only contain user-defined overrides, not auto-detected values
+- Default values in config are placeholders, not dev machine values
+
+**Network Interface Detection (priority order):**
+
+| Priority | Interface Type | Patterns | Condition |
+|----------|---------------|----------|-----------|
+| 1 | Wired Ethernet | `eth*`, `en*`, `em*` | Connected + global IP |
+| 2 | WiFi | `wlan*`, `wl*`, `wifi*` | Connected + global IP (fallback if wired unavailable) |
+| 3 | Other physical | Any remaining physical | Connected + global IP |
+
+**ALWAYS skip these interfaces:**
+- `lo`, `lo0` - Loopback
+- `docker*`, `br-*`, `veth*` - Docker
+- `incus*`, `lxc*`, `lxd*` - Incus/LXC/LXD
+- `virbr*`, `vnet*` - libvirt/KVM
+- `tun*`, `tap*` - VPN tunnels
+- `wg*` - WireGuard
+- `tailscale*`, `utun*` - Tailscale
+- `podman*` - Podman
+- `cni*`, `flannel*`, `calico*` - Kubernetes CNI
+
+**Detection logic:**
+1. List all network interfaces
+2. Filter out virtual/container interfaces (skip list above)
+3. For remaining interfaces, check: UP + has global unicast IP (not link-local)
+4. Prefer wired (eth/en) over wireless (wlan/wl)
+5. If no wired connected, use wireless
+6. Return first matching interface's global IP
+
+```go
+// CORRECT: Detect at runtime
+hostname, _ := os.Hostname()
+cpuCores := runtime.NumCPU()
+primaryIP := detectPrimaryIP()
+
+// WRONG: Hardcoded from dev machine
+hostname := "dev-laptop.local"
+cpuCores := 8
+primaryIP := "192.168.1.50"
+```
+
+## Performance Optimization Rules (NON-NEGOTIABLE)
+
+**Always optimize based on actual available resources, detected at runtime.**
+
+| Resource | Detection | Usage |
+|----------|-----------|-------|
+| **CPU cores** | `runtime.NumCPU()` | Worker pools, concurrency limits |
+| **Available memory** | System memory APIs | Cache sizes, buffer pools |
+| **Disk I/O** | Benchmark at startup (optional) | Batch sizes, flush intervals |
+
+**Rules:**
+- NEVER hardcode resource limits based on dev machine specs
+- Detect actual resources at application startup
+- Scale worker pools, caches, and buffers proportionally to available resources
+- Provide sensible defaults that work on minimal systems (1 CPU, 512MB RAM)
+- Allow config overrides for users who want manual control
+
+**Example scaling:**
+```go
+// Worker pool scales to available CPUs
+workers := runtime.NumCPU()
+if workers < 2 {
+    workers = 2
+}
+
+// Cache size scales to available memory (use ~10% for cache)
+availMem := getAvailableMemory()
+cacheSize := availMem / 10
+if cacheSize < 64*1024*1024 {
+    // Minimum 64MB cache
+    cacheSize = 64 * 1024 * 1024
+}
+if cacheSize > 1024*1024*1024 {
+    // Maximum 1GB cache
+    cacheSize = 1024 * 1024 * 1024
+}
+```
+
+## JSON File Rules (NON-NEGOTIABLE)
+
+**JSON does not support comments.** Never add comments inside JSON files or JSON code blocks.
+
+| Format | Comments Allowed |
+|--------|------------------|
+| `.json` files | NO |
+| JSON in code blocks | NO |
+| YAML (`.yml`, `.yaml`) | YES (`#`) |
+| Go code | YES (`//`) |
+| JavaScript | YES (`//`, `/* */`) |
+
+**If you need to document JSON:**
+- Put explanation text BEFORE the JSON code block (in markdown)
+- Use descriptive key names that are self-documenting
+- Add a separate documentation section explaining the schema
+
 ## Docker Rules
 
 | Rule | Description |
@@ -514,6 +632,7 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 |------|:--------:|---------|
 | `AI.md` | ✓ | Project specification |
 | `TODO.AI.md` | Optional | AI task tracking (3+ tasks only) |
+| `PLAN.md` | Optional | Implementation plan (if exists, this is THE plan) |
 | `README.md` | ✓ | Public documentation |
 | `LICENSE.md` | ✓ | License file |
 | `Makefile` | ✓ | Build targets |
@@ -643,7 +762,7 @@ Accept ALL of these (case-insensitive) → convert to `true`/`false`:
 
 ---
 
-
+# HOW TO USE THIS TEMPLATE
 # AI ASSISTANT INSTRUCTIONS (READ THIS ENTIRE SECTION)
 
 ## ⚠️ STEP 1: CHECK WHICH FILE TO USE ⚠️
@@ -1081,6 +1200,7 @@ BEFORE writing ANY code:
 | Template | Varies (see below) | Master spec | **NEVER** |
 | AI.md | Project repo | Project spec | Yes |
 | TODO.AI.md | Project repo | Task tracking | Yes |
+| PLAN.md | Project repo | Implementation plan | Yes |
 | README.md | Project repo | User docs | Yes |
 
 
@@ -1136,8 +1256,48 @@ BEFORE writing ANY code:
 - Work from memory of the spec
 - Create patterns not in the spec
 - Write verbose documentation explaining what you're doing (the spec is the documentation)
+- **NEVER create unnecessary files** (no AUDIT.md, COMPLIANCE.md, SUMMARY.md, ANALYSIS.md, REPORT.md, etc.)
 
 **The spec defines it. TODO.AI.md tracks it. No additional documentation needed.**
+
+## CRITICAL: No Report Files - Fix The Project Instead
+
+**NEVER create report/analysis files. ALWAYS fix the project directly.**
+
+| WRONG | RIGHT |
+|-------|-------|
+| Create `AUDIT.md` with findings | Fix the issues directly |
+| Create `COMPLIANCE.md` with gaps | Bring project to 100% compliance |
+| Create `SUMMARY.md` of changes | Make the changes, update TODO.AI.md |
+| Create `ANALYSIS.md` of problems | Solve the problems |
+| Create `REPORT.md` for user | Update PART 36, fix code |
+
+**Rules:**
+- If you find compliance gaps → FIX THEM (bring to 100% compliance)
+- If you need to document changes → Update PART 36 in AI.md
+- If you need to track tasks → Use TODO.AI.md
+- If you need to plan work → Use PLAN.md (if it exists)
+- The project should be WORKING, not documented as broken
+
+**The only allowed project files are listed in "Allowed Root Files" - nothing else.**
+
+## PLAN.md Completion
+
+**When a PLAN.md has been fully implemented and verified working:**
+
+Replace the entire contents with:
+
+```markdown
+# Fully Implemented
+
+See PART 36 in AI.md for the full project breakdown.
+```
+
+**Rules:**
+- Keep the PLAN.md file (don't delete it)
+- Replace all planning content with the completion message above
+- This signals the plan is done and PART 36 is the source of truth
+- If new planning is needed later, replace the completion message with the new plan
 
 ## Template File vs AI.md
 
@@ -1146,6 +1306,7 @@ BEFORE writing ANY code:
 | **Template file** | **NEVER MODIFY** | Read-only master (may be named TEMPLATE.md, SPEC.md, etc.) |
 | **AI.md** | Create/Update | Project-specific specification |
 | **TODO.AI.md** | Create/Update | Task tracking |
+| **PLAN.md** | Create/Update | Implementation plan (if exists, this is THE plan) |
 
 **How to identify the template file:**
 - Location varies: project root, org root, different org, ~/, or user-specified
@@ -1632,7 +1793,7 @@ Dockerfile                         docker/Dockerfile
 | Check | Document |
 |-------|----------|
 | **Core functionality** | What does the app DO? (preserve this) |
-| **Custom config** | App-specific settings (migrate to config.yml) |
+| **Custom config** | App-specific settings (migrate to server.yml) |
 | **Custom routes** | API endpoints (keep, standardize format) |
 | **Dependencies** | Required packages (add to Dockerfile) |
 | **Database schema** | Tables and relationships (preserve) |
@@ -2440,6 +2601,7 @@ func gUBE(e string) (*U, error) {
 | **Template file** | Varies (anywhere) | Master specification | **NEVER** |
 | **AI.md** | Project repository | Project-specific specification | **YES** |
 | **TODO.AI.md** | Project repository | Task tracking (>2 tasks) | **YES** |
+| **PLAN.md** | Project repository | Implementation plan | **YES** |
 
 **Note:** Template file may be named `TEMPLATE.md`, `SPEC.md`, `CLAUDE.md`, or other. Location varies (project root, org root, ~/, etc.). Identify by content: unreplaced `{variables}`, "HOW TO USE" section, multiple PART X: sections.
 
@@ -3309,6 +3471,7 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 ├── LICENSE.md              # MIT + embedded licenses
 ├── AI.md                   # Project specification (from TEMPLATE.md)
 ├── TODO.AI.md              # Task tracking for >2 tasks
+├── PLAN.md                 # Implementation plan (optional)
 ├── Jenkinsfile             # Jenkins pipeline
 └── release.txt             # Version tracking
 ```
@@ -3806,13 +3969,18 @@ require (
 ```go
 import "golang.org/x/crypto/argon2"
 
-// Recommended parameters
+// Recommended parameters (OWASP 2023)
 const (
-    ArgonTime    = 3         // iterations
-    ArgonMemory  = 64 * 1024 // 64 MB
-    ArgonThreads = 4         // parallelism
-    ArgonKeyLen  = 32        // output length in bytes
-    ArgonSaltLen = 16        // salt length in bytes
+	// Iterations
+	ArgonTime = 3
+	// Memory in KB (64 MB)
+	ArgonMemory = 64 * 1024
+	// Parallelism
+	ArgonThreads = 4
+	// Output length in bytes
+	ArgonKeyLen = 32
+	// Salt length in bytes
+	ArgonSaltLen = 16
 )
 
 func HashPassword(password string) (string, error) {
@@ -3914,8 +4082,8 @@ Before proceeding, confirm you understand:
 | Config | `~/.config/apimgr/vidveil/` |
 | Config File | `~/.config/apimgr/vidveil/server.yml` |
 | Data | `~/.local/share/apimgr/vidveil/` |
-| Logs | `~/.local/share/apimgr/vidveil/logs/` |
-| Backup | `~/.local/backups/apimgr/vidveil/` |
+| Logs | `~/.local/log/apimgr/vidveil/` |
+| Backup | `~/.local/backup/apimgr/vidveil/` |
 | PID File | `~/.local/share/apimgr/vidveil/vidveil.pid` |
 | SSL | `~/.config/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
 | Security | `~/.config/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
@@ -3985,8 +4153,8 @@ Before proceeding, confirm you understand:
 | Config | `~/.config/apimgr/vidveil/` |
 | Config File | `~/.config/apimgr/vidveil/server.yml` |
 | Data | `~/.local/share/apimgr/vidveil/` |
-| Logs | `~/.local/share/apimgr/vidveil/logs/` |
-| Backup | `~/.local/backups/apimgr/vidveil/` |
+| Logs | `~/.local/log/apimgr/vidveil/` |
+| Backup | `~/.local/backup/apimgr/vidveil/` |
 | PID File | `~/.local/share/apimgr/vidveil/vidveil.pid` |
 | SSL | `~/.config/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
 | Security | `~/.config/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
@@ -4036,7 +4204,7 @@ Before proceeding, confirm you understand:
 | Config File | `/config/server.yml` |
 | Security DBs | `/config/security/` (geoip, blocklists, cve, trivy) |
 | Data | `/data/` |
-| Logs | `/data/logs/` |
+| Logs | `/data/log/` |
 | SQLite DB | `/data/db/` |
 | Internal Port | `80` |
 
@@ -4743,9 +4911,10 @@ func handleForm(w http.ResponseWriter, r *http.Request) {
 }
 
 // JSON API body
+// All fields are strings to accept flexible boolean input (true/false, yes/no, 1/0)
 type CreateUserRequest struct {
     Email    string `json:"email"`
-    IsAdmin  string `json:"is_admin"`  // Accept string for flexible input
+    IsAdmin  string `json:"is_admin"`
     Verified string `json:"verified"`
 }
 
@@ -5225,7 +5394,8 @@ import (
 // registerDebugRoutes registers debug endpoints (--debug/DEBUG=true only)
 func (s *Server) registerDebugRoutes(r chi.Router) {
     if !s.config.IsDebug() {
-        return // No debug routes unless --debug or DEBUG=true
+        // No debug routes unless --debug or DEBUG=true
+        return
     }
 
     r.Route("/debug", func(r chi.Router) {
@@ -5303,8 +5473,10 @@ func (s *Server) handleDebugMemory(w http.ResponseWriter, r *http.Request) {
 
 // handleDebugGoroutines returns goroutine count and stack traces
 func (s *Server) handleDebugGoroutines(w http.ResponseWriter, r *http.Request) {
-    buf := make([]byte, 1024*1024) // 1MB buffer
-    n := runtime.Stack(buf, true)   // true = all goroutines
+    // 1MB buffer for stack traces
+    buf := make([]byte, 1024*1024)
+    // true = include all goroutines
+    n := runtime.Stack(buf, true)
 
     w.Header().Set("Content-Type", "text/plain; charset=utf-8")
     w.WriteHeader(http.StatusOK)
@@ -5423,8 +5595,9 @@ import (
 
 // debugMiddleware logs detailed request/response info (--debug/DEBUG=true only)
 func (s *Server) debugMiddleware(next http.Handler) http.Handler {
+    // No-op unless debug enabled
     if !s.config.IsDebug() {
-        return next // No-op unless debug enabled
+        return next
     }
 
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -5771,7 +5944,7 @@ Default config: /etc/apimgr/jokes/  # Hardcoded project name
 |------|------|----------------------|----------------------|
 | `--config` | Directory | `/etc/apimgr/vidveil/` | `~/.config/apimgr/vidveil/` |
 | `--data` | Directory | `/var/lib/apimgr/vidveil/` | `~/.local/share/apimgr/vidveil/` |
-| `--log` | Directory | `/var/log/apimgr/vidveil/` | `~/.local/share/apimgr/vidveil/logs/` |
+| `--log` | Directory | `/var/log/apimgr/vidveil/` | `~/.local/log/apimgr/vidveil/` |
 | `--pid` | File | `/var/run/apimgr/vidveil.pid` | `~/.local/share/apimgr/vidveil/vidveil.pid` |
 
 ### Directory Validation Rules
@@ -5826,7 +5999,8 @@ func EnsurePIDFile(path string, isRoot bool) error {
 func CheckPIDFile(pidPath string) (bool, int, error) {
     data, err := os.ReadFile(pidPath)
     if os.IsNotExist(err) {
-        return false, 0, nil // No PID file, not running
+        // No PID file, not running
+        return false, 0, nil
     }
     if err != nil {
         return false, 0, fmt.Errorf("reading pid file: %w", err)
@@ -6106,11 +6280,14 @@ func shouldDaemonize(isServiceStart bool, daemonFlag bool, configDaemonize bool)
         // Service start - detect manager and ignore config
         switch detectServiceManager() {
         case "systemd", "launchd", "runit", "s6", "docker", "container":
-            return false // Always foreground
+            // Always foreground
+            return false
         case "sysv", "rcd":
-            return true // Always daemonize
+            // Always daemonize
+            return true
         default:
-            return false // Unknown, default to foreground
+            // Unknown, default to foreground
+            return false
         }
     }
 
@@ -6165,7 +6342,8 @@ func Daemonize() error {
     cmd.Stdout = nil
     cmd.Stderr = nil
     cmd.SysProcAttr = &syscall.SysProcAttr{
-        Setsid: true, // Create new session (detach from controlling terminal)
+        // Create new session (detach from controlling terminal)
+        Setsid: true,
     }
 
     if err := cmd.Start(); err != nil {
@@ -6204,7 +6382,8 @@ func Daemonize() error {
     // Use Windows Service (--service install/start) instead
     fmt.Fprintln(os.Stderr, "Warning: --daemon is not supported on Windows")
     fmt.Fprintln(os.Stderr, "Use --service install && --service start for Windows Service")
-    return nil // Continue in foreground
+    // Continue in foreground
+    return nil
 }
 ```
 
@@ -6323,12 +6502,17 @@ import (
 // setupSignalHandler configures graceful shutdown (Unix)
 func setupSignalHandler(server *http.Server, pidFile string) {
     sigChan := make(chan os.Signal, 1)
+    // SIGTERM: kill (default)
+    // SIGINT: Ctrl+C
+    // SIGQUIT: Ctrl+\
+    // SIGUSR1: Reopen logs
+    // SIGUSR2: Status dump
     signal.Notify(sigChan,
-        syscall.SIGTERM,  // kill (default)
-        syscall.SIGINT,   // Ctrl+C
-        syscall.SIGQUIT,  // Ctrl+\
-        syscall.SIGUSR1,  // Reopen logs
-        syscall.SIGUSR2,  // Status dump
+        syscall.SIGTERM,
+        syscall.SIGINT,
+        syscall.SIGQUIT,
+        syscall.SIGUSR1,
+        syscall.SIGUSR2,
     )
 
     // Handle SIGRTMIN+3 (Docker STOPSIGNAL) - signal 37
@@ -6481,7 +6665,8 @@ func stopChildProcesses(timeout time.Duration) {
         process, _ := os.FindProcess(pid)
         for time.Now().Before(deadline) {
             if err := process.Signal(syscall.Signal(0)); err != nil {
-                break // Process exited
+                // Process exited
+                break
             }
             time.Sleep(100 * time.Millisecond)
         }
@@ -6544,9 +6729,12 @@ type ConfigManager struct {
     configPath      string
     db              *sql.DB
     lastFileModTime time.Time
-    lastDBVersion   int64         // Config version in database
-    pendingRestart  bool          // True if restart-required settings changed
-    restartSettings []string      // Which settings need restart
+    // Config version in database
+    lastDBVersion   int64
+    // True if restart-required settings changed
+    pendingRestart  bool
+    // Which settings need restart
+    restartSettings []string
     mu              sync.RWMutex
 }
 
@@ -7471,7 +7659,8 @@ func GetConfigDir(flagValue string) string {
     if envValue := os.Getenv("CONFIG_DIR"); envValue != "" {
         return envValue
     }
-    return defaultConfigDir() // OS-specific default
+    // OS-specific default
+    return defaultConfigDir()
 }
 
 // GetDatabaseDir returns database directory (always under data dir)
@@ -7490,7 +7679,7 @@ func GetDatabaseDir(dataDir string) string {
 # Configurable paths (via env vars or CLI flags)
 export CONFIG_DIR="/config"
 export DATA_DIR="/data"
-export LOG_DIR="/data/logs"
+export LOG_DIR="/data/log"
 export DATABASE_DIR="/data/db"
 export BACKUP_DIR="/data/backup"
 
@@ -7887,7 +8076,8 @@ func IsValidHost(host string, devMode bool, projectName string) bool {
 
     // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, vidveil)
     if projectName != "" && strings.HasSuffix(lower, "."+strings.ToLower(projectName)) {
-        return devMode // Project TLDs only valid in dev mode
+        // Project TLDs only valid in dev mode
+        return devMode
     }
 
     // Get the public suffix (TLD or eTLD like co.uk)
@@ -7895,7 +8085,8 @@ func IsValidHost(host string, devMode bool, projectName string) bool {
 
     // Check if it's a dev-only TLD
     if devOnlyTLDs[suffix] {
-        return devMode // Dev TLDs only valid in dev mode
+        // Dev TLDs only valid in dev mode
+        return devMode
     }
 
     // In production, require valid ICANN TLD
@@ -8488,7 +8679,8 @@ func installWindowsService() error {
             DisplayName:     "vidveil",
             Description:     "vidveil service",
             StartType:       mgr.StartAutomatic,
-            ServiceStartName: "", // Empty = Virtual Service Account
+            // Empty = Virtual Service Account
+            ServiceStartName: "",
         },
     )
     if err != nil {
@@ -8565,7 +8757,7 @@ func installWindowsService() error {
 
 | Asset Type | Location |
 |------------|----------|
-| Templates | `src/server/templates/` |
+| Templates | `src/server/template/` |
 | Static files | `src/server/static/` |
 | Application data | `src/data/` (JSON files) |
 
@@ -10387,7 +10579,7 @@ docker/
 | `/config/security` | Security databases (geoip, blocklists, cve, trivy) |
 | `/data` | Data directory (databases, Tor keys, caches) |
 | `/data/db` | SQLite databases (server.db, users.db) |
-| `/data/logs` | Log files (access.log, error.log, audit.log, etc.) |
+| `/data/log` | Log files (access.log, error.log, audit.log, etc.) |
 | `/data/tor` | Tor data (hidden service keys) |
 | `/data/backup` | Backup archives |
 | `/usr/local/bin/vidveil` | Application binary |
@@ -10520,7 +10712,7 @@ RUN apk add --no-cache \
     tor
 
 # Create directories with proper structure
-RUN mkdir -p /config /config/security /data/db /data/logs /data/tor /data/backup
+RUN mkdir -p /config /config/security /data/db /data/log /data/tor /data/backup
 
 # Copy binary from builder stage (multi-stage build)
 COPY --from=builder /build/binary/vidveil /usr/local/bin/vidveil
@@ -10590,7 +10782,7 @@ export TZ="${TZ:-America/New_York}"
 # Configurable paths (via env vars or CLI flags)
 export CONFIG_DIR="/config"
 export DATA_DIR="/data"
-export LOG_DIR="/data/logs"
+export LOG_DIR="/data/log"
 export DATABASE_DIR="/data/db"
 export BACKUP_DIR="/data/backup"
 
@@ -10919,7 +11111,7 @@ $TEMP_DIR/
 | `/config/` | Configuration files |
 | `/config/security/` | TLS certs, keys |
 | `/data/db/` | SQLite databases (server.db, users.db) |
-| `/data/logs/` | Application and service logs |
+| `/data/log/` | Application and service logs |
 | `/data/tor/` | Tor hidden service data |
 | `/data/backup/` | Backup files |
 | `/data/cache/` | Cache files (if used) |
@@ -11219,7 +11411,7 @@ networks:
 | Security dir | `/config/security` (geoip, blocklists, cve, trivy) |
 | Data dir | `/data` |
 | Database dir | `/data/db` (server.db, users.db) |
-| Log dir | `/data/logs` |
+| Log dir | `/data/log` |
 | Tor data dir | `/data/tor` |
 | Backup dir | `/data/backup` |
 | Binary | `/usr/local/bin/vidveil` |
@@ -11232,7 +11424,7 @@ networks:
 | `/config` | `./rootfs/config` | Configuration files |
 | `/data` | `./rootfs/data` | All persistent data |
 | `/data/db/` | (inside /data) | SQLite databases |
-| `/data/logs/` | (inside /data) | Log files |
+| `/data/log/` | (inside /data) | Log files |
 
 ## Tor in Container
 
@@ -13615,7 +13807,8 @@ func detectClientType(r *http.Request) string {
         return "text"
     }
     if strings.Contains(accept, "application/json") {
-        return "json" // Rare for frontend, but support it
+        // Rare for frontend, but support it
+        return "json"
     }
 
     // 2. Check User-Agent for browser detection
@@ -13647,7 +13840,8 @@ func detectClientType(r *http.Request) string {
 
     // 4. Empty or unknown User-Agent
     if ua == "" {
-        return "text" // Default to text for programmatic access
+        // Default to text for programmatic access
+        return "text"
     }
 
     // 5. Default: HTML (safest fallback)
@@ -14118,19 +14312,19 @@ See **JavaScript Rules** section below for `app.js` structure.
 
 | Location | Purpose |
 |----------|---------|
-| `src/server/templates/` | All `.tmpl` template files |
-| `src/server/templates/partials/` | Reusable template partials |
-| `src/server/templates/layouts/` | Base layouts |
-| `src/server/templates/pages/` | Page-specific templates |
+| `src/server/template/` | All `.tmpl` template files |
+| `src/server/template/partial/` | Reusable template partials |
+| `src/server/template/layout/` | Base layouts |
+| `src/server/template/page/` | Page-specific templates |
 | `src/server/static/` | Static assets (CSS, JS, images) |
 
 **Template Structure (all files use `.tmpl` extension):**
 ```
-src/server/templates/
-├── layouts/
+src/server/template/
+├── layout/
 │   ├── public.tmpl         # Public-facing layout (/, /auth/*, /server/*)
 │   └── admin.tmpl          # Admin panel layout (/admin/*)
-├── partials/
+├── partial/
 │   ├── public/
 │   │   ├── header.tmpl     # Public header (logo, nav, login)
 │   │   ├── nav.tmpl        # Public navigation
@@ -14141,7 +14335,7 @@ src/server/templates/
 │   │   └── footer.tmpl     # Admin footer (version, docs)
 │   ├── head.tmpl           # <head> contents (meta, CSS)
 │   └── scripts.tmpl        # JavaScript includes
-├── pages/
+├── page/
 │   ├── index.tmpl          # Home page
 │   ├── healthz.tmpl        # Health check page
 │   └── error.tmpl          # Error pages (404, 500, etc.)
@@ -14153,7 +14347,7 @@ src/server/templates/
 │   ├── dashboard.tmpl      # Admin dashboard
 │   ├── settings.tmpl       # Settings page
 │   └── ...
-└── components/
+└── component/
     ├── modal.tmpl          # Reusable modal component
     ├── toast.tmpl          # Toast notifications
     └── ...
@@ -14249,14 +14443,14 @@ src/server/templates/
 
 | Partial | Public | Admin | Purpose |
 |---------|:------:|:-----:|---------|
-| `partials/public/header.tmpl` | ✓ | | Logo + top nav + login/user menu |
-| `partials/public/nav.tmpl` | ✓ | | Horizontal navigation links |
-| `partials/public/footer.tmpl` | ✓ | | About, Privacy, Contact links |
-| `partials/admin/header.tmpl` | | ✓ | Logo + search + bell + admin menu |
-| `partials/admin/sidebar.tmpl` | | ✓ | Collapsible sidebar navigation |
-| `partials/admin/footer.tmpl` | | ✓ | Version, docs, status |
-| `partials/head.tmpl` | ✓ | ✓ | Shared `<head>` contents |
-| `partials/scripts.tmpl` | ✓ | ✓ | Shared JavaScript includes |
+| `partial/public/header.tmpl` | ✓ | | Logo + top nav + login/user menu |
+| `partial/public/nav.tmpl` | ✓ | | Horizontal navigation links |
+| `partial/public/footer.tmpl` | ✓ | | About, Privacy, Contact links |
+| `partial/admin/header.tmpl` | | ✓ | Logo + search + bell + admin menu |
+| `partial/admin/sidebar.tmpl` | | ✓ | Collapsible sidebar navigation |
+| `partial/admin/footer.tmpl` | | ✓ | Version, docs, status |
+| `partial/head.tmpl` | ✓ | ✓ | Shared `<head>` contents |
+| `partial/scripts.tmpl` | ✓ | ✓ | Shared JavaScript includes |
 
 ### Static Assets Organization (NON-NEGOTIABLE)
 
@@ -14396,35 +14590,35 @@ function confirmDelete(form, message = 'Are you sure?') {
 | Rule | Description |
 |------|-------------|
 | **Go templates only** | `html/template` package, `.tmpl` extension |
-| **Layouts for structure** | `layouts/public.tmpl`, `layouts/admin.tmpl` |
+| **Layouts for structure** | `layout/public.tmpl`, `layout/admin.tmpl` |
 | **Partials for reuse** | Header, nav, footer, components |
 | **Pages for content** | One `.tmpl` per page/route |
 | **No logic in templates** | Minimal `{{if}}`, `{{range}}` - logic in handlers |
 
 **Template Inheritance:**
 ```
-layouts/public.tmpl
-  └── includes partials/head.tmpl
-  └── includes partials/public/header.tmpl
-  └── includes partials/public/nav.tmpl
+layout/public.tmpl
+  └── includes partial/head.tmpl
+  └── includes partial/public/header.tmpl
+  └── includes partial/public/nav.tmpl
   └── yields to page content
-  └── includes partials/public/footer.tmpl
-  └── includes partials/scripts.tmpl
+  └── includes partial/public/footer.tmpl
+  └── includes partial/scripts.tmpl
 ```
 
 ### Partials Rules (NON-NEGOTIABLE)
 
 | Rule | Description |
 |------|-------------|
-| **Shared partials** | `partials/head.tmpl`, `partials/scripts.tmpl` |
-| **Context partials** | `partials/public/*`, `partials/admin/*` |
-| **Component partials** | Reusable UI: `partials/toast.tmpl`, `partials/modal.tmpl` |
+| **Shared partials** | `partial/head.tmpl`, `partial/scripts.tmpl` |
+| **Context partials** | `partial/public/*`, `partial/admin/*` |
+| **Component partials** | Reusable UI: `partial/toast.tmpl`, `partial/modal.tmpl` |
 | **No page-specific partials** | If used once, it's not a partial |
 | **Self-contained** | Partials include their own styles/scripts if needed |
 
 **Mandatory Partials:**
 ```
-partials/
+partial/
 ├── head.tmpl           # <head> - meta, CSS links (REQUIRED)
 ├── scripts.tmpl        # JS includes before </body> (REQUIRED)
 ├── public/
@@ -14439,7 +14633,7 @@ partials/
 
 **Optional Component Partials:**
 ```
-partials/
+partial/
 ├── toast.tmpl          # Toast notification container
 ├── modal.tmpl          # Reusable modal structure
 ├── pagination.tmpl     # Pagination controls
@@ -14739,7 +14933,7 @@ main {
 
 **App-Specific Partials (Optional):**
 
-Projects can create additional partials for functionality unique to that application. Place these in `partials/` alongside the mandatory ones.
+Projects can create additional partials for functionality unique to that application. Place these in `partial/` alongside the mandatory ones.
 
 | Example Partial | Project | Purpose |
 |-----------------|---------|---------|
@@ -14756,11 +14950,11 @@ Projects can create additional partials for functionality unique to that applica
 
 **App-Specific Partials (add to existing structure):**
 
-See **Template Structure** above for mandatory partials (`partials/public/*`, `partials/admin/*`, `partials/head.tmpl`, `partials/scripts.tmpl`).
+See **Template Structure** above for mandatory partials (`partial/public/*`, `partial/admin/*`, `partial/head.tmpl`, `partial/scripts.tmpl`).
 
 Projects add app-specific partials alongside the mandatory ones:
 ```
-src/server/templates/partials/
+src/server/template/partial/
 ├── public/                  # MANDATORY (see Template Structure)
 ├── admin/                   # MANDATORY (see Template Structure)
 ├── head.tmpl                # MANDATORY
@@ -14802,8 +14996,8 @@ package server
 
 import "embed"
 
-//go:embed templates/*.tmpl templates/**/*.tmpl
-var templatesFS embed.FS
+//go:embed template/*.tmpl template/**/*.tmpl
+var templateFS embed.FS
 
 //go:embed static/*
 var staticFS embed.FS
@@ -16499,10 +16693,12 @@ GET /api/v1/users?status=active&role=admin ✓ Multiple filters
 
 ```go
 // ALL JSON responses MUST be indented and end with newline
-data, _ := json.MarshalIndent(response, "", "  ")  // 2-space indent
+// Use 2-space indent
+data, _ := json.MarshalIndent(response, "", "  ")
 w.Header().Set("Content-Type", "application/json")
 w.Write(data)
-w.Write([]byte("\n"))  // Single trailing newline
+// Single trailing newline
+w.Write([]byte("\n"))
 ```
 
 **Output:**
@@ -16524,7 +16720,8 @@ w.Write([]byte("\n"))  // Single trailing newline
 ```go
 // ALL text responses MUST end with single newline
 w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-fmt.Fprintf(w, "%s\n", text)  // Single trailing newline
+// Single trailing newline included in format string
+fmt.Fprintf(w, "%s\n", text)
 ```
 
 **Output:**
@@ -17682,7 +17879,8 @@ func GetAllDomains() []string {
 func GetWildcardDomain() string {
     domains := GetAllDomains()
     if len(domains) < 2 {
-        return "" // Need multiple to infer wildcard
+        // Need multiple to infer wildcard
+        return ""
     }
 
     // Extract base domain from first (primary)
@@ -17691,7 +17889,8 @@ func GetWildcardDomain() string {
     // Check if all share same base
     for _, d := range domains[1:] {
         if extractBaseDomain(d) != base {
-            return "" // Different base domains, no wildcard
+            // Different base domains, no wildcard
+            return ""
         }
     }
 
@@ -17861,16 +18060,22 @@ func formatURL(host string, port int, isHTTPS bool) string {
 **Usage:**
 ```go
 // Single HTTP port
-formatURL(host, 8080, false)  // http://host:8080
+// Returns: http://host:8080
+formatURL(host, 8080, false)
 
 // Single HTTPS port (443 = HTTPS-only mode)
-formatURL(host, 443, false)   // https://host  (443 forces HTTPS)
+// Returns: https://host (443 forces HTTPS)
+formatURL(host, 443, false)
 
 // Dual port mode
-formatURL(host, 80, false)    // http://host
-formatURL(host, 443, true)    // https://host
-formatURL(host, 8080, false)  // http://host:8080
-formatURL(host, 8443, true)   // https://host:8443
+// Returns: http://host
+formatURL(host, 80, false)
+// Returns: https://host
+formatURL(host, 443, true)
+// Returns: http://host:8080
+formatURL(host, 8080, false)
+// Returns: https://host:8443
+formatURL(host, 8443, true)
 ```
 
 **Overlay Network Protocol Rules (Tor, I2P, etc.):**
@@ -19347,14 +19552,19 @@ server:
 ```go
 type IPBlock struct {
     IP          string    `json:"ip"`
-    CIDR        string    `json:"cidr,omitempty"`     // Optional range block
-    Type        BlockType `json:"type"`               // temporary, extended, permanent
+    // Optional range block
+    CIDR        string    `json:"cidr,omitempty"`
+    // temporary, extended, permanent
+    Type        BlockType `json:"type"`
     Reason      string    `json:"reason"`
     BlockedAt   time.Time `json:"blocked_at"`
-    ExpiresAt   *time.Time `json:"expires_at,omitempty"` // nil = permanent
+    // nil = permanent
+    ExpiresAt   *time.Time `json:"expires_at,omitempty"`
     OffenseCount int      `json:"offense_count"`
-    AutoBlocked bool      `json:"auto_blocked"`        // true = system, false = admin
-    BlockedBy   string    `json:"blocked_by,omitempty"` // admin ID if manual
+    // true = system, false = admin
+    AutoBlocked bool      `json:"auto_blocked"`
+    // admin ID if manual
+    BlockedBy   string    `json:"blocked_by,omitempty"`
 }
 ```
 
@@ -19554,9 +19764,12 @@ type Breach struct {
     Summary         string        `json:"summary"`
     Description     string        `json:"description"`
     DetectedAt      time.Time     `json:"detected_at"`
-    DetectedBy      string        `json:"detected_by"`      // "system" or admin ID
-    DetectionMethod string        `json:"detection_method"` // automated/manual/external
-    AffectedData    []string      `json:"affected_data"`    // data categories
+    // "system" or admin ID
+    DetectedBy      string        `json:"detected_by"`
+    // automated/manual/external
+    DetectionMethod string        `json:"detection_method"`
+    // data categories
+    AffectedData    []string      `json:"affected_data"`
     AffectedUsers   int           `json:"affected_users"`
     ContainedAt     *time.Time    `json:"contained_at,omitempty"`
     NotifiedAt      *time.Time    `json:"notified_at,omitempty"`
@@ -19564,8 +19777,10 @@ type Breach struct {
     RootCause       string        `json:"root_cause,omitempty"`
     Remediation     string        `json:"remediation,omitempty"`
     Timeline        []BreachEvent `json:"timeline"`
-    Compliance      []string      `json:"compliance"`       // applicable standards
-    NotifyDeadline  time.Time     `json:"notify_deadline"`  // based on strictest standard
+    // applicable standards
+    Compliance      []string      `json:"compliance"`
+    // based on strictest standard
+    NotifyDeadline  time.Time     `json:"notify_deadline"`
 }
 
 type BreachStatus string
@@ -22802,8 +23017,8 @@ vidveil --maintenance backup [filename]
 | `server.yml` | ✓ Always | Configuration file |
 | `server.db` | ✓ Always | Main database (admin credentials, settings) |
 | `users.db` | ✓ If exists | User database (multi-user mode) |
-| `{config_dir}/templates/` | ✓ If exists | Custom email templates |
-| `{config_dir}/themes/` | ✓ If exists | Custom themes |
+| `{config_dir}/template/` | ✓ If exists | Custom email templates |
+| `{config_dir}/theme/` | ✓ If exists | Custom themes |
 | `{config_dir}/ssl/` | Optional | SSL certificates (flag: `--include-ssl`) |
 | `{data_dir}/` | Optional | Data files (flag: `--include-data`) |
 
@@ -22839,7 +23054,7 @@ vidveil --maintenance backup [filename]
     "server.yml",
     "server.db",
     "users.db",
-    "templates/",
+    "template/",
     "ssl/"
   ],
   "encrypted": true,
@@ -22913,9 +23128,11 @@ POST /api/v1/admin/server/backup
 Content-Type: application/json
 
 {
-  "password": "backup-encryption-password"  // Required if encryption enabled
+  "password": "backup-encryption-password"
 }
 ```
+
+**Note:** The `password` field is required if encryption is enabled.
 
 **Warning Shown if Encryption Not Enabled:**
 
@@ -23198,7 +23415,7 @@ vidveil --service start
 
 **ALL projects MUST have customizable email templates.**
 
-Email templates allow server admins to customize ALL notification messages, including account-related emails (password reset, email verification, login alerts, etc.). Default templates with sane defaults are embedded in the binary; custom templates are stored in `{config_dir}/templates/email/`.
+Email templates allow server admins to customize ALL notification messages, including account-related emails (password reset, email verification, login alerts, etc.). Default templates with sane defaults are embedded in the binary; custom templates are stored in `{config_dir}/template/email/`.
 
 **Key Points:**
 - ALL email templates are fully customizable via the admin panel
@@ -23210,8 +23427,8 @@ Email templates allow server admins to customize ALL notification messages, incl
 
 | Type | Location |
 |------|----------|
-| Default templates | Embedded in binary (`src/templates/email/`) |
-| Custom templates | `{config_dir}/templates/email/` |
+| Default templates | Embedded in binary (`src/server/template/email/`) |
+| Custom templates | `{config_dir}/template/email/` |
 
 **Behavior:**
 - If custom template exists → use custom
@@ -26290,7 +26507,8 @@ func main() {
     // NOTE: Use signal package's setupSignalHandler() for proper cross-platform support
     // This is simplified - actual implementation uses platform-specific signal_*.go files
     sigChan := make(chan os.Signal, 1)
-    registerShutdownSignals(sigChan) // See signal/signal_unix.go and signal_windows.go
+    // See signal/signal_unix.go and signal_windows.go
+    registerShutdownSignals(sigChan)
 
     go func() {
         <-sigChan
@@ -27352,7 +27570,7 @@ When a project includes a CLI client, it provides a terminal-based interface for
 | Default binary name | `vidveil-cli` |
 | Versioning | Same as main application |
 | Build | Part of same Makefile (`make build` produces both binaries) |
-| Config location | `~/.config/vidveil/cli.yml` |
+| Config location | `~/.config/apimgr/vidveil/cli.yml` |
 
 ## Binary Naming Rules
 
@@ -27371,7 +27589,8 @@ When a project includes a CLI client, it provides a terminal-based interface for
 binaryName := filepath.Base(os.Args[0])
 
 // Hardcoded for User-Agent (never changes)
-const projectName = "jokes"  // compiled in via -ldflags
+// Compiled in via -ldflags
+const projectName = "jokes"
 userAgent := fmt.Sprintf("%s-cli/%s", projectName, version)
 ```
 
@@ -27410,13 +27629,106 @@ jokes-cli tui
 
 ## Configuration
 
-### Config File Location
+### Directory Structure (NON-NEGOTIABLE)
 
-| OS | Path |
-|----|------|
-| Linux | `~/.config/vidveil/cli.yml` |
-| macOS | `~/.config/vidveil/cli.yml` |
-| Windows | `%APPDATA%\vidveil\cli.yml` |
+**CLI client ALWAYS uses user home directories. NEVER OS system directories.**
+
+The CLI client uses the same user directory structure as the server in user mode. This allows the CLI to share configuration with a locally running server when appropriate.
+
+#### Linux / macOS
+
+| Directory | Path | Purpose |
+|-----------|------|---------|
+| Config | `~/.config/apimgr/vidveil/` | Configuration files |
+| Config File | `~/.config/apimgr/vidveil/cli.yml` | CLI configuration |
+| Data | `~/.local/share/apimgr/vidveil/` | Persistent data |
+| Cache | `~/.cache/apimgr/vidveil/` | Temporary/cached data |
+| Logs | `~/.local/log/apimgr/vidveil/` | Log files |
+
+#### Windows
+
+| Directory | Path | Purpose |
+|-----------|------|---------|
+| Config | `%APPDATA%\apimgr\vidveil\` | Configuration files |
+| Config File | `%APPDATA%\apimgr\vidveil\cli.yml` | CLI configuration |
+| Data | `%LOCALAPPDATA%\apimgr\vidveil\data\` | Persistent data |
+| Cache | `%LOCALAPPDATA%\apimgr\vidveil\cache\` | Temporary/cached data |
+| Logs | `%LOCALAPPDATA%\apimgr\vidveil\log\` | Log files |
+
+#### Directory Usage
+
+| Directory | Contents | Backup? |
+|-----------|----------|---------|
+| Config | `cli.yml`, connection profiles, preferences | Yes |
+| Data | Downloaded data, local databases, saved items | Yes |
+| Cache | API response cache, temp files, thumbnails | No (recreatable) |
+| Logs | `cli.log`, debug logs | Optional |
+
+**NEVER use OS system directories:**
+- `/etc/apimgr/vidveil/` (Linux system config)
+- `/var/lib/apimgr/vidveil/` (Linux system data)
+- `/var/log/apimgr/vidveil/` (Linux system logs)
+- `C:\ProgramData\` (Windows system data)
+- Any directory requiring elevated privileges
+
+#### Path Resolution (Go)
+
+```go
+// src/cli/paths/paths.go
+package paths
+
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+)
+
+const (
+	projectOrg  = "apimgr"
+	projectName = "vidveil"
+)
+
+// ConfigDir returns the CLI config directory
+func ConfigDir() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.Getenv("APPDATA"), projectOrg, projectName)
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", projectOrg, projectName)
+}
+
+// DataDir returns the CLI data directory
+func DataDir() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.Getenv("LOCALAPPDATA"), projectOrg, projectName, "data")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "share", projectOrg, projectName)
+}
+
+// CacheDir returns the CLI cache directory
+func CacheDir() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.Getenv("LOCALAPPDATA"), projectOrg, projectName, "cache")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".cache", projectOrg, projectName)
+}
+
+// LogDir returns the CLI log directory
+func LogDir() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.Getenv("LOCALAPPDATA"), projectOrg, projectName, "log")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "log", projectOrg, projectName)
+}
+
+// ConfigFile returns the CLI config file path
+func ConfigFile() string {
+	return filepath.Join(ConfigDir(), "cli.yml")
+}
+```
 
 ### Config Structure
 
@@ -27640,7 +27952,8 @@ The project name is compiled into the binary at build time:
 ```go
 // Set at build time via -ldflags
 var (
-    ProjectName = "jokes"      // Original project name (compiled in)
+    // Original project name (compiled in)
+    ProjectName = "jokes"
     Version     = "1.2.3"
 )
 
@@ -27780,8 +28093,8 @@ vidveil/
 │       │   └── {project-specific}.go
 │       ├── tui/            # TUI implementation
 │       │   ├── app.go
-│       │   ├── views/
-│       │   └── components/
+│       │   ├── view/
+│       │   └── component/
 │       └── api/            # API client library
 │           └── client.go
 ├── go.mod
@@ -28095,7 +28408,8 @@ Incoming Request: https://api.customer.com/path
 // DomainResolver handles custom domain routing
 type DomainResolver struct {
     db       *sql.DB
-    cache    *cache.Cache  // Cache domain lookups
+    // Cache domain lookups
+    cache    *cache.Cache
     cacheTTL time.Duration
 }
 
@@ -28522,10 +28836,12 @@ func (s *DomainService) selectChallengeType(domain *CustomDomain) string {
 
 **For verified domains, SSL can be issued automatically without user configuration:**
 
+Challenge options: `auto`, `http-01`, `tls-alpn-01`
+
 ```
 POST /api/v1/user/domains/api.mycompany.com/ssl
 {
-  "challenge": "auto"   // or "http-01", "tls-alpn-01"
+  "challenge": "auto"
 }
 
 Response:
@@ -28867,286 +29183,448 @@ When implementing custom domains for a project:
 
 ## Project Business Purpose
 
-Purpose: Privacy-respecting meta search engine for adult video content
+**Purpose:** Privacy-respecting meta search for adult video content by aggregating results from 47+ adult video sites without tracking or logging user activity.
 
-Vidveil is a self-hosted meta search engine that aggregates adult video search results from 47+ major adult content sites. It provides a unified search experience with bang shortcuts, real-time streaming results, and zero tracking.
+**Target Users:**
+- Privacy-conscious users seeking adult content without tracking or logging
+- Users wanting to search multiple adult video sites simultaneously  
+- Users requiring anonymous access via Tor hidden services
+- Self-hosters wanting private adult content search infrastructure
+- Developers building adult content aggregation services
 
-Target Users:
-- Privacy-conscious users seeking adult content without tracking
-- Users who want to search multiple adult sites simultaneously
-- Developers building adult content discovery applications
-- Self-hosters wanting complete control over their search data
-
-Unique Value:
-- Aggregates results from 47+ major adult video sites in one search
-- Bang shortcuts for instant single-site searches (!ph, !xh, !rt, etc.)
-- Server-Sent Events (SSE) for real-time result streaming
-- Direct API integration with PornHub, RedTube, Eporner
-- Zero tracking, zero logging, zero analytics
-- Built-in Tor support for maximum anonymity
-- Complete self-hosting - no external dependencies
-- Single static binary with embedded assets
+**Unique Value:**
+- Zero tracking: No user activity logging, no analytics, no cookies (except admin sessions)
+- 47 search engines: Aggregates results from major and niche adult video sites
+- Bang shortcuts: Type `!phamateur`tosearchPornHubdirectly,orcombinemultiplebangs
+- Fast API integration: Direct JSON APIs for PornHub, RedTube, Eporner (no scraping needed)
+- SSE streaming: Real-time result delivery as each engine responds (progressive results)
+- Autocomplete: Bang shortcuts autocomplete as you type for quick access
+- Tor support: Built-in Tor hidden service for anonymous access
+- Single binary: No external dependencies, all assets embedded
+- Self-hosted: Complete control, no external data sharing
 
 ## Business Logic & Rules
 
-Business Rules:
-- Minimum video duration filter (default: 300 seconds / 5 minutes) - configurable
-- Premium/gold content filtering - exclude paid/premium results when enabled
-- Bang shortcuts take precedence: "!ph amateur" only searches PornHub
-- Multiple bangs allowed: "!ph !rt amateur" searches both PornHub and RedTube
-- Default engines used when no bangs specified (configurable list)
-- Concurrent engine requests (configurable, default: 10)
-- Engine timeout (configurable, default: 10 seconds)
-- Results cached per query+page combination (configurable TTL)
-- Age verification can be enforced (configurable, disabled by default)
-- Tor routing can be forced for all engines or specific ones
-- TLS fingerprint spoofing (Chrome) to bypass Cloudflare protection
+**Privacy Rules (CRITICAL):**
+- NO user tracking: No analytics, no cookies (except admin session), no logging of search queries
+- NO data collection: Search queries are processed in memory and immediately discarded
+- NO IP logging: IP addresses not stored for search requests (only for admin panel rate limiting)
+- NO user profiles: No user accounts, no registration, no sign-in required for search
+- Admin sessions only: Session cookies ONLY for admin panel authentication (not public search)
+- Rate limiting: Applied per-IP but IPs not stored permanently (in-memory only)
 
-Search Behavior:
-- Bang parser extracts !xx patterns from query
-- If bangs found: use ONLY those engines
-- If no bangs: use configured default_engines list
-- Results streamed via SSE as each engine responds
-- Results deduplicated by URL (same video from multiple sources)
-- Results sorted by relevance, then views, then rating
-- Pagination: results_per_page (default 30), max_pages (default 10)
+**Search Engine Integration:**
+- Tier 1 engines (API-based): PornHub, RedTube, Eporner use official JSON APIs
+- Tier 2/3 engines (scraping): HTML parsing with proper error handling and fallback
+- Engine failures: Individual engine timeouts don't block other engines
+- Result aggregation: Deduplicate by video URL, prefer API results over scraped
+- Timeout: 10 seconds per engine maximum, 30 seconds total search timeout
+- Concurrent requests: All engines queried simultaneously, results streamed as they arrive
 
-Validation:
-- Query cannot be empty
-- Page number must be >= 1
-- Engine names must exist in supported engines list
-- Bang shortcuts validated against registered bangs
-- Duration filter must be >= 0 seconds
+**Bang Search Rules:**
+- Bang format: `!xx`wherexxistheengineshortcode(e.g.,`!ph`forPornHub)
+- Multiple bangs: `!ph!rtamateur`searchesbothPornHubandRedTube
+- No bang: All enabled engines searched
+- Bang validation: Invalid bangs ignored, search continues with valid bangs or all engines
+- Case insensitive: `!PH`,`!ph`,`!Ph`allwork
+- Autocomplete: Bang shortcuts autocomplete as you type (starts after `!`character)
 
-Privacy Rules:
-- NO search query logging
-- NO user tracking or analytics
-- NO cookies except admin session
-- NO external analytics or tracking scripts
-- Tor hidden service support built-in
-- All external engine requests go through configurable proxy (if enabled)
+**Result Processing:**
+- Deduplication: Same video URL from multiple engines shown once
+- Title cleaning: Remove site branding, normalize encoding
+- Thumbnail proxying: All thumbnails proxied through vidveil (prevent tracking)
+- Safe title generation: Generate safe, descriptive titles for videos with missing data
+- Result sorting: By relevance (default) or date (if available from engine)
+- Pagination: Client-side only (engines don't support consistent pagination)
+
+**Search Query Validation:**
+- Minimum length: 2 characters (prevent abuse)
+- Maximum length: 200 characters
+- Allowed characters: Letters, numbers, spaces, common punctuation, bang prefix
+- Sanitization: HTML encode all user input, strip script tags
+- Query not stored: Processed in memory, immediately discarded after response
+
+**Engine Configuration:**
+- Enable/disable: Each engine can be enabled or disabled via admin panel
+- Timeout per engine: Configurable (default 10 seconds)
+- Retry logic: No automatic retries (fail fast, don't delay results)
+- Health checks: Optional periodic engine health monitoring
+- Engine metadata: Name, URL, bang shortcut, tier, API vs scraping
+
+**Rate Limiting (Public Search):**
+- Anonymous users: 30 searches per 5 minutes per IP
+- Burst allowance: 5 additional searches allowed before hard limit
+- Cooldown: 5 minutes before limits reset
+- Admin panel: Separate rate limits (5 login attempts per 15 minutes)
+- No permanent IP storage: Rate limit counters in-memory only
+
+**Content Safety:**
+- All content is adult: No content filtering by default (adult search engine)
+- No illegal content: Engines known for illegal content explicitly excluded
+- User responsibility: Users responsible for legal compliance in their jurisdiction
+- No content hosting: All results are links to external sites, no content stored locally
+- Disclaimer: Clear disclaimer on first page about legal responsibility
+
+**SSE Streaming Behavior:**
+- Progressive results: Results streamed as each engine responds
+- Event types: `engine_start`, `result`, `engine_complete`, `search_complete`
+- Partial results: Users see results immediately without waiting for all engines
+- Connection timeout: 30 seconds maximum, then stream closes
+- Error handling: Engine failures reported as events, don't stop stream
 
 ## Data Models
 
+**Search Result (from engines):**
 ```go
-// Result represents a single video search result
-type Result struct {
-    ID              string    `json:"id"`               // Unique identifier from source
-    Title           string    `json:"title"`            // Video title
-    URL             string    `json:"url"`              // Video page URL
-    Thumbnail       string    `json:"thumbnail"`        // Thumbnail image URL
-    PreviewURL      string    `json:"preview_url"`      // Video preview/trailer URL (optional)
-    Duration        string    `json:"duration"`         // Human-readable duration (e.g., "12:34")
-    DurationSeconds int       `json:"duration_seconds"` // Duration in seconds for filtering
-    Views           string    `json:"views"`            // Human-readable view count (e.g., "1.2M")
-    ViewsCount      int64     `json:"views_count"`      // Numeric view count for sorting
-    Rating          float64   `json:"rating"`           // Video rating (0.0-5.0) - optional
-    Quality         string    `json:"quality"`          // Video quality (HD, 4K, etc.) - optional
-    Source          string    `json:"source"`           // Engine name (lowercase ID)
-    SourceDisplay   string    `json:"source_display"`   // Human-readable engine name
-    Published       time.Time `json:"published"`        // Publication date - optional
-    Description     string    `json:"description"`      // Video description - optional
+// SearchResult represents a single video result from an engine
+type SearchResult struct {
+    // Unique identifier (video URL hash)
+    ID string `json:"id"`
+    // Video title
+    Title string `json:"title"`
+    // Video URL (on external site)
+    URL string `json:"url"`
+    // Thumbnail URL (proxied through vidveil)
+    Thumbnail string `json:"thumbnail"`
+    // Video duration in seconds
+    Duration int `json:"duration"`
+    // Engine that provided this result
+    Engine string `json:"engine"`
+    // Upload date (if available)
+    UploadDate string `json:"upload_date,omitempty"`
+    // View count (if available)
+    Views int64 `json:"views,omitempty"`
+    // Rating (if available, 0-5 scale)
+    Rating float64 `json:"rating,omitempty"`
+    // NSFW flag (always true for adult content)
+    NSFW bool `json:"nsfw"`
 }
 
-// SearchResponse represents the API response for a search
+// SearchRequest represents a search query
+type SearchRequest struct {
+    // Search query text
+    Query string `json:"query"`
+    // Page number (client-side pagination)
+    Page int `json:"page"`
+    // Specific engines to search (empty = all enabled)
+    Engines []string `json:"engines,omitempty"`
+    // Bang shortcuts parsed from query
+    Bangs []string `json:"bangs,omitempty"`
+    // Actual search query (with bangs removed)
+    SearchQuery string `json:"search_query"`
+}
+
+// SearchResponse represents search results
 type SearchResponse struct {
-    Success    bool             `json:"success"`
-    Data       SearchData       `json:"data"`
-    Pagination PaginationData   `json:"pagination"`
-    Error      string           `json:"error,omitempty"`
-    Code       string           `json:"code,omitempty"`
+    // Search query submitted
+    Query string `json:"query"`
+    // Actual search query used (with bangs removed)
+    SearchQuery string `json:"search_query"`
+    // Whether bang shortcuts were detected
+    HasBang bool `json:"has_bang"`
+    // Bang engines requested
+    BangEngines []string `json:"bang_engines,omitempty"`
+    // Search results
+    Results []SearchResult `json:"results"`
+    // Engines that responded successfully
+    EnginesUsed []string `json:"engines_used"`
+    // Search time in milliseconds
+    SearchTimeMs int64 `json:"search_time_ms"`
+    // Page number
+    Page int `json:"page"`
+    // Total results (estimated)
+    TotalResults int `json:"total_results,omitempty"`
 }
 
-// SearchData holds the search results and metadata
-type SearchData struct {
-    Query         string   `json:"query"`              // Original query string
-    SearchQuery   string   `json:"search_query"`       // Query after bang parsing
-    Results       []Result `json:"results"`            // Search results
-    EnginesUsed   []string `json:"engines_used"`       // Successfully queried engines
-    EnginesFailed []string `json:"engines_failed"`     // Failed engine names
-    SearchTimeMS  int64    `json:"search_time_ms"`     // Total search time
-    HasBang       bool     `json:"has_bang"`           // Whether bang shortcuts were used
-    BangEngines   []string `json:"bang_engines"`       // Engines from bang parsing
-    Cached        bool     `json:"cached"`             // Whether results came from cache
+// Engine represents a search engine configuration
+type Engine struct {
+    // Unique identifier
+    ID string `json:"id"`
+    // Display name
+    Name string `json:"name"`
+    // Bang shortcut (!ph,!rt,etc.)
+    Bang string `json:"bang"`
+    // Engine base URL
+    BaseURL string `json:"base_url"`
+    // Engine tier (1=API, 2=major scraping, 3=minor scraping)
+    Tier int `json:"tier"`
+    // Whether engine uses official API
+    HasAPI bool `json:"has_api"`
+    // Whether engine is enabled
+    Enabled bool `json:"enabled"`
+    // Timeout in seconds
+    Timeout int `json:"timeout"`
+    // Last health check status
+    Healthy bool `json:"healthy"`
+    // Last health check time
+    LastCheck string `json:"last_check,omitempty"`
 }
 
-// PaginationData holds pagination information
-type PaginationData struct {
-    Page  int `json:"page"`   // Current page number
-    Limit int `json:"limit"`  // Results per page
-    Total int `json:"total"`  // Total results count
-    Pages int `json:"pages"`  // Total pages available
+// BangShortcut represents an autocomplete suggestion
+type BangShortcut struct {
+    // Bang shortcut
+    Bang string `json:"bang"`
+    // Engine name
+    Name string `json:"name"`
+    // Engine tier
+    Tier int `json:"tier"`
+    // Whether engine has official API
+    HasAPI bool `json:"has_api"`
 }
 
-// EngineInfo represents information about a search engine
-type EngineInfo struct {
-    Name        string   `json:"name"`         // Engine ID (lowercase)
-    DisplayName string   `json:"display_name"` // Human-readable name
-    Enabled     bool     `json:"enabled"`      // Enabled in config
-    Available   bool     `json:"available"`    // Currently reachable
-    Features    []string `json:"features"`     // Supported features (api, streaming, etc.)
-    Tier        int      `json:"tier"`         // Engine tier (1=API, 2=JSON, 3=HTML)
-}
-
-// BangInfo represents a bang shortcut
-type BangInfo struct {
-    Shortcut    string `json:"shortcut"`     // Bang shortcut (!ph, !xh, etc.)
-    Engine      string `json:"engine"`       // Engine ID
-    DisplayName string `json:"display_name"` // Human-readable engine name
+// SSEEvent represents a Server-Sent Event
+type SSEEvent struct {
+    // Event type (engine_start, result, engine_complete, search_complete, error)
+    Event string `json:"event"`
+    // Event data (varies by event type)
+    Data interface{} `json:"data"`
 }
 ```
 
 ## Data Sources
 
-Data Sources:
-- 47 external adult video search engines (live scraping/API calls)
-- PornHub Webmasters API (direct JSON API integration)
-- RedTube Public API (direct JSON API integration)
-- Eporner v2 JSON API (direct JSON API integration)
-- XVideos, XNXX, xHamster (JSON extraction from embedded data)
-- 40+ additional sites (HTML parsing with CSS selectors)
+**Engine Configuration:**
+- `src/engines/engines.json` - List of all 47 search engines (embedded in binary)
+- Updated at build time only
+- Contains: engine ID, name, bang, base URL, tier, API flag, default timeout
+- User can enable/disable engines via admin panel (stored in database)
+- Cannot add new engines at runtime (requires new release)
 
-Engine Tiers:
-1. Tier 1 (6 engines): Major sites with API or direct JSON access
-   - pornhub, redtube, eporner, xvideos, xnxx, xhamster
-2. Tier 2 (10 engines): Popular sites with JSON endpoints
-   - youporn, pornmd, pornhat, tube8, xtube, etc.
-3. Tier 3+ (31 engines): Additional sites with HTML parsing
-   - fourtube, fux, porntube, youjizz, sunporno, txxx, etc.
+**Engine API Endpoints:**
+- PornHub Webmasters API: `https://www.pornhub.com/webmasters/search?search={query}`
+- RedTube Public API: `https://api.redtube.com/?data=redtube.Videos.searchVideos&search={query}`
+- Eporner v2 API: `https://www.eporner.com/api/v2/video/search/?query={query}`
+- All other engines: HTML scraping with CSS selectors (no official API)
 
-Update Strategy:
-- Engines queried in real-time per search request
-- No local database of videos (privacy: no stored searches)
-- Results cached per query+page for configured TTL
-- Engine availability checked via periodic health checks
-- Bang shortcuts hardcoded in binary (src/service/engines/bangs.go)
+**Thumbnail Proxying:**
+- External thumbnails: Proxied through `/api/v1/proxy/thumbnail?url={encoded_url}`
+- Prevents tracking: External sites don't see user IPs
+- Cached locally: Thumbnails cached in memory for 1 hour (reduces external requests)
+- No storage: Thumbnails not saved to disk (memory cache only)
 
-Data Location:
-- src/service/engines/*.go - Engine implementations
-- src/service/engines/bangs.go - Bang shortcut mappings
-- src/service/parsers/*.go - HTML/JSON parsers
-- No committed video data files (all data fetched live)
+**GeoIP Data (for blocking/analytics - OPTIONAL feature):**
+- ip2location-db: Community-maintained IP-to-country database
+- Downloaded on first run if enabled: `https://github.com/sapics/ip-location-db`
+- Updated weekly via scheduler if enabled
+- Optional feature: Admin can enable country-based access control
+- No user tracking: Only used for access control if enabled, not analytics
 
-Privacy Design:
-- Zero persistent storage of search queries
-- Zero logging of user searches
-- Cache uses query hash as key (no readable queries stored)
-- All external requests proxiable through Tor
-- No user profiles or accounts (except admin)
+**Blocklist (OPTIONAL feature):**
+- Admin-defined IP/country blocklist stored in database
+- Can block by: IP address, IP range, country code
+- Applied at request level before search processing
+- No user tracking: Block decisions not logged permanently
+
+**Rate Limit Data:**
+- In-memory only: No persistent storage of IP addresses or search queries
+- TTL-based: Rate limit counters expire after timeout period
+- No logs: Rate limit events not logged permanently (only live stats)
+
+**Update Strategy:**
+- Engine list: Updates require new release (hardcoded engine configurations)
+- Engine enable/disable: Runtime configuration via admin panel (stored in database)
+- GeoIP database: Weekly automatic updates via scheduler (if feature enabled)
+- Application: Self-update via `--update` command (GitHub releases API)
+
+**Data Location:**
+- `src/engines/engines.json` - Engine configurations (embedded, read-only)
+- Database: User settings, admin sessions, engine enable/disable, blocklist (if used)
+- Memory cache: Thumbnail cache, rate limit counters, search result deduplication
+- No persistent logs: Search queries never written to disk or database
 
 ## Project-Specific Endpoints Summary
 
 **Implementation of these endpoints MUST follow PART 20 (API Structure) and PART 17 (Web Frontend) rules.**
 
-Endpoints Purpose:
-- Search: Meta search across 47+ adult video sites with bang support
-- Search Stream: SSE streaming of search results as engines respond
-- Autocomplete: Bang shortcut suggestions for partial input
-- Bangs: List all available bang shortcuts
-- Engines: List and manage search engines
-- Engine details: Get information about specific engine
+### Public Search Endpoints
 
-Business Behavior:
+**Search (Standard):**
+- Purpose: Search across all enabled engines or specific engines via bang shortcuts
+- Input: Query string, optional engines filter, page number
+- Output: Aggregated results from all responding engines
+- Business Behavior:
+  - All enabled engines queried concurrently
+  - Results deduplicated by video URL
+  - 10 second timeout per engine, 30 seconds total
+  - Engines that timeout don't block results from faster engines
+  - Query not logged or stored
+  - Rate limited: 30 searches per 5 minutes per IP
 
-**Search (GET /api/v1/search)**
-- Accepts query, page, engines parameters
-- Parses bang shortcuts from query (!ph, !xh, !rt, etc.)
-- If bangs found: uses ONLY those engines
-- If no bangs: uses configured default_engines list
-- Multiple bangs supported: "!ph !rt query" searches both
-- Results filtered by minimum duration
-- Premium content filtered if enabled
-- Results cached per query+page combination
-- Returns JSON with results, metadata, timing
+**Search Stream (SSE):**
+- Purpose: Real-time progressive result streaming as engines respond
+- Input: Query string, optional engines filter
+- Output: Server-Sent Events with progressive results
+- Business Behavior:
+  - Connection stays open until all engines respond or timeout
+  - Events: `engine_start`, `result`, `engine_complete`, `search_complete`, `error`
+  - Users see results immediately without waiting
+  - 30 second maximum connection time
+  - Query not logged or stored
+  - Rate limited: Same as standard search
 
-**Search Stream (GET /api/v1/search/stream)**
-- Server-Sent Events (SSE) streaming
-- Results sent as each engine responds
-- Format: `data: {JSON}\n\n` per result batch
-- Engines queried concurrently with configurable limit
-- Client receives results in real-time (faster UX)
-- Final event sent when all engines complete or timeout
+**Autocomplete:**
+- Purpose: Suggest bang shortcuts as user types
+- Input: Partial bang text (e.g., `!po`)
+- Output: List of matching engines with bangs
+- Business Behavior:
+  - Triggered when user types `!`followedby1+characters
+  - Case-insensitive matching
+  - Returns engine name, bang, tier, API flag
+  - No rate limiting (low cost operation)
+  - Not logged
 
-**Autocomplete (GET /api/v1/autocomplete)**
-- Suggests bang shortcuts as user types
-- Input "!p" returns: !ph (PornHub), !pmd (PornMD), !phat (PornHat), etc.
-- Case-insensitive matching
-- Returns bang shortcut, engine name, display name
-- Used by frontend for search box autocomplete
+**Bangs List:**
+- Purpose: Get all available bang shortcuts
+- Input: None
+- Output: Complete list of engines with bang shortcuts
+- Business Behavior:
+  - Returns all 47 engines with their bang shortcuts
+  - Includes only enabled engines (or all if admin authenticated)
+  - Not logged
+  - No rate limiting (read-only, cached)
 
-**Bangs (GET /api/v1/bangs)**
-- Lists all 47+ bang shortcuts
-- Returns bang code, engine ID, display name
-- Used for documentation and bang discovery
-- Alphabetically sorted
+**Engines List:**
+- Purpose: Get all search engines with metadata
+- Input: None
+- Output: List of all engines with status
+- Business Behavior:
+  - Returns engine ID, name, bang, tier, API flag, enabled status
+  - Public endpoint shows only enabled engines
+  - Admin endpoint shows all engines with health status
+  - Not logged
+  - No rate limiting (read-only, cached)
 
-**Engines (GET /api/v1/engines)**
-- Lists all search engines with status
-- Shows: name, display name, enabled, available, features, tier
-- Includes health check status
-- Can be filtered by enabled/tier
+**Thumbnail Proxy:**
+- Purpose: Proxy external thumbnails to prevent tracking
+- Input: Encoded thumbnail URL from external site
+- Output: Proxied thumbnail image
+- Business Behavior:
+  - Fetches thumbnail from external site
+  - Caches in memory for 1 hour
+  - Returns image to client (prevents external site seeing user IP)
+  - Cache miss: fetch from external, cache, return
+  - Cache hit: return from memory
+  - Rate limited: 100 requests per minute per IP
 
-**Engine Details (GET /api/v1/engines/{name})**
-- Returns detailed info about specific engine
-- Shows configuration, features, last health check
-- Includes success/failure statistics
+### Admin Panel Endpoints
 
-Web UI Endpoints:
-- / - Homepage with search box
-- /search - Search results page
-- /about - About and engine list
-- /admin - Admin panel (authentication required)
+**Engine Management:**
+- Purpose: Enable/disable search engines, view engine health
+- Input: Engine ID, enabled/disabled flag
+- Output: Updated engine configuration
+- Business Behavior:
+  - Admin can enable/disable any of the 47 engines
+  - Changes apply immediately to new searches
+  - Health check shows last successful query time
+  - Can trigger manual health check for all engines
 
-Admin Features:
-- Enable/disable engines
-- Configure default engines
-- Set search parameters (timeout, concurrent requests, etc.)
-- View engine health and statistics
-- Configure Tor settings
-- Manage age verification
-- View logs and metrics
+**Search Analytics (OPTIONAL, disabled by default):**
+- Purpose: View aggregate search statistics (no query logging)
+- Input: Date range
+- Output: Aggregate statistics (searches per day, engines used, response times)
+- Business Behavior:
+  - Only counts/aggregates, NO query text or IPs stored
+  - Tracks: total searches, searches per engine, average response time
+  - NO user tracking, NO query logging, NO IP storage
+  - Feature must be explicitly enabled by admin
+  - Default: DISABLED (privacy-first)
+
+**Rate Limit Management:**
+- Purpose: Configure rate limits for public search
+- Input: Rate limit values (searches per window, window duration)
+- Output: Updated rate limit configuration
+- Business Behavior:
+  - Configurable: searches per time window, burst allowance, cooldown period
+  - Applied per-IP but IPs not stored permanently
+  - Changes apply immediately to new requests
+
+**Blocklist Management (OPTIONAL):**
+- Purpose: Block access by IP, IP range, or country
+- Input: IP address, IP range, or country code
+- Output: Updated blocklist
+- Business Behavior:
+  - Admin can add/remove blocked IPs, ranges, or countries
+  - Blocking applied at request level (before search processing)
+  - NO permanent logging of blocked requests
+  - Optional feature (disabled by default)
 
 ## Extended Node Functions (If Applicable)
 
-**Not applicable for Vidveil.** This project only requires standard clustering (config sync). No managed nodes or extended node functions.
+**Vidveil does NOT have extended node functions beyond standard clustering.**
+
+Vidveil implements standard clustering (config sync via shared database) but does NOT manage external nodes or resources. Each cluster node is a vidveil instance sharing configuration - there are no "managed nodes" that vidveil controls.
+
+| Function | Description |
+|----------|-------------|
+| N/A | No extended node functions - standard clustering only |
+
+**Note:** Vidveil uses clustering only for config synchronization across multiple vidveil instances. It does NOT manage external resources like Docker hosts, servers, or infrastructure.
 
 ## High Availability Requirements (If Applicable)
 
-**Not applicable for Vidveil.** This is a stateless search aggregator that only needs standard clustering (config sync). No HA failover required.
+**Vidveil does NOT require High Availability.**
+
+Vidveil is a stateless search aggregation service. Standard clustering (config sync) is sufficient. There is no need for automatic failover, health monitoring, or HA-specific features.
+
+| Requirement | Description |
+|-------------|-------------|
+| HA Required | NO - standard clustering is sufficient |
+| Failover | Not needed - load balancer handles traffic distribution |
+| State | Stateless search - no session state to sync |
+
+**Note:** Multiple vidveil instances can run behind a load balancer for horizontal scaling, but this is standard clustering, not HA. Each instance operates independently and shares only configuration via the database.
 
 ## Notes
 
-Technical Implementation Notes:
-- TLS fingerprint spoofing using uTLS library to bypass Cloudflare
-- Concurrent HTTP requests with configurable limits (default: 10)
-- Engine-specific parsers in src/service/parsers/
-- Bang parser uses regex for pattern extraction
-- SSE implementation uses chunked transfer encoding
-- Cache implementation uses Valkey/Redis when available, fallback to memory
-- Tor circuit rotation for enhanced privacy when enabled
-- Age verification uses simple cookie-based system (not legally compliant, use reverse proxy for real compliance)
+**Privacy-First Design:**
+Vidveil is built with privacy as the #1 priority. This means:
+- No query logging: Search queries are never written to disk or database
+- No IP logging: IP addresses used only for rate limiting (in-memory, expires quickly)
+- No user tracking: No accounts, no profiles, no cookies (except admin sessions)
+- No analytics: No usage statistics collected by default (optional aggregate stats can be enabled)
+- Thumbnail proxying: All thumbnails proxied to prevent external tracking
+- Tor support: Built-in Tor hidden service for anonymous access
 
-Configuration Files:
-- server.yml - Main configuration
-- Key sections: search, search.tor, web.security, search.age_verification
-- All search engines enabled by default
-- Tor disabled by default (enable in search.tor.enabled)
+**Content Responsibility:**
+Vidveil is a search aggregation service, not a content provider. All results link to external sites. Users are responsible for legal compliance in their jurisdiction.
 
-CLI Client:
-- Includes optional CLI client (vidveil-cli) for terminal searches
-- TUI mode with interactive search interface
-- Supports all API features (search, bangs, autocomplete)
-- See PART 34 for CLI client details
+**Engine Selection:**
+The 47 engines were selected based on:
+- Popularity: Major and well-known adult video sites
+- Reliability: Sites with consistent availability
+- API availability: Preference for sites with official APIs (PornHub, RedTube, Eporner)
+- Legal standing: Only sites operating within legal frameworks
+- Diversity: Mix of professional, amateur, and niche content sources
 
-Supported Adult Sites (47+):
-Tier 1: pornhub, redtube, eporner, xvideos, xnxx, xhamster
-Tier 2: youporn, pornmd, pornhat, tube8, xtube, keezmovies, extremetube, spankwire, sleazyneasy, youjizz
-Tier 3+: fourtube, fux, porntube, sunporno, txxx, nuvid, tnaflix, drtuber, empflix, hellporno, alphaporno, pornflip, zenporn, gotporn, hdzog, xxxymovies, lovehomeporn, pornerbros, nonktube, nubilesporn, pornbox, porntop, pornotube, vporn, pornhd, xbabe, pornone, porntrex, hqporner, vjav, flyflv, anyporn, superporn, tubegalore, motherless, threemovs
+**Search Quality:**
+- Deduplication: Same video URL from multiple engines shown once
+- API preference: API results prioritized over scraped results (more reliable)
+- Timeout handling: Fast engines don't wait for slow engines
+- Progressive results: SSE streaming shows results as they arrive (better UX)
 
-Project Status:
-- Feature-complete for v1.0
-- Active development on engine improvements
-- Regular updates to adapt to site changes
+**Performance Considerations:**
+- Concurrent queries: All engines queried simultaneously (not sequential)
+- Timeout: 10 seconds per engine, 30 seconds total search
+- Caching: Thumbnails cached in memory (1 hour), results never cached (always fresh)
+- Rate limiting: Prevents abuse without requiring authentication
+
+**Tor Hidden Service:**
+- Optional feature: Can be enabled via admin panel
+- Automatic setup: If Tor installed, hidden service auto-configured
+- Anonymous access: Users can access vidveil via .onion address
+- No logging: Same privacy guarantees apply to Tor traffic
+
+**Clustering:**
+- Standard clustering: Multiple instances share config via database
+- Load balancing: Use external load balancer (nginx, HAProxy, Cloudflare)
+- Stateless: Each instance operates independently, no state to sync
+- Config sync: Changes in admin panel propagate to all instances immediately
+
+**Legal Considerations:**
+- Age verification: Site shows 18+ disclaimer, user must confirm
+- DMCA compliance: All content hosted externally, vidveil only provides links
+- Jurisdiction: Users responsible for legal compliance in their location
+- No content storage: Vidveil does not store, cache, or host any video content
 
 ---
 
@@ -29209,6 +29687,7 @@ Project Status:
 
 - [ ] `AI.md` - Complete project specification (required, THE spec)
 - [ ] `TODO.AI.md` - Task tracking (when needed)
+- [ ] `PLAN.md` - Implementation plan (optional, if exists this is THE plan)
 - [ ] `README.md` - User documentation (required)
 - [ ] `LICENSE.md` - License file (required)
 - [ ] `Makefile` - Build targets (required)
@@ -29216,7 +29695,7 @@ Project Status:
 - [ ] `go.mod` / `go.sum` - Go modules (required)
 - [ ] `.github/workflows/` or `.gitea/workflows/` - CI/CD (required)
 
-**Note:** No TEMPLATE.md, SPEC.md, or CLAUDE.md in projects. Only AI.md.
+**Note:** No TEMPLATE.md, SPEC.md, CLAUDE.md, AUDIT.md, COMPLIANCE.md, SUMMARY.md, REPORT.md, or any other report files in projects. Fix issues directly, don't document them.
 
 ### Development
 
@@ -29344,7 +29823,7 @@ Project Status:
 - [ ] Binary: `vidveil-cli`
 - [ ] Same version as server
 - [ ] Standard CLI + TUI modes
-- [ ] Config: `~/.config/vidveil/cli.yml`
+- [ ] Config: `~/.config/apimgr/vidveil/cli.yml`
 - [ ] Dark theme for TUI (matching project theme)
 - [ ] Built alongside server
 

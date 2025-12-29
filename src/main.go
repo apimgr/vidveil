@@ -42,7 +42,7 @@ var (
 func main() {
 	args := os.Args[1:]
 
-	// Parse arguments manually per TEMPLATE.md spec
+	// Parse arguments manually per AI.md spec
 	var (
 		configDir   string
 		dataDir     string
@@ -50,7 +50,7 @@ func main() {
 		pidFile     string
 		address     string
 		port        string
-		modeFlag        string
+		mode        string
 		debug       bool
 		daemon      bool
 		serviceCmd  string
@@ -115,10 +115,10 @@ func main() {
 				port = args[i]
 			}
 
-		case "--modeFlag":
+		case "--mode":
 			if i+1 < len(args) {
 				i++
-				modeFlag = args[i]
+				mode = args[i]
 			}
 
 		case "--debug":
@@ -131,7 +131,7 @@ func main() {
 			}
 
 		case "--update":
-			// TEMPLATE.md PART 14: --update [check|yes|branch {stable|beta|daily}]
+			// AI.md PART 14: --update [check|yes|branch {stable|beta|daily}]
 			// Default per spec
 			updateCmd = "yes"
 			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
@@ -167,8 +167,8 @@ func main() {
 				address = strings.TrimPrefix(arg, "--address=")
 			} else if strings.HasPrefix(arg, "--port=") {
 				port = strings.TrimPrefix(arg, "--port=")
-			} else if strings.HasPrefix(arg, "--modeFlag=") {
-				modeFlag = strings.TrimPrefix(arg, "--modeFlag=")
+			} else if strings.HasPrefix(arg, "--mode=") {
+				mode = strings.TrimPrefix(arg, "--mode=")
 			}
 		}
 		i++
@@ -180,7 +180,7 @@ func main() {
 		return
 	}
 
-	// Handle update command (TEMPLATE.md PART 14)
+	// Handle update command (AI.md PART 14)
 	if updateCmd != "" {
 		handleUpdateCommand(updateCmd, updateArg)
 		return
@@ -188,7 +188,7 @@ func main() {
 
 	// Handle maintenance command
 	if maintCmd != "" {
-		// --maintenance update is alias for --update yes per TEMPLATE.md
+		// --maintenance update is alias for --update yes per AI.md
 		if maintCmd == "update" {
 			handleUpdateCommand("yes", "")
 			return
@@ -197,7 +197,7 @@ func main() {
 		return
 	}
 
-	// Check for environment variables (init only per TEMPLATE.md)
+	// Check for environment variables (init only per AI.md)
 	if configDir == "" && os.Getenv("CONFIG_DIR") != "" {
 		configDir = os.Getenv("CONFIG_DIR")
 	}
@@ -214,22 +214,22 @@ func main() {
 		address = os.Getenv("LISTEN")
 	}
 
-	// MODE env var is runtime - always checked per TEMPLATE.md
+	// MODE env var is runtime - always checked per AI.md
 	// Priority: CLI flag > env var > config file
-	if modeFlag == "" && os.Getenv("MODE") != "" {
-		modeFlag = os.Getenv("MODE")
+	if mode == "" && os.Getenv("MODE") != "" {
+		mode = os.Getenv("MODE")
 	}
 
-	// Initialize modeFlag and debug per TEMPLATE.md PART 5
+	// Initialize mode and debug per AI.md PART 5
 	// This must happen before starting the server
-	mode.Initialize(modeFlag, debug)
+	mode.Initialize(mode, debug)
 
-	// Handle daemon modeFlag per TEMPLATE.md PART 4
+	// Handle daemon mode per AI.md PART 4
 	if daemon {
 		// Daemonize: fork to background
-		// For now, just log that daemon modeFlag was requested
+		// For now, just log that daemon mode was requested
 		// Full implementation requires platform-specific code
-		fmt.Println("🔄 Running in daemon modeFlag...")
+		fmt.Println("🔄 Running in daemon mode...")
 	}
 
 	// Load configuration
@@ -247,7 +247,7 @@ func main() {
 		paths.Log = logDir
 	}
 
-	// Write PID file if specified per TEMPLATE.md PART 4
+	// Write PID file if specified per AI.md PART 4
 	if pidFile != "" {
 		pid := os.Getpid()
 		if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d\n", pid)), 0644); err != nil {
@@ -264,16 +264,16 @@ func main() {
 		cfg.Server.Port = port
 	}
 
-	// Apply modeFlag (CLI > env > config, normalized)
-	if modeFlag != "" {
-		cfg.Server.Mode = config.NormalizeMode(modeFlag)
+	// Apply mode (CLI > env > config, normalized)
+	if mode != "" {
+		cfg.Server.Mode = config.NormalizeMode(mode)
 	} else if cfg.Server.Mode == "" {
 		cfg.Server.Mode = "production"
 	} else {
 		cfg.Server.Mode = config.NormalizeMode(cfg.Server.Mode)
 	}
 
-	// Initialize database per TEMPLATE.md PART 24
+	// Initialize database per AI.md PART 24
 	// Two separate databases: server.db (admin/config) and users.db (user accounts)
 	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
 	migrationMgr, err := database.NewMigrationManager(serverDBPath)
@@ -290,7 +290,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize admin service per TEMPLATE.md PART 31
+	// Initialize admin service per AI.md PART 31
 	adminSvc := admin.NewService(migrationMgr.GetDB())
 	if err := adminSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Failed to initialize admin service: %v\n", err)
@@ -310,7 +310,7 @@ func main() {
 	engineMgr := engines.NewManager(cfg)
 	engineMgr.InitializeEngines()
 
-	// Initialize services per TEMPLATE.md specifications
+	// Initialize services per AI.md specifications
 	// SSL service (PART 21)
 	sslSvc := ssl.New(cfg)
 	if err := sslSvc.Initialize(); err != nil {
@@ -339,10 +339,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "⚠️  CVE service initialization failed: %v\n", err)
 	}
 
-	// Initialize scheduler per TEMPLATE.md PART 27
+	// Initialize scheduler per AI.md PART 27
 	sched := scheduler.New()
 
-	// Register all built-in tasks per TEMPLATE.md PART 27
+	// Register all built-in tasks per AI.md PART 27
 	sched.RegisterBuiltinTasks(scheduler.BuiltinTaskFuncs{
 		SSLRenewal: func(ctx context.Context) error {
 			// SSL certificate renewal check per PART 21
@@ -434,7 +434,7 @@ func main() {
 	// Create server with admin service, migration manager, and scheduler
 	srv := server.New(cfg, engineMgr, adminSvc, migrationMgr, sched)
 
-	// Start live config watcher per TEMPLATE.md PART 1 NON-NEGOTIABLE
+	// Start live config watcher per AI.md PART 1 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, cfg)
 	configWatcher.OnReload(func(newCfg *config.Config) {
 		// Config has been reloaded - the shared cfg pointer is already updated
@@ -447,18 +447,18 @@ func main() {
 	go func() {
 		// Build listen address properly handling IPv6
 		listenAddr := cfg.Server.Address + ":" + cfg.Server.Port
-		// Per TEMPLATE.md line 6197-6199: Never show localhost, 127.0.0.1, 0.0.0.0
+		// Per AI.md line 6197-6199: Never show localhost, 127.0.0.1, 0.0.0.0
 		// Show only one address, the most relevant
 		displayAddr := getDisplayAddress(cfg)
 
-		// Console output per TEMPLATE.md PART 31 lines 10230-10258
+		// Console output per AI.md PART 31 lines 10230-10258
 		isFirstRun := adminSvc.IsFirstRun()
 		statusText := "Running"
 		if isFirstRun {
 			statusText = "Running (first run - setup available)"
 		}
 
-		// Check SMTP status per TEMPLATE.md PART 31 lines 10267-10306
+		// Check SMTP status per AI.md PART 31 lines 10267-10306
 		smtpStatus := "Not detected (email features disabled)"
 		smtpInfo := ""
 		if cfg.Server.Email.Enabled {
@@ -528,7 +528,7 @@ func main() {
 	sig := <-quit
 	fmt.Printf("\n🛑 Received %v, shutting down gracefully...\n", sig)
 
-	// Graceful shutdown with timeout (30 seconds per TEMPLATE.md)
+	// Graceful shutdown with timeout (30 seconds per AI.md)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -549,17 +549,17 @@ Options:
   --help              Show this help message
   --version           Show version information
   --status            Check server status and health
-  --modeFlag <modeFlag>       Set application modeFlag (prod/production or dev/development)
+  --mode <mode>       Set application mode (production or development)
   --config <dir>      Set configuration directory
   --data <dir>        Set data directory
   --log <dir>         Set log directory
   --pid <file>        Set PID file path
   --address <addr>    Set listen address
   --port <port>       Set port (e.g., 8888 or 80,443)
-  --debug             Enable debug modeFlag (enables /debug/pprof endpoints)
+  --debug             Enable debug mode (enables /debug/pprof endpoints)
   --daemon            Run in background (daemonize)
 
-Update (TEMPLATE.md PART 14):
+Update (AI.md PART 8):
   --update                Check and perform in-place update with restart
   --update yes            Same as --update (default)
   --update check          Check for updates without installing (no privileges required)
@@ -579,11 +579,11 @@ Maintenance:
   --maintenance backup [file]     Create backup
   --maintenance restore [file]    Restore from backup
   --maintenance update            Alias for --update yes
-  --maintenance modeFlag <on|off>     Enable/disable maintenance modeFlag
+  --maintenance mode <on|off>     Enable/disable maintenance mode
   --maintenance setup             Reset admin credentials (recovery)
 
 Environment Variables:
-  MODE                Application modeFlag (runtime, always checked)
+  MODE                Application mode (runtime, always checked)
 
   Initialization only (used once on first run):
   CONFIG_DIR          Configuration directory
@@ -743,7 +743,7 @@ Supported service managers:
 	}
 }
 
-// handleUpdateCommand implements TEMPLATE.md PART 14 --update command
+// handleUpdateCommand implements AI.md PART 14 --update command
 func handleUpdateCommand(cmd, arg string) {
 	maint := maintenance.New("", "", Version)
 
@@ -755,7 +755,7 @@ func handleUpdateCommand(cmd, arg string) {
 
 		info, err := maint.CheckUpdate()
 		if err != nil {
-			// HTTP 404 means no updates available per TEMPLATE.md
+			// HTTP 404 means no updates available per AI.md
 			if strings.Contains(err.Error(), "404") {
 				fmt.Println("✅ Already up to date (no newer release found)")
 				os.Exit(0)
@@ -828,7 +828,7 @@ func handleUpdateCommand(cmd, arg string) {
 	default:
 		fmt.Printf("❌ Unknown update command: %s\n", cmd)
 		fmt.Println(`
-Update Commands (TEMPLATE.md PART 14):
+Update Commands (AI.md PART 14):
   vidveil --update              Check and perform in-place update with restart
   vidveil --update yes          Same as --update (default)
   vidveil --update check        Check for updates without installing
@@ -864,14 +864,14 @@ func handleMaintenanceCommand(cmd, arg string) {
 			os.Exit(1)
 		}
 
-	case "modeFlag":
+	case "mode":
 		if arg == "" {
-			fmt.Println("❌ Missing modeFlag argument")
-			fmt.Println("   Usage: vidveil --maintenance modeFlag <on|off>")
+			fmt.Println("❌ Missing mode argument")
+			fmt.Println("   Usage: vidveil --maintenance mode <on|off>")
 			os.Exit(1)
 		}
 
-		// Parse boolean per TEMPLATE.md (1, yes, true, enable, enabled, on)
+		// Parse boolean per AI.md (1, yes, true, enable, enabled, on)
 		enabled := false
 		switch strings.ToLower(arg) {
 		case "1", "yes", "true", "enable", "enabled", "on":
@@ -879,7 +879,7 @@ func handleMaintenanceCommand(cmd, arg string) {
 		case "0", "no", "false", "disable", "disabled", "off":
 			enabled = false
 		default:
-			fmt.Printf("❌ Invalid modeFlag value: %s\n", arg)
+			fmt.Printf("❌ Invalid mode value: %s\n", arg)
 			fmt.Println("   Valid values: on, off, true, false, yes, no, enable, disable")
 			os.Exit(1)
 		}
@@ -890,7 +890,7 @@ func handleMaintenanceCommand(cmd, arg string) {
 		}
 
 	case "setup":
-		// Admin recovery per TEMPLATE.md PART 26
+		// Admin recovery per AI.md PART 26
 		// Clears admin password and API token, generates new setup token
 		fmt.Println()
 		fmt.Println("╔══════════════════════════════════════════════════════════════════╗")
@@ -924,13 +924,13 @@ Maintenance Commands:
   vidveil --maintenance backup [file]     Create backup
   vidveil --maintenance restore [file]    Restore from backup
   vidveil --maintenance update            Check and apply updates
-  vidveil --maintenance modeFlag <on|off>     Enable/disable maintenance modeFlag
+  vidveil --maintenance mode <on|off>     Enable/disable maintenance mode
   vidveil --maintenance setup             Reset admin credentials (recovery)`)
 		os.Exit(1)
 	}
 }
 
 func getDisplayAddress(cfg *config.Config) string {
-	// Per TEMPLATE.md PART 13: Never show 0.0.0.0, 127.0.0.1, localhost, etc.
+	// Per AI.md PART 13: Never show 0.0.0.0, 127.0.0.1, localhost, etc.
 	return net.JoinHostPort(config.GetDisplayHost(cfg), cfg.Server.Port)
 }

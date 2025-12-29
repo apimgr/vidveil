@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 //go:build !windows
 
-// TEMPLATE.md PART 4: Non-Windows stub for UAC functions
+// AI.md PART 4: Non-Windows stub for UAC functions
 package system
 
 import (
@@ -26,7 +26,7 @@ func IsElevated() bool {
 }
 
 // RequestElevation attempts to restart with elevated privileges using sudo/doas/pkexec
-// per TEMPLATE.md PART 4 escalation order
+// per AI.md PART 4 escalation order
 func RequestElevation(args ...string) ElevationResult {
 	if IsElevated() {
 		return ElevationAlreadyAdmin
@@ -43,7 +43,7 @@ func RunAsAdmin(command string, args ...string) error {
 		return cmd.Run()
 	}
 
-	// Try escalation methods in priority order per TEMPLATE.md PART 4
+	// Try escalation methods in priority order per AI.md PART 4
 	escalator := DetectEscalation()
 	if escalator == "" {
 		return fmt.Errorf("no escalation method available (need sudo, doas, or pkexec)")

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Package mode handles application mode (production/development) and debug settings
-// per TEMPLATE.md PART 5 - NON-NEGOTIABLE
+// per AI.md PART 5 - NON-NEGOTIABLE
 package mode
 
 import (
@@ -126,7 +126,7 @@ func Initialize(modeFlag string, debugFlag bool) {
 }
 
 // ConsoleIcon returns an emoji icon for the current mode
-// Used for console output per TEMPLATE.md
+// Used for console output per AI.md
 func ConsoleIcon() string {
 	if IsProduction() {
 		return "🔒"

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 31: Admin Credentials Management
+// AI.md PART 31: Admin Credentials Management
 // Admin credentials stored in database, NOT config file
-// Password hashing uses Argon2id per TEMPLATE.md PART 2
+// Password hashing uses Argon2id per AI.md PART 2
 package admin
 
 import (
@@ -20,7 +20,7 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Service manages admin credentials per TEMPLATE.md PART 31
+// Service manages admin credentials per AI.md PART 31
 type Service struct {
 	db           *sql.DB
 	mu           sync.RWMutex
@@ -53,7 +53,7 @@ func (s *Service) GetDB() *sql.DB {
 }
 
 // Initialize checks for first run and generates setup token if needed
-// Per TEMPLATE.md PART 31: App is FULLY FUNCTIONAL before setup
+// Per AI.md PART 31: App is FULLY FUNCTIONAL before setup
 func (s *Service) Initialize() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -86,7 +86,7 @@ func (s *Service) Initialize() error {
 			return fmt.Errorf("failed to store setup token: %w", err)
 		}
 
-		// Console output is handled in main.go per TEMPLATE.md PART 31
+		// Console output is handled in main.go per AI.md PART 31
 	}
 
 	return nil
@@ -134,7 +134,7 @@ func (s *Service) ValidateSetupToken(token string) bool {
 }
 
 // CreateAdmin creates a new admin account
-// Uses Argon2id for password hashing per TEMPLATE.md PART 2
+// Uses Argon2id for password hashing per AI.md PART 2
 // Server admin accounts are exempt from username blocklist per PART 31
 func (s *Service) CreateAdmin(username, password string, isPrimary bool) (*Admin, error) {
 	s.mu.Lock()
@@ -194,7 +194,7 @@ func (s *Service) CreateAdminWithSetupToken(token, username, password string) (*
 }
 
 // Authenticate validates admin credentials
-// Uses Argon2id for password verification per TEMPLATE.md PART 2
+// Uses Argon2id for password verification per AI.md PART 2
 func (s *Service) Authenticate(username, password string) (*Admin, error) {
 	var admin Admin
 	var passwordHash string
@@ -232,7 +232,7 @@ func (s *Service) Authenticate(username, password string) (*Admin, error) {
 }
 
 // ChangePassword updates admin password
-// Uses Argon2id for password hashing per TEMPLATE.md PART 2
+// Uses Argon2id for password hashing per AI.md PART 2
 func (s *Service) ChangePassword(adminID int64, currentPassword, newPassword string) error {
 	var passwordHash string
 	err := s.db.QueryRow(`
@@ -348,7 +348,7 @@ type AdminInvite struct {
 	CreatedBy int64
 }
 
-// CreateAdminInvite creates an invite for a new admin per TEMPLATE.md PART 31
+// CreateAdminInvite creates an invite for a new admin per AI.md PART 31
 func (s *Service) CreateAdminInvite(createdBy int64, username string, expiresIn time.Duration) (string, error) {
 	// Validate username
 	if err := validation.ValidateUsername(username, true); err != nil {
@@ -380,7 +380,7 @@ func (s *Service) CreateAdminInvite(createdBy int64, username string, expiresIn 
 	return token, nil
 }
 
-// ValidateInviteToken validates an admin invite token per TEMPLATE.md PART 31
+// ValidateInviteToken validates an admin invite token per AI.md PART 31
 func (s *Service) ValidateInviteToken(token string) (*AdminInvite, error) {
 	var invite AdminInvite
 	var usedAt sql.NullTime
@@ -415,7 +415,7 @@ func (s *Service) ValidateInviteToken(token string) (*AdminInvite, error) {
 	return &invite, nil
 }
 
-// CreateAdminWithInvite creates an admin account from an invite token per TEMPLATE.md PART 31
+// CreateAdminWithInvite creates an admin account from an invite token per AI.md PART 31
 func (s *Service) CreateAdminWithInvite(token, username, password string) (*Admin, error) {
 	// Validate the token
 	invite, err := s.ValidateInviteToken(token)
@@ -521,7 +521,7 @@ func hashToken(token string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// Argon2id parameters per TEMPLATE.md PART 2 (OWASP 2023 recommendations)
+// Argon2id parameters per AI.md PART 2 (OWASP 2023 recommendations)
 const (
 	// iterations
 	argonTime = 3
@@ -535,7 +535,7 @@ const (
 	argonSaltLen = 16
 )
 
-// hashPassword hashes a password using Argon2id per TEMPLATE.md PART 2
+// hashPassword hashes a password using Argon2id per AI.md PART 2
 // Returns PHC string format: $argon2id$v=19$m=65536,t=3,p=4$<base64-salt>$<base64-hash>
 func hashPassword(password string) (string, error) {
 	// Generate random salt
@@ -782,7 +782,7 @@ func (s *Service) GetRecoveryKeysStatus(adminID int64) (*RecoveryKeyInfo, error)
 }
 
 // CleanupExpiredSessions removes expired admin sessions (called by scheduler)
-// Per TEMPLATE.md PART 26: session.cleanup runs hourly
+// Per AI.md PART 26: session.cleanup runs hourly
 func (s *Service) CleanupExpiredSessions() error {
 	_, err := s.db.Exec(`
 		DELETE FROM admin_sessions WHERE expires_at < ?
@@ -794,7 +794,7 @@ func (s *Service) CleanupExpiredSessions() error {
 }
 
 // CleanupExpiredTokens removes expired API tokens and reset tokens (called by scheduler)
-// Per TEMPLATE.md PART 26: token.cleanup runs daily
+// Per AI.md PART 26: token.cleanup runs daily
 func (s *Service) CleanupExpiredTokens() error {
 	// Clean up expired setup tokens (password reset, invites, etc.)
 	_, err := s.db.Exec(`

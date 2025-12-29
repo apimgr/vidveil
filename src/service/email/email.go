@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 16: Email Templates
+// AI.md PART 16: Email Templates
 package email
 
 import (
@@ -20,7 +20,7 @@ import (
 //go:embed template/*.txt
 var embeddedTemplates embed.FS
 
-// Default templates per TEMPLATE.md PART 16
+// Default templates per AI.md PART 16
 var defaultTemplates = map[string]string{
 	"welcome": `Subject: Welcome to {app_name}
 ---
@@ -387,11 +387,11 @@ func (s *Service) sendTLS(addr, host string, auth smtp.Auth, from, to string, ms
 	return client.Quit()
 }
 
-// autodetectSMTP tries to find an SMTP server per TEMPLATE.md PART 31 lines 10267-10284
+// autodetectSMTP tries to find an SMTP server per AI.md PART 31 lines 10267-10284
 func (s *Service) autodetectSMTP() (string, int) {
 	hosts := s.cfg.Server.Email.AutodetectHost
 	if len(hosts) == 0 {
-		// Per TEMPLATE.md PART 31: Check localhost, 127.0.0.1, Docker host, gateway
+		// Per AI.md PART 31: Check localhost, 127.0.0.1, Docker host, gateway
 		hosts = []string{"localhost", "127.0.0.1", "172.17.0.1"}
 		// Try to get gateway IP
 		if gw := getGatewayIP(); gw != "" {

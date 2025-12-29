@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 25: Internationalization (i18n) Support
+// AI.md PART 25: Internationalization (i18n) Support
 package i18n
 
 import (
@@ -14,10 +14,10 @@ import (
 //go:embed translations/*.json
 var translationsFS embed.FS
 
-// DefaultLocale is the default locale per TEMPLATE.md
+// DefaultLocale is the default locale per AI.md
 const DefaultLocale = "en"
 
-// Translator handles translations per TEMPLATE.md PART 25
+// Translator handles translations per AI.md PART 25
 type Translator struct {
 	// translations: locale -> key -> translation
 	translations map[string]map[string]string
@@ -236,7 +236,7 @@ func (t *Translator) TF(locale, key string, args ...interface{}) string {
 	return fmt.Sprintf(t.T(locale, key), args...)
 }
 
-// GetLocale extracts the preferred locale from an HTTP request per TEMPLATE.md
+// GetLocale extracts the preferred locale from an HTTP request per AI.md
 func (t *Translator) GetLocale(r *http.Request) string {
 	// Check query parameter first
 	if locale := r.URL.Query().Get("lang"); locale != "" {
@@ -252,7 +252,7 @@ func (t *Translator) GetLocale(r *http.Request) string {
 		}
 	}
 
-	// Parse Accept-Language header per TEMPLATE.md PART 25
+	// Parse Accept-Language header per AI.md PART 25
 	acceptLang := r.Header.Get("Accept-Language")
 	if acceptLang != "" {
 		locales := parseAcceptLanguage(acceptLang)

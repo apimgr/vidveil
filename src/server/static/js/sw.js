@@ -1,5 +1,5 @@
 // Service Worker for VidVeil PWA
-// TEMPLATE.md PART 16: PWA Support
+// AI.md PART 16: PWA Support
 
 const CACHE_NAME = 'vidveil-v1';
 const STATIC_ASSETS = [

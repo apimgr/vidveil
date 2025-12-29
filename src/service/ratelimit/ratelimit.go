@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 16: Rate Limiting
+// AI.md PART 16: Rate Limiting
 package ratelimit
 
 import (
@@ -27,11 +27,11 @@ type clientInfo struct {
 // New creates a new rate limiter
 // Default: 120 requests per 60 seconds (from config)
 func New(enabled bool, requests int, windowSeconds int) *Limiter {
-	// Default per TEMPLATE.md PART 16
+	// Default per AI.md PART 16
 	if requests <= 0 {
 		requests = 120
 	}
-	// Default per TEMPLATE.md PART 16
+	// Default per AI.md PART 16
 	if windowSeconds <= 0 {
 		windowSeconds = 60
 	}

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 31: Username and Email Validation
+// AI.md PART 31: Username and Email Validation
 package validation
 
 import (
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// UsernameBlocklist per TEMPLATE.md PART 31
+// UsernameBlocklist per AI.md PART 31
 // Server admin account is exempt from this blocklist
 var UsernameBlocklist = []string{
 	// System & Administrative
@@ -111,7 +111,7 @@ func (e *UsernameError) Error() string {
 	return e.Message
 }
 
-// ValidateUsername validates a username per TEMPLATE.md PART 31
+// ValidateUsername validates a username per AI.md PART 31
 // Set isAdmin=true to exempt from blocklist (for server admin accounts)
 func ValidateUsername(username string, isAdmin bool) error {
 	// Convert to lowercase for validation
@@ -212,7 +212,7 @@ func ValidateEmail(email string) error {
 	return nil
 }
 
-// ValidatePassword validates password strength per TEMPLATE.md PART 22
+// ValidatePassword validates password strength per AI.md PART 22
 // Minimum requirements: 8 chars, 1 upper, 1 lower, 1 number, 1 special
 func ValidatePassword(password string) error {
 	return ValidatePasswordWithPolicy(password, false)

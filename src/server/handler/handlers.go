@@ -436,7 +436,7 @@ Components: Go, SQLite, Valkey/Redis
 `, appName, appURL, time.Now().Format("2006-01-02"))))
 }
 
-// SitemapXML returns sitemap.xml per TEMPLATE.md PART 13
+// SitemapXML returns sitemap.xml per AI.md PART 13
 func (h *Handler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 
@@ -445,7 +445,7 @@ func (h *Handler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 		baseURL = fmt.Sprintf("https://%s:%s", h.cfg.Server.FQDN, h.cfg.Server.Port)
 	}
 
-	// Build sitemap with static pages per TEMPLATE.md PART 13
+	// Build sitemap with static pages per AI.md PART 13
 	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -928,7 +928,7 @@ func (h *Handler) jsonError(w http.ResponseWriter, message, code string, status 
 	w.Write([]byte("\n"))
 }
 
-// RenderErrorPage renders a custom error page per TEMPLATE.md PART 30
+// RenderErrorPage renders a custom error page per AI.md PART 30
 func (h *Handler) RenderErrorPage(w http.ResponseWriter, code int, title, message string) {
 	data := map[string]interface{}{
 		"Code":      code,
@@ -951,13 +951,13 @@ func (h *Handler) RenderErrorPage(w http.ResponseWriter, code int, title, messag
 	}
 }
 
-// NotFoundHandler handles 404 errors per TEMPLATE.md PART 30
+// NotFoundHandler handles 404 errors per AI.md PART 30
 func (h *Handler) NotFoundHandler(w http.ResponseWriter, r *http.Request) {
 	h.RenderErrorPage(w, http.StatusNotFound, "Page Not Found",
 		"The page you're looking for doesn't exist or has been moved.")
 }
 
-// InternalErrorHandler handles 500 errors per TEMPLATE.md PART 30
+// InternalErrorHandler handles 500 errors per AI.md PART 30
 func (h *Handler) InternalErrorHandler(w http.ResponseWriter, r *http.Request) {
 	h.RenderErrorPage(w, http.StatusInternalServerError, "Server Error",
 		"Something went wrong on our end. Please try again later.")

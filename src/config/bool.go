@@ -7,7 +7,7 @@ import (
 )
 
 // Truthy values (case-insensitive)
-// Per TEMPLATE.md PART 4 - NON-NEGOTIABLE
+// Per AI.md PART 4 - NON-NEGOTIABLE
 var truthyValues = map[string]bool{
 	"1": true, "y": true, "t": true,
 	"yes": true, "true": true, "on": true, "ok": true,
@@ -19,7 +19,7 @@ var truthyValues = map[string]bool{
 }
 
 // Falsy values (case-insensitive)
-// Per TEMPLATE.md PART 4 - NON-NEGOTIABLE
+// Per AI.md PART 4 - NON-NEGOTIABLE
 var falsyValues = map[string]bool{
 	"0": true, "n": true, "f": true,
 	"no": true, "false": true, "off": true,

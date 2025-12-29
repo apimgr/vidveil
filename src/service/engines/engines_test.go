@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 23: Test coverage for engines
+// AI.md PART 23: Test coverage for engines
 package engines
 
 import (

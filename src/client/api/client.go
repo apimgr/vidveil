@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 33: CLI Client - API Client
+// AI.md PART 33: CLI Client - API Client
 package api
 
 import (
@@ -63,7 +63,7 @@ func NewClient(baseURL, token string, timeout int) *Client {
 		httpClient: &http.Client{
 			Timeout: time.Duration(timeout) * time.Second,
 		},
-		// TEMPLATE.md PART 33: User-Agent always uses original project name
+		// AI.md PART 33: User-Agent always uses original project name
 		userAgent: "vidveil-cli/dev",
 	}
 }

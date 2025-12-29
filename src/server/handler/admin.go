@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 12: Admin Panel
+// AI.md PART 12: Admin Panel
 package handler
 
 import (
@@ -77,7 +77,7 @@ type VanityStatus struct {
 	ElapsedTime string    `json:"elapsed_time"`
 }
 
-// AdminHandler handles admin panel routes per TEMPLATE.md PART 12
+// AdminHandler handles admin panel routes per AI.md PART 12
 type AdminHandler struct {
 	cfg          *config.Config
 	engineMgr    *engines.Manager
@@ -126,13 +126,13 @@ func (h *AdminHandler) IsFirstRun() bool {
 	return h.adminSvc.IsFirstRun()
 }
 
-// AuthMiddleware protects admin routes per TEMPLATE.md PART 31
+// AuthMiddleware protects admin routes per AI.md PART 31
 func (h *AdminHandler) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check for session cookie
 		cookie, err := r.Cookie(adminSessionCookieName)
 		if err != nil || !h.validateSession(cookie.Value) {
-			// Redirect to /auth/login per TEMPLATE.md PART 31
+			// Redirect to /auth/login per AI.md PART 31
 			http.Redirect(w, r, "/auth/login", http.StatusFound)
 			return
 		}
@@ -141,7 +141,7 @@ func (h *AdminHandler) AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// LoginPage redirects to /auth/login per TEMPLATE.md PART 31
+// LoginPage redirects to /auth/login per AI.md PART 31
 // All logins (admin and user) go through /auth/login
 func (h *AdminHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/auth/login", http.StatusFound)
@@ -174,11 +174,11 @@ func (h *AdminHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 
-	// Redirect to /auth/login per TEMPLATE.md PART 31
+	// Redirect to /auth/login per AI.md PART 31
 	http.Redirect(w, r, "/auth/login", http.StatusFound)
 }
 
-// SetupTokenPage handles setup token entry at /admin on first run per TEMPLATE.md PART 31
+// SetupTokenPage handles setup token entry at /admin on first run per AI.md PART 31
 // Step 2-3: User navigates to /admin, enters setup token
 // Step 4: Redirect to /admin/server/setup
 func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
@@ -213,7 +213,7 @@ func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
 	h.renderSetupTokenPage(w, errorMsg)
 }
 
-// SetupWizardPage renders the setup wizard at /admin/server/setup per TEMPLATE.md PART 31
+// SetupWizardPage renders the setup wizard at /admin/server/setup per AI.md PART 31
 func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 	// Check if setup is still needed
 	if !h.adminSvc.IsFirstRun() {
@@ -466,7 +466,7 @@ func (h *AdminHandler) DatabasePage(w http.ResponseWriter, r *http.Request) {
 
 // EmailPage renders email & notifications settings (Section 6)
 func (h *AdminHandler) EmailPage(w http.ResponseWriter, r *http.Request) {
-	// Email templates list per TEMPLATE.md PART 16
+	// Email templates list per AI.md PART 16
 	// 10 required templates + 4 additional templates = 14 total
 	templates := []map[string]string{
 		{"Name": "welcome", "Description": "New user/admin welcome", "Status": "Active"},
@@ -577,7 +577,7 @@ func (h *AdminHandler) SystemInfoPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// NodesPage renders cluster nodes management (TEMPLATE.md PART 24)
+// NodesPage renders cluster nodes management (AI.md PART 24)
 func (h *AdminHandler) NodesPage(w http.ResponseWriter, r *http.Request) {
 	hostname, _ := os.Hostname()
 
@@ -594,7 +594,7 @@ func (h *AdminHandler) NodesPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PagesPage renders standard pages editor per TEMPLATE.md PART 31
+// PagesPage renders standard pages editor per AI.md PART 31
 func (h *AdminHandler) PagesPage(w http.ResponseWriter, r *http.Request) {
 	pages, err := h.getPages()
 	if err != nil {
@@ -650,7 +650,7 @@ func (h *AdminHandler) getPages() ([]PageInfo, error) {
 	return pages, nil
 }
 
-// APIPagesGet returns all pages per TEMPLATE.md PART 31
+// APIPagesGet returns all pages per AI.md PART 31
 func (h *AdminHandler) APIPagesGet(w http.ResponseWriter, r *http.Request) {
 	pages, err := h.getPages()
 	if err != nil {
@@ -664,7 +664,7 @@ func (h *AdminHandler) APIPagesGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIPageUpdate updates a page per TEMPLATE.md PART 31
+// APIPageUpdate updates a page per AI.md PART 31
 func (h *AdminHandler) APIPageUpdate(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -701,7 +701,7 @@ func (h *AdminHandler) APIPageUpdate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIPageReset resets a page to default content per TEMPLATE.md PART 31
+// APIPageReset resets a page to default content per AI.md PART 31
 func (h *AdminHandler) APIPageReset(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -740,7 +740,7 @@ func (h *AdminHandler) APIPageReset(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// NotificationsPage renders notification settings (TEMPLATE.md PART 16)
+// NotificationsPage renders notification settings (AI.md PART 16)
 func (h *AdminHandler) NotificationsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "notifications", nil)
 }
@@ -844,7 +844,7 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// TorPage renders Tor hidden service settings (TEMPLATE.md PART 32)
+// TorPage renders Tor hidden service settings (AI.md PART 32)
 // TorConnected and OnionEnabled would check actual Tor connection/service
 func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "tor", map[string]interface{}{
@@ -975,7 +975,7 @@ func (h *AdminHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "help", nil)
 }
 
-// ProfilePage renders admin profile page per TEMPLATE.md PART 31
+// ProfilePage renders admin profile page per AI.md PART 31
 func (h *AdminHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 	// Get current admin from session
 	cookie, err := r.Cookie(adminSessionCookieName)
@@ -1010,7 +1010,7 @@ func (h *AdminHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIProfilePassword handles password change via API per TEMPLATE.md PART 31
+// APIProfilePassword handles password change via API per AI.md PART 31
 func (h *AdminHandler) APIProfilePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1045,7 +1045,7 @@ func (h *AdminHandler) APIProfilePassword(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// APIProfileToken regenerates API token per TEMPLATE.md PART 31
+// APIProfileToken regenerates API token per AI.md PART 31
 func (h *AdminHandler) APIProfileToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1087,7 +1087,7 @@ func (h *AdminHandler) getSessionAdminID(r *http.Request) int64 {
 	return session.adminID
 }
 
-// APIRecoveryKeysStatus returns the status of recovery keys per TEMPLATE.md PART 31
+// APIRecoveryKeysStatus returns the status of recovery keys per AI.md PART 31
 func (h *AdminHandler) APIRecoveryKeysStatus(w http.ResponseWriter, r *http.Request) {
 	adminID := h.getSessionAdminID(r)
 	if adminID == 0 {
@@ -1108,7 +1108,7 @@ func (h *AdminHandler) APIRecoveryKeysStatus(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// APIRecoveryKeysGenerate generates new recovery keys per TEMPLATE.md PART 31
+// APIRecoveryKeysGenerate generates new recovery keys per AI.md PART 31
 func (h *AdminHandler) APIRecoveryKeysGenerate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1137,7 +1137,7 @@ func (h *AdminHandler) APIRecoveryKeysGenerate(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// UsersAdminsPage renders the admin users management page per TEMPLATE.md PART 31
+// UsersAdminsPage renders the admin users management page per AI.md PART 31
 func (h *AdminHandler) UsersAdminsPage(w http.ResponseWriter, r *http.Request) {
 	// Get current admin from session
 	cookie, err := r.Cookie(adminSessionCookieName)
@@ -1202,7 +1202,7 @@ func (h *AdminHandler) getOnlineCount() int {
 	return count
 }
 
-// AdminInvitePage handles the invite acceptance flow per TEMPLATE.md PART 31
+// AdminInvitePage handles the invite acceptance flow per AI.md PART 31
 func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
@@ -1269,7 +1269,7 @@ func (h *AdminHandler) renderInvitePage(w http.ResponseWriter, data map[string]i
 	}
 }
 
-// APIUsersAdminsInvite creates an admin invite per TEMPLATE.md PART 31
+// APIUsersAdminsInvite creates an admin invite per AI.md PART 31
 func (h *AdminHandler) APIUsersAdminsInvite(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1777,7 +1777,7 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 				h.cfg.Search.ResultsPerPage = int(rpp)
 				updated = true
 			}
-			// Tor settings per TEMPLATE.md PART 32
+			// Tor settings per AI.md PART 32
 			if torCfg, ok := searchCfg["tor"].(map[string]interface{}); ok {
 				if enabled, ok := torCfg["enabled"].(bool); ok {
 					h.cfg.Search.Tor.Enabled = enabled
@@ -1956,7 +1956,7 @@ func (h *AdminHandler) APITestEmail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIPassword changes admin password using database per TEMPLATE.md PART 31
+// APIPassword changes admin password using database per AI.md PART 31
 func (h *AdminHandler) APIPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -2010,7 +2010,7 @@ func (h *AdminHandler) APITokenRegenerate(w http.ResponseWriter, r *http.Request
 	newToken := hex.EncodeToString(tokenBytes)
 
 	// In production, this would update the database/config
-	// For now, just return the new token (shown only once per TEMPLATE.md)
+	// For now, just return the new token (shown only once per AI.md)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
@@ -2093,7 +2093,7 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 }
 
 // =====================================================
-// Tor API handlers per TEMPLATE.md PART 32
+// Tor API handlers per AI.md PART 32
 // =====================================================
 
 // APITorStatus returns Tor hidden service status
@@ -2433,7 +2433,7 @@ func (h *AdminHandler) getSession(r *http.Request) *adminSession {
 	return &session
 }
 
-// === CSRF Protection per TEMPLATE.md PART 12 ===
+// === CSRF Protection per AI.md PART 12 ===
 
 // generateCSRFToken creates a new CSRF token for a session
 func (h *AdminHandler) generateCSRFToken(sessionID string) string {
@@ -3121,7 +3121,7 @@ func (h *AdminHandler) renderSystemInfoPage() string {
         </div>`)
 }
 
-// renderTorPage renders Tor hidden service admin page per TEMPLATE.md PART 32
+// renderTorPage renders Tor hidden service admin page per AI.md PART 32
 func (h *AdminHandler) renderTorPage() string {
 	torEnabled := h.cfg.Search.Tor.Enabled
 	enabledStr := "Disabled"
@@ -3255,7 +3255,7 @@ func (h *AdminHandler) renderTorPage() string {
         </script>`)
 }
 
-// renderAdminTemplate renders admin pages using proper Go html/template per TEMPLATE.md PART 13
+// renderAdminTemplate renders admin pages using proper Go html/template per AI.md PART 13
 func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Request, templateName string, data map[string]interface{}) {
 	// Add common template data
 	if data == nil {
@@ -3265,7 +3265,7 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	data["ActiveNav"] = templateName
 	data["SiteTitle"] = h.cfg.Server.Title
 
-	// Add session info for header display per TEMPLATE.md PART 31
+	// Add session info for header display per AI.md PART 31
 	if r != nil {
 		if sess := h.getSession(r); sess != nil {
 			data["AdminUsername"] = sess.username
@@ -3374,7 +3374,7 @@ func (h *AdminHandler) renderAdminPage(active, title, content string) string {
 // adminToastScript returns the toast notification JavaScript per PART 10/12 (no alerts)
 func adminToastScript() string {
 	return `<script>
-// Toast notification system (replaces alerts per TEMPLATE.md PART 10)
+// Toast notification system (replaces alerts per AI.md PART 10)
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -3391,7 +3391,7 @@ function showSuccess(msg) { showToast(msg, 'success'); }
 function showError(msg) { showToast(msg, 'error'); }
 function showWarning(msg) { showToast(msg, 'warning'); }
 
-// Custom confirm dialog (replaces confirm() per TEMPLATE.md PART 10)
+// Custom confirm dialog (replaces confirm() per AI.md PART 10)
 function showConfirm(message) {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
@@ -3425,7 +3425,7 @@ func adminStyles() string {
 }
 
 // =====================================================
-// Cluster Node Handlers per TEMPLATE.md PART 24
+// Cluster Node Handlers per AI.md PART 24
 // =====================================================
 
 // AddNodePage renders the add node form

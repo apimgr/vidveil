@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 4 & 5: Service Management and User Creation
+// AI.md PART 4 & 5: Service Management and User Creation
 package system
 
 import (
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// ServiceManager handles system service installation per TEMPLATE.md PART 5
+// ServiceManager handles system service installation per AI.md PART 5
 type ServiceManager struct {
 	appName     string
 	binaryPath  string
@@ -36,7 +36,7 @@ func NewServiceManager(appName, binaryPath, configDir, dataDir string) *ServiceM
 	}
 }
 
-// Install installs the service per TEMPLATE.md PART 5
+// Install installs the service per AI.md PART 5
 func (sm *ServiceManager) Install() error {
 	switch runtime.GOOS {
 	case "linux":
@@ -167,9 +167,9 @@ func (sm *ServiceManager) hasRunit() bool {
 	return err == nil
 }
 
-// installLinux installs service on Linux per TEMPLATE.md PART 5
+// installLinux installs service on Linux per AI.md PART 5
 func (sm *ServiceManager) installLinux() error {
-	// Create system user per TEMPLATE.md PART 4
+	// Create system user per AI.md PART 4
 	if err := sm.createLinuxUser(); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
@@ -184,7 +184,7 @@ func (sm *ServiceManager) installLinux() error {
 	return fmt.Errorf("no supported init system found (systemd or runit)")
 }
 
-// createLinuxUser creates system user per TEMPLATE.md PART 4
+// createLinuxUser creates system user per AI.md PART 4
 func (sm *ServiceManager) createLinuxUser() error {
 	// Check if user exists
 	_, err := exec.Command("id", sm.user).CombinedOutput()
@@ -193,7 +193,7 @@ func (sm *ServiceManager) createLinuxUser() error {
 		return nil
 	}
 
-	// Find available UID in 100-999 range per TEMPLATE.md PART 4
+	// Find available UID in 100-999 range per AI.md PART 4
 	uid := sm.findAvailableUID(100, 999)
 
 	// Create group
@@ -239,7 +239,7 @@ func (sm *ServiceManager) findAvailableUID(min, max int) int {
 	return min
 }
 
-// installSystemd installs systemd service unit per TEMPLATE.md PART 5
+// installSystemd installs systemd service unit per AI.md PART 5
 func (sm *ServiceManager) installSystemd() error {
 	unitPath := fmt.Sprintf("/etc/systemd/system/%s.service", sm.appName)
 
@@ -286,7 +286,7 @@ WantedBy=multi-user.target
 	return nil
 }
 
-// installRunit installs runit service per TEMPLATE.md PART 5
+// installRunit installs runit service per AI.md PART 5
 func (sm *ServiceManager) installRunit() error {
 	serviceDir := fmt.Sprintf("/etc/sv/%s", sm.appName)
 	os.MkdirAll(serviceDir, 0755)
@@ -320,9 +320,9 @@ exec svlogd -tt /var/log/%s
 	return nil
 }
 
-// installDarwin installs launchd service on macOS per TEMPLATE.md PART 5
+// installDarwin installs launchd service on macOS per AI.md PART 5
 func (sm *ServiceManager) installDarwin() error {
-	// Create user per TEMPLATE.md PART 4 (macOS uses dscl)
+	// Create user per AI.md PART 4 (macOS uses dscl)
 	if err := sm.createDarwinUser(); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
@@ -368,7 +368,7 @@ func (sm *ServiceManager) installDarwin() error {
 	return nil
 }
 
-// createDarwinUser creates system user on macOS using dscl per TEMPLATE.md PART 4
+// createDarwinUser creates system user on macOS using dscl per AI.md PART 4
 func (sm *ServiceManager) createDarwinUser() error {
 	// Check if user exists
 	_, err := exec.Command("dscl", ".", "-read", fmt.Sprintf("/Users/%s", sm.user)).CombinedOutput()
@@ -380,7 +380,7 @@ func (sm *ServiceManager) createDarwinUser() error {
 	// Find available UID
 	uid := sm.findAvailableUID(100, 999)
 
-	// Create user using dscl per TEMPLATE.md PART 4
+	// Create user using dscl per AI.md PART 4
 	commands := [][]string{
 		{"dscl", ".", "-create", fmt.Sprintf("/Users/%s", sm.user)},
 		{"dscl", ".", "-create", fmt.Sprintf("/Users/%s", sm.user), "UniqueID", strconv.Itoa(uid)},
@@ -399,9 +399,9 @@ func (sm *ServiceManager) createDarwinUser() error {
 	return nil
 }
 
-// installBSD installs rc.d service on BSD per TEMPLATE.md PART 5
+// installBSD installs rc.d service on BSD per AI.md PART 5
 func (sm *ServiceManager) installBSD() error {
-	// Create user using pw per TEMPLATE.md PART 4
+	// Create user using pw per AI.md PART 4
 	if err := sm.createBSDUser(); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
@@ -440,7 +440,7 @@ run_rc_command "$1"
 	return nil
 }
 
-// createBSDUser creates system user on BSD using pw per TEMPLATE.md PART 4
+// createBSDUser creates system user on BSD using pw per AI.md PART 4
 func (sm *ServiceManager) createBSDUser() error {
 	// Check if user exists
 	_, err := exec.Command("pw", "usershow", sm.user).CombinedOutput()
@@ -454,7 +454,7 @@ func (sm *ServiceManager) createBSDUser() error {
 	// Create group
 	exec.Command("pw", "groupadd", sm.group, "-g", strconv.Itoa(uid)).Run()
 
-	// Create user using pw per TEMPLATE.md PART 4
+	// Create user using pw per AI.md PART 4
 	return exec.Command("pw", "useradd", sm.user,
 		"-u", strconv.Itoa(uid),
 		"-g", sm.group,
@@ -464,9 +464,9 @@ func (sm *ServiceManager) createBSDUser() error {
 	).Run()
 }
 
-// installWindows installs Windows service per TEMPLATE.md PART 5
+// installWindows installs Windows service per AI.md PART 5
 func (sm *ServiceManager) installWindows() error {
-	// Create Windows Virtual Service Account per TEMPLATE.md PART 4
+	// Create Windows Virtual Service Account per AI.md PART 4
 	account := fmt.Sprintf("NT SERVICE\\%s", sm.appName)
 
 	// Install service using sc.exe
@@ -535,11 +535,11 @@ func (sm *ServiceManager) uninstallWindows() error {
 	return nil
 }
 
-// DetectEscalation detects available privilege escalation methods per TEMPLATE.md PART 4
+// DetectEscalation detects available privilege escalation methods per AI.md PART 4
 func DetectEscalation() string {
 	switch runtime.GOOS {
 	case "linux", "darwin", "freebsd", "openbsd", "netbsd":
-		// Check in priority order per TEMPLATE.md
+		// Check in priority order per AI.md
 		for _, cmd := range []string{"sudo", "doas", "pkexec"} {
 			if _, err := exec.LookPath(cmd); err == nil {
 				return cmd

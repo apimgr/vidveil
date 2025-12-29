@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 31: Route Standards - /auth/ and /user/ scopes
+// AI.md PART 31: Route Standards - /auth/ and /user/ scopes
 package handler
 
 import (
@@ -11,7 +11,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// AuthHandler handles authentication routes per TEMPLATE.md PART 31
+// AuthHandler handles authentication routes per AI.md PART 31
 type AuthHandler struct {
 	cfg      *config.Config
 	adminHdl *AdminHandler
@@ -29,7 +29,7 @@ func (h *AuthHandler) SetAdminHandler(adminHdl *AdminHandler) {
 	h.adminHdl = adminHdl
 }
 
-// LoginPage renders the login form and handles authentication per TEMPLATE.md PART 31
+// LoginPage renders the login form and handles authentication per AI.md PART 31
 func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	// Check if admin already logged in
 	if h.adminHdl != nil {
@@ -178,7 +178,7 @@ func (h *AuthHandler) VerifyPage(w http.ResponseWriter, r *http.Request) {
 </body></html>`))
 }
 
-// API Routes per TEMPLATE.md PART 31
+// API Routes per AI.md PART 31
 
 // APILogin handles POST /api/v1/auth/login
 func (h *AuthHandler) APILogin(w http.ResponseWriter, r *http.Request) {
@@ -251,7 +251,7 @@ func (h *AuthHandler) APIRefresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// UserHandler handles /user/ routes per TEMPLATE.md PART 31
+// UserHandler handles /user/ routes per AI.md PART 31
 type UserHandler struct {
 	cfg *config.Config
 }
@@ -298,7 +298,7 @@ func (h *UserHandler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 </body></html>`))
 }
 
-// API Routes per TEMPLATE.md PART 31
+// API Routes per AI.md PART 31
 
 // APIProfile handles GET/PATCH /api/v1/user/profile
 func (h *UserHandler) APIProfile(w http.ResponseWriter, r *http.Request) {

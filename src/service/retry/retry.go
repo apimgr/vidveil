@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 28: Retry Logic with Exponential Backoff
+// AI.md PART 28: Retry Logic with Exponential Backoff
 package retry
 
 import (

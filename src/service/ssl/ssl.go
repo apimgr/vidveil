@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 8: SSL/TLS & Let's Encrypt Support
+// AI.md PART 8: SSL/TLS & Let's Encrypt Support
 package ssl
 
 import (
@@ -78,7 +78,7 @@ func (m *Manager) Initialize() error {
 		return fmt.Errorf("failed to create cert directory: %w", err)
 	}
 
-	// Check for existing Let's Encrypt certs first (per TEMPLATE.md PART 8)
+	// Check for existing Let's Encrypt certs first (per AI.md PART 8)
 	letsEncryptPath := "/etc/letsencrypt/live"
 	domain := m.cfg.Server.FQDN
 	if domain != "" {
@@ -218,7 +218,7 @@ func (m *Manager) generateSelfSigned() error {
 }
 
 // RequestCertificate requests a certificate from Let's Encrypt
-// Supports HTTP-01, TLS-ALPN-01, and DNS-01 challenges per TEMPLATE.md PART 8
+// Supports HTTP-01, TLS-ALPN-01, and DNS-01 challenges per AI.md PART 8
 func (m *Manager) RequestCertificate(domain string) error {
 	if !config.IsValidSSLHost(domain) {
 		return fmt.Errorf("invalid domain for SSL: %s", domain)

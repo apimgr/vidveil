@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 28: Circuit Breaker Pattern
+// AI.md PART 28: Circuit Breaker Pattern
 package retry
 
 import (

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 23: Database Abstraction Layer
+// AI.md PART 23: Database Abstraction Layer
 package database
 
 import (

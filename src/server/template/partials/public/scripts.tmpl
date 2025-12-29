@@ -1,14 +1,14 @@
 {{define "public/scripts"}}
 <script src="/static/js/app.js"></script>
 <script>
-// PWA Service Worker Registration (TEMPLATE.md PART 16)
+// PWA Service Worker Registration (AI.md PART 16)
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/static/js/sw.js')
         .then(reg => console.log('SW registered'))
         .catch(err => console.log('SW registration failed:', err));
 }
 
-// Offline indicator (TEMPLATE.md PART 16)
+// Offline indicator (AI.md PART 16)
 window.addEventListener('online', () => {
     const indicator = document.getElementById('offline-indicator');
     if (indicator) indicator.hidden = true;

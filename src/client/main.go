@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 33: CLI Client
+// AI.md PART 33: CLI Client
 package main
 
 import (

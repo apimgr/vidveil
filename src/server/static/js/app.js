@@ -1,5 +1,5 @@
 // Vidveil - Frontend JavaScript
-// TEMPLATE.md PART 16: Single app.js file for all frontend functionality
+// AI.md PART 16: Single app.js file for all frontend functionality
 
 // ============================================================================
 // Theme Management
@@ -402,7 +402,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 // ============================================================================
-// Mobile Navigation - TEMPLATE.md PART 13
+// Mobile Navigation - AI.md PART 13
 // Slides in from RIGHT edge
 // ============================================================================
 function toggleNav() {
@@ -433,7 +433,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ============================================================================
-// Admin Panel Functions - TEMPLATE.md PART 16
+// Admin Panel Functions - AI.md PART 16
 // ============================================================================
 
 // Admin section collapse state management
@@ -491,7 +491,7 @@ function showError(msg) { showToast(msg, 'error'); }
 function showWarning(msg) { showToast(msg, 'warning'); }
 function showInfo(msg) { showToast(msg, 'info'); }
 
-// Admin keyboard shortcuts per TEMPLATE.md PART 15
+// Admin keyboard shortcuts per AI.md PART 15
 function setupAdminKeyboardShortcuts() {
     var keySequence = '';
     var keyTimeout = null;

@@ -204,7 +204,7 @@ a:hover {
 }
 
 /* ===========================================
-   HEADER - TEMPLATE.md PART 13
+   HEADER - AI.md PART 13
    Separate row with logo + user icon
    NO position: sticky - scrolls with page
    =========================================== */
@@ -257,7 +257,7 @@ a:hover {
 }
 
 /* ===========================================
-   NAVIGATION - TEMPLATE.md PART 13
+   NAVIGATION - AI.md PART 13
    Separate row below header
    NO position: sticky - scrolls with page
    =========================================== */
@@ -344,7 +344,7 @@ a:hover {
 }
 
 /* ===========================================
-   MOBILE SLIDE-IN MENU - TEMPLATE.md PART 13
+   MOBILE SLIDE-IN MENU - AI.md PART 13
    Slides in from RIGHT edge
    =========================================== */
 .nav-panel {
@@ -1409,7 +1409,7 @@ header .search-form {
     gap: 0.75rem;
 }
 
-/* Modal Component (TEMPLATE.md requirement) */
+/* Modal Component (AI.md requirement) */
 .modal {
     position: fixed;
     inset: 0;
@@ -1889,7 +1889,7 @@ a:focus-visible {
 }
 
 /* ===========================================
-   PWA Offline Indicator (TEMPLATE.md PART 16)
+   PWA Offline Indicator (AI.md PART 16)
    =========================================== */
 .offline-banner {
     position: fixed;
@@ -1914,7 +1914,7 @@ a:focus-visible {
     }
 }
 
-/* Respect reduced motion preference (TEMPLATE.md PART 16) */
+/* Respect reduced motion preference (AI.md PART 16) */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0.01ms !important;
@@ -1923,7 +1923,7 @@ a:focus-visible {
 }
 
 /* ===========================================
-   Native Dialog Modals (TEMPLATE.md PART 16)
+   Native Dialog Modals (AI.md PART 16)
    =========================================== */
 .modal-dialog {
     border: none;
@@ -1986,7 +1986,7 @@ a:focus-visible {
 }
 
 /* ===========================================
-   UTILITY CLASSES (TEMPLATE.md PART 16)
+   UTILITY CLASSES (AI.md PART 16)
    =========================================== */
 
 /* Text alignment */
@@ -2036,7 +2036,7 @@ a:focus-visible {
 .file-input-hidden { display: none; }
 
 /* ===========================================
-   PRINT STYLES (TEMPLATE.md PART 16)
+   PRINT STYLES (AI.md PART 16)
    =========================================== */
 @media print {
     /* Reset for print */

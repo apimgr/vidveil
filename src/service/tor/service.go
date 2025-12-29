@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 32: Embedded Tor Hidden Service Support using bine
+// AI.md PART 32: Embedded Tor Hidden Service Support using bine
 package tor
 
 import (
@@ -23,7 +23,7 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// Service represents the embedded Tor hidden service per TEMPLATE.md PART 32
+// Service represents the embedded Tor hidden service per AI.md PART 32
 // Uses github.com/cretz/bine for dedicated Tor process management
 type Service struct {
 	cfg     *Config
@@ -52,7 +52,7 @@ type Service struct {
 	vanityStatus *VanityStatus
 }
 
-// Config holds Tor service configuration per TEMPLATE.md PART 32
+// Config holds Tor service configuration per AI.md PART 32
 type Config struct {
 	// Default: true (enabled by default per PART 32)
 	Enabled bool `yaml:"enabled"`
@@ -95,7 +95,7 @@ func New(dataDir string, enabled bool) *Service {
 }
 
 // Start initializes the Tor hidden service using bine
-// Per TEMPLATE.md PART 32: Uses dedicated Tor process via bine library
+// Per AI.md PART 32: Uses dedicated Tor process via bine library
 func (s *Service) Start(ctx context.Context, localPort int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -147,7 +147,7 @@ func (s *Service) Start(ctx context.Context, localPort int) error {
 	s.onionAddress = s.generateOnionAddress()
 
 	// Start dedicated Tor process using bine
-	// Per TEMPLATE.md: Start OUR OWN Tor process - completely separate from system Tor
+	// Per AI.md: Start OUR OWN Tor process - completely separate from system Tor
 	startConf := &tor.StartConf{
 		// Our own data directory - isolated from system Tor
 		DataDir: torDataDir,
@@ -430,7 +430,7 @@ func (s *Service) RegenerateAddress() error {
 }
 
 // GenerateVanityAddress starts background generation of a vanity address
-// maxPrefixLength is limited to 6 characters per TEMPLATE.md PART 32
+// maxPrefixLength is limited to 6 characters per AI.md PART 32
 func (s *Service) GenerateVanityAddress(prefix string) error {
 	prefix = strings.ToLower(prefix)
 

@@ -1,4 +1,4 @@
-/* Admin Panel Styles - Dracula Theme per TEMPLATE.md PART 16 */
+/* Admin Panel Styles - Dracula Theme per AI.md PART 16 */
 
 :root {
     /* Dracula Theme Colors - NON-NEGOTIABLE */
@@ -66,7 +66,7 @@ body {
     margin-left: 0.25rem;
 }
 
-/* Notification Bell - TEMPLATE.md PART 25 */
+/* Notification Bell - AI.md PART 25 */
 .nav-brand-row {
     display: flex;
     align-items: center;

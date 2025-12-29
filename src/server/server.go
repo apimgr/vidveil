@@ -100,7 +100,7 @@ func (s *Server) setupMiddleware() {
 		MaxAge:           300,
 	}))
 
-	// Security headers (TEMPLATE.md PART 15 NON-NEGOTIABLE)
+	// Security headers (AI.md PART 15 NON-NEGOTIABLE)
 	s.router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -110,11 +110,11 @@ func (s *Server) setupMiddleware() {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; connect-src 'self'")
 			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
-			// Add Request ID to response headers per TEMPLATE.md PART 17
+			// Add Request ID to response headers per AI.md PART 17
 			if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 				w.Header().Set("X-Request-ID", reqID)
 			}
-			// Cache-Control headers per TEMPLATE.md PART 28
+			// Cache-Control headers per AI.md PART 28
 			path := r.URL.Path
 			if strings.HasPrefix(path, "/static/") {
 				// Static assets: cache for 1 year
@@ -132,7 +132,7 @@ func (s *Server) setupMiddleware() {
 		})
 	})
 
-	// Rate limiting (TEMPLATE.md PART 16)
+	// Rate limiting (AI.md PART 16)
 	s.router.Use(s.rateLimiter.Middleware)
 }
 
@@ -140,7 +140,7 @@ func (s *Server) setupMiddleware() {
 func (s *Server) setupRoutes() {
 	h := handler.New(s.cfg, s.engineMgr)
 	admin := handler.NewAdminHandler(s.cfg, s.engineMgr, s.adminSvc, s.migrationMgr)
-	// Set scheduler for admin panel management per TEMPLATE.md PART 26
+	// Set scheduler for admin panel management per AI.md PART 26
 	admin.SetScheduler(s.scheduler)
 	metrics := handler.NewMetrics(s.cfg, s.engineMgr)
 
@@ -163,7 +163,7 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/.well-known/change-password", handler.ChangePasswordRedirect)
 	s.router.Get("/humans.txt", h.HumansTxt)
 
-	// OpenAPI/Swagger documentation (TEMPLATE.md PART 19: JSON only, no YAML)
+	// OpenAPI/Swagger documentation (AI.md PART 19: JSON only, no YAML)
 	s.router.Get("/openapi", handler.SwaggerUI(s.cfg))
 	s.router.Get("/openapi.json", handler.OpenAPISpec(s.cfg))
 	s.router.Get("/swagger", handler.SwaggerUI(s.cfg))
@@ -180,7 +180,7 @@ func (s *Server) setupRoutes() {
 		s.router.Get(s.cfg.Server.Metrics.Endpoint, metrics.Handler())
 	}
 
-	// Debug endpoints (development mode only per TEMPLATE.md spec)
+	// Debug endpoints (development mode only per AI.md spec)
 	if s.cfg.IsDevelopmentMode() {
 		s.router.Route("/debug", func(r chi.Router) {
 			r.Get("/vars", handler.DebugVars)
@@ -204,7 +204,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/privacy", h.PrivacyPage)
 	})
 
-	// Server routes per TEMPLATE.md PART 31
+	// Server routes per AI.md PART 31
 	server := handler.NewServerHandler(s.cfg)
 	s.router.Route("/server", func(r chi.Router) {
 		r.Get("/about", server.AboutPage)
@@ -214,7 +214,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/help", server.HelpPage)
 	})
 
-	// Auth routes per TEMPLATE.md PART 31
+	// Auth routes per AI.md PART 31
 	auth := handler.NewAuthHandler(s.cfg)
 	// Link admin handler for authentication
 	auth.SetAdminHandler(admin)
@@ -231,7 +231,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/verify/{token}", auth.VerifyPage)
 	})
 
-	// User routes per TEMPLATE.md PART 31
+	// User routes per AI.md PART 31
 	user := handler.NewUserHandler(s.cfg)
 	s.router.Route("/user", func(r chi.Router) {
 		r.Get("/profile", user.ProfilePage)
@@ -244,7 +244,7 @@ func (s *Server) setupRoutes() {
 
 	// Admin panel routes - PART 15 and PART 31 compliant
 	s.router.Route("/admin", func(r chi.Router) {
-		// Login redirects to /auth/login per TEMPLATE.md PART 31
+		// Login redirects to /auth/login per AI.md PART 31
 		r.Get("/login", admin.LoginPage)
 		r.Post("/login", admin.LoginPage)
 
@@ -253,7 +253,7 @@ func (s *Server) setupRoutes() {
 		r.Post("/logout", admin.LogoutHandler)
 
 		// Root: Setup token entry (first run) or dashboard (authenticated)
-		// Per TEMPLATE.md PART 31: User navigates to /admin, enters setup token
+		// Per AI.md PART 31: User navigates to /admin, enters setup token
 		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
 			if admin.IsFirstRun() {
 				admin.SetupTokenPage(w, req)
@@ -270,7 +270,7 @@ func (s *Server) setupRoutes() {
 			admin.AuthMiddleware(http.HandlerFunc(admin.DashboardPage)).ServeHTTP(w, req)
 		})
 
-		// Protected admin routes per TEMPLATE.md PART 15
+		// Protected admin routes per AI.md PART 15
 		r.Group(func(r chi.Router) {
 			r.Use(admin.AuthMiddleware)
 			r.Use(admin.CSRFMiddleware)
@@ -305,7 +305,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/server/setup", admin.SetupWizardPage)
 		r.Post("/server/setup", admin.SetupWizardPage)
 
-		// Protected admin routes per TEMPLATE.md PART 15
+		// Protected admin routes per AI.md PART 15
 		r.Group(func(r chi.Router) {
 			r.Use(admin.AuthMiddleware)
 			r.Use(admin.CSRFMiddleware)
@@ -342,10 +342,10 @@ func (s *Server) setupRoutes() {
 			// Help
 			r.Get("/help", admin.HelpPage)
 
-			// Profile per TEMPLATE.md PART 31
+			// Profile per AI.md PART 31
 			r.Get("/profile", admin.ProfilePage)
 
-			// Users section per TEMPLATE.md PART 31
+			// Users section per AI.md PART 31
 			r.Route("/users", func(r chi.Router) {
 				r.Get("/admins", admin.UsersAdminsPage)
 			})
@@ -380,7 +380,7 @@ func (s *Server) setupRoutes() {
 		// Health (public)
 		r.Get("/healthz", h.APIHealthCheck)
 
-		// Server API per TEMPLATE.md PART 31
+		// Server API per AI.md PART 31
 		r.Route("/server", func(r chi.Router) {
 			r.Get("/about", server.APIAbout)
 			r.Get("/privacy", server.APIPrivacy)
@@ -388,7 +388,7 @@ func (s *Server) setupRoutes() {
 			r.Get("/help", server.APIHelp)
 		})
 
-		// Auth API per TEMPLATE.md PART 31
+		// Auth API per AI.md PART 31
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", auth.APIRegister)
 			r.Post("/login", auth.APILogin)
@@ -399,7 +399,7 @@ func (s *Server) setupRoutes() {
 			r.Post("/refresh", auth.APIRefresh)
 		})
 
-		// User API per TEMPLATE.md PART 31
+		// User API per AI.md PART 31
 		r.Route("/user", func(r chi.Router) {
 			r.Get("/profile", user.APIProfile)
 			r.Patch("/profile", user.APIProfile)
@@ -423,7 +423,7 @@ func (s *Server) setupRoutes() {
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(admin.APITokenMiddleware)
 
-			// Users management per TEMPLATE.md PART 31
+			// Users management per AI.md PART 31
 			r.Post("/users/admins/invite", admin.APIUsersAdminsInvite)
 			r.Get("/users/admins/invites", admin.APIUsersAdminsInvites)
 			r.Delete("/users/admins/invites/{id}", admin.APIUsersAdminsInviteRevoke)
@@ -434,7 +434,7 @@ func (s *Server) setupRoutes() {
 			r.Get("/status", admin.APIStatus)
 			r.Get("/health", admin.APIHealth)
 
-			// Server settings per TEMPLATE.md PART 31
+			// Server settings per AI.md PART 31
 			r.Route("/server", func(r chi.Router) {
 				// Settings
 				r.Get("/settings", admin.APIConfig)
@@ -565,7 +565,7 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/api/engines", h.APIEngines)
 	s.router.Get("/api/health", h.APIHealthCheck)
 
-	// Custom 404 handler per TEMPLATE.md PART 30
+	// Custom 404 handler per AI.md PART 30
 	s.router.NotFound(h.NotFoundHandler)
 }
 

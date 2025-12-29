@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 21: Logging with Built-in Rotation
+// AI.md PART 21: Logging with Built-in Rotation
 package logging
 
 import (
@@ -30,7 +30,7 @@ const (
 )
 
 // RotatingFile implements io.Writer with automatic rotation
-// TEMPLATE.md PART 21: Built-in rotation support (no external logrotate needed)
+// AI.md PART 21: Built-in rotation support (no external logrotate needed)
 type RotatingFile struct {
 	mu   sync.Mutex
 	path string
@@ -316,7 +316,7 @@ func (rf *RotatingFile) Close() error {
 	return nil
 }
 
-// MaskEmail masks an email address per TEMPLATE.md PART 21
+// MaskEmail masks an email address per AI.md PART 21
 // "user@example.com" -> "u***@e***.com"
 func MaskEmail(email string) string {
 	if email == "" {
@@ -342,7 +342,7 @@ func MaskEmail(email string) string {
 	return maskedUser + "@***"
 }
 
-// MaskUsername masks a username per TEMPLATE.md PART 21
+// MaskUsername masks a username per AI.md PART 21
 // "johndoe" -> "joh***"
 func MaskUsername(username string) string {
 	if username == "" {
@@ -354,7 +354,7 @@ func MaskUsername(username string) string {
 	return username[:3] + "***"
 }
 
-// MaskIP masks an IP address per TEMPLATE.md PART 21
+// MaskIP masks an IP address per AI.md PART 21
 // "192.168.1.100" -> "192.168.xxx.xxx"
 func MaskIP(ip string) string {
 	if ip == "" {
@@ -374,7 +374,7 @@ func MaskIP(ip string) string {
 	return ip[:len(ip)/2] + "***"
 }
 
-// SanitizeLogFields masks sensitive fields in log data per TEMPLATE.md PART 21
+// SanitizeLogFields masks sensitive fields in log data per AI.md PART 21
 func SanitizeLogFields(fields map[string]interface{}) map[string]interface{} {
 	if fields == nil {
 		return nil
@@ -661,7 +661,7 @@ func (l *Logger) Access(method, path, remoteAddr, userAgent string, status int, 
 	})
 }
 
-// Audit logs an audit event with automatic PII masking per TEMPLATE.md PART 21
+// Audit logs an audit event with automatic PII masking per AI.md PART 21
 func (l *Logger) Audit(action, user, resource string, details map[string]interface{}) {
 	fields := map[string]interface{}{
 		"action":   action,
@@ -675,7 +675,7 @@ func (l *Logger) Audit(action, user, resource string, details map[string]interfa
 	l.log(LevelInfo, "audit", "Audit event", SanitizeLogFields(fields))
 }
 
-// Security logs a security event with automatic PII masking per TEMPLATE.md PART 21
+// Security logs a security event with automatic PII masking per AI.md PART 21
 func (l *Logger) Security(event, remoteAddr string, details map[string]interface{}) {
 	fields := map[string]interface{}{
 		"event":       event,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 26: Built-in Scheduler
+// AI.md PART 26: Built-in Scheduler
 package scheduler
 
 import (
@@ -42,7 +42,7 @@ type TaskHistory struct {
 	Error     string        `json:"error,omitempty"`
 }
 
-// Scheduler manages scheduled tasks per TEMPLATE.md PART 9
+// Scheduler manages scheduled tasks per AI.md PART 9
 type Scheduler struct {
 	tasks    map[string]*Task
 	history  []TaskHistory
@@ -89,7 +89,7 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 	return nil
 }
 
-// parseSchedule converts schedule string to duration per TEMPLATE.md
+// parseSchedule converts schedule string to duration per AI.md
 func parseSchedule(schedule string) (time.Duration, error) {
 	switch schedule {
 	case "hourly":
@@ -374,7 +374,7 @@ func (s *Scheduler) Stats() map[string]interface{} {
 	}
 }
 
-// BuiltinTaskFuncs holds all built-in task functions per TEMPLATE.md PART 26
+// BuiltinTaskFuncs holds all built-in task functions per AI.md PART 26
 type BuiltinTaskFuncs struct {
 	// ssl.renewal - Daily, renew certs 7 days before expiry
 	SSLRenewal TaskFunc
@@ -400,7 +400,7 @@ type BuiltinTaskFuncs struct {
 	ClusterHeartbeat TaskFunc
 }
 
-// RegisterBuiltinTasks registers all built-in scheduled tasks per TEMPLATE.md PART 26
+// RegisterBuiltinTasks registers all built-in scheduled tasks per AI.md PART 26
 func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 	// ssl.renewal - Daily (runs check, renews if within 7 days of expiry)
 	if funcs.SSLRenewal != nil {
@@ -456,7 +456,7 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 		s.RegisterTask("backup.auto", "Automatic Backup",
 			"Create automatic backups of configuration and databases",
 			"daily", funcs.BackupAuto)
-		// Disable by default per TEMPLATE.md PART 26
+		// Disable by default per AI.md PART 26
 		s.DisableTask("backup.auto")
 	}
 

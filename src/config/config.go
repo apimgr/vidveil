@@ -21,14 +21,14 @@ import (
 // Version is set at build time via ldflags
 var Version = "dev"
 
-// Config holds all application configuration per TEMPLATE.md spec
+// Config holds all application configuration per AI.md spec
 type Config struct {
 	Server ServerConfig `yaml:"server"`
 	Web    WebConfig    `yaml:"web"`
 	Search SearchConfig `yaml:"search"`
 }
 
-// ServerConfig holds server-related settings per TEMPLATE.md
+// ServerConfig holds server-related settings per AI.md
 type ServerConfig struct {
 	// Port: single (HTTP) or dual (HTTP,HTTPS) e.g., "8090" or "8090,64453"
 	Port    string `yaml:"port"`
@@ -114,7 +114,7 @@ type AdminConfig struct {
 	TwoFactor   TwoFactorConfig `yaml:"two_factor"`
 }
 
-// TwoFactorConfig holds 2FA settings per TEMPLATE.md PART 31
+// TwoFactorConfig holds 2FA settings per AI.md PART 31
 type TwoFactorConfig struct {
 	// 2FA is enabled for this admin
 	Enabled bool `yaml:"enabled"`
@@ -191,7 +191,7 @@ type MetricsConfig struct {
 	Token         string `yaml:"token"`
 }
 
-// GeoIPConfig holds GeoIP settings per TEMPLATE.md PART 10
+// GeoIPConfig holds GeoIP settings per AI.md PART 10
 type GeoIPConfig struct {
 	Enabled       bool              `yaml:"enabled"`
 	Dir           string            `yaml:"dir"`
@@ -207,7 +207,7 @@ type GeoIPDatabasesConfig struct {
 	City    bool `yaml:"city"`
 }
 
-// UsersConfig holds user management settings per TEMPLATE.md PART 31
+// UsersConfig holds user management settings per AI.md PART 31
 type UsersConfig struct {
 	// Enable multi-user mode (default: false = admin-only)
 	Enabled bool `yaml:"enabled"`
@@ -293,13 +293,13 @@ type UserLimitsConfig struct {
 	RequestsPerDay int `yaml:"requests_per_day"`
 }
 
-// LogsConfig holds logging settings per TEMPLATE.md PART 21
+// LogsConfig holds logging settings per AI.md PART 21
 type LogsConfig struct {
 	Level  string         `yaml:"level"`
 	Debug  DebugLogConfig `yaml:"debug"`
 	Access AccessLogConfig `yaml:"access"`
 	Server ServerLogConfig `yaml:"server"`
-	// TEMPLATE.md PART 21: error.log
+	// AI.md PART 21: error.log
 	Error    ErrorLogConfig    `yaml:"error"`
 	Audit    AuditLogConfig    `yaml:"audit"`
 	Security SecurityLogConfig `yaml:"security"`
@@ -332,7 +332,7 @@ type ServerLogConfig struct {
 	Rotate   string `yaml:"rotate"`
 }
 
-// ErrorLogConfig holds error log settings per TEMPLATE.md PART 21
+// ErrorLogConfig holds error log settings per AI.md PART 21
 type ErrorLogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Filename string `yaml:"filename"`
@@ -473,7 +473,7 @@ type SQLiteConfig struct {
 	BusyTimeout int    `yaml:"busy_timeout"`
 }
 
-// WebConfig holds frontend settings per TEMPLATE.md
+// WebConfig holds frontend settings per AI.md
 type WebConfig struct {
 	UI            UIConfig            `yaml:"ui"`
 	Branding      BrandingConfig      `yaml:"branding"`
@@ -579,7 +579,7 @@ type AgeVerificationConfig struct {
 // Paths is now defined in paths package
 type Paths = paths.Paths
 
-// Default returns a Config with sensible defaults per TEMPLATE.md
+// Default returns a Config with sensible defaults per AI.md
 func Default() *Config {
 	fqdn := getHostname()
 	randomPort := findUnusedPort()
@@ -757,7 +757,7 @@ func Default() *Config {
 					City:    false,
 				},
 			},
-			// Admin-only mode by default per TEMPLATE.md
+			// Admin-only mode by default per AI.md
 			Users: UsersConfig{
 				Enabled: false,
 				Registration: RegistrationConfig{
@@ -899,7 +899,7 @@ func Load(configDir, dataDir string) (*Config, string, error) {
 			return nil, "", fmt.Errorf("failed to save default config: %w", err)
 		}
 
-		// Console output is handled in main.go per TEMPLATE.md PART 31
+		// Console output is handled in main.go per AI.md PART 31
 
 		return cfg, configPath, nil
 	}
@@ -930,7 +930,7 @@ func Save(cfg *Config, path string) error {
 	header := `# =============================================================================
 # Vidveil Configuration
 # =============================================================================
-# This file follows the apimgr TEMPLATE.md specification
+# This file follows the apimgr AI.md specification
 # Documentation: https://github.com/apimgr/vidveil
 # =============================================================================
 
@@ -947,7 +947,7 @@ func Save(cfg *Config, path string) error {
 // Helper functions
 
 // ParseBool parses a boolean value from various string representations
-// Uses the full truthy/falsy value set from bool.go per TEMPLATE.md PART 4
+// Uses the full truthy/falsy value set from bool.go per AI.md PART 4
 // Returns false for empty or invalid values (backwards compatible)
 func ParseBool(value string) bool {
 	val, _ := ParseBoolWithDefault(value, false)
@@ -955,7 +955,7 @@ func ParseBool(value string) bool {
 }
 
 // ParseBoolEnv parses a boolean value from an environment variable
-// Uses the full truthy/falsy value set from bool.go per TEMPLATE.md PART 4
+// Uses the full truthy/falsy value set from bool.go per AI.md PART 4
 func ParseBoolEnv(key string, defaultVal bool) bool {
 	val := os.Getenv(key)
 	if val == "" {
@@ -1036,16 +1036,16 @@ func NormalizeMode(mode string) string {
 	}
 }
 
-// TEMPLATE.md PART 13: URL/FQDN Detection
+// AI.md PART 13: URL/FQDN Detection
 
-// devOnlyTLDs are TLDs allowed only in development mode per TEMPLATE.md
+// devOnlyTLDs are TLDs allowed only in development mode per AI.md
 var devOnlyTLDs = []string{
 	".localhost", ".test", ".example", ".invalid",
 	".local", ".lan", ".internal", ".home", ".localdomain",
 	".home.arpa", ".intranet", ".corp", ".private",
 }
 
-// IsValidHost validates a host per TEMPLATE.md PART 13
+// IsValidHost validates a host per AI.md PART 13
 // In production mode, only valid FQDNs are allowed (no IPs, no localhost, no dev TLDs)
 // In development mode, localhost and dev TLDs are allowed (still no IPs)
 func IsValidHost(host string, devMode bool) bool {
@@ -1078,13 +1078,13 @@ func IsValidHost(host string, devMode bool) bool {
 	return true
 }
 
-// IsValidSSLHost validates host for SSL/Let's Encrypt per TEMPLATE.md
+// IsValidSSLHost validates host for SSL/Let's Encrypt per AI.md
 // SSL always requires production-valid host (devMode=false)
 func IsValidSSLHost(host string) bool {
 	return IsValidHost(host, false)
 }
 
-// LiveReload per TEMPLATE.md PART 1 NON-NEGOTIABLE
+// LiveReload per AI.md PART 1 NON-NEGOTIABLE
 // Watches config file and reloads on changes
 
 // ReloadCallback is called when configuration is reloaded
@@ -1197,7 +1197,7 @@ func (w *ConfigWatcher) Reload() error {
 	return nil
 }
 
-// GetDisplayHost returns the appropriate host for display per TEMPLATE.md lines 2333-2457
+// GetDisplayHost returns the appropriate host for display per AI.md lines 2333-2457
 // Never shows: 0.0.0.0, 127.0.0.1, localhost, [::]
 // Uses global IP if dev TLD or localhost detected
 func GetDisplayHost(_ *Config) string {
@@ -1220,7 +1220,7 @@ func GetDisplayHost(_ *Config) string {
 	return fqdn
 }
 
-// GetFQDN returns the FQDN per TEMPLATE.md lines 2333-2366
+// GetFQDN returns the FQDN per AI.md lines 2333-2366
 func GetFQDN() string {
 	// 1. DOMAIN env var (explicit user override)
 	if domain := os.Getenv("DOMAIN"); domain != "" {
@@ -1255,7 +1255,7 @@ func GetFQDN() string {
 	return "localhost"
 }
 
-// isLoopback checks if host is a loopback address per TEMPLATE.md lines 2368-2377
+// isLoopback checks if host is a loopback address per AI.md lines 2368-2377
 func isLoopback(host string) bool {
 	lower := strings.ToLower(host)
 	if lower == "localhost" {
@@ -1267,7 +1267,7 @@ func isLoopback(host string) bool {
 	return false
 }
 
-// isDevTLD checks if FQDN is a dev TLD per TEMPLATE.md lines 2420-2432
+// isDevTLD checks if FQDN is a dev TLD per AI.md lines 2420-2432
 func isDevTLD(fqdn string) bool {
 	lower := strings.ToLower(fqdn)
 	if lower == "localhost" {
@@ -1289,7 +1289,7 @@ func isDevTLD(fqdn string) bool {
 	return false
 }
 
-// getGlobalIPv6 returns first global unicast IPv6 address per TEMPLATE.md lines 2379-2392
+// getGlobalIPv6 returns first global unicast IPv6 address per AI.md lines 2379-2392
 func getGlobalIPv6() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -1305,7 +1305,7 @@ func getGlobalIPv6() string {
 	return ""
 }
 
-// getGlobalIPv4 returns first global unicast IPv4 address per TEMPLATE.md lines 2394-2407
+// getGlobalIPv4 returns first global unicast IPv4 address per AI.md lines 2394-2407
 func getGlobalIPv4() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {

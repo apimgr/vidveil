@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 33: CLI Client - TUI Command
+// AI.md PART 33: CLI Client - TUI Command
 package cmd
 
 import (
@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Dracula colors per TEMPLATE.md PART 33
+// Dracula colors per AI.md PART 33
 var (
 	colorBackground = lipgloss.Color("#282a36")
 	colorForeground = lipgloss.Color("#f8f8f2")

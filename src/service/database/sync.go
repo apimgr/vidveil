@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 23: Cross-Database Sync for Mixed Mode
+// AI.md PART 23: Cross-Database Sync for Mixed Mode
 package database
 
 import (

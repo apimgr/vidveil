@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 23: Distributed Cache Support
+// AI.md PART 23: Distributed Cache Support
 package cache
 
 import (

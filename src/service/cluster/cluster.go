@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 20: Cluster Mode Support
+// AI.md PART 20: Cluster Mode Support
 package cluster
 
 import (
@@ -35,7 +35,7 @@ type Lock struct {
 	Metadata   string    `json:"metadata,omitempty"`
 }
 
-// Manager handles cluster operations per TEMPLATE.md PART 20
+// Manager handles cluster operations per AI.md PART 20
 type Manager struct {
 	nodeID        string
 	db            *sql.DB
@@ -144,7 +144,7 @@ func (m *Manager) heartbeatLoop() {
 	}
 }
 
-// primaryElectionLoop handles primary election per TEMPLATE.md
+// primaryElectionLoop handles primary election per AI.md
 func (m *Manager) primaryElectionLoop() {
 	ticker := time.NewTicker(m.heartbeatInt * 2)
 	defer ticker.Stop()

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 31: Two-Factor Authentication (2FA) Support
+// AI.md PART 31: Two-Factor Authentication (2FA) Support
 package totp
 
 import (
@@ -131,7 +131,7 @@ func (s *Service) generateCode(secret string, counter int64) string {
 	return fmt.Sprintf("%06d", code%1000000)
 }
 
-// Config holds 2FA configuration per TEMPLATE.md PART 31
+// Config holds 2FA configuration per AI.md PART 31
 type Config struct {
 	// Enabled allows 2FA to be enabled by users
 	Enabled bool `yaml:"enabled"`

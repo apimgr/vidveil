@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 23: Test coverage for auth handlers
+// AI.md PART 23: Test coverage for auth handlers
 package handler
 
 import (

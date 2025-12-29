@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// TEMPLATE.md PART 20: Database Migrations
+// AI.md PART 20: Database Migrations
 package database
 
 import (
@@ -24,7 +24,7 @@ type Migration struct {
 	Down        func(*sql.Tx) error `json:"-"`
 }
 
-// MigrationManager handles database migrations per TEMPLATE.md PART 20
+// MigrationManager handles database migrations per AI.md PART 20
 type MigrationManager struct {
 	db         *sql.DB
 	dbPath     string
@@ -60,7 +60,7 @@ func NewMigrationManager(dbPath string) (*MigrationManager, error) {
 	return mm, nil
 }
 
-// createMigrationsTable creates the schema_migrations table per TEMPLATE.md
+// createMigrationsTable creates the schema_migrations table per AI.md
 func (mm *MigrationManager) createMigrationsTable() error {
 	_, err := mm.db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -92,7 +92,7 @@ func (mm *MigrationManager) RegisterMigration(version int64, name, description s
 	})
 }
 
-// RunMigrations runs all pending migrations on startup per TEMPLATE.md
+// RunMigrations runs all pending migrations on startup per AI.md
 func (mm *MigrationManager) RunMigrations() error {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
@@ -443,7 +443,7 @@ func (mm *MigrationManager) RegisterDefaultMigrations() {
 		return err
 	})
 
-	// Migration 9: Create admin_credentials table per TEMPLATE.md PART 31
+	// Migration 9: Create admin_credentials table per AI.md PART 31
 	// Admin credentials stored in database, NOT config file
 	mm.RegisterMigration(9, "create_admin_credentials_table", "Create admin credentials table per PART 31", func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
@@ -470,7 +470,7 @@ func (mm *MigrationManager) RegisterDefaultMigrations() {
 		return err
 	})
 
-	// Migration 10: Create setup_tokens table per TEMPLATE.md PART 31
+	// Migration 10: Create setup_tokens table per AI.md PART 31
 	// One-time setup tokens for first run
 	mm.RegisterMigration(10, "create_setup_tokens_table", "Create setup tokens table per PART 31", func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
@@ -490,7 +490,7 @@ func (mm *MigrationManager) RegisterDefaultMigrations() {
 		return err
 	})
 
-	// Migration 11: Create api_tokens table per TEMPLATE.md PART 31
+	// Migration 11: Create api_tokens table per AI.md PART 31
 	// API tokens for programmatic access
 	mm.RegisterMigration(11, "create_api_tokens_table", "Create API tokens table per PART 31", func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
@@ -514,7 +514,7 @@ func (mm *MigrationManager) RegisterDefaultMigrations() {
 		return err
 	})
 
-	// Migration 12: Create smtp_config table per TEMPLATE.md PART 31
+	// Migration 12: Create smtp_config table per AI.md PART 31
 	// SMTP configuration stored in database
 	mm.RegisterMigration(12, "create_smtp_config_table", "Create SMTP config table per PART 31", func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
@@ -539,7 +539,7 @@ func (mm *MigrationManager) RegisterDefaultMigrations() {
 		return err
 	})
 
-	// Migration 13: Create recovery_keys table per TEMPLATE.md PART 31
+	// Migration 13: Create recovery_keys table per AI.md PART 31
 	// Recovery keys for 2FA backup access
 	mm.RegisterMigration(13, "create_recovery_keys_table", "Create recovery keys table for 2FA backup", func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
@@ -558,7 +558,7 @@ func (mm *MigrationManager) RegisterDefaultMigrations() {
 		return err
 	})
 
-	// Migration 14: Create pages table per TEMPLATE.md PART 31
+	// Migration 14: Create pages table per AI.md PART 31
 	// Standard pages content (about, privacy, contact, help)
 	mm.RegisterMigration(14, "create_pages_table", "Create pages table for standard page content", func(tx *sql.Tx) error {
 		_, err := tx.Exec(`

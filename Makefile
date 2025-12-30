@@ -1,9 +1,14 @@
 # Vidveil Makefile
-# Per TEMPLATE.md PART 20: EXACTLY 4 targets - build, release, docker, test
+# Per AI.md PART 12: EXACTLY 4 targets - build, release, docker, test
 # DO NOT ADD OTHER TARGETS
 
-PROJECT := vidveil
-ORG := apimgr
+# Infer PROJECTNAME and PROJECTORG from git remote or directory path (NEVER hardcode)
+PROJECTNAME := $(shell git remote get-url origin 2>/dev/null | sed -E -e 's|.*[/:]||' -e 's|\.git$$||' || basename "$$(pwd)")
+PROJECTORG := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$$|\1|' || basename "$$(dirname "$$(pwd)")")
+
+# Convenience aliases for common use
+PROJECT := $(PROJECTNAME)
+ORG := $(PROJECTORG)
 
 # Version: env var > release.txt > default
 VERSION ?= $(shell cat release.txt 2>/dev/null || echo "0.1.0")

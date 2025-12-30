@@ -17,6 +17,7 @@ Privacy-respecting meta search for adult video content.
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
 | **SSE Streaming** | Real-time result streaming as engines respond |
+| **Thumbnail Proxy** | All thumbnails proxied to prevent engine tracking |
 | **Autocomplete** | Bang shortcuts autocomplete as you type |
 | **Tor Support** | Built-in Tor hidden service support |
 | **Admin Panel** | Full web-based administration |

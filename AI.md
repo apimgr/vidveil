@@ -1,29 +1,26 @@
-# VIDVEIL Specification
+# {PROJECTNAME} Specification
 
-**Name**: vidveil
+**Name**: {projectname}
 
 ---
 
 # PROJECT DESCRIPTION
 
-**Privacy-respecting meta search for adult video content.**
+**{Provide a brief description of what this project does and its primary purpose}**
 
-Vidveil is a meta search engine that aggregates results from 52 adult video sites while prioritizing user privacy. No tracking, no logging, no analytics. Results are streamed in real-time using Server-Sent Events (SSE) as engines respond.
+Example:
+- A REST API service that provides random jokes
+- A timezone conversion API with city lookup
+- A GitHub .gitignore template generator
 
 **Key Features:**
-- Privacy-first design (no tracking, logging, or analytics)
-- 52 search engines with tiered performance (Tier 1: JSON APIs, Tier 2: Structured HTML, Tier 3: Complex scraping)
-- Bang shortcuts (47 codes like `!ph`, `!xh`, `!rt`) for direct engine searches
-- Real-time SSE streaming for progressive result loading
-- Thumbnail proxy to prevent engine tracking
-- Tor hidden service support
-- Admin panel for configuration
-- Single binary with embedded assets
+- {Feature 1}
+- {Feature 2}
+- {Feature 3}
 
 **Target Users:**
-- Users seeking privacy-respecting adult content search
-- Users tired of tracked searches and invasive analytics
-- Self-hosters wanting private adult content aggregation
+- {Who uses this?}
+- {What problem does it solve?}
 
 ---
 
@@ -181,15 +178,15 @@ Vidveil is a meta search engine that aggregates results from 52 adult video site
 **Quick reference:**
 ```bash
 # Build (ALWAYS Docker)
-docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/vidveil ./src
+docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/{projectname} ./src
 
 # Test - Quick (Docker)
 docker run --rm -v $(pwd):/build -w /build golang:alpine go test -v ./...
 
 # Test - Full OS (Incus - PREFERRED)
 incus launch images:debian/12 test-app
-incus file push binaries/vidveil test-app/usr/local/bin/
-incus exec test-app -- vidveil --help
+incus file push binaries/{projectname} test-app/usr/local/bin/
+incus exec test-app -- {projectname} --help
 
 # Run (use temp dir workflow)
 cd $(mktemp -d) && cp -r /path/to/project/* . && docker-compose -f docker/docker-compose.dev.yml up
@@ -586,7 +583,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | **Config files** | lowercase, dot-extension | `server.yml`, `mkdocs.yml` | `SERVER.yml` |
 | **Documentation** | UPPERCASE.md | `README.md`, `LICENSE.md` | `readme.md` |
 | **Scripts** | lowercase, snake_case | `run_tests.sh` | `RunTests.sh` |
-| **Binaries** | `{project}-{os}-{arch}` | `jokes-linux-amd64` | `jokes_linux_amd64` |
+| **Binaries** | `{project}-{os}-{arch}` | `echoip-linux-amd64` | `echoip_linux_amd64` |
 
 ### NEVER Create These Files
 
@@ -615,7 +612,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | `config/` in root | Config is embedded, runtime-generated in OS dirs |
 | `data/` in root | Data goes to OS data directory at runtime |
 | `logs/` in root | Logs go to OS log directory at runtime |
-| `tmp/`, `temp/` in root | Use `/tmp/apimgr/vidveil-XXXXXX/` |
+| `tmp/`, `temp/` in root | Use `/tmp/{projectorg}/{projectname}-XXXXXX/` |
 | `test-data/` in root | Test data goes to temp directories |
 | `build/`, `dist/`, `out/` | Use `binaries/` (gitignored) |
 | `vendor/` | Use Go modules, not vendoring |
@@ -712,7 +709,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 | Term | Definition |
 |------|------------|
-| **Project / App / Application** | The server binary you are building (`vidveil`) - used interchangeably |
+| **Project / App / Application** | The server binary you are building (`{projectname}`) - used interchangeably |
 | **App Instance** | A single running copy of the app (one process) |
 | **Server** | The machine (physical, VM, or container) running an app instance |
 
@@ -770,17 +767,20 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 | Term | Definition |
 |------|------------|
-| **CLI Client** | Optional companion binary (`vidveil-cli`) for terminal access |
+| **CLI Client** | Optional companion binary (`{projectname}-cli`) for terminal access |
 | **TUI** | Terminal User Interface - interactive terminal app with menus/panels |
 | **Admin Panel** | Web UI at `/admin` for server administration |
 | **FQDN** | Fully Qualified Domain Name (e.g., `api.example.com`) |
-| **Config Dir** | Where config files live (`{configdir}`, default: `/etc/vidveil`) |
-| **Data Dir** | Where runtime data lives (`{datadir}`, default: `/var/lib/vidveil`) |
-| **Log Dir** | Where log files live (`{logdir}`, default: `/var/log/vidveil`) |
-| **PID File** | Process ID file path (`{pidfile}`, default: `/var/run/vidveil.pid`) |
+| **Config Dir** | Where config files live (`{configdir}`, default: `/etc/{projectname}`) |
+| **Data Dir** | Where runtime data lives (`{datadir}`, default: `/var/lib/{projectname}`) |
+| **Log Dir** | Where log files live (`{logdir}`, default: `/var/log/{projectname}`) |
+| **PID File** | Process ID file path (`{pidfile}`, default: `/var/run/{projectname}.pid`) |
 
 ---
 
+# ══════════════════════════════════════════════════════════════════════════════
+# HOW TO USE THIS TEMPLATE (DELETE THIS SECTION AFTER COPYING TO AI.md)
+# ══════════════════════════════════════════════════════════════════════════════
 
 ## FOR AI ASSISTANTS (If you're reading this, follow these steps EXACTLY)
 
@@ -811,9 +811,9 @@ GITPROVIDER=$(git remote get-url origin 2>/dev/null | sed -E 's|.*[@/]([^/:]+)[:
 
 | Variable | Detection Method | Fallback |
 |----------|------------------|----------|
-| `vidveil` | Git remote URL → repo name | Directory name |
-| `apimgr` | Git remote URL → org/owner | Parent directory name |
-| `github` | Git remote URL → host | Ask user |
+| `{projectname}` | Git remote URL → repo name | Directory name |
+| `{projectorg}` | Git remote URL → org/owner | Parent directory name |
+| `{gitprovider}` | Git remote URL → host | Ask user |
 
 **For Description/Features:**
 
@@ -839,10 +839,10 @@ Or if reading from a different location, write the content to `./AI.md`.
 Replace ALL occurrences of:
 | Variable | Replace With |
 |----------|--------------|
-| `vidveil` | Project name lowercase (e.g., `jokes`) |
-| `VIDVEIL` | Project name UPPERCASE (e.g., `JOKES`) |
-| `apimgr` | Organization name (e.g., `apimgr`) |
-| `github` | Git provider (e.g., `github`) |
+| `{projectname}` | Project name lowercase (e.g., `jokes`) |
+| `{PROJECTNAME}` | Project name UPPERCASE (e.g., `JOKES`) |
+| `{projectorg}` | Organization name (e.g., `apimgr`) |
+| `{gitprovider}` | Git provider (e.g., `github`) |
 | `{fqdn}` | Leave as `{fqdn}` (resolved at runtime) |
 
 ### Step 5: Fill Project-Specific Content
@@ -870,9 +870,9 @@ Update in AI.md:
 ## Endpoints
 | Method | URL | Description |
 |--------|-----|-------------|
-| GET | https://jokes.example.com/api/v1/joke/random | Random joke |
-| GET | https://jokes.example.com/api/v1/joke/{id} | Specific joke |
-| POST | https://jokes.example.com/api/v1/joke | Add joke (admin) |
+| GET | https://quotesvc.example.com/api/v1/quote/random | Random quote |
+| GET | https://quotesvc.example.com/api/v1/quote/{id} | Specific quote |
+| POST | https://quotesvc.example.com/api/v1/quote | Add quote (admin) |
 
 ## Business Rules
 - Rating: 1-5 stars, anonymous
@@ -896,7 +896,7 @@ Update in AI.md:
 | GET | https://paste.example.com/api/v1/paste/{id} | Get paste |
 | GET | https://paste.example.com/api/v1/paste/{id}/raw | Raw content |
 | POST | https://paste.example.com/api/v1/paste | Create paste |
-| GET | https://paste.example.com/api/v1/user/{username}/pastes | User's pastes |
+| GET | https://paste.example.com/api/v1/users/{username}/pastes | User's pastes |
 
 ## Business Rules
 - Anonymous pastes: max 10KB, expire in 30 days
@@ -973,6 +973,7 @@ Update in AI.md:
 | **MIT License** | Our code MIT, 3rd party attribution in LICENSE.md |
 | **Container-only** | Build=Docker, Test=Docker/Incus, Debug=Incus preferred |
 | **AI = Beta tester** | Goal is to BREAK things and FIX them, not just report |
+| **No legacy endpoints** | Old/changed/removed endpoints = DELETE, never keep |
 | **Audit = FIX** | When auditing, FIX issues - never create AUDIT.md or reports |
 
 **When implementing ANY feature:**
@@ -1000,7 +1001,7 @@ Remove everything between the ═══ markers (this entire HOW TO USE section)
 Tell the user:
 ```
 ✓ Created AI.md from template
-✓ Replaced variables: vidveil, apimgr, github
+✓ Replaced variables: {projectname}, {projectorg}, {gitprovider}
 ✓ Filled project description and PART 36 (WHAT)
 ✓ Ready to implement - AI.md is the specification
 ✓ PARTS 0-35 define HOW, PART 36 defines WHAT
@@ -1011,7 +1012,7 @@ Tell the user:
 ## FOR HUMANS (Manual Setup)
 
 1. **Copy this file** to your project directory as `AI.md`
-2. **Replace all variables** (`vidveil`, `apimgr`, etc.)
+2. **Replace all variables** (`{projectname}`, `{projectorg}`, etc.)
 3. **Fill in** project description (lines 1-25) and PART 36
 4. **Delete this section** (everything between ═══ markers)
 5. **Done** - AI.md is your project specification
@@ -1020,10 +1021,10 @@ Tell the user:
 
 | Variable | Replace With | Example |
 |----------|--------------|---------|
-| `vidveil` | Project name (lowercase) | `jokes` |
-| `VIDVEIL` | Project name (UPPERCASE) | `JOKES` |
-| `apimgr` | Organization name | `apimgr` |
-| `github` | Git host | `github`, `gitea`, `gitlab` |
+| `{projectname}` | Project name (lowercase) | `jokes` |
+| `{PROJECTNAME}` | Project name (UPPERCASE) | `JOKES` |
+| `{projectorg}` | Organization name | `apimgr` |
+| `{gitprovider}` | Git host | `github`, `gitea`, `gitlab` |
 
 ## After Setup
 
@@ -1039,16 +1040,16 @@ Tell the user:
 
 ## How to Read This Large File
 
-**AI.md is ~1MB and ~30,000 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1MB and ~34,000 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
 | File size | ~1MB |
-| Line count | ~30,000 lines |
+| Line count | ~34,000 lines |
 | Read limit | ~500 lines per read |
-| Full reads needed | ~60 reads (impractical) |
+| Full reads needed | ~68 reads (impractical) |
 
 **You MUST read strategically, not sequentially.**
 
@@ -1056,46 +1057,46 @@ Tell the user:
 
 **Use `grep -n "^# PART" AI.md` to get exact current line numbers.**
 
-| PART | Topic | When to Read |
-|------|-------|--------------|
-| 0 | AI Assistant Rules | **ALWAYS READ FIRST** |
-| 1 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | License & Attribution | License requirements |
-| 3 | Project Structure | Setting up new project |
-| 4 | OS-Specific Paths | Path handling |
-| 5 | Configuration | Config file work |
-| 6 | Application Modes | Mode handling, debug endpoints |
-| 7 | Server Binary CLI | CLI flags/commands |
-| 8 | Update Command | Update feature |
-| 9 | Privilege Escalation & Service | Service/privilege work |
-| 10 | Service Support | Systemd/service |
-| 11 | Binary Requirements | Binary building |
-| 12 | Makefile | Build system |
-| 13 | Testing & Development | Testing/dev workflow |
-| 14 | Docker | Docker/containers |
-| 15 | CI/CD Workflows | GitHub/Gitea Actions |
-| 16 | Health & Versioning | Health endpoints |
-| 17 | Web Frontend | Frontend/UI work |
-| 18 | Server Configuration | Server settings |
-| 19 | Admin Panel | Admin UI |
-| 20 | API Structure | REST/GraphQL/Compatibility API |
-| 21 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 22 | Security & Logging | Security features |
-| 23 | User Management | Users/auth/sessions |
-| 24 | Database & Cluster | Database work |
-| 25 | Backup & Restore | Backup features |
-| 26 | Email & Notifications | Email/SMTP |
-| 27 | Scheduler | Background tasks |
-| 28 | GeoIP | GeoIP features |
-| 29 | Metrics | Metrics/monitoring |
-| 30 | Tor Hidden Service | Tor support |
-| 31 | Error Handling & Caching | Error/cache |
-| 32 | I18N & A11Y | Internationalization |
-| 33 | ReadTheDocs Documentation | Documentation |
-| 34 | CLI Client | **OPTIONAL** - CLI tool |
-| 35 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 36 | Project-Specific Sections | Your project's business logic |
-| FINAL | Compliance Checklist | Final verification |
+| PART | ~Line | Topic | When to Read |
+|------|-------|-------|--------------|
+| 0 | 1290 | AI Assistant Rules | **ALWAYS READ FIRST** |
+| 1 | 2597 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | 3264 | License & Attribution | License requirements |
+| 3 | 3643 | Project Structure | Setting up new project |
+| 4 | 4414 | OS-Specific Paths | Path handling |
+| 5 | 4580 | Configuration | Config file work |
+| 6 | 5619 | Application Modes | Mode handling, debug endpoints |
+| 7 | 6227 | Server Binary CLI | CLI flags/commands |
+| 8 | 8748 | Update Command | Update feature |
+| 9 | 8804 | Privilege Escalation & Service | Service/privilege work |
+| 10 | 9191 | Service Support | Systemd/service |
+| 11 | 9209 | Binary Requirements | Binary building |
+| 12 | 9366 | Makefile | Build system |
+| 13 | 9890 | Testing & Development | Testing/dev workflow |
+| 14 | 11045 | Docker | Docker/containers |
+| 15 | 12544 | CI/CD Workflows | GitHub/Gitea Actions |
+| 16 | 15031 | Health & Versioning | Health endpoints |
+| 17 | 15180 | Web Frontend | Frontend/UI work |
+| 18 | 17729 | Server Configuration | Server settings |
+| 19 | 17996 | Admin Panel | Admin UI |
+| 20 | 18849 | API Structure | REST/GraphQL/Compatibility API |
+| 21 | 19971 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 22 | 20657 | Security & Logging | Security features |
+| 23 | 22143 | User Management | Users/auth/sessions |
+| 24 | 26198 | Database & Cluster | Database work |
+| 25 | 26331 | Backup & Restore | Backup features |
+| 26 | 26738 | Email & Notifications | Email/SMTP |
+| 27 | 28072 | Scheduler | Background tasks |
+| 28 | 28400 | GeoIP | GeoIP features |
+| 29 | 28473 | Metrics | Metrics/monitoring |
+| 30 | 29494 | Tor Hidden Service | Tor support |
+| 31 | 30088 | Error Handling & Caching | Error/cache |
+| 32 | 30146 | I18N & A11Y | Internationalization |
+| 33 | 30169 | ReadTheDocs Documentation | Documentation |
+| 34 | 30886 | CLI Client | **OPTIONAL** - CLI tool |
+| 35 | 31813 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 36 | 32752 | Project-Specific Sections | Your project's business logic |
+| FINAL | 33000 | Compliance Checklist | Final verification |
 
 ### How to Read This File
 
@@ -1639,6 +1640,98 @@ Implemented core server functionality and admin panel.
 - Detailed description follows
 - Use bullet points for multiple changes
 - Be specific about what changed and why
+
+## Project Audit (NON-NEGOTIABLE)
+
+**Audit is a systematic review of the entire project against the spec.**
+
+### When to Audit
+
+| Trigger | Action |
+|---------|--------|
+| User requests audit | Run full audit |
+| Major spec update | Audit affected areas |
+| Before release | Full audit recommended |
+| Sync issues found | Audit related components |
+
+### Audit Process
+
+1. **Create AUDIT.AI.md** - audit task tracking file
+2. **Read spec line by line** - identify all requirements
+3. **Check each requirement** - verify implementation matches spec
+4. **Log issues in AUDIT.AI.md** - track what needs fixing
+5. **Fix/sync each issue** - update code to match spec
+6. **Mark completed in AUDIT.AI.md** - track progress
+7. **Delete AUDIT.AI.md** - remove when audit complete
+
+### AUDIT.AI.md Format
+
+```markdown
+# Project Audit
+
+Started: {date}
+Spec version: {line count or hash}
+
+## Issues Found
+
+- [ ] {component}: {issue description}
+- [ ] {component}: {issue description}
+- [x] {component}: {issue description} - FIXED
+
+## Sync Required
+
+- [ ] Shell completions out of sync with CLI flags
+- [ ] Config validation missing for {field}
+- [x] README.md missing completion install docs - FIXED
+
+## Completed
+
+- {component}: {what was fixed}
+- {component}: {what was synced}
+```
+
+### Audit Rules
+
+| Rule | Requirement |
+|------|-------------|
+| **Tracking file** | Use `AUDIT.AI.md` (NOT TODO.AI.md) |
+| **Scope** | Read spec line by line, check everything |
+| **Fix immediately** | Fix issues as found, don't just log |
+| **Sync items** | Completions, docs, configs must match code |
+| **Completion** | Delete AUDIT.AI.md when all issues resolved |
+| **No partial** | Don't leave AUDIT.AI.md with unchecked items |
+
+### What to Check
+
+| Component | Verify |
+|-----------|--------|
+| **CLI flags** | Match spec, completions in sync |
+| **Commands** | Match spec, help output correct |
+| **Config files** | All fields documented, validation present |
+| **Shell completions** | Match actual flags/commands |
+| **README.md** | Install docs, usage examples current |
+| **Directory structure** | Matches spec layout |
+| **API endpoints** | Match spec, .txt support, content negotiation |
+| **Error messages** | Match spec format |
+| **Default values** | Match spec |
+
+### Audit Completion
+
+**When ALL items in AUDIT.AI.md are checked:**
+
+1. **Verify no unchecked items remain**
+2. **Delete AUDIT.AI.md** - file is removed entirely (not emptied)
+3. **Write COMMIT_MESS** with audit summary:
+
+```
+🔍 project audit completed 🔍
+
+Full audit against spec completed.
+
+- Fixed: {list of fixes}
+- Synced: {list of syncs}
+- Verified: {components checked}
+```
 
 ## Common Drift Patterns to Avoid
 
@@ -2208,6 +2301,41 @@ logging:
 - "I noticed the SPEC doesn't have..." → STOP - ask user
 - "The existing code does X but SPEC says Y..." → Follow SPEC, ask if unsure
 
+## AI Question Format (NON-NEGOTIABLE)
+
+**When AI asks user a question, ALWAYS use numbered or lettered options for easy selection:**
+
+```
+Question text here?
+
+1) First option
+2) Second option
+3) Third option
+4) Other (specify)
+
+Enter choice [1-4]:
+```
+
+**Or with letters:**
+
+```
+Which database should be used?
+
+a) SQLite (recommended for single-node)
+b) PostgreSQL (recommended for cluster)
+c) MySQL/MariaDB
+d) Other (specify)
+
+Enter choice [a-d]:
+```
+
+**Rules:**
+- Always number (1, 2, 3) or letter (a, b, c) options
+- User can simply type `2` or `b` instead of full answer
+- Include "Other" option when appropriate
+- Show valid range: `[1-4]` or `[a-d]`
+- Put recommended option first with "(recommended)" suffix
+
 ## Migration Success Criteria
 
 **Migration is ONLY complete when:**
@@ -2227,8 +2355,8 @@ logging:
 # AI should run these checks and report results:
 
 # 1. Verify CLI
-./binaries/vidveil --help
-./binaries/vidveil --version
+./binaries/{projectname} --help
+./binaries/{projectname} --version
 
 # 2. Verify build
 make clean && make build
@@ -2483,7 +2611,7 @@ Every feature MUST work via:
 | **Browser** | Chrome, Firefox, Safari | HTML (pretty UI) |
 | **PWA** | Installed web app (desktop/mobile) | HTML (same as browser) |
 | **API/Automation** | curl, wget, scripts, integrations | JSON |
-| **CLI tool** | `vidveil-cli` | Text/JSON (configurable) |
+| **CLI tool** | `{projectname}-cli` | Text/JSON (configurable) |
 
 **Why we support all these clients:**
 - Browser users get a full web experience
@@ -2499,8 +2627,8 @@ Every feature MUST work via:
 | `/admin/dashboard` | `/api/v1/admin/dashboard` | Admin dashboard |
 | `/admin/server/settings` | `/api/v1/admin/server/settings` | Server settings |
 | `/admin/users` | `/api/v1/admin/users` | User management |
-| `/jokes` | `/api/v1/jokes` | Project feature (example) |
-| `/jokes/random` | `/api/v1/jokes/random` | Project feature (example) |
+| `/quotes` | `/api/v1/quotes` | Project feature (example) |
+| `/quotes/random` | `/api/v1/quotes/random` | Project feature (example) |
 | `/swagger` | `/api/v1/openapi.json` | API documentation |
 | `/graphql` | `/api/v1/graphql` | GraphQL endpoint |
 
@@ -2553,19 +2681,19 @@ These are not roleplay - they ARE these roles when the work requires it. Each pr
 
 ```bash
 # CORRECT - Use Makefile (wraps Docker)
-make dev                    # Quick build to {tempdir}/apimgr.XXXXXX/vidveil
+make dev                    # Quick build to {tempdir}/{projectorg}.XXXXXX/{projectname}
 make build                  # Full build to binaries/
 
 # ALSO CORRECT - Direct Docker build
-docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/vidveil ./src
+docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/{projectname} ./src
 
 # CORRECT - Full OS test with Incus (PREFERRED)
 incus launch images:debian/12 test-app
-incus file push binaries/vidveil test-app/usr/local/bin/
-incus exec test-app -- vidveil --help
+incus file push binaries/{projectname} test-app/usr/local/bin/
+incus exec test-app -- {projectname} --help
 
 # WRONG - Never run go directly on host
-go build -o binary/vidveil src
+go build -o binary/{projectname} src
 ```
 
 **See PART 13: TESTING & DEVELOPMENT for full containerized build/test procedures.**
@@ -2831,7 +2959,7 @@ Template File (master, read-only, organization-level)
 
 1. **Title & Badges** - Project name, build status, version badges
 2. **About** - Brief description of what the project does
-3. **Official Site** - Link to official site (if defined, e.g., `https://vidveil.apimgr.us`)
+3. **Official Site** - Link to official site (if defined, e.g., `https://{projectname}.{projectorg}.us`)
 4. **Features** - Key features list
 5. **Production** - Production deployment instructions (Docker, binary, systemd)
 6. **CLI Client** - Client CLI installation and usage (if applicable)
@@ -2844,11 +2972,11 @@ Template File (master, read-only, organization-level)
 #### README Template
 
 ```markdown
-# vidveil
+# {projectname}
 
-[![Build Status](https://jenkins.casjay.cc/buildStatus/icon?job=apimgr/vidveil)](https://jenkins.casjay.cc/job/apimgr/job/vidveil/)
-[![GitHub release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
-[![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
+[![Build Status](https://jenkins.casjay.cc/buildStatus/icon?job={projectorg}/{projectname})](https://jenkins.casjay.cc/job/{projectorg}/job/{projectname}/)
+[![GitHub release](https://img.shields.io/github/v/release/{projectorg}/{projectname})](https://github.com/{projectorg}/{projectname}/releases)
+[![License](https://img.shields.io/github/license/{projectorg}/{projectname})](LICENSE.md)
 
 ## About
 
@@ -2856,7 +2984,7 @@ Template File (master, read-only, organization-level)
 
 ## Official Site
 
-https://vidveil.apimgr.us
+https://{projectname}.{projectorg}.us
 
 ## Features
 
@@ -2870,17 +2998,17 @@ https://vidveil.apimgr.us
 
 ```bash
 docker run -d \
-  --name vidveil \
+  --name {projectname} \
   -p 64580:80 \
   -v ./rootfs/config:/config:z \
   -v ./rootfs/data:/data:z \
-  ghcr.io/apimgr/vidveil:latest
+  ghcr.io/{projectorg}/{projectname}:latest
 ```
 
 ### Docker Compose
 
 ```bash
-curl -O https://raw.githubusercontent.com/apimgr/vidveil/main/docker/docker-compose.yml
+curl -O https://raw.githubusercontent.com/{projectorg}/{projectname}/main/docker/docker-compose.yml
 docker compose up -d
 ```
 
@@ -2888,11 +3016,11 @@ docker compose up -d
 
 ```bash
 # Download latest release
-curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
+curl -LO https://github.com/{projectorg}/{projectname}/releases/latest/download/{projectname}-linux-amd64
 
 # Make executable and run
-chmod +x vidveil-linux-amd64
-./vidveil-linux-amd64
+chmod +x {projectname}-linux-amd64
+./{projectname}-linux-amd64
 ```
 
 ## CLI Client
@@ -2903,23 +3031,23 @@ A companion CLI client is available for interacting with the server API.
 
 ```bash
 # Download latest release
-curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-cli-linux-amd64
-chmod +x vidveil-cli-linux-amd64
-sudo mv vidveil-cli-linux-amd64 /usr/local/bin/vidveil-cli
+curl -LO https://github.com/{projectorg}/{projectname}/releases/latest/download/{projectname}-cli-linux-amd64
+chmod +x {projectname}-cli-linux-amd64
+sudo mv {projectname}-cli-linux-amd64 /usr/local/bin/{projectname}-cli
 ```
 
 ### Configure
 
 ```bash
-# Connect to server (creates ~/.config/apimgr/vidveil/cli.yml)
-vidveil-cli --server https://api.example.com --token YOUR_API_TOKEN
+# Connect to server (creates ~/.config/{projectorg}/{projectname}/cli.yml)
+{projectname}-cli --server https://api.example.com --token YOUR_API_TOKEN
 ```
 
 ### Usage
 
 ```bash
-vidveil-cli --help
-vidveil-cli [command] --help
+{projectname}-cli --help
+{projectname}-cli [command] --help
 ```
 
 ## Configuration
@@ -2943,7 +3071,7 @@ API documentation available at `/api/v1/` when running.
 
 ### Troubleshooting
 
-- Check logs: `docker logs vidveil`
+- Check logs: `docker logs {projectname}`
 - Health check: `curl http://{fqdn}:{port}/healthz`
 
 ## Development
@@ -2959,8 +3087,8 @@ API documentation available at `/api/v1/` when running.
 
 ```bash
 # Clone
-git clone https://github.com/apimgr/vidveil
-cd vidveil
+git clone https://github.com/{projectorg}/{projectname}
+cd {projectname}
 
 # Quick dev build (outputs to OS temp dir)
 make dev
@@ -3006,10 +3134,10 @@ MIT - See [LICENSE.md](LICENSE.md)
 
 | Principle | Description |
 |-----------|-------------|
-| **Validate Everything** | All input must be validated before processing |
-| **Sanitize Appropriately** | Clean data where needed |
-| **Save Only Valid Data** | Never persist invalid data |
-| **Clear Only Invalid Data** | Don't destroy valid data |
+| **Validate everything** | All input must be validated before processing |
+| **Only save valid** | Never persist invalid data to database/config |
+| **Never clear valid** | Don't destroy/overwrite valid data with invalid |
+| **Sanitize appropriately** | Clean data where needed |
 | **Test Everything** | Comprehensive testing where applicable |
 | **Show Tooltips/Docs** | Help users understand the interface |
 | **Security First** | But security should never block usability |
@@ -3143,7 +3271,7 @@ Before proceeding, confirm you understand:
 |-------------|-------|
 | License type | MIT License |
 | License file | `LICENSE.md` (REQUIRED in project root) |
-| Copyright holder | `apimgr` or individual/organization name |
+| Copyright holder | `{projectorg}` or individual/organization name |
 | Year | Current year or year of first publication |
 
 ## LICENSE.md Structure (NON-NEGOTIABLE)
@@ -3151,7 +3279,7 @@ Before proceeding, confirm you understand:
 ```markdown
 MIT License
 
-Copyright (c) {YEAR} apimgr
+Copyright (c) {YEAR} {projectorg}
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -3439,7 +3567,7 @@ echo "3. Commit the changes"
 **Every README.md MUST include a license badge:**
 
 ```markdown
-[![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
+[![License](https://img.shields.io/github/license/{projectorg}/{projectname})](LICENSE.md)
 ```
 
 This badge should appear in the badges section near the top of README.md.
@@ -3520,7 +3648,7 @@ package main
 |-------|-------|
 | **Name** | vidveil |
 | **Organization** | apimgr |
-| **Official Site** | https://vidveil.apimgr.us |
+| **Official Site** | https://scour.li |
 | **Repository** | https://github.com/apimgr/vidveil |
 | **README** | README.md |
 | **License** | MIT > LICENSE.md |
@@ -3528,11 +3656,20 @@ package main
 
 ## Project Description
 
-{Brief description of what this project does}
+Privacy-respecting meta search engine for adult video content. Aggregates results from 52+ adult video sites with zero tracking, bang search syntax (DuckDuckGo-style shortcuts), and real-time SSE streaming.
 
 ## Project-Specific Features
 
-{List features unique to this project}
+- **52 Engines**: Aggregates PornHub, XVideos, XNXX, RedTube, xHamster, Eporner, and 46 more sites
+- **Bang Search**: `!ph amateur` searches only PornHub, `!ph !rt amateur` searches multiple sites
+- **SSE Streaming**: Results appear in real-time as each engine responds
+- **Thumbnail Proxy**: All images proxied to prevent engine tracking
+- **Zero Tracking**: No cookies, no analytics, no logging (production mode)
+- **Tor Support**: Automatic hidden service if Tor installed
+- **TLS Fingerprinting**: Anti-fingerprinting via utls library
+- **Circuit Breaker**: Auto-disable failing engines, auto-recover when healthy
+- **Fast APIs**: Direct integration with PornHub, RedTube, Eporner APIs
+- **Autocomplete**: Bang shortcuts autocomplete as you type
 
 ---
 
@@ -3540,21 +3677,21 @@ package main
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `vidveil` | Project name (inferred from path) | `jokes` |
-| `apimgr` | Organization name (inferred from path) | `apimgr` |
-| `github` | Git hosting provider | `github`, `gitlab`, `private` |
+| `{projectname}` | Project name (inferred from path) | `jokes` |
+| `{projectorg}` | Organization name (inferred from path) | `apimgr` |
+| `{gitprovider}` | Git hosting provider | `github`, `gitlab`, `private` |
 | **Rule** | Anything in `{}` is a variable | |
 | **Rule** | Anything NOT in `{}` is literal | `/etc/letsencrypt/live` is a real path |
 
 ### Inferring Variables from Path (NON-NEGOTIABLE)
 
-**NEVER hardcode `vidveil` or `apimgr` - always infer from git remote or directory path.**
+**NEVER hardcode `{projectname}` or `{projectorg}` - always infer from git remote or directory path.**
 
-**Recommended path structure:** `~/Projects/github/apimgr/vidveil` (but works with any location)
+**Recommended path structure:** `~/Projects/{gitprovider}/{projectorg}/{projectname}` (but works with any location)
 
 ```bash
 # Method 1: Infer from git remote (PREFERRED - works regardless of directory location)
-# github.com/apimgr/jokes.git → PROJECTORG=apimgr, PROJECTNAME=jokes
+# github.com/cloudops/echoip.git → PROJECTORG=cloudops, PROJECTNAME=echoip
 PROJECTNAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$|\1|')
 PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$|\1|')
 
@@ -3568,22 +3705,22 @@ PROJECTNAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git
 PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$|\1|' || basename "$(dirname "$PWD")")
 ```
 
-**Note:** When using path-based inference, `PROJECTORG` will be the parent directory name, which may not match the git organization unless you follow the recommended `~/Projects/github/apimgr/vidveil` structure. Git remote inference is always more reliable.
+**Note:** When using path-based inference, `PROJECTORG` will be the parent directory name, which may not match the git organization unless you follow the recommended `~/Projects/{gitprovider}/{projectorg}/{projectname}` structure. Git remote inference is always more reliable.
 
 ### Variable Capitalization
 
 | Format | Use Case | Example |
 |--------|----------|---------|
-| `vidveil` | Lowercase (filenames, paths, commands) | `jokes`, `/etc/apimgr/jokes/` |
+| `{projectname}` | Lowercase (filenames, paths, commands) | `jokes`, `/etc/apimgr/jokes/` |
 | `{projectName}` | camelCase (Go variables, JSON keys) | `projectName := "jokes"` |
 | `{Projectname}` | PascalCase (Go types, display names) | `type JokesServer struct` |
-| `VIDVEIL` | UPPERCASE (env vars, Makefile vars) | `PROJECTNAME=jokes` |
+| `{PROJECTNAME}` | UPPERCASE (env vars, Makefile vars) | `PROJECTNAME=jokes` |
 
 **Examples (assuming no git remote, inferred from path):**
 
 | Path | `PROJECTORG` | `PROJECTNAME` | Notes |
 |------|--------------|---------------|-------|
-| `~/Projects/github/apimgr/jokes` | `apimgr` | `jokes` | Recommended structure |
+| `~/Projects/github/cloudops/echoip` | `cloudops` | `echoip` | Recommended structure |
 | `~/Projects/gitlab/casapps/cassearch` | `casapps` | `cassearch` | Recommended structure |
 | `~/Documents/myproject` | `Documents` | `myproject` | Simple structure - org is parent dir |
 | `~/myproject` | `~` | `myproject` | Home directory - org is home |
@@ -3595,18 +3732,18 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 
 **IMPORTANT: Project root can be located ANYWHERE on your system. This section describes a RECOMMENDED organizational structure, not a requirement.**
 
-**Recommended Format:** `~/Projects/github/apimgr/vidveil`
+**Recommended Format:** `~/Projects/{gitprovider}/{projectorg}/{projectname}`
 
 | Component | Description | Examples |
 |-----------|-------------|----------|
 | `~/Projects/` | Base projects directory (recommended) | Can be `~/Projects/`, `~/Documents/`, `/opt/`, etc. |
-| `github` | Git hosting provider or `local` | `github`, `gitlab`, `bitbucket`, `private`, `local` |
-| `apimgr` | Organization/username (inferred) | `apimgr`, `casjay`, `myorg` |
-| `vidveil` | Project name (inferred) | `jokes`, `icons`, `myproject` |
+| `{gitprovider}` | Git hosting provider or `local` | `github`, `gitlab`, `bitbucket`, `private`, `local` |
+| `{projectorg}` | Organization/username (inferred) | `apimgr`, `casjay`, `myorg` |
+| `{projectname}` | Project name (inferred) | `jokes`, `icons`, `myproject` |
 
 **Examples of recommended structure:**
 ```
-~/Projects/github/apimgr/jokes        # ORG=apimgr, PROJECT=jokes
+~/Projects/github/netutils/pastebin   # ORG=netutils, PROJECT=pastebin
 ~/Projects/gitlab/casjay/icons        # ORG=casjay, PROJECT=icons
 ~/Projects/private/myorg/myproject    # ORG=myorg, PROJECT=myproject
 ~/Projects/bitbucket/company/app      # ORG=company, PROJECT=app
@@ -3623,7 +3760,7 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 
 ### Special: `local` Provider
 
-`~/Projects/local/apimgr/vidveil` (or any other location) is used for:
+`~/Projects/local/{projectorg}/{projectname}` (or any other location) is used for:
 - **Prototyping** - Quick experiments and proof-of-concept
 - **Bootstrapping** - Initial project setup before pushing to VCS
 - **Local-only development** - Projects not intended for remote hosting
@@ -3672,6 +3809,13 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 │   └── requirements.txt    # Python dependencies for MkDocs
 ├── src/                    # All source files
 ├── scripts/                # All production/install scripts
+│   └── completions/        # Shell completions
+│       ├── {projectname}.bash      # Server bash completions
+│       ├── {projectname}.zsh       # Server zsh completions
+│       ├── {projectname}.fish      # Server fish completions
+│       ├── {projectname}-cli.bash  # CLI bash completions
+│       ├── {projectname}-cli.zsh   # CLI zsh completions
+│       └── {projectname}-cli.fish  # CLI fish completions
 ├── tests/                  # All development/test scripts and files
 │   ├── run_tests.sh        # Auto-detect and run tests (REQUIRED)
 │   ├── docker.sh           # Beta testing with Docker (REQUIRED)
@@ -3996,7 +4140,7 @@ cd /path/to/project && docker build -f docker/Dockerfile .
 
 **go.mod Example:**
 ```
-module github.com/apimgr/vidveil
+module github.com/{projectorg}/{projectname}
 
 go 1.23
 
@@ -4033,7 +4177,7 @@ require (
 | **YAML** | `gopkg.in/yaml.v3` | Config file parsing |
 | **UUID** | `github.com/google/uuid` | Standard UUID generation |
 | **Argon2** | `golang.org/x/crypto/argon2` | Password hashing |
-| **Bcrypt** | `golang.org/x/crypto/bcrypt` | Legacy password verification |
+| **Bcrypt** | `golang.org/x/crypto/bcrypt` | Verify existing passwords (rehash to Argon2id) |
 
 ### Authentication (REQUIRED - ALL PROJECTS)
 
@@ -4124,7 +4268,7 @@ require modernc.org/sqlite v1.29.1
 ### Example go.mod
 
 ```go
-module github.com/apimgr/vidveil
+module github.com/{projectorg}/{projectname}
 
 go 1.24
 
@@ -4184,7 +4328,7 @@ require (
 |---------|-------|--------|
 | **Algorithm** | Argon2id | Winner of Password Hashing Competition, memory-hard |
 | **Library** | `golang.org/x/crypto/argon2` | Pure Go, CGO_ENABLED=0 compatible |
-| **Fallback** | Bcrypt (cost 12+) | For legacy password verification only |
+| **Fallback** | Bcrypt (cost 12+) | Verify existing passwords, then rehash with Argon2id |
 
 ### Argon2id Parameters (OWASP 2023)
 
@@ -4284,32 +4428,32 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `/usr/local/bin/vidveil` |
-| Config | `/etc/apimgr/vidveil/` |
-| Config File | `/etc/apimgr/vidveil/server.yml` |
-| Data | `/var/lib/apimgr/vidveil/` |
-| Logs | `/var/log/apimgr/vidveil/` |
-| Backup | `/mnt/Backups/apimgr/vidveil/` |
-| PID File | `/var/run/apimgr/vidveil.pid` |
-| SSL | `/etc/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
-| Security | `/etc/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `/var/lib/apimgr/vidveil/db/` |
-| Service | `/etc/systemd/system/vidveil.service` |
+| Binary | `/usr/local/bin/{projectname}` |
+| Config | `/etc/{projectorg}/{projectname}/` |
+| Config File | `/etc/{projectorg}/{projectname}/server.yml` |
+| Data | `/var/lib/{projectorg}/{projectname}/` |
+| Logs | `/var/log/{projectorg}/{projectname}/` |
+| Backup | `/mnt/Backups/{projectorg}/{projectname}/` |
+| PID File | `/var/run/{projectorg}/{projectname}.pid` |
+| SSL | `/etc/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
+| Security | `/etc/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `/var/lib/{projectorg}/{projectname}/db/` |
+| Service | `/etc/systemd/system/{projectname}.service` |
 
 ### User (non-privileged)
 
 | Type | Path |
 |------|------|
-| Binary | `~/.local/bin/vidveil` |
-| Config | `~/.config/apimgr/vidveil/` |
-| Config File | `~/.config/apimgr/vidveil/server.yml` |
-| Data | `~/.local/share/apimgr/vidveil/` |
-| Logs | `~/.local/log/apimgr/vidveil/` |
-| Backup | `~/.local/backup/apimgr/vidveil/` |
-| PID File | `~/.local/share/apimgr/vidveil/vidveil.pid` |
-| SSL | `~/.config/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
-| Security | `~/.config/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `~/.local/share/apimgr/vidveil/db/` |
+| Binary | `~/.local/bin/{projectname}` |
+| Config | `~/.config/{projectorg}/{projectname}/` |
+| Config File | `~/.config/{projectorg}/{projectname}/server.yml` |
+| Data | `~/.local/share/{projectorg}/{projectname}/` |
+| Logs | `~/.local/log/{projectorg}/{projectname}/` |
+| Backup | `~/.local/backup/{projectorg}/{projectname}/` |
+| PID File | `~/.local/share/{projectorg}/{projectname}/{projectname}.pid` |
+| SSL | `~/.config/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
+| Security | `~/.config/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `~/.local/share/{projectorg}/{projectname}/db/` |
 
 ---
 
@@ -4319,33 +4463,33 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `/usr/local/bin/vidveil` |
-| Config | `/Library/Application Support/apimgr/vidveil/` |
-| Config File | `/Library/Application Support/apimgr/vidveil/server.yml` |
-| Data | `/Library/Application Support/apimgr/vidveil/data/` |
-| Logs | `/Library/Logs/apimgr/vidveil/` |
-| Backup | `/Library/Backups/apimgr/vidveil/` |
-| PID File | `/var/run/apimgr/vidveil.pid` |
-| SSL | `/Library/Application Support/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
-| Security | `/Library/Application Support/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `/Library/Application Support/apimgr/vidveil/db/` |
-| Service | `/Library/LaunchDaemons/com.apimgr.vidveil.plist` |
+| Binary | `/usr/local/bin/{projectname}` |
+| Config | `/Library/Application Support/{projectorg}/{projectname}/` |
+| Config File | `/Library/Application Support/{projectorg}/{projectname}/server.yml` |
+| Data | `/Library/Application Support/{projectorg}/{projectname}/data/` |
+| Logs | `/Library/Logs/{projectorg}/{projectname}/` |
+| Backup | `/Library/Backups/{projectorg}/{projectname}/` |
+| PID File | `/var/run/{projectorg}/{projectname}.pid` |
+| SSL | `/Library/Application Support/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
+| Security | `/Library/Application Support/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `/Library/Application Support/{projectorg}/{projectname}/db/` |
+| Service | `/Library/LaunchDaemons/com.{projectorg}.{projectname}.plist` |
 
 ### User (non-privileged)
 
 | Type | Path |
 |------|------|
-| Binary | `~/bin/vidveil` or `/usr/local/bin/vidveil` |
-| Config | `~/Library/Application Support/apimgr/vidveil/` |
-| Config File | `~/Library/Application Support/apimgr/vidveil/server.yml` |
-| Data | `~/Library/Application Support/apimgr/vidveil/` |
-| Logs | `~/Library/Logs/apimgr/vidveil/` |
-| Backup | `~/Library/Backups/apimgr/vidveil/` |
-| PID File | `~/Library/Application Support/apimgr/vidveil/vidveil.pid` |
-| SSL | `~/Library/Application Support/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
-| Security | `~/Library/Application Support/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `~/Library/Application Support/apimgr/vidveil/db/` |
-| Service | `~/Library/LaunchAgents/com.apimgr.vidveil.plist` |
+| Binary | `~/bin/{projectname}` or `/usr/local/bin/{projectname}` |
+| Config | `~/Library/Application Support/{projectorg}/{projectname}/` |
+| Config File | `~/Library/Application Support/{projectorg}/{projectname}/server.yml` |
+| Data | `~/Library/Application Support/{projectorg}/{projectname}/` |
+| Logs | `~/Library/Logs/{projectorg}/{projectname}/` |
+| Backup | `~/Library/Backups/{projectorg}/{projectname}/` |
+| PID File | `~/Library/Application Support/{projectorg}/{projectname}/{projectname}.pid` |
+| SSL | `~/Library/Application Support/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
+| Security | `~/Library/Application Support/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `~/Library/Application Support/{projectorg}/{projectname}/db/` |
+| Service | `~/Library/LaunchAgents/com.{projectorg}.{projectname}.plist` |
 
 ---
 
@@ -4355,32 +4499,32 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `/usr/local/bin/vidveil` |
-| Config | `/usr/local/etc/apimgr/vidveil/` |
-| Config File | `/usr/local/etc/apimgr/vidveil/server.yml` |
-| Data | `/var/db/apimgr/vidveil/` |
-| Logs | `/var/log/apimgr/vidveil/` |
-| Backup | `/var/backups/apimgr/vidveil/` |
-| PID File | `/var/run/apimgr/vidveil.pid` |
-| SSL | `/usr/local/etc/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
-| Security | `/usr/local/etc/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `/var/db/apimgr/vidveil/db/` |
-| Service | `/usr/local/etc/rc.d/vidveil` |
+| Binary | `/usr/local/bin/{projectname}` |
+| Config | `/usr/local/etc/{projectorg}/{projectname}/` |
+| Config File | `/usr/local/etc/{projectorg}/{projectname}/server.yml` |
+| Data | `/var/db/{projectorg}/{projectname}/` |
+| Logs | `/var/log/{projectorg}/{projectname}/` |
+| Backup | `/var/backups/{projectorg}/{projectname}/` |
+| PID File | `/var/run/{projectorg}/{projectname}.pid` |
+| SSL | `/usr/local/etc/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
+| Security | `/usr/local/etc/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `/var/db/{projectorg}/{projectname}/db/` |
+| Service | `/usr/local/etc/rc.d/{projectname}` |
 
 ### User (non-privileged)
 
 | Type | Path |
 |------|------|
-| Binary | `~/.local/bin/vidveil` |
-| Config | `~/.config/apimgr/vidveil/` |
-| Config File | `~/.config/apimgr/vidveil/server.yml` |
-| Data | `~/.local/share/apimgr/vidveil/` |
-| Logs | `~/.local/log/apimgr/vidveil/` |
-| Backup | `~/.local/backup/apimgr/vidveil/` |
-| PID File | `~/.local/share/apimgr/vidveil/vidveil.pid` |
-| SSL | `~/.config/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
-| Security | `~/.config/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `~/.local/share/apimgr/vidveil/db/` |
+| Binary | `~/.local/bin/{projectname}` |
+| Config | `~/.config/{projectorg}/{projectname}/` |
+| Config File | `~/.config/{projectorg}/{projectname}/server.yml` |
+| Data | `~/.local/share/{projectorg}/{projectname}/` |
+| Logs | `~/.local/log/{projectorg}/{projectname}/` |
+| Backup | `~/.local/backup/{projectorg}/{projectname}/` |
+| PID File | `~/.local/share/{projectorg}/{projectname}/{projectname}.pid` |
+| SSL | `~/.config/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
+| Security | `~/.config/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `~/.local/share/{projectorg}/{projectname}/db/` |
 
 ---
 
@@ -4390,30 +4534,30 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `C:\Program Files\apimgr\vidveil\vidveil.exe` |
-| Config | `%ProgramData%\apimgr\vidveil\` |
-| Config File | `%ProgramData%\apimgr\vidveil\server.yml` |
-| Data | `%ProgramData%\apimgr\vidveil\data\` |
-| Logs | `%ProgramData%\apimgr\vidveil\logs\` |
-| Backup | `%ProgramData%\Backups\apimgr\vidveil\` |
-| SSL | `%ProgramData%\apimgr\vidveil\ssl\` (letsencrypt\, local\) |
-| Security | `%ProgramData%\apimgr\vidveil\security\` (geoip\, blocklists\, cve\, trivy\) |
-| SQLite DB | `%ProgramData%\apimgr\vidveil\db\` |
+| Binary | `C:\Program Files\{projectorg}\{projectname}\{projectname}.exe` |
+| Config | `%ProgramData%\{projectorg}\{projectname}\` |
+| Config File | `%ProgramData%\{projectorg}\{projectname}\server.yml` |
+| Data | `%ProgramData%\{projectorg}\{projectname}\data\` |
+| Logs | `%ProgramData%\{projectorg}\{projectname}\logs\` |
+| Backup | `%ProgramData%\Backups\{projectorg}\{projectname}\` |
+| SSL | `%ProgramData%\{projectorg}\{projectname}\ssl\` (letsencrypt\, local\) |
+| Security | `%ProgramData%\{projectorg}\{projectname}\security\` (geoip\, blocklists\, cve\, trivy\) |
+| SQLite DB | `%ProgramData%\{projectorg}\{projectname}\db\` |
 | Service | Windows Service Manager |
 
 ### User (non-privileged)
 
 | Type | Path |
 |------|------|
-| Binary | `%LocalAppData%\apimgr\vidveil\vidveil.exe` |
-| Config | `%AppData%\apimgr\vidveil\` |
-| Config File | `%AppData%\apimgr\vidveil\server.yml` |
-| Data | `%LocalAppData%\apimgr\vidveil\` |
-| Logs | `%LocalAppData%\apimgr\vidveil\logs\` |
-| Backup | `%LocalAppData%\Backups\apimgr\vidveil\` |
-| SSL | `%AppData%\apimgr\vidveil\ssl\` (letsencrypt\, local\) |
-| Security | `%AppData%\apimgr\vidveil\security\` (geoip\, blocklists\, cve\, trivy\) |
-| SQLite DB | `%LocalAppData%\apimgr\vidveil\db\` |
+| Binary | `%LocalAppData%\{projectorg}\{projectname}\{projectname}.exe` |
+| Config | `%AppData%\{projectorg}\{projectname}\` |
+| Config File | `%AppData%\{projectorg}\{projectname}\server.yml` |
+| Data | `%LocalAppData%\{projectorg}\{projectname}\` |
+| Logs | `%LocalAppData%\{projectorg}\{projectname}\logs\` |
+| Backup | `%LocalAppData%\Backups\{projectorg}\{projectname}\` |
+| SSL | `%AppData%\{projectorg}\{projectname}\ssl\` (letsencrypt\, local\) |
+| Security | `%AppData%\{projectorg}\{projectname}\security\` (geoip\, blocklists\, cve\, trivy\) |
+| SQLite DB | `%LocalAppData%\{projectorg}\{projectname}\db\` |
 
 ---
 
@@ -4421,7 +4565,7 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `/usr/local/bin/vidveil` |
+| Binary | `/usr/local/bin/{projectname}` |
 | Config | `/config/` |
 | Config File | `/config/server.yml` |
 | Security DBs | `/config/security/` (geoip, blocklists, cve, trivy) |
@@ -4438,7 +4582,7 @@ Before proceeding, confirm you understand:
 - [ ] Each OS has specific paths for privileged and non-privileged users
 - [ ] Config file is ALWAYS `server.yml` (not .yaml)
 - [ ] Docker uses simplified paths (/config, /data)
-- [ ] All paths follow the apimgr/vidveil pattern
+- [ ] All paths follow the {projectorg}/{projectname} pattern
 
 ---
 
@@ -5214,8 +5358,8 @@ func (req *CreateUserRequest) Parse() (*User, error) {
 
 | User Type | Path |
 |-----------|------|
-| Root | `/etc/apimgr/vidveil/server.yml` |
-| Regular | `~/.config/apimgr/vidveil/server.yml` |
+| Root | `/etc/{projectorg}/{projectname}/server.yml` |
+| Regular | `~/.config/{projectorg}/{projectname}/server.yml` |
 
 ### Migration
 
@@ -5338,10 +5482,12 @@ server:
   address: "[::]"
   # production or development
   mode: production
+  # Admin panel path (default: admin) - see PART 19
+  admin_path: admin
 
   # Branding & SEO - see PART 17 for full details
   branding:
-    title: "vidveil"
+    title: "{projectname}"
     tagline: ""
     description: ""
   seo:
@@ -5990,7 +6136,7 @@ import (
     "runtime"
     "strings"
 
-    "github.com/apimgr/vidveil/src/config"
+    "github.com/{projectorg}/{projectname}/src/config"
 )
 
 var (
@@ -6089,14 +6235,14 @@ func FromEnv() {
 
 # PART 7: SERVER BINARY CLI (NON-NEGOTIABLE)
 
-**These are the command-line flags for the SERVER binary (`vidveil`), NOT the CLI client (`vidveil-cli`).**
+**These are the command-line flags for the SERVER binary (`{projectname}`), NOT the CLI client (`{projectname}-cli`).**
 
 ## Two Different Binaries
 
 | Binary | Default Name | Purpose | Flags |
 |--------|--------------|---------|-------|
-| **Server** | `vidveil` | Runs the HTTP server | `--config`, `--data`, `--log`, `--port`, `--mode`, etc. |
-| **CLI Client** | `vidveil-cli` | Connects to server | `--server`, `--token`, `--output`, `--tui`, etc. |
+| **Server** | `{projectname}` | Runs the HTTP server | `--config`, `--data`, `--log`, `--port`, `--mode`, etc. |
+| **CLI Client** | `{projectname}-cli` | Connects to server | `--server`, `--token`, `--output`, `--debug`, etc. |
 
 **Shared flags:** `--help` and `--version` (both binaries support these)
 
@@ -6107,12 +6253,12 @@ func FromEnv() {
   - Web UI titles, headers, command examples
   - Error messages showing "run X --help"
   - Any documentation/instructions shown to user
-- Hardcode `vidveil` for internal identifiers:
+- Hardcode `{projectname}` for internal identifiers:
   - User-Agent header
-  - Default paths (`/etc/apimgr/vidveil/`)
+  - Default paths (`/etc/{projectorg}/{projectname}/`)
   - Config keys, database tables
   - API identifiers
-- Hardcode `vidveil-cli` for: CLI client User-Agent
+- Hardcode `{projectname}-cli` for: CLI client User-Agent
 
 **Get actual binary name:**
 ```go
@@ -6164,10 +6310,10 @@ Default config: /etc/apimgr/jokes/  # Hardcoded project name
 
 | Flag | Type | Default (Linux root) | Default (Linux user) |
 |------|------|----------------------|----------------------|
-| `--config` | Directory | `/etc/apimgr/vidveil/` | `~/.config/apimgr/vidveil/` |
-| `--data` | Directory | `/var/lib/apimgr/vidveil/` | `~/.local/share/apimgr/vidveil/` |
-| `--log` | Directory | `/var/log/apimgr/vidveil/` | `~/.local/log/apimgr/vidveil/` |
-| `--pid` | File | `/var/run/apimgr/vidveil.pid` | `~/.local/share/apimgr/vidveil/vidveil.pid` |
+| `--config` | Directory | `/etc/{projectorg}/{projectname}/` | `~/.config/{projectorg}/{projectname}/` |
+| `--data` | Directory | `/var/lib/{projectorg}/{projectname}/` | `~/.local/share/{projectorg}/{projectname}/` |
+| `--log` | Directory | `/var/log/{projectorg}/{projectname}/` | `~/.local/log/{projectorg}/{projectname}/` |
+| `--pid` | File | `/var/run/{projectorg}/{projectname}.pid` | `~/.local/share/{projectorg}/{projectname}/{projectname}.pid` |
 
 ### Directory Validation Rules
 
@@ -6277,7 +6423,7 @@ func isOurProcess(pid int) bool {
         // On macOS/BSD, use ps command
         return isOurProcessDarwin(pid)
     }
-    return strings.Contains(filepath.Base(exePath), "vidveil")
+    return strings.Contains(filepath.Base(exePath), "{projectname}")
 }
 
 // isOurProcessDarwin checks process on macOS/BSD
@@ -6287,7 +6433,7 @@ func isOurProcessDarwin(pid int) bool {
     if err != nil {
         return false
     }
-    return strings.Contains(string(output), "vidveil")
+    return strings.Contains(string(output), "{projectname}")
 }
 
 // --- pid_windows.go ---
@@ -6326,7 +6472,7 @@ func isOurProcess(pid int) bool {
         return false
     }
     exePath := windows.UTF16ToString(buf[:size])
-    return strings.Contains(strings.ToLower(filepath.Base(exePath)), "vidveil")
+    return strings.Contains(strings.ToLower(filepath.Base(exePath)), "{projectname}")
 }
 
 // WritePIDFile writes current process PID to file
@@ -6397,7 +6543,7 @@ func RemovePIDFile(pidPath string) error {
 - `/.dockerenv` exists
 - `container` env var set
 - Parent process is: `tini`, `dumb-init`, `s6-svscan`, `runsv`, `runsvdir`
-- Parent process is `vidveil` (self - entrypoint wrapper)
+- Parent process is `{projectname}` (self - entrypoint wrapper)
 
 **Manual Start Priority Order:**
 1. `--daemon` CLI flag (highest)
@@ -6427,7 +6573,7 @@ func detectServiceManager() string {
     switch parentName {
     case "tini", "dumb-init", "s6-svscan", "runsv", "runsvdir":
         return "container"
-    case "vidveil":
+    case "{projectname}":
         // Parent is our own binary - likely container entrypoint
         return "container"
     }
@@ -6930,6 +7076,12 @@ The app automatically watches config files and hot-reloads what it can. Settings
 | Notification settings | `notifications.*`, `smtp.*` |
 | Security headers | `security.headers.*` |
 | Allowed origins | `cors.allowed_origins` |
+
+**Requires Graceful Reload (no downtime):**
+
+| Setting | Why |
+|---------|-----|
+| `server.admin_path` | Routes must be re-registered |
 
 **Requires Restart (admin UI shows notification):**
 
@@ -7456,7 +7608,15 @@ CREATE TABLE IF NOT EXISTS users (
     email       TEXT UNIQUE,
     password    TEXT NOT NULL,                 -- Argon2id hash
     display_name TEXT,
-    avatar_url  TEXT,
+    bio         TEXT,                          -- Short biography (max 500 chars)
+    location    TEXT,                          -- Location (free text)
+    website     TEXT,                          -- Personal website URL
+    avatar_type TEXT NOT NULL DEFAULT 'gravatar', -- gravatar, upload, url
+    avatar_url  TEXT,                          -- URL for upload/url types, null for gravatar
+    visibility  TEXT NOT NULL DEFAULT 'public', -- public, private
+    org_visibility INTEGER NOT NULL DEFAULT 1, -- 1=show basic info in orgs, 0=username only
+    timezone    TEXT,                          -- IANA timezone (e.g., America/New_York)
+    language    TEXT NOT NULL DEFAULT 'en',    -- Preferred language
     role        TEXT NOT NULL DEFAULT 'user',  -- user, moderator, premium, etc.
     enabled     INTEGER NOT NULL DEFAULT 1,
     verified    INTEGER NOT NULL DEFAULT 0,    -- Email verified
@@ -7470,6 +7630,108 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- ----------------------------------------------------------------------------
+-- User Preferences (settings storage for users)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_preferences (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL UNIQUE,          -- FK to users.id (one row per user)
+
+    -- Privacy Settings
+    show_email      INTEGER NOT NULL DEFAULT 0,   -- Show email on public profile
+    show_activity   INTEGER NOT NULL DEFAULT 1,   -- Show activity on public profile
+    show_orgs       INTEGER NOT NULL DEFAULT 1,   -- Show org memberships on profile
+    searchable      INTEGER NOT NULL DEFAULT 1,   -- Appear in user search results
+
+    -- Notification Settings (Email)
+    email_security  INTEGER NOT NULL DEFAULT 1,   -- Security alerts (CANNOT be disabled)
+    email_mentions  INTEGER NOT NULL DEFAULT 1,   -- Email when mentioned
+    email_updates   INTEGER NOT NULL DEFAULT 1,   -- Product updates and news
+    email_digest    TEXT NOT NULL DEFAULT 'weekly', -- never, daily, weekly
+
+    -- Notification Settings (Push)
+    push_enabled    INTEGER NOT NULL DEFAULT 0,   -- Browser push notifications
+    push_mentions   INTEGER NOT NULL DEFAULT 1,   -- Push when mentioned
+
+    -- Appearance Settings
+    theme           TEXT NOT NULL DEFAULT 'system', -- light, dark, system
+    font_size       TEXT NOT NULL DEFAULT 'medium', -- small, medium, large
+    reduce_motion   INTEGER NOT NULL DEFAULT 0,   -- Minimize animations
+
+    -- Display Settings
+    date_format     TEXT NOT NULL DEFAULT 'YYYY-MM-DD', -- YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY
+    time_format     TEXT NOT NULL DEFAULT '24h',  -- 12h, 24h
+
+    -- Timestamps
+    created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_preferences_user ON user_preferences(user_id);
+
+-- Trigger to create preferences row when user is created
+-- (Or handle in application code - create on first access)
+
+-- ----------------------------------------------------------------------------
+-- Organizations (for multi-user collaboration - ONLY if project has orgs)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS orgs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug        TEXT NOT NULL UNIQUE,             -- URL-safe identifier
+    name        TEXT NOT NULL,                    -- Display name
+    description TEXT,
+    avatar_type TEXT NOT NULL DEFAULT 'gravatar', -- gravatar, upload, url
+    avatar_url  TEXT,                             -- URL for upload/url types
+    visibility  TEXT NOT NULL DEFAULT 'public',  -- public, private
+    owner_id    INTEGER NOT NULL,                 -- FK to users.id (creator)
+    created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    metadata    TEXT                              -- JSON for app-specific data
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orgs_slug ON orgs(slug);
+CREATE INDEX IF NOT EXISTS idx_orgs_owner ON orgs(owner_id);
+
+-- Organization Members
+CREATE TABLE IF NOT EXISTS org_members (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    org_id      INTEGER NOT NULL,                 -- FK to orgs.id
+    user_id     INTEGER NOT NULL,                 -- FK to users.id
+    role        TEXT NOT NULL DEFAULT 'member',   -- owner, admin, member
+    created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    UNIQUE(org_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_org_members_org ON org_members(org_id);
+CREATE INDEX IF NOT EXISTS idx_org_members_user ON org_members(user_id);
+
+-- ----------------------------------------------------------------------------
+-- Organization Preferences (settings storage for orgs)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS org_preferences (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    org_id      INTEGER NOT NULL UNIQUE,          -- FK to orgs.id (one row per org)
+
+    -- Member Settings
+    default_member_role TEXT NOT NULL DEFAULT 'member', -- Role for new members
+    require_2fa     INTEGER NOT NULL DEFAULT 0,   -- Require 2FA for all members
+    allow_invites   INTEGER NOT NULL DEFAULT 1,   -- Allow admins to invite members
+
+    -- Visibility Settings
+    show_members    INTEGER NOT NULL DEFAULT 1,   -- Show member list publicly
+    show_activity   INTEGER NOT NULL DEFAULT 1,   -- Show org activity publicly
+
+    -- Notification Settings
+    notify_new_member   INTEGER NOT NULL DEFAULT 1, -- Notify admins of new members
+    notify_member_leave INTEGER NOT NULL DEFAULT 1, -- Notify admins when members leave
+
+    -- Timestamps
+    created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_org_preferences_org ON org_preferences(org_id);
 
 -- ----------------------------------------------------------------------------
 -- API Keys (for API authentication)
@@ -7868,7 +8130,7 @@ $ kill -TERM $(cat /var/run/myapp.pid)
 | (none) | `DATABASE_DIR` | SQLite database directory (defaults to `{datadir}/db/`, changeable) |
 | (none) | `BACKUP_DIR` | Backup directory (defaults to `{datadir}/backup/`, changeable) |
 
-**External backup mounts:** In production, `BACKUP_DIR` should typically point to external storage (NAS, separate disk, etc.) rather than staying under `{datadir}`. Example: `BACKUP_DIR=/mnt/Backups/apimgr/vidveil`. The default `{datadir}/backup/` is for development/testing only.
+**External backup mounts:** In production, `BACKUP_DIR` should typically point to external storage (NAS, separate disk, etc.) rather than staying under `{datadir}`. Example: `BACKUP_DIR=/mnt/Backups/{projectorg}/{projectname}`. The default `{datadir}/backup/` is for development/testing only.
 
 **Implementation:**
 
@@ -7915,13 +8177,13 @@ TOR_DATA_DIR="${DATA_DIR}/tor"
 
 ```yaml
 services:
-  vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
+  {projectname}:
+    image: ghcr.io/{projectorg}/{projectname}:latest
     command:
       - --config=/config
       - --data=/data
       - --log=/logs
-      - --pid=/run/vidveil.pid
+      - --pid=/run/{projectname}.pid
       - --port=8080
     volumes:
       - config:/config:ro          # Config (read-only)
@@ -7936,15 +8198,15 @@ services:
 
 ```yaml
 services:
-  vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
+  {projectname}:
+    image: ghcr.io/{projectorg}/{projectname}:latest
     volumes:
-      - vidveil-data:/data
+      - {projectname}-data:/data
     ports:
       - "8080:8080"
 
 volumes:
-  vidveil-data:
+  {projectname}-data:
 ```
 
 ### Commands Anyone Can Run (No Privileges)
@@ -8240,7 +8502,7 @@ This properly handles complex suffixes like `.co.uk`, `.com.au`, `.org.uk`, etc.
 - `.localhost`, `.test`, `.example`, `.invalid` (RFC 6761)
 - `.local`, `.lan`, `.internal`, `.home`, `.localdomain`
 - `.home.arpa`, `.intranet`, `.corp`, `.private`
-- `vidveil` - dynamic (e.g., `app.jokes`, `dev.quotes`, `my.api`)
+- `{projectname}` - dynamic (e.g., `app.jokes`, `dev.quotes`, `my.api`)
 
 **Overlay Network TLDs (App-Managed, not set in DOMAIN):**
 - `.onion` - Tor hidden services (RFC 7686) - app generates/manages
@@ -8296,7 +8558,7 @@ func IsValidHost(host string, devMode bool, projectName string) bool {
         return true
     }
 
-    // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, vidveil)
+    // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, {projectname})
     if projectName != "" && strings.HasSuffix(lower, "."+strings.ToLower(projectName)) {
         // Project TLDs only valid in dev mode
         return devMode
@@ -8531,17 +8793,17 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 
 ```bash
 # Check for updates (no privileges required)
-vidveil --update check
+{projectname} --update check
 
 # Perform update (these are equivalent)
-vidveil --update
-vidveil --update yes
-vidveil --maintenance update
+{projectname} --update
+{projectname} --update yes
+{projectname} --maintenance update
 
 # Switch channels
-vidveil --update branch beta
-vidveil --update branch daily
-vidveil --update branch stable
+{projectname} --update branch beta
+{projectname} --update branch daily
+{projectname} --update branch stable
 ```
 
 ---
@@ -8614,14 +8876,14 @@ ON --service --install:
 
 | Requirement | Value |
 |-------------|-------|
-| Username | `vidveil` |
-| Group | `vidveil` |
+| Username | `{projectname}` |
+| Group | `{projectname}` |
 | UID/GID | **Must match** - same value for both UID and GID |
 | UID/GID Range | 100-999 (system user range) |
 | Shell | `/sbin/nologin` or `/usr/sbin/nologin` |
-| Home | Config directory (`/etc/apimgr/vidveil`) or data directory (`/var/lib/apimgr/vidveil`) |
+| Home | Config directory (`/etc/{projectorg}/{projectname}`) or data directory (`/var/lib/{projectorg}/{projectname}`) |
 | Type | System user (no password, no login) |
-| Gecos | `vidveil service account` |
+| Gecos | `{projectname} service account` |
 
 ### UID/GID Selection Logic
 
@@ -8667,14 +8929,14 @@ func findAvailableSystemID() (int, error) {
 **Linux:**
 ```bash
 # Create group with specific GID
-groupadd --system --gid {id} vidveil
+groupadd --system --gid {id} {projectname}
 
 # Create user with matching UID, same primary group
 useradd --system --uid {id} --gid {id} \
-  --home-dir /etc/apimgr/vidveil \
+  --home-dir /etc/{projectorg}/{projectname} \
   --shell /sbin/nologin \
-  --comment "vidveil service account" \
-  vidveil
+  --comment "{projectname} service account" \
+  {projectname}
 ```
 
 ### macOS Service Account (NON-NEGOTIABLE)
@@ -8706,21 +8968,21 @@ macOS uses `dscl` (Directory Service Command Line) to create system users. The u
 # Start at 499, work down until both UID and GID are available
 
 # Create group with specific GID
-dscl . -create /Groups/vidveil
-dscl . -create /Groups/vidveil PrimaryGroupID {id}
-dscl . -create /Groups/vidveil Password "*"
+dscl . -create /Groups/{projectname}
+dscl . -create /Groups/{projectname} PrimaryGroupID {id}
+dscl . -create /Groups/{projectname} Password "*"
 
 # Create user with matching UID
-dscl . -create /Users/vidveil
-dscl . -create /Users/vidveil UniqueID {id}
-dscl . -create /Users/vidveil PrimaryGroupID {id}
-dscl . -create /Users/vidveil UserShell /usr/bin/false
-dscl . -create /Users/vidveil RealName "vidveil service account"
-dscl . -create /Users/vidveil NFSHomeDirectory /usr/local/var/apimgr/vidveil
-dscl . -create /Users/vidveil Password "*"
+dscl . -create /Users/{projectname}
+dscl . -create /Users/{projectname} UniqueID {id}
+dscl . -create /Users/{projectname} PrimaryGroupID {id}
+dscl . -create /Users/{projectname} UserShell /usr/bin/false
+dscl . -create /Users/{projectname} RealName "{projectname} service account"
+dscl . -create /Users/{projectname} NFSHomeDirectory /usr/local/var/{projectorg}/{projectname}
+dscl . -create /Users/{projectname} Password "*"
 
 # Hide user from login window
-dscl . -create /Users/vidveil IsHidden 1
+dscl . -create /Users/{projectname} IsHidden 1
 ```
 
 **launchd plist with UserName:**
@@ -8730,19 +8992,19 @@ dscl . -create /Users/vidveil IsHidden 1
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>apimgr.vidveil</string>
+    <string>{projectorg}.{projectname}</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/vidveil</string>
+        <string>/usr/local/bin/{projectname}</string>
     </array>
 
     <!-- Run as dedicated service user, NOT root -->
     <key>UserName</key>
-    <string>vidveil</string>
+    <string>{projectname}</string>
 
     <key>GroupName</key>
-    <string>vidveil</string>
+    <string>{projectname}</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -8751,13 +9013,13 @@ dscl . -create /Users/vidveil IsHidden 1
     <true/>
 
     <key>WorkingDirectory</key>
-    <string>/usr/local/var/apimgr/vidveil</string>
+    <string>/usr/local/var/{projectorg}/{projectname}</string>
 
     <key>StandardOutPath</key>
-    <string>/usr/local/var/log/apimgr/vidveil/stdout.log</string>
+    <string>/usr/local/var/log/{projectorg}/{projectname}/stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/usr/local/var/log/apimgr/vidveil/stderr.log</string>
+    <string>/usr/local/var/log/{projectorg}/{projectname}/stderr.log</string>
 </dict>
 </plist>
 ```
@@ -8766,11 +9028,11 @@ dscl . -create /Users/vidveil IsHidden 1
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Binary | `/usr/local/bin/vidveil` | Executable |
-| Config | `/usr/local/etc/apimgr/vidveil/` | Configuration files |
-| Data | `/usr/local/var/apimgr/vidveil/` | Application data |
-| Logs | `/usr/local/var/log/apimgr/vidveil/` | Log files |
-| launchd plist | `/Library/LaunchDaemons/apimgr.vidveil.plist` | Service definition |
+| Binary | `/usr/local/bin/{projectname}` | Executable |
+| Config | `/usr/local/etc/{projectorg}/{projectname}/` | Configuration files |
+| Data | `/usr/local/var/{projectorg}/{projectname}/` | Application data |
+| Logs | `/usr/local/var/log/{projectorg}/{projectname}/` | Log files |
+| launchd plist | `/Library/LaunchDaemons/{projectorg}.{projectname}.plist` | Service definition |
 
 **Go Implementation (macOS):**
 ```go
@@ -8823,11 +9085,11 @@ func createMacOSServiceUser(name string, id int, homeDir string) error {
 **FreeBSD:**
 ```bash
 # Create user and group with matching ID
-pw groupadd -n vidveil -g {id}
-pw useradd -n vidveil -u {id} -g {id} \
-  -d /var/lib/apimgr/vidveil \
+pw groupadd -n {projectname} -g {id}
+pw useradd -n {projectname} -u {id} -g {id} \
+  -d /var/lib/{projectorg}/{projectname} \
   -s /usr/sbin/nologin \
-  -c "vidveil service account"
+  -c "{projectname} service account"
 ```
 
 ### Windows Service Account (NON-NEGOTIABLE)
@@ -8848,33 +9110,33 @@ pw useradd -n vidveil -u {id} -g {id} \
 
 Virtual Service Accounts are automatically managed by Windows, require no password management, and have minimal privileges. They are created automatically when the service is installed.
 
-**Service Account Format:** `NT SERVICE\vidveil`
+**Service Account Format:** `NT SERVICE\{projectname}`
 
 ```powershell
 # Create service with Virtual Service Account (automatic)
-New-Service -Name "vidveil" `
-  -BinaryPathName "C:\Program Files\apimgr\vidveil\vidveil.exe" `
-  -DisplayName "vidveil" `
-  -Description "vidveil service" `
+New-Service -Name "{projectname}" `
+  -BinaryPathName "C:\Program Files\{projectorg}\{projectname}\{projectname}.exe" `
+  -DisplayName "{projectname}" `
+  -Description "{projectname} service" `
   -StartupType Automatic
 
-# Service automatically runs as NT SERVICE\vidveil
+# Service automatically runs as NT SERVICE\{projectname}
 # No user creation needed - Windows manages it
 ```
 
 **Directory Permissions:**
 ```powershell
 # Grant Virtual Service Account access to config/data directories
-$acl = Get-Acl "C:\ProgramData\apimgr\vidveil"
+$acl = Get-Acl "C:\ProgramData\{projectorg}\{projectname}"
 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-    "NT SERVICE\vidveil",
+    "NT SERVICE\{projectname}",
     "FullControl",
     "ContainerInherit,ObjectInherit",
     "None",
     "Allow"
 )
 $acl.SetAccessRule($rule)
-Set-Acl "C:\ProgramData\apimgr\vidveil" $acl
+Set-Acl "C:\ProgramData\{projectorg}\{projectname}" $acl
 ```
 
 **Go Implementation (Windows):**
@@ -8895,11 +9157,11 @@ func installWindowsService() error {
     // Create service - runs as Virtual Service Account by default
     // when ServiceStartName is empty or "NT SERVICE\{name}"
     s, err := m.CreateService(
-        "vidveil",
+        "{projectname}",
         exePath,
         mgr.Config{
-            DisplayName:     "vidveil",
-            Description:     "vidveil service",
+            DisplayName:     "{projectname}",
+            Description:     "{projectname} service",
             StartType:       mgr.StartAutomatic,
             // Empty = Virtual Service Account
             ServiceStartName: "",
@@ -8918,17 +9180,17 @@ func installWindowsService() error {
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Binary | `C:\Program Files\apimgr\vidveil\` | Executable |
-| Config | `C:\ProgramData\apimgr\vidveil\config\` | Configuration files |
-| Data | `C:\ProgramData\apimgr\vidveil\data\` | Application data |
-| Logs | `C:\ProgramData\apimgr\vidveil\logs\` | Log files |
+| Binary | `C:\Program Files\{projectorg}\{projectname}\` | Executable |
+| Config | `C:\ProgramData\{projectorg}\{projectname}\config\` | Configuration files |
+| Data | `C:\ProgramData\{projectorg}\{projectname}\data\` | Application data |
+| Logs | `C:\ProgramData\{projectorg}\{projectname}\logs\` | Log files |
 
 ### Home Directory Selection
 
 | Directory | Use When |
 |-----------|----------|
-| Config dir (`/etc/apimgr/vidveil`) | Default - user needs access to config files |
-| Data dir (`/var/lib/apimgr/vidveil`) | When data dir contains user-writable content |
+| Config dir (`/etc/{projectorg}/{projectname}`) | Default - user needs access to config files |
+| Data dir (`/var/lib/{projectorg}/{projectname}`) | When data dir contains user-writable content |
 
 **Note:** Home directory must exist before user creation. Create directories first, then user, then set ownership.
 
@@ -9212,9 +9474,9 @@ format_version_tag() {
 
 | Context | Name | Example |
 |---------|------|---------|
-| Host Build | `binaries/vidveil` | `binaries/jokes` |
-| Distribution | `vidveil-{os}-{arch}` | `jokes-linux-amd64` |
-| Local/Testing | `$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")/vidveil` | Org-prefixed temp dir |
+| Host Build | `binaries/{projectname}` | `binaries/jokes` |
+| Distribution | `{projectname}-{os}-{arch}` | `pastebin-linux-amd64` |
+| Local/Testing | `$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")/{projectname}` | Org-prefixed temp dir |
 
 **If built with musl → strip binary before release. Final name has NO `-musl` suffix.**
 
@@ -9441,8 +9703,8 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 1. Creates cache directories if needed
 2. Downloads Go modules (cached)
 3. Creates `binaries/` directory
-4. Builds host binary: `binaries/vidveil`
-5. Builds all platform binaries: `binaries/vidveil-{os}-{arch}`
+4. Builds host binary: `binaries/{projectname}`
+5. Builds all platform binaries: `binaries/{projectname}-{os}-{arch}`
 6. Uses `CGO_ENABLED=0` for static binaries
 7. Embeds Version, CommitID, BuildDate via `-ldflags`
 8. All builds via Docker (`golang:alpine`)
@@ -9463,7 +9725,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 2. Multi-stage Dockerfile handles Go compilation (no pre-built binaries)
 3. Context is project root, Dockerfile at `docker/Dockerfile`
 4. Builds for `linux/amd64` and `linux/arm64`
-5. Pushes to `ghcr.io/{org}/vidveil:{version}` and `:latest`
+5. Pushes to `ghcr.io/{org}/{projectname}:{version}` and `:latest`
 6. Passes VERSION, BUILD_DATE, COMMIT_ID as build args
 7. Layer caching: Go modules cached in builder stage
 
@@ -9481,7 +9743,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 1. Quick build for local development/testing
 2. Builds host platform only (fastest)
 3. No `-ldflags` (version info not embedded)
-4. Outputs to `{tempdir}/apimgr.XXXXXX/vidveil` (isolated, org-identifiable)
+4. Outputs to `{tempdir}/{projectorg}.XXXXXX/{projectname}` (isolated, org-identifiable)
 5. Uses Docker (`golang:alpine`) - keeps host clean
 6. Easy cleanup: `rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/` or auto-deleted on reboot
 
@@ -9511,34 +9773,34 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 | File | Description |
 |------|-------------|
-| `vidveil-linux-amd64` | Linux AMD64 server binary |
-| `vidveil-linux-arm64` | Linux ARM64 server binary |
-| `vidveil-darwin-amd64` | macOS AMD64 server binary |
-| `vidveil-darwin-arm64` | macOS ARM64 (Apple Silicon) server binary |
-| `vidveil-windows-amd64.exe` | Windows AMD64 server binary |
-| `vidveil-windows-arm64.exe` | Windows ARM64 server binary |
-| `vidveil-freebsd-amd64` | FreeBSD AMD64 server binary |
-| `vidveil-freebsd-arm64` | FreeBSD ARM64 server binary |
+| `{projectname}-linux-amd64` | Linux AMD64 server binary |
+| `{projectname}-linux-arm64` | Linux ARM64 server binary |
+| `{projectname}-darwin-amd64` | macOS AMD64 server binary |
+| `{projectname}-darwin-arm64` | macOS ARM64 (Apple Silicon) server binary |
+| `{projectname}-windows-amd64.exe` | Windows AMD64 server binary |
+| `{projectname}-windows-arm64.exe` | Windows ARM64 server binary |
+| `{projectname}-freebsd-amd64` | FreeBSD AMD64 server binary |
+| `{projectname}-freebsd-arm64` | FreeBSD ARM64 server binary |
 
 ### CLI Binaries (If Project Has CLI)
 
 | File | Description |
 |------|-------------|
-| `vidveil-linux-amd64-cli` | Linux AMD64 CLI binary |
-| `vidveil-linux-arm64-cli` | Linux ARM64 CLI binary |
-| `vidveil-darwin-amd64-cli` | macOS AMD64 CLI binary |
-| `vidveil-darwin-arm64-cli` | macOS ARM64 (Apple Silicon) CLI binary |
-| `vidveil-windows-amd64-cli.exe` | Windows AMD64 CLI binary |
-| `vidveil-windows-arm64-cli.exe` | Windows ARM64 CLI binary |
-| `vidveil-freebsd-amd64-cli` | FreeBSD AMD64 CLI binary |
-| `vidveil-freebsd-arm64-cli` | FreeBSD ARM64 CLI binary |
+| `{projectname}-linux-amd64-cli` | Linux AMD64 CLI binary |
+| `{projectname}-linux-arm64-cli` | Linux ARM64 CLI binary |
+| `{projectname}-darwin-amd64-cli` | macOS AMD64 CLI binary |
+| `{projectname}-darwin-arm64-cli` | macOS ARM64 (Apple Silicon) CLI binary |
+| `{projectname}-windows-amd64-cli.exe` | Windows AMD64 CLI binary |
+| `{projectname}-windows-arm64-cli.exe` | Windows ARM64 CLI binary |
+| `{projectname}-freebsd-amd64-cli` | FreeBSD AMD64 CLI binary |
+| `{projectname}-freebsd-arm64-cli` | FreeBSD ARM64 CLI binary |
 
 ### Metadata Files (Always)
 
 | File | Description | Example Content |
 |------|-------------|-----------------|
 | `version.txt` | Version string only | `1.2.3`, `20251218060432-beta`, `20251218060432` |
-| `vidveil-{version}-source.tar.gz` | Source code archive | Excludes `.git`, `.github`, `binaries/`, `releases/` |
+| `{projectname}-{version}-source.tar.gz` | Source code archive | Excludes `.git`, `.github`, `binaries/`, `releases/` |
 
 ### version.txt Content
 
@@ -9644,8 +9906,8 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 | REQUIRED | Example |
 |----------|---------|
-| Temp directory | `/tmp/apimgr/vidveil-XXXXXX/` |
-| Volume mounts | `/tmp/apimgr/vidveil-XXXXXX/rootfs/` |
+| Temp directory | `/tmp/{projectorg}/{projectname}-XXXXXX/` |
+| Volume mounts | `/tmp/{projectorg}/{projectname}-XXXXXX/rootfs/` |
 | Test databases | In temp directory, never project |
 
 **The project directory is for SOURCE CODE ONLY. All runtime/test data goes to the OS temp directory.**
@@ -9659,7 +9921,7 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 | File | Location | Created When |
 |------|----------|--------------|
 | `server.yml` | `{config_dir}/server.yml` (see PART 4) | Server first run |
-| `cli.yml` | `~/.config/apimgr/vidveil/cli.yml` | CLI first run |
+| `cli.yml` | `~/.config/{projectorg}/{projectname}/cli.yml` | CLI first run |
 | Tor data | `{data_dir}/tor/` (see PART 30) | When Tor enabled |
 
 **Why runtime-generated?**
@@ -9685,40 +9947,40 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 
 ## Temporary Directory Structure (NON-NEGOTIABLE)
 
-**CRITICAL: NEVER use `/tmp` root directory directly. ALWAYS use `/tmp/apimgr/vidveil-XXXXXX` structure.**
+**CRITICAL: NEVER use `/tmp` root directory directly. ALWAYS use `/tmp/{projectorg}/{projectname}-XXXXXX` structure.**
 
 **FORBIDDEN:**
 - ❌ `/tmp/myfile` - Root tmp directory
-- ❌ `/tmp/vidveil` - Missing org prefix
+- ❌ `/tmp/{projectname}` - Missing org prefix
 - ❌ `mktemp -d` - No org/project structure
 - ❌ `/tmp/test-data` - Generic paths
 
 **REQUIRED:**
-- ✓ `/tmp/apimgr/vidveil-XXXXXX/` - Full structure
-- ✓ `/tmp/apimgr/jokes-aB3xY9/` - Org + project + random
-- ✓ `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` - Proper command
+- ✓ `/tmp/{projectorg}/{projectname}-XXXXXX/` - Full structure
+- ✓ `/tmp/cloudops/echoip-aB3xY9/` - Org + project + random
+- ✓ `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX"` - Proper command
 
 **See "Inferring Variables from Path" section for how to detect `ORG` and `PROJECT`.**
 
 ### Creating Temp Directories
 
-**Always use `apimgr/vidveil-` structure for identifiable temp dirs:**
+**Always use `{projectorg}/{projectname}-` structure for identifiable temp dirs:**
 
 | Language | How to Create Prefixed Temp Dir |
 |----------|--------------------------------|
-| Shell | `mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}" && mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` |
+| Shell | `mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}" && mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX"` |
 | Go | `os.MkdirAll(filepath.Join(os.TempDir(), projectOrg), 0755); os.MkdirTemp(filepath.Join(os.TempDir(), projectOrg), projectName+"-")` |
 | Python | `os.makedirs(f"{tempfile.gettempdir()}/{project_org}", exist_ok=True); tempfile.mkdtemp(prefix=f"{project_name}-", dir=f"{tempfile.gettempdir()}/{project_org}")` |
 
-**Result:** `/tmp/apimgr/jokes-aB3xY9` or `/tmp/casapps/linktree-k9mN2p` (identifiable by org and project)
+**Result:** `/tmp/cloudops/echoip-aB3xY9` or `/tmp/netutils/pastebin-k9mN2p` (identifiable by org and project)
 
 ### Directory Structure
 
 | Purpose | Path Pattern | Example |
 |---------|--------------|---------|
-| Dev/Test runtime | `{tempdir}/apimgr/vidveil-XXXXXX/` | `/tmp/apimgr/jokes-aB3xY9/` |
-| Config volume | `{tempdir}/apimgr/vidveil-XXXXXX/rootfs/config/` | `/tmp/apimgr/jokes-aB3xY9/rootfs/config/` |
-| Data volume | `{tempdir}/apimgr/vidveil-XXXXXX/rootfs/data/` | `/tmp/apimgr/jokes-aB3xY9/rootfs/data/` |
+| Dev/Test runtime | `{tempdir}/{projectorg}/{projectname}-XXXXXX/` | `/tmp/acmesoft/weatherapi-aB3xY9/` |
+| Config volume | `{tempdir}/{projectorg}/{projectname}-XXXXXX/rootfs/config/` | `/tmp/acmesoft/weatherapi-aB3xY9/rootfs/config/` |
+| Data volume | `{tempdir}/{projectorg}/{projectname}-XXXXXX/rootfs/data/` | `/tmp/acmesoft/weatherapi-aB3xY9/rootfs/data/` |
 
 ### OS Temp Directories
 
@@ -9736,7 +9998,7 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 | **NEVER** | Use project directory for test/runtime data |
 | **NEVER** | Hardcode `/tmp` - use `os.TempDir()` or `mktemp` |
 | **NEVER** | Use bare `mktemp -d` without org prefix |
-| **ALWAYS** | Use `apimgr.` prefix for all temp dirs |
+| **ALWAYS** | Use `{projectorg}.` prefix for all temp dirs |
 | **ALWAYS** | Detect org from git remote or directory path |
 
 ### Cleanup
@@ -9753,42 +10015,42 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 
 | WRONG | RIGHT | Why |
 |-------|-------|-----|
-| `/tmp/` | `/tmp/apimgr/vidveil-XXXXXX/` | NEVER use root tmp |
-| `/tmp/myfile` | `/tmp/apimgr/jokes-aB3xY9/myfile` | Always use org/project structure |
-| `/tmp/jokes` | `/tmp/apimgr/jokes-kL9mN2/` | Missing org, missing random suffix |
-| `/tmp/test-data/` | `/tmp/apimgr/jokes-Qw5rT1/test-data/` | Generic path not allowed |
-| `mktemp -d` | `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` | Must include org/project |
+| `/tmp/` | `/tmp/{projectorg}/{projectname}-XXXXXX/` | NEVER use root tmp |
+| `/tmp/myfile` | `/tmp/cloudops/echoip-aB3xY9/myfile` | Always use org/project structure |
+| `/tmp/echoip` | `/tmp/cloudops/echoip-kL9mN2/` | Missing org, missing random suffix |
+| `/tmp/test-data/` | `/tmp/devtools/quotesvc-Qw5rT1/test-data/` | Generic path not allowed |
+| `mktemp -d` | `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX"` | Must include org/project |
 | `os.TempDir()` alone | `os.MkdirTemp(filepath.Join(os.TempDir(), projectOrg), projectName+"-")` | Must nest under org |
 | Hardcoded org name | Detect from git remote or path | Auto-detect, never hardcode |
 
-**Rule: ALL temp directories MUST be under `/tmp/apimgr/vidveil-XXXXXX/` - no exceptions.**
+**Rule: ALL temp directories MUST be under `/tmp/{projectorg}/{projectname}-XXXXXX/` - no exceptions.**
 
 ### Summary: Temp Directory Rules
 
 **The ONLY acceptable temp directory pattern:**
 ```
-/tmp/apimgr/vidveil-XXXXXX/
+/tmp/{projectorg}/{projectname}-XXXXXX/
 ```
 
 **Breaking it down:**
 - `/tmp/` or `$TMPDIR` - OS temp directory base
-- `apimgr/` - Organization directory (apimgr, casapps, etc.)
-- `vidveil-XXXXXX` - Project directory with random suffix
+- `{projectorg}/` - Organization directory (cloudops, acmesoft, etc.)
+- `{projectname}-XXXXXX` - Project directory with random suffix
 
 **Examples of CORRECT paths:**
-- `/tmp/apimgr/jokes-aB3xY9/` ✓
-- `/tmp/casapps/linktree-k9mN2p/` ✓
-- `/tmp/myorg/myproject-Qw5rT1/` ✓
+- `/tmp/cloudops/echoip-aB3xY9/` ✓
+- `/tmp/netutils/pastebin-k9mN2p/` ✓
+- `/tmp/acmesoft/weatherapi-Qw5rT1/` ✓
 
 **Examples of WRONG paths:**
-- `/tmp/jokes/` ❌ (missing org)
+- `/tmp/echoip/` ❌ (missing org)
 - `/tmp/myfile` ❌ (no structure at all)
 - `/tmp/test-data/` ❌ (generic path)
-- `/tmp/apimgr/` ❌ (no project directory)
+- `/tmp/cloudops/` ❌ (no project directory)
 
 **Why this structure:**
 - Prevents conflicts between projects
-- Makes cleanup easy (`rm -rf /tmp/apimgr.*`)
+- Makes cleanup easy (`rm -rf /tmp/{projectorg}.*`)
 - Identifies which project created temp files
 - Prevents pollution of root `/tmp` directory
 - Multiple projects can run simultaneously
@@ -9807,8 +10069,8 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 | **NEVER run binaries on host** | All binaries run inside containers, never directly |
 | **NEVER** | Run `go build` directly on host |
 | **NEVER** | Run `go test` directly on host |
-| **NEVER** | Run `binaries/vidveil` on host |
-| **NEVER** | Run `$BUILD_DIR/vidveil` on host |
+| **NEVER** | Run `binaries/{projectname}` on host |
+| **NEVER** | Run `$BUILD_DIR/{projectname}` on host |
 | **ALWAYS** | Build inside container, run inside container |
 
 ### Container Types
@@ -10009,24 +10271,24 @@ docker run --rm -v $(pwd):/build -w /build golang:alpine go test -cover ./...
 # 1. Build in Docker (always use Docker for builds)
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/vidveil src
+  golang:alpine go build -o /build/binaries/{projectname} src
 
 # 2. Test (prefer Incus, fallback to Docker)
 if command -v incus &>/dev/null; then
   # PREFERRED: Full OS test in Incus (debian + systemd)
   echo "Testing with Incus (Debian + systemd)..."
-  incus launch images:debian/12 test-vidveil
-  incus file push binaries/vidveil test-vidveil/usr/local/bin/
-  incus exec test-vidveil -- chmod +x /usr/local/bin/vidveil
-  incus exec test-vidveil -- vidveil --help
-  incus exec test-vidveil -- vidveil --service --install
-  incus exec test-vidveil -- systemctl status vidveil
-  incus delete test-vidveil --force
+  incus launch images:debian/12 test-{projectname}
+  incus file push binaries/{projectname} test-{projectname}/usr/local/bin/
+  incus exec test-{projectname} -- chmod +x /usr/local/bin/{projectname}
+  incus exec test-{projectname} -- {projectname} --help
+  incus exec test-{projectname} -- {projectname} --service --install
+  incus exec test-{projectname} -- systemctl status {projectname}
+  incus delete test-{projectname} --force
 else
   # FALLBACK: Quick test in Docker (alpine, no systemd)
   echo "Incus not available, testing with Docker..."
   docker run --rm -v $(pwd)/binaries:/app alpine:latest \
-    /app/vidveil --help
+    /app/{projectname} --help
 fi
 ```
 
@@ -10085,27 +10347,27 @@ docker run --rm \
   -v "$(pwd):/build" \
   -w /build \
   -e CGO_ENABLED=0 \
-  golang:alpine go build -o "$BUILD_DIR/$VIDVEIL" src
+  golang:alpine go build -o "$BUILD_DIR/${PROJECTNAME}" src
 
 echo "Testing in Docker (Alpine)..."
 docker run --rm \
   -v "$BUILD_DIR:/app" \
   alpine:latest sh -c "
     set -e
-    chmod +x /app/$VIDVEIL
+    chmod +x /app/${PROJECTNAME}
 
     echo '=== Version Check ==='
-    /app/$VIDVEIL --version
+    /app/${PROJECTNAME} --version
 
     echo '=== Help Check ==='
-    /app/$VIDVEIL --help
+    /app/${PROJECTNAME} --help
 
     echo '=== Binary Info ==='
-    ls -lh /app/$VIDVEIL
-    file /app/$VIDVEIL
+    ls -lh /app/${PROJECTNAME}
+    file /app/${PROJECTNAME}
 
     echo '=== Starting Server for API Tests ==='
-    /app/$VIDVEIL --port 64580 &
+    /app/${PROJECTNAME} --port 64580 &
     SERVER_PID=\$!
     sleep 3
 
@@ -10179,7 +10441,7 @@ fi
 # Detect project info
 PROJECTNAME=$(basename "$PWD")
 PROJECTORG=$(basename "$(dirname "$PWD")")
-CONTAINER_NAME="test-$VIDVEIL-$$"
+CONTAINER_NAME="test-${PROJECTNAME}-$$"
 
 # Create temp directory for build
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
@@ -10190,7 +10452,7 @@ docker run --rm \
   -v "$(pwd):/build" \
   -w /build \
   -e CGO_ENABLED=0 \
-  golang:alpine go build -o "$BUILD_DIR/$VIDVEIL" src
+  golang:alpine go build -o "$BUILD_DIR/${PROJECTNAME}" src
 
 echo "Launching Incus container (Debian + systemd)..."
 incus launch images:debian/12 "$CONTAINER_NAME"
@@ -10199,33 +10461,33 @@ incus launch images:debian/12 "$CONTAINER_NAME"
 sleep 2
 
 echo "Copying binary to container..."
-incus file push "$BUILD_DIR/$VIDVEIL" "$CONTAINER_NAME/usr/local/bin/"
-incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/$VIDVEIL"
+incus file push "$BUILD_DIR/${PROJECTNAME}" "$CONTAINER_NAME/usr/local/bin/"
+incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/${PROJECTNAME}"
 
 echo "Running tests in Incus..."
 incus exec "$CONTAINER_NAME" -- bash -c "
     set -e
 
     echo '=== Version Check ==='
-    $VIDVEIL --version
+    ${PROJECTNAME} --version
 
     echo '=== Help Check ==='
-    $VIDVEIL --help
+    ${PROJECTNAME} --help
 
     echo '=== Binary Info ==='
-    ls -lh /usr/local/bin/$VIDVEIL
-    file /usr/local/bin/$VIDVEIL
+    ls -lh /usr/local/bin/${PROJECTNAME}
+    file /usr/local/bin/${PROJECTNAME}
 
     echo '=== Service Install Test ==='
-    $VIDVEIL --service --install
+    ${PROJECTNAME} --service --install
 
     echo '=== Service Status ==='
-    systemctl status $VIDVEIL || true
+    systemctl status ${PROJECTNAME} || true
 
     echo '=== Service Start Test ==='
-    systemctl start $VIDVEIL
+    systemctl start ${PROJECTNAME}
     sleep 2
-    systemctl status $VIDVEIL
+    systemctl status ${PROJECTNAME}
 
     echo '=== API Endpoint Tests ==='
     # Test JSON response (default)
@@ -10271,7 +10533,7 @@ incus exec "$CONTAINER_NAME" -- bash -c "
     # Test ALL project-specific endpoints defined in PART 36
 
     echo '=== Service Stop Test ==='
-    systemctl stop $VIDVEIL
+    systemctl stop ${PROJECTNAME}
 
     echo '=== All tests passed ==='
 "
@@ -10321,6 +10583,50 @@ fi
 | **Output** | Clear progress messages with `echo` |
 | **Error handling** | `set -euo pipefail` at top |
 
+### Production Scripts (scripts/ directory)
+
+**ALL projects MUST have shell completions in `scripts/completions/`:**
+
+```
+scripts/
+├── completions/
+│   ├── {projectname}.bash      # Bash completions for server binary
+│   ├── {projectname}.zsh       # Zsh completions for server binary
+│   ├── {projectname}.fish      # Fish completions for server binary
+│   ├── {projectname}-cli.bash  # Bash completions for CLI client
+│   ├── {projectname}-cli.zsh   # Zsh completions for CLI client
+│   └── {projectname}-cli.fish  # Fish completions for CLI client
+└── install.sh                  # Optional: Installation helper script
+```
+
+**Shell Completion Rules:**
+
+| Rule | Requirement |
+|------|-------------|
+| **Location** | `scripts/completions/{projectname}.{shell}` and `scripts/completions/{projectname}-cli.{shell}` |
+| **Shells** | bash, zsh, fish (all three required) |
+| **Server binary** | `{projectname}.{shell}` - completions for server binary flags/commands |
+| **CLI client** | `{projectname}-cli.{shell}` - completions for CLI flags/commands |
+| **Generation** | AI generates based on actual flags/commands from CLI PART |
+| **Sync** | MUST update completions when flags/commands change - keep in sync with code |
+| **Install** | Document installation in README.md |
+
+**Completion Installation (document in README.md):**
+
+```bash
+# Bash
+cp scripts/completions/{projectname}.bash /etc/bash_completion.d/{projectname}
+cp scripts/completions/{projectname}-cli.bash /etc/bash_completion.d/{projectname}-cli
+
+# Zsh (add to ~/.zshrc)
+source /path/to/scripts/completions/{projectname}.zsh
+source /path/to/scripts/completions/{projectname}-cli.zsh
+
+# Fish
+cp scripts/completions/{projectname}.fish ~/.config/fish/completions/
+cp scripts/completions/{projectname}-cli.fish ~/.config/fish/completions/
+```
+
 ## Testing Admin Routes (NON-NEGOTIABLE)
 
 **Admin routes (`/admin/**`) require authentication. Tests MUST verify authentication works.**
@@ -10338,7 +10644,7 @@ set -euo pipefail
 echo '=== Admin Authentication Tests ==='
 
 # Start server normally (authentication required)
-/app/$VIDVEIL --port 64580 &
+/app/${PROJECTNAME} --port 64580 &
 SERVER_PID=$!
 sleep 3
 
@@ -10354,7 +10660,7 @@ else
 fi
 
 # 2. Get setup token from server logs (using proper temp dir structure)
-SETUP_TOKEN=$(grep -oP 'Setup Token.*:\s*\K[a-f0-9]+' "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL/server.log" | head -1)
+SETUP_TOKEN=$(grep -oP 'Setup Token.*:\s*\K[a-f0-9]+' "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}/server.log" | head -1)
 
 if [ -z "$SETUP_TOKEN" ]; then
     echo "✗ FAILED: No setup token found in logs"
@@ -10497,14 +10803,14 @@ func AdminAuthMiddleware(next http.Handler) http.Handler {
 # Set project path to YOUR actual project location (examples shown below)
 # Use git top-level if in a git repo: PROJECT_PATH="$(git rev-parse --show-toplevel)"
 # Or use absolute path to your project directory
-PROJECT_PATH="/root/Projects/github/apimgr/vidveil"  # Example 1
+PROJECT_PATH="/root/Projects/github/apimgr/{projectname}"  # Example 1
 # PROJECT_PATH="~/Documents/myproject"                     # Example 2
 # PROJECT_PATH="~/myproject"                               # Example 3
 # PROJECT_PATH="/workspace/dev/myproject"                  # Example 4
 
 # Build (outputs to binaries/ which can be mounted into test containers)
 docker run --rm -v $PROJECT_PATH:/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/vidveil src
+  golang:alpine go build -o /build/binaries/{projectname} src
 
 # Run tests
 docker run --rm -v $PROJECT_PATH:/build -w /build \
@@ -10542,16 +10848,16 @@ docker run --rm -it -v $PROJECT_PATH:/build -w /build \
 ```bash
 # Build
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/vidveil src
+  golang:alpine go build -o /build/binaries/{projectname} src
 
 # Test in Docker (quick)
-docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/vidveil --help
+docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/{projectname} --help
 
 # Test in Incus (full OS with systemd)
-incus launch images:debian/12 test-vidveil
-incus file push binaries/vidveil test-vidveil/usr/local/bin/
-incus exec test-vidveil -- vidveil --help
-incus delete test-vidveil --force
+incus launch images:debian/12 test-{projectname}
+incus file push binaries/{projectname} test-{projectname}/usr/local/bin/
+incus exec test-{projectname} -- {projectname} --help
+incus delete test-{projectname} --force
 ```
 
 ### Testing with Config/Data
@@ -10563,17 +10869,17 @@ mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build to binaries/
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/vidveil src
+  golang:alpine go build -o /build/binaries/{projectname} src
 
 # Quick test in Docker
-docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/vidveil --help
-docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/vidveil --version
+docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/{projectname} --help
+docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/{projectname} --version
 
 # Full test with config/data in Docker
 docker run --rm \
   -v $(pwd)/binaries:/app \
   -v $TEST_DIR:/test \
-  alpine:latest /app/vidveil \
+  alpine:latest /app/{projectname} \
     --config /test/config \
     --data /test/data \
     --log /test/logs
@@ -10593,23 +10899,23 @@ mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/vidveil src
+  golang:alpine go build -o /build/binaries/{projectname} src
 
 # Launch Incus container
-incus launch images:debian/12 test-vidveil
+incus launch images:debian/12 test-{projectname}
 
 # Push binary and test data
-incus file push binaries/vidveil test-vidveil/usr/local/bin/
-incus exec test-vidveil -- mkdir -p /etc/apimgr/vidveil /var/lib/apimgr/vidveil
+incus file push binaries/{projectname} test-{projectname}/usr/local/bin/
+incus exec test-{projectname} -- mkdir -p /etc/{projectorg}/{projectname} /var/lib/{projectorg}/{projectname}
 
 # Test
-incus exec test-vidveil -- vidveil --help
-incus exec test-vidveil -- vidveil --version
-incus exec test-vidveil -- vidveil --service --install
-incus exec test-vidveil -- systemctl status vidveil
+incus exec test-{projectname} -- {projectname} --help
+incus exec test-{projectname} -- {projectname} --version
+incus exec test-{projectname} -- {projectname} --service --install
+incus exec test-{projectname} -- systemctl status {projectname}
 
 # Cleanup
-incus delete test-vidveil --force
+incus delete test-{projectname} --force
 rm -rf $TEST_DIR
 ```
 
@@ -10654,11 +10960,11 @@ rm -rf $TEST_DIR
 
 **Kill Process Flow:**
 ```
-1. pgrep -la vidveil           # List matching processes
+1. pgrep -la {projectname}           # List matching processes
 2. Verify the PID is correct          # CHECK before killing
 3. kill {pid}                         # Graceful termination (SIGTERM)
 4. sleep 5                            # Wait for graceful shutdown
-5. pgrep -la vidveil           # Check if still running
+5. pgrep -la {projectname}           # Check if still running
 6. kill -9 {pid}                      # Force kill ONLY if still running
 ```
 
@@ -10666,23 +10972,23 @@ rm -rf $TEST_DIR
 
 | Rule | Description |
 |------|-------------|
-| **ONLY this project** | Only stop/remove containers named `vidveil` |
+| **ONLY this project** | Only stop/remove containers named `{projectname}` |
 | **NEVER other containers** | Even if they look related or unused |
-| **NEVER images not ours** | Only remove `apimgr/vidveil:*` images |
+| **NEVER images not ours** | Only remove `{projectorg}/{projectname}:*` images |
 | **NEVER base images** | Never remove `golang`, `alpine`, `ubuntu`, etc. |
 | **NEVER volumes** | Unless explicitly part of this project |
 
 **Docker Cleanup Flow:**
 ```
-1. docker ps -a --filter name=vidveil     # List ONLY this project's containers
-2. Verify output shows ONLY vidveil       # CHECK before removing
-3. docker stop vidveil                    # Stop gracefully
-4. docker rm vidveil                      # Remove container
+1. docker ps -a --filter name={projectname}     # List ONLY this project's containers
+2. Verify output shows ONLY {projectname}       # CHECK before removing
+3. docker stop {projectname}                    # Stop gracefully
+4. docker rm {projectname}                      # Remove container
 
 # For images:
-1. docker images apimgr/vidveil     # List ONLY this project's images
+1. docker images {projectorg}/{projectname}     # List ONLY this project's images
 2. Verify output shows ONLY our images          # CHECK before removing
-3. docker rmi apimgr/vidveil:tag    # Remove SPECIFIC tag
+3. docker rmi {projectorg}/{projectname}:tag    # Remove SPECIFIC tag
 ```
 
 ### Allowed Commands (Project-Scoped ONLY)
@@ -10690,10 +10996,10 @@ rm -rf $TEST_DIR
 | Command | Description |
 |---------|-------------|
 | `kill {specific-pid}` | Kill exact PID only (after verification) |
-| `pkill -x vidveil` | Exact binary name match only |
-| `docker stop vidveil` | Stop specific container by name |
-| `docker rm vidveil` | Remove specific container by name |
-| `docker rmi apimgr/vidveil:tag` | Remove specific image:tag |
+| `pkill -x {projectname}` | Exact binary name match only |
+| `docker stop {projectname}` | Stop specific container by name |
+| `docker rm {projectname}` | Remove specific container by name |
+| `docker rmi {projectorg}/{projectname}:tag` | Remove specific image:tag |
 | `rm -rf $BUILD_DIR` | Remove temp build dir (from mktemp) |
 | `rm -rf $TEST_DIR` | Remove temp test dir (from mktemp) |
 
@@ -10716,8 +11022,8 @@ rm -rf $TEST_DIR
 | Temp build dir | `rm -rf $BUILD_DIR` (saved from mktemp) |
 | Temp test dir | `rm -rf $TEST_DIR` (saved from mktemp) |
 | All mktemp dirs | Cleaned automatically on reboot |
-| Project binaries | `rm -rf binaries/vidveil*` |
-| Project releases | `rm -rf releases/vidveil*` |
+| Project binaries | `rm -rf binaries/{projectname}*` |
+| Project releases | `rm -rf releases/{projectname}*` |
 
 **Note:** Always use `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX"` and save the path to a variable for cleanup. Temp dirs are auto-cleaned on reboot.
 
@@ -10788,7 +11094,7 @@ docker/
 | Runtime stage | `alpine:latest` |
 | Meta labels | All OCI labels (see below) |
 | Required packages | git, curl, bash, tini, **tor** |
-| Binary location | `/usr/local/bin/vidveil` |
+| Binary location | `/usr/local/bin/{projectname}` |
 | Entrypoint script | `/usr/local/bin/entrypoint.sh` |
 | Init system | **tini** |
 | Internal port | **80** |
@@ -10805,7 +11111,7 @@ docker/
 | `/data/log` | Log files (access.log, error.log, audit.log, etc.) |
 | `/data/tor` | Tor data (hidden service keys) |
 | `/data/backup` | Backup archives |
-| `/usr/local/bin/vidveil` | Application binary |
+| `/usr/local/bin/{projectname}` | Application binary |
 | `/root/Dockerfile` | Build reference and backup |
 
 ### OCI Meta Labels (Required)
@@ -10815,19 +11121,19 @@ All Dockerfiles MUST include these labels:
 | Label | Value |
 |-------|-------|
 | `maintainer` | `{maintainer_name} <{maintainer_email}>` |
-| `org.opencontainers.image.vendor` | `apimgr` |
-| `org.opencontainers.image.authors` | `apimgr` |
-| `org.opencontainers.image.title` | `vidveil` |
-| `org.opencontainers.image.base.name` | `vidveil` |
-| `org.opencontainers.image.description` | `Containerized version of vidveil` |
+| `org.opencontainers.image.vendor` | `{projectorg}` |
+| `org.opencontainers.image.authors` | `{projectorg}` |
+| `org.opencontainers.image.title` | `{projectname}` |
+| `org.opencontainers.image.base.name` | `{projectname}` |
+| `org.opencontainers.image.description` | `Containerized version of {projectname}` |
 | `org.opencontainers.image.licenses` | License (e.g., `MIT`) |
 | `org.opencontainers.image.created` | `${BUILD_DATE}` (ARG) |
 | `org.opencontainers.image.version` | `${VERSION}` (ARG) |
 | `org.opencontainers.image.schema-version` | `${VERSION}` (ARG) |
 | `org.opencontainers.image.revision` | `${COMMIT_ID}` (ARG) |
-| `org.opencontainers.image.url` | `https://github.com/apimgr/vidveil` |
-| `org.opencontainers.image.source` | `https://github.com/apimgr/vidveil` |
-| `org.opencontainers.image.documentation` | `https://github.com/apimgr/vidveil` |
+| `org.opencontainers.image.url` | `https://github.com/{projectorg}/{projectname}` |
+| `org.opencontainers.image.source` | `https://github.com/{projectorg}/{projectname}` |
+| `org.opencontainers.image.documentation` | `https://github.com/{projectorg}/{projectname}` |
 | `org.opencontainers.image.vcs-type` | `Git` |
 | `com.github.containers.toolbox` | `false` |
 
@@ -10893,7 +11199,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'" \
-    -o /build/binary/vidveil src
+    -o /build/binary/{projectname} src
 
 # =============================================================================
 # Runtime Stage - Minimal Alpine image
@@ -10908,14 +11214,14 @@ ARG LICENSE=MIT
 
 # Static Labels
 LABEL maintainer="{maintainer_name} <{maintainer_email}>" \
-      org.opencontainers.image.vendor="apimgr" \
-      org.opencontainers.image.authors="apimgr" \
-      org.opencontainers.image.title="vidveil" \
-      org.opencontainers.image.base.name="vidveil" \
-      org.opencontainers.image.description="Containerized version of vidveil" \
-      org.opencontainers.image.url="https://github.com/apimgr/vidveil" \
-      org.opencontainers.image.source="https://github.com/apimgr/vidveil" \
-      org.opencontainers.image.documentation="https://github.com/apimgr/vidveil" \
+      org.opencontainers.image.vendor="{projectorg}" \
+      org.opencontainers.image.authors="{projectorg}" \
+      org.opencontainers.image.title="{projectname}" \
+      org.opencontainers.image.base.name="{projectname}" \
+      org.opencontainers.image.description="Containerized version of {projectname}" \
+      org.opencontainers.image.url="https://github.com/{projectorg}/{projectname}" \
+      org.opencontainers.image.source="https://github.com/{projectorg}/{projectname}" \
+      org.opencontainers.image.documentation="https://github.com/{projectorg}/{projectname}" \
       org.opencontainers.image.vcs-type="Git" \
       com.github.containers.toolbox="false"
 
@@ -10938,7 +11244,7 @@ RUN apk add --no-cache \
 RUN mkdir -p /config /config/security /data/db /data/log /data/tor /data/backup
 
 # Copy binary from builder stage (multi-stage build)
-COPY --from=builder /build/binary/vidveil /usr/local/bin/vidveil
+COPY --from=builder /build/binary/{projectname} /usr/local/bin/{projectname}
 
 # Copy BUILD-TIME overlay (entrypoint.sh) from docker/rootfs/ into image
 # Note: This is docker/rootfs/ (build context), NOT runtime ./rootfs/ volumes
@@ -10963,7 +11269,7 @@ STOPSIGNAL SIGRTMIN+3
 
 # Health check (long start period for services that need initialization)
 HEALTHCHECK --start-period=10m --interval=5m --timeout=15s --retries=3 \
-    CMD /usr/local/bin/vidveil --status || exit 1
+    CMD /usr/local/bin/{projectname} --status || exit 1
 
 # Use tini as init with signal propagation
 # -p SIGTERM: propagate SIGTERM to child processes
@@ -10995,7 +11301,7 @@ set -e
 # Handles service startup, signal handling, and graceful shutdown
 # =============================================================================
 
-APP_NAME="vidveil"
+APP_NAME="{projectname}"
 APP_BIN="/usr/local/bin/${APP_NAME}"
 
 # Container defaults (exported for app to use)
@@ -11274,11 +11580,549 @@ main "$@"
 |-------------|-------|
 | `build:` | **NEVER include** |
 | `version:` | **NEVER include** |
-| `name:` | `vidveil` |
-| Container name | `vidveil` |
-| Network | Custom `vidveil` with `external: false` |
+| `name:` | `{projectname}` (top-level) |
+| `container_name:` | `{projectname}-{servicename}` |
+| Main service name | `server` (not `app`) |
+| `pull_policy:` | `always` |
+| `restart:` | `always` |
+| `x-logging:` | Anchor for consistent logging (see below) |
+| Network | Custom `{projectname}` with `external: false` |
 | Environment variables | **Hardcode with sane defaults** (NEVER use .env files) |
 | **environment: MODE** | **production** (strict host validation) |
+
+### Docker Compose Structure (NON-NEGOTIABLE)
+
+```yaml
+# {projectname} - {brief description}
+# nginx proxy address - http://172.17.0.1:{port}
+
+name: {projectname}
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  server:
+    image: ghcr.io/{projectorg}/{projectname}:latest
+    container_name: {projectname}-server
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      - MODE=production
+      - PORT=80
+      - DEBUG=false
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - './rootfs/config:/config:z'
+      - './rootfs/data:/data:z'
+    ports:
+      - '172.17.0.1:64580:80'
+    healthcheck:
+      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - {projectname}
+
+networks:
+  {projectname}:
+    name: {projectname}
+    external: false
+```
+
+### Docker Compose Field Reference
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| `name:` | `{projectname}` | Top-level compose project name |
+| `container_name:` | `{projectname}-{servicename}` | e.g., `jokes-server`, `jokes-db`, `jokes-cache` |
+| Main service | `server` | Primary application service (not `app`) |
+| `hostname:` | `${BASE_HOST_NAME:-$HOSTNAME}` | Uses env or system hostname |
+| `restart:` | `always` | Always restart on failure |
+| `pull_policy:` | `always` | Always pull latest image |
+| `logging:` | `*default-logging` | Use the logging anchor |
+| `networks:` | `{projectname}` | Isolated network per project |
+
+### Logging Anchor (NON-NEGOTIABLE)
+
+**Every docker-compose.yml MUST include the x-logging anchor:**
+
+```yaml
+x-logging: &default-logging
+  options:
+    max-size: '5m'    # Max 5MB per log file
+    max-file: '1'     # Keep only 1 log file
+  driver: json-file   # JSON format for parsing
+```
+
+**Every service MUST use the anchor:**
+```yaml
+services:
+  server:
+    logging: *default-logging
+```
+
+### Multi-Service Example
+
+```yaml
+# weatherapi - Weather forecast API with caching
+# nginx proxy address - http://172.17.0.1:64580
+
+name: weatherapi
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  server:
+    image: ghcr.io/acmesoft/weatherapi:latest
+    container_name: weatherapi-server
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      - MODE=production
+      - PORT=80
+      - DEBUG=false
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - './rootfs/config:/config:z'
+      - './rootfs/data:/data:z'
+    ports:
+      - '172.17.0.1:64580:80'
+    healthcheck:
+      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    depends_on:
+      cache:
+        condition: service_healthy
+    networks:
+      - weatherapi
+
+  cache:
+    image: redis:alpine
+    container_name: weatherapi-cache
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    volumes:
+      - './rootfs/data/redis:/data:z'
+    healthcheck:
+      test: redis-cli ping || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - weatherapi
+
+networks:
+  weatherapi:
+    name: weatherapi
+    external: false
+```
+
+### Service Naming Convention
+
+| Service Type | Service Name | Container Name Example |
+|--------------|--------------|------------------------|
+| Main application | `server` | `pastebin-server` |
+| All-in-one | `server` | `quotesvc-server` |
+| Database | `db` | `linktree-db` |
+| Cache (Redis/Valkey) | `cache` | `echoip-cache` |
+| Search (Meilisearch) | `search` | `gitmsg-search` |
+| Queue (RabbitMQ) | `queue` | `notifier-queue` |
+| Proxy (Nginx) | `proxy` | `gateway-proxy` |
+
+### All-in-One vs Multi-Service (NON-NEGOTIABLE)
+
+**Choose based on project complexity:**
+
+| Type | When to Use | Services in Container |
+|------|-------------|----------------------|
+| **All-in-One** | Simple projects, single binary | App + embedded DB + optional cache |
+| **Multi-Service** | Complex projects, scaling needs | Separate containers per service |
+
+**All-in-One Container:**
+
+⚠️ **Not best practice, but easy to deploy.** Trade-off: simplicity over scalability.
+
+- Single container runs everything
+- Uses SQLite (embedded) or embedded key-value store
+- Valkey/Redis runs inside container via supervisor or embedded
+- Service name: `server`
+- Container name: `{projectname}-server`
+- Simpler deployment, single image
+- **Trade-offs:** No horizontal scaling, single point of failure, harder to debug
+
+**All-in-One Files:**
+
+| File | Purpose |
+|------|---------|
+| `docker/Dockerfile.aio` | All-in-one Dockerfile (debian-based) |
+| `docker/all-in-one.yml` | All-in-one docker-compose |
+| `docker/Dockerfile` | Standard Dockerfile (alpine-based, app only) |
+| `docker/docker-compose.yml` | Standard docker-compose (multi-service) |
+
+**All-in-One docker-compose (`docker/all-in-one.yml`):**
+
+```yaml
+# quotesvc - Inspirational quotes API (all-in-one)
+# nginx proxy address - http://172.17.0.1:64580
+# Usage: docker compose -f all-in-one.yml up -d
+
+name: quotesvc
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  server:
+    image: ghcr.io/devtools/quotesvc-aio:latest
+    container_name: quotesvc-server
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      - MODE=production
+      - PORT=80
+      - DEBUG=false
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - './rootfs/config:/config:z'
+      - './rootfs/data:/data:z'
+    ports:
+      - '172.17.0.1:64580:80'
+    healthcheck:
+      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - quotesvc
+
+networks:
+  quotesvc:
+    name: quotesvc
+    external: false
+```
+
+## All-in-One Database and Cache
+
+**Database:** PostgreSQL (preferred for AIO)
+- Better defaults out of the box
+- Strong ACID compliance
+- Superior handling of concurrent connections
+- Built-in connection pooling
+
+**Cache:** Valkey (Redis-compatible)
+- Low memory footprint
+- Persistence via AOF
+- Unix socket for local communication (faster than TCP)
+
+**Port Exposure:** Only port 80 (server) is exposed. Database (5432) and cache (6379) ports are internal-only - no external access.
+
+| Service | Internal Port | External Port | Access |
+|---------|---------------|---------------|--------|
+| App | 80 | 80 | Exposed |
+| PostgreSQL | 5432 | - | Internal only |
+| Valkey | 6379 (or socket) | - | Internal only |
+| Tor | 9050 | - | Internal only |
+
+**All-in-One Dockerfile (`docker/Dockerfile.aio`):**
+
+```dockerfile
+# All-in-One Dockerfile - includes app + postgresql + valkey + tor
+# Base: debian:latest (stable, broad compatibility)
+# Image name: ghcr.io/{projectorg}/{projectname}-aio:latest
+# PORTS: Only 80 exposed (db/cache are internal-only)
+
+FROM debian:latest
+
+LABEL org.opencontainers.image.source="https://github.com/{projectorg}/{projectname}"
+LABEL org.opencontainers.image.description="{projectname} - all-in-one container"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Install dependencies (PostgreSQL + Valkey + Tor + Supervisor)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    postgresql \
+    postgresql-contrib \
+    valkey \
+    supervisor \
+    tor \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create directories
+RUN mkdir -p /config /data /data/db /data/log /data/cache /data/tor /data/backup /run/postgresql \
+    && chown -R postgres:postgres /data/db /run/postgresql
+
+# Copy configs and entrypoint
+COPY rootfs/ /
+
+# Copy application binary
+COPY {projectname} /usr/local/bin/
+RUN chmod +x /usr/local/bin/{projectname} /usr/local/bin/entrypoint.sh
+
+# Default environment
+ENV MODE=production \
+    PORT=80 \
+    DEBUG=false \
+    TZ=America/New_York \
+    PGDATA=/data/db \
+    DB_HOST=/run/postgresql \
+    DB_NAME={projectname} \
+    DB_USER={projectname} \
+    VALKEY_SOCKET=/run/valkey/valkey.sock
+
+# Only expose app port - db/cache are internal
+EXPOSE 80
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=90s --retries=3 \
+    CMD timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+```
+
+**All-in-One supervisor config (`docker/rootfs/etc/supervisor/conf.d/services.conf`):**
+
+```ini
+[supervisord]
+nodaemon=true
+logfile=/data/log/supervisord.log
+pidfile=/var/run/supervisord.pid
+
+[program:postgresql]
+command=/usr/lib/postgresql/15/bin/postgres -D /data/db
+user=postgres
+autostart=true
+autorestart=true
+priority=10
+stdout_logfile=/data/log/postgresql.log
+stderr_logfile=/data/log/postgresql.log
+
+[program:valkey]
+command=/usr/bin/valkey-server /etc/valkey/valkey-aio.conf
+autostart=true
+autorestart=true
+priority=20
+stdout_logfile=/data/log/valkey.log
+stderr_logfile=/data/log/valkey.log
+
+[program:tor]
+command=/usr/bin/tor -f /etc/tor/torrc
+autostart=%(ENV_TOR_ENABLED)s
+autorestart=true
+priority=30
+stdout_logfile=/data/log/tor.log
+stderr_logfile=/data/log/tor.log
+
+[program:app]
+command=/usr/local/bin/{projectname}
+autostart=true
+autorestart=true
+priority=100
+stdout_logfile=/data/log/app.log
+stderr_logfile=/data/log/app.log
+```
+
+**All-in-One PostgreSQL config (`docker/rootfs/etc/postgresql/postgresql-aio.conf`):**
+
+```ini
+# PostgreSQL configuration optimized for AIO containers
+# Low memory footprint, single-container deployment
+
+# Connection settings (unix socket only - no TCP)
+listen_addresses = ''
+unix_socket_directories = '/run/postgresql'
+max_connections = 50
+
+# Memory (conservative for AIO - adjust based on container limits)
+shared_buffers = 64MB
+effective_cache_size = 128MB
+work_mem = 4MB
+maintenance_work_mem = 32MB
+
+# WAL settings (balanced durability/performance)
+wal_level = replica
+max_wal_size = 256MB
+min_wal_size = 64MB
+checkpoint_completion_target = 0.9
+
+# Query planner
+random_page_cost = 1.1
+effective_io_concurrency = 200
+
+# Logging
+log_destination = 'stderr'
+logging_collector = off
+log_min_duration_statement = 1000
+log_line_prefix = '%t [%p]: '
+
+# Autovacuum (lighter for AIO)
+autovacuum_max_workers = 2
+autovacuum_naptime = 60s
+
+# Disable features not needed for AIO
+ssl = off
+```
+
+**All-in-One Valkey config (`docker/rootfs/etc/valkey/valkey-aio.conf`):**
+
+```ini
+# Valkey configuration optimized for AIO containers
+# Low memory, unix socket, persistent
+
+# Network (unix socket only - no TCP, faster + more secure)
+port 0
+unixsocket /run/valkey/valkey.sock
+unixsocketperm 770
+
+# Memory (conservative for AIO)
+maxmemory 64mb
+maxmemory-policy allkeys-lru
+
+# Persistence (AOF for durability)
+dir /data/cache
+appendonly yes
+appendfsync everysec
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 32mb
+
+# Disable RDB (AOF is sufficient for AIO)
+save ""
+
+# Performance
+tcp-keepalive 300
+timeout 0
+
+# Logging
+loglevel notice
+logfile ""
+
+# Security (no password needed - socket only, container internal)
+protected-mode no
+```
+
+**All-in-One entrypoint.sh (`docker/rootfs/usr/local/bin/entrypoint.sh`):**
+
+```bash
+#!/bin/bash
+set -e
+
+# Set timezone
+if [ -n "$TZ" ]; then
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
+    echo $TZ > /etc/timezone
+fi
+
+# Ensure directories exist with correct permissions
+mkdir -p /data/db /data/log /data/cache /data/tor /data/backup /run/postgresql /run/valkey
+chown -R postgres:postgres /data/db /run/postgresql
+chmod 700 /data/tor /data/db
+chmod 755 /run/valkey
+
+# Initialize PostgreSQL if not already done
+if [ ! -f /data/db/PG_VERSION ]; then
+    echo "Initializing PostgreSQL database..."
+    su - postgres -c "/usr/lib/postgresql/15/bin/initdb -D /data/db"
+
+    # Copy optimized config
+    cp /etc/postgresql/postgresql-aio.conf /data/db/postgresql.conf
+
+    # Start PostgreSQL temporarily to create database and user
+    su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl -D /data/db -l /data/log/postgresql-init.log start"
+    sleep 3
+
+    # Create application database and user
+    su - postgres -c "psql -c \"CREATE USER ${DB_USER:-{projectname}} WITH PASSWORD '${DB_PASSWORD:-{projectname}}';\""
+    su - postgres -c "psql -c \"CREATE DATABASE ${DB_NAME:-{projectname}} OWNER ${DB_USER:-{projectname}};\""
+    su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME:-{projectname}} TO ${DB_USER:-{projectname}};\""
+
+    # Stop PostgreSQL (supervisor will start it)
+    su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl -D /data/db stop"
+fi
+
+# Set Tor enabled flag for supervisor
+export TOR_ENABLED="${TOR_ENABLED:-false}"
+
+# Start supervisor (manages postgresql + valkey + tor + app)
+exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+```
+
+**Image Names:**
+
+| Image | Dockerfile | Description |
+|-------|------------|-------------|
+| `{name}:latest` | `Dockerfile` | Standard image (app only, alpine) |
+| `{name}-aio:latest` | `Dockerfile.aio` | All-in-one (app + postgresql + valkey + tor, debian) |
+
+**AIO Environment Variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MODE` | `production` | Application mode |
+| `PORT` | `80` | Application port |
+| `DEBUG` | `false` | Debug mode |
+| `TZ` | `America/New_York` | Timezone |
+| `DB_NAME` | `{projectname}` | PostgreSQL database name |
+| `DB_USER` | `{projectname}` | PostgreSQL username |
+| `DB_PASSWORD` | `{projectname}` | PostgreSQL password |
+| `TOR_ENABLED` | `false` | Enable Tor hidden service |
+
+**App Connection Strings (internal):**
+
+```go
+// PostgreSQL via unix socket (faster than TCP)
+dbURL := "postgres:///projectname?host=/run/postgresql"
+
+// Valkey via unix socket
+valkeyURL := "unix:///run/valkey/valkey.sock"
+```
+
+**Build Commands:**
+
+```bash
+# Standard image
+docker build -t ghcr.io/{projectorg}/{projectname}:latest -f docker/Dockerfile docker/
+
+# All-in-one image
+docker build -t ghcr.io/{projectorg}/{projectname}-aio:latest -f docker/Dockerfile.aio docker/
+```
+
+**When to use All-in-One:**
+- Simple APIs with SQLite storage
+- Projects that don't need horizontal scaling
+- Minimal infrastructure requirements
+- Self-contained deployment (single `docker pull && docker run`)
+
+**When to use Multi-Service:**
+- Need separate database (PostgreSQL, MySQL)
+- Cache needs dedicated resources
+- Horizontal scaling of specific components
+- Microservice architecture
 
 ### Two `rootfs/` Contexts (CRITICAL - Understand This)
 
@@ -11357,12 +12201,12 @@ $TEMP_DIR/
 5. Data lives in temp dir, isolated from project
 
 ```bash
-# Setup (uses OS temp dir: {ostempdir}/apimgr/vidveil-XXXXXX/)
+# Setup (uses OS temp dir: {ostempdir}/{projectorg}/{projectname}-XXXXXX/)
 # Set PROJECT_ROOT to your actual project location
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"  # Use git top-level
 # Or use absolute path: PROJECT_ROOT="/path/to/your/project"
 mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX")
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
 
 # Copy docker-compose.yml
@@ -11378,7 +12222,7 @@ rm -rf "$TEMP_DIR"
 
 **Example paths:**
 ```
-/tmp/apimgr/jokes-aB3xY9/           # jokes project
+/tmp/netutils/pastebin-aB3xY9/      # pastebin project
 /tmp/apimgr/weather-k9mN2p/         # weather project
 /tmp/casapps/linktree-Qw5rT1/       # different org
 ```
@@ -11432,12 +12276,12 @@ rm -rf "$TEMP_DIR"
 **Development mode with optional debug. MUST use temp directory workflow.**
 
 ```yaml
-name: vidveil-dev
+name: {projectname}-dev
 
 services:
-  vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
-    container_name: vidveil-dev
+  {projectname}:
+    image: ghcr.io/{projectorg}/{projectname}:latest
+    container_name: {projectname}-dev
     restart: unless-stopped
     environment:
       # Development: relaxed security, verbose logging, no caching
@@ -11455,18 +12299,18 @@ services:
       - ./rootfs/config:/config
       - ./rootfs/data:/data
     networks:
-      - vidveil-dev
+      - {projectname}-dev
 
 networks:
-  vidveil-dev:
-    name: vidveil-dev
+  {projectname}-dev:
+    name: {projectname}-dev
     external: false
 ```
 
 **Run:**
 ```bash
-mkdir -p "${TMPDIR:-/tmp}/apimgr"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apimgr/vidveil-XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/{projectorg}"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/{projectorg}/{projectname}-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
 cp docker/docker-compose.dev.yml "$TEMP_DIR/docker-compose.yml"
 cd "$TEMP_DIR" && docker compose up -d
@@ -11479,12 +12323,12 @@ cd "$TEMP_DIR" && docker compose up -d
 **Production has NO debug options. Debug must be set via CLI if needed.**
 
 ```yaml
-name: vidveil
+name: {projectname}
 
 services:
-  vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
-    container_name: vidveil
+  {projectname}:
+    image: ghcr.io/{projectorg}/{projectname}:latest
+    container_name: {projectname}
     restart: unless-stopped
     environment:
       # Production: strict security, minimal logging, caching enabled
@@ -11507,18 +12351,18 @@ services:
       - ./rootfs/config:/config:z
       - ./rootfs/data:/data:z
     networks:
-      - vidveil
+      - {projectname}
 
 networks:
-  vidveil:
-    name: vidveil
+  {projectname}:
+    name: {projectname}
     external: false
 ```
 
 **Run:**
 ```bash
-mkdir -p "${TMPDIR:-/tmp}/apimgr"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apimgr/vidveil-XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/{projectorg}"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/{projectorg}/{projectname}-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
 cp docker/docker-compose.yml "$TEMP_DIR/"
 cd "$TEMP_DIR" && docker compose up -d
@@ -11531,12 +12375,12 @@ cd "$TEMP_DIR" && docker compose up -d
 **For running tests in CI/CD or locally. Debug enabled for test visibility. MUST use temp directory workflow.**
 
 ```yaml
-name: vidveil-test
+name: {projectname}-test
 
 services:
-  vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
-    container_name: vidveil-test
+  {projectname}:
+    image: ghcr.io/{projectorg}/{projectname}:latest
+    container_name: {projectname}-test
     restart: "no"
     environment:
       - MODE=development
@@ -11550,18 +12394,18 @@ services:
       - ./rootfs/config:/config
       - ./rootfs/data:/data
     networks:
-      - vidveil-test
+      - {projectname}-test
 
 networks:
-  vidveil-test:
-    name: vidveil-test
+  {projectname}-test:
+    name: {projectname}-test
     external: false
 ```
 
 **Run:**
 ```bash
-mkdir -p "${TMPDIR:-/tmp}/apimgr"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apimgr/vidveil-XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/{projectorg}"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/{projectorg}/{projectname}-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
 cp docker/docker-compose.test.yml "$TEMP_DIR/docker-compose.yml"
 cd "$TEMP_DIR" && docker compose up --abort-on-container-exit
@@ -11573,12 +12417,12 @@ rm -rf "$TEMP_DIR"  # Cleanup after tests
 **Location:** `docker/docker-compose.yml`
 
 ```yaml
-name: vidveil
+name: {projectname}
 
 services:
-  vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
-    container_name: vidveil
+  {projectname}:
+    image: ghcr.io/{projectorg}/{projectname}:latest
+    container_name: {projectname}
     restart: unless-stopped
     depends_on:
       - postgres
@@ -11591,9 +12435,9 @@ services:
       # - DOMAIN=myapp.com,www.myapp.com,api.myapp.com
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=vidveil
-      - DB_USER=vidveil
-      - DB_PASS=vidveil
+      - DB_NAME={projectname}
+      - DB_USER={projectname}
+      - DB_PASS={projectname}
     ports:
       # Production: bound to Docker bridge only (reverse proxy handles external)
       - "172.17.0.1:64580:80"
@@ -11601,25 +12445,25 @@ services:
       - ./rootfs/config:/config:z
       - ./rootfs/data:/data:z
     networks:
-      - vidveil
+      - {projectname}
 
   postgres:
     image: postgres:alpine
-    container_name: vidveil-postgres
+    container_name: {projectname}-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=vidveil
-      - POSTGRES_USER=vidveil
-      - POSTGRES_PASSWORD=vidveil
+      - POSTGRES_DB={projectname}
+      - POSTGRES_USER={projectname}
+      - POSTGRES_PASSWORD={projectname}
       - TZ=America/New_York
     volumes:
       - ./rootfs/data/db/postgres:/var/lib/postgresql/data:z
     networks:
-      - vidveil
+      - {projectname}
 
 networks:
-  vidveil:
-    name: vidveil
+  {projectname}:
+    name: {projectname}
     external: false
 ```
 
@@ -11637,7 +12481,7 @@ networks:
 | Log dir | `/data/log` |
 | Tor data dir | `/data/tor` |
 | Backup dir | `/data/backup` |
-| Binary | `/usr/local/bin/vidveil` |
+| Binary | `/usr/local/bin/{projectname}` |
 | HEALTHCHECK | `{binary} --status` |
 
 **Path Mapping (Container vs Host):**
@@ -11677,17 +12521,17 @@ networks:
 
 | Tag | Description | Example |
 |-----|-------------|---------|
-| `ghcr.io/apimgr/vidveil:latest` | Latest stable release | `ghcr.io/myorg/myapp:latest` |
-| `ghcr.io/apimgr/vidveil:{version}` | Specific version | `ghcr.io/myorg/myapp:1.2.3` |
-| `ghcr.io/apimgr/vidveil:{YYMM}` | Year/month tag | `ghcr.io/myorg/myapp:2512` |
-| `ghcr.io/apimgr/vidveil:{commit}` | Git commit (7 char) | `ghcr.io/myorg/myapp:abc1234` |
+| `ghcr.io/{projectorg}/{projectname}:latest` | Latest stable release | `ghcr.io/myorg/myapp:latest` |
+| `ghcr.io/{projectorg}/{projectname}:{version}` | Specific version | `ghcr.io/myorg/myapp:1.2.3` |
+| `ghcr.io/{projectorg}/{projectname}:{YYMM}` | Year/month tag | `ghcr.io/myorg/myapp:2512` |
+| `ghcr.io/{projectorg}/{projectname}:{commit}` | Git commit (7 char) | `ghcr.io/myorg/myapp:abc1234` |
 
 ### Development Tags (Local)
 
 | Tag | Description | Example |
 |-----|-------------|---------|
-| `vidveil:dev` | Local development build | `myapp:dev` |
-| `vidveil:test` | Local test build | `myapp:test` |
+| `{projectname}:dev` | Local development build | `myapp:dev` |
+| `{projectname}:test` | Local test build | `myapp:test` |
 
 ### Registry
 
@@ -11698,7 +12542,7 @@ networks:
 
 ### Tag Rules
 
-1. **Release builds** MUST push to `ghcr.io/apimgr/vidveil`
+1. **Release builds** MUST push to `ghcr.io/{projectorg}/{projectname}`
 2. **Development builds** MUST use local-only tags (no registry prefix)
 3. **NEVER push `:dev` or `:test` tags to ghcr.io**
 4. All release images built for `linux/amd64` AND `linux/arm64`
@@ -11759,7 +12603,7 @@ on:
       - '[0-9]*.[0-9]*.[0-9]*'
 
 env:
-  PROJECTNAME: vidveil
+  PROJECTNAME: {projectname}
 
 jobs:
   build:
@@ -11893,7 +12737,7 @@ on:
       - beta
 
 env:
-  PROJECTNAME: vidveil
+  PROJECTNAME: {projectname}
 
 jobs:
   build:
@@ -12000,7 +12844,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECTNAME: vidveil
+  PROJECTNAME: {projectname}
 
 jobs:
   build:
@@ -12100,21 +12944,27 @@ jobs:
 
 ## Docker Workflow
 
+### Image Types
+
+| Image | Dockerfile | Tag Suffix | Base | Contents |
+|-------|------------|------------|------|----------|
+| **Standard** | `docker/Dockerfile` | (none) | alpine | App only |
+| **All-in-One** | `docker/Dockerfile.aio` | `-aio` | debian | App + PostgreSQL + Valkey + Tor |
+
 ### Triggers and Tags
 
-| Trigger | Image Tags |
-|---------|------------|
-| **Any push** (all branches) | `devel`, `{COMMIT_ID}` |
-| Push to beta branch | `devel`, `beta`, `{COMMIT_ID}` |
-| Version tag (`v*`, `*.*.*`) | `{version}`, `latest`, `YYMM`, `{COMMIT_ID}` |
+| Trigger | Standard Tags | All-in-One Tags |
+|---------|---------------|-----------------|
+| **Any push** (all branches) | `devel`, `{COMMIT_ID}` | `devel-aio`, `{COMMIT_ID}-aio` |
+| Push to beta branch | `devel`, `beta`, `{COMMIT_ID}` | `devel-aio`, `beta-aio`, `{COMMIT_ID}-aio` |
+| Version tag (`v*`, `*.*.*`) | `{version}`, `latest`, `YYMM` | `{version}-aio`, `aio`, `YYMM-aio` |
 
 **Notes:**
 - `{COMMIT_ID}` = short SHA (7 characters) from `git rev-parse --short HEAD`
 - `YYMM` = year/month (e.g., `2512`)
 - Built for `linux/amd64` and `linux/arm64` using `docker buildx`
 - Registry: `ghcr.io`
-- `devel` tag is updated on EVERY push (any branch)
-- `latest` tag only updated on version tags (releases)
+- Standard uses `latest`, All-in-One uses `aio` as the "latest" equivalent
 
 **File:** `.github/workflows/docker.yml`
 
@@ -12130,12 +12980,12 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECTNAME: vidveil
+  PROJECTNAME: {projectname}
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  build-standard:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -12163,7 +13013,7 @@ jobs:
           echo "YYMM=$(date +"%y%m")" >> $GITHUB_ENV
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
-            echo "VERSION=${VERSION#v}" >> $GITHUB_ENV  # Strip 'v' prefix
+            echo "VERSION=${VERSION#v}" >> $GITHUB_ENV
             echo "IS_TAG=true" >> $GITHUB_ENV
           else
             echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
@@ -12171,21 +13021,17 @@ jobs:
           fi
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
 
-      - name: Determine tags
+      - name: Determine tags (standard)
         id: tags
         run: |
           TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.COMMIT_ID }}"
 
           if [[ "${{ env.IS_TAG }}" == "true" ]]; then
-            # Release tag - version, latest, YYMM
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.YYMM }}"
           else
-            # All pushes get devel tag
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel"
-
-            # Beta branch also gets beta tag
             if [[ "${{ github.ref }}" == refs/heads/beta ]]; then
               TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:beta"
             fi
@@ -12193,55 +13039,146 @@ jobs:
 
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
-      - name: Build and push
+      - name: Build and push (standard)
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: docker
           file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
-            VERSION="${{ env.VERSION }}"
-            BUILD_DATE="${{ env.BUILD_DATE }}"
-            COMMIT_ID="${{ env.COMMIT_ID }}"
-          # OCI Image Labels (applied to image config)
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            COMMIT_ID=${{ env.COMMIT_ID }}
           labels: |
-            org.opencontainers.image.vendor="apimgr"
-            org.opencontainers.image.authors="apimgr"
-            org.opencontainers.image.title="${{ env.PROJECTNAME }}"
-            org.opencontainers.image.base.name="${{ env.PROJECTNAME }}"
-            org.opencontainers.image.description="Containerized version of ${{ env.PROJECTNAME }}"
+            org.opencontainers.image.vendor={projectorg}
+            org.opencontainers.image.authors={projectorg}
+            org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.licenses=MIT
-            org.opencontainers.image.version="${{ env.VERSION }}"
-            org.opencontainers.image.created="${{ env.BUILD_DATE }}"
-            org.opencontainers.image.revision="${{ env.COMMIT_ID }}"
-            org.opencontainers.image.url="${{ github.server_url }}/${{ github.repository }}"
-            org.opencontainers.image.source="${{ github.server_url }}/${{ github.repository }}"
-            org.opencontainers.image.documentation="${{ github.server_url }}/${{ github.repository }}"
-          # OCI Annotations for multi-arch manifest (required for registry display)
           annotations: |
-            manifest:org.opencontainers.image.vendor=apimgr
-            manifest:org.opencontainers.image.authors=apimgr
+            manifest:org.opencontainers.image.vendor={projectorg}
+            manifest:org.opencontainers.image.authors={projectorg}
             manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
-            manifest:org.opencontainers.image.description=Containerized version of ${{ env.PROJECTNAME }}
-            manifest:org.opencontainers.image.licenses=MIT
+            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
             manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
             manifest:org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.licenses=MIT
+
+  build-aio:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set build info
+        run: |
+          echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "YYMM=$(date +"%y%m")" >> $GITHUB_ENV
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            echo "VERSION=${VERSION#v}" >> $GITHUB_ENV
+            echo "IS_TAG=true" >> $GITHUB_ENV
+          else
+            echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+            echo "IS_TAG=false" >> $GITHUB_ENV
+          fi
+          echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
+
+      - name: Determine tags (all-in-one)
+        id: tags
+        run: |
+          # AIO uses separate image name: {repo}-aio:{tag}
+          AIO_IMAGE="${{ env.IMAGE_NAME }}-aio"
+          TAGS="${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.COMMIT_ID }}"
+
+          if [[ "${{ env.IS_TAG }}" == "true" ]]; then
+            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.VERSION }}"
+            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:latest"
+            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.YYMM }}"
+          else
+            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:devel"
+            if [[ "${{ github.ref }}" == refs/heads/beta ]]; then
+              TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:beta"
+            fi
+          fi
+
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
+      - name: Build and push (all-in-one)
+        uses: docker/build-push-action@v5
+        with:
+          context: docker
+          file: docker/Dockerfile.aio
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            COMMIT_ID=${{ env.COMMIT_ID }}
+          labels: |
+            org.opencontainers.image.vendor={projectorg}
+            org.opencontainers.image.authors={projectorg}
+            org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
+            org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + postgresql + valkey + tor)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=MIT
+          annotations: |
+            manifest:org.opencontainers.image.vendor={projectorg}
+            manifest:org.opencontainers.image.authors={projectorg}
+            manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
+            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + postgresql + valkey + tor)
+            manifest:org.opencontainers.image.version=${{ env.VERSION }}
+            manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            manifest:org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.licenses=MIT
 ```
 
-**Labels vs Annotations:**
+**Image Tag Summary:**
 
-| Type | Purpose | Where Applied |
-|------|---------|---------------|
-| `labels` | Image metadata | Image config (per-arch) |
-| `annotations` | Manifest metadata | Multi-arch manifest index |
-
-**Note:** For multi-arch images, registries (GHCR, Docker Hub) read annotations from the manifest index, not from individual image configs. The `manifest:` prefix tells buildx to apply annotations to the manifest list.
+| Use Case | Standard Image | All-in-One Image |
+|----------|----------------|------------------|
+| Latest stable | `{name}:latest` | `{name}-aio:latest` |
+| Specific version | `{name}:1.2.3` | `{name}-aio:1.2.3` |
+| Development | `{name}:devel` | `{name}-aio:devel` |
+| Beta | `{name}:beta` | `{name}-aio:beta` |
+| Commit | `{name}:abc1234` | `{name}-aio:abc1234` |
 
 ---
 
@@ -12311,7 +13248,7 @@ on:
       - '[0-9]*.[0-9]*.[0-9]*'
 
 env:
-  PROJECTNAME: vidveil
+  PROJECTNAME: {projectname}
 
 jobs:
   build:
@@ -12445,7 +13382,7 @@ on:
       - beta
 
 env:
-  PROJECTNAME: vidveil
+  PROJECTNAME: {projectname}
 
 jobs:
   build:
@@ -12552,7 +13489,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECTNAME: vidveil
+  PROJECTNAME: {projectname}
 
 jobs:
   build:
@@ -12667,13 +13604,13 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECTNAME: vidveil
+  PROJECTNAME: {projectname}
   # Registry auto-detected from Gitea instance (works with self-hosted)
   # Format: {gitea-server}/owner/repo -> extracts server for registry
   IMAGE_NAME: ${{ gitea.repository }}
 
 jobs:
-  build:
+  build-standard:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -12718,7 +13655,7 @@ jobs:
           fi
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITEA_ENV
 
-      - name: Determine tags
+      - name: Determine tags (standard)
         id: tags
         run: |
           # Use self-hosted registry URL
@@ -12741,7 +13678,7 @@ jobs:
 
           echo "tags=$TAGS" >> $GITEA_OUTPUT
 
-      - name: Build and push
+      - name: Build and push (standard)
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -12750,36 +13687,133 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
-            VERSION="${{ env.VERSION }}"
-            BUILD_DATE="${{ env.BUILD_DATE }}"
-            COMMIT_ID="${{ env.COMMIT_ID }}"
-          # OCI Image Labels (applied to image config)
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            COMMIT_ID=${{ env.COMMIT_ID }}
           labels: |
-            org.opencontainers.image.vendor="apimgr"
-            org.opencontainers.image.authors="apimgr"
-            org.opencontainers.image.title="${{ env.PROJECTNAME }}"
-            org.opencontainers.image.base.name="${{ env.PROJECTNAME }}"
-            org.opencontainers.image.description="Containerized version of ${{ env.PROJECTNAME }}"
+            org.opencontainers.image.vendor={projectorg}
+            org.opencontainers.image.authors={projectorg}
+            org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
+            org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
+            org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
             org.opencontainers.image.licenses=MIT
-            org.opencontainers.image.version="${{ env.VERSION }}"
-            org.opencontainers.image.created="${{ env.BUILD_DATE }}"
-            org.opencontainers.image.revision="${{ env.COMMIT_ID }}"
-            org.opencontainers.image.url="${{ gitea.server_url }}/${{ gitea.repository }}"
-            org.opencontainers.image.source="${{ gitea.server_url }}/${{ gitea.repository }}"
-            org.opencontainers.image.documentation="${{ gitea.server_url }}/${{ gitea.repository }}"
-          # OCI Annotations for multi-arch manifest (required for registry display)
           annotations: |
-            manifest:org.opencontainers.image.vendor=apimgr
-            manifest:org.opencontainers.image.authors=apimgr
+            manifest:org.opencontainers.image.vendor={projectorg}
+            manifest:org.opencontainers.image.authors={projectorg}
             manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
-            manifest:org.opencontainers.image.description=Containerized version of ${{ env.PROJECTNAME }}
-            manifest:org.opencontainers.image.licenses=MIT
+            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
             manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
             manifest:org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
             manifest:org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
             manifest:org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
+            manifest:org.opencontainers.image.licenses=MIT
+
+  build-aio:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set registry from server URL
+        run: |
+          SERVER_URL="${{ gitea.server_url }}"
+          REGISTRY="${SERVER_URL#https://}"
+          REGISTRY="${REGISTRY#http://}"
+          echo "REGISTRY=${REGISTRY}" >> $GITEA_ENV
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ gitea.actor }}
+          password: ${{ secrets.GITEA_TOKEN }}
+
+      - name: Set build info
+        run: |
+          echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITEA_ENV
+          echo "YYMM=$(date +"%y%m")" >> $GITEA_ENV
+          if [[ "${{ gitea.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITEA_REF_NAME}"
+            echo "VERSION=${VERSION#v}" >> $GITEA_ENV
+            echo "IS_TAG=true" >> $GITEA_ENV
+          else
+            echo "VERSION=$(git rev-parse --short HEAD)" >> $GITEA_ENV
+            echo "IS_TAG=false" >> $GITEA_ENV
+          fi
+          echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITEA_ENV
+
+      - name: Determine tags (all-in-one)
+        id: tags
+        run: |
+          # AIO uses separate image name: {repo}-aio:{tag}
+          AIO_IMAGE="${{ env.IMAGE_NAME }}-aio"
+          TAGS="${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.COMMIT_ID }}"
+
+          if [[ "${{ env.IS_TAG }}" == "true" ]]; then
+            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.VERSION }}"
+            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:latest"
+            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.YYMM }}"
+          else
+            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:devel"
+            if [[ "${{ gitea.ref }}" == refs/heads/beta ]]; then
+              TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:beta"
+            fi
+          fi
+
+          echo "tags=$TAGS" >> $GITEA_OUTPUT
+
+      - name: Build and push (all-in-one)
+        uses: docker/build-push-action@v5
+        with:
+          context: docker
+          file: docker/Dockerfile.aio
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            COMMIT_ID=${{ env.COMMIT_ID }}
+          labels: |
+            org.opencontainers.image.vendor={projectorg}
+            org.opencontainers.image.authors={projectorg}
+            org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
+            org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + postgresql + valkey + tor)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
+            org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
+            org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
+            org.opencontainers.image.licenses=MIT
+          annotations: |
+            manifest:org.opencontainers.image.vendor={projectorg}
+            manifest:org.opencontainers.image.authors={projectorg}
+            manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
+            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + postgresql + valkey + tor)
+            manifest:org.opencontainers.image.version=${{ env.VERSION }}
+            manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            manifest:org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
+            manifest:org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
+            manifest:org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
+            manifest:org.opencontainers.image.licenses=MIT
 ```
 
 ## Variable Mapping (GitHub → Gitea → Forgejo)
@@ -12842,12 +13876,12 @@ All `$CI_*` variables are auto-populated by GitLab (works with self-hosted).
 **File:** `.gitlab-ci.yml`
 
 ```yaml
-# GitLab CI/CD Pipeline for vidveil
+# GitLab CI/CD Pipeline for {projectname}
 # Equivalent to GitHub Actions: release.yml, beta.yml, daily.yml, docker.yml
 
 variables:
-  PROJECTNAME: "vidveil"
-  PROJECTORG: "apimgr"
+  PROJECTNAME: "{projectname}"
+  PROJECTORG: "{projectorg}"
   CGO_ENABLED: "0"
   GOOS: linux
   GOARCH: amd64
@@ -12883,11 +13917,11 @@ build:linux-amd64:
     GOOS: linux
     GOARCH: amd64
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-amd64 src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-amd64-cli src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64-cli src/client; fi
   artifacts:
     paths:
-      - $VIDVEIL-linux-amd64*
+      - ${PROJECTNAME}-linux-amd64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -12899,11 +13933,11 @@ build:linux-arm64:
     GOOS: linux
     GOARCH: arm64
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-arm64 src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-arm64-cli src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64-cli src/client; fi
   artifacts:
     paths:
-      - $VIDVEIL-linux-arm64*
+      - ${PROJECTNAME}-linux-arm64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -12915,11 +13949,11 @@ build:darwin-amd64:
     GOOS: darwin
     GOARCH: amd64
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-darwin-amd64 src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-darwin-amd64-cli src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-amd64 src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-amd64-cli src/client; fi
   artifacts:
     paths:
-      - $VIDVEIL-darwin-amd64*
+      - ${PROJECTNAME}-darwin-amd64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -12931,11 +13965,11 @@ build:darwin-arm64:
     GOOS: darwin
     GOARCH: arm64
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-darwin-arm64 src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-darwin-arm64-cli src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-arm64 src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-arm64-cli src/client; fi
   artifacts:
     paths:
-      - $VIDVEIL-darwin-arm64*
+      - ${PROJECTNAME}-darwin-arm64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -12947,11 +13981,11 @@ build:windows-amd64:
     GOOS: windows
     GOARCH: amd64
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-windows-amd64.exe src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-windows-amd64-cli.exe src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-amd64.exe src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-amd64-cli.exe src/client; fi
   artifacts:
     paths:
-      - $VIDVEIL-windows-amd64*.exe
+      - ${PROJECTNAME}-windows-amd64*.exe
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -12963,11 +13997,11 @@ build:windows-arm64:
     GOOS: windows
     GOARCH: arm64
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-windows-arm64.exe src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-windows-arm64-cli.exe src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-arm64.exe src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-arm64-cli.exe src/client; fi
   artifacts:
     paths:
-      - $VIDVEIL-windows-arm64*.exe
+      - ${PROJECTNAME}-windows-arm64*.exe
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -12979,11 +14013,11 @@ build:freebsd-amd64:
     GOOS: freebsd
     GOARCH: amd64
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-freebsd-amd64 src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-freebsd-amd64-cli src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-amd64 src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-amd64-cli src/client; fi
   artifacts:
     paths:
-      - $VIDVEIL-freebsd-amd64*
+      - ${PROJECTNAME}-freebsd-amd64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -12995,11 +14029,11 @@ build:freebsd-arm64:
     GOOS: freebsd
     GOARCH: arm64
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-freebsd-arm64 src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-freebsd-arm64-cli src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-arm64 src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-arm64-cli src/client; fi
   artifacts:
     paths:
-      - $VIDVEIL-freebsd-arm64*
+      - ${PROJECTNAME}-freebsd-arm64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -13041,29 +14075,29 @@ release:
   artifacts:
     paths:
       - version.txt
-      - $VIDVEIL-*
+      - ${PROJECTNAME}-*
   release:
     tag_name: $CI_COMMIT_TAG
     name: "Release $CI_COMMIT_TAG"
     description: "Release created by GitLab CI"
     assets:
       links:
-        - name: "$VIDVEIL-linux-amd64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-linux-amd64?job=build:linux-amd64"
-        - name: "$VIDVEIL-linux-arm64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-linux-arm64?job=build:linux-arm64"
-        - name: "$VIDVEIL-darwin-amd64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-darwin-amd64?job=build:darwin-amd64"
-        - name: "$VIDVEIL-darwin-arm64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-darwin-arm64?job=build:darwin-arm64"
-        - name: "$VIDVEIL-windows-amd64.exe"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-windows-amd64.exe?job=build:windows-amd64"
-        - name: "$VIDVEIL-windows-arm64.exe"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-windows-arm64.exe?job=build:windows-arm64"
-        - name: "$VIDVEIL-freebsd-amd64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-freebsd-amd64?job=build:freebsd-amd64"
-        - name: "$VIDVEIL-freebsd-arm64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-freebsd-arm64?job=build:freebsd-arm64"
+        - name: "${PROJECTNAME}-linux-amd64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-linux-amd64?job=build:linux-amd64"
+        - name: "${PROJECTNAME}-linux-arm64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-linux-arm64?job=build:linux-arm64"
+        - name: "${PROJECTNAME}-darwin-amd64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-darwin-amd64?job=build:darwin-amd64"
+        - name: "${PROJECTNAME}-darwin-arm64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-darwin-arm64?job=build:darwin-arm64"
+        - name: "${PROJECTNAME}-windows-amd64.exe"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-windows-amd64.exe?job=build:windows-amd64"
+        - name: "${PROJECTNAME}-windows-arm64.exe"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-windows-arm64.exe?job=build:windows-arm64"
+        - name: "${PROJECTNAME}-freebsd-amd64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-freebsd-amd64?job=build:freebsd-amd64"
+        - name: "${PROJECTNAME}-freebsd-arm64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-freebsd-arm64?job=build:freebsd-arm64"
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
 
@@ -13084,11 +14118,11 @@ build:beta:linux:
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'"
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-amd64 src
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-arm64 src
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 src
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 src
   artifacts:
     paths:
-      - $VIDVEIL-linux-*
+      - ${PROJECTNAME}-linux-*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_BRANCH == "beta"
@@ -13110,11 +14144,11 @@ build:daily:linux:
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'"
   script:
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-amd64 src
-    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-arm64 src
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 src
+    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 src
   artifacts:
     paths:
-      - $VIDVEIL-linux-*
+      - ${PROJECTNAME}-linux-*
     expire_in: 1 day
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -13162,9 +14196,9 @@ docker:build:
         --build-arg BUILD_DATE="${BUILD_DATE}" \
         --label "org.opencontainers.image.vendor=${PROJECTORG}" \
         --label "org.opencontainers.image.authors=${PROJECTORG}" \
-        --label "org.opencontainers.image.title=$VIDVEIL" \
-        --label "org.opencontainers.image.base.name=$VIDVEIL" \
-        --label "org.opencontainers.image.description=Containerized version of $VIDVEIL" \
+        --label "org.opencontainers.image.title=${PROJECTNAME}" \
+        --label "org.opencontainers.image.base.name=${PROJECTNAME}" \
+        --label "org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
         --label "org.opencontainers.image.licenses=MIT" \
         --label "org.opencontainers.image.version=${VERSION}" \
         --label "org.opencontainers.image.created=${BUILD_DATE}" \
@@ -13174,8 +14208,8 @@ docker:build:
         --label "org.opencontainers.image.documentation=${CI_PROJECT_URL}" \
         --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
         --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
-        --annotation "manifest:org.opencontainers.image.title=$VIDVEIL" \
-        --annotation "manifest:org.opencontainers.image.description=Containerized version of $VIDVEIL" \
+        --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}" \
+        --annotation "manifest:org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
         --annotation "manifest:org.opencontainers.image.licenses=MIT" \
         --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
         --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
@@ -13186,6 +14220,71 @@ docker:build:
         $TAGS \
         --push \
         .
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
+    - if: $CI_COMMIT_BRANCH == "beta"
+
+docker:build-aio:
+  stage: docker
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_BUILDKIT: "1"
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker buildx create --name multiarch-builder --use 2>/dev/null || docker buildx use multiarch-builder
+  script:
+    - |
+      # AIO uses separate image name: {repo}-aio:{tag}
+      AIO_IMAGE="${CI_REGISTRY_IMAGE}-aio"
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        VERSION="${CI_COMMIT_TAG#v}"
+        YYMM=$(date +%y%m)
+        TAGS="-t ${AIO_IMAGE}:${VERSION} -t ${AIO_IMAGE}:latest -t ${AIO_IMAGE}:${YYMM} -t ${AIO_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+      elif [ "$CI_COMMIT_BRANCH" = "beta" ]; then
+        VERSION="beta-$CI_COMMIT_SHORT_SHA"
+        TAGS="-t ${AIO_IMAGE}:beta -t ${AIO_IMAGE}:devel -t ${AIO_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+      else
+        VERSION="devel-$CI_COMMIT_SHORT_SHA"
+        TAGS="-t ${AIO_IMAGE}:devel -t ${AIO_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+      fi
+      BUILD_DATE="$(date -Iseconds)"
+    - |
+      # Build multi-arch all-in-one with OCI labels and manifest annotations
+      docker buildx build \
+        -f docker/Dockerfile.aio \
+        --platform linux/amd64,linux/arm64 \
+        --build-arg VERSION="${VERSION}" \
+        --build-arg COMMIT_ID="${CI_COMMIT_SHORT_SHA}" \
+        --build-arg BUILD_DATE="${BUILD_DATE}" \
+        --label "org.opencontainers.image.vendor=${PROJECTORG}" \
+        --label "org.opencontainers.image.authors=${PROJECTORG}" \
+        --label "org.opencontainers.image.title=${PROJECTNAME}-aio" \
+        --label "org.opencontainers.image.description=${PROJECTNAME} - all-in-one (debian + postgresql + valkey + tor)" \
+        --label "org.opencontainers.image.licenses=MIT" \
+        --label "org.opencontainers.image.version=${VERSION}" \
+        --label "org.opencontainers.image.created=${BUILD_DATE}" \
+        --label "org.opencontainers.image.revision=${CI_COMMIT_SHORT_SHA}" \
+        --label "org.opencontainers.image.url=${CI_PROJECT_URL}" \
+        --label "org.opencontainers.image.source=${CI_PROJECT_URL}" \
+        --label "org.opencontainers.image.documentation=${CI_PROJECT_URL}" \
+        --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
+        --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
+        --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}-aio" \
+        --annotation "manifest:org.opencontainers.image.description=${PROJECTNAME} - all-in-one (debian + postgresql + valkey + tor)" \
+        --annotation "manifest:org.opencontainers.image.licenses=MIT" \
+        --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
+        --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
+        --annotation "manifest:org.opencontainers.image.revision=${CI_COMMIT_SHORT_SHA}" \
+        --annotation "manifest:org.opencontainers.image.url=${CI_PROJECT_URL}" \
+        --annotation "manifest:org.opencontainers.image.source=${CI_PROJECT_URL}" \
+        --annotation "manifest:org.opencontainers.image.documentation=${CI_PROJECT_URL}" \
+        $TAGS \
+        --push \
+        docker
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
@@ -13273,8 +14372,8 @@ pipeline {
     }
 
     environment {
-        PROJECTNAME = 'vidveil'
-        PROJECTORG = 'apimgr'
+        PROJECTNAME = '{projectname}'
+        PROJECTORG = '{projectorg}'
         BINDIR = 'binaries'
         RELDIR = 'releases'
         GOCACHE = "/tmp/${PROJECTORG}/go-cache"
@@ -13288,22 +14387,22 @@ pipeline {
         // ----- GITHUB (default) -----
         GIT_FQDN = 'github.com'
         GIT_TOKEN = credentials('github-token')  // Jenkins credentials ID
-        REGISTRY = "ghcr.io/${PROJECTORG}/$VIDVEIL"
+        REGISTRY = "ghcr.io/${PROJECTORG}/${PROJECTNAME}"
 
         // ----- GITEA / FORGEJO (self-hosted) -----
         // GIT_FQDN = 'git.example.com'  // Your Gitea/Forgejo domain
         // GIT_TOKEN = credentials('gitea-token')  // Jenkins credentials ID
-        // REGISTRY = "${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
+        // REGISTRY = "${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}"
 
         // ----- GITLAB (gitlab.com or self-hosted) -----
         // GIT_FQDN = 'gitlab.com'  // or your self-hosted GitLab domain
         // GIT_TOKEN = credentials('gitlab-token')  // Jenkins credentials ID
-        // REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
+        // REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}"
 
         // ----- DOCKER HUB -----
         // GIT_FQDN = 'github.com'  // Git host (separate from registry)
         // GIT_TOKEN = credentials('github-token')
-        // REGISTRY = "docker.io/${PROJECTORG}/$VIDVEIL"
+        // REGISTRY = "docker.io/${PROJECTORG}/${PROJECTNAME}"
 
         // =========================================================================
     }
@@ -13357,7 +14456,7 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-linux-amd64 src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-amd64 src
                         '''
                     }
                 }
@@ -13374,7 +14473,7 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-linux-arm64 src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-arm64 src
                         '''
                     }
                 }
@@ -13392,7 +14491,7 @@ pipeline {
                                 -e GOOS=darwin \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-darwin-amd64 src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-amd64 src
                         '''
                     }
                 }
@@ -13409,7 +14508,7 @@ pipeline {
                                 -e GOOS=darwin \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-darwin-arm64 src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-arm64 src
                         '''
                     }
                 }
@@ -13427,7 +14526,7 @@ pipeline {
                                 -e GOOS=windows \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-windows-amd64.exe src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-amd64.exe src
                         '''
                     }
                 }
@@ -13444,7 +14543,7 @@ pipeline {
                                 -e GOOS=windows \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-windows-arm64.exe src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-arm64.exe src
                         '''
                     }
                 }
@@ -13462,7 +14561,7 @@ pipeline {
                                 -e GOOS=freebsd \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-freebsd-amd64 src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-amd64 src
                         '''
                     }
                 }
@@ -13479,7 +14578,7 @@ pipeline {
                                 -e GOOS=freebsd \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-freebsd-arm64 src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-arm64 src
                         '''
                     }
                 }
@@ -13505,7 +14604,7 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-linux-amd64-cli src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-amd64-cli src/client
                         '''
                     }
                 }
@@ -13522,7 +14621,7 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-linux-arm64-cli src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-arm64-cli src/client
                         '''
                     }
                 }
@@ -13539,7 +14638,7 @@ pipeline {
                                 -e GOOS=darwin \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-darwin-amd64-cli src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-amd64-cli src/client
                         '''
                     }
                 }
@@ -13556,7 +14655,7 @@ pipeline {
                                 -e GOOS=darwin \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-darwin-arm64-cli src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-arm64-cli src/client
                         '''
                     }
                 }
@@ -13573,7 +14672,7 @@ pipeline {
                                 -e GOOS=windows \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-windows-amd64-cli.exe src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-amd64-cli.exe src/client
                         '''
                     }
                 }
@@ -13590,7 +14689,7 @@ pipeline {
                                 -e GOOS=windows \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-windows-arm64-cli.exe src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-arm64-cli.exe src/client
                         '''
                     }
                 }
@@ -13607,7 +14706,7 @@ pipeline {
                                 -e GOOS=freebsd \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-freebsd-amd64-cli src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-amd64-cli src/client
                         '''
                     }
                 }
@@ -13624,7 +14723,7 @@ pipeline {
                                 -e GOOS=freebsd \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-freebsd-arm64-cli src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-arm64-cli src/client
                         '''
                     }
                 }
@@ -13656,7 +14755,7 @@ pipeline {
                 sh '''
                     echo "${VERSION}" > ${RELDIR}/version.txt
 
-                    for f in ${BINDIR}/$VIDVEIL-*; do
+                    for f in ${BINDIR}/${PROJECTNAME}-*; do
                         [ -f "$f" ] || continue
                         cp "$f" ${RELDIR}/
                     done
@@ -13664,7 +14763,7 @@ pipeline {
                     tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
                         --exclude='.forgejo' --exclude='binaries' --exclude='releases' \
                         --exclude='*.tar.gz' \
-                        -czf ${RELDIR}/$VIDVEIL-${VERSION}-source.tar.gz .
+                        -czf ${RELDIR}/${PROJECTNAME}-${VERSION}-source.tar.gz .
                 '''
                 archiveArtifacts artifacts: 'releases/*', fingerprint: true
             }
@@ -13680,7 +14779,7 @@ pipeline {
                 sh '''
                     echo "${VERSION}" > ${RELDIR}/version.txt
 
-                    for f in ${BINDIR}/$VIDVEIL-*; do
+                    for f in ${BINDIR}/${PROJECTNAME}-*; do
                         [ -f "$f" ] || continue
                         cp "$f" ${RELDIR}/
                     done
@@ -13699,7 +14798,7 @@ pipeline {
                 sh '''
                     echo "${VERSION}" > ${RELDIR}/version.txt
 
-                    for f in ${BINDIR}/$VIDVEIL-*; do
+                    for f in ${BINDIR}/${PROJECTNAME}-*; do
                         [ -f "$f" ] || continue
                         cp "$f" ${RELDIR}/
                     done
@@ -13738,7 +14837,7 @@ pipeline {
 
                     // Build multi-arch with OCI labels and manifest annotations
                     sh """
-                        docker buildx create --name $VIDVEIL-builder --use 2>/dev/null || docker buildx use $VIDVEIL-builder
+                        docker buildx create --name ${PROJECTNAME}-builder --use 2>/dev/null || docker buildx use ${PROJECTNAME}-builder
                         docker buildx build \
                             -f docker/Dockerfile \
                             --platform linux/amd64,linux/arm64 \
@@ -13747,30 +14846,98 @@ pipeline {
                             --build-arg BUILD_DATE="${BUILD_DATE}" \
                             --label "org.opencontainers.image.vendor=${PROJECTORG}" \
                             --label "org.opencontainers.image.authors=${PROJECTORG}" \
-                            --label "org.opencontainers.image.title=$VIDVEIL" \
-                            --label "org.opencontainers.image.base.name=$VIDVEIL" \
-                            --label "org.opencontainers.image.description=Containerized version of $VIDVEIL" \
+                            --label "org.opencontainers.image.title=${PROJECTNAME}" \
+                            --label "org.opencontainers.image.base.name=${PROJECTNAME}" \
+                            --label "org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
                             --label "org.opencontainers.image.licenses=MIT" \
                             --label "org.opencontainers.image.version=${VERSION}" \
                             --label "org.opencontainers.image.created=${BUILD_DATE}" \
                             --label "org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
-                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
-                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
                             --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
                             --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
-                            --annotation "manifest:org.opencontainers.image.title=$VIDVEIL" \
-                            --annotation "manifest:org.opencontainers.image.description=Containerized version of $VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
                             --annotation "manifest:org.opencontainers.image.licenses=MIT" \
                             --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
                             --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
                             --annotation "manifest:org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
-                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
-                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
                             ${tags} \
                             --push \
                             .
+                    """
+                }
+            }
+        }
+
+        // Docker All-in-One - matches docker.yml build-aio (ALL branches and tags)
+        // AIO uses separate image name: {repo}-aio:{tag}
+        stage('Docker AIO') {
+            agent { label 'amd64' }
+            steps {
+                script {
+                    def aioRegistry = "${REGISTRY}-aio"
+                    def tags = "-t ${aioRegistry}:${COMMIT_ID}"
+
+                    if (env.BUILD_TYPE == 'release') {
+                        // Release tag - version, latest, YYMM
+                        def yymm = new Date().format('yyMM')
+                        tags += " -t ${aioRegistry}:${VERSION}"
+                        tags += " -t ${aioRegistry}:latest"
+                        tags += " -t ${aioRegistry}:${yymm}"
+                    } else if (env.BUILD_TYPE == 'beta') {
+                        // Beta branch - beta, devel
+                        tags += " -t ${aioRegistry}:beta"
+                        tags += " -t ${aioRegistry}:devel"
+                    } else {
+                        // All other branches - devel only
+                        tags += " -t ${aioRegistry}:devel"
+                    }
+
+                    // Login to container registry
+                    sh """
+                        echo "\${GIT_TOKEN}" | docker login ${REGISTRY.split('/')[0]} -u ${PROJECTORG} --password-stdin
+                    """
+
+                    // Build multi-arch all-in-one with OCI labels and manifest annotations
+                    sh """
+                        docker buildx create --name ${PROJECTNAME}-builder --use 2>/dev/null || docker buildx use ${PROJECTNAME}-builder
+                        docker buildx build \
+                            -f docker/Dockerfile.aio \
+                            --platform linux/amd64,linux/arm64 \
+                            --build-arg VERSION="${VERSION}" \
+                            --build-arg COMMIT_ID="${COMMIT_ID}" \
+                            --build-arg BUILD_DATE="${BUILD_DATE}" \
+                            --label "org.opencontainers.image.vendor=${PROJECTORG}" \
+                            --label "org.opencontainers.image.authors=${PROJECTORG}" \
+                            --label "org.opencontainers.image.title=${PROJECTNAME}-aio" \
+                            --label "org.opencontainers.image.description=${PROJECTNAME} - all-in-one (debian + postgresql + valkey + tor)" \
+                            --label "org.opencontainers.image.licenses=MIT" \
+                            --label "org.opencontainers.image.version=${VERSION}" \
+                            --label "org.opencontainers.image.created=${BUILD_DATE}" \
+                            --label "org.opencontainers.image.revision=${COMMIT_ID}" \
+                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
+                            --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
+                            --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}-aio" \
+                            --annotation "manifest:org.opencontainers.image.description=${PROJECTNAME} - all-in-one (debian + postgresql + valkey + tor)" \
+                            --annotation "manifest:org.opencontainers.image.licenses=MIT" \
+                            --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
+                            --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
+                            --annotation "manifest:org.opencontainers.image.revision=${COMMIT_ID}" \
+                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            ${tags} \
+                            --push \
+                            docker
                     """
                 }
             }
@@ -13794,7 +14961,7 @@ pipeline {
 | Agent labels | `amd64` and `arm64` MUST be available |
 | Docker | Required on all agents (builds use golang:alpine) |
 | Docker buildx | Required on amd64 agent for multi-arch builds |
-| Go caches | `/tmp/apimgr/go-cache` and `/tmp/apimgr/go-mod-cache` |
+| Go caches | `/tmp/{projectorg}/go-cache` and `/tmp/{projectorg}/go-mod-cache` |
 
 ### Credentials Setup (Jenkins → Credentials → Add Credentials)
 
@@ -13825,17 +14992,17 @@ In the Jenkinsfile, uncomment the appropriate block:
 // ----- GITHUB (default) -----
 GIT_FQDN = 'github.com'
 GIT_TOKEN = credentials('github-token')
-REGISTRY = "ghcr.io/${PROJECTORG}/$VIDVEIL"
+REGISTRY = "ghcr.io/${PROJECTORG}/${PROJECTNAME}"
 
 // ----- GITEA / FORGEJO (self-hosted) -----
 // GIT_FQDN = 'git.example.com'
 // GIT_TOKEN = credentials('gitea-token')
-// REGISTRY = "${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
+// REGISTRY = "${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}"
 
 // ----- GITLAB (gitlab.com or self-hosted) -----
 // GIT_FQDN = 'gitlab.com'
 // GIT_TOKEN = credentials('gitlab-token')
-// REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
+// REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}"
 ```
 
 ### Triggers Comparison
@@ -14010,7 +15177,7 @@ When not in cluster mode:
 ### --version Output
 
 ```
-vidveil v1.0.0
+{projectname} v1.0.0
 Built: 2024-01-15T10:30:00Z
 Go: 1.23
 OS/Arch: linux/amd64
@@ -14023,10 +15190,11 @@ OS/Arch: linux/amd64
 
 ## Requirements
 
-**ALL PROJECTS MUST HAVE A PROFESSIONAL, WELL-DESIGNED FRONTEND BUILT IN.**
+**ALL PROJECTS MUST HAVE A PROFESSIONAL, WELL-DESIGNED, FULLY FUNCTIONAL FRONTEND.**
 
 | Requirement | Description |
 |-------------|-------------|
+| **Fully Functional** | ALL features work in browser - not just API |
 | **Professional UI/UX** | Clean, modern, polished design |
 | **Mobile Support** | Full responsive design with touch-friendly targets |
 | **HTML5** | Full web standards compliance |
@@ -14034,6 +15202,45 @@ OS/Arch: linux/amd64
 | **UX** | Readable, navigable, intuitive, user-friendly, self-explanatory |
 | **PWA Support** | Progressive Web App - installable, offline-capable |
 | **CORS** | `Access-Control-Allow-Origin: *` for API endpoints |
+
+## Frontend Must Match Backend (NON-NEGOTIABLE)
+
+**Every API endpoint MUST have a corresponding frontend page/action.**
+
+| Rule | Description |
+|------|-------------|
+| **Route parity** | `/api/v1/users` → frontend at `/users` |
+| **Full functionality** | Everything API can do, frontend can do |
+| **Same validation** | Frontend validates same rules as backend |
+| **Real-time feedback** | Frontend shows success/error from backend |
+
+**If it works in API, it MUST work in browser. No API-only features.**
+
+### Frontend Route Structure
+
+| API Route | Frontend Route | Page Type |
+|-----------|----------------|-----------|
+| `GET /api/v1/users` | `GET /users` | Current user profile |
+| `PATCH /api/v1/users` | `POST /users` | Profile update form |
+| `GET /api/v1/users/tokens` | `GET /users/tokens` | Token list page |
+| `GET /api/v1/users/settings` | `GET /users/settings` | User settings page |
+| `GET /api/v1/users/security` | `GET /users/security` | Security settings page |
+| `GET /api/v1/orgs` | `GET /orgs` | User's org list |
+| `GET /api/v1/orgs/{slug}` | `GET /orgs/{slug}` | Org detail page |
+| `GET /api/v1/server/about` | `GET /server/about` | About page |
+
+### No JavaScript-Disabled Broken State
+
+**Frontend MUST work without JavaScript for core functionality:**
+
+| Feature | Without JS | With JS |
+|---------|------------|---------|
+| **Navigation** | Works (links) | Works (maybe enhanced) |
+| **Forms** | Work (submit) | Enhanced validation |
+| **Content** | Visible | Maybe enhanced |
+| **CRUD** | Works via forms | AJAX enhanced |
+
+**JavaScript enhances, it does not enable.**
 
 ## Smart Content Detection (NON-NEGOTIABLE)
 
@@ -14314,29 +15521,408 @@ footer {
 
 **Note:** Native `<dialog>` element handles focus trap and backdrop automatically. Use `showModal()` to open with backdrop, `close()` to close.
 
-### Toast Notifications
+### Toast vs Modal: When to Use Which (NON-NEGOTIABLE)
 
-**In-app notifications for immediate feedback:**
+**Toasts and modals serve DIFFERENT purposes. Do NOT use them interchangeably.**
 
-| Type | Use For | Auto-dismiss |
-|------|---------|--------------|
-| Success | Action completed | 3 seconds |
-| Error | Action failed | Manual dismiss only |
-| Warning | Caution needed | 5 seconds |
-| Info | General information | 3 seconds |
+**Quick Reference:**
 
-**Position:** Top-right corner, stacked vertically
+| Scenario | Use | Reason |
+|----------|-----|--------|
+| "Settings saved" | **Toast** | Non-blocking confirmation |
+| "Are you sure you want to delete?" | **Modal** | Requires user decision |
+| "File uploaded successfully" | **Toast** | Non-blocking confirmation |
+| "Enter new password" | **Modal** | Requires user input |
+| "Network error, try again" | **Toast** | Informational, user can retry |
+| "Session expired, please login" | **Modal** | Blocking, requires action |
+| "Item added to cart" | **Toast** | Non-blocking confirmation |
+| "Select shipping address" | **Modal** | Requires user selection |
+| "Email sent" | **Toast** | Non-blocking confirmation |
+| "Confirm your email address" | **Modal** | Requires user input/action |
 
-### Notification Bell
+**Use TOAST When:**
 
-**Built-in notification center accessible via bell icon in header:**
+| Criteria | Examples |
+|----------|----------|
+| **Confirmation of action** | "Saved", "Deleted", "Copied", "Sent" |
+| **Non-blocking information** | "New update available", "You have 3 notifications" |
+| **Transient feedback** | "Loading...", "Processing..." |
+| **Errors that don't need input** | "Network error", "Rate limited, try again" |
+| **User can continue working** | Any message that doesn't require immediate attention |
 
-- Bell icon with unread count badge
-- Click opens notification dropdown/panel
-- Mark as read on view
-- "Mark all as read" action
-- Links to full notification center
-- See PART 26: EMAIL & NOTIFICATIONS for full specification
+**Use MODAL When:**
+
+| Criteria | Examples |
+|----------|----------|
+| **Requires user decision** | "Delete this item?", "Discard unsaved changes?" |
+| **Requires user input** | Forms, password entry, settings that need confirmation |
+| **Destructive action confirmation** | Delete, remove, revoke, disconnect |
+| **Blocking workflow** | Must complete before continuing (login, terms acceptance) |
+| **Complex information** | Details that need space (error details, help text) |
+| **Multi-step process** | Wizards, setup flows, guided processes |
+
+**NEVER Do This:**
+
+| Wrong | Right |
+|-------|-------|
+| Toast: "Are you sure?" | Modal: "Are you sure?" (needs decision) |
+| Modal: "Settings saved" | Toast: "Settings saved" (just confirmation) |
+| Toast with buttons | Modal with buttons (toasts should auto-dismiss) |
+| Modal for every error | Toast for simple errors (modal for blocking errors) |
+| Stacking modals | One modal at a time (queue if needed) |
+| Toast requiring action | Modal if action required |
+
+**Decision Flowchart:**
+```
+Does user need to make a decision or provide input?
+├── YES → Use MODAL
+└── NO → Does user need to acknowledge before continuing?
+         ├── YES → Use MODAL
+         └── NO → Is it destructive action confirmation?
+                  ├── YES → Use MODAL
+                  └── NO → Use TOAST
+```
+
+**Code Pattern:**
+```javascript
+// TOAST - Non-blocking feedback
+async function saveSettings(data) {
+    const result = await api.post('/users/settings', data);
+    if (result.ok) {
+        showToast('Settings saved', 'success');  // Non-blocking, auto-dismiss
+    } else {
+        showToast('Failed to save settings', 'error');  // Non-blocking error
+    }
+}
+
+// MODAL - Blocking decision required
+function deleteItem(itemId) {
+    showModal({
+        title: 'Delete Item',
+        message: 'Are you sure you want to delete this item? This cannot be undone.',
+        confirmText: 'Delete',
+        confirmStyle: 'danger',
+        onConfirm: async () => {
+            await api.delete(`/items/${itemId}`);
+            showToast('Item deleted', 'success');  // Confirmation after action
+        }
+    });
+}
+
+// MODAL - User input required
+function changePassword() {
+    showModal({
+        title: 'Change Password',
+        form: true,
+        fields: ['current_password', 'new_password', 'confirm_password'],
+        onSubmit: async (data) => {
+            await api.post('/users/security/password', data);
+            showToast('Password changed', 'success');  // Confirmation after action
+        }
+    });
+}
+```
+
+### Toast Notifications (NON-NEGOTIABLE)
+
+**In-app notifications for immediate feedback. Follows common patterns (GitHub, GitLab, Slack).**
+
+**Toast Behavior Rules:**
+
+| Rule | Value | Description |
+|------|-------|-------------|
+| **Position** | Top-right corner | Fixed position, doesn't scroll with page |
+| **Stacking** | Vertical, newest on top | Multiple toasts stack without overlapping |
+| **Max visible** | 5 toasts | Older toasts queue until space available |
+| **Auto-dismiss** | 3 seconds (default) | Countdown visible, can be paused on hover |
+| **Click to dismiss** | Always | User can click X or entire toast to dismiss |
+| **Keyboard dismiss** | Escape key | Dismisses topmost toast |
+| **Animation** | Slide in from right | Fade out on dismiss |
+| **Pause on hover** | Yes | Hovering pauses auto-dismiss countdown |
+
+**Toast Types:**
+
+| Type | Icon | Auto-dismiss | Use For |
+|------|------|--------------|---------|
+| **Success** | ✓ (checkmark) | 3 seconds | Action completed successfully |
+| **Error** | ✗ (X) | No auto-dismiss | Action failed, needs attention |
+| **Warning** | ⚠ (triangle) | 5 seconds | Caution needed, action may have issues |
+| **Info** | ℹ (info) | 3 seconds | General information, tips |
+
+**Toast Structure:**
+```html
+<div class="toast toast-success" role="alert" aria-live="polite">
+  <span class="toast-icon">✓</span>
+  <span class="toast-message">Settings saved successfully</span>
+  <button class="toast-close" aria-label="Dismiss">&times;</button>
+  <div class="toast-progress"></div>
+</div>
+```
+
+**Toast Container (for stacking):**
+```html
+<div id="toast-container" aria-label="Notifications">
+  <!-- Toasts inserted here, newest first -->
+</div>
+```
+
+**CSS for Stacking:**
+```css
+#toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: calc(100vh - 2rem);
+  overflow: hidden;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  animation: slideIn 0.3s ease-out;
+  position: relative;
+  min-width: 300px;
+  max-width: 400px;
+}
+
+.toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: rgba(255,255,255,0.5);
+  animation: countdown linear forwards;
+}
+
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } }
+@keyframes countdown { from { width: 100%; } to { width: 0%; } }
+```
+
+**JavaScript Toast API:**
+```javascript
+// Show toast - returns toast ID for programmatic control
+const toastId = showToast("Settings saved", "success");        // 3s auto-dismiss
+const toastId = showToast("Save failed", "error");             // No auto-dismiss
+const toastId = showToast("Check your input", "warning", 5000); // 5s auto-dismiss
+const toastId = showToast("Tip: Use shortcuts", "info");       // 3s auto-dismiss
+
+// Dismiss programmatically
+dismissToast(toastId);
+
+// Dismiss all
+dismissAllToasts();
+```
+
+### Notification Bell (NON-NEGOTIABLE)
+
+**Built-in notification center accessible via bell icon in header. Follows GitHub/GitLab patterns.**
+
+**Bell Icon Behavior:**
+
+| Feature | Description |
+|---------|-------------|
+| **Position** | Header, right side, before profile icon |
+| **Icon** | Bell outline (empty = no unread), filled (has unread) |
+| **Badge** | Red dot or count (1-9, then "9+") for unread |
+| **Click** | Opens dropdown panel below bell |
+| **Keyboard** | Enter/Space opens dropdown, Escape closes |
+
+**Dropdown Panel:**
+
+| Feature | Description |
+|---------|-------------|
+| **Position** | Below bell icon, right-aligned |
+| **Width** | 320-400px |
+| **Max height** | 400px (scrollable) |
+| **Empty state** | "No notifications" message |
+| **Header** | "Notifications" title + "Mark all read" link |
+| **Footer** | "View all notifications" link to `/users/notifications` |
+
+**Notification Item:**
+
+| Element | Description |
+|---------|-------------|
+| **Icon** | Type indicator (info, success, warning, error) |
+| **Title** | Brief notification title |
+| **Message** | Short description (truncated if long) |
+| **Timestamp** | Relative time ("2m ago", "1h ago", "Yesterday") |
+| **Unread indicator** | Blue dot on left side |
+| **Click behavior** | Mark as read + navigate to related page |
+
+**HTML Structure:**
+```html
+<div class="header-actions">
+  <!-- Notification Bell -->
+  <div class="notification-bell" aria-label="Notifications">
+    <button class="bell-button" aria-haspopup="true" aria-expanded="false">
+      <svg class="bell-icon"><!-- bell SVG --></svg>
+      <span class="badge" aria-label="3 unread">3</span>
+    </button>
+    <div class="notification-dropdown" role="menu" hidden>
+      <div class="dropdown-header">
+        <span>Notifications</span>
+        <button class="mark-all-read">Mark all read</button>
+      </div>
+      <div class="notification-list">
+        <a href="/users/settings" class="notification-item unread">
+          <span class="notification-dot"></span>
+          <span class="notification-icon">ℹ</span>
+          <div class="notification-content">
+            <span class="notification-title">Settings updated</span>
+            <span class="notification-message">Your preferences were saved</span>
+            <span class="notification-time">2m ago</span>
+          </div>
+        </a>
+        <!-- More items... -->
+      </div>
+      <a href="/users/notifications" class="dropdown-footer">View all</a>
+    </div>
+  </div>
+
+  <!-- Profile Icon -->
+  <div class="profile-menu"><!-- See below --></div>
+</div>
+```
+
+### Profile Icon (NON-NEGOTIABLE)
+
+**User profile dropdown accessible via avatar/icon in header. Follows GitHub/GitLab patterns.**
+
+**Profile Icon Behavior:**
+
+| Feature | Description |
+|---------|-------------|
+| **Position** | Header, right side, last item |
+| **Icon** | User avatar (if uploaded) or default avatar |
+| **Size** | 32x32px, circular |
+| **Click** | Opens dropdown menu below icon |
+| **Keyboard** | Enter/Space opens dropdown, Escape closes |
+
+**Dropdown Menu Items:**
+
+| Item | Link | Description |
+|------|------|-------------|
+| **Username** | - | Display current username (not clickable, header) |
+| **Profile** | `/users` | View/edit profile |
+| **Settings** | `/users/settings` | Account settings |
+| **Security** | `/users/security` | Password, 2FA, sessions |
+| **API Tokens** | `/users/tokens` | Manage API tokens |
+| *(divider)* | - | - |
+| **Theme** | - | Theme toggle (Light/Dark/System) |
+| *(divider)* | - | - |
+| **Help** | `/server/help` | Help documentation |
+| **Sign out** | `/auth/logout` | Log out |
+
+**HTML Structure:**
+```html
+<div class="profile-menu" aria-label="User menu">
+  <button class="profile-button" aria-haspopup="true" aria-expanded="false">
+    <img src="/users/avatar" alt="Username" class="avatar">
+    <svg class="dropdown-arrow"><!-- chevron --></svg>
+  </button>
+  <div class="profile-dropdown" role="menu" hidden>
+    <div class="dropdown-header">
+      <span class="username">johndoe</span>
+    </div>
+    <a href="/users" class="dropdown-item" role="menuitem">Profile</a>
+    <a href="/users/settings" class="dropdown-item" role="menuitem">Settings</a>
+    <a href="/users/security" class="dropdown-item" role="menuitem">Security</a>
+    <a href="/users/tokens" class="dropdown-item" role="menuitem">API Tokens</a>
+    <div class="dropdown-divider" role="separator"></div>
+    <div class="dropdown-item theme-toggle">
+      Theme: <button>Light</button> | <button>Dark</button> | <button>System</button>
+    </div>
+    <div class="dropdown-divider" role="separator"></div>
+    <a href="/server/help" class="dropdown-item" role="menuitem">Help</a>
+    <form action="/auth/logout" method="POST">
+      <button type="submit" class="dropdown-item logout" role="menuitem">Sign out</button>
+    </form>
+  </div>
+</div>
+```
+
+**CSS for Header Actions:**
+```css
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.notification-bell, .profile-menu {
+  position: relative;
+}
+
+.bell-button, .profile-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--color-danger);
+  color: white;
+  font-size: 0.75rem;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.notification-dropdown, .profile-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+}
+
+.dropdown-item {
+  display: block;
+  padding: 0.5rem 1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.dropdown-item:hover {
+  background: var(--color-hover);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 0.5rem 0;
+}
+```
+
+- See PART 26: EMAIL & NOTIFICATIONS for full notification specification
 
 ## Accessibility (NON-NEGOTIABLE)
 
@@ -14650,7 +16236,7 @@ src/server/template/
 
 | Layout | Routes | Design Philosophy |
 |--------|--------|-------------------|
-| `public.tmpl` | `/`, `/auth/*`, `/server/*`, `/user/*` | Clean, marketing-friendly, top navigation |
+| `public.tmpl` | `/`, `/auth/*`, `/server/*`, `/users/*` | Clean, marketing-friendly, top navigation |
 | `admin.tmpl` | `/admin/*` | Dashboard-style, sidebar navigation, data-dense |
 
 ### Public Layout (`public.tmpl`)
@@ -14987,14 +16573,14 @@ partial/
 ```
 Desktop:
 ┌─────────────────────────────────────────────────────────────────┐
-│  vidveil                                      [User Icon] │  ← Header
+│  {projectname}                                      [User Icon] │  ← Header
 ├─────────────────────────────────────────────────────────────────┤
 │  Home  |  [App Section 1]  |  [App Section 2]  |  ...           │  ← Nav
 └─────────────────────────────────────────────────────────────────┘
 
 Mobile:
 ┌─────────────────────────────────────────────────────────────────┐
-│  vidveil                                      [User Icon] │  ← Header
+│  {projectname}                                      [User Icon] │  ← Header
 ├─────────────────────────────────────────────────────────────────┤
 │                                                      [☰ Menu]   │  ← Nav row
 └─────────────────────────────────────────────────────────────────┘
@@ -15009,7 +16595,7 @@ Mobile:
 ```html
 <!-- Header bar: site name + user icon -->
 <header class="header">
-  <a href="/" class="site-brand">vidveil</a>
+  <a href="/" class="site-brand">{projectname}</a>
 
   <!-- User icon (always visible, far right) -->
   <div class="user-menu">
@@ -15021,8 +16607,8 @@ Mobile:
         </button>
         <div class="dropdown-menu">
           <span class="dropdown-header">{{ .User.Username }}</span>
-          <a href="/user/profile">Profile</a>
-          <a href="/user/settings">Settings</a>
+          <a href="/users">Profile</a>
+          <a href="/users/settings">Settings</a>
           <hr />
           <a href="/auth/logout">Logout</a>
         </div>
@@ -15391,13 +16977,17 @@ var staticFS embed.FS
 - Animated entrance/exit
 - **Auto-close on action** - clicking any action button (OK, Yes, No, Cancel, Save, Delete, Submit, etc.) automatically closes the modal after performing the action. User should never need to click an action then manually close.
 
-**Toast/Notification Requirements:**
-- Non-blocking notifications
-- Auto-dismiss with configurable timeout
-- Manual dismiss option
-- Stacking for multiple notifications
-- Types: success, error, warning, info
-- Icon + message format
+**Toast/Notification Requirements (NON-NEGOTIABLE):**
+- Non-blocking notifications (never use JS alerts)
+- Stackable - multiple toasts display vertically (max 5 visible)
+- Auto-dismiss: 3 seconds (success/info), 5 seconds (warning), never (error)
+- Click to dismiss - user can click X or toast body to dismiss early
+- Pause on hover - hovering pauses auto-dismiss countdown
+- Position: top-right corner, fixed position
+- Animation: slide in from right, fade out on dismiss
+- Types: success (✓), error (✗), warning (⚠), info (ℹ)
+- Progress bar shows remaining time before auto-dismiss
+- See "Toast Notifications" section in PART 17 for full implementation
 
 ## Layout
 
@@ -15479,8 +17069,8 @@ var staticFS embed.FS
 
 | Changes (User-Visible) | Does NOT Change (System) |
 |------------------------|--------------------------|
-| Page titles | Directory names (`vidveil/`) |
-| Browser tab | System username (`vidveil`) |
+| Page titles | Directory names (`{projectname}/`) |
+| Browser tab | System username (`{projectname}`) |
 | Header/logo text | Log filenames |
 | Footer branding | Config paths |
 | Email "From" name | Binary name |
@@ -15494,7 +17084,7 @@ var staticFS embed.FS
 server:
   branding:
     # Display name (e.g., "Jokes API")
-    title: "vidveil"
+    title: "{projectname}"
     # Short slogan (e.g., "The best jokes API")
     tagline: ""
     # Longer description for SEO/about
@@ -15601,13 +17191,13 @@ server:
 
 | Field | Default Value |
 |-------|---------------|
-| `title` | `vidveil` |
+| `title` | `{projectname}` |
 | `tagline` | Empty |
 | `description` | Empty |
 | `keywords` | Empty |
 | All others | Empty |
 
-**Rule:** If `title` is empty, fall back to `vidveil`. Other fields are optional.
+**Rule:** If `title` is empty, fall back to `{projectname}`. Other fields are optional.
 
 ## Announcements (NON-NEGOTIABLE)
 
@@ -15742,12 +17332,15 @@ web:
     # Example: UA-936146-1 or G-XXXXXXXXXX
     tracking_id: ""
 
-    # Cookie consent popup (EU GDPR compliance)
+    # Cookie consent banner (EU GDPR compliance) - REQUIRED
+    # We use cookies for sessions, preferences, etc. - consent is mandatory
     cookie_consent:
-      enabled: true
-      message: "This site uses cookies for functionality and analytics."
-      policy_url: ""
-      # URL to privacy policy
+      # enabled: always true (not configurable - we use cookies)
+      message: "In accordance with the EU GDPR law this message is being displayed."
+      policy_text: "Privacy Policy"
+      policy_url: "/server/privacy"
+      decline_text: "Decline"
+      agree_text: "I Agree"
 
     # Custom branding HTML above the Application Footer
     # - Not set or "": Use default branding (built-in)
@@ -15761,8 +17354,8 @@ web:
 | Variable | Description |
 |----------|-------------|
 | `{currentyear}` | Current year (e.g., 2025) |
-| `vidveil` | Project name |
-| `apimgr` | Organization name |
+| `{projectname}` | Project name |
+| `{projectorg}` | Organization name |
 | `{projectversion}` | Application version |
 | `{builddatetime}` | Build date/time |
 
@@ -15785,7 +17378,7 @@ web:
 
   <!-- Application branding -->
   <p>
-    <a href="https://github.com/apimgr/vidveil" target="_blank">vidveil</a>
+    <a href="https://github.com/{projectorg}/{projectname}" target="_blank">{projectname}</a>
     <span>•</span>
     <span>Made with ❤️</span>
     <span>•</span>
@@ -15803,11 +17396,195 @@ web:
 | Element | Type | Description |
 |---------|------|-------------|
 | Google Analytics ID | Text input | Tracking ID (empty = disabled) |
-| Cookie consent enabled | Toggle | Show cookie consent popup |
-| Cookie consent message | Textarea | Consent message |
-| Privacy policy URL | Text input | Link to privacy policy |
+| Cookie consent message | Textarea | GDPR message text |
+| Policy link text | Text input | Link text (e.g., "Privacy Policy") |
+| Policy URL | Text input | Link to privacy policy |
+| Decline button text | Text input | Decline button label |
+| Agree button text | Text input | Agree button label |
 | Custom branding HTML | Textarea | HTML above application footer |
-| Preview | Preview pane | Shows rendered footer |
+| Preview | Preview pane | Shows rendered footer + banner |
+
+**Note:** Cookie consent banner is always enabled (not toggleable) - we use cookies for sessions and preferences.
+
+## Cookie Consent Banner (NON-NEGOTIABLE)
+
+**Fixed bottom banner for GDPR/privacy compliance. ALWAYS enabled - we use cookies.**
+
+**Admin configures all text via UI (message, policy link, button labels).**
+
+### Banner Layout
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│   {message} - {policy_link}                                     │
+│                                                                 │
+│        ┌──────────────┐    ┌──────────────────┐                │
+│        │   Decline    │    │     I Agree      │                │
+│        └──────────────┘    └──────────────────┘                │
+│         (outline btn)        (filled btn)                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+  ↑ Fixed to bottom of viewport, above page footer
+```
+
+### Banner Rules
+
+| Rule | Requirement |
+|------|-------------|
+| **Position** | Fixed bottom of viewport, full width |
+| **Background** | Theme accent color (purple/magenta in dark theme) |
+| **Message** | Centered, configurable via admin |
+| **Policy link** | Inline after message, underlined |
+| **Buttons** | Side by side, centered below message |
+| **Decline button** | Outline/text style (left) |
+| **Agree button** | Filled/solid style (right) |
+| **Persistence** | Remember choice in localStorage, don't show again |
+| **Z-index** | Above all content, below modals |
+
+### Banner Behavior
+
+| Action | Result |
+|--------|--------|
+| **I Agree** | Set `cookieConsent=accepted` in localStorage, hide banner, enable all cookies + tracking |
+| **Decline** | Set `cookieConsent=declined` in localStorage, hide banner, session cookies only |
+| **Already set** | Don't show banner if localStorage has cookieConsent |
+| **First visit** | Always show banner until user responds |
+
+### Implementation
+
+```html
+<!-- Cookie Consent Banner - ALWAYS shown until user responds (we use cookies) -->
+<div id="cookie-consent" class="cookie-banner" style="display: none;">
+  <p>
+    <span class="message">{message}</span>
+    <span class="separator"> - </span>
+    <a href="{policy_url}" class="policy-link">{policy_text}</a>
+  </p>
+  <div class="buttons">
+    <button class="btn-decline" onclick="declineCookies()">{decline_text}</button>
+    <button class="btn-agree" onclick="acceptCookies()">{agree_text}</button>
+  </div>
+</div>
+
+<script>
+// Show banner if no prior consent (we always use cookies)
+(function() {
+  const consent = localStorage.getItem('cookieConsent');
+  const banner = document.getElementById('cookie-consent');
+
+  // No consent yet - show banner
+  if (!consent && banner) {
+    banner.style.display = 'block';
+  }
+
+  // Already accepted - enable full functionality
+  if (consent === 'accepted') {
+    enableAllCookies();
+    loadTracking();
+  }
+  // Declined - session cookies only (handled server-side)
+})();
+
+function acceptCookies() {
+  localStorage.setItem('cookieConsent', 'accepted');
+  document.getElementById('cookie-consent').style.display = 'none';
+  enableAllCookies();
+  loadTracking();
+}
+
+function declineCookies() {
+  localStorage.setItem('cookieConsent', 'declined');
+  document.getElementById('cookie-consent').style.display = 'none';
+  // Session cookies still work (essential), but no preference/tracking cookies
+}
+
+function enableAllCookies() {
+  // Enable preference cookies (theme, language, etc.)
+  document.cookie = "cookiesEnabled=true; path=/; max-age=31536000";
+}
+
+function loadTracking() {
+  // Load Google Analytics if tracking_id is configured
+  const trackingId = document.querySelector('meta[name="tracking-id"]')?.content;
+  if (trackingId) {
+    // Load GA script
+  }
+}
+</script>
+
+<style>
+.cookie-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--accent-color);  /* Theme accent (purple/magenta) */
+  color: var(--accent-text);
+  padding: 1.5rem;
+  text-align: center;
+  z-index: 9999;
+}
+
+.cookie-banner p {
+  margin-bottom: 1rem;
+}
+
+.cookie-banner .policy-link {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.cookie-banner .buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.cookie-banner .btn-decline {
+  background: transparent;
+  border: 2px solid var(--accent-text);
+  color: var(--accent-text);
+  padding: 0.75rem 2rem;
+  cursor: pointer;
+}
+
+.cookie-banner .btn-agree {
+  background: var(--accent-text);
+  border: 2px solid var(--accent-text);
+  color: var(--accent-color);
+  padding: 0.75rem 2rem;
+  cursor: pointer;
+}
+
+/* Responsive - stack on mobile */
+@media (max-width: 480px) {
+  .cookie-banner .buttons {
+    flex-direction: row;  /* Keep side by side even on mobile */
+  }
+
+  .cookie-banner .btn-decline,
+  .cookie-banner .btn-agree {
+    flex: 1;
+  }
+}
+</style>
+```
+
+### Consent Logic
+
+| Condition | Show Banner | Set Cookies | Load Tracking |
+|-----------|-------------|-------------|---------------|
+| No localStorage (first visit) | **Yes** | No (wait) | No (wait) |
+| `cookieConsent=accepted` | No | **Yes** | If `tracking_id` set |
+| `cookieConsent=declined` | No | **Session only** | No |
+
+**Cookie consent is ALWAYS enabled - we use cookies for sessions and preferences.**
+
+**Decline behavior:**
+- Essential session cookies still set (required for app to function)
+- Preference cookies not set
+- Tracking/analytics never loaded
 
 ## Standard Pages (NON-NEGOTIABLE)
 
@@ -15960,6 +17737,34 @@ server:
 
 # PART 18: SERVER CONFIGURATION (NON-NEGOTIABLE)
 
+## Config Validation Rule (NON-NEGOTIABLE)
+
+**If config setting is invalid, warn and replace with default. Never fail startup.**
+
+```go
+// validateConfig validates all config values, replacing invalid with defaults
+func validateConfig(cfg *Config) {
+    // Example: port must be 1-65535
+    if cfg.Server.Port < 1 || cfg.Server.Port > 65535 {
+        log.Warnf("invalid port %d, using default 8080", cfg.Server.Port)
+        cfg.Server.Port = 8080
+    }
+
+    // Example: timeout must be positive
+    if cfg.Server.Timeout <= 0 {
+        log.Warnf("invalid timeout %d, using default 30s", cfg.Server.Timeout)
+        cfg.Server.Timeout = 30
+    }
+}
+```
+
+| Principle | Rule |
+|-----------|------|
+| **Validate everything** | Check all config values on load |
+| **Invalid → default** | Replace invalid values with defaults |
+| **Warn, don't error** | Log warning, don't fail startup |
+| **Never crash on config** | Server must start with sane defaults |
+
 ## Request Limits
 
 ```yaml
@@ -16104,7 +17909,7 @@ server:
     timeout: 5s
 
     # Key prefix to avoid collisions (use unique prefix per app)
-    prefix: "vidveil:"
+    prefix: "{projectname}:"
 
     # Default TTL in seconds
     ttl: 3600
@@ -16139,7 +17944,7 @@ server:
   cache:
     type: valkey
     url: ${CACHE_URL}  # valkey://user:pass@valkey.example.com:6379/0
-    prefix: "vidveil:"
+    prefix: "{projectname}:"
 ```
 
 **Using individual fields:**
@@ -16151,7 +17956,7 @@ server:
     port: 6379
     password: ${VALKEY_PASSWORD}
     db: 0
-    prefix: "vidveil:"
+    prefix: "{projectname}:"
 ```
 
 **Valkey/Redis Cluster:**
@@ -16165,7 +17970,7 @@ server:
       - valkey2.example.com:6379
       - valkey3.example.com:6379
     password: ${VALKEY_PASSWORD}
-    prefix: "vidveil:"
+    prefix: "{projectname}:"
 ```
 
 ### Cache Usage in Application
@@ -16205,11 +18010,13 @@ All settings above MUST be configurable via admin panel:
 
 **The admin panel is completely isolated from the public site.**
 
+**Note:** `/admin` is the default path. It can be changed via `server.admin_path` config. See "Configurable Admin Path" section below.
+
 | Rule | Description |
 |------|-------------|
-| **NEVER link to /admin** | No links to /admin on ANY public routes (`/**`) |
-| **Intentional access only** | Users must manually type `/admin` in browser |
-| **Separate authentication** | Admin account is ONLY valid for `/admin/**` routes |
+| **NEVER link to admin path** | No links to `/{admin_path}` on ANY public routes (`/**`) |
+| **Intentional access only** | Users must manually type admin path in browser |
+| **Separate authentication** | Admin account is ONLY valid for `/{admin_path}/**` routes |
 | **No admin mentions** | Don't advertise admin panel existence anywhere |
 | **Separate session** | Admin session is separate from user sessions |
 
@@ -16217,9 +18024,9 @@ All settings above MUST be configurable via admin panel:
 
 | User Type | Valid Routes | Authentication |
 |-----------|--------------|----------------|
-| **Admin** | `/admin/**` ONLY | Admin credentials (username/password) |
-| **Guest/Anon** | `/**` (except /admin) | None |
-| **Normal User** | `/**` (except /admin) | User account (if multi-user enabled) |
+| **Admin** | `/{admin_path}/**` ONLY | Admin credentials (username/password) |
+| **Guest/Anon** | `/**` (except `/{admin_path}`) | None |
+| **Normal User** | `/**` (except `/{admin_path}`) | User account (if multi-user enabled) |
 
 **Admin credentials are stored in `users.db` (admins table), NOT in config file.**
 
@@ -16247,6 +18054,136 @@ All settings above MUST be configurable via admin panel:
 - Separation: Admin functions separate from user functions
 - Simplicity: No confusion between admin and user roles
 - Protection: Reduces attack surface
+
+## Configurable Admin Path (NON-NEGOTIABLE)
+
+**The `/admin` path can be changed for security (obscurity).**
+
+### Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `server.admin_path` | `admin` | Path segment for admin panel (no leading slash) |
+
+**When changed, ALL admin routes update:**
+- `/admin/**` → `/{admin_path}/**`
+- `/api/v1/admin/**` → `/api/v1/{admin_path}/**`
+
+### Validation Rules (NON-NEGOTIABLE)
+
+| Rule | Action |
+|------|--------|
+| **Cannot conflict with existing routes** | Error and revert to `admin` |
+| **Reserved paths blocked** | `api`, `static`, `assets`, `health`, `version`, etc. |
+| **Valid characters only** | `[a-z0-9-]` (lowercase, numbers, hyphens) |
+| **Min/max length** | 2-32 characters |
+| **No leading/trailing hyphens** | `my-admin` ✓, `-admin-` ✗ |
+
+### Route Conflict Detection
+
+```go
+// Check if new admin path conflicts with existing routes
+func validateAdminPath(newPath string, router *mux.Router) error {
+    // 1. Check reserved paths
+    reserved := []string{"api", "static", "assets", "health", "version", "metrics", ".well-known"}
+    for _, r := range reserved {
+        if newPath == r {
+            return fmt.Errorf("'%s' is a reserved path", newPath)
+        }
+    }
+
+    // 2. Check existing routes
+    existingRoutes := getRegisteredRoutes(router)
+    for _, route := range existingRoutes {
+        if strings.HasPrefix(route, "/"+newPath) {
+            return fmt.Errorf("'%s' conflicts with existing route: %s", newPath, route)
+        }
+    }
+
+    return nil
+}
+```
+
+### WebUI Change Flow (NON-NEGOTIABLE)
+
+**When admin path changed via WebUI (`/{admin_path}/server/settings`):**
+
+```
+1. User submits new admin path
+2. Server validates (no conflicts, valid format)
+3. If invalid → Show error, keep current path
+4. If valid:
+   a. Save to config
+   b. Return success with new path
+   c. Frontend shows "Reloading..." overlay
+   d. Server triggers graceful reload
+   e. After reload, frontend redirects to new path
+```
+
+**Frontend JavaScript:**
+```javascript
+async function changeAdminPath(newPath) {
+    const response = await fetch(`/${currentAdminPath}/api/v1/admin/server/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ admin_path: newPath })
+    });
+
+    if (response.ok) {
+        const data = await response.json();
+        // Show reload overlay
+        showOverlay("Applying changes...");
+        // Wait for server reload
+        await waitForServerReady();
+        // Redirect to new admin path
+        window.location.href = `/${data.new_admin_path}/dashboard`;
+    } else {
+        showError(await response.json());
+    }
+}
+```
+
+### Internal Systems Update (NON-NEGOTIABLE)
+
+**All internal systems MUST use the configured admin path:**
+
+| System | Update Required |
+|--------|-----------------|
+| **Swagger/OpenAPI** | Base path for admin endpoints |
+| **GraphQL** | Admin schema endpoint path |
+| **WebSocket** | Admin notification channels |
+| **CORS** | Allowed origins for admin path |
+| **CSP** | Content Security Policy paths |
+| **Session cookies** | Cookie path attribute |
+| **Audit logs** | Log correct paths |
+| **Error pages** | Login redirect URLs |
+
+**Implementation:**
+```go
+// Global admin path accessor
+func AdminPath() string {
+    return config.Get().Server.AdminPath // default: "admin"
+}
+
+// Use in route registration
+func RegisterAdminRoutes(r *mux.Router) {
+    adminPath := AdminPath()
+    admin := r.PathPrefix("/" + adminPath).Subrouter()
+    // ... register routes
+
+    api := r.PathPrefix("/api/v1/" + adminPath).Subrouter()
+    // ... register API routes
+}
+
+// Use in templates
+{{ .AdminPath }} // Available in all templates
+```
+
+### Restart vs Reload
+
+| Change Type | Action | Downtime |
+|-------------|--------|----------|
+| **Admin path** | Graceful reload | None (routes re-registered) |
+| **Port change** | Full restart | Brief (~1-2s) |
 
 ## Design Principles
 
@@ -16595,7 +18532,7 @@ All settings above MUST be configurable via admin panel:
 
 | Setting | Control | Default | Restart | Description |
 |---------|---------|---------|---------|-------------|
-| `title` | Text | `vidveil` | No | App display name |
+| `title` | Text | `{projectname}` | No | App display name |
 | `tagline` | Text | (empty) | No | Short slogan |
 | `description` | Textarea | (empty) | No | SEO/about description |
 | `logo` | File | (none) | No | Logo image upload |
@@ -16616,6 +18553,7 @@ All settings above MUST be configurable via admin panel:
 
 | Setting | Control | Default | Restart | Description |
 |---------|---------|---------|---------|-------------|
+| `admin_path` | Text | `admin` | Reload | Custom admin panel path (see PART 19) |
 | `rate_limit.enabled` | Toggle | On | No | Enable rate limiting |
 | `rate_limit.requests` | Number | `120` | No | Requests per window |
 | `rate_limit.window` | Duration | `1 minute` | No | Rate limit window |
@@ -16924,9 +18862,108 @@ The admin panel MUST include a scheduler section with:
 - Admin API Routes: PART 19 (Admin Panel → API Routes)
 - Project-specific Routes: PART 36 (Project-Specific Sections)
 
+## Legacy vs Compatibility Endpoints (NON-NEGOTIABLE)
+
+| Type | Definition | Action |
+|------|------------|--------|
+| **Compatibility** | External service endpoints (pastebin.com, microbin, etc.) | Implement per "External API Compatibility" section below |
+| **Legacy** | Old, changed, or removed endpoints from YOUR project | **NEVER KEEP - DELETE THEM** |
+
+**Legacy endpoints are technical debt.** When an endpoint changes or is removed:
+- DELETE the old endpoint completely
+- Update documentation
+- Update clients to use new endpoint
+- NO backwards compatibility shims, redirects, or deprecation periods
+
 ## API Versioning
 
 **Use versioned API: `/api/v1`**
+
+## Route Naming Convention (NON-NEGOTIABLE)
+
+### Always Plural
+
+**All resource routes use plural form. No singular forms. No exceptions.**
+
+| ✓ Correct | ✗ Wrong |
+|-----------|---------|
+| `/api/v1/users` | `/api/v1/user` |
+| `/api/v1/orgs` | `/api/v1/org` |
+| `/api/v1/orgs/{slug}/members` | `/api/v1/org/{slug}/members` |
+
+### Route Scopes
+
+| Scope | Web Route | API Route | ID Required | Description |
+|-------|-----------|-----------|-------------|-------------|
+| **Server** | `/server/*` | `/api/v1/server/*` | No | About, privacy, contact, help, terms |
+| **Auth** | `/auth/*` | `/api/v1/auth/*` | No | Login, register, logout, OAuth |
+| **Users** | `/users/*` | `/api/v1/users/*` | **No** | Current user's resources (from session) |
+| **Orgs** | `/orgs/*` | `/api/v1/orgs/*` | **Yes** (`{slug}`) | User can own multiple orgs |
+| **Admin** | `/{admin_path}/*` | `/api/v1/{admin_path}/*` | No | Server administration |
+| **Project** | `/*` | `/api/v1/*` | Varies | Project-specific (jokes, pastes, etc.) |
+
+### User Routes - No ID Required (NON-NEGOTIABLE)
+
+**Users can only manage themselves. The app knows who from the session.**
+
+| Route | Description |
+|-------|-------------|
+| `GET /api/v1/users` | Current user's profile |
+| `PATCH /api/v1/users` | Update current user's profile |
+| `GET /api/v1/users/tokens` | Current user's API tokens |
+| `GET /api/v1/users/security` | Current user's security settings |
+| `GET /api/v1/users/settings` | Current user's preferences |
+
+**Admin routes for managing OTHER users use `/admin/users/{id}`:**
+
+| Route | Description |
+|-------|-------------|
+| `GET /api/v1/{admin_path}/users` | List all users (admin) |
+| `GET /api/v1/{admin_path}/users/{id}` | View specific user (admin) |
+| `PATCH /api/v1/{admin_path}/users/{id}` | Edit specific user (admin) |
+
+### Org Routes - Slug Required (NON-NEGOTIABLE)
+
+**Users can own multiple orgs. Slug identifies which org.**
+
+| Route | Description |
+|-------|-------------|
+| `GET /api/v1/orgs` | List user's organizations |
+| `POST /api/v1/orgs` | Create new organization |
+| `GET /api/v1/orgs/{slug}` | Get specific org |
+| `GET /api/v1/orgs/{slug}/members` | Get org members |
+| `GET /api/v1/orgs/{slug}/settings` | Get org settings |
+
+### Frontend Must Match Backend
+
+**Every API route has a corresponding frontend route. They MUST match.**
+
+| API Route | Frontend Route | Notes |
+|-----------|----------------|-------|
+| `/api/v1/users` | `/users` | Current user profile |
+| `/api/v1/users/tokens` | `/users/tokens` | Current user's tokens |
+| `/api/v1/users/settings` | `/users/settings` | Current user's settings |
+| `/api/v1/orgs` | `/orgs` | User's org list |
+| `/api/v1/orgs/{slug}` | `/orgs/{slug}` | Specific org |
+| `/api/v1/orgs/{slug}/members` | `/orgs/{slug}/members` | Org members |
+| `/api/v1/server/about` | `/server/about` | About page |
+
+**Frontend uses same routes, different response format:**
+- Browser request → HTML page
+- API request → JSON
+- `.txt` extension → Plain text
+
+### ID/Slug Consistency
+
+**Use descriptive parameter names in nested routes:**
+
+| Route | Parameter | Notes |
+|-------|-----------|-------|
+| `/users/tokens/{token_id}` | `token_id` | User's token |
+| `/users/sessions/{session_id}` | `session_id` | User's session |
+| `/orgs/{slug}` | `slug` | Org identifier |
+| `/orgs/{slug}/members/{member_id}` | `member_id` | Org member |
+| `/orgs/{slug}/tokens/{token_id}` | `token_id` | Org's token |
 
 ## URL Parameters (NON-NEGOTIABLE)
 
@@ -18011,7 +20048,7 @@ Before proceeding, confirm you understand:
 
 | Environment | DOMAIN Value | Example |
 |-------------|--------------|---------|
-| **Development** | `vidveil` | `DOMAIN=jokes` |
+| **Development** | `{projectname}` | `DOMAIN=jokes` |
 | **Production** | Valid FQDN | `DOMAIN=api.example.com` |
 
 **Valid Production DOMAIN formats (comma-separated list supported):**
@@ -18217,9 +20254,9 @@ export DOMAIN=myapp.com,www.myapp.com,api.myapp.com
 **Dev TLDs are allowed in development mode but require global IP fallback for remote access.**
 
 **Dynamic Dev TLDs (project name as TLD):**
-- `vidveil` - e.g., `app.jokes`, `my.quotes`, `dev.api`
-- `vidveil.local` - e.g., `app.jokes.local`
-- `vidveil.test` - e.g., `app.jokes.test`
+- `{projectname}` - e.g., `app.jokes`, `my.quotes`, `dev.api`
+- `{projectname}.local` - e.g., `app.jokes.local`
+- `{projectname}.test` - e.g., `app.jokes.test`
 
 **Static Dev TLDs:**
 - `.local`, `.test`, `.example`, `.invalid` (RFC 6761)
@@ -18255,7 +20292,7 @@ func GetDisplayURL(projectName string, port int, isHTTPS bool) string {
 func isDevTLD(host, projectName string) bool {
     lower := strings.ToLower(host)
 
-    // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, vidveil)
+    // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, {projectname})
     if projectName != "" && strings.HasSuffix(lower, "."+strings.ToLower(projectName)) {
         return true
     }
@@ -18401,7 +20438,7 @@ formatURL(host, 8443, true)
 **Example (Production with SSL + Tor on 443):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 v1.0.0                                │
+│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -18416,7 +20453,7 @@ formatURL(host, 8443, true)
 **Example (Production with Tor + I2P on 443):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 v1.0.0                                │
+│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -18432,7 +20469,7 @@ formatURL(host, 8443, true)
 **Example (Production on port 8080):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 v1.0.0                                │
+│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -18446,7 +20483,7 @@ formatURL(host, 8443, true)
 **Example (Development on port 8080):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 v1.0.0                                │
+│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
 ├─────────────────────────────────────────────────────────────┤
 │  🔧 Running in mode: development                            │
 ├─────────────────────────────────────────────────────────────┤
@@ -18460,7 +20497,7 @@ formatURL(host, 8443, true)
 **Example (Development IPv6 on port 8080):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 v1.0.0                                │
+│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
 ├─────────────────────────────────────────────────────────────┤
 │  🔧 Running in mode: development                            │
 ├─────────────────────────────────────────────────────────────┤
@@ -18474,7 +20511,7 @@ formatURL(host, 8443, true)
 **Example (Production on port 80):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 v1.0.0                                │
+│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -18488,7 +20525,7 @@ formatURL(host, 8443, true)
 **Example (Production with debugging enabled):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 v1.0.0                                │
+│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production [debugging]                 │
 ├─────────────────────────────────────────────────────────────┤
@@ -18502,7 +20539,7 @@ formatURL(host, 8443, true)
 **Example (First Run - Setup Required):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 v1.0.0                                │
+│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
 ├─────────────────────────────────────────────────────────────┤
 │  🔧 Running in mode: development                            │
 ├─────────────────────────────────────────────────────────────┤
@@ -18670,7 +20707,7 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains
 | Path | Purpose |
 |------|---------|
 | `/.well-known/acme-challenge/` | Let's Encrypt HTTP-01 challenge |
-| `/.well-known/change-password` | Password change URL (redirects to `/user/security/password` if logged in, `/auth/password/forgot` if not) |
+| `/.well-known/change-password` | Password change URL (redirects to `/users/security/password` if logged in, `/auth/password/forgot` if not) |
 
 ### Well-Known Directory Support
 
@@ -19028,7 +21065,7 @@ server:
 | **Isolation** | Each org's audit log stored in separate table/partition |
 | **Retention** | Configurable per-org (default: 2 years, min: 90 days) |
 | **Immutability** | Append-only, no modification or deletion by org admins |
-| **Export** | JSON, CSV, or PDF export for auditors (`/org/{slug}/security/audit/export`) |
+| **Export** | JSON, CSV, or PDF export for auditors (`/orgs/{slug}/security/audit/export`) |
 | **Filtering** | Filter by date range, event type, actor, target |
 | **Search** | Full-text search on audit entries |
 | **Access control** | Only org admins with `audit:read` permission |
@@ -19054,11 +21091,11 @@ server:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/org/{slug}/security/audit` | GET | List audit events (paginated) |
-| `/api/v1/org/{slug}/security/audit/export` | POST | Request audit export |
-| `/api/v1/org/{slug}/security/audit/export/{id}` | GET | Download audit export |
-| `/api/v1/org/{slug}/security/audit/retention` | GET | Get retention settings |
-| `/api/v1/org/{slug}/security/audit/retention` | PATCH | Update retention (org owner only) |
+| `/api/v1/orgs/{slug}/security/audit` | GET | List audit events (paginated) |
+| `/api/v1/orgs/{slug}/security/audit/export` | POST | Request audit export |
+| `/api/v1/orgs/{slug}/security/audit/export/{id}` | GET | Download audit export |
+| `/api/v1/orgs/{slug}/security/audit/retention` | GET | Get retention settings |
+| `/api/v1/orgs/{slug}/security/audit/retention` | PATCH | Update retention (org owner only) |
 
 ### OIDC/LDAP Events
 
@@ -19429,8 +21466,8 @@ When GDPR/CCPA (right to erasure) conflicts with HIPAA/SOC2 (retention requireme
 | Feature | Behavior |
 |---------|----------|
 | Cookie consent | Required popup before any tracking |
-| Data export | `/user/data/export` endpoint enabled |
-| Data deletion | `/user/data/delete` endpoint enabled |
+| Data export | `/users/data/export` endpoint enabled |
+| Data deletion | `/users/data/delete` endpoint enabled |
 | Consent tracking | All consents logged with timestamp |
 | Data residency | Configurable allowed regions |
 | Privacy policy | Required, must specify data processing |
@@ -19476,9 +21513,9 @@ When GDPR/CCPA (right to erasure) conflicts with HIPAA/SOC2 (retention requireme
 
 | Feature | Behavior |
 |---------|----------|
-| Data disclosure | `/user/data/export` - what data is collected and sold |
-| Opt-out of sale | `/user/privacy/do-not-sell` toggle |
-| Right to delete | `/user/data/delete` endpoint enabled |
+| Data disclosure | `/users/data/export` - what data is collected and sold |
+| Opt-out of sale | `/users/privacy/do-not-sell` toggle |
+| Right to delete | `/users/data/delete` endpoint enabled |
 | Non-discrimination | Cannot deny service for exercising rights |
 | Privacy notice | "Do Not Sell My Personal Information" link required |
 | Verification | Identity verification before data requests |
@@ -19572,11 +21609,11 @@ When GDPR/CCPA (right to erasure) conflicts with HIPAA/SOC2 (retention requireme
 
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/user/data/export` | GET | Request personal data export (GDPR/CCPA) |
-| `/user/data/export/{id}` | GET | Download data export |
-| `/user/data/delete` | POST | Request account deletion (GDPR/CCPA) |
-| `/user/consents` | GET | View consent history |
-| `/user/consents` | PATCH | Update consent preferences |
+| `/users/data/export` | GET | Request personal data export (GDPR/CCPA) |
+| `/users/data/export/{id}` | GET | Download data export |
+| `/users/data/delete` | POST | Request account deletion (GDPR/CCPA) |
+| `/users/consents` | GET | View consent history |
+| `/users/consents` | PATCH | Update consent preferences |
 | `/server/privacy` | GET | Privacy policy |
 | `/server/dpo` | GET | Data Protection Officer contact (GDPR) |
 | `/admin/server/compliance` | GET | Compliance dashboard |
@@ -19587,11 +21624,11 @@ When GDPR/CCPA (right to erasure) conflicts with HIPAA/SOC2 (retention requireme
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/user/data/export` | POST | Request data export |
-| `/api/v1/user/data/export/{id}` | GET | Download export |
-| `/api/v1/user/data/delete` | POST | Request deletion |
-| `/api/v1/user/consents` | GET | Get consents |
-| `/api/v1/user/consents` | PATCH | Update consents |
+| `/api/v1/users/data/export` | POST | Request data export |
+| `/api/v1/users/data/export/{export_id}` | GET | Download export |
+| `/api/v1/users/data/delete` | POST | Request deletion |
+| `/api/v1/users/consents` | GET | Get consents |
+| `/api/v1/users/consents` | PATCH | Update consents |
 | `/api/v1/admin/server/compliance` | GET | Compliance status |
 | `/api/v1/admin/server/compliance/standards` | GET | Enabled standards |
 | `/api/v1/admin/server/compliance/report` | POST | Generate report |
@@ -20134,8 +22171,8 @@ const (
 | **Purpose** | Manage server, configuration, other users | Use the application features |
 | **Scope** | Server-wide administration | Own account and data only |
 | **Storage** | `admins` table | `users` table |
-| **Login** | `/auth/login` → `/admin/*` | `/auth/login` → `/user/*` |
-| **Access** | Admin panel (`/admin/*`) | User routes (`/user/*`) |
+| **Login** | `/auth/login` → `/admin/*` | `/auth/login` → `/users/*` |
+| **Access** | Admin panel (`/admin/*`) | User routes (`/users/*`) |
 | **Created by** | Setup wizard, existing admin, or OIDC/LDAP group mapping | Registration or admin invitation |
 
 ### Account Types Summary
@@ -20143,7 +22180,7 @@ const (
 | Account Type | Storage | Login | Access |
 |--------------|---------|-------|--------|
 | **Server Admin** | Database (`admins` table) | `/auth/login` | `/admin/*` only |
-| **Regular Users** | Database (`users` table) | `/auth/login` | `/user/*` routes |
+| **Regular Users** | Database (`users` table) | `/auth/login` | `/users/*` routes |
 
 **Important:** Server admins and regular users are completely separate account types. A server admin is NOT a "privileged user" - they are a different kind of account entirely.
 
@@ -20152,7 +22189,7 @@ const (
 | Route | Server Admin Access |
 |-------|---------------------|
 | `/admin/*` | Full access |
-| `/user/*` | NO - treated as guest (redirect to `/admin`) |
+| `/users/*` | NO - treated as guest (redirect to `/admin`) |
 | `/auth/login` | Login page |
 | `/auth/logout` | Logout |
 | Public routes (`/`, `/server/*`, etc.) | Guest view (no user-specific content) |
@@ -20205,7 +22242,7 @@ users:
 
 **Invite-only registration. Users need an invite code.**
 
-- Existing users generate invite codes at `/user/invites/create`
+- Existing users generate invite codes at `/users/invites/create`
 - Invite code has expiration (`invite_expiration_days` config)
 - New user visits `/auth/register?invite={code}`
 - Invite code validated, user submits registration form
@@ -20256,7 +22293,7 @@ users:
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                                                                      ║
-║   VIDVEIL v1.0.0                                               ║
+║   {PROJECTNAME} v1.0.0                                               ║
 ║                                                                      ║
 ║   Status: Running (first run - setup available)                      ║
 ║                                                                      ║
@@ -20498,7 +22535,7 @@ Display in console:
 
 **Server Admin Credentials Storage:**
 - Stored in database (`admins` table) - NEVER in config file
-- Managed via `/admin/server/settings` (NOT `/user/profile`)
+- Managed via `/admin/server/settings` (NOT `/users/{id}`)
 - NOT in the users table (separate table for isolation)
 - Multiple server admin accounts supported (primary admin created during setup)
 
@@ -20789,14 +22826,14 @@ Admin Panel Header:
 | Route | Regular User Access |
 |-------|---------------------|
 | `/admin/*` | NO - 403 Forbidden (unless user has admin role) |
-| `/user/*` | Full access to own profile, settings, tokens |
+| `/users/*` | Full access to own profile, settings, tokens |
 | `/auth/login` | Login page |
 | `/auth/logout` | Logout |
 | Public routes | Authenticated view (may show user-specific content) |
 
 **Regular User Accounts:**
 - Stored in database (users table)
-- Managed via `/user/profile`, `/user/settings`
+- Managed via `/users/{id}`, `/users/settings`
 - Can have roles (admin, user, custom)
 - Multiple accounts supported
 
@@ -20900,7 +22937,7 @@ var UsernameBlocklist = []string{
     "webmaster", "hostmaster", "abuse", "spam", "junk", "trash",
 
     // Project-specific (dynamic)
-    "vidveil", "apimgr",
+    "{projectname}", "{projectorg}",
 }
 ```
 
@@ -20917,9 +22954,42 @@ var UsernameBlocklist = []string{
 - Emails are case-insensitive: `me@example.com` = `Me@Example.COM`
 - Stored in lowercase, compared in lowercase
 
-**Login Identifier:**
-- Users can log in with **either** username OR email
-- Both must be unique across all users
+**Login Identifier (NON-NEGOTIABLE):**
+
+Users can log in with ANY of these three identifiers:
+
+| Identifier | Format | Example | Detection |
+|------------|--------|---------|-----------|
+| **User ID** | Numeric only | `12345` | All digits |
+| **Username** | Text (no @) | `johndoe` | Letters/numbers, no `@` |
+| **Email** | Contains @ | `john@example.com` | Contains `@` |
+
+**Detection Logic:**
+```go
+func DetectIdentifierType(input string) string {
+    // Numeric only = User ID
+    if regexp.MustCompile(`^\d+$`).MatchString(input) {
+        return "user_id"
+    }
+    // Contains @ = Email
+    if strings.Contains(input, "@") {
+        return "email"
+    }
+    // Otherwise = Username
+    return "username"
+}
+```
+
+**API Request:**
+```json
+POST /api/v1/auth/login
+{
+    "identifier": "johndoe",  // or "12345" or "john@example.com"
+    "password": "..."
+}
+```
+
+**All identifiers must be unique across all users.**
 
 **Email Addresses:**
 | SMTP Configured | Max Emails | Verification |
@@ -20933,7 +23003,82 @@ var UsernameBlocklist = []string{
 | **Account Email** | Security & account recovery | Password reset, 2FA recovery, security alerts, login notifications |
 | **Notification Email** | Non-security communications | Newsletters, updates, marketing, general notifications |
 
-**Email Rules:**
+**Email Validation Rules (NON-NEGOTIABLE):**
+
+| Rule | Value | Example |
+|------|-------|---------|
+| **Format** | RFC 5322 compliant | `user@example.com` |
+| **Min local part** | 1 character | `a@example.com` ✓ |
+| **Max local part** | 64 characters | Per RFC 5321 |
+| **Max domain** | 255 characters | Per RFC 5321 |
+| **Max total length** | 254 characters | Per RFC 5321 |
+| **Allowed local chars** | `a-z`, `0-9`, `.`, `+`, `_`, `-` | `user.name+tag@example.com` ✓ |
+| **Cannot start/end with** | `.` in local part | `.user@example.com` ✗ |
+| **No consecutive dots** | In local part | `user..name@example.com` ✗ |
+| **Domain validation** | Must have valid TLD | `user@localhost` ✗ |
+| **Case handling** | Case-insensitive, stored lowercase | `User@Example.COM` → `user@example.com` |
+
+**Email Validation Code:**
+```go
+func ValidateEmail(email string) error {
+    email = strings.TrimSpace(strings.ToLower(email))
+
+    // Length checks
+    if len(email) > 254 {
+        return errors.New("email too long (max 254 characters)")
+    }
+
+    parts := strings.Split(email, "@")
+    if len(parts) != 2 {
+        return errors.New("invalid email format")
+    }
+
+    local, domain := parts[0], parts[1]
+
+    // Local part checks
+    if len(local) == 0 || len(local) > 64 {
+        return errors.New("invalid local part length")
+    }
+    if strings.HasPrefix(local, ".") || strings.HasSuffix(local, ".") {
+        return errors.New("local part cannot start or end with dot")
+    }
+    if strings.Contains(local, "..") {
+        return errors.New("local part cannot have consecutive dots")
+    }
+
+    // Domain checks
+    if len(domain) == 0 || len(domain) > 255 {
+        return errors.New("invalid domain length")
+    }
+    if !strings.Contains(domain, ".") {
+        return errors.New("domain must have valid TLD")
+    }
+
+    // Regex for allowed characters
+    localRegex := regexp.MustCompile(`^[a-z0-9.+_-]+$`)
+    if !localRegex.MatchString(local) {
+        return errors.New("invalid characters in local part")
+    }
+
+    domainRegex := regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*[a-z0-9]\.[a-z]{2,}$`)
+    if !domainRegex.MatchString(domain) {
+        return errors.New("invalid domain format")
+    }
+
+    return nil
+}
+```
+
+**Email Blocklist (Optional):**
+```go
+var EmailDomainBlocklist = []string{
+    // Disposable email domains (add as needed)
+    "tempmail.com", "throwaway.email", "guerrillamail.com",
+    "mailinator.com", "10minutemail.com", "trashmail.com",
+}
+```
+
+**Email Behavior Rules:**
 - Primary email set at registration (becomes account email by default)
 - User can designate a different verified email as account email
 - Additional emails require verification (SMTP required)
@@ -20941,6 +23086,199 @@ var UsernameBlocklist = []string{
 - Unverified emails cannot be used for login
 - Account email receives security-sensitive communications ONLY
 - Notification email receives everything else (if set, otherwise account email)
+
+### Profile Privacy Settings (NON-NEGOTIABLE)
+
+**Users and organizations can set their profile visibility.**
+
+**Visibility Options:**
+
+| Visibility | Default | Description |
+|------------|---------|-------------|
+| **Public** | ✓ Yes | Profile visible to everyone, appears in search, listings, public pages |
+| **Private** | No | Profile hidden from public, search, listings, other user contexts |
+
+**What Private Means:**
+
+| Context | Public Profile | Private Profile |
+|---------|----------------|-----------------|
+| **Public search** | ✓ Appears | ✗ Hidden |
+| **Public listings** | ✓ Appears | ✗ Hidden |
+| **User directories** | ✓ Appears | ✗ Hidden |
+| **Profile URL** | ✓ Accessible | 404 Not Found |
+| **API queries** | ✓ Returned | ✗ Excluded |
+| **Activity feeds** | ✓ Visible | ✗ Hidden |
+| **Organization members list** (if in org) | Username only | Username only |
+| **Direct mentions/links** | ✓ Works | Redirect to 404 |
+
+**Private Profile Exceptions (always visible to):**
+- The user themselves
+- Server admins (via admin panel, not public routes)
+- Other org members (if user is in same org - username only, minimal info)
+
+**Database Fields:**
+```sql
+-- Users
+visibility TEXT NOT NULL DEFAULT 'public'  -- public, private
+
+-- Organizations
+visibility TEXT NOT NULL DEFAULT 'public'  -- public, private
+```
+
+**API Behavior:**
+```go
+// Public endpoints automatically filter private profiles
+func GetPublicUsers() []User {
+    return db.Where("visibility = ?", "public").Find(&users)
+}
+
+// User's own profile always accessible
+func GetUserProfile(requestingUserID, targetUserID int) (*User, error) {
+    user := db.Find(targetUserID)
+    if user.Visibility == "private" && requestingUserID != targetUserID {
+        return nil, ErrNotFound  // 404, not 403 (don't leak existence)
+    }
+    return user, nil
+}
+```
+
+### Avatar Settings (NON-NEGOTIABLE)
+
+**Users and organizations can set their avatar using three methods.**
+
+**Avatar Types:**
+
+| Type | Description | Storage |
+|------|-------------|---------|
+| **Gravatar** | Default. Uses email hash to fetch from gravatar.com | No storage needed |
+| **Upload** | User uploads image file | Stored locally or S3 |
+| **URL** | External image URL | URL stored in database |
+
+**Avatar Validation Rules:**
+
+| Rule | Value |
+|------|-------|
+| **Allowed formats** | PNG, JPG, JPEG, GIF, BMP, WEBP, SVG, ICO |
+| **Max file size** | 2 MB (upload) |
+| **Min dimensions** | 64x64 pixels |
+| **Max dimensions** | 1024x1024 pixels (resized if larger) |
+| **Aspect ratio** | Square preferred (auto-cropped if not) |
+| **Storage sizes** | Original, 256x256, 128x128, 64x64, 32x32 |
+
+**Avatar Validation Code:**
+```go
+var AllowedImageTypes = map[string]bool{
+    "image/png":     true,
+    "image/jpeg":    true,
+    "image/gif":     true,
+    "image/bmp":     true,
+    "image/webp":    true,
+    "image/svg+xml": true,
+    "image/x-icon":  true,
+    "image/vnd.microsoft.icon": true,
+}
+
+func ValidateAvatar(file io.Reader, filename string) error {
+    // Read first 512 bytes for MIME detection
+    header := make([]byte, 512)
+    n, err := file.Read(header)
+    if err != nil {
+        return errors.New("cannot read file")
+    }
+
+    // Detect actual MIME type (not from extension)
+    mimeType := http.DetectContentType(header[:n])
+    if !AllowedImageTypes[mimeType] {
+        return fmt.Errorf("invalid image type: %s", mimeType)
+    }
+
+    // For external URLs, fetch and validate
+    return nil
+}
+
+func ValidateAvatarURL(url string) error {
+    // Must be HTTPS
+    if !strings.HasPrefix(url, "https://") {
+        return errors.New("avatar URL must use HTTPS")
+    }
+
+    // Fetch with timeout
+    client := &http.Client{Timeout: 10 * time.Second}
+    resp, err := client.Head(url)
+    if err != nil {
+        return errors.New("cannot reach avatar URL")
+    }
+    defer resp.Body.Close()
+
+    // Check Content-Type
+    contentType := resp.Header.Get("Content-Type")
+    if !AllowedImageTypes[contentType] {
+        return fmt.Errorf("URL does not point to valid image: %s", contentType)
+    }
+
+    // Check Content-Length (max 2MB)
+    if resp.ContentLength > 2*1024*1024 {
+        return errors.New("avatar too large (max 2MB)")
+    }
+
+    return nil
+}
+```
+
+**Gravatar Integration:**
+```go
+import "crypto/md5"
+
+func GetGravatarURL(email string, size int) string {
+    email = strings.TrimSpace(strings.ToLower(email))
+    hash := md5.Sum([]byte(email))
+    return fmt.Sprintf("https://www.gravatar.com/avatar/%x?s=%d&d=identicon", hash, size)
+}
+```
+
+**Avatar API Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `GET /api/v1/users/avatar` | GET | Get current user's avatar URL |
+| `POST /api/v1/users/avatar` | POST | Upload new avatar |
+| `PATCH /api/v1/users/avatar` | PATCH | Update avatar settings (type, URL) |
+| `DELETE /api/v1/users/avatar` | DELETE | Reset to Gravatar |
+| `GET /api/v1/orgs/{slug}/avatar` | GET | Get org's avatar URL |
+| `POST /api/v1/orgs/{slug}/avatar` | POST | Upload org avatar |
+| `PATCH /api/v1/orgs/{slug}/avatar` | PATCH | Update org avatar settings |
+| `DELETE /api/v1/orgs/{slug}/avatar` | DELETE | Reset org to Gravatar |
+
+**Avatar Upload Request:**
+```
+POST /api/v1/users/avatar
+Content-Type: multipart/form-data
+
+file: <binary image data>
+```
+
+**Avatar URL Request:**
+```json
+PATCH /api/v1/users/avatar
+{
+    "type": "url",
+    "url": "https://example.com/my-avatar.png"
+}
+```
+
+**Avatar Response:**
+```json
+{
+    "type": "upload",
+    "urls": {
+        "original": "/uploads/avatars/user_123_original.png",
+        "256": "/uploads/avatars/user_123_256.png",
+        "128": "/uploads/avatars/user_123_128.png",
+        "64": "/uploads/avatars/user_123_64.png",
+        "32": "/uploads/avatars/user_123_32.png"
+    }
+}
+```
 
 ### Server Admin Limitations (NON-NEGOTIABLE)
 
@@ -21206,11 +23544,11 @@ The server admin (administrator with access to the server/binary) has ONE recove
 
 | Scenario | Recovery Method |
 |----------|-----------------|
-| Admin forgot password | `vidveil --maintenance setup` |
-| Admin lost API token | `vidveil --maintenance setup` |
-| Admin lost recovery keys | `vidveil --maintenance setup` |
-| Admin lost 2FA + no recovery keys | `vidveil --maintenance setup` |
-| Admin lost everything | `vidveil --maintenance setup` |
+| Admin forgot password | `{projectname} --maintenance setup` |
+| Admin lost API token | `{projectname} --maintenance setup` |
+| Admin lost recovery keys | `{projectname} --maintenance setup` |
+| Admin lost 2FA + no recovery keys | `{projectname} --maintenance setup` |
+| Admin lost everything | `{projectname} --maintenance setup` |
 
 **This requires:**
 - Console/SSH access to the server to run the binary
@@ -21321,11 +23659,11 @@ POST /api/v1/auth/recovery/use
   → { "session_token": "temp_xxx", "recovery_key": "a1b2c3d4-e5f6" }
   ← { "success": true, "token": "auth_xxx", "remaining_keys": 9 }
 
-# Now authenticated - can manage 2FA via /user/security/
-POST /api/v1/user/security/2fa/disable
+# Now authenticated - can manage 2FA via /users/security/
+POST /api/v1/users/security/2fa/disable
   ← { "success": true }
      OR (setup new device)
-POST /api/v1/user/security/2fa/enable
+POST /api/v1/users/security/2fa/enable
   ← { "qr_code": "...", "secret": "...", "recovery_keys": [...] }
 ```
 
@@ -21574,7 +23912,7 @@ No registration allowed, admin creates users manually
 
 **Mode: private**
 ```
-1. Existing user generates invite code (/user/invites/create)
+1. Existing user generates invite code (/users/invites/create)
 2. New user visits /auth/register?invite={code}
 3. Submits registration form
 4. Email verification sent (if require_email_verification: true)
@@ -21619,16 +23957,715 @@ No registration allowed, admin creates users manually
 | Recovery keys | 10 one-time use keys (format: `a1b2c3d4-e5f6`) |
 | Remember device | Optional "trust this device" for 30 days |
 
-## User Profile
+## User Profile (NON-NEGOTIABLE)
 
-| Field | Type | Configurable |
-|-------|------|--------------|
-| Email | Required | No (always required) |
-| Display name | Optional | `profile.allow_display_name` |
-| Avatar | Optional | `profile.allow_avatar` |
-| Bio | Optional | `profile.allow_bio` |
-| Timezone | Optional | Always available |
-| Language | Optional | Always available |
+### Profile Fields
+
+| Field | Type | Required | Editable | Public | Description |
+|-------|------|----------|----------|--------|-------------|
+| `id` | Integer | Auto | No | No | Unique user ID |
+| `username` | String | Yes | No* | Yes | Unique username (3-32 chars, lowercase) |
+| `email` | String | Yes | Yes | No | Primary email (private by default) |
+| `display_name` | String | No | Yes | Yes | Public display name |
+| `avatar_type` | Enum | Yes | Yes | Yes | `gravatar`, `upload`, `url` |
+| `avatar_url` | String | No | Yes | Yes | Avatar URL (if type is upload/url) |
+| `bio` | String | No | Yes | Yes | Short biography (max 500 chars) |
+| `location` | String | No | Yes | Yes | Location (free text) |
+| `website` | String | No | Yes | Yes | Personal website URL |
+| `visibility` | Enum | Yes | Yes | N/A | `public` (default), `private` |
+| `timezone` | String | No | Yes | No | IANA timezone (e.g., `America/New_York`) |
+| `language` | String | No | Yes | No | Preferred language (e.g., `en`, `es`) |
+| `role` | String | Yes | No | No | User role (set by admin) |
+| `verified` | Boolean | Auto | No | Yes | Email verified badge |
+| `created_at` | Timestamp | Auto | No | Yes | Account creation date |
+| `last_login` | Timestamp | Auto | No | No | Last login (private) |
+
+*Username can only be changed by admin or via special request flow.
+
+**Profile Example (API Response):**
+```json
+GET /api/v1/users
+{
+    "id": 12345,
+    "username": "johndoe",
+    "display_name": "John Doe",
+    "avatar": {
+        "type": "gravatar",
+        "urls": {
+            "256": "https://www.gravatar.com/avatar/abc123?s=256&d=identicon",
+            "128": "https://www.gravatar.com/avatar/abc123?s=128&d=identicon",
+            "64": "https://www.gravatar.com/avatar/abc123?s=64&d=identicon",
+            "32": "https://www.gravatar.com/avatar/abc123?s=32&d=identicon"
+        }
+    },
+    "bio": "Software developer and coffee enthusiast",
+    "location": "San Francisco, CA",
+    "website": "https://johndoe.dev",
+    "visibility": "public",
+    "timezone": "America/Los_Angeles",
+    "language": "en",
+    "verified": true,
+    "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Public Profile Example (what others see):**
+```json
+GET /api/v1/public/users/johndoe
+{
+    "username": "johndoe",
+    "display_name": "John Doe",
+    "avatar": {
+        "256": "https://www.gravatar.com/avatar/abc123?s=256&d=identicon"
+    },
+    "bio": "Software developer and coffee enthusiast",
+    "location": "San Francisco, CA",
+    "website": "https://johndoe.dev",
+    "verified": true,
+    "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
+### User Settings
+
+Settings are organized into categories. Each setting has a default value and can be modified by the user.
+
+**Settings Categories:**
+
+| Category | Route | Description |
+|----------|-------|-------------|
+| **Account** | `/users/settings` | Basic account settings |
+| **Privacy** | `/users/settings/privacy` | Visibility and data sharing |
+| **Notifications** | `/users/settings/notifications` | Email and push preferences |
+| **Appearance** | `/users/settings/appearance` | Theme and display options |
+| **Security** | `/users/security` | Password, 2FA, sessions |
+
+#### Account Settings (`/users/settings`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `display_name` | String | null | Public display name |
+| `bio` | String | null | Short biography |
+| `location` | String | null | Location |
+| `website` | URL | null | Personal website |
+| `timezone` | Select | Auto-detect | Timezone for dates/times |
+| `language` | Select | `en` | Interface language |
+| `date_format` | Select | `YYYY-MM-DD` | Date display format |
+| `time_format` | Select | `24h` | 12h or 24h time |
+
+**Account Settings Form Example:**
+```
+Account Settings (/users/settings)
+┌─────────────────────────────────────────────────────────────┐
+│  Display Name                                               │
+│  [John Doe                                    ]             │
+│                                                             │
+│  Bio                                                        │
+│  [Software developer and coffee enthusiast   ]             │
+│  Characters: 42/500                                         │
+│                                                             │
+│  Location                                                   │
+│  [San Francisco, CA                          ]             │
+│                                                             │
+│  Website                                                    │
+│  [https://johndoe.dev                        ]             │
+│                                                             │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  Timezone                                                   │
+│  [America/Los_Angeles (UTC-8)            ▼]                │
+│                                                             │
+│  Language                                                   │
+│  [English                                ▼]                │
+│                                                             │
+│  Date Format                                                │
+│  ○ YYYY-MM-DD (2025-01-15)                                 │
+│  ● MM/DD/YYYY (01/15/2025)                                 │
+│  ○ DD/MM/YYYY (15/01/2025)                                 │
+│                                                             │
+│  Time Format                                                │
+│  ● 24-hour (14:30)                                         │
+│  ○ 12-hour (2:30 PM)                                       │
+│                                                             │
+│  [Save Changes]                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Privacy Settings (`/users/settings/privacy`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `visibility` | Select | `public` | Profile visibility (public/private) |
+| `show_email` | Toggle | Off | Show email on public profile |
+| `show_activity` | Toggle | On | Show activity on public profile |
+| `show_orgs` | Toggle | On | Show org memberships on profile |
+| `searchable` | Toggle | On | Appear in user search results |
+| `org_visibility` | Toggle | On | Show basic info in orgs (even if private) |
+
+**Privacy Settings Form Example:**
+```
+Privacy Settings (/users/settings/privacy)
+┌─────────────────────────────────────────────────────────────┐
+│  Profile Visibility                                         │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ ○ Public                                             │   │
+│  │   Anyone can view your profile and find you in      │   │
+│  │   search results.                                    │   │
+│  │                                                      │   │
+│  │ ● Private                                            │   │
+│  │   Your profile is hidden from public view and       │   │
+│  │   search results. Only you can see your profile.    │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ─────────────────────────────────────────────────────────  │
+│  When Profile is Public:                                    │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  [OFF] Show email address on profile                        │
+│        Your email will be visible to anyone viewing your    │
+│        profile.                                             │
+│                                                             │
+│  [ON ] Show activity on profile                             │
+│        Recent activity will appear on your public profile.  │
+│                                                             │
+│  [ON ] Show organization memberships                        │
+│        Organizations you belong to will be listed on your   │
+│        profile.                                             │
+│                                                             │
+│  [ON ] Appear in search results                             │
+│        Others can find you when searching for users.        │
+│                                                             │
+│  ─────────────────────────────────────────────────────────  │
+│  When Profile is Private:                                   │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  [ON ] Show basic info in organizations                     │
+│        Members of organizations you belong to can see       │
+│        your username, name, and avatar. Your full profile   │
+│        remains private.                                     │
+│                                                             │
+│  [Save Changes]                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Notification Settings (`/users/settings/notifications`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `email_security` | Toggle | On | Security alerts via email (cannot disable) |
+| `email_mentions` | Toggle | On | Email when mentioned |
+| `email_updates` | Toggle | On | Product updates and news |
+| `email_digest` | Select | `weekly` | Digest frequency (never/daily/weekly) |
+| `push_enabled` | Toggle | Off | Browser push notifications |
+| `push_mentions` | Toggle | On | Push when mentioned |
+
+**Notification Settings Form Example:**
+```
+Notification Settings (/users/settings/notifications)
+┌─────────────────────────────────────────────────────────────┐
+│  Email Notifications                                        │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  [ON ] Security alerts (required)                    🔒     │
+│        Password changes, new logins, 2FA changes.           │
+│        This setting cannot be disabled for your security.   │
+│                                                             │
+│  [ON ] Mentions and replies                                 │
+│        When someone mentions you or replies to you.         │
+│                                                             │
+│  [OFF] Product updates                                      │
+│        News about new features and improvements.            │
+│                                                             │
+│  Activity Digest                                            │
+│  [Weekly                                         ▼]        │
+│  Options: Never, Daily, Weekly                              │
+│                                                             │
+│  ─────────────────────────────────────────────────────────  │
+│  Push Notifications                                         │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  [OFF] Enable push notifications                            │
+│        Receive notifications in your browser even when      │
+│        you're not on this site.                             │
+│                                                             │
+│        (Requires browser permission)                        │
+│                                                             │
+│  [Save Changes]                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Appearance Settings (`/users/settings/appearance`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `theme` | Select | `system` | Theme (light/dark/system) |
+| `font_size` | Select | `medium` | Font size (small/medium/large) |
+| `reduce_motion` | Toggle | Off | Reduce animations |
+
+**Appearance Settings Form Example:**
+```
+Appearance Settings (/users/settings/appearance)
+┌─────────────────────────────────────────────────────────────┐
+│  Theme                                                      │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐                       │
+│  │  ☀️     │ │  🌙     │ │  💻     │                       │
+│  │ Light   │ │ Dark    │ │ System  │ ← Selected            │
+│  └─────────┘ └─────────┘ └─────────┘                       │
+│                                                             │
+│  Font Size                                                  │
+│  ○ Small                                                    │
+│  ● Medium (default)                                         │
+│  ○ Large                                                    │
+│                                                             │
+│  Accessibility                                              │
+│  [OFF] Reduce motion                                        │
+│        Minimize animations and transitions.                 │
+│                                                             │
+│  [Save Changes]                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### User Settings API
+
+**Database Storage:**
+
+| Setting Category | Storage Location |
+|------------------|------------------|
+| **Account** (display_name, bio, location, website, timezone, language) | `users` table |
+| **Privacy** (visibility, org_visibility) | `users` table |
+| **Privacy** (show_email, show_activity, show_orgs, searchable) | `user_preferences` table |
+| **Notifications** (email_*, push_*) | `user_preferences` table |
+| **Appearance** (theme, font_size, reduce_motion, date_format, time_format) | `user_preferences` table |
+
+**Preferences are created on first access (lazy initialization):**
+```go
+func GetOrCreatePreferences(userID int) (*UserPreferences, error) {
+    prefs := &UserPreferences{}
+    err := db.Where("user_id = ?", userID).First(prefs).Error
+    if err == gorm.ErrRecordNotFound {
+        prefs = &UserPreferences{UserID: userID}  // Uses DB defaults
+        db.Create(prefs)
+    }
+    return prefs, nil
+}
+```
+
+**Get All Settings:**
+```json
+GET /api/v1/users/settings
+{
+    "account": {
+        "display_name": "John Doe",
+        "bio": "Software developer",
+        "location": "San Francisco, CA",
+        "website": "https://johndoe.dev",
+        "timezone": "America/Los_Angeles",
+        "language": "en",
+        "date_format": "MM/DD/YYYY",
+        "time_format": "24h"
+    },
+    "privacy": {
+        "visibility": "private",
+        "show_email": false,
+        "show_activity": true,
+        "show_orgs": true,
+        "searchable": false,
+        "org_visibility": true
+    },
+    "notifications": {
+        "email_security": true,
+        "email_mentions": true,
+        "email_updates": false,
+        "email_digest": "weekly",
+        "push_enabled": false,
+        "push_mentions": true
+    },
+    "appearance": {
+        "theme": "system",
+        "font_size": "medium",
+        "reduce_motion": false
+    }
+}
+```
+
+**Update Settings (partial update):**
+```json
+PATCH /api/v1/users/settings
+{
+    "privacy": {
+        "visibility": "public",
+        "org_visibility": true
+    }
+}
+```
+
+## Organization Profile (NON-NEGOTIABLE)
+
+### Org Profile Fields
+
+| Field | Type | Required | Editable | Public | Description |
+|-------|------|----------|----------|--------|-------------|
+| `id` | Integer | Auto | No | No | Unique org ID |
+| `slug` | String | Yes | No* | Yes | URL-safe identifier (3-32 chars) |
+| `name` | String | Yes | Yes | Yes | Display name |
+| `description` | String | No | Yes | Yes | Short description (max 500 chars) |
+| `avatar_type` | Enum | Yes | Yes | Yes | `gravatar`, `upload`, `url` |
+| `avatar_url` | String | No | Yes | Yes | Avatar URL |
+| `website` | String | No | Yes | Yes | Organization website |
+| `location` | String | No | Yes | Yes | Location |
+| `visibility` | Enum | Yes | Yes | N/A | `public` (default), `private` |
+| `owner_id` | Integer | Yes | Yes** | No | Owner user ID |
+| `member_count` | Integer | Auto | No | Yes | Number of members |
+| `created_at` | Timestamp | Auto | No | Yes | Creation date |
+
+*Slug change requires confirmation and redirect setup.
+**Ownership can be transferred to another member.
+
+**Org Profile Example (API Response):**
+```json
+GET /api/v1/orgs/acme-corp
+{
+    "id": 42,
+    "slug": "acme-corp",
+    "name": "Acme Corporation",
+    "description": "Building the future, one anvil at a time",
+    "avatar": {
+        "type": "upload",
+        "urls": {
+            "256": "/uploads/orgs/acme-corp_256.png",
+            "128": "/uploads/orgs/acme-corp_128.png",
+            "64": "/uploads/orgs/acme-corp_64.png",
+            "32": "/uploads/orgs/acme-corp_32.png"
+        }
+    },
+    "website": "https://acme.example.com",
+    "location": "Phoenix, AZ",
+    "visibility": "public",
+    "member_count": 15,
+    "created_at": "2024-06-01T08:00:00Z",
+    "your_role": "admin"  // Only shown to authenticated members
+}
+```
+
+### Org Member Roles
+
+| Role | Permissions |
+|------|-------------|
+| **Owner** | Full control, can delete org, transfer ownership |
+| **Admin** | Manage members, settings, tokens (cannot delete org) |
+| **Member** | View org, access org resources |
+
+### Org Settings
+
+**Settings Categories:**
+
+| Category | Route | Who Can Edit |
+|----------|-------|--------------|
+| **General** | `/orgs/{slug}/settings` | Owner, Admin |
+| **Members** | `/orgs/{slug}/members` | Owner, Admin |
+| **Roles** | `/orgs/{slug}/roles` | Owner, Admin |
+| **Security** | `/orgs/{slug}/security` | Owner, Admin |
+| **Tokens** | `/orgs/{slug}/tokens` | Owner, Admin |
+| **Billing** | `/orgs/{slug}/billing` | Owner only |
+| **Danger Zone** | `/orgs/{slug}/settings#danger` | Owner only |
+
+#### General Settings (`/orgs/{slug}/settings`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `name` | String | Required | Organization display name |
+| `description` | String | null | Short description |
+| `website` | URL | null | Organization website |
+| `location` | String | null | Location |
+| `visibility` | Select | `public` | Public or private org |
+| `default_member_role` | Select | `member` | Role for new members |
+| `require_2fa` | Toggle | Off | Require 2FA for all members |
+
+**General Settings Form Example:**
+```
+Organization Settings (/orgs/acme-corp/settings)
+┌─────────────────────────────────────────────────────────────┐
+│  Organization Profile                                       │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  Name                                                       │
+│  [Acme Corporation                           ]             │
+│                                                             │
+│  URL Slug                                                   │
+│  [acme-corp                                  ] 🔒           │
+│  https://example.com/orgs/acme-corp                        │
+│  (Contact support to change)                                │
+│                                                             │
+│  Description                                                │
+│  [Building the future, one anvil at a time   ]             │
+│  Characters: 42/500                                         │
+│                                                             │
+│  Website                                                    │
+│  [https://acme.example.com                   ]             │
+│                                                             │
+│  Location                                                   │
+│  [Phoenix, AZ                                ]             │
+│                                                             │
+│  ─────────────────────────────────────────────────────────  │
+│  Visibility                                                 │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  ● Public                                                   │
+│    Anyone can see this organization and its public         │
+│    members.                                                 │
+│                                                             │
+│  ○ Private                                                  │
+│    Only members can see this organization. It won't        │
+│    appear in search or public listings.                    │
+│                                                             │
+│  ─────────────────────────────────────────────────────────  │
+│  Member Settings                                            │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  Default role for new members                               │
+│  [Member                                     ▼]            │
+│                                                             │
+│  [OFF] Require two-factor authentication                    │
+│        All members must enable 2FA to access org resources. │
+│                                                             │
+│  [Save Changes]                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Members Management (`/orgs/{slug}/members`)
+
+**Members List Example:**
+```
+Organization Members (/orgs/acme-corp/members)
+┌─────────────────────────────────────────────────────────────┐
+│  Members (15)                              [+ Invite Member]│
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 👤 johndoe          John Doe           Owner    ⋮  │   │
+│  │ 👤 janedoe          Jane Doe           Admin    ⋮  │   │
+│  │ 👤 bobsmith         Bob Smith          Member   ⋮  │   │
+│  │ 👤 private_user     Private User       Member   ⋮  │   │
+│  │    (Profile hidden - org visibility enabled)        │   │
+│  │ ...                                                 │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ⋮ Menu: Change role, Remove from org                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Danger Zone (`/orgs/{slug}/settings#danger`)
+
+**Owner-only actions:**
+
+| Action | Confirmation | Description |
+|--------|--------------|-------------|
+| Transfer ownership | Password + confirmation | Transfer to another admin |
+| Delete organization | Password + type org name | Permanently delete |
+
+**Danger Zone Form Example:**
+```
+Danger Zone (/orgs/acme-corp/settings#danger)
+┌─────────────────────────────────────────────────────────────┐
+│  ⚠️ Danger Zone                                              │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  Transfer Ownership                                         │
+│  Transfer this organization to another admin. You will     │
+│  become an admin after transfer.                           │
+│                                                     [Transfer]│
+│                                                             │
+│  ─────────────────────────────────────────────────────────  │
+│                                                             │
+│  Delete Organization                                        │
+│  Once deleted, all data will be permanently removed.       │
+│  This action cannot be undone.                             │
+│                                                     [Delete] │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Org Settings API
+
+**Database Storage:**
+
+| Setting Category | Storage Location |
+|------------------|------------------|
+| **General** (name, slug, description, website, location, visibility) | `orgs` table |
+| **Members** (default_role, require_2fa, allow_invites) | `org_preferences` table |
+| **Visibility** (show_members, show_activity) | `org_preferences` table |
+| **Notifications** (notify_new_member, notify_member_leave) | `org_preferences` table |
+
+**Preferences are created on first access (lazy initialization):**
+```go
+func GetOrCreateOrgPreferences(orgID int) (*OrgPreferences, error) {
+    prefs := &OrgPreferences{}
+    err := db.Where("org_id = ?", orgID).First(prefs).Error
+    if err == gorm.ErrRecordNotFound {
+        prefs = &OrgPreferences{OrgID: orgID}  // Uses DB defaults
+        db.Create(prefs)
+    }
+    return prefs, nil
+}
+```
+
+**Get Org Settings:**
+```json
+GET /api/v1/orgs/acme-corp/settings
+{
+    "general": {
+        "name": "Acme Corporation",
+        "slug": "acme-corp",
+        "description": "Building the future, one anvil at a time",
+        "website": "https://acme.example.com",
+        "location": "Phoenix, AZ",
+        "visibility": "public"
+    },
+    "members": {
+        "default_role": "member",
+        "require_2fa": false,
+        "member_count": 15
+    },
+    "your_permissions": {
+        "can_edit_settings": true,
+        "can_manage_members": true,
+        "can_manage_billing": false,
+        "can_delete_org": false
+    }
+}
+```
+
+## Org-Scoped User Visibility (NON-NEGOTIABLE)
+
+**Users with private profiles can choose to show basic info within organizations they belong to.**
+
+### How It Works
+
+| User Setting | Org Context | Public Context |
+|--------------|-------------|----------------|
+| `visibility: public` | Full profile visible | Full profile visible |
+| `visibility: private`, `org_visibility: true` | Basic info visible | 404 Not Found |
+| `visibility: private`, `org_visibility: false` | Username only | 404 Not Found |
+
+### What "Basic Info" Means
+
+When a private user has `org_visibility: true`, org members can see:
+
+| Field | Visible in Org | Visible Publicly |
+|-------|----------------|------------------|
+| `username` | ✓ Yes | ✗ No |
+| `display_name` | ✓ Yes | ✗ No |
+| `avatar` | ✓ Yes | ✗ No |
+| `bio` | ✗ No | ✗ No |
+| `location` | ✗ No | ✗ No |
+| `website` | ✗ No | ✗ No |
+| `email` | ✗ No | ✗ No |
+| `activity` | ✗ No | ✗ No |
+
+### API Responses
+
+**Private user with org_visibility=true, viewed by org member:**
+```json
+GET /api/v1/orgs/acme-corp/members/private_user
+{
+    "username": "private_user",
+    "display_name": "Private User",
+    "avatar": {
+        "64": "https://www.gravatar.com/avatar/xyz?s=64&d=identicon"
+    },
+    "role": "member",
+    "joined_at": "2024-08-01T10:00:00Z",
+    "profile_visibility": "org_only"  // Indicates limited visibility
+}
+```
+
+**Private user with org_visibility=true, viewed publicly:**
+```json
+GET /api/v1/public/users/private_user
+{
+    "error": "not_found",
+    "message": "User not found"
+}
+// Returns 404, not 403 (don't leak existence)
+```
+
+**Private user with org_visibility=false, viewed by org member:**
+```json
+GET /api/v1/orgs/acme-corp/members/very_private_user
+{
+    "username": "very_private_user",
+    "role": "member",
+    "joined_at": "2024-08-01T10:00:00Z",
+    "profile_visibility": "hidden"  // Indicates minimal visibility
+}
+// Only username and role shown - no avatar, no display name
+```
+
+### Database Schema Update
+
+```sql
+-- Add org_visibility to users table
+ALTER TABLE users ADD COLUMN org_visibility INTEGER NOT NULL DEFAULT 1;
+-- 1 = show basic info in orgs, 0 = username only
+
+-- Index for efficient org member queries
+CREATE INDEX IF NOT EXISTS idx_users_org_visibility ON users(visibility, org_visibility);
+```
+
+### Implementation Logic
+
+```go
+// Get user info for org context
+func GetOrgMemberProfile(orgID, targetUserID, requestingUserID int) (*MemberProfile, error) {
+    // Verify requester is in the org
+    if !IsOrgMember(orgID, requestingUserID) {
+        return nil, ErrForbidden
+    }
+
+    // Verify target is in the org
+    member := GetOrgMember(orgID, targetUserID)
+    if member == nil {
+        return nil, ErrNotFound
+    }
+
+    user := GetUser(targetUserID)
+
+    // Build response based on visibility settings
+    profile := &MemberProfile{
+        Username:  user.Username,
+        Role:      member.Role,
+        JoinedAt:  member.CreatedAt,
+    }
+
+    // If public or org_visibility enabled, include basic info
+    if user.Visibility == "public" || user.OrgVisibility {
+        profile.DisplayName = user.DisplayName
+        profile.Avatar = GetAvatarURLs(user)
+        profile.ProfileVisibility = "org_only"
+    } else {
+        profile.ProfileVisibility = "hidden"
+    }
+
+    return profile, nil
+}
+```
+
+### UI Indicators
+
+**In org member lists, show visibility status:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 👤 johndoe          John Doe           Owner              │
+│ 👤 janedoe          Jane Doe           Admin              │
+│ 👤 private_user     Private User       Member   🔒        │
+│                     (Profile visible to org only)          │
+│ 👤 very_private     -                  Member   🔒🔒      │
+│                     (Minimal info - username only)         │
+└─────────────────────────────────────────────────────────────┘
+
+🔒 = Private profile, basic info visible in org
+🔒🔒 = Private profile, username only
+```
 
 ## API Tokens
 
@@ -21644,7 +24681,7 @@ No registration allowed, admin creates users manually
 ### API Token Format
 
 ```
-vidveil_{random_32_chars}
+{projectname}_{random_32_chars}
 
 Example: jokes_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 ```
@@ -21717,20 +24754,21 @@ Example: jokes_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 | Scope | Web | API | Description |
 |-------|-----|-----|-------------|
 | Public | `/` | `/api/v1/` | Public resources, unauthenticated |
+| Server | `/server/` | `/api/v1/server/` | Server info pages (about, privacy, etc.) |
 | Auth | `/auth/` | `/api/v1/auth/` | Authentication flows |
-| User | `/user/` | `/api/v1/user/` | Current user's resources |
-| Org | `/org/` | `/api/v1/org/` | Organization resources (if applicable) |
-| Admin | `/admin/` | `/api/v1/admin/` | Admin/server management |
+| Users | `/users/` | `/api/v1/users/` | User resources (requires ID) |
+| Orgs | `/orgs/` | `/api/v1/orgs/` | Organization resources (requires slug) |
+| Admin | `/{admin_path}/` | `/api/v1/{admin_path}/` | Admin/server management |
 
 ### Authentication Requirements
 
 | Scope | Web Auth | API Auth | Notes |
 |-------|----------|----------|-------|
 | Public | None | None | Unauthenticated access |
-| Server (`/server/`) | None | None | Static info pages |
+| Server | None | None | Static info pages |
 | Auth | None | None | Used to obtain authentication |
-| User | Session cookie | `Authorization: Bearer {token}` | User must be logged in |
-| Org | Session cookie | `Authorization: Bearer {token}` | User + org membership |
+| Users | Session cookie | `Authorization: Bearer {token}` | User must be logged in |
+| Orgs | Session cookie | `Authorization: Bearer {token}` | User + org membership |
 | Admin | Session cookie | `Authorization: Bearer {admin_token}` | Admin-only access |
 
 **API Token Types:**
@@ -21750,7 +24788,7 @@ Example: jokes_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 | Cookie | Scope | Max Age | Notes |
 |--------|-------|---------|-------|
 | `admin_session` | `/admin/` | 30 days | Admin web sessions |
-| `user_session` | `/user/`, `/org/` | 7 days | User web sessions |
+| `user_session` | `/users/`, `/orgs/` | 7 days | User web sessions |
 
 ## Web Routes
 
@@ -21792,39 +24830,41 @@ Example: jokes_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 | `/auth/oidc/{provider}/callback` | OIDC callback (provider redirects back) |
 | `/auth/ldap` | LDAP login form (if separate from main login) |
 
-### User (`/user/`)
+### Users (`/users/`)
+
+**No ID required - app knows current user from session.**
 
 | Path | Description |
 |------|-------------|
-| `/user/profile` | View/edit profile |
-| `/user/settings` | Account settings |
-| `/user/tokens` | Manage API tokens |
-| `/user/security` | Password, 2FA, sessions, recovery |
-| `/user/security/password` | Change password |
-| `/user/security/sessions` | Active sessions |
-| `/user/security/2fa` | Two-factor settings |
-| `/user/security/recovery` | View/regenerate recovery keys |
-| `/user/security/passkeys` | Manage passkeys (WebAuthn) |
+| `/users` | Current user's profile |
+| `/users/settings` | Account settings |
+| `/users/tokens` | Manage API tokens |
+| `/users/security` | Password, 2FA, sessions, recovery |
+| `/users/security/password` | Change password |
+| `/users/security/sessions` | Active sessions |
+| `/users/security/2fa` | Two-factor settings |
+| `/users/security/recovery` | View/regenerate recovery keys |
+| `/users/security/passkeys` | Manage passkeys (WebAuthn) |
 
-### Org (`/org/`)
+### Orgs (`/orgs/`)
 
-Organizations - only for projects with multi-user collaboration. Routes always use `/org/` but UI display name can be customized to "Team" if project requires (rarely needed).
+Organizations - only for projects with multi-user collaboration.
 
 | Path | Description |
 |------|-------------|
-| `/org` | List user's organizations |
-| `/org/new` | Create new organization |
-| `/org/{slug}` | Organization dashboard |
-| `/org/{slug}/settings` | Organization settings |
-| `/org/{slug}/tokens` | Organization API tokens |
-| `/org/{slug}/members` | Member management |
-| `/org/{slug}/members/invite` | Invite new members |
-| `/org/{slug}/roles` | Organization roles |
-| `/org/{slug}/security` | Security settings |
-| `/org/{slug}/security/audit` | Audit log |
-| `/org/{slug}/security/audit/export` | Export audit log (compliance) |
-| `/org/{slug}/security/sessions` | Active sessions (org-wide) |
-| `/org/{slug}/billing` | Billing & subscription (if applicable) |
+| `/orgs` | List user's organizations |
+| `/orgs/new` | Create new organization |
+| `/orgs/{slug}` | Organization dashboard |
+| `/orgs/{slug}/settings` | Organization settings |
+| `/orgs/{slug}/tokens` | Organization API tokens |
+| `/orgs/{slug}/members` | Member management |
+| `/orgs/{slug}/members/invite` | Invite new members |
+| `/orgs/{slug}/roles` | Organization roles |
+| `/orgs/{slug}/security` | Security settings |
+| `/orgs/{slug}/security/audit` | Audit log |
+| `/orgs/{slug}/security/audit/export` | Export audit log (compliance) |
+| `/orgs/{slug}/security/sessions` | Active sessions (org-wide) |
+| `/orgs/{slug}/billing` | Billing & subscription (if applicable) |
 
 ### Admin (`/admin/`)
 
@@ -21912,63 +24952,69 @@ Organizations - only for projects with multi-user collaboration. Routes always u
 | `/api/v1/auth/oidc/{provider}/callback` | POST | Exchange OIDC code for session |
 | `/api/v1/auth/ldap` | POST | LDAP authentication |
 
-### User (`/api/v1/user/`)
+### Users (`/api/v1/users/`)
+
+**No ID required - app knows current user from session/token.**
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/user/profile` | GET | Get own profile |
-| `/api/v1/user/profile` | PATCH | Update own profile |
-| `/api/v1/user/tokens` | GET | List own API tokens |
-| `/api/v1/user/tokens` | POST | Create API token |
-| `/api/v1/user/tokens/{id}` | GET | Get token details |
-| `/api/v1/user/tokens/{id}` | DELETE | Revoke API token |
-| `/api/v1/user/security/password` | POST | Change password |
-| `/api/v1/user/security/sessions` | GET | List active sessions |
-| `/api/v1/user/security/sessions/{id}` | DELETE | Revoke session |
-| `/api/v1/user/security/2fa` | GET | Get 2FA status |
-| `/api/v1/user/security/2fa/enable` | POST | Enable 2FA |
-| `/api/v1/user/security/2fa/disable` | POST | Disable 2FA |
-| `/api/v1/user/security/recovery` | GET | Get recovery keys status |
-| `/api/v1/user/security/recovery/regenerate` | POST | Regenerate recovery keys |
-| `/api/v1/user/security/passkeys` | GET | List passkeys |
-| `/api/v1/user/security/passkeys` | POST | Register new passkey |
-| `/api/v1/user/security/passkeys/{id}` | DELETE | Remove passkey |
+| `/api/v1/users` | GET | Current user's profile |
+| `/api/v1/users` | PATCH | Update current user's profile |
+| `/api/v1/users/tokens` | GET | List user's API tokens |
+| `/api/v1/users/tokens` | POST | Create API token |
+| `/api/v1/users/tokens/{token_id}` | GET | Get token details |
+| `/api/v1/users/tokens/{token_id}` | DELETE | Revoke API token |
+| `/api/v1/users/settings` | GET | Get user preferences |
+| `/api/v1/users/settings` | PATCH | Update user preferences |
+| `/api/v1/users/security/password` | POST | Change password |
+| `/api/v1/users/security/sessions` | GET | List active sessions |
+| `/api/v1/users/security/sessions/{session_id}` | DELETE | Revoke session |
+| `/api/v1/users/security/2fa` | GET | Get 2FA status |
+| `/api/v1/users/security/2fa/enable` | POST | Enable 2FA |
+| `/api/v1/users/security/2fa/disable` | POST | Disable 2FA |
+| `/api/v1/users/security/recovery` | GET | Get recovery keys status |
+| `/api/v1/users/security/recovery/regenerate` | POST | Regenerate recovery keys |
+| `/api/v1/users/security/passkeys` | GET | List passkeys |
+| `/api/v1/users/security/passkeys` | POST | Register new passkey |
+| `/api/v1/users/security/passkeys/{passkey_id}` | DELETE | Remove passkey |
 
-### Org (`/api/v1/org/`)
+### Orgs (`/api/v1/orgs/`)
 
 Organizations - only for projects with multi-user collaboration.
 
+**Route scoping:** All routes use org slug. Client gets own orgs from `GET /api/v1/orgs`.
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/org` | GET | List user's organizations |
-| `/api/v1/org` | POST | Create organization |
-| `/api/v1/org/{slug}` | GET | Get organization details |
-| `/api/v1/org/{slug}` | PATCH | Update organization |
-| `/api/v1/org/{slug}` | DELETE | Delete organization |
-| `/api/v1/org/{slug}/settings` | GET | Get org settings |
-| `/api/v1/org/{slug}/settings` | PATCH | Update org settings |
-| `/api/v1/org/{slug}/tokens` | GET | List org API tokens |
-| `/api/v1/org/{slug}/tokens` | POST | Create org API token |
-| `/api/v1/org/{slug}/tokens/{id}` | GET | Get token details |
-| `/api/v1/org/{slug}/tokens/{id}` | DELETE | Revoke token |
-| `/api/v1/org/{slug}/members` | GET | List members |
-| `/api/v1/org/{slug}/members` | POST | Add member |
-| `/api/v1/org/{slug}/members/{id}` | GET | Get member details |
-| `/api/v1/org/{slug}/members/{id}` | PATCH | Update member role |
-| `/api/v1/org/{slug}/members/{id}` | DELETE | Remove member |
-| `/api/v1/org/{slug}/invites` | GET | List pending invites |
-| `/api/v1/org/{slug}/invites` | POST | Create invite |
-| `/api/v1/org/{slug}/invites/{id}` | DELETE | Revoke invite |
-| `/api/v1/org/{slug}/roles` | GET | List organization roles |
-| `/api/v1/org/{slug}/roles` | POST | Create custom role |
-| `/api/v1/org/{slug}/roles/{id}` | PATCH | Update role |
-| `/api/v1/org/{slug}/roles/{id}` | DELETE | Delete role |
-| `/api/v1/org/{slug}/security/audit` | GET | List audit events (paginated) |
-| `/api/v1/org/{slug}/security/audit/export` | POST | Request audit export |
-| `/api/v1/org/{slug}/security/audit/export/{id}` | GET | Download audit export |
-| `/api/v1/org/{slug}/security/audit/retention` | GET | Get retention settings |
-| `/api/v1/org/{slug}/security/audit/retention` | PATCH | Update retention (org owner only) |
-| `/api/v1/org/{slug}/security/sessions` | GET | List org-wide sessions |
+| `/api/v1/orgs` | GET | Own orgs (user) or list all (admin) |
+| `/api/v1/orgs` | POST | Create organization |
+| `/api/v1/orgs/{slug}` | GET | Get organization details |
+| `/api/v1/orgs/{slug}` | PATCH | Update organization |
+| `/api/v1/orgs/{slug}` | DELETE | Delete organization |
+| `/api/v1/orgs/{slug}/settings` | GET | Get org settings |
+| `/api/v1/orgs/{slug}/settings` | PATCH | Update org settings |
+| `/api/v1/orgs/{slug}/tokens` | GET | List org API tokens |
+| `/api/v1/orgs/{slug}/tokens` | POST | Create org API token |
+| `/api/v1/orgs/{slug}/tokens/{token_id}` | GET | Get token details |
+| `/api/v1/orgs/{slug}/tokens/{token_id}` | DELETE | Revoke token |
+| `/api/v1/orgs/{slug}/members` | GET | List members |
+| `/api/v1/orgs/{slug}/members` | POST | Add member |
+| `/api/v1/orgs/{slug}/members/{member_id}` | GET | Get member details |
+| `/api/v1/orgs/{slug}/members/{member_id}` | PATCH | Update member role |
+| `/api/v1/orgs/{slug}/members/{member_id}` | DELETE | Remove member |
+| `/api/v1/orgs/{slug}/invites` | GET | List pending invites |
+| `/api/v1/orgs/{slug}/invites` | POST | Create invite |
+| `/api/v1/orgs/{slug}/invites/{invite_id}` | DELETE | Revoke invite |
+| `/api/v1/orgs/{slug}/roles` | GET | List organization roles |
+| `/api/v1/orgs/{slug}/roles` | POST | Create custom role |
+| `/api/v1/orgs/{slug}/roles/{role_id}` | PATCH | Update role |
+| `/api/v1/orgs/{slug}/roles/{role_id}` | DELETE | Delete role |
+| `/api/v1/orgs/{slug}/security/audit` | GET | List audit events (paginated) |
+| `/api/v1/orgs/{slug}/security/audit/export` | POST | Request audit export |
+| `/api/v1/orgs/{slug}/security/audit/export/{export_id}` | GET | Download audit export |
+| `/api/v1/orgs/{slug}/security/audit/retention` | GET | Get retention settings |
+| `/api/v1/orgs/{slug}/security/audit/retention` | PATCH | Update retention (org owner only) |
+| `/api/v1/orgs/{slug}/security/sessions` | GET | List org-wide sessions |
 
 ### Admin - Server (`/api/v1/admin/server/`)
 
@@ -22027,9 +25073,9 @@ User registration invite codes (multi-user apps only).
 | `/api/v1/admin/server/moderation/users` | GET | List all users |
 | `/api/v1/admin/server/moderation/users/{id}` | GET | Get user details |
 | `/api/v1/admin/server/moderation/users/{id}` | DELETE | Delete user |
-| `/api/v1/admin/server/moderation/users/{id}/disable` | POST | Disable user |
-| `/api/v1/admin/server/moderation/users/{id}/enable` | POST | Enable user |
-| `/api/v1/admin/server/moderation/users/{id}/impersonate` | POST | Get impersonation token |
+| `/api/v1/admin/server/moderation/users/disable` | POST | Disable user |
+| `/api/v1/admin/server/moderation/users/enable` | POST | Enable user |
+| `/api/v1/admin/server/moderation/users/impersonate` | POST | Get impersonation token |
 
 ### Admin - Moderation Orgs (`/api/v1/admin/server/moderation/orgs/`)
 
@@ -23296,7 +26342,7 @@ Most apps (Jokes, Quotes, Airports, etc.) do NOT need HA - clustering with confi
 ## Backup Command
 
 ```bash
-vidveil --maintenance backup [filename]
+{projectname} --maintenance backup [filename]
 ```
 
 ### Backup Contents
@@ -23328,7 +26374,7 @@ vidveil --maintenance backup [filename]
 ### Backup Format
 
 - Single `.tar.gz` file (or `.tar.gz.enc` if encrypted)
-- Filename: `vidveil_backup_YYYY-MM-DD_HHMMSS.tar.gz[.enc]`
+- Filename: `{projectname}_backup_YYYY-MM-DD_HHMMSS.tar.gz[.enc]`
 - Includes manifest with version info
 - Encrypted if backup password was set during setup
 
@@ -23399,14 +26445,14 @@ server:
 
 ```bash
 # If encryption password set during setup:
-vidveil --maintenance backup
+{projectname} --maintenance backup
 # Prompts for password, creates encrypted backup
 
 # Override with explicit password:
-vidveil --maintenance backup --password "mypassword"
+{projectname} --maintenance backup --password "mypassword"
 
 # Restore encrypted backup:
-vidveil --maintenance restore backup.tar.gz.enc
+{projectname} --maintenance restore backup.tar.gz.enc
 # Prompts for password
 ```
 
@@ -23535,7 +26581,7 @@ Every backup is verified immediately after creation:
 ## Restore Command
 
 ```bash
-vidveil --maintenance restore <backup-file>
+{projectname} --maintenance restore <backup-file>
 ```
 
 ### Restore Behavior
@@ -23590,7 +26636,7 @@ Your existing password and settings will be preserved.
 ## Admin Recovery Command
 
 ```bash
-vidveil --maintenance setup
+{projectname} --maintenance setup
 ```
 
 **Purpose:** Resets admin credentials and generates a new setup token. This is the ONLY way for a server admin to recover access if they have lost their password, API token, AND recovery keys.
@@ -23619,10 +26665,10 @@ vidveil --maintenance setup
 
 ```bash
 # Stop the service first (recommended)
-vidveil --service stop
+{projectname} --service stop
 
 # Run setup reset
-vidveil --maintenance setup
+{projectname} --maintenance setup
 
 # Output:
 # ╔══════════════════════════════════════════════════════════════════╗
@@ -23635,14 +26681,14 @@ vidveil --maintenance setup
 # ║  │  a1b2c3d4e5f67890abcdef1234567890                          │  ║
 # ║  └────────────────────────────────────────────────────────────┘  ║
 # ║                                                                  ║
-# ║  1. Start the service: vidveil --service start             ║
+# ║  1. Start the service: {projectname} --service start             ║
 # ║  2. Go to: http://{fqdn}:{port}/admin                            ║
 # ║  3. Enter the setup token above                                  ║
 # ║  4. Create new admin account via setup wizard                    ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # Start the service
-vidveil --service start
+{projectname} --service start
 ```
 
 ### Security Considerations
@@ -23677,7 +26723,7 @@ vidveil --service start
 │  Admin locked out (no password, no token, no recovery keys)     │
 │                           │                                     │
 │                           ▼                                     │
-│  Server admin runs: vidveil --maintenance setup           │
+│  Server admin runs: {projectname} --maintenance setup           │
 │                           │                                     │
 │                           ▼                                     │
 │  Admin credentials cleared, new setup token generated           │
@@ -23974,7 +27020,7 @@ IMPORTANT NEXT STEPS
 5. Enable two-factor authentication
 
 Keep your admin credentials secure. If you lose access, use:
-  vidveil --maintenance setup
+  {projectname} --maintenance setup
 ────────────────────────────────────────────────────────────────────────
 
 --
@@ -24263,10 +27309,10 @@ We recommend you take the following steps to protect your account:
    {app_url}/auth/password/forgot
 
 2. Review your account activity:
-   {app_url}/user/security
+   {app_url}/users/security
 
 3. Enable two-factor authentication if not already enabled:
-   {app_url}/user/security/2fa
+   {app_url}/users/security/2fa
 
 4. Monitor your accounts for any suspicious activity
 ────────────────────────────────────────────────────────────────────────
@@ -24767,7 +27813,7 @@ Send Test Email Dialog
 
 ## User Notifications (Multi-User Mode)
 
-**Notifications shown to regular users in `/user/*` routes.**
+**Notifications shown to regular users in `/users/*` routes.**
 
 | Event | Toast | Banner | Center | Description |
 |-------|:-----:|:------:|:------:|-------------|
@@ -24922,7 +27968,7 @@ Admin Notification Preferences (/admin/profile/notifications)
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### User Notification Preferences (`/user/settings/notifications`)
+### User Notification Preferences (`/users/settings/notifications`)
 
 | Category | Events | Default | Can Disable? |
 |----------|--------|---------|--------------|
@@ -24931,7 +27977,7 @@ Admin Notification Preferences (/admin/profile/notifications)
 | **Sessions** | Session expired, new device | All ON | Partial |
 
 ```
-User Notification Preferences (/user/settings/notifications)
+User Notification Preferences (/users/settings/notifications)
 ┌─────────────────────────────────────────────────────────────┐
 │  Notification Preferences                                   │
 ├─────────────────────────────────────────────────────────────┤
@@ -25498,7 +28544,7 @@ var (
     // HTTP metrics
     HTTPRequestsTotal = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "vidveil_http_requests_total",
+            Name: "{projectname}_http_requests_total",
             Help: "Total number of HTTP requests",
         },
         []string{"method", "path", "status"},
@@ -25506,7 +28552,7 @@ var (
 
     HTTPRequestDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "vidveil_http_request_duration_seconds",
+            Name:    "{projectname}_http_request_duration_seconds",
             Help:    "HTTP request duration in seconds",
             Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
         },
@@ -25515,7 +28561,7 @@ var (
 
     HTTPRequestSize = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "vidveil_http_request_size_bytes",
+            Name:    "{projectname}_http_request_size_bytes",
             Help:    "HTTP request size in bytes",
             Buckets: []float64{100, 1000, 10000, 100000, 1000000, 10000000},
         },
@@ -25524,7 +28570,7 @@ var (
 
     HTTPResponseSize = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "vidveil_http_response_size_bytes",
+            Name:    "{projectname}_http_response_size_bytes",
             Help:    "HTTP response size in bytes",
             Buckets: []float64{100, 1000, 10000, 100000, 1000000, 10000000},
         },
@@ -25533,7 +28579,7 @@ var (
 
     HTTPActiveRequests = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_http_active_requests",
+            Name: "{projectname}_http_active_requests",
             Help: "Number of active HTTP requests",
         },
     )
@@ -25541,7 +28587,7 @@ var (
     // Database metrics
     DBQueriesTotal = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "vidveil_db_queries_total",
+            Name: "{projectname}_db_queries_total",
             Help: "Total number of database queries",
         },
         []string{"operation", "table"},
@@ -25549,7 +28595,7 @@ var (
 
     DBQueryDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "vidveil_db_query_duration_seconds",
+            Name:    "{projectname}_db_query_duration_seconds",
             Help:    "Database query duration in seconds",
             Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1},
         },
@@ -25558,21 +28604,21 @@ var (
 
     DBConnectionsOpen = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_db_connections_open",
+            Name: "{projectname}_db_connections_open",
             Help: "Number of open database connections",
         },
     )
 
     DBConnectionsInUse = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_db_connections_in_use",
+            Name: "{projectname}_db_connections_in_use",
             Help: "Number of database connections in use",
         },
     )
 
     DBErrors = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "vidveil_db_errors_total",
+            Name: "{projectname}_db_errors_total",
             Help: "Total number of database errors",
         },
         []string{"operation", "error_type"},
@@ -25581,7 +28627,7 @@ var (
     // Cache metrics
     CacheHits = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "vidveil_cache_hits_total",
+            Name: "{projectname}_cache_hits_total",
             Help: "Total number of cache hits",
         },
         []string{"cache"},
@@ -25589,7 +28635,7 @@ var (
 
     CacheMisses = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "vidveil_cache_misses_total",
+            Name: "{projectname}_cache_misses_total",
             Help: "Total number of cache misses",
         },
         []string{"cache"},
@@ -25597,7 +28643,7 @@ var (
 
     CacheEvictions = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "vidveil_cache_evictions_total",
+            Name: "{projectname}_cache_evictions_total",
             Help: "Total number of cache evictions",
         },
         []string{"cache"},
@@ -25605,7 +28651,7 @@ var (
 
     CacheSize = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "vidveil_cache_size",
+            Name: "{projectname}_cache_size",
             Help: "Current cache size (items)",
         },
         []string{"cache"},
@@ -25613,7 +28659,7 @@ var (
 
     CacheBytes = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "vidveil_cache_bytes",
+            Name: "{projectname}_cache_bytes",
             Help: "Current cache size (bytes)",
         },
         []string{"cache"},
@@ -25622,7 +28668,7 @@ var (
     // Scheduler metrics
     SchedulerTasksTotal = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "vidveil_scheduler_tasks_total",
+            Name: "{projectname}_scheduler_tasks_total",
             Help: "Total number of scheduled tasks executed",
         },
         []string{"task", "status"},
@@ -25630,7 +28676,7 @@ var (
 
     SchedulerTaskDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "vidveil_scheduler_task_duration_seconds",
+            Name:    "{projectname}_scheduler_task_duration_seconds",
             Help:    "Scheduled task duration in seconds",
             Buckets: []float64{0.1, 0.5, 1, 5, 10, 30, 60, 300, 600},
         },
@@ -25639,7 +28685,7 @@ var (
 
     SchedulerTasksRunning = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "vidveil_scheduler_tasks_running",
+            Name: "{projectname}_scheduler_tasks_running",
             Help: "Number of currently running scheduled tasks",
         },
         []string{"task"},
@@ -25647,7 +28693,7 @@ var (
 
     SchedulerLastRun = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "vidveil_scheduler_last_run_timestamp",
+            Name: "{projectname}_scheduler_last_run_timestamp",
             Help: "Timestamp of last task run",
         },
         []string{"task"},
@@ -25656,7 +28702,7 @@ var (
     // Authentication metrics
     AuthAttempts = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "vidveil_auth_attempts_total",
+            Name: "{projectname}_auth_attempts_total",
             Help: "Total authentication attempts",
         },
         []string{"method", "status"},
@@ -25664,7 +28710,7 @@ var (
 
     AuthSessionsActive = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_auth_sessions_active",
+            Name: "{projectname}_auth_sessions_active",
             Help: "Number of active sessions",
         },
     )
@@ -25672,21 +28718,21 @@ var (
     // Business metrics
     UsersTotal = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_users_total",
+            Name: "{projectname}_users_total",
             Help: "Total number of registered users",
         },
     )
 
     UsersActive = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_users_active",
+            Name: "{projectname}_users_active",
             Help: "Number of users active in last 24 hours",
         },
     )
 
     APITokensActive = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_api_tokens_active",
+            Name: "{projectname}_api_tokens_active",
             Help: "Number of active API tokens",
         },
     )
@@ -25694,7 +28740,7 @@ var (
     // Application info
     AppInfo = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "vidveil_app_info",
+            Name: "{projectname}_app_info",
             Help: "Application information",
         },
         []string{"version", "commit", "build_date", "go_version"},
@@ -25702,14 +28748,14 @@ var (
 
     AppUptime = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_app_uptime_seconds",
+            Name: "{projectname}_app_uptime_seconds",
             Help: "Application uptime in seconds",
         },
     )
 
     AppStartTime = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_app_start_timestamp",
+            Name: "{projectname}_app_start_timestamp",
             Help: "Application start timestamp",
         },
     )
@@ -25733,7 +28779,7 @@ import (
     "strconv"
     "time"
 
-    "github.com/apimgr/vidveil/src/server/metrics"
+    "github.com/{projectorg}/{projectname}/src/server/metrics"
 )
 
 // metricsMiddleware records HTTP metrics for all requests
@@ -25817,7 +28863,7 @@ import (
     "database/sql"
     "time"
 
-    "github.com/apimgr/vidveil/src/server/metrics"
+    "github.com/{projectorg}/{projectname}/src/server/metrics"
 )
 
 // MetricsDB wraps sql.DB with metrics
@@ -25918,7 +28964,7 @@ package cache
 import (
     "time"
 
-    "github.com/apimgr/vidveil/src/server/metrics"
+    "github.com/{projectorg}/{projectname}/src/server/metrics"
 )
 
 // MetricsCache wraps a cache with metrics
@@ -25971,7 +29017,7 @@ package scheduler
 import (
     "time"
 
-    "github.com/apimgr/vidveil/src/server/metrics"
+    "github.com/{projectorg}/{projectname}/src/server/metrics"
 )
 
 // RecordTaskStart records when a task starts
@@ -26014,35 +29060,35 @@ var (
     // System metrics
     SystemCPUUsage = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_system_cpu_usage_percent",
+            Name: "{projectname}_system_cpu_usage_percent",
             Help: "Current CPU usage percentage",
         },
     )
 
     SystemMemoryUsage = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_system_memory_usage_percent",
+            Name: "{projectname}_system_memory_usage_percent",
             Help: "Current memory usage percentage",
         },
     )
 
     SystemMemoryUsed = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_system_memory_used_bytes",
+            Name: "{projectname}_system_memory_used_bytes",
             Help: "Memory used in bytes",
         },
     )
 
     SystemMemoryTotal = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_system_memory_total_bytes",
+            Name: "{projectname}_system_memory_total_bytes",
             Help: "Total memory in bytes",
         },
     )
 
     SystemDiskUsage = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "vidveil_system_disk_usage_percent",
+            Name: "{projectname}_system_disk_usage_percent",
             Help: "Disk usage percentage",
         },
         []string{"path"},
@@ -26050,7 +29096,7 @@ var (
 
     SystemDiskUsed = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "vidveil_system_disk_used_bytes",
+            Name: "{projectname}_system_disk_used_bytes",
             Help: "Disk used in bytes",
         },
         []string{"path"},
@@ -26058,7 +29104,7 @@ var (
 
     SystemDiskTotal = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "vidveil_system_disk_total_bytes",
+            Name: "{projectname}_system_disk_total_bytes",
             Help: "Total disk in bytes",
         },
         []string{"path"},
@@ -26067,35 +29113,35 @@ var (
     // Go runtime metrics
     GoGoroutines = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_go_goroutines",
+            Name: "{projectname}_go_goroutines",
             Help: "Number of goroutines",
         },
     )
 
     GoMemAlloc = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_go_mem_alloc_bytes",
+            Name: "{projectname}_go_mem_alloc_bytes",
             Help: "Bytes allocated and in use",
         },
     )
 
     GoMemSys = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "vidveil_go_mem_sys_bytes",
+            Name: "{projectname}_go_mem_sys_bytes",
             Help: "Bytes obtained from system",
         },
     )
 
     GoGCRuns = promauto.NewCounter(
         prometheus.CounterOpts{
-            Name: "vidveil_go_gc_runs_total",
+            Name: "{projectname}_go_gc_runs_total",
             Help: "Total number of GC runs",
         },
     )
 
     GoGCPauseTotal = promauto.NewCounter(
         prometheus.CounterOpts{
-            Name: "vidveil_go_gc_pause_total_seconds",
+            Name: "{projectname}_go_gc_pause_total_seconds",
             Help: "Total GC pause time in seconds",
         },
     )
@@ -26243,35 +29289,35 @@ func StartUptimeUpdater() {
 ## Metrics Endpoint Output
 
 ```
-# HELP vidveil_http_requests_total Total number of HTTP requests
-# TYPE vidveil_http_requests_total counter
-vidveil_http_requests_total{method="GET",path="/api/v1/users",status="200"} 1523
-vidveil_http_requests_total{method="POST",path="/api/v1/users",status="201"} 42
+# HELP {projectname}_http_requests_total Total number of HTTP requests
+# TYPE {projectname}_http_requests_total counter
+{projectname}_http_requests_total{method="GET",path="/api/v1/users",status="200"} 1523
+{projectname}_http_requests_total{method="POST",path="/api/v1/users",status="201"} 42
 
-# HELP vidveil_http_request_duration_seconds HTTP request duration in seconds
-# TYPE vidveil_http_request_duration_seconds histogram
-vidveil_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.01"} 1400
-vidveil_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.1"} 1520
-vidveil_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="+Inf"} 1523
-vidveil_http_request_duration_seconds_sum{method="GET",path="/api/v1/users"} 12.456
-vidveil_http_request_duration_seconds_count{method="GET",path="/api/v1/users"} 1523
+# HELP {projectname}_http_request_duration_seconds HTTP request duration in seconds
+# TYPE {projectname}_http_request_duration_seconds histogram
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.01"} 1400
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.1"} 1520
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="+Inf"} 1523
+{projectname}_http_request_duration_seconds_sum{method="GET",path="/api/v1/users"} 12.456
+{projectname}_http_request_duration_seconds_count{method="GET",path="/api/v1/users"} 1523
 
-# HELP vidveil_db_connections_open Number of open database connections
-# TYPE vidveil_db_connections_open gauge
-vidveil_db_connections_open 5
+# HELP {projectname}_db_connections_open Number of open database connections
+# TYPE {projectname}_db_connections_open gauge
+{projectname}_db_connections_open 5
 
-# HELP vidveil_cache_hits_total Total number of cache hits
-# TYPE vidveil_cache_hits_total counter
-vidveil_cache_hits_total{cache="sessions"} 8234
-vidveil_cache_hits_total{cache="users"} 1523
+# HELP {projectname}_cache_hits_total Total number of cache hits
+# TYPE {projectname}_cache_hits_total counter
+{projectname}_cache_hits_total{cache="sessions"} 8234
+{projectname}_cache_hits_total{cache="users"} 1523
 
-# HELP vidveil_app_info Application information
-# TYPE vidveil_app_info gauge
-vidveil_app_info{version="1.2.3",commit="abc123",build_date="2025-01-15",go_version="go1.23"} 1
+# HELP {projectname}_app_info Application information
+# TYPE {projectname}_app_info gauge
+{projectname}_app_info{version="1.2.3",commit="abc123",build_date="2025-01-15",go_version="go1.23"} 1
 
-# HELP vidveil_app_uptime_seconds Application uptime in seconds
-# TYPE vidveil_app_uptime_seconds gauge
-vidveil_app_uptime_seconds 86423.5
+# HELP {projectname}_app_uptime_seconds Application uptime in seconds
+# TYPE {projectname}_app_uptime_seconds gauge
+{projectname}_app_uptime_seconds 86423.5
 ```
 
 ## Alerting Rules (Prometheus)
@@ -26279,13 +29325,13 @@ vidveil_app_uptime_seconds 86423.5
 ```yaml
 # alerts.yml - Example Prometheus alerting rules
 groups:
-  - name: vidveil_alerts
+  - name: {projectname}_alerts
     rules:
       # High error rate
       - alert: HighErrorRate
         expr: |
-          sum(rate(vidveil_http_requests_total{status=~"5.."}[5m]))
-          / sum(rate(vidveil_http_requests_total[5m])) > 0.05
+          sum(rate({projectname}_http_requests_total{status=~"5.."}[5m]))
+          / sum(rate({projectname}_http_requests_total[5m])) > 0.05
         for: 5m
         labels:
           severity: critical
@@ -26296,7 +29342,7 @@ groups:
       # High latency
       - alert: HighLatency
         expr: |
-          histogram_quantile(0.95, rate(vidveil_http_request_duration_seconds_bucket[5m])) > 1
+          histogram_quantile(0.95, rate({projectname}_http_request_duration_seconds_bucket[5m])) > 1
         for: 5m
         labels:
           severity: warning
@@ -26307,7 +29353,7 @@ groups:
       # Database connection pool exhausted
       - alert: DBConnectionPoolExhausted
         expr: |
-          vidveil_db_connections_in_use / vidveil_db_connections_open > 0.9
+          {projectname}_db_connections_in_use / {projectname}_db_connections_open > 0.9
         for: 5m
         labels:
           severity: warning
@@ -26316,7 +29362,7 @@ groups:
 
       # High memory usage
       - alert: HighMemoryUsage
-        expr: vidveil_system_memory_usage_percent > 90
+        expr: {projectname}_system_memory_usage_percent > 90
         for: 10m
         labels:
           severity: warning
@@ -26325,7 +29371,7 @@ groups:
 
       # Disk space low
       - alert: DiskSpaceLow
-        expr: vidveil_system_disk_usage_percent > 85
+        expr: {projectname}_system_disk_usage_percent > 85
         for: 5m
         labels:
           severity: warning
@@ -26334,18 +29380,18 @@ groups:
 
       # Application down
       - alert: ApplicationDown
-        expr: up{job="vidveil"} == 0
+        expr: up{job="{projectname}"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "vidveil is down"
+          summary: "{projectname} is down"
 
       # Goroutine leak
       - alert: GoroutineLeak
         expr: |
-          vidveil_go_goroutines > 1000
-          and increase(vidveil_go_goroutines[1h]) > 100
+          {projectname}_go_goroutines > 1000
+          and increase({projectname}_go_goroutines[1h]) > 100
         for: 30m
         labels:
           severity: warning
@@ -26356,7 +29402,7 @@ groups:
       # Scheduler task failing
       - alert: SchedulerTaskFailing
         expr: |
-          increase(vidveil_scheduler_tasks_total{status="error"}[1h]) > 3
+          increase({projectname}_scheduler_tasks_total{status="error"}[1h]) > 3
         for: 0m
         labels:
           severity: warning
@@ -26368,72 +29414,72 @@ groups:
 
 ```json
 {
-  "title": "VIDVEIL Metrics",
+  "title": "{PROJECTNAME} Metrics",
   "panels": [
     {
       "title": "Request Rate",
       "type": "graph",
       "targets": [
-        {"expr": "sum(rate(vidveil_http_requests_total[5m]))"}
+        {"expr": "sum(rate({projectname}_http_requests_total[5m]))"}
       ]
     },
     {
       "title": "Error Rate",
       "type": "graph",
       "targets": [
-        {"expr": "sum(rate(vidveil_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(vidveil_http_requests_total[5m]))"}
+        {"expr": "sum(rate({projectname}_http_requests_total{status=~\"5..\"}[5m])) / sum(rate({projectname}_http_requests_total[5m]))"}
       ]
     },
     {
       "title": "Latency (p50, p95, p99)",
       "type": "graph",
       "targets": [
-        {"expr": "histogram_quantile(0.50, rate(vidveil_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p50"},
-        {"expr": "histogram_quantile(0.95, rate(vidveil_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p95"},
-        {"expr": "histogram_quantile(0.99, rate(vidveil_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p99"}
+        {"expr": "histogram_quantile(0.50, rate({projectname}_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.95, rate({projectname}_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p95"},
+        {"expr": "histogram_quantile(0.99, rate({projectname}_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p99"}
       ]
     },
     {
       "title": "Active Requests",
       "type": "stat",
       "targets": [
-        {"expr": "vidveil_http_active_requests"}
+        {"expr": "{projectname}_http_active_requests"}
       ]
     },
     {
       "title": "Database Connections",
       "type": "graph",
       "targets": [
-        {"expr": "vidveil_db_connections_open", "legendFormat": "open"},
-        {"expr": "vidveil_db_connections_in_use", "legendFormat": "in_use"}
+        {"expr": "{projectname}_db_connections_open", "legendFormat": "open"},
+        {"expr": "{projectname}_db_connections_in_use", "legendFormat": "in_use"}
       ]
     },
     {
       "title": "Cache Hit Rate",
       "type": "graph",
       "targets": [
-        {"expr": "sum(rate(vidveil_cache_hits_total[5m])) / (sum(rate(vidveil_cache_hits_total[5m])) + sum(rate(vidveil_cache_misses_total[5m])))"}
+        {"expr": "sum(rate({projectname}_cache_hits_total[5m])) / (sum(rate({projectname}_cache_hits_total[5m])) + sum(rate({projectname}_cache_misses_total[5m])))"}
       ]
     },
     {
       "title": "Memory Usage",
       "type": "gauge",
       "targets": [
-        {"expr": "vidveil_system_memory_usage_percent"}
+        {"expr": "{projectname}_system_memory_usage_percent"}
       ]
     },
     {
       "title": "Goroutines",
       "type": "graph",
       "targets": [
-        {"expr": "vidveil_go_goroutines"}
+        {"expr": "{projectname}_go_goroutines"}
       ]
     },
     {
       "title": "Uptime",
       "type": "stat",
       "targets": [
-        {"expr": "vidveil_app_uptime_seconds"}
+        {"expr": "{projectname}_app_uptime_seconds"}
       ]
     }
   ]
@@ -27145,7 +30191,7 @@ Documentation uses MkDocs Material theme with built-in light/dark/auto switching
 | Theme | MkDocs Material with palette toggle (light/dark/auto) |
 | Default theme | Dark theme |
 | Hosting | ReadTheDocs |
-| URL format | `https://apimgr-vidveil.readthedocs.io` |
+| URL format | `https://{projectorg}-{projectname}.readthedocs.io` |
 | Source directory | `docs/` (ONLY ReadTheDocs files) |
 
 **Theme Support:**
@@ -27183,13 +30229,13 @@ Documentation uses MkDocs Material theme with built-in light/dark/auto switching
 ## mkdocs.yml Template (NON-NEGOTIABLE)
 
 ```yaml
-site_name: VIDVEIL
-site_url: https://apimgr-vidveil.readthedocs.io
+site_name: {PROJECTNAME}
+site_url: https://{projectorg}-{projectname}.readthedocs.io
 site_description: "{Project description}"
-site_author: apimgr
+site_author: {projectorg}
 
-repo_name: apimgr/vidveil
-repo_url: https://github.com/apimgr/vidveil
+repo_name: {projectorg}/{projectname}
+repo_url: https://github.com/{projectorg}/{projectname}
 edit_uri: edit/main/docs/
 
 theme:
@@ -27269,8 +30315,8 @@ markdown_extensions:
   - pymdownx.keys
   - pymdownx.magiclink:
       repo_url_shorthand: true
-      user: apimgr
-      repo: vidveil
+      user: {projectorg}
+      repo: {projectname}
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.superfences:
@@ -27299,7 +30345,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/apimgr/vidveil
+      link: https://github.com/{projectorg}/{projectname}
   generator: false
 ```
 
@@ -27611,7 +30657,7 @@ pymdown-extensions>=10.0
 ### docs/index.md
 
 ```markdown
-# VIDVEIL
+# {PROJECTNAME}
 
 {Brief project description}
 
@@ -27619,10 +30665,10 @@ pymdown-extensions>=10.0
 
 ```bash
 # Docker
-docker run -p 64580:80 ghcr.io/apimgr/vidveil:latest
+docker run -p 64580:80 ghcr.io/{projectorg}/{projectname}:latest
 
 # Binary
-./vidveil-linux-amd64 --config server.yml
+./{projectname}-linux-amd64 --config server.yml
 ```
 
 ## Features
@@ -27641,14 +30687,14 @@ docker run -p 64580:80 ghcr.io/apimgr/vidveil:latest
 
 ## Links
 
-- [GitHub Repository](https://github.com/apimgr/vidveil)
-- [Live Demo](https://vidveil.apimgr.us) (if applicable)
+- [GitHub Repository](https://github.com/{projectorg}/{projectname})
+- [Live Demo](https://{projectname}.{projectorg}.us) (if applicable)
 - [API Documentation](/openapi) (Swagger UI)
 - [GraphQL Playground](/graphql)
 
 ## License
 
-MIT - See [LICENSE.md](https://github.com/apimgr/vidveil/blob/main/LICENSE.md)
+MIT - See [LICENSE.md](https://github.com/{projectorg}/{projectname}/blob/main/LICENSE.md)
 ```
 
 ### docs/installation.md
@@ -27660,29 +30706,29 @@ MIT - See [LICENSE.md](https://github.com/apimgr/vidveil/blob/main/LICENSE.md)
 
 ```bash
 docker run -d \
-  --name vidveil \
+  --name {projectname} \
   -p 64580:80 \
-  -v vidveil-data:/data \
-  ghcr.io/apimgr/vidveil:latest
+  -v {projectname}-data:/data \
+  ghcr.io/{projectorg}/{projectname}:latest
 ```
 
 ## Binary
 
-Download from [releases](https://github.com/apimgr/vidveil/releases):
+Download from [releases](https://github.com/{projectorg}/{projectname}/releases):
 
 ```bash
 # Linux AMD64
-wget https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
-chmod +x vidveil-linux-amd64
-./vidveil-linux-amd64
+wget https://github.com/{projectorg}/{projectname}/releases/latest/download/{projectname}-linux-amd64
+chmod +x {projectname}-linux-amd64
+./{projectname}-linux-amd64
 ```
 
 ## Systemd Service
 
 ```bash
-sudo ./vidveil --service install
-sudo systemctl start vidveil
-sudo systemctl enable vidveil
+sudo ./{projectname} --service install
+sudo systemctl start {projectname}
+sudo systemctl enable {projectname}
 ```
 
 ## Configuration
@@ -27697,7 +30743,7 @@ See [Configuration](configuration.md) for all options.
 
 ## Config File
 
-Default location: `/etc/vidveil/server.yml`
+Default location: `/etc/{projectname}/server.yml`
 
 ```yaml
 server:
@@ -27716,8 +30762,8 @@ database:
 All settings can be overridden via environment:
 
 ```bash
-VIDVEIL_SERVER_PORT=8080
-VIDVEIL_DATABASE_TYPE=postgres
+{PROJECTNAME}_SERVER_PORT=8080
+{PROJECTNAME}_DATABASE_TYPE=postgres
 ```
 
 ## Admin Panel
@@ -27795,15 +30841,15 @@ Programmatic access via `/api/v1/admin/` with bearer token authentication.
 ## Build
 
 ```bash
-git clone https://github.com/apimgr/vidveil
-cd vidveil
+git clone https://github.com/{projectorg}/{projectname}
+cd {projectname}
 make build
 ```
 
 ## Run Locally
 
 ```bash
-./binaries/vidveil --config server.yml --debug
+./binaries/{projectname} --config server.yml --debug
 ```
 
 ## Testing
@@ -27858,10 +30904,10 @@ When a project includes a CLI client, it provides a terminal-based interface for
 
 | Attribute | Value |
 |-----------|-------|
-| Default binary name | `vidveil-cli` |
+| Default binary name | `{projectname}-cli` |
 | Versioning | Same as main application |
 | Build | Part of same Makefile (`make build` produces both binaries) |
-| Config location | `~/.config/apimgr/vidveil/cli.yml` |
+| Config location | `~/.config/{projectorg}/{projectname}/cli.yml` |
 
 ## Binary Naming Rules
 
@@ -27871,9 +30917,9 @@ When a project includes a CLI client, it provides a terminal-based interface for
 - Show ACTUAL binary name in user-facing places:
   - `--help` and `--version` output
   - Error messages, usage examples
-- Hardcode `vidveil-cli` for:
+- Hardcode `{projectname}-cli` for:
   - User-Agent header (server uses this to identify client type)
-  - Default config path uses `vidveil` not binary name
+  - Default config path uses `{projectname}` not binary name
 
 ```go
 // Get actual binary name for display
@@ -27881,39 +30927,95 @@ binaryName := filepath.Base(os.Args[0])
 
 // Hardcoded for User-Agent (never changes)
 // Compiled in via -ldflags
-const projectName = "jokes"
+const projectName = "pastebin"
 userAgent := fmt.Sprintf("%s-cli/%s", projectName, version)
 ```
 
 ## Modes
 
-### Standard CLI Mode
+### Automatic Mode Detection (NON-NEGOTIABLE)
 
-Traditional command-line interface with commands, subcommands, and flags:
+**The CLI automatically detects whether to use TUI or standard output. No `--tui` flag or `tui` command.**
 
+| Condition | Mode |
+|-----------|------|
+| Interactive terminal + no command | TUI mode |
+| Interactive terminal + only `--server`/`--token` | TUI mode (config flags don't count) |
+| Interactive terminal + command provided | Standard CLI with formatted output |
+| Piped/redirected output | Plain output (no colors, no TUI) |
+| Non-interactive (cron, scripts) | Plain output |
+
+**Config-only flags (`--server`, `--token`, `--config`) do NOT prevent TUI mode:**
 ```bash
-# Examples
-jokes-cli get random
-jokes-cli search --query "programming" --limit 10
-jokes-cli list --output json
-airports-cli lookup JFK
-quotes-cli random --category motivation
+pastebin-cli                                    # TUI mode (default cli.yml)
+pastebin-cli --config dev                       # TUI mode (with dev.yml loaded)
+pastebin-cli --server https://example.com       # TUI mode (with server set)
+pastebin-cli --token abc123                     # TUI mode (with token set)
+pastebin-cli --config dev --server https://x.com # TUI mode (dev.yml + server override)
+pastebin-cli list                               # CLI mode (command provided)
+pastebin-cli --config dev list                  # CLI mode (dev.yml + list command)
 ```
 
-### TUI Mode (Interactive)
+```go
+// Automatic mode detection
+func detectMode(args []string) string {
+    // Check if stdout is a terminal
+    if !term.IsTerminal(int(os.Stdout.Fd())) {
+        return "plain"  // Piped or redirected
+    }
 
-Full terminal user interface with menus, panels, and keyboard navigation:
+    // Config-only flags don't count as "action" - TUI still launches
+    configOnlyFlags := map[string]bool{
+        "--config": true, "--server": true, "--token": true,
+        "-h": true, "--help": true,
+        "-v": true, "--version": true,
+    }
+
+    // Check if any non-config args provided
+    for _, arg := range args[1:] {
+        // Skip flag values (the value after a flag)
+        if !strings.HasPrefix(arg, "-") {
+            return "cli"  // Command provided
+        }
+        // Check if it's an action flag (not config-only)
+        flagName := strings.Split(arg, "=")[0]
+        if !configOnlyFlags[flagName] {
+            return "cli"  // Action flag provided
+        }
+    }
+
+    return "tui"  // Only config flags or no args, launch TUI
+}
+```
+
+### Standard CLI Mode
+
+When command arguments are provided:
 
 ```bash
-# Launch TUI
-jokes-cli --tui
-jokes-cli tui
+# Examples - standard CLI output
+pastebin-cli create --file notes.txt --expire 24h
+airports-cli lookup JFK --output json
+quotesvc-cli random --category motivation
+weatherapi-cli forecast --city "New York" --days 5
+echoip-cli check --output table
+```
+
+### TUI Mode (Automatic)
+
+When launched with no arguments in an interactive terminal:
+
+```bash
+# Launch TUI (no arguments needed)
+pastebin-cli              # Opens TUI automatically
+airports-cli              # Opens TUI automatically
 
 # TUI provides:
 # - Interactive menus
 # - Search with live results
 # - Keyboard shortcuts
 # - Visual data display
+# - Professional, polished interface
 ```
 
 **TUI Library:** Use `github.com/charmbracelet/bubbletea` for TUI implementation.
@@ -27930,21 +31032,21 @@ The CLI client uses the same user directory structure as the server in user mode
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Config | `~/.config/apimgr/vidveil/` | Configuration files |
-| Config File | `~/.config/apimgr/vidveil/cli.yml` | CLI configuration |
-| Data | `~/.local/share/apimgr/vidveil/` | Persistent data |
-| Cache | `~/.cache/apimgr/vidveil/` | Temporary/cached data |
-| Logs | `~/.local/log/apimgr/vidveil/` | Log files |
+| Config | `~/.config/{projectorg}/{projectname}/` | Configuration files |
+| Config File | `~/.config/{projectorg}/{projectname}/cli.yml` | CLI configuration |
+| Data | `~/.local/share/{projectorg}/{projectname}/` | Persistent data |
+| Cache | `~/.cache/{projectorg}/{projectname}/` | Temporary/cached data |
+| Logs | `~/.local/log/{projectorg}/{projectname}/` | Log files |
 
 #### Windows
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Config | `%APPDATA%\apimgr\vidveil\` | Configuration files |
-| Config File | `%APPDATA%\apimgr\vidveil\cli.yml` | CLI configuration |
-| Data | `%LOCALAPPDATA%\apimgr\vidveil\data\` | Persistent data |
-| Cache | `%LOCALAPPDATA%\apimgr\vidveil\cache\` | Temporary/cached data |
-| Logs | `%LOCALAPPDATA%\apimgr\vidveil\log\` | Log files |
+| Config | `%APPDATA%\{projectorg}\{projectname}\` | Configuration files |
+| Config File | `%APPDATA%\{projectorg}\{projectname}\cli.yml` | CLI configuration |
+| Data | `%LOCALAPPDATA%\{projectorg}\{projectname}\data\` | Persistent data |
+| Cache | `%LOCALAPPDATA%\{projectorg}\{projectname}\cache\` | Temporary/cached data |
+| Logs | `%LOCALAPPDATA%\{projectorg}\{projectname}\log\` | Log files |
 
 #### Directory Usage
 
@@ -27956,9 +31058,9 @@ The CLI client uses the same user directory structure as the server in user mode
 | Logs | `cli.log`, debug logs | Optional |
 
 **NEVER use OS system directories:**
-- `/etc/apimgr/vidveil/` (Linux system config)
-- `/var/lib/apimgr/vidveil/` (Linux system data)
-- `/var/log/apimgr/vidveil/` (Linux system logs)
+- `/etc/{projectorg}/{projectname}/` (Linux system config)
+- `/var/lib/{projectorg}/{projectname}/` (Linux system data)
+- `/var/log/{projectorg}/{projectname}/` (Linux system logs)
 - `C:\ProgramData\` (Windows system data)
 - Any directory requiring elevated privileges
 
@@ -27975,8 +31077,8 @@ import (
 )
 
 const (
-	projectOrg  = "apimgr"
-	projectName = "vidveil"
+	projectOrg  = "{projectorg}"
+	projectName = "{projectname}"
 )
 
 // ConfigDir returns the CLI config directory
@@ -28021,6 +31123,92 @@ func ConfigFile() string {
 }
 ```
 
+### --config Flag (Config File Selection)
+
+**The `--config` flag loads a specific config file instead of the default `cli.yml`.**
+
+| Input | Resolution |
+|-------|------------|
+| `--config test` | `{configdir}/test.yml` |
+| `--config dev.yml` | `{configdir}/dev.yml` |
+| `--config test.yaml` | `{configdir}/test.yaml` |
+| `--config ~/testing/app.yml` | Absolute path: `~/testing/app.yml` |
+| `--config /etc/myapp/prod.yml` | Absolute path: `/etc/myapp/prod.yml` |
+| (not specified) | Default: `{configdir}/cli.yml` |
+
+**Resolution rules:**
+1. If path is absolute (starts with `/` or `~`) → expand, then check extension
+2. If path is relative → resolve relative to `{configdir}`
+3. If extension is `.yml` or `.yaml` → use as-is
+4. If no extension → auto-detect: check `.yml` first, then `.yaml`, default to `.yml`
+5. File must exist or error (except for new configs which default to `.yml`)
+
+```go
+// resolveConfigPath resolves --config flag to absolute path
+func resolveConfigPath(configFlag string) (string, error) {
+    if configFlag == "" {
+        return ConfigFile(), nil  // Default: cli.yml
+    }
+
+    // Expand ~ to home directory
+    if strings.HasPrefix(configFlag, "~/") {
+        home, _ := os.UserHomeDir()
+        configFlag = filepath.Join(home, configFlag[2:])
+    }
+
+    // Absolute path - check extension detection
+    if filepath.IsAbs(configFlag) {
+        return resolveYamlExtension(configFlag), nil
+    }
+
+    // Relative path - resolve to configdir
+    path := filepath.Join(ConfigDir(), configFlag)
+
+    return resolveYamlExtension(path), nil
+}
+
+// resolveYamlExtension auto-detects .yml or .yaml extension
+// If no extension provided, checks for existing .yml then .yaml
+// Defaults to .yml if neither exists (for new configs)
+func resolveYamlExtension(path string) string {
+    ext := filepath.Ext(path)
+
+    // Already has yaml extension - use as-is
+    if ext == ".yml" || ext == ".yaml" {
+        return path
+    }
+
+    // No extension - auto-detect
+    if ext == "" {
+        // Check .yml first
+        if fileExists(path + ".yml") {
+            return path + ".yml"
+        }
+        // Check .yaml second
+        if fileExists(path + ".yaml") {
+            return path + ".yaml"
+        }
+        // Default to .yml for new configs
+        return path + ".yml"
+    }
+
+    // Non-yaml extension - use as-is (user knows what they're doing)
+    return path
+}
+```
+
+**Example usage:**
+```bash
+# Use different configs for different environments
+pastebin-cli --config dev list              # Uses ~/.config/.../dev.yml
+pastebin-cli --config staging list          # Uses ~/.config/.../staging.yml
+pastebin-cli --config ~/work/prod.yml list  # Uses absolute path
+
+# Config profiles allow different servers/tokens without flags
+# dev.yml:   server: https://dev.example.com, token: dev-token
+# staging.yml: server: https://staging.example.com, token: staging-token
+```
+
 ### Config Structure
 
 ```yaml
@@ -28046,21 +31234,95 @@ output:
 
 # TUI preferences
 tui:
-  # Theme: default, minimal, compact
-  theme: default
-
-  # Show help hints in TUI
-  show_hints: true
+  # Theme: dark (default) or light
+  theme: dark
 ```
 
-### Default Server Address
+### Server Address Resolution (NON-NEGOTIABLE)
 
-| Scenario | `server.address` Default |
-|----------|--------------------------|
-| Project has official site | Official site URL (e.g., `https://jokes.example.com`) |
-| No official site defined | Empty (must be configured by user) |
+**Priority order (highest to lowest):**
 
-**Official site is defined in the project's AI.md specification.**
+1. `--server` flag (if provided)
+2. `server.address` in `cli.yml` (if set)
+3. `{officialsite}` compiled default (if project has official site)
+4. Error with setup instructions
+
+**Behavior:**
+
+| Scenario | Result |
+|----------|--------|
+| `--server` flag used | Use that server, **save to cli.yml for future** |
+| `server.address` in cli.yml | Use configured server |
+| Project has `{officialsite}` | Use official site as default |
+| No server available | Error with setup instructions |
+
+**Config save rule: Validate everything, only save valid, never clear valid.**
+
+```go
+// saveIfEmpty saves value to config only if current is empty and new is valid
+func saveIfEmpty(current, newValue string, validate func(string) bool) (string, error) {
+    if newValue == "" {
+        return current, nil
+    }
+    if !validate(newValue) {
+        return "", fmt.Errorf("invalid value: %s", newValue)
+    }
+    if current == "" {
+        return newValue, nil  // Save to config
+    }
+    return newValue, nil  // Use for session, don't save (current preserved)
+}
+```
+
+| Principle | Rule |
+|-----------|------|
+| **Validate everything** | Always validate before use or save |
+| **Only save valid** | Never save invalid values to config |
+| **Never clear valid** | Don't overwrite existing valid config |
+
+**Error when no server configured (projects without official site):**
+
+```bash
+$ pastebin-cli list
+Error: no server configured
+
+To configure a server, run:
+  pastebin-cli --server https://your-server.example.com list
+
+This will save the server address for future commands.
+Or edit ~/.config/{projectorg}/{projectname}/cli.yml directly.
+```
+
+**Projects with official site show default in help:**
+
+```bash
+$ pastebin-cli --help
+...
+Flags:
+      --server string    Server address (default: https://pastebin.example.com)
+...
+```
+
+**Official site (`{officialsite}`) is defined in the project's AI.md or README.md and compiled into the binary.**
+
+Sources for official site (check in order):
+1. AI.md: `Official Site: https://...` or `{officialsite}: https://...`
+2. README.md: `Official site is: https://...` or `Site: https://...`
+3. AI asks user (if not found in docs)
+4. If user selects "none", project has no default server
+
+**AI should ask if not defined:**
+```
+Official site not found in AI.md or README.md.
+What is the official site for this project?
+
+1) https://projectname.example.com
+2) https://api.example.com/projectname
+3) None (users must configure with --server)
+4) Other (specify URL)
+
+Enter choice [1-4]:
+```
 
 ## Standard Flags (NON-NEGOTIABLE)
 
@@ -28070,58 +31332,56 @@ tui:
 |------|-------|-------------|
 | `--help` | `-h` | Show help (same format as server `--help`) |
 | `--version` | `-v` | Show version (same format as server `--version`) |
-| `--server` | | Server address (overrides config) |
-| `--token` | | API token (overrides config) |
+| `--config` | | Config file to load (default: cli.yml) |
+| `--server` | | Server address (saves to config if not already set) |
+| `--token` | | API token (saves to config if not already set) |
 | `--output` | | Output format: json, table, plain |
-| `--config` | | Path to config file |
 | `--no-color` | | Disable colored output |
 | `--timeout` | | Request timeout in seconds |
 | `--debug` | | Enable debug output |
-| `--tui` | | Launch TUI mode |
 
 **Short Flag Rule:** Only `-h` (help) and `-v` (version) may have short flags. All other flags use long form only.
 
 ### --help Output
 
-**Note:** Examples show default name `jokes-cli`. Actual output uses `filepath.Base(os.Args[0])` - whatever the binary is named.
+**Note:** Examples show default name `pastebin-cli`. Actual output uses `filepath.Base(os.Args[0])` - whatever the binary is named.
 
 ```bash
-$ jokes-cli --help
-jokes-cli v1.2.3 - CLI client for Jokes API
+$ pastebin-cli --help
+pastebin-cli v1.2.3 - CLI client for Pastebin API
 
 Usage:
-  jokes-cli [command] [flags]
+  pastebin-cli [command] [flags]
 
 Commands:
-  random      Get a random joke
-  search      Search jokes
-  categories  List categories
-  get         Get joke by ID
-  config      Manage configuration
-  tui         Launch interactive TUI
-  version     Show version information
+  create      Create a new paste
+  get         Get paste by ID
+  list        List pastes
+  delete      Delete a paste
 
 Flags:
-  -s, --server string    Server address (default: config or https://jokes.example.com)
-  -t, --token string     API token for authentication
-  -o, --output string    Output format: json, table, plain (default: table)
-  -c, --config string    Path to config file
+      --config string    Config file to load (default: cli.yml)
+      --server string    Server address (default: https://pastebin.example.com)
+      --token string     API token for authentication
+      --output string    Output format: json, table, plain (default: table)
       --no-color         Disable colored output
       --timeout int      Request timeout in seconds (default: 30)
-      --tui              Launch TUI mode
+      --debug            Enable debug output
   -h, --help             Show help
   -v, --version          Show version
 
-Use "jokes-cli [command] --help" for more information about a command.
+Note: Run without arguments to launch interactive TUI mode.
+
+Use "pastebin-cli [command] --help" for more information about a command.
 ```
 
 **If user renames binary:**
 ```bash
-$ myjokes --help
-myjokes v1.2.3 - CLI client for Jokes API   # Shows actual name
+$ mypaste --help
+mypaste v1.2.3 - CLI client for Pastebin API   # Shows actual name
 
 Usage:
-  myjokes [command] [flags]                   # Shows actual name
+  mypaste [command] [flags]                     # Shows actual name
 ...
 ```
 
@@ -28130,53 +31390,34 @@ Usage:
 **MUST match server `--version` format. Shows ACTUAL binary name:**
 
 ```bash
-$ jokes-cli --version
-jokes-cli v1.2.3 (abc1234) built 2025-01-15
+$ pastebin-cli --version
+pastebin-cli v1.2.3 (abc1234) built 2025-01-15
 
 # If renamed:
-$ myjokes --version
-myjokes v1.2.3 (abc1234) built 2025-01-15   # Shows actual name
+$ mypaste --version
+mypaste v1.2.3 (abc1234) built 2025-01-15   # Shows actual name
 ```
 
 Same format as server:
 ```bash
-$ jokes --version
-jokes v1.2.3 (abc1234) built 2025-01-15
+$ pastebin --version
+pastebin v1.2.3 (abc1234) built 2025-01-15
 ```
 
-## Standard Commands (NON-NEGOTIABLE)
+## Commands
 
-**ALL CLI clients MUST have these commands:**
+**CLI clients have project-specific commands only.** No standard commands required.
 
-| Command | Description |
-|---------|-------------|
-| `config` | Manage configuration |
-| `config show` | Display current configuration |
-| `config set <key> <value>` | Set configuration value |
-| `config get <key>` | Get configuration value |
-| `version` | Show version information |
-| `tui` | Launch TUI mode |
+Example commands (project-dependent):
+- `create`, `get`, `list`, `delete` (pastebin)
+- `lookup`, `search`, `nearby` (airports)
+- `random`, `search` (quotes)
 
-**Note:** Config file is auto-created on first run with sane defaults. No init command needed.
-
-### Config Command Examples
-
-```bash
-# Set server address
-jokes-cli config set server.address https://jokes.example.com
-
-# Set API token
-jokes-cli config set server.token abc123
-
-# Set default output format
-jokes-cli config set output.format json
-
-# Show current config
-jokes-cli config show
-
-# Get specific value
-jokes-cli config get server.address
-```
+**Notes:**
+- Version and help are FLAGS (`--version`/`-v`, `--help`/`-h`), NOT commands
+- No `config` command - edit `cli.yml` directly or use `--server`/`--token` flags
+- No `tui` command - TUI launches automatically when no arguments provided
+- Config file (`cli.yml`) is auto-created on first run with sane defaults
 
 ## Authentication
 
@@ -28184,19 +31425,19 @@ jokes-cli config get server.address
 
 | Auth Type | When Used |
 |-----------|-----------|
-| None | Public endpoints (e.g., `GET /api/v1/jokes/random`) |
+| None | Public endpoints (e.g., `GET /api/v1/pastes/{id}`) |
 | API Token | Protected endpoints, user-specific data |
 | Session | Admin operations (if CLI supports admin features) |
 
 **Token Storage:**
 - Stored in `cli.yml` under `server.token`
-- Can be overridden with `--token` flag
-- Environment variable: `VIDVEIL_CLI_TOKEN`
+- `--token` flag saves to cli.yml only if not already set (same as `--server`)
+- Environment variable: `{PROJECTNAME}_CLI_TOKEN` (does NOT save to config)
 
 **Priority (highest to lowest):**
-1. `--token` flag
-2. `VIDVEIL_CLI_TOKEN` environment variable
-3. `server.token` in config file
+1. `--token` flag (saves only if config empty/invalid)
+2. `{PROJECTNAME}_CLI_TOKEN` environment variable
+3. `server.token` in cli.yml
 
 ## HTTP Client Identity (NON-NEGOTIABLE)
 
@@ -28209,7 +31450,7 @@ jokes-cli config get server.address
 | Display in `--help` | ✓ | |
 | Display in `--version` | ✓ | |
 | Error messages | ✓ | |
-| Config file path | ✓ | |
+| **Config file path** | | ✓ |
 | **User-Agent header** | | ✓ |
 
 **Why?** The server uses User-Agent to identify client types for:
@@ -28221,16 +31462,16 @@ jokes-cli config get server.address
 ### User-Agent Format
 
 ```
-vidveil-cli/{version}
+{projectname}-cli/{version}
 ```
 
 **Examples:**
 
 | Binary Name | User-Agent Header |
 |-------------|-------------------|
-| `jokes-cli` | `jokes-cli/1.2.3` |
-| `my-jokes` (renamed) | `jokes-cli/1.2.3` |
-| `jk` (renamed) | `jokes-cli/1.2.3` |
+| `pastebin-cli` | `pastebin-cli/1.2.3` |
+| `mypaste` (renamed) | `pastebin-cli/1.2.3` |
+| `pb` (renamed) | `pastebin-cli/1.2.3` |
 | `airports-cli` | `airports-cli/1.2.3` |
 | `apt` (renamed) | `airports-cli/1.2.3` |
 
@@ -28242,7 +31483,7 @@ The project name is compiled into the binary at build time:
 // Set at build time via -ldflags
 var (
     // Original project name (compiled in)
-    ProjectName = "jokes"
+    ProjectName = "pastebin"
     Version     = "1.2.3"
 )
 
@@ -28259,7 +31500,7 @@ func GetBinaryName() string {
 
 **Build command:**
 ```bash
-go build -ldflags "-X main.ProjectName=jokes -X main.Version=1.2.3" -o jokes-cli src/client
+go build -ldflags "-X main.ProjectName=pastebin -X main.Version=1.2.3" -o pastebin-cli src/client
 ```
 
 ### Server-Side Client Detection
@@ -28284,32 +31525,33 @@ func getClientType(r *http.Request) string {
 ### JSON
 
 ```bash
-$ jokes-cli get random --output json
+$ pastebin-cli get abc123 --output json
 {
   "id": "abc123",
-  "text": "Why do programmers prefer dark mode? Because light attracts bugs.",
-  "category": "programming"
+  "content": "Hello world example code snippet",
+  "language": "go",
+  "expires": "2025-01-20T12:00:00Z"
 }
 ```
 
 ### Table
 
 ```bash
-$ jokes-cli list --output table
-┌──────────┬─────────────────────────────────────────────┬─────────────┐
-│ ID       │ Text                                        │ Category    │
-├──────────┼─────────────────────────────────────────────┼─────────────┤
-│ abc123   │ Why do programmers prefer dark mode?...     │ programming │
-│ def456   │ A SQL query walks into a bar...             │ programming │
-│ ghi789   │ There are 10 types of people...             │ programming │
-└──────────┴─────────────────────────────────────────────┴─────────────┘
+$ pastebin-cli list --output table
+┌──────────┬─────────────────────────────────────────────┬──────────┬─────────────┐
+│ ID       │ Content                                     │ Language │ Expires     │
+├──────────┼─────────────────────────────────────────────┼──────────┼─────────────┤
+│ abc123   │ Hello world example code snippet            │ go       │ 2025-01-20  │
+│ def456   │ Python decorator pattern example            │ python   │ 2025-01-21  │
+│ ghi789   │ Bash script for deployment                  │ bash     │ 2025-01-22  │
+└──────────┴─────────────────────────────────────────────┴──────────┴─────────────┘
 ```
 
 ### Plain
 
 ```bash
-$ jokes-cli get random --output plain
-Why do programmers prefer dark mode? Because light attracts bugs.
+$ pastebin-cli get abc123 --output plain
+Hello world example code snippet
 ```
 
 ## Project-Specific Commands
@@ -28317,10 +31559,10 @@ Why do programmers prefer dark mode? Because light attracts bugs.
 Each project defines its own commands based on its API:
 
 ```bash
-# Jokes project
-jokes-cli random
-jokes-cli search --query "programming"
-jokes-cli categories
+# Pastebin project
+pastebin-cli create --file notes.txt --expire 24h
+pastebin-cli get abc123
+pastebin-cli list --limit 10
 
 # Airports project
 airports-cli lookup JFK
@@ -28328,9 +31570,9 @@ airports-cli search --city "New York"
 airports-cli nearby --lat 40.7128 --lon -74.0060
 
 # Quotes project
-quotes-cli random
-quotes-cli random --category motivation
-quotes-cli search --author "Einstein"
+quotesvc-cli random
+quotesvc-cli random --category motivation
+quotesvc-cli search --author "Einstein"
 ```
 
 ## Build Integration
@@ -28340,26 +31582,26 @@ quotes-cli search --author "Einstein"
 ```makefile
 # Build both server and CLI (if src/client exists)
 build:
-	CGO_ENABLED=0 go build -o binaries/vidveil src
+	CGO_ENABLED=0 go build -o binaries/{projectname} src
 	@if [ -d "src/client" ]; then \
-		CGO_ENABLED=0 go build -o binaries/vidveil-cli src/client; \
+		CGO_ENABLED=0 go build -o binaries/{projectname}-cli src/client; \
 	fi
 
 # Build CLI only
 build-cli:
-	CGO_ENABLED=0 go build -o binaries/vidveil-cli src/client
+	CGO_ENABLED=0 go build -o binaries/{projectname}-cli src/client
 
 # Release builds (8 platforms)
 release:
 	# Server binaries
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/vidveil-linux-amd64 src
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/vidveil-linux-arm64 src
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/{projectname}-linux-amd64 src
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/{projectname}-linux-arm64 src
 	# ... (other platforms)
 
 	# CLI binaries (if src/client exists)
 	@if [ -d "src/client" ]; then \
-		GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/vidveil-linux-amd64-cli src/client; \
-		GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/vidveil-linux-arm64-cli src/client; \
+		GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/{projectname}-linux-amd64-cli src/client; \
+		GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/{projectname}-linux-arm64-cli src/client; \
 	fi
 	# ... (other platforms)
 ```
@@ -28367,23 +31609,22 @@ release:
 ### Directory Structure
 
 ```
-vidveil/
+{projectname}/
 ├── src/                    # Server application
 │   ├── main.go
 │   ├── config/
 │   ├── server/
 │   ├── ...
 │   └── client/             # CLI client (if project has CLI)
-│       ├── main.go
+│       ├── main.go         # Entry point, mode detection
 │       ├── cmd/            # Command implementations
-│       │   ├── root.go
-│       │   ├── config.go
-│       │   ├── version.go
-│       │   └── {project-specific}.go
-│       ├── tui/            # TUI implementation
-│       │   ├── app.go
-│       │   ├── view/
-│       │   └── component/
+│       │   ├── root.go     # Root command, --help, --version flags
+│       │   └── {project-specific}.go  # e.g., create.go, get.go, list.go
+│       ├── tui/            # TUI implementation (auto-launched)
+│       │   ├── app.go      # Main TUI application
+│       │   ├── theme.go    # Theme colors (dark default)
+│       │   ├── view/       # View components
+│       │   └── component/  # Reusable components
 │       └── api/            # API client library
 │           └── client.go
 ├── go.mod
@@ -28391,7 +31632,38 @@ vidveil/
 └── ...
 ```
 
-## TUI Requirements
+## TUI Requirements (NON-NEGOTIABLE)
+
+### Window Awareness
+
+**CLI MUST be window-aware - detect and respond to terminal dimensions.**
+
+```go
+// Get terminal dimensions
+func getTerminalSize() (width, height int) {
+    width, height, _ = term.GetSize(int(os.Stdout.Fd()))
+    return
+}
+
+// Handle window resize (bubbletea)
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    switch msg := msg.(type) {
+    case tea.WindowSizeMsg:
+        m.width = msg.Width
+        m.height = msg.Height
+        // Reflow content to fit new dimensions
+        m.recalculateLayout()
+    }
+    return m, nil
+}
+```
+
+| Requirement | Description |
+|-------------|-------------|
+| **Detect dimensions** | Get terminal columns/rows on startup |
+| **Handle resize** | Respond to SIGWINCH, reflow content |
+| **Minimum size** | Graceful degradation below 80x24 |
+| **Responsive layout** | Adapt UI to available space |
 
 ### Minimum Features
 
@@ -28401,36 +31673,79 @@ vidveil/
 | Search/filter | ✓ |
 | Help screen (?) | ✓ |
 | Quit (q/Ctrl+C) | ✓ |
+| Window resize handling | ✓ |
 | Responsive layout | ✓ |
 | Error display | ✓ |
+| Professional appearance | ✓ |
 
-### Recommended Libraries
+### Required Libraries
 
 | Library | Purpose |
 |---------|---------|
 | `github.com/charmbracelet/bubbletea` | TUI framework |
 | `github.com/charmbracelet/bubbles` | TUI components |
 | `github.com/charmbracelet/lipgloss` | TUI styling |
+| `golang.org/x/term` | Terminal detection/dimensions |
 
-### TUI Theme
+### Theme Support
 
-**TUI MUST use dark theme color scheme to match server frontend.**
+**TUI MUST support themes. Default is dark theme matching server frontend.**
 
 ```go
-// Dark theme colors for TUI
-var (
-    Background = lipgloss.Color("#282a36")
-    Foreground = lipgloss.Color("#f8f8f2")
-    Selection  = lipgloss.Color("#44475a")
-    Comment    = lipgloss.Color("#6272a4")
-    Cyan       = lipgloss.Color("#8be9fd")
-    Green      = lipgloss.Color("#50fa7b")
-    Orange     = lipgloss.Color("#ffb86c")
-    Pink       = lipgloss.Color("#ff79c6")
-    Purple     = lipgloss.Color("#bd93f9")
-    Red        = lipgloss.Color("#ff5555")
-    Yellow     = lipgloss.Color("#f1fa8c")
-)
+// src/client/tui/theme.go
+package tui
+
+import "github.com/charmbracelet/lipgloss"
+
+type Theme struct {
+    Name       string
+    Background lipgloss.Color
+    Foreground lipgloss.Color
+    Primary    lipgloss.Color
+    Secondary  lipgloss.Color
+    Accent     lipgloss.Color
+    Error      lipgloss.Color
+    Success    lipgloss.Color
+    Warning    lipgloss.Color
+    Muted      lipgloss.Color
+}
+
+// Dark theme (default) - matches server frontend
+var DarkTheme = Theme{
+    Name:       "dark",
+    Background: lipgloss.Color("#282a36"),
+    Foreground: lipgloss.Color("#f8f8f2"),
+    Primary:    lipgloss.Color("#bd93f9"),
+    Secondary:  lipgloss.Color("#6272a4"),
+    Accent:     lipgloss.Color("#8be9fd"),
+    Error:      lipgloss.Color("#ff5555"),
+    Success:    lipgloss.Color("#50fa7b"),
+    Warning:    lipgloss.Color("#f1fa8c"),
+    Muted:      lipgloss.Color("#44475a"),
+}
+
+// Light theme (optional)
+var LightTheme = Theme{
+    Name:       "light",
+    Background: lipgloss.Color("#ffffff"),
+    Foreground: lipgloss.Color("#282a36"),
+    Primary:    lipgloss.Color("#6c5ce7"),
+    Secondary:  lipgloss.Color("#636e72"),
+    Accent:     lipgloss.Color("#0984e3"),
+    Error:      lipgloss.Color("#d63031"),
+    Success:    lipgloss.Color("#00b894"),
+    Warning:    lipgloss.Color("#fdcb6e"),
+    Muted:      lipgloss.Color("#dfe6e9"),
+}
+
+// Current theme (set from config)
+var CurrentTheme = DarkTheme
+```
+
+**Theme is set in cli.yml:**
+```yaml
+tui:
+  theme: dark    # dark (default) or light
 ```
 
 ## Error Handling
@@ -28451,36 +31766,36 @@ var (
 
 ```bash
 # Connection error
-$ jokes-cli random
-Error: cannot connect to server at https://jokes.example.com
+$ pastebin-cli list
+Error: cannot connect to server at https://pastebin.example.com
   Check your network connection and server address.
   Use --server to specify a different server.
 
 # Auth error
-$ jokes-cli admin users --token invalid
+$ pastebin-cli admin users --token invalid
 Error: authentication failed
   Your API token is invalid or expired.
-  Use 'jokes-cli config set server.token <token>' to update.
+  Update server.token in cli.yml or use --token flag.
 
 # Not found
-$ jokes-cli get abc123
-Error: joke not found: abc123
+$ pastebin-cli get abc123
+Error: paste not found: abc123
 ```
 
-## Version Command
+## --version Extended Output
+
+When server is reachable, `--version` can show extended info:
 
 ```bash
-$ jokes-cli version
-jokes-cli v1.2.3
+$ pastebin-cli --version
+pastebin-cli v1.2.3 (abc1234) built 2025-01-15
 
-Server: https://jokes.example.com
+Server: https://pastebin.example.com
 Server Version: v1.2.3 (compatible)
 
 Build Info:
   Go: go1.21.0
   OS/Arch: linux/amd64
-  Commit: abc123
-  Date: 2025-01-15
 ```
 
 **Version compatibility check:** CLI queries server `/api/v1/version` and warns if versions differ significantly.
@@ -28770,29 +32085,29 @@ func CustomDomainMiddleware(resolver *DomainResolver) func(http.Handler) http.Ha
 
 ## Web Routes
 
-### User Domain Management (`/user/domains/`)
+### User Domain Management (`/users/domains/`)
 
 | Path | Description |
 |------|-------------|
-| `/user/domains` | List user's custom domains |
-| `/user/domains/add` | Add new custom domain form |
-| `/user/domains/{domain}` | Domain details and management |
-| `/user/domains/{domain}/dns` | DNS configuration instructions |
-| `/user/domains/{domain}/ssl` | SSL configuration |
-| `/user/domains/{domain}/verify` | Trigger verification |
-| `/user/domains/{domain}/delete` | Delete confirmation |
+| `/users/domains` | List user's custom domains |
+| `/users/domains/add` | Add new custom domain form |
+| `/users/domains/{domain}` | Domain details and management |
+| `/users/domains/{domain}/dns` | DNS configuration instructions |
+| `/users/domains/{domain}/ssl` | SSL configuration |
+| `/users/domains/{domain}/verify` | Trigger verification |
+| `/users/domains/{domain}/delete` | Delete confirmation |
 
-### Org Domain Management (`/org/{slug}/domains/`)
+### Org Domain Management (`/orgs/{slug}/domains/`)
 
 | Path | Description |
 |------|-------------|
-| `/org/{slug}/domains` | List org's custom domains |
-| `/org/{slug}/domains/add` | Add new custom domain form |
-| `/org/{slug}/domains/{domain}` | Domain details and management |
-| `/org/{slug}/domains/{domain}/dns` | DNS configuration instructions |
-| `/org/{slug}/domains/{domain}/ssl` | SSL configuration |
-| `/org/{slug}/domains/{domain}/verify` | Trigger verification |
-| `/org/{slug}/domains/{domain}/delete` | Delete confirmation |
+| `/orgs/{slug}/domains` | List org's custom domains |
+| `/orgs/{slug}/domains/add` | Add new custom domain form |
+| `/orgs/{slug}/domains/{domain}` | Domain details and management |
+| `/orgs/{slug}/domains/{domain}/dns` | DNS configuration instructions |
+| `/orgs/{slug}/domains/{domain}/ssl` | SSL configuration |
+| `/orgs/{slug}/domains/{domain}/verify` | Trigger verification |
+| `/orgs/{slug}/domains/{domain}/delete` | Delete confirmation |
 
 ### Admin Domain Management (`/admin/server/domains/`)
 
@@ -28806,21 +32121,21 @@ func CustomDomainMiddleware(resolver *DomainResolver) func(http.Handler) http.Ha
 
 ## API Routes
 
-### User Domain API (`/api/v1/user/domains/`)
+### User Domain API (`/api/v1/users/domains/`)
 
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/api/v1/user/domains` | GET | List user's domains |
-| `/api/v1/user/domains` | POST | Add new domain |
-| `/api/v1/user/domains/{domain}` | GET | Get domain details |
-| `/api/v1/user/domains/{domain}` | DELETE | Remove domain |
-| `/api/v1/user/domains/{domain}/verify` | POST | Trigger verification |
-| `/api/v1/user/domains/{domain}/dns` | GET | Get DNS records to configure |
-| `/api/v1/user/domains/{domain}/ssl` | GET | Get SSL status |
-| `/api/v1/user/domains/{domain}/ssl` | POST | Configure SSL (provider + credentials) |
-| `/api/v1/user/domains/{domain}/ssl/renew` | POST | Force SSL renewal |
+| `/api/v1/users/domains` | GET | List user's domains |
+| `/api/v1/users/domains` | POST | Add new domain |
+| `/api/v1/users/domains/{domain}` | GET | Get domain details |
+| `/api/v1/users/domains/{domain}` | DELETE | Remove domain |
+| `/api/v1/users/domains/{domain}/verify` | POST | Trigger verification |
+| `/api/v1/users/domains/{domain}/dns` | GET | Get DNS records to configure |
+| `/api/v1/users/domains/{domain}/ssl` | GET | Get SSL status |
+| `/api/v1/users/domains/{domain}/ssl` | POST | Configure SSL (provider + credentials) |
+| `/api/v1/users/domains/{domain}/ssl/renew` | POST | Force SSL renewal |
 
-### Org Domain API (`/api/v1/org/{slug}/domains/`)
+### Org Domain API (`/api/v1/orgs/{slug}/domains/`)
 
 Same routes as user, scoped to organization.
 
@@ -28842,7 +32157,7 @@ Same routes as user, scoped to organization.
 ### Step 1: User Adds Domain
 
 ```
-POST /api/v1/user/domains
+POST /api/v1/users/domains
 {
   "domain": "api.mycompany.com"
 }
@@ -28880,7 +32195,7 @@ mycompany.com.              300  IN  AAAA   2001:db8::1
 ### Step 3: User Triggers Verification
 
 ```
-POST /api/v1/user/domains/api.mycompany.com/verify
+POST /api/v1/users/domains/api.mycompany.com/verify
 
 Response (success):
 {
@@ -29130,7 +32445,7 @@ func (s *DomainService) selectChallengeType(domain *CustomDomain) string {
 Challenge options: `auto`, `http-01`, `tls-alpn-01`
 
 ```
-POST /api/v1/user/domains/api.mycompany.com/ssl
+POST /api/v1/users/domains/api.mycompany.com/ssl
 {
   "challenge": "auto"
 }
@@ -29157,7 +32472,7 @@ The server handles the ACME TLS-ALPN-01 challenge on port 443. This works behind
 **For wildcards or when HTTP/TLS challenges aren't available:**
 
 ```
-POST /api/v1/user/domains/api.mycompany.com/ssl
+POST /api/v1/users/domains/api.mycompany.com/ssl
 {
   "challenge": "dns-01",
   "provider": "cloudflare",
@@ -29428,8 +32743,8 @@ When implementing custom domains for a project:
 - [ ] Add feature flag to configuration
 - [ ] Create database tables (custom_domains, custom_domain_records, custom_domain_audit)
 - [ ] Implement domain resolver middleware
-- [ ] Create user web routes (/user/domains/*)
-- [ ] Create user API routes (/api/v1/user/domains/*)
+- [ ] Create user web routes (/users/domains/*)
+- [ ] Create user API routes (/api/v1/users/domains/*)
 - [ ] Create org web/API routes (if orgs supported)
 - [ ] Create admin management routes
 - [ ] Implement DNS verification
@@ -29474,520 +32789,1190 @@ When implementing custom domains for a project:
 
 ---
 
-
 ## Project Business Purpose
 
-**Purpose:** Privacy-respecting meta search for adult video content
-
-Vidveil aggregates search results from 52 adult video sites without tracking users. Results stream in real-time using Server-Sent Events (SSE) as engines respond. Thumbnail images are proxied to prevent engines from tracking users.
+**Purpose:** Privacy-respecting meta search engine for adult video content aggregation from 52+ sources.
 
 **Target Users:**
-- Privacy-conscious users seeking adult content
-- Users who want aggregated results from multiple sources
-- Self-hosters wanting control over their search privacy
-- Users tired of invasive tracking and analytics
+- Privacy-conscious users seeking adult content without tracking
+- Users wanting to search multiple sites simultaneously
+- Users who prefer direct search without site-hopping
+- Users requiring Tor/onion routing for anonymity
 
 **Unique Value:**
-- No tracking, no logging, no analytics - true privacy
-- 52 engines with intelligent tiering (fast APIs first, scraping last)
-- Bang shortcuts for direct engine searches (`!phamateur`)
-- SSE streaming for progressive result loading
-- Thumbnail proxy prevents engine tracking
-- Single binary with embedded assets - easy deployment
-- Tor hidden service support for ultimate privacy
-
----
+- Zero tracking, zero logging, zero analytics (complete privacy)
+- Aggregates 52 adult video sites with single query
+- Bang search syntax (DuckDuckGo-style `!ph`, `!xv` shortcuts)
+- Real-time SSE streaming (results appear as engines respond)
+- Thumbnail proxy (all images proxied to prevent engine tracking)
+- Tor hidden service support (automatic .onion address)
+- Single binary, no external dependencies
+- Fast API integration for tier 1 sites (PornHub, RedTube, Eporner)
 
 ## Business Logic & Rules
 
-### Privacy Rules (NON-NEGOTIABLE)
+**Search Rules:**
+- Minimum query length: 1 character
+- Maximum query length: 500 characters
+- Bang syntax: `!{shortcode}` or `!{fullname}` (e.g., `!ph amateur` or `!pornhub amateur`)
+- Multiple bangs supported: `!ph !rt amateur` searches both PornHub and RedTube
+- Bang extraction: Bangs parsed and removed from search query before engine execution
+- No bang = search all enabled engines concurrently
+- Single bang = search only specified engine(s)
 
-| Rule | Implementation |
-|------|----------------|
-| **No tracking** | Zero cookies, zero localStorage, zero fingerprinting |
-| **No logging** | Searches never logged to disk or database |
-| **No analytics** | No Google Analytics, no Plausible, nothing |
-| **Thumbnail proxy** | All thumbnails served through `/proxy?url=` to prevent engine tracking |
-| **No external CDNs** | All assets embedded in binary |
-| **No third-party requests** | Browser makes ZERO external requests except proxied thumbnails |
+**Engine Tier System:**
+- **Tier 1**: Major sites with official APIs (PornHub, RedTube, Eporner)
+- **Tier 2**: Popular sites with JSON endpoints (xHamster, YouPorn)
+- **Tier 3**: HTML parsing sites (XVideos, XNXX, 4Tube, etc.)
+- **Tier 4**: Additional yt-dlp supported sites
 
-### Search Rules
+**Privacy Rules (NON-NEGOTIABLE):**
+- NO user tracking cookies
+- NO analytics or telemetry
+- NO IP logging in production mode
+- NO referrer headers sent to engines
+- ALL thumbnails proxied through `/proxy/*` endpoint
+- User-Agent spoofing (browser-like UA, random generation)
+- TLS fingerprint spoofing (utls library for anti-fingerprinting)
+- Tor support: Automatic hidden service if Tor installed
 
-| Rule | Description |
-|------|-------------|
-| **Query parsing** | Extract bang codes (`!ph`,`!xh`)beforesearch|
-| **Engine selection** | If bangs present, use only those engines; otherwise use all enabled |
-| **Tiered execution** | Tier 1 (JSON APIs) → Tier 2 (Structured HTML) → Tier 3 (Complex) |
-| **Parallel requests** | All engines search simultaneously within their tier |
-| **Timeout** | 10 seconds per engine (configurable) |
-| **Deduplication** | Results with identical URLs are merged (keep highest quality) |
-| **Result limit** | Max 500 results per search (configurable) |
+**Caching Strategy:**
+- Search results cached for 15 minutes (reduce engine load)
+- Cache key: `query + page + engines list`
+- Cache invalidation: Time-based only (no manual purge needed)
+- Thumbnail proxy: No caching (direct stream to client)
 
-### Bang Shortcuts
+**Rate Limiting:**
+- Per-engine rate limiting (prevent abuse)
+- Circuit breaker pattern (auto-disable failing engines)
+- Retry logic: 3 attempts with exponential backoff
+- Failure threshold: 5 failures = circuit open for 30 seconds
+- Success threshold: 2 successes = circuit closed
 
-**47 bang codes** mapping to 52 engines (some engines have multiple bangs):
+**Engine Health:**
+- Circuit breaker per engine (auto-disable on repeated failures)
+- Health check: Implicit (search failures trigger circuit breaker)
+- Auto-recovery: Circuit breaker half-open state after timeout
+- Manual override: Admin panel engine enable/disable
 
-| Tier | Examples | Count |
-|------|----------|-------|
-| **Tier 1** | `!ph`(PornHub),`!xv`(XVideos),`!xn`(XNXX),`!rt`(RedTube),`!xh`(xHamster)|5codes→5engines|
-| **Tier 2** | `!ep`(Eporner),`!yp`(YouPorn),`!pmd`(PornMD)|3codes→3engines|
-| **Tier 3+** | `lla AI.md t`, `!fux`,`!pt`,`!yj`,`!sp`,`!tx`,`!nv`,etc.|39+codes→44+engines|
-
-**Bang behavior:**
-- Multiple bangs allowed: `!ph!rtamateur`searchesbothPornHubandRedTube
-- Bang overrides default engine selection
-- Unknown bangs ignored with warning
-- Bangs are case-insensitive: `!PH`=`!ph`
-
-### Engine Tiers
-
-| Tier | Type | Examples | Speed | Reliability |
-|------|------|----------|-------|-------------|
-| **Tier 1** | JSON API | PornHub, RedTube, Eporner | <500ms | 99%+ |
-| **Tier 2** | Structured HTML | xHamster, XVideos, XNXX | 500ms-2s | 95%+ |
-| **Tier 3** | Complex Scraping | Various | 2s-5s | 80%+ |
-
-**Tier execution strategy:**
-1. Tier 1 engines execute first (fastest, most reliable)
-2. Tier 2 engines execute 200ms after Tier 1 starts
-3. Tier 3 engines execute 500ms after Tier 2 starts
-4. Results stream to client as each engine responds (SSE)
-
-### Result Validation
-
-| Field | Validation |
-|-------|------------|
-| **URL** | Must be valid HTTP/HTTPS URL |
-| **Title** | Required, max 200 chars, sanitized HTML |
-| **Thumbnail** | Must be valid URL, proxied through `/proxy` |
-| **Duration** | Format `MM:SS` or `HH:MM:SS`, converted to seconds |
-| **Views** | Numeric with optional suffix (K, M, B), converted to integer |
-| **Source** | Must match engine name |
-
----
+**Validation:**
+- Query cannot be empty after bang extraction
+- Page number must be >= 1
+- Engine names must exist in registry
+- Timeout per engine: 15 seconds (configurable)
+- Maximum concurrent engines: 52 (all available)
+- Bang shortcuts: Must match registered bangs (47 shortcuts)
 
 ## Data Models
+
+**Result Model** - Single video search result
 
 ```go
 // Result represents a single video search result
 type Result struct {
-    ID              string    `json:"id"`               // Unique ID (engine_videoid)
-    Title           string    `json:"title"`            // Video title (sanitized HTML)
-    URL             string    `json:"url"`              // Direct video page URL
-    Thumbnail       string    `json:"thumbnail"`        // Thumbnail URL (will be proxied)
-    PreviewURL      string    `json:"preview_url"`      // Preview GIF/video URL (optional)
-    Duration        string    `json:"duration"`         // Human readable: "12:34"
-    DurationSeconds int       `json:"duration_seconds"` // Sortable duration
-    Views           string    `json:"views"`            // Human readable: "1.2M views"
-    ViewsCount      int64     `json:"views_count"`      // Sortable view count
-    Rating          float64   `json:"rating"`           // 0.0-5.0 stars (optional)
-    Quality         string    `json:"quality"`          // HD, 4K, 1080p, etc (optional)
-    Source          string    `json:"source"`           // Engine name: "pornhub"
-    SourceDisplay   string    `json:"source_display"`   // Display name: "PornHub"
-    Published       time.Time `json:"published"`        // Upload date (optional)
-    Description     string    `json:"description"`      // Video description (optional)
+	// Unique identifier (engine-specific ID)
+	ID              string    `json:"id"`
+	// Video title
+	Title           string    `json:"title"`
+	// Direct link to video page
+	URL             string    `json:"url"`
+	// Thumbnail image URL (must be proxied)
+	Thumbnail       string    `json:"thumbnail"`
+	// Animated preview/hover thumbnail (optional)
+	PreviewURL      string    `json:"preview_url,omitempty"`
+	// Human-readable duration (e.g., "12:34")
+	Duration        string    `json:"duration"`
+	// Duration in seconds
+	DurationSeconds int       `json:"duration_seconds"`
+	// Human-readable view count (e.g., "1.2M")
+	Views           string    `json:"views"`
+	// Numeric view count
+	ViewsCount      int64     `json:"views_count"`
+	// Video rating (0.0-100.0 or 0.0-5.0, engine-specific)
+	Rating          float64   `json:"rating,omitempty"`
+	// Quality label (HD, 4K, etc.)
+	Quality         string    `json:"quality,omitempty"`
+	// Engine name (pornhub, xvideos, etc.)
+	Source          string    `json:"source"`
+	// Display name (PornHub, XVideos, etc.)
+	SourceDisplay   string    `json:"source_display"`
+	// Upload/publish date
+	Published       time.Time `json:"published,omitempty"`
+	// Video description
+	Description     string    `json:"description,omitempty"`
 }
+```
 
+**SearchResponse Model** - API response wrapper
+
+```go
 // SearchResponse represents the API response for a search
 type SearchResponse struct {
-    Success    bool           `json:"success"`
-    Data       SearchData     `json:"data"`
-    Pagination PaginationData `json:"pagination"`
-    Error      string         `json:"error,omitempty"`
-    Code       string         `json:"code,omitempty"`
+	Success    bool             `json:"success"`
+	Data       SearchData       `json:"data"`
+	Pagination PaginationData   `json:"pagination"`
+	Error      string           `json:"error,omitempty"`
+	Code       string           `json:"code,omitempty"`
 }
 
 // SearchData holds the search results and metadata
 type SearchData struct {
-    Query         string   `json:"query"`               // Original query
-    SearchQuery   string   `json:"search_query"`        // Query after bang parsing
-    Results       []Result `json:"results"`             // Video results
-    EnginesUsed   []string `json:"engines_used"`        // Engines that returned results
-    EnginesFailed []string `json:"engines_failed"`      // Engines that failed/timed out
-    SearchTimeMS  int64    `json:"search_time_ms"`      // Total search time
-    HasBang       bool     `json:"has_bang"`            // Whether bang codes were used
-    BangEngines   []string `json:"bang_engines"`        // Engines from bang codes
-    Cached        bool     `json:"cached"`              // Whether results from cache (future)
+	// Original query with bangs
+	Query         string   `json:"query"`
+	// Query after bang extraction
+	SearchQuery   string   `json:"search_query,omitempty"`
+	// Array of video results
+	Results       []Result `json:"results"`
+	// Engines that returned results
+	EnginesUsed   []string `json:"engines_used"`
+	// Engines that failed
+	EnginesFailed []string `json:"engines_failed"`
+	// Search execution time (milliseconds)
+	SearchTimeMS  int64    `json:"search_time_ms"`
+	// Whether query contained bangs
+	HasBang       bool     `json:"has_bang,omitempty"`
+	// Engines extracted from bangs
+	BangEngines   []string `json:"bang_engines,omitempty"`
+	// Whether results came from cache
+	Cached        bool     `json:"cached,omitempty"`
 }
+```
 
+**EngineInfo Model** - Engine metadata
+
+```go
 // EngineInfo represents information about a search engine
 type EngineInfo struct {
-    Name        string   `json:"name"`         // Internal name: "pornhub"
-    DisplayName string   `json:"display_name"` // Display name: "PornHub"
-    Enabled     bool     `json:"enabled"`      // Whether enabled in config
-    Available   bool     `json:"available"`    // Whether currently operational
-    Features    []string `json:"features"`     // ["json_api", "preview", "rating"]
-    Tier        int      `json:"tier"`         // 1=fastest, 2=medium, 3=slowest
+	// Engine name (lowercase identifier)
+	Name        string   `json:"name"`
+	// Display name (human-readable)
+	DisplayName string   `json:"display_name"`
+	// Whether engine is enabled
+	Enabled     bool     `json:"enabled"`
+	// Whether engine is currently available
+	Available   bool     `json:"available"`
+	// Supported features (pagination, sorting, etc.)
+	Features    []string `json:"features"`
+	// Engine tier (1=API, 2=JSON, 3=HTML, 4=yt-dlp)
+	Tier        int      `json:"tier"`
 }
+```
 
-// Bang represents a bang shortcut mapping
-type Bang struct {
-    Code   string `json:"code"`    // Short code: "ph"
-    Engine string `json:"engine"`  // Engine name: "pornhub"
-    Name   string `json:"name"`    // Display name: "PornHub"
+**Engine Interface** - What engines must implement
+
+```go
+// Engine interface defines what a search engine must implement
+type Engine interface {
+	// Lowercase identifier (pornhub, xvideos)
+	Name() string
+	// Human-readable name (PornHub, XVideos)
+	DisplayName() string
+	// Execute search query
+	Search(ctx context.Context, query string, page int) ([]Result, error)
+	// Check if engine is available (circuit breaker state)
+	IsAvailable() bool
+	// Check feature support
+	SupportsFeature(feature Feature) bool
+	// Get engine tier
+	Tier() int
 }
 ```
-
----
-
-## Project-Specific Endpoints Summary
-
-**All endpoints follow PART 20 (API Structure) patterns.**
-
-### Core Search Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `https://{fqdn}/` | Search homepage (web UI) |
-| GET | `https://{fqdn}/search` | Search results page (web UI, SSE-powered) |
-| GET | `https://{fqdn}/api/search` | Search API (SSE stream) |
-| GET | `https://{fqdn}/api/search?q=query&format=json` | Search API (JSON, no SSE) |
-
-**Search parameters:**
-- `q` - Search query (required, includes optional bang codes)
-- `format` - Response format: `sse` (default) or `json`
-- `page` - Page number (default: 1, not implemented in streaming)
-- `limit` - Results per page (default: 50, max: 500)
-
-**Example:**
-```
-GET /api/search?q=!ph+!rt+amateur&format=sse
-→ SSE stream: each result as `data: {json}\n\n`
-→ Final message: `data: {"done": true, "total": 47}`
-
-GET /api/search?q=latina&format=json
-→ JSON SearchResponse with all results
-```
-
-### Information Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `https://{fqdn}/api/engines` | List all engines with status |
-| GET | `https://{fqdn}/api/bangs` | List all bang shortcuts |
-| GET | `https://{fqdn}/api/health` | Health check |
-
-### Utility Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `https://{fqdn}/proxy` | Thumbnail proxy (prevents tracking) |
-| GET | `https://{fqdn}/robots.txt` | Robots.txt (allow all) |
-| GET | `https://{fqdn}/age-verify` | Age verification gate (18+) |
-
-### Admin Panel
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `https://{fqdn}/admin` | Admin panel (auth required) |
-| GET | `https://{fqdn}/admin/engines` | Engine management UI |
-| POST | `https://{fqdn}/admin/api/engines` | Enable/disable engines |
-
-**SSE Streaming Format:**
-
-```
-event: result
-data: {"id":"ph_12345","title":"Video Title",...}
-
-event: result  
-data: {"id":"rt_67890","title":"Another Video",...}
-
-event: done
-data: {"total":47,"engines_used":["pornhub","redtube"],"search_time_ms":1234}
-```
-
----
 
 ## Data Sources
 
-### Search Engines (52 total)
+**External APIs** - Real-time data from adult video sites
 
-**Tier 1 - JSON APIs (5 engines):**
-- PornHub API
-- RedTube API
-- Eporner API
-- YouPorn API (JSON)
-- PornMD API (JSON)
+**Tier 1 - Direct API Integration:**
+- **PornHub Webmasters API**: Official REST API (JSON responses)
+- **RedTube Public API**: Official REST API (JSON responses)
+- **Eporner v2 API**: Public JSON API
 
-**Tier 2 - Structured HTML (10 engines):**
-- xHamster
-- XVideos
-- XNXX
-- YouPorn (HTML fallback)
-- Tube8
-- DrTuber
-- Empflix
-- 4Tube
-- TnaFlix
-- Fux
+**Tier 2 - JSON Endpoints:**
+- **xHamster**: JSON data extraction from page responses
+- **YouPorn**: JSON endpoints (unofficial but stable)
+- **XVideos**: JSON embedded in HTML pages
+- **XNXX**: JSON embedded in HTML pages
 
-**Tier 3 - Complex Scraping (37 engines):**
-- All remaining engines (requires more complex parsing)
-- Less reliable, slower response times
-- Fallback when Tier 1/2 fail
+**Tier 3 - HTML Parsing:**
+- 40+ sites using HTML parsing with goquery/regexp
+- Resilient to minor layout changes
+- Fallback patterns for common structures
 
-### Bang Mappings (Embedded)
+**Tier 4 - yt-dlp Compatible:**
+- Sites supported by yt-dlp library patterns
+- URL pattern matching and extraction
 
-**Source:** `src/service/engines/bangs.go`
+**Update Strategy:**
+- **Engine list**: Compiled into binary (add new engines = rebuild)
+- **Bang shortcuts**: Hardcoded in `src/service/engines/bangs.go`
+- **No runtime data files**: All logic embedded in binary
+- **No database requirements**: Stateless search (cache in memory only)
 
-**Format:** Go map embedded in binary
-```go
-var BangMapping = map[string]string{
-    "ph": "pornhub",
-    "xv": "xvideos",
-    // ... 47 total bang codes
-}
+**Data Flow:**
+1. User submits query
+2. Bang parser extracts engine shortcuts
+3. Engine manager selects engines (specific or all)
+4. Concurrent execution (goroutines per engine)
+5. Results aggregated and deduplicated
+6. Thumbnails rewritten to proxy URLs
+7. Response returned (JSON or HTML)
+
+## Project-Specific Endpoints Summary
+
+**Vidveil Endpoints Purpose:**
+
+**Core Search Endpoints:**
+- **Search (standard)**: Execute search query, return JSON results with all metadata
+- **Search (streaming)**: SSE stream with results appearing as engines respond
+- **Search (text)**: Plain text output for terminal/curl users
+- **Autocomplete**: Bang shortcut suggestions as user types (e.g., `!po` → suggests `!ph`, `!pornhub`, `!pornmd`)
+
+**Engine Management:**
+- **List engines**: Get all 52 engines with status (enabled, available, tier)
+- **Get engine**: Get single engine details
+- **Bangs list**: Return all 47 bang shortcuts with engine mappings
+
+**Privacy/Proxy:**
+- **Thumbnail proxy**: Proxy all thumbnail images to prevent engine tracking
+- **User-Agent spoofing**: Randomized browser-like headers
+- **TLS fingerprinting**: utls library for anti-fingerprinting
+
+**Frontend:**
+- **Home page**: Search interface with bang autocomplete
+- **Results page**: Display search results with infinite scroll
+- **About page**: Explanation of privacy features and bangs
+
+**Admin Panel:**
+- **Engine configuration**: Enable/disable engines, configure timeouts
+- **Cache management**: View cache stats, clear cache
+- **Logs**: View access logs (development mode only)
+
+**Business Behavior:**
+
+**Search Execution:**
+- Parse query for bang shortcuts (e.g., `!ph amateur` → engine=pornhub, query="amateur")
+- If bangs found: Search only specified engines
+- If no bangs: Search all enabled engines concurrently
+- Execute searches in parallel (goroutines)
+- Aggregate results as they arrive
+- Deduplicate by URL (same video on multiple sites)
+- Rewrite thumbnail URLs to proxy endpoint
+- Cache results for 15 minutes
+
+**SSE Streaming:**
+- Open Server-Sent Events connection
+- Send results as each engine responds
+- Format: `data: {json}\n\n` per event
+- Client receives real-time updates
+- Connection closes when all engines complete or timeout
+
+**Bang Autocomplete:**
+- Client sends partial bang (e.g., `!po`)
+- Server matches against 47 registered bangs
+- Returns top 5 matches with engine names
+- Case-insensitive matching
+- Fuzzy matching (substring search)
+
+**Thumbnail Proxy:**
+- Rewrite all `thumbnail` URLs to `/proxy?url={encoded}`
+- Server fetches thumbnail from original URL
+- Strips referrer headers (prevent tracking)
+- Streams response to client
+- No caching (direct proxy)
+- Spoofed User-Agent
+
+**Engine Health:**
+- Circuit breaker per engine
+- 5 failures → circuit open (30s timeout)
+- Engine auto-disabled during circuit open
+- Half-open state: Try 1 request after timeout
+- 2 successes → circuit closed (engine re-enabled)
+- Admin can manually disable/enable engines
+
+## Extended Node Functions (If Applicable)
+
+**Not applicable for Vidveil.** This is a stateless search proxy with no cluster/node management beyond standard config sync.
+
+## High Availability Requirements (If Applicable)
+
+**Not applicable for Vidveil.** This is a stateless application.
+
+- No database (results not persisted)
+- No session state (all data in memory cache)
+- Horizontal scaling: Deploy multiple instances behind load balancer
+- No data sync needed between instances (each has own cache)
+- Cache misses simply re-query engines
+
+## Notes
+
+**Privacy Implementation:**
+- All external requests use spoofed User-Agent
+- TLS fingerprint randomization via utls library
+- No cookies stored or sent to engines
+- No IP logging in production mode
+- All thumbnails proxied (never direct to engine URLs)
+- Tor support automatic if `tor` binary present
+
+**Engine Architecture:**
+- Pluggable engine system (easy to add new sites)
+- Base engine class handles HTTP client, Tor, retry logic, circuit breaker
+- Each engine implements Search() interface
+- Manager orchestrates concurrent execution
+- Results aggregated and deduplicated by URL
+
+**Bang Search Implementation:**
+- Regex parser extracts `!{shortcode}` from query
+- 47 shortcuts map to 52 engines (some engines have multiple shortcuts)
+- Multiple bangs supported: `!ph !rt query` searches both
+- Autocomplete matches substrings: `!po` matches `!ph`, `!pornhub`, `!pornmd`
+- Bang-only queries (no search terms) show engine homepage info
+
+**Performance Optimizations:**
+- Concurrent engine queries (goroutines)
+- 15-second timeout per engine (configurable)
+- Circuit breaker prevents hammering failing engines
+- Result caching (15 minute TTL)
+- Connection pooling for HTTP clients
+- Thumbnail streaming (no buffering)
+
+**Security:**
+- Admin panel requires authentication (first-run credentials)
+- CSRF protection on admin forms
+- Rate limiting on search endpoints
+- Input validation (query length, page numbers)
+- SQL injection N/A (no database)
+- XSS protection (template auto-escaping)
+
+---
+
+# FINAL CHECKPOINT: COMPLIANCE CHECKLIST
+
+---
+
+## FOR AI ASSISTANTS (STRICT RULES)
+
+**These rules are NON-NEGOTIABLE. Violation is unacceptable.**
+
+### Document Rules
+
+- [ ] **AI.md is the ONLY project specification** - nothing else
+- [ ] **PARTS 0-35 are READ-ONLY** - implementation patterns, never modify
+- [ ] **PART 36 is the project spec** - update when features change
+- [ ] Keep AI.md in sync with PROJECT STATE
+- [ ] Use TODO.AI.md for tasks when more than 2 items
+
+### Behavior Rules
+
+- [ ] **NEVER assume or guess** - ask questions when unclear
+- [ ] **NEVER skip steps** - follow specifications exactly
+- [ ] **NEVER add features not requested** - implement what is specified
+- [ ] **NEVER use deprecated patterns** - check the spec for current standards
+- [ ] **ALWAYS verify before modifying** - read existing code first
+- [ ] **ALWAYS use exact naming** - config paths, routes, file names as specified
+- [ ] **ALWAYS check cross-references** - ensure consistency across sections
+
+### Code Rules
+
+- [ ] CGO_ENABLED=0 - no exceptions, static binaries only
+- [ ] No external runtime dependencies - everything embedded
+- [ ] Use ONLY approved libraries (see PART 5)
+- [ ] Follow exact config paths: `server.xxx`, not variations
+- [ ] Follow exact route patterns: `/api/v1/admin/server/xxx`
+- [ ] Token prefixes: `adm_` (admin primary), `key_` (API keys)
+- [ ] Setup token: 32 hex chars, no dashes
+
+### Container Rules
+
+**Building (ALWAYS Docker):**
+- [ ] **NEVER run `go build` on host** - ALWAYS use Docker `golang:alpine`
+- [ ] **NEVER run `go test` on host** - ALWAYS use Docker `golang:alpine`
+- [ ] **NEVER run `go run` on host** - ALWAYS use Docker `golang:alpine`
+
+**Testing (Docker OR Incus):**
+- [ ] **Quick tests** - Docker `alpine:latest` for unit tests, CI/CD
+- [ ] **Full OS tests** - Incus `debian:latest` for systemd (PREFERRED)
+- [ ] **NEVER run binaries on host** - use Docker or Incus container
+
+**Debugging (Incus Preferred):**
+- [ ] **Incus** for interactive debugging (full OS, persistent, SSH-able)
+- [ ] **Docker** for quick ephemeral checks only
+
+### AI as Beta Tester
+
+- [ ] **Goal is to BREAK things** - try edge cases, invalid inputs, stress tests
+- [ ] **Then FIX them** - don't just report bugs, implement fixes
+- [ ] **Verify fixes** - re-test to confirm the fix works
+- [ ] See PART 13: TESTING & DEVELOPMENT for full procedures
+
+### API & Endpoints
+
+- [ ] **Compatibility = external services** - pastebin.com, microbin, etc. (match their format)
+- [ ] **Legacy = NEVER KEEP** - old/changed/removed endpoints from YOUR project = DELETE
+- [ ] **No backwards compatibility shims** - no redirects, no deprecation periods
+- [ ] See PART 20: API STRUCTURE for full rules
+
+### When Starting Work
+
+1. Read AI.md completely - this is the ONLY project specification
+2. Read TODO.AI.md for current tasks (if exists)
+3. Identify the specific task/section
+4. Check for cross-references to other sections
+5. Ask clarifying questions BEFORE implementing
+6. Implement exactly as specified
+7. Verify consistency with related sections
+8. Update TODO.AI.md when tasks complete
+
+---
+
+## FOR HUMANS (PROJECT CHECKLIST)
+
+### Project Files
+
+- [ ] `AI.md` - Complete project specification (required, THE spec)
+- [ ] `TODO.AI.md` - Task tracking (when needed)
+- [ ] `PLAN.md` - Implementation plan (optional, if exists this is THE plan)
+- [ ] `README.md` - User documentation (required)
+- [ ] `LICENSE.md` - License file (required)
+- [ ] `Makefile` - Build targets (required)
+- [ ] `docker/Dockerfile` - Container build (required)
+- [ ] `go.mod` / `go.sum` - Go modules (required)
+- [ ] `.github/workflows/` or `.gitea/workflows/` - CI/CD (required)
+
+### Licensing & Features
+
+- [ ] MIT License for all project code
+- [ ] 3rd party licenses listed in LICENSE.md
+- [ ] 100% free and open source - no paid tiers
+- [ ] No feature gating - ALL features available to ALL users
+- [ ] No "pro", "premium", "enterprise" editions
+- [ ] No license keys or activation required
+- [ ] Rate limits OK (server protection), usage limits NOT OK (monetization)
+
+### Development
+
+- [ ] All 4 OSes: Linux, macOS, BSD, Windows
+- [ ] Both architectures: AMD64, ARM64
+- [ ] CGO_ENABLED=0 for static binaries
+- [ ] Single binary with embedded assets
+- [ ] No external runtime dependencies
+
+### Configuration
+
+- [ ] Config file: `server.yml` (not .yaml)
+- [ ] Environment variables: `{PROJECTNAME}_xxx`
+- [ ] CLI flags override env, env overrides file
+- [ ] Boolean accepts: true/false, yes/no, 1/0, on/off
+- [ ] Sane defaults for everything
+
+### Frontend
+
+- [ ] Frontend required for ALL projects
+- [ ] Project-wide theme system: light/dark/auto (dark is default)
+- [ ] Themes apply everywhere: web UI, admin, Swagger, GraphQL, ReadTheDocs
+- [ ] NO inline CSS - external stylesheets only
+- [ ] NO JavaScript alerts - use toast notifications
+- [ ] Mobile-first responsive design
+- [ ] WCAG 2.1 AA accessibility (both light and dark themes)
+
+### API
+
+- [ ] REST API at `/api/v1/`
+- [ ] Swagger UI at `/openapi`
+- [ ] OpenAPI spec at `/openapi.json` (JSON only, no YAML)
+- [ ] GraphQL at `/graphql` (synced with REST)
+- [ ] Health check at `/healthz`
+
+### Admin Panel
+
+- [ ] Web UI at `/admin` (session auth)
+- [ ] API at `/api/v1/admin/` (bearer token auth)
+- [ ] First-run setup wizard
+- [ ] All settings configurable via UI
+
+### Server CLI
+
+- [ ] `--help`, `--version` - no privileges needed
+- [ ] `--status` - show running status
+- [ ] `--config` - specify config file
+- [ ] `--service` - install/start/stop/restart/uninstall
+- [ ] `--maintenance` - backup/restore/setup
+- [ ] `--update` - check/yes/branch
+
+### Database
+
+- [ ] SQLite for local/single-node (default)
+- [ ] PostgreSQL/MySQL for cluster mode
+- [ ] Self-creating schema (CREATE TABLE IF NOT EXISTS)
+- [ ] Automatic migrations on startup
+
+### Scheduler
+
+- [ ] Built-in scheduler (always running)
+- [ ] Backup: 02:00 daily
+- [ ] SSL renewal: 03:00 daily
+- [ ] GeoIP update: 03:00 Sunday
+- [ ] Session cleanup: hourly
+- [ ] Cluster-aware task locking
+
+### Backup & Restore
+
+- [ ] Automatic daily backups (configurable)
+- [ ] Encrypted backups (AES-256-GCM)
+- [ ] Max 4 backups retained (default)
+- [ ] Restore via CLI: `--maintenance restore`
+
+### Email & Notifications
+
+- [ ] SMTP required for email features
+- [ ] No SMTP = email features disabled (not hidden errors)
+- [ ] Customizable email templates
+- [ ] WebUI notifications always available
+
+### SSL/TLS
+
+- [ ] Let's Encrypt support (HTTP-01, TLS-ALPN-01, DNS-01)
+- [ ] Manual certificate support
+- [ ] Auto-renewal via scheduler
+- [ ] HSTS when SSL enabled
+
+### Security
+
+- [ ] All security headers (CSP, X-Frame-Options, etc.)
+- [ ] Rate limiting enabled
+- [ ] Audit logging
+- [ ] 2FA support (TOTP, WebAuthn)
+- [ ] Session management
+
+### Logging
+
+- [ ] access.log, server.log, error.log, audit.log, security.log
+- [ ] Configurable formats and rotation
+- [ ] Audit log: JSON only, daily rotation
+
+### Build & Deploy
+
+- [ ] Makefile: build, release, docker, test
+- [ ] CI/CD: release, beta, daily, docker workflows
+- [ ] 8 platform builds (4 OS × 2 arch)
+- [ ] Docker: Alpine base, tini init, non-root user
+
+### Building & Testing
+
+**Building (ALWAYS Docker):**
+- [ ] ALL builds use Docker `golang:alpine` - NEVER on host
+- [ ] `go build`, `go test`, `go run` - ALWAYS in Docker
+
+**Testing (Docker OR Incus):**
+- [ ] Quick tests: Docker `alpine:latest`
+- [ ] Full OS tests: Incus `debian:latest` (PREFERRED for systemd)
+- [ ] ALL binaries run in containers - never host
+- [ ] `tests/run_tests.sh` - auto-detects Incus or Docker
+- [ ] `tests/docker.sh` - Docker-based tests
+- [ ] `tests/incus.sh` - Incus-based tests (full systemd)
+
+**Debugging:**
+- [ ] Incus preferred (full OS, persistent, SSH-able)
+- [ ] Docker for quick ephemeral checks only
+
+### Documentation
+
+- [ ] `docs/` directory ONLY for ReadTheDocs (MkDocs) - nothing else
+- [ ] `mkdocs.yml` in project root
+- [ ] `.readthedocs.yaml` in project root
+- [ ] `docs/requirements.txt` with dependencies
+- [ ] MkDocs Material theme with light/dark/auto toggle (dark default)
+- [ ] `docs/stylesheets/dark.css` (OPTIONAL for dark theme customization)
+- [ ] `docs/stylesheets/light.css` (OPTIONAL for light theme customization)
+- [ ] Required pages: index, installation, configuration, api, admin, development
+- [ ] ReadTheDocs URL: `https://{projectorg}-{projectname}.readthedocs.io`
+- [ ] Documentation badge in README.md
+
+### CLI Client (if applicable)
+
+- [ ] Binary: `{projectname}-cli`
+- [ ] Same version as server
+- [ ] Standard CLI + TUI modes
+- [ ] Config: `~/.config/{projectorg}/{projectname}/cli.yml`
+- [ ] Dark theme for TUI (matching project theme)
+- [ ] Built alongside server
+
+### Tor (if tor binary installed)
+
+- [ ] Auto-enabled when tor binary found
+- [ ] Dedicated tor process (not system tor)
+- [ ] .onion address management
+- [ ] Vanity address generation
+
+### Optional Features
+
+- [ ] Custom domains (per-project decision)
+- [ ] Multi-user mode (per-project decision)
+- [ ] Organizations (per-project decision)
+- [ ] Cluster mode (when HA needed)
+
+---
+
+**END OF SPECIFICATION**
+
+**ALL sections marked NON-NEGOTIABLE must be implemented exactly as specified.**
+
+**When in doubt:**
+- **AI:** Re-read AI.md and TODO.AI.md. Ask questions. Never assume.
+- **Humans:** Re-read AI.md. Update TODO.AI.md. Ask AI to clarify.
+
+---
+
+# APPENDIX A: INTEGRATION NOTES
+
+# Integration Notes for Existing Projects
+
+**Use this prompt when integrating this specification into an EXISTING project.**
+
+---
+
+## Prompt for AI Assistants
+
+When integrating this specification into an existing project:
+
+### Phase 1: Assessment (Read-Only)
+
+1. **Read the entire AI.md specification** (this file)
+2. **Read the existing project codebase** - understand current structure
+3. **Identify gaps** between current state and specification requirements
+4. **Create TODO.AI.md** with comprehensive task list organized by priority:
+   - **Critical (P0)**: Security issues, data loss risks, broken functionality
+   - **High (P1)**: Missing NON-NEGOTIABLE requirements
+   - **Medium (P2)**: Structural improvements, standardization
+   - **Low (P3)**: Nice-to-have features, documentation improvements
+
+### Phase 2: Planning
+
+1. **Do NOT start making changes yet**
+2. **Review TODO.AI.md with the human** - get approval on priorities
+3. **Ask clarifying questions:**
+   - Are there existing features that should be preserved?
+   - Are there breaking changes acceptable?
+   - What is the migration timeline (can it be done incrementally)?
+   - Are there production systems that need careful migration?
+4. **Create a migration plan** for each major change
+5. **Identify risks** - data migration, API breaking changes, downtime requirements
+
+### Phase 3: Incremental Implementation
+
+**NEVER attempt to fix everything at once. Work incrementally:**
+
+1. **Start with Critical (P0) items**
+   - Security vulnerabilities
+   - Data integrity issues
+   - Broken functionality
+
+2. **Then High (P1) NON-NEGOTIABLE items**
+   - Work in small, testable increments
+   - One subsystem at a time
+   - Ensure each change is tested before moving on
+
+3. **Then Medium (P2) improvements**
+   - Structural reorganization
+   - Standardization of patterns
+
+4. **Finally Low (P3) enhancements**
+   - Documentation
+   - Nice-to-have features
+
+### Phase 4: Validation
+
+After each significant change:
+
+1. **Test thoroughly** - verify nothing broke
+2. **Update TODO.AI.md** - mark items complete
+3. **Update AI.md** - reflect current project state
+4. **Document breaking changes** - if any
+5. **Get human approval** before proceeding to next phase
+
+---
+
+## Common Integration Patterns
+
+### Pattern 1: File Structure Migration
+
+**If project has non-standard structure:**
+
+1. Create new `src/` directory structure per spec
+2. Move files incrementally (one package at a time)
+3. Update imports after each move
+4. Test after each move
+5. Delete old structure only when new structure is fully working
+
+### Pattern 2: Configuration Migration
+
+**If project uses different config format:**
+
+1. Add config migration utility: `--migrate-config old.conf new.yml`
+2. Document migration in README/docs
+3. Run migration on first startup (auto-detect old format)
+4. DELETE old config after successful migration
+5. New installs use new format only
+
+### Pattern 3: API Migration
+
+**If project has existing API that doesn't match spec:**
+
+1. Implement new spec-compliant API at `/api/v1/`
+2. **DELETE old endpoints** - no deprecation periods, no shims
+3. Document breaking changes clearly in release notes
+4. Provide one-time migration script if data format changed
+5. Clients must update - this is expected for major versions
+
+### Pattern 4: Database Schema Migration
+
+**If project has existing database:**
+
+1. **NEVER break existing data**
+2. Create migration scripts in `src/migration/`
+3. Use proper migration tool or SQL migration files
+4. Test migrations on backup data first
+5. Provide rollback capability
+6. Document breaking schema changes
+
+---
+
+## Critical Rules for Integration
+
+| Rule | Description |
+|------|-------------|
+| **NEVER break production** | Integration should be incremental and safe |
+| **NEVER lose data** | Migrations must preserve all existing data |
+| **NEVER remove features** | Unless explicitly approved by human |
+| **ALWAYS test** | Every change must be tested before proceeding |
+| **ALWAYS backup** | Before major structural changes |
+| **ALWAYS document** | Breaking changes, migrations, deletions |
+| **ALWAYS ask** | When unsure about preserving existing behavior |
+
+---
+
+## Red Flags (Stop and Ask Human)
+
+Stop immediately and ask the human if you encounter:
+
+- Existing data that might be lost
+- Breaking API changes affecting external users
+- Configuration changes requiring manual migration
+- File structure changes affecting deployed systems
+- Security changes that might break authentication
+- Database schema changes without clear migration path
+- Removal of features currently in use
+
+---
+
+## Integration Checklist
+
+Before starting integration:
+
+- [ ] Have you read the ENTIRE AI.md specification?
+- [ ] Have you read and understood the existing codebase?
+- [ ] Have you created a comprehensive TODO.AI.md with prioritized tasks?
+- [ ] Have you reviewed the TODO.AI.md with the human?
+- [ ] Have you identified all risks and breaking changes?
+- [ ] Have you planned for data migration (if needed)?
+- [ ] Have you planned for incremental rollout?
+- [ ] Do you have a rollback plan for each major change?
+
+**If you answered NO to any of the above, DO NOT START IMPLEMENTATION.**
+
+---
+
+## Example TODO.AI.md for Integration
+
+```markdown
+# Integration Tasks for {projectname}
+
+## Critical (P0) - Do First
+
+- [ ] Fix SQL injection vulnerability in user search (line 234)
+- [ ] Add missing input validation on admin endpoints
+- [ ] Fix session management security issue
+
+## High (P1) - NON-NEGOTIABLE Requirements
+
+### File Structure
+- [ ] Create src/ directory structure per spec
+- [ ] Move main.go to src/main.go
+- [ ] Create src/config/ package
+- [ ] Create src/server/ package
+- [ ] Create src/swagger/ package (NEW)
+- [ ] Create src/graphql/ package (NEW)
+- [ ] Update all imports
+
+### Configuration
+- [ ] Migrate config.json to server.yml format
+- [ ] Add environment variable support
+- [ ] Add CLI flag overrides
+- [ ] Create migration utility
+
+### API
+- [ ] Add Swagger/OpenAPI support (NEW)
+- [ ] Add GraphQL support (NEW)
+- [ ] Ensure REST API matches spec patterns
+
+## Medium (P2) - Standardization
+
+- [ ] Standardize error handling per spec
+- [ ] Add comprehensive logging per spec
+- [ ] Implement project-wide theme system (light/dark/auto)
+- [ ] Add health check endpoint format per spec
+
+## Low (P3) - Documentation
+
+- [ ] Create docs/ directory for ReadTheDocs
+- [ ] Write docs/index.md
+- [ ] Write docs/installation.md
+- [ ] Configure mkdocs.yml
 ```
 
-### Static Assets
+---
 
-**All embedded in binary** (no external files):
-- HTML templates (`src/server/template/`)
-- CSS stylesheets (`src/server/static/css/`)
-- JavaScript (`src/server/static/js/`)
-- Images (logo, icons)
+## Remember
+
+**Integration is a PROCESS, not a single change.**
+
+- Work incrementally
+- Test continuously
+- Document everything
+- Get approval at each phase
+- Preserve existing functionality unless explicitly changing it
+- NEVER rush integration to "get it done faster"
 
 ---
 
-## Special Features
+---
 
-### Server-Sent Events (SSE) Streaming
+# APPENDIX B: BOOTSTRAP NOTES
 
-**Why SSE:**
-- Results appear progressively as engines respond
-- Faster perceived performance (Tier 1 results in <500ms)
-- No page reload needed
-- Standard EventSource API in browsers
+# Bootstrap Notes for New Projects
 
-**Flow:**
-1. Client connects to `/api/search?q=query&format=sse`
-2. Server parses query, extracts bangs
-3. Server launches all engine requests in parallel
-4. As each engine returns results → send SSE `event: result`
-5. When all complete or timeout → send SSE `event: done`
-6. Client accumulates results and displays progressively
-
-### Thumbnail Proxy
-
-**Problem:** Direct thumbnail URLs allow engines to track users
-
-**Solution:** Proxy all thumbnails through `/proxy?url=...`
-
-**Flow:**
-```
-1. Engine returns: https://cdn.pornhub.com/thumb123.jpg
-2. Vidveil transforms to: https://{fqdn}/proxy?url=https%3A%2F%2Fcdn.pornhub.com%2Fthumb123.jpg
-3. Browser requests proxied URL
-4. Vidveil fetches from engine, streams to client
-5. Engine sees Vidveil IP, not user IP
-```
-
-**Caching:** Thumbnails cached in memory (30 min TTL) to reduce engine requests
-
-### Age Verification
-
-**Gate:** All content behind age verification
-
-**Implementation:**
-- Session cookie after verification (`age_verified=1`)
-- Cookie expires when browser closes
-- No long-term tracking
+**Use this prompt when creating a NEW project from scratch.**
 
 ---
 
-## Extended Node Functions
+## Prompt for AI Assistants
 
-**Vidveil does NOT use extended node clustering** as defined in PART 24.
+When bootstrapping a new project from this specification:
 
-**Reasoning:**
-- Search aggregation is stateless (no shared data)
-- Each node can independently search engines
-- No need for distributed state or consensus
-- Standard load balancing sufficient
+### Phase 1: Project Initialization
 
-**If scaling needed:**
-- Deploy multiple instances behind load balancer
-- Optional shared Redis for result caching (future)
-- Each instance operates independently
+1. **Confirm project details:**
+   - Project name: `{projectname}`
+   - Organization: `{projectorg}`
+   - Description: What does this project do?
+   - Primary purpose: What problem does it solve?
+
+2. **Create directory structure:**
+   ```bash
+   mkdir -p {projectname}
+   cd {projectname}
+
+   # Create all required directories
+   mkdir -p src/{config,server,swagger,graphql,mode,paths,ssl,scheduler,service,admin}
+   mkdir -p src/server/{handler,service,model,store,template}
+   mkdir -p docker/rootfs/usr/local/bin
+   mkdir -p docs/stylesheets
+   mkdir -p tests
+   mkdir -p scripts
+   mkdir -p .github/workflows
+   ```
+
+3. **Create AI.md:**
+   - Ask human to provide AI.md for the new project
+   - Verify all `{variables}` are replaced with actual values
+   - Verify PART 36 is filled in with project details
+
+4. **Create foundational files:**
+   ```bash
+   # Required files
+   touch README.md
+   touch LICENSE.md
+   touch Makefile
+   touch Jenkinsfile
+   touch release.txt
+   touch TODO.AI.md
+   touch .gitignore
+
+   # Docker files
+   touch docker/Dockerfile
+   touch docker/docker-compose.yml
+   touch docker/docker-compose.dev.yml
+   touch docker/docker-compose.test.yml
+   touch docker/rootfs/usr/local/bin/entrypoint.sh
+
+   # ReadTheDocs files
+   touch mkdocs.yml
+   touch .readthedocs.yaml
+   touch docs/index.md
+   touch docs/installation.md
+   touch docs/configuration.md
+   touch docs/api.md
+   touch docs/admin.md
+   touch docs/development.md
+   touch docs/requirements.txt
+   touch docs/stylesheets/dark.css
+   touch docs/stylesheets/light.css
+
+   # CI/CD
+   touch .github/workflows/release.yml
+   touch .github/workflows/beta.yml
+   touch .github/workflows/daily.yml
+   touch .github/workflows/docker.yml
+   ```
+
+### Phase 2: Core Implementation Order
+
+**Implement in this specific order for best results:**
+
+#### Step 1: Basic Structure (PARTS 1-5)
+
+1. **Initialize Go module:**
+   ```bash
+   go mod init github.com/{projectorg}/{projectname}
+   ```
+
+2. **Create src/main.go** - Minimal entry point
+3. **Create src/config/config.go** - Configuration loading
+4. **Create src/mode/mode.go** - Application mode detection
+5. **Create src/paths/paths.go** - Path resolution
+
+**Test:** Binary should compile and show version
+
+#### Step 2: Server Foundation (PARTS 6-10)
+
+1. **Create src/server/server.go** - HTTP server setup
+2. **Create src/server/handler/health.go** - Health check
+3. **Add CLI flags** per PART 7 specification
+4. **Add service support** per PART 9
+5. **Create Makefile** per PART 12
+
+**Test:** Server starts and responds to `/healthz`
+
+#### Step 3: Docker & CI/CD (PARTS 12-15)
+
+1. **Create docker/Dockerfile** - Multi-stage build
+2. **Create docker-compose files** - Production, dev, test
+3. **Create entrypoint.sh** - Container initialization
+4. **Create .github/workflows/** - All CI/CD workflows
+5. **Create Makefile targets** - build, docker, release
+
+**Test:** Docker build succeeds, container runs
+
+#### Step 4: Web Frontend (PART 17)
+
+1. **Create src/server/template/** - HTML templates
+2. **Embed templates in server.go**
+3. **Implement theme system** (light/dark/auto)
+4. **Create homepage route** - `/` endpoint
+5. **Test responsive design**
+
+**Test:** Homepage loads with working theme toggle
+
+#### Step 5: Admin Panel (PART 19)
+
+1. **Create src/admin/admin.go** - Admin package
+2. **Create admin templates** - UI pages
+3. **Create admin handlers** - Routes and logic
+4. **Implement first-run setup wizard**
+5. **Add all admin configuration pages**
+
+**Test:** Admin panel accessible at `/admin`
+
+#### Step 6: API Layer (PART 20)
+
+1. **Create src/server/handler/api.go** - REST API handlers
+2. **Create src/swagger/swagger.go** - OpenAPI/Swagger
+3. **Create src/graphql/graphql.go** - GraphQL API
+4. **Ensure all three APIs are in sync**
+5. **Apply theme to Swagger/GraphQL UIs**
+
+**Test:** All three APIs work (REST, Swagger, GraphQL)
+
+#### Step 7: Core Features (PARTS 21-29)
+
+Implement in order:
+1. **PART 21:** SSL/TLS & Let's Encrypt
+2. **PART 22:** Security & Logging
+3. **PART 23:** User Management
+4. **PART 24:** Database & Cluster
+5. **PART 25:** Backup & Restore
+6. **PART 26:** Email & Notifications
+7. **PART 27:** Scheduler
+8. **PART 28:** GeoIP
+9. **PART 29:** Metrics
+
+**Test after each part:** Verify the feature works before moving to next
+
+#### Step 8: Optional Features (PARTS 30-35)
+
+Implement as needed:
+1. **PART 30:** Tor Hidden Service (if tor installed)
+2. **PART 31:** Error Handling & Caching
+3. **PART 32:** I18N & A11Y
+4. **PART 34:** CLI Client (if applicable)
+5. **PART 35:** Custom Domains (if applicable)
+
+#### Step 9: Documentation (PART 33)
+
+1. **Create all docs/*.md files**
+2. **Configure mkdocs.yml**
+3. **Configure .readthedocs.yaml**
+4. **Add docs/requirements.txt**
+5. **Create theme CSS files**
+6. **Test local MkDocs build:** `mkdocs serve`
+
+**Test:** Documentation builds and deploys to ReadTheDocs
+
+#### Step 10: Project-Specific (PART 36)
+
+1. **Fill in PART 36 in AI.md** - Define project-specific endpoints, data, config
+2. **Implement project-specific features**
+3. **Add project-specific tests**
+4. **Update documentation with project specifics**
+
+**Test:** All project-specific functionality works
+
+### Phase 3: Polish & Release
+
+1. **Run full test suite** - Ensure everything works
+2. **Build all 8 platforms** - Verify cross-platform builds
+3. **Test Docker images** - All compose files work
+4. **Complete README.md** - Production-first documentation
+5. **Complete LICENSE.md** - Include all embedded licenses
+6. **Final compliance check** - Review FINAL CHECKPOINT checklist
+7. **Create initial release** - Tag v0.1.0
 
 ---
 
-## High Availability Requirements
+## Bootstrap Checklist
 
-**Vidveil does NOT require HA features** from PART 24.
+### Before You Start
 
-**Reasoning:**
-- No critical data stored (stateless search)
-- Downtime = users use alternative search
-- Not mission-critical infrastructure
-- Self-hosted users accept occasional downtime
+- [ ] Have you read the ENTIRE AI.md specification?
+- [ ] Do you understand the project purpose and scope?
+- [ ] Have you confirmed all project details (name, org, description)?
+- [ ] Have you asked clarifying questions about project-specific requirements?
 
-**If HA desired:**
-- Deploy 2+ instances behind load balancer
-- Health check endpoint: `/healthz`
-- No database failover needed (no persistent data)
+### Foundation (Must Complete First)
 
----
+- [ ] Directory structure created per spec
+- [ ] AI.md created and customized
+- [ ] go.mod initialized
+- [ ] .gitignore created with proper rules
+- [ ] Basic src/main.go exists
+- [ ] src/config/config.go exists
+- [ ] Project compiles successfully
 
-## Business Rules Summary
+### Core Features (In Order)
 
-| Category | Rules |
-|----------|-------|
-| **Privacy** | No tracking, no logging, no analytics, thumbnail proxy required |
-| **Search** | Parallel engine execution, tiered by speed, SSE streaming |
-| **Bangs** | 47 codes, multiple allowed, case-insensitive, override default engines |
-| **Results** | Deduplicated by URL, max 500 per search, sanitized HTML |
-| **Engines** | 52 total, admin can enable/disable, auto-disable on repeated failures |
-| **Performance** | Tier 1 <500ms, Tier 2 <2s, Tier 3 <5s, 10s total timeout |
-| **Content** | 18+ age gate required, no content moderation (engines handle that) |
+- [ ] Server starts and responds to requests
+- [ ] Health check endpoint works
+- [ ] CLI flags work per spec
+- [ ] Configuration loading works (file, env, flags)
+- [ ] Logging configured properly
+- [ ] Admin panel accessible
+- [ ] First-run setup wizard works
+- [ ] REST API endpoints defined
+- [ ] Swagger UI accessible at /openapi
+- [ ] GraphQL accessible at /graphql
+- [ ] All three APIs in sync
 
----
+### Infrastructure
 
-## Configuration Options
+- [ ] Docker builds successfully
+- [ ] Docker Compose files work (prod, dev, test)
+- [ ] CI/CD workflows configured
+- [ ] Automated builds work
+- [ ] Multi-platform builds work (8 platforms)
 
-**Vidveil-specific configuration** (in `server.yml` per PART 5):
+### Documentation
 
-```yaml
-search:
-  # Engine settings
-  engines:
-    timeout: 10s              # Per-engine timeout
-    max_results: 500          # Max results per search
-    tier_delay_ms: 200        # Delay between tier execution
-  
-  # Result settings
-  deduplicate: true           # Remove duplicate URLs
-  sanitize_html: true         # Strip HTML from titles
-  
-  # Privacy settings
-  proxy_thumbnails: true      # Proxy all thumbnails (required)
-  log_queries: false          # Never log searches (forced)
+- [ ] README.md complete
+- [ ] LICENSE.md complete with embedded licenses
+- [ ] docs/ directory structure created
+- [ ] All required .md files in docs/
+- [ ] mkdocs.yml configured
+- [ ] ReadTheDocs configured
+- [ ] Documentation builds successfully
 
-# Age verification
-age_verification:
-  enabled: true               # Must be true
-  minimum_age: 18             # Fixed at 18
-```
+### Final Validation
 
-**All standard configuration** (server, admin, TLS, etc) follows PARTS 5, 18, 21.
-
----
-
-## Testing Requirements
-
-**Per PART 13, testing focuses on:**
-
-1. **Engine functionality** - Each engine returns valid results
-2. **Bang parsing** - Correct engine selection from bang codes
-3. **SSE streaming** - Results stream correctly
-4. **Deduplication** - Duplicate URLs merged properly
-5. **Thumbnail proxy** - All thumbnails proxied, no direct URLs
-6. **Privacy compliance** - Zero tracking/logging verified
-7. **Age verification** - Gate enforced on all content routes
-
-**Test structure:**
-- `tests/run_tests.sh` - Auto-detect and run all tests
-- `tests/docker.sh` - Beta test in Docker
-- `tests/incus.sh` - Beta test in Incus
-- `src/service/engines/engines_test.go` - Engine unit tests
+- [ ] All NON-NEGOTIABLE requirements met
+- [ ] All FINAL CHECKPOINT items checked
+- [ ] No TODO items marked as critical/blocker
+- [ ] All tests pass
+- [ ] All 8 platform builds succeed
+- [ ] Docker images build and run
+- [ ] Documentation published
 
 ---
 
-## Development URLs
+## Common Mistakes When Bootstrapping
 
-Replace production `https://scour.li` with development:
-
-| Environment | Base URL |
-|-------------|----------|
-| **Production** | `https://scour.li` |
-| **Development** | `http://localhost:64580` |
-| **Docker** | `http://localhost:8080` |
-
-**Examples:**
-- Development search: `http://localhost:64580/search?q=query`
-- Development API: `http://localhost:64580/api/search?q=query`
-- Development admin: `http://localhost:64580/admin`
+| Mistake | Why It's Wrong | Correct Approach |
+|---------|----------------|------------------|
+| Starting with project-specific features | Wastes time if foundation is wrong | Build foundation first (config, server, admin) |
+| Skipping admin panel | Hard to configure without UI | Build admin panel early |
+| Implementing all APIs at once | Easy to get out of sync | Start with REST, then add Swagger, then GraphQL |
+| Not testing incrementally | Find bugs too late | Test after each major component |
+| Hardcoding values | Makes project inflexible | Use configuration from day 1 |
+| Skipping documentation | Users can't use the project | Write docs as you build |
+| Building for one platform only | Fails CI/CD | Test multi-platform early |
+| Ignoring theme system | Hard to retrofit later | Implement themes from start |
 
 ---
 
-## Compliance Notes
+## Time-Saving Tips
 
-**Vidveil is 100% compliant with AI.md specification:**
+1. **Use existing projects as reference:**
+   - Look at jokes, quotes, or other apimgr projects
+   - Copy patterns that match the spec
+   - Adapt to your project's needs
 
-✅ **Privacy-first design** (PART 22: Security)
-✅ **Admin panel** (PART 19: Admin Panel)  
-✅ **REST, Swagger, GraphQL APIs** (PART 20: API Structure)
-✅ **SSE streaming** (PART 20: API Structure)
-✅ **Docker-ready** (PART 14: Docker)
-✅ **Single binary** (PART 11: Binary Requirements)
-✅ **Embedded assets** (PART 11: Binary Requirements)
-✅ **Tor support** (PART 30: Tor Hidden Service)
-✅ **No feature tiers** (all features free, no limitations)
-✅ **MIT License** (PART 2: License & Attribution)
+2. **Leverage templates:**
+   - Use spec templates for Docker, CI/CD, configs
+   - Don't reinvent - copy and customize
 
-**Deviations from standard spec:**
-- **No users/auth** - Vidveil is anonymous (PART 23 not applicable)
-- **No database** - Fully stateless (PART 24 minimal use)
-- **No email** - No user accounts (PART 26 not applicable)
-- **No scheduler** - No background tasks (PART 27 not applicable)
-- **No custom domains** - Single-instance design (PART 35 not applicable)
+3. **Build iteratively:**
+   - Get basic version working first
+   - Add features incrementally
+   - Test continuously
 
-**These deviations are ACCEPTABLE** per AI.md: "Optional features can be omitted if not needed."
+4. **Focus on NON-NEGOTIABLE items first:**
+   - Optional features can wait
+   - Core requirements must be solid
 
 ---
 
-# FINAL CHECKPOINT: VIDVEIL
+## Success Criteria
 
-**✅ = Complete and verified**
+A successfully bootstrapped project should:
 
-## Core Functionality
-
-- [x] Search aggregation from 52 engines
-- [x] Bang shortcuts (47 codes)
-- [x] SSE streaming for progressive results
-- [x] Thumbnail proxy (prevents tracking)
-- [x] Privacy-first (no tracking/logging)
-- [x] Age verification gate
-- [x] Deduplication by URL
-- [x] Tiered engine execution
-- [x] Web UI with search
-- [x] Admin panel
-- [x] REST API
-- [x] Swagger/OpenAPI
-- [x] GraphQL API
-
-## Infrastructure
-
-- [x] Single binary (all platforms)
-- [x] Docker support (Dockerfile, compose files)
-- [x] Tor hidden service support
-- [x] Health check endpoint
-- [x] Proper logging
-- [x] Configuration file support
-- [x] CLI flags
-- [x] Embedded assets
-
-## Documentation
-
-- [x] README.md complete
-- [x] AI.md PART 36 complete
-- [x] LICENSE.md with attributions
-- [x] docs/ directory structure
-- [x] API documentation
-- [x] Usage examples
-
-## Compliance
-
-- [x] No tracking/analytics
-- [x] No feature limitations
-- [x] MIT License
-- [x] All PARTs followed (applicable ones)
-- [x] Build system (Makefile)
-- [x] CI/CD workflows
-- [x] Multi-platform binaries
+✅ Compile to a single static binary for all 8 platforms
+✅ Run in Docker with proper configuration
+✅ Have working web UI with theme support (light/dark/auto)
+✅ Have working admin panel with all config options
+✅ Expose REST, Swagger, AND GraphQL APIs (all in sync)
+✅ Have comprehensive documentation on ReadTheDocs
+✅ Pass all CI/CD workflows
+✅ Follow every NON-NEGOTIABLE requirement in AI.md
+✅ Be ready for v0.1.0 release
 
 ---
 
-**PROJECT STATUS: 100% COMPLIANT AND PRODUCTION-READY** ✅
+## Getting Help
+
+When stuck:
+
+1. **Re-read the relevant PART** in AI.md
+2. **Check existing projects** in apimgr for working examples
+3. **Ask specific questions** about unclear requirements
+4. **Propose solutions** for human review
+
+**NEVER guess or assume** - always ask when uncertain.
 
 ---

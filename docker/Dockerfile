@@ -21,7 +21,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'" \
-    -o /build/binary/vidveil src
+    -o /build/binary/vidveil ./src
 
 # =============================================================================
 # Runtime Stage - Minimal Alpine image

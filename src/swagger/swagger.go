@@ -3,10 +3,132 @@
 package swagger
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/apimgr/vidveil/src/config"
 )
+
+// DetectTheme determines the UI theme (light/dark/auto) from request
+// See AI.md PART 17 for theme detection rules
+func DetectTheme(r *http.Request) string {
+	// Check cookie first
+	if cookie, err := r.Cookie("theme"); err == nil {
+		if cookie.Value == "light" || cookie.Value == "dark" {
+			return cookie.Value
+		}
+	}
+
+	// Check query parameter
+	if theme := r.URL.Query().Get("theme"); theme == "light" || theme == "dark" {
+		return theme
+	}
+
+	// Default to auto (respects browser preference)
+	return "auto"
+}
+
+// GenerateSpec generates the OpenAPI 3.0 specification
+func GenerateSpec(cfg *config.Config) string {
+	spec := map[string]interface{}{
+		"openapi": "3.0.0",
+		"info": map[string]interface{}{
+			"title":       "VidVeil API",
+			"description": "Privacy-respecting meta search for adult video content",
+			"version":     "1.0.0",
+			"license": map[string]string{
+				"name": "MIT",
+				"url":  "https://opensource.org/licenses/MIT",
+			},
+		},
+		"servers": []map[string]string{
+			{
+				"url":         "/",
+				"description": "Current server",
+			},
+		},
+		"paths": map[string]interface{}{
+			"/api/search": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary":     "Search videos",
+					"description": "Search across multiple adult video engines",
+					"parameters": []map[string]interface{}{
+						{
+							"name":        "q",
+							"in":          "query",
+							"required":    true,
+							"description": "Search query (supports bang syntax: !ph, !xv, etc.)",
+							"schema":      map[string]string{"type": "string"},
+						},
+						{
+							"name":        "page",
+							"in":          "query",
+							"required":    false,
+							"description": "Page number (default: 1)",
+							"schema":      map[string]string{"type": "integer"},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "Search results",
+							"content": map[string]interface{}{
+								"application/json": map[string]interface{}{
+									"schema": map[string]string{"type": "object"},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/api/engines": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary":     "List engines",
+					"description": "Get all search engines with status",
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "Engine list",
+							"content": map[string]interface{}{
+								"application/json": map[string]interface{}{
+									"schema": map[string]string{"type": "array"},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/api/health": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary":     "Health check",
+					"description": "Get API health status",
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "Healthy",
+							"content": map[string]interface{}{
+								"application/json": map[string]interface{}{
+									"schema": map[string]string{"type": "object"},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/healthz": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary":     "Kubernetes health",
+					"description": "Kubernetes-style health endpoint",
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "OK",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	data, _ := json.MarshalIndent(spec, "", "  ")
+	return string(data)
+}
 
 // Handler returns the Swagger UI handler
 func Handler(cfg *config.Config) http.HandlerFunc {

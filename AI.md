@@ -1,26 +1,32 @@
-# {PROJECTNAME} Specification
+# VidVeil Specification
 
-**Name**: {projectname}
+**Name**: vidveil
 
 ---
 
 # PROJECT DESCRIPTION
 
-**{Provide a brief description of what this project does and its primary purpose}**
+**Privacy-respecting meta search engine for adult video content aggregation from 52+ sources.**
 
-Example:
-- A REST API service that provides random jokes
-- A timezone conversion API with city lookup
-- A GitHub .gitignore template generator
+VidVeil is a stateless, privacy-first adult video search proxy that aggregates results from 52 adult video sites with zero tracking, zero logging, and zero analytics.
 
 **Key Features:**
-- {Feature 1}
-- {Feature 2}
-- {Feature 3}
+- Privacy First: No tracking, no logging, no analytics, no IP logging in production
+- 52 Engines: Aggregates results from 52 adult video sites concurrently
+- Bang Search: DuckDuckGo-style shortcuts (`!ph`, `!xv`, `!rt`) for site-specific searches
+- SSE Streaming: Real-time Server-Sent Events streaming as engines respond
+- Thumbnail Proxy: All thumbnails proxied to prevent engine tracking
+- Tor Support: Built-in Tor hidden service (automatic .onion address)
+- Fast APIs: Direct JSON integration with tier 1 sites (PornHub, RedTube, Eporner)
+- Single Binary: No external dependencies, all assets embedded
+- Autocomplete: Bang shortcut autocomplete as you type
+- Admin Panel: Full web-based engine configuration and monitoring
 
 **Target Users:**
-- {Who uses this?}
-- {What problem does it solve?}
+- Privacy-conscious users seeking adult content without tracking
+- Users wanting to search multiple sites simultaneously without site-hopping
+- Users requiring Tor/onion routing for anonymity
+- Terminal users preferring curl/wget text-based search
 
 ---
 

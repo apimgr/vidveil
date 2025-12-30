@@ -10,11 +10,18 @@
 
 name: vidveil-test
 
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
 services:
   vidveil:
     image: ghcr.io/apimgr/vidveil:latest
     container_name: vidveil-test
     restart: unless-stopped
+    logging: *default-logging
     environment:
       # Testing mode with debug endpoints enabled
       - MODE=development

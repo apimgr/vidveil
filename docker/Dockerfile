@@ -1,11 +1,10 @@
-# Vidveil Docker Image
-# Per TEMPLATE.md PART 19: Multi-stage build, Alpine-based, tini init, internal port 80
-# Location: ./docker/Dockerfile
-
 # =============================================================================
 # Build Stage - Compile Go binary
 # =============================================================================
 FROM golang:alpine AS builder
+
+# Install git and bash (git: required for go mod download; bash: for build scripts)
+RUN apk add --no-cache git bash
 
 ARG TARGETARCH
 ARG VERSION=dev
@@ -22,7 +21,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'" \
-    -o /app ./src
+    -o /build/binary/vidveil src
 
 # =============================================================================
 # Runtime Stage - Minimal Alpine image
@@ -36,12 +35,12 @@ ARG COMMIT_ID
 ARG LICENSE=MIT
 
 # Static Labels
-LABEL maintainer="CasjaysDev <admin@casjaysdev.pro>" \
+LABEL maintainer="apimgr <noreply@github.com>" \
       org.opencontainers.image.vendor="apimgr" \
       org.opencontainers.image.authors="apimgr" \
       org.opencontainers.image.title="vidveil" \
       org.opencontainers.image.base.name="vidveil" \
-      org.opencontainers.image.description="Privacy-respecting adult video meta search engine" \
+      org.opencontainers.image.description="Privacy-respecting meta search for adult video content" \
       org.opencontainers.image.url="https://github.com/apimgr/vidveil" \
       org.opencontainers.image.source="https://github.com/apimgr/vidveil" \
       org.opencontainers.image.documentation="https://github.com/apimgr/vidveil" \
@@ -57,18 +56,20 @@ LABEL org.opencontainers.image.licenses="${LICENSE}" \
 
 # Install required packages including Tor
 RUN apk add --no-cache \
+    git \
     curl \
     bash \
     tini \
     tor
 
 # Create directories with proper structure
-RUN mkdir -p /config /data/db /data/logs /data/tor /data/geoip /data/backup
+RUN mkdir -p /config /config/security /data/db /data/log /data/tor /data/backup
 
 # Copy binary from builder stage (multi-stage build)
-COPY --from=builder /app /usr/local/bin/vidveil
+COPY --from=builder /build/binary/vidveil /usr/local/bin/vidveil
 
-# Copy entrypoint script from ./docker/rootfs/
+# Copy BUILD-TIME overlay (entrypoint.sh) from docker/rootfs/ into image
+# Note: This is docker/rootfs/ (build context), NOT runtime ./rootfs/ volumes
 COPY docker/rootfs/ /
 
 # Copy Dockerfile to image (for reference and backup)
@@ -78,9 +79,9 @@ COPY docker/Dockerfile /root/Dockerfile
 RUN chmod 755 /usr/local/bin/*
 
 # Set environment
-ENV MODE=production \
-    TZ=America/New_York \
-    ENABLE_TOR=true
+# Note: Tor auto-enabled because tor binary is installed above
+ENV MODE=development \
+    TZ=America/New_York
 
 # Expose internal port (always 80)
 EXPOSE 80

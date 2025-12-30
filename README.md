@@ -1,6 +1,6 @@
 # Vidveil
 
-Privacy-respecting meta search engine for adult video content.
+Privacy-respecting meta search for adult video content.
 
 **Official Site**: https://scour.li
 
@@ -13,7 +13,7 @@ Privacy-respecting meta search engine for adult video content.
 | Feature | Description |
 |---------|-------------|
 | **Privacy First** | No tracking, no logging, no analytics |
-| **47 Engines** | Aggregates results from 47+ adult video sites |
+| **52 Engines** | Aggregates results from 52 adult video sites |
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
 | **SSE Streaming** | Real-time result streaming as engines respond |

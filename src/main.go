@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -19,24 +18,20 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server"
-	"github.com/apimgr/vidveil/src/service/admin"
-	"github.com/apimgr/vidveil/src/service/blocklist"
-	"github.com/apimgr/vidveil/src/service/cluster"
-	"github.com/apimgr/vidveil/src/service/cve"
-	"github.com/apimgr/vidveil/src/service/database"
-	"github.com/apimgr/vidveil/src/service/engines"
-	"github.com/apimgr/vidveil/src/service/geoip"
-	"github.com/apimgr/vidveil/src/service/maintenance"
-	"github.com/apimgr/vidveil/src/service/scheduler"
-	"github.com/apimgr/vidveil/src/service/service"
-	"github.com/apimgr/vidveil/src/service/ssl"
-	"github.com/apimgr/vidveil/src/service/tor"
-)
-
-var (
-	Version   = "0.2.0"
-	BuildDate = "unknown"
-	CommitID  = "unknown"
+	"github.com/apimgr/vidveil/src/server/service/admin"
+	"github.com/apimgr/vidveil/src/server/service/blocklist"
+	"github.com/apimgr/vidveil/src/server/service/cluster"
+	"github.com/apimgr/vidveil/src/server/service/cve"
+	"github.com/apimgr/vidveil/src/server/service/database"
+	"github.com/apimgr/vidveil/src/server/service/engine"
+	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/server/service/logging"
+	"github.com/apimgr/vidveil/src/server/service/maintenance"
+	"github.com/apimgr/vidveil/src/server/service/scheduler"
+	"github.com/apimgr/vidveil/src/server/service/service"
+	"github.com/apimgr/vidveil/src/server/service/ssl"
+	"github.com/apimgr/vidveil/src/server/service/tor"
+	"github.com/apimgr/vidveil/src/version"
 )
 
 func main() {
@@ -46,7 +41,9 @@ func main() {
 	var (
 		configDir   string
 		dataDir     string
+		cacheDir    string
 		logDir      string
+		backupDir   string
 		pidFile     string
 		address     string
 		port        string
@@ -88,10 +85,22 @@ func main() {
 				dataDir = args[i]
 			}
 
+		case "--cache":
+			if i+1 < len(args) {
+				i++
+				cacheDir = args[i]
+			}
+
 		case "--log":
 			if i+1 < len(args) {
 				i++
 				logDir = args[i]
+			}
+
+		case "--backup":
+			if i+1 < len(args) {
+				i++
+				backupDir = args[i]
 			}
 
 		case "--pid":
@@ -159,8 +168,12 @@ func main() {
 				configDir = strings.TrimPrefix(arg, "--config=")
 			} else if strings.HasPrefix(arg, "--data=") {
 				dataDir = strings.TrimPrefix(arg, "--data=")
+			} else if strings.HasPrefix(arg, "--cache=") {
+				cacheDir = strings.TrimPrefix(arg, "--cache=")
 			} else if strings.HasPrefix(arg, "--log=") {
 				logDir = strings.TrimPrefix(arg, "--log=")
+			} else if strings.HasPrefix(arg, "--backup=") {
+				backupDir = strings.TrimPrefix(arg, "--backup=")
 			} else if strings.HasPrefix(arg, "--pid=") {
 				pidFile = strings.TrimPrefix(arg, "--pid=")
 			} else if strings.HasPrefix(arg, "--address=") {
@@ -204,8 +217,14 @@ func main() {
 	if dataDir == "" && os.Getenv("DATA_DIR") != "" {
 		dataDir = os.Getenv("DATA_DIR")
 	}
+	if cacheDir == "" && os.Getenv("CACHE_DIR") != "" {
+		cacheDir = os.Getenv("CACHE_DIR")
+	}
 	if logDir == "" && os.Getenv("LOG_DIR") != "" {
 		logDir = os.Getenv("LOG_DIR")
+	}
+	if backupDir == "" && os.Getenv("BACKUP_DIR") != "" {
+		backupDir = os.Getenv("BACKUP_DIR")
 	}
 	if port == "" && os.Getenv("PORT") != "" {
 		port = os.Getenv("PORT")
@@ -307,7 +326,7 @@ func main() {
 	}
 
 	// Initialize search engines
-	engineMgr := engines.NewManager(cfg)
+	engineMgr := engine.NewManager(cfg)
 	engineMgr.InitializeEngines()
 
 	// Initialize services per AI.md specifications
@@ -323,9 +342,18 @@ func main() {
 		fmt.Fprintf(os.Stderr, "⚠️  GeoIP service initialization failed: %v\n", err)
 	}
 
-	// Tor service (PART 30) - needs data dir and enabled flag
+	// Initialize logger per PART 21
+	logger, err := logging.New(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Logger initialization failed: %v\n", err)
+		// Create a basic logger that doesn't write to files
+		logger = &logging.Logger{}
+	}
+	defer logger.Close()
+
+	// Tor service (PART 30) - needs data dir, enabled flag, and logger
 	torDataDir := filepath.Join(paths.Data, "tor")
-	torSvc := tor.New(torDataDir, cfg.Search.Tor.Enabled)
+	torSvc := tor.New(torDataDir, cfg.Search.Tor.Enabled, logger)
 
 	// Blocklist service (PART 22)
 	blocklistSvc := blocklist.New(cfg)
@@ -385,7 +413,7 @@ func main() {
 		},
 		BackupAuto: func(ctx context.Context) error {
 			// Automatic backup per PART 25 (disabled by default)
-			maint := maintenance.New(paths.Config, paths.Data, Version)
+			maint := maintenance.New(paths.Config, paths.Data, version.Get())
 			return maint.Backup("")
 		},
 		HealthcheckSelf: func(ctx context.Context) error {
@@ -473,7 +501,7 @@ func main() {
 		fmt.Println()
 		fmt.Println("╔══════════════════════════════════════════════════════════════════════╗")
 		fmt.Println("║                                                                      ║")
-		fmt.Printf("║   VIDVEIL v%-58s ║\n", Version)
+		fmt.Printf("║   VIDVEIL v%-58s ║\n", version.Get())
 		fmt.Println("║                                                                      ║")
 		fmt.Printf("║   Status: %-60s ║\n", statusText)
 		fmt.Println("║                                                                      ║")
@@ -552,7 +580,9 @@ Options:
   --mode <mode>       Set application mode (production or development)
   --config <dir>      Set configuration directory
   --data <dir>        Set data directory
+  --cache <dir>       Set cache directory
   --log <dir>         Set log directory
+  --backup <dir>      Set backup directory
   --pid <file>        Set PID file path
   --address <addr>    Set listen address
   --port <port>       Set port (e.g., 8888 or 80,443)
@@ -588,7 +618,9 @@ Environment Variables:
   Initialization only (used once on first run):
   CONFIG_DIR          Configuration directory
   DATA_DIR            Data directory
+  CACHE_DIR           Cache directory
   LOG_DIR             Log directory
+  BACKUP_DIR          Backup directory
   PORT                Server port
   LISTEN              Listen address
   APPLICATION_NAME    Application title
@@ -599,16 +631,12 @@ Default behavior:
 
 Documentation: https://vidveil.apimgr.us
 Source: https://github.com/apimgr/vidveil
-`, Version)
+`, version.Get())
 }
 
 func printVersion() {
-	// Per AI.md PART 15: --version Output
-	fmt.Printf("vidveil v%s\n", Version)
-	fmt.Printf("Built: %s\n", BuildDate)
-	fmt.Printf("Commit: %s\n", CommitID)
-	fmt.Printf("Go: %s\n", runtime.Version())
-	fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	// Use version package per AI.md PART 13 lines 11427-11432
+	fmt.Println(version.GetFull())
 }
 
 func checkStatus() int {
@@ -745,13 +773,13 @@ Supported service managers:
 
 // handleUpdateCommand implements AI.md PART 14 --update command
 func handleUpdateCommand(cmd, arg string) {
-	maint := maintenance.New("", "", Version)
+	maint := maintenance.New("", "", version.Get())
 
 	switch cmd {
 	case "check":
 		// Check for updates without installing (no privileges required)
 		fmt.Println("Checking for updates...")
-		fmt.Printf("Current version: %s\n", Version)
+		fmt.Printf("Current version: %s\n", version.Get())
 
 		info, err := maint.CheckUpdate()
 		if err != nil {
@@ -778,7 +806,7 @@ func handleUpdateCommand(cmd, arg string) {
 	case "yes", "":
 		// Check and perform in-place update with restart
 		fmt.Println("Checking for updates...")
-		fmt.Printf("Current version: %s\n", Version)
+		fmt.Printf("Current version: %s\n", version.Get())
 
 		info, err := maint.CheckUpdate()
 		if err != nil {
@@ -843,7 +871,7 @@ Update Branches:
 }
 
 func handleMaintenanceCommand(cmd, arg string) {
-	maint := maintenance.New("", "", Version)
+	maint := maintenance.New("", "", version.Get())
 
 	switch cmd {
 	case "backup":

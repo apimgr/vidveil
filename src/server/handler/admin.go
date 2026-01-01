@@ -21,12 +21,12 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
-	"github.com/apimgr/vidveil/src/service/admin"
-	"github.com/apimgr/vidveil/src/service/cluster"
-	"github.com/apimgr/vidveil/src/service/email"
-	"github.com/apimgr/vidveil/src/service/engines"
-	"github.com/apimgr/vidveil/src/service/maintenance"
-	"github.com/apimgr/vidveil/src/service/scheduler"
+	"github.com/apimgr/vidveil/src/server/service/admin"
+	"github.com/apimgr/vidveil/src/server/service/cluster"
+	"github.com/apimgr/vidveil/src/server/service/email"
+	"github.com/apimgr/vidveil/src/server/service/engine"
+	"github.com/apimgr/vidveil/src/server/service/maintenance"
+	"github.com/apimgr/vidveil/src/server/service/scheduler"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -83,7 +83,7 @@ type AdminHandler struct {
 	cfg          *config.Config
 	configDir    string
 	dataDir      string
-	engineMgr    *engines.Manager
+	engineMgr    *engine.Manager
 	adminSvc     *admin.Service
 	migrationMgr MigrationManager
 	torSvc       TorService
@@ -102,7 +102,7 @@ type adminSession struct {
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(cfg *config.Config, configDir, dataDir string, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager) *AdminHandler {
+func NewAdminHandler(cfg *config.Config, configDir, dataDir string, engineMgr *engine.Manager, adminSvc *admin.Service, migrationMgr MigrationManager) *AdminHandler {
 	return &AdminHandler{
 		cfg:          cfg,
 		configDir:    configDir,
@@ -676,8 +676,7 @@ func (h *AdminHandler) APIPagesGet(w http.ResponseWriter, r *http.Request) {
 		h.jsonError(w, err.Error(), "ERR_DATABASE", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    pages,
 	})
@@ -713,8 +712,7 @@ func (h *AdminHandler) APIPageUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Page updated successfully",
 	})
@@ -752,8 +750,7 @@ func (h *AdminHandler) APIPageReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Page reset to default",
 	})
@@ -766,8 +763,7 @@ func (h *AdminHandler) NotificationsPage(w http.ResponseWriter, r *http.Request)
 
 // APINotificationsGet returns current notification settings
 func (h *AdminHandler) APINotificationsGet(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    h.cfg.Server.Notifications,
 	})
@@ -813,8 +809,7 @@ func (h *AdminHandler) APINotificationsUpdate(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Notification settings saved",
 	})
@@ -856,8 +851,7 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": fmt.Sprintf("Test notification sent to %s", req.Email),
 	})
@@ -941,8 +935,7 @@ func (h *AdminHandler) UpdatesPage(w http.ResponseWriter, r *http.Request) {
 
 // APIUpdatesStatus returns the current update status
 func (h *AdminHandler) APIUpdatesStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success":          true,
 		"current_version":  "0.2.0",
 		"latest_version":   "",
@@ -979,8 +972,7 @@ func (h *AdminHandler) APIUpdatesCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success":          true,
 		"current_version":  currentVersion,
 		"latest_version":   latestVersion,
@@ -1057,8 +1049,7 @@ func (h *AdminHandler) APIProfilePassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Password updated successfully",
 	})
@@ -1084,8 +1075,7 @@ func (h *AdminHandler) APIProfileToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"token": token,
@@ -1120,8 +1110,7 @@ func (h *AdminHandler) APIRecoveryKeysStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    status,
 	})
@@ -1146,8 +1135,7 @@ func (h *AdminHandler) APIRecoveryKeysGenerate(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"keys":    keys,
@@ -1338,8 +1326,7 @@ func (h *AdminHandler) APIUsersAdminsInvite(w http.ResponseWriter, r *http.Reque
 	}
 	inviteURL := fmt.Sprintf("%s://%s/admin/invite/%s", scheme, host, token)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"invite_url": inviteURL,
@@ -1356,8 +1343,7 @@ func (h *AdminHandler) APIUsersAdminsInvites(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    invites,
 	})
@@ -1382,8 +1368,7 @@ func (h *AdminHandler) APIUsersAdminsInviteRevoke(w http.ResponseWriter, r *http
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Invite revoked",
 	})
@@ -1417,9 +1402,7 @@ func (h *AdminHandler) SessionOrTokenMiddleware(next http.Handler) http.Handler 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusUnauthorized, map[string]interface{}{
 			"success": false,
 			"error":   "Authentication required",
 		})
@@ -1438,9 +1421,7 @@ func (h *AdminHandler) APITokenMiddleware(next http.Handler) http.Handler {
 		}
 
 		if !h.validateToken(token) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			WriteJSON(w, http.StatusUnauthorized, map[string]interface{}{
 				"success": false,
 				"error":   "Invalid or missing API token",
 			})
@@ -1483,16 +1464,14 @@ func (h *AdminHandler) APIStats(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	WriteJSON(w, http.StatusOK, stats)
 }
 
 // APIEngines returns engine information
 func (h *AdminHandler) APIEngines(w http.ResponseWriter, r *http.Request) {
 	engines := h.engineMgr.ListEngines()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    engines,
 	})
@@ -1513,8 +1492,7 @@ func (h *AdminHandler) APIBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Backup created successfully",
 	})
@@ -1532,8 +1510,7 @@ func (h *AdminHandler) APIDatabaseMigrate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Migrations completed successfully",
 	})
@@ -1552,8 +1529,7 @@ func (h *AdminHandler) APIDatabaseVacuum(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Database vacuum completed",
 	})
@@ -1572,8 +1548,7 @@ func (h *AdminHandler) APIDatabaseAnalyze(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Database analysis completed",
 	})
@@ -1592,8 +1567,7 @@ func (h *AdminHandler) APIDatabaseMigrations(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    migrations,
 	})
@@ -1635,7 +1609,7 @@ func (h *AdminHandler) APIDatabaseTest(w http.ResponseWriter, r *http.Request) {
 	// Test connection (in production, actually test the connection with sql.Open)
 	// For now, return a simulated success
 	// Version would be actual version from DB
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Connection successful",
 		"data": map[string]interface{}{
@@ -1683,7 +1657,7 @@ func (h *AdminHandler) APIDatabaseBackend(w http.ResponseWriter, r *http.Request
 	// 4. Update config
 	// 5. Trigger a restart
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Database backend changed to " + req.Driver,
 		"data": map[string]interface{}{
@@ -1717,8 +1691,7 @@ func (h *AdminHandler) APIMaintenanceMode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Maintenance mode updated",
 		"enabled": enable,
@@ -1752,7 +1725,7 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 				"tor_enabled":      h.cfg.Search.Tor.Enabled,
 			},
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"data":    safeCfg,
 		})
@@ -1835,14 +1808,13 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"message": "Configuration updated (restart required for some changes)",
 		})
 
 	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
 			"success": false,
 			"error":   "Method not allowed",
 		})
@@ -1851,9 +1823,10 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 
 // jsonError sends a standardized error response per PART 24
 func (h *AdminHandler) jsonError(w http.ResponseWriter, message, code string, status int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if status == 0 {
+		status = http.StatusInternalServerError
+	}
+	WriteJSON(w, status, map[string]interface{}{
 		"success": false,
 		"error":   message,
 		"code":    code,
@@ -1865,8 +1838,7 @@ func (h *AdminHandler) jsonError(w http.ResponseWriter, message, code string, st
 func (h *AdminHandler) APIStatus(w http.ResponseWriter, r *http.Request) {
 	uptime := time.Since(h.startTime)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"status":  "running",
@@ -1882,8 +1854,7 @@ func (h *AdminHandler) APIHealth(w http.ResponseWriter, r *http.Request) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"status": "healthy",
@@ -1902,8 +1873,7 @@ func (h *AdminHandler) APIHealth(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) APILogsAccess(w http.ResponseWriter, r *http.Request) {
 	lines := h.readLogLines(h.cfg.Server.Logs.Access.Filename, 100)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"filename": h.cfg.Server.Logs.Access.Filename,
@@ -1916,8 +1886,7 @@ func (h *AdminHandler) APILogsAccess(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) APILogsError(w http.ResponseWriter, r *http.Request) {
 	lines := h.readLogLines(h.cfg.Server.Logs.Error.Filename, 100)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"filename": h.cfg.Server.Logs.Error.Filename,
@@ -1929,8 +1898,7 @@ func (h *AdminHandler) APILogsError(w http.ResponseWriter, r *http.Request) {
 // APIRestore restores from backup
 func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
 			"success": false,
 			"error":   "Method not allowed",
 		})
@@ -1941,16 +1909,14 @@ func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 	backupFile := r.URL.Query().Get("file")
 
 	if err := maint.Restore(backupFile); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"success": false,
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Restore completed successfully",
 	})
@@ -1959,8 +1925,7 @@ func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 // APITestEmail sends a test email
 func (h *AdminHandler) APITestEmail(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
 			"success": false,
 			"error":   "Method not allowed",
 		})
@@ -1968,8 +1933,7 @@ func (h *AdminHandler) APITestEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Email sending would be implemented with SMTP
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Test email sent (if email is configured)",
 	})
@@ -2005,8 +1969,7 @@ func (h *AdminHandler) APIPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Password changed successfully",
 	})
@@ -2030,8 +1993,7 @@ func (h *AdminHandler) APITokenRegenerate(w http.ResponseWriter, r *http.Request
 
 	// In production, this would update the database/config
 	// For now, just return the new token (shown only once per AI.md)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Token regenerated - save this token now, it will not be shown again",
 		"token":   newToken,
@@ -2048,7 +2010,7 @@ func (h *AdminHandler) APISchedulerTasks(w http.ResponseWriter, r *http.Request)
 	}
 
 	tasks := h.scheduler.ListTasks()
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    tasks,
 	})
@@ -2080,8 +2042,7 @@ func (h *AdminHandler) APISchedulerRunTask(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Task triggered",
 	})
@@ -2105,7 +2066,7 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	history := h.scheduler.GetHistory(taskID, limit)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    history,
 	})
@@ -2119,8 +2080,7 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 // GET /api/v1/admin/server/tor
 // Status and onion_address would check actual Tor connection/manager
 func (h *AdminHandler) APITorStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"enabled":       h.cfg.Search.Tor.Enabled,
@@ -2148,8 +2108,7 @@ func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"error":   "Invalid request body: " + err.Error(),
 		})
@@ -2183,7 +2142,7 @@ func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
 		updated = true
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": updated,
 		"message": "Tor settings updated",
 	})
@@ -2194,7 +2153,7 @@ func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) APITorRegenerate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// Would trigger Tor manager to regenerate address
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Tor circuit regenerated",
 	})
@@ -2206,7 +2165,7 @@ func (h *AdminHandler) APITorVanityStatus(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 
 	if h.torSvc == nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"data": map[string]interface{}{
 				"active":        false,
@@ -2218,7 +2177,7 @@ func (h *AdminHandler) APITorVanityStatus(w http.ResponseWriter, r *http.Request
 
 	status := h.torSvc.GetVanityStatus()
 	if status == nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"data": map[string]interface{}{
 				"active":        false,
@@ -2231,7 +2190,7 @@ func (h *AdminHandler) APITorVanityStatus(w http.ResponseWriter, r *http.Request
 	// Check if generation completed (not active but status exists)
 	pendingReady := !status.Active && status.Attempts > 0
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"active":        status.Active,
@@ -2272,7 +2231,7 @@ func (h *AdminHandler) APITorVanityStart(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Vanity generation started for prefix: " + req.Prefix,
 	})
@@ -2287,7 +2246,7 @@ func (h *AdminHandler) APITorVanityCancel(w http.ResponseWriter, r *http.Request
 		h.torSvc.CancelVanityGeneration()
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Vanity generation cancelled",
 	})
@@ -2308,7 +2267,7 @@ func (h *AdminHandler) APITorVanityApply(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Vanity address applied - restart Tor service to use new address",
 	})
@@ -2324,8 +2283,7 @@ func (h *AdminHandler) APITorImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"error":   "Invalid request body",
 		})
@@ -2333,8 +2291,7 @@ func (h *AdminHandler) APITorImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.PrivateKey == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"error":   "Private key is required",
 		})
@@ -2342,7 +2299,7 @@ func (h *AdminHandler) APITorImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Would import the key and restart Tor
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Tor keys imported successfully",
 	})
@@ -2355,7 +2312,7 @@ func (h *AdminHandler) APITorTest(w http.ResponseWriter, r *http.Request) {
 
 	// Check if Tor service is available
 	if h.torSvc == nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"success": false,
 			"error":   "Tor service not initialized",
 		})
@@ -2364,7 +2321,7 @@ func (h *AdminHandler) APITorTest(w http.ResponseWriter, r *http.Request) {
 
 	// Test the Tor connection
 	result := h.torSvc.TestConnection()
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    result,
 	})
@@ -3502,8 +3459,7 @@ func (h *AdminHandler) AddNodePage(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) APINodesGet(w http.ResponseWriter, r *http.Request) {
 	hostname, _ := os.Hostname()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"this_node": map[string]interface{}{
@@ -3544,7 +3500,7 @@ func (h *AdminHandler) APINodeAdd(w http.ResponseWriter, r *http.Request) {
 	// In production: verify node, add to cluster
 	nodeID := fmt.Sprintf("%s:%d", req.Address, req.Port)
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Node added successfully",
 		"data": map[string]interface{}{
@@ -3580,7 +3536,7 @@ func (h *AdminHandler) APINodeTest(w http.ResponseWriter, r *http.Request) {
 
 	// In production: actually test connection
 	// For now, return simulated success
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Connection successful",
 		"data": map[string]interface{}{
@@ -3606,7 +3562,7 @@ func (h *AdminHandler) APINodeTokenRegenerate(w http.ResponseWriter, r *http.Req
 
 	newToken := hex.EncodeToString(tokenBytes)
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Join token regenerated",
 		"data": map[string]interface{}{
@@ -3627,7 +3583,7 @@ func (h *AdminHandler) APINodeRemove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// In production: actually remove from cluster
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": fmt.Sprintf("Node %s removed from cluster", nodeID),
 	})
@@ -3658,7 +3614,7 @@ func (h *AdminHandler) APINodeLeave(w http.ResponseWriter, r *http.Request) {
 	// 3. Clear cluster config
 	// 4. Restart in single-node mode
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Node removed from cluster - restarting in single-node mode",
 	})
@@ -3752,7 +3708,7 @@ func (h *AdminHandler) APINodeSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// In production: update node settings in config and cluster
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Node settings updated",
 	})
@@ -3764,7 +3720,7 @@ func (h *AdminHandler) APINodeStepDown(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// In production: trigger leader election
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Stepped down as primary, election triggered",
 	})
@@ -3778,7 +3734,7 @@ func (h *AdminHandler) APINodeRegenerateID(w http.ResponseWriter, r *http.Reques
 	// Generate new node ID
 	newID := hex.EncodeToString(make([]byte, 8))
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Node ID regenerated",
 		"data": map[string]interface{}{
@@ -3799,7 +3755,7 @@ func (h *AdminHandler) APINodePing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// In production: actually ping the node
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"node_id": nodeID,

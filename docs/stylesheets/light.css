@@ -1,0 +1,30 @@
+/* VidVeil ReadTheDocs Light Theme Customization */
+/* Per AI.md PART 30 - Optional light theme overrides */
+
+[data-md-color-scheme="default"] {
+  /* Project-specific accent colors for light theme */
+  --md-primary-fg-color: #6c5ce7;
+  --md-accent-fg-color: #0984e3;
+  
+  /* Custom background shades */
+  --md-default-bg-color: #ffffff;
+  --md-default-fg-color: #282a36;
+  
+  /* Code block styling */
+  --md-code-bg-color: #f5f5f5;
+  --md-code-fg-color: #282a36;
+  
+  /* Link colors */
+  --md-typeset-a-color: #0984e3;
+}
+
+/* Additional custom styles for light mode */
+[data-md-color-scheme="default"] .md-typeset h1,
+[data-md-color-scheme="default"] .md-typeset h2 {
+  color: #6c5ce7;
+}
+
+[data-md-color-scheme="default"] .md-typeset code {
+  background-color: #dfe6e9;
+  color: #2d3436;
+}

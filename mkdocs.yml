@@ -10,9 +10,25 @@ edit_uri: edit/main/docs/
 theme:
   name: material
   palette:
-    scheme: dracula
-    primary: deep purple
-    accent: purple
+    # Light/Dark/Auto theme toggle
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to auto mode
   features:
     - navigation.instant
     - navigation.tracking
@@ -31,7 +47,8 @@ theme:
     repo: fontawesome/brands/github
 
 extra_css:
-  - stylesheets/dracula.css
+  - stylesheets/dark.css
+  - stylesheets/light.css
 
 plugins:
   - search

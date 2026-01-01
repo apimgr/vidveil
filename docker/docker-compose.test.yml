@@ -1,12 +1,6 @@
-# Vidveil Docker Compose (Testing)
-# Per AI.md PART 13: Testing mode with debug endpoints enabled
-# Location: ./docker/docker-compose.test.yml
-#
-# USAGE (per AI.md PART 13 - NEVER run in project directory):
-#   TEMP_DIR="/tmp/vidveil-test-$(date +%s)"
-#   mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
-#   cp ./docker/docker-compose.test.yml "$TEMP_DIR/docker-compose.yml"
-#   cd "$TEMP_DIR" && docker compose up -d
+# vidveil - Privacy-respecting adult video meta search engine (Testing)
+# nginx proxy address - http://localhost:64889
+# Per PART 28: DEBUG=true enabled for testing
 
 name: vidveil-test
 
@@ -17,23 +11,29 @@ x-logging: &default-logging
   driver: json-file
 
 services:
-  vidveil:
+  server:
     image: ghcr.io/apimgr/vidveil:latest
-    container_name: vidveil-test
-    restart: unless-stopped
+    container_name: vidveil-test-server
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
     logging: *default-logging
     environment:
-      # Testing mode with debug endpoints enabled
       - MODE=development
-      - DEBUG=true
-      - TZ=America/New_York
-      - ENABLE_TOR=false
-    ports:
-      # Testing: accessible from all interfaces
-      - "64889:80"
+      - PORT=80
+      - DEBUG=true  # Enabled for testing
+      - TZ=${TZ:-America/New_York}
     volumes:
-      - ./rootfs/config:/config:z
-      - ./rootfs/data:/data:z
+      - './rootfs/config:/config:z'
+      - './rootfs/data:/data:z'
+    ports:
+      - '64889:80'  # Different port for testing
+    healthcheck:
+      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     networks:
       - vidveil-test
 

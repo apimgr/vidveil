@@ -8,17 +8,17 @@ import (
 	"strings"
 
 	"github.com/apimgr/vidveil/src/config"
-	"github.com/apimgr/vidveil/src/service/engines"
+	"github.com/apimgr/vidveil/src/server/service/engine"
 )
 
 // GraphQLHandler handles GraphQL requests
 type GraphQLHandler struct {
 	cfg       *config.Config
-	engineMgr *engines.Manager
+	engineMgr *engine.Manager
 }
 
 // NewGraphQLHandler creates a new GraphQL handler
-func NewGraphQLHandler(cfg *config.Config, engineMgr *engines.Manager) *GraphQLHandler {
+func NewGraphQLHandler(cfg *config.Config, engineMgr *engine.Manager) *GraphQLHandler {
 	return &GraphQLHandler{
 		cfg:       cfg,
 		engineMgr: engineMgr,
@@ -57,14 +57,13 @@ func (h *GraphQLHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if r.Method == http.MethodPost {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			json.NewEncoder(w).Encode(GraphQLResponse{
+			WriteJSON(w, http.StatusBadRequest, GraphQLResponse{
 				Errors: []GQLError{{Message: "Invalid request body"}},
 			})
 			return
 		}
 	} else {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		json.NewEncoder(w).Encode(GraphQLResponse{
+		WriteJSON(w, http.StatusMethodNotAllowed, GraphQLResponse{
 			Errors: []GQLError{{Message: "Method not allowed"}},
 		})
 		return
@@ -72,7 +71,7 @@ func (h *GraphQLHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	// Simple query parser (for common operations)
 	result := h.executeQuery(req)
-	json.NewEncoder(w).Encode(result)
+	WriteJSON(w, http.StatusOK, result)
 }
 
 // GraphiQL serves the GraphiQL interface
@@ -235,7 +234,7 @@ func (h *GraphQLHandler) handleHealth() GraphQLResponse {
 }
 
 func (h *GraphQLHandler) handleBangs() GraphQLResponse {
-	bangs := engines.ListBangs()
+	bangs := engine.ListBangs()
 
 	gqlBangs := make([]map[string]interface{}, len(bangs))
 	for i, b := range bangs {
@@ -268,7 +267,7 @@ func (h *GraphQLHandler) handleAutocomplete(req GraphQLRequest) GraphQLResponse 
 		}
 	}
 
-	suggestions := engines.Autocomplete(prefix)
+	suggestions := engine.Autocomplete(prefix)
 
 	gqlSuggestions := make([]map[string]interface{}, len(suggestions))
 	for i, s := range suggestions {

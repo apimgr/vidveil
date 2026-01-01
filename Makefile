@@ -1,5 +1,5 @@
 # Vidveil Makefile
-# Per AI.md PART 12: EXACTLY 4 targets - build, release, docker, test
+# Per AI.md PART 26: EXACTLY 4 targets - build, release, docker, test
 # DO NOT ADD OTHER TARGETS
 
 # Infer PROJECTNAME and PROJECTORG from git remote or directory path (NEVER hardcode)
@@ -24,7 +24,7 @@ LDFLAGS := -s -w \
 	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)'
 
-# Linker flags for CLI client (TEMPLATE.md PART 33)
+# Linker flags for CLI client (AI.md PART 36)
 CLI_LDFLAGS := -s -w \
 	-X 'main.ProjectName=$(PROJECT)' \
 	-X 'main.Version=$(VERSION)' \
@@ -39,7 +39,7 @@ RELDIR := ./releases
 GOCACHE := $(HOME)/.cache/go-build
 GOMODCACHE := $(HOME)/go/pkg/mod
 
-# Build targets - Per TEMPLATE.md: Linux, macOS (Darwin), Windows, FreeBSD - AMD64, ARM64
+# Build targets - Per AI.md PART 26: Linux, macOS (Darwin), Windows, FreeBSD - AMD64, ARM64
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64
 
 # Docker
@@ -56,9 +56,9 @@ GO_DOCKER := docker run --rm \
 
 # =============================================================================
 # BUILD - Build all platforms + host binary (via Docker with cached modules)
-# Per TEMPLATE.md PART 33: Build CLI client if src/client exists
+# Per AI.md PART 36: Build CLI client if src/client exists
 # =============================================================================
-build: clean
+build:
 	@mkdir -p $(BINDIR)
 	@echo "Building version $(VERSION)..."
 	@mkdir -p $(GOCACHE) $(GOMODCACHE)
@@ -72,7 +72,7 @@ build: clean
 	@$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
 		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT) ./src"
 
-	# Build CLI client if src/client exists (TEMPLATE.md PART 33)
+	# Build CLI client if src/client exists (AI.md PART 36)
 	@if [ -d "src/client" ]; then \
 		echo "Building CLI client host binary..."; \
 		$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
@@ -96,7 +96,7 @@ build: clean
 		for platform in $(PLATFORMS); do \
 			OS=$${platform%/*}; \
 			ARCH=$${platform#*/}; \
-			OUTPUT=$(BINDIR)/$(PROJECT)-cli-$$OS-$$ARCH; \
+			OUTPUT=$(BINDIR)/$(PROJECT)-$$OS-$$ARCH-cli; \
 			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 			echo "Building CLI $$OS/$$ARCH..."; \
 			$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
@@ -180,9 +180,3 @@ test:
 	@$(GO_DOCKER) go mod download
 	@$(GO_DOCKER) go test -v -cover ./...
 	@echo "Tests complete"
-
-# =============================================================================
-# CLEAN - Remove build artifacts
-# =============================================================================
-clean:
-	@rm -rf $(BINDIR) $(RELDIR)

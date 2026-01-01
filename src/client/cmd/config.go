@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Client - Config Command
+// AI.md PART 36: CLI Client - Config Command
 package cmd
 
 import (

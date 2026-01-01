@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
-	"github.com/apimgr/vidveil/src/service/engines"
+	"github.com/apimgr/vidveil/src/server/service/engine"
 )
 
 // Metrics holds application metrics
 type Metrics struct {
 	cfg       *config.Config
-	engineMgr *engines.Manager
+	engineMgr *engine.Manager
 	startTime time.Time
 
 	// Counters
@@ -26,7 +26,7 @@ type Metrics struct {
 }
 
 // NewMetrics creates a new metrics collector
-func NewMetrics(cfg *config.Config, engineMgr *engines.Manager) *Metrics {
+func NewMetrics(cfg *config.Config, engineMgr *engine.Manager) *Metrics {
 	return &Metrics{
 		cfg:       cfg,
 		engineMgr: engineMgr,

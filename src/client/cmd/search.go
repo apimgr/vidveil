@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Client - Search Command
+// AI.md PART 36: CLI Client - Search Command
 package cmd
 
 import (

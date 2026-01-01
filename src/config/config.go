@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -582,13 +581,12 @@ type Paths = paths.Paths
 // Default returns a Config with sensible defaults per AI.md
 func Default() *Config {
 	fqdn := getHostname()
-	randomPort := findUnusedPort()
 
 	return &Config{
 		Server: ServerConfig{
-			Port:        strconv.Itoa(randomPort),
+			Port:        "80",
 			FQDN:        fqdn,
-			Address:     "[::]",
+			Address:     "0.0.0.0",
 			Mode:        "production",
 			Title:       "Vidveil",
 			Description: "Privacy-respecting adult video search",

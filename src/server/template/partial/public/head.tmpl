@@ -1,0 +1,22 @@
+{{define "public/head"}}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#282a36">
+<meta name="description" content="Privacy-focused video search engine">
+<title>{{.Title}}</title>
+<link rel="stylesheet" href="/static/css/common.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.svg">
+<script>
+  // Register service worker for PWA (AI.md PART 17 lines 17751-17830)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(registration => console.log('ServiceWorker registered:', registration.scope))
+        .catch(error => console.log('ServiceWorker registration failed:', error));
+    });
+  }
+</script>
+{{end}}

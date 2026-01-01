@@ -1,12 +1,6 @@
-# Vidveil Docker Compose (Development)
-# Per TEMPLATE.md PART 19: Development mode with accessible ports
-# Location: ./docker/docker-compose.dev.yml
-#
-# USAGE (per TEMPLATE.md PART 19 - NEVER run in project directory):
-#   TEMP_DIR="/tmp/vidveil-$(date +%s)"
-#   mkdir -p "$TEMP_DIR/rootfs/config/vidveil" "$TEMP_DIR/rootfs/data/vidveil"
-#   cp ./docker/docker-compose.dev.yml "$TEMP_DIR/docker-compose.yml"
-#   cd "$TEMP_DIR" && docker compose up -d
+# vidveil - Privacy-respecting adult video meta search engine (Development)
+# nginx proxy address - http://localhost:64888
+# Per PART 28: DEBUG commented out (set to true for debugging)
 
 name: vidveil
 
@@ -17,22 +11,29 @@ x-logging: &default-logging
   driver: json-file
 
 services:
-  vidveil:
+  server:
     image: ghcr.io/apimgr/vidveil:latest
-    container_name: vidveil
-    restart: unless-stopped
+    container_name: vidveil-server
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
     logging: *default-logging
     environment:
-      # Hardcoded with sane defaults - NO .env files
       - MODE=development
-      - TZ=America/New_York
-      - ENABLE_TOR=false
-    ports:
-      # Development: accessible from all interfaces
-      - "64888:80"
+      - PORT=80
+      # - DEBUG=true  # Uncomment to enable debug mode
+      - TZ=${TZ:-America/New_York}
     volumes:
-      - ./rootfs/config/vidveil:/config
-      - ./rootfs/data/vidveil:/data
+      - './rootfs/config:/config:z'
+      - './rootfs/data:/data:z'
+    ports:
+      - '64888:80'  # Accessible from all interfaces for development
+    healthcheck:
+      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     networks:
       - vidveil
 

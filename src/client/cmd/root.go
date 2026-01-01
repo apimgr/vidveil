@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Client - Root Command
+// AI.md PART 36: CLI Client - Root Command
 package cmd
 
 import (

@@ -14,13 +14,13 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/handler"
-	"github.com/apimgr/vidveil/src/service/admin"
-	"github.com/apimgr/vidveil/src/service/engines"
-	"github.com/apimgr/vidveil/src/service/ratelimit"
-	"github.com/apimgr/vidveil/src/service/scheduler"
+	"github.com/apimgr/vidveil/src/server/service/admin"
+	"github.com/apimgr/vidveil/src/server/service/engine"
+	"github.com/apimgr/vidveil/src/server/service/ratelimit"
+	"github.com/apimgr/vidveil/src/server/service/scheduler"
 )
 
-//go:embed static/css/* static/js/* static/img/* template/*.tmpl template/partials/public/*.tmpl template/partials/admin/*.tmpl template/layouts/*.tmpl template/admin/*.tmpl
+//go:embed static/css/* static/js/* static/img/* template/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -33,7 +33,7 @@ type Server struct {
 	cfg          *config.Config
 	configDir    string
 	dataDir      string
-	engineMgr    *engines.Manager
+	engineMgr    *engine.Manager
 	adminSvc     *admin.Service
 	migrationMgr MigrationManager
 	scheduler    *scheduler.Scheduler
@@ -50,7 +50,7 @@ type MigrationManager interface {
 }
 
 // New creates a new server instance
-func New(cfg *config.Config, configDir, dataDir string, engineMgr *engines.Manager, adminSvc *admin.Service, migrationMgr MigrationManager, sched *scheduler.Scheduler) *Server {
+func New(cfg *config.Config, configDir, dataDir string, engineMgr *engine.Manager, adminSvc *admin.Service, migrationMgr MigrationManager, sched *scheduler.Scheduler) *Server {
 	// Set templates filesystem for handlers
 	handler.SetTemplatesFS(embeddedFS)
 	handler.SetAdminTemplatesFS(embeddedFS)
@@ -158,7 +158,10 @@ func (s *Server) setupRoutes() {
 	s.router.Post("/age-verify", h.AgeVerifySubmit)
 
 	// Health, robots, security.txt, and sitemap (no age verification)
+	// Per AI.md PART 13 lines 11271-11272: /healthz with extension support
 	s.router.Get("/healthz", h.HealthCheck)
+	s.router.Get("/healthz.json", h.HealthCheck)
+	s.router.Get("/healthz.txt", h.HealthCheck)
 	s.router.Get("/robots.txt", h.RobotsTxt)
 	s.router.Get("/sitemap.xml", h.SitemapXML)
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)

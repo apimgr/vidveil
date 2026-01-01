@@ -63,7 +63,7 @@ RUN apk add --no-cache \
     tor
 
 # Create directories with proper structure
-RUN mkdir -p /config /config/security /data/db /data/log /data/tor /data/backup
+RUN mkdir -p /config /config/security /config/tor /data/db /data/log /data/tor /data/backup
 
 # Copy binary from builder stage (multi-stage build)
 COPY --from=builder /build/binary/vidveil /usr/local/bin/vidveil

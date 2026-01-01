@@ -1,8 +1,14 @@
 # Vidveil
 
+[![Build Status](https://jenkins.casjay.cc/buildStatus/icon?job=apimgr/vidveil)](https://jenkins.casjay.cc/job/apimgr/job/vidveil/)
+[![GitHub release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
+[![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
+
 Privacy-respecting meta search for adult video content.
 
-**Official Site**: https://scour.li
+## Official Site
+
+https://scour.li
 
 **Repository**: https://github.com/apimgr/vidveil
 
@@ -192,8 +198,7 @@ GET /api/v1/healthz
 | Endpoint | Description |
 |----------|-------------|
 | `/openapi` | Swagger UI |
-| `/openapi.json` | OpenAPI 3.0 spec (JSON) |
-| `/openapi.yaml` | OpenAPI 3.0 spec (YAML) |
+| `/openapi.json` | OpenAPI 3.0 spec (JSON only) |
 | `/graphql` | GraphQL endpoint |
 | `/graphiql` | GraphQL playground |
 

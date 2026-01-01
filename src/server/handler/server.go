@@ -3,7 +3,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -256,8 +255,7 @@ func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 
 // APIAbout handles GET /api/v1/server/about
 func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"name":        h.cfg.Server.Title,
@@ -275,8 +273,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 
 // APIPrivacy handles GET /api/v1/server/privacy
 func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"policy_version": "1.0",
@@ -300,8 +297,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
 			"success": false,
 			"error":   "Method not allowed",
 			"code":    "METHOD_NOT_ALLOWED",
@@ -311,8 +307,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 
 	// Parse form data
 	if err := r.ParseForm(); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"error":   "Invalid form data",
 			"code":    "INVALID_REQUEST",
@@ -325,8 +320,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 	message := r.FormValue("message")
 
 	if subject == "" || message == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"error":   "Subject and message are required",
 			"code":    "MISSING_FIELDS",
@@ -335,7 +329,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// In a real implementation, this would send an email or store the message
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Message received successfully",
 	})
@@ -343,8 +337,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 
 // APIHelp handles GET /api/v1/server/help
 func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"search": map[string]interface{}{

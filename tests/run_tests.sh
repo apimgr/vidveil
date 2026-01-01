@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
 # Vidveil Integration Tests - Auto-detect Runtime
-# Per TEMPLATE.md PART 13: Testing & Development
+# Per AI.md PART 29: Testing & Development
 
 set -euo pipefail
 

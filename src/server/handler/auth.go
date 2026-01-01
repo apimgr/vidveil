@@ -3,7 +3,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -185,7 +184,7 @@ func (h *AuthHandler) APILogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// This project uses admin panel authentication, not user auth
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": false,
 		"error":   "User authentication is handled through the admin panel",
 		"code":    "NOT_IMPLEMENTED",
@@ -194,8 +193,7 @@ func (h *AuthHandler) APILogin(w http.ResponseWriter, r *http.Request) {
 
 // APILogout handles POST /api/v1/auth/logout
 func (h *AuthHandler) APILogout(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": "Logged out successfully",
 	})
@@ -203,8 +201,7 @@ func (h *AuthHandler) APILogout(w http.ResponseWriter, r *http.Request) {
 
 // APIRegister handles POST /api/v1/auth/register
 func (h *AuthHandler) APIRegister(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": false,
 		"error":   "Registration is not available for this application",
 		"code":    "NOT_IMPLEMENTED",
@@ -213,8 +210,7 @@ func (h *AuthHandler) APIRegister(w http.ResponseWriter, r *http.Request) {
 
 // APIPasswordForgot handles POST /api/v1/auth/password/forgot
 func (h *AuthHandler) APIPasswordForgot(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": false,
 		"error":   "Password reset is managed through the admin panel",
 		"code":    "NOT_IMPLEMENTED",
@@ -223,8 +219,7 @@ func (h *AuthHandler) APIPasswordForgot(w http.ResponseWriter, r *http.Request) 
 
 // APIPasswordReset handles POST /api/v1/auth/password/reset
 func (h *AuthHandler) APIPasswordReset(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": false,
 		"error":   "Password reset is managed through the admin panel",
 		"code":    "NOT_IMPLEMENTED",
@@ -233,8 +228,7 @@ func (h *AuthHandler) APIPasswordReset(w http.ResponseWriter, r *http.Request) {
 
 // APIVerify handles POST /api/v1/auth/verify
 func (h *AuthHandler) APIVerify(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": false,
 		"error":   "Email verification is not required",
 		"code":    "NOT_IMPLEMENTED",
@@ -243,8 +237,7 @@ func (h *AuthHandler) APIVerify(w http.ResponseWriter, r *http.Request) {
 
 // APIRefresh handles POST /api/v1/auth/refresh
 func (h *AuthHandler) APIRefresh(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": false,
 		"error":   "Token refresh is managed through the admin panel",
 		"code":    "NOT_IMPLEMENTED",
@@ -306,7 +299,7 @@ func (h *UserHandler) APIProfile(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodGet {
 		// Return basic profile (no user system in this project)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
 			"data": map[string]interface{}{
 				"theme":      h.cfg.Web.UI.Theme,
@@ -317,7 +310,7 @@ func (h *UserHandler) APIProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// PATCH
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": false,
 		"error":   "Profile updates not supported",
 		"code":    "NOT_IMPLEMENTED",
@@ -326,8 +319,7 @@ func (h *UserHandler) APIProfile(w http.ResponseWriter, r *http.Request) {
 
 // APIPassword handles POST /api/v1/user/password
 func (h *UserHandler) APIPassword(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": false,
 		"error":   "Password changes are managed through the admin panel",
 		"code":    "NOT_IMPLEMENTED",
@@ -336,8 +328,7 @@ func (h *UserHandler) APIPassword(w http.ResponseWriter, r *http.Request) {
 
 // APITokens handles GET/POST /api/v1/user/tokens
 func (h *UserHandler) APITokens(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    []interface{}{},
 		"message": "API tokens are managed through the admin panel",
@@ -346,8 +337,7 @@ func (h *UserHandler) APITokens(w http.ResponseWriter, r *http.Request) {
 
 // APISessions handles GET /api/v1/user/sessions
 func (h *UserHandler) APISessions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data":    []interface{}{},
 		"message": "Sessions are managed through the admin panel",
@@ -356,8 +346,7 @@ func (h *UserHandler) APISessions(w http.ResponseWriter, r *http.Request) {
 
 // API2FA handles GET /api/v1/user/2fa
 func (h *UserHandler) API2FA(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"enabled": false,

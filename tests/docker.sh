@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
 # Vidveil Integration Tests - Docker Runtime
-# Per TEMPLATE.md PART 13: Testing & Development
+# Per AI.md PART 29: Testing & Development
 
 set -euo pipefail
 
@@ -36,14 +36,14 @@ echo
 # Helper functions
 pass() {
     echo -e "${GREEN}✓${NC} $1"
-    ((TESTS_PASSED++))
-    ((TESTS_RUN++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 fail() {
     echo -e "${RED}✗${NC} $1"
-    ((TESTS_FAILED++))
-    ((TESTS_RUN++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    TESTS_RUN=$((TESTS_RUN + 1))
 }
 
 info() {

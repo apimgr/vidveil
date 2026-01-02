@@ -9,8 +9,8 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  # Light/Dark/Auto theme toggle
   palette:
-    # Light/Dark/Auto theme toggle
     - media: "(prefers-color-scheme)"
       toggle:
         icon: material/brightness-auto

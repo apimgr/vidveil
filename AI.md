@@ -8,11 +8,11 @@
 
 **Privacy-respecting meta search engine for adult video content.**
 
-Vidveil aggregates results from 52 adult video sites without tracking users, logging searches, or collecting analytics. It provides a fast, private way to search adult content across multiple platforms.
+Vidveil aggregates results from 54+ adult video sites without tracking users, logging searches, or collecting analytics. It provides a fast, private way to search adult content across multiple platforms.
 
 **Key Features:**
 - Privacy-first design (no tracking, no logging, no analytics)
-- 52 search engines aggregated
+- 54+ search engines aggregated
 - Bang shortcuts for direct site searches (!ph, !xh, !rt, etc.)
 - Real-time SSE streaming search results
 - Thumbnail proxy (prevents engine tracking)
@@ -806,43 +806,43 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 |------|-------|-------|--------------|
 | 0 | 1275 | AI Assistant Rules | **ALWAYS READ FIRST** |
 | 1 | 2716 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | 3381 | License & Attribution | License requirements |
-| 3 | 3760 | Project Structure | Setting up new project |
-| 4 | 4531 | OS-Specific Paths | Path handling |
-| 5 | 4716 | Configuration | Config file work |
-| 6 | 5755 | Application Modes | Mode handling, debug endpoints |
-| 7 | 6363 | Binary Requirements | Binary building |
-| 8 | 6520 | Server Binary CLI | CLI flags/commands |
-| 9 | 9187 | Error Handling & Caching | Error/cache patterns |
-| 10 | 9575 | Database & Cluster | Database work |
-| 11 | 9990 | Security & Logging | Security features, **API Token format**, **Scoped Login** |
-| 12 | 11634 | Server Configuration | Server settings |
-| 13 | 11901 | Health & Versioning | Health endpoints |
-| 14 | 12081 | API Structure | REST/GraphQL/Compatibility API |
-| 15 | 13265 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | 13951 | Web Frontend | Frontend/UI work, vanity URLs |
-| 17 | 16642 | Admin Panel | Admin UI, **Server Admin auth & security** |
-| 18 | 18104 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | 19500 | Scheduler | Background tasks |
-| 20 | 19828 | GeoIP | GeoIP features |
-| 21 | 19901 | Metrics | Metrics/monitoring |
-| 22 | 20922 | Backup & Restore | Backup features |
-| 23 | 21329 | Update Command | Update feature |
-| 24 | 21385 | Privilege Escalation & Service | Service/privilege work |
-| 25 | 21772 | Service Support | Systemd/service templates |
-| 26 | 21901 | Makefile | Build system |
-| 27 | 22425 | Docker | Docker/containers |
-| 28 | 23904 | CI/CD Workflows | GitHub/Gitea Actions |
-| 29 | 26391 | Testing & Development | Testing/dev workflow |
-| 30 | 27546 | ReadTheDocs Documentation | Documentation |
-| 31 | 28258 | I18N & A11Y | Internationalization |
-| 32 | 28679 | Tor Hidden Service | Tor support |
-| 33 | 29415 | Multi-User | **OPTIONAL** - regular user accounts/registration, vanity URLs |
-| 34 | 32742 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 35 | 33289 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 36 | 34229 | CLI Client | **OPTIONAL** - CLI tool |
-| 37 | 35244 | Project-Specific Sections | Your project's business logic |
-| FINAL | 35493 | Compliance Checklist | Final verification |
+| 2 | 3437 | License & Attribution | License requirements |
+| 3 | 3816 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | 4587 | OS-Specific Paths | Path handling |
+| 5 | 4772 | Configuration | Config file work |
+| 6 | 5811 | Application Modes | Mode handling, debug endpoints |
+| 7 | 6419 | Binary Requirements | Binary building |
+| 8 | 6576 | Server Binary CLI | CLI flags/commands |
+| 9 | 9243 | Error Handling & Caching | Error/cache patterns |
+| 10 | 9631 | Database & Cluster | Database work |
+| 11 | 10046 | Security & Logging | Security features, **API Token format**, **Scoped Login** |
+| 12 | 11690 | Server Configuration | Server settings |
+| 13 | 11957 | Health & Versioning | Health endpoints |
+| 14 | 12137 | API Structure | REST/GraphQL/Compatibility API |
+| 15 | 13321 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | 14007 | Web Frontend | Frontend/UI work, vanity URLs |
+| 17 | 16698 | Admin Panel | Admin UI, **Server Admin auth & security** |
+| 18 | 18160 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | 19556 | Scheduler | Background tasks |
+| 20 | 19884 | GeoIP | GeoIP features |
+| 21 | 19957 | Metrics | Metrics/monitoring |
+| 22 | 20978 | Backup & Restore | Backup features |
+| 23 | 21385 | Update Command | Update feature |
+| 24 | 21441 | Privilege Escalation & Service | Service/privilege work |
+| 25 | 21828 | Service Support | Systemd/service templates |
+| 26 | 21957 | Makefile | Build system |
+| 27 | 22481 | Docker | Docker/containers |
+| 28 | 23960 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | 26447 | Testing & Development | Testing/dev workflow |
+| 30 | 27602 | ReadTheDocs Documentation | Documentation |
+| 31 | 28314 | I18N & A11Y | Internationalization |
+| 32 | 28735 | Tor Hidden Service | Tor support |
+| 33 | 29471 | Multi-User | **OPTIONAL** - regular user accounts/registration, vanity URLs |
+| 34 | 32798 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 35 | 33345 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 36 | 34285 | CLI Client | **OPTIONAL** - CLI tool |
+| 37 | 35300 | Project-Specific Sections | Your project's business logic |
+| FINAL | 35549 | Compliance Checklist | Final verification |
 
 ### How to Read This File
 
@@ -2829,14 +2829,70 @@ AI.md (project specification)
 10. **Development** - Development setup (ALWAYS LAST - for contributors only)
 11. **License** - License info
 
+#### CI/CD Badge Detection (NON-NEGOTIABLE)
+
+**The build status badge MUST match the project's hosting platform.**
+
+Detect platform by checking for workflow files in this order:
+
+| Priority | Check For | Platform | Badge Format |
+|----------|-----------|----------|--------------|
+| 1 | `.github/workflows/*.yml` | GitHub | GitHub Actions badge |
+| 2 | `.gitea/workflows/*.yml` | Gitea/Forgejo | Gitea Actions badge |
+| 3 | `.gitlab-ci.yml` | GitLab | GitLab CI badge |
+| 4 | `Jenkinsfile` | Jenkins | Jenkins badge |
+
+**Badge Templates by Platform:**
+
+```markdown
+# GitHub Actions
+[![Build](https://github.com/apimgr/vidveil/actions/workflows/build.yml/badge.svg)](https://github.com/apimgr/vidveil/actions/workflows/build.yml)
+
+# Gitea/Forgejo Actions
+[![Build](https://git.example.com/apimgr/vidveil/actions/workflows/build.yml/badge.svg)](https://git.example.com/apimgr/vidveil/actions)
+
+# GitLab CI
+[![Build](https://gitlab.com/apimgr/vidveil/badges/main/pipeline.svg)](https://gitlab.com/apimgr/vidveil/-/pipelines)
+
+# Jenkins
+[![Build](https://jenkins.example.com/buildStatus/icon?job=apimgr/vidveil)](https://jenkins.example.com/job/apimgr/job/vidveil/)
+```
+
+**Release/License badges also adapt to platform:**
+
+```markdown
+# GitHub
+[![Release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
+[![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
+
+# GitLab
+[![Release](https://gitlab.com/apimgr/vidveil/-/badges/release.svg)](https://gitlab.com/apimgr/vidveil/-/releases)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
+
+# Gitea/Forgejo (use shields.io with custom endpoint or static badge)
+[![Release](https://img.shields.io/badge/dynamic/json?url=https://git.example.com/api/v1/repos/apimgr/vidveil/releases/latest&query=$.tag_name&label=release)](https://git.example.com/apimgr/vidveil/releases)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
+```
+
+**Platform-Specific URLs:**
+
+| Resource | GitHub | GitLab | Gitea/Forgejo |
+|----------|--------|--------|---------------|
+| Repository | `https://github.com/{org}/{repo}` | `https://gitlab.com/{org}/{repo}` | `https://git.example.com/{org}/{repo}` |
+| Raw file | `https://raw.githubusercontent.com/{org}/{repo}/main/{path}` | `https://gitlab.com/{org}/{repo}/-/raw/main/{path}` | `https://git.example.com/{org}/{repo}/raw/branch/main/{path}` |
+| Release download | `https://github.com/{org}/{repo}/releases/latest/download/{file}` | `https://gitlab.com/{org}/{repo}/-/releases/permalink/latest/downloads/{file}` | `https://git.example.com/{org}/{repo}/releases/download/latest/{file}` |
+| Container registry | `ghcr.io/{org}/{repo}` | `registry.gitlab.com/{org}/{repo}` | `git.example.com/{org}/{repo}` |
+
 #### README Template
+
+**Use the appropriate badges and URLs for your platform (see above).**
 
 ```markdown
 # vidveil
 
-[![Build Status](https://jenkins.casjay.cc/buildStatus/icon?job=apimgr/vidveil)](https://jenkins.casjay.cc/job/apimgr/job/vidveil/)
-[![GitHub release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
-[![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
+{PLATFORM_BUILD_BADGE}
+{PLATFORM_RELEASE_BADGE}
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
 ## About
 
@@ -2862,13 +2918,13 @@ docker run -d \
   -p 64580:80 \
   -v ./rootfs/config:/config:z \
   -v ./rootfs/data:/data:z \
-  ghcr.io/apimgr/vidveil:latest
+  {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
 ```
 
 ### Docker Compose
 
 ```bash
-curl -O https://raw.githubusercontent.com/apimgr/vidveil/main/docker/docker-compose.yml
+curl -O {PLATFORM_RAW_URL}/docker/docker-compose.yml
 docker compose up -d
 ```
 
@@ -2876,7 +2932,7 @@ docker compose up -d
 
 ```bash
 # Download latest release
-curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
+curl -LO {PLATFORM_RELEASE_URL}/vidveil-linux-amd64
 
 # Make executable and run
 chmod +x vidveil-linux-amd64
@@ -2891,7 +2947,7 @@ A companion CLI client is available for interacting with the server API.
 
 ```bash
 # Download latest release
-curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-cli-linux-amd64
+curl -LO {PLATFORM_RELEASE_URL}/vidveil-cli-linux-amd64
 chmod +x vidveil-cli-linux-amd64
 sudo mv vidveil-cli-linux-amd64 /usr/local/bin/vidveil-cli
 ```
@@ -2947,7 +3003,7 @@ API documentation available at `/api/v1/` when running.
 
 ```bash
 # Clone
-git clone https://github.com/apimgr/vidveil
+git clone {PLATFORM_REPO_URL}
 cd vidveil
 
 # Quick dev build (outputs to OS temp dir)
@@ -3509,7 +3565,7 @@ package main
 | **Name** | vidveil |
 | **Organization** | apimgr |
 | **Official Site** | https://vidveil.apimgr.us |
-| **Repository** | https://github.com/apimgr/vidveil |
+| **Repository** | {PLATFORM_REPO_URL} |
 | **README** | README.md |
 | **License** | MIT > LICENSE.md |
 | **Embedded Licenses** | Added to bottom of LICENSE.md |
@@ -8351,7 +8407,7 @@ export BACKUP_DIR="/data/backups/${APP_NAME}"
 ```yaml
 services:
   vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
     command:
       - --config=/config
       - --data=/data
@@ -8372,7 +8428,7 @@ services:
 ```yaml
 services:
   vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
     volumes:
       - vidveil-data:/data
     ports:
@@ -16025,7 +16081,7 @@ web:
 
   <!-- Application branding -->
   <p>
-    <a href="https://github.com/apimgr/vidveil" target="_blank">vidveil</a>
+    <a href="{PLATFORM_REPO_URL}" target="_blank">vidveil</a>
     <span>•</span>
     <span>Made with ❤️</span>
     <span>•</span>
@@ -21650,8 +21706,8 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, s c
 | Target | Description | Output |
 |--------|-------------|--------|
 | `build` | Build all platforms + host binary | `binaries/` |
-| `release` | GitHub release with source archive | `releases/` |
-| `docker` | Build and push container to ghcr.io | ghcr.io |
+| `release` | Release with source archive | `releases/` |
+| `docker` | Build and push container to registry | `$REGISTRY` |
 | `test` | Run all tests | - |
 
 ## Versioning (NON-NEGOTIABLE)
@@ -21791,8 +21847,8 @@ GOMODCACHE := $(HOME)/go/pkg/mod
 # Build targets
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64
 
-# Docker
-REGISTRY := ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
+# Docker - Set REGISTRY based on your platform (ghcr.io, registry.gitlab.com, git.example.com)
+REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
 GO_DOCKER := docker run --rm \
 	-v $(PWD):/build \
 	-v $(GOCACHE):/root/.cache/go-build \
@@ -21870,7 +21926,7 @@ release: build
 	@echo "Release complete: $(VERSION)"
 
 # =============================================================================
-# DOCKER - Build and push container to ghcr.io
+# DOCKER - Build and push container to registry (set REGISTRY env var)
 # =============================================================================
 # Uses multi-stage Dockerfile - Go compilation happens inside Docker
 # No pre-built binaries needed
@@ -21994,7 +22050,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 2. Multi-stage Dockerfile handles Go compilation (no pre-built binaries)
 3. Context is project root, Dockerfile at `docker/Dockerfile`
 4. Builds for `linux/amd64` and `linux/arm64`
-5. Pushes to `ghcr.io/{org}/vidveil:{version}` and `:latest`
+5. Pushes to `$REGISTRY:{version}` and `:latest`
 6. Passes VERSION, BUILD_DATE, COMMIT_ID as build args
 7. Layer caching: Go modules cached in builder stage
 
@@ -22253,9 +22309,9 @@ All Dockerfiles MUST include these labels:
 | `org.opencontainers.image.version` | `${VERSION}` (ARG) |
 | `org.opencontainers.image.schema-version` | `${VERSION}` (ARG) |
 | `org.opencontainers.image.revision` | `${COMMIT_ID}` (ARG) |
-| `org.opencontainers.image.url` | `https://github.com/apimgr/vidveil` |
-| `org.opencontainers.image.source` | `https://github.com/apimgr/vidveil` |
-| `org.opencontainers.image.documentation` | `https://github.com/apimgr/vidveil` |
+| `org.opencontainers.image.url` | `{PLATFORM_REPO_URL}` |
+| `org.opencontainers.image.source` | `{PLATFORM_REPO_URL}` |
+| `org.opencontainers.image.documentation` | `{PLATFORM_REPO_URL}` |
 | `org.opencontainers.image.vcs-type` | `Git` |
 | `com.github.containers.toolbox` | `false` |
 
@@ -22341,9 +22397,9 @@ LABEL maintainer="{maintainer_name} <{maintainer_email}>" \
       org.opencontainers.image.title="vidveil" \
       org.opencontainers.image.base.name="vidveil" \
       org.opencontainers.image.description="Containerized version of vidveil" \
-      org.opencontainers.image.url="https://github.com/apimgr/vidveil" \
-      org.opencontainers.image.source="https://github.com/apimgr/vidveil" \
-      org.opencontainers.image.documentation="https://github.com/apimgr/vidveil" \
+      org.opencontainers.image.url="{PLATFORM_REPO_URL}" \
+      org.opencontainers.image.source="{PLATFORM_REPO_URL}" \
+      org.opencontainers.image.documentation="{PLATFORM_REPO_URL}" \
       org.opencontainers.image.vcs-type="Git" \
       com.github.containers.toolbox="false"
 
@@ -22685,7 +22741,7 @@ x-logging: &default-logging
 
 services:
   server:
-    image: ghcr.io/apimgr/vidveil:latest
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
     container_name: vidveil-server
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
@@ -22933,12 +22989,12 @@ networks:
 ```dockerfile
 # All-in-One Dockerfile - includes app + postgresql + valkey + tor
 # Base: debian:latest (stable, broad compatibility)
-# Image name: ghcr.io/apimgr/vidveil-aio:latest
+# Image name: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil-aio:latest
 # PORTS: Only 80 exposed (db/cache are internal-only)
 
 FROM debian:latest
 
-LABEL org.opencontainers.image.source="https://github.com/apimgr/vidveil"
+LABEL org.opencontainers.image.source="{PLATFORM_REPO_URL}"
 LABEL org.opencontainers.image.description="vidveil - all-in-one container"
 LABEL org.opencontainers.image.licenses="MIT"
 
@@ -23192,10 +23248,10 @@ valkeyURL := "unix:///run/valkey/valkey.sock"
 
 ```bash
 # Standard image
-docker build -t ghcr.io/apimgr/vidveil:latest -f docker/Dockerfile docker/
+docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest -f docker/Dockerfile docker/
 
 # All-in-one image
-docker build -t ghcr.io/apimgr/vidveil-aio:latest -f docker/Dockerfile.aio docker/
+docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil-aio:latest -f docker/Dockerfile.aio docker/
 ```
 
 **When to use All-in-One:**
@@ -23370,7 +23426,7 @@ name: vidveil-dev
 
 services:
   vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
     container_name: vidveil-dev
     restart: unless-stopped
     environment:
@@ -23417,7 +23473,7 @@ name: vidveil
 
 services:
   vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
     container_name: vidveil
     restart: unless-stopped
     environment:
@@ -23469,7 +23525,7 @@ name: vidveil-test
 
 services:
   vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
     container_name: vidveil-test
     restart: "no"
     environment:
@@ -23511,7 +23567,7 @@ name: vidveil
 
 services:
   vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
     container_name: vidveil
     restart: unless-stopped
     depends_on:
@@ -23615,10 +23671,10 @@ networks:
 
 | Tag | Description | Example |
 |-----|-------------|---------|
-| `ghcr.io/apimgr/vidveil:latest` | Latest stable release | `ghcr.io/myorg/myapp:latest` |
-| `ghcr.io/apimgr/vidveil:{version}` | Specific version | `ghcr.io/myorg/myapp:1.2.3` |
-| `ghcr.io/apimgr/vidveil:{YYMM}` | Year/month tag | `ghcr.io/myorg/myapp:2512` |
-| `ghcr.io/apimgr/vidveil:{commit}` | Git commit (7 char) | `ghcr.io/myorg/myapp:abc1234` |
+| `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest` | Latest stable release | `ghcr.io/myorg/myapp:latest` |
+| `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:{version}` | Specific version | `ghcr.io/myorg/myapp:1.2.3` |
+| `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:{YYMM}` | Year/month tag | `ghcr.io/myorg/myapp:2512` |
+| `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:{commit}` | Git commit (7 char) | `ghcr.io/myorg/myapp:abc1234` |
 
 ### Development Tags (Local)
 
@@ -23631,14 +23687,14 @@ networks:
 
 | Environment | Registry |
 |-------------|----------|
-| Release | `ghcr.io` (GitHub Container Registry) |
+| Release | Platform container registry (ghcr.io, registry.gitlab.com, etc.) |
 | Development | Local Docker daemon only |
 
 ### Tag Rules
 
-1. **Release builds** MUST push to `ghcr.io/apimgr/vidveil`
+1. **Release builds** MUST push to `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil`
 2. **Development builds** MUST use local-only tags (no registry prefix)
-3. **NEVER push `:dev` or `:test` tags to ghcr.io**
+3. **NEVER push `:dev` or `:test` tags to production registry**
 4. All release images built for `linux/amd64` AND `linux/arm64`
 
 ---
@@ -27340,8 +27396,8 @@ site_description: "{Project description}"
 site_author: apimgr
 
 repo_name: apimgr/vidveil
-repo_url: https://github.com/apimgr/vidveil
-edit_uri: edit/main/docs/
+repo_url: {PLATFORM_REPO_URL}
+edit_uri: edit/main/docs/  # Adjust path format for GitLab/Gitea if needed
 
 theme:
   name: material
@@ -27447,8 +27503,8 @@ nav:
 
 extra:
   social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/apimgr/vidveil
+    - icon: fontawesome/brands/git-alt  # Or github/gitlab/gitea as appropriate
+      link: {PLATFORM_REPO_URL}
   generator: false
 ```
 
@@ -27771,7 +27827,7 @@ pymdown-extensions>=10.0
 
 ```bash
 # Docker
-docker run -p 64580:80 ghcr.io/apimgr/vidveil:latest
+docker run -p 64580:80 {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
 
 # Binary
 ./vidveil-linux-amd64 --config server.yml
@@ -27793,14 +27849,14 @@ docker run -p 64580:80 ghcr.io/apimgr/vidveil:latest
 
 ## Links
 
-- [GitHub Repository](https://github.com/apimgr/vidveil)
+- [Repository]({PLATFORM_REPO_URL})
 - [Live Demo](https://vidveil.apimgr.us) (if applicable)
 - [API Documentation](/openapi) (Swagger UI)
 - [GraphQL Playground](/graphql)
 
 ## License
 
-MIT - See [LICENSE.md](https://github.com/apimgr/vidveil/blob/main/LICENSE.md)
+MIT - See [LICENSE.md]({PLATFORM_REPO_URL}/blob/main/LICENSE.md)
 ```
 
 ### docs/installation.md
@@ -27815,16 +27871,16 @@ docker run -d \
   --name vidveil \
   -p 64580:80 \
   -v vidveil-data:/data \
-  ghcr.io/apimgr/vidveil:latest
+  {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
 ```
 
 ## Binary
 
-Download from [releases](https://github.com/apimgr/vidveil/releases):
+Download from [releases]({PLATFORM_REPO_URL}/releases):
 
 ```bash
 # Linux AMD64
-wget https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
+wget {PLATFORM_RELEASE_URL}/vidveil-linux-amd64
 chmod +x vidveil-linux-amd64
 ./vidveil-linux-amd64
 ```
@@ -27947,7 +28003,7 @@ Programmatic access via `/api/v1/admin/` with bearer token authentication.
 ## Build
 
 ```bash
-git clone https://github.com/apimgr/vidveil
+git clone {PLATFORM_REPO_URL}
 cd vidveil
 make build
 ```
@@ -32264,7 +32320,7 @@ On confirm:
 
 | Database | Driver | Pure Go | Notes |
 |----------|--------|---------|-------|
-| PostgreSQL | `github.com/lib/pq` | YES | Recommended for production |
+| PostgreSQL | `github.com/jackc/pgx/v5` | YES | Recommended for production |
 | MySQL/MariaDB | `github.com/go-sql-driver/mysql` | YES | Widely supported |
 | SQLite | `modernc.org/sqlite` | YES | Single instance only |
 
@@ -35015,11 +35071,9 @@ Build Info:
 
 ---
 
-## Project Business Purpose
-
 **Purpose:** Privacy-respecting meta search engine for adult video content
 
-VidVeil aggregates search results from 52+ adult video sites without tracking users, logging searches, or collecting analytics. It provides a unified, private search interface across multiple platforms.
+VidVeil aggregates search results from 54+ adult video sites without tracking users, logging searches, or collecting analytics. It provides a unified, private search interface across multiple platforms.
 
 **Target Users:**
 - Privacy-conscious users seeking adult content without tracking
@@ -35029,7 +35083,7 @@ VidVeil aggregates search results from 52+ adult video sites without tracking us
 
 **Unique Value:**
 - **Zero tracking:** No search logging, no analytics, no user profiling
-- **52+ search engines:** Comprehensive coverage of adult video platforms
+- **54+ search engines:** Comprehensive coverage of adult video platforms
 - **Bang shortcuts:** Quick site-specific searches (!ph, !xh, !rt, etc.)
 - **SSE streaming:** Real-time results as engines respond
 - **Thumbnail proxy:** All images proxied to prevent engine tracking
@@ -35062,7 +35116,7 @@ VidVeil aggregates search results from 52+ adult video sites without tracking us
 - No tracking: Blocked content not logged or tracked
 
 **Engine Management:**
-- 52+ engines organized in tiers (Tier 1: major sites, Tier 2-4: additional sites)
+- 54+ engines organized in tiers (Tier 1: major sites, Tier 2-4: additional sites)
 - Engine enabling: Admin can enable/disable engines globally
 - Fallback: If all engines fail, returns graceful error (not crash)
 - Timeout: Per-engine timeout of 5 seconds (configurable)
@@ -35223,7 +35277,7 @@ type CVEInfo struct {
 
 ## Data Sources
 
-**Search Engines (52+ External APIs and Scrapers):**
+**Search Engines (54+ External APIs and Scrapers):**
 
 **Tier 1 - Major Sites (API Integration):**
 - PornHub (API): Official JSON API with OAuth
@@ -35289,7 +35343,7 @@ type CVEInfo struct {
 
 ### Search Endpoints (Core Functionality)
 
-**Purpose:** Execute meta-search across 52+ adult video sites
+**Purpose:** Execute meta-search across 54+ adult video sites
 
 | Endpoint | Method | Purpose | Parameters |
 |----------|--------|---------|------------|
@@ -35342,7 +35396,7 @@ type CVEInfo struct {
 | `/api/v1/engines/{name}` | GET | Get engine info | No |
 
 **Business Behavior:**
-- Returns list of all 52+ engines with metadata
+- Returns list of all 54+ engines with metadata
 - Shows enabled/disabled status (admin-controlled)
 - Shows availability status (reachable/unreachable)
 - Shows features (API, scraper, preview, HD)
@@ -35483,19 +35537,6 @@ VidVeil's core mission is privacy preservation. Every technical decision must be
 - No content liability - pure linking/search functionality
 
 **Rate Limiting Philosophy:**
-- Purpose: Server protection (DDoS prevention, abuse prevention)
-- NOT for monetization or feature gating
-- Limits generous enough for normal usage
-- No "upgrade to premium" - all limits are technical, not business
-
-**Future Enhancements (Not in v1.0):**
-- User accounts (optional, for saved searches/favorites)
-- Search history (client-side localStorage only, never server-side)
-- Custom engine combinations (user-defined bang shortcuts)
-- Advanced filtering (duration, quality, date ranges)
-- Video preview integration (if engines support it)
-
----
 
 
 # FINAL CHECKPOINT: COMPLIANCE CHECKLIST

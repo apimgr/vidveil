@@ -21,7 +21,8 @@ services:
     environment:
       - MODE=development
       - PORT=80
-      # - DEBUG=true  # Uncomment to enable debug mode
+      # Uncomment to enable debug mode
+      # - DEBUG=true
       - TZ=${TZ:-America/New_York}
     volumes:
       - './rootfs/config:/config:z'

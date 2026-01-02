@@ -1,14 +1,15 @@
 # Vidveil
 
-[![Build Status](https://jenkins.casjay.cc/buildStatus/icon?job=apimgr/vidveil)](https://jenkins.casjay.cc/job/apimgr/job/vidveil/)
+[![Build Status](https://github.com/apimgr/vidveil/actions/workflows/release.yml/badge.svg)](https://github.com/apimgr/vidveil/actions)
 [![GitHub release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
 [![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
+[![Documentation](https://readthedocs.org/projects/apimgr-vidveil/badge/?version=latest)](https://apimgr-vidveil.readthedocs.io/en/latest/)
 
 Privacy-respecting meta search for adult video content.
 
 ## Official Site
 
-https://scour.li
+https://x.scour.li
 
 **Repository**: https://github.com/apimgr/vidveil
 
@@ -19,7 +20,7 @@ https://scour.li
 | Feature | Description |
 |---------|-------------|
 | **Privacy First** | No tracking, no logging, no analytics |
-| **52 Engines** | Aggregates results from 52 adult video sites |
+| **54+ Engines** | Aggregates results from 54+ adult video sites |
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
 | **SSE Streaming** | Real-time result streaming as engines respond |
@@ -39,14 +40,16 @@ https://scour.li
 ```bash
 docker run -d \
   --name vidveil \
-  -p 8080:80 \
+  -p 64580:80 \
+  -v ./rootfs/config:/config:z \
+  -v ./rootfs/data:/data:z \
   ghcr.io/apimgr/vidveil:latest
 ```
 
 ### Docker Compose
 
 ```bash
-curl -O https://raw.githubusercontent.com/apimgr/vidveil/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/apimgr/vidveil/main/docker/docker-compose.yml
 docker compose up -d
 ```
 
@@ -78,7 +81,7 @@ Use bang shortcuts to search specific engines:
 
 **Multiple bangs**: `!ph !rt amateur` searches both PornHub and RedTube.
 
-**Full list**: See `/api/v1/bangs` for all 47 engine shortcuts.
+**Full list**: See `/api/v1/bangs` for all 54+ engine shortcuts.
 
 ---
 
@@ -248,6 +251,46 @@ Access at `/admin` (credentials shown on first run).
 | Engines | Enable/disable search engines |
 | Logs | Access and error logs |
 | Backup | Backup and restore |
+
+---
+
+## CLI Client
+
+A companion CLI client (`vidveil-cli`) is available for interacting with the server API from the terminal.
+
+### Install
+
+```bash
+# Download latest release
+curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-cli-linux-amd64
+chmod +x vidveil-cli-linux-amd64
+sudo mv vidveil-cli-linux-amd64 /usr/local/bin/vidveil-cli
+```
+
+### Configure
+
+```bash
+# Connect to server (creates ~/.config/apimgr/vidveil/cli.yml)
+vidveil-cli --server https://x.scour.li --token YOUR_API_TOKEN
+```
+
+### Usage
+
+```bash
+# Show help
+vidveil-cli --help
+
+# Search (launches interactive TUI)
+vidveil-cli search "query"
+
+# List engines
+vidveil-cli engines
+
+# View bangs
+vidveil-cli bangs
+```
+
+The CLI automatically launches an interactive TUI (Terminal User Interface) with keyboard navigation, dark theme, and real-time updates.
 
 ---
 

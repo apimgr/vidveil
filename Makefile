@@ -52,7 +52,7 @@ GO_DOCKER := docker run --rm \
 	-e CGO_ENABLED=0 \
 	golang:alpine
 
-.PHONY: build release docker test clean
+.PHONY: build release docker test
 
 # =============================================================================
 # BUILD - Build all platforms + host binary (via Docker with cached modules)

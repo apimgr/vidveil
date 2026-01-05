@@ -5,8 +5,8 @@ package service
 import "github.com/apimgr/vidveil/src/server/service/system"
 
 // Re-export main types and functions
-type Service = system.Service
+type ServiceManager = system.ServiceManager
 
 var (
-	New = system.New
+	NewServiceManager = system.NewServiceManager
 )

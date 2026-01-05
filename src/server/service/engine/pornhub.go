@@ -3,77 +3,99 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/apimgr/vidveil/src/server/service/parser"
 	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
-// PornHub API response structures
-type pornHubAPIResponse struct {
-	Videos []pornHubVideo `json:"videos"`
-}
-
-type pornHubVideo struct {
-	Duration  string  `json:"duration"`
-	Views     int64   `json:"views"`
-	VideoID   string  `json:"video_id"`
-	Rating    float64 `json:"rating"`
-	Title     string  `json:"title"`
-	URL       string  `json:"url"`
-	Thumb     string  `json:"thumb"`
-}
-
-// PornHubEngine implements the PornHub search engine using their public API
+// PornHubEngine implements the PornHub search engine using HTML scraping
+// Switched from API to HTML to extract preview URLs (data-mediabook)
 type PornHubEngine struct {
 	*BaseEngine
+	parser *parser.PornHubParser
 }
 
 // NewPornHubEngine creates a new PornHub engine
 func NewPornHubEngine(cfg *config.Config, torClient *tor.Client) *PornHubEngine {
-	return &PornHubEngine{
+	e := &PornHubEngine{
 		BaseEngine: NewBaseEngine("pornhub", "PornHub", "https://www.pornhub.com", 1, cfg, torClient),
+		parser:     parser.NewPornHubParser(),
 	}
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:    true,
+		HasDownload:   false,
+		HasDuration:   true,
+		HasViews:      true,
+		HasRating:     true,
+		HasQuality:    true,
+		HasUploadDate: false,
+		PreviewSource: "data-mediabook",
+		APIType:       "html",
+	})
+	return e
 }
 
-// Search performs a search on PornHub using their webmasters API
+// Search performs a search on PornHub using HTML scraping
 func (e *PornHubEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
-	// PornHub webmasters API
-	apiURL := fmt.Sprintf("https://www.pornhub.com/webmasters/search?search=%s&thumbsize=medium&page=%d",
-		url.QueryEscape(query), page)
+	// PornHub search URL
+	searchURL := fmt.Sprintf("%s/video/search?search=%s&page=%d",
+		e.baseURL, url.QueryEscape(query), page)
 
-	resp, err := e.MakeRequest(ctx, apiURL)
+	resp, err := e.MakeRequest(ctx, searchURL)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var apiResp pornHubAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, fmt.Errorf("failed to decode API response: %w", err)
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
 	var results []model.Result
-	for _, v := range apiResp.Videos {
-		results = append(results, model.Result{
-			ID:              GenerateResultID(v.URL, e.Name()),
-			URL:             v.URL,
-			Title:           v.Title,
-			Thumbnail:       v.Thumb,
-			Duration:        v.Duration,
-			DurationSeconds: ParseDuration(v.Duration),
-			Views:           formatViews(v.Views),
-			ViewsCount:      v.Views,
-			Source:          e.Name(),
-			SourceDisplay:   e.DisplayName(),
-		})
-	}
+
+	doc.Find(e.parser.ItemSelector()).Each(func(i int, s *goquery.Selection) {
+		item := e.parser.Parse(s)
+		if item != nil && item.Title != "" && item.URL != "" && !item.IsPremium {
+			results = append(results, e.convertToResult(item))
+		}
+	})
 
 	return results, nil
+}
+
+// convertToResult converts VideoItem to model.Result
+func (e *PornHubEngine) convertToResult(item *parser.VideoItem) model.Result {
+	result := model.Result{
+		ID:              GenerateResultID(item.URL, e.Name()),
+		URL:             item.URL,
+		Title:           item.Title,
+		Thumbnail:       item.Thumbnail,
+		PreviewURL:      item.PreviewURL,
+		Duration:        item.Duration,
+		DurationSeconds: item.DurationSeconds,
+		Views:           item.Views,
+		ViewsCount:      item.ViewsCount,
+		Quality:         item.Quality,
+		Source:          e.Name(),
+		SourceDisplay:   e.DisplayName(),
+	}
+
+	// Parse rating if available
+	if item.Rating != "" {
+		if r, err := strconv.ParseFloat(item.Rating, 64); err == nil {
+			result.Rating = r
+		}
+	}
+
+	return result
 }
 
 // SupportsFeature checks if PornHub supports a specific feature
@@ -82,6 +104,8 @@ func (e *PornHubEngine) SupportsFeature(feature Feature) bool {
 	case FeaturePagination:
 		return true
 	case FeatureSorting:
+		return true
+	case FeatureThumbnailPreview:
 		return true
 	default:
 		return false

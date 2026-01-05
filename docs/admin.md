@@ -2,91 +2,128 @@
 
 ## Access
 
-Admin panel is available at `/admin`
+Admin panel is available at `/admin` (configurable via `server.admin.path`).
 
 ## First Run Setup
 
-On first run, VidVeil displays a setup token:
+On first run, VidVeil displays a setup token in the console:
 
 ```
-Setup URL: http://localhost:64580/admin/setup?token=abc123...
+Setup Token: abc123...
+Setup URL: http://localhost:64580/admin
 ```
 
-Visit this URL to create your admin account.
+Navigate to `/admin` and enter the setup token to create your admin account.
+
+## Route Structure
+
+Per AI.md PART 17, admin routes follow a strict hierarchy:
+
+```
+/admin/                      # Dashboard
+/admin/profile               # Your profile settings
+/admin/server/               # ALL server management
+/admin/server/settings       # Server settings
+/admin/server/branding       # Branding configuration
+/admin/server/ssl            # SSL/TLS settings
+/admin/server/scheduler      # Scheduled tasks
+/admin/server/email          # Email configuration
+/admin/server/logs           # Server logs
+/admin/server/database       # Database settings
+/admin/server/security/      # Security settings
+/admin/server/security/auth  # Authentication config
+/admin/server/security/tokens # API tokens
+/admin/server/network/       # Network settings
+/admin/server/network/tor    # Tor configuration
+/admin/server/network/geoip  # GeoIP settings
+/admin/server/system/        # System management
+/admin/server/system/backup  # Backup & restore
+/admin/server/system/maintenance # Maintenance mode
+/admin/server/system/updates # Update management
+/admin/server/users/         # User management
+/admin/server/users/admins   # Admin accounts
+/admin/server/engines        # Search engines
+/admin/server/help           # Help & documentation
+```
 
 ## Features
 
-### Dashboard
+### Dashboard (`/admin`)
 
 - Search statistics
-- Engine status
+- Engine status overview
 - System metrics
+- Quick actions
 
-### Server Settings
+### Server Settings (`/admin/server/settings`)
 
 - Listen address and port
-- Application mode
+- Application mode (prod/dev/debug)
 - Debug settings
+- Admin path configuration
 
-### Engine Management
+### Engine Management (`/admin/server/engines`)
 
 - Enable/disable search engines
 - Configure timeouts
-- View engine status
+- View engine status and health
 
-### Blocklist
+### Security (`/admin/server/security/*`)
 
-- Add blocked terms/patterns
-- Support for regex patterns
-- View blocked content
+- **Authentication** (`/auth`): Login settings, session config
+- **API Tokens** (`/tokens`): Generate and manage API tokens
+- **Rate Limiting** (`/ratelimit`): Configure request limits
+- **Firewall** (`/firewall`): IP blocking rules
 
-### Security
+### Network (`/admin/server/network/*`)
 
-- Rate limiting configuration
-- Security headers
-- CVE vulnerability tracking
+- **Tor** (`/tor`): Hidden service configuration
+- **GeoIP** (`/geoip`): Geographic IP lookup settings
+- **Blocklists** (`/blocklists`): IP and term blocklists
 
-### SSL/TLS
+### System (`/admin/server/system/*`)
 
-- Let's Encrypt integration
+- **Backup** (`/backup`): Manual and scheduled backups with AES-256-GCM encryption
+- **Maintenance** (`/maintenance`): Maintenance mode control
+- **Updates** (`/updates`): Update management
+- **Info** (`/info`): System information
+
+### SSL/TLS (`/admin/server/ssl`)
+
+- Let's Encrypt integration (HTTP-01, TLS-ALPN-01, DNS-01)
 - Manual certificate upload
 - Auto-renewal configuration
 
-### Backup & Restore
-
-- Manual backup creation
-- Scheduled backups (02:00 daily)
-- Restore from backup
-- AES-256-GCM encryption
-
-### Logs
+### Logs (`/admin/server/logs`)
 
 - Access logs
 - Error logs
 - Audit logs
 - Search and filter
 
-### Users
+### Users (`/admin/server/users/*`)
 
 - Admin user management
-- 2FA (TOTP, WebAuthn)
+- 2FA setup (TOTP, WebAuthn)
 - Session management
 
 ## API Access
 
-Admin functions are also available via REST API:
+Admin API follows the same hierarchy under `/api/v1/admin/`:
 
 ```bash
+# Get server settings
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:64580/api/v1/admin/server/settings
+
 # List engines
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:64580/api/v1/admin/engines
+  http://localhost:64580/api/v1/admin/server/engines
 
-# Update engine status
-curl -X PUT \
+# Create backup
+curl -X POST \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"enabled": false}' \
-  http://localhost:64580/api/v1/admin/engines/pornhub
+  http://localhost:64580/api/v1/admin/server/backup
 ```
 
 ## Security
@@ -94,5 +131,6 @@ curl -X PUT \
 - Session-based authentication for web UI
 - Bearer token authentication for API
 - 2FA support (TOTP, WebAuthn)
-- Automatic session timeout
-- Audit logging
+- Automatic session timeout (30 days default)
+- Full audit logging
+- Admin panel completely isolated from public site

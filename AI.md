@@ -1,26 +1,27 @@
-# {PROJECTNAME} Specification
+# VIDVEIL Specification
 
-**Name**: {projectname}
+**Name**: vidveil
 
 ---
 
 # PROJECT DESCRIPTION
 
-**{Provide a brief description of what this project does and its primary purpose}**
-
-Example:
-- A REST API service that provides random jokes
-- A timezone conversion API with city lookup
-- A GitHub .gitignore template generator
+**Privacy-respecting meta search engine for adult video content that aggregates results from 54+ video sites without tracking, logging, or analytics.**
 
 **Key Features:**
-- {Feature 1}
-- {Feature 2}
-- {Feature 3}
+- No tracking, logging, or analytics - complete privacy
+- 54+ engines with bang shortcuts for targeted searches
+- SSE streaming for real-time results as engines respond
+- Thumbnail proxy prevents engine tracking of users
+- Single static binary with all assets embedded
+- Built-in Tor hidden service support
+- Full admin panel for configuration
 
 **Target Users:**
-- {Who uses this?}
-- {What problem does it solve?}
+- Privacy-conscious users seeking adult content without tracking
+- Self-hosters wanting their own private search instance
+- Developers needing a unified API across multiple adult video platforms
+- Tor users requiring anonymous access to adult content
 
 ---
 
@@ -178,15 +179,15 @@ Example:
 **Quick reference:**
 ```bash
 # Build (ALWAYS Docker)
-docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/{projectname} ./src
+docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/vidveil ./src
 
 # Test - Quick (Docker)
 docker run --rm -v $(pwd):/build -w /build golang:alpine go test -v ./...
 
 # Test - Full OS (Incus - PREFERRED)
 incus launch images:debian/12 test-app
-incus file push binaries/{projectname} test-app/usr/local/bin/
-incus exec test-app -- {projectname} --help
+incus file push binaries/vidveil test-app/usr/local/bin/
+incus exec test-app -- vidveil --help
 
 # Run (use temp dir workflow)
 cd $(mktemp -d) && cp -r /path/to/project/* . && docker-compose -f docker/docker-compose.dev.yml up
@@ -381,7 +382,7 @@ if cacheSize > 1024*1024*1024 {
 --address {listen}
 --port {port}
 --debug                      # Enable debug mode
---status                     # Show status and health
+--status                     # Show status and health (exit 0=healthy, 1=unhealthy)
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
 --daemon                     # Daemonize (detach from terminal)
 --maintenance {backup,restore,update,mode,setup} [optional-file-or-setting]
@@ -400,6 +401,7 @@ src/main.go                 # Server application entry point
 src/config/                 # Configuration package
 src/server/                 # HTTP server package
 src/client/                 # CLI client (OPTIONAL - if project has CLI)
+src/agent/                  # Agent (OPTIONAL - if project has agent)
 docker/                     # Docker files (REQUIRED)
 docker/Dockerfile           # Multi-stage Dockerfile
 docker/docker-compose.yml   # Production docker-compose
@@ -410,6 +412,7 @@ releases/                   # Release artifacts (gitignored)
 
 **Notes:**
 - `src/client/` is only present if the project includes a CLI client. See PART 36 for CLI details.
+- `src/agent/` is only present if the project includes an agent. See PART 36 for agent details.
 - `docker/rootfs/` is for BUILD-TIME container overlay (copied into image). Runtime volumes (`./rootfs/config`, `./rootfs/data`) are NEVER in the repo - they exist only where docker-compose runs (production server or temp dir).
 
 ## File & Directory Naming Conventions (NON-NEGOTIABLE)
@@ -612,7 +615,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | `config/` in root | Config is embedded, runtime-generated in OS dirs |
 | `data/` in root | Data goes to OS data directory at runtime |
 | `logs/` in root | Logs go to OS log directory at runtime |
-| `tmp/`, `temp/` in root | Use `/tmp/{projectorg}/{projectname}-XXXXXX/` |
+| `tmp/`, `temp/` in root | Use `/tmp/apimgr/vidveil-XXXXXX/` |
 | `test-data/` in root | Test data goes to temp directories |
 | `build/`, `dist/`, `out/` | Use `binaries/` (gitignored) |
 | `vendor/` | Use Go modules, not vendoring |
@@ -626,9 +629,11 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 | File | Required | Purpose |
 |------|:--------:|---------|
-| `AI.md` | ✓ | Project specification |
+| `AI.md` | ✓ | Project specification (HOW - implementation patterns) |
+| `IDEA.md` | ✓ | Project idea (WHAT - business logic, features) |
+| `CLAUDE.md` | Optional | Claude Code AI configuration and settings |
 | `TODO.AI.md` | Optional | AI task tracking (3+ tasks only) |
-| `PLAN.md` | Optional | Implementation plan (if exists, this is THE plan) |
+| `PLAN.AI.md` | Optional | AI implementation plan (if exists, this is THE plan) |
 | `README.md` | ✓ | Public documentation |
 | `LICENSE.md` | ✓ | License file |
 | `Makefile` | ✓ | Build targets |
@@ -673,7 +678,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | `releases/` | Auto | Release artifacts | **Yes** |
 | `rootfs/` | Auto | Runtime volume data | **Yes** |
 
-**RULE: If a directory doesn't appear in this list, it probably shouldn't exist.**
+**RULE: If a directory doesn't appear in this list, it MUST NOT exist - ask before creating.**
 
 ### GitHub-Specific Files (`.github/` directory)
 
@@ -695,7 +700,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | `PULL_REQUEST_TEMPLATE.md` | `.gitea/PULL_REQUEST_TEMPLATE.md` |
 | `workflows/*.yml` | `.gitea/workflows/` |
 
-**RULE: If a file doesn't appear in the allowed list, it probably shouldn't exist.**
+**RULE: If a file doesn't appear in the allowed list, it MUST NOT exist - ask before creating.**
 
 ---
 
@@ -709,7 +714,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 | Term | Definition |
 |------|------------|
-| **Project / App / Application** | The server binary you are building (`{projectname}`) - used interchangeably |
+| **Project / App / Application** | The server binary you are building (`vidveil`) - used interchangeably |
 | **App Instance** | A single running copy of the app (one process) |
 | **Server** | The machine (physical, VM, or container) running an app instance |
 
@@ -767,339 +772,84 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 | Term | Definition |
 |------|------------|
-| **CLI Client** | Optional companion binary (`{projectname}-cli`) for terminal access |
+| **CLI Client** | Optional companion binary (`vidveil-cli`) for terminal access |
 | **TUI** | Terminal User Interface - interactive terminal app with menus/panels |
 | **Admin Panel** | Web UI at `/admin` for server administration |
 | **FQDN** | Fully Qualified Domain Name (e.g., `api.example.com`) |
-| **Config Dir** | Where config files live (`{config_dir}`, default: `/etc/{projectorg}/{projectname}`) |
-| **Data Dir** | Where runtime data lives (`{data_dir}`, default: `/var/lib/{projectorg}/{projectname}`) |
-| **Log Dir** | Where log files live (`{log_dir}`, default: `/var/log/{projectorg}/{projectname}`) |
-| **Cache Dir** | Where cache files live (`{cache_dir}`, default: `/var/cache/{projectorg}/{projectname}`) |
-| **Backup Dir** | Where backups live (`{backup_dir}`, default: `/mnt/Backups/{projectorg}/{projectname}`) |
-| **PID File** | Process ID file path (`{pid_file}`, default: `/var/run/{projectorg}/{projectname}.pid`) |
-
----
-
-# ══════════════════════════════════════════════════════════════════════════════
-# HOW TO USE THIS TEMPLATE (DELETE THIS SECTION AFTER COPYING TO AI.md)
-# ══════════════════════════════════════════════════════════════════════════════
-
-## FOR AI ASSISTANTS (If you're reading this, follow these steps EXACTLY)
-
-**You are reading TEMPLATE.md, not AI.md. This means you must set up the project.**
-
-### Step 1: Recognize the Situation
-
-You're reading the TEMPLATE file because:
-- User said "read the template" or similar
-- This section exists (it gets deleted in AI.md)
-
-**Assumption:** Current working directory (pwd) IS the project root.
-
-### Step 2: Gather Required Information (Auto-Detect)
-
-**INFER these values automatically - DO NOT ask unless detection fails:**
-
-```bash
-# From git remote (preferred)
-PROJECTNAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$|\1|')
-PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*[:/]([^/]+)/[^/]+(\.git)?$|\1|')
-GITPROVIDER=$(git remote get-url origin 2>/dev/null | sed -E 's|.*[@/]([^/:]+)[:/].*|\1|' | sed 's/\.com$//')
-
-# Fallback to directory structure
-[ -z "$PROJECTNAME" ] && PROJECTNAME=$(basename "$(pwd)")
-[ -z "$PROJECTORG" ] && PROJECTORG=$(basename "$(dirname "$(pwd)")")
-```
-
-| Variable | Detection Method | Fallback |
-|----------|------------------|----------|
-| `{projectname}` | Git remote URL → repo name | Directory name |
-| `{projectorg}` | Git remote URL → org/owner | Parent directory name |
-| `{gitprovider}` | Git remote URL → host | Ask user |
-
-**For Description/Features:**
-
-| Situation | Action |
-|-----------|--------|
-| **Existing codebase** | Analyze code, README, go.mod to infer purpose |
-| **New/empty project** | Ask: "What does this project do? (one sentence)" |
-
-**Only ask user if:**
-- No git remote AND directory names seem wrong (e.g., `temp`, `test`, `new-project`)
-- Description cannot be inferred from existing code
-
-### Step 3: Copy Template to AI.md
-
-```bash
-cp /path/to/TEMPLATE.md ./AI.md
-```
-
-Or if reading from a different location, write the content to `./AI.md`.
-
-### Step 4: Replace Variables in AI.md
-
-Replace ALL occurrences of:
-| Variable | Replace With |
-|----------|--------------|
-| `{projectname}` | Project name lowercase (e.g., `jokes`) |
-| `{PROJECTNAME}` | Project name UPPERCASE (e.g., `JOKES`) |
-| `{projectorg}` | Organization name (e.g., `apimgr`) |
-| `{gitprovider}` | Git provider (e.g., `github`) |
-| `{fqdn}` | Leave as `{fqdn}` (resolved at runtime) |
-
-### Step 5: Fill Project-Specific Content
-
-Update in AI.md:
-1. **Lines 1-25**: Project name, description, features, target users
-2. **PART 37**: Business logic for THIS project only
-
-**CRITICAL - PART 37 Rules:**
-
-| PART 37 Contains (WHAT) | PART 37 Does NOT Contain (HOW) |
-|-------------------------|--------------------------------|
-| Project description | User/auth implementation patterns |
-| Data models (what fields) | How to hash passwords |
-| API endpoints (what they do) | How to structure routes |
-| Business rules (validation) | Admin panel patterns |
-| Feature list | Database schema patterns |
-
-**Example PART 37 - Simple (Jokes API):**
-```
-## Data: Jokes
-- id, text, category, rating, created_at
-- Categories: programming, dad, pun
-
-## Endpoints
-| Method | URL | Description |
-|--------|-----|-------------|
-| GET | https://quotesvc.example.com/api/v1/quote/random | Random quote |
-| GET | https://quotesvc.example.com/api/v1/quote/{id} | Specific quote |
-| POST | https://quotesvc.example.com/api/v1/quote | Add quote (admin) |
-
-## Business Rules
-- Rating: 1-5 stars, anonymous
-- Categories: admin-managed list
-```
-
-**Example PART 37 - Medium (Pastebin-type):**
-```
-## Data: Pastes
-- id, title, content, syntax, visibility, expires_at, view_count
-- Visibility: public, unlisted, private
-- Syntax: 100+ languages (auto-detect option)
-
-## Data: Users (optional)
-- Pastes can be anonymous or user-owned
-- User pastes appear in profile
-
-## Endpoints
-| Method | URL | Description |
-|--------|-----|-------------|
-| GET | https://paste.example.com/api/v1/paste/{id} | Get paste |
-| GET | https://paste.example.com/api/v1/paste/{id}/raw | Raw content |
-| POST | https://paste.example.com/api/v1/paste | Create paste |
-| GET | https://paste.example.com/api/v1/users/{username}/pastes | User's pastes |
-
-## Business Rules
-- Anonymous pastes: max 10KB, expire in 30 days
-- User pastes: max 1MB, optional expiration
-- Private pastes: only owner can view
-- Unlisted: accessible via link, not in search
-```
-
-**Example PART 37 - Complex (Git Hosting-type):**
-```
-## Data: Repositories
-- id, name, description, visibility, default_branch, fork_of
-- Owner: user OR org
-- Visibility: public, private, internal (org-only)
-
-## Data: Organizations
-- id, name, display_name, description, members[]
-- Member roles: owner, admin, member
-
-## Data: Issues/PRs
-- id, repo_id, number, title, body, state, author, assignees[]
-- State: open, closed, merged (PR only)
-
-## Endpoints
-| Method | URL | Description |
-|--------|-----|-------------|
-| GET | https://git.example.com/api/v1/repos/{owner}/{repo} | Repo info |
-| GET | https://git.example.com/api/v1/repos/{owner}/{repo}/issues | List issues |
-| POST | https://git.example.com/api/v1/repos/{owner}/{repo}/issues | Create issue |
-| GET | https://git.example.com/api/v1/orgs/{org}/members | Org members |
-| GET | https://git.example.com/api/v1/users/{username}/repos | User repos |
-| GET | https://git.example.com/{owner}/{repo}.git | Git clone URL |
-
-## Business Rules
-- Repo names: lowercase, alphanumeric, hyphens, max 100 chars
-- Forks inherit visibility from parent (can be more restrictive)
-- Internal repos: visible to all org members
-- Issue numbers: per-repo sequential
-- PRs share number sequence with issues
-```
-
-**Development URLs:** Replace `example.com` with `localhost:64580`
-
-**URL Rule:** Always use full URLs with FQDN, never just `GET /path`. See PART 8 URL Display Rules.
-
-**NOT in PART 37** (these are in PARTS 0-36):
-- How to implement auth → PART 17 (server admin) or PART 33 (regular users)
-- How to structure admin panel → PART 17
-- How to format API responses → PART 14
-- How regular users/orgs work → PART 33/34 (multi-user)
-
-**NEVER in PART 37 or anywhere:**
-- Feature tiers (free/pro/enterprise)
-- Artificial limits (max users, storage caps for monetization)
-- License key requirements
-- "Premium" or "paid" features
-
-**Rate limits for server protection are OK. Limits to extract money are NOT.**
-
-**All features are free. All features are available. No exceptions.**
-
-### Step 6: Persistent Rules (MEMORIZE THESE)
-
-**These rules persist AFTER you delete this section. Internalize them.**
-
-| Rule | Description |
-|------|-------------|
-| **PART 37 = WHAT** | Business logic, data, features for THIS project |
-| **PARTS 0-36 = HOW** | Implementation patterns (auth, admin, API, etc.) |
-| **Never duplicate** | Don't put HOW patterns in PART 37 |
-| **Always cross-reference** | Implementing users? Read PART 33. API? Read PART 14. |
-| **AI.md is truth** | After setup, AI.md is the only spec |
-| **No feature gating** | ALL features free, no tiers, no limits, no license keys |
-| **MIT License** | Our code MIT, 3rd party attribution in LICENSE.md |
-| **Container-only** | Build=Docker, Test=Docker/Incus, Debug=Incus preferred |
-| **AI = Beta tester** | Goal is to BREAK things and FIX them, not just report |
-| **No legacy endpoints** | Old/changed/removed endpoints = DELETE, never keep |
-| **Audit = FIX** | When auditing, FIX issues - never create AUDIT.md or reports |
-
-**When implementing ANY feature:**
-```
-1. Read PART 37 → WHAT does this feature do?
-2. Read relevant PART → HOW do I implement it?
-3. Combine both → Build the feature correctly
-```
-
-### Step 7: Delete This Section
-
-Remove everything between the ═══ markers (this entire HOW TO USE section) from AI.md.
-
-### Step 8: FORGET THE TEMPLATE
-
-**CRITICAL:** After completing these steps:
-- The template file NO LONGER EXISTS for you
-- AI.md IS the specification
-- NEVER reference or re-read the template
-- All future work uses AI.md only
-- The persistent rules from Step 6 are now internalized
-
-### Step 9: Confirm Completion
-
-Tell the user:
-```
-✓ Created AI.md from template
-✓ Replaced variables: {projectname}, {projectorg}, {gitprovider}
-✓ Filled project description and PART 37 (WHAT)
-✓ Ready to implement - AI.md is the specification
-✓ PARTS 0-36 define HOW, PART 37 defines WHAT
-```
-
----
-
-## FOR HUMANS (Manual Setup)
-
-1. **Copy this file** to your project directory as `AI.md`
-2. **Replace all variables** (`{projectname}`, `{projectorg}`, etc.)
-3. **Fill in** project description (lines 1-25) and PART 37
-4. **Delete this section** (everything between ═══ markers)
-5. **Done** - AI.md is your project specification
-
-## Variables Reference
-
-| Variable | Replace With | Example |
-|----------|--------------|---------|
-| `{projectname}` | Project name (lowercase) | `jokes` |
-| `{PROJECTNAME}` | Project name (UPPERCASE) | `JOKES` |
-| `{projectorg}` | Organization name | `apimgr` |
-| `{gitprovider}` | Git host | `github`, `gitea`, `gitlab` |
-
-## After Setup
-
-- AI.md is THE specification - follow it exactly
-- Update PART 37 when features change
-- PARTS 0-36 define patterns - do NOT modify them
-
-# ══════════════════════════════════════════════════════════════════════════════
-# END OF SECTION TO DELETE
-# ══════════════════════════════════════════════════════════════════════════════
+| **Config Dir** | Where config files live (`{config_dir}`, default: `/etc/apimgr/vidveil`) |
+| **Data Dir** | Where runtime data lives (`{data_dir}`, default: `/var/lib/apimgr/vidveil`) |
+| **Log Dir** | Where log files live (`{log_dir}`, default: `/var/log/apimgr/vidveil`) |
+| **Cache Dir** | Where cache files live (`{cache_dir}`, default: `/var/cache/apimgr/vidveil`) |
+| **Backup Dir** | Where backups live (`{backup_dir}`, default: `/mnt/Backups/apimgr/vidveil`) |
+| **PID File** | Process ID file path (`{pid_file}`, default: `/var/run/apimgr/vidveil.pid`) |
 
 ---
 
 ## How to Read This Large File
 
-**AI.md is ~1.2MB and ~34,000 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1.5MB and ~42,000 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
-| File size | ~1.2MB |
-| Line count | ~34,000 lines |
+| File size | ~1.5MB |
+| Line count | ~42,810 lines |
 | Read limit | ~500 lines per read |
-| Full reads needed | ~68 reads (impractical) |
+| Full reads needed | ~85 reads (impractical) |
 
-**You MUST read strategically, not sequentially.**
+**Use the PART index to find relevant sections, then read each section COMPLETELY.**
 
 ### PART Index (Quick Reference)
 
 **Use `grep -n "^# PART" AI.md` to get exact current line numbers.**
 
-| PART | ~Line | Topic | When to Read |
-|------|-------|-------|--------------|
-| 0 | 1275 | AI Assistant Rules | **ALWAYS READ FIRST** |
-| 1 | 2716 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | 3437 | License & Attribution | License requirements |
-| 3 | 3776 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | 4547 | OS-Specific Paths | Path handling |
-| 5 | 4732 | Configuration | Config file work |
-| 6 | 5771 | Application Modes | Mode handling, debug endpoints |
-| 7 | 6379 | Binary Requirements | Binary building |
-| 8 | 6536 | Server Binary CLI | CLI flags/commands |
-| 9 | 9203 | Error Handling & Caching | Error/cache patterns |
-| 10 | 9591 | Database & Cluster | Database work |
-| 11 | 10006 | Security & Logging | Security features, **API Token format**, **Scoped Login** |
-| 12 | 11650 | Server Configuration | Server settings |
-| 13 | 11917 | Health & Versioning | Health endpoints |
-| 14 | 12097 | API Structure | REST/GraphQL/Compatibility API |
-| 15 | 13281 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | 13967 | Web Frontend | Frontend/UI work, vanity URLs |
-| 17 | 16658 | Admin Panel | Admin UI, **Server Admin auth & security** |
-| 18 | 18120 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | 19516 | Scheduler | Background tasks |
-| 20 | 19844 | GeoIP | GeoIP features |
-| 21 | 19917 | Metrics | Metrics/monitoring |
-| 22 | 20938 | Backup & Restore | Backup features |
-| 23 | 21345 | Update Command | Update feature |
-| 24 | 21401 | Privilege Escalation & Service | Service/privilege work |
-| 25 | 21788 | Service Support | Systemd/service templates |
-| 26 | 21917 | Makefile | Build system |
-| 27 | 22441 | Docker | Docker/containers |
-| 28 | 23797 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | 26284 | Testing & Development | Testing/dev workflow |
-| 30 | 27439 | ReadTheDocs Documentation | Documentation |
-| 31 | 28151 | I18N & A11Y | Internationalization |
-| 32 | 28572 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | 29308 | Multi-User | **OPTIONAL** - regular user accounts/registration, vanity URLs |
-| 34 | 32635 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 35 | 33182 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 36 | 34122 | CLI Client | **OPTIONAL** - CLI tool |
-| 37 | 35137 | Project-Specific Sections | Your project's business logic |
-| FINAL | 35386 | Compliance Checklist | Final verification |
+| PART | Line | Topic | When to Read |
+|------|------|-------|--------------|
+| 0 | 941 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
+| 1 | 2631 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | 3353 | License & Attribution | License requirements |
+| 3 | 3692 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | 4455 | OS-Specific Paths | Path handling |
+| 5 | 4640 | Configuration | Config file work, **Path Security** |
+| 6 | 5951 | Application Modes | Mode handling, debug endpoints |
+| 7 | 6559 | Binary Requirements | Binary building, **Display detection** |
+| 8 | 7026 | Server Binary CLI | CLI flags/commands |
+| 9 | 9771 | Error Handling & Caching | Error/cache patterns |
+| 10 | 10148 | Database & Cluster | Database work |
+| 11 | 10563 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | 12425 | Server Configuration | Server settings |
+| 13 | 12692 | Health & Versioning | Health endpoints |
+| 14 | 13181 | API Structure | REST/GraphQL/Route Compliance |
+| 15 | 14446 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | 15265 | Web Frontend | Frontend/UI, **Unified Response Format** |
+| 17 | 18544 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | 20570 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | 21966 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | 22451 | GeoIP | GeoIP features |
+| 21 | 22524 | Metrics | Metrics/monitoring |
+| 22 | 23545 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | 24252 | Update Command | Update feature |
+| 24 | 24308 | Privilege Escalation & Service | Service/privilege work |
+| 25 | 24695 | Service Support | Systemd/service templates |
+| 26 | 24824 | Makefile | Build system, **make host** |
+| 27 | 25485 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | 26841 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | 29328 | Testing & Development | Testing/dev workflow, **100% Coverage** |
+| 30 | 30666 | ReadTheDocs Documentation | Documentation |
+| 31 | 31378 | I18N & A11Y | Internationalization |
+| 32 | 31799 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | 32535 | Multi-User | **OPTIONAL** - regular user accounts/registration, vanity URLs |
+| 34 | 35877 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 35 | 36521 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 36 | 37544 | CLI Client & Agent | **OPTIONAL** - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context** |
+| 37 | 41000 | Project-Specific Sections | **WHAT** (IDEA.md) - 0-36 = HOW |
+| FINAL | 41325 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+
+**When Implementing OPTIONAL PARTs (33-36):**
+1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
+2. Update IDEA.md to document the feature as implemented
+3. Follow ALL rules in that PART exactly (no longer optional)
 
 ### How to Read This File
 
@@ -1176,6 +926,8 @@ grep -n "^|" AI.md | head -50
 | Not re-reading before implementing | Drift from spec | Always re-read relevant PART |
 | Guessing instead of searching | Wrong implementation | Use grep to find answers |
 | Skipping PART 0 and 1 | Missing critical rules | ALWAYS read these first |
+| Adding content without searching first | Duplicate rules/content | Search for existing content before adding |
+| Reading entire file at once | Context overflow, missed details | Read PART by PART, implement fully before next |
 
 ### When You Can't Find Information
 
@@ -1184,93 +936,7 @@ grep -n "^|" AI.md | head -50
 3. **Read the FINAL CHECKPOINT** - summary of all requirements
 4. **ASK the user** - don't guess
 
-### Memory Limitations
-
-**You will forget details from earlier reads.** Combat this by:
-
-1. **Re-reading before implementing** - every time
-2. **Noting key values** - write down important numbers/names
-3. **Cross-referencing** - check multiple sections for consistency
-4. **Never relying on memory** - always verify with a fresh read
-
 ---
-
-## CRITICAL: Specification Drift Prevention
-
-**AI assistants have a tendency to "drift" from specifications over time.** This means gradually deviating from documented requirements, inventing new patterns, or forgetting constraints. **This is unacceptable.**
-
-### The Problem
-
-| Drift Type | Example | Impact |
-|------------|---------|--------|
-| **Pattern drift** | Using different file structure than specified | Inconsistency across projects |
-| **Naming drift** | Using different variable/function names | Code doesn't match spec |
-| **Feature drift** | Adding unrequested features | Over-engineering, bugs |
-| **Constraint drift** | Forgetting NON-NEGOTIABLE rules | Specification violations |
-| **Format drift** | Using different date/version formats | Integration failures |
-
-### The Solution: Constant Re-verification
-
-**You MUST re-read relevant spec sections before EVERY implementation.**
-
-```
-BEFORE writing ANY code:
-1. Identify which PART(s) of the spec apply
-2. Re-read those sections completely
-3. Verify your planned implementation matches EXACTLY
-4. If ANY deviation is needed, ASK first
-5. NEVER assume you remember correctly - ALWAYS re-check
-```
-
-## Mandatory Compliance Checks
-
-**Perform these checks at regular intervals:**
-
-| When | Action |
-|------|--------|
-| **Start of session** | Read AI.md completely, identify applicable sections |
-| **Before each task** | Re-read relevant PART(s) of the spec |
-| **Every 3-5 changes** | Stop and verify against spec - are you drifting? |
-| **Before completing task** | Full compliance check against relevant sections |
-| **If uncertain** | STOP and re-read spec, or ASK user |
-
-## What "NON-NEGOTIABLE" Means
-
-**NON-NEGOTIABLE sections MUST be implemented EXACTLY as specified.**
-
-| Allowed | NOT Allowed |
-|---------|-------------|
-| Copy spec exactly | "Improve" or "optimize" the spec |
-| Ask for clarification | Assume you know better |
-| Report conflicts | Silently deviate |
-| Request exceptions | Make exceptions yourself |
-
-**If you think a NON-NEGOTIABLE section is wrong:**
-1. STOP implementation
-2. Tell the user specifically what you think is wrong
-3. Ask for explicit permission to deviate
-4. Document the deviation in AI.md if approved
-
-## Common Drift Mistakes to Avoid
-
-| Mistake | Correct Approach |
-|---------|------------------|
-| "I'll use a better pattern" | Use the pattern in the spec |
-| "This format makes more sense" | Use the format in the spec |
-| "I remember the spec says..." | Re-read the spec, don't rely on memory |
-| "This is obviously what they want" | Check the spec, ask if not covered |
-| "I'll add this helpful feature" | Only implement what's requested |
-| "The spec is outdated here" | Ask before deviating |
-
-## Quick Reference
-
-| File | Location | Purpose | Modify? |
-|------|----------|---------|---------|
-| AI.md | Project repo | Project spec (PARTS 0-36 read-only, PART 37 updatable) | Yes (PART 37) |
-| TODO.AI.md | Project repo | Task tracking | Yes |
-| PLAN.md | Project repo | Implementation plan | Yes |
-| README.md | Project repo | User docs | Yes |
-
 
 # PART 0: AI ASSISTANT RULES (READ FIRST - NON-NEGOTIABLE)
 
@@ -1289,6 +955,155 @@ BEFORE writing ANY code:
 1. **Follow PARTS 0-36 exactly** - these define HOW to implement things
 2. **Update PART 37** when features change - this defines WHAT your project does
 3. **Keep documentation in sync** - README.md, docs/, Swagger, GraphQL must match code
+
+## AI Behavior Rules (NON-NEGOTIABLE)
+
+**These rules prevent wasted time and tokens. Follow them EXACTLY.**
+
+### NEVER Guess or Assume
+
+| Situation | WRONG | RIGHT |
+|-----------|-------|-------|
+| Unsure about requirement | Guess and implement | **STOP and ASK** |
+| Can't find file/function | Assume location | **Search first, ask if not found** |
+| Multiple valid approaches | Pick one randomly | **List options, ask user** |
+| Spec seems incomplete | Fill in the blanks | **Ask for clarification** |
+| "Probably works" | Ship it | **Test it, verify it** |
+| Don't know the answer | Make something up | **Say "I don't know" and research** |
+
+### NEVER Rush or Skip
+
+| Rule | Description |
+|------|-------------|
+| **Read before edit** | MUST read file before modifying - no exceptions |
+| **Search before create** | Check if it exists before adding |
+| **Verify before claim** | NEVER say "done" without verification |
+| **Test before commit** | Run tests, check output |
+| **One thing at a time** | Complete current task before starting next |
+| **No silent fixes** | If you find an issue, report it first |
+| **No partial work** | Finish what you start or explicitly say it's incomplete |
+
+### The Cost of Guessing
+
+**Every wrong guess costs:**
+- User time to identify the mistake
+- Tokens to explain the correction
+- More tokens to redo the work
+- User trust and patience
+
+**It is ALWAYS cheaper to ask than to guess wrong.**
+
+**Math:**
+- Asking a question: ~100 tokens
+- Wrong implementation + explanation + redo: ~5000+ tokens
+- **Asking is 50x cheaper than guessing wrong**
+
+### Mandatory Verification Steps
+
+**Before saying "done" on ANY task:**
+
+```
+1. [ ] Did I READ the relevant files first?
+2. [ ] Did I SEARCH for existing patterns?
+3. [ ] Did I TEST my changes?
+4. [ ] Did I VERIFY the output?
+5. [ ] Am I CERTAIN this is correct?
+```
+
+**If ANY answer is "no" → DO NOT claim completion.**
+
+### When to STOP and ASK
+
+**ALWAYS stop and ask when:**
+- The spec doesn't cover this case
+- Multiple interpretations are possible
+- You're about to make an architectural decision
+- You're unsure about naming/structure
+- The user's intent is ambiguous
+- You would need to "assume" anything
+- You're about to do something destructive
+- You're not 100% confident
+
+**Question Format:**
+```
+I need clarification before proceeding:
+
+1. [Specific question]?
+2. [Specific question]?
+
+Which approach do you prefer?
+
+a) Option A - [brief description]
+b) Option B - [brief description]
+c) Other (please specify)
+```
+
+### Red Flags - STOP IMMEDIATELY
+
+**If you catch yourself thinking any of these, STOP:**
+
+| Thought | Action |
+|---------|--------|
+| "This is probably what they meant..." | **STOP - ASK** |
+| "I'll just assume..." | **STOP - ASK** |
+| "This should work..." | **STOP - TEST** |
+| "They probably want..." | **STOP - ASK** |
+| "I'll fix this later..." | **STOP - FIX NOW or ASK** |
+| "Close enough..." | **STOP - DO IT RIGHT** |
+| "I think I remember..." | **STOP - READ THE SPEC** |
+| "Let me quickly..." | **STOP - SLOW DOWN** |
+| "This is obvious..." | **STOP - VERIFY** |
+| "I don't need to check..." | **STOP - CHECK ANYWAY** |
+
+### Speed vs Correctness
+
+| Priority | Value |
+|----------|-------|
+| **1. Correct** | A correct answer, even if slow |
+| **2. Verified** | A tested answer, even if it took time |
+| **3. Fast** | Speed is LAST priority |
+
+**A fast wrong answer is WORSE than a slow correct answer.**
+
+**Wrong answers waste:**
+- User's time reading wrong output
+- User's time explaining the error
+- Tokens for the redo
+- User's trust
+
+### What "I Don't Know" Looks Like
+
+**It is ACCEPTABLE to say:**
+
+```
+I'm not sure about [X]. Let me:
+1. Search the codebase for existing patterns
+2. Read the relevant spec section
+3. Ask you for clarification if needed
+
+Before I proceed, can you confirm [specific question]?
+```
+
+**It is UNACCEPTABLE to:**
+- Make up an answer
+- Pretend to know
+- Guess and hope it's right
+- Skip verification
+
+### Verification Checklist (Run Every Time)
+
+**Before EVERY response that claims completion:**
+
+```
+□ I read the relevant files (not just claimed to)
+□ I searched for existing patterns
+□ I tested my changes (or explained why I couldn't)
+□ I verified the output matches expectations
+□ I am confident this is correct
+□ I did NOT guess or assume
+□ I did NOT rush or skip steps
+□ If unsure about anything, I asked
+```
 
 ## CRITICAL: Always Reference AI.md (NON-NEGOTIABLE)
 
@@ -1312,6 +1127,104 @@ BEFORE writing ANY code:
 - "Improving" things that don't need improvement
 
 **This drift is the #1 cause of specification violations. Combat it actively.**
+
+### Drift Types
+
+| Drift Type | Example | Impact |
+|------------|---------|--------|
+| **Pattern drift** | Using different file structure than specified | Inconsistency across projects |
+| **Naming drift** | Using different variable/function names | Code doesn't match spec |
+| **Feature drift** | Adding unrequested features | Over-engineering, bugs |
+| **Constraint drift** | Forgetting NON-NEGOTIABLE rules | Specification violations |
+| **Format drift** | Using different date/version formats | Integration failures |
+
+### The Solution: Constant Re-verification
+
+**You MUST re-read relevant spec sections before EVERY implementation.**
+
+```
+BEFORE writing ANY code:
+1. Identify which PART(s) of the spec apply
+2. Re-read those sections completely
+3. Verify your planned implementation matches EXACTLY
+4. If ANY deviation is needed, ASK first
+5. NEVER assume you remember correctly - ALWAYS re-check
+```
+
+### Mandatory Compliance Checks
+
+| When | Action |
+|------|--------|
+| **Start of session** | Read PART 0 and PART 1, identify applicable sections |
+| **Before each task** | Re-read relevant PART(s) of the spec |
+| **Every 3-5 changes** | Stop and verify against spec - are you drifting? |
+| **Before completing task** | Full compliance check against relevant sections |
+| **If uncertain** | STOP and re-read spec, or ASK user |
+
+### What "NON-NEGOTIABLE" Means
+
+**NON-NEGOTIABLE sections MUST be implemented EXACTLY as specified.**
+
+| Allowed | NOT Allowed |
+|---------|-------------|
+| Copy spec exactly | "Improve" or "optimize" the spec |
+| Ask for clarification | Assume you know better |
+| Report conflicts | Silently deviate |
+| Request exceptions | Make exceptions yourself |
+
+**If you think a NON-NEGOTIABLE section is wrong:**
+1. STOP implementation
+2. Tell the user specifically what you think is wrong
+3. Ask for explicit permission to deviate
+4. Document the deviation in AI.md if approved
+
+### Common Drift Mistakes
+
+| Mistake | Correct Approach |
+|---------|------------------|
+| "I'll use a better pattern" | Use the pattern in the spec |
+| "This format makes more sense" | Use the format in the spec |
+| "I remember the spec says..." | Re-read the spec, don't rely on memory |
+| "This is obviously what they want" | Check the spec, ask if not covered |
+| "I'll add this helpful feature" | Only implement what's requested |
+| "The spec is outdated here" | Ask before deviating |
+
+### Memory Limitations
+
+**You will forget details from earlier reads.** Combat this by:
+
+1. **Re-reading before implementing** - every time
+2. **Noting key values** - write down important numbers/names
+3. **Cross-referencing** - check multiple sections for consistency
+4. **Never relying on memory** - always verify with a fresh read
+
+## CRITICAL: Editing This Document (NON-NEGOTIABLE)
+
+**Before adding or modifying ANY content in AI.md:**
+
+| Step | Action | Purpose |
+|------|--------|---------|
+| 1 | **Search first** | `grep -n "keyword" AI.md` to check if content exists |
+| 2 | **Read the PART** | Read the relevant PART completely, not just snippets |
+| 3 | **Check references** | Search for related content in other PARTs |
+| 4 | **Verify no duplicates** | Ensure you're not adding what already exists |
+| 5 | **Update, don't duplicate** | If content exists, update it; don't add a second copy |
+| 6 | **Update line numbers** | After edits, update the PART index line numbers |
+
+**Implementation workflow:**
+```
+1. Read PART N completely
+2. Implement PART N fully
+3. Verify PART N is complete
+4. Move to PART N+1
+5. Repeat
+```
+
+**Never:**
+- Read entire file at once (context overflow)
+- Add content without searching first (duplicates)
+- Skip ahead before completing current PART
+- Assume content doesn't exist without searching
 
 ## CRITICAL: Always Reference The Relevant Section
 
@@ -1390,7 +1303,7 @@ Reading PART 5 at line 4800...
 - If you find compliance gaps → FIX THEM (bring to 100% compliance)
 - If you need to document changes → Update PART 37 in AI.md
 - If you need to track tasks → Use TODO.AI.md
-- If you need to plan work → Use PLAN.md (if it exists)
+- If you need to plan work → Use PLAN.AI.md (if it exists)
 - The project should be WORKING, not documented as broken
 
 **See Critical Rules: "Files & Directories Master Rules" for allowed files/directories - nothing else.**
@@ -1452,9 +1365,9 @@ Purpose: {inferred from code/config}
 
 **See: "Project Audit (NON-NEGOTIABLE)" section (line ~1595) for the full audit process.**
 
-## PLAN.md Completion
+## PLAN.AI.md Completion
 
-**When a PLAN.md has been fully implemented and verified working:**
+**When a PLAN.AI.md has been fully implemented and verified working:**
 
 Replace the entire contents with:
 
@@ -1465,7 +1378,7 @@ See PART 37 in AI.md for the full project breakdown.
 ```
 
 **Rules:**
-- Keep the PLAN.md file (don't delete it)
+- Keep the PLAN.AI.md file (don't delete it)
 - Replace all planning content with the completion message above
 - This signals the plan is done and PART 37 is the source of truth
 - If new planning is needed later, replace the completion message with the new plan
@@ -1476,7 +1389,7 @@ See PART 37 in AI.md for the full project breakdown.
 |------|---------|-------------|
 | **AI.md** | Project specification | PART 37 when features change |
 | **TODO.AI.md** | Task tracking | Tasks added/completed |
-| **PLAN.md** | Implementation plan | Planning new features |
+| **PLAN.AI.md** | Implementation plan | Planning new features |
 | **README.md** | User documentation | Usage changes |
 
 ## Mandatory Compliance Schedule
@@ -1519,7 +1432,7 @@ See PART 37 in AI.md for the full project breakdown.
 
 **AI assistants CANNOT run `git add`, `git commit`, or `git push`.** Instead, create/update the commit message file.
 
-**File:** `{projectdir}/.git/COMMIT_MESS`
+**File:** `{project_dir}/.git/COMMIT_MESS`
 
 | Action | When |
 |--------|------|
@@ -1801,9 +1714,9 @@ Spec version: {line count or hash}
 | Full | All tools available |
 | **PROHIBITED** | `git add`, `git commit`, `git push` - AI cannot run these |
 | Allowed | `git status`, `git diff`, `git log`, `git branch` (read-only) |
-| **Required** | Write `.git/COMMIT_MESS` file with commit message instead |
+| **Required** | Write `{project_dir}/.git/COMMIT_MESS` file with commit message instead |
 
-**Since AI cannot commit, it MUST write the commit message to `.git/COMMIT_MESS` so the user can commit with:** `git commit -F .git/COMMIT_MESS`
+**Since AI cannot commit, it MUST write the commit message to `{project_dir}/.git/COMMIT_MESS` so the user can commit with:** `git commit -F .git/COMMIT_MESS`
 
 ## Prohibited Actions
 
@@ -2332,7 +2245,9 @@ logging:
 
 ## Red Flags (AI Must Stop and Ask)
 
-**If AI notices any of these, STOP and ask user:**
+**See also: "AI Behavior Rules (NON-NEGOTIABLE)" at the start of PART 0 for general red flags.**
+
+**Migration-specific red flags - STOP and ask user:**
 
 - "I think we should..." → STOP - follow SPEC instead
 - "It would be better to..." → STOP - follow SPEC instead
@@ -2397,8 +2312,8 @@ Enter choice [a-d]:
 # AI should run these checks and report results:
 
 # 1. Verify CLI
-./binaries/{projectname} --help
-./binaries/{projectname} --version
+./binaries/vidveil --help
+./binaries/vidveil --version
 
 # 2. Verify build
 make clean && make build
@@ -2730,7 +2645,7 @@ Every feature MUST work via:
 | **Browser** | Chrome, Firefox, Safari | HTML (pretty UI) |
 | **PWA** | Installed web app (desktop/mobile) | HTML (same as browser) |
 | **API/Automation** | curl, wget, scripts, integrations | JSON |
-| **CLI tool** | `{projectname}-cli` | Text/JSON (configurable) |
+| **CLI tool** | `vidveil-cli` | Text/JSON (configurable) |
 
 **Why we support all these clients:**
 - Browser users get a full web experience
@@ -2742,13 +2657,13 @@ Every feature MUST work via:
 | Web Route (HTML) | API Route (JSON) | Purpose |
 |------------------|------------------|---------|
 | `/` | `/api/v1/` | Homepage / API root |
-| `/healthz` | `/api/v1/healthz` | Health status |
-| `/admin/dashboard` | `/api/v1/admin/dashboard` | Admin dashboard |
-| `/admin/server/settings` | `/api/v1/admin/server/settings` | Server settings |
-| `/admin/users` | `/api/v1/admin/users` | User management |
+| `/healthz` | `/api/v1/healthz` | Health status (both exist independently) |
+| `/{adminpath}/dashboard` | `/api/v1/admin/dashboard` | Admin dashboard |
+| `/{adminpath}/server/settings` | `/api/v1/admin/server/settings` | Server settings |
+| `/{adminpath}/users` | `/api/v1/admin/users` | User management |
 | `/quotes` | `/api/v1/quotes` | Project feature (example) |
 | `/quotes/random` | `/api/v1/quotes/random` | Project feature (example) |
-| `/swagger` | `/api/v1/openapi.json` | API documentation |
+| `/openapi` | `/openapi.json` | API documentation (root-level, not /api/v1/) |
 | `/graphql` | `/api/v1/graphql` | GraphQL endpoint |
 
 **This pattern applies to ALL features:**
@@ -2800,19 +2715,19 @@ These are not roleplay - they ARE these roles when the work requires it. Each pr
 
 ```bash
 # CORRECT - Use Makefile (wraps Docker)
-make dev                    # Quick build to {tempdir}/{projectorg}.XXXXXX/{projectname}
+make dev                    # Quick build to {tempdir}/apimgr.XXXXXX/vidveil
 make build                  # Full build to binaries/
 
 # ALSO CORRECT - Direct Docker build
-docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/{projectname} ./src
+docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/vidveil ./src
 
 # CORRECT - Full OS test with Incus (PREFERRED)
 incus launch images:debian/12 test-app
-incus file push binaries/{projectname} test-app/usr/local/bin/
-incus exec test-app -- {projectname} --help
+incus file push binaries/vidveil test-app/usr/local/bin/
+incus exec test-app -- vidveil --help
 
 # WRONG - Never run go directly on host
-go build -o binary/{projectname} ./src
+go build -o binary/vidveil ./src
 ```
 
 **See PART 29: TESTING & DEVELOPMENT for full containerized build/test procedures.**
@@ -3051,7 +2966,7 @@ func gUBE(e string) (*U, error) {
 |------|----------|---------|---------|
 | **AI.md** | Project repository | Project specification | **YES** (PART 37 only) |
 | **TODO.AI.md** | Project repository | Task tracking (3+ tasks) | **YES** |
-| **PLAN.md** | Project repository | Implementation plan | **YES** |
+| **PLAN.AI.md** | Project repository | Implementation plan | **YES** |
 
 ### Documentation Rules (NON-NEGOTIABLE)
 
@@ -3076,7 +2991,7 @@ AI.md (project specification)
 
 1. **Title & Badges** - Project name, build status, version badges
 2. **About** - Brief description of what the project does
-3. **Official Site** - Link to official site (if defined, e.g., `https://{projectname}.{projectorg}.us`)
+3. **Official Site** - Link to official site (if defined, e.g., `https://vidveil.apimgr.us`)
 4. **Features** - Key features list
 5. **Production** - Production deployment instructions (Docker, binary, systemd)
 6. **CLI Client** - Client CLI installation and usage (if applicable)
@@ -3103,31 +3018,31 @@ Detect platform by checking for workflow files in this order:
 
 ```markdown
 # GitHub Actions
-[![Build](https://github.com/{projectorg}/{projectname}/actions/workflows/build.yml/badge.svg)](https://github.com/{projectorg}/{projectname}/actions/workflows/build.yml)
+[![Build](https://github.com/apimgr/vidveil/actions/workflows/build.yml/badge.svg)](https://github.com/apimgr/vidveil/actions/workflows/build.yml)
 
 # Gitea/Forgejo Actions
-[![Build](https://git.example.com/{projectorg}/{projectname}/actions/workflows/build.yml/badge.svg)](https://git.example.com/{projectorg}/{projectname}/actions)
+[![Build](https://git.example.com/apimgr/vidveil/actions/workflows/build.yml/badge.svg)](https://git.example.com/apimgr/vidveil/actions)
 
 # GitLab CI
-[![Build](https://gitlab.com/{projectorg}/{projectname}/badges/main/pipeline.svg)](https://gitlab.com/{projectorg}/{projectname}/-/pipelines)
+[![Build](https://gitlab.com/apimgr/vidveil/badges/main/pipeline.svg)](https://gitlab.com/apimgr/vidveil/-/pipelines)
 
 # Jenkins
-[![Build](https://jenkins.example.com/buildStatus/icon?job={projectorg}/{projectname})](https://jenkins.example.com/job/{projectorg}/job/{projectname}/)
+[![Build](https://jenkins.example.com/buildStatus/icon?job=apimgr/vidveil)](https://jenkins.example.com/job/apimgr/job/vidveil/)
 ```
 
 **Release/License badges also adapt to platform:**
 
 ```markdown
 # GitHub
-[![Release](https://img.shields.io/github/v/release/{projectorg}/{projectname})](https://github.com/{projectorg}/{projectname}/releases)
-[![License](https://img.shields.io/github/license/{projectorg}/{projectname})](LICENSE.md)
+[![Release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
+[![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
 
 # GitLab
-[![Release](https://gitlab.com/{projectorg}/{projectname}/-/badges/release.svg)](https://gitlab.com/{projectorg}/{projectname}/-/releases)
+[![Release](https://gitlab.com/apimgr/vidveil/-/badges/release.svg)](https://gitlab.com/apimgr/vidveil/-/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
 # Gitea/Forgejo (use shields.io with custom endpoint or static badge)
-[![Release](https://img.shields.io/badge/dynamic/json?url=https://git.example.com/api/v1/repos/{projectorg}/{projectname}/releases/latest&query=$.tag_name&label=release)](https://git.example.com/{projectorg}/{projectname}/releases)
+[![Release](https://img.shields.io/badge/dynamic/json?url=https://git.example.com/api/v1/repos/apimgr/vidveil/releases/latest&query=$.tag_name&label=release)](https://git.example.com/apimgr/vidveil/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 ```
 
@@ -3145,7 +3060,7 @@ Detect platform by checking for workflow files in this order:
 **Use the appropriate badges and URLs for your platform (see above).**
 
 ```markdown
-# {projectname}
+# vidveil
 
 {PLATFORM_BUILD_BADGE}
 {PLATFORM_RELEASE_BADGE}
@@ -3157,7 +3072,7 @@ Detect platform by checking for workflow files in this order:
 
 ## Official Site
 
-https://{projectname}.{projectorg}.us
+https://vidveil.apimgr.us
 
 ## Features
 
@@ -3171,11 +3086,11 @@ https://{projectname}.{projectorg}.us
 
 ```bash
 docker run -d \
-  --name {projectname} \
+  --name vidveil \
   -p 64580:80 \
   -v ./rootfs/config:/config:z \
   -v ./rootfs/data:/data:z \
-  {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
+  {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
 ```
 
 ### Docker Compose
@@ -3189,11 +3104,11 @@ docker compose up -d
 
 ```bash
 # Download latest release
-curl -LO {PLATFORM_RELEASE_URL}/{projectname}-linux-amd64
+curl -LO {PLATFORM_RELEASE_URL}/vidveil-linux-amd64
 
 # Make executable and run
-chmod +x {projectname}-linux-amd64
-./{projectname}-linux-amd64
+chmod +x vidveil-linux-amd64
+./vidveil-linux-amd64
 ```
 
 ## CLI Client
@@ -3204,23 +3119,23 @@ A companion CLI client is available for interacting with the server API.
 
 ```bash
 # Download latest release
-curl -LO {PLATFORM_RELEASE_URL}/{projectname}-cli-linux-amd64
-chmod +x {projectname}-cli-linux-amd64
-sudo mv {projectname}-cli-linux-amd64 /usr/local/bin/{projectname}-cli
+curl -LO {PLATFORM_RELEASE_URL}/vidveil-cli-linux-amd64
+chmod +x vidveil-cli-linux-amd64
+sudo mv vidveil-cli-linux-amd64 /usr/local/bin/vidveil-cli
 ```
 
 ### Configure
 
 ```bash
-# Connect to server (creates ~/.config/{projectorg}/{projectname}/cli.yml)
-{projectname}-cli --server https://api.example.com --token YOUR_API_TOKEN
+# Connect to server (creates ~/.config/apimgr/vidveil/cli.yml)
+vidveil-cli --server https://api.example.com --token YOUR_API_TOKEN
 ```
 
 ### Usage
 
 ```bash
-{projectname}-cli --help
-{projectname}-cli [command] --help
+vidveil-cli --help
+vidveil-cli [command] --help
 ```
 
 ## Configuration
@@ -3244,7 +3159,7 @@ API documentation available at `/api/v1/` when running.
 
 ### Troubleshooting
 
-- Check logs: `docker logs {projectname}`
+- Check logs: `docker logs vidveil`
 - Health check: `curl http://{fqdn}:{port}/healthz`
 
 ## Development
@@ -3261,7 +3176,7 @@ API documentation available at `/api/v1/` when running.
 ```bash
 # Clone
 git clone {PLATFORM_REPO_URL}
-cd {projectname}
+cd vidveil
 
 # Quick dev build (outputs to OS temp dir)
 make dev
@@ -3320,6 +3235,7 @@ MIT - See [LICENSE.md](LICENSE.md)
 | **Concise Responses** | Short, descriptive, and helpful |
 | **Everything Configurable** | ALL settings MUST be configurable via admin web UI |
 | **Live Reload** | Configuration changes apply immediately without restart |
+| **Built-in Scheduler** | NEVER use cron, Task Scheduler, or external schedulers (PART 19) |
 
 ### Admin Web UI Configuration (NON-NEGOTIABLE)
 
@@ -3444,7 +3360,7 @@ Before proceeding, confirm you understand:
 |-------------|-------|
 | License type | MIT License |
 | License file | `LICENSE.md` (REQUIRED in project root) |
-| Copyright holder | `{projectorg}` or individual/organization name |
+| Copyright holder | `apimgr` or individual/organization name |
 | Year | Current year or year of first publication |
 
 ## LICENSE.md Structure (NON-NEGOTIABLE)
@@ -3452,7 +3368,7 @@ Before proceeding, confirm you understand:
 ```markdown
 MIT License
 
-Copyright (c) {YEAR} {projectorg}
+Copyright (c) {YEAR} apimgr
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -3700,7 +3616,7 @@ echo "3. Commit the changes"
 **Every README.md MUST include a license badge:**
 
 ```markdown
-[![License](https://img.shields.io/github/license/{projectorg}/{projectname})](LICENSE.md)
+[![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
 ```
 
 This badge should appear in the badges section near the top of README.md.
@@ -3779,9 +3695,9 @@ package main
 
 | Field | Value |
 |-------|-------|
-| **Name** | {projectname} |
-| **Organization** | {projectorg} |
-| **Official Site** | https://{projectname}.{projectorg}.us |
+| **Name** | vidveil |
+| **Organization** | apimgr |
+| **Official Site** | https://vidveil.apimgr.us |
 | **Repository** | {PLATFORM_REPO_URL} |
 | **README** | README.md |
 | **License** | MIT > LICENSE.md |
@@ -3801,17 +3717,17 @@ package main
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `{projectname}` | Project name (inferred from path) | `jokes` |
-| `{projectorg}` | Organization name (inferred from path) | `apimgr` |
-| `{gitprovider}` | Git hosting provider | `github`, `gitlab`, `private` |
+| `vidveil` | Project name (inferred from path) | `jokes` |
+| `apimgr` | Organization name (inferred from path) | `apimgr` |
+| `github` | Git hosting provider | `github`, `gitlab`, `private` |
 | **Rule** | Anything in `{}` is a variable | |
 | **Rule** | Anything NOT in `{}` is literal | `/etc/letsencrypt/live` is a real path |
 
 ### Inferring Variables from Path (NON-NEGOTIABLE)
 
-**NEVER hardcode `{projectname}` or `{projectorg}` - always infer from git remote or directory path.**
+**NEVER hardcode `vidveil` or `apimgr` - always infer from git remote or directory path.**
 
-**Recommended path structure:** `~/Projects/{gitprovider}/{projectorg}/{projectname}` (but works with any location)
+**Recommended path structure:** `~/Projects/github/apimgr/vidveil` (but works with any location)
 
 ```bash
 # Method 1: Infer from git remote (PREFERRED - works regardless of directory location)
@@ -3829,16 +3745,16 @@ PROJECTNAME=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git
 PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$|\1|' || basename "$(dirname "$PWD")")
 ```
 
-**Note:** When using path-based inference, `PROJECTORG` will be the parent directory name, which may not match the git organization unless you follow the recommended `~/Projects/{gitprovider}/{projectorg}/{projectname}` structure. Git remote inference is always more reliable.
+**Note:** When using path-based inference, `PROJECTORG` will be the parent directory name, which may not match the git organization unless you follow the recommended `~/Projects/github/apimgr/vidveil` structure. Git remote inference is always more reliable.
 
 ### Variable Capitalization
 
 | Format | Use Case | Example |
 |--------|----------|---------|
-| `{projectname}` | Lowercase (filenames, paths, commands) | `jokes`, `/etc/apimgr/jokes/` |
+| `vidveil` | Lowercase (filenames, paths, commands) | `jokes`, `/etc/apimgr/jokes/` |
 | `{projectName}` | camelCase (Go variables, JSON keys) | `projectName := "jokes"` |
 | `{Projectname}` | PascalCase (Go types, display names) | `type JokesServer struct` |
-| `{PROJECTNAME}` | UPPERCASE (env vars, Makefile vars) | `PROJECTNAME=jokes` |
+| `VIDVEIL` | UPPERCASE (env vars, Makefile vars) | `PROJECTNAME=jokes` |
 
 **Examples (assuming no git remote, inferred from path):**
 
@@ -3856,14 +3772,14 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 
 **IMPORTANT: Project root can be located ANYWHERE on your system. This section describes a RECOMMENDED organizational structure, not a requirement.**
 
-**Recommended Format:** `~/Projects/{gitprovider}/{projectorg}/{projectname}`
+**Recommended Format:** `~/Projects/github/apimgr/vidveil`
 
 | Component | Description | Examples |
 |-----------|-------------|----------|
 | `~/Projects/` | Base projects directory (recommended) | Can be `~/Projects/`, `~/Documents/`, `/opt/`, etc. |
-| `{gitprovider}` | Git hosting provider or `local` | `github`, `gitlab`, `bitbucket`, `private`, `local` |
-| `{projectorg}` | Organization/username (inferred) | `apimgr`, `casjay`, `myorg` |
-| `{projectname}` | Project name (inferred) | `jokes`, `icons`, `myproject` |
+| `github` | Git hosting provider or `local` | `github`, `gitlab`, `bitbucket`, `private`, `local` |
+| `apimgr` | Organization/username (inferred) | `apimgr`, `casjay`, `myorg` |
+| `vidveil` | Project name (inferred) | `jokes`, `icons`, `myproject` |
 
 **Examples of recommended structure:**
 ```
@@ -3884,7 +3800,7 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 
 ### Special: `local` Provider
 
-`~/Projects/local/{projectorg}/{projectname}` (or any other location) is used for:
+`~/Projects/local/apimgr/vidveil` (or any other location) is used for:
 - **Prototyping** - Quick experiments and proof-of-concept
 - **Bootstrapping** - Initial project setup before pushing to VCS
 - **Local-only development** - Projects not intended for remote hosting
@@ -3932,14 +3848,7 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 │   │   └── light.css       # Light theme customization for ReadTheDocs (optional)
 │   └── requirements.txt    # Python dependencies for MkDocs
 ├── src/                    # All source files
-├── scripts/                # All production/install scripts
-│   └── completions/        # Shell completions
-│       ├── {projectname}.bash      # Server bash completions
-│       ├── {projectname}.zsh       # Server zsh completions
-│       ├── {projectname}.fish      # Server fish completions
-│       ├── {projectname}-cli.bash  # CLI bash completions
-│       ├── {projectname}-cli.zsh   # CLI zsh completions
-│       └── {projectname}-cli.fish  # CLI fish completions
+├── scripts/                # Production/install scripts (if any)
 ├── tests/                  # All development/test scripts and files
 │   ├── run_tests.sh        # Auto-detect and run tests (REQUIRED)
 │   ├── docker.sh           # Beta testing with Docker (REQUIRED)
@@ -3965,7 +3874,7 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 ├── LICENSE.md              # MIT + embedded licenses
 ├── AI.md                   # Project specification
 ├── TODO.AI.md              # Task tracking for 3+ tasks
-├── PLAN.md                 # Implementation plan (optional)
+├── PLAN.AI.md                 # Implementation plan (optional)
 ├── Jenkinsfile             # Jenkins pipeline
 └── release.txt             # Version tracking
 ```
@@ -4255,18 +4164,17 @@ cd /path/to/project && docker build -f docker/Dockerfile .
 
 | Rule | Description |
 |------|-------------|
-| **Minimum Version** | Go 1.23+ (latest stable at time of project creation) |
-| **Always Latest Stable** | Use latest stable Go version when starting new projects |
+| **Always Latest Stable** | Use latest stable Go version (never hardcode specific version in docs) |
 | **Build Only** | Go is only for building, not runtime (single static binary) |
-| **go.mod** | Set `go 1.23` or higher in go.mod |
-| **Docker** | Use `golang:alpine` for builds, Incus for debugging (always latest Go) |
+| **go.mod** | Set to current latest stable version |
+| **Docker** | Use `golang:alpine` for builds (always has latest stable Go) |
 | **No Pinning** | Don't pin to patch versions unless compatibility issue |
 
 **go.mod Example:**
 ```
-module github.com/{projectorg}/{projectname}
+module github.com/apimgr/vidveil
 
-go 1.23
+go 1.xx  // Use current latest stable version
 
 require (
     // dependencies...
@@ -4392,9 +4300,9 @@ require modernc.org/sqlite v1.29.1
 ### Example go.mod
 
 ```go
-module github.com/{projectorg}/{projectname}
+module github.com/apimgr/vidveil
 
-go 1.24
+go 1.xx  // Use current latest stable version
 
 require (
 	// Database drivers
@@ -4552,36 +4460,36 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `/usr/local/bin/{projectname}` |
-| Config | `/etc/{projectorg}/{projectname}/` |
-| Config File | `/etc/{projectorg}/{projectname}/server.yml` |
-| Data | `/var/lib/{projectorg}/{projectname}/` |
-| Cache | `/var/cache/{projectorg}/{projectname}/` |
-| Logs | `/var/log/{projectorg}/{projectname}/` |
-| Log File | `/var/log/{projectorg}/{projectname}/server.log` |
-| Backup | `/mnt/Backups/{projectorg}/{projectname}/` |
-| PID File | `/var/run/{projectorg}/{projectname}.pid` |
-| SSL | `/etc/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
-| Security | `/etc/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `/var/lib/{projectorg}/{projectname}/db/` |
-| Service | `/etc/systemd/system/{projectname}.service` |
+| Binary | `/usr/local/bin/vidveil` |
+| Config | `/etc/apimgr/vidveil/` |
+| Config File | `/etc/apimgr/vidveil/server.yml` |
+| Data | `/var/lib/apimgr/vidveil/` |
+| Cache | `/var/cache/apimgr/vidveil/` |
+| Logs | `/var/log/apimgr/vidveil/` |
+| Log File | `/var/log/apimgr/vidveil/server.log` |
+| Backup | `/mnt/Backups/apimgr/vidveil/` |
+| PID File | `/var/run/apimgr/vidveil.pid` |
+| SSL | `/etc/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
+| Security | `/etc/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `/var/lib/apimgr/vidveil/db/` |
+| Service | `/etc/systemd/system/vidveil.service` |
 
 ### User (non-privileged)
 
 | Type | Path |
 |------|------|
-| Binary | `~/.local/bin/{projectname}` |
-| Config | `~/.config/{projectorg}/{projectname}/` |
-| Config File | `~/.config/{projectorg}/{projectname}/server.yml` |
-| Data | `~/.local/share/{projectorg}/{projectname}/` |
-| Cache | `~/.cache/{projectorg}/{projectname}/` |
-| Logs | `~/.local/log/{projectorg}/{projectname}/` |
-| Log File | `~/.local/log/{projectorg}/{projectname}/server.log` |
-| Backup | `~/.local/share/Backups/{projectorg}/{projectname}/` |
-| PID File | `~/.local/share/{projectorg}/{projectname}/{projectname}.pid` |
-| SSL | `~/.config/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
-| Security | `~/.config/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `~/.local/share/{projectorg}/{projectname}/db/` |
+| Binary | `~/.local/bin/vidveil` |
+| Config | `~/.config/apimgr/vidveil/` |
+| Config File | `~/.config/apimgr/vidveil/server.yml` |
+| Data | `~/.local/share/apimgr/vidveil/` |
+| Cache | `~/.cache/apimgr/vidveil/` |
+| Logs | `~/.local/log/apimgr/vidveil/` |
+| Log File | `~/.local/log/apimgr/vidveil/server.log` |
+| Backup | `~/.local/share/Backups/apimgr/vidveil/` |
+| PID File | `~/.local/share/apimgr/vidveil/vidveil.pid` |
+| SSL | `~/.config/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
+| Security | `~/.config/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `~/.local/share/apimgr/vidveil/db/` |
 
 ---
 
@@ -4591,37 +4499,37 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `/usr/local/bin/{projectname}` |
-| Config | `/Library/Application Support/{projectorg}/{projectname}/` |
-| Config File | `/Library/Application Support/{projectorg}/{projectname}/server.yml` |
-| Data | `/Library/Application Support/{projectorg}/{projectname}/data/` |
-| Cache | `/Library/Caches/{projectorg}/{projectname}/` |
-| Logs | `/Library/Logs/{projectorg}/{projectname}/` |
-| Log File | `/Library/Logs/{projectorg}/{projectname}/server.log` |
-| Backup | `/Library/Backups/{projectorg}/{projectname}/` |
-| PID File | `/var/run/{projectorg}/{projectname}.pid` |
-| SSL | `/Library/Application Support/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
-| Security | `/Library/Application Support/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `/Library/Application Support/{projectorg}/{projectname}/db/` |
-| Service | `/Library/LaunchDaemons/com.{projectorg}.{projectname}.plist` |
+| Binary | `/usr/local/bin/vidveil` |
+| Config | `/Library/Application Support/apimgr/vidveil/` |
+| Config File | `/Library/Application Support/apimgr/vidveil/server.yml` |
+| Data | `/Library/Application Support/apimgr/vidveil/data/` |
+| Cache | `/Library/Caches/apimgr/vidveil/` |
+| Logs | `/Library/Logs/apimgr/vidveil/` |
+| Log File | `/Library/Logs/apimgr/vidveil/server.log` |
+| Backup | `/Library/Backups/apimgr/vidveil/` |
+| PID File | `/var/run/apimgr/vidveil.pid` |
+| SSL | `/Library/Application Support/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
+| Security | `/Library/Application Support/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `/Library/Application Support/apimgr/vidveil/db/` |
+| Service | `/Library/LaunchDaemons/com.apimgr.vidveil.plist` |
 
 ### User (non-privileged)
 
 | Type | Path |
 |------|------|
-| Binary | `~/bin/{projectname}` or `/usr/local/bin/{projectname}` |
-| Config | `~/Library/Application Support/{projectorg}/{projectname}/` |
-| Config File | `~/Library/Application Support/{projectorg}/{projectname}/server.yml` |
-| Data | `~/Library/Application Support/{projectorg}/{projectname}/` |
-| Cache | `~/Library/Caches/{projectorg}/{projectname}/` |
-| Logs | `~/Library/Logs/{projectorg}/{projectname}/` |
-| Log File | `~/Library/Logs/{projectorg}/{projectname}/server.log` |
-| Backup | `~/Library/Backups/{projectorg}/{projectname}/` |
-| PID File | `~/Library/Application Support/{projectorg}/{projectname}/{projectname}.pid` |
-| SSL | `~/Library/Application Support/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
-| Security | `~/Library/Application Support/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `~/Library/Application Support/{projectorg}/{projectname}/db/` |
-| Service | `~/Library/LaunchAgents/com.{projectorg}.{projectname}.plist` |
+| Binary | `~/bin/vidveil` or `/usr/local/bin/vidveil` |
+| Config | `~/Library/Application Support/apimgr/vidveil/` |
+| Config File | `~/Library/Application Support/apimgr/vidveil/server.yml` |
+| Data | `~/Library/Application Support/apimgr/vidveil/` |
+| Cache | `~/Library/Caches/apimgr/vidveil/` |
+| Logs | `~/Library/Logs/apimgr/vidveil/` |
+| Log File | `~/Library/Logs/apimgr/vidveil/server.log` |
+| Backup | `~/Library/Backups/apimgr/vidveil/` |
+| PID File | `~/Library/Application Support/apimgr/vidveil/vidveil.pid` |
+| SSL | `~/Library/Application Support/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
+| Security | `~/Library/Application Support/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `~/Library/Application Support/apimgr/vidveil/db/` |
+| Service | `~/Library/LaunchAgents/com.apimgr.vidveil.plist` |
 
 ---
 
@@ -4631,36 +4539,36 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `/usr/local/bin/{projectname}` |
-| Config | `/usr/local/etc/{projectorg}/{projectname}/` |
-| Config File | `/usr/local/etc/{projectorg}/{projectname}/server.yml` |
-| Data | `/var/db/{projectorg}/{projectname}/` |
-| Cache | `/var/cache/{projectorg}/{projectname}/` |
-| Logs | `/var/log/{projectorg}/{projectname}/` |
-| Log File | `/var/log/{projectorg}/{projectname}/server.log` |
-| Backup | `/var/backups/{projectorg}/{projectname}/` |
-| PID File | `/var/run/{projectorg}/{projectname}.pid` |
-| SSL | `/usr/local/etc/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
-| Security | `/usr/local/etc/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `/var/db/{projectorg}/{projectname}/db/` |
-| Service | `/usr/local/etc/rc.d/{projectname}` |
+| Binary | `/usr/local/bin/vidveil` |
+| Config | `/usr/local/etc/apimgr/vidveil/` |
+| Config File | `/usr/local/etc/apimgr/vidveil/server.yml` |
+| Data | `/var/db/apimgr/vidveil/` |
+| Cache | `/var/cache/apimgr/vidveil/` |
+| Logs | `/var/log/apimgr/vidveil/` |
+| Log File | `/var/log/apimgr/vidveil/server.log` |
+| Backup | `/var/backups/apimgr/vidveil/` |
+| PID File | `/var/run/apimgr/vidveil.pid` |
+| SSL | `/usr/local/etc/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
+| Security | `/usr/local/etc/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `/var/db/apimgr/vidveil/db/` |
+| Service | `/usr/local/etc/rc.d/vidveil` |
 
 ### User (non-privileged)
 
 | Type | Path |
 |------|------|
-| Binary | `~/.local/bin/{projectname}` |
-| Config | `~/.config/{projectorg}/{projectname}/` |
-| Config File | `~/.config/{projectorg}/{projectname}/server.yml` |
-| Data | `~/.local/share/{projectorg}/{projectname}/` |
-| Cache | `~/.cache/{projectorg}/{projectname}/` |
-| Logs | `~/.local/log/{projectorg}/{projectname}/` |
-| Log File | `~/.local/log/{projectorg}/{projectname}/server.log` |
-| Backup | `~/.local/share/Backups/{projectorg}/{projectname}/` |
-| PID File | `~/.local/share/{projectorg}/{projectname}/{projectname}.pid` |
-| SSL | `~/.config/{projectorg}/{projectname}/ssl/` (letsencrypt/, local/) |
-| Security | `~/.config/{projectorg}/{projectname}/security/` (geoip/, blocklists/, cve/, trivy/) |
-| SQLite DB | `~/.local/share/{projectorg}/{projectname}/db/` |
+| Binary | `~/.local/bin/vidveil` |
+| Config | `~/.config/apimgr/vidveil/` |
+| Config File | `~/.config/apimgr/vidveil/server.yml` |
+| Data | `~/.local/share/apimgr/vidveil/` |
+| Cache | `~/.cache/apimgr/vidveil/` |
+| Logs | `~/.local/log/apimgr/vidveil/` |
+| Log File | `~/.local/log/apimgr/vidveil/server.log` |
+| Backup | `~/.local/share/Backups/apimgr/vidveil/` |
+| PID File | `~/.local/share/apimgr/vidveil/vidveil.pid` |
+| SSL | `~/.config/apimgr/vidveil/ssl/` (letsencrypt/, local/) |
+| Security | `~/.config/apimgr/vidveil/security/` (geoip/, blocklists/, cve/, trivy/) |
+| SQLite DB | `~/.local/share/apimgr/vidveil/db/` |
 
 ---
 
@@ -4670,34 +4578,34 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `C:\Program Files\{projectorg}\{projectname}\{projectname}.exe` |
-| Config | `%ProgramData%\{projectorg}\{projectname}\` |
-| Config File | `%ProgramData%\{projectorg}\{projectname}\server.yml` |
-| Data | `%ProgramData%\{projectorg}\{projectname}\data\` |
-| Cache | `%ProgramData%\{projectorg}\{projectname}\cache\` |
-| Logs | `%ProgramData%\{projectorg}\{projectname}\logs\` |
-| Log File | `%ProgramData%\{projectorg}\{projectname}\logs\server.log` |
-| Backup | `%ProgramData%\Backups\{projectorg}\{projectname}\` |
-| SSL | `%ProgramData%\{projectorg}\{projectname}\ssl\` (letsencrypt\, local\) |
-| Security | `%ProgramData%\{projectorg}\{projectname}\security\` (geoip\, blocklists\, cve\, trivy\) |
-| SQLite DB | `%ProgramData%\{projectorg}\{projectname}\db\` |
+| Binary | `C:\Program Files\apimgr\vidveil\vidveil.exe` |
+| Config | `%ProgramData%\apimgr\vidveil\` |
+| Config File | `%ProgramData%\apimgr\vidveil\server.yml` |
+| Data | `%ProgramData%\apimgr\vidveil\data\` |
+| Cache | `%ProgramData%\apimgr\vidveil\cache\` |
+| Logs | `%ProgramData%\apimgr\vidveil\logs\` |
+| Log File | `%ProgramData%\apimgr\vidveil\logs\server.log` |
+| Backup | `%ProgramData%\Backups\apimgr\vidveil\` |
+| SSL | `%ProgramData%\apimgr\vidveil\ssl\` (letsencrypt\, local\) |
+| Security | `%ProgramData%\apimgr\vidveil\security\` (geoip\, blocklists\, cve\, trivy\) |
+| SQLite DB | `%ProgramData%\apimgr\vidveil\db\` |
 | Service | Windows Service Manager |
 
 ### User (non-privileged)
 
 | Type | Path |
 |------|------|
-| Binary | `%LocalAppData%\{projectorg}\{projectname}\{projectname}.exe` |
-| Config | `%AppData%\{projectorg}\{projectname}\` |
-| Config File | `%AppData%\{projectorg}\{projectname}\server.yml` |
-| Data | `%LocalAppData%\{projectorg}\{projectname}\` |
-| Cache | `%LocalAppData%\{projectorg}\{projectname}\cache\` |
-| Logs | `%LocalAppData%\{projectorg}\{projectname}\logs\` |
-| Log File | `%LocalAppData%\{projectorg}\{projectname}\logs\server.log` |
-| Backup | `%LocalAppData%\Backups\{projectorg}\{projectname}\` |
-| SSL | `%AppData%\{projectorg}\{projectname}\ssl\` (letsencrypt\, local\) |
-| Security | `%AppData%\{projectorg}\{projectname}\security\` (geoip\, blocklists\, cve\, trivy\) |
-| SQLite DB | `%LocalAppData%\{projectorg}\{projectname}\db\` |
+| Binary | `%LocalAppData%\apimgr\vidveil\vidveil.exe` |
+| Config | `%AppData%\apimgr\vidveil\` |
+| Config File | `%AppData%\apimgr\vidveil\server.yml` |
+| Data | `%LocalAppData%\apimgr\vidveil\` |
+| Cache | `%LocalAppData%\apimgr\vidveil\cache\` |
+| Logs | `%LocalAppData%\apimgr\vidveil\logs\` |
+| Log File | `%LocalAppData%\apimgr\vidveil\logs\server.log` |
+| Backup | `%LocalAppData%\Backups\apimgr\vidveil\` |
+| SSL | `%AppData%\apimgr\vidveil\ssl\` (letsencrypt\, local\) |
+| Security | `%AppData%\apimgr\vidveil\security\` (geoip\, blocklists\, cve\, trivy\) |
+| SQLite DB | `%LocalAppData%\apimgr\vidveil\db\` |
 
 ---
 
@@ -4705,16 +4613,16 @@ Before proceeding, confirm you understand:
 
 | Type | Path |
 |------|------|
-| Binary | `/usr/local/bin/{projectname}` |
-| Config | `/config/{projectname}/` |
-| Config File | `/config/{projectname}/server.yml` |
-| Security DBs | `/config/{projectname}/security/` (geoip, blocklists, cve, trivy) |
-| Data | `/data/{projectname}/` |
-| Cache | `/data/{projectname}/cache/` |
-| Logs | `/data/log/{projectname}/` |
-| Log File | `/data/log/{projectname}/server.log` |
+| Binary | `/usr/local/bin/vidveil` |
+| Config | `/config/vidveil/` |
+| Config File | `/config/vidveil/server.yml` |
+| Security DBs | `/config/vidveil/security/` (geoip, blocklists, cve, trivy) |
+| Data | `/data/vidveil/` |
+| Cache | `/data/vidveil/cache/` |
+| Logs | `/data/log/vidveil/` |
+| Log File | `/data/log/vidveil/server.log` |
 | SQLite DB | `/data/db/{dbtype}/` |
-| Backup | `/data/backups/{projectname}/` |
+| Backup | `/data/backups/vidveil/` |
 | Internal Port | `80` |
 
 ---
@@ -4725,7 +4633,7 @@ Before proceeding, confirm you understand:
 - [ ] Each OS has specific paths for privileged and non-privileged users
 - [ ] Config file is ALWAYS `server.yml` (not .yaml)
 - [ ] Docker uses simplified paths (/config, /data)
-- [ ] All paths follow the {projectorg}/{projectname} pattern
+- [ ] All paths follow the apimgr/vidveil pattern
 
 ---
 
@@ -4757,6 +4665,278 @@ port: 8080
 - `docker-compose.yml` files
 - All YAML in the project
 - All code examples in documentation
+
+## Path Normalization & Validation (NON-NEGOTIABLE)
+
+**All paths MUST be normalized and validated. This is a GLOBAL security rule for all binaries (server, agent, cli) and applies to:**
+- Configuration values (admin_path, static_path, etc.)
+- HTTP request paths
+- File paths
+- API parameters containing paths
+
+### Path Security Functions
+
+```go
+import (
+    "errors"
+    "path"
+    "regexp"
+    "strings"
+)
+
+var (
+    ErrPathTraversal   = errors.New("path traversal attempt detected")
+    ErrInvalidPath     = errors.New("invalid path characters")
+    ErrPathTooLong     = errors.New("path exceeds maximum length")
+
+    // Valid path segment: lowercase alphanumeric, hyphens, underscores
+    validPathSegment = regexp.MustCompile(`^[a-z0-9_-]+$`)
+)
+
+// normalizePath cleans a path for safe use
+// - Strips leading/trailing slashes
+// - Collapses multiple slashes (// → /)
+// - Removes path traversal (.., .)
+// - Returns empty string for invalid input
+func normalizePath(input string) string {
+    // Handle empty
+    if input == "" {
+        return ""
+    }
+
+    // Use path.Clean to handle .., ., and //
+    cleaned := path.Clean(input)
+
+    // Strip leading/trailing slashes
+    cleaned = strings.Trim(cleaned, "/")
+
+    // Reject if still contains .. after cleaning (shouldn't happen, but be safe)
+    if strings.Contains(cleaned, "..") {
+        return ""
+    }
+
+    return cleaned
+}
+
+// validatePathSegment checks a single path segment (e.g., "admin" in "/admin/dashboard")
+func validatePathSegment(segment string) error {
+    if segment == "" {
+        return ErrInvalidPath
+    }
+    if len(segment) > 64 {
+        return ErrPathTooLong
+    }
+    if !validPathSegment.MatchString(segment) {
+        return ErrInvalidPath
+    }
+    if segment == "." || segment == ".." {
+        return ErrPathTraversal
+    }
+    return nil
+}
+
+// validatePath checks an entire path
+func validatePath(p string) error {
+    if len(p) > 2048 {
+        return ErrPathTooLong
+    }
+
+    // Check for traversal attempts before normalization
+    if strings.Contains(p, "..") {
+        return ErrPathTraversal
+    }
+
+    // Check each segment
+    segments := strings.Split(strings.Trim(p, "/"), "/")
+    for _, seg := range segments {
+        if seg == "" {
+            continue // Skip empty (from //)
+        }
+        if err := validatePathSegment(seg); err != nil {
+            return err
+        }
+    }
+
+    return nil
+}
+
+// SafePath normalizes and validates - returns error if invalid
+func SafePath(input string) (string, error) {
+    if err := validatePath(input); err != nil {
+        return "", err
+    }
+    return normalizePath(input), nil
+}
+```
+
+### Normalization Examples
+
+| Input | Normalized | Valid |
+|-------|------------|-------|
+| `/myadmin/` | `myadmin` | ✓ |
+| `//admin` | `admin` | ✓ |
+| `/my//admin` | `my/admin` | ✓ |
+| `///a//b///` | `a/b` | ✓ |
+| `/../admin` | ✗ rejected | Path traversal |
+| `/admin/../secret` | ✗ rejected | Path traversal |
+| `/admin/..` | ✗ rejected | Path traversal |
+| `....` | ✗ rejected | Invalid chars |
+| `/Admin` | ✗ rejected | Uppercase not allowed |
+| `/admin/<script>` | ✗ rejected | Invalid chars |
+
+### Apply Everywhere (NON-NEGOTIABLE)
+
+**Configuration paths:**
+```go
+func (c *Config) SetAdminPath(input string) error {
+    safe, err := SafePath(input)
+    if err != nil {
+        return fmt.Errorf("invalid admin_path: %w", err)
+    }
+    c.AdminPath = safe
+    return nil
+}
+```
+
+**CLI flags:**
+```go
+func parseFlags() error {
+    dataDir := flag.String("data", "/var/lib/app", "Data directory")
+    flag.Parse()
+
+    safe, err := SafePath(*dataDir)
+    if err != nil {
+        return fmt.Errorf("invalid --data path: %w", err)
+    }
+    cfg.DataDir = safe
+    return nil
+}
+```
+
+**API parameters:**
+```go
+func handleFileRequest(w http.ResponseWriter, r *http.Request) {
+    filename := r.URL.Query().Get("file")
+
+    safe, err := SafePath(filename)
+    if err != nil {
+        http.Error(w, "Invalid path", http.StatusBadRequest)
+        return
+    }
+
+    // Safe to use
+    fullPath := filepath.Join(cfg.DataDir, safe)
+    // ...
+}
+```
+
+### HTTP Request Path Middleware (NON-NEGOTIABLE)
+
+**This middleware MUST be first in the chain - before auth, before routing.**
+
+```go
+// PathSecurityMiddleware normalizes paths and blocks traversal attempts
+func PathSecurityMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        original := r.URL.Path
+
+        // Check both raw path and URL-decoded for traversal
+        // Note: r.URL.Path is already decoded by net/http, but check RawPath too
+        rawPath := r.URL.RawPath
+        if rawPath == "" {
+            rawPath = r.URL.Path
+        }
+
+        // Block path traversal attempts (encoded and decoded)
+        // %2e = . so %2e%2e = ..
+        if strings.Contains(original, "..") ||
+            strings.Contains(rawPath, "..") ||
+            strings.Contains(strings.ToLower(rawPath), "%2e") {
+            http.Error(w, "Bad Request", http.StatusBadRequest)
+            return
+        }
+
+        // Normalize the path
+        cleaned := path.Clean(original)
+
+        // Ensure leading slash
+        if !strings.HasPrefix(cleaned, "/") {
+            cleaned = "/" + cleaned
+        }
+
+        // Preserve trailing slash for directory paths
+        if original != "/" && strings.HasSuffix(original, "/") && !strings.HasSuffix(cleaned, "/") {
+            cleaned += "/"
+        }
+
+        // Update request
+        r.URL.Path = cleaned
+
+        next.ServeHTTP(w, r)
+    })
+}
+```
+
+**Request examples:**
+
+| Request | Result | Status |
+|---------|--------|--------|
+| `GET /admin//dashboard` | `/admin/dashboard` | 200 |
+| `GET //api///v1//users` | `/api/v1/users` | 200 |
+| `GET ///` | `/` | 200 |
+| `GET /static/../admin` | Blocked | 400 |
+| `GET /api/v1/files/..%2F..%2Fetc/passwd` | Blocked | 400 |
+| `GET /admin/....//secret` | Blocked | 400 |
+
+### File Path Security (NON-NEGOTIABLE)
+
+**When constructing file paths from user input, ALWAYS validate the result stays within bounds:**
+
+```go
+// SafeFilePath ensures path stays within base directory
+func SafeFilePath(baseDir, userPath string) (string, error) {
+    // Normalize user input
+    safe, err := SafePath(userPath)
+    if err != nil {
+        return "", err
+    }
+
+    // Construct full path
+    fullPath := filepath.Join(baseDir, safe)
+
+    // Resolve to absolute
+    absPath, err := filepath.Abs(fullPath)
+    if err != nil {
+        return "", err
+    }
+
+    absBase, err := filepath.Abs(baseDir)
+    if err != nil {
+        return "", err
+    }
+
+    // Verify path is still within base
+    if !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) && absPath != absBase {
+        return "", ErrPathTraversal
+    }
+
+    return absPath, nil
+}
+```
+
+### Middleware Order (NON-NEGOTIABLE)
+
+```go
+func setupMiddleware(handler http.Handler) http.Handler {
+    // Order matters - security first!
+    handler = LoggingMiddleware(handler)           // 5. Log requests
+    handler = AuthMiddleware(handler)              // 4. Check auth
+    handler = RateLimitMiddleware(handler)         // 3. Rate limiting
+    handler = SecurityHeadersMiddleware(handler)  // 2. Add security headers
+    handler = PathSecurityMiddleware(handler)     // 1. FIRST - normalize & validate paths
+    return handler
+}
+```
 
 ## Configuration Storage
 
@@ -5501,8 +5681,8 @@ func (req *CreateUserRequest) Parse() (*User, error) {
 
 | User Type | Path |
 |-----------|------|
-| Root | `/etc/{projectorg}/{projectname}/server.yml` |
-| Regular | `~/.config/{projectorg}/{projectname}/server.yml` |
+| Root | `/etc/apimgr/vidveil/server.yml` |
+| Regular | `~/.config/apimgr/vidveil/server.yml` |
 
 ### Migration
 
@@ -5630,7 +5810,7 @@ server:
 
   # Branding & SEO - see PART 16 for full details
   branding:
-    title: "{projectname}"
+    title: "vidveil"
     tagline: ""
     description: ""
   seo:
@@ -6279,7 +6459,7 @@ import (
     "runtime"
     "strings"
 
-    "github.com/{projectorg}/{projectname}/src/config"
+    "github.com/apimgr/vidveil/src/config"
 )
 
 var (
@@ -6530,57 +6710,371 @@ data:
 - MMDB format (same as MaxMind, compatible with existing Go libraries)
 - IPv4 and IPv6 support
 
+## Display Environment Detection (NON-NEGOTIABLE)
+
+**ALL binaries (server, CLI, agent) MUST detect display environment and adapt output accordingly.**
+
+### Display Mode Hierarchy
+
+| Mode | When Used | Requirements |
+|------|-----------|--------------|
+| **GUI** | Native display available, CLI binary only | X11, Wayland, Windows, macOS |
+| **TUI** | Terminal available, interactive | TTY, SSH, mosh, screen, tmux |
+| **CLI** | Command provided or piped output | Any environment |
+| **Headless** | No display, no TTY | Daemon, service, cron |
+
+### Platform Detection
+
+| Platform | Display Check | Notes |
+|----------|---------------|-------|
+| **Linux/BSD** | `WAYLAND_DISPLAY` or `DISPLAY` | Wayland preferred over X11 |
+| **macOS** | Always (unless SSH) | Native Cocoa display |
+| **Windows** | Always (unless service) | Native Win32 display |
+| **SSH/Mosh** | `SSH_CLIENT`, `SSH_TTY`, `MOSH` | No GUI, TUI or CLI only |
+
+### Terminal Detection
+
+```go
+// src/common/display/detect.go
+package display
+
+import (
+    "os"
+    "golang.org/x/term"
+)
+
+type DisplayEnv struct {
+    HasDisplay    bool   // X11, Wayland, Windows, macOS
+    DisplayType   string // "x11", "wayland", "windows", "macos", "none"
+    IsTerminal    bool   // stdout is a TTY
+    IsSSH         bool   // Running over SSH
+    IsMosh        bool   // Running over mosh
+    Cols          int    // Terminal columns (0 if no terminal)
+    Rows          int    // Terminal rows (0 if no terminal)
+}
+
+func Detect() DisplayEnv {
+    env := DisplayEnv{}
+
+    // Terminal detection
+    env.IsTerminal = term.IsTerminal(int(os.Stdout.Fd()))
+    if env.IsTerminal {
+        env.Cols, env.Rows, _ = term.GetSize(int(os.Stdout.Fd()))
+    }
+
+    // Remote session detection
+    env.IsSSH = os.Getenv("SSH_CLIENT") != "" || os.Getenv("SSH_TTY") != ""
+    env.IsMosh = os.Getenv("MOSH") != ""
+
+    // Platform-specific display detection
+    env.detectPlatformDisplay()
+
+    return env
+}
+```
+
+### Binary-Specific Behavior
+
+| Binary | GUI | TUI | CLI | Headless |
+|--------|-----|-----|-----|----------|
+| **Server** | ❌ | Banner/status only | Commands | Default (daemon) |
+| **CLI** | ✅ (optional) | ✅ (interactive) | ✅ (commands) | ❌ |
+| **Agent** | ❌ | Status only | Commands | Default (service) |
+
+**See PART 36 for full CLI/TUI/GUI mode implementation details.**
+
+## Common Go Modules (NON-NEGOTIABLE)
+
+**Shared packages used by server, CLI, and agent binaries:**
+
+### Module Structure
+
+```
+src/
+├── common/                          # Shared across all binaries
+│   ├── display/                     # Display/terminal detection
+│   │   ├── detect.go                # Core detection logic
+│   │   ├── detect_unix.go           # Linux/BSD/macOS detection
+│   │   ├── detect_windows.go        # Windows detection
+│   │   └── mode.go                  # DisplayMode type and helpers
+│   ├── theme/                       # Unified theming
+│   │   ├── colors.go                # Palette definition (Dark/Light)
+│   │   ├── detect.go                # System theme detection
+│   │   └── css.go                   # CSS variable generation
+│   ├── terminal/                    # Terminal utilities
+│   │   ├── size.go                  # Terminal size and breakpoints
+│   │   ├── resize.go                # SIGWINCH handling
+│   │   └── symbols.go               # Unicode/ASCII symbols
+│   ├── banner/                      # Startup banner
+│   │   ├── banner.go                # Responsive banner printing
+│   │   └── ascii.go                 # ASCII art generation
+│   └── version/                     # Version info
+│       └── version.go               # Build info, version strings
+├── server/                          # Server binary
+├── client/                          # CLI binary
+│   ├── cli/                         # CLI mode
+│   ├── tui/                         # TUI mode (bubbletea)
+│   └── gui/                         # GUI mode (native)
+└── agent/                           # Agent binary
+    ├── cli/                         # Agent CLI commands
+    └── collector/                   # Metrics/data collection
+```
+
+### Go Module Imports
+
+```go
+// go.mod
+module apimgr/vidveil
+
+go 1.xx  // Use current latest stable version
+
+require (
+    // Terminal/TUI
+    golang.org/x/term v0.27.0
+    github.com/charmbracelet/bubbletea v1.2.4
+    github.com/charmbracelet/bubbles v0.20.0
+    github.com/charmbracelet/lipgloss v1.0.0
+
+    // CLI
+    github.com/spf13/cobra v1.8.1
+    github.com/spf13/viper v1.19.0
+
+    // GUI (build tag: gui)
+    // Linux: github.com/diamondburned/gotk4/pkg/gtk/v4
+    // macOS: uses cgo with Cocoa
+    // Windows: uses cgo with Win32
+
+    // Common
+    github.com/rs/zerolog v1.33.0
+    gopkg.in/yaml.v3 v3.0.1
+)
+```
+
+### Display Package
+
+```go
+// src/common/display/mode.go
+package display
+
+type Mode int
+
+const (
+    ModeHeadless Mode = iota
+    ModeCLI
+    ModeTUI
+    ModeGUI
+)
+
+func (m Mode) String() string {
+    return [...]string{"headless", "cli", "tui", "gui"}[m]
+}
+
+func (m Mode) SupportsInteraction() bool {
+    return m >= ModeTUI
+}
+
+func (m Mode) SupportsColors() bool {
+    return m >= ModeCLI
+}
+```
+
+### Terminal Package
+
+```go
+// src/common/terminal/size.go
+package terminal
+
+import (
+    "os"
+    "golang.org/x/term"
+)
+
+type SizeMode int
+
+const (
+    SizeModeMicro     SizeMode = iota // <40 cols or <10 rows
+    SizeModeMinimal                    // 40-59 cols or 10-15 rows
+    SizeModeCompact                    // 60-79 cols or 16-23 rows
+    SizeModeStandard                   // 80-119 cols and 24-39 rows
+    SizeModeWide                       // 120-199 cols and 40-59 rows
+    SizeModeUltrawide                  // 200-399 cols and 60-79 rows
+    SizeModeMassive                    // 400+ cols and 80+ rows
+)
+
+type Size struct {
+    Cols int
+    Rows int
+    Mode SizeMode
+}
+
+func GetSize() Size {
+    cols, rows, _ := term.GetSize(int(os.Stdout.Fd()))
+    if cols == 0 { cols = 80 }
+    if rows == 0 { rows = 24 }
+
+    return Size{
+        Cols: cols,
+        Rows: rows,
+        Mode: calculateMode(cols, rows),
+    }
+}
+
+func calculateMode(cols, rows int) SizeMode {
+    switch {
+    case cols < 40 || rows < 10:
+        return SizeModeMicro
+    case cols < 60 || rows < 16:
+        return SizeModeMinimal
+    case cols < 80 || rows < 24:
+        return SizeModeCompact
+    case cols < 120 || rows < 40:
+        return SizeModeStandard
+    case cols < 200 || rows < 60:
+        return SizeModeWide
+    case cols < 400 || rows < 80:
+        return SizeModeUltrawide
+    default:
+        return SizeModeMassive
+    }
+}
+
+func (s SizeMode) ShowASCIIArt() bool    { return s >= SizeModeStandard }
+func (s SizeMode) ShowBorders() bool     { return s >= SizeModeCompact }
+func (s SizeMode) ShowSidebar() bool     { return s >= SizeModeWide }
+func (s SizeMode) ShowIcons() bool       { return s >= SizeModeMinimal }
+```
+
+### Theme Package
+
+```go
+// src/common/theme/colors.go
+package theme
+
+type Palette struct {
+    Background, Foreground string
+    Primary, Secondary, Accent string
+    Success, Warning, Error, Info string
+    Surface, SurfaceAlt, Border, Muted string
+}
+
+var (
+    Dark = Palette{
+        Background: "#1a1b26", Foreground: "#c0caf5",
+        Primary: "#7aa2f7", Secondary: "#9ece6a", Accent: "#bb9af7",
+        Success: "#9ece6a", Warning: "#e0af68", Error: "#f7768e", Info: "#7dcfff",
+        Surface: "#24283b", SurfaceAlt: "#1f2335", Border: "#414868", Muted: "#565f89",
+    }
+    Light = Palette{
+        Background: "#ffffff", Foreground: "#1a1b26",
+        Primary: "#2e7de9", Secondary: "#587539", Accent: "#7847bd",
+        Success: "#587539", Warning: "#8c6c3e", Error: "#c64343", Info: "#007197",
+        Surface: "#f5f5f5", SurfaceAlt: "#e9e9ec", Border: "#c0caf5", Muted: "#6172b0",
+    }
+)
+
+func Get(mode string) Palette {
+    switch mode {
+    case "light": return Light
+    case "auto":
+        if DetectSystemDark() { return Dark }
+        return Light
+    default: return Dark
+    }
+}
+```
+
+### Banner Package
+
+```go
+// src/common/banner/banner.go
+package banner
+
+import (
+    "fmt"
+    "apimgr/vidveil/common/terminal"
+)
+
+type Config struct {
+    AppName    string
+    Version    string
+    Mode       string   // production/development
+    Debug      bool
+    URLs       []string
+    ShowSetup  bool     // Show setup token (server only, first run)
+    SetupToken string
+}
+
+func Print(cfg Config) {
+    size := terminal.GetSize()
+
+    switch {
+    case size.Mode >= terminal.SizeModeStandard:
+        printFull(cfg, size)
+    case size.Mode >= terminal.SizeModeCompact:
+        printCompact(cfg)
+    case size.Mode >= terminal.SizeModeMinimal:
+        printMinimal(cfg)
+    default:
+        printMicro(cfg)
+    }
+}
+```
+
 ---
 
 
 # PART 8: SERVER BINARY CLI (NON-NEGOTIABLE)
 
-**These are the command-line flags for the SERVER binary (`{projectname}`), NOT the CLI client (`{projectname}-cli`).**
+**These are the command-line flags for the SERVER binary (`vidveil`), NOT the CLI client (`vidveil-cli`).**
 
-## Two Different Binaries
+## Binary Types
 
-| Binary | Default Name | Purpose | Flags |
-|--------|--------------|---------|-------|
-| **Server** | `{projectname}` | Runs the HTTP server | `--config`, `--data`, `--log`, `--port`, `--mode`, etc. |
-| **CLI Client** | `{projectname}-cli` | Connects to server | `--server`, `--token`, `--output`, `--debug`, etc. |
+| Binary | Default Name | Purpose | Key Flags |
+|--------|--------------|---------|-----------|
+| **Server** | `vidveil` | Runs the HTTP server | `--config`, `--data`, `--port`, `--mode` |
+| **Agent** | `vidveil-agent` | Reports to server | `--server`, `--token`, `--config` |
+| **CLI Client** | `vidveil-cli` | User interface to server | `--server`, `--token`, `--output` |
 
-**Shared flags:** `--help` and `--version` (both binaries support these)
+**Shared flags (ALL binaries):** `--help`, `--version`, `--shell`, `--debug`
 
-**Binary naming rules:**
-- Both binaries can be renamed by users
-- Show ACTUAL binary name in user-facing places:
-  - `--help` and `--version` output
-  - Web UI titles, headers, command examples
-  - Error messages showing "run X --help"
-  - Any documentation/instructions shown to user
-- Hardcode `{projectname}` for internal identifiers:
-  - User-Agent header
-  - Default paths (`/etc/{projectorg}/{projectname}/`)
-  - Config keys, database tables
-  - API identifiers
-- Hardcode `{projectname}-cli` for: CLI client User-Agent
+**Binary naming rules (ALL binaries: server, agent, client):**
+
+| Binary | Default Name | User-Agent |
+|--------|--------------|------------|
+| Server | `vidveil` | `vidveil/{version}` |
+| Agent | `vidveil-agent` | `vidveil-agent/{version}` |
+| Client | `vidveil-cli` | `vidveil-cli/{version}` |
+
+**ALL binaries can be renamed by users. Must show ACTUAL binary name in:**
+- `--help` and `--version` output
+- Error messages showing "run X --help"
+- Any user-facing documentation/instructions
+
+**Hardcode `vidveil` for internal identifiers (never changes):**
+- User-Agent header (identifies binary type to server)
+- Default paths (`/etc/apimgr/vidveil/`)
+- Config keys, database tables, API identifiers
 
 **Get actual binary name:**
 ```go
-binaryName := filepath.Base(os.Args[0])
+binaryName := filepath.Base(os.Args[0])  // Use for display
+// User-Agent uses hardcoded project name, not binaryName
 ```
 
-**Example:**
+**Example (user renames `jokes` to `myapp`):**
 ```
-# User renames jokes to myapp
 $ myapp --help
 Usage: myapp [options]              # Shows actual name
 
-# Web UI shows:
-"myapp Admin Panel"                 # Shows actual name
-"Run: myapp --status"               # Shows actual name
+$ myapp --version
+myapp 1.0.0 (abc123)                # Shows actual name
 
 # But internally:
 User-Agent: jokes/1.0.0             # Hardcoded project name
 Default config: /etc/apimgr/jokes/  # Hardcoded project name
 ```
 
-**For CLI client flags, see PART 36.**
+**For CLI client and agent flags, see PART 36.**
 
 **THESE SERVER COMMANDS CANNOT BE CHANGED. This is the complete command set.**
 
@@ -6589,6 +7083,8 @@ Default config: /etc/apimgr/jokes/  # Hardcoded project name
 ```bash
 --help                       # Show help (can be run by anyone)
 --version                    # Show version (can be run by anyone)
+--shell completions [SHELL]  # Print shell completions (auto-detect if SHELL omitted)
+--shell init [SHELL]         # Print shell init for eval (auto-detect if SHELL omitted)
 --mode {production|development}  # Set application mode
 --config {config_dir}         # Set config directory
 --data {data_dir}             # Set data directory
@@ -6598,12 +7094,48 @@ Default config: /etc/apimgr/jokes/  # Hardcoded project name
 --pid {pid_file}              # Set PID file path
 --address {listen}           # Set listen address
 --port {port}                # Set the port
---status                     # Show status and health
+--status                     # Show status and health (exit 0=healthy, 1=unhealthy)
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
 --daemon                     # Daemonize (detach from terminal)
 --debug                      # Enable debug mode (verbose logging, debug endpoints)
 --maintenance {backup,restore,update,mode,setup} [optional-file-or-setting]
 --update [check|yes|branch {stable|beta|daily}]  # Check/perform updates
+```
+
+### Server --help Output
+
+```bash
+$ vidveil --help
+vidveil {projectversion} - {project description}
+
+Usage:
+  vidveil [flags]
+
+Flags:
+  -h, --help                        Show help
+  -v, --version                     Show version
+      --shell completions [SHELL]   Print shell completions (auto-detect if SHELL omitted)
+      --shell init [SHELL]          Print shell init command (auto-detect if SHELL omitted)
+
+      --mode {production|development}  Application mode (default: production)
+      --config DIR                  Config directory
+      --data DIR                    Data directory
+      --cache DIR                   Cache directory
+      --log DIR                     Log directory
+      --backup DIR                  Backup directory
+      --pid FILE                    PID file path
+      --address ADDR                Listen address (default: 0.0.0.0)
+      --port PORT                   Listen port (default: 8080)
+
+      --status                      Show server status and health
+      --daemon                      Run as daemon (detach from terminal)
+      --debug                       Enable debug mode
+
+      --service CMD                 Service management (start|stop|restart|reload|install|uninstall)
+      --maintenance CMD             Maintenance (backup|restore|update|mode|setup)
+      --update [CMD]                Check/perform updates
+
+Shells: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
 ```
 
 ## Directory Flags (NON-NEGOTIABLE)
@@ -6612,12 +7144,12 @@ Default config: /etc/apimgr/jokes/  # Hardcoded project name
 
 | Flag | Type | Default (Linux root) | Default (Linux user) |
 |------|------|----------------------|----------------------|
-| `--config` | Directory | `/etc/{projectorg}/{projectname}/` | `~/.config/{projectorg}/{projectname}/` |
-| `--data` | Directory | `/var/lib/{projectorg}/{projectname}/` | `~/.local/share/{projectorg}/{projectname}/` |
-| `--cache` | Directory | `/var/cache/{projectorg}/{projectname}/` | `~/.cache/{projectorg}/{projectname}/` |
-| `--log` | Directory | `/var/log/{projectorg}/{projectname}/` | `~/.local/log/{projectorg}/{projectname}/` |
-| `--backup` | Directory | `/mnt/Backups/{projectorg}/{projectname}/` (if writable) | `~/.local/share/Backups/{projectorg}/{projectname}/` |
-| `--pid` | File | `/var/run/{projectorg}/{projectname}.pid` | `~/.local/share/{projectorg}/{projectname}/{projectname}.pid` |
+| `--config` | Directory | `/etc/apimgr/vidveil/` | `~/.config/apimgr/vidveil/` |
+| `--data` | Directory | `/var/lib/apimgr/vidveil/` | `~/.local/share/apimgr/vidveil/` |
+| `--cache` | Directory | `/var/cache/apimgr/vidveil/` | `~/.cache/apimgr/vidveil/` |
+| `--log` | Directory | `/var/log/apimgr/vidveil/` | `~/.local/log/apimgr/vidveil/` |
+| `--backup` | Directory | `/mnt/Backups/apimgr/vidveil/` (if writable) | `~/.local/share/Backups/apimgr/vidveil/` |
+| `--pid` | File | `/var/run/apimgr/vidveil.pid` | `~/.local/share/apimgr/vidveil/vidveil.pid` |
 
 **Note:** `--backup` prefers system backup dir if writable, falls back to user dir. See `GetBackupDir()` in PART 5.
 
@@ -6729,7 +7261,7 @@ func isOurProcess(pid int) bool {
         // On macOS/BSD, use ps command
         return isOurProcessDarwin(pid)
     }
-    return strings.Contains(filepath.Base(exePath), "{projectname}")
+    return strings.Contains(filepath.Base(exePath), "vidveil")
 }
 
 // isOurProcessDarwin checks process on macOS/BSD
@@ -6739,7 +7271,7 @@ func isOurProcessDarwin(pid int) bool {
     if err != nil {
         return false
     }
-    return strings.Contains(string(output), "{projectname}")
+    return strings.Contains(string(output), "vidveil")
 }
 
 // --- pid_windows.go ---
@@ -6778,7 +7310,7 @@ func isOurProcess(pid int) bool {
         return false
     }
     exePath := windows.UTF16ToString(buf[:size])
-    return strings.Contains(strings.ToLower(filepath.Base(exePath)), "{projectname}")
+    return strings.Contains(strings.ToLower(filepath.Base(exePath)), "vidveil")
 }
 
 // WritePIDFile writes current process PID to file
@@ -6900,7 +7432,7 @@ func RemovePIDFile(pidPath string) error {
 - `/.dockerenv` exists
 - `container` env var set
 - Parent process is: `tini`, `dumb-init`, `s6-svscan`, `runsv`, `runsvdir`
-- Parent process is `{projectname}` (self - entrypoint wrapper)
+- Parent process is `vidveil` (self - entrypoint wrapper)
 
 **Manual Start Priority Order:**
 1. `--daemon` CLI flag (highest)
@@ -6930,7 +7462,7 @@ func detectServiceManager() string {
     switch parentName {
     case "tini", "dumb-init", "s6-svscan", "runsv", "runsvdir":
         return "container"
-    case "{projectname}":
+    case "vidveil":
         // Parent is our own binary - likely container entrypoint
         return "container"
     }
@@ -7145,6 +7677,23 @@ Daemon started with PID 12345
 
 $ ./myapp --status
 myapp is running (PID 12345)
+```
+
+**--status Exit Codes (NON-NEGOTIABLE):**
+
+| Exit Code | Meaning | When |
+|-----------|---------|------|
+| `0` | Healthy | Server running and responding |
+| `1` | Unhealthy | Server not running, not responding, or error |
+
+**Used for Docker/compose healthcheck:**
+```yaml
+healthcheck:
+  test: /usr/local/bin/vidveil --status
+  interval: 10s
+  timeout: 5s
+  retries: 3
+  start_period: 90s
 ```
 
 **Console Output (Windows):**
@@ -7879,15 +8428,19 @@ CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_type, actor_id);
 -- Scheduler (background task tracking)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS scheduler_tasks (
-    id          TEXT PRIMARY KEY,              -- Task name: "backup", "geoip_update", "cleanup"
+    id          TEXT PRIMARY KEY,              -- Task name: "backup_daily", "backup_hourly", "geoip_update", "cleanup"
+    name        TEXT NOT NULL,                 -- Human-readable: "Daily Backup", "Hourly Incremental"
+    task_type   TEXT NOT NULL DEFAULT 'global', -- global (one node) or local (all nodes)
     enabled     INTEGER NOT NULL DEFAULT 1,
     schedule    TEXT NOT NULL,                 -- Cron expression: "0 2 * * *"
     last_run    INTEGER,                       -- Unix timestamp
     next_run    INTEGER,                       -- Unix timestamp
-    last_status TEXT,                          -- success, failed, running
+    last_status TEXT,                          -- success, failed, running, skipped
     last_error  TEXT,                          -- Error message if failed
     run_count   INTEGER NOT NULL DEFAULT 0,
-    fail_count  INTEGER NOT NULL DEFAULT 0
+    fail_count  INTEGER NOT NULL DEFAULT 0,
+    locked_by   TEXT,                          -- Node ID holding lock (cluster mode)
+    locked_at   INTEGER                        -- When lock was acquired (cluster mode)
 );
 
 CREATE TABLE IF NOT EXISTS scheduler_history (
@@ -7957,6 +8510,38 @@ CREATE TABLE IF NOT EXISTS admins (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_username ON admins(username);
 
 -- ----------------------------------------------------------------------------
+-- Admin Preferences (settings storage for server admins)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS admin_preferences (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id    INTEGER NOT NULL UNIQUE,          -- FK to admins.id (one row per admin)
+
+    -- Appearance Settings
+    theme           TEXT NOT NULL DEFAULT 'dark', -- dark (default), light, auto
+    font_size       TEXT NOT NULL DEFAULT 'medium', -- small, medium, large
+    reduce_motion   INTEGER NOT NULL DEFAULT 0,   -- Minimize animations
+
+    -- Display Settings
+    date_format     TEXT NOT NULL DEFAULT 'YYYY-MM-DD', -- YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY
+    time_format     TEXT NOT NULL DEFAULT '24h',  -- 12h, 24h
+
+    -- Notification Settings (Email)
+    email_security  INTEGER NOT NULL DEFAULT 1,   -- Security alerts (CANNOT be disabled)
+    email_server    INTEGER NOT NULL DEFAULT 1,   -- Server alerts (SSL, updates, disk space)
+    email_backups   INTEGER NOT NULL DEFAULT 1,   -- Backup notifications
+    email_users     INTEGER NOT NULL DEFAULT 1,   -- User activity (if multi-user)
+
+    -- Timestamps
+    created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_preferences_admin ON admin_preferences(admin_id);
+
+-- Trigger to create preferences row when admin is created
+-- (Or handle in application code - create on first access)
+
+-- ----------------------------------------------------------------------------
 -- Regular Users (app users - ONLY if project has user accounts)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
@@ -8012,7 +8597,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     push_mentions   INTEGER NOT NULL DEFAULT 1,   -- Push when mentioned
 
     -- Appearance Settings
-    theme           TEXT NOT NULL DEFAULT 'system', -- light, dark, system
+    theme           TEXT NOT NULL DEFAULT 'dark', -- dark (default), light, auto
     font_size       TEXT NOT NULL DEFAULT 'medium', -- small, medium, large
     reduce_motion   INTEGER NOT NULL DEFAULT 0,   -- Minimize animations
 
@@ -8091,27 +8676,10 @@ CREATE TABLE IF NOT EXISTS org_preferences (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_org_preferences_org ON org_preferences(org_id);
 
 -- ----------------------------------------------------------------------------
--- API Keys (for API authentication)
+-- NOTE: API tokens are stored in the unified `tokens` table (see PART 10)
+-- The `tokens` table handles all token types: adm_, usr_, org_, and agent tokens
+-- Each token has: name, scope (global/read-write/read), expiration options
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS api_keys (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    key_hash    TEXT NOT NULL UNIQUE,          -- SHA256 of the key (never store plaintext)
-    key_prefix  TEXT NOT NULL,                 -- First 8 chars for identification: "abc12345..."
-    name        TEXT NOT NULL,                 -- Friendly name: "Production API"
-    owner_type  TEXT NOT NULL,                 -- admin, user
-    owner_id    INTEGER NOT NULL,              -- FK to admins or users
-    scopes      TEXT,                          -- JSON array: ["read", "write", "admin"]
-    rate_limit  INTEGER,                       -- Override default rate limit (requests/min)
-    enabled     INTEGER NOT NULL DEFAULT 1,
-    created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    expires_at  INTEGER,                       -- Null = never expires
-    last_used   INTEGER,
-    use_count   INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
-CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
-CREATE INDEX IF NOT EXISTS idx_api_keys_owner ON api_keys(owner_type, owner_id);
 
 -- ----------------------------------------------------------------------------
 -- Password Reset Tokens
@@ -8345,7 +8913,7 @@ func categorizeChanges(changes []string) (hotReload, needsRestart []string) {
 **Admin UI Restart Notification:**
 
 ```go
-// GET /admin/api/status returns pending restart info
+// GET /{adminpath}/api/status returns pending restart info
 func adminStatusHandler(w http.ResponseWriter, r *http.Request) {
     status := map[string]interface{}{
         "running":         true,
@@ -8487,7 +9055,7 @@ $ kill -TERM $(cat /var/run/myapp.pid)
 | (none) | `DATABASE_DIR` | SQLite database directory (defaults to `{data_dir}/db/`, changeable) |
 | (none) | `BACKUP_DIR` | Backup directory (defaults to `{data_dir}/backup/`, changeable) |
 
-**External backup mounts:** In production, `BACKUP_DIR` should typically point to external storage (NAS, separate disk, etc.) rather than staying under `{data_dir}`. Example: `BACKUP_DIR=/mnt/Backups/{projectorg}/{projectname}`. The default `{data_dir}/backup/` is for development/testing only.
+**External backup mounts:** In production, `BACKUP_DIR` should typically point to external storage (NAS, separate disk, etc.) rather than staying under `{data_dir}`. Example: `BACKUP_DIR=/mnt/Backups/apimgr/vidveil`. The default `{data_dir}/backup/` is for development/testing only.
 
 **Implementation:**
 
@@ -8566,10 +9134,10 @@ func isWritable(path string) bool {
 }
 
 // systemBackupDir returns the system-level backup directory
-// Linux: /mnt/Backups/{projectorg}/{projectname}
-// macOS: /Library/Backups/{projectorg}/{projectname}
-// BSD:   /var/backups/{projectorg}/{projectname}
-// Windows: %ProgramData%\Backups\{projectorg}\{projectname}
+// Linux: /mnt/Backups/apimgr/vidveil
+// macOS: /Library/Backups/apimgr/vidveil
+// BSD:   /var/backups/apimgr/vidveil
+// Windows: %ProgramData%\Backups\apimgr\vidveil
 func systemBackupDir() string {
     switch runtime.GOOS {
     case "darwin":
@@ -8584,9 +9152,9 @@ func systemBackupDir() string {
 }
 
 // userBackupDir returns the user-level backup directory
-// Linux/BSD: ~/.local/share/Backups/{projectorg}/{projectname}
-// macOS: ~/Library/Backups/{projectorg}/{projectname}
-// Windows: %LocalAppData%\Backups\{projectorg}\{projectname}
+// Linux/BSD: ~/.local/share/Backups/apimgr/vidveil
+// macOS: ~/Library/Backups/apimgr/vidveil
+// Windows: %LocalAppData%\Backups\apimgr\vidveil
 func userBackupDir() string {
     home, _ := os.UserHomeDir()
     switch runtime.GOOS {
@@ -8604,7 +9172,7 @@ func userBackupDir() string {
 
 ```bash
 # Configurable paths - organized by component
-# APP_NAME is set to {projectname}
+# APP_NAME is set to vidveil
 export CONFIG_DIR="/config/${APP_NAME}"
 export DATA_DIR="/data/${APP_NAME}"
 export CACHE_DIR="/data/${APP_NAME}/cache"
@@ -8613,8 +9181,8 @@ export DATABASE_DIR="/data/db"
 export BACKUP_DIR="/data/backups/${APP_NAME}"
 
 # Tor directories under binary's dirs (binary owns Tor)
-# ${CONFIG_DIR}/tor/ = /config/{projectname}/tor/
-# ${DATA_DIR}/tor/   = /data/{projectname}/tor/
+# ${CONFIG_DIR}/tor/ = /config/vidveil/tor/
+# ${DATA_DIR}/tor/   = /data/vidveil/tor/
 ```
 
 ### Docker Compose Mapping
@@ -8623,13 +9191,13 @@ export BACKUP_DIR="/data/backups/${APP_NAME}"
 
 ```yaml
 services:
-  {projectname}:
-    image: {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
+  vidveil:
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
     command:
       - --config=/config
       - --data=/data
       - --log=/logs
-      - --pid=/run/{projectname}.pid
+      - --pid=/run/vidveil.pid
       - --port=8080
     volumes:
       - config:/config:ro          # Config (read-only)
@@ -8644,15 +9212,15 @@ services:
 
 ```yaml
 services:
-  {projectname}:
-    image: {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
+  vidveil:
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
     volumes:
-      - {projectname}-data:/data
+      - vidveil-data:/data
     ports:
       - "8080:8080"
 
 volumes:
-  {projectname}-data:
+  vidveil-data:
 ```
 
 ### Commands Anyone Can Run (No Privileges)
@@ -8948,7 +9516,7 @@ This properly handles complex suffixes like `.co.uk`, `.com.au`, `.org.uk`, etc.
 - `.localhost`, `.test`, `.example`, `.invalid` (RFC 6761)
 - `.local`, `.lan`, `.internal`, `.home`, `.localdomain`
 - `.home.arpa`, `.intranet`, `.corp`, `.private`
-- `{projectname}` - dynamic (e.g., `app.jokes`, `dev.quotes`, `my.api`)
+- `vidveil` - dynamic (e.g., `app.jokes`, `dev.quotes`, `my.api`)
 
 **Overlay Network TLDs (App-Managed, not set in DOMAIN):**
 - `.onion` - Tor hidden services (RFC 7686) - app generates/manages
@@ -9004,7 +9572,7 @@ func IsValidHost(host string, devMode bool, projectName string) bool {
         return true
     }
 
-    // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, {projectname})
+    // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, vidveil)
     if projectName != "" && strings.HasSuffix(lower, "."+strings.ToLower(projectName)) {
         // Project TLDs only valid in dev mode
         return devMode
@@ -9214,109 +9782,98 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 | **Appropriate codes** | HTTP status codes match error semantics |
 | **Log everything** | All errors logged with context for debugging |
 
-### Error Response Format
+### Response Format
 
-**All API errors MUST use this JSON structure:**
+**See "Unified Response Format (NON-NEGOTIABLE)" in PART 16 for the complete specification.**
 
+**All responses use simple, consistent format:**
+
+Success:
 ```json
 {
-  "error": {
-    "code": "ERR_VALIDATION",
-    "message": "Validation failed",
-    "details": [
-      {
-        "field": "email",
-        "code": "invalid_format",
-        "message": "Invalid email address format"
-      },
-      {
-        "field": "password",
-        "code": "too_short",
-        "message": "Password must be at least 8 characters"
-      }
-    ],
-    "request_id": "req_abc123def456"
-  }
+  "ok": true,
+  "data": {}
 }
 ```
 
-**Minimal error (no field-level details):**
-
+Error:
 ```json
 {
-  "error": {
-    "code": "ERR_NOT_FOUND",
-    "message": "Resource not found",
-    "request_id": "req_abc123def456"
-  }
+  "ok": false,
+  "error": "ERROR_CODE",
+  "message": "Human readable message"
 }
 ```
 
 ### Error Codes
 
-**Standard error codes mapped to HTTP status codes:**
+**Standard error codes (see PART 16 for full list):**
 
-| Code | HTTP | Description | User Message |
-|------|------|-------------|--------------|
-| `ERR_BAD_REQUEST` | 400 | Malformed request syntax | "Invalid request format" |
-| `ERR_VALIDATION` | 400 | Input validation failed | "Please check your input" |
-| `ERR_UNAUTHORIZED` | 401 | Authentication required | "Please log in to continue" |
-| `ERR_SESSION_EXPIRED` | 401 | Session has expired | "Your session has expired. Please log in again" |
-| `ERR_SESSION_INVALID` | 401 | Invalid session token | "Invalid session. Please log in again" |
-| `ERR_2FA_REQUIRED` | 401 | Two-factor authentication required | "Please complete two-factor authentication" |
-| `ERR_2FA_INVALID` | 401 | Invalid 2FA code | "Invalid verification code" |
-| `ERR_FORBIDDEN` | 403 | Permission denied | "You don't have permission to do this" |
-| `ERR_ACCOUNT_LOCKED` | 403 | Account temporarily locked | "Account temporarily locked. Try again later" |
-| `ERR_NOT_FOUND` | 404 | Resource not found | "The requested resource was not found" |
-| `ERR_METHOD_NOT_ALLOWED` | 405 | HTTP method not supported | "Method not allowed" |
-| `ERR_CONFLICT` | 409 | Resource already exists | "This resource already exists" |
-| `ERR_UNPROCESSABLE` | 422 | Semantic validation error | "Unable to process request" |
-| `ERR_RATE_LIMIT` | 429 | Rate limit exceeded | "Too many requests. Please wait and try again" |
-| `ERR_INTERNAL` | 500 | Server error | "Something went wrong. Please try again later" |
-| `ERR_SERVICE_UNAVAILABLE` | 503 | Maintenance mode | "Service temporarily unavailable" |
+| Code | HTTP | Message |
+|------|------|---------|
+| `BAD_REQUEST` | 400 | "Invalid request format" |
+| `VALIDATION_FAILED` | 400 | "Validation failed: {details}" |
+| `UNAUTHORIZED` | 401 | "Authentication required" |
+| `TOKEN_EXPIRED` | 401 | "Token has expired" |
+| `TOKEN_INVALID` | 401 | "Invalid token" |
+| `2FA_REQUIRED` | 401 | "Two-factor authentication required" |
+| `2FA_INVALID` | 401 | "Invalid 2FA code" |
+| `FORBIDDEN` | 403 | "Permission denied" |
+| `ACCOUNT_LOCKED` | 403 | "Account locked" |
+| `NOT_FOUND` | 404 | "Resource not found" |
+| `METHOD_NOT_ALLOWED` | 405 | "Method not allowed" |
+| `CONFLICT` | 409 | "Resource already exists" |
+| `RATE_LIMITED` | 429 | "Too many requests" |
+| `SERVER_ERROR` | 500 | "Internal server error" |
+| `MAINTENANCE` | 503 | "Service unavailable" |
 
 ### Error Implementation
 
 ```go
-// Error types
-type AppError struct {
-    Code       string            `json:"code"`
-    Message    string            `json:"message"`
-    Details    []FieldError      `json:"details,omitempty"`
-    RequestID  string            `json:"request_id"`
-    HTTPStatus int               `json:"-"`
-    Internal   error             `json:"-"` // Never exposed
+// Unified response structure
+type Response struct {
+    OK      bool            `json:"ok"`
+    Data    any             `json:"data,omitempty"`
+    Error   string          `json:"error,omitempty"`
+    Message string          `json:"message,omitempty"`
 }
 
-type FieldError struct {
-    Field   string `json:"field"`
-    Code    string `json:"code"`
-    Message string `json:"message"`
+// Send success response
+func SendOK(w http.ResponseWriter, data any) {
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(Response{OK: true, Data: data})
 }
 
-// Constructor
-func NewError(code string, message string) *AppError {
-    return &AppError{
-        Code:       code,
-        Message:    message,
-        HTTPStatus: errorCodeToHTTP(code),
+// Send error response
+func SendError(w http.ResponseWriter, code string, message string) {
+    status := errorCodeToHTTP(code)
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(status)
+    json.NewEncoder(w).Encode(Response{OK: false, Error: code, Message: message})
+}
+
+// Map error code to HTTP status
+func errorCodeToHTTP(code string) int {
+    switch code {
+    case "BAD_REQUEST", "VALIDATION_FAILED":
+        return 400
+    case "UNAUTHORIZED", "TOKEN_EXPIRED", "TOKEN_INVALID", "2FA_REQUIRED", "2FA_INVALID":
+        return 401
+    case "FORBIDDEN", "ACCOUNT_LOCKED":
+        return 403
+    case "NOT_FOUND":
+        return 404
+    case "METHOD_NOT_ALLOWED":
+        return 405
+    case "CONFLICT":
+        return 409
+    case "RATE_LIMITED":
+        return 429
+    case "MAINTENANCE":
+        return 503
+    default:
+        return 500
     }
-}
-
-// Add field error
-func (e *AppError) WithField(field, code, message string) *AppError {
-    e.Details = append(e.Details, FieldError{
-        Field:   field,
-        Code:    code,
-        Message: message,
-    })
-    return e
-}
-
-// Wrap internal error (for logging, never exposed)
-func (e *AppError) WithInternal(err error) *AppError {
-    e.Internal = err
-    return e
 }
 ```
 
@@ -9354,7 +9911,7 @@ func logError(ctx context.Context, err *AppError) {
   "time": "2024-12-31T10:15:30Z",
   "level": "ERROR",
   "msg": "Database connection failed",
-  "error_code": "ERR_INTERNAL",
+  "error": "SERVER_ERROR",
   "request_id": "req_abc123",
   "http_status": 500,
   "internal": "pq: connection refused",
@@ -9671,7 +10228,7 @@ If now - last_seen > 5 minutes:
          │
          ▼
 Admin manually removes dead nodes via:
-   /admin/server/cluster → Remove Node
+   /{adminpath}/server/cluster → Remove Node
 ```
 
 **Primary Election:**
@@ -9841,16 +10398,16 @@ func WithTransaction(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) er
 ### Handling Timeouts
 
 ```go
-func handleQueryError(err error) *AppError {
+func handleQueryError(err error) error {
     switch {
     case errors.Is(err, context.DeadlineExceeded):
-        return NewError("ERR_TIMEOUT", "Request timed out")
+        return errors.New("TIMEOUT: Request timed out")
     case errors.Is(err, sql.ErrNoRows):
-        return NewError("ERR_NOT_FOUND", "Resource not found")
+        return errors.New("NOT_FOUND: Resource not found")
     case errors.Is(err, context.Canceled):
-        return NewError("ERR_CANCELED", "Request was canceled")
+        return errors.New("CANCELED: Request was canceled")
     default:
-        return NewError("ERR_INTERNAL", "Database error").WithInternal(err)
+        return fmt.Errorf("SERVER_ERROR: Database error: %w", err)
     }
 }
 ```
@@ -9904,7 +10461,7 @@ func UpdateUser(ctx context.Context, db *sql.DB, user *User) error {
 
     rows, _ := result.RowsAffected()
     if rows == 0 {
-        return NewError("ERR_CONFLICT", "Resource was modified by another request")
+        return errors.New("CONFLICT: Resource was modified by another request")
     }
 
     user.Version++
@@ -9936,7 +10493,7 @@ func ReserveTicket(ctx context.Context, db *sql.DB, eventID, userID int) error {
         return err
     }
     if available <= 0 {
-        return NewError("ERR_CONFLICT", "No tickets available")
+        return errors.New("CONFLICT: No tickets available")
     }
 
     // Reserve
@@ -10041,60 +10598,127 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains
 {prefix}_{random_32_alphanumeric}
 
 Examples:
-  adm_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6    (admin token)
-  usr_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4    (user token - if multi-user)
-  key_j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6    (scoped API key)
+  adm_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6        (admin token)
+  usr_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4        (user token - if multi-user)
+  org_q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6        (org token - if orgs)
+
+Agent tokens (scoped to owner):
+  adm_agt_z1x2c3v4b5n6m7l8k9j0h1g2f3d4s5a6   (admin agent - server infrastructure)
+  usr_agt_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6   (user agent - user's personal agent)
+  org_agt_q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6   (org agent - organization agent)
 ```
 
 ### Token Prefixes (NON-NEGOTIABLE)
 
 | Prefix | Type | Required | Description |
 |--------|------|----------|-------------|
-| `adm_` | Admin primary token | **YES - all projects** | Server admin API access |
-| `usr_` | User primary token | If multi-user (PART 33) | Regular user API access |
+| `adm_` | Admin token | **YES - all projects** | Server admin API access |
+| `usr_` | User token | If multi-user (PART 33) | Regular user API access |
 | `org_` | Organization token | If orgs (PART 34) | Organization-level API access |
-| `key_` | Scoped API key | Optional | Custom scoped access (admin or user) |
+
+### Token Properties (NON-NEGOTIABLE)
+
+**All tokens (adm_, usr_, org_) support these properties:**
+
+| Property | Options | Default |
+|----------|---------|---------|
+| **Name** | User-defined string | "default" |
+| **Scope** | `global`, `read-write`, `read` | `global` |
+| **Expiration** | Never, 7 days, 1 month, 6 months, 1 year, custom | Never |
+
+**Scope definitions:**
+- `global` - All permissions the owner has access to (auto-detected)
+- `read-write` - Read and write operations (no delete, no admin actions)
+- `read` - Read-only operations
+
+**Token actions:**
+- **Create** - Generate new token with name, scope, expiration
+- **Rotate** - Generate new token value, keep settings
+- **Delete** - Revoke token immediately
+
+**Users can have multiple tokens:**
+```
+adm_abc123...  "default"      global     never
+adm_def456...  "ci-cd"        read-write 6 months
+adm_ghi789...  "monitoring"   read       1 year
+```
+
+### Agent Token Prefixes (If PART 36 Implemented)
+
+| Prefix | Scope | Route | Description |
+|--------|-------|-------|-------------|
+| `adm_agt_` | Admin | `/api/v1/admin/server/agents/*` | Server infrastructure agents |
+| `usr_agt_` | User | `/api/v1/users/agents/*` | User's personal agents (SaaS) |
+| `org_agt_` | Org | `/api/v1/orgs/{slug}/agents/*` | Organization agents |
+
+**Same setup procedure across all scopes** - one-line config, same registration flow.
 
 ### Token Storage (NON-NEGOTIABLE)
 
 | Rule | Description |
 |------|-------------|
-| **Never store plaintext** | Store Argon2id hash only |
+| **Never store plaintext** | Store SHA-256 hash only (tokens are already random) |
 | **Show once** | Display full token only on creation |
 | **Store prefix** | Keep first 8 chars for display: `adm_a1b2...` |
 | **Secure generation** | Use cryptographically secure random (32 alphanumeric chars) |
 
 ### Token Database Schema
 
-**Admin Tokens (`admins` table):**
+**Tokens table (supports multiple tokens per owner):**
 ```sql
--- Primary admin token (one per admin)
-api_token_hash    TEXT,           -- Argon2id hash of full token
-api_token_prefix  TEXT,           -- First 8 chars: "adm_a1b2"
-api_token_created TIMESTAMP,      -- When token was generated
+CREATE TABLE tokens (
+    id            INTEGER PRIMARY KEY,
+    owner_type    TEXT NOT NULL,       -- 'admin', 'user', 'org'
+    owner_id      INTEGER NOT NULL,    -- admin.id, user.id, or org.id
+
+    -- Token identification
+    name          TEXT NOT NULL,       -- User-provided label: "default", "ci-cd"
+    token_hash    TEXT NOT NULL,       -- SHA-256 hash of full token
+    token_prefix  TEXT NOT NULL,       -- First 8 chars: "adm_a1b2"
+
+    -- Token properties
+    scope         TEXT NOT NULL DEFAULT 'global',  -- 'global', 'read-write', 'read'
+    expires_at    TIMESTAMP,           -- NULL = never expires
+
+    -- Tracking
+    last_used_at  TIMESTAMP,
+    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(owner_type, owner_id, name)  -- One token per name per owner
+);
+
+CREATE INDEX idx_tokens_hash ON tokens(token_hash);
+CREATE INDEX idx_tokens_owner ON tokens(owner_type, owner_id);
 ```
 
-**Scoped API Keys (`api_keys` table):**
-```sql
-CREATE TABLE api_keys (
-    id            INTEGER PRIMARY KEY,
-    owner_type    TEXT NOT NULL,       -- 'admin' or 'user'
-    owner_id      INTEGER NOT NULL,    -- admin.id or user.id
-    name          TEXT NOT NULL,       -- User-provided label
-    key_hash      TEXT NOT NULL,       -- Argon2id hash
-    key_prefix    TEXT NOT NULL,       -- First 8 chars: "key_j1k2"
-    scopes        TEXT NOT NULL,       -- JSON: ["read", "write"]
-    expires_at    TIMESTAMP,           -- Optional expiry
-    last_used_at  TIMESTAMP,           -- Track usage
-    created_at    TIMESTAMP NOT NULL
-);
+**Expiration options:**
+```go
+var ExpirationOptions = map[string]time.Duration{
+    "never":    0,              // NULL in database
+    "7days":    7 * 24 * time.Hour,
+    "1month":   30 * 24 * time.Hour,
+    "6months":  180 * 24 * time.Hour,
+    "1year":    365 * 24 * time.Hour,
+    // "custom" - user picks date from calendar
+}
 ```
 
 ### Token Validation
 
 ```go
 func ValidateToken(token string) (*TokenInfo, error) {
-    // 1. Check format: {prefix}_{32_chars}
+    // Check for compound agent prefixes first (adm_agt_, usr_agt_, org_agt_)
+    if strings.HasPrefix(token, "adm_agt_") {
+        return validateAgentToken(token, ScopeAdmin)
+    }
+    if strings.HasPrefix(token, "usr_agt_") {
+        return validateAgentToken(token, ScopeUser)
+    }
+    if strings.HasPrefix(token, "org_agt_") {
+        return validateAgentToken(token, ScopeOrg)
+    }
+
+    // Standard single-prefix tokens: {prefix}_{32_chars}
     parts := strings.SplitN(token, "_", 2)
     if len(parts) != 2 || len(parts[1]) != 32 {
         return nil, ErrInvalidTokenFormat
@@ -10102,17 +10726,168 @@ func ValidateToken(token string) (*TokenInfo, error) {
 
     prefix := parts[0] + "_"
 
-    // 2. Route by prefix
     switch prefix {
     case "adm_":
         return validateAdminToken(token)
     case "usr_":
         return validateUserToken(token)  // Only if multi-user
-    case "key_":
-        return validateAPIKey(token)
+    case "org_":
+        return validateOrgToken(token)   // Only if orgs
     default:
         return nil, ErrUnknownTokenType
     }
+}
+
+// Agent token validation with scope
+func validateAgentToken(token string, scope TokenScope) (*TokenInfo, error) {
+    // Extract the random part after compound prefix
+    var prefix string
+    switch scope {
+    case ScopeAdmin:
+        prefix = "adm_agt_"
+    case ScopeUser:
+        prefix = "usr_agt_"
+    case ScopeOrg:
+        prefix = "org_agt_"
+    }
+
+    random := strings.TrimPrefix(token, prefix)
+    if len(random) != 32 {
+        return nil, ErrInvalidTokenFormat
+    }
+
+    // Validate against appropriate agents table based on scope
+    return lookupAgentByScope(token, scope)
+}
+```
+
+### Server-Side Context Detection (NON-NEGOTIABLE)
+
+**Server MUST auto-detect context from token scope. `--user` / `X-Target-Context` only needed when ambiguous.**
+
+**Token scope determines available contexts:**
+
+| Token Type | Possible Scopes | Default Context |
+|------------|-----------------|-----------------|
+| `adm_` | Server admin only | Admin (no user/org) |
+| `usr_` (user only) | User's personal | User |
+| `usr_` (user + 1 org) | User + that org | User |
+| `usr_` (user + N orgs) | User + all orgs | User (require `--user` for org) |
+| `org_` (org-specific) | Single org only | That org |
+| `adm_agt_` | Admin agent | Admin infrastructure |
+| `usr_agt_` | User agent | User's personal agent |
+| `org_agt_` | Org agent | Organization agent |
+
+**Server request handling:**
+
+```go
+// ContextMiddleware extracts and validates context from request
+func ContextMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        token := getTokenFromRequest(r)
+        if token == nil {
+            // No token - anonymous access (if allowed)
+            next.ServeHTTP(w, r)
+            return
+        }
+
+        // Get token's available scopes
+        scopes := token.GetScopes()
+
+        // Get requested context from header (optional)
+        requestedContext := r.Header.Get("X-Target-Context")
+        requestedType := r.Header.Get("X-Target-Type")  // "user" or "org" hint
+
+        // Resolve context
+        ctx, err := resolveContext(token, scopes, requestedContext, requestedType)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusForbidden)
+            return
+        }
+
+        // Add to request context
+        r = r.WithContext(context.WithValue(r.Context(), "target_context", ctx))
+        next.ServeHTTP(w, r)
+    })
+}
+
+// resolveContext determines the effective context for a request
+func resolveContext(token *Token, scopes []TokenScope, requested, typeHint string) (*Context, error) {
+    // No context requested - auto-detect from scopes
+    if requested == "" {
+        return autoDetectContext(scopes)
+    }
+
+    // Context requested - validate access
+    cleanName := strings.TrimLeft(requested, "@+")
+
+    // Determine type from prefix or hint
+    var targetType TargetType
+    switch {
+    case strings.HasPrefix(requested, "@"):
+        targetType = TargetUser
+    case strings.HasPrefix(requested, "+"):
+        targetType = TargetOrg
+    case typeHint == "user":
+        targetType = TargetUser
+    case typeHint == "org":
+        targetType = TargetOrg
+    default:
+        // Auto-detect: check if name is user or org
+        targetType = detectTargetType(cleanName)
+    }
+
+    // Validate token has access to this context
+    if !hasScope(scopes, cleanName, targetType) {
+        return nil, ErrForbidden
+    }
+
+    return &Context{Name: cleanName, Type: targetType}, nil
+}
+
+// autoDetectContext picks default context from scopes
+func autoDetectContext(scopes []TokenScope) (*Context, error) {
+    if len(scopes) == 0 {
+        return nil, ErrNoScopes
+    }
+
+    // Single scope - use it (no ambiguity)
+    if len(scopes) == 1 {
+        return &Context{Name: scopes[0].Name, Type: scopes[0].Type}, nil
+    }
+
+    // Multiple scopes - prefer user scope as default
+    for _, scope := range scopes {
+        if scope.Type == TargetUser {
+            return &Context{Name: scope.Name, Type: TargetUser}, nil
+        }
+    }
+
+    // Multiple org scopes, no user - require explicit selection
+    return nil, ErrAmbiguousContext
+}
+```
+
+**Error responses:**
+
+| Scenario | HTTP Status | Error |
+|----------|-------------|-------|
+| No scopes on token | 403 | `{"error": "token has no valid scopes"}` |
+| Requested context not in scopes | 403 | `{"error": "no access to context: acme-corp"}` |
+| Multiple orgs, no `--user` | 400 | `{"error": "ambiguous context, specify --user"}` |
+| Invalid context name | 404 | `{"error": "user or org not found: xyz"}` |
+
+**API response includes context:**
+
+```json
+{
+  "data": [...],
+  "meta": {
+    "context": {
+      "name": "acme-corp",
+      "type": "org"
+    }
+  }
 }
 ```
 
@@ -11821,7 +12596,7 @@ server:
     timeout: 5s
 
     # Key prefix to avoid collisions (use unique prefix per app)
-    prefix: "{projectname}:"
+    prefix: "vidveil:"
 
     # Default TTL in seconds
     ttl: 3600
@@ -11856,7 +12631,7 @@ server:
   cache:
     type: valkey
     url: ${CACHE_URL}  # valkey://user:pass@valkey.example.com:6379/0
-    prefix: "{projectname}:"
+    prefix: "vidveil:"
 ```
 
 **Using individual fields:**
@@ -11868,7 +12643,7 @@ server:
     port: 6379
     password: ${VALKEY_PASSWORD}
     db: 0
-    prefix: "{projectname}:"
+    prefix: "vidveil:"
 ```
 
 **Valkey/Redis Cluster:**
@@ -11882,7 +12657,7 @@ server:
       - valkey2.example.com:6379
       - valkey3.example.com:6379
     password: ${VALKEY_PASSWORD}
-    prefix: "{projectname}:"
+    prefix: "vidveil:"
 ```
 
 ### Cache Usage in Application
@@ -11918,20 +12693,11 @@ All settings above MUST be configurable via admin panel:
 
 ## Health Checks
 
-**Single endpoint with content negotiation:**
-- `/healthz` - Supports HTML, JSON, and plain text based on access method
-- `/api/v1/healthz` - JSON API (same data as `/healthz` JSON)
+**Endpoints:**
+- `/healthz` - Frontend route (follows PART 14 content negotiation rules)
+- `/api/v1/healthz` - API route (always JSON)
 
-**Content Negotiation for /healthz:**
-
-| Access Method | Response Format |
-|---------------|-----------------|
-| Browser (default) | HTML (pretty status page) |
-| `Accept: text/html` | HTML |
-| `Accept: application/json` | JSON |
-| `Accept: text/plain` | Plain text |
-| `curl` (no Accept header) | HTML (default) |
-| `curl -H 'Accept: application/json'` | JSON |
+**Content negotiation:** Follows standard frontend rules (see PART 14). No special /healthz rules.
 
 **NO sub-routes** - just `/healthz`, not `/healthz/db` or `/healthz/**`
 
@@ -11956,16 +12722,231 @@ All settings above MUST be configurable via admin panel:
 
 ### /healthz Response Formats
 
-#### HTML (default for browsers)
+**Follows standard content negotiation (PART 14). Browser gets HTML, CLI gets text, API gets JSON.**
 
-Pretty status page with:
-- Status (healthy/unhealthy)
-- Uptime
-- Version
-- Mode
-- Node ID (cluster mode)
-- Cluster status (if clustered)
-- System resources (optional - percentages only, no paths)
+#### HTML (browsers)
+
+**Full HTML page following frontend rules (PART 16).**
+
+**Required Elements:**
+- Full HTML document with `<head>` and `<body>`
+- Proper page title: "vidveil - Health Status"
+- Uses site theme (light/dark mode support)
+- Responsive layout
+- Header with navigation (if logged in) or minimal header (if public)
+- Footer with standard links
+
+**Health Information Display:**
+
+**Frontend MUST display ALL data returned by backend, formatted properly.**
+
+| Section | Content | Backend Field |
+|---------|---------|---------------|
+| **Status Banner** | Large status indicator (Healthy ✓ / Unhealthy ✗) with color | `status` |
+| **Version Info** | Version, Go version, build commit, build date | `version`, `go_version`, `build.*` |
+| **Uptime** | Server uptime in human-readable format | `uptime` |
+| **Mode** | Production/Development | `mode` |
+| **Cluster** | Status, primary, nodes list, role | `cluster.*` |
+| **Features** | Enabled features with icons | `features.*` |
+| **Component Checks** | Database, cache, disk, scheduler, cluster - each with status indicator | `checks.*` |
+| **Statistics** | Total requests, 24h requests, active connections | `stats.*` |
+| **Last Updated** | Timestamp of health check | `timestamp` |
+
+**HTML Structure:**
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>vidveil - Health Status</title>
+  <!-- Standard meta, CSS, theme support -->
+</head>
+<body>
+  <header><!-- Standard header --></header>
+  <main class="health-status">
+    <h1>System Health</h1>
+
+    <!-- Status Banner -->
+    <div class="status-banner status-healthy">
+      <span class="status-icon">✓</span>
+      <span class="status-text">All Systems Operational</span>
+    </div>
+
+    <!-- Version & Build Info -->
+    <section class="health-section">
+      <h2>Version</h2>
+      <dl class="info-grid">
+        <dt>Version</dt><dd>1.0.0</dd>
+        <dt>Go Version</dt><dd>1.23.0</dd>
+        <dt>Build</dt><dd>abc1234 (2024-01-10)</dd>
+        <dt>Uptime</dt><dd>2d 5h 30m</dd>
+        <dt>Mode</dt><dd><span class="badge badge-production">Production</span></dd>
+      </dl>
+    </section>
+
+    <!-- Cluster Info (if enabled) -->
+    <section class="health-section">
+      <h2>Cluster</h2>
+      <dl class="info-grid">
+        <dt>Status</dt><dd><span class="status-ok">Connected</span></dd>
+        <dt>Primary</dt><dd><code>https://node1.example.com</code></dd>
+        <dt>Role</dt><dd>Member</dd>
+      </dl>
+      <h3>Nodes</h3>
+      <ul class="node-list">
+        <li><code>https://node1.example.com</code> <span class="badge badge-primary">Primary</span></li>
+        <li><code>https://node2.example.com</code></li>
+        <li><code>https://node3.example.com</code></li>
+      </ul>
+    </section>
+
+    <!-- Features -->
+    <section class="health-section">
+      <h2>Features</h2>
+      <ul class="feature-list">
+        <li class="feature-enabled">✓ Multi-User</li>
+        <li class="feature-enabled">✓ Organizations</li>
+        <li class="feature-enabled">✓ Tor: <span class="status-ok">healthy</span> <code>abc123xyz456.onion</code></li>
+        <li class="feature-enabled">✓ GeoIP</li>
+        <li class="feature-enabled">✓ Metrics</li>
+      </ul>
+    </section>
+
+    <!-- Component Checks -->
+    <section class="health-section">
+      <h2>Component Status</h2>
+      <table class="checks-table">
+        <thead><tr><th>Component</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Database</td><td class="status-ok">OK</td></tr>
+          <tr><td>Cache</td><td class="status-ok">OK</td></tr>
+          <tr><td>Disk</td><td class="status-ok">OK</td></tr>
+          <tr><td>Scheduler</td><td class="status-ok">OK</td></tr>
+          <tr><td>Cluster</td><td class="status-ok">OK</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Statistics -->
+    <section class="health-section">
+      <h2>Statistics</h2>
+      <dl class="info-grid stats-grid">
+        <dt>Total Requests</dt><dd>1,234,567</dd>
+        <dt>Requests (24h)</dt><dd>45,678</dd>
+        <dt>Active Connections</dt><dd>42</dd>
+      </dl>
+    </section>
+
+    <!-- Footer -->
+    <footer class="health-footer">
+      <p>Last checked: <time datetime="2024-01-15T10:30:00Z">Jan 15, 2024 10:30 AM</time></p>
+      <p class="auto-refresh">Auto-refreshing in <span id="countdown">30</span>s</p>
+    </footer>
+  </main>
+  <footer><!-- Standard footer --></footer>
+</body>
+</html>
+```
+
+**Status Styling:**
+```css
+/* Status Banner */
+.status-banner {
+  padding: 1.5rem;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 2rem;
+}
+.status-healthy { background: var(--color-success-bg); color: var(--color-success); }
+.status-unhealthy { background: var(--color-error-bg); color: var(--color-error); }
+.status-degraded { background: var(--color-warning-bg); color: var(--color-warning); }
+
+/* Status Indicators */
+.status-ok { color: var(--color-success); }
+.status-error { color: var(--color-error); }
+.status-warning { color: var(--color-warning); }
+
+/* Sections */
+.health-section {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+.health-section h2 {
+  margin-top: 0;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.5rem;
+}
+
+/* Info Grid (dl/dt/dd) */
+.info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+}
+.info-grid dt { font-weight: 600; }
+.info-grid dd { margin: 0; }
+
+/* Feature List */
+.feature-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.feature-enabled { color: var(--color-success); }
+.feature-disabled { color: var(--color-muted); }
+
+/* Node List */
+.node-list {
+  list-style: none;
+  padding: 0;
+}
+.node-list li {
+  padding: 0.25rem 0;
+  font-family: monospace;
+}
+
+/* Checks Table */
+.checks-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.checks-table th, .checks-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+/* Badges */
+.badge {
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+.badge-production { background: var(--color-success-bg); color: var(--color-success); }
+.badge-development { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge-primary { background: var(--color-primary-bg); color: var(--color-primary); }
+
+/* Stats */
+.stats-grid dd {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* Auto-refresh */
+.auto-refresh {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+```
+
+**Auto-refresh (optional):**
+- Page may auto-refresh every 30-60 seconds
+- Use `<meta http-equiv="refresh" content="30">` or JavaScript
+- Show countdown or "Auto-refreshing in Xs" indicator
 
 #### JSON (Accept: application/json)
 
@@ -11976,24 +12957,77 @@ Pretty status page with:
   "mode": "production",
   "uptime": "2d 5h 30m",
   "timestamp": "2024-01-15T10:30:00Z",
-  "node": {
-    "id": "node-abc123",
-    "hostname": "server-1.example.com"
+  "go_version": "1.23.0",
+  "build": {
+    "commit": "abc1234",
+    "date": "2024-01-10T10:00:00Z"
   },
   "cluster": {
     "enabled": true,
     "status": "connected",
-    "nodes": 3,
+    "primary": "https://node1.example.com",
+    "nodes": [
+      "https://node1.example.com",
+      "https://node2.example.com",
+      "https://node3.example.com"
+    ],
     "role": "member"
+  },
+  "features": {
+    "multi_user": true,
+    "organizations": true,
+    "tor": {
+      "enabled": true,
+      "running": true,
+      "status": "healthy",
+      "hostname": "abc123xyz456.onion"
+    },
+    "geoip": true,
+    "metrics": true
   },
   "checks": {
     "database": "ok",
     "cache": "ok",
     "disk": "ok",
+    "scheduler": "ok",
     "cluster": "ok"
+  },
+  "stats": {
+    "requests_total": 1234567,
+    "requests_24h": 45678,
+    "active_connections": 42
   }
 }
 ```
+
+### /api/v1/healthz Security Rules (NON-NEGOTIABLE)
+
+**NEVER expose in /healthz response:**
+
+| Category | NEVER Include | Why |
+|----------|---------------|-----|
+| **Credentials** | Tokens, API keys, passwords | Direct security breach |
+| **Database** | Connection strings, host, port, user | Attack vector |
+| **Internal IPs** | Private IPs, internal hostnames | Network reconnaissance |
+| **Paths** | Config paths, data paths, file locations | File system info |
+| **Usernames** | Admin names, user counts with names | User enumeration |
+| **Email** | SMTP host, admin emails | Phishing/spam target |
+| **Secrets** | Encryption keys, session secrets | Cryptographic breach |
+| **Debug** | Stack traces, detailed errors | Exploitation info |
+
+**Safe to include:**
+
+| Category | OK to Include | Example |
+|----------|---------------|---------|
+| **Version** | App version, Go version, build info | `1.0.0`, `go1.23.0` |
+| **Status** | Health status, uptime | `healthy`, `2d 5h` |
+| **Features** | Enabled features (bool only) | `multi_user: true` |
+| **Checks** | Service status (ok/error only) | `database: ok` |
+| **Cluster** | Public node URLs | `https://node1.example.com` |
+| **Stats** | Aggregate counts only | `requests_total: 12345` |
+| **Mode** | Production/development | `production` |
+
+**Rule: If in doubt, don't include it. Health checks need status, not details.**
 
 #### Plain Text (Accept: text/plain)
 
@@ -12002,10 +13036,20 @@ status: healthy
 version: 1.0.0
 mode: production
 uptime: 2d 5h 30m
+go_version: 1.23.0
+build.commit: abc1234
 database: ok
 cache: ok
 disk: ok
-cluster: ok (3 nodes)
+scheduler: ok
+cluster: ok
+cluster.primary: https://node1.example.com
+cluster.nodes: https://node1.example.com, https://node2.example.com, https://node3.example.com
+features: multi_user, organizations, tor, geoip, metrics
+features.tor.enabled: true
+features.tor.running: true
+features.tor.status: healthy
+features.tor.hostname: abc123xyz456.onion
 ```
 
 ### /api/v1/healthz (JSON only)
@@ -12023,32 +13067,72 @@ When not in cluster mode:
   "mode": "production",
   "uptime": "2d 5h 30m",
   "timestamp": "2024-01-15T10:30:00Z",
-  "node": {
-    "id": "standalone",
-    "hostname": "server.example.com"
+  "go_version": "1.23.0",
+  "build": {
+    "commit": "abc1234",
+    "date": "2024-01-10T10:00:00Z"
   },
   "cluster": {
-    "enabled": false
+    "enabled": false,
+    "primary": "",
+    "nodes": []
+  },
+  "features": {
+    "multi_user": false,
+    "organizations": false,
+    "tor": {
+      "enabled": false,
+      "running": false,
+      "status": "",
+      "hostname": ""
+    },
+    "geoip": true,
+    "metrics": true
   },
   "checks": {
     "database": "ok",
     "cache": "ok",
-    "disk": "ok"
+    "disk": "ok",
+    "scheduler": "ok"
+  },
+  "stats": {
+    "requests_total": 12345,
+    "requests_24h": 678,
+    "active_connections": 5
   }
 }
 ```
 
-### Cluster Health Fields
+### Health Response Fields
 
 | Field | Description |
 |-------|-------------|
-| `node.id` | Unique identifier for this node |
-| `node.hostname` | Node hostname |
+| `status` | healthy, degraded, unhealthy |
+| `version` | Application version (SemVer) |
+| `mode` | production, development |
+| `uptime` | Human-readable uptime |
+| `timestamp` | ISO 8601 timestamp |
+| `go_version` | Go runtime version |
+| `build.commit` | Git commit hash (short) |
+| `build.date` | Build timestamp |
 | `cluster.enabled` | Whether cluster mode is active |
 | `cluster.status` | connected, degraded, disconnected |
-| `cluster.nodes` | Number of nodes in cluster |
+| `cluster.primary` | Primary node URL (for failover) |
+| `cluster.nodes` | Array of all node URLs (for failover) |
 | `cluster.role` | member (all nodes are equal) |
-| `checks.cluster` | ok, degraded, error |
+| `features.*` | Enabled features (bool or object) |
+| `features.tor.enabled` | Tor hidden service enabled (config) |
+| `features.tor.running` | Tor process currently running |
+| `features.tor.status` | healthy, error:{short message} |
+| `features.tor.hostname` | Onion address (if running) |
+| `checks.*` | Service health (ok, degraded, error) |
+| `stats.requests_total` | Total requests served |
+| `stats.requests_24h` | Requests in last 24 hours |
+| `stats.active_connections` | Current active connections |
+
+**Cluster fields for agent/CLI failover:**
+- `cluster.primary` - The primary server URL
+- `cluster.nodes` - All available nodes (agents/CLI use for automatic failover)
 
 ## Versioning
 
@@ -12085,10 +13169,10 @@ When not in cluster mode:
 ### --version Output
 
 ```
-{projectname} v1.0.0
-Built: 2024-01-15T10:30:00Z
-Go: 1.23
-OS/Arch: linux/amd64
+vidveil {projectversion}
+Built: {BUILD_DATE}
+Go: {GO_VERSION}
+OS/Arch: {GOOS}/{GOARCH}
 ```
 
 ---
@@ -12117,6 +13201,86 @@ OS/Arch: linux/amd64
 ## API Versioning
 
 **Use versioned API: `/api/v1`**
+
+## Route Compliance (NON-NEGOTIABLE)
+
+**IF A ROUTE EXISTS, IT MUST FOLLOW THESE RULES. NO EXCEPTIONS.**
+
+### Mandatory Route Rules
+
+| Rule | Requirement | Wrong | Correct |
+|------|-------------|-------|---------|
+| **Versioning** | All API routes MUST be versioned | `/api/users` | `/api/v1/users` |
+| **Plural nouns** | All resource names MUST be plural | `/api/v1/user` | `/api/v1/users` |
+| **Lowercase** | All routes MUST be lowercase | `/api/v1/Users` | `/api/v1/users` |
+| **Hyphens** | Multi-word routes use hyphens | `/api/v1/api_keys` | `/api/v1/api-keys` |
+| **No trailing slash** | Routes MUST NOT end with `/` | `/api/v1/users/` | `/api/v1/users` |
+| **No verbs** | Routes are nouns, not actions | `/api/v1/getUsers` | `GET /api/v1/users` |
+
+### Frontend-Backend Integration (NON-NEGOTIABLE)
+
+**API is the source of truth. Frontend consumes the API. Not every API needs a frontend route.**
+
+| API Type | Frontend Required | Example |
+|----------|-------------------|---------|
+| **User-facing features** | Yes | `/api/v1/users` → `/users` page |
+| **Admin features** | Yes | `/api/v1/admin/*` → `/{adminpath}/*` pages |
+| **Health/status** | No | `/api/v1/healthz` - API only |
+| **Webhooks** | No | `/api/v1/webhooks/*` - backend only |
+| **Agent endpoints** | No | `/api/v1/*/agents/*` - CLI/agent only |
+| **System/internal** | No | Metrics, cluster sync, etc. |
+
+| Requirement | Description |
+|-------------|-------------|
+| **API first** | API is complete and works standalone |
+| **Frontend consumes API** | Frontend makes requests to API, displays responses |
+| **Full functionality** | User-facing features work completely in browser |
+| **CRUD parity** | If user can do it in API, they can do it in frontend |
+
+**Example - User Features:**
+
+| Backend API | Frontend | Purpose |
+|-------------|----------|---------|
+| `GET /api/v1/users` | `GET /users` | View user profile |
+| `PATCH /api/v1/users` | `POST /users` (form) | Update user profile |
+| `GET /api/v1/users/tokens` | `GET /users/tokens` | List tokens |
+| `POST /api/v1/users/tokens` | `POST /users/tokens` (form) | Create token |
+| `DELETE /api/v1/users/tokens/{id}` | `POST /users/tokens/{id}/delete` | Delete token |
+
+**API-only (no frontend needed):**
+
+| API Endpoint | Why No Frontend |
+|--------------|-----------------|
+| `/api/v1/healthz` | Machine monitoring |
+| `/api/v1/admin/server/agents/*` | Agent binary uses directly |
+| `/api/v1/cluster/*` | Node-to-node communication |
+| `/api/v1/webhooks/*` | External service callbacks |
+
+### Frontend Functionality Requirements (NON-NEGOTIABLE)
+
+**Frontend is NOT just a display layer. It MUST be fully functional:**
+
+| Requirement | Description |
+|-------------|-------------|
+| **Forms work** | All frontend forms submit to backend and process responses |
+| **CRUD complete** | Create, Read, Update, Delete all work from frontend |
+| **Error handling** | Frontend displays backend errors appropriately |
+| **Validation** | Client-side validation matches server-side rules |
+| **State sync** | Frontend state reflects backend state after operations |
+| **No dead ends** | Every action has a result (success message, error, redirect) |
+
+**Frontend MUST work without JavaScript for core functionality (progressive enhancement).**
+
+### Route Audit Checklist
+
+Before adding ANY route, verify:
+
+- [ ] Is it versioned? (`/api/v1/...`)
+- [ ] Is the resource name plural? (`users`, not `user`)
+- [ ] Is it lowercase with hyphens? (`api-keys`, not `API_Keys`)
+- [ ] Does the route follow scope rules? (`/auth/`, `/users/`, `/orgs/`, `/admin/`)
+- [ ] If user-facing: does frontend route exist and work?
+- [ ] If system/agent: documented as API-only?
 
 ## Route Naming Convention (NON-NEGOTIABLE)
 
@@ -13218,27 +14382,28 @@ Need additional compatible endpoints?"
 
 ```json
 {
-  "success": true,
-  "message": "Item created successfully",
-  "id": "item_123"
+  "ok": true,
+  "data": {
+    "id": "item_123",
+    "message": "Item created successfully"
+  }
 }
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `success` | Yes | Always `true` for successful actions |
-| `message` | No | Human-readable status message |
-| `id` | If created | ID of created/affected resource |
-| `{data}` | If applicable | Additional response data as needed |
+| `ok` | Yes | Always `true` for success |
+| `data` | Yes | Response payload |
+| `data.id` | If created | ID of created/affected resource |
+| `data.message` | No | Human-readable status message |
 
 #### Error Response
 
 ```json
 {
-  "error": "Human readable message",
-  "code": "ERROR_CODE",
-  "status": 400,
-  "details": {}
+  "ok": false,
+  "error": "ERROR_CODE",
+  "message": "Human readable message"
 }
 ```
 
@@ -13349,7 +14514,7 @@ Before proceeding, confirm you understand:
 
 | Environment | DOMAIN Value | Example |
 |-------------|--------------|---------|
-| **Development** | `{projectname}` | `DOMAIN=jokes` |
+| **Development** | `vidveil` | `DOMAIN=jokes` |
 | **Production** | Valid FQDN | `DOMAIN=api.example.com` |
 
 **Valid Production DOMAIN formats (comma-separated list supported):**
@@ -13555,9 +14720,9 @@ export DOMAIN=myapp.com,www.myapp.com,api.myapp.com
 **Dev TLDs are allowed in development mode but require global IP fallback for remote access.**
 
 **Dynamic Dev TLDs (project name as TLD):**
-- `{projectname}` - e.g., `app.jokes`, `my.quotes`, `dev.api`
-- `{projectname}.local` - e.g., `app.jokes.local`
-- `{projectname}.test` - e.g., `app.jokes.test`
+- `vidveil` - e.g., `app.jokes`, `my.quotes`, `dev.api`
+- `vidveil.local` - e.g., `app.jokes.local`
+- `vidveil.test` - e.g., `app.jokes.test`
 
 **Static Dev TLDs:**
 - `.local`, `.test`, `.example`, `.invalid` (RFC 6761)
@@ -13593,7 +14758,7 @@ func GetDisplayURL(projectName string, port int, isHTTPS bool) string {
 func isDevTLD(host, projectName string) bool {
     lower := strings.ToLower(host)
 
-    // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, {projectname})
+    // Check dynamic project-specific TLD (e.g., app.jokes, dev.quotes, quotes, jokes, vidveil)
     if projectName != "" && strings.HasSuffix(lower, "."+strings.ToLower(projectName)) {
         return true
     }
@@ -13630,6 +14795,135 @@ func isDevTLD(host, projectName string) bool {
 | Warning | ⚠️ | Status |
 | Error | ❌ | Status |
 | Info | ℹ️ | Status |
+
+### Responsive Startup Banner (NON-NEGOTIABLE)
+
+**Banner MUST adapt to terminal size. Phone SSH users are common.**
+
+| Terminal Size | Banner Style | Example |
+|---------------|--------------|---------|
+| **≥80 cols** | Full ASCII art + icons + URLs | Full branded banner |
+| **60-79 cols** | Icons + text only, no ASCII art | `🚀 AppName v1.0.0` |
+| **40-59 cols** | Minimal text, abbreviated | `AppName 1.0.0 :8080` |
+| **<40 cols** | Single line only | `AppName :8080` |
+
+```go
+// src/server/banner/banner.go
+package banner
+
+import (
+    "fmt"
+    "os"
+    "golang.org/x/term"
+)
+
+func Print(appName, version, mode string, urls []string) {
+    width, _, _ := term.GetSize(int(os.Stdout.Fd()))
+    if width == 0 {
+        width = 80 // Default
+    }
+
+    switch {
+    case width >= 80:
+        printFullBanner(appName, version, mode, urls)
+    case width >= 60:
+        printCompactBanner(appName, version, mode, urls)
+    case width >= 40:
+        printMinimalBanner(appName, version, urls)
+    default:
+        printMicroBanner(appName, urls)
+    }
+}
+
+func printFullBanner(appName, version, mode string, urls []string) {
+    // Full ASCII art logo
+    fmt.Println(getASCIIArt(appName))
+    fmt.Println()
+    fmt.Printf("🚀 %s v%s\n", appName, version)
+    printModeLine(mode, true)
+    fmt.Println()
+    for _, url := range urls {
+        fmt.Printf("  🌐 %s\n", url)
+    }
+    fmt.Println()
+}
+
+func printCompactBanner(appName, version, mode string, urls []string) {
+    // No ASCII art, just icons and text
+    fmt.Printf("🚀 %s v%s\n", appName, version)
+    printModeLine(mode, true)
+    for _, url := range urls {
+        fmt.Printf("🌐 %s\n", url)
+    }
+}
+
+func printMinimalBanner(appName, version string, urls []string) {
+    // Abbreviated, no icons
+    fmt.Printf("%s %s\n", appName, version)
+    for _, url := range urls {
+        // Extract just host:port
+        fmt.Println(extractHostPort(url))
+    }
+}
+
+func printMicroBanner(appName string, urls []string) {
+    // Single line for very narrow terminals
+    if len(urls) > 0 {
+        fmt.Printf("%s %s\n", appName, extractHostPort(urls[0]))
+    } else {
+        fmt.Println(appName)
+    }
+}
+
+func printModeLine(mode string, useIcons bool) {
+    if useIcons {
+        icon := "🔒"
+        if mode == "development" {
+            icon = "🔧"
+        }
+        fmt.Printf("%s Running in mode: %s\n", icon, mode)
+    } else {
+        fmt.Printf("Mode: %s\n", mode)
+    }
+}
+```
+
+**Terminal Size Detection on Startup:**
+```go
+// In main.go or server init
+func init() {
+    width, height, _ := term.GetSize(int(os.Stdout.Fd()))
+
+    // Store for use throughout application
+    runtime.TerminalWidth = width
+    runtime.TerminalHeight = height
+
+    // Log terminal size in debug mode
+    if config.Debug {
+        log.Printf("Terminal size: %dx%d", width, height)
+    }
+}
+```
+
+**Resize Handling (for long-running servers):**
+```go
+// Handle SIGWINCH for terminal resize
+func watchTerminalSize(ctx context.Context) {
+    sigCh := make(chan os.Signal, 1)
+    signal.Notify(sigCh, syscall.SIGWINCH)
+
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-sigCh:
+            width, height, _ := term.GetSize(int(os.Stdout.Fd()))
+            runtime.TerminalWidth = width
+            runtime.TerminalHeight = height
+        }
+    }
+}
+```
 
 **Mode Line (NON-NEGOTIABLE):**
 
@@ -13734,12 +15028,14 @@ formatURL(host, 8443, true)
 - HTTPS adds overhead without additional security benefit
 - Only use HTTPS on overlays when HTTPS-only mode is required (port 443)
 
-**Footer timestamp format:** `%a %b %d, %Y at %H:%M:%S %Z` → `Wed Jan 15, 2025 at 09:00:00 EST`
+**Footer timestamp format:** `%B %d, %Y at %H:%M:%S %Z` → `June 27, 2026 at 16:15:12 EST`
+
+**"Last update" MUST use build date, NOT hardcoded.** Use `BUILD_DATE` from build process.
 
 **Example (Production with SSL + Tor on 443):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
+│  🚀 VIDVEIL · 📦 {projectversion}                      │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -13754,7 +15050,7 @@ formatURL(host, 8443, true)
 **Example (Production with Tor + I2P on 443):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
+│  🚀 VIDVEIL · 📦 {projectversion}                      │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -13770,7 +15066,7 @@ formatURL(host, 8443, true)
 **Example (Production on port 8080):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
+│  🚀 VIDVEIL · 📦 {projectversion}                      │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -13784,7 +15080,7 @@ formatURL(host, 8443, true)
 **Example (Development on port 8080):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
+│  🚀 VIDVEIL · 📦 {projectversion}                      │
 ├─────────────────────────────────────────────────────────────┤
 │  🔧 Running in mode: development                            │
 ├─────────────────────────────────────────────────────────────┤
@@ -13798,7 +15094,7 @@ formatURL(host, 8443, true)
 **Example (Development IPv6 on port 8080):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
+│  🚀 VIDVEIL · 📦 {projectversion}                      │
 ├─────────────────────────────────────────────────────────────┤
 │  🔧 Running in mode: development                            │
 ├─────────────────────────────────────────────────────────────┤
@@ -13812,7 +15108,7 @@ formatURL(host, 8443, true)
 **Example (Production on port 80):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
+│  🚀 VIDVEIL · 📦 {projectversion}                      │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production                             │
 ├─────────────────────────────────────────────────────────────┤
@@ -13826,7 +15122,7 @@ formatURL(host, 8443, true)
 **Example (Production with debugging enabled):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
+│  🚀 VIDVEIL · 📦 {projectversion}                      │
 ├─────────────────────────────────────────────────────────────┤
 │  🔒 Running in mode: production [debugging]                 │
 ├─────────────────────────────────────────────────────────────┤
@@ -13840,7 +15136,7 @@ formatURL(host, 8443, true)
 **Example (First Run - Setup Required):**
 ```
 ╭─────────────────────────────────────────────────────────────╮
-│  🚀 {PROJECTNAME} · 📦 v1.0.0                                │
+│  🚀 VIDVEIL · 📦 {projectversion}                      │
 ├─────────────────────────────────────────────────────────────┤
 │  🔧 Running in mode: development                            │
 ├─────────────────────────────────────────────────────────────┤
@@ -13866,10 +15162,12 @@ formatURL(host, 8443, true)
 
 | Output | Icons | ASCII Art | Colors | Format |
 |--------|-------|-----------|--------|--------|
-| **Startup banner** | ✅ Yes | ✅ Yes | ✅ Yes | Pretty |
+| **Startup banner** | ✅ Responsive | ✅ If ≥80 cols | ✅ Yes | Pretty, adapts to terminal |
 | **Interactive console** | ✅ Yes | ✅ Yes | ✅ Yes | Pretty |
 | **Log files** | ❌ Never | ❌ Never | ❌ Never | Raw text |
 | **Log output (stdout)** | ❌ Never | ❌ Never | ❌ Never | Raw text |
+
+**Note:** Startup banner adapts to terminal width. ASCII art only shown at ≥80 columns. Icons reduced at <60 columns. See "Responsive Startup Banner" section.
 
 **Log format is ALWAYS plain text:**
 ```
@@ -13981,18 +15279,18 @@ Startup (for configured FQDN)
 | **PWA Support** | Progressive Web App - installable, offline-capable |
 | **CORS** | `Access-Control-Allow-Origin: *` for API endpoints |
 
-## Frontend Must Match Backend (NON-NEGOTIABLE)
+## Frontend Consumes Backend (NON-NEGOTIABLE)
 
-**Every API endpoint MUST have a corresponding frontend page/action.**
+**API is the source of truth. Frontend fully integrates with relevant API endpoints.**
 
 | Rule | Description |
 |------|-------------|
-| **Route parity** | `/api/v1/users` → frontend at `/users` |
-| **Full functionality** | Everything API can do, frontend can do |
+| **API first** | Backend API works standalone, frontend consumes it |
+| **User features in browser** | All user-facing API features accessible via frontend |
 | **Same validation** | Frontend validates same rules as backend |
-| **Real-time feedback** | Frontend shows success/error from backend |
+| **Real-time feedback** | Frontend shows success/error from backend responses |
 
-**If it works in API, it MUST work in browser. No API-only features.**
+**User-facing features work in browser. System/agent endpoints are API-only (see PART 14).**
 
 ### Frontend Route Structure
 
@@ -14024,7 +15322,7 @@ This is OPTIONAL and only applies to apps where user/org profiles are a core fea
 
 ```
 1. /api/v1/*          → API routes (highest priority)
-2. /admin/*           → Admin panel
+2. /{adminpath}/*     → Admin panel (configurable path)
 3. /healthz           → Health check
 4. /static/*          → Static assets
 5. /users/*           → Explicit user routes
@@ -14379,6 +15677,48 @@ footer {
 | Icon | Compact actions (Edit, Copy, Refresh) | Icon only with tooltip |
 
 **Button States:** Normal, Hover, Active, Disabled, Loading
+
+**Submit Button Behavior (NON-NEGOTIABLE):**
+
+| Rule | Implementation |
+|------|----------------|
+| **Single submit only** | Disable button immediately on click (prevent double-submit) |
+| **Show action state** | Change text to indicate action (Saving..., Searching..., Loading...) |
+| **Re-enable on complete** | Re-enable button after success OR error response |
+| **Preserve width** | Button width should not change when text changes |
+
+**Loading Text Examples:**
+
+| Original | Loading State |
+|----------|---------------|
+| Save | Saving... |
+| Search | Searching... |
+| Submit | Submitting... |
+| Create | Creating... |
+| Delete | Deleting... |
+| Send | Sending... |
+| Login | Logging in... |
+| Register | Registering... |
+| Upload | Uploading... |
+| Download | Downloading... |
+
+```html
+<!-- Submit button with loading state -->
+<button type="submit" id="save-btn" onclick="this.disabled=true; this.textContent='Saving...';">
+  Save
+</button>
+```
+
+```javascript
+// Re-enable after response
+fetch('/api/save', { method: 'POST', body: data })
+  .then(response => { /* handle success */ })
+  .catch(error => { /* handle error */ })
+  .finally(() => {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  });
+```
 
 ### Toggle Switches
 
@@ -14736,7 +16076,7 @@ dismissAllToasts();
 | **Security** | `/users/security` | Password, 2FA, sessions |
 | **API Tokens** | `/users/tokens` | Manage API tokens |
 | *(divider)* | - | - |
-| **Theme** | - | Theme toggle (Light/Dark/System) |
+| **Theme** | - | Theme toggle (Dark/Light/Auto) |
 | *(divider)* | - | - |
 | **Help** | `/server/help` | Help documentation |
 | **Sign out** | `/auth/logout` | Log out |
@@ -14758,7 +16098,7 @@ dismissAllToasts();
     <a href="/users/tokens" class="dropdown-item" role="menuitem">API Tokens</a>
     <div class="dropdown-divider" role="separator"></div>
     <div class="dropdown-item theme-toggle">
-      Theme: <button>Light</button> | <button>Dark</button> | <button>System</button>
+      Theme: <button>Dark</button> | <button>Light</button> | <button>Auto</button>
     </div>
     <div class="dropdown-divider" role="separator"></div>
     <a href="/server/help" class="dropdown-item" role="menuitem">Help</a>
@@ -14843,6 +16183,101 @@ dismissAllToasts();
 ```
 
 - See PART 18: EMAIL & NOTIFICATIONS for full notification specification
+
+### Empty States (NON-NEGOTIABLE)
+
+**Every list, table, and data view MUST have a proper empty state - NEVER show blank space.**
+
+| Scenario | Display | Call to Action |
+|----------|---------|----------------|
+| No search results | "No results found for '{query}'" | Suggest clearing filters or different search |
+| Empty list | "No {items} yet" | "Create your first {item}" button |
+| Empty table | Friendly message in table body | Action button or instructions |
+| No notifications | "No notifications" | - |
+| Failed to load | Error message | "Retry" button |
+| No permissions | "You don't have access to this" | Link to request access or go back |
+
+**Empty State Structure:**
+```html
+<div class="empty-state">
+  <svg class="empty-state-icon"><!-- relevant icon --></svg>
+  <h3 class="empty-state-title">No items yet</h3>
+  <p class="empty-state-message">Create your first item to get started.</p>
+  <a href="/items/new" class="btn btn-primary">Create Item</a>
+</div>
+```
+
+**Rules:**
+- Always include an icon or illustration
+- Title should be short and clear
+- Message should explain what to do next
+- Include action button when user can fix the state
+- Center vertically and horizontally in the container
+
+### Form Validation (NON-NEGOTIABLE)
+
+**All forms MUST provide clear, inline validation feedback.**
+
+| Rule | Implementation |
+|------|----------------|
+| **Validate on blur** | Show error when user leaves field (not while typing) |
+| **Inline errors** | Error message directly below the field, not in alert/modal |
+| **Highlight field** | Red border on invalid fields, green on valid (optional) |
+| **Clear on fix** | Remove error immediately when user corrects input |
+| **Submit validation** | Re-validate all fields on submit, focus first error |
+| **Accessible errors** | Use `aria-describedby` to link error to field |
+
+**Error Message Style:**
+```html
+<div class="form-group error">
+  <label for="email">Email</label>
+  <input type="email" id="email" name="email"
+         aria-describedby="email-error" aria-invalid="true">
+  <span id="email-error" class="field-error" role="alert">
+    Please enter a valid email address
+  </span>
+</div>
+```
+
+**Validation Timing:**
+
+| Event | Action |
+|-------|--------|
+| Field blur | Validate that field only |
+| Field input (after error shown) | Clear error when valid |
+| Form submit | Validate all fields, focus first error |
+| Field focus | Do NOT validate (let user type) |
+
+**Error Message Content:**
+
+| Field Type | Error Message |
+|------------|---------------|
+| Required empty | "{Field name} is required" |
+| Invalid email | "Please enter a valid email address" |
+| Password too short | "Password must be at least 8 characters" |
+| Passwords don't match | "Passwords do not match" |
+| Invalid URL | "Please enter a valid URL" |
+| Number out of range | "Value must be between {min} and {max}" |
+
+**CSS for Validation States:**
+```css
+.form-group.error input,
+.form-group.error select,
+.form-group.error textarea {
+  border-color: var(--color-error);
+}
+
+.field-error {
+  color: var(--color-error);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.form-group.success input {
+  border-color: var(--color-success);
+}
+```
 
 ## Accessibility (NON-NEGOTIABLE)
 
@@ -14979,7 +16414,7 @@ self.addEventListener('push', event => {
 
 ## HTTP Status Codes (NON-NEGOTIABLE)
 
-**Use standard HTTP status codes consistently:**
+**Use standard RFC 7231 HTTP status codes consistently:**
 
 | Code | Meaning | Use For |
 |------|---------|---------|
@@ -14999,6 +16434,264 @@ self.addEventListener('push', event => {
 | 500 | Internal Server Error | Server-side errors |
 | 503 | Service Unavailable | Maintenance mode |
 
+## Unified Response Format (NON-NEGOTIABLE)
+
+**ALL responses (server → client/agent) use this exact format. Simple to parse everywhere.**
+
+### Success Response
+
+```json
+{
+  "ok": true,
+  "data": {}
+}
+```
+
+### Error Response
+
+```json
+{
+  "ok": false,
+  "error": "ERROR_CODE",
+  "message": "Human readable message"
+}
+```
+
+### Standard Error Codes (server sends, client/agent parses)
+
+| Error Code | HTTP | Message | Client/Agent Display |
+|------------|------|---------|---------------------|
+| `BAD_REQUEST` | 400 | "Invalid request format" | Invalid request |
+| `VALIDATION_FAILED` | 400 | "Validation failed: {field}" | Check input: {field} |
+| `UNAUTHORIZED` | 401 | "Authentication required" | Please log in |
+| `TOKEN_EXPIRED` | 401 | "Token has expired" | Session expired, log in again |
+| `TOKEN_INVALID` | 401 | "Invalid token" | Invalid session |
+| `2FA_REQUIRED` | 401 | "Two-factor authentication required" | Enter 2FA code |
+| `2FA_INVALID` | 401 | "Invalid 2FA code" | Wrong code, try again |
+| `FORBIDDEN` | 403 | "Permission denied" | Access denied |
+| `ACCOUNT_LOCKED` | 403 | "Account locked" | Account locked, try later |
+| `NOT_FOUND` | 404 | "Resource not found" | Not found |
+| `METHOD_NOT_ALLOWED` | 405 | "Method not allowed" | Invalid operation |
+| `CONFLICT` | 409 | "Resource already exists" | Already exists |
+| `RATE_LIMITED` | 429 | "Too many requests" | Slow down, try later |
+| `SERVER_ERROR` | 500 | "Internal server error" | Something went wrong |
+| `MAINTENANCE` | 503 | "Service unavailable" | Maintenance, try later |
+
+### Parsing Rules (NON-NEGOTIABLE)
+
+**All consumers (client binary, agent binary, web UI, external tools) parse the same way:**
+
+```go
+// Universal response parser - works for server, client, agent
+type Response struct {
+    OK      bool            `json:"ok"`
+    Data    json.RawMessage `json:"data,omitempty"`
+    Error   string          `json:"error,omitempty"`
+    Message string          `json:"message,omitempty"`
+}
+
+func ParseResponse(body []byte) (*Response, error) {
+    var r Response
+    if err := json.Unmarshal(body, &r); err != nil {
+        return nil, err
+    }
+    return &r, nil
+}
+
+// Usage in client/agent
+resp, _ := ParseResponse(body)
+if !resp.OK {
+    // Display: resp.Message (human) or handle by resp.Error (code)
+    return fmt.Errorf("%s: %s", resp.Error, resp.Message)
+}
+// Success: use resp.Data
+```
+
+### Client/Agent Message Display
+
+| Context | What to Show |
+|---------|--------------|
+| Terminal (CLI/TUI) | `resp.Message` directly |
+| Web UI | `resp.Message` in toast/alert |
+| Logging | `resp.Error: resp.Message` |
+| Machine parsing | Check `resp.Error` code |
+
+### Examples
+
+**Success - List items:**
+```json
+{
+  "ok": true,
+  "data": {
+    "items": [],
+    "total": 42
+  }
+}
+```
+
+**Success - Create item:**
+```json
+{
+  "ok": true,
+  "data": {
+    "id": 123,
+    "name": "new-item"
+  }
+}
+```
+
+**Error - Not authenticated:**
+```json
+{
+  "ok": false,
+  "error": "UNAUTHORIZED",
+  "message": "Authentication required"
+}
+```
+
+**Error - Validation:**
+```json
+{
+  "ok": false,
+  "error": "VALIDATION_FAILED",
+  "message": "Validation failed: email must be valid"
+}
+```
+
+**Error - Rate limit:**
+```json
+{
+  "ok": false,
+  "error": "RATE_LIMITED",
+  "message": "Too many requests, retry after 60 seconds"
+}
+```
+
+### Why This Format
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Simple** | Just check `ok` field first |
+| **Consistent** | Same structure everywhere |
+| **Parseable** | One parser for all responses |
+| **Human-friendly** | `message` always displayable |
+| **Machine-friendly** | `error` code for programmatic handling |
+| **Minimal** | No nested complexity for simple cases |
+
+## Text Response Format (NON-NEGOTIABLE)
+
+**CLI/agent text output uses standardized format. Easy to parse with grep/awk/cut.**
+
+### Success Response (text/plain)
+
+```
+OK: {message}
+{data lines...}
+```
+
+### Error Response (text/plain)
+
+```
+ERROR: {code}: {message}
+```
+
+### Text Response Examples
+
+**Success - Single value:**
+```
+OK: Retrieved successfully
+value: 42
+```
+
+**Success - List:**
+```
+OK: 3 items found
+item-1
+item-2
+item-3
+```
+
+**Error:**
+```
+ERROR: NOT_FOUND: Resource not found
+```
+
+**Error with details:**
+```
+ERROR: VALIDATION_FAILED: email must be valid
+```
+
+## Server Response Rules (NON-NEGOTIABLE)
+
+**These rules apply SERVER-WIDE to ALL responses (API, frontend AJAX, CLI, agent, webhooks).**
+
+### Content-Type Detection
+
+| Source | Content-Type | Format |
+|--------|--------------|--------|
+| API routes (`/api/v1/*`) | `application/json` | JSON |
+| `.txt` suffix (API only) | `text/plain` | Text |
+| `Accept: application/json` | `application/json` | JSON |
+| `Accept: text/plain` | `text/plain` | Text |
+| CLI/Agent (auto-detected) | `text/plain` | Text |
+| Browser (no Accept header) | `text/html` | HTML |
+| Frontend AJAX/fetch | Auto-detect from `Accept` | JSON/Text |
+
+**Notes:**
+- `.txt` suffix only works on API routes (`/api/v1/*.txt`)
+- No `.json` suffix exists - JSON is the default for API
+- Frontend uses `Accept` header for format negotiation (set by fetch/XMLHttpRequest)
+
+### Newline Rules (NON-NEGOTIABLE)
+
+**ALL non-HTML responses MUST end with a single newline (`\n`).**
+
+| Format | Rule | Example |
+|--------|------|---------|
+| JSON | Single `\n` after closing `}` or `]` | `{"ok": true}\n` |
+| Text | Single `\n` after last line | `OK: done\n` |
+| HTML | No trailing newline requirement | `</html>` |
+
+**Why:** Ensures consistent parsing, clean terminal output, proper file concatenation.
+
+```go
+// Server response helper
+func WriteJSON(w http.ResponseWriter, data any) {
+    w.Header().Set("Content-Type", "application/json")
+    enc := json.NewEncoder(w)
+    enc.SetIndent("", "  ")
+    enc.Encode(data)  // Encode() adds trailing newline
+}
+
+func WriteText(w http.ResponseWriter, text string) {
+    w.Header().Set("Content-Type", "text/plain")
+    if !strings.HasSuffix(text, "\n") {
+        text += "\n"
+    }
+    w.Write([]byte(text))
+}
+```
+
+### JSON Rules (NON-NEGOTIABLE)
+
+| Rule | Correct | Wrong |
+|------|---------|-------|
+| No comments | `{"key": "value"}` | `{"key": "value" // comment}` |
+| No trailing commas | `{"a": 1, "b": 2}` | `{"a": 1, "b": 2,}` |
+| Double quotes only | `{"key": "value"}` | `{'key': 'value'}` |
+| No undefined | `{"key": null}` | `{"key": undefined}` |
+| 2-space indentation | `  "key": "value"` | `    "key"` or `\t"key"` |
+| Trailing newline | `}\n` | `}` (no newline) |
+
+### Text Rules (NON-NEGOTIABLE)
+
+| Rule | Correct | Wrong |
+|------|---------|-------|
+| Lines end with `\n` | `line1\nline2\n` | `line1\nline2` |
+| No trailing spaces | `value\n` | `value  \n` |
+| UTF-8 encoding | Always UTF-8 | Other encodings |
+| Unix line endings | `\n` | `\r\n` (Windows) |
+
 ## CORS Configuration
 
 **See "CORS (NON-NEGOTIABLE)" section below for complete configuration and behavior.**
@@ -15007,7 +16700,15 @@ Quick reference: Default allows all origins (`*`). Configure via `web.cors` in s
 
 ### HTML5 & CSS Over JavaScript (NON-NEGOTIABLE)
 
-**Minimize JavaScript - prefer HTML5 and CSS solutions whenever possible.**
+**Priority Order: HTML5 first → CSS second → JavaScript last resort.**
+
+| Priority | Technology | Use For |
+|----------|------------|---------|
+| **1st** | HTML5 | Structure, forms, validation, semantic content, `<details>`, `<dialog>` |
+| **2nd** | CSS | Styling, layout, themes, animations, hover states, responsive design |
+| **3rd** | JavaScript | ONLY when HTML5/CSS cannot achieve the functionality |
+
+**JavaScript is the exception, not the rule. Every JS line must be justified.**
 
 | Use Case | Use HTML5/CSS | Use JavaScript Only When |
 |----------|---------------|--------------------------|
@@ -15174,7 +16875,7 @@ src/server/template/
 │                                                                 │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
-│        About · Privacy · Contact · GitHub · v1.0.0              │  ← Footer (centered)
+│        About · Privacy · Contact · GitHub · {projectversion}    │  ← Footer (centered)
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -15225,7 +16926,7 @@ src/server/template/
 │              │                                                  │
 │  Sidebar     │                                                  │
 ├──────────────┴──────────────────────────────────────────────────┤
-│                    v1.0.0 · Docs · Status                       │  ← Footer
+│                    {projectversion} · Docs · Status             │  ← Footer
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -15235,6 +16936,83 @@ src/server/template/
 - Data-dense, dashboard-style design
 - Compact footer with version and links
 - Breadcrumbs for navigation context
+
+### Shared Theme Classes (NON-NEGOTIABLE)
+
+**Both `public.tmpl` and `admin.tmpl` use the SAME theme CSS classes. No conflicts, no ambiguities.**
+
+| Rule | Description |
+|------|-------------|
+| **Same theme classes** | Both layouts use `theme-dark`, `theme-light` on `<html>` |
+| **Same CSS variables** | Theme colors defined once in `common.css`, used everywhere |
+| **Same color schemes** | `dark.css` and `light.css` apply to both public and admin |
+| **No layout-specific themes** | Do NOT create `admin-dark.css` or `public-light.css` |
+| **No class conflicts** | Theme class names are global and consistent |
+| **No ambiguity** | One set of theme rules for the entire project |
+
+**Both layouts start with:**
+```html
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">  <!-- or theme-light -->
+<head>
+  {{ template "partial/head.tmpl" . }}
+</head>
+```
+
+**Theme class on `<html>` element (NOT `<body>`):**
+```html
+<!-- CORRECT -->
+<html class="theme-dark">
+
+<!-- WRONG - do not put theme class on body -->
+<body class="theme-dark">
+```
+
+**CSS variable inheritance:**
+```css
+/* common.css - theme variables */
+html.theme-dark {
+  --bg-color: #1a1a2e;
+  --text-color: #eaeaea;
+  --border-color: #333;
+  /* ... all theme colors ... */
+}
+
+html.theme-light {
+  --bg-color: #ffffff;
+  --text-color: #212529;
+  --border-color: #dee2e6;
+  /* ... all theme colors ... */
+}
+
+/* public.css and admin.css use the SAME variables */
+.sidebar { background: var(--bg-color); }
+.header { color: var(--text-color); }
+```
+
+**Theme preference source:**
+| Context | Preference Source | Fallback |
+|---------|-------------------|----------|
+| Public (guest) | `localStorage.theme` | `dark` |
+| Public (user) | `user_preferences.theme` | `dark` |
+| Admin | `admin_preferences.theme` | `dark` |
+
+**JavaScript theme switching (shared):**
+
+**Note:** Per "HTML5 & CSS Over JavaScript" rules - CSS does all theming via variables. JavaScript ONLY handles preference detection and class switching (cannot be done in pure CSS).
+
+```javascript
+// Same function works for both public and admin
+// JS only sets the class - CSS does all the actual styling
+function setTheme(theme) {
+  if (theme === 'auto') {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    theme = prefersDark ? 'dark' : 'light';
+  }
+  document.documentElement.className = `theme-${theme}`;
+  localStorage.setItem('theme', theme);
+}
+```
 
 ### Layout Partials
 
@@ -15493,14 +17271,14 @@ partial/
 ```
 Desktop:
 ┌─────────────────────────────────────────────────────────────────┐
-│  {projectname}                                      [User Icon] │  ← Header
+│  vidveil                                      [User Icon] │  ← Header
 ├─────────────────────────────────────────────────────────────────┤
 │  Home  |  [App Section 1]  |  [App Section 2]  |  ...           │  ← Nav
 └─────────────────────────────────────────────────────────────────┘
 
 Mobile:
 ┌─────────────────────────────────────────────────────────────────┐
-│  {projectname}                                      [User Icon] │  ← Header
+│  vidveil                                      [User Icon] │  ← Header
 ├─────────────────────────────────────────────────────────────────┤
 │                                                      [☰ Menu]   │  ← Nav row
 └─────────────────────────────────────────────────────────────────┘
@@ -15515,7 +17293,7 @@ Mobile:
 ```html
 <!-- Header bar: site name + user icon -->
 <header class="header">
-  <a href="/" class="site-brand">{projectname}</a>
+  <a href="/" class="site-brand">vidveil</a>
 
   <!-- User icon (always visible, far right) -->
   <div class="user-menu">
@@ -15919,11 +17697,14 @@ var staticFS embed.FS
 
 ## Themes (NON-NEGOTIABLE - PROJECT-WIDE)
 
-**Theme system applies to THE ENTIRE PROJECT:**
+**Theme system applies to THE ENTIRE PROJECT - ALL interfaces share the same colors and settings:**
 - Web interface (HTML pages)
 - Admin panel
 - Swagger UI
 - GraphiQL interface
+- CLI colored output
+- TUI (bubbletea/lipgloss)
+- Native GUI (GTK/Cocoa/Win32)
 - ReadTheDocs documentation (if possible)
 - All interactive elements
 
@@ -15950,11 +17731,66 @@ var staticFS embed.FS
 
 | Component | File Location | Purpose |
 |-----------|---------------|---------|
+| **Common palette** | `src/common/theme/colors.go` | Shared colors (single source of truth) |
 | Theme core logic | `src/server/theme.go` | Theme detection, switching, persistence |
 | Swagger theming | `src/swagger/theme.go` | Swagger UI theme application |
 | GraphQL theming | `src/graphql/theme.go` | GraphiQL theme application |
 | Web UI theming | `src/server/template/` | HTML template theme classes |
 | CSS variables | Embedded in templates | Theme-specific CSS custom properties |
+| **TUI theming** | `src/client/tui/styles.go` | Lipgloss styles from palette |
+| **CLI colors** | `src/client/cli/output.go` | ANSI colors from palette |
+| **GUI theming** | `src/client/gui/theme_*.go` | Native widget theming |
+
+### Unified Color Palette (NON-NEGOTIABLE)
+
+**Colors are defined ONCE in Go and used everywhere - Web CSS, TUI, CLI, GUI.**
+
+```go
+// src/common/theme/colors.go
+package theme
+
+type Palette struct {
+    Background string `json:"background"`
+    Foreground string `json:"foreground"`
+    Primary    string `json:"primary"`
+    Secondary  string `json:"secondary"`
+    Accent     string `json:"accent"`
+    Success    string `json:"success"`
+    Warning    string `json:"warning"`
+    Error      string `json:"error"`
+    Info       string `json:"info"`
+    Surface    string `json:"surface"`
+    SurfaceAlt string `json:"surface_alt"`
+    Border     string `json:"border"`
+    Muted      string `json:"muted"`
+}
+
+var Dark = Palette{
+    Background: "#1a1b26", Foreground: "#c0caf5",
+    Primary: "#7aa2f7", Secondary: "#9ece6a", Accent: "#bb9af7",
+    Success: "#9ece6a", Warning: "#e0af68", Error: "#f7768e", Info: "#7dcfff",
+    Surface: "#24283b", SurfaceAlt: "#1f2335", Border: "#414868", Muted: "#565f89",
+}
+
+var Light = Palette{
+    Background: "#ffffff", Foreground: "#1a1b26",
+    Primary: "#2e7de9", Secondary: "#587539", Accent: "#7847bd",
+    Success: "#587539", Warning: "#8c6c3e", Error: "#c64343", Info: "#007197",
+    Surface: "#f5f5f5", SurfaceAlt: "#e9e9ec", Border: "#c0caf5", Muted: "#6172b0",
+}
+```
+
+### System Theme Detection (Cross-Platform)
+
+| Platform | Detection Method | Notes |
+|----------|------------------|-------|
+| **Web** | `prefers-color-scheme` media query | CSS/JavaScript |
+| **Linux** | `gsettings get org.gnome.desktop.interface color-scheme` | GNOME |
+| **macOS** | `defaults read -g AppleInterfaceStyle` | Returns "Dark" if dark mode |
+| **Windows** | Registry `AppsUseLightTheme` | 0 = dark, 1 = light |
+| **Terminal** | `COLORFGBG` env or fallback to dark | Terminal-specific |
+
+**See PART 36 for CLI/TUI/GUI implementation details.**
 
 **Theme Detection Flow:**
 ```
@@ -15989,8 +17825,8 @@ var staticFS embed.FS
 
 | Changes (User-Visible) | Does NOT Change (System) |
 |------------------------|--------------------------|
-| Page titles | Directory names (`{projectname}/`) |
-| Browser tab | System username (`{projectname}`) |
+| Page titles | Directory names (`vidveil/`) |
+| Browser tab | System username (`vidveil`) |
 | Header/logo text | Log filenames |
 | Footer branding | Config paths |
 | Email "From" name | Binary name |
@@ -16004,7 +17840,7 @@ var staticFS embed.FS
 server:
   branding:
     # Display name (e.g., "Jokes API")
-    title: "{projectname}"
+    title: "vidveil"
     # Short slogan (e.g., "The best jokes API")
     tagline: ""
     # Longer description for SEO/about
@@ -16111,13 +17947,13 @@ server:
 
 | Field | Default Value |
 |-------|---------------|
-| `title` | `{projectname}` |
+| `title` | `vidveil` |
 | `tagline` | Empty |
 | `description` | Empty |
 | `keywords` | Empty |
 | All others | Empty |
 
-**Rule:** If `title` is empty, fall back to `{projectname}`. Other fields are optional.
+**Rule:** If `title` is empty, fall back to `vidveil`. Other fields are optional.
 
 ## Announcements (NON-NEGOTIABLE)
 
@@ -16274,8 +18110,8 @@ web:
 | Variable | Description |
 |----------|-------------|
 | `{currentyear}` | Current year (e.g., 2025) |
-| `{projectname}` | Project name |
-| `{projectorg}` | Organization name |
+| `vidveil` | Project name |
+| `apimgr` | Organization name |
 | `{projectversion}` | Application version |
 | `{builddatetime}` | Build date/time |
 
@@ -16298,9 +18134,7 @@ web:
 
   <!-- Application branding -->
   <p>
-    <a href="{PLATFORM_REPO_URL}" target="_blank">{projectname}</a>
-    <span>•</span>
-    <span>Made with ❤️</span>
+    <a href="{PLATFORM_REPO_URL}" target="_blank">Made with</a> ❤️
     <span>•</span>
     <span>{projectversion}</span>
   </p>
@@ -16594,6 +18428,23 @@ function loadTracking() {
 
 **Content is project-specific. Markdown supported.**
 
+### /server/terms
+
+**Terms of Service - legal terms for using the application.**
+
+| Section | Description |
+|---------|-------------|
+| Acceptance | Agreement to terms by using the service |
+| Account terms | User account responsibilities |
+| Acceptable use | What is/isn't allowed |
+| Content | User-generated content rules |
+| Termination | When/how accounts can be terminated |
+| Liability | Limitation of liability |
+| Changes | How terms may be updated |
+| Governing law | Jurisdiction |
+
+**Default template provided, customizable via admin panel.**
+
 ### Configuration
 
 ```yaml
@@ -16628,6 +18479,11 @@ server:
       # Help page content (markdown supported)
       # Project-specific - must be defined per application
       content: ""
+
+    terms:
+      # Terms of service content (markdown supported)
+      # If empty, uses default template
+      content: ""
 ```
 
 ### Admin Panel (/admin/server/pages)
@@ -16651,6 +18507,36 @@ server:
 | **Help Page** | | |
 | Content | Markdown editor | Help/documentation content |
 | Preview | Button | Preview help page |
+| **Terms of Service** | | |
+| Content | Markdown editor | Terms of service content |
+| Reset to default | Button | Restore default template |
+| Preview | Button | Preview terms page |
+
+### /server/ API Endpoints
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/v1/server/about` | GET | About information (JSON) |
+| `/api/v1/server/privacy` | GET | Privacy policy (JSON) |
+| `/api/v1/server/contact` | POST | Submit contact form |
+| `/api/v1/server/help` | GET | Help content (JSON) |
+| `/api/v1/server/terms` | GET | Terms of service (JSON) |
+
+### /server/ Frontend Routes
+
+| Route | Description |
+|-------|-------------|
+| `/server/about` | About page (HTML) |
+| `/server/privacy` | Privacy policy page (HTML) |
+| `/server/contact` | Contact form page (HTML) |
+| `/server/help` | Help page (HTML) |
+| `/server/terms` | Terms of service page (HTML) |
+
+**All /server/ pages follow standard frontend rules (PART 16):**
+- Full HTML with header/footer
+- Theme support (light/dark)
+- Responsive layout
+- Proper SEO meta tags
 
 ---
 
@@ -16708,6 +18594,131 @@ server:
 - Simplicity: No confusion between admin and user roles
 - Protection: Reduces attack surface
 
+## Admin Route Hierarchy (NON-NEGOTIABLE)
+
+**All admin routes follow a strict hierarchy. Routes MUST NOT conflict.**
+
+### Route Structure
+
+```
+/{adminpath}/                          # Admin root (dashboard)
+/{adminpath}/profile                   # Admin's own profile/preferences
+/{adminpath}/preferences               # Admin's own preferences/settings
+/{adminpath}/notifications             # Admin's own notifications
+/{adminpath}/server/                   # Server management (EVERYTHING ELSE)
+/{adminpath}/server/settings           # Server settings
+/{adminpath}/server/ssl                # SSL/TLS configuration
+/{adminpath}/server/email              # Email configuration
+/{adminpath}/server/scheduler          # Scheduled tasks
+/{adminpath}/server/logs               # Server logs
+/{adminpath}/server/logs/audit         # Audit logs
+/{adminpath}/server/backup             # Backup/restore
+/{adminpath}/server/updates            # Update management
+/{adminpath}/server/info               # Server information
+/{adminpath}/server/metrics            # Metrics dashboard
+/{adminpath}/server/network/           # Network settings
+/{adminpath}/server/network/tor        # Tor configuration
+/{adminpath}/server/network/geoip      # GeoIP settings
+/{adminpath}/server/security/          # Security settings
+/{adminpath}/server/security/auth      # Authentication config
+/{adminpath}/server/security/tokens    # API token management
+/{adminpath}/server/security/firewall  # Firewall rules
+/{adminpath}/server/users/             # User management (if multi-user)
+/{adminpath}/server/orgs/              # Org management (if orgs enabled)
+/{adminpath}/server/cluster/           # Cluster management (if clustering)
+/{adminpath}/server/agents/            # Agent management (if agents)
+```
+
+### Route Hierarchy Rules (NON-NEGOTIABLE)
+
+| Rule | Description |
+|------|-------------|
+| **`/{adminpath}/` root** | Dashboard ONLY |
+| **`/{adminpath}/profile`** | Admin's OWN profile (not server management) |
+| **`/{adminpath}/preferences`** | Admin's OWN preferences (not server settings) |
+| **`/{adminpath}/notifications`** | Admin's OWN notifications |
+| **`/{adminpath}/server/*`** | ALL server management goes here |
+| **No other direct children** | ONLY profile/preferences/notifications under `/{adminpath}/` |
+
+### What Goes Where
+
+| Route | Purpose | Example |
+|-------|---------|---------|
+| `/{adminpath}/` | Dashboard overview | System status, quick stats |
+| `/{adminpath}/profile` | Admin's personal account | Change own password, 2FA |
+| `/{adminpath}/preferences` | Admin's UI preferences | Theme, language, timezone |
+| `/{adminpath}/server/*` | **EVERYTHING server-related** | Config, users, logs, etc. |
+
+### INVALID Routes (NEVER DO THIS)
+
+```
+# WRONG - Server management at admin root level
+/{adminpath}/settings          # ✗ WRONG - use /{adminpath}/server/settings
+/{adminpath}/users             # ✗ WRONG - use /{adminpath}/server/users
+/{adminpath}/logs              # ✗ WRONG - use /{adminpath}/server/logs
+/{adminpath}/security          # ✗ WRONG - use /{adminpath}/server/security
+/{adminpath}/email             # ✗ WRONG - use /{adminpath}/server/email
+/{adminpath}/tor               # ✗ WRONG - use /{adminpath}/server/network/tor
+/{adminpath}/tokens            # ✗ WRONG - use /{adminpath}/server/security/tokens
+/{adminpath}/agents            # ✗ WRONG - use /{adminpath}/server/agents
+/{adminpath}/cluster           # ✗ WRONG - use /{adminpath}/server/cluster
+
+# CORRECT
+/{adminpath}/profile           # ✓ Admin's own profile
+/{adminpath}/preferences       # ✓ Admin's own preferences
+/{adminpath}/server/settings   # ✓ Server settings
+/{adminpath}/server/users      # ✓ User management
+```
+
+### API Route Hierarchy (Same Pattern)
+
+```
+/api/v1/admin/                         # Admin API root
+/api/v1/admin/profile                  # Admin's own profile
+/api/v1/admin/preferences              # Admin's own preferences
+/api/v1/admin/server/                  # Server management API
+/api/v1/admin/server/settings          # Server settings
+/api/v1/admin/server/users             # User management
+/api/v1/admin/server/agents            # Agent management
+```
+
+### Route Conflict Prevention
+
+**New routes MUST be checked against existing routes:**
+
+```go
+// Admin route hierarchy validation
+var validAdminRootPaths = map[string]bool{
+    "":              true,  // Dashboard (/{adminpath}/)
+    "profile":       true,  // Admin's own profile
+    "preferences":   true,  // Admin's own preferences
+    "notifications": true,  // Admin's own notifications
+    "server":        true,  // Server management (has sub-routes)
+}
+
+func validateAdminRoute(path string) error {
+    // Extract first segment after /{adminpath}/
+    parts := strings.Split(strings.Trim(path, "/"), "/")
+    if len(parts) == 0 {
+        return nil // Root path is OK
+    }
+
+    firstSegment := parts[0]
+    if !validAdminRootPaths[firstSegment] {
+        return fmt.Errorf("invalid admin route: /%s/* - must use /server/* for server management", firstSegment)
+    }
+    return nil
+}
+```
+
+### Why This Structure?
+
+1. **Clear separation**: Admin's personal settings vs server management
+2. **No conflicts**: Fixed set of root-level paths prevents collisions
+3. **Scalability**: All new server features go under `/server/*`
+4. **Predictability**: Developers know where to add new routes
+5. **Security**: Easy to audit - only 4 valid root-level paths
+
 ## Configurable Admin Path (NON-NEGOTIABLE)
 
 **The `/admin` path can be changed for security (obscurity).**
@@ -16732,11 +18743,15 @@ server:
 | **Min/max length** | 2-32 characters |
 | **No leading/trailing hyphens** | `my-admin` ✓, `-admin-` ✗ |
 
+**Path Normalization:** See PART 5 "Path Normalization (NON-NEGOTIABLE)" for global path cleanup rules that apply to `admin_path` and all other configurable paths.
+
 ### Route Conflict Detection
 
 ```go
 // Check if new admin path conflicts with existing routes
 func validateAdminPath(newPath string, router *mux.Router) error {
+    // Normalize first
+    newPath = normalizePath(newPath)
     // 1. Check reserved paths
     reserved := []string{"api", "static", "assets", "health", "version", "metrics", ".well-known"}
     for _, r := range reserved {
@@ -17021,7 +19036,7 @@ func RegisterAdminRoutes(r *mux.Router) {
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                                                                      ║
-║   {PROJECTNAME} v1.0.0                                               ║
+║   VIDVEIL {projectversion}                                     ║
 ║                                                                      ║
 ║   Status: Running (first run - setup available)                      ║
 ║                                                                      ║
@@ -17367,6 +19382,54 @@ Admin clicks "Invite New Admin"
 - SMTP status shown in notification preferences
 - See PART 18: EMAIL & NOTIFICATIONS for SMTP configuration
 
+#### Admin Appearance Settings (`/admin/profile/preferences`)
+
+**Server admins can customize their admin panel appearance.**
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `theme` | Select | `dark` | Theme (dark/light/auto) |
+| `font_size` | Select | `medium` | Font size (small/medium/large) |
+| `reduce_motion` | Toggle | Off | Reduce animations |
+| `date_format` | Select | `YYYY-MM-DD` | Date display format |
+| `time_format` | Select | `24h` | Time display format (12h/24h) |
+
+**Admin Appearance Settings UI:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Appearance Settings                                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Theme                                                      │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐                       │
+│  │  🌙     │ │  ☀️     │ │  💻     │                       │
+│  │ Dark    │ │ Light   │ │ Auto    │                       │
+│  └─────────┘ └─────────┘ └─────────┘ ↑ Default: Dark       │
+│                                                             │
+│  Font Size                                                  │
+│  ○ Small                                                    │
+│  ● Medium (default)                                         │
+│  ○ Large                                                    │
+│                                                             │
+│  Accessibility                                              │
+│  [OFF] Reduce motion                                        │
+│        Minimize animations and transitions.                 │
+│                                                             │
+│  Date & Time                                                │
+│  Date Format: [YYYY-MM-DD ▼]                               │
+│  Time Format: [24h ▼]                                       │
+│                                                             │
+│  [Save Changes]                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Admin theme applies to:**
+- Admin panel (`/admin/*`)
+- Admin-accessible Swagger UI
+- Admin-accessible GraphiQL
+
+**Note:** Admin theme preference is independent of the site-wide default theme. The site default is dark, but each admin can choose their own preference.
+
 ## Server Admin Privacy (NON-NEGOTIABLE)
 
 **Server admins CANNOT see other server admin accounts, similar to user privacy.**
@@ -17475,7 +19538,7 @@ Admin Panel Header:
 │         │                   │           │
 │         └───────────────────┘           │
 │                                         │
-│              v1.2.3                     │
+│              {projectversion}           │
 └─────────────────────────────────────────┘
 ```
 
@@ -17671,7 +19734,7 @@ Admin Panel Header:
 
 | Setting | Control | Default | Restart | Description |
 |---------|---------|---------|---------|-------------|
-| `title` | Text | `{projectname}` | No | App display name |
+| `title` | Text | `vidveil` | No | App display name |
 | `tagline` | Text | (empty) | No | Short slogan |
 | `description` | Textarea | (empty) | No | SEO/about description |
 | `logo` | File | (none) | No | Logo image upload |
@@ -17754,10 +19817,13 @@ Admin Panel Header:
 
 | Setting | Control | Default | Restart | Description |
 |---------|---------|---------|---------|-------------|
-| `backup.enabled` | Toggle | On | No | Enable scheduled backups |
-| `backup.schedule` | Text | `0 2 * * *` | No | Cron schedule |
-| `backup.retention.max_backups` | Number | `4` | No | Max backups to keep |
-| `backup.retention.policy` | Dropdown | `count` | No | `count`/`days`/`weeks` |
+| `backup.enabled` | Toggle | On | No | Enable scheduled backups (backup_daily) |
+| `backup.hourly_enabled` | Toggle | Off | No | Enable hourly incremental (backup_hourly) |
+| `backup.schedule` | Text | `0 2 * * *` | No | Daily backup cron schedule |
+| `backup.retention.max_backups` | Number | `1` | No | Daily full backups to keep (≥1) |
+| `backup.retention.keep_weekly` | Number | `0` | No | Weekly backups (Sunday) - 0 = disabled |
+| `backup.retention.keep_monthly` | Number | `0` | No | Monthly backups (1st) - 0 = disabled |
+| `backup.retention.keep_yearly` | Number | `0` | No | Yearly backups (Jan 1st) - 0 = disabled |
 | `backup.encryption.enabled` | Toggle | Off | No | Encrypt backups |
 | `backup.encryption.password` | Password | (none) | No | Encryption password |
 
@@ -18015,6 +20081,8 @@ The admin panel MUST include a scheduler section with:
 | `/api/v1/admin/profile/password` | POST | Change admin password |
 | `/api/v1/admin/profile/token` | GET | Get current API token (masked) |
 | `/api/v1/admin/profile/token` | POST | Regenerate API token |
+| `/api/v1/admin/profile/preferences` | GET | Get admin preferences (theme, notifications) |
+| `/api/v1/admin/profile/preferences` | PATCH | Update admin preferences |
 
 ### Admin - Branding (`/api/v1/admin/server/branding/`)
 
@@ -18113,6 +20181,388 @@ The admin panel MUST include a scheduler section with:
 | `/api/v1/admin/server/logs` | GET | List log files |
 | `/api/v1/admin/server/logs/{type}` | GET | Get log entries |
 | `/api/v1/admin/server/logs/{type}/download` | GET | Download log file |
+
+## Agent Management (OPTIONAL - When Agent is Enabled)
+
+**Agent management routes are only available when the project includes an agent component.**
+
+**See PART 36 for full agent binary and setup details.**
+
+### Admin Panel (`/{adminpath}/server/agents`)
+
+**Main agent dashboard showing all registered agents:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  /{adminpath}/server/agents                                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Connected Agents                                              [+ Add Agent] │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│                                                                             │
+│  │ Name              │ Status    │ Connected     │ Last Seen    │ Health   │
+│  ├───────────────────┼───────────┼───────────────┼──────────────┼──────────│
+│  │ web-server-01     │ ● Online  │ 2h 15m        │ Just now     │ ✓ Good   │
+│  │ web-server-02     │ ● Online  │ 2h 14m        │ 5s ago       │ ✓ Good   │
+│  │ db-primary        │ ● Online  │ 5d 3h         │ 2s ago       │ ⚠ Warn   │
+│  │ db-replica        │ ○ Offline │ —             │ 3 days ago   │ ✗ Error  │
+│  │ cache-01          │ ● Online  │ 12h 30m       │ 1s ago       │ ✓ Good   │
+│  └───────────────────┴───────────┴───────────────┴──────────────┴──────────┘
+│                                                                             │
+│  Summary: 4 online, 1 offline                                               │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Table Columns:**
+| Column | Description |
+|--------|-------------|
+| **Name** | Agent hostname (link to detail page) |
+| **Status** | ● Online / ○ Offline |
+| **Connected** | Duration since agent connected (or — if offline) |
+| **Last Seen** | Time since last heartbeat/report |
+| **Health** | ✓ Good / ⚠ Warn / ✗ Error (based on agent metrics) |
+
+### Admin Panel (`/{adminpath}/server/agents/{name}`)
+
+**Detailed view of a single agent:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  /{adminpath}/server/agents/web-server-01                         [← Back to List] │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  web-server-01                                             ● Online         │
+│  ───────────────────────────────────────────────────────────────────────    │
+│                                                                             │
+│  ┌─ System Info ─────────────────────────────────────────────────────────┐  │
+│  │                                                                       │  │
+│  │  Hostname:    web-server-01                                           │  │
+│  │  OS:          Linux (Ubuntu 22.04)                                    │  │
+│  │  Arch:        amd64                                                   │  │
+│  │  Agent Ver:   1.0.0                                                   │  │
+│  │  Uptime:      45 days, 3 hours                                        │  │
+│  │  Tags:        production, web-tier, us-east-1                         │  │
+│  │                                                                       │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌─ Connection ──────────────────────────────────────────────────────────┐  │
+│  │                                                                       │  │
+│  │  Status:      ● Connected                                             │  │
+│  │  Connected:   2h 15m ago                                              │  │
+│  │  Last Report: Just now (every 60s)                                    │  │
+│  │  IP Address:  192.168.1.100                                           │  │
+│  │                                                                       │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌─ System Metrics ──────────────────────────────────────────────────────┐  │
+│  │                                                                       │  │
+│  │  CPU:     ████████░░░░░░░░░░░░  42%                                   │  │
+│  │  Memory:  ██████████████░░░░░░  72% (5.8GB / 8GB)                     │  │
+│  │  Disk:    ████████████░░░░░░░░  62% (124GB / 200GB)                   │  │
+│  │  Network: ↓ 1.2 MB/s  ↑ 450 KB/s                                      │  │
+│  │  Load:    2.45 / 4.12 / 3.87                                          │  │
+│  │                                                                       │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌─ Actions ─────────────────────────────────────────────────────────────┐  │
+│  │                                                                       │  │
+│  │  [Refresh Now]  [View Logs]  [Edit Tags]  [Regenerate Token]          │  │
+│  │                                                                       │  │
+│  │  [Remove Agent]  ← Requires confirmation                              │  │
+│  │                                                                       │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Admin Panel (`/{adminpath}/server/agents/add`)
+
+**Simple agent registration page:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  /{adminpath}/server/agents/add                                   [← Back to List] │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Add New Agent                                                              │
+│  ───────────────────────────────────────────────────────────────────────    │
+│                                                                             │
+│  Agent Name (optional):                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                                                                     │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│  Leave blank to use hostname. Equivalent to: hostname -s                    │
+│                                                                             │
+│  Tags (optional):                                                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ production, web-tier                                                │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│  Comma-separated. Used for filtering and grouping.                          │
+│                                                                             │
+│  Token Expiry:                                                              │
+│  ○ 1 hour                                                                   │
+│  ● 24 hours (recommended)                                                   │
+│  ○ 7 days                                                                   │
+│  ○ Never expires                                                            │
+│                                                                             │
+│  [Generate Agent Token]                                                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+         ↓ (Token generated)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ✅ Agent Token Generated                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Run this command on the target host:                                       │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ curl -sSL https://app.example.com/install-agent | sh -s -- \        │    │
+│  │   --server https://app.example.com \                                │    │
+│  │   --token adm_agt_abc123def456ghi789jkl012mno345pqr678              │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│  [Copy to Clipboard]                                                        │
+│                                                                             │
+│  Or manually:                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ projectname-agent --server https://app.example.com \                │    │
+│  │   --token adm_agt_abc123def456ghi789jkl012mno345pqr678              │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│  [Copy to Clipboard]                                                        │
+│                                                                             │
+│  ⚠️  Token expires in 24 hours and can only be used once.                   │
+│                                                                             │
+│  [Done]                                                                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Server generates the complete command string:**
+```go
+func GenerateAgentConnectionCommand(serverURL, token string) string {
+    return fmt.Sprintf("projectname-agent --server %s --token %s", serverURL, token)
+}
+```
+
+**Agent Name Default:**
+```go
+// Go equivalent of hostname -s
+func getDefaultAgentName() string {
+    hostname, err := os.Hostname()
+    if err != nil {
+        return "unknown"
+    }
+    // hostname -s returns short hostname (before first dot)
+    if idx := strings.Index(hostname, "."); idx > 0 {
+        return hostname[:idx]
+    }
+    return hostname
+}
+```
+
+### Agent Connection Notifications (NON-NEGOTIABLE)
+
+**When an agent connects, server WebUI shows real-time notification:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  🔔 Notification                                                      [×]   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ✅ web-server-01 has connected                                             │
+│  Agent is now sending data to server for admin scope                        │
+│                                                                             │
+│  [View Agent]  [Dismiss]                                                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Notification content by scope:**
+
+| Scope | Notification Message |
+|-------|---------------------|
+| Admin | "{name} has connected. Agent is now sending data to server for admin scope" |
+| User | "{name} has connected. Agent is now sending data for user {username}" |
+| Org | "{name} has connected. Agent is now sending data for org {orgname}" |
+
+**Notification triggers:**
+- Agent first connection (registration complete)
+- Agent reconnection after disconnect
+- Agent status change (online/offline)
+
+### Admin Panel (`/{adminpath}/server/agents/remove`)
+
+**Agent removal page with confirmation:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  /{adminpath}/server/agents/remove                                [← Back to List] │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Remove Agent                                                               │
+│  ───────────────────────────────────────────────────────────────────────    │
+│                                                                             │
+│  Select agent to remove:                                                    │
+│                                                                             │
+│  ┌───────────────────┬───────────┬──────────────────────────────────────┐   │
+│  │ Name              │ Status    │ Last Seen                            │   │
+│  ├───────────────────┼───────────┼──────────────────────────────────────┤   │
+│  │ ○ web-server-01   │ ● Online  │ Just now                             │   │
+│  │ ○ web-server-02   │ ● Online  │ 5s ago                               │   │
+│  │ ○ db-primary      │ ● Online  │ 2s ago                               │   │
+│  │ ○ db-replica      │ ○ Offline │ 3 days ago                           │   │
+│  │ ○ cache-01        │ ● Online  │ 1s ago                               │   │
+│  └───────────────────┴───────────┴──────────────────────────────────────┘   │
+│                                                                             │
+│  [Remove Selected]                                                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+         ↓ (Agent selected, click Remove)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  ⚠️  Remove Agent                                                           │
+│                                                                             │
+│  Are you sure you want to remove agent "db-replica"?                        │
+│                                                                             │
+│  This will:                                                                 │
+│  • Revoke the agent's authentication token                                  │
+│  • Remove the agent from the dashboard                                      │
+│  • Delete all historical metrics for this agent                             │
+│                                                                             │
+│  The agent binary on the remote host will NOT be uninstalled.               │
+│  You must manually run: projectname-agent --service uninstall               │
+│                                                                             │
+│              [No, Cancel]        [Yes, Remove Agent]                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Scoped Agents API (NON-NEGOTIABLE)
+
+**Agents can belong to admin, user, or org scope. Same API pattern, different routes.**
+
+| Scope | Base Route | Owner Token | Agent Token |
+|-------|------------|-------------|-------------|
+| Admin | `/api/v1/admin/server/agents/` | `adm_` | `adm_agt_` |
+| User | `/api/v1/users/agents/` | `usr_` | `usr_agt_` |
+| Org | `/api/v1/orgs/{slug}/agents/` | `org_` | `org_agt_` |
+
+**Same endpoints for all scopes (replace `{base}` with scope route above):**
+
+| Endpoint | Method | Token | Description |
+|----------|--------|-------|-------------|
+| `{base}` | GET | Owner | List agents |
+| `{base}` | POST | Owner | Create agent token |
+| `{base}/{name}` | GET | Owner | Get agent details |
+| `{base}/{name}` | PATCH | Owner | Update agent (tags, name) |
+| `{base}/{name}` | DELETE | Owner | Remove agent |
+| `{base}/{name}/token` | POST | Owner | Regenerate agent token |
+| `{base}/{name}/metrics` | GET | Owner | Get agent metrics history |
+| `{base}/register` | POST | Agent | Agent self-registration (one-time) |
+| `{base}/heartbeat` | POST | Agent | Agent health check / keepalive |
+| `{base}/report` | POST | Agent | Submit collected data (project-specific) |
+
+**Token Access:**
+- Owner tokens (`adm_`, `usr_`, `org_`): Full agent management (CRUD, view metrics)
+- Agent tokens (`adm_agt_`, `usr_agt_`, `org_agt_`): Limited to register, heartbeat, report (own data only)
+
+**Examples:**
+```
+# Admin agent (server infrastructure)
+POST /api/v1/admin/server/agents/register
+Authorization: Bearer adm_agt_abc123...
+
+# User agent (personal SaaS monitoring)
+POST /api/v1/users/agents/register
+Authorization: Bearer usr_agt_xyz789...
+
+# Org agent (organization resources)
+POST /api/v1/orgs/acme-corp/agents/register
+Authorization: Bearer org_agt_def456...
+```
+
+**Agent Data Views (Project-Specific):**
+
+Agent data can be exposed via project-specific routes for different audiences:
+
+| Route | Description | Example |
+|-------|-------------|---------|
+| `/{admin_path}/server/agents/*` | Admin management UI | Full control |
+| `/users/agents/*` | User's agent dashboard | Personal agents |
+| `/orgs/{slug}/agents/*` | Org agent dashboard | Org agents |
+| `/{custom}/status` | Public status page | Status dashboard |
+
+Define project-specific data views in PART 37.
+
+### Agent Database Schema
+
+```sql
+-- agents table (supports all scopes)
+CREATE TABLE agents (
+    id TEXT PRIMARY KEY,                    -- UUID
+    name TEXT NOT NULL,                     -- hostname or custom name
+
+    -- Scope (which owner)
+    scope TEXT NOT NULL,                    -- 'admin', 'user', 'org'
+    owner_id TEXT,                          -- NULL for admin, user_id for user, org_id for org
+    token_prefix TEXT NOT NULL,             -- 'adm_agt_', 'usr_agt_', 'org_agt_'
+    token_hash TEXT NOT NULL,               -- SHA-256 hash of full token
+
+    -- System info (from agent)
+    hostname TEXT,
+    os TEXT,                                -- linux, windows, darwin
+    arch TEXT,                              -- amd64, arm64
+    version TEXT,                           -- Agent version
+
+    -- Tags
+    tags TEXT,                              -- JSON array: ["prod", "web"]
+
+    -- Connection tracking
+    status TEXT DEFAULT 'pending',          -- pending, online, offline
+    ip_address TEXT,
+    connected_at TIMESTAMP,
+    last_seen_at TIMESTAMP,
+
+    -- Metadata
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(scope, owner_id, name)           -- Name unique within scope+owner
+);
+
+CREATE INDEX idx_agents_scope_owner ON agents(scope, owner_id);
+
+-- agent_metrics table (for historical data)
+CREATE TABLE agent_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+
+    -- Metrics
+    cpu_percent REAL,
+    memory_percent REAL,
+    memory_used_bytes INTEGER,
+    memory_total_bytes INTEGER,
+    disk_percent REAL,
+    disk_used_bytes INTEGER,
+    disk_total_bytes INTEGER,
+    network_rx_bytes INTEGER,
+    network_tx_bytes INTEGER,
+    load_1 REAL,
+    load_5 REAL,
+    load_15 REAL,
+
+    -- Custom metrics (JSON)
+    custom_metrics TEXT,
+
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_agent_metrics_agent_time ON agent_metrics(agent_id, recorded_at);
+```
 
 ---
 
@@ -18455,7 +20905,7 @@ IMPORTANT NEXT STEPS
 5. Enable two-factor authentication
 
 Keep your admin credentials secure. If you lose access, use:
-  {projectname} --maintenance setup
+  vidveil --maintenance setup
 ────────────────────────────────────────────────────────────────────────
 
 --
@@ -19336,7 +21786,7 @@ Send Test Email Dialog
   "type": "warning",
   "title": "SSL Certificate Expiring",
   "message": "Certificate expires in 3 days",
-  "link": "/admin/server/ssl",
+  "link": "/{adminpath}/server/ssl",
   "read": false,
   "created_at": "2025-01-15T10:30:00Z"
 }
@@ -19529,6 +21979,65 @@ server:
 | **Cluster Aware** | Only one node runs each task in cluster mode |
 | **No External Dependencies** | Built-in, no cron or external scheduler needed |
 
+## NEVER Use External Schedulers (NON-NEGOTIABLE)
+
+**The built-in scheduler handles ALL scheduled tasks. NEVER use external schedulers.**
+
+### Prohibited External Schedulers
+
+| Platform | NEVER Use | Reason |
+|----------|-----------|--------|
+| **Linux** | cron, crond, crontab, systemd timers, at, anacron | Built-in scheduler handles this |
+| **Windows** | Task Scheduler, schtasks, at | Built-in scheduler handles this |
+| **macOS** | launchd, cron, at | Built-in scheduler handles this |
+| **Container** | Kubernetes CronJob, Docker cron containers | Built-in scheduler handles this |
+| **Cloud** | AWS CloudWatch Events, Azure Scheduler, GCP Cloud Scheduler | Built-in scheduler handles this |
+
+### Why Built-in Only?
+
+| Reason | Explanation |
+|--------|-------------|
+| **Single source of truth** | All schedules visible in admin panel |
+| **Cluster aware** | External cron doesn't know about cluster nodes |
+| **State tracking** | Tracks last run, next run, success/failure |
+| **Catch-up logic** | Runs missed tasks on restart |
+| **No deployment complexity** | No cron files to manage, sync, or debug |
+| **Portable** | Works identically on all platforms |
+| **Observable** | Logs, metrics, admin UI for all tasks |
+
+### What If User Asks for Cron?
+
+**User request:** "Can I run the backup via cron instead?"
+
+**Correct response:**
+```
+The application has a built-in scheduler that handles backups.
+
+To configure backup schedule:
+1. Go to Admin Panel → Server → Backup
+2. Set schedule to your preferred time
+3. The built-in scheduler will run it automatically
+
+External schedulers (cron, Task Scheduler, etc.) are not supported
+because the built-in scheduler provides:
+- Cluster-aware execution
+- Automatic catch-up for missed runs
+- State tracking and logging
+- Admin panel visibility
+```
+
+### Exceptions (NONE)
+
+**There are NO exceptions to this rule:**
+
+| Scenario | Answer |
+|----------|--------|
+| "Cron is more reliable" | No - built-in is just as reliable |
+| "I already have cron set up" | No - use built-in instead |
+| "I need to run at boot" | No - built-in runs at boot |
+| "I need complex schedules" | No - built-in supports full cron syntax |
+| "I want to trigger externally" | Use API endpoint instead of scheduler |
+
 ### Built-in Tasks (Required)
 
 Every project MUST include these scheduled tasks:
@@ -19539,10 +22048,11 @@ Every project MUST include these scheduled tasks:
 | `geoip.update` | Weekly (Sunday 03:00) | Download/update MaxMind GeoLite2 databases | Yes |
 | `blocklist.update` | Daily at 04:00 | Download/update IP/domain blocklists | Yes |
 | `cve.update` | Daily at 05:00 | Download/update CVE/security databases | Yes |
-| `session.cleanup` | Hourly | Remove expired sessions | No |
-| `token.cleanup` | Daily at 06:00 | Remove expired tokens | No |
+| `session.cleanup` | Every 15 minutes | Remove expired sessions | No |
+| `token.cleanup` | Every 15 minutes | Remove expired tokens | No |
 | `log.rotation` | Daily at 00:00 | Rotate and compress old logs | No |
-| `backup.auto` | Disabled by default | Automatic backups | Yes |
+| `backup_daily` | Daily at 02:00 | Full backup + daily incremental (default: 2 files) | Yes |
+| `backup_hourly` | Hourly | Hourly incremental (disabled by default) | Yes |
 | `healthcheck.self` | Every 5 minutes | Self-health verification | No |
 | `tor.health` | Every 10 minutes | Check Tor connectivity, restart if needed | No (when Tor installed) |
 | `cluster.heartbeat` | Every 30 seconds | Cluster node heartbeat (cluster mode only) | No |
@@ -19587,14 +22097,14 @@ server:
         retry_on_fail: true
         retry_delay: 1h
 
-      # Every hour
+      # Every 15 minutes
       session_cleanup:
-        schedule: "@hourly"
+        schedule: "@every 15m"
         enabled: true
 
-      # Daily at 06:00
+      # Every 15 minutes
       token_cleanup:
-        schedule: "0 6 * * *"
+        schedule: "@every 15m"
         enabled: true
 
       # Daily at midnight
@@ -19607,12 +22117,26 @@ server:
         max_size: 100MB
         compress: true
 
-      # Daily at 01:00 (disabled by default)
-      backup_auto:
-        schedule: "0 1 * * *"
+      # Daily backup at 02:00 (admin can disable)
+      backup_daily:
+        schedule: "0 2 * * *"
+        enabled: true
+        # Verify after creation (all checks must pass)
+        verify: true
+        # Creates: vidveil_backup_YYYY-MM-DD.tar.gz[.enc] (full)
+        #          vidveil-daily.tar.gz[.enc] (incremental)
+        retention:
+          max_backups: 1     # 1-365: daily full backups to keep
+          keep_weekly: 0     # 0-52: Sunday backups (0 = disabled)
+          keep_monthly: 0    # 0-12: 1st of month backups (0 = disabled)
+          keep_yearly: 0     # 0-10: January 1st backups (0 = disabled)
+
+      # Hourly incremental backup (disabled by default)
+      backup_hourly:
+        schedule: "@hourly"
         enabled: false
-        # Keep max 4 backups (storage management)
-        keep_count: 4
+        # Creates: vidveil-hourly.tar.gz[.enc] (incremental since daily)
+        # Always 1 file (replaced each hour)
 
       # Every 5 minutes
       healthcheck_self:
@@ -19695,7 +22219,7 @@ In cluster mode, tasks are distributed to prevent duplicate execution:
 - `ssl.renewal`
 - `geoip.update`
 - `blocklist.update`
-- `backup.auto`
+- `backup`
 
 **Local Tasks (run on each node):**
 - `session.cleanup`
@@ -19775,18 +22299,101 @@ Execute task
 | **Task List** | All tasks with status, next run, last run |
 | **Task Detail** | Full history, logs, configuration |
 | **Run Now** | Button to trigger immediate execution |
-| **Enable/Disable** | Toggle for non-critical tasks |
+| **Enable/Disable** | Toggle for tasks (admin can enable/disable backup) |
 | **History** | Last 100 executions per task |
+
+**Admin UI - Scheduler Overview:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  SCHEDULED TASKS                                            [Run All Now]   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Task                 Schedule        Last Run           Next Run    Status │
+│  ───────────────────────────────────────────────────────────────────────── │
+│  ✓ Backup Daily       02:00 daily     Today 02:00 (15s)  Tomorrow    ✓     │
+│  ○ Backup Hourly      Hourly          -                  -           ○     │
+│  ✓ SSL Renewal        03:00 daily     Today 03:00 (1s)   Tomorrow    ✓     │
+│  ✓ GeoIP Update       03:00 Sunday    Jan 12 03:00 (45s) Jan 19      ✓     │
+│  ✓ Session Cleanup    Every 15m       14:15 (0.1s)       14:30       ✓     │
+│  ✓ Token Cleanup      Every 15m       14:15 (0.1s)       14:30       ✓     │
+│  ✓ Log Rotation       00:00 daily     Today 00:00 (2s)   Tomorrow    ✓     │
+│  ✓ Health Check       Every 5m        14:25 (0.1s)       14:30       ✓     │
+│                                                                             │
+│  Legend: ✓ Success  ● Running  ✗ Failed  ○ Pending  ◐ Skipped             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Admin UI - Task Detail (Backup):**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TASK: Backup                               [Enable/Disable] [Run Now]      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Status:      ✓ Enabled                                                    │
+│  Schedule:    0 2 * * * (Daily at 02:00)                                   │
+│  Type:        Global (runs on one cluster node)                            │
+│  Last Run:    2025-01-15 02:00:05 (15.1s)                                  │
+│  Next Run:    2025-01-16 02:00:00                                          │
+│  Run Count:   342 successful, 2 failed                                     │
+│                                                                             │
+│  Retention:   Keep 2 (yesterday's full + daily incremental)                │
+│  Encryption:  ✓ Enabled (compliance mode)                                  │
+│                                                                             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  CURRENT BACKUPS                                                            │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  File                                   Size      Created          Status  │
+│  myapp_backup_2025-01-15.tar.gz.enc    23MB      Today 02:00      ✓       │
+│  myapp-daily.tar.gz.enc                 5MB      Today 02:00      ✓       │
+│                                                                             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  RECENT HISTORY                                                             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  Date                 Duration   Status   Details                          │
+│  2025-01-15 02:00     15.1s      ✓        Verified: 2 backups, 28MB       │
+│  2025-01-14 02:00     14.8s      ✓        Verified: 2 backups, 27MB       │
+│  2025-01-13 02:00     45.2s      ✗        Error: disk full                │
+│                                                                             │
+│  [View Full History]  [Download Backup]  [Restore...]                      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 **Task List Columns:**
 
 | Column | Description |
 |--------|-------------|
 | Task Name | Human-readable name |
-| Status | ● running, ✓ success, ✗ failed, ○ pending |
+| Status | ● running, ✓ success, ✗ failed, ○ pending, ◐ skipped |
+| Schedule | Cron expression or interval |
 | Last Run | Timestamp and duration |
 | Next Run | Scheduled time |
-| Actions | Run Now, View History |
+| Actions | Enable/Disable, Run Now, View History |
+
+**Backup Tasks:**
+
+| Task | Schedule | Default | Description |
+|------|----------|---------|-------------|
+| `backup_daily` | 02:00 daily | Enabled | Full backup + daily incremental |
+| `backup_hourly` | Hourly | Disabled | Hourly incremental |
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `max_backups` | 1 | Daily full backups to keep |
+| `keep_weekly` | 0 | Sunday backups (0 = disabled) |
+| `keep_monthly` | 0 | 1st of month (0 = disabled) |
+| `keep_yearly` | 0 | January 1st (0 = disabled) |
+| Verify | Yes | All checks must pass |
+
+**What backup_daily creates (default: 2 files):**
+- `vidveil_backup_YYYY-MM-DD.tar.gz[.enc]` - Full backup (yesterday's)
+- `vidveil-daily.tar.gz[.enc]` - Daily incremental
+
+**What backup_hourly creates (if enabled: +1 file):**
+- `vidveil-hourly.tar.gz[.enc]` - Hourly incremental
 
 ### API Endpoints
 
@@ -19979,7 +22586,7 @@ var (
     // HTTP metrics
     HTTPRequestsTotal = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "{projectname}_http_requests_total",
+            Name: "vidveil_http_requests_total",
             Help: "Total number of HTTP requests",
         },
         []string{"method", "path", "status"},
@@ -19987,7 +22594,7 @@ var (
 
     HTTPRequestDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "{projectname}_http_request_duration_seconds",
+            Name:    "vidveil_http_request_duration_seconds",
             Help:    "HTTP request duration in seconds",
             Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
         },
@@ -19996,7 +22603,7 @@ var (
 
     HTTPRequestSize = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "{projectname}_http_request_size_bytes",
+            Name:    "vidveil_http_request_size_bytes",
             Help:    "HTTP request size in bytes",
             Buckets: []float64{100, 1000, 10000, 100000, 1000000, 10000000},
         },
@@ -20005,7 +22612,7 @@ var (
 
     HTTPResponseSize = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "{projectname}_http_response_size_bytes",
+            Name:    "vidveil_http_response_size_bytes",
             Help:    "HTTP response size in bytes",
             Buckets: []float64{100, 1000, 10000, 100000, 1000000, 10000000},
         },
@@ -20014,7 +22621,7 @@ var (
 
     HTTPActiveRequests = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_http_active_requests",
+            Name: "vidveil_http_active_requests",
             Help: "Number of active HTTP requests",
         },
     )
@@ -20022,7 +22629,7 @@ var (
     // Database metrics
     DBQueriesTotal = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "{projectname}_db_queries_total",
+            Name: "vidveil_db_queries_total",
             Help: "Total number of database queries",
         },
         []string{"operation", "table"},
@@ -20030,7 +22637,7 @@ var (
 
     DBQueryDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "{projectname}_db_query_duration_seconds",
+            Name:    "vidveil_db_query_duration_seconds",
             Help:    "Database query duration in seconds",
             Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1},
         },
@@ -20039,21 +22646,21 @@ var (
 
     DBConnectionsOpen = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_db_connections_open",
+            Name: "vidveil_db_connections_open",
             Help: "Number of open database connections",
         },
     )
 
     DBConnectionsInUse = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_db_connections_in_use",
+            Name: "vidveil_db_connections_in_use",
             Help: "Number of database connections in use",
         },
     )
 
     DBErrors = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "{projectname}_db_errors_total",
+            Name: "vidveil_db_errors_total",
             Help: "Total number of database errors",
         },
         []string{"operation", "error_type"},
@@ -20062,7 +22669,7 @@ var (
     // Cache metrics
     CacheHits = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "{projectname}_cache_hits_total",
+            Name: "vidveil_cache_hits_total",
             Help: "Total number of cache hits",
         },
         []string{"cache"},
@@ -20070,7 +22677,7 @@ var (
 
     CacheMisses = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "{projectname}_cache_misses_total",
+            Name: "vidveil_cache_misses_total",
             Help: "Total number of cache misses",
         },
         []string{"cache"},
@@ -20078,7 +22685,7 @@ var (
 
     CacheEvictions = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "{projectname}_cache_evictions_total",
+            Name: "vidveil_cache_evictions_total",
             Help: "Total number of cache evictions",
         },
         []string{"cache"},
@@ -20086,7 +22693,7 @@ var (
 
     CacheSize = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "{projectname}_cache_size",
+            Name: "vidveil_cache_size",
             Help: "Current cache size (items)",
         },
         []string{"cache"},
@@ -20094,7 +22701,7 @@ var (
 
     CacheBytes = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "{projectname}_cache_bytes",
+            Name: "vidveil_cache_bytes",
             Help: "Current cache size (bytes)",
         },
         []string{"cache"},
@@ -20103,7 +22710,7 @@ var (
     // Scheduler metrics
     SchedulerTasksTotal = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "{projectname}_scheduler_tasks_total",
+            Name: "vidveil_scheduler_tasks_total",
             Help: "Total number of scheduled tasks executed",
         },
         []string{"task", "status"},
@@ -20111,7 +22718,7 @@ var (
 
     SchedulerTaskDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "{projectname}_scheduler_task_duration_seconds",
+            Name:    "vidveil_scheduler_task_duration_seconds",
             Help:    "Scheduled task duration in seconds",
             Buckets: []float64{0.1, 0.5, 1, 5, 10, 30, 60, 300, 600},
         },
@@ -20120,7 +22727,7 @@ var (
 
     SchedulerTasksRunning = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "{projectname}_scheduler_tasks_running",
+            Name: "vidveil_scheduler_tasks_running",
             Help: "Number of currently running scheduled tasks",
         },
         []string{"task"},
@@ -20128,7 +22735,7 @@ var (
 
     SchedulerLastRun = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "{projectname}_scheduler_last_run_timestamp",
+            Name: "vidveil_scheduler_last_run_timestamp",
             Help: "Timestamp of last task run",
         },
         []string{"task"},
@@ -20137,7 +22744,7 @@ var (
     // Authentication metrics
     AuthAttempts = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "{projectname}_auth_attempts_total",
+            Name: "vidveil_auth_attempts_total",
             Help: "Total authentication attempts",
         },
         []string{"method", "status"},
@@ -20145,7 +22752,7 @@ var (
 
     AuthSessionsActive = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_auth_sessions_active",
+            Name: "vidveil_auth_sessions_active",
             Help: "Number of active sessions",
         },
     )
@@ -20153,21 +22760,21 @@ var (
     // Business metrics
     UsersTotal = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_users_total",
+            Name: "vidveil_users_total",
             Help: "Total number of registered users",
         },
     )
 
     UsersActive = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_users_active",
+            Name: "vidveil_users_active",
             Help: "Number of users active in last 24 hours",
         },
     )
 
     APITokensActive = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_api_tokens_active",
+            Name: "vidveil_api_tokens_active",
             Help: "Number of active API tokens",
         },
     )
@@ -20175,7 +22782,7 @@ var (
     // Application info
     AppInfo = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "{projectname}_app_info",
+            Name: "vidveil_app_info",
             Help: "Application information",
         },
         []string{"version", "commit", "build_date", "go_version"},
@@ -20183,14 +22790,14 @@ var (
 
     AppUptime = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_app_uptime_seconds",
+            Name: "vidveil_app_uptime_seconds",
             Help: "Application uptime in seconds",
         },
     )
 
     AppStartTime = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_app_start_timestamp",
+            Name: "vidveil_app_start_timestamp",
             Help: "Application start timestamp",
         },
     )
@@ -20214,7 +22821,7 @@ import (
     "strconv"
     "time"
 
-    "github.com/{projectorg}/{projectname}/src/server/metrics"
+    "github.com/apimgr/vidveil/src/server/metrics"
 )
 
 // metricsMiddleware records HTTP metrics for all requests
@@ -20298,7 +22905,7 @@ import (
     "database/sql"
     "time"
 
-    "github.com/{projectorg}/{projectname}/src/server/metrics"
+    "github.com/apimgr/vidveil/src/server/metrics"
 )
 
 // MetricsDB wraps sql.DB with metrics
@@ -20399,7 +23006,7 @@ package cache
 import (
     "time"
 
-    "github.com/{projectorg}/{projectname}/src/server/metrics"
+    "github.com/apimgr/vidveil/src/server/metrics"
 )
 
 // MetricsCache wraps a cache with metrics
@@ -20452,7 +23059,7 @@ package scheduler
 import (
     "time"
 
-    "github.com/{projectorg}/{projectname}/src/server/metrics"
+    "github.com/apimgr/vidveil/src/server/metrics"
 )
 
 // RecordTaskStart records when a task starts
@@ -20495,35 +23102,35 @@ var (
     // System metrics
     SystemCPUUsage = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_system_cpu_usage_percent",
+            Name: "vidveil_system_cpu_usage_percent",
             Help: "Current CPU usage percentage",
         },
     )
 
     SystemMemoryUsage = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_system_memory_usage_percent",
+            Name: "vidveil_system_memory_usage_percent",
             Help: "Current memory usage percentage",
         },
     )
 
     SystemMemoryUsed = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_system_memory_used_bytes",
+            Name: "vidveil_system_memory_used_bytes",
             Help: "Memory used in bytes",
         },
     )
 
     SystemMemoryTotal = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_system_memory_total_bytes",
+            Name: "vidveil_system_memory_total_bytes",
             Help: "Total memory in bytes",
         },
     )
 
     SystemDiskUsage = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "{projectname}_system_disk_usage_percent",
+            Name: "vidveil_system_disk_usage_percent",
             Help: "Disk usage percentage",
         },
         []string{"path"},
@@ -20531,7 +23138,7 @@ var (
 
     SystemDiskUsed = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "{projectname}_system_disk_used_bytes",
+            Name: "vidveil_system_disk_used_bytes",
             Help: "Disk used in bytes",
         },
         []string{"path"},
@@ -20539,7 +23146,7 @@ var (
 
     SystemDiskTotal = promauto.NewGaugeVec(
         prometheus.GaugeOpts{
-            Name: "{projectname}_system_disk_total_bytes",
+            Name: "vidveil_system_disk_total_bytes",
             Help: "Total disk in bytes",
         },
         []string{"path"},
@@ -20548,35 +23155,35 @@ var (
     // Go runtime metrics
     GoGoroutines = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_go_goroutines",
+            Name: "vidveil_go_goroutines",
             Help: "Number of goroutines",
         },
     )
 
     GoMemAlloc = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_go_mem_alloc_bytes",
+            Name: "vidveil_go_mem_alloc_bytes",
             Help: "Bytes allocated and in use",
         },
     )
 
     GoMemSys = promauto.NewGauge(
         prometheus.GaugeOpts{
-            Name: "{projectname}_go_mem_sys_bytes",
+            Name: "vidveil_go_mem_sys_bytes",
             Help: "Bytes obtained from system",
         },
     )
 
     GoGCRuns = promauto.NewCounter(
         prometheus.CounterOpts{
-            Name: "{projectname}_go_gc_runs_total",
+            Name: "vidveil_go_gc_runs_total",
             Help: "Total number of GC runs",
         },
     )
 
     GoGCPauseTotal = promauto.NewCounter(
         prometheus.CounterOpts{
-            Name: "{projectname}_go_gc_pause_total_seconds",
+            Name: "vidveil_go_gc_pause_total_seconds",
             Help: "Total GC pause time in seconds",
         },
     )
@@ -20724,35 +23331,35 @@ func StartUptimeUpdater() {
 ## Metrics Endpoint Output
 
 ```
-# HELP {projectname}_http_requests_total Total number of HTTP requests
-# TYPE {projectname}_http_requests_total counter
-{projectname}_http_requests_total{method="GET",path="/api/v1/users",status="200"} 1523
-{projectname}_http_requests_total{method="POST",path="/api/v1/users",status="201"} 42
+# HELP vidveil_http_requests_total Total number of HTTP requests
+# TYPE vidveil_http_requests_total counter
+vidveil_http_requests_total{method="GET",path="/api/v1/users",status="200"} 1523
+vidveil_http_requests_total{method="POST",path="/api/v1/users",status="201"} 42
 
-# HELP {projectname}_http_request_duration_seconds HTTP request duration in seconds
-# TYPE {projectname}_http_request_duration_seconds histogram
-{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.01"} 1400
-{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.1"} 1520
-{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="+Inf"} 1523
-{projectname}_http_request_duration_seconds_sum{method="GET",path="/api/v1/users"} 12.456
-{projectname}_http_request_duration_seconds_count{method="GET",path="/api/v1/users"} 1523
+# HELP vidveil_http_request_duration_seconds HTTP request duration in seconds
+# TYPE vidveil_http_request_duration_seconds histogram
+vidveil_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.01"} 1400
+vidveil_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.1"} 1520
+vidveil_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="+Inf"} 1523
+vidveil_http_request_duration_seconds_sum{method="GET",path="/api/v1/users"} 12.456
+vidveil_http_request_duration_seconds_count{method="GET",path="/api/v1/users"} 1523
 
-# HELP {projectname}_db_connections_open Number of open database connections
-# TYPE {projectname}_db_connections_open gauge
-{projectname}_db_connections_open 5
+# HELP vidveil_db_connections_open Number of open database connections
+# TYPE vidveil_db_connections_open gauge
+vidveil_db_connections_open 5
 
-# HELP {projectname}_cache_hits_total Total number of cache hits
-# TYPE {projectname}_cache_hits_total counter
-{projectname}_cache_hits_total{cache="sessions"} 8234
-{projectname}_cache_hits_total{cache="users"} 1523
+# HELP vidveil_cache_hits_total Total number of cache hits
+# TYPE vidveil_cache_hits_total counter
+vidveil_cache_hits_total{cache="sessions"} 8234
+vidveil_cache_hits_total{cache="users"} 1523
 
-# HELP {projectname}_app_info Application information
-# TYPE {projectname}_app_info gauge
-{projectname}_app_info{version="1.2.3",commit="abc123",build_date="2025-01-15",go_version="go1.23"} 1
+# HELP vidveil_app_info Application information
+# TYPE vidveil_app_info gauge
+vidveil_app_info{version="1.2.3",commit="abc123",build_date="2025-01-15",go_version="go1.23"} 1
 
-# HELP {projectname}_app_uptime_seconds Application uptime in seconds
-# TYPE {projectname}_app_uptime_seconds gauge
-{projectname}_app_uptime_seconds 86423.5
+# HELP vidveil_app_uptime_seconds Application uptime in seconds
+# TYPE vidveil_app_uptime_seconds gauge
+vidveil_app_uptime_seconds 86423.5
 ```
 
 ## Alerting Rules (Prometheus)
@@ -20760,13 +23367,13 @@ func StartUptimeUpdater() {
 ```yaml
 # alerts.yml - Example Prometheus alerting rules
 groups:
-  - name: {projectname}_alerts
+  - name: vidveil_alerts
     rules:
       # High error rate
       - alert: HighErrorRate
         expr: |
-          sum(rate({projectname}_http_requests_total{status=~"5.."}[5m]))
-          / sum(rate({projectname}_http_requests_total[5m])) > 0.05
+          sum(rate(vidveil_http_requests_total{status=~"5.."}[5m]))
+          / sum(rate(vidveil_http_requests_total[5m])) > 0.05
         for: 5m
         labels:
           severity: critical
@@ -20777,7 +23384,7 @@ groups:
       # High latency
       - alert: HighLatency
         expr: |
-          histogram_quantile(0.95, rate({projectname}_http_request_duration_seconds_bucket[5m])) > 1
+          histogram_quantile(0.95, rate(vidveil_http_request_duration_seconds_bucket[5m])) > 1
         for: 5m
         labels:
           severity: warning
@@ -20788,7 +23395,7 @@ groups:
       # Database connection pool exhausted
       - alert: DBConnectionPoolExhausted
         expr: |
-          {projectname}_db_connections_in_use / {projectname}_db_connections_open > 0.9
+          vidveil_db_connections_in_use / vidveil_db_connections_open > 0.9
         for: 5m
         labels:
           severity: warning
@@ -20797,7 +23404,7 @@ groups:
 
       # High memory usage
       - alert: HighMemoryUsage
-        expr: {projectname}_system_memory_usage_percent > 90
+        expr: vidveil_system_memory_usage_percent > 90
         for: 10m
         labels:
           severity: warning
@@ -20806,7 +23413,7 @@ groups:
 
       # Disk space low
       - alert: DiskSpaceLow
-        expr: {projectname}_system_disk_usage_percent > 85
+        expr: vidveil_system_disk_usage_percent > 85
         for: 5m
         labels:
           severity: warning
@@ -20815,18 +23422,18 @@ groups:
 
       # Application down
       - alert: ApplicationDown
-        expr: up{job="{projectname}"} == 0
+        expr: up{job="vidveil"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "{projectname} is down"
+          summary: "vidveil is down"
 
       # Goroutine leak
       - alert: GoroutineLeak
         expr: |
-          {projectname}_go_goroutines > 1000
-          and increase({projectname}_go_goroutines[1h]) > 100
+          vidveil_go_goroutines > 1000
+          and increase(vidveil_go_goroutines[1h]) > 100
         for: 30m
         labels:
           severity: warning
@@ -20837,7 +23444,7 @@ groups:
       # Scheduler task failing
       - alert: SchedulerTaskFailing
         expr: |
-          increase({projectname}_scheduler_tasks_total{status="error"}[1h]) > 3
+          increase(vidveil_scheduler_tasks_total{status="error"}[1h]) > 3
         for: 0m
         labels:
           severity: warning
@@ -20849,72 +23456,72 @@ groups:
 
 ```json
 {
-  "title": "{PROJECTNAME} Metrics",
+  "title": "VIDVEIL Metrics",
   "panels": [
     {
       "title": "Request Rate",
       "type": "graph",
       "targets": [
-        {"expr": "sum(rate({projectname}_http_requests_total[5m]))"}
+        {"expr": "sum(rate(vidveil_http_requests_total[5m]))"}
       ]
     },
     {
       "title": "Error Rate",
       "type": "graph",
       "targets": [
-        {"expr": "sum(rate({projectname}_http_requests_total{status=~\"5..\"}[5m])) / sum(rate({projectname}_http_requests_total[5m]))"}
+        {"expr": "sum(rate(vidveil_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(vidveil_http_requests_total[5m]))"}
       ]
     },
     {
       "title": "Latency (p50, p95, p99)",
       "type": "graph",
       "targets": [
-        {"expr": "histogram_quantile(0.50, rate({projectname}_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p50"},
-        {"expr": "histogram_quantile(0.95, rate({projectname}_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p95"},
-        {"expr": "histogram_quantile(0.99, rate({projectname}_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p99"}
+        {"expr": "histogram_quantile(0.50, rate(vidveil_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.95, rate(vidveil_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p95"},
+        {"expr": "histogram_quantile(0.99, rate(vidveil_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p99"}
       ]
     },
     {
       "title": "Active Requests",
       "type": "stat",
       "targets": [
-        {"expr": "{projectname}_http_active_requests"}
+        {"expr": "vidveil_http_active_requests"}
       ]
     },
     {
       "title": "Database Connections",
       "type": "graph",
       "targets": [
-        {"expr": "{projectname}_db_connections_open", "legendFormat": "open"},
-        {"expr": "{projectname}_db_connections_in_use", "legendFormat": "in_use"}
+        {"expr": "vidveil_db_connections_open", "legendFormat": "open"},
+        {"expr": "vidveil_db_connections_in_use", "legendFormat": "in_use"}
       ]
     },
     {
       "title": "Cache Hit Rate",
       "type": "graph",
       "targets": [
-        {"expr": "sum(rate({projectname}_cache_hits_total[5m])) / (sum(rate({projectname}_cache_hits_total[5m])) + sum(rate({projectname}_cache_misses_total[5m])))"}
+        {"expr": "sum(rate(vidveil_cache_hits_total[5m])) / (sum(rate(vidveil_cache_hits_total[5m])) + sum(rate(vidveil_cache_misses_total[5m])))"}
       ]
     },
     {
       "title": "Memory Usage",
       "type": "gauge",
       "targets": [
-        {"expr": "{projectname}_system_memory_usage_percent"}
+        {"expr": "vidveil_system_memory_usage_percent"}
       ]
     },
     {
       "title": "Goroutines",
       "type": "graph",
       "targets": [
-        {"expr": "{projectname}_go_goroutines"}
+        {"expr": "vidveil_go_goroutines"}
       ]
     },
     {
       "title": "Uptime",
       "type": "stat",
       "targets": [
-        {"expr": "{projectname}_app_uptime_seconds"}
+        {"expr": "vidveil_app_uptime_seconds"}
       ]
     }
   ]
@@ -20940,7 +23547,7 @@ groups:
 ## Backup Command
 
 ```bash
-{projectname} --maintenance backup [filename]
+vidveil --maintenance backup [filename]
 ```
 
 ### Backup Contents
@@ -20972,7 +23579,7 @@ groups:
 ### Backup Format
 
 - Single `.tar.gz` file (or `.tar.gz.enc` if encrypted)
-- Filename: `{projectname}_backup_YYYY-MM-DD_HHMMSS.tar.gz[.enc]`
+- Filename: `vidveil_backup_YYYY-MM-DD_HHMMSS.tar.gz[.enc]`
 - Includes manifest with version info
 - Encrypted if backup password was set during setup
 
@@ -20996,18 +23603,25 @@ groups:
 }
 ```
 
-### Backup Encryption (Highly Recommended)
+### Backup Encryption
 
-**If backup encryption password was set during setup, ALL backups are automatically encrypted.**
+**Encryption is OPTIONAL unless compliance mode is enabled.**
+
+| Compliance Mode | Backup Password | Behavior |
+|-----------------|-----------------|----------|
+| Disabled | Not set | Unencrypted backups (`.tar.gz`) |
+| Disabled | Set | Encrypted backups (`.tar.gz.enc`) |
+| **Enabled** | Not set | **Backups BLOCKED** until password set |
+| **Enabled** | Set | Encrypted backups (required) |
 
 | Aspect | Details |
 |--------|---------|
 | Algorithm | AES-256-GCM |
 | Key Derivation | Argon2id (password → encryption key) |
-| File Extension | `.tar.gz.enc` |
+| File Extension | `.tar.gz` (unencrypted) or `.tar.gz.enc` (encrypted) |
 | Password Storage | **NEVER stored** - admin must remember |
 
-**How It Works:**
+**How Encryption Works:**
 1. Backup creates `.tar.gz` archive in memory
 2. Password is run through Argon2id to derive 256-bit key
 3. Archive is encrypted with AES-256-GCM
@@ -21020,19 +23634,44 @@ groups:
 server:
   backup:
     encryption:
-      # true if password was set during setup
-      enabled: true
-      # Password is NEVER stored - derived on-demand
+      enabled: true       # true if password was set
+      # Password is NEVER stored - prompted on-demand
+  compliance:
+    enabled: false        # HIPAA, SOC2, etc.
+    # If true, backup.encryption.enabled MUST be true
+```
+
+**Compliance Mode Enforcement:**
+
+When `server.compliance.enabled: true`:
+- Backups will NOT run unless encryption password is set
+- WebUI shows mandatory password setup dialog
+- CLI shows error with instructions to set password
+- Scheduled backups skip with audit log warning
+
+```
+┌─────────────────────────────────────────┐
+│  ⚠️  Backup Password Required           │
+├─────────────────────────────────────────┤
+│  Compliance mode requires encrypted     │
+│  backups. Set a backup password.        │
+│                                         │
+│  Password:         [••••••••••••]       │
+│  Confirm Password: [••••••••••••]       │
+│  Hint (optional):  [______________]     │
+│                                         │
+│           [Cancel]  [Save & Enable]     │
+└─────────────────────────────────────────┘
 ```
 
 **Setting/Changing Backup Password:**
 
 | Action | Location | Notes |
 |--------|----------|-------|
-| Set during setup | Setup wizard Step 4 | Recommended |
+| Set during setup | Setup wizard Step 4 | Optional (unless compliance) |
 | Set later | `/admin/server/backup` | Click "Set Encryption Password" |
 | Change password | `/admin/server/backup` | New backups use new password |
-| Remove encryption | Not possible | Once enabled, cannot disable |
+| Remove encryption | Only if compliance disabled | Cannot remove if compliance enabled |
 
 **Important:**
 - Old backups encrypted with old password still need old password to restore
@@ -21043,14 +23682,14 @@ server:
 
 ```bash
 # If encryption password set during setup:
-{projectname} --maintenance backup
+vidveil --maintenance backup
 # Prompts for password, creates encrypted backup
 
 # Override with explicit password:
-{projectname} --maintenance backup --password "mypassword"
+vidveil --maintenance backup --password "mypassword"
 
 # Restore encrypted backup:
-{projectname} --maintenance restore backup.tar.gz.enc
+vidveil --maintenance restore backup.tar.gz.enc
 # Prompts for password
 ```
 
@@ -21084,24 +23723,18 @@ Shown on:
 - First backup if encryption not configured
 - `/admin/server/backup` page (dismissable)
 
-### Backup Retention (Max 4 by Default)
+### Backup Retention
 
-**Storage management: only keep the most recent backups.**
+**Storage management: keep backups based on retention policy.**
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `max_backups` | 4 | Maximum number of backups to keep |
-| `retention_policy` | `count` | `count`, `day`, `week`, `month`, `year` |
+| Setting | Default | Valid | Description |
+|---------|---------|-------|-------------|
+| `max_backups` | 1 | ≥1 | Daily full backups to keep |
+| `keep_weekly` | 0 | ≥0 | Weekly backups (Sunday) - 0 = disabled |
+| `keep_monthly` | 0 | ≥0 | Monthly backups (1st) - 0 = disabled |
+| `keep_yearly` | 0 | ≥0 | Yearly backups (Jan 1st) - 0 = disabled |
 
-**Retention Policies:**
-
-| Policy | Behavior |
-|--------|----------|
-| `count` | Keep last N backups (default: 4) |
-| `day` | Keep one backup per day for N days |
-| `week` | Keep one backup per week for N weeks |
-| `month` | Keep one backup per month for N months |
-| `year` | Keep one backup per year for N years |
+**Falsey Values (all disabled):** `0`, `false`, `no`, `none`, `disable`, `disabled`, `off`
 
 **Configuration:**
 
@@ -21109,40 +23742,53 @@ Shown on:
 server:
   backup:
     retention:
-      # Maximum backups to keep (prevents storage bloat)
-      max_backups: 4
-      # Policy: count, day, week, month, year
-      policy: count
-      # Auto-delete old backups after creating new one
-      auto_cleanup: true
+      max_backups: 1     # 1-365: daily full backups
+      keep_weekly: 0     # 0-52: Sunday backups (0 = disabled)
+      keep_monthly: 0    # 0-12: 1st of month (0 = disabled)
+      keep_yearly: 0     # 0-10: January 1st (0 = disabled)
 ```
 
-**Backup Creation Flow:**
+**Default: 2 files total** (yesterday's full + today's incremental)
+
+**With hourly enabled: 3 files total** (+ hourly incremental from `backup_hourly` task)
+
+**With retention options:** `max_backups + keep_weekly + keep_monthly + keep_yearly + incrementals`
+
+**Backup Creation Flow (backup_daily task at 02:00):**
 
 ```
-1. Create new backup
-2. Verify backup integrity (checksum + test decrypt if encrypted)
-3. If verification passes:
-   - Count existing backups
-   - If count >= max_backups:
-     - Delete oldest backup(s) to stay under limit
-4. If verification fails:
-   - Delete failed backup
+1. Create full backup: vidveil_backup_YYYY-MM-DD.tar.gz[.enc]
+2. Verify full backup (all checks must pass)
+3. Create daily incremental: vidveil-daily.tar.gz[.enc]
+4. Verify daily incremental (all checks must pass)
+5. If ALL verifications pass:
+   - Apply retention policy (delete old backups per retention settings)
+6. If ANY verification fails:
+   - Delete failed backup file
+   - Keep existing valid backups
    - Alert admin
-   - Do NOT delete any existing backups
+   - Retry on next scheduled run
 ```
 
 **Verification (NON-NEGOTIABLE):**
 
-Every backup is verified immediately after creation:
+Every backup is verified **immediately after creation** - backups must be 100% working:
 
-| Check | Description |
-|-------|-------------|
-| File exists | Backup file was written |
-| Size > 0 | File is not empty |
-| Checksum valid | SHA-256 matches manifest |
-| Decrypt test | If encrypted, verify password works |
-| Manifest readable | Can parse manifest.json |
+| Check | Description | Failure = |
+|-------|-------------|-----------|
+| File exists | Backup file was written | Fatal |
+| Size > 0 | File is not empty | Fatal |
+| Checksum valid | SHA-256 matches manifest | Fatal |
+| Decrypt test | If encrypted, verify password works | Fatal |
+| Manifest readable | Can parse manifest.json | Fatal |
+| **Content extraction** | Test extract all files to temp dir | Fatal |
+| **Database integrity** | Verify SQLite/dump is valid | Fatal |
+
+**All checks must pass. If ANY check fails:**
+- Delete the failed backup immediately
+- Alert admin (WebUI notification + audit log)
+- Do NOT delete any existing backups
+- Retry backup on next scheduled run
 
 **Only delete old backups if new backup passes ALL verification checks.**
 
@@ -21153,18 +23799,17 @@ Every backup is verified immediately after creation:
 │  BACKUP RETENTION                                                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  Maximum backups to keep: [4    ▼]                                  │
-│                                                                      │
-│  Retention policy:                                                   │
-│  (●) Keep last N backups                                            │
-│  ( ) Keep daily backups for N days                                  │
-│  ( ) Keep weekly backups for N weeks                                │
-│  ( ) Keep monthly backups for N months                              │
-│  ( ) Keep yearly backups for N years                                │
+│  Daily full backups (max_backups):    [1    ] ← required, ≥1        │
+│  Weekly backups (keep_weekly):        [0    ] ← 0 = disabled        │
+│  Monthly backups (keep_monthly):      [0    ] ← 0 = disabled        │
+│  Yearly backups (keep_yearly):        [0    ] ← 0 = disabled        │
 │                                                                      │
 │  [✓] Auto-delete old backups after successful backup                │
 │                                                                      │
-│  Current storage: 45 MB (4 backups)                                 │
+│  Current storage: 23 MB (2 files: yesterday + daily incremental)    │
+│                                                                      │
+│  Hourly incremental:                                                 │
+│  [ ] Enable backup_hourly task (creates 3rd file)                   │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -21173,14 +23818,276 @@ Every backup is verified immediately after creation:
 
 | Event | Description | Logged Data |
 |-------|-------------|-------------|
+| `backup.created` | Backup created and verified | Filename, size, encrypted, verification status |
 | `backup.retention_cleanup` | Old backups deleted | Deleted files, reason, remaining count |
 | `backup.verification_failed` | Backup verification failed | Filename, check that failed |
+| `backup.daily_updated` | Daily incremental updated | Filename, changes since last |
+
+### Backup Files Created (Single Task at 02:00)
+
+**The backup task creates TWO files each run:**
+
+| File | Description | Retention |
+|------|-------------|-----------|
+| `vidveil_backup_YYYY-MM-DD.tar.gz[.enc]` | Full backup (yesterday's data) | Controlled by `max_backups` |
+| `vidveil-daily.tar.gz[.enc]` | Daily incremental (changes since full) | Always 1 (replaced each run) |
+| `vidveil-hourly.tar.gz[.enc]` | Hourly incremental (if enabled) | Always 1 (replaced each run) |
+
+### Retention Configuration
+
+```yaml
+server:
+  backup:
+    retention:
+      # Full backups to keep (default: 1 = yesterday only)
+      max_backups: 1
+      # Optional: keep weekly backup (e.g., every Sunday's backup)
+      keep_weekly: 0
+      # Optional: keep monthly backup (e.g., 1st of month)
+      keep_monthly: 0
+      # Optional: keep yearly backup (e.g., Jan 1st)
+      keep_yearly: 0
+```
+
+**Retention Settings:**
+
+| Setting | Default | Valid | Description |
+|---------|---------|-------|-------------|
+| `max_backups` | 1 | ≥1 | Daily full backups to keep |
+| `keep_weekly` | 0 | ≥0 | Weekly backups (Sunday) - 0 = disabled |
+| `keep_monthly` | 0 | ≥0 | Monthly backups (1st) - 0 = disabled |
+| `keep_yearly` | 0 | ≥0 | Yearly backups (Jan 1st) - 0 = disabled |
+
+**Falsey Values (all mean disabled):**
+- `0`, `false`, `no`, `none`, `disable`, `disabled`, `off`
+
+**Validation (warn, don't error - server must start):**
+
+| Value | Behavior |
+|-------|----------|
+| Valid number ≥ 0 | Accept |
+| `max_backups: 0` | Warn, use default (1) |
+| Negative number | Warn, use default |
+| Non-numeric | Warn, use default |
+
+**Warning Thresholds (accept but warn):**
+
+| Setting | Warn If | Reason |
+|---------|---------|--------|
+| `max_backups` | > 7 | More than a week of daily backups |
+| `keep_weekly` | > 8 | More than 2 months of weekly backups |
+| `keep_monthly` | > 12 | More than a year of monthly backups |
+| `keep_yearly` | > 2 | More than 2 years of yearly backups |
+
+**Warning Examples (logged, server starts):**
+```
+WARN: max_backups: 0 invalid, using default 1
+WARN: keep_monthly: -5 invalid, using default 0
+WARN: max_backups: 30 exceeds recommended 7 (30 days of daily backups)
+WARN: keep_monthly: 24 exceeds recommended 12 (2 years of monthly backups)
+```
+
+**WebUI Confirmation for High Values:**
+```
+┌─────────────────────────────────────────────────────────┐
+│  ⚠️ Confirm Backup Retention                            │
+├─────────────────────────────────────────────────────────┤
+│  max_backups: 30 will retain 30 days of daily backups.  │
+│  Recommended: 7 or less.                                │
+│                                                         │
+│  Estimated storage: ~15 GB (based on current backups)   │
+│                                                         │
+│              [Cancel]  [Save Anyway]                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Default: 2 files total (yesterday + today's incremental)**
+
+**With hourly enabled: 3 files total** (yesterday + daily + hourly incrementals)
+
+**Retention Priority Order:**
+```
+1. Yearly (Jan 1st) - highest priority, never deleted if in keep_yearly count
+2. Monthly (1st of month) - next priority
+3. Weekly (Sunday) - next priority
+4. Daily (max_backups) - lowest priority, oldest deleted first
+```
+
+**Example: Default settings (max=1, weekly=0, monthly=0, yearly=0)**
+```
+Backups on disk:
+  myapp_backup_2025-01-15.tar.gz.enc    ← Yesterday (full)
+  myapp-daily.tar.gz.enc                 ← Today (incremental)
+
+Total: 2 files
+```
+
+**Example: Keep 1 weekly + 1 monthly + 1 yearly**
+```yaml
+retention:
+  max_backups: 1
+  keep_weekly: 1
+  keep_monthly: 1
+  keep_yearly: 1
+```
+```
+Backups on disk (January 15, 2025):
+  myapp_backup_2025-01-15.tar.gz.enc    ← Yesterday (daily)
+  myapp_backup_2025-01-12.tar.gz.enc    ← Last Sunday (weekly)
+  myapp_backup_2025-01-01.tar.gz.enc    ← 1st of Jan 2025 (monthly + yearly)
+  myapp-daily.tar.gz.enc                 ← Incremental
+
+Total: 4 files
+```
+
+**Example: Full retention over a year**
+```yaml
+retention:
+  max_backups: 1
+  keep_weekly: 1
+  keep_monthly: 1
+  keep_yearly: 1
+```
+```
+Backups on disk (January 15, 2026):
+  myapp_backup_2026-01-15.tar.gz.enc    ← Yesterday (daily)
+  myapp_backup_2026-01-12.tar.gz.enc    ← Last Sunday (weekly)
+  myapp_backup_2026-01-01.tar.gz.enc    ← 1st of Jan 2026 (monthly + yearly)
+  myapp_backup_2025-12-01.tar.gz.enc    ← 1st of Dec 2025 (monthly, kept until Feb)
+  myapp_backup_2025-01-01.tar.gz.enc    ← 1st of Jan 2025 (yearly)
+  myapp-daily.tar.gz.enc                 ← Incremental
+
+Total: 6 files (1 daily + 1 weekly + 2 monthly + 1 yearly + incremental)
+```
+
+**Backup Cleanup Logic (runs after successful backup):**
+```
+1. Mark all backups from January 1st as "yearly" (keep up to keep_yearly)
+2. Mark all backups from 1st of month as "monthly" (keep up to keep_monthly)
+3. Mark all backups from Sunday as "weekly" (keep up to keep_weekly)
+4. Mark remaining backups as "daily" (keep up to max_backups)
+5. Delete unmarked backups, oldest first
+6. Daily incremental is always replaced (only 1 exists)
+
+Note: A single backup can satisfy multiple retention types (e.g., Jan 1st 2025
+on a Sunday counts as daily + weekly + monthly + yearly - uses highest priority)
+```
+
+**Daily incremental is NOT counted** in retention - it's always exactly 1 file that gets replaced.
+
+### Cluster Backup Rules (NON-NEGOTIABLE)
+
+**In cluster mode, EVERY node must maintain its own valid backups.**
+
+| Rule | Description |
+|------|-------------|
+| **Per-node backups** | Each node creates and stores its own backups |
+| **Same retention** | All nodes use same `max_backups` setting |
+| **Same schedule** | All nodes backup at same time (staggered by 5min per node) |
+| **Same encryption** | All nodes use same encryption password |
+| **Local storage** | Backups stored in node's local `{backup_dir}` |
+| **Shared storage (optional)** | Can configure shared NFS/S3 for centralized backups |
+
+**Cluster Backup Verification:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  CLUSTER BACKUP STATUS                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Node              Last Backup      Status    Backups  Daily   │
+│  ─────────────────────────────────────────────────────────────  │
+│  node1.example.com 2025-01-15 02:05 ✓ Valid   4/4      ✓       │
+│  node2.example.com 2025-01-15 02:10 ✓ Valid   4/4      ✓       │
+│  node3.example.com 2025-01-15 02:15 ✓ Valid   4/4      ✓       │
+│                                                                 │
+│  [Backup All Now]  [Verify All]  [Download from Node...]       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Cluster Backup Alerts:**
+- Alert if ANY node has no valid backups
+- Alert if ANY node's daily backup is missing or invalid
+- Alert if nodes have different backup counts (sync issue)
 
 ## Restore Command
 
 ```bash
-{projectname} --maintenance restore <backup-file>
+vidveil --maintenance restore <backup-file>
 ```
+
+### Restore Password Handling
+
+**If backup is encrypted (`.tar.gz.enc`), password is required.**
+
+| Interface | Password Not Provided | Behavior |
+|-----------|----------------------|----------|
+| **CLI** | Interactive prompt | Prompts: `Enter backup password:` |
+| **CLI** | `--password` flag | Uses provided password |
+| **WebUI** | Shows dialog | Password input dialog before restore |
+| **API** | Returns 400 error | `{"error": "password_required", "message": "Encrypted backup requires password"}` |
+
+**CLI Restore:**
+
+```bash
+# Encrypted backup - prompts for password
+vidveil --maintenance restore backup_2025-01-15.tar.gz.enc
+Enter backup password: ••••••••••••
+Verifying backup integrity... OK
+Restoring...
+
+# Encrypted backup - password via flag
+vidveil --maintenance restore backup_2025-01-15.tar.gz.enc --password "mypassword"
+
+# Unencrypted backup - no password needed
+vidveil --maintenance restore backup_2025-01-15.tar.gz
+```
+
+**WebUI Restore:**
+
+```
+┌─────────────────────────────────────────┐
+│  🔐 Encrypted Backup                    │
+├─────────────────────────────────────────┤
+│  This backup is encrypted.              │
+│  Enter the backup password to restore.  │
+│                                         │
+│  Password: [••••••••••••]               │
+│                                         │
+│           [Cancel]  [Restore]           │
+└─────────────────────────────────────────┘
+```
+
+**API Restore:**
+
+```bash
+# Encrypted backup - password required
+POST /api/v1/admin/server/restore
+{
+  "backup_file": "backup_2025-01-15.tar.gz.enc",
+  "password": "backup-encryption-password"
+}
+
+# Unencrypted backup - no password
+POST /api/v1/admin/server/restore
+{
+  "backup_file": "backup_2025-01-15.tar.gz"
+}
+```
+
+### Restore Verification
+
+**Before restoring, the backup is verified:**
+
+| Check | Description | Failure Action |
+|-------|-------------|----------------|
+| File exists | Backup file found | Error: file not found |
+| File readable | Can open file | Error: permission denied |
+| Format valid | Valid tar.gz or tar.gz.enc | Error: invalid format |
+| Decrypt test | If encrypted, password works | Error: invalid password |
+| Checksum valid | SHA-256 matches manifest | Error: backup corrupted |
+| Manifest valid | Can parse manifest.json | Error: invalid manifest |
+| Version compatible | App version can restore this backup | Warning: version mismatch |
+
+**Only proceed with restore if ALL verification checks pass.**
 
 ### Restore Behavior
 
@@ -21234,7 +24141,7 @@ Your existing password and settings will be preserved.
 ## Admin Recovery Command
 
 ```bash
-{projectname} --maintenance setup
+vidveil --maintenance setup
 ```
 
 **Purpose:** Resets admin credentials and generates a new setup token. This is the ONLY way for a server admin to recover access if they have lost their password, API token, AND recovery keys.
@@ -21263,10 +24170,10 @@ Your existing password and settings will be preserved.
 
 ```bash
 # Stop the service first (recommended)
-{projectname} --service stop
+vidveil --service stop
 
 # Run setup reset
-{projectname} --maintenance setup
+vidveil --maintenance setup
 
 # Output:
 # ╔══════════════════════════════════════════════════════════════════╗
@@ -21279,14 +24186,14 @@ Your existing password and settings will be preserved.
 # ║  │  a1b2c3d4e5f67890abcdef1234567890                          │  ║
 # ║  └────────────────────────────────────────────────────────────┘  ║
 # ║                                                                  ║
-# ║  1. Start the service: {projectname} --service start             ║
+# ║  1. Start the service: vidveil --service start             ║
 # ║  2. Go to: http://{fqdn}:{port}/admin                            ║
 # ║  3. Enter the setup token above                                  ║
 # ║  4. Create new admin account via setup wizard                    ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # Start the service
-{projectname} --service start
+vidveil --service start
 ```
 
 ### Security Considerations
@@ -21309,7 +24216,7 @@ Your existing password and settings will be preserved.
 | Admin locked out of 2FA | ✓ Yes (only if no recovery keys) |
 | User forgot password | ✗ No (use password reset) |
 | User locked out | ✗ No (admin can help via UI) |
-| Routine password change | ✗ No (use /admin/profile) |
+| Routine password change | ✗ No (use /{adminpath}/profile) |
 
 ### Recovery Flow
 
@@ -21321,7 +24228,7 @@ Your existing password and settings will be preserved.
 │  Admin locked out (no password, no token, no recovery keys)     │
 │                           │                                     │
 │                           ▼                                     │
-│  Server admin runs: {projectname} --maintenance setup           │
+│  Server admin runs: vidveil --maintenance setup           │
 │                           │                                     │
 │                           ▼                                     │
 │  Admin credentials cleared, new setup token generated           │
@@ -21381,17 +24288,17 @@ Your existing password and settings will be preserved.
 
 ```bash
 # Check for updates (no privileges required)
-{projectname} --update check
+vidveil --update check
 
 # Perform update (these are equivalent)
-{projectname} --update
-{projectname} --update yes
-{projectname} --maintenance update
+vidveil --update
+vidveil --update yes
+vidveil --maintenance update
 
 # Switch channels
-{projectname} --update branch beta
-{projectname} --update branch daily
-{projectname} --update branch stable
+vidveil --update branch beta
+vidveil --update branch daily
+vidveil --update branch stable
 ```
 
 ---
@@ -21464,14 +24371,14 @@ ON --service --install:
 
 | Requirement | Value |
 |-------------|-------|
-| Username | `{projectname}` |
-| Group | `{projectname}` |
+| Username | `vidveil` |
+| Group | `vidveil` |
 | UID/GID | **Must match** - same value for both UID and GID |
 | UID/GID Range | 100-999 (system user range) |
 | Shell | `/sbin/nologin` or `/usr/sbin/nologin` |
-| Home | Config directory (`/etc/{projectorg}/{projectname}`) or data directory (`/var/lib/{projectorg}/{projectname}`) |
+| Home | Config directory (`/etc/apimgr/vidveil`) or data directory (`/var/lib/apimgr/vidveil`) |
 | Type | System user (no password, no login) |
-| Gecos | `{projectname} service account` |
+| Gecos | `vidveil service account` |
 
 ### UID/GID Selection Logic
 
@@ -21517,14 +24424,14 @@ func findAvailableSystemID() (int, error) {
 **Linux:**
 ```bash
 # Create group with specific GID
-groupadd --system --gid {id} {projectname}
+groupadd --system --gid {id} vidveil
 
 # Create user with matching UID, same primary group
 useradd --system --uid {id} --gid {id} \
-  --home-dir /etc/{projectorg}/{projectname} \
+  --home-dir /etc/apimgr/vidveil \
   --shell /sbin/nologin \
-  --comment "{projectname} service account" \
-  {projectname}
+  --comment "vidveil service account" \
+  vidveil
 ```
 
 ### macOS Service Account (NON-NEGOTIABLE)
@@ -21556,21 +24463,21 @@ macOS uses `dscl` (Directory Service Command Line) to create system users. The u
 # Start at 499, work down until both UID and GID are available
 
 # Create group with specific GID
-dscl . -create /Groups/{projectname}
-dscl . -create /Groups/{projectname} PrimaryGroupID {id}
-dscl . -create /Groups/{projectname} Password "*"
+dscl . -create /Groups/vidveil
+dscl . -create /Groups/vidveil PrimaryGroupID {id}
+dscl . -create /Groups/vidveil Password "*"
 
 # Create user with matching UID
-dscl . -create /Users/{projectname}
-dscl . -create /Users/{projectname} UniqueID {id}
-dscl . -create /Users/{projectname} PrimaryGroupID {id}
-dscl . -create /Users/{projectname} UserShell /usr/bin/false
-dscl . -create /Users/{projectname} RealName "{projectname} service account"
-dscl . -create /Users/{projectname} NFSHomeDirectory /usr/local/var/{projectorg}/{projectname}
-dscl . -create /Users/{projectname} Password "*"
+dscl . -create /Users/vidveil
+dscl . -create /Users/vidveil UniqueID {id}
+dscl . -create /Users/vidveil PrimaryGroupID {id}
+dscl . -create /Users/vidveil UserShell /usr/bin/false
+dscl . -create /Users/vidveil RealName "vidveil service account"
+dscl . -create /Users/vidveil NFSHomeDirectory /usr/local/var/apimgr/vidveil
+dscl . -create /Users/vidveil Password "*"
 
 # Hide user from login window
-dscl . -create /Users/{projectname} IsHidden 1
+dscl . -create /Users/vidveil IsHidden 1
 ```
 
 **launchd plist with UserName:**
@@ -21580,19 +24487,19 @@ dscl . -create /Users/{projectname} IsHidden 1
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>{projectorg}.{projectname}</string>
+    <string>apimgr.vidveil</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/{projectname}</string>
+        <string>/usr/local/bin/vidveil</string>
     </array>
 
     <!-- Run as dedicated service user, NOT root -->
     <key>UserName</key>
-    <string>{projectname}</string>
+    <string>vidveil</string>
 
     <key>GroupName</key>
-    <string>{projectname}</string>
+    <string>vidveil</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -21601,13 +24508,13 @@ dscl . -create /Users/{projectname} IsHidden 1
     <true/>
 
     <key>WorkingDirectory</key>
-    <string>/usr/local/var/{projectorg}/{projectname}</string>
+    <string>/usr/local/var/apimgr/vidveil</string>
 
     <key>StandardOutPath</key>
-    <string>/usr/local/var/log/{projectorg}/{projectname}/stdout.log</string>
+    <string>/usr/local/var/log/apimgr/vidveil/stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/usr/local/var/log/{projectorg}/{projectname}/stderr.log</string>
+    <string>/usr/local/var/log/apimgr/vidveil/stderr.log</string>
 </dict>
 </plist>
 ```
@@ -21616,11 +24523,11 @@ dscl . -create /Users/{projectname} IsHidden 1
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Binary | `/usr/local/bin/{projectname}` | Executable |
-| Config | `/usr/local/etc/{projectorg}/{projectname}/` | Configuration files |
-| Data | `/usr/local/var/{projectorg}/{projectname}/` | Application data |
-| Logs | `/usr/local/var/log/{projectorg}/{projectname}/` | Log files |
-| launchd plist | `/Library/LaunchDaemons/{projectorg}.{projectname}.plist` | Service definition |
+| Binary | `/usr/local/bin/vidveil` | Executable |
+| Config | `/usr/local/etc/apimgr/vidveil/` | Configuration files |
+| Data | `/usr/local/var/apimgr/vidveil/` | Application data |
+| Logs | `/usr/local/var/log/apimgr/vidveil/` | Log files |
+| launchd plist | `/Library/LaunchDaemons/apimgr.vidveil.plist` | Service definition |
 
 **Go Implementation (macOS):**
 ```go
@@ -21673,11 +24580,11 @@ func createMacOSServiceUser(name string, id int, homeDir string) error {
 **FreeBSD:**
 ```bash
 # Create user and group with matching ID
-pw groupadd -n {projectname} -g {id}
-pw useradd -n {projectname} -u {id} -g {id} \
-  -d /var/lib/{projectorg}/{projectname} \
+pw groupadd -n vidveil -g {id}
+pw useradd -n vidveil -u {id} -g {id} \
+  -d /var/lib/apimgr/vidveil \
   -s /usr/sbin/nologin \
-  -c "{projectname} service account"
+  -c "vidveil service account"
 ```
 
 ### Windows Service Account (NON-NEGOTIABLE)
@@ -21698,33 +24605,33 @@ pw useradd -n {projectname} -u {id} -g {id} \
 
 Virtual Service Accounts are automatically managed by Windows, require no password management, and have minimal privileges. They are created automatically when the service is installed.
 
-**Service Account Format:** `NT SERVICE\{projectname}`
+**Service Account Format:** `NT SERVICE\vidveil`
 
 ```powershell
 # Create service with Virtual Service Account (automatic)
-New-Service -Name "{projectname}" `
-  -BinaryPathName "C:\Program Files\{projectorg}\{projectname}\{projectname}.exe" `
-  -DisplayName "{projectname}" `
-  -Description "{projectname} service" `
+New-Service -Name "vidveil" `
+  -BinaryPathName "C:\Program Files\apimgr\vidveil\vidveil.exe" `
+  -DisplayName "vidveil" `
+  -Description "vidveil service" `
   -StartupType Automatic
 
-# Service automatically runs as NT SERVICE\{projectname}
+# Service automatically runs as NT SERVICE\vidveil
 # No user creation needed - Windows manages it
 ```
 
 **Directory Permissions:**
 ```powershell
 # Grant Virtual Service Account access to config/data directories
-$acl = Get-Acl "C:\ProgramData\{projectorg}\{projectname}"
+$acl = Get-Acl "C:\ProgramData\apimgr\vidveil"
 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-    "NT SERVICE\{projectname}",
+    "NT SERVICE\vidveil",
     "FullControl",
     "ContainerInherit,ObjectInherit",
     "None",
     "Allow"
 )
 $acl.SetAccessRule($rule)
-Set-Acl "C:\ProgramData\{projectorg}\{projectname}" $acl
+Set-Acl "C:\ProgramData\apimgr\vidveil" $acl
 ```
 
 **Go Implementation (Windows):**
@@ -21745,11 +24652,11 @@ func installWindowsService() error {
     // Create service - runs as Virtual Service Account by default
     // when ServiceStartName is empty or "NT SERVICE\{name}"
     s, err := m.CreateService(
-        "{projectname}",
+        "vidveil",
         exePath,
         mgr.Config{
-            DisplayName:     "{projectname}",
-            Description:     "{projectname} service",
+            DisplayName:     "vidveil",
+            Description:     "vidveil service",
             StartType:       mgr.StartAutomatic,
             // Empty = Virtual Service Account
             ServiceStartName: "",
@@ -21768,17 +24675,17 @@ func installWindowsService() error {
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Binary | `C:\Program Files\{projectorg}\{projectname}\` | Executable |
-| Config | `C:\ProgramData\{projectorg}\{projectname}\config\` | Configuration files |
-| Data | `C:\ProgramData\{projectorg}\{projectname}\data\` | Application data |
-| Logs | `C:\ProgramData\{projectorg}\{projectname}\logs\` | Log files |
+| Binary | `C:\Program Files\apimgr\vidveil\` | Executable |
+| Config | `C:\ProgramData\apimgr\vidveil\config\` | Configuration files |
+| Data | `C:\ProgramData\apimgr\vidveil\data\` | Application data |
+| Logs | `C:\ProgramData\apimgr\vidveil\logs\` | Log files |
 
 ### Home Directory Selection
 
 | Directory | Use When |
 |-----------|----------|
-| Config dir (`/etc/{projectorg}/{projectname}`) | Default - user needs access to config files |
-| Data dir (`/var/lib/{projectorg}/{projectname}`) | When data dir contains user-writable content |
+| Config dir (`/etc/apimgr/vidveil`) | Default - user needs access to config files |
+| Data dir (`/var/lib/apimgr/vidveil`) | When data dir contains user-writable content |
 
 **Note:** Home directory must exist before user creation. Create directories first, then user, then set ownership.
 
@@ -21805,16 +24712,16 @@ func installWindowsService() error {
 
 ```ini
 [Unit]
-Description={projectname} service
-Documentation=https://{projectorg}.github.io/{projectname}
+Description=vidveil service
+Documentation=https://apimgr.github.io/vidveil
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User={projectname}
-Group={projectname}
-ExecStart=/usr/local/bin/{projectname}
+User=vidveil
+Group=vidveil
+ExecStart=/usr/local/bin/vidveil
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -21825,19 +24732,19 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/var/lib/{projectorg}/{projectname}
-ReadWritePaths=/var/log/{projectorg}/{projectname}
+ReadWritePaths=/var/lib/apimgr/vidveil
+ReadWritePaths=/var/log/apimgr/vidveil
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-**Installation path:** `/etc/systemd/system/{projectname}.service`
+**Installation path:** `/etc/systemd/system/vidveil.service`
 
 ## runit Service Template
 
 ```
-/etc/sv/{projectname}/
+/etc/sv/vidveil/
 ├── run           # Main service script
 ├── log/
 │   └── run       # Logging script
@@ -21847,13 +24754,13 @@ WantedBy=multi-user.target
 **run script:**
 ```bash
 #!/bin/sh
-exec chpst -u {projectname}:{projectname} /usr/local/bin/{projectname} 2>&1
+exec chpst -u vidveil:vidveil /usr/local/bin/vidveil 2>&1
 ```
 
 **log/run script:**
 ```bash
 #!/bin/sh
-exec svlogd -tt /var/log/{projectorg}/{projectname}
+exec svlogd -tt /var/log/apimgr/vidveil
 ```
 
 ## rc.d Script Template (BSD)
@@ -21861,22 +24768,22 @@ exec svlogd -tt /var/log/{projectorg}/{projectname}
 ```bash
 #!/bin/sh
 
-# PROVIDE: {projectname}
+# PROVIDE: vidveil
 # REQUIRE: NETWORKING
 # KEYWORD: shutdown
 
 . /etc/rc.subr
 
-name="{projectname}"
-rcvar="{projectname}_enable"
-command="/usr/local/bin/{projectname}"
-{projectname}_user="{projectname}"
+name="vidveil"
+rcvar="vidveil_enable"
+command="/usr/local/bin/vidveil"
+vidveil_user="vidveil"
 
 load_rc_config $name
 run_rc_command "$1"
 ```
 
-**Installation path:** `/usr/local/etc/rc.d/{projectname}`
+**Installation path:** `/usr/local/etc/rc.d/vidveil`
 
 ## Windows Service
 
@@ -21888,7 +24795,7 @@ Use `golang.org/x/sys/windows/svc` for Windows service integration:
 import "golang.org/x/sys/windows/svc"
 
 func runAsService() error {
-    return svc.Run("{projectname}", &windowsService{})
+    return svc.Run("vidveil", &windowsService{})
 }
 
 type windowsService struct{}
@@ -22014,11 +24921,52 @@ format_version_tag() {
 
 ## Binary Naming (NON-NEGOTIABLE)
 
-| Context | Name | Example |
-|---------|------|---------|
-| Host Build | `binaries/{projectname}` | `binaries/jokes` |
-| Distribution | `{projectname}-{os}-{arch}` | `pastebin-linux-amd64` |
-| Local/Testing | `$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")/{projectname}` | Org-prefixed temp dir |
+### Naming Pattern
+
+**Pattern: `vidveil[-type]-{os}-{arch}[.exe]`**
+
+| Binary | Host Build | Distribution |
+|--------|------------|--------------|
+| **Server** | `vidveil` | `vidveil-{os}-{arch}` |
+| **CLI** | `vidveil-cli` | `vidveil-cli-{os}-{arch}` |
+| **Agent** | `vidveil-agent` | `vidveil-agent-{os}-{arch}` |
+
+### Examples
+
+| Binary | Host | Linux AMD64 | Windows AMD64 |
+|--------|------|-------------|---------------|
+| Server | `jokes` | `jokes-linux-amd64` | `jokes-windows-amd64.exe` |
+| CLI | `jokes-cli` | `jokes-cli-linux-amd64` | `jokes-cli-windows-amd64.exe` |
+| Agent | `jokes-agent` | `jokes-agent-linux-amd64` | `jokes-agent-windows-amd64.exe` |
+
+### Directory Structure
+
+```
+binaries/
+├── vidveil                      # Host server
+├── vidveil-cli                  # Host CLI (if src/cli/ exists)
+├── vidveil-agent                # Host agent (if src/agent/ exists)
+├── vidveil-linux-amd64          # Server distributions
+├── vidveil-linux-arm64
+├── vidveil-darwin-amd64
+├── vidveil-darwin-arm64
+├── vidveil-windows-amd64.exe
+├── vidveil-windows-arm64.exe
+├── vidveil-freebsd-amd64
+├── vidveil-freebsd-arm64
+├── vidveil-cli-linux-amd64      # CLI distributions
+├── vidveil-cli-linux-arm64
+├── ...
+├── vidveil-agent-linux-amd64    # Agent distributions
+├── vidveil-agent-linux-arm64
+└── ...
+```
+
+### Local/Testing
+
+| Context | Path |
+|---------|------|
+| Temp build | `$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")/vidveil` |
 
 **If built with musl → strip binary before release. Final name has NO `-musl` suffix.**
 
@@ -22057,9 +25005,9 @@ LDFLAGS := -s -w \
 BINDIR := binaries
 RELDIR := releases
 
-# Go module cache (persistent across builds)
-GOCACHE := $(HOME)/.cache/go-build
-GOMODCACHE := $(HOME)/go/pkg/mod
+# Go directories (persistent across builds)
+GODIR := $(HOME)/.local/share/go
+GOCACHE := $(HOME)/.local/share/go/build
 
 # Build targets
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64
@@ -22069,12 +25017,12 @@ REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
 GO_DOCKER := docker run --rm \
 	-v $(PWD):/build \
 	-v $(GOCACHE):/root/.cache/go-build \
-	-v $(GOMODCACHE):/go/pkg/mod \
+	-v $(GODIR):/go \
 	-w /build \
 	-e CGO_ENABLED=0 \
 	golang:alpine
 
-.PHONY: build release docker test dev clean
+.PHONY: build host release docker test dev clean
 
 # =============================================================================
 # BUILD - Build all platforms + host binary (via Docker with cached modules)
@@ -22082,7 +25030,7 @@ GO_DOCKER := docker run --rm \
 build: clean
 	@mkdir -p $(BINDIR)
 	@echo "Building version $(VERSION)..."
-	@mkdir -p $(GOCACHE) $(GOMODCACHE)
+	@mkdir -p $(GOCACHE) $(GODIR)
 
 	# Download modules first (cached)
 	@echo "Downloading Go modules..."
@@ -22106,6 +25054,39 @@ build: clean
 	done
 
 	@echo "Build complete: $(BINDIR)/"
+
+# =============================================================================
+# HOST - Build host binaries only (fast development builds)
+# =============================================================================
+host: clean
+	@mkdir -p $(BINDIR)
+	@echo "Building host binaries version $(VERSION)..."
+	@mkdir -p $(GOCACHE) $(GODIR)
+
+	# Download modules first (cached)
+	@echo "Downloading Go modules..."
+	@$(GO_DOCKER) go mod download
+
+	# Build server binary
+	@echo "Building $(PROJECTNAME)..."
+	@$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
+		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME) ./src"
+
+	# Build CLI binary (if exists)
+	@if [ -d "src/cli" ]; then \
+		echo "Building $(PROJECTNAME)-cli..."; \
+		$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
+			go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME)-cli ./src/cli"; \
+	fi
+
+	# Build agent binary (if exists)
+	@if [ -d "src/agent" ]; then \
+		echo "Building $(PROJECTNAME)-agent..."; \
+		$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
+			go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME)-agent ./src/agent"; \
+	fi
+
+	@echo "Host build complete: $(BINDIR)/"
 
 # =============================================================================
 # RELEASE - Manual local release (stable only)
@@ -22176,7 +25157,7 @@ docker:
 # =============================================================================
 test:
 	@echo "Running tests in Docker..."
-	@mkdir -p $(GOCACHE) $(GOMODCACHE)
+	@mkdir -p $(GOCACHE) $(GODIR)
 	@$(GO_DOCKER) go mod download
 	@$(GO_DOCKER) go test -v -cover ./...
 	@echo "Tests complete"
@@ -22186,7 +25167,7 @@ test:
 # =============================================================================
 # Fast: host platform only, no ldflags, random temp dir for isolation
 dev:
-	@mkdir -p $(GOCACHE) $(GOMODCACHE)
+	@mkdir -p $(GOCACHE) $(GODIR)
 	@BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG).XXXXXX") && \
 		echo "Quick dev build..." && \
 		$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
@@ -22229,8 +25210,8 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 | Cache | Host Path | Container Path |
 |-------|-----------|----------------|
-| Build cache | `~/.cache/go-build` | `/root/.cache/go-build` |
-| Module cache | `~/go/pkg/mod` | `/go/pkg/mod` |
+| Go directory | `~/.local/share/go` | `/go` |
+| Build cache | `~/.local/share/go/build` | `/root/.cache/go-build` |
 
 **Benefits:**
 - First build downloads modules once
@@ -22242,14 +25223,15 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 ### `make build`
 
-1. Creates cache directories if needed
-2. Downloads Go modules (cached)
-3. Creates `binaries/` directory
-4. Builds host binary: `binaries/{projectname}`
-5. Builds all platform binaries: `binaries/{projectname}-{os}-{arch}`
-6. Uses `CGO_ENABLED=0` for static binaries
-7. Embeds Version, CommitID, BuildDate via `-ldflags`
-8. All builds via Docker (`golang:alpine`)
+1. **Runs `clean` first** (removes previous build artifacts)
+2. Creates cache directories if needed
+3. Downloads Go modules (cached)
+4. Creates `binaries/` directory
+5. Builds host binary: `binaries/vidveil`
+6. Builds all platform binaries: `binaries/vidveil-{os}-{arch}`
+7. Uses `CGO_ENABLED=0` for static binaries
+8. Embeds Version, CommitID, BuildDate via `-ldflags`
+9. All builds via Docker (`golang:alpine`)
 
 ### `make release`
 
@@ -22285,27 +25267,89 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 1. Quick build for local development/testing
 2. Builds host platform only (fastest)
 3. No `-ldflags` (version info not embedded)
-4. Outputs to `{tempdir}/{projectorg}.XXXXXX/{projectname}` (isolated, org-identifiable)
+4. Outputs to `{tempdir}/apimgr.XXXXXX/vidveil` (isolated, org-identifiable)
 5. Uses Docker (`golang:alpine`) - keeps host clean
 6. Easy cleanup: `rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/` or auto-deleted on reboot
 
+### `make host`
+
+1. **Runs `clean` first** (removes previous build artifacts)
+2. Builds host platform binaries only (fast)
+3. Outputs to `binaries/` (server, cli, agent if applicable)
+4. Full `-ldflags` (version info embedded)
+5. Uses Docker (`golang:alpine`) - keeps host clean
+6. **Use for local testing before full cross-platform build**
+
 **When to use:**
 
-| Command | Use Case |
-|---------|----------|
-| `make dev` | Quick iteration during development |
-| `make build` | Full build for testing all platforms |
-| `make test` | Run test suite |
+| Command | Use Case | Speed |
+|---------|----------|-------|
+| `make dev` | Quick iteration during development (temp dir, no version) | Fastest |
+| `make host` | Local testing with version info before full build | Fast |
+| `make build` | Full cross-platform build (all 8 platforms) | Slow |
+| `make test` | Run unit test suite | Fast |
+| `./tests/run_tests.sh` | Integration tests (auto-detects incus/docker) | Medium |
+| `./tests/docker.sh` | Integration tests in Docker (`alpine:latest`) | Medium |
+| `./tests/incus.sh` | Full integration + systemd tests (`debian:latest`) | Slow |
+
+**Typical workflow:**
+```
+make dev                # Rapid iteration while coding
+make host               # Build with version info locally
+./tests/run_tests.sh    # Integration tests (auto-detects incus/docker)
+make build              # Full cross-platform build before release
+./tests/incus.sh        # Full systemd testing before release (preferred)
+```
 
 ## Directory Rules (NON-NEGOTIABLE)
 
 | Rule | Description |
 |------|-------------|
-| **NEVER symlink** | Never symlink between `binaries/` and `releases/` |
-| **NEVER copy** | Never copy files between `binaries/` and `releases/` |
 | **binaries/** | Build output only - temporary, gitignored |
 | **releases/** | Release artifacts only - packaged for distribution |
 | **version.txt** | Every release includes `version.txt` with current version |
+
+## NEVER Copy or Symlink Binaries (NON-NEGOTIABLE)
+
+**Binaries are NEVER copied or symlinked. They stay in `binaries/` until explicitly moved for release.**
+
+### Prohibited Actions
+
+| Action | Example | Why Prohibited |
+|--------|---------|----------------|
+| **Symlink to PATH** | `ln -s binaries/app /usr/local/bin/app` | Creates maintenance nightmare |
+| **Copy to system dirs** | `cp binaries/app /usr/local/bin/` | Stale binaries, version confusion |
+| **Symlink for testing** | `ln -s ../binaries/app test/app` | Use full path instead |
+| **Copy between dirs** | `cp binaries/app releases/app` | Use CI/CD release process |
+| **Install locally** | Any form of "installing" the binary | Run from `binaries/` directly |
+
+### Correct Usage
+
+| Task | WRONG | CORRECT |
+|------|-------|---------|
+| **Run binary** | `ln -s binaries/app ~/bin/app && app` | `./binaries/app` or `binaries/app` |
+| **Test binary** | `cp binaries/app /tmp/ && /tmp/app` | `./binaries/app --test` |
+| **Release** | `cp binaries/* releases/` | CI/CD handles release artifacts |
+| **Deploy** | Copy binary to server | Use container or package manager |
+
+### Why This Rule Exists
+
+| Problem | Description |
+|---------|-------------|
+| **Stale binaries** | Symlinks/copies don't auto-update when you rebuild |
+| **Version confusion** | Which binary is running? The copy or the original? |
+| **Debug nightmare** | "I fixed it but it's still broken" = running old copy |
+| **Path pollution** | Binaries scattered across system |
+| **No cleanup** | Copies left behind, consuming space |
+
+### The Only Exception: CI/CD Release
+
+The **only** time binaries are copied is during CI/CD release process, where they are:
+1. Built fresh by CI/CD
+2. Stripped (debug symbols removed)
+3. Uploaded directly to release (GitHub Releases, registry, etc.)
+
+**This is handled by CI/CD, not manual commands.**
 
 ## Release Artifacts (NON-NEGOTIABLE)
 
@@ -22315,34 +25359,34 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 | File | Description |
 |------|-------------|
-| `{projectname}-linux-amd64` | Linux AMD64 server binary |
-| `{projectname}-linux-arm64` | Linux ARM64 server binary |
-| `{projectname}-darwin-amd64` | macOS AMD64 server binary |
-| `{projectname}-darwin-arm64` | macOS ARM64 (Apple Silicon) server binary |
-| `{projectname}-windows-amd64.exe` | Windows AMD64 server binary |
-| `{projectname}-windows-arm64.exe` | Windows ARM64 server binary |
-| `{projectname}-freebsd-amd64` | FreeBSD AMD64 server binary |
-| `{projectname}-freebsd-arm64` | FreeBSD ARM64 server binary |
+| `vidveil-linux-amd64` | Linux AMD64 server binary |
+| `vidveil-linux-arm64` | Linux ARM64 server binary |
+| `vidveil-darwin-amd64` | macOS AMD64 server binary |
+| `vidveil-darwin-arm64` | macOS ARM64 (Apple Silicon) server binary |
+| `vidveil-windows-amd64.exe` | Windows AMD64 server binary |
+| `vidveil-windows-arm64.exe` | Windows ARM64 server binary |
+| `vidveil-freebsd-amd64` | FreeBSD AMD64 server binary |
+| `vidveil-freebsd-arm64` | FreeBSD ARM64 server binary |
 
 ### CLI Binaries (If Project Has CLI)
 
 | File | Description |
 |------|-------------|
-| `{projectname}-linux-amd64-cli` | Linux AMD64 CLI binary |
-| `{projectname}-linux-arm64-cli` | Linux ARM64 CLI binary |
-| `{projectname}-darwin-amd64-cli` | macOS AMD64 CLI binary |
-| `{projectname}-darwin-arm64-cli` | macOS ARM64 (Apple Silicon) CLI binary |
-| `{projectname}-windows-amd64-cli.exe` | Windows AMD64 CLI binary |
-| `{projectname}-windows-arm64-cli.exe` | Windows ARM64 CLI binary |
-| `{projectname}-freebsd-amd64-cli` | FreeBSD AMD64 CLI binary |
-| `{projectname}-freebsd-arm64-cli` | FreeBSD ARM64 CLI binary |
+| `vidveil-cli-linux-amd64` | Linux AMD64 CLI binary |
+| `vidveil-cli-linux-arm64` | Linux ARM64 CLI binary |
+| `vidveil-cli-darwin-amd64` | macOS AMD64 CLI binary |
+| `vidveil-cli-darwin-arm64` | macOS ARM64 (Apple Silicon) CLI binary |
+| `vidveil-cli-windows-amd64.exe` | Windows AMD64 CLI binary |
+| `vidveil-cli-windows-arm64.exe` | Windows ARM64 CLI binary |
+| `vidveil-cli-freebsd-amd64` | FreeBSD AMD64 CLI binary |
+| `vidveil-cli-freebsd-arm64` | FreeBSD ARM64 CLI binary |
 
 ### Metadata Files (Always)
 
 | File | Description | Example Content |
 |------|-------------|-----------------|
 | `version.txt` | Version string only | `1.2.3`, `20251218060432-beta`, `20251218060432` |
-| `{projectname}-{version}-source.tar.gz` | Source code archive | Excludes `.git`, `.github`, `binaries/`, `releases/` |
+| `vidveil-{version}-source.tar.gz` | Source code archive | Excludes `.git`, `.github`, `binaries/`, `releases/` |
 
 ### version.txt Content
 
@@ -22482,7 +25526,7 @@ docker/
 | Meta labels | All OCI labels (see below) |
 | Required packages | git, curl, bash, tini, tor |
 | Tor handling | Installed but **binary controls** (see PART 32) |
-| Binary location | `/usr/local/bin/{projectname}` |
+| Binary location | `/usr/local/bin/vidveil` |
 | Entrypoint script | `/usr/local/bin/entrypoint.sh` |
 | Init system | **tini** |
 | Internal port | **80** |
@@ -22494,21 +25538,21 @@ docker/
 
 | Path | Purpose |
 |------|---------|
-| `/config/{projectname}/` | Binary's {config_dir} (server.yml, etc.) |
-| `/config/{projectname}/security/` | Security databases (geoip, blocklists, cve, trivy) |
-| `/config/{projectname}/tor/` | Tor config (torrc) - binary owns Tor |
+| `/config/vidveil/` | Binary's {config_dir} (server.yml, etc.) |
+| `/config/vidveil/security/` | Security databases (geoip, blocklists, cve, trivy) |
+| `/config/vidveil/tor/` | Tor config (torrc) - binary owns Tor |
 | `/config/{servicename}/` | External service configs (valkey, nginx, etc.) |
-| `/data/{projectname}/` | Binary's {data_dir} |
-| `/data/{projectname}/tor/` | Tor data (hidden service keys) - binary owns Tor |
+| `/data/vidveil/` | Binary's {data_dir} |
+| `/data/vidveil/tor/` | Tor data (hidden service keys) - binary owns Tor |
 | `/data/db/{dbtype}/` | Database data (postgres, valkey, mssql, etc.) |
-| `/data/log/{projectname}/` | App logs (access.log, error.log, tor.log, etc.) |
+| `/data/log/vidveil/` | App logs (access.log, error.log, tor.log, etc.) |
 | `/data/log/{servicename}/` | Service logs (nginx, caddy, etc.) |
-| `/data/backups/{projectname}/` | Backup archives |
+| `/data/backups/vidveil/` | Backup archives |
 | `/data/{servicename}/` | External service data (nginx, apache, etc.) |
-| `/usr/local/bin/{projectname}` | Application binary |
+| `/usr/local/bin/vidveil` | Application binary |
 | `/root/Dockerfile` | Build reference and backup |
 
-**Key principle:** Binary owns Tor completely - Tor dirs are under `{projectname}/`, not separate.
+**Key principle:** Binary owns Tor completely - Tor dirs are under `vidveil/`, not separate.
 
 ### OCI Meta Labels (Required)
 
@@ -22517,11 +25561,11 @@ All Dockerfiles MUST include these labels:
 | Label | Value |
 |-------|-------|
 | `maintainer` | `{maintainer_name} <{maintainer_email}>` |
-| `org.opencontainers.image.vendor` | `{projectorg}` |
-| `org.opencontainers.image.authors` | `{projectorg}` |
-| `org.opencontainers.image.title` | `{projectname}` |
-| `org.opencontainers.image.base.name` | `{projectname}` |
-| `org.opencontainers.image.description` | `Containerized version of {projectname}` |
+| `org.opencontainers.image.vendor` | `apimgr` |
+| `org.opencontainers.image.authors` | `apimgr` |
+| `org.opencontainers.image.title` | `vidveil` |
+| `org.opencontainers.image.base.name` | `vidveil` |
+| `org.opencontainers.image.description` | `Containerized version of vidveil` |
 | `org.opencontainers.image.licenses` | License (e.g., `MIT`) |
 | `org.opencontainers.image.created` | `${BUILD_DATE}` (ARG) |
 | `org.opencontainers.image.version` | `${VERSION}` (ARG) |
@@ -22595,7 +25639,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'" \
-    -o /build/binary/{projectname} src
+    -o /build/binary/vidveil src
 
 # =============================================================================
 # Runtime Stage - Minimal Alpine image
@@ -22610,11 +25654,11 @@ ARG LICENSE=MIT
 
 # Static Labels
 LABEL maintainer="{maintainer_name} <{maintainer_email}>" \
-      org.opencontainers.image.vendor="{projectorg}" \
-      org.opencontainers.image.authors="{projectorg}" \
-      org.opencontainers.image.title="{projectname}" \
-      org.opencontainers.image.base.name="{projectname}" \
-      org.opencontainers.image.description="Containerized version of {projectname}" \
+      org.opencontainers.image.vendor="apimgr" \
+      org.opencontainers.image.authors="apimgr" \
+      org.opencontainers.image.title="vidveil" \
+      org.opencontainers.image.base.name="vidveil" \
+      org.opencontainers.image.description="Containerized version of vidveil" \
       org.opencontainers.image.url="{PLATFORM_REPO_URL}" \
       org.opencontainers.image.source="{PLATFORM_REPO_URL}" \
       org.opencontainers.image.documentation="{PLATFORM_REPO_URL}" \
@@ -22642,7 +25686,7 @@ RUN apk add --no-cache \
 # Docker volume mounts auto-create mount points
 
 # Copy binary from builder stage (multi-stage build)
-COPY --from=builder /build/binary/{projectname} /usr/local/bin/{projectname}
+COPY --from=builder /build/binary/vidveil /usr/local/bin/vidveil
 
 # Copy BUILD-TIME overlay (entrypoint.sh) from docker/rootfs/ into image
 # Note: This is docker/rootfs/ (build context), NOT runtime ./rootfs/ volumes
@@ -22667,7 +25711,7 @@ STOPSIGNAL SIGRTMIN+3
 
 # Health check (long start period for services that need initialization)
 HEALTHCHECK --start-period=10m --interval=5m --timeout=15s --retries=3 \
-    CMD /usr/local/bin/{projectname} --status || exit 1
+    CMD /usr/local/bin/vidveil --status || exit 1
 
 # Use tini as init with signal propagation
 # -p SIGTERM: propagate SIGTERM to child processes
@@ -22708,7 +25752,7 @@ set -e
 # Binary handles: directories, permissions, user/group, Tor, etc.
 # =============================================================================
 
-APP_NAME="{projectname}"
+APP_NAME="vidveil"
 APP_BIN="/usr/local/bin/${APP_NAME}"
 
 # Export environment defaults (binary reads these)
@@ -22809,23 +25853,23 @@ exec $APP_BIN $FLAGS "$@"
 |-------------|-------|
 | `build:` | **NEVER include** |
 | `version:` | **NEVER include** |
-| `name:` | `{projectname}` (top-level) |
-| `container_name:` | `{projectname}-{servicename}` |
+| `name:` | `vidveil` (top-level) |
+| `container_name:` | `vidveil-{servicename}` |
 | Main service name | `server` (not `app`) |
 | `pull_policy:` | `always` |
 | `restart:` | `always` |
 | `x-logging:` | Anchor for consistent logging (see below) |
-| Network | Custom `{projectname}` with `external: false` |
+| Network | Custom `vidveil` with `external: false` |
 | Environment variables | **Hardcode with sane defaults** (NEVER use .env files) |
 | **environment: MODE** | **production** (strict host validation) |
 
 ### Docker Compose Structure (NON-NEGOTIABLE)
 
 ```yaml
-# {projectname} - {brief description}
+# vidveil - {brief description}
 # nginx proxy address - http://172.17.0.1:{port}
 
-name: {projectname}
+name: vidveil
 
 x-logging: &default-logging
   options:
@@ -22835,8 +25879,8 @@ x-logging: &default-logging
 
 services:
   server:
-    image: {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
-    container_name: {projectname}-server
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+    container_name: vidveil-server
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
     pull_policy: always
@@ -22852,17 +25896,17 @@ services:
     ports:
       - '172.17.0.1:64580:80'
     healthcheck:
-      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      test: /usr/local/bin/vidveil --status
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 90s
     networks:
-      - {projectname}
+      - vidveil
 
 networks:
-  {projectname}:
-    name: {projectname}
+  vidveil:
+    name: vidveil
     external: false
 ```
 
@@ -22870,14 +25914,14 @@ networks:
 
 | Field | Value | Description |
 |-------|-------|-------------|
-| `name:` | `{projectname}` | Top-level compose project name |
-| `container_name:` | `{projectname}-{servicename}` | e.g., `jokes-server`, `jokes-db`, `jokes-cache` |
+| `name:` | `vidveil` | Top-level compose project name |
+| `container_name:` | `vidveil-{servicename}` | e.g., `jokes-server`, `jokes-db`, `jokes-cache` |
 | Main service | `server` | Primary application service (not `app`) |
 | `hostname:` | `${BASE_HOST_NAME:-$HOSTNAME}` | Uses env or system hostname |
 | `restart:` | `always` | Always restart on failure |
 | `pull_policy:` | `always` | Always pull latest image |
 | `logging:` | `*default-logging` | Use the logging anchor |
-| `networks:` | `{projectname}` | Isolated network per project |
+| `networks:` | `vidveil` | Isolated network per project |
 
 ### Logging Anchor (NON-NEGOTIABLE)
 
@@ -22901,10 +25945,10 @@ services:
 ### Multi-Service Example
 
 ```yaml
-# weatherapi - Weather forecast API with caching
+# vidveil - with Redis cache
 # nginx proxy address - http://172.17.0.1:64580
 
-name: weatherapi
+name: vidveil
 
 x-logging: &default-logging
   options:
@@ -22914,8 +25958,8 @@ x-logging: &default-logging
 
 services:
   server:
-    image: ghcr.io/acmesoft/weatherapi:latest
-    container_name: weatherapi-server
+    image: ghcr.io/apimgr/vidveil:latest
+    container_name: vidveil-server
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
     pull_policy: always
@@ -22931,7 +25975,7 @@ services:
     ports:
       - '172.17.0.1:64580:80'
     healthcheck:
-      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      test: /usr/local/bin/vidveil --status
       interval: 10s
       timeout: 5s
       retries: 3
@@ -22940,11 +25984,11 @@ services:
       cache:
         condition: service_healthy
     networks:
-      - weatherapi
+      - vidveil
 
   cache:
     image: redis:alpine
-    container_name: weatherapi-cache
+    container_name: vidveil-cache
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
     pull_policy: always
@@ -22958,11 +26002,11 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - weatherapi
+      - vidveil
 
 networks:
-  weatherapi:
-    name: weatherapi
+  vidveil:
+    name: vidveil
     external: false
 ```
 
@@ -22995,7 +26039,7 @@ networks:
 - Uses SQLite (embedded) or embedded key-value store
 - Valkey/Redis runs inside container via supervisor or embedded
 - Service name: `server`
-- Container name: `{projectname}-server`
+- Container name: `vidveil-server`
 - Simpler deployment, single image
 - **Trade-offs:** No horizontal scaling, single point of failure, harder to debug
 
@@ -23011,11 +26055,11 @@ networks:
 **All-in-One docker-compose (`docker/all-in-one.yml`):**
 
 ```yaml
-# quotesvc - Inspirational quotes API (all-in-one)
+# vidveil - All-in-One (app + embedded DB)
 # nginx proxy address - http://172.17.0.1:64580
 # Usage: docker compose -f all-in-one.yml up -d
 
-name: quotesvc
+name: vidveil
 
 x-logging: &default-logging
   options:
@@ -23025,8 +26069,8 @@ x-logging: &default-logging
 
 services:
   server:
-    image: ghcr.io/devtools/quotesvc-aio:latest
-    container_name: quotesvc-server
+    image: ghcr.io/apimgr/vidveil-aio:latest
+    container_name: vidveil-server
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
     pull_policy: always
@@ -23042,17 +26086,17 @@ services:
     ports:
       - '172.17.0.1:64580:80'
     healthcheck:
-      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
+      test: /usr/local/bin/vidveil --status
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 90s
     networks:
-      - quotesvc
+      - vidveil
 
 networks:
-  quotesvc:
-    name: quotesvc
+  vidveil:
+    name: vidveil
     external: false
 ```
 
@@ -23083,13 +26127,13 @@ networks:
 ```dockerfile
 # All-in-One Dockerfile - includes app + postgresql + valkey + tor
 # Base: debian:latest (stable, broad compatibility)
-# Image name: {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}-aio:latest
+# Image name: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil-aio:latest
 # PORTS: Only 80 exposed (db/cache are internal-only)
 
 FROM debian:latest
 
 LABEL org.opencontainers.image.source="{PLATFORM_REPO_URL}"
-LABEL org.opencontainers.image.description="{projectname} - all-in-one container"
+LABEL org.opencontainers.image.description="vidveil - all-in-one container"
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Install dependencies (PostgreSQL + Valkey + Tor + Supervisor)
@@ -23105,11 +26149,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories - organized by component
-RUN mkdir -p /config/{projectname} /config/{projectname}/security /config/{projectname}/tor \
+RUN mkdir -p /config/vidveil /config/vidveil/security /config/vidveil/tor \
              /config/valkey /config/postgres \
-             /data/{projectname} /data/{projectname}/tor \
+             /data/vidveil /data/vidveil/tor \
              /data/db/postgres /data/db/valkey \
-             /data/log/{projectname} /data/backups/{projectname} \
+             /data/log/vidveil /data/backups/vidveil \
              /run/postgresql /run/valkey \
     && chown -R postgres:postgres /data/db/postgres /run/postgresql
 
@@ -23117,8 +26161,8 @@ RUN mkdir -p /config/{projectname} /config/{projectname}/security /config/{proje
 COPY rootfs/ /
 
 # Copy application binary
-COPY {projectname} /usr/local/bin/
-RUN chmod +x /usr/local/bin/{projectname} /usr/local/bin/entrypoint.sh
+COPY vidveil /usr/local/bin/
+RUN chmod +x /usr/local/bin/vidveil /usr/local/bin/entrypoint.sh
 
 # Default environment
 ENV MODE=production \
@@ -23127,8 +26171,8 @@ ENV MODE=production \
     TZ=America/New_York \
     PGDATA=/data/db \
     DB_HOST=/run/postgresql \
-    DB_NAME={projectname} \
-    DB_USER={projectname} \
+    DB_NAME=vidveil \
+    DB_USER=vidveil \
     VALKEY_SOCKET=/run/valkey/valkey.sock
 
 # Only expose app port - db/cache are internal
@@ -23174,7 +26218,7 @@ stdout_logfile=/data/log/tor.log
 stderr_logfile=/data/log/tor.log
 
 [program:app]
-command=/usr/local/bin/{projectname}
+command=/usr/local/bin/vidveil
 autostart=true
 autorestart=true
 priority=100
@@ -23293,9 +26337,9 @@ if [ ! -f /data/db/postgres/PG_VERSION ]; then
     sleep 3
 
     # Create application database and user
-    su - postgres -c "psql -c \"CREATE USER ${DB_USER:-{projectname}} WITH PASSWORD '${DB_PASSWORD:-{projectname}}';\""
-    su - postgres -c "psql -c \"CREATE DATABASE ${DB_NAME:-{projectname}} OWNER ${DB_USER:-{projectname}};\""
-    su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME:-{projectname}} TO ${DB_USER:-{projectname}};\""
+    su - postgres -c "psql -c \"CREATE USER ${DB_USER:-vidveil} WITH PASSWORD '${DB_PASSWORD:-vidveil}';\""
+    su - postgres -c "psql -c \"CREATE DATABASE ${DB_NAME:-vidveil} OWNER ${DB_USER:-vidveil};\""
+    su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME:-vidveil} TO ${DB_USER:-vidveil};\""
 
     # Stop PostgreSQL (supervisor will start it)
     su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl -D /data/db/postgres stop"
@@ -23323,9 +26367,9 @@ exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 | `PORT` | `80` | Application port |
 | `DEBUG` | `false` | Debug mode |
 | `TZ` | `America/New_York` | Timezone |
-| `DB_NAME` | `{projectname}` | PostgreSQL database name |
-| `DB_USER` | `{projectname}` | PostgreSQL username |
-| `DB_PASSWORD` | `{projectname}` | PostgreSQL password |
+| `DB_NAME` | `vidveil` | PostgreSQL database name |
+| `DB_USER` | `vidveil` | PostgreSQL username |
+| `DB_PASSWORD` | `vidveil` | PostgreSQL password |
 | `TOR_ENABLED` | `false` | Enable Tor hidden service |
 
 **App Connection Strings (internal):**
@@ -23342,10 +26386,10 @@ valkeyURL := "unix:///run/valkey/valkey.sock"
 
 ```bash
 # Standard image
-docker build -t {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest -f docker/Dockerfile docker/
+docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest -f docker/Dockerfile docker/
 
 # All-in-one image
-docker build -t {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}-aio:latest -f docker/Dockerfile.aio docker/
+docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil-aio:latest -f docker/Dockerfile.aio docker/
 ```
 
 **When to use All-in-One:**
@@ -23411,16 +26455,16 @@ $TEMP_DIR/
 
 | Container Path | Contents |
 |----------------|----------|
-| `/config/{projectname}/` | Binary's {config_dir} - server.yml, etc. |
-| `/config/{projectname}/security/` | TLS certs, keys, security DBs |
-| `/config/{projectname}/tor/` | Tor config (torrc) - binary owns Tor |
+| `/config/vidveil/` | Binary's {config_dir} - server.yml, etc. |
+| `/config/vidveil/security/` | TLS certs, keys, security DBs |
+| `/config/vidveil/tor/` | Tor config (torrc) - binary owns Tor |
 | `/config/{servicename}/` | External service configs (valkey, nginx, etc.) |
-| `/data/{projectname}/` | Binary's {data_dir} |
-| `/data/{projectname}/tor/` | Tor data (hidden service keys) - binary owns Tor |
+| `/data/vidveil/` | Binary's {data_dir} |
+| `/data/vidveil/tor/` | Tor data (hidden service keys) - binary owns Tor |
 | `/data/db/{dbtype}/` | Database data (postgres, valkey, sqlite, etc.) |
-| `/data/log/{projectname}/` | App logs (access.log, error.log, tor.log) |
+| `/data/log/vidveil/` | App logs (access.log, error.log, tor.log) |
 | `/data/log/{servicename}/` | Service logs (nginx, caddy, etc.) |
-| `/data/backups/{projectname}/` | Backup files |
+| `/data/backups/vidveil/` | Backup files |
 | `/data/{servicename}/` | External service data (nginx, apache, etc.) |
 
 **Rules:**
@@ -23441,12 +26485,12 @@ $TEMP_DIR/
 5. Data lives in temp dir, isolated from project
 
 ```bash
-# Setup (uses OS temp dir: {ostempdir}/{projectorg}/{projectname}-XXXXXX/)
+# Setup (uses OS temp dir: {ostempdir}/apimgr/vidveil-XXXXXX/)
 # Set PROJECT_ROOT to your actual project location
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"  # Use git top-level
 # Or use absolute path: PROJECT_ROOT="/path/to/your/project"
 mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
 
 # Copy docker-compose.yml
@@ -23462,9 +26506,9 @@ rm -rf "$TEMP_DIR"
 
 **Example paths:**
 ```
-/tmp/netutils/pastebin-aB3xY9/      # pastebin project
-/tmp/apimgr/weather-k9mN2p/         # weather project
-/tmp/casapps/linktree-Qw5rT1/       # different org
+/tmp/netutils/pastebin-aB3xY9/      # Example: pastebin project
+/tmp/apimgr/jokes-k9mN2p/           # Example: jokes project
+/tmp/casapps/linktree-Qw5rT1/       # Example: different org
 ```
 
 **Why temp dir:**
@@ -23516,12 +26560,12 @@ rm -rf "$TEMP_DIR"
 **Development mode with optional debug. MUST use temp directory workflow.**
 
 ```yaml
-name: {projectname}-dev
+name: vidveil-dev
 
 services:
-  {projectname}:
-    image: {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
-    container_name: {projectname}-dev
+  vidveil:
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+    container_name: vidveil-dev
     restart: unless-stopped
     environment:
       # Development: relaxed security, verbose logging, no caching
@@ -23539,18 +26583,18 @@ services:
       - ./rootfs/config:/config
       - ./rootfs/data:/data
     networks:
-      - {projectname}-dev
+      - vidveil-dev
 
 networks:
-  {projectname}-dev:
-    name: {projectname}-dev
+  vidveil-dev:
+    name: vidveil-dev
     external: false
 ```
 
 **Run:**
 ```bash
-mkdir -p "${TMPDIR:-/tmp}/{projectorg}"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/{projectorg}/{projectname}-XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/apimgr"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apimgr/vidveil-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
 cp docker/docker-compose.dev.yml "$TEMP_DIR/docker-compose.yml"
 cd "$TEMP_DIR" && docker compose up -d
@@ -23563,12 +26607,12 @@ cd "$TEMP_DIR" && docker compose up -d
 **Production has NO debug options. Debug must be set via CLI if needed.**
 
 ```yaml
-name: {projectname}
+name: vidveil
 
 services:
-  {projectname}:
-    image: {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
-    container_name: {projectname}
+  vidveil:
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+    container_name: vidveil
     restart: unless-stopped
     environment:
       # Production: strict security, minimal logging, caching enabled
@@ -23591,18 +26635,18 @@ services:
       - ./rootfs/config:/config:z
       - ./rootfs/data:/data:z
     networks:
-      - {projectname}
+      - vidveil
 
 networks:
-  {projectname}:
-    name: {projectname}
+  vidveil:
+    name: vidveil
     external: false
 ```
 
 **Run:**
 ```bash
-mkdir -p "${TMPDIR:-/tmp}/{projectorg}"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/{projectorg}/{projectname}-XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/apimgr"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apimgr/vidveil-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
 cp docker/docker-compose.yml "$TEMP_DIR/"
 cd "$TEMP_DIR" && docker compose up -d
@@ -23615,12 +26659,12 @@ cd "$TEMP_DIR" && docker compose up -d
 **For running tests in CI/CD or locally. Debug enabled for test visibility. MUST use temp directory workflow.**
 
 ```yaml
-name: {projectname}-test
+name: vidveil-test
 
 services:
-  {projectname}:
-    image: {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
-    container_name: {projectname}-test
+  vidveil:
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+    container_name: vidveil-test
     restart: "no"
     environment:
       - MODE=development
@@ -23634,18 +26678,18 @@ services:
       - ./rootfs/config:/config
       - ./rootfs/data:/data
     networks:
-      - {projectname}-test
+      - vidveil-test
 
 networks:
-  {projectname}-test:
-    name: {projectname}-test
+  vidveil-test:
+    name: vidveil-test
     external: false
 ```
 
 **Run:**
 ```bash
-mkdir -p "${TMPDIR:-/tmp}/{projectorg}"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/{projectorg}/{projectname}-XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/apimgr"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apimgr/vidveil-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
 cp docker/docker-compose.test.yml "$TEMP_DIR/docker-compose.yml"
 cd "$TEMP_DIR" && docker compose up --abort-on-container-exit
@@ -23657,12 +26701,12 @@ rm -rf "$TEMP_DIR"  # Cleanup after tests
 **Location:** `docker/docker-compose.yml`
 
 ```yaml
-name: {projectname}
+name: vidveil
 
 services:
-  {projectname}:
-    image: {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
-    container_name: {projectname}
+  vidveil:
+    image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+    container_name: vidveil
     restart: unless-stopped
     depends_on:
       - postgres
@@ -23675,9 +26719,9 @@ services:
       # - DOMAIN=myapp.com,www.myapp.com,api.myapp.com
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME={projectname}
-      - DB_USER={projectname}
-      - DB_PASS={projectname}
+      - DB_NAME=vidveil
+      - DB_USER=vidveil
+      - DB_PASS=vidveil
     ports:
       # Production: bound to Docker bridge only (reverse proxy handles external)
       - "172.17.0.1:64580:80"
@@ -23685,25 +26729,25 @@ services:
       - ./rootfs/config:/config:z
       - ./rootfs/data:/data:z
     networks:
-      - {projectname}
+      - vidveil
 
   postgres:
     image: postgres:alpine
-    container_name: {projectname}-postgres
+    container_name: vidveil-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_DB={projectname}
-      - POSTGRES_USER={projectname}
-      - POSTGRES_PASSWORD={projectname}
+      - POSTGRES_DB=vidveil
+      - POSTGRES_USER=vidveil
+      - POSTGRES_PASSWORD=vidveil
       - TZ=America/New_York
     volumes:
       - ./rootfs/data/db/postgres:/var/lib/postgresql/data:z
     networks:
-      - {projectname}
+      - vidveil
 
 networks:
-  {projectname}:
-    name: {projectname}
+  vidveil:
+    name: vidveil
     external: false
 ```
 
@@ -23714,15 +26758,15 @@ networks:
 | Setting | Value |
 |---------|-------|
 | Internal port | **80** (always) |
-| Config dir | `/config/{projectname}/` (binary's {config_dir}) |
-| Security dir | `/config/{projectname}/security/` |
-| Tor config dir | `/config/{projectname}/tor/` (binary owns Tor) |
-| Data dir | `/data/{projectname}/` (binary's {data_dir}) |
-| Tor data dir | `/data/{projectname}/tor/` (binary owns Tor) |
+| Config dir | `/config/vidveil/` (binary's {config_dir}) |
+| Security dir | `/config/vidveil/security/` |
+| Tor config dir | `/config/vidveil/tor/` (binary owns Tor) |
+| Data dir | `/data/vidveil/` (binary's {data_dir}) |
+| Tor data dir | `/data/vidveil/tor/` (binary owns Tor) |
 | Database dir | `/data/db/{dbtype}/` (postgres, valkey, sqlite) |
-| Log dir | `/data/log/{projectname}/` |
-| Backup dir | `/data/backups/{projectname}/` |
-| Binary | `/usr/local/bin/{projectname}` |
+| Log dir | `/data/log/vidveil/` |
+| Backup dir | `/data/backups/vidveil/` |
+| Binary | `/usr/local/bin/vidveil` |
 | HEALTHCHECK | `{binary} --status` |
 
 **Path Mapping (Container vs Host):**
@@ -23731,8 +26775,8 @@ networks:
 |----------------|-----------|---------|
 | `/config` | `./rootfs/config` | Configuration root (organized by component) |
 | `/data` | `./rootfs/data` | Data root (organized by component) |
-| `/config/{projectname}/` | `./rootfs/config/{projectname}/` | Binary's config |
-| `/data/{projectname}/` | `./rootfs/data/{projectname}/` | Binary's data |
+| `/config/vidveil/` | `./rootfs/config/vidveil/` | Binary's config |
+| `/data/vidveil/` | `./rootfs/data/vidveil/` | Binary's data |
 | `/data/db/` | `./rootfs/data/db/` | Database data |
 | `/data/log/` | `./rootfs/data/log/` | Log files |
 
@@ -23744,9 +26788,9 @@ networks:
 |----------|-------------|
 | Auto-detection | Tor starts automatically if `tor` binary is installed |
 | Always enabled | Docker image includes `tor`, so always enabled in containers |
-| Data persistence | Tor keys in `/data/{projectname}/tor/site/` (survives restart) |
+| Data persistence | Tor keys in `/data/vidveil/tor/site/` (survives restart) |
 | .onion address | Persists across container restarts via volume mount |
-| Binary owns Tor | Tor dirs under `{projectname}/`, not separate service |
+| Binary owns Tor | Tor dirs under `vidveil/`, not separate service |
 
 ## Container Detection
 
@@ -23765,17 +26809,17 @@ networks:
 
 | Tag | Description | Example |
 |-----|-------------|---------|
-| `{PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest` | Latest stable release | `ghcr.io/myorg/myapp:latest` |
-| `{PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:{version}` | Specific version | `ghcr.io/myorg/myapp:1.2.3` |
-| `{PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:{YYMM}` | Year/month tag | `ghcr.io/myorg/myapp:2512` |
-| `{PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:{commit}` | Git commit (7 char) | `ghcr.io/myorg/myapp:abc1234` |
+| `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest` | Latest stable release | `ghcr.io/myorg/myapp:latest` |
+| `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:{version}` | Specific version | `ghcr.io/myorg/myapp:1.2.3` |
+| `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:{YYMM}` | Year/month tag | `ghcr.io/myorg/myapp:2512` |
+| `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:{commit}` | Git commit (7 char) | `ghcr.io/myorg/myapp:abc1234` |
 
 ### Development Tags (Local)
 
 | Tag | Description | Example |
 |-----|-------------|---------|
-| `{projectname}:dev` | Local development build | `myapp:dev` |
-| `{projectname}:test` | Local test build | `myapp:test` |
+| `vidveil:dev` | Local development build | `myapp:dev` |
+| `vidveil:test` | Local test build | `myapp:test` |
 
 ### Registry
 
@@ -23786,7 +26830,7 @@ networks:
 
 ### Tag Rules
 
-1. **Release builds** MUST push to `{PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}`
+1. **Release builds** MUST push to `{PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil`
 2. **Development builds** MUST use local-only tags (no registry prefix)
 3. **NEVER push `:dev` or `:test` tags to production registry**
 4. All release images built for `linux/amd64` AND `linux/arm64`
@@ -23847,7 +26891,7 @@ on:
       - '[0-9]*.[0-9]*.[0-9]*'
 
 env:
-  PROJECTNAME: {projectname}
+  PROJECTNAME: vidveil
 
 jobs:
   build:
@@ -23981,7 +27025,7 @@ on:
       - beta
 
 env:
-  PROJECTNAME: {projectname}
+  PROJECTNAME: vidveil
 
 jobs:
   build:
@@ -24088,7 +27132,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECTNAME: {projectname}
+  PROJECTNAME: vidveil
 
 jobs:
   build:
@@ -24224,7 +27268,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECTNAME: {projectname}
+  PROJECTNAME: vidveil
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -24296,8 +27340,8 @@ jobs:
             BUILD_DATE=${{ env.BUILD_DATE }}
             COMMIT_ID=${{ env.COMMIT_ID }}
           labels: |
-            org.opencontainers.image.vendor={projectorg}
-            org.opencontainers.image.authors={projectorg}
+            org.opencontainers.image.vendor=apimgr
+            org.opencontainers.image.authors=apimgr
             org.opencontainers.image.title=${{ env.PROJECTNAME }}
             org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             org.opencontainers.image.version=${{ env.VERSION }}
@@ -24308,8 +27352,8 @@ jobs:
             org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.licenses=MIT
           annotations: |
-            manifest:org.opencontainers.image.vendor={projectorg}
-            manifest:org.opencontainers.image.authors={projectorg}
+            manifest:org.opencontainers.image.vendor=apimgr
+            manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
             manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
@@ -24389,8 +27433,8 @@ jobs:
             BUILD_DATE=${{ env.BUILD_DATE }}
             COMMIT_ID=${{ env.COMMIT_ID }}
           labels: |
-            org.opencontainers.image.vendor={projectorg}
-            org.opencontainers.image.authors={projectorg}
+            org.opencontainers.image.vendor=apimgr
+            org.opencontainers.image.authors=apimgr
             org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
             org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + postgresql + valkey + tor)
             org.opencontainers.image.version=${{ env.VERSION }}
@@ -24401,8 +27445,8 @@ jobs:
             org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.licenses=MIT
           annotations: |
-            manifest:org.opencontainers.image.vendor={projectorg}
-            manifest:org.opencontainers.image.authors={projectorg}
+            manifest:org.opencontainers.image.vendor=apimgr
+            manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
             manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + postgresql + valkey + tor)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
@@ -24492,7 +27536,7 @@ on:
       - '[0-9]*.[0-9]*.[0-9]*'
 
 env:
-  PROJECTNAME: {projectname}
+  PROJECTNAME: vidveil
 
 jobs:
   build:
@@ -24626,7 +27670,7 @@ on:
       - beta
 
 env:
-  PROJECTNAME: {projectname}
+  PROJECTNAME: vidveil
 
 jobs:
   build:
@@ -24733,7 +27777,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECTNAME: {projectname}
+  PROJECTNAME: vidveil
 
 jobs:
   build:
@@ -24848,7 +27892,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECTNAME: {projectname}
+  PROJECTNAME: vidveil
   # Registry auto-detected from Gitea instance (works with self-hosted)
   # Format: {gitea-server}/owner/repo -> extracts server for registry
   IMAGE_NAME: ${{ gitea.repository }}
@@ -24935,8 +27979,8 @@ jobs:
             BUILD_DATE=${{ env.BUILD_DATE }}
             COMMIT_ID=${{ env.COMMIT_ID }}
           labels: |
-            org.opencontainers.image.vendor={projectorg}
-            org.opencontainers.image.authors={projectorg}
+            org.opencontainers.image.vendor=apimgr
+            org.opencontainers.image.authors=apimgr
             org.opencontainers.image.title=${{ env.PROJECTNAME }}
             org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             org.opencontainers.image.version=${{ env.VERSION }}
@@ -24947,8 +27991,8 @@ jobs:
             org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
             org.opencontainers.image.licenses=MIT
           annotations: |
-            manifest:org.opencontainers.image.vendor={projectorg}
-            manifest:org.opencontainers.image.authors={projectorg}
+            manifest:org.opencontainers.image.vendor=apimgr
+            manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
             manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
@@ -25035,8 +28079,8 @@ jobs:
             BUILD_DATE=${{ env.BUILD_DATE }}
             COMMIT_ID=${{ env.COMMIT_ID }}
           labels: |
-            org.opencontainers.image.vendor={projectorg}
-            org.opencontainers.image.authors={projectorg}
+            org.opencontainers.image.vendor=apimgr
+            org.opencontainers.image.authors=apimgr
             org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
             org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + postgresql + valkey + tor)
             org.opencontainers.image.version=${{ env.VERSION }}
@@ -25047,8 +28091,8 @@ jobs:
             org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
             org.opencontainers.image.licenses=MIT
           annotations: |
-            manifest:org.opencontainers.image.vendor={projectorg}
-            manifest:org.opencontainers.image.authors={projectorg}
+            manifest:org.opencontainers.image.vendor=apimgr
+            manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
             manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + postgresql + valkey + tor)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
@@ -25120,12 +28164,12 @@ All `$CI_*` variables are auto-populated by GitLab (works with self-hosted).
 **File:** `.gitlab-ci.yml`
 
 ```yaml
-# GitLab CI/CD Pipeline for {projectname}
+# GitLab CI/CD Pipeline for vidveil
 # Equivalent to GitHub Actions: release.yml, beta.yml, daily.yml, docker.yml
 
 variables:
-  PROJECTNAME: "{projectname}"
-  PROJECTORG: "{projectorg}"
+  PROJECTNAME: "vidveil"
+  PROJECTORG: "apimgr"
   CGO_ENABLED: "0"
   GOOS: linux
   GOARCH: amd64
@@ -25161,11 +28205,11 @@ build:linux-amd64:
     GOOS: linux
     GOARCH: amd64
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64-cli ./src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-amd64 ./src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-cli-linux-amd64 ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-linux-amd64*
+      - $VIDVEIL-linux-amd64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -25177,11 +28221,11 @@ build:linux-arm64:
     GOOS: linux
     GOARCH: arm64
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64-cli ./src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-arm64 ./src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-cli-linux-arm64 ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-linux-arm64*
+      - $VIDVEIL-linux-arm64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -25193,11 +28237,11 @@ build:darwin-amd64:
     GOOS: darwin
     GOARCH: amd64
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-amd64 ./src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-amd64-cli ./src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-darwin-amd64 ./src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-cli-darwin-amd64 ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-darwin-amd64*
+      - $VIDVEIL-darwin-amd64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -25209,11 +28253,11 @@ build:darwin-arm64:
     GOOS: darwin
     GOARCH: arm64
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-arm64 ./src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-arm64-cli ./src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-darwin-arm64 ./src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-cli-darwin-arm64 ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-darwin-arm64*
+      - $VIDVEIL-darwin-arm64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -25225,11 +28269,11 @@ build:windows-amd64:
     GOOS: windows
     GOARCH: amd64
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-amd64.exe ./src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-amd64-cli.exe ./src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-windows-amd64.exe ./src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-cli-windows-amd64.exe ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-windows-amd64*.exe
+      - $VIDVEIL-windows-amd64*.exe
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -25241,11 +28285,11 @@ build:windows-arm64:
     GOOS: windows
     GOARCH: arm64
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-arm64.exe ./src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-arm64-cli.exe ./src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-windows-arm64.exe ./src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-cli-windows-arm64.exe ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-windows-arm64*.exe
+      - $VIDVEIL-windows-arm64*.exe
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -25257,11 +28301,11 @@ build:freebsd-amd64:
     GOOS: freebsd
     GOARCH: amd64
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-amd64 ./src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-amd64-cli ./src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-freebsd-amd64 ./src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-cli-freebsd-amd64 ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-freebsd-amd64*
+      - $VIDVEIL-freebsd-amd64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -25273,11 +28317,11 @@ build:freebsd-arm64:
     GOOS: freebsd
     GOARCH: arm64
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-arm64 ./src
-    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-arm64-cli ./src/client; fi
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-freebsd-arm64 ./src
+    - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o $VIDVEIL-cli-freebsd-arm64 ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-freebsd-arm64*
+      - $VIDVEIL-freebsd-arm64*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
@@ -25319,29 +28363,29 @@ release:
   artifacts:
     paths:
       - version.txt
-      - ${PROJECTNAME}-*
+      - $VIDVEIL-*
   release:
     tag_name: $CI_COMMIT_TAG
     name: "Release $CI_COMMIT_TAG"
     description: "Release created by GitLab CI"
     assets:
       links:
-        - name: "${PROJECTNAME}-linux-amd64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-linux-amd64?job=build:linux-amd64"
-        - name: "${PROJECTNAME}-linux-arm64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-linux-arm64?job=build:linux-arm64"
-        - name: "${PROJECTNAME}-darwin-amd64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-darwin-amd64?job=build:darwin-amd64"
-        - name: "${PROJECTNAME}-darwin-arm64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-darwin-arm64?job=build:darwin-arm64"
-        - name: "${PROJECTNAME}-windows-amd64.exe"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-windows-amd64.exe?job=build:windows-amd64"
-        - name: "${PROJECTNAME}-windows-arm64.exe"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-windows-arm64.exe?job=build:windows-arm64"
-        - name: "${PROJECTNAME}-freebsd-amd64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-freebsd-amd64?job=build:freebsd-amd64"
-        - name: "${PROJECTNAME}-freebsd-arm64"
-          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-freebsd-arm64?job=build:freebsd-arm64"
+        - name: "$VIDVEIL-linux-amd64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-linux-amd64?job=build:linux-amd64"
+        - name: "$VIDVEIL-linux-arm64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-linux-arm64?job=build:linux-arm64"
+        - name: "$VIDVEIL-darwin-amd64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-darwin-amd64?job=build:darwin-amd64"
+        - name: "$VIDVEIL-darwin-arm64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-darwin-arm64?job=build:darwin-arm64"
+        - name: "$VIDVEIL-windows-amd64.exe"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-windows-amd64.exe?job=build:windows-amd64"
+        - name: "$VIDVEIL-windows-arm64.exe"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-windows-arm64.exe?job=build:windows-arm64"
+        - name: "$VIDVEIL-freebsd-amd64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-freebsd-amd64?job=build:freebsd-amd64"
+        - name: "$VIDVEIL-freebsd-arm64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/$VIDVEIL-freebsd-arm64?job=build:freebsd-arm64"
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
 
@@ -25362,11 +28406,11 @@ build:beta:linux:
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'"
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-amd64 ./src
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-arm64 ./src
   artifacts:
     paths:
-      - ${PROJECTNAME}-linux-*
+      - $VIDVEIL-linux-*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_BRANCH == "beta"
@@ -25388,11 +28432,11 @@ build:daily:linux:
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'"
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-amd64 ./src
+    - go build -ldflags "${LDFLAGS}" -o $VIDVEIL-linux-arm64 ./src
   artifacts:
     paths:
-      - ${PROJECTNAME}-linux-*
+      - $VIDVEIL-linux-*
     expire_in: 1 day
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -25440,9 +28484,9 @@ docker:build:
         --build-arg BUILD_DATE="${BUILD_DATE}" \
         --label "org.opencontainers.image.vendor=${PROJECTORG}" \
         --label "org.opencontainers.image.authors=${PROJECTORG}" \
-        --label "org.opencontainers.image.title=${PROJECTNAME}" \
-        --label "org.opencontainers.image.base.name=${PROJECTNAME}" \
-        --label "org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
+        --label "org.opencontainers.image.title=$VIDVEIL" \
+        --label "org.opencontainers.image.base.name=$VIDVEIL" \
+        --label "org.opencontainers.image.description=Containerized version of $VIDVEIL" \
         --label "org.opencontainers.image.licenses=MIT" \
         --label "org.opencontainers.image.version=${VERSION}" \
         --label "org.opencontainers.image.created=${BUILD_DATE}" \
@@ -25452,8 +28496,8 @@ docker:build:
         --label "org.opencontainers.image.documentation=${CI_PROJECT_URL}" \
         --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
         --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
-        --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}" \
-        --annotation "manifest:org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
+        --annotation "manifest:org.opencontainers.image.title=$VIDVEIL" \
+        --annotation "manifest:org.opencontainers.image.description=Containerized version of $VIDVEIL" \
         --annotation "manifest:org.opencontainers.image.licenses=MIT" \
         --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
         --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
@@ -25506,8 +28550,8 @@ docker:build-aio:
         --build-arg BUILD_DATE="${BUILD_DATE}" \
         --label "org.opencontainers.image.vendor=${PROJECTORG}" \
         --label "org.opencontainers.image.authors=${PROJECTORG}" \
-        --label "org.opencontainers.image.title=${PROJECTNAME}-aio" \
-        --label "org.opencontainers.image.description=${PROJECTNAME} - all-in-one (debian + postgresql + valkey + tor)" \
+        --label "org.opencontainers.image.title=$VIDVEIL-aio" \
+        --label "org.opencontainers.image.description=$VIDVEIL - all-in-one (debian + postgresql + valkey + tor)" \
         --label "org.opencontainers.image.licenses=MIT" \
         --label "org.opencontainers.image.version=${VERSION}" \
         --label "org.opencontainers.image.created=${BUILD_DATE}" \
@@ -25517,8 +28561,8 @@ docker:build-aio:
         --label "org.opencontainers.image.documentation=${CI_PROJECT_URL}" \
         --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
         --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
-        --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}-aio" \
-        --annotation "manifest:org.opencontainers.image.description=${PROJECTNAME} - all-in-one (debian + postgresql + valkey + tor)" \
+        --annotation "manifest:org.opencontainers.image.title=$VIDVEIL-aio" \
+        --annotation "manifest:org.opencontainers.image.description=$VIDVEIL - all-in-one (debian + postgresql + valkey + tor)" \
         --annotation "manifest:org.opencontainers.image.licenses=MIT" \
         --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
         --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
@@ -25616,12 +28660,12 @@ pipeline {
     }
 
     environment {
-        PROJECTNAME = '{projectname}'
-        PROJECTORG = '{projectorg}'
+        PROJECTNAME = 'vidveil'
+        PROJECTORG = 'apimgr'
         BINDIR = 'binaries'
         RELDIR = 'releases'
-        GOCACHE = "/tmp/${PROJECTORG}/go-cache"
-        GOMODCACHE = "/tmp/${PROJECTORG}/go-mod-cache"
+        GODIR = "/tmp/${PROJECTORG}/go"
+        GOCACHE = "/tmp/${PROJECTORG}/go/build"
 
         // =========================================================================
         // GIT PROVIDER CONFIGURATION
@@ -25631,22 +28675,22 @@ pipeline {
         // ----- GITHUB (default) -----
         GIT_FQDN = 'github.com'
         GIT_TOKEN = credentials('github-token')  // Jenkins credentials ID
-        REGISTRY = "ghcr.io/${PROJECTORG}/${PROJECTNAME}"
+        REGISTRY = "ghcr.io/${PROJECTORG}/$VIDVEIL"
 
         // ----- GITEA / FORGEJO (self-hosted) -----
         // GIT_FQDN = 'git.example.com'  // Your Gitea/Forgejo domain
         // GIT_TOKEN = credentials('gitea-token')  // Jenkins credentials ID
-        // REGISTRY = "${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}"
+        // REGISTRY = "${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
 
         // ----- GITLAB (gitlab.com or self-hosted) -----
         // GIT_FQDN = 'gitlab.com'  // or your self-hosted GitLab domain
         // GIT_TOKEN = credentials('gitlab-token')  // Jenkins credentials ID
-        // REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}"
+        // REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
 
         // ----- DOCKER HUB -----
         // GIT_FQDN = 'github.com'  // Git host (separate from registry)
         // GIT_TOKEN = credentials('github-token')
-        // REGISTRY = "docker.io/${PROJECTORG}/${PROJECTNAME}"
+        // REGISTRY = "docker.io/${PROJECTORG}/$VIDVEIL"
 
         // =========================================================================
     }
@@ -25694,13 +28738,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-amd64 ./src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-linux-amd64 ./src
                         '''
                     }
                 }
@@ -25711,13 +28755,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-arm64 ./src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-linux-arm64 ./src
                         '''
                     }
                 }
@@ -25729,13 +28773,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-amd64 ./src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-darwin-amd64 ./src
                         '''
                     }
                 }
@@ -25746,13 +28790,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-arm64 ./src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-darwin-arm64 ./src
                         '''
                     }
                 }
@@ -25764,13 +28808,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-amd64.exe ./src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-windows-amd64.exe ./src
                         '''
                     }
                 }
@@ -25781,13 +28825,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-arm64.exe ./src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-windows-arm64.exe ./src
                         '''
                     }
                 }
@@ -25799,13 +28843,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-amd64 ./src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-freebsd-amd64 ./src
                         '''
                     }
                 }
@@ -25816,13 +28860,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-arm64 ./src
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-freebsd-arm64 ./src
                         '''
                     }
                 }
@@ -25842,13 +28886,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-amd64-cli ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-cli-linux-amd64 ./src/client
                         '''
                     }
                 }
@@ -25859,13 +28903,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-arm64-cli ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-cli-linux-arm64 ./src/client
                         '''
                     }
                 }
@@ -25876,13 +28920,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-amd64-cli ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-cli-darwin-amd64 ./src/client
                         '''
                     }
                 }
@@ -25893,13 +28937,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-arm64-cli ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-cli-darwin-arm64 ./src/client
                         '''
                     }
                 }
@@ -25910,13 +28954,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-amd64-cli.exe ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-cli-windows-amd64.exe ./src/client
                         '''
                     }
                 }
@@ -25927,13 +28971,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-arm64-cli.exe ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-cli-windows-arm64.exe ./src/client
                         '''
                     }
                 }
@@ -25944,13 +28988,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-amd64-cli ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-cli-freebsd-amd64 ./src/client
                         '''
                     }
                 }
@@ -25961,13 +29005,13 @@ pipeline {
                             docker run --rm \
                                 -v ${WORKSPACE}:/build \
                                 -v ${GOCACHE}:/root/.cache/go-build \
-                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -v ${GODIR}:/go \
                                 -w /build \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-arm64-cli ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/$VIDVEIL-cli-freebsd-arm64 ./src/client
                         '''
                     }
                 }
@@ -25981,7 +29025,7 @@ pipeline {
                     docker run --rm \
                         -v ${WORKSPACE}:/build \
                         -v ${GOCACHE}:/root/.cache/go-build \
-                        -v ${GOMODCACHE}:/go/pkg/mod \
+                        -v ${GODIR}:/go \
                         -w /build \
                         golang:alpine \
                         go test -v -cover ./...
@@ -25999,7 +29043,7 @@ pipeline {
                 sh '''
                     echo "${VERSION}" > ${RELDIR}/version.txt
 
-                    for f in ${BINDIR}/${PROJECTNAME}-*; do
+                    for f in ${BINDIR}/$VIDVEIL-*; do
                         [ -f "$f" ] || continue
                         cp "$f" ${RELDIR}/
                     done
@@ -26007,7 +29051,7 @@ pipeline {
                     tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
                         --exclude='.forgejo' --exclude='binaries' --exclude='releases' \
                         --exclude='*.tar.gz' \
-                        -czf ${RELDIR}/${PROJECTNAME}-${VERSION}-source.tar.gz .
+                        -czf ${RELDIR}/$VIDVEIL-${VERSION}-source.tar.gz .
                 '''
                 archiveArtifacts artifacts: 'releases/*', fingerprint: true
             }
@@ -26023,7 +29067,7 @@ pipeline {
                 sh '''
                     echo "${VERSION}" > ${RELDIR}/version.txt
 
-                    for f in ${BINDIR}/${PROJECTNAME}-*; do
+                    for f in ${BINDIR}/$VIDVEIL-*; do
                         [ -f "$f" ] || continue
                         cp "$f" ${RELDIR}/
                     done
@@ -26042,7 +29086,7 @@ pipeline {
                 sh '''
                     echo "${VERSION}" > ${RELDIR}/version.txt
 
-                    for f in ${BINDIR}/${PROJECTNAME}-*; do
+                    for f in ${BINDIR}/$VIDVEIL-*; do
                         [ -f "$f" ] || continue
                         cp "$f" ${RELDIR}/
                     done
@@ -26081,7 +29125,7 @@ pipeline {
 
                     // Build multi-arch with OCI labels and manifest annotations
                     sh """
-                        docker buildx create --name ${PROJECTNAME}-builder --use 2>/dev/null || docker buildx use ${PROJECTNAME}-builder
+                        docker buildx create --name $VIDVEIL-builder --use 2>/dev/null || docker buildx use $VIDVEIL-builder
                         docker buildx build \
                             -f docker/Dockerfile \
                             --platform linux/amd64,linux/arm64 \
@@ -26090,27 +29134,27 @@ pipeline {
                             --build-arg BUILD_DATE="${BUILD_DATE}" \
                             --label "org.opencontainers.image.vendor=${PROJECTORG}" \
                             --label "org.opencontainers.image.authors=${PROJECTORG}" \
-                            --label "org.opencontainers.image.title=${PROJECTNAME}" \
-                            --label "org.opencontainers.image.base.name=${PROJECTNAME}" \
-                            --label "org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
+                            --label "org.opencontainers.image.title=$VIDVEIL" \
+                            --label "org.opencontainers.image.base.name=$VIDVEIL" \
+                            --label "org.opencontainers.image.description=Containerized version of $VIDVEIL" \
                             --label "org.opencontainers.image.licenses=MIT" \
                             --label "org.opencontainers.image.version=${VERSION}" \
                             --label "org.opencontainers.image.created=${BUILD_DATE}" \
                             --label "org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
-                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
-                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
                             --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
                             --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
-                            --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}" \
-                            --annotation "manifest:org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.title=$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.description=Containerized version of $VIDVEIL" \
                             --annotation "manifest:org.opencontainers.image.licenses=MIT" \
                             --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
                             --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
                             --annotation "manifest:org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
-                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
-                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
                             ${tags} \
                             --push \
                             .
@@ -26150,7 +29194,7 @@ pipeline {
 
                     // Build multi-arch all-in-one with OCI labels and manifest annotations
                     sh """
-                        docker buildx create --name ${PROJECTNAME}-builder --use 2>/dev/null || docker buildx use ${PROJECTNAME}-builder
+                        docker buildx create --name $VIDVEIL-builder --use 2>/dev/null || docker buildx use $VIDVEIL-builder
                         docker buildx build \
                             -f docker/Dockerfile.aio \
                             --platform linux/amd64,linux/arm64 \
@@ -26159,26 +29203,26 @@ pipeline {
                             --build-arg BUILD_DATE="${BUILD_DATE}" \
                             --label "org.opencontainers.image.vendor=${PROJECTORG}" \
                             --label "org.opencontainers.image.authors=${PROJECTORG}" \
-                            --label "org.opencontainers.image.title=${PROJECTNAME}-aio" \
-                            --label "org.opencontainers.image.description=${PROJECTNAME} - all-in-one (debian + postgresql + valkey + tor)" \
+                            --label "org.opencontainers.image.title=$VIDVEIL-aio" \
+                            --label "org.opencontainers.image.description=$VIDVEIL - all-in-one (debian + postgresql + valkey + tor)" \
                             --label "org.opencontainers.image.licenses=MIT" \
                             --label "org.opencontainers.image.version=${VERSION}" \
                             --label "org.opencontainers.image.created=${BUILD_DATE}" \
                             --label "org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
-                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
-                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --label "org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --label "org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
                             --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
                             --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
-                            --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}-aio" \
-                            --annotation "manifest:org.opencontainers.image.description=${PROJECTNAME} - all-in-one (debian + postgresql + valkey + tor)" \
+                            --annotation "manifest:org.opencontainers.image.title=$VIDVEIL-aio" \
+                            --annotation "manifest:org.opencontainers.image.description=$VIDVEIL - all-in-one (debian + postgresql + valkey + tor)" \
                             --annotation "manifest:org.opencontainers.image.licenses=MIT" \
                             --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
                             --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
                             --annotation "manifest:org.opencontainers.image.revision=${COMMIT_ID}" \
-                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
-                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
-                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.source=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
+                            --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
                             ${tags} \
                             --push \
                             docker
@@ -26205,7 +29249,7 @@ pipeline {
 | Agent labels | `amd64` and `arm64` MUST be available |
 | Docker | Required on all agents (builds use golang:alpine) |
 | Docker buildx | Required on amd64 agent for multi-arch builds |
-| Go caches | `/tmp/{projectorg}/go-cache` and `/tmp/{projectorg}/go-mod-cache` |
+| Go caches | `/tmp/apimgr/go-cache` and `/tmp/apimgr/go-mod-cache` |
 
 ### Credentials Setup (Jenkins → Credentials → Add Credentials)
 
@@ -26236,17 +29280,17 @@ In the Jenkinsfile, uncomment the appropriate block:
 // ----- GITHUB (default) -----
 GIT_FQDN = 'github.com'
 GIT_TOKEN = credentials('github-token')
-REGISTRY = "ghcr.io/${PROJECTORG}/${PROJECTNAME}"
+REGISTRY = "ghcr.io/${PROJECTORG}/$VIDVEIL"
 
 // ----- GITEA / FORGEJO (self-hosted) -----
 // GIT_FQDN = 'git.example.com'
 // GIT_TOKEN = credentials('gitea-token')
-// REGISTRY = "${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}"
+// REGISTRY = "${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
 
 // ----- GITLAB (gitlab.com or self-hosted) -----
 // GIT_FQDN = 'gitlab.com'
 // GIT_TOKEN = credentials('gitlab-token')
-// REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/${PROJECTNAME}"
+// REGISTRY = "registry.${GIT_FQDN}/${PROJECTORG}/$VIDVEIL"
 ```
 
 ### Triggers Comparison
@@ -26291,8 +29335,8 @@ Before proceeding, confirm you understand:
 
 | REQUIRED | Example |
 |----------|---------|
-| Temp directory | `/tmp/{projectorg}/{projectname}-XXXXXX/` |
-| Volume mounts | `/tmp/{projectorg}/{projectname}-XXXXXX/rootfs/` |
+| Temp directory | `/tmp/apimgr/vidveil-XXXXXX/` |
+| Volume mounts | `/tmp/apimgr/vidveil-XXXXXX/rootfs/` |
 | Test databases | In temp directory, never project |
 
 **The project directory is for SOURCE CODE ONLY. All runtime/test data goes to the OS temp directory.**
@@ -26306,7 +29350,7 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 | File | Location | Created When |
 |------|----------|--------------|
 | `server.yml` | `{config_dir}/server.yml` (see PART 4) | Server first run |
-| `cli.yml` | `~/.config/{projectorg}/{projectname}/cli.yml` | CLI first run |
+| `cli.yml` | `~/.config/apimgr/vidveil/cli.yml` | CLI first run |
 | Tor data | `{data_dir}/tor/` (see PART 32) | When Tor enabled |
 
 **Why runtime-generated?**
@@ -26332,28 +29376,28 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 
 ## Temporary Directory Structure (NON-NEGOTIABLE)
 
-**CRITICAL: NEVER use `/tmp` root directory directly. ALWAYS use `/tmp/{projectorg}/{projectname}-XXXXXX` structure.**
+**CRITICAL: NEVER use `/tmp` root directory directly. ALWAYS use `/tmp/apimgr/vidveil-XXXXXX` structure.**
 
 **FORBIDDEN:**
 - ❌ `/tmp/myfile` - Root tmp directory
-- ❌ `/tmp/{projectname}` - Missing org prefix
+- ❌ `/tmp/vidveil` - Missing org prefix
 - ❌ `mktemp -d` - No org/project structure
 - ❌ `/tmp/test-data` - Generic paths
 
 **REQUIRED:**
-- ✓ `/tmp/{projectorg}/{projectname}-XXXXXX/` - Full structure
+- ✓ `/tmp/apimgr/vidveil-XXXXXX/` - Full structure
 - ✓ `/tmp/cloudops/echoip-aB3xY9/` - Org + project + random
-- ✓ `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX"` - Proper command
+- ✓ `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` - Proper command
 
 **See "Inferring Variables from Path" section for how to detect `ORG` and `PROJECT`.**
 
 ### Creating Temp Directories
 
-**Always use `{projectorg}/{projectname}-` structure for identifiable temp dirs:**
+**Always use `apimgr/vidveil-` structure for identifiable temp dirs:**
 
 | Language | How to Create Prefixed Temp Dir |
 |----------|--------------------------------|
-| Shell | `mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}" && mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX"` |
+| Shell | `mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}" && mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` |
 | Go | `os.MkdirAll(filepath.Join(os.TempDir(), projectOrg), 0755); os.MkdirTemp(filepath.Join(os.TempDir(), projectOrg), projectName+"-")` |
 | Python | `os.makedirs(f"{tempfile.gettempdir()}/{project_org}", exist_ok=True); tempfile.mkdtemp(prefix=f"{project_name}-", dir=f"{tempfile.gettempdir()}/{project_org}")` |
 
@@ -26363,9 +29407,9 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 
 | Purpose | Path Pattern | Example |
 |---------|--------------|---------|
-| Dev/Test runtime | `{tempdir}/{projectorg}/{projectname}-XXXXXX/` | `/tmp/acmesoft/weatherapi-aB3xY9/` |
-| Config volume | `{tempdir}/{projectorg}/{projectname}-XXXXXX/rootfs/config/` | `/tmp/acmesoft/weatherapi-aB3xY9/rootfs/config/` |
-| Data volume | `{tempdir}/{projectorg}/{projectname}-XXXXXX/rootfs/data/` | `/tmp/acmesoft/weatherapi-aB3xY9/rootfs/data/` |
+| Dev/Test runtime | `{tempdir}/apimgr/vidveil-XXXXXX/` | `/tmp/apimgr/vidveil-aB3xY9/` |
+| Config volume | `{tempdir}/apimgr/vidveil-XXXXXX/rootfs/config/` | `/tmp/apimgr/vidveil-aB3xY9/rootfs/config/` |
+| Data volume | `{tempdir}/apimgr/vidveil-XXXXXX/rootfs/data/` | `/tmp/apimgr/vidveil-aB3xY9/rootfs/data/` |
 
 ### OS Temp Directories
 
@@ -26383,7 +29427,7 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 | **NEVER** | Use project directory for test/runtime data |
 | **NEVER** | Hardcode `/tmp` - use `os.TempDir()` or `mktemp` |
 | **NEVER** | Use bare `mktemp -d` without org prefix |
-| **ALWAYS** | Use `{projectorg}.` prefix for all temp dirs |
+| **ALWAYS** | Use `apimgr.` prefix for all temp dirs |
 | **ALWAYS** | Detect org from git remote or directory path |
 
 ### Cleanup
@@ -26400,32 +29444,32 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 
 | WRONG | RIGHT | Why |
 |-------|-------|-----|
-| `/tmp/` | `/tmp/{projectorg}/{projectname}-XXXXXX/` | NEVER use root tmp |
+| `/tmp/` | `/tmp/apimgr/vidveil-XXXXXX/` | NEVER use root tmp |
 | `/tmp/myfile` | `/tmp/cloudops/echoip-aB3xY9/myfile` | Always use org/project structure |
 | `/tmp/echoip` | `/tmp/cloudops/echoip-kL9mN2/` | Missing org, missing random suffix |
 | `/tmp/test-data/` | `/tmp/devtools/quotesvc-Qw5rT1/test-data/` | Generic path not allowed |
-| `mktemp -d` | `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX"` | Must include org/project |
+| `mktemp -d` | `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` | Must include org/project |
 | `os.TempDir()` alone | `os.MkdirTemp(filepath.Join(os.TempDir(), projectOrg), projectName+"-")` | Must nest under org |
 | Hardcoded org name | Detect from git remote or path | Auto-detect, never hardcode |
 
-**Rule: ALL temp directories MUST be under `/tmp/{projectorg}/{projectname}-XXXXXX/` - no exceptions.**
+**Rule: ALL temp directories MUST be under `/tmp/apimgr/vidveil-XXXXXX/` - no exceptions.**
 
 ### Summary: Temp Directory Rules
 
 **The ONLY acceptable temp directory pattern:**
 ```
-/tmp/{projectorg}/{projectname}-XXXXXX/
+/tmp/apimgr/vidveil-XXXXXX/
 ```
 
 **Breaking it down:**
 - `/tmp/` or `$TMPDIR` - OS temp directory base
-- `{projectorg}/` - Organization directory (cloudops, acmesoft, etc.)
-- `{projectname}-XXXXXX` - Project directory with random suffix
+- `apimgr/` - Organization directory (cloudops, acmesoft, etc.)
+- `vidveil-XXXXXX` - Project directory with random suffix
 
 **Examples of CORRECT paths:**
 - `/tmp/cloudops/echoip-aB3xY9/` ✓
 - `/tmp/netutils/pastebin-k9mN2p/` ✓
-- `/tmp/acmesoft/weatherapi-Qw5rT1/` ✓
+- `/tmp/apimgr/jokes-Qw5rT1/` ✓
 
 **Examples of WRONG paths:**
 - `/tmp/echoip/` ❌ (missing org)
@@ -26435,7 +29479,7 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 
 **Why this structure:**
 - Prevents conflicts between projects
-- Makes cleanup easy (`rm -rf /tmp/{projectorg}.*`)
+- Makes cleanup easy (`rm -rf /tmp/apimgr.*`)
 - Identifies which project created temp files
 - Prevents pollution of root `/tmp` directory
 - Multiple projects can run simultaneously
@@ -26454,8 +29498,8 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 | **NEVER run binaries on host** | All binaries run inside containers, never directly |
 | **NEVER** | Run `go build` directly on host |
 | **NEVER** | Run `go test` directly on host |
-| **NEVER** | Run `binaries/{projectname}` on host |
-| **NEVER** | Run `$BUILD_DIR/{projectname}` on host |
+| **NEVER** | Run `binaries/vidveil` on host |
+| **NEVER** | Run `$BUILD_DIR/vidveil` on host |
 | **ALWAYS** | Build inside container, run inside container |
 
 ### Container Types
@@ -26611,6 +29655,209 @@ docker run --rm -v $(pwd):/build -w /build golang:alpine go test -v ./src/config
 docker run --rm -v $(pwd):/build -w /build golang:alpine go test -cover ./...
 ```
 
+## 100% Test Coverage (NON-NEGOTIABLE)
+
+**ALL code MUST have 100% test coverage. No exceptions.**
+
+### Coverage Requirements
+
+| Coverage Type | Requirement | Verification |
+|--------------|-------------|--------------|
+| **Go Unit Tests** | 100% code coverage | `go test -cover` must report 100% |
+| **Integration Tests** | 100% endpoint coverage | Every endpoint tested |
+| **Admin Routes** | 100% route coverage | Every admin route tested |
+| **Error Paths** | 100% error handling | All error conditions tested |
+
+### What 100% Coverage Means
+
+**Go Code (Unit Tests):**
+```bash
+# Must show 100% for all packages
+docker run --rm -v $(pwd):/build -w /build golang:alpine \
+  go test -cover -coverprofile=coverage.out ./...
+
+# Verify coverage
+docker run --rm -v $(pwd):/build -w /build golang:alpine \
+  go tool cover -func=coverage.out | grep total | awk '{print $3}'
+# Must output: 100.0%
+```
+
+**Endpoints (Integration Tests):**
+
+| Endpoint Type | Must Test |
+|--------------|-----------|
+| **Public API** | All `/api/v1/*` endpoints |
+| **Public Web** | All frontend routes |
+| **Admin API** | All `/api/v1/admin/*` endpoints |
+| **Admin Web** | All `/{adminpath}/*` routes |
+| **Error cases** | 400, 401, 403, 404, 500 responses |
+| **Edge cases** | Empty data, invalid input, rate limits |
+
+### Coverage Enforcement
+
+**In CI/CD Pipeline (REQUIRED):**
+
+```yaml
+# .github/workflows/test.yml
+test:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Run tests with coverage
+      run: |
+        docker run --rm -v $(pwd):/build -w /build golang:alpine \
+          go test -cover -coverprofile=coverage.out ./...
+
+    - name: Check coverage is 100%
+      run: |
+        COVERAGE=$(docker run --rm -v $(pwd):/build -w /build golang:alpine \
+          go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        if [ $(echo "$COVERAGE < 100" | bc -l) -eq 1 ]; then
+          echo "ERROR: Coverage is $COVERAGE%, must be 100%"
+          exit 1
+        fi
+        echo "Coverage: $COVERAGE% ✓"
+```
+
+### How to Achieve 100% Coverage
+
+**1. Test All Code Paths:**
+```go
+// Function with multiple paths
+func ValidateInput(input string) error {
+    if input == "" {
+        return ErrEmpty  // Test this path
+    }
+    if len(input) > 100 {
+        return ErrTooLong  // Test this path
+    }
+    if !isValid(input) {
+        return ErrInvalid  // Test this path
+    }
+    return nil  // Test this path
+}
+
+// Tests must cover ALL paths
+func TestValidateInput(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        wantErr error
+    }{
+        {"empty", "", ErrEmpty},
+        {"too long", strings.Repeat("a", 101), ErrTooLong},
+        {"invalid", "bad@input", ErrInvalid},
+        {"valid", "good-input", nil},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := ValidateInput(tt.input)
+            if err != tt.wantErr {
+                t.Errorf("got %v, want %v", err, tt.wantErr)
+            }
+        })
+    }
+}
+```
+
+**2. Test Error Handlers:**
+```go
+// Error handler must be tested
+func handleError(err error) string {
+    if errors.Is(err, ErrNotFound) {
+        return "Not found"
+    }
+    if errors.Is(err, ErrForbidden) {
+        return "Forbidden"
+    }
+    return "Internal error"
+}
+
+// Test ALL error types
+func TestHandleError(t *testing.T) {
+    tests := []struct {
+        err  error
+        want string
+    }{
+        {ErrNotFound, "Not found"},
+        {ErrForbidden, "Forbidden"},
+        {errors.New("random"), "Internal error"},
+    }
+    // ...
+}
+```
+
+**3. Test All Endpoints:**
+```bash
+#!/bin/bash
+# tests/test_all_endpoints.sh
+
+# Track coverage
+declare -A TESTED_ENDPOINTS
+
+# Test each endpoint
+test_endpoint() {
+    local method=$1
+    local path=$2
+    TESTED_ENDPOINTS["$method $path"]=1
+    # ... test logic
+}
+
+# PUBLIC API
+test_endpoint GET "/api/v1/jokes/random"
+test_endpoint GET "/api/v1/jokes/categories"
+test_endpoint GET "/api/v1/jokes/{id}"
+
+# ADMIN API (with auth)
+test_endpoint GET "/api/v1/admin/server/settings"
+test_endpoint PUT "/api/v1/admin/server/settings"
+test_endpoint GET "/api/v1/admin/server/logs"
+
+# At end: verify ALL endpoints were tested
+verify_all_endpoints_tested
+```
+
+### What Counts as Tested
+
+| ✓ Counts | ✗ Does NOT Count |
+|----------|------------------|
+| Actual function call in test | Comment saying "tested manually" |
+| Assert on return value | Print statement without assert |
+| Error path exercised | Only happy path tested |
+| All branches covered | Just main branch |
+| Integration test hits endpoint | Documentation says it works |
+
+### Coverage Exceptions (NONE)
+
+**There are NO exceptions to 100% coverage:**
+
+| Common Excuse | Response |
+|--------------|----------|
+| "It's just a simple getter" | Test it anyway |
+| "The code is obvious" | Obvious code can still have bugs |
+| "It's only used internally" | Internal code needs tests too |
+| "I tested it manually" | Manual tests don't count |
+| "It's just logging" | Mock the logger and test |
+| "It's third-party code" | Test your integration with it |
+
+### Makefile Target
+
+```makefile
+.PHONY: coverage
+coverage:
+	@echo "Running tests with coverage..."
+	@docker run --rm -v $(pwd):/build -w /build golang:alpine \
+		go test -cover -coverprofile=coverage.out ./...
+	@COVERAGE=$$(docker run --rm -v $(pwd):/build -w /build golang:alpine \
+		go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
+	if [ $$(echo "$$COVERAGE < 100" | bc -l) -eq 1 ]; then \
+		echo "ERROR: Coverage is $$COVERAGE%, must be 100%"; \
+		exit 1; \
+	fi
+	@echo "Coverage: 100% ✓"
+```
+
 **When to run which tests:**
 
 | When | Run This | Purpose |
@@ -26656,24 +29903,24 @@ docker run --rm -v $(pwd):/build -w /build golang:alpine go test -cover ./...
 # 1. Build in Docker (always use Docker for builds)
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/{projectname} ./src
+  golang:alpine go build -o /build/binaries/vidveil ./src
 
 # 2. Test (prefer Incus, fallback to Docker)
 if command -v incus &>/dev/null; then
   # PREFERRED: Full OS test in Incus (debian + systemd)
   echo "Testing with Incus (Debian + systemd)..."
-  incus launch images:debian/12 test-{projectname}
-  incus file push binaries/{projectname} test-{projectname}/usr/local/bin/
-  incus exec test-{projectname} -- chmod +x /usr/local/bin/{projectname}
-  incus exec test-{projectname} -- {projectname} --help
-  incus exec test-{projectname} -- {projectname} --service --install
-  incus exec test-{projectname} -- systemctl status {projectname}
-  incus delete test-{projectname} --force
+  incus launch images:debian/12 test-vidveil
+  incus file push binaries/vidveil test-vidveil/usr/local/bin/
+  incus exec test-vidveil -- chmod +x /usr/local/bin/vidveil
+  incus exec test-vidveil -- vidveil --help
+  incus exec test-vidveil -- vidveil --service --install
+  incus exec test-vidveil -- systemctl status vidveil
+  incus delete test-vidveil --force
 else
   # FALLBACK: Quick test in Docker (alpine, no systemd)
   echo "Incus not available, testing with Docker..."
   docker run --rm -v $(pwd)/binaries:/app alpine:latest \
-    /app/{projectname} --help
+    /app/vidveil --help
 fi
 ```
 
@@ -26732,27 +29979,27 @@ docker run --rm \
   -v "$(pwd):/build" \
   -w /build \
   -e CGO_ENABLED=0 \
-  golang:alpine go build -o "$BUILD_DIR/${PROJECTNAME}" ./src
+  golang:alpine go build -o "$BUILD_DIR/$VIDVEIL" ./src
 
 echo "Testing in Docker (Alpine)..."
 docker run --rm \
   -v "$BUILD_DIR:/app" \
   alpine:latest sh -c "
     set -e
-    chmod +x /app/${PROJECTNAME}
+    chmod +x /app/$VIDVEIL
 
     echo '=== Version Check ==='
-    /app/${PROJECTNAME} --version
+    /app/$VIDVEIL --version
 
     echo '=== Help Check ==='
-    /app/${PROJECTNAME} --help
+    /app/$VIDVEIL --help
 
     echo '=== Binary Info ==='
-    ls -lh /app/${PROJECTNAME}
-    file /app/${PROJECTNAME}
+    ls -lh /app/$VIDVEIL
+    file /app/$VIDVEIL
 
     echo '=== Starting Server for API Tests ==='
-    /app/${PROJECTNAME} --port 64580 &
+    /app/$VIDVEIL --port 64580 &
     SERVER_PID=\$!
     sleep 3
 
@@ -26826,7 +30073,7 @@ fi
 # Detect project info
 PROJECTNAME=$(basename "$PWD")
 PROJECTORG=$(basename "$(dirname "$PWD")")
-CONTAINER_NAME="test-${PROJECTNAME}-$$"
+CONTAINER_NAME="test-$VIDVEIL-$$"
 
 # Create temp directory for build
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
@@ -26837,7 +30084,7 @@ docker run --rm \
   -v "$(pwd):/build" \
   -w /build \
   -e CGO_ENABLED=0 \
-  golang:alpine go build -o "$BUILD_DIR/${PROJECTNAME}" ./src
+  golang:alpine go build -o "$BUILD_DIR/$VIDVEIL" ./src
 
 echo "Launching Incus container (Debian + systemd)..."
 incus launch images:debian/12 "$CONTAINER_NAME"
@@ -26846,33 +30093,33 @@ incus launch images:debian/12 "$CONTAINER_NAME"
 sleep 2
 
 echo "Copying binary to container..."
-incus file push "$BUILD_DIR/${PROJECTNAME}" "$CONTAINER_NAME/usr/local/bin/"
-incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/${PROJECTNAME}"
+incus file push "$BUILD_DIR/$VIDVEIL" "$CONTAINER_NAME/usr/local/bin/"
+incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/$VIDVEIL"
 
 echo "Running tests in Incus..."
 incus exec "$CONTAINER_NAME" -- bash -c "
     set -e
 
     echo '=== Version Check ==='
-    ${PROJECTNAME} --version
+    $VIDVEIL --version
 
     echo '=== Help Check ==='
-    ${PROJECTNAME} --help
+    $VIDVEIL --help
 
     echo '=== Binary Info ==='
-    ls -lh /usr/local/bin/${PROJECTNAME}
-    file /usr/local/bin/${PROJECTNAME}
+    ls -lh /usr/local/bin/$VIDVEIL
+    file /usr/local/bin/$VIDVEIL
 
     echo '=== Service Install Test ==='
-    ${PROJECTNAME} --service --install
+    $VIDVEIL --service --install
 
     echo '=== Service Status ==='
-    systemctl status ${PROJECTNAME} || true
+    systemctl status $VIDVEIL || true
 
     echo '=== Service Start Test ==='
-    systemctl start ${PROJECTNAME}
+    systemctl start $VIDVEIL
     sleep 2
-    systemctl status ${PROJECTNAME}
+    systemctl status $VIDVEIL
 
     echo '=== API Endpoint Tests ==='
     # Test JSON response (default)
@@ -26918,7 +30165,7 @@ incus exec "$CONTAINER_NAME" -- bash -c "
     # Test ALL project-specific endpoints defined in PART 37
 
     echo '=== Service Stop Test ==='
-    systemctl stop ${PROJECTNAME}
+    systemctl stop $VIDVEIL
 
     echo '=== All tests passed ==='
 "
@@ -26968,49 +30215,29 @@ fi
 | **Output** | Clear progress messages with `echo` |
 | **Error handling** | `set -euo pipefail` at top |
 
-### Production Scripts (scripts/ directory)
+### Shell Completions (Built-in)
 
-**ALL projects MUST have shell completions in `scripts/completions/`:**
+**ALL binaries (server, agent, client) support shell completions - built into binary, no separate files.**
 
-```
-scripts/
-├── completions/
-│   ├── {projectname}.bash      # Bash completions for server binary
-│   ├── {projectname}.zsh       # Zsh completions for server binary
-│   ├── {projectname}.fish      # Fish completions for server binary
-│   ├── {projectname}-cli.bash  # Bash completions for CLI client
-│   ├── {projectname}-cli.zsh   # Zsh completions for CLI client
-│   └── {projectname}-cli.fish  # Fish completions for CLI client
-└── install.sh                  # Optional: Installation helper script
-```
-
-**Shell Completion Rules:**
-
-| Rule | Requirement |
-|------|-------------|
-| **Location** | `scripts/completions/{projectname}.{shell}` and `scripts/completions/{projectname}-cli.{shell}` |
-| **Shells** | bash, zsh, fish (all three required) |
-| **Server binary** | `{projectname}.{shell}` - completions for server binary flags/commands |
-| **CLI client** | `{projectname}-cli.{shell}` - completions for CLI flags/commands |
-| **Generation** | AI generates based on actual flags/commands from CLI PART |
-| **Sync** | MUST update completions when flags/commands change - keep in sync with code |
-| **Install** | Document installation in README.md |
-
-**Completion Installation (document in README.md):**
+See PART 36: "Shell Completions (Built-in)" for full implementation details.
 
 ```bash
-# Bash
-cp scripts/completions/{projectname}.bash /etc/bash_completion.d/{projectname}
-cp scripts/completions/{projectname}-cli.bash /etc/bash_completion.d/{projectname}-cli
+# Generate and install completions (prints to stdout, user redirects)
+vidveil --shell completions bash > /etc/bash_completion.d/vidveil
+vidveil-cli --shell completions bash > /etc/bash_completion.d/vidveil-cli
+vidveil-agent --shell completions bash > /etc/bash_completion.d/vidveil-agent
 
-# Zsh (add to ~/.zshrc)
-source /path/to/scripts/completions/{projectname}.zsh
-source /path/to/scripts/completions/{projectname}-cli.zsh
-
-# Fish
-cp scripts/completions/{projectname}.fish ~/.config/fish/completions/
-cp scripts/completions/{projectname}-cli.fish ~/.config/fish/completions/
+# Or use eval in shell rc file
+eval "$(vidveil --shell init)"
+eval "$(vidveil-cli --shell init)"
+eval "$(vidveil-agent --shell init)"
 ```
+
+| Advantage | Description |
+|-----------|-------------|
+| **Always current** | Completions match binary version exactly |
+| **Rename-friendly** | Works even if user renames binary |
+| **No sync issues** | Can't have outdated completion files |
 
 ## Testing Admin Routes (NON-NEGOTIABLE)
 
@@ -27029,7 +30256,7 @@ set -euo pipefail
 echo '=== Admin Authentication Tests ==='
 
 # Start server normally (authentication required)
-/app/${PROJECTNAME} --port 64580 &
+/app/$VIDVEIL --port 64580 &
 SERVER_PID=$!
 sleep 3
 
@@ -27045,7 +30272,7 @@ else
 fi
 
 # 2. Get setup token from server logs (using proper temp dir structure)
-SETUP_TOKEN=$(grep -oP 'Setup Token.*:\s*\K[a-f0-9]+' "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}/server.log" | head -1)
+SETUP_TOKEN=$(grep -oP 'Setup Token.*:\s*\K[a-f0-9]+' "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL/server.log" | head -1)
 
 if [ -z "$SETUP_TOKEN" ]; then
     echo "✗ FAILED: No setup token found in logs"
@@ -27141,7 +30368,7 @@ func AdminAuthMiddleware(next http.Handler) http.Handler {
         // Normal: require valid admin session
         session := validateAdminSession(r)
         if session == nil {
-            http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+            http.Redirect(w, r, cfg.AdminPath+"/login", http.StatusSeeOther)
             return
         }
 
@@ -27188,14 +30415,14 @@ func AdminAuthMiddleware(next http.Handler) http.Handler {
 # Set project path to YOUR actual project location (examples shown below)
 # Use git top-level if in a git repo: PROJECT_PATH="$(git rev-parse --show-toplevel)"
 # Or use absolute path to your project directory
-PROJECT_PATH="/root/Projects/github/apimgr/{projectname}"  # Example 1
+PROJECT_PATH="/root/Projects/github/apimgr/vidveil"  # Example 1
 # PROJECT_PATH="~/Documents/myproject"                     # Example 2
 # PROJECT_PATH="~/myproject"                               # Example 3
 # PROJECT_PATH="/workspace/dev/myproject"                  # Example 4
 
 # Build (outputs to binaries/ which can be mounted into test containers)
 docker run --rm -v $PROJECT_PATH:/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/{projectname} ./src
+  golang:alpine go build -o /build/binaries/vidveil ./src
 
 # Run tests
 docker run --rm -v $PROJECT_PATH:/build -w /build \
@@ -27233,16 +30460,16 @@ docker run --rm -it -v $PROJECT_PATH:/build -w /build \
 ```bash
 # Build
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/{projectname} ./src
+  golang:alpine go build -o /build/binaries/vidveil ./src
 
 # Test in Docker (quick)
-docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/{projectname} --help
+docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/vidveil --help
 
 # Test in Incus (full OS with systemd)
-incus launch images:debian/12 test-{projectname}
-incus file push binaries/{projectname} test-{projectname}/usr/local/bin/
-incus exec test-{projectname} -- {projectname} --help
-incus delete test-{projectname} --force
+incus launch images:debian/12 test-vidveil
+incus file push binaries/vidveil test-vidveil/usr/local/bin/
+incus exec test-vidveil -- vidveil --help
+incus delete test-vidveil --force
 ```
 
 ### Testing with Config/Data
@@ -27254,17 +30481,17 @@ mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build to binaries/
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/{projectname} ./src
+  golang:alpine go build -o /build/binaries/vidveil ./src
 
 # Quick test in Docker
-docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/{projectname} --help
-docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/{projectname} --version
+docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/vidveil --help
+docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/vidveil --version
 
 # Full test with config/data in Docker
 docker run --rm \
   -v $(pwd)/binaries:/app \
   -v $TEST_DIR:/test \
-  alpine:latest /app/{projectname} \
+  alpine:latest /app/vidveil \
     --config /test/config \
     --data /test/data \
     --log /test/logs
@@ -27284,23 +30511,23 @@ mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/{projectname} ./src
+  golang:alpine go build -o /build/binaries/vidveil ./src
 
 # Launch Incus container
-incus launch images:debian/12 test-{projectname}
+incus launch images:debian/12 test-vidveil
 
 # Push binary and test data
-incus file push binaries/{projectname} test-{projectname}/usr/local/bin/
-incus exec test-{projectname} -- mkdir -p /etc/{projectorg}/{projectname} /var/lib/{projectorg}/{projectname}
+incus file push binaries/vidveil test-vidveil/usr/local/bin/
+incus exec test-vidveil -- mkdir -p /etc/apimgr/vidveil /var/lib/apimgr/vidveil
 
 # Test
-incus exec test-{projectname} -- {projectname} --help
-incus exec test-{projectname} -- {projectname} --version
-incus exec test-{projectname} -- {projectname} --service --install
-incus exec test-{projectname} -- systemctl status {projectname}
+incus exec test-vidveil -- vidveil --help
+incus exec test-vidveil -- vidveil --version
+incus exec test-vidveil -- vidveil --service --install
+incus exec test-vidveil -- systemctl status vidveil
 
 # Cleanup
-incus delete test-{projectname} --force
+incus delete test-vidveil --force
 rm -rf $TEST_DIR
 ```
 
@@ -27345,11 +30572,11 @@ rm -rf $TEST_DIR
 
 **Kill Process Flow:**
 ```
-1. pgrep -la {projectname}           # List matching processes
+1. pgrep -la vidveil           # List matching processes
 2. Verify the PID is correct          # CHECK before killing
 3. kill {pid}                         # Graceful termination (SIGTERM)
 4. sleep 5                            # Wait for graceful shutdown
-5. pgrep -la {projectname}           # Check if still running
+5. pgrep -la vidveil           # Check if still running
 6. kill -9 {pid}                      # Force kill ONLY if still running
 ```
 
@@ -27357,23 +30584,23 @@ rm -rf $TEST_DIR
 
 | Rule | Description |
 |------|-------------|
-| **ONLY this project** | Only stop/remove containers named `{projectname}` |
+| **ONLY this project** | Only stop/remove containers named `vidveil` |
 | **NEVER other containers** | Even if they look related or unused |
-| **NEVER images not ours** | Only remove `{projectorg}/{projectname}:*` images |
+| **NEVER images not ours** | Only remove `apimgr/vidveil:*` images |
 | **NEVER base images** | Never remove `golang`, `alpine`, `ubuntu`, etc. |
 | **NEVER volumes** | Unless explicitly part of this project |
 
 **Docker Cleanup Flow:**
 ```
-1. docker ps -a --filter name={projectname}     # List ONLY this project's containers
-2. Verify output shows ONLY {projectname}       # CHECK before removing
-3. docker stop {projectname}                    # Stop gracefully
-4. docker rm {projectname}                      # Remove container
+1. docker ps -a --filter name=vidveil     # List ONLY this project's containers
+2. Verify output shows ONLY vidveil       # CHECK before removing
+3. docker stop vidveil                    # Stop gracefully
+4. docker rm vidveil                      # Remove container
 
 # For images:
-1. docker images {projectorg}/{projectname}     # List ONLY this project's images
+1. docker images apimgr/vidveil     # List ONLY this project's images
 2. Verify output shows ONLY our images          # CHECK before removing
-3. docker rmi {projectorg}/{projectname}:tag    # Remove SPECIFIC tag
+3. docker rmi apimgr/vidveil:tag    # Remove SPECIFIC tag
 ```
 
 ### Allowed Commands (Project-Scoped ONLY)
@@ -27381,10 +30608,10 @@ rm -rf $TEST_DIR
 | Command | Description |
 |---------|-------------|
 | `kill {specific-pid}` | Kill exact PID only (after verification) |
-| `pkill -x {projectname}` | Exact binary name match only |
-| `docker stop {projectname}` | Stop specific container by name |
-| `docker rm {projectname}` | Remove specific container by name |
-| `docker rmi {projectorg}/{projectname}:tag` | Remove specific image:tag |
+| `pkill -x vidveil` | Exact binary name match only |
+| `docker stop vidveil` | Stop specific container by name |
+| `docker rm vidveil` | Remove specific container by name |
+| `docker rmi apimgr/vidveil:tag` | Remove specific image:tag |
 | `rm -rf $BUILD_DIR` | Remove temp build dir (from mktemp) |
 | `rm -rf $TEST_DIR` | Remove temp test dir (from mktemp) |
 
@@ -27407,8 +30634,8 @@ rm -rf $TEST_DIR
 | Temp build dir | `rm -rf $BUILD_DIR` (saved from mktemp) |
 | Temp test dir | `rm -rf $TEST_DIR` (saved from mktemp) |
 | All mktemp dirs | Cleaned automatically on reboot |
-| Project binaries | `rm -rf binaries/{projectname}*` |
-| Project releases | `rm -rf releases/{projectname}*` |
+| Project binaries | `rm -rf binaries/vidveil*` |
+| Project releases | `rm -rf releases/vidveil*` |
 
 **Note:** Always use `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX"` and save the path to a variable for cleanup. Temp dirs are auto-cleaned on reboot.
 
@@ -27454,7 +30681,7 @@ Documentation uses MkDocs Material theme with dark/light/auto switching.
 | Theme | MkDocs Material (follows PART 16 theme rules) |
 | Theme files | `docs/stylesheets/dark.css`, `docs/stylesheets/light.css` |
 | Hosting | ReadTheDocs |
-| URL format | `https://{projectorg}-{projectname}.readthedocs.io` |
+| URL format | `https://apimgr-vidveil.readthedocs.io` |
 | Source directory | `docs/` (ONLY ReadTheDocs files) |
 
 ## Required Files
@@ -27484,12 +30711,12 @@ Documentation uses MkDocs Material theme with dark/light/auto switching.
 ## mkdocs.yml Template (NON-NEGOTIABLE)
 
 ```yaml
-site_name: {PROJECTNAME}
-site_url: https://{projectorg}-{projectname}.readthedocs.io
+site_name: VIDVEIL
+site_url: https://apimgr-vidveil.readthedocs.io
 site_description: "{Project description}"
-site_author: {projectorg}
+site_author: apimgr
 
-repo_name: {projectorg}/{projectname}
+repo_name: apimgr/vidveil
 repo_url: {PLATFORM_REPO_URL}
 edit_uri: edit/main/docs/  # Adjust path format for GitLab/Gitea if needed
 
@@ -27568,8 +30795,8 @@ markdown_extensions:
   - pymdownx.keys
   - pymdownx.magiclink:
       repo_url_shorthand: true
-      user: {projectorg}
-      repo: {projectname}
+      user: apimgr
+      repo: vidveil
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.superfences:
@@ -27913,7 +31140,7 @@ pymdown-extensions>=10.0
 ### docs/index.md
 
 ```markdown
-# {PROJECTNAME}
+# VIDVEIL
 
 {Brief project description}
 
@@ -27921,10 +31148,10 @@ pymdown-extensions>=10.0
 
 ```bash
 # Docker
-docker run -p 64580:80 {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
+docker run -p 64580:80 {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
 
 # Binary
-./{projectname}-linux-amd64 --config server.yml
+./vidveil-linux-amd64 --config server.yml
 ```
 
 ## Features
@@ -27944,7 +31171,7 @@ docker run -p 64580:80 {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:
 ## Links
 
 - [Repository]({PLATFORM_REPO_URL})
-- [Live Demo](https://{projectname}.{projectorg}.us) (if applicable)
+- [Live Demo](https://vidveil.apimgr.us) (if applicable)
 - [API Documentation](/openapi) (Swagger UI)
 - [GraphQL Playground](/graphql)
 
@@ -27962,10 +31189,10 @@ MIT - See [LICENSE.md]({PLATFORM_REPO_URL}/blob/main/LICENSE.md)
 
 ```bash
 docker run -d \
-  --name {projectname} \
+  --name vidveil \
   -p 64580:80 \
-  -v {projectname}-data:/data \
-  {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}:latest
+  -v vidveil-data:/data \
+  {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
 ```
 
 ## Binary
@@ -27974,17 +31201,17 @@ Download from [releases]({PLATFORM_REPO_URL}/releases):
 
 ```bash
 # Linux AMD64
-wget {PLATFORM_RELEASE_URL}/{projectname}-linux-amd64
-chmod +x {projectname}-linux-amd64
-./{projectname}-linux-amd64
+wget {PLATFORM_RELEASE_URL}/vidveil-linux-amd64
+chmod +x vidveil-linux-amd64
+./vidveil-linux-amd64
 ```
 
 ## Systemd Service
 
 ```bash
-sudo ./{projectname} --service install
-sudo systemctl start {projectname}
-sudo systemctl enable {projectname}
+sudo ./vidveil --service install
+sudo systemctl start vidveil
+sudo systemctl enable vidveil
 ```
 
 ## Configuration
@@ -27999,7 +31226,7 @@ See [Configuration](configuration.md) for all options.
 
 ## Config File
 
-Default location: `/etc/{projectorg}/{projectname}/server.yml`
+Default location: `/etc/apimgr/vidveil/server.yml`
 
 ```yaml
 server:
@@ -28018,8 +31245,8 @@ database:
 All settings can be overridden via environment:
 
 ```bash
-{PROJECTNAME}_SERVER_PORT=8080
-{PROJECTNAME}_DATABASE_TYPE=postgres
+VIDVEIL_SERVER_PORT=8080
+VIDVEIL_DATABASE_TYPE=postgres
 ```
 
 ## Admin Panel
@@ -28098,14 +31325,14 @@ Programmatic access via `/api/v1/admin/` with bearer token authentication.
 
 ```bash
 git clone {PLATFORM_REPO_URL}
-cd {projectname}
+cd vidveil
 make build
 ```
 
 ## Run Locally
 
 ```bash
-./binaries/{projectname} --config server.yml --debug
+./binaries/vidveil --config server.yml --debug
 ```
 
 ## Testing
@@ -29009,10 +32236,10 @@ No impact on binary size - Tor is external. Application binary remains small and
 
 | Environment | Tor Config | Tor Data | Tor Log |
 |-------------|------------|----------|---------|
-| Docker | `/config/{projectname}/tor/` | `/data/{projectname}/tor/` | `/data/log/{projectname}/tor.log` |
-| Linux root | `/etc/{projectorg}/{projectname}/tor/` | `/var/lib/{projectorg}/{projectname}/tor/` | `/var/log/{projectorg}/{projectname}/tor.log` |
-| Linux user | `~/.config/{projectorg}/{projectname}/tor/` | `~/.local/share/{projectorg}/{projectname}/tor/` | `~/.local/log/{projectorg}/{projectname}/tor.log` |
-| macOS | `~/Library/Application Support/.../tor/` | Same | `~/Library/Logs/{projectorg}/{projectname}/tor.log` |
+| Docker | `/config/vidveil/tor/` | `/data/vidveil/tor/` | `/data/log/vidveil/tor.log` |
+| Linux root | `/etc/apimgr/vidveil/tor/` | `/var/lib/apimgr/vidveil/tor/` | `/var/log/apimgr/vidveil/tor.log` |
+| Linux user | `~/.config/apimgr/vidveil/tor/` | `~/.local/share/apimgr/vidveil/tor/` | `~/.local/log/apimgr/vidveil/tor.log` |
+| macOS | `~/Library/Application Support/.../tor/` | Same | `~/Library/Logs/apimgr/vidveil/tor.log` |
 | Windows | `%AppData%\...\tor\` | Same | `%AppData%\...\log\tor.log` |
 
 ### Runtime Directory Handling (NON-NEGOTIABLE)
@@ -29110,7 +32337,7 @@ func ensureTorFile(path string, content []byte) error {
 
 ## Admin Panel
 
-### /admin/server/tor (Web UI)
+### /{adminpath}/server/tor (Web UI)
 
 | Element | Type | Description |
 |---------|------|-------------|
@@ -29636,7 +32863,7 @@ var UsernameBlocklist = []string{
     "webmaster", "hostmaster", "abuse", "spam", "junk", "trash",
 
     // Project-specific (dynamic)
-    "{projectname}", "{projectorg}",
+    "vidveil", "apimgr",
 }
 ```
 
@@ -29680,11 +32907,15 @@ func DetectIdentifierType(input string) string {
 ```
 
 **API Request:**
+
+`POST /api/v1/auth/login`
+
+Identifier can be: username, user_id, or email.
+
 ```json
-POST /api/v1/auth/login
 {
-    "identifier": "johndoe",  // or "12345" or "john@example.com"
-    "password": "..."
+  "identifier": "johndoe",
+  "password": "secretpassword"
 }
 ```
 
@@ -30092,7 +33323,7 @@ User receives: "Password reset requested by administrator.
 | **Count** | 10 recovery keys generated |
 | **Generated once** | Recovery keys generated when 2FA/passkey enabled |
 | **User must copy** | Displayed ONCE, user MUST save them |
-| **Hashed storage** | Keys are hashed (Argon2id), NOT stored in plain text |
+| **Hashed storage** | Keys are hashed (SHA-256), NOT stored in plain text |
 | **NOT recoverable** | If lost, cannot be retrieved - account recovery required |
 | **Single use** | Each recovery key can only be used once |
 | **Case insensitive** | Keys are validated case-insensitively |
@@ -30243,11 +33474,11 @@ The server admin (administrator with access to the server/binary) has ONE recove
 
 | Scenario | Recovery Method |
 |----------|-----------------|
-| Admin forgot password | `{projectname} --maintenance setup` |
-| Admin lost API token | `{projectname} --maintenance setup` |
-| Admin lost recovery keys | `{projectname} --maintenance setup` |
-| Admin lost 2FA + no recovery keys | `{projectname} --maintenance setup` |
-| Admin lost everything | `{projectname} --maintenance setup` |
+| Admin forgot password | `vidveil --maintenance setup` |
+| Admin lost API token | `vidveil --maintenance setup` |
+| Admin lost recovery keys | `vidveil --maintenance setup` |
+| Admin lost 2FA + no recovery keys | `vidveil --maintenance setup` |
+| Admin lost everything | `vidveil --maintenance setup` |
 
 **This requires:**
 - Console/SSH access to the server to run the binary
@@ -30351,19 +33582,19 @@ See **PART 22: BACKUP & RESTORE → Admin Recovery Command** for full details.
 **Recovery Key API Flow:**
 ```
 POST /api/v1/auth/login
-  → { "identifier": "john@example.com", "password": "..." }
-  ← { "requires_2fa": true, "session_token": "temp_xxx" }
+  → { "identifier": "john@example.com", "password": "secretpassword" }
+  ← { "ok": true, "data": { "requires_2fa": true, "session_token": "temp_xxx" } }
 
 POST /api/v1/auth/recovery/use
   → { "session_token": "temp_xxx", "recovery_key": "a1b2c3d4-e5f6" }
-  ← { "success": true, "token": "auth_xxx", "remaining_keys": 9 }
+  ← { "ok": true, "data": { "token": "auth_xxx", "remaining_keys": 9 } }
 
 # Now authenticated - can manage 2FA via /users/security/
 POST /api/v1/users/security/2fa/disable
-  ← { "success": true }
+  ← { "ok": true, "data": {} }
      OR (setup new device)
 POST /api/v1/users/security/2fa/enable
-  ← { "qr_code": "...", "secret": "...", "recovery_keys": [...] }
+  ← { "ok": true, "data": { "qr_code": "base64", "secret": "JBSWY3DPEHPK3PXP", "recovery_keys": [] } }
 ```
 
 **Recovery Key Rules:**
@@ -30626,7 +33857,7 @@ No registration allowed, admin creates users manually
 3. Email verification sent (if require_email_verification: true)
 4. User clicks verification link
 5. Admin notified of pending user
-6. Admin approves user at /admin/server/users/pending
+6. Admin approves user at /{adminpath}/server/users/pending
 7. Account active → user can log in
 ```
 
@@ -30897,7 +34128,7 @@ Notification Settings (/users/settings/notifications)
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `theme` | Select | `system` | Theme (light/dark/system) |
+| `theme` | Select | `dark` | Theme (dark/light/auto) |
 | `font_size` | Select | `medium` | Font size (small/medium/large) |
 | `reduce_motion` | Toggle | Off | Reduce animations |
 
@@ -30907,9 +34138,9 @@ Appearance Settings (/users/settings/appearance)
 ┌─────────────────────────────────────────────────────────────┐
 │  Theme                                                      │
 │  ┌─────────┐ ┌─────────┐ ┌─────────┐                       │
-│  │  ☀️     │ │  🌙     │ │  💻     │                       │
-│  │ Light   │ │ Dark    │ │ System  │ ← Selected            │
-│  └─────────┘ └─────────┘ └─────────┘                       │
+│  │  🌙     │ │  ☀️     │ │  💻     │                       │
+│  │ Dark    │ │ Light   │ │ Auto    │                       │
+│  └─────────┘ └─────────┘ └─────────┘ ↑ Default: Dark       │
 │                                                             │
 │  Font Size                                                  │
 │  ○ Small                                                    │
@@ -30980,7 +34211,7 @@ GET /api/v1/users/settings
         "push_mentions": true
     },
     "appearance": {
-        "theme": "system",
+        "theme": "dark",
         "font_size": "medium",
         "reduce_motion": false
     }
@@ -31034,7 +34265,7 @@ PATCH /api/v1/users/settings
 
 ## Admin Panel
 
-### /admin/server/moderation/users (User Moderation)
+### /{adminpath}/server/moderation/users (User Moderation)
 
 | Element | Type | Description |
 |---------|------|-------------|
@@ -31044,7 +34275,7 @@ PATCH /api/v1/users/settings
 | Disable/Enable | Toggle | Temporarily disable account |
 | Revoke sessions | Button | Log user out everywhere |
 
-### /admin/server/moderation/users/{id} (User Detail)
+### /{adminpath}/server/moderation/users/{id} (User Detail)
 
 | Section | Contents |
 |---------|----------|
@@ -31053,7 +34284,7 @@ PATCH /api/v1/users/settings
 | Activity | Login history, API usage |
 | Actions | Disable, delete, impersonate |
 
-### /admin/server/roles (Role Management)
+### /{adminpath}/server/roles (Role Management)
 
 | Element | Type | Description |
 |---------|------|-------------|
@@ -31062,7 +34293,7 @@ PATCH /api/v1/users/settings
 | Edit permissions | Checkboxes | Set role permissions |
 | Delete role | Button | Remove role (reassign users first) |
 
-### /admin/server/users/invites (User Invitation Codes)
+### /{adminpath}/server/users/invites (User Invitation Codes)
 
 | Element | Type | Description |
 |---------|------|-------------|
@@ -31121,13 +34352,18 @@ PATCH /api/v1/users/settings
 
 | Token Type | Prefix | Use For | Stored In |
 |------------|--------|---------|-----------|
-| Admin primary token | `adm_` | Admin operations, CLI | `admins.api_token_hash` |
-| Additional API keys | `key_` | Custom scoped access | `api_keys.key_hash` |
+| Admin token | `adm_` | Admin operations, CLI | `tokens` table |
+| User token | `usr_` | User operations | `tokens` table |
+| Org token | `org_` | Org operations | `tokens` table |
+| Admin agent | `adm_agt_` | Admin infrastructure agent | `tokens` table |
+| User agent | `usr_agt_` | User's personal agent | `tokens` table |
+| Org agent | `org_agt_` | Organization agent | `tokens` table |
 
-**API Keys Table (`api_keys`):**
-- Supports both admin and user tokens via `owner_type` (admin/user)
-- Each key has scopes: `["read", "write", "admin"]`
-- `key_prefix` stores first 8 chars for display: `"key_abc1..."`
+**Unified Tokens Table (`tokens`):**
+- All token types stored in single table with `owner_type` (admin/user/org)
+- Each token has: name, scope (`global`/`read-write`/`read`), expiration
+- `token_prefix` stores first 8 chars for display: `"adm_abc1..."`
+- Multiple tokens per owner allowed
 
 **Web Session Cookies:**
 
@@ -31218,6 +34454,7 @@ Organizations - only for projects with multi-user collaboration.
 |------|-------------|
 | `/admin` | Dashboard |
 | `/admin/profile` | Your admin account (password, API token, 2FA) |
+| `/admin/profile/preferences` | Admin preferences (theme, notifications) |
 
 ### Admin - Server (`/admin/server/`)
 
@@ -31263,7 +34500,8 @@ Organizations - only for projects with multi-user collaboration.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/v1/healthz` | GET | Health check |
-| `/api/v1/openapi.json` | GET | OpenAPI spec (JSON only) |
+
+**Note:** `/openapi.json` is a root-level endpoint (not `/api/v1/openapi.json`). See PART 14.
 
 ### Server (`/api/v1/server/`)
 
@@ -31444,6 +34682,8 @@ Moderation only - server admin does not manage org members/roles.
 | `/api/v1/admin/profile/password` | POST | Change admin password |
 | `/api/v1/admin/profile/token` | GET | Get current API token (masked) |
 | `/api/v1/admin/profile/token` | POST | Regenerate API token (returns new token ONCE) |
+| `/api/v1/admin/profile/preferences` | GET | Get admin preferences (theme, notifications) |
+| `/api/v1/admin/profile/preferences` | PATCH | Update admin preferences |
 
 ### Admin - Branding (`/api/v1/admin/server/branding/`)
 
@@ -31906,7 +35146,7 @@ Settings can be stored in database OR config file. Sync between them:
 **SQLite → YAML (Export settings to file):**
 
 ```
-Admin Web UI: /admin/server/settings → "Export to YAML"
+Admin Web UI: /{adminpath}/server/settings → "Export to YAML"
          │
          ▼
 Read all settings from server.db
@@ -32089,7 +35329,7 @@ Local MariaDB INSERT                     Local PostgreSQL INSERT
 Existing Node                          New Node
      │                                      │
      ▼                                      │
-/admin/server/nodes/add                     │
+/{adminpath}/server/nodes/add               │
      │                                      │
      ▼                                      │
 Generate Token                              │
@@ -32099,7 +35339,7 @@ Generate Token                              │
      └──────── Share token + URL ──────────►│
                                             │
                                             ▼
-                                   /admin/server/nodes/add
+                                   /{adminpath}/server/nodes/add
                                             │
                                             ▼
                                    Enter URL + Token
@@ -32174,25 +35414,27 @@ NEW NODE                                    EXISTING NODE
 
 ```json
 {
-  "success": true,
-  "cluster": {
-    "id": "cluster_abc123",
-    "name": "MyApp Cluster"
-  },
-  "database": {
-    "driver": "postgres",
-    "host": "db.example.com",
-    "port": 5432,
-    "name": "myapp",
-    "username": "myapp",
-    "password_encrypted": "base64_encrypted_password",
-    "sslmode": "require"
-  },
-  "encryption": {
-    "key_encrypted": "base64_encrypted_key"
-  },
-  "node": {
-    "suggested_id": "server-2"
+  "ok": true,
+  "data": {
+    "cluster": {
+      "id": "cluster_abc123",
+      "name": "MyApp Cluster"
+    },
+    "database": {
+      "driver": "postgres",
+      "host": "db.example.com",
+      "port": 5432,
+      "name": "myapp",
+      "username": "myapp",
+      "password_encrypted": "base64_encrypted_password",
+      "sslmode": "require"
+    },
+    "encryption": {
+      "key_encrypted": "base64_encrypted_key"
+    },
+    "node": {
+      "suggested_id": "server-2"
+    }
   }
 }
 ```
@@ -32371,7 +35613,7 @@ func updateHeartbeat(db *sql.DB, nodeID string) {
 Single Instance (SQLite)
          │
          ▼
-Admin goes to /admin/server/nodes/add
+Admin goes to /{adminpath}/server/nodes/add
          │
          ▼
 Clicks "Generate Token"
@@ -32636,6 +35878,103 @@ See PART 16 (Web Frontend) for the complete reserved names list. Users and orgs 
 
 **Requires PART 33: MULTI-USER to be implemented first.**
 
+## When Organizations Are Needed vs Not Needed
+
+**Key Question: Do users need to collaborate as teams/groups with shared resources?**
+
+### Organization Decision Matrix
+
+| Scenario | Orgs Needed? | Why |
+|----------|--------------|-----|
+| Teams share repositories/projects | ✅ YES | GitHub, GitLab model - org owns repos |
+| Company departments with shared resources | ✅ YES | Marketing team, Engineering team |
+| Agencies managing client accounts | ✅ YES | Agency creates org per client |
+| Multi-tenant SaaS with team billing | ✅ YES | Billing at org level, not user |
+| Personal note-taking app | ❌ NO | Individual use, no sharing |
+| Simple blog platform | ❌ NO | Authors work independently |
+| Dating/social matching | ❌ NO | Individual profiles, not teams |
+| Single-user self-hosted apps | ❌ NO | One user, no collaboration |
+
+### Project Examples: Organizations vs No Organizations
+
+**Projects that DO need organizations:**
+
+| Project Type | Example Names | Org Use Case |
+|--------------|---------------|--------------|
+| **Git Hosting** | GitHub, GitLab, Gitea, Forgejo | Orgs own repositories, teams have access |
+| **Project Management** | Jira, Linear, Plane | Teams collaborate on projects |
+| **Document Collaboration** | Notion, Confluence, Outline | Teams share docs/wikis |
+| **Cloud Storage** | Nextcloud, Seafile | Shared folders for teams |
+| **Communication** | Slack, Mattermost, Discord | Workspaces/servers for groups |
+| **Design Tools** | Figma, Penpot | Teams share design files |
+| **CI/CD Platforms** | Jenkins, Drone, Woodpecker | Orgs have pipelines and secrets |
+| **Container Registry** | Harbor, Docker Hub | Orgs own image repositories |
+| **Monitoring/Observability** | Grafana, Sentry | Teams share dashboards/projects |
+| **API Management** | Kong, Tyk | Orgs manage API keys and quotas |
+
+**Projects that do NOT need organizations:**
+
+| Project Type | Example Names | Why No Orgs |
+|--------------|---------------|-------------|
+| **Personal Tools** | Standard Notes, Joplin | Individual note-taking |
+| **Single-User Hosting** | Personal blogs, portfolios | One author per site |
+| **Consumer Social** | Instagram, TikTok | Individual accounts (followers ≠ org) |
+| **Dating Apps** | Tinder, Bumble | Individual matching |
+| **Media Consumption** | Netflix, Spotify | Personal accounts (family ≠ org) |
+| **Personal Finance** | Budget trackers | Individual budgets |
+| **Fitness/Health** | Strava, MyFitnessPal | Personal tracking |
+| **Gaming** | Most games | Players, not organizations |
+| **Simple APIs** | Jokes, Quotes, Weather | No user accounts at all |
+| **Pastebin** | Hastebin, PrivateBin | Anonymous/individual pastes |
+
+### Organization Decision Tree
+
+```
+Does your app have multiple users?
+│
+├─► NO → Skip organizations (and skip multi-user too)
+│
+└─► YES
+    │
+    ├─► Do users need to share resources (repos, projects, files)?
+    │   └─► YES → Organizations beneficial
+    │
+    ├─► Do users work in teams with shared permissions?
+    │   └─► YES → Organizations beneficial
+    │
+    ├─► Is billing/subscription at team level, not individual?
+    │   └─► YES → Organizations beneficial
+    │
+    └─► Are users independent with no collaboration needs?
+        └─► Skip organizations - just user accounts
+```
+
+### Organization vs Just Groups/Teams
+
+**When full Organizations are needed:**
+
+| Feature | Simple Groups | Full Organizations |
+|---------|---------------|-------------------|
+| Shared ownership | ❌ User owns, shares access | ✅ Org owns resources |
+| Billing entity | ❌ Per-user billing | ✅ Org-level billing |
+| Transfer ownership | ❌ Complex | ✅ Add/remove members |
+| Public profile | ❌ No org identity | ✅ /orgs/acme public page |
+| Vanity URL | ❌ No | ✅ /acme-corp/project |
+| Member roles | ❌ Simple share | ✅ Owner, Admin, Member |
+| Audit trail | ❌ Per-user | ✅ Org-level audit |
+
+### Quick Decision
+
+| If your users... | Orgs? |
+|-----------------|-------|
+| Work alone, never share | ❌ No |
+| Share occasionally (like Google Docs link) | ❌ No (just sharing) |
+| Regularly collaborate as teams | ✅ Yes |
+| Need team billing | ✅ Yes |
+| Are companies/agencies with multiple staff | ✅ Yes |
+
+---
+
 ## Organization Profile (NON-NEGOTIABLE)
 
 ### Org Profile Fields
@@ -32680,7 +36019,7 @@ GET /api/v1/orgs/acme-corp
     "visibility": "public",
     "member_count": 15,
     "created_at": "2024-06-01T08:00:00Z",
-    "your_role": "admin"  // Only shown to authenticated members
+    "your_role": "admin"
 }
 ```
 
@@ -33194,23 +36533,113 @@ See PART 16 (Web Frontend) for the complete reserved names list. Users and orgs 
 | SSL | Automatic via Let's Encrypt DNS-01 |
 | Verification | TXT record ownership verification |
 
-### When to Include This Feature
+## When Custom Domains Are Needed vs Not Needed
 
-| Include | Skip | Reason |
-|---------|------|--------|
-| Linktree clone | Weather API | Users want branded links (myname.com) |
-| Blog platform | Jokes API | Users publish under own domain |
-| SaaS application | GeoIP service | Customers need branded instances |
-| URL shortener | Pastebin | Users want custom short domains |
-| E-commerce platform | Timezone API | Merchants want branded stores |
+**Key Question: Do users need to present YOUR service under THEIR brand/domain?**
 
-**Rule of thumb:** If users/orgs will publicly share content or services, they likely want custom domains. If the app is just an API or utility, skip this feature.
+### Custom Domains Decision Matrix
 
-**Use cases (when included):**
-- Blog platform: `myblog.example.com` → user's blog
-- API service: `api.acme-corp.com` → org's API endpoint
-- SaaS: `app.customer.com` → customer's branded instance
-- Linktree: `links.myname.com` → user's link page
+| Scenario | Custom Domains? | Why |
+|----------|-----------------|-----|
+| Users publish public content | ✅ YES | They want `myblog.com` not `platform.com/username` |
+| White-label SaaS for businesses | ✅ YES | Customers need `app.theircompany.com` |
+| Link-in-bio/landing pages | ✅ YES | Users share their domain, not yours |
+| E-commerce/storefronts | ✅ YES | Merchants want branded stores |
+| Internal API service | ❌ NO | No public-facing user content |
+| Simple data APIs | ❌ NO | API is your service, not theirs |
+| Personal self-hosted apps | ❌ NO | Single tenant, admin sets domain |
+| Anonymous/ephemeral content | ❌ NO | No identity to brand |
+
+### Project Examples: Custom Domains vs No Custom Domains
+
+**Projects that DO need custom domains:**
+
+| Project Type | Example Names | Custom Domain Use Case |
+|--------------|---------------|------------------------|
+| **Blogging Platforms** | Ghost, Wordpress.com, Medium | `myblog.com` for each author |
+| **Link-in-Bio** | Linktree, Bento, Carrd | `links.myname.com` |
+| **E-commerce** | Shopify, WooCommerce, Saleor | `store.mybrand.com` |
+| **Website Builders** | Squarespace, Wix, Webflow | `mysite.com` for each customer |
+| **Email Marketing** | Mailchimp, Buttondown | `mail.mybrand.com` |
+| **Help Desk/Docs** | Zendesk, GitBook, ReadMe | `docs.company.com` |
+| **URL Shorteners** | Bitly, Short.io, YOURLS | `short.mybrand.com` |
+| **Status Pages** | Statuspage, Instatus | `status.company.com` |
+| **Landing Pages** | Leadpages, Unbounce | `campaign.mybrand.com` |
+| **Scheduling** | Calendly, Cal.com | `book.consultant.com` |
+
+**Projects that do NOT need custom domains:**
+
+| Project Type | Example Names | Why No Custom Domains |
+|--------------|---------------|----------------------|
+| **Data APIs** | Weather, GeoIP, Jokes, Quotes | Users consume API, don't rebrand it |
+| **Dev Tools (APIs)** | Stripe, Twilio, SendGrid | API is under your brand |
+| **Git Hosting** | GitHub, GitLab, Gitea | Repos live on platform (subdomain sufficient) |
+| **Chat/Communication** | Slack, Discord, Mattermost | Workspace is internal, not public |
+| **Personal Notes** | Standard Notes, Joplin | Private content, not published |
+| **Password Managers** | Bitwarden, Vaultwarden | Private vaults, no public presence |
+| **Media Libraries** | Jellyfin, Plex, Navidrome | Personal media, not shared publicly |
+| **Monitoring/Internal** | Grafana, Prometheus | Internal dashboards |
+| **Pastebin (anonymous)** | PrivateBin, Hastebin | Anonymous pastes, no branding |
+| **File Sync** | Syncthing, Seafile | Private sync, not public sharing |
+
+### Custom Domains Decision Tree
+
+```
+Does your app serve public-facing content for users?
+│
+├─► NO (internal tool, private data, API-only)
+│   └─► Skip custom domains
+│
+└─► YES (blogs, stores, public pages)
+    │
+    ├─► Do users want to present content under THEIR brand?
+    │   └─► YES → Custom domains beneficial
+    │
+    ├─► Would "yoursite.yourplatform.com" hurt their brand?
+    │   └─► YES → Custom domains beneficial
+    │
+    ├─► Do users share links publicly that represent them?
+    │   └─► YES → Custom domains beneficial
+    │
+    └─► Is subdomain sufficient (user.platform.com)?
+        └─► For many projects, subdomain is enough (simpler)
+```
+
+### Custom Domains vs Subdomains
+
+**When full custom domains are worth the complexity:**
+
+| Feature | Subdomain (user.platform.com) | Custom Domain (user.com) |
+|---------|------------------------------|-------------------------|
+| Setup complexity | ✅ Zero config | ❌ DNS + verification |
+| SSL | ✅ Wildcard cert | ❌ Per-domain certs |
+| User branding | ⚠️ Platform in URL | ✅ Fully branded |
+| SEO | ⚠️ Authority split | ✅ User controls SEO |
+| Portability | ❌ Locked to platform | ✅ User owns domain |
+| Enterprise demand | ⚠️ Some care | ✅ Often required |
+
+**Start with subdomains, add custom domains if users request it.**
+
+### Quick Decision
+
+| If your users... | Custom Domains? |
+|-----------------|-----------------|
+| Publish content publicly under their name | ✅ Yes |
+| Need white-label for their clients | ✅ Yes |
+| Share links that represent their brand | ✅ Yes |
+| Run businesses through your platform | ✅ Yes |
+| Use your platform internally/privately | ❌ No |
+| Just consume your API | ❌ No |
+| Are fine with `user.yourplatform.com` | ❌ Maybe (subdomain first) |
+
+### Use Cases (When Implemented)
+
+- **Blog platform**: `myblog.example.com` → user's blog
+- **API service**: `api.acme-corp.com` → org's API endpoint
+- **SaaS**: `app.customer.com` → customer's branded instance
+- **Linktree**: `links.myname.com` → user's link page
+- **E-commerce**: `shop.mybrand.com` → merchant's storefront
+- **Status page**: `status.company.com` → company's status page
 
 ## Feature Configuration
 
@@ -33524,8 +36953,8 @@ POST /api/v1/users/domains
 
 Response:
 {
-  "success": true,
-  "domain": {
+  "ok": true,
+  "data": {
     "id": 123,
     "domain": "api.mycompany.com",
     "status": "pending",
@@ -33559,8 +36988,8 @@ POST /api/v1/users/domains/api.mycompany.com/verify
 
 Response (success):
 {
-  "success": true,
-  "domain": {
+  "ok": true,
+  "data": {
     "domain": "api.mycompany.com",
     "verification_status": "verified",
     "verified_at": "2025-01-15T10:30:00Z",
@@ -33571,14 +37000,9 @@ Response (success):
 
 Response (failed - wrong IP):
 {
-  "success": false,
-  "error": "Domain does not resolve to this server",
-  "code": "ERR_DNS_MISMATCH",
-  "details": {
-    "expected": ["203.0.113.50", "2001:db8::1"],
-    "got": ["198.51.100.25"],
-    "hint": "DNS propagation can take up to 48 hours"
-  }
+  "ok": false,
+  "error": "DNS_MISMATCH",
+  "message": "Domain does not resolve to this server. DNS propagation can take up to 48 hours."
 }
 ```
 
@@ -33598,9 +37022,9 @@ func (s *DomainService) Verify(domainID int64) (*VerifyResult, error) {
     ips, err := net.LookupIP(domain.Domain)
     if err != nil {
         return &VerifyResult{
-            Success: false,
-            Error:   "DNS lookup failed",
-            Code:    "ERR_DNS_LOOKUP",
+            OK:      false,
+            Error:   "DNS_LOOKUP_FAILED",
+            Message: "DNS lookup failed",
         }, nil
     }
 
@@ -33619,13 +37043,9 @@ func (s *DomainService) Verify(domainID int64) (*VerifyResult, error) {
 
     if !matched {
         return &VerifyResult{
-            Success: false,
-            Error:   "Domain does not resolve to this server",
-            Code:    "ERR_DNS_MISMATCH",
-            Details: map[string]interface{}{
-                "expected": serverIPs,
-                "got":      resolvedIPs,
-            },
+            OK:      false,
+            Error:   "DNS_MISMATCH",
+            Message: fmt.Sprintf("Domain resolves to %v, expected %v", resolvedIPs, serverIPs),
         }, nil
     }
 
@@ -33812,8 +37232,8 @@ POST /api/v1/users/domains/api.mycompany.com/ssl
 
 Response:
 {
-  "success": true,
-  "domain": {
+  "ok": true,
+  "data": {
     "domain": "api.mycompany.com",
     "ssl_status": "active",
     "ssl_challenge": "tls-alpn-01",
@@ -33973,21 +37393,23 @@ The discovered public IPs are safe to include in `/healthz` - same info anyone c
 
 ## Error Handling
 
+**Uses standard error format (see PART 16). Domain-specific error codes:**
+
 | Error Code | HTTP | Description |
 |------------|------|-------------|
-| `ERR_DOMAIN_EXISTS` | 409 | Domain already registered |
-| `ERR_DOMAIN_RESERVED` | 400 | Domain is reserved/blocked |
-| `ERR_DOMAIN_LIMIT` | 400 | Max domains limit reached |
-| `ERR_DOMAIN_INVALID` | 400 | Invalid domain format |
-| `ERR_DOMAIN_NOT_FOUND` | 404 | Domain not found |
-| `ERR_DOMAIN_NOT_VERIFIED` | 400 | Domain not yet verified |
-| `ERR_DOMAIN_SUSPENDED` | 403 | Domain is suspended |
-| `ERR_DNS_LOOKUP` | 400 | DNS lookup failed |
-| `ERR_DNS_MISMATCH` | 400 | Domain does not resolve to server IP |
-| `ERR_SSL_PROVIDER` | 400 | Invalid DNS provider for SSL |
-| `ERR_SSL_CREDENTIALS` | 400 | DNS credentials validation failed |
-| `ERR_SSL_CHALLENGE` | 400 | ACME challenge failed |
-| `ERR_SSL_ISSUANCE` | 500 | Certificate issuance failed |
+| `DOMAIN_EXISTS` | 409 | Domain already registered |
+| `DOMAIN_RESERVED` | 400 | Domain is reserved/blocked |
+| `DOMAIN_LIMIT` | 400 | Max domains limit reached |
+| `DOMAIN_INVALID` | 400 | Invalid domain format |
+| `DOMAIN_NOT_FOUND` | 404 | Domain not found |
+| `DOMAIN_NOT_VERIFIED` | 400 | Domain not yet verified |
+| `DOMAIN_SUSPENDED` | 403 | Domain is suspended |
+| `DNS_LOOKUP_FAILED` | 400 | DNS lookup failed |
+| `DNS_MISMATCH` | 400 | Domain does not resolve to server IP |
+| `SSL_PROVIDER_INVALID` | 400 | Invalid DNS provider for SSL |
+| `SSL_CREDENTIALS_INVALID` | 400 | DNS credentials validation failed |
+| `SSL_CHALLENGE_FAILED` | 400 | ACME challenge failed |
+| `SSL_ISSUANCE_FAILED` | 500 | Certificate issuance failed |
 
 ## Admin Controls
 
@@ -34119,11 +37541,11 @@ When implementing custom domains for a project:
 
 
 
-# PART 36: CLI CLIENT (OPTIONAL - NON-NEGOTIABLE WHEN IMPLEMENTED)
+# PART 36: CLI CLIENT & AGENT (OPTIONAL - NON-NEGOTIABLE WHEN IMPLEMENTED)
 
 ## Overview
 
-**CLI client is a PER-PROJECT determination.** Not all projects require a CLI client.
+**CLI client and Agent are PER-PROJECT determinations.** Not all projects require a CLI client or agent.
 
 **IMPORTANT: Once a project implements a CLI client, this entire PART becomes NON-NEGOTIABLE.** The CLI must follow all standards defined here exactly.
 
@@ -34131,87 +37553,1199 @@ When a project includes a CLI client, it provides a terminal-based interface for
 
 | Attribute | Value |
 |-----------|-------|
-| Default binary name | `{projectname}-cli` |
+| Default binary name | `vidveil-cli` |
 | Versioning | Same as main application |
 | Build | Part of same Makefile (`make build` produces both binaries) |
-| Config location | `~/.config/{projectorg}/{projectname}/cli.yml` |
+| Config location | `~/.config/apimgr/vidveil/cli.yml` |
 
-## Binary Naming Rules
+## Binary Naming Rules (NON-NEGOTIABLE)
 
-**Same rules as server binary (see PART 6):**
+**Same rules apply to ALL binaries (server, agent, client). See PART 8 for full details.**
 
-- CLI client binary can be renamed by users
-- Show ACTUAL binary name in user-facing places:
-  - `--help` and `--version` output
-  - Error messages, usage examples
-- Hardcode `{projectname}-cli` for:
-  - User-Agent header (server uses this to identify client type)
-  - Default config path uses `{projectname}` not binary name
+| Rule | Display | Internal |
+|------|---------|----------|
+| Binary name | ACTUAL name (`filepath.Base(os.Args[0])`) | Hardcoded `vidveil` |
+| `--help` output | Shows actual binary name | - |
+| `--version` output | Shows actual binary name | - |
+| User-Agent | - | `vidveil-cli/{version}` (hardcoded) |
+| Config paths | - | `/etc/apimgr/vidveil/` (hardcoded) |
 
 ```go
-// Get actual binary name for display
+// Display: use actual binary name
 binaryName := filepath.Base(os.Args[0])
 
-// Hardcoded for User-Agent (never changes)
-// Compiled in via -ldflags
-const projectName = "pastebin"
+// Internal: hardcoded project name (compiled via -ldflags)
+const projectName = "vidveil"
 userAgent := fmt.Sprintf("%s-cli/%s", projectName, version)
+```
+
+## API Token Authentication (Multi-User Mode)
+
+**If project uses PART 33 (Multi-User) or PART 34 (Organizations), client MUST support `--token` for API authentication.**
+
+| Flag | Description |
+|------|-------------|
+| `--token TOKEN` | API token for authentication |
+| `--token-file FILE` | Read token from file |
+
+**Token sources (priority order):**
+1. `--token` flag (explicit)
+2. `--token-file` flag (file path)
+3. Environment variable: `VIDVEIL_TOKEN`
+4. Config file: `cli.yml` → `token: xxx`
+5. Token file: `~/.config/apimgr/vidveil/token`
+
+**Token format:** See PART 11 "API Token Security" for token format and validation.
+
+```go
+func getToken(flags *Flags) (string, error) {
+    // 1. Explicit flag
+    if flags.Token != "" {
+        return flags.Token, nil
+    }
+    // 2. Token file flag
+    if flags.TokenFile != "" {
+        return readTokenFile(flags.TokenFile)
+    }
+    // 3. Environment variable
+    if token := os.Getenv(strings.ToUpper(projectName) + "_TOKEN"); token != "" {
+        return token, nil
+    }
+    // 4. Config file
+    if cfg.Token != "" {
+        return cfg.Token, nil
+    }
+    // 5. Default token file
+    tokenPath := filepath.Join(configDir, "token")
+    if data, err := os.ReadFile(tokenPath); err == nil {
+        return strings.TrimSpace(string(data)), nil
+    }
+    return "", nil  // No token (anonymous access if allowed)
+}
+```
+
+**Usage:**
+```bash
+# Explicit token
+vidveil-cli --token "usr_abc123..." list
+
+# From environment
+export VIDVEIL_TOKEN="usr_abc123..."
+vidveil-cli list
+
+# Store token (interactive login)
+vidveil-cli login
+# Saves to ~/.config/apimgr/vidveil/token
+```
+
+## User/Org Context (Smart Detection, NON-NEGOTIABLE)
+
+**If project uses PART 33/34, client MUST support `--user` flag for user/org context. Server auto-detects type.**
+
+### --user Flag
+
+| Flag | Description |
+|------|-------------|
+| `--user NAME` | Target user OR org (server auto-detects) |
+| `--user @NAME` | Force user context (explicit) |
+| `--user +NAME` | Force org context (explicit) |
+
+**Smart detection priority:**
+1. If prefixed with `@` → user
+2. If prefixed with `+` → org
+3. Otherwise → server auto-detects from name
+
+### Global Token (Works Across User + Orgs)
+
+**A user's token grants access to:**
+- Their own user account
+- All orgs where they have permissions
+- Resources based on their role in each org
+
+```
+Token: usr_abc123... (user: alice)
+├── User context: alice's personal resources
+├── Org context: acme-corp (alice is admin)
+├── Org context: dev-team (alice is member)
+└── Org context: open-source-proj (alice is owner)
+```
+
+**One token, multiple contexts - no need for separate org tokens.**
+
+### Server-Side Smart Detection (NON-NEGOTIABLE)
+
+**Server MUST auto-detect if target is user or org:**
+
+```go
+// DetectTargetType determines if name is user or org
+func DetectTargetType(ctx context.Context, name string) (TargetType, error) {
+    // 1. Check explicit prefix
+    if strings.HasPrefix(name, "@") {
+        return TargetUser, nil
+    }
+    if strings.HasPrefix(name, "+") {
+        return TargetOrg, nil
+    }
+
+    // 2. Strip prefix for lookup
+    cleanName := strings.TrimLeft(name, "@+")
+
+    // 3. Check user table first (users are more common)
+    if userExists(ctx, cleanName) {
+        return TargetUser, nil
+    }
+
+    // 4. Check org table
+    if orgExists(ctx, cleanName) {
+        return TargetOrg, nil
+    }
+
+    // 5. Not found
+    return TargetUnknown, ErrNotFound
+}
+
+// ValidateAccess checks if token has access to target
+func ValidateAccess(ctx context.Context, token *Token, target string, action string) error {
+    targetType, err := DetectTargetType(ctx, target)
+    if err != nil {
+        return err
+    }
+
+    cleanName := strings.TrimLeft(target, "@+")
+
+    switch targetType {
+    case TargetUser:
+        // Token owner must BE this user
+        if token.UserID != getUserID(ctx, cleanName) {
+            return ErrForbidden
+        }
+        return nil
+
+    case TargetOrg:
+        // Token owner must have permission in this org
+        org := getOrg(ctx, cleanName)
+        role := getOrgRole(ctx, token.UserID, org.ID)
+        if !role.Can(action) {
+            return ErrForbidden
+        }
+        return nil
+    }
+
+    return ErrNotFound
+}
+```
+
+### CLI Usage Examples
+
+```bash
+# Auto-detect: server figures out if "alice" is user or org
+vidveil-cli --user alice list
+
+# Explicit user context
+vidveil-cli --user @alice list
+
+# Explicit org context
+vidveil-cli --user +acme-corp list
+
+# Default: use token owner's context (no --user flag)
+vidveil-cli list                    # Uses alice's personal context
+
+# Org operations with user's global token
+vidveil-cli --user acme-corp create --name "project"
+vidveil-cli --user dev-team list
+```
+
+### API Request Headers
+
+**Client sends context in request:**
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `Authorization` | `Bearer usr_abc123...` | User's global token |
+| `X-Target-Context` | `alice` or `acme-corp` | Target user/org (optional) |
+| `X-Target-Type` | `user` or `org` | Explicit type hint (optional) |
+
+```bash
+# CLI translates --user to headers
+vidveil-cli --user acme-corp list
+
+# Becomes:
+GET /api/v1/items
+Authorization: Bearer usr_abc123...
+X-Target-Context: acme-corp
+```
+
+### Detection Flow
+
+```
+Request arrives with token + optional context
+│
+├─► No --user / X-Target-Context
+│   └─► Use token owner's personal context
+│
+├─► --user NAME provided
+│   ├─► Prefix @? → Force user lookup
+│   ├─► Prefix +? → Force org lookup
+│   └─► No prefix → Auto-detect:
+│       ├─► Check users table → Found? User context
+│       ├─► Check orgs table → Found? Org context
+│       └─► Neither → 404 Not Found
+│
+└─► Validate token has access to resolved context
+    ├─► User context: token.user_id must match
+    ├─► Org context: token.user must have org role
+    └─► No access → 403 Forbidden
+```
+
+### Smart Context Detection (Based on Token Scope)
+
+**`--user` flag only needed when token has multiple contexts. Server auto-detects when possible.**
+
+| Token Scope | `--user` Needed? | Default Context |
+|-------------|------------------|-----------------|
+| User only (no orgs) | No | User |
+| Single org only | No | That org |
+| User + 1 org | Optional | User (use `--user {org}` for org) |
+| User + multiple orgs | Yes (for orgs) | User (must specify which org) |
+
+**Examples by token scope:**
+
+```bash
+# Token: alice (no org access)
+vidveil-cli list                    # Uses alice's context (only option)
+vidveil-cli --user alice list       # Same (redundant but valid)
+vidveil-cli --user acme-corp list   # ERROR: no access to acme-corp
+
+# Token: scoped to acme-corp only (org-specific token)
+vidveil-cli list                    # Uses acme-corp context (only option)
+vidveil-cli --user acme-corp list   # Same (redundant but valid)
+vidveil-cli --user @me list         # ERROR: token not scoped to user
+
+# Token: alice + acme-corp (user has one org)
+vidveil-cli list                    # Uses alice's context (default = user)
+vidveil-cli --user acme-corp list   # Uses acme-corp context
+
+# Token: alice + acme-corp + dev-team (user has multiple orgs)
+vidveil-cli list                    # Uses alice's context (default = user)
+vidveil-cli --user acme-corp list   # Uses acme-corp context
+vidveil-cli --user dev-team list    # Uses dev-team context
+```
+
+**Server-side scope detection:**
+
+```go
+// GetDefaultContext returns the default context for a token
+func GetDefaultContext(token *Token) (string, TargetType) {
+    scopes := token.GetScopes()
+
+    // Single scope - use it directly, no --user needed
+    if len(scopes) == 1 {
+        return scopes[0].Name, scopes[0].Type
+    }
+
+    // Multiple scopes - default to user if available
+    for _, scope := range scopes {
+        if scope.Type == TargetUser {
+            return scope.Name, TargetUser
+        }
+    }
+
+    // No user scope, multiple orgs - require --user flag
+    return "", TargetUnknown
+}
+
+// Token scope types
+type TokenScope struct {
+    Name string      // "alice" or "acme-corp"
+    Type TargetType  // TargetUser or TargetOrg
+}
+```
+
+**Why this design?**
+- Zero friction for simple cases (single scope = no flag needed)
+- Explicit only when ambiguous (multiple orgs)
+- Token scope determines what's possible, `--user` selects which
+
+### Flag-to-Config Save Rules (NON-NEGOTIABLE)
+
+**Flags only update config if current value is empty or invalid:**
+
+```go
+// SaveIfEmptyOrInvalid updates config only when appropriate
+func SaveIfEmptyOrInvalid(current, flagValue string, validate func(string) bool) string {
+    // Flag not provided - keep current
+    if flagValue == "" {
+        return current
+    }
+
+    // Validate flag value
+    if !validate(flagValue) {
+        // Invalid flag value - keep current, log warning
+        log.Warn("invalid flag value, keeping current config")
+        return current
+    }
+
+    // Current is empty - save new value
+    if current == "" {
+        return flagValue  // Save to config
+    }
+
+    // Current is invalid - replace with valid flag value
+    if !validate(current) {
+        return flagValue  // Save to config
+    }
+
+    // Current is valid - use flag for session only, don't save
+    return flagValue  // Use but don't persist
+}
+```
+
+| Current Config | Flag Value | Result |
+|----------------|------------|--------|
+| Empty | Valid | **Save to config** |
+| Empty | Invalid | Keep empty, warn |
+| Valid | Valid | Use flag (don't save) |
+| Valid | Invalid | Keep current, warn |
+| Invalid | Valid | **Save to config** |
+| Invalid | Invalid | Keep current, warn |
+
+**Example:**
+```bash
+# First run: no server configured
+vidveil-cli --server https://api.example.com list
+# → Saves to cli.yml (was empty)
+
+# Second run: server already configured
+vidveil-cli --server https://staging.example.com list
+# → Uses staging for THIS command, but cli.yml still has api.example.com
+
+# To permanently change: edit cli.yml directly
+```
+
+### Reserved Names
+
+**These names are reserved and cannot be users OR orgs:**
+
+| Name | Reason |
+|------|--------|
+| `me` | Alias for current token owner |
+| `self` | Alias for current token owner |
+| `@me` | Explicit user self-reference |
+| `admin` | Reserved for system |
+| `system` | Reserved for system |
+| `api` | Reserved for routes |
+| `www` | Reserved for routes |
+
+```bash
+# @me always means token owner
+vidveil-cli --user @me list    # Always personal context
 ```
 
 ## Modes
 
 ### Automatic Mode Detection (NON-NEGOTIABLE)
 
-**The CLI automatically detects whether to use TUI or standard output. No `--tui` flag or `tui` command.**
+**Smart TUI detection. No `--tui` flag or `tui` command needed.**
 
-| Condition | Mode |
-|-----------|------|
+| Condition | Result |
+|-----------|--------|
+| `-h`, `--help` | Print help, exit (CLI only, never TUI) |
+| `-v`, `--version` | Print version, exit (CLI only, never TUI) |
 | Interactive terminal + no command | TUI mode |
-| Interactive terminal + only `--server`/`--token` | TUI mode (config flags don't count) |
-| Interactive terminal + command provided | Standard CLI with formatted output |
-| Piped/redirected output | Plain output (no colors, no TUI) |
+| Interactive terminal + config flags only | TUI mode |
+| Interactive terminal + command/args | CLI mode |
+| Piped/redirected output | Plain output (no TUI) |
 | Non-interactive (cron, scripts) | Plain output |
 
-**Config-only flags (`--server`, `--token`, `--config`) do NOT prevent TUI mode:**
+**Exit-immediately flags (NEVER launch TUI):**
 ```bash
-pastebin-cli                                    # TUI mode (default cli.yml)
-pastebin-cli --config dev                       # TUI mode (with dev.yml loaded)
-pastebin-cli --server https://example.com       # TUI mode (with server set)
-pastebin-cli --token abc123                     # TUI mode (with token set)
-pastebin-cli --config dev --server https://x.com # TUI mode (dev.yml + server override)
-pastebin-cli list                               # CLI mode (command provided)
-pastebin-cli --config dev list                  # CLI mode (dev.yml + list command)
+vidveil-cli -h                    # Print help, exit
+vidveil-cli --help                # Print help, exit
+vidveil-cli -v                    # Print version, exit
+vidveil-cli --version             # Print version, exit
+```
+
+**Config flags (still launch TUI):**
+```bash
+vidveil-cli                                    # TUI mode
+vidveil-cli --config dev                       # TUI mode (with dev.yml)
+vidveil-cli --server https://example.com       # TUI mode (with server)
+vidveil-cli --token abc123                     # TUI mode (with token)
+```
+
+**Command/args (CLI mode):**
+```bash
+vidveil-cli list                               # CLI mode
+vidveil-cli golang tutorials                   # CLI mode (search)
+vidveil-cli notes.txt                          # CLI mode (paste file)
 ```
 
 ```go
-// Automatic mode detection
 func detectMode(args []string) string {
-    // Check if stdout is a terminal
-    if !term.IsTerminal(int(os.Stdout.Fd())) {
-        return "plain"  // Piped or redirected
-    }
-
-    // Config-only flags don't count as "action" - TUI still launches
-    configOnlyFlags := map[string]bool{
-        "--config": true, "--server": true, "--token": true,
-        "-h": true, "--help": true,
-        "-v": true, "--version": true,
-    }
-
-    // Check if any non-config args provided
+    // Exit-immediately flags - never TUI
     for _, arg := range args[1:] {
-        // Skip flag values (the value after a flag)
-        if !strings.HasPrefix(arg, "-") {
-            return "cli"  // Command provided
-        }
-        // Check if it's an action flag (not config-only)
-        flagName := strings.Split(arg, "=")[0]
-        if !configOnlyFlags[flagName] {
-            return "cli"  // Action flag provided
+        switch arg {
+        case "-h", "--help", "-v", "--version":
+            return "cli"  // Handle and exit
         }
     }
 
-    return "tui"  // Only config flags or no args, launch TUI
+    // Not a terminal = plain output
+    if !term.IsTerminal(int(os.Stdout.Fd())) {
+        return "plain"
+    }
+
+    // Config-only flags don't prevent TUI
+    configFlags := map[string]bool{
+        "--config": true, "--server": true, "--token": true, "--debug": true,
+    }
+
+    for _, arg := range args[1:] {
+        if !strings.HasPrefix(arg, "-") {
+            return "cli"  // Command/arg provided
+        }
+        flag := strings.Split(arg, "=")[0]
+        if !configFlags[flag] {
+            return "cli"  // Action flag
+        }
+    }
+
+    return "tui"  // No args or config-only = TUI
+}
+```
+
+## Display Environment Detection (CLI-Specific)
+
+**See PART 7 for core display detection shared by all binaries.**
+
+**CLI binary extends the base detection with GUI support and mode selection:**
+
+### CLI Display Mode Hierarchy
+
+| Mode | Priority | When Used | CLI Binary Behavior |
+|------|----------|-----------|---------------------|
+| **GUI** | 1 | Native display, no remote | Launch native GUI (GTK/Cocoa/Win32) |
+| **TUI** | 2 | Interactive terminal | Launch bubbletea TUI |
+| **CLI** | 3 | Command provided or piped | Text output with colors |
+| **Headless** | 4 | No display, no TTY | Error (CLI requires interaction) |
+
+### Extended Platform Display Detection
+
+```go
+// src/common/display/detect.go
+package display
+
+import (
+    "os"
+    "os/exec"
+    "runtime"
+    "strings"
+
+    "golang.org/x/term"
+)
+
+type DisplayMode int
+
+const (
+    ModeHeadless DisplayMode = iota // No display, no TTY
+    ModeCLI                         // Command-line only (piped or command provided)
+    ModeTUI                         // Terminal UI (interactive terminal)
+    ModeGUI                         // Native graphical UI
+)
+
+type DisplayEnv struct {
+    Mode          DisplayMode
+    HasDisplay    bool     // X11, Wayland, Windows, macOS display
+    DisplayType   string   // "x11", "wayland", "windows", "macos", "none"
+    IsTerminal    bool     // stdout is a TTY
+    IsSSH         bool     // Running over SSH
+    IsMosh        bool     // Running over mosh
+    IsScreen      bool     // Running in screen/tmux
+    TerminalType  string   // TERM value
+    Cols          int      // Terminal columns (0 if no terminal)
+    Rows          int      // Terminal rows (0 if no terminal)
+}
+
+func Detect() DisplayEnv {
+    env := DisplayEnv{}
+
+    // Check terminal
+    env.IsTerminal = term.IsTerminal(int(os.Stdout.Fd()))
+    if env.IsTerminal {
+        env.Cols, env.Rows, _ = term.GetSize(int(os.Stdout.Fd()))
+    }
+    env.TerminalType = os.Getenv("TERM")
+
+    // Check remote session
+    env.IsSSH = os.Getenv("SSH_CLIENT") != "" || os.Getenv("SSH_TTY") != ""
+    env.IsMosh = os.Getenv("MOSH") != "" || strings.Contains(os.Getenv("TERM"), "mosh")
+    env.IsScreen = os.Getenv("STY") != "" || os.Getenv("TMUX") != ""
+
+    // Detect display environment
+    env.detectDisplay()
+
+    // Determine mode
+    env.Mode = env.determineMode()
+
+    return env
+}
+
+func (e *DisplayEnv) detectDisplay() {
+    switch runtime.GOOS {
+    case "linux", "freebsd", "openbsd", "netbsd":
+        e.detectUnixDisplay()
+    case "darwin":
+        e.detectMacOSDisplay()
+    case "windows":
+        e.detectWindowsDisplay()
+    default:
+        e.DisplayType = "none"
+        e.HasDisplay = false
+    }
+}
+
+func (e *DisplayEnv) detectUnixDisplay() {
+    // Check Wayland first (preferred on modern Linux)
+    if os.Getenv("WAYLAND_DISPLAY") != "" {
+        e.DisplayType = "wayland"
+        e.HasDisplay = true
+        return
+    }
+
+    // Check X11
+    display := os.Getenv("DISPLAY")
+    if display != "" {
+        // Verify X server is actually accessible
+        cmd := exec.Command("xset", "q")
+        if err := cmd.Run(); err == nil {
+            e.DisplayType = "x11"
+            e.HasDisplay = true
+            return
+        }
+    }
+
+    e.DisplayType = "none"
+    e.HasDisplay = false
+}
+
+func (e *DisplayEnv) detectMacOSDisplay() {
+    // macOS always has a display unless running headless
+    // Check if we're in a graphical session
+    if os.Getenv("TERM_PROGRAM") != "" || os.Getenv("Apple_PubSub_Socket_Render") != "" {
+        e.DisplayType = "macos"
+        e.HasDisplay = true
+        return
+    }
+
+    // SSH session to macOS - no local display access
+    if e.IsSSH {
+        e.DisplayType = "none"
+        e.HasDisplay = false
+        return
+    }
+
+    // Assume display available on macOS
+    e.DisplayType = "macos"
+    e.HasDisplay = true
+}
+
+func (e *DisplayEnv) detectWindowsDisplay() {
+    // Windows: check for console vs GUI session
+    // GetConsoleWindow returns 0 if no console
+    e.DisplayType = "windows"
+    e.HasDisplay = true // Windows desktop always available unless service
+
+    // Detect Windows service mode (no display)
+    if os.Getenv("USERPROFILE") == "" {
+        e.DisplayType = "none"
+        e.HasDisplay = false
+    }
+}
+
+func (e *DisplayEnv) determineMode() DisplayMode {
+    // No TTY and no display = headless
+    if !e.IsTerminal && !e.HasDisplay {
+        return ModeHeadless
+    }
+
+    // Has native display = GUI possible
+    if e.HasDisplay && !e.IsSSH && !e.IsMosh {
+        return ModeGUI
+    }
+
+    // Has terminal = TUI possible
+    if e.IsTerminal {
+        return ModeTUI
+    }
+
+    // Fallback to CLI
+    return ModeCLI
+}
+
+func (e DisplayEnv) String() string {
+    modes := []string{"headless", "cli", "tui", "gui"}
+    return modes[e.Mode]
+}
+
+func (e DisplayEnv) SupportsColors() bool {
+    if !e.IsTerminal {
+        return false
+    }
+    // Most modern terminals support colors
+    term := strings.ToLower(e.TerminalType)
+    return strings.Contains(term, "color") ||
+           strings.Contains(term, "256") ||
+           strings.Contains(term, "xterm") ||
+           strings.Contains(term, "screen") ||
+           strings.Contains(term, "tmux") ||
+           term == "linux"
+}
+
+func (e DisplayEnv) SupportsUnicode() bool {
+    // Check locale for UTF-8 support
+    lang := os.Getenv("LANG")
+    lcAll := os.Getenv("LC_ALL")
+    return strings.Contains(strings.ToUpper(lang), "UTF") ||
+           strings.Contains(strings.ToUpper(lcAll), "UTF")
+}
+```
+
+### Mode Selection by Binary (NON-NEGOTIABLE)
+
+| Binary | GUI | TUI | CLI | Headless |
+|--------|-----|-----|-----|----------|
+| **Server** | ❌ No | Status only | Commands | Default (daemon) |
+| **CLI** | ✅ Yes | ✅ Yes (default) | ✅ Yes | ❌ No |
+| **Agent** | ❌ No | Status only | Commands | Default (service) |
+
+**Server and Agent are primarily headless services. GUI is CLI-only.**
+
+### GUI Mode Requirements (NON-NEGOTIABLE)
+
+**When GUI mode is available, use NATIVE platform toolkit. No Electron, no web views.**
+
+| Platform | Toolkit | Notes |
+|----------|---------|-------|
+| **Linux** | GTK4 or Qt6 | GTK4 preferred for GNOME, Qt6 for KDE |
+| **macOS** | Cocoa (AppKit) | Native macOS UI via cgo |
+| **Windows** | Win32/WinUI | Native Windows UI |
+| **BSD** | GTK4 or Qt6 | Same as Linux |
+
+```go
+// src/client/gui/gui.go
+//go:build gui
+
+package gui
+
+import (
+    "runtime"
+)
+
+// GUI is conditionally compiled
+// Build with: go build -tags gui
+
+func Available() bool {
+    env := display.Detect()
+    return env.HasDisplay && !env.IsSSH && !env.IsMosh
+}
+
+func Launch(config *Config) error {
+    switch runtime.GOOS {
+    case "linux", "freebsd", "openbsd", "netbsd":
+        return launchGTK(config)
+    case "darwin":
+        return launchCocoa(config)
+    case "windows":
+        return launchWin32(config)
+    default:
+        return ErrGUIUnsupported
+    }
+}
+```
+
+### SSH/Mosh Detection (NON-NEGOTIABLE)
+
+**Remote sessions ALWAYS use TUI or CLI. Never attempt GUI over SSH/mosh.**
+
+```go
+func IsRemoteSession() bool {
+    // SSH detection
+    if os.Getenv("SSH_CLIENT") != "" || os.Getenv("SSH_TTY") != "" {
+        return true
+    }
+
+    // Mosh detection
+    if os.Getenv("MOSH") != "" {
+        return true
+    }
+
+    // Check for SSH connection string
+    if os.Getenv("SSH_CONNECTION") != "" {
+        return true
+    }
+
+    return false
+}
+```
+
+### Mode Override Flags
+
+**Users can force specific modes when needed:**
+
+```bash
+# Force CLI mode (no TUI, no GUI)
+vidveil-cli --mode cli list
+vidveil-cli --cli list          # Short form
+
+# Force TUI mode (skip GUI even if available)
+vidveil-cli --mode tui
+vidveil-cli --tui               # Short form
+
+# Force GUI mode (error if unavailable)
+vidveil-cli --mode gui
+vidveil-cli --gui               # Short form
+
+# Let auto-detection decide (default)
+vidveil-cli                     # Auto-detect best mode
+```
+
+```go
+// Mode override handling
+func selectMode(flagMode string, env DisplayEnv) DisplayMode {
+    switch flagMode {
+    case "cli":
+        return ModeCLI
+    case "tui":
+        if !env.IsTerminal {
+            log.Fatal("TUI mode requires interactive terminal")
+        }
+        return ModeTUI
+    case "gui":
+        if !env.HasDisplay || env.IsSSH || env.IsMosh {
+            log.Fatal("GUI mode requires local display (not available over SSH/mosh)")
+        }
+        return ModeGUI
+    default:
+        return env.Mode // Auto-detect
+    }
+}
+```
+
+## CLI/TUI/GUI Theming
+
+**See PART 16 "Themes (NON-NEGOTIABLE - PROJECT-WIDE)" for the unified color palette.**
+
+**CLI/TUI/GUI use the same `theme.Palette` from `src/common/theme/colors.go`.**
+
+### CLI Theme Configuration
+
+```yaml
+# cli.yml - theme section (same format as server.yml)
+theme:
+  mode: auto          # dark (default), light, auto
+```
+
+### TUI Styles from Palette
+
+```go
+// src/client/tui/styles.go
+package tui
+
+import (
+    "github.com/charmbracelet/lipgloss"
+    "project/common/theme"
+)
+
+func StylesFromPalette(p theme.Palette) Styles {
+    return Styles{
+        Base: lipgloss.NewStyle().
+            Foreground(lipgloss.Color(p.Foreground)).
+            Background(lipgloss.Color(p.Background)),
+        Title: lipgloss.NewStyle().
+            Foreground(lipgloss.Color(p.Primary)).Bold(true),
+        Selected: lipgloss.NewStyle().
+            Foreground(lipgloss.Color(p.Background)).
+            Background(lipgloss.Color(p.Primary)),
+        Error: lipgloss.NewStyle().Foreground(lipgloss.Color(p.Error)),
+        Success: lipgloss.NewStyle().Foreground(lipgloss.Color(p.Success)),
+        Warning: lipgloss.NewStyle().Foreground(lipgloss.Color(p.Warning)),
+        Muted: lipgloss.NewStyle().Foreground(lipgloss.Color(p.Muted)),
+        Border: lipgloss.NewStyle().BorderForeground(lipgloss.Color(p.Border)),
+    }
+}
+```
+
+### CLI Colored Output
+
+```go
+// src/client/cli/output.go
+package cli
+
+import (
+    "fmt"
+    "project/common/theme"
+)
+
+// Apply palette colors to CLI text output
+func (o *Output) PrintSuccess(msg string) {
+    if o.colors {
+        fmt.Printf("\033[38;2;%sм%s\033[0m\n", hexToRGB(o.palette.Success), msg)
+    } else {
+        fmt.Println(msg)
+    }
+}
+
+func (o *Output) PrintError(msg string) {
+    if o.colors {
+        fmt.Printf("\033[38;2;%sм%s\033[0m\n", hexToRGB(o.palette.Error), msg)
+    } else {
+        fmt.Println(msg)
+    }
+}
+```
+
+## Responsive Layout (NON-NEGOTIABLE)
+
+**ALL interfaces MUST look professional from mobile (40x10) to 16K displays (400+ columns).**
+
+### Screen Size Categories
+
+| Category | Columns | Rows | Examples | Layout |
+|----------|---------|------|----------|--------|
+| **Micro** | <40 | <10 | Phone portrait SSH | Vertical stack, no chrome |
+| **Minimal** | 40-59 | 10-15 | Phone landscape SSH | Single column, minimal borders |
+| **Compact** | 60-79 | 16-23 | Tablet SSH, small terminal | Compact layout, abbreviated |
+| **Standard** | 80-119 | 24-39 | Standard terminal | Normal layout |
+| **Wide** | 120-199 | 40-59 | Wide terminal | Sidebars, multi-column |
+| **Ultrawide** | 200-399 | 60+ | Ultrawide monitor | Three-column, dashboards |
+| **Massive** | 400+ | 80+ | 4K/8K/16K displays | Multi-pane, tile layout |
+
+### GUI Responsive Layout
+
+```go
+// GUI window scaling for high-DPI and large displays
+func calculateGUILayout(width, height int, dpi float64) Layout {
+    // Scale based on DPI
+    scale := dpi / 96.0 // 96 DPI is baseline
+
+    // Base sizes (at 96 DPI)
+    baseMinWidth := 800
+    baseMinHeight := 600
+
+    // Calculate scaled sizes
+    minWidth := int(float64(baseMinWidth) * scale)
+    minHeight := int(float64(baseMinHeight) * scale)
+
+    // Determine layout mode
+    switch {
+    case width >= 3840: // 4K+
+        return Layout{
+            Mode:       "dashboard",
+            Columns:    4,
+            Sidebar:    true,
+            SidebarW:   int(300 * scale),
+            FontScale:  scale,
+        }
+    case width >= 2560: // 1440p/QHD
+        return Layout{
+            Mode:       "wide",
+            Columns:    3,
+            Sidebar:    true,
+            SidebarW:   int(280 * scale),
+            FontScale:  scale,
+        }
+    case width >= 1920: // 1080p
+        return Layout{
+            Mode:       "standard",
+            Columns:    2,
+            Sidebar:    true,
+            SidebarW:   int(250 * scale),
+            FontScale:  scale,
+        }
+    case width >= 1280: // 720p
+        return Layout{
+            Mode:       "compact",
+            Columns:    1,
+            Sidebar:    true,
+            SidebarW:   int(200 * scale),
+            FontScale:  scale,
+        }
+    default:
+        return Layout{
+            Mode:       "mobile",
+            Columns:    1,
+            Sidebar:    false,
+            FontScale:  scale,
+        }
+    }
+}
+```
+
+### TUI Responsive Layout
+
+```go
+// src/client/tui/layout.go
+package tui
+
+type LayoutMode int
+
+const (
+    LayoutMicro     LayoutMode = iota // <40 cols
+    LayoutMinimal                      // 40-59 cols
+    LayoutCompact                      // 60-79 cols
+    LayoutStandard                     // 80-119 cols
+    LayoutWide                         // 120-199 cols
+    LayoutUltrawide                    // 200-399 cols
+    LayoutMassive                      // 400+ cols
+)
+
+func GetLayoutMode(cols, rows int) LayoutMode {
+    // Use the more constraining dimension
+    switch {
+    case cols < 40 || rows < 10:
+        return LayoutMicro
+    case cols < 60 || rows < 16:
+        return LayoutMinimal
+    case cols < 80 || rows < 24:
+        return LayoutCompact
+    case cols < 120 || rows < 40:
+        return LayoutStandard
+    case cols < 200 || rows < 60:
+        return LayoutWide
+    case cols < 400 || rows < 80:
+        return LayoutUltrawide
+    default:
+        return LayoutMassive
+    }
+}
+
+// Layout configuration per mode
+func (m LayoutMode) Config() LayoutConfig {
+    configs := map[LayoutMode]LayoutConfig{
+        LayoutMicro: {
+            ShowBorders:    false,
+            ShowHeader:     false,
+            ShowFooter:     false,
+            ShowSidebar:    false,
+            MaxColumns:     2,
+            TruncateAt:     30,
+            UseAbbrev:      true,
+            VerticalScroll: true,
+        },
+        LayoutMinimal: {
+            ShowBorders:    false,
+            ShowHeader:     true,
+            ShowFooter:     true,
+            ShowSidebar:    false,
+            MaxColumns:     3,
+            TruncateAt:     40,
+            UseAbbrev:      true,
+            VerticalScroll: true,
+        },
+        LayoutCompact: {
+            ShowBorders:    true,
+            ShowHeader:     true,
+            ShowFooter:     true,
+            ShowSidebar:    false,
+            MaxColumns:     4,
+            TruncateAt:     60,
+            UseAbbrev:      false,
+            VerticalScroll: true,
+        },
+        LayoutStandard: {
+            ShowBorders:    true,
+            ShowHeader:     true,
+            ShowFooter:     true,
+            ShowSidebar:    false,
+            MaxColumns:     6,
+            TruncateAt:     80,
+            UseAbbrev:      false,
+            VerticalScroll: true,
+        },
+        LayoutWide: {
+            ShowBorders:    true,
+            ShowHeader:     true,
+            ShowFooter:     true,
+            ShowSidebar:    true,
+            SidebarWidth:   30,
+            MaxColumns:     8,
+            TruncateAt:     120,
+            UseAbbrev:      false,
+            VerticalScroll: true,
+        },
+        LayoutUltrawide: {
+            ShowBorders:    true,
+            ShowHeader:     true,
+            ShowFooter:     true,
+            ShowSidebar:    true,
+            SidebarWidth:   40,
+            MaxColumns:     12,
+            TruncateAt:     200,
+            UseAbbrev:      false,
+            VerticalScroll: false, // Full content visible
+            MultiPane:      true,
+        },
+        LayoutMassive: {
+            ShowBorders:    true,
+            ShowHeader:     true,
+            ShowFooter:     true,
+            ShowSidebar:    true,
+            SidebarWidth:   50,
+            MaxColumns:     20,
+            TruncateAt:     0, // No truncation
+            UseAbbrev:      false,
+            VerticalScroll: false,
+            MultiPane:      true,
+            TileLayout:     true,
+        },
+    }
+    return configs[m]
+}
+```
+
+### Window Resize Handling (NON-NEGOTIABLE)
+
+**ALL modes MUST handle window resize smoothly.**
+
+```go
+// TUI resize handling with bubbletea
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    switch msg := msg.(type) {
+    case tea.WindowSizeMsg:
+        m.width = msg.Width
+        m.height = msg.Height
+        m.layoutMode = GetLayoutMode(msg.Width, msg.Height)
+        m.layout = m.layoutMode.Config()
+
+        // Recalculate all component sizes
+        m.recalculateViewport()
+        m.recalculateTables()
+        m.recalculateSidebar()
+
+        // Log resize in debug mode
+        if m.debug {
+            log.Printf("Window resize: %dx%d, mode: %s",
+                msg.Width, msg.Height, m.layoutMode)
+        }
+    }
+    return m, nil
+}
+
+// Server/Agent: Handle SIGWINCH for console output
+func watchWindowSize(ctx context.Context, callback func(w, h int)) {
+    sigCh := make(chan os.Signal, 1)
+    signal.Notify(sigCh, syscall.SIGWINCH)
+
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-sigCh:
+            w, h, _ := term.GetSize(int(os.Stdout.Fd()))
+            callback(w, h)
+        }
+    }
+}
+```
+
+## Professional UI/UX Standards (NON-NEGOTIABLE)
+
+**Every interface MUST look professional. No amateur hour.**
+
+### Visual Hierarchy
+
+| Element | Priority | Styling |
+|---------|----------|---------|
+| **Primary Actions** | High | Primary color, prominent placement |
+| **Data/Content** | High | Clear contrast, readable fonts |
+| **Navigation** | Medium | Consistent position, clear labels |
+| **Secondary Actions** | Medium | Muted styling, discoverable |
+| **Status/Meta** | Low | Muted color, smaller text |
+| **Decorative** | Lowest | Subtle, never distracting |
+
+### Spacing and Alignment
+
+```go
+// Consistent spacing units (TUI)
+const (
+    SpaceXS = 1  // Micro spacing
+    SpaceS  = 2  // Small spacing
+    SpaceM  = 4  // Medium spacing
+    SpaceL  = 6  // Large spacing
+    SpaceXL = 8  // Extra large spacing
+)
+
+// Apply based on layout mode
+func (m LayoutMode) Spacing() int {
+    switch m {
+    case LayoutMicro, LayoutMinimal:
+        return SpaceXS
+    case LayoutCompact:
+        return SpaceS
+    case LayoutStandard:
+        return SpaceM
+    case LayoutWide:
+        return SpaceL
+    default:
+        return SpaceXL
+    }
+}
+```
+
+### Consistent Icons and Symbols
+
+```go
+// Unicode symbols that work across terminals
+var Symbols = struct {
+    Success  string
+    Error    string
+    Warning  string
+    Info     string
+    Arrow    string
+    Check    string
+    Cross    string
+    Bullet   string
+    Spinner  []string
+}{
+    Success:  "✓",
+    Error:    "✗",
+    Warning:  "⚠",
+    Info:     "ℹ",
+    Arrow:    "→",
+    Check:    "☑",
+    Cross:    "☒",
+    Bullet:   "•",
+    Spinner:  []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
+}
+
+// Fallback for non-Unicode terminals
+var SymbolsASCII = struct {
+    Success  string
+    Error    string
+    Warning  string
+    Info     string
+    Arrow    string
+    Check    string
+    Cross    string
+    Bullet   string
+    Spinner  []string
+}{
+    Success:  "[OK]",
+    Error:    "[ERR]",
+    Warning:  "[WARN]",
+    Info:     "[INFO]",
+    Arrow:    "->",
+    Check:    "[x]",
+    Cross:    "[ ]",
+    Bullet:   "*",
+    Spinner:  []string{"|", "/", "-", "\\"},
+}
+
+func GetSymbols(env DisplayEnv) interface{} {
+    if env.SupportsUnicode() {
+        return Symbols
+    }
+    return SymbolsASCII
 }
 ```
 
@@ -34220,12 +38754,11 @@ func detectMode(args []string) string {
 When command arguments are provided:
 
 ```bash
-# Examples - standard CLI output
-pastebin-cli create --file notes.txt --expire 24h
-airports-cli lookup JFK --output json
-quotesvc-cli random --category motivation
-weatherapi-cli forecast --city "New York" --days 5
-echoip-cli check --output table
+# Standard CLI output (your project)
+vidveil-cli create --file notes.txt --expire 24h
+vidveil-cli get abc123 --output json
+vidveil-cli list --limit 10
+vidveil-cli search --query "keyword"
 ```
 
 ### TUI Mode (Automatic)
@@ -34234,8 +38767,7 @@ When launched with no arguments in an interactive terminal:
 
 ```bash
 # Launch TUI (no arguments needed)
-pastebin-cli              # Opens TUI automatically
-airports-cli              # Opens TUI automatically
+vidveil-cli              # Opens TUI automatically
 
 # TUI provides:
 # - Interactive menus
@@ -34266,23 +38798,23 @@ The CLI client uses the same user directory structure as the server in user mode
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Config | `~/.config/{projectorg}/{projectname}/` | Configuration files |
-| Config File | `~/.config/{projectorg}/{projectname}/cli.yml` | CLI configuration |
-| Data | `~/.local/share/{projectorg}/{projectname}/` | Persistent data |
-| Cache | `~/.cache/{projectorg}/{projectname}/` | Temporary/cached data |
-| Logs | `~/.local/log/{projectorg}/{projectname}/` | Log files |
-| Log File | `~/.local/log/{projectorg}/{projectname}/cli.log` | CLI log output |
+| Config | `~/.config/apimgr/vidveil/` | Configuration files |
+| Config File | `~/.config/apimgr/vidveil/cli.yml` | CLI configuration |
+| Data | `~/.local/share/apimgr/vidveil/` | Persistent data |
+| Cache | `~/.cache/apimgr/vidveil/` | Temporary/cached data |
+| Logs | `~/.local/log/apimgr/vidveil/` | Log files |
+| Log File | `~/.local/log/apimgr/vidveil/cli.log` | CLI log output |
 
 #### Windows
 
 | Directory | Path | Purpose |
 |-----------|------|---------|
-| Config | `%APPDATA%\{projectorg}\{projectname}\` | Configuration files |
-| Config File | `%APPDATA%\{projectorg}\{projectname}\cli.yml` | CLI configuration |
-| Data | `%LOCALAPPDATA%\{projectorg}\{projectname}\data\` | Persistent data |
-| Cache | `%LOCALAPPDATA%\{projectorg}\{projectname}\cache\` | Temporary/cached data |
-| Logs | `%LOCALAPPDATA%\{projectorg}\{projectname}\log\` | Log files |
-| Log File | `%LOCALAPPDATA%\{projectorg}\{projectname}\log\cli.log` | CLI log output |
+| Config | `%APPDATA%\apimgr\vidveil\` | Configuration files |
+| Config File | `%APPDATA%\apimgr\vidveil\cli.yml` | CLI configuration |
+| Data | `%LOCALAPPDATA%\apimgr\vidveil\data\` | Persistent data |
+| Cache | `%LOCALAPPDATA%\apimgr\vidveil\cache\` | Temporary/cached data |
+| Logs | `%LOCALAPPDATA%\apimgr\vidveil\log\` | Log files |
+| Log File | `%LOCALAPPDATA%\apimgr\vidveil\log\cli.log` | CLI log output |
 
 #### Directory Usage
 
@@ -34294,9 +38826,9 @@ The CLI client uses the same user directory structure as the server in user mode
 | Logs | `cli.log`, debug logs | Optional |
 
 **NEVER use OS system directories:**
-- `/etc/{projectorg}/{projectname}/` (Linux system config)
-- `/var/lib/{projectorg}/{projectname}/` (Linux system data)
-- `/var/log/{projectorg}/{projectname}/` (Linux system logs)
+- `/etc/apimgr/vidveil/` (Linux system config)
+- `/var/lib/apimgr/vidveil/` (Linux system data)
+- `/var/log/apimgr/vidveil/` (Linux system logs)
 - `C:\ProgramData\` (Windows system data)
 - Any directory requiring elevated privileges
 
@@ -34308,10 +38840,10 @@ On every startup, the CLI MUST:
 
 1. **Ensure directories exist** (create if missing):
    ```
-   ├─ {config_dir}/           (~/.config/{projectorg}/{projectname}/)
-   ├─ {data_dir}/             (~/.local/share/{projectorg}/{projectname}/)
-   ├─ {cache_dir}/            (~/.cache/{projectorg}/{projectname}/)
-   └─ {log_dir}/              (~/.local/log/{projectorg}/{projectname}/)
+   ├─ {config_dir}/           (~/.config/apimgr/vidveil/)
+   ├─ {data_dir}/             (~/.local/share/apimgr/vidveil/)
+   ├─ {cache_dir}/            (~/.cache/apimgr/vidveil/)
+   └─ {log_dir}/              (~/.local/log/apimgr/vidveil/)
    ```
 
 2. **Set correct permissions** (user-only access):
@@ -34386,8 +38918,8 @@ import (
 )
 
 const (
-	projectOrg  = "{projectorg}"
-	projectName = "{projectname}"
+	projectOrg  = "apimgr"
+	projectName = "vidveil"
 )
 
 // ConfigDir returns the CLI config directory
@@ -34514,59 +39046,143 @@ func resolveYamlExtension(path string) string {
 **Example usage:**
 ```bash
 # Use different configs for different environments
-pastebin-cli --config dev list              # Uses ~/.config/.../dev.yml
-pastebin-cli --config staging list          # Uses ~/.config/.../staging.yml
-pastebin-cli --config ~/work/prod.yml list  # Uses absolute path
+vidveil-cli --config dev list              # Uses ~/.config/.../dev.yml
+vidveil-cli --config staging list          # Uses ~/.config/.../staging.yml
+vidveil-cli --config ~/work/prod.yml list  # Uses absolute path
 
 # Config profiles allow different servers/tokens without flags
 # dev.yml:   server: https://dev.example.com, token: dev-token
 # staging.yml: server: https://staging.example.com, token: staging-token
 ```
 
-### Config Structure
+### cli.yml Configuration (NON-NEGOTIABLE)
+
+**EVERYTHING must be configurable via cli.yml. Sane defaults match server where applicable.**
 
 ```yaml
-# CLI client configuration
+# ~/.config/apimgr/vidveil/cli.yml
+# CLI client configuration - ALL options with defaults
+
+# Server connection
 server:
-  # Server address (FQDN or IP:port)
-  # Default: official site if defined for project, otherwise empty
-  address: "https://api.example.com"
+  primary: ""                      # Server URL (empty = use {officialsite} or prompt)
+  cluster: []                      # Auto-discovered cluster nodes
+  timeout: 30                      # Request timeout in seconds (match server default)
+  retry: 3                         # Retry attempts on failure
+  retry_delay: 1                   # Seconds between retries
 
-  # API token for authenticated requests (optional)
-  token: ""
-
-  # Request timeout in seconds
-  timeout: 30
+# Authentication (required for multi-user, see PART 33/34)
+auth:
+  token: ""                        # API token (usr_xxx, see PART 11)
+  token_file: ""                   # Read token from file instead
+  # No default_context - default is ALWAYS token owner (user)
+  # Use --user {org} to switch to org context
 
 # Output preferences
 output:
-  # Default format: json, table, plain
-  format: table
+  format: table                    # Default: table, json, yaml, plain, csv
+  color: auto                      # auto, always, never (match terminal detection)
+  pager: auto                      # auto, always, never (use less/more for long output)
+  quiet: false                     # Suppress non-essential output
+  verbose: false                   # Extra output (same as --verbose)
 
-  # Colorize output (auto, always, never)
-  color: auto
-
-# TUI preferences
+# TUI preferences (if TUI supported)
 tui:
-  # Theme: dark (default) or light
-  theme: dark
+  enabled: true                    # Allow TUI mode (false = CLI-only)
+  theme: dark                      # dark, light, system (match server theme options)
+  mouse: true                      # Enable mouse support
+  unicode: true                    # Use unicode characters (false = ASCII only)
+
+# Logging
+logging:
+  level: warn                      # debug, info, warn, error (match server default)
+  file: ""                         # Log file path (empty = {log_dir}/cli.log)
+  max_size: 10                     # Max log file size in MB (match server default)
+  max_files: 5                     # Max log files to keep (match server default)
+
+# Cache
+cache:
+  enabled: true                    # Enable response caching
+  ttl: 300                         # Cache TTL in seconds (5 minutes)
+  max_size: 100                    # Max cache size in MB
+
+# Debug
+debug: false                       # Enable debug mode (same as --debug)
+
+# Project-specific defaults (flag defaults)
+defaults:
+  # These become defaults for project-specific flags
+  # Example for pastebin:
+  # public: unlisted               # --public default
+  # expire: 24h                    # --expire default
+  # syntax: auto                   # --syntax default
 ```
+
+**Config precedence (highest to lowest):**
+
+| Priority | Source | Example |
+|----------|--------|---------|
+| 1 | CLI flag | `--format json` |
+| 2 | Environment variable | `VIDVEIL_FORMAT=json` |
+| 3 | Config file | `output.format: json` |
+| 4 | Compiled default | `table` |
+
+**Environment variable mapping:**
+```bash
+# Pattern: VIDVEIL_{SECTION}_{KEY} or VIDVEIL_{KEY}
+VIDVEIL_SERVER_PRIMARY="https://example.com"
+VIDVEIL_SERVER_TIMEOUT=60
+VIDVEIL_TOKEN="usr_abc123..."
+VIDVEIL_OUTPUT_FORMAT="json"
+VIDVEIL_DEBUG=true
+```
+
+### CLI Cluster Failover (NON-NEGOTIABLE)
+
+**CLI client MUST support automatic cluster failover. Background node discovery keeps config current.**
+
+| Feature | Behavior |
+|---------|----------|
+| **Background discovery** | CLI calls `/api/v1/healthz` in background |
+| **Auto-update** | `server.cluster` updated from `cluster.nodes` in response |
+| **Failover** | If primary fails, try cluster nodes transparently |
+| **No user action** | Completely automatic, user sees no difference |
+
+**CLI Cluster Behavior:**
+```
+On every CLI command:
+1. Load cli.yml
+2. Try server.primary
+3. If fails → try server.cluster nodes (silent failover)
+4. Execute command on first available node
+5. Background: GET /api/v1/healthz
+6. Read cluster.primary and cluster.nodes from response
+7. Update server.primary and server.cluster in cli.yml (async, non-blocking)
+```
+
+**User Experience:**
+- User runs `mycli list` - just works
+- If primary is down, CLI silently uses cluster node
+- No error unless ALL nodes are unreachable
+- Config stays current automatically
 
 ### Server Address Resolution (NON-NEGOTIABLE)
 
 **Priority order (highest to lowest):**
 
 1. `--server` flag (if provided)
-2. `server.address` in `cli.yml` (if set)
-3. `{officialsite}` compiled default (if project has official site)
-4. Error with setup instructions
+2. `server.primary` in `cli.yml` (if set)
+3. `server.cluster` nodes (if primary fails)
+4. `{officialsite}` compiled default (if project has official site)
+5. Error with setup instructions
 
 **Behavior:**
 
 | Scenario | Result |
 |----------|--------|
-| `--server` flag used | Use that server, **save to cli.yml for future** |
-| `server.address` in cli.yml | Use configured server |
+| `--server` flag used | Use that server, **save to `server.primary` in cli.yml** |
+| `server.primary` in cli.yml | Use configured primary server |
+| Primary fails, cluster exists | Silently try cluster nodes |
 | Project has `{officialsite}` | Use official site as default |
 | No server available | Error with setup instructions |
 
@@ -34597,23 +39213,23 @@ func saveIfEmpty(current, newValue string, validate func(string) bool) (string, 
 **Error when no server configured (projects without official site):**
 
 ```bash
-$ pastebin-cli list
+$ vidveil-cli list
 Error: no server configured
 
 To configure a server, run:
-  pastebin-cli --server https://your-server.example.com list
+  vidveil-cli --server https://your-server.example.com list
 
 This will save the server address for future commands.
-Or edit ~/.config/{projectorg}/{projectname}/cli.yml directly.
+Or edit ~/.config/apimgr/vidveil/cli.yml directly.
 ```
 
 **Projects with official site show default in help:**
 
 ```bash
-$ pastebin-cli --help
+$ vidveil-cli --help
 ...
 Flags:
-      --server string    Server address (default: https://pastebin.example.com)
+      --server string    Server address (default: https://vidveil.example.com)
 ...
 ```
 
@@ -34640,62 +39256,314 @@ Enter choice [1-4]:
 
 ## Standard Flags (NON-NEGOTIABLE)
 
-**ALL CLI clients MUST support these flags:**
+### Universal Flags (ALL CLIs)
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--help` | `-h` | Show help (same format as server `--help`) |
-| `--version` | `-v` | Show version (same format as server `--version`) |
-| `--config` | | Config file to load (default: cli.yml) |
-| `--server` | | Server address (saves to config if not already set) |
-| `--token` | | API token (saves to config if not already set) |
-| `--output` | | Output format: json, table, plain |
-| `--no-color` | | Disable colored output |
-| `--timeout` | | Request timeout in seconds |
-| `--debug` | | Enable debug output |
+| `--help` | `-h` | Show help |
+| `--version` | `-v` | Show version |
 
-**Short Flag Rule:** Only `-h` (help) and `-v` (version) may have short flags. All other flags use long form only.
+**Only `-h` and `-v` have short forms. Everything else is long-form only.**
+
+### Boolean/Truthy-Falsey Handling (CLI & Agent)
+
+**CLI and Agent binaries use the SAME truthy/falsey parsing as the server.**
+
+See PART 5: Boolean Handling for the complete implementation.
+
+| Truthy | Falsey |
+|--------|--------|
+| `true`, `yes`, `on`, `1`, `enable`, `enabled` | `false`, `no`, `off`, `0`, `disable`, `disabled`, `none` |
+
+**Usage in flags:**
+```bash
+vidveil-cli --public                    # Boolean flag (true)
+vidveil-cli --public=yes                # Explicit truthy
+vidveil-cli --public=no                 # Explicit falsey
+vidveil-cli --expire=0                  # Falsey = no expiration
+vidveil-cli --expire=disabled           # Falsey = no expiration
+```
+
+**Config file (cli.yml):**
+```yaml
+server:
+  verify_ssl: yes        # Truthy
+  auto_update: false     # Falsey
+  notifications: enabled # Truthy
+```
+
+**ALL boolean inputs MUST use `config.ParseBool()` or `config.IsTruthy()` - NEVER `strconv.ParseBool()`.**
+
+### Common Optional Flags (if needed)
+
+| Flag | When to Include |
+|------|-----------------|
+| `--server` | Multi-server support (skip if single official site) |
+| `--token` | Authenticated operations |
+| `--config` | Multiple config profiles |
+| `--output` | Multiple output formats (json/table/plain) |
+| `--debug` | Debug mode |
+
+### Flag Argument Syntax (ALL Binaries)
+
+**All binaries accept BOTH `=` and space for flag values:**
+```
+--{flag}={value}    # Equals syntax
+--{flag} {value}    # Space syntax
+```
+
+**Examples:**
+```bash
+--public=yes   OR  --public yes
+--expire=24h   OR  --expire 24h
+--limit=10     OR  --limit 10
+--output=json  OR  --output json
+```
+
+### Project-Specific Flags (by service type)
+
+**Search/Query CLI (minimal flags):**
+```bash
+# Args ARE the search - no flags needed for basic use
+vidveil-cli golang tutorials           # Search
+vidveil-cli --limit 10 golang          # With limit
+vidveil-cli --output json golang       # JSON output
+```
+
+**Pastebin/Content CLI:**
+```bash
+# Smart detection handles input, flags for metadata
+vidveil-cli notes.txt                          # File (detected), uses defaults
+vidveil-cli notes.txt --public yes             # Public paste
+vidveil-cli notes.txt --public no              # Private (requires auth)
+vidveil-cli notes.txt --public unlisted        # Unlisted (default)
+vidveil-cli notes.txt --expire 24h             # Expiration
+vidveil-cli notes.txt --syntax python          # Syntax highlight
+vidveil-cli notes.txt --author "John"          # Author name
+```
+
+**API/Data CLI:**
+```bash
+# Resource-specific flags
+vidveil-cli get abc123                         # Get by ID
+vidveil-cli list --limit 20 --offset 0         # Pagination
+vidveil-cli delete abc123 --force              # Dangerous ops need confirm
+```
+
+### Flag Defaults from Config (NON-NEGOTIABLE)
+
+**Every flag MUST have a corresponding config setting to change its default.**
+
+```yaml
+# cli.yml - defaults for flags
+defaults:
+  public: unlisted      # --public default (yes, no, unlisted)
+  expire: 24h           # --expire default
+  syntax: auto          # --syntax default
+  output: table         # --output default (json, table, plain)
+  limit: 20             # --limit default
+```
+
+**Precedence (highest to lowest):**
+1. Command-line flag (`--public yes`)
+2. Environment variable (`VIDVEIL_PUBLIC=yes`)
+3. Config file (`defaults.public: yes`)
+4. Hardcoded default
+
+### Flag Guidelines
+
+| Rule | Description |
+|------|-------------|
+| **Minimize flags** | Smart detection > explicit flags |
+| **Config defaults** | Every flag has config equivalent |
+| **No redundant flags** | If detectable, don't require flag |
+| **Value flags** | `--public unlisted` not `--unlisted` |
+| **Confirmation** | Destructive ops: `--force` or interactive confirm |
+
+### Shell Completions (Built-in, NON-NEGOTIABLE)
+
+**ALL binaries (server, agent, client) MUST support shell completions. Built into binary - no separate files.**
+
+| Flag | Description |
+|------|-------------|
+| `--shell completions [SHELL]` | Print completion script to stdout |
+| `--shell init [SHELL]` | Alias: prints eval-wrapped completions command |
+
+**`[SHELL]` is OPTIONAL - both commands auto-detect from `$SHELL` env var if omitted.**
+
+**`--shell init` is just a convenience wrapper:**
+```bash
+# These are equivalent:
+eval "$(vidveil --shell init)"
+eval "$(vidveil --shell init bash)"      # if $SHELL=/bin/bash
+
+# init outputs the eval command, completions outputs the script:
+vidveil --shell init        # → source <(vidveil --shell completions bash)
+vidveil --shell completions # → (actual completion script)
+```
+
+**Supported shells:**
+
+| Shell | Completion Support | Init Support |
+|-------|-------------------|--------------|
+| `bash` | Full | `source <(...)` |
+| `zsh` | Full | `source <(...)` |
+| `fish` | Full | `... \| source` |
+| `sh` | Basic (POSIX) | `eval $(...)` |
+| `dash` | Basic (POSIX) | `eval $(...)` |
+| `ksh` | Basic | `eval $(...)` |
+| `powershell` | Full | `Invoke-Expression` |
+| `pwsh` | Full (PowerShell Core) | `Invoke-Expression` |
+
+**Behavior:**
+- `--shell completions` prints to stdout - user redirects with `> {file}`
+- `--shell init` prints eval-ready command for shell rc file
+- Auto-detect extracts shell name from `$SHELL` path (e.g., `/bin/bash` → `bash`)
+
+**Usage examples:**
+```bash
+# Explicit shell specification
+vidveil --shell completions bash > ~/.local/share/bash-completion/completions/vidveil
+vidveil-cli --shell completions zsh > ~/.zsh/completions/_vidveil-cli
+vidveil-agent --shell completions fish > ~/.config/fish/completions/vidveil-agent.fish
+vidveil --shell completions powershell > ~/Documents/PowerShell/completions/vidveil.ps1
+
+# Auto-detect shell (omit SHELL argument)
+vidveil --shell completions > ~/completions/vidveil
+vidveil-cli --shell init                    # auto-detect, print init
+eval "$(vidveil --shell init)"              # auto-detect in eval
+
+# Specific shell init
+eval "$(vidveil-cli --shell init bash)"
+eval "$(vidveil-agent --shell init zsh)"
+vidveil --shell init fish | source
+```
+
+**Add to shell rc file:**
+```bash
+# ~/.bashrc, ~/.zshrc, ~/.config/fish/config.fish, etc.
+eval "$(vidveil --shell init)"        # server (auto-detect)
+eval "$(vidveil-cli --shell init)"    # client (auto-detect)
+eval "$(vidveil-agent --shell init)"  # agent (auto-detect)
+```
+
+**Why built-in (not separate files):**
+
+| Advantage | Description |
+|-----------|-------------|
+| **Always current** | Completions match binary version exactly |
+| **Rename-friendly** | Works even if user renames binary |
+| **No sync issues** | Can't have outdated completion files |
+| **Self-contained** | No extra files to distribute/install |
+
+**Implementation:**
+```go
+func handleShellCommand(args []string) {
+    if len(args) < 1 {
+        fmt.Fprintln(os.Stderr, "Usage: --shell [completions|init] [SHELL]")
+        os.Exit(1)
+    }
+
+    cmd := args[0]
+    shell := ""
+    if len(args) > 1 {
+        shell = args[1]
+    } else {
+        shell = detectShell()  // auto-detect from $SHELL
+    }
+
+    binaryName := filepath.Base(os.Args[0])
+
+    switch cmd {
+    case "completions":
+        printCompletions(shell, binaryName)
+    case "init":
+        printInit(shell, binaryName)
+    }
+}
+
+func detectShell() string {
+    shellPath := os.Getenv("SHELL")
+    if shellPath == "" {
+        return "bash"  // default fallback
+    }
+    return filepath.Base(shellPath)  // /bin/zsh → zsh
+}
+
+func printCompletions(shell, binaryName string) {
+    switch shell {
+    case "bash":
+        fmt.Print(generateBashCompletions(binaryName))
+    case "zsh":
+        fmt.Print(generateZshCompletions(binaryName))
+    case "fish":
+        fmt.Print(generateFishCompletions(binaryName))
+    case "sh", "dash", "ksh":
+        fmt.Print(generatePosixCompletions(binaryName))
+    case "powershell", "pwsh":
+        fmt.Print(generatePowershellCompletions(binaryName))
+    default:
+        fmt.Fprintf(os.Stderr, "Unsupported shell: %s\n", shell)
+        os.Exit(1)
+    }
+}
+
+func printInit(shell, binaryName string) {
+    switch shell {
+    case "bash":
+        fmt.Printf("source <(%s --shell completions bash)\n", binaryName)
+    case "zsh":
+        fmt.Printf("source <(%s --shell completions zsh)\n", binaryName)
+    case "fish":
+        fmt.Printf("%s --shell completions fish | source\n", binaryName)
+    case "sh", "dash", "ksh":
+        fmt.Printf("eval \"$(%s --shell completions %s)\"\n", binaryName, shell)
+    case "powershell", "pwsh":
+        fmt.Printf("Invoke-Expression (& %s --shell completions powershell)\n", binaryName)
+    default:
+        fmt.Fprintf(os.Stderr, "Unsupported shell: %s\n", shell)
+        os.Exit(1)
+    }
+}
+```
 
 ### --help Output
 
-**Note:** Examples show default name `pastebin-cli`. Actual output uses `filepath.Base(os.Args[0])` - whatever the binary is named.
-
 ```bash
-$ pastebin-cli --help
-pastebin-cli v1.2.3 - CLI client for Pastebin API
+$ vidveil-cli --help
+vidveil-cli {projectversion} - CLI for vidveil
 
 Usage:
-  pastebin-cli [command] [flags]
-
-Commands:
-  create      Create a new paste
-  get         Get paste by ID
-  list        List pastes
-  delete      Delete a paste
+  vidveil-cli [args] [flags]
+  vidveil-cli                    # TUI mode (no args)
 
 Flags:
-      --config string    Config file to load (default: cli.yml)
-      --server string    Server address (default: https://pastebin.example.com)
-      --token string     API token for authentication
-      --output string    Output format: json, table, plain (default: table)
-      --no-color         Disable colored output
-      --timeout int      Request timeout in seconds (default: 30)
-      --debug            Enable debug output
-  -h, --help             Show help
-  -v, --version          Show version
+  -h, --help                        Show help
+  -v, --version                     Show version
+      --shell completions [SHELL]   Print shell completions (auto-detect if SHELL omitted)
+      --shell init [SHELL]          Print shell init command (auto-detect if SHELL omitted)
 
-Note: Run without arguments to launch interactive TUI mode.
+      --server URL                  Server URL (default: from config)
+      --token TOKEN                 API token for authentication
+      --token-file FILE             Read token from file
+      --user NAME                   Target user or org (auto-detect, @user, +org)
+      --config NAME                 Config profile name (default: cli.yml)
+      --debug                       Debug output
 
-Use "pastebin-cli [command] --help" for more information about a command.
+  {project-specific flags listed here}
+
+Shells: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
+
+Run without arguments for interactive TUI mode.
 ```
 
 **If user renames binary:**
 ```bash
 $ mypaste --help
-mypaste v1.2.3 - CLI client for Pastebin API   # Shows actual name
+mypaste {projectversion} - CLI client for vidveil API   # Shows actual binary name
 
 Usage:
-  mypaste [command] [flags]                     # Shows actual name
+  mypaste [command] [flags]                     # Shows actual binary name
 ...
 ```
 
@@ -34704,18 +39572,18 @@ Usage:
 **MUST match server `--version` format. Shows ACTUAL binary name:**
 
 ```bash
-$ pastebin-cli --version
-pastebin-cli v1.2.3 (abc1234) built 2025-01-15
+$ vidveil-cli --version
+vidveil-cli {projectversion} ({COMMIT_SHA}) built {BUILD_DATE}
 
 # If renamed:
 $ mypaste --version
-mypaste v1.2.3 (abc1234) built 2025-01-15   # Shows actual name
+mypaste {projectversion} ({COMMIT_SHA}) built {BUILD_DATE}   # Shows actual name
 ```
 
 Same format as server:
 ```bash
 $ pastebin --version
-pastebin v1.2.3 (abc1234) built 2025-01-15
+pastebin {projectversion} ({COMMIT_SHA}) built {BUILD_DATE}
 ```
 
 ## Commands
@@ -34746,11 +39614,11 @@ Example commands (project-dependent):
 **Token Storage:**
 - Stored in `cli.yml` under `server.token`
 - `--token` flag saves to cli.yml only if not already set (same as `--server`)
-- Environment variable: `{PROJECTNAME}_CLI_TOKEN` (does NOT save to config)
+- Environment variable: `VIDVEIL_CLI_TOKEN` (does NOT save to config)
 
 **Priority (highest to lowest):**
 1. `--token` flag (saves only if config empty/invalid)
-2. `{PROJECTNAME}_CLI_TOKEN` environment variable
+2. `VIDVEIL_CLI_TOKEN` environment variable
 3. `server.token` in cli.yml
 
 ## HTTP Client Identity (NON-NEGOTIABLE)
@@ -34776,18 +39644,16 @@ Example commands (project-dependent):
 ### User-Agent Format
 
 ```
-{projectname}-cli/{version}
+vidveil-cli/{version}
 ```
 
-**Examples:**
+**Examples (User-Agent uses compiled project name, not binary name):**
 
 | Binary Name | User-Agent Header |
 |-------------|-------------------|
-| `pastebin-cli` | `pastebin-cli/1.2.3` |
-| `mypaste` (renamed) | `pastebin-cli/1.2.3` |
-| `pb` (renamed) | `pastebin-cli/1.2.3` |
-| `airports-cli` | `airports-cli/1.2.3` |
-| `apt` (renamed) | `airports-cli/1.2.3` |
+| `vidveil-cli` | `vidveil-cli/1.2.3` |
+| `mypaste` (renamed by user) | `vidveil-cli/1.2.3` |
+| `pb` (renamed by user) | `vidveil-cli/1.2.3` |
 
 ### Implementation
 
@@ -34814,7 +39680,7 @@ func GetBinaryName() string {
 
 **Build command:**
 ```bash
-go build -ldflags "-X main.ProjectName=pastebin -X main.Version=1.2.3" -o pastebin-cli ./src/client
+go build -ldflags "-X main.ProjectName=pastebin -X main.Version=1.2.3" -o vidveil-cli ./src/client
 ```
 
 ### Server-Side Client Detection
@@ -34839,7 +39705,7 @@ func getClientType(r *http.Request) string {
 ### JSON
 
 ```bash
-$ pastebin-cli get abc123 --output json
+$ vidveil-cli get abc123 --output json
 {
   "id": "abc123",
   "content": "Hello world example code snippet",
@@ -34851,7 +39717,7 @@ $ pastebin-cli get abc123 --output json
 ### Table
 
 ```bash
-$ pastebin-cli list --output table
+$ vidveil-cli list --output table
 ┌──────────┬─────────────────────────────────────────────┬──────────┬─────────────┐
 │ ID       │ Content                                     │ Language │ Expires     │
 ├──────────┼─────────────────────────────────────────────┼──────────┼─────────────┤
@@ -34864,29 +39730,78 @@ $ pastebin-cli list --output table
 ### Plain
 
 ```bash
-$ pastebin-cli get abc123 --output plain
+$ vidveil-cli get abc123 --output plain
 Hello world example code snippet
 ```
 
 ## Project-Specific Commands
 
-Each project defines its own commands based on its API:
+Each project defines its own commands based on its API.
 
+### Smart Argument Detection (NON-NEGOTIABLE)
+
+**Minimize flags. Detect intent from arguments.**
+
+**Search/Query Services:**
 ```bash
-# Pastebin project
-pastebin-cli create --file notes.txt --expire 24h
-pastebin-cli get abc123
-pastebin-cli list --limit 10
+# Bare args = search term (no --query flag needed)
+vidveil-cli golang tutorials        # Search for "golang tutorials"
+vidveil-cli "exact phrase"          # Quoted = exact match
+vidveil-cli --limit 5 golang        # Flags before search term OK
+```
 
-# Airports project
-airports-cli lookup JFK
-airports-cli search --city "New York"
-airports-cli nearby --lat 40.7128 --lon -74.0060
+**Content/Paste Services:**
+```bash
+# Detection order: stdin → file → directory → text
+echo "hello" | vidveil-cli          # stdin detected → paste stdin
+vidveil-cli notes.txt               # File exists → paste file content
+vidveil-cli /path/to/dir            # Directory → error or list
+vidveil-cli "some text here"        # Not file → paste as text
+```
 
-# Quotes project
-quotesvc-cli random
-quotesvc-cli random --category motivation
-quotesvc-cli search --author "Einstein"
+**Detection Logic:**
+```go
+func detectInput(args []string) (content string, source string) {
+    // 1. Check stdin (pipe or redirect)
+    if !term.IsTerminal(int(os.Stdin.Fd())) {
+        data, _ := io.ReadAll(os.Stdin)
+        return string(data), "stdin"
+    }
+
+    // 2. If arg provided, check what it is
+    if len(args) > 0 {
+        arg := args[0]
+
+        // Is it a file?
+        if info, err := os.Stat(arg); err == nil {
+            if info.IsDir() {
+                return "", "error:directory"  // or list files
+            }
+            data, _ := os.ReadFile(arg)
+            return string(data), "file:" + arg
+        }
+
+        // Not a file = treat as text
+        return strings.Join(args, " "), "text"
+    }
+
+    return "", "error:no-input"
+}
+```
+
+**Result: Cleaner commands:**
+
+| Instead of | Use |
+|------------|-----|
+| `cli create --file notes.txt` | `cli notes.txt` |
+| `cli create --text "hello"` | `cli "hello"` |
+| `cat file \| cli create --stdin` | `cat file \| cli` |
+| `cli search --query "golang"` | `cli golang` |
+
+**Explicit flags still work (override detection):**
+```bash
+vidveil-cli --file notes.txt        # Force file mode
+vidveil-cli --text "notes.txt"      # Force text mode (not file)
 ```
 
 ## Build Integration
@@ -34896,26 +39811,26 @@ quotesvc-cli search --author "Einstein"
 ```makefile
 # Build both server and CLI (if src/client exists)
 build:
-	CGO_ENABLED=0 go build -o binaries/{projectname} ./src
+	CGO_ENABLED=0 go build -o binaries/vidveil ./src
 	@if [ -d "src/client" ]; then \
-		CGO_ENABLED=0 go build -o binaries/{projectname}-cli ./src/client; \
+		CGO_ENABLED=0 go build -o binaries/vidveil-cli ./src/client; \
 	fi
 
 # Build CLI only
 build-cli:
-	CGO_ENABLED=0 go build -o binaries/{projectname}-cli ./src/client
+	CGO_ENABLED=0 go build -o binaries/vidveil-cli ./src/client
 
 # Release builds (8 platforms)
 release:
 	# Server binaries
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/{projectname}-linux-amd64 ./src
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/{projectname}-linux-arm64 ./src
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/vidveil-linux-amd64 ./src
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/vidveil-linux-arm64 ./src
 	# ... (other platforms)
 
 	# CLI binaries (if src/client exists)
 	@if [ -d "src/client" ]; then \
-		GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/{projectname}-linux-amd64-cli ./src/client; \
-		GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/{projectname}-linux-arm64-cli ./src/client; \
+		GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/vidveil-cli-linux-amd64 ./src/client; \
+		GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/vidveil-cli-linux-arm64 ./src/client; \
 	fi
 	# ... (other platforms)
 ```
@@ -34923,7 +39838,7 @@ release:
 ### Directory Structure
 
 ```
-{projectname}/
+vidveil/
 ├── src/                    # Server application
 │   ├── main.go
 │   ├── config/
@@ -34978,6 +39893,140 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 | **Handle resize** | Respond to SIGWINCH, reflow content |
 | **Minimum size** | Graceful degradation below 80x24 |
 | **Responsive layout** | Adapt UI to available space |
+| **Compact mode** | Auto-enable for small screens |
+
+### Terminal Size Breakpoints (NON-NEGOTIABLE)
+
+**Phone SSH and small terminal support is required. Many users work remotely via phone.**
+
+| Breakpoint | Columns | Rows | Mode | Behavior |
+|------------|---------|------|------|----------|
+| **Large** | ≥120 | ≥40 | Full | All features, full ASCII art, sidebars |
+| **Standard** | 80-119 | 24-39 | Normal | Standard layout, simplified art |
+| **Compact** | 60-79 | 16-23 | Compact | No ASCII art, abbreviated headers |
+| **Minimal** | 40-59 | 10-15 | Minimal | Single column, no borders, text only |
+| **Micro** | <40 | <10 | Micro | Critical info only, scrollable |
+
+```go
+// src/common/terminal/size.go
+package terminal
+
+import (
+    "os"
+    "golang.org/x/term"
+)
+
+type SizeMode int
+
+const (
+    SizeModeMicro   SizeMode = iota // <40 cols or <10 rows
+    SizeModeMinimal                  // 40-59 cols or 10-15 rows
+    SizeModeCompact                  // 60-79 cols or 16-23 rows
+    SizeModeNormal                   // 80-119 cols and 24-39 rows
+    SizeModeLarge                    // ≥120 cols and ≥40 rows
+)
+
+func GetTerminalSize() (width, height int, mode SizeMode) {
+    width, height, _ = term.GetSize(int(os.Stdout.Fd()))
+
+    // Default if detection fails
+    if width == 0 {
+        width = 80
+    }
+    if height == 0 {
+        height = 24
+    }
+
+    // Determine mode based on SMALLEST dimension constraint
+    switch {
+    case width < 40 || height < 10:
+        mode = SizeModeMicro
+    case width < 60 || height < 16:
+        mode = SizeModeMinimal
+    case width < 80 || height < 24:
+        mode = SizeModeCompact
+    case width < 120 || height < 40:
+        mode = SizeModeNormal
+    default:
+        mode = SizeModeLarge
+    }
+
+    return
+}
+
+func (m SizeMode) String() string {
+    return [...]string{"micro", "minimal", "compact", "normal", "large"}[m]
+}
+
+func (m SizeMode) ShowASCIIArt() bool {
+    return m >= SizeModeNormal
+}
+
+func (m SizeMode) ShowBorders() bool {
+    return m >= SizeModeCompact
+}
+
+func (m SizeMode) ShowSidebar() bool {
+    return m >= SizeModeLarge
+}
+
+func (m SizeMode) MaxTableColumns() int {
+    switch m {
+    case SizeModeMicro:
+        return 2
+    case SizeModeMinimal:
+        return 3
+    case SizeModeCompact:
+        return 4
+    case SizeModeNormal:
+        return 6
+    default:
+        return 10
+    }
+}
+```
+
+### Responsive UI Patterns
+
+**Tables:**
+```go
+// Truncate columns based on terminal width
+func (m Model) renderTable() string {
+    cols := m.sizeMode.MaxTableColumns()
+
+    // Always show: ID, Name (or primary identifier)
+    // Conditionally show: other columns based on space
+
+    switch m.sizeMode {
+    case terminal.SizeModeMicro:
+        // ID only, vertically scrollable
+        return m.renderVerticalList()
+    case terminal.SizeModeMinimal:
+        // ID + Name, no borders
+        return m.renderSimpleTable(2)
+    case terminal.SizeModeCompact:
+        // ID + Name + Status, light borders
+        return m.renderCompactTable(3)
+    default:
+        // Full table with all columns
+        return m.renderFullTable()
+    }
+}
+```
+
+**Help Text:**
+```go
+func (m Model) renderHelp() string {
+    switch m.sizeMode {
+    case terminal.SizeModeMicro, terminal.SizeModeMinimal:
+        return "?:help q:quit"
+    case terminal.SizeModeCompact:
+        return "↑↓:nav │ enter:select │ ?:help │ q:quit"
+    default:
+        return "↑/↓: Navigate │ Enter: Select │ /: Search │ ?: Help │ q: Quit"
+    }
+}
+```
 
 ### Minimum Features
 
@@ -35062,6 +40111,118 @@ tui:
   theme: dark    # dark (default) or light
 ```
 
+### TUI Implementation Guidance (NON-NEGOTIABLE)
+
+**Small terminal support is NOT optional. Phone SSH is a primary use case.**
+
+**Viewport Management:**
+```go
+// Always calculate usable space
+func (m Model) calculateLayout() {
+    // Reserve space for chrome
+    headerHeight := 1
+    footerHeight := 1
+    borderHeight := 0
+
+    if m.sizeMode >= terminal.SizeModeCompact {
+        borderHeight = 2 // top + bottom
+    }
+
+    m.viewportHeight = m.height - headerHeight - footerHeight - borderHeight
+    m.viewportWidth = m.width
+
+    if m.sizeMode >= terminal.SizeModeLarge && m.showSidebar {
+        m.viewportWidth = m.width - m.sidebarWidth
+    }
+
+    // Ensure minimum usable space
+    if m.viewportHeight < 3 {
+        m.viewportHeight = 3
+    }
+    if m.viewportWidth < 20 {
+        m.viewportWidth = 20
+    }
+}
+```
+
+**Content Truncation:**
+```go
+// Truncate text to fit terminal width
+func truncate(s string, maxWidth int) string {
+    if len(s) <= maxWidth {
+        return s
+    }
+    if maxWidth <= 3 {
+        return s[:maxWidth]
+    }
+    return s[:maxWidth-3] + "..."
+}
+
+// Truncate with ellipsis in middle (for paths/URLs)
+func truncateMiddle(s string, maxWidth int) string {
+    if len(s) <= maxWidth {
+        return s
+    }
+    if maxWidth <= 5 {
+        return s[:maxWidth]
+    }
+    half := (maxWidth - 3) / 2
+    return s[:half] + "..." + s[len(s)-half:]
+}
+```
+
+**Scrolling for Small Screens:**
+```go
+// Ensure scrolling works on tiny terminals
+func (m Model) ensureVisible(index int) {
+    if index < m.scrollOffset {
+        m.scrollOffset = index
+    }
+    if index >= m.scrollOffset + m.viewportHeight {
+        m.scrollOffset = index - m.viewportHeight + 1
+    }
+}
+
+// Page size based on viewport
+func (m Model) pageSize() int {
+    ps := m.viewportHeight - 2
+    if ps < 1 {
+        ps = 1
+    }
+    return ps
+}
+```
+
+**Phone-Friendly Key Bindings:**
+```go
+// Single-key bindings work better on mobile keyboards
+var keyBindings = map[string]string{
+    "up":     "k",    // vim-style, single key
+    "down":   "j",
+    "left":   "h",
+    "right":  "l",
+    "select": "enter",
+    "back":   "escape",  // Also 'b' as alternative
+    "quit":   "q",
+    "help":   "?",
+    "search": "/",
+    "top":    "g",       // Go to top
+    "bottom": "G",       // Go to bottom
+}
+```
+
+**Testing Small Terminals:**
+```bash
+# Test with different terminal sizes
+resize -s 10 40   # Phone portrait (micro)
+resize -s 16 60   # Phone landscape (minimal)
+resize -s 24 80   # Standard terminal
+resize -s 40 120  # Large monitor
+
+# Or use stty
+stty rows 10 cols 40
+```
+
 ## Error Handling
 
 ### Exit Codes
@@ -35080,20 +40241,20 @@ tui:
 
 ```bash
 # Connection error
-$ pastebin-cli list
-Error: cannot connect to server at https://pastebin.example.com
+$ vidveil-cli list
+Error: cannot connect to server at https://vidveil.example.com
   Check your network connection and server address.
   Use --server to specify a different server.
 
 # Auth error
-$ pastebin-cli admin users --token invalid
+$ vidveil-cli admin users --token invalid
 Error: authentication failed
   Your API token is invalid or expired.
   Update server.token in cli.yml or use --token flag.
 
 # Not found
-$ pastebin-cli get abc123
-Error: paste not found: abc123
+$ vidveil-cli get abc123
+Error: resource not found: abc123
 ```
 
 ## --version Extended Output
@@ -35101,34 +40262,736 @@ Error: paste not found: abc123
 When server is reachable, `--version` can show extended info:
 
 ```bash
-$ pastebin-cli --version
-pastebin-cli v1.2.3 (abc1234) built 2025-01-15
+$ vidveil-cli --version
+vidveil-cli {projectversion} ({COMMIT_SHA}) built {BUILD_DATE}
 
-Server: https://pastebin.example.com
-Server Version: v1.2.3 (compatible)
+Server: https://vidveil.example.com
+Server Version: {projectversion} (compatible)
 
 Build Info:
-  Go: go1.21.0
-  OS/Arch: linux/amd64
+  Go: {GO_VERSION}
+  OS/Arch: {GOOS}/{GOARCH}
 ```
 
 **Version compatibility check:** CLI queries server `/api/v1/version` and warns if versions differ significantly.
 
 ## Determining If Project Needs CLI
 
-**Add CLI client to project if ANY of these apply:**
+**Key Question: Would users benefit from terminal-based access to your service?**
 
-| Criterion | Example |
-|-----------|---------|
-| Data lookup/search use case | airports, zipcodes, countries |
-| Power users benefit from terminal access | developers, sysadmins |
-| Scripting/automation valuable | CI/CD integration, batch operations |
-| Offline-friendly interactions | cached data, local operations |
+### When CLI is Needed vs Not Needed
 
-**Skip CLI client if:**
-- Project is purely web-based with no terminal use case
-- API is too simple (single endpoint)
-- Target audience doesn't use terminal
+| Scenario | CLI Needed? | Why |
+|----------|-------------|-----|
+| Developers querying API data | ✅ YES | `mycli search term` faster than browser |
+| Sysadmins managing servers | ✅ YES | Terminal is their native environment |
+| CI/CD pipeline integration | ✅ YES | Scripts need programmatic access |
+| Bulk data operations | ✅ YES | `mycli import file.csv` beats web forms |
+| Simple consumer web app | ❌ NO | Users expect browser, not terminal |
+| Photo sharing for families | ❌ NO | Grandma won't use CLI |
+| Single-purpose widget | ❌ NO | Too simple, just use curl |
+| Mobile-first application | ❌ NO | No terminal on phones |
+
+### Project Examples: CLI vs No CLI
+
+**Projects that DO benefit from CLI:**
+
+| Project Type | Example Names | CLI Use Case |
+|--------------|---------------|--------------|
+| **Data Lookup APIs** | IP geolocation, airport codes, country data | `mycli lookup JFK` quick terminal queries |
+| **Developer Tools** | GitHub CLI, Vercel CLI, Netlify CLI | Developers live in terminal |
+| **DevOps/Infra** | kubectl, docker, terraform | Automation and scripting |
+| **Pastebin/Snippet** | GitHub Gist, ix.io, termbin | `cat file \| mycli paste` |
+| **Git Hosting** | Gitea, Forgejo (via gh/glab) | PR/issue management from terminal |
+| **Password Manager** | Bitwarden CLI, 1Password CLI | Secure scripted access |
+| **Note Taking** | Standard Notes CLI, Joplin CLI | Quick capture from terminal |
+| **URL Shortener** | YOURLS, Shlink | `mycli shorten https://...` |
+| **Bookmark Manager** | Linkding, Shaarli | Batch import/export |
+| **Time Tracking** | Toggl CLI, Clockify CLI | `mycli start "task"` without context switch |
+
+**Projects that do NOT need CLI:**
+
+| Project Type | Example Names | Why No CLI |
+|--------------|---------------|------------|
+| **Photo Sharing** | Immich, Photoprism, Google Photos | Visual content needs visual interface |
+| **Social Media** | Mastodon, Pixelfed | Social experience is visual |
+| **E-commerce** | WooCommerce, Shopify | Shopping is visual/browsing |
+| **Video Streaming** | Jellyfin, Plex | Watching video requires GUI |
+| **Dating/Social Apps** | Any social app | Human interaction, not automation |
+| **Games** | Any game | Games need GUI |
+| **CMS/Blogs** | WordPress, Ghost | Content creation is visual |
+| **Forum/Community** | Discourse, Flarum | Discussion is web-based |
+| **Calendar/Scheduling** | Calendly, Cal.com | Visual scheduling |
+| **Survey/Forms** | Typeform, Google Forms | Form filling is web-native |
+
+### CLI Decision Tree
+
+```
+Is your target user comfortable in a terminal?
+│
+├─► YES (developers, sysadmins, power users)
+│   │
+│   ├─► Would terminal access save them time?
+│   │   └─► YES → CLI beneficial
+│   │
+│   ├─► Would scripting/automation be valuable?
+│   │   └─► YES → CLI beneficial
+│   │
+│   └─► Is data lookup/search a common use case?
+│       └─► YES → CLI beneficial
+│
+└─► NO (general consumers, non-technical users)
+    └─► Skip CLI - focus on web/mobile UI
+```
+
+### CLI vs Just Using curl
+
+**When CLI adds value over raw curl:**
+
+| Feature | curl | Dedicated CLI |
+|---------|------|---------------|
+| Authentication | Manual header management | `mycli login` saves token |
+| Output formatting | Raw JSON | Pretty tables, colors |
+| Pagination | Manual URL building | `mycli list --page 2` |
+| Complex operations | Multi-step scripts | Single commands |
+| Offline caching | Not possible | Local cache support |
+| Tab completion | None | Command/arg completion |
+| Interactive mode | None | TUI for browsing |
+
+**If users would just use curl anyway, CLI is worthwhile.**
+**If users would never touch terminal, skip CLI.**
+
+### Quick Decision
+
+| If your users are... | CLI? |
+|---------------------|------|
+| Developers | ✅ Yes |
+| Sysadmins/DevOps | ✅ Yes |
+| Technical power users | ✅ Yes |
+| General consumers | ❌ No |
+| Non-technical business users | ❌ No |
+| Mobile-only users | ❌ No |
+
+---
+
+## Agent Binary (OPTIONAL - NON-NEGOTIABLE WHEN IMPLEMENTED)
+
+**Agent is OPTIONAL and only needed for very specific project types.** Most projects do NOT need an agent.
+
+### When Agent is Needed vs Not Needed
+
+**Key Question: Does the server need to reach INTO remote hosts to collect data or execute commands?**
+
+| Scenario | Agent Needed? | Why |
+|----------|---------------|-----|
+| Server collects CPU/RAM/disk from 50 hosts | ✅ YES | Agent runs on each host, pushes metrics |
+| Users upload files via web form | ❌ NO | User initiates, server receives |
+| API serves random quotes | ❌ NO | Server has all data locally |
+| Execute shell commands on remote servers | ✅ YES | Agent receives commands, executes locally |
+| CI/CD pipeline runner on build machines | ✅ YES | Agent pulls jobs, runs builds |
+| Pastebin with user submissions | ❌ NO | Pull-based, users push data |
+| Centralized log aggregation | ✅ YES | Agent tails local logs, ships to server |
+| Weather API (fetches from external sources) | ❌ NO | Server fetches, no host access needed |
+| Backup orchestration across servers | ✅ YES | Agent runs backup commands locally |
+| Git hosting (Gitea, Forgejo) | ❌ NO | Users push/pull via git protocol |
+
+### Project Examples: Agent vs No Agent
+
+**Projects that DO need an agent:**
+
+| Project Type | Example Names | What Agent Does |
+|--------------|---------------|-----------------|
+| **System Monitoring** | Zabbix, Nagios, Beszel, Netdata | Collects CPU, RAM, disk, network stats from each host |
+| **Remote Desktop/Shell** | MeshCentral, RustDesk, Teleport | Provides remote access tunnel from host |
+| **Log Management** | Fluentd, Filebeat, Vector, Loki | Tails log files, ships to central server |
+| **CI/CD Runners** | GitLab Runner, GitHub Actions Runner, Drone | Pulls jobs from server, executes builds |
+| **Backup Agents** | Restic, Borg, Velero, Bacula | Runs backup commands, ships data to server |
+| **Config Management** | Puppet Agent, Salt Minion, CFEngine | Pulls and applies configuration from server |
+| **Security Scanning** | OSSEC, Wazuh, Falco, Lynis | Monitors files, processes, runs audits |
+| **Container Orchestration** | Kubernetes Kubelet, Nomad Client | Runs containers as directed by control plane |
+| **Network Monitoring** | Prometheus Node Exporter, Telegraf | Exposes host metrics for scraping |
+| **Update Management** | Landscape Client, WSUS Client | Checks for and applies updates |
+
+**Projects that do NOT need an agent:**
+
+| Project Type | Example Names | Why No Agent |
+|--------------|---------------|--------------|
+| **Content APIs** | Jokes API, Quotes API, Facts API | Data is on server, clients just fetch |
+| **Pastebin/URL Shortener** | Hastebin, YOURLS, Shlink | Users push content, server stores it |
+| **Git Hosting** | Gitea, Forgejo, GitLab | Git protocol handles push/pull |
+| **Image Hosting** | Immich, Photoprism, Piwigo | Users upload, server stores/serves |
+| **Chat/Forum** | Mattermost, Discourse, Flarum | Users connect via web/API |
+| **Wiki/Docs** | Wiki.js, BookStack, Outline | Users edit via web interface |
+| **File Sharing** | Nextcloud, Seafile, FileBrowser | Web/WebDAV uploads, no host access |
+| **Media Server** | Jellyfin, Plex, Navidrome | Serves content from local storage |
+| **Auth/SSO** | Authentik, Authelia, Keycloak | Applications connect to auth server |
+| **Status Pages** | Uptime Kuma, Gatus, Cachet | Server checks endpoints (pull-based) |
+
+### Agent Architecture Decision Tree
+
+```
+Does your server need to:
+│
+├─► Collect data FROM remote hosts (metrics, logs, files)?
+│   └─► YES → Agent needed (runs on each host, pushes to server)
+│
+├─► Execute commands ON remote hosts (shell, backup, updates)?
+│   └─► YES → Agent needed (receives commands from server)
+│
+├─► Run jobs/tasks ON remote machines (builds, scans)?
+│   └─► YES → Agent needed (pulls jobs, executes locally)
+│
+├─► Provide remote access TO hosts (shell, desktop, file transfer)?
+│   └─► YES → Agent needed (establishes reverse tunnel)
+│
+└─► Just serve an API/web interface that clients call?
+    └─► NO agent - users/clients connect TO your server
+```
+
+### Agent vs Webhook/API Callback
+
+**Don't confuse agents with webhooks:**
+
+| Mechanism | Direction | Use Case |
+|-----------|-----------|----------|
+| **Agent** | Host → Server (persistent) | Continuous metrics, always-on remote access |
+| **Webhook** | External → Server (triggered) | Event notifications, CI triggers |
+| **API Poll** | Server → External (scheduled) | Weather data, external service status |
+
+**Agent = persistent daemon on remote host reporting to central server**
+
+### Determining If YOUR Project Needs Agent
+
+Answer these questions for your specific project:
+
+1. **Where does the data originate?**
+   - On user devices → No agent (users submit data)
+   - On remote servers you manage → Agent likely needed
+
+2. **Who initiates the connection?**
+   - User/client initiates → No agent (standard API)
+   - Server needs to reach hosts → Agent needed
+
+3. **What runs on remote machines?**
+   - Nothing (just users with browsers) → No agent
+   - Background daemon collecting/executing → Agent needed
+
+4. **Is it push or pull?**
+   - Server pulls from external APIs → No agent
+   - Hosts push data to server → Agent needed
+
+### Project Types That Need Agent
+
+| Category | Examples | Agent Purpose |
+|----------|----------|---------------|
+| **Monitoring** | Zabbix, Nagios, Prometheus Node Exporter | Host metrics, health checks |
+| **Remote Management** | MeshCentral, RustDesk, TeamViewer | Remote shell, desktop, file transfer |
+| **System Monitor** | Beszel, Netdata, Glances | Real-time system stats |
+| **Log Shipping** | Fluentd, Filebeat, Vector | Tail and forward logs |
+| **Backup** | Restic, Borg, Duplicati | Execute local backups |
+| **Config Management** | Puppet, Ansible (pull mode), Salt | Apply configurations |
+| **Security/Compliance** | OSSEC, Wazuh, Lynis | Security scanning, audit |
+
+### Agent Runs on Host, NOT Container (NON-NEGOTIABLE)
+
+**Agents MUST run directly on the host OS, not in containers.**
+
+| Deployment | Supported | Reason |
+|------------|-----------|--------|
+| Direct on host | ✅ Yes | Full system access, accurate metrics |
+| systemd service | ✅ Yes | Preferred for Linux |
+| Windows service | ✅ Yes | Preferred for Windows |
+| launchd daemon | ✅ Yes | Preferred for macOS |
+| Docker container | ❌ No | Limited system visibility |
+| Kubernetes pod | ❌ No | Cannot monitor host properly |
+
+### Overview
+
+| Attribute | Value |
+|-----------|-------|
+| Binary naming | `vidveil-agent-{os}-{arch}` |
+| Examples | `monitor-agent-linux-amd64`, `monitor-agent-windows-arm64` |
+| Versioning | Same as server and CLI client |
+| Build | Part of same Makefile (`make build` builds all if `src/agent/` exists) |
+| Config file | `{config_dir}/agent.yml` (same dir as server) |
+| Data directory | `{data_dir}/` (same as server) |
+| Database | `{data_dir}/db/agent.db` (if needed, same dir as server) |
+| Privileges | **Root/Admin required** (for full system access) |
+| Update mechanism | Same as CLI client (self-update) |
+
+### Agent Binary Structure (Same as Server)
+
+**Agent shares the same CLI structure, banner, and modes as the server binary (minus setup token).**
+
+| Component | Server | Agent | Notes |
+|-----------|--------|-------|-------|
+| Startup banner | ✅ | ✅ | Responsive, terminal-aware |
+| Mode line | ✅ | ✅ | Shows production/development |
+| Debug flag | ✅ | ✅ | Enables verbose logging |
+| Service management | ✅ | ✅ | install/uninstall/start/stop |
+| Self-update | ✅ | ✅ | --update flag |
+| Setup token | ✅ | ❌ | Agent uses server-issued token |
+| Web UI | ✅ | ❌ | Agent is headless |
+
+### Agent Startup Banner
+
+```
+┌────────────────────────────────────────┐
+│  ███╗   ███╗ ██████╗ ███╗   ██╗        │
+│  ████╗ ████║██╔═══██╗████╗  ██║        │
+│  ██╔████╔██║██║   ██║██╔██╗ ██║        │
+│  ██║╚██╔╝██║██║   ██║██║╚██╗██║        │
+│  ██║ ╚═╝ ██║╚██████╔╝██║ ╚████║        │
+│  ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝        │
+│                                  AGENT │
+└────────────────────────────────────────┘
+
+🤖 monitor-agent v1.0.0
+🔒 Running in mode: production
+
+📡 Server: https://monitor.example.com
+🏷️  Hostname: web-server-01
+🏷️  Tags: production, web-tier
+
+✅ Connected to server
+```
+
+**Compact banner (60-79 cols):**
+```
+🤖 monitor-agent v1.0.0
+🔒 Mode: production
+📡 https://monitor.example.com
+🏷️  web-server-01
+✅ Connected
+```
+
+**Minimal banner (<60 cols):**
+```
+monitor-agent 1.0.0
+web-server-01 → monitor.example.com
+Connected
+```
+
+### Agent Flags (NON-NEGOTIABLE)
+
+**Same flag style as server binary, EXCEPT no `--port` or `--address` (agents don't serve web).**
+
+| Server Flag | Agent | Reason |
+|-------------|-------|--------|
+| `--port` | ❌ No | Agent doesn't serve HTTP |
+| `--address` | ❌ No | Agent doesn't listen for connections |
+| `--config` | ✅ Yes | Same config directory |
+| `--data` | ✅ Yes | Same data directory |
+| `--status` | ✅ Yes | Health check (exit 0=healthy, 1=unhealthy) |
+| `--service` | ✅ Yes | Service management |
+| `--update` | ✅ Yes | Self-update |
+
+```bash
+# Information
+--help, -h                    # Show help
+--version, -v                 # Show version (same format as server)
+--shell completions [SHELL]   # Print shell completions (auto-detect if SHELL omitted)
+--shell init [SHELL]          # Print shell init command (auto-detect if SHELL omitted)
+--status                      # Show status and health (exit 0=healthy, 1=unhealthy)
+
+# Configuration
+--config {path}               # Config directory (default: {config_dir})
+--data {path}                 # Data directory override
+--log {path}                  # Log directory override
+
+# Connection (can also be set in agent.yml)
+--server {url}                # Server URL to connect to
+--token {token}               # Authentication token (from server)
+
+# Runtime
+--mode {production|development}  # Force mode (auto-detected by default)
+--debug                       # Enable debug logging (implies development features)
+
+# Commands (subcommands like server)
+status                        # Show agent status
+test                          # Test server connection
+register                      # Interactive registration with server
+
+# Service management (same as server)
+--service {install|uninstall|start|stop|restart|status}
+
+# Updates (same as server/CLI)
+--update [check|yes]          # Check for or perform self-update
+```
+
+### Agent --help Output
+
+```bash
+$ vidveil-agent --help
+vidveil-agent {projectversion} - Agent for vidveil
+
+Usage:
+  vidveil-agent [flags]
+  vidveil-agent [command]
+
+Commands:
+  status                        Show agent status
+  test                          Test server connection
+  register                      Interactive registration
+
+Flags:
+  -h, --help                        Show help
+  -v, --version                     Show version
+      --shell completions [SHELL]   Print shell completions (auto-detect if SHELL omitted)
+      --shell init [SHELL]          Print shell init command (auto-detect if SHELL omitted)
+
+      --config DIR                  Config directory
+      --data DIR                    Data directory
+      --log DIR                     Log directory
+      --server URL                  Server URL to connect to
+      --token TOKEN                 Authentication token
+
+      --mode {production|development}  Application mode
+      --debug                       Enable debug mode
+      --status                      Show agent health
+
+      --service CMD                 Service management (install|uninstall|start|stop|restart)
+      --update [CMD]                Check/perform self-update
+
+Shells: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
+```
+
+### Agent Commands (NON-NEGOTIABLE)
+
+**Agent has subcommands similar to server:**
+
+```bash
+# Default: run agent (foreground)
+vidveil-agent
+
+# Status: show current agent status
+vidveil-agent status
+  Agent: monitor-agent v1.0.0
+  Hostname: web-server-01
+  Server: https://monitor.example.com
+  Status: Connected (5m 32s)
+  Last Report: 2025-01-15 10:30:00
+  Next Report: 2025-01-15 10:31:00
+
+# Test: verify server connection
+vidveil-agent test
+  Testing connection to https://monitor.example.com...
+  ✅ Connection successful
+  ✅ Authentication valid
+  ✅ Agent registered
+
+# Connect: one-liner from server panel (preferred)
+vidveil-agent --server https://monitor.example.com --token adm_agt_abc123def456...
+  Connecting to https://monitor.example.com...
+  ✅ Connection successful
+  ✅ Token validated
+  ✅ Agent registered as "web-server-01"
+
+  Config saved to: /etc/projectorg/projectname/agent.yml
+  Installing service...
+  ✅ Service installed and started
+
+  Agent is now sending data to server for admin scope.
+
+# Service management
+vidveil-agent --service install   # Install as system service
+vidveil-agent --service start     # Start service
+vidveil-agent --service stop      # Stop service
+vidveil-agent --service status    # Show service status
+vidveil-agent --service uninstall # Remove service
+```
+
+### Agent Setup Process (NON-NEGOTIABLE)
+
+**Agent setup is initiated from the SERVER admin panel, NOT via setup token:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AGENT SETUP FLOW                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. Generate token (admin/user/org panel)                   │
+│     └─→ Server generates complete command string            │
+│     └─→ Display one-liner with [Copy to Clipboard]          │
+│                                                             │
+│  2. On Target Host (one command)                            │
+│     └─→ Paste and run the one-liner:                        │
+│         vidveil-agent --server {url} --token {token}  │
+│     └─→ Agent connects, registers, saves config             │
+│     └─→ Server shows notification: "{name} has connected"   │
+│                                                             │
+│  3. Agent auto-starts and sends data                        │
+│     └─→ Agent installs itself as service (if root)          │
+│     └─→ Begins sending data to server                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Server generates the complete command:**
+```go
+func GenerateAgentCommand(serverURL, token string) string {
+    return fmt.Sprintf("%s-agent --server %s --token %s",
+        projectName, serverURL, token)
+}
+```
+
+### Agent Token Format
+
+**Agent tokens are scoped to their owner (admin, user, or org):**
+
+| Scope | Token Prefix | Issued By | Route |
+|-------|--------------|-----------|-------|
+| Admin | `adm_agt_` | Admin panel | `/api/v1/admin/server/agents/*` |
+| User | `usr_agt_` | User settings | `/api/v1/users/agents/*` |
+| Org | `org_agt_` | Org settings | `/api/v1/orgs/{slug}/agents/*` |
+
+```go
+// Agent token generation (server-side) - scoped by owner type
+func GenerateAgentToken(scope AgentScope) string {
+    switch scope {
+    case ScopeAdmin:
+        return "adm_agt_" + generateSecureRandom(32)
+    case ScopeUser:
+        return "usr_agt_" + generateSecureRandom(32)
+    case ScopeOrg:
+        return "org_agt_" + generateSecureRandom(32)
+    }
+    return ""
+}
+```
+
+### Agent Registration API
+
+**Same pattern for all scopes (see PART 16 for full API):**
+
+**Endpoint:** `POST {base}/register` (where {base} = scope route)
+
+| Scope | Endpoint |
+|-------|----------|
+| Admin | `POST /api/v1/admin/server/agents/register` |
+| User | `POST /api/v1/users/agents/register` |
+| Org | `POST /api/v1/orgs/{slug}/agents/register` |
+
+**Request:**
+```json
+{
+  "token": "adm_agt_abc123def456ghi789jkl012mno345pqr678",
+  "hostname": "web-server-01",
+  "os": "linux",
+  "arch": "amd64",
+  "version": "1.0.0",
+  "tags": ["production", "web-tier"]
+}
+```
+
+**Response (success):**
+```json
+{
+  "ok": true,
+  "data": {
+    "agent_id": "uuid-here",
+    "name": "web-server-01",
+    "scope": "admin",
+    "server_time": "2025-01-15T10:00:00Z"
+  }
+}
+```
+
+**Response (error):**
+```json
+{
+  "ok": false,
+  "error": "TOKEN_INVALID",
+  "message": "Agent token is invalid or expired"
+}
+```
+
+### agent.yml Configuration (NON-NEGOTIABLE)
+
+**EVERYTHING must be configurable via agent.yml. Sane defaults match server where applicable.**
+
+**File: `{config_dir}/agent.yml`** (same directory as server.yml)
+
+```yaml
+# /etc/apimgr/vidveil/agent.yml (root)
+# ~/.config/apimgr/vidveil/agent.yml (user)
+# Agent configuration - ALL options with defaults
+
+# Server connection
+server:
+  primary: ""                      # Server URL (required, set during registration)
+  cluster: []                      # Auto-discovered cluster nodes
+  timeout: 30                      # Request timeout in seconds (match server default)
+  retry: 3                         # Retry attempts on failure
+  retry_delay: 5                   # Seconds between retries
+  reconnect_delay: 10              # Seconds before reconnect attempt
+
+# Authentication
+auth:
+  token: ""                        # Agent token ({scope}_agt_xxx, see PART 11)
+  token_file: ""                   # Read token from file instead
+
+# Agent identity
+identity:
+  hostname: ""                     # Hostname (auto-detect if empty)
+  display_name: ""                 # Friendly name (defaults to hostname)
+  tags: []                         # Tags for grouping ["production", "web-tier"]
+  labels: {}                       # Key-value labels {environment: prod, tier: web}
+
+# Data collection (project-specific)
+collection:
+  enabled: true                    # Enable data collection
+  interval: 60                     # Collection interval in seconds
+  batch_size: 100                  # Max items per batch
+  buffer_size: 1000                # Max buffered items if offline
+
+# Logging
+logging:
+  level: info                      # debug, info, warn, error (match server default)
+  file: ""                         # Log file path (empty = {log_dir}/agent.log)
+  max_size: 10                     # Max log file size in MB (match server default)
+  max_files: 5                     # Max log files to keep (match server default)
+
+# Health reporting
+health:
+  enabled: true                    # Report agent health to server
+  interval: 30                     # Health check interval in seconds
+
+# Debug
+debug: false                       # Enable debug mode (same as --debug)
+
+# Mode (auto-detected, can override)
+mode: ""                           # production, development (empty = auto-detect)
+```
+
+**Config precedence (highest to lowest):**
+
+| Priority | Source | Example |
+|----------|--------|---------|
+| 1 | CLI flag | `--server https://...` |
+| 2 | Environment variable | `VIDVEIL_AGENT_SERVER=https://...` |
+| 3 | Config file | `server.primary: https://...` |
+| 4 | Compiled default | (none for server, must be configured) |
+
+**Environment variable mapping:**
+```bash
+# Pattern: VIDVEIL_AGENT_{KEY} or VIDVEIL_{KEY}
+VIDVEIL_AGENT_SERVER_PRIMARY="https://example.com"
+VIDVEIL_AGENT_TOKEN="adm_agt_abc123..."
+VIDVEIL_AGENT_HOSTNAME="web-server-01"
+VIDVEIL_AGENT_COLLECTION_INTERVAL=30
+VIDVEIL_DEBUG=true
+```
+
+### Agent Cluster Failover (NON-NEGOTIABLE)
+
+**Agents MUST support automatic cluster failover. Everything is automatic.**
+
+| Feature | Behavior |
+|---------|----------|
+| **Node discovery** | Agent calls `/api/v1/healthz` on connect |
+| **Auto-update** | `server.cluster` updated from `cluster.nodes` in response |
+| **Failover** | If primary fails, try cluster nodes in order |
+| **Reconnect** | When primary recovers, switch back automatically |
+| **No manual config** | Cluster list maintained automatically |
+
+**Failover Flow:**
+```
+1. Agent connects to server.primary
+2. Agent calls GET /api/v1/healthz
+3. Agent reads cluster.primary and cluster.nodes from response
+4. Agent saves to server.primary and server.cluster in agent.yml
+5. If primary fails:
+   a. Try each node in server.cluster
+   b. First successful = new active connection
+   c. Continue trying primary in background
+6. When primary recovers:
+   a. Switch back to primary
+   b. Update cluster list (may have changed)
+```
+
+**Agent Startup Sequence:**
+```
+1. Load agent.yml
+2. Try server.primary
+3. If fails → try server.cluster nodes
+4. Once connected → GET /api/v1/healthz
+5. Update server.primary and server.cluster from response
+6. Begin normal operation
+```
+
+### Shared Directories with Server (NON-NEGOTIABLE)
+
+**Agent uses the SAME directory structure as server:**
+
+| Directory | Path | Shared With |
+|-----------|------|-------------|
+| Config | `{config_dir}/` | Server (agent.yml alongside server.yml) |
+| Data | `{data_dir}/` | Server |
+| Database | `{data_dir}/db/agent.db` | Server uses `server.db` in same dir |
+| Logs | `{log_dir}/agent.log` | Server uses `server.log` in same dir |
+| Cache | `{cache_dir}/` | Server |
+
+**Same privilege escalation as server (see PART 24)** - agent requires root/admin for full system access.
+
+### Agent vs CLI Client vs Server
+
+| Aspect | Server | CLI Client | Agent |
+|--------|--------|------------|-------|
+| **Runs as** | Service/daemon | Interactive/one-shot | Service/daemon |
+| **Purpose** | Serve API, web UI | User interaction | Data collection |
+| **Initiated by** | System startup | User | System startup |
+| **Connection** | Listens for connections | Connects to server | Connects to server |
+| **Lifetime** | Long-running | Short-lived | Long-running |
+| **User interaction** | Web UI, API | Terminal, TUI | None (headless) |
+| **Updates** | Manual or scheduled | Manual | Auto or server-pushed |
+
+### Agent Directory Structure
+
+**Source Code:**
+```
+src/
+├── server/               # Server-specific code
+├── client/               # CLI-specific code (if present)
+└── agent/                # Agent-specific code
+    ├── collector/        # Data collectors
+    │   ├── collector.go
+    │   ├── cpu.go
+    │   ├── memory.go
+    │   ├── disk.go
+    │   └── network.go
+    ├── reporter/         # Server reporting
+    │   └── reporter.go
+    ├── service/          # OS service management
+    │   ├── service.go
+    │   ├── linux.go
+    │   ├── windows.go
+    │   └── darwin.go
+    └── updater/          # Self-update logic
+        └── updater.go
+```
+
+### Build Output
+
+**`make build` automatically builds all components if their source directories exist:**
+
+```
+binaries/
+├── vidveil                         # Host server - for local testing
+├── vidveil-cli                     # Host CLI (if src/client/ exists)
+├── vidveil-agent                   # Host agent (if src/agent/ exists)
+├── vidveil-linux-amd64             # Server
+├── vidveil-linux-arm64
+├── vidveil-cli-linux-amd64         # CLI (if src/client/ exists)
+├── vidveil-cli-linux-arm64
+├── vidveil-agent-linux-amd64       # Agent (if src/agent/ exists)
+├── vidveil-agent-linux-arm64
+├── vidveil-agent-windows-amd64.exe
+├── vidveil-agent-darwin-amd64
+└── vidveil-agent-darwin-arm64
+```
+
+**See PART 26 (Makefile) for full build details.**
 
 ---
 
@@ -35140,10 +41003,86 @@ Build Info:
 
 **PART 37 is NON-NEGOTIABLE.** The business logic, data models, and rules defined here are the authoritative specification for this project. Implementation must match exactly.
 
+---
+
+## IDEA.md: The Project Idea File
+
+**The project idea (business logic, features) is stored in `{projectdir}/IDEA.md`, separate from the specification.**
+
+| File | Contains | Updates When |
+|------|----------|--------------|
+| `AI.md` | HOW - Implementation patterns (PARTS 0-36) | Rarely - spec changes |
+| `IDEA.md` | WHAT - Project idea, data, features | Features added/changed |
+
+**IDEA.md Structure:**
+```markdown
+# vidveil - Project Idea
+
+## Purpose
+{What does this project do? One paragraph.}
+
+## Target Users
+{Who uses this? List 2-5 user types.}
+
+## Features
+{List of features with brief descriptions}
+
+## Data Models
+{Define business data structures - fields and meaning}
+
+## Business Rules
+{Validation, constraints, logic rules}
+
+## Endpoints
+{WHAT endpoints exist and WHAT they do - NOT route structure}
+
+## Data Sources
+{Where data comes from, update frequency}
+```
+
+**Cross-Reference Rules:**
+- AI.md PART 37 references IDEA.md for business logic
+- IDEA.md references AI.md PARTS for implementation patterns
+- Both files MUST stay in sync
+
+**IDEA.md Sync Rules (NON-NEGOTIABLE):**
+
+| Rule | Description |
+|------|-------------|
+| **Always current** | IDEA.md must reflect the current project vision |
+| **Feature added** | Update IDEA.md immediately |
+| **Feature changed** | Update IDEA.md to reflect new vision |
+| **Feature removed** | Remove from IDEA.md |
+| **SPEC wins** | If IDEA.md conflicts with SPEC, update IDEA.md |
+
+**IDEA.md Must Follow SPEC:**
+
+IDEA.md describes WHAT, but must use spec-compliant terminology:
+
+| IDEA.md Says | SPEC Says | Fix IDEA.md To |
+|--------------|-----------|----------------|
+| `/login` | Auth routes at `/auth/*` | `/auth/login` |
+| `/api/users` | API at `/api/v1/*` | `/api/v1/users` |
+| `password` field | Argon2id hashing | (no change - WHAT not HOW) |
+| `admin page` | Admin at `/admin/*` | `/admin` dashboard |
+
+**Rule:** IDEA.md contains the project vision using spec-compliant route names, terminology, and patterns. When SPEC defines HOW something works, IDEA.md adopts that terminology but only describes WHAT it does.
+
+**For Existing Projects Without IDEA.md:**
+```
+1. Audit codebase → extract business logic
+2. Create IDEA.md with project idea
+3. Update AI.md PART 37 to reference IDEA.md
+4. Verify code matches IDEA.md specification
+```
+
+---
+
 ## ⚠️ CRITICAL: Business Logic Only
 
-**PARTS 1-36 define HOW to build (standards, patterns, structure).**
-**PART 37 defines WHAT this project does (business logic, unique features).**
+**PARTS 0-36 define HOW to build (standards, patterns, structure).**
+**PART 37 defines WHAT this specific project does (business logic, unique features).**
+**IDEA.md contains the actual project idea - PART 37 references it.**
 
 **PART 37 should contain:**
 - ✓ Business purpose and intent
@@ -35167,104 +41106,47 @@ Build Info:
 
 ## Project Business Purpose
 
-{Describe WHAT this project does - its purpose, target users, unique value}
+**See `IDEA.md` → "Project Business Purpose" section.**
 
-**Example (Jokes API):**
-```
-Purpose: Provide random programming jokes via API and web interface
-
-Target Users:
-- Developers looking for humor during coding
-- Slack bots needing joke content
-- Websites wanting random developer jokes
-
-Unique Value:
-- Curated database of high-quality programming jokes
-- No low-quality or offensive content
-- Category-based filtering
-- No-repeat tracking for better UX
-```
+VidVeil: Privacy-respecting meta search engine for adult video content.
+- Aggregates 54+ video sites without tracking
+- SSE streaming for real-time results
+- Bang shortcuts for targeted searches
+- Thumbnail proxy prevents engine tracking
 
 ## Business Logic & Rules
 
-{Define unique business rules, validation, constraints}
+**See `IDEA.md` → "Business Logic & Rules" section.**
 
-**Example (Jokes API):**
-```
-Business Rules:
-- Jokes must be programming-related or developer humor
-- Maximum joke length: 500 characters
-- Minimum rating to display: 3.0 stars (configurable)
-- NSFW content hidden by default (requires ?nsfw=true flag)
-- Random selection excludes last 100 shown (no immediate repeats)
-- Categories are predefined (no custom categories allowed)
-- All jokes reviewed before inclusion
-
-Validation:
-- Category must exist in categories list
-- Rating must be 1.0-5.0
-- Text cannot be empty
-- ID must be unique
-```
+Key rules:
+- Bang syntax: `!xx query` searches specific engine
+- Multiple bangs supported: `!ph !rt query`
+- All thumbnails proxied through server
+- No user accounts (stateless, privacy-first)
+- Admin panel for server configuration only (per PART 17)
 
 ## Data Models
 
-{Define business data structures - what fields exist and mean, NOT database schema}
+**See `IDEA.md` → "Data Models" section.**
 
-**Example (Jokes API):**
-```go
-// Joke represents a single joke entry
-type Joke struct {
-    // Unique identifier
-    ID       string   `json:"id"`
-    // The joke content
-    Text     string   `json:"text"`
-    // programming, puns, dad-jokes
-    Category string   `json:"category"`
-    // 1.0-5.0 stars
-    Rating   float64  `json:"rating"`
-    // Searchable tags
-    Tags     []string `json:"tags"`
-    // Safe-for-work flag
-    NSFW     bool     `json:"nsfw"`
-    // Joke attribution
-    Author   string   `json:"author"`
-}
-
-// Category represents a joke category
-type Category struct {
-    ID          string `json:"id"`
-    Name        string `json:"name"`
-    Description string `json:"description"`
-    // Number of jokes in category
-    Count       int    `json:"count"`
-}
-```
+Core models:
+- `VideoResult`: Search result with ID, title, thumbnail, preview, duration, views
+- `Engine`: Search engine with name, bang, tier, capabilities
+- `SearchResponse`: Query results with engines used, search time
 
 ## Data Sources
 
-{Define where data comes from, update frequency, format}
+**See `IDEA.md` → "Data Sources" section.**
 
-**Example (Jokes API):**
-```
-Data Sources:
-- jokes.json: 5000+ curated programming jokes (embedded in binary)
-- categories.json: List of valid categories (embedded in binary)
-- blocklist.json: Filtered/banned content (embedded in binary)
-
-Update Strategy:
-- Data files embedded at build time
-- Updates require new release
-- No runtime data modification (read-only)
-
-Data Location:
-- src/data/jokes.json (committed to repo)
-- src/data/categories.json (committed to repo)
-```
+Sources:
+- External APIs: PornHub, RedTube, Eporner (Tier 1)
+- HTML parsing: XVideos, XNXX, xHamster, YouPorn, 38+ others (Tier 2-3)
+- Engine definitions embedded at build time
+- Search results fetched real-time (no caching)
 
 ## Project-Specific Endpoints Summary
 
-{List WHAT endpoints exist and WHAT they do - NOT route structure or response format}
+**See `IDEA.md` → "Project-Specific Endpoints Summary" section for full details.**
 
 **Endpoint Implementation Rules:**
 
@@ -35272,113 +41154,45 @@ Data Location:
 |---------------|---------------------|-------|
 | **Standard API** | Follow PART 14: API STRUCTURE | `/api/v1/*` patterns, response formats |
 | **Frontend** | Follow PART 16: WEB FRONTEND | HTML templates, themes, accessibility |
-| **Compatibility** | Follow PART 14: External API Compatibility | External services ONLY - match their exact format |
+| **Admin** | Follow PART 17: ADMIN PANEL | `/{admin_path}/server/*` hierarchy |
 | **Legacy** | **NEVER KEEP** | Old/changed/removed endpoints - DELETE them |
 
-**Terminology:**
-- **Compatibility** = External service endpoints (pastebin.com, microbin, etc.) - match their API format
-- **Legacy** = Old, changed, or removed endpoints from YOUR project - NEVER keep, always DELETE
+**VidVeil Endpoints Purpose (WHAT they do):**
 
-**PART 37 describes WHAT endpoints do (business purpose). PARTs 14/16 define HOW to implement them.**
+| Purpose | Description |
+|---------|-------------|
+| **Search** | Search videos across 54+ engines with bang shortcuts |
+| **Stream** | SSE streaming of results as engines respond |
+| **Bangs** | List and autocomplete bang shortcuts |
+| **Engines** | List available search engines and capabilities |
+| **Proxy** | Proxy thumbnails to prevent engine tracking |
+| **Health** | Health check for monitoring |
+| **Admin** | Server configuration (per PART 17) |
 
-**Example 1 (Jokes API - Read-Only Data):**
-```
-Endpoints Purpose:
-- Random joke: Get a random joke (with optional category filter)
-- Search: Find jokes by keyword in text
-- By category: Get random joke from specific category
-- List categories: Show available categories with counts
-
-Business Behavior:
-- Random endpoint uses weighted selection (higher rated = more likely)
-- Search is case-insensitive, matches text and tags
-- Category filter requires valid category ID
-- All endpoints support pagination (if returning lists)
-```
-
-**Example 2 (Weather API - External Data Integration):**
-```
-Endpoints Purpose:
-- Current weather: Get current conditions for location
-- Forecast: Get 7-day forecast for location
-- Alerts: Get active weather alerts for region
-- Search locations: Find cities/coordinates
-
-Business Behavior:
-- Caches weather data for 15 minutes (reduce external API calls)
-- Accepts city name, ZIP code, or lat/long coordinates
-- Returns data in metric or imperial units (user preference)
-- Includes data attribution (external API source)
-- Falls back to cached data if external API unavailable
-```
-
-**Example 3 (User Directory - Full CRUD):**
-```
-Endpoints Purpose:
-- List users: Paginated user list with filtering/sorting
-- Get user: Retrieve user profile by ID or username
-- Create user: Register new user account
-- Update user: Modify user profile/settings
-- Delete user: Remove user account (soft delete)
-- Search users: Find users by name, email, tags
-
-Business Behavior:
-- Username must be unique (3-20 chars, alphanumeric)
-- Email validation with verification requirement
-- Profile fields: name, bio, avatar, social links
-- Privacy settings: public, private, unlisted
-- Soft delete preserves data for 30 days before permanent deletion
-```
-
-**Example 4 (Link Shortener - URL Mapping):**
-```
-Endpoints Purpose:
-- Create short link: Generate short URL for long URL
-- Resolve short link: Redirect short URL to destination
-- Link stats: View click count, referrers, locations
-- Update destination: Change where short link points
-- Delete link: Remove short URL
-
-Business Behavior:
-- Short codes: 6-character alphanumeric (62^6 = 56B possible)
-- Custom slugs allowed (user-defined short codes)
-- Expiration support (optional TTL for links)
-- Click tracking (timestamp, IP, user-agent, referrer)
-- QR code generation for each short link
-```
+**Business Behavior:**
+- Bang shortcuts target specific engines (`!ph`, `!xv`, etc.)
+- Multiple bangs combine searches (`!ph !rt query`)
+- SSE delivers results as each engine responds
+- All thumbnails proxied (privacy)
+- Stateless - no user accounts, no session storage
 
 ## Extended Node Functions (If Applicable)
 
-**Only define if nodes do MORE than config sync. Most projects leave this empty.**
-
-{Describe what nodes manage beyond config sync, if anything}
-
-| Function | Description |
-|----------|-------------|
-| {function} | {what nodes do} |
-
-**Examples:**
-- Watchtower-type: Nodes manage Docker hosts (update containers, monitor health)
-- Monitoring app: Nodes monitor remote servers (collect metrics, send alerts)
-- DNS server: Nodes provide HA failover (automatic DNS resolution failover)
+**Not applicable for VidVeil.** VidVeil is stateless - nodes only sync config.
 
 ## High Availability Requirements (If Applicable)
 
-**Only define if this app requires HA. Most projects (Jokes, Quotes, etc.) do NOT need HA.**
-
-{Describe HA requirements if this is a specialized app}
-
-| Requirement | Description |
-|-------------|-------------|
-| Failover type | {automatic/manual} |
-| Recovery time | {target RTO} |
-| Data sync | {sync strategy} |
-
-**Leave empty for apps that only need clustering (config sync).**
+**Not applicable for VidVeil.** VidVeil is stateless - any instance handles any request. Standard load balancing provides sufficient availability.
 
 ## Notes
 
-{Any additional notes, decisions, or context for this project}
+**See `IDEA.md` → "Notes" section.**
+
+- VidVeil has NO user accounts - privacy-first, stateless
+- All searches real-time - no result caching
+- Thumbnail proxy caches temporarily to reduce repeated fetches
+- Admin panel is server configuration only (per PART 17)
+- Tor support for hidden service operation
 
 ---
 
@@ -35394,10 +41208,13 @@ Business Behavior:
 ### Document Rules
 
 - [ ] **AI.md is the ONLY project specification** - nothing else
+- [ ] **IDEA.md is the project vision** - WHAT (must follow SPEC, SPEC wins conflicts)
 - [ ] **PARTS 0-36 are READ-ONLY** - implementation patterns, never modify
 - [ ] **PART 37 is the project spec** - update when features change
 - [ ] Keep AI.md in sync with PROJECT STATE
+- [ ] Keep IDEA.md in sync with current project vision
 - [ ] Use TODO.AI.md for tasks when 3+ items
+- [ ] Use PLAN.AI.md for implementation planning
 
 ### Behavior Rules
 
@@ -35416,7 +41233,7 @@ Business Behavior:
 - [ ] Use ONLY approved libraries (see PART 5)
 - [ ] Follow exact config paths: `server.xxx`, not variations
 - [ ] Follow exact route patterns: `/api/v1/admin/server/xxx`
-- [ ] Token prefixes: `adm_` (admin primary), `key_` (API keys)
+- [ ] Token prefixes: `adm_` (admin), `usr_` (user), `org_` (org)
 - [ ] Setup token: 32 hex chars, no dashes
 
 ### Container Rules
@@ -35460,15 +41277,795 @@ Business Behavior:
 7. Verify consistency with related sections
 8. Update TODO.AI.md when tasks complete
 
+### Quick Reference - Critical Rules
+
+**Container-Only (NO HOST EXECUTION):**
+| NEVER | ALWAYS |
+|-------|--------|
+| `go build` on host | `docker run ... golang:alpine go build ...` |
+| `go test` on host | `docker run ... golang:alpine go test ...` |
+| `./binaries/vidveil` on host | Run binary inside Docker/Incus container |
+| Go installed on host | Use Docker `golang:alpine` for all Go operations |
+
+**GODIR (Go Module Cache):**
+```bash
+GODIR := $(HOME)/.local/share/go    # Host path for Go module cache
+GOCACHE := $(HOME)/.cache/go-build  # Host path for build cache
+# Mount in Docker: -v $(GODIR):/go -v $(GOCACHE):/root/.cache/go-build
+```
+
+**Temp Directory Workflow:**
+| NEVER | ALWAYS |
+|-------|--------|
+| `docker compose up` in project dir | Use temp directory workflow |
+| Runtime data in project directory | `/tmp/apimgr/vidveil-XXXXXX/` |
+| `mktemp -d` (bare) | `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX"` |
+| `/tmp/myfile` | `/tmp/apimgr/vidveil-XXXXXX/myfile` |
+
+```bash
+# Temp dir workflow
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/$VIDVEIL-XXXXXX")
+mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
+cp docker/docker-compose.yml "$TEMP_DIR/"
+cd "$TEMP_DIR" && docker compose up -d
+```
+
+**Project Directory Rules:**
+| NEVER Create | Reason |
+|--------------|--------|
+| `config/`, `data/`, `logs/`, `cache/` | Runtime dirs go to temp/OS paths |
+| `server.yml`, `cli.yml` | Generated at runtime, not in repo |
+| `rootfs/` in project root | Only in `docker/rootfs/` for build overlay |
+| `.env` with secrets | Use environment variables or admin panel |
+
+**Config Files:**
+- NEVER in repository - generated at RUNTIME
+- Binary creates on first run with sane defaults
+- User edits generated file or uses admin panel
+
+**Testing:**
+| Type | Container | Purpose |
+|------|-----------|---------|
+| Build | Docker `golang:alpine` | Compile Go code |
+| Unit tests | Docker `golang:alpine` | `go test ./...` |
+| Integration | Docker `alpine:latest` OR Incus `debian:latest` | Full server tests |
+| Full OS/systemd | Incus `debian:latest` (PREFERRED) | Services, real environment |
+
+**Makefile Targets:**
+```bash
+make dev    # Quick build → temp dir (no version info)
+make build  # Full build → binaries/ (with ldflags)
+make test   # Run tests in container
+make docker # Build Docker image
+```
+
+**Cryptography:**
+| Use | For |
+|-----|-----|
+| Argon2id | Password hashing |
+| SHA-256 | Token hashing, checksums |
+| Ed25519 | Signing (if needed) |
+| AES-256-GCM | Encryption (if needed) |
+
+**File Locations:**
+| Type | Development/Test | Production |
+|------|------------------|------------|
+| Config | `/tmp/{org}/{proj}-XXX/rootfs/config/` | `/etc/{org}/{proj}/` (Linux) |
+| Data | `/tmp/{org}/{proj}-XXX/rootfs/data/` | `/var/lib/{org}/{proj}/` (Linux) |
+| Binary | `binaries/vidveil` | `/usr/local/bin/vidveil` |
+
+---
+
+## DETAILED VERIFICATION BY PART
+
+### Phase 1: Foundation (PARTS 0-6)
+
+**PART 0-2: Meta & Rules**
+- [ ] AI.md exists and is the ONLY project specification
+- [ ] PARTS 0-36 are treated as READ-ONLY
+- [ ] PART 37 contains project-specific business logic
+- [ ] MIT License in LICENSE.md
+- [ ] All embedded library licenses listed
+- [ ] No proprietary dependencies
+
+**PART 3: Project Structure**
+- [ ] `src/` directory exists with proper layout
+- [ ] `src/config/config.go` - Configuration package
+- [ ] `src/mode/mode.go` - Application modes
+- [ ] `src/paths/paths.go` - Path resolution
+- [ ] `src/ssl/ssl.go` - SSL/TLS handling
+- [ ] `src/scheduler/scheduler.go` - Background tasks
+- [ ] `src/service/service.go` - Service management
+- [ ] `src/admin/` - Admin panel package
+- [ ] `src/server/` - HTTP server with subdirs
+- [ ] `docker/` - Docker configuration
+- [ ] `docs/` - ReadTheDocs documentation only
+- [ ] `tests/` - Test files and scripts
+- [ ] No `pkg/`, `internal/`, `cmd/` directories
+
+**PART 4: OS-Specific Paths**
+- [ ] Linux paths: `/etc/`, `/var/lib/`, `/var/log/`, `/var/cache/`
+- [ ] macOS paths: `~/Library/Application Support/`
+- [ ] Windows paths: `%APPDATA%\`, `%LOCALAPPDATA%\`
+- [ ] BSD paths: Same as Linux
+- [ ] Docker paths: `/config/`, `/data/`
+- [ ] Root vs user path detection works
+- [ ] All path functions use `apimgr/vidveil` structure
+
+**PART 5: Configuration**
+- [ ] Config file: `server.yml` (not .yaml, not .json)
+- [ ] Hierarchy: CLI flags > env vars > file > defaults
+- [ ] Environment prefix: `VIDVEIL_`
+- [ ] Boolean values: true/false, yes/no, 1/0, on/off all work
+- [ ] All config values have sane defaults
+- [ ] Unknown config keys are ERRORS, not ignored
+- [ ] Config validation on load
+- [ ] Approved libraries only (see PART 5 list)
+
+**PART 6: Application Modes**
+- [ ] Production mode: Default, optimized, no debug
+- [ ] Development mode: Verbose logging, debug endpoints
+- [ ] Mode detection: env var, CLI flag, config file
+- [ ] Debug endpoints disabled in production
+- [ ] `/debug/pprof/` only in development mode
+
+### Phase 2: Binary Core (PARTS 7-9)
+
+**PART 7: Binary Requirements**
+- [ ] CGO_ENABLED=0 - Static binary, no exceptions
+- [ ] Single binary with ALL assets embedded
+- [ ] No external runtime dependencies
+- [ ] Builds for 8 platforms (4 OS × 2 arch)
+- [ ] Binary handles ALL initialization (no setup scripts)
+- [ ] Creates directories on first run
+- [ ] Sets permissions based on run context
+- [ ] Runs as root or user correctly
+
+**PART 8: Server Binary CLI**
+- [ ] `--help` - Shows help (no privileges needed)
+- [ ] `--version` - Shows version (no privileges needed)
+- [ ] `--config {path}` - Config directory
+- [ ] `--data {path}` - Data directory
+- [ ] `--cache {path}` - Cache directory
+- [ ] `--log {path}` - Log directory
+- [ ] `--backup {path}` - Backup directory
+- [ ] `--pid {path}` - PID file path
+- [ ] `--address {addr}` - Listen address
+- [ ] `--port {port}` - Listen port
+- [ ] `--mode {mode}` - Application mode
+- [ ] `--status` - Show running status
+- [ ] `--daemon` - Daemonize (detach)
+- [ ] `--debug` - Enable debug mode
+- [ ] `--service {cmd}` - Service management
+- [ ] `--maintenance {cmd}` - Maintenance operations
+- [ ] `--update {cmd}` - Update operations
+- [ ] Binary naming rules followed (user can rename)
+
+**PART 9: Error Handling & Caching**
+- [ ] Consistent error response format (JSON)
+- [ ] Error codes are stable and documented
+- [ ] Stack traces only in development mode
+- [ ] Cache headers set correctly
+- [ ] ETag support for cacheable resources
+- [ ] Cache-Control headers appropriate per resource type
+
+### Phase 3: Data Layer (PARTS 10-11)
+
+**PART 10: Database & Cluster**
+- [ ] SQLite default for single-node
+- [ ] PostgreSQL/MySQL for cluster mode
+- [ ] CREATE TABLE IF NOT EXISTS pattern
+- [ ] Automatic migrations on startup
+- [ ] No manual schema creation required
+- [ ] Cluster-aware task locking (when applicable)
+- [ ] Connection pooling configured
+- [ ] Prepared statements used (no SQL injection)
+
+**PART 11: Security & Logging**
+- [ ] All security headers set (CSP, X-Frame-Options, etc.)
+- [ ] HSTS enabled when SSL active
+- [ ] Rate limiting enabled and configurable
+- [ ] Audit logging to audit.log (JSON format)
+- [ ] Security events logged to security.log
+- [ ] No sensitive data in logs
+- [ ] Log rotation configured
+- [ ] Log levels: debug, info, warn, error
+
+### Phase 4: Server Core (PARTS 12-14)
+
+**PART 12: Server Configuration**
+- [ ] All server settings in `server.yml`
+- [ ] Runtime reload of safe settings
+- [ ] Restart required clearly documented
+- [ ] Valkey/Redis configuration (if applicable)
+- [ ] Cluster configuration (if applicable)
+
+**PART 13: Health & Versioning**
+- [ ] `/healthz` endpoint exists (frontend - smart detection)
+- [ ] `/api/v1/healthz` endpoint exists (API - supports .txt)
+- [ ] Returns 200 OK when healthy
+- [ ] Smart detection: browser → HTML, CLI → text
+- [ ] Extended healthz response includes:
+  - [ ] version, go_version, build info
+  - [ ] cluster (enabled, status, primary, nodes, role)
+  - [ ] features (multi_user, organizations, tor, geoip, metrics)
+  - [ ] checks (database, cache, disk, scheduler, cluster)
+  - [ ] stats (requests_total, requests_24h, active_connections)
+- [ ] NEVER expose sensitive data (tokens, credentials, paths, internal IPs)
+- [ ] `release.txt` contains version
+- [ ] Semantic versioning: MAJOR.MINOR.PATCH
+- [ ] Version exposed in `/healthz` response
+- [ ] Version exposed in `--version` output
+- [ ] `--status` flag returns exit 0 (healthy) or 1 (unhealthy)
+
+**PART 14: API Structure**
+- [ ] REST API at `/api/v1/`
+- [ ] Consistent response format
+- [ ] Proper HTTP status codes
+- [ ] Pagination for list endpoints
+- [ ] Filter/sort/search parameters
+- [ ] Rate limiting per endpoint type
+- [ ] API versioning in URL path
+- [ ] No breaking changes without major version bump
+
+### Phase 5: Auth & Security (PARTS 15-16)
+
+**PART 15: SSL/TLS & Let's Encrypt**
+- [ ] Let's Encrypt HTTP-01 challenge
+- [ ] Let's Encrypt TLS-ALPN-01 challenge
+- [ ] Let's Encrypt DNS-01 challenge (optional)
+- [ ] Manual certificate support
+- [ ] Auto-renewal via scheduler
+- [ ] Certificate monitoring/expiry alerts
+- [ ] HSTS headers when SSL enabled
+- [ ] Redirect HTTP to HTTPS option
+
+**PART 16: Web Frontend**
+- [ ] Homepage at `/`
+- [ ] Theme system: light, dark, auto
+- [ ] Dark theme is DEFAULT
+- [ ] Theme toggle in UI
+- [ ] Theme persisted in localStorage
+- [ ] NO inline CSS - external stylesheets only
+- [ ] NO JavaScript alerts - toast notifications
+- [ ] Mobile-first responsive design
+- [ ] WCAG 2.1 AA accessibility
+- [ ] Semantic HTML structure
+- [ ] Keyboard navigation works
+- [ ] Screen reader compatible
+- [ ] Color contrast meets AA standards (both themes)
+
+### Phase 6: Admin & Email (PARTS 17-18)
+
+**PART 17: Admin Panel**
+- [ ] Admin UI at `/{admin_path}`
+- [ ] Admin API at `/api/v1/{admin_path}/`
+- [ ] First-run setup wizard
+- [ ] All settings configurable via UI
+- [ ] Settings organized by category
+- [ ] Real-time validation feedback
+- [ ] Confirmation for destructive actions
+- [ ] Same theme system as main UI
+- [ ] Activity/audit log viewer
+- [ ] System status dashboard
+
+**PART 18: Email & Notifications**
+- [ ] SMTP configuration in admin
+- [ ] Email disabled gracefully if no SMTP
+- [ ] Customizable email templates
+- [ ] WebUI notifications always available
+- [ ] Email queue with retry logic
+- [ ] Email logging (success/failure)
+
+### Phase 7: Features (PARTS 19-22)
+
+**PART 19: Scheduler**
+- [ ] Built-in scheduler always running
+- [ ] Backup: 02:00 daily (configurable)
+- [ ] SSL renewal: 03:00 daily
+- [ ] GeoIP update: 03:00 Sunday
+- [ ] Session cleanup: hourly
+- [ ] Cluster-aware task locking
+- [ ] Scheduler status in admin panel
+- [ ] Manual task trigger option
+
+**PART 20: GeoIP**
+- [ ] MaxMind GeoLite2 database support
+- [ ] Auto-download and update
+- [ ] Country blocking capability
+- [ ] IP lookup API endpoint
+- [ ] Graceful degradation if unavailable
+
+**PART 21: Metrics**
+- [ ] Prometheus metrics at `/metrics`
+- [ ] Request count, latency, errors
+- [ ] System metrics (memory, goroutines)
+- [ ] Custom business metrics
+- [ ] Metrics endpoint authentication option
+
+**PART 22: Backup & Restore**
+- [ ] Automatic daily backups (backup_daily task at 02:00)
+- [ ] Optional hourly incremental (backup_hourly task, disabled by default)
+- [ ] Backup encryption (AES-256-GCM) - optional unless compliance enabled
+- [ ] If compliance enabled, encryption REQUIRED (backups blocked without password)
+- [ ] Configurable retention: max_backups (default: 1), keep_weekly/monthly/yearly (default: 0)
+- [ ] `--maintenance backup` works
+- [ ] `--maintenance restore {file}` works (prompts for password if encrypted)
+- [ ] Backup includes: database, config, uploads
+- [ ] Restore is atomic (all or nothing)
+- [ ] **Backup verification after creation** (checksum, decrypt, extract, DB integrity)
+- [ ] **Daily incremental** `vidveil-daily.tar.gz[.enc]` always valid
+- [ ] **Hourly incremental** `vidveil-hourly.tar.gz[.enc]` (if enabled)
+- [ ] **Cluster mode**: each node maintains own valid backups (max_backups per node)
+
+### Phase 8: Maintenance (PARTS 23-26)
+
+**PART 23: Update Command**
+- [ ] `--update check` - Check for updates
+- [ ] `--update yes` - Perform update
+- [ ] `--update branch {name}` - Switch branch
+- [ ] Update channels: stable, beta, daily
+- [ ] Rollback capability
+- [ ] Update notifications in admin
+
+**PART 24: Privilege Escalation & Service**
+- [ ] Privilege escalation for protected operations
+- [ ] Clear privilege requirements documented
+- [ ] sudo/runas prompts when needed
+- [ ] Service operations require appropriate rights
+
+**PART 25: Service Support**
+- [ ] `--service install` - Install as service
+- [ ] `--service uninstall` - Remove service
+- [ ] `--service start/stop/restart/reload`
+- [ ] Linux: systemd service file
+- [ ] macOS: launchd plist
+- [ ] Windows: Windows Service
+- [ ] BSD: rc.d script
+
+**PART 26: Makefile**
+- [ ] `make build` - Build binary
+- [ ] `make test` - Run tests
+- [ ] `make docker` - Build Docker image
+- [ ] `make release` - Create release
+- [ ] `make clean` - Clean build artifacts
+- [ ] `make all` - Full build
+- [ ] Cross-compilation targets
+- [ ] Version injection at build time
+
+### Phase 9: Build & Deploy (PARTS 27-29)
+
+**PART 27: Docker**
+- [ ] Multi-stage Dockerfile
+- [ ] Alpine base image
+- [ ] tini as init process
+- [ ] Non-root user in container
+- [ ] Proper labels (OCI standard)
+- [ ] Health check in Dockerfile
+- [ ] docker-compose.yml for production
+- [ ] docker-compose.dev.yml for development
+- [ ] docker-compose.test.yml for testing
+- [ ] Volume mounts for config/data
+
+**PART 28: CI/CD Workflows**
+- [ ] release.yml - Stable releases
+- [ ] beta.yml - Beta releases
+- [ ] daily.yml - Nightly builds
+- [ ] docker.yml - Docker image builds
+- [ ] All 8 platform builds
+- [ ] Automated testing in CI
+- [ ] Release artifacts uploaded
+- [ ] Docker images pushed to registry
+
+**PART 29: Testing & Development**
+- [ ] Unit tests exist
+- [ ] Integration tests exist
+- [ ] tests/run_tests.sh - Auto-detect environment
+- [ ] tests/docker.sh - Docker-based tests
+- [ ] tests/incus.sh - Incus-based tests
+- [ ] All tests pass in CI
+- [ ] Test coverage measured
+- [ ] API testing included
+- [ ] Beta testing procedures documented
+
+### Phase 10: Documentation (PARTS 30-31)
+
+**PART 30: ReadTheDocs Documentation**
+- [ ] docs/ directory for MkDocs only
+- [ ] mkdocs.yml in project root
+- [ ] .readthedocs.yaml in project root
+- [ ] docs/requirements.txt with dependencies
+- [ ] MkDocs Material theme
+- [ ] Theme toggle (light/dark/auto, dark default)
+- [ ] Required pages exist:
+  - [ ] docs/index.md
+  - [ ] docs/installation.md
+  - [ ] docs/configuration.md
+  - [ ] docs/api.md
+  - [ ] docs/admin.md
+  - [ ] docs/development.md
+- [ ] ReadTheDocs builds successfully
+- [ ] Documentation badge in README.md
+
+**PART 31: I18N & A11Y**
+- [ ] Internationalization framework (if applicable)
+- [ ] RTL language support (if applicable)
+- [ ] WCAG 2.1 AA compliance
+- [ ] Accessibility testing performed
+
+### Phase 11: Optional Features (PARTS 32-36)
+
+**PART 32: Tor Hidden Service**
+- [ ] Auto-enabled when tor binary found
+- [ ] Dedicated tor process (not system tor)
+- [ ] .onion address generation
+- [ ] Vanity address generation option
+- [ ] Tor status in admin panel
+- [ ] Tor data in `{data_dir}/tor/`
+- [ ] Tor fields in `/api/v1/healthz`:
+  - [ ] `features.tor.enabled` (yes/no)
+  - [ ] `features.tor.running` (yes/no)
+  - [ ] `features.tor.status` (healthy/error:{message})
+  - [ ] `features.tor.hostname` ({onion_address})
+
+**PART 33: Multi-User** (if applicable)
+- [ ] User registration flow
+- [ ] User authentication (session-based for UI)
+- [ ] API authentication (bearer token)
+- [ ] Token prefixes: `usr_` (user) with properties (name, scope, expiration)
+- [ ] Session management implemented
+- [ ] 2FA support: TOTP and WebAuthn
+- [ ] Password requirements enforced
+
+**PART 34: Organizations** (if applicable)
+- [ ] Org creation and management
+- [ ] Member roles and permissions
+- [ ] Org-level settings
+- [ ] Org API tokens
+
+**PART 35: Custom Domains** (if applicable)
+- [ ] Custom domain configuration
+- [ ] SSL for custom domains
+- [ ] DNS verification
+- [ ] Domain management in admin
+
+**PART 36: CLI Client & Agent** (if applicable)
+
+*CLI Client:*
+- [ ] Binary: `vidveil-cli`
+- [ ] Same version as server
+- [ ] CLI mode (standard commands)
+- [ ] TUI mode (interactive)
+- [ ] Config: `~/.config/apimgr/vidveil/cli.yml`
+- [ ] Theme matching server (dark default)
+- [ ] Cluster failover support:
+  - [ ] `server.primary` and `server.cluster` in cli.yml
+  - [ ] Auto-discover nodes from `/api/v1/healthz`
+  - [ ] Auto-update cli.yml with discovered nodes
+  - [ ] Automatic failover to next node if primary fails
+
+*Agent (only for monitoring/remote management projects):*
+- [ ] Binary: `vidveil-agent`
+- [ ] Runs on host, NOT in container
+- [ ] Same version as server
+- [ ] Systemd/launchd/Windows service support
+- [ ] Config: `/etc/apimgr/vidveil/agent.yml`
+- [ ] Connects to central server
+- [ ] Same flags as server EXCEPT no `--port`/`--address` (agents don't serve HTTP)
+- [ ] Cluster failover support:
+  - [ ] `server.primary` and `server.cluster` in agent.yml
+  - [ ] Auto-discover nodes from `/api/v1/healthz`
+  - [ ] Auto-update agent.yml with discovered nodes
+  - [ ] Automatic failover to next node if primary fails
+
+### Phase 12: Project-Specific (PART 37)
+
+**PART 37: Project-Specific**
+- [ ] Business logic documented
+- [ ] Data models defined
+- [ ] API endpoints specified
+- [ ] Configuration options listed
+- [ ] No implementation details (use PARTS 0-36)
+
+---
+
+## SECURITY AUDIT CHECKLIST
+
+### Authentication & Authorization
+
+- [ ] No hardcoded credentials in code
+- [ ] Passwords hashed with Argon2id (NEVER bcrypt)
+- [ ] Session tokens are cryptographically random
+- [ ] Session expiration enforced
+- [ ] CSRF protection on all forms
+- [ ] API authentication on all protected endpoints
+- [ ] Rate limiting prevents brute force
+- [ ] Account lockout after failed attempts
+- [ ] Privilege escalation properly controlled
+
+### Input Validation
+
+- [ ] All user input validated server-side
+- [ ] SQL injection prevented (parameterized queries)
+- [ ] XSS prevented (output encoding)
+- [ ] Command injection prevented (no shell exec with user input)
+- [ ] Path traversal prevented (canonicalized paths)
+- [ ] File upload restrictions enforced
+- [ ] Content-Type validation
+- [ ] Size limits on all inputs
+
+### Network Security
+
+- [ ] HTTPS enforced in production
+- [ ] HSTS header set
+- [ ] Secure cookies (HttpOnly, Secure, SameSite)
+- [ ] CORS properly configured
+- [ ] No sensitive data in URLs
+- [ ] API keys not logged
+- [ ] Error messages don't leak internals
+
+### Security Headers
+
+- [ ] Content-Security-Policy
+- [ ] X-Frame-Options: DENY
+- [ ] X-Content-Type-Options: nosniff
+- [ ] X-XSS-Protection: 1; mode=block
+- [ ] Referrer-Policy: strict-origin-when-cross-origin
+- [ ] Permissions-Policy (as appropriate)
+
+### Data Protection
+
+- [ ] Sensitive data encrypted at rest
+- [ ] Backups encrypted
+- [ ] No sensitive data in logs
+- [ ] PII handled according to policy
+- [ ] Data retention policies implemented
+- [ ] Secure deletion when required
+
+### Two-Factor Authentication (2FA)
+
+- [ ] TOTP support (RFC 6238)
+- [ ] WebAuthn/Passkeys support (FIDO2)
+- [ ] 2FA prompt on first login (can skip)
+- [ ] Remember device option (configurable, default 30 days)
+- [ ] Recovery codes generated on 2FA setup
+- [ ] 2FA can be disabled (requires password confirmation)
+- [ ] Trusted device management in settings
+
+### Token Security
+
+- [ ] Token prefixes enforced: `adm_` (admin), `usr_` (user), `org_` (org)
+- [ ] Agent token prefixes enforced: `adm_agt_`, `usr_agt_`, `org_agt_` (scoped to owner)
+- [ ] Setup token: 32 hex characters, no dashes
+- [ ] Tokens hashed before storage (SHA-256)
+- [ ] Token expiration enforced
+- [ ] Token revocation works immediately
+- [ ] No tokens in logs or error messages
+
+### Admin vs User Separation
+
+- [ ] Server admins in separate table (`admins`)
+- [ ] Regular users in separate table (`users`)
+- [ ] Separate session tables (`admin_sessions`, `user_sessions`)
+- [ ] Admin routes protected (`/{admin_path}/*`)
+- [ ] No privilege escalation path from user to admin
+
+---
+
+## API COMPLIANCE CHECKLIST
+
+### Route Compliance (MANDATORY)
+
+- [ ] ALL API routes are versioned (`/api/v1/...`)
+- [ ] ALL resource names are plural (`users`, not `user`)
+- [ ] ALL routes are lowercase
+- [ ] Multi-word routes use hyphens (`api-keys`, not `api_keys`)
+- [ ] No trailing slashes on routes
+- [ ] No verbs in routes (use HTTP methods)
+- [ ] Every API route has corresponding frontend route
+- [ ] Frontend routes match API structure (`/users` ↔ `/api/v1/users`)
+- [ ] Frontend is fully functional (not just display)
+- [ ] All CRUD operations work from both frontend and API
+- [ ] No orphan routes (frontend-only or API-only)
+- [ ] Routes follow scope rules (`/auth/`, `/users/`, `/orgs/`, `/admin/`)
+
+### REST API (`/api/v1/`)
+
+- [ ] Consistent URL patterns
+- [ ] Proper HTTP methods (GET, POST, PUT, PATCH, DELETE)
+- [ ] Correct status codes (200, 201, 204, 400, 401, 403, 404, 500)
+- [ ] JSON response format consistent
+- [ ] Error responses include code, message, details
+- [ ] Pagination: limit, offset, total
+- [ ] Filtering: query parameters
+- [ ] Sorting: sort, order parameters
+- [ ] HATEOAS links (optional but recommended)
+
+### OpenAPI/Swagger (`/openapi`)
+
+- [ ] Swagger UI accessible
+- [ ] OpenAPI spec at `/openapi.json`
+- [ ] All endpoints documented
+- [ ] Request/response schemas defined
+- [ ] Authentication documented
+- [ ] Examples provided
+- [ ] Theme matches project theme
+
+### GraphQL (`/graphql`)
+
+- [ ] GraphQL endpoint accessible
+- [ ] GraphiQL/Playground available
+- [ ] Schema matches REST API capabilities
+- [ ] Authentication integrated
+- [ ] Query complexity limits
+- [ ] Introspection disabled in production (optional)
+- [ ] Theme matches project theme
+
+### Content Negotiation
+
+- [ ] Accept header respected
+- [ ] JSON default for API
+- [ ] HTML default for frontend
+- [ ] Plain text via .txt extension or Accept header
+- [ ] CLI tools get text output automatically
+
+---
+
+## PERFORMANCE CHECKLIST
+
+### Response Times
+
+- [ ] Health check < 10ms
+- [ ] Simple API calls < 100ms
+- [ ] Complex queries < 500ms
+- [ ] Page loads < 1s (first contentful paint)
+
+### Resource Usage
+
+- [ ] Memory usage reasonable
+- [ ] No memory leaks
+- [ ] Goroutine count stable
+- [ ] Connection pool sized correctly
+- [ ] File handles closed properly
+
+### Caching
+
+- [ ] Static assets cached (1 year)
+- [ ] API responses cached where appropriate
+- [ ] ETags used for conditional requests
+- [ ] Cache-Control headers correct
+- [ ] CDN-friendly headers
+
+### Database
+
+- [ ] Indexes on frequently queried columns
+- [ ] N+1 query problems avoided
+- [ ] Connection pooling configured
+- [ ] Query timeouts set
+- [ ] Slow query logging enabled
+
+---
+
+## DOCKER CHECKLIST
+
+### Dockerfile Requirements
+
+- [ ] Multi-stage build (builder + runtime)
+- [ ] Alpine base image for runtime
+- [ ] `tini` as init process (PID 1)
+- [ ] Non-root user in container
+- [ ] HEALTHCHECK instruction present
+- [ ] OCI labels (org.opencontainers.image.*)
+- [ ] No secrets in image layers
+- [ ] Minimal image size
+
+### Docker Compose Files
+
+- [ ] `docker-compose.yml` - Production deployment
+- [ ] `docker-compose.dev.yml` - Development (hot reload)
+- [ ] `docker-compose.test.yml` - Testing
+- [ ] Volume mounts for `/config` and `/data`
+- [ ] Proper network configuration
+- [ ] Health checks use `--status` flag (exit 0=healthy, 1=unhealthy)
+
+### Container Behavior
+
+- [ ] Logs to stdout/stderr (container captures)
+- [ ] Graceful shutdown on SIGTERM
+- [ ] Environment variables for configuration
+- [ ] Single process per container
+- [ ] Stateless (data in volumes)
+
+---
+
+## CI/CD CHECKLIST
+
+### Workflow Files
+
+- [ ] `release.yml` - Stable releases (tag trigger)
+- [ ] `beta.yml` - Beta releases (branch trigger)
+- [ ] `daily.yml` - Nightly builds (cron + push)
+- [ ] `docker.yml` - Docker image builds
+
+### Build Requirements
+
+- [ ] All 8 platforms built (4 OS × 2 arch)
+- [ ] CGO_ENABLED=0 for all builds
+- [ ] Version injected via ldflags
+- [ ] Checksums generated (SHA256)
+- [ ] Artifacts uploaded to release
+
+### Docker Publishing
+
+- [ ] Multi-arch images (amd64, arm64)
+- [ ] Tagged by version and latest
+- [ ] Pushed to registry (ghcr.io or project registry)
+- [ ] Manifest lists for multi-arch
+
+### Quality Gates
+
+- [ ] Tests pass before release
+- [ ] License check passes (no GPL/AGPL)
+- [ ] Build succeeds on all platforms
+- [ ] Docker image builds successfully
+
+---
+
+## THEME/UI CHECKLIST
+
+### Theme System
+
+- [ ] Dark theme is DEFAULT
+- [ ] Light theme available
+- [ ] Auto theme (system preference)
+- [ ] Theme persisted in localStorage
+- [ ] Theme toggle in UI
+- [ ] Same theme system everywhere
+
+### Theme Coverage
+
+- [ ] Web frontend uses theme
+- [ ] Admin panel uses theme
+- [ ] Swagger UI uses theme
+- [ ] GraphQL Playground uses theme
+- [ ] ReadTheDocs uses theme
+- [ ] CLI TUI uses theme (if applicable)
+
+### CSS Requirements
+
+- [ ] NO inline styles
+- [ ] External stylesheets only
+- [ ] CSS variables for theme colors
+- [ ] Same color scheme across all UIs
+- [ ] `theme-dark` / `theme-light` classes on `<html>`
+
+### Accessibility (WCAG 2.1 AA)
+
+- [ ] Color contrast meets AA (both themes)
+- [ ] Keyboard navigation works
+- [ ] Screen reader compatible
+- [ ] Focus indicators visible
+- [ ] Alt text on images
+- [ ] Form labels properly associated
+- [ ] Skip to content link
+
+### Responsive Design
+
+- [ ] Mobile-first approach
+- [ ] Works on all screen sizes
+- [ ] Touch-friendly controls
+- [ ] No horizontal scroll on mobile
+
 ---
 
 ## FOR HUMANS (PROJECT CHECKLIST)
 
 ### Project Files
 
-- [ ] `AI.md` - Complete project specification (required, THE spec)
+- [ ] `AI.md` - Complete project specification (required, THE spec - HOW)
+- [ ] `IDEA.md` - Project vision document (optional, WHAT - must follow SPEC)
 - [ ] `TODO.AI.md` - Task tracking (when needed)
-- [ ] `PLAN.md` - Implementation plan (optional, if exists this is THE plan)
+- [ ] `PLAN.AI.md` - Implementation plan (optional, if exists this is THE plan)
 - [ ] `README.md` - User documentation (required)
 - [ ] `LICENSE.md` - License file (required)
 - [ ] `Makefile` - Build targets (required)
@@ -35497,7 +42094,7 @@ Business Behavior:
 ### Configuration
 
 - [ ] Config file: `server.yml` (not .yaml)
-- [ ] Environment variables: `{PROJECTNAME}_xxx`
+- [ ] Environment variables: `VIDVEIL_xxx`
 - [ ] CLI flags override env, env overrides file
 - [ ] Boolean accepts: true/false, yes/no, 1/0, on/off
 - [ ] Sane defaults for everything
@@ -35518,7 +42115,8 @@ Business Behavior:
 - [ ] Swagger UI at `/openapi`
 - [ ] OpenAPI spec at `/openapi.json` (JSON only, no YAML)
 - [ ] GraphQL at `/graphql` (synced with REST)
-- [ ] Health check at `/healthz`
+- [ ] Health check at `/healthz` (extended response with cluster info)
+- [ ] Health check includes cluster.nodes for agent/CLI failover
 
 ### Admin Panel
 
@@ -35555,9 +42153,13 @@ Business Behavior:
 ### Backup & Restore
 
 - [ ] Automatic daily backups (configurable)
-- [ ] Encrypted backups (AES-256-GCM)
+- [ ] Encrypted backups (AES-256-GCM) - optional unless compliance enabled
+- [ ] Compliance mode requires encryption (backups blocked without password)
 - [ ] Max 4 backups retained (default)
-- [ ] Restore via CLI: `--maintenance restore`
+- [ ] Restore via CLI: `--maintenance restore` (prompts for password if encrypted)
+- [ ] Backup verification after creation (all backups must be 100% valid)
+- [ ] Daily incremental: `vidveil-daily.tar.gz[.enc]` always exists
+- [ ] Cluster: each node maintains own valid backups
 
 ### Email & Notifications
 
@@ -35622,17 +42224,18 @@ Business Behavior:
 - [ ] `docs/stylesheets/dark.css` (OPTIONAL for dark theme customization)
 - [ ] `docs/stylesheets/light.css` (OPTIONAL for light theme customization)
 - [ ] Required pages: index, installation, configuration, api, admin, development
-- [ ] ReadTheDocs URL: `https://{projectorg}-{projectname}.readthedocs.io`
+- [ ] ReadTheDocs URL: `https://apimgr-vidveil.readthedocs.io`
 - [ ] Documentation badge in README.md
 
 ### CLI Client (if applicable)
 
-- [ ] Binary: `{projectname}-cli`
+- [ ] Binary: `vidveil-cli`
 - [ ] Same version as server
 - [ ] Standard CLI + TUI modes
-- [ ] Config: `~/.config/{projectorg}/{projectname}/cli.yml`
+- [ ] Config: `~/.config/apimgr/vidveil/cli.yml`
 - [ ] Dark theme for TUI (matching project theme)
 - [ ] Built alongside server
+- [ ] Cluster failover (auto-discover from `/api/v1/healthz`)
 
 ### Tor (if tor binary installed)
 
@@ -35640,6 +42243,7 @@ Business Behavior:
 - [ ] Dedicated tor process (not system tor)
 - [ ] .onion address management
 - [ ] Vanity address generation
+- [ ] Status in healthz: enabled, running, status, hostname
 
 ### Optional Features
 
@@ -35655,8 +42259,8 @@ Business Behavior:
 **ALL sections marked NON-NEGOTIABLE must be implemented exactly as specified.**
 
 **When in doubt:**
-- **AI:** Re-read AI.md and TODO.AI.md. Ask questions. Never assume.
-- **Humans:** Re-read AI.md. Update TODO.AI.md. Ask AI to clarify.
+- **AI:** Re-read AI.md (HOW), IDEA.md (WHAT), and TODO.AI.md. Ask questions. Never assume.
+- **Humans:** Re-read AI.md. Update IDEA.md for vision changes, TODO.AI.md for tasks. Ask AI to clarify.
 
 ---
 
@@ -35822,7 +42426,7 @@ Before starting integration:
 ## Example TODO.AI.md for Integration
 
 ```markdown
-# Integration Tasks for {projectname}
+# Integration Tasks for vidveil
 
 ## Critical (P0) - Do First
 
@@ -35899,15 +42503,15 @@ When bootstrapping a new project from this specification:
 ### Phase 1: Project Initialization
 
 1. **Confirm project details:**
-   - Project name: `{projectname}`
-   - Organization: `{projectorg}`
+   - Project name: `vidveil`
+   - Organization: `apimgr`
    - Description: What does this project do?
    - Primary purpose: What problem does it solve?
 
 2. **Create directory structure:**
    ```bash
-   mkdir -p {projectname}
-   cd {projectname}
+   mkdir -p vidveil
+   cd vidveil
 
    # Create all required directories
    mkdir -p src/{config,server,swagger,graphql,mode,paths,ssl,scheduler,service,admin}
@@ -35970,7 +42574,7 @@ When bootstrapping a new project from this specification:
 
 1. **Initialize Go module:**
    ```bash
-   go mod init github.com/{projectorg}/{projectname}
+   go mod init github.com/apimgr/vidveil
    ```
 
 2. **Create src/main.go** - Minimal entry point

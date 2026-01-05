@@ -5,9 +5,10 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/apimgr/vidveil/src/client/api"
+	"github.com/apimgr/vidveil/src/client/paths"
+	"github.com/charmbracelet/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,7 +38,8 @@ type Config struct {
 	} `yaml:"tui"`
 }
 
-// Global flags
+// Global flags per AI.md PART 36
+// Short flags only for -h (help) and -v (version)
 var (
 	cfgFile    string
 	serverAddr string
@@ -46,6 +48,7 @@ var (
 	noColor    bool
 	timeout    int
 	tuiMode    bool
+	debugMode  bool
 )
 
 // Global config and client
@@ -55,14 +58,9 @@ var (
 )
 
 // Execute runs the CLI
+// Per AI.md PART 36: Auto-detect TUI mode when interactive terminal + no command
 func Execute() error {
 	args := os.Args[1:]
-
-	// No args - show help
-	if len(args) == 0 {
-		printHelp()
-		return nil
-	}
 
 	// Parse global flags first
 	args = parseGlobalFlags(args)
@@ -73,11 +71,17 @@ func Execute() error {
 	// Initialize API client
 	initClient()
 
-	// Handle remaining args
+	// Per AI.md PART 36: Automatic Mode Detection
+	// - Interactive terminal + no command = TUI mode
+	// - Interactive terminal + only config flags = TUI mode
+	// - Interactive terminal + command provided = CLI mode
+	// - Piped/redirected output = Plain output (no TUI)
 	if len(args) == 0 {
-		if tuiMode {
+		// Check if stdout is interactive terminal
+		if term.IsTerminal(os.Stdout.Fd()) {
 			return runTUI()
 		}
+		// Non-interactive: show help
 		printHelp()
 		return nil
 	}
@@ -102,33 +106,35 @@ func Execute() error {
 	return nil
 }
 
+// parseGlobalFlags parses global flags per AI.md PART 36
+// Short flags only for -h (help) and -v (version)
 func parseGlobalFlags(args []string) []string {
 	var remaining []string
 	i := 0
 	for i < len(args) {
 		switch args[i] {
-		case "-s", "--server":
+		case "--server":
 			if i+1 < len(args) {
 				serverAddr = args[i+1]
 				i += 2
 			} else {
 				i++
 			}
-		case "-t", "--token":
+		case "--token":
 			if i+1 < len(args) {
 				apiToken = args[i+1]
 				i += 2
 			} else {
 				i++
 			}
-		case "-o", "--output":
+		case "--output":
 			if i+1 < len(args) {
 				outputFmt = args[i+1]
 				i += 2
 			} else {
 				i++
 			}
-		case "-c", "--config":
+		case "--config":
 			if i+1 < len(args) {
 				cfgFile = args[i+1]
 				i += 2
@@ -145,6 +151,9 @@ func parseGlobalFlags(args []string) []string {
 			} else {
 				i++
 			}
+		case "--debug":
+			debugMode = true
+			i++
 		case "--tui":
 			tuiMode = true
 			i++
@@ -170,10 +179,10 @@ func loadConfig() {
 	cfg.TUI.Theme = "default"
 	cfg.TUI.ShowHints = true
 
-	// Determine config path
+	// Determine config path per AI.md PART 36
+	// Uses paths module for OS-specific resolution
 	if cfgFile == "" {
-		home, _ := os.UserHomeDir()
-		cfgFile = filepath.Join(home, ".config", ProjectName, "cli.yml")
+		cfgFile = paths.ConfigFile()
 	}
 
 	// Read config file if exists
@@ -212,8 +221,9 @@ func initClient() {
 	client = api.NewClient(cfg.Server.Address, cfg.Server.Token, cfg.Server.Timeout)
 }
 
+// printHelp prints help per AI.md PART 36 format
 func printHelp() {
-	fmt.Printf(`%s v%s - CLI client for VidVeil video search
+	fmt.Printf(`%s %s - CLI client for VidVeil video search
 
 Usage:
   %s [command] [flags]
@@ -222,31 +232,30 @@ Usage:
 Commands:
   search <query>    Search for videos
   config            Manage configuration
-  tui               Launch interactive TUI
-  version           Show version information
-  help              Show this help
 
 Flags:
-  -s, --server string    Server address (default: config or https://x.scour.li)
-  -t, --token string     API token for authentication
-  -o, --output string    Output format: json, table, plain (default: table)
-  -c, --config string    Path to config file
+      --config string    Config file to load (default: cli.yml)
+      --server string    Server address (default: https://x.scour.li)
+      --token string     API token for authentication
+      --output string    Output format: json, table, plain (default: table)
       --no-color         Disable colored output
       --timeout int      Request timeout in seconds (default: 30)
-      --tui              Launch TUI mode
+      --debug            Enable debug output
   -h, --help             Show help
   -v, --version          Show version
+
+Note: Run without arguments to launch interactive TUI mode.
 
 Examples:
   %s "amateur"                    Search for videos
   %s search --limit 20 "test"     Search with limit
   %s --output json "query"        Output as JSON
-  %s tui                          Launch interactive TUI
 
 Use "%s [command] --help" for more information about a command.
-`, BinaryName, Version, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
+`, BinaryName, Version, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
 }
 
 func printVersion() {
-	fmt.Printf("%s v%s (%s) built %s\n", BinaryName, Version, CommitID, BuildDate)
+	// Per AI.md PART 36: CLI --version format
+	fmt.Printf("%s %s (%s) built %s\n", BinaryName, Version, CommitID, BuildDate)
 }

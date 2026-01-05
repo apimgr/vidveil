@@ -10,7 +10,14 @@ Public endpoints require no authentication. Admin endpoints require a Bearer tok
 
 ```bash
 curl -H "Authorization: Bearer YOUR_API_TOKEN" \
-  https://your-server.com/api/v1/admin/stats
+  https://your-server.com/api/v1/admin/server/settings
+```
+
+Or use the `X-API-Token` header:
+
+```bash
+curl -H "X-API-Token: YOUR_API_TOKEN" \
+  https://your-server.com/api/v1/admin/server/settings
 ```
 
 ---
@@ -27,22 +34,24 @@ GET /api/v1/search
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `q` | string | Yes | Search query |
+| `q` | string | Yes | Search query (supports bangs like `!ph amateur`) |
 | `engines` | string | No | Comma-separated engine list |
 | `page` | int | No | Page number (default: 1) |
-| `safe` | bool | No | Safe search filter |
 
 **Example Request:**
 
 ```bash
 # Basic search
-curl "https://your-server.com/api/v1/search?q=funny+cats"
+curl "https://your-server.com/api/v1/search?q=example"
+
+# Search with bang
+curl "https://your-server.com/api/v1/search?q=!ph+amateur"
 
 # Search with specific engines
 curl "https://your-server.com/api/v1/search?q=tutorial&engines=pornhub,xvideos"
 
 # Paginated results
-curl "https://your-server.com/api/v1/search?q=music&page=2"
+curl "https://your-server.com/api/v1/search?q=test&page=2"
 ```
 
 **Example Response:**
@@ -50,21 +59,36 @@ curl "https://your-server.com/api/v1/search?q=music&page=2"
 ```json
 {
   "success": true,
-  "query": "funny cats",
-  "page": 1,
-  "results": [
-    {
-      "title": "Video Title",
-      "url": "https://example.com/video",
-      "thumbnail": "https://example.com/thumb.jpg",
-      "duration": "10:30",
-      "views": "1.2M",
-      "engine": "pornhub",
-      "quality": "1080p"
-    }
-  ],
-  "total": 100,
-  "engines_searched": ["pornhub", "xvideos", "xhamster"]
+  "data": {
+    "query": "!ph amateur",
+    "search_query": "amateur",
+    "has_bang": true,
+    "bang_engines": ["pornhub"],
+    "results": [
+      {
+        "id": "abc123",
+        "title": "Video Title",
+        "url": "https://example.com/video",
+        "thumbnail": "/api/v1/proxy/thumbnails?url=...",
+        "duration": "10:30",
+        "duration_seconds": 630,
+        "views": "1.2M",
+        "views_count": 1200000,
+        "source": "pornhub",
+        "source_display": "PornHub",
+        "quality": "1080p"
+      }
+    ],
+    "engines_used": ["pornhub"],
+    "engines_failed": [],
+    "search_time_ms": 450
+  },
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 100,
+    "pages": 5
+  }
 }
 ```
 
@@ -86,10 +110,10 @@ curl -N "https://your-server.com/api/v1/search/stream?q=test"
 
 ```
 event: result
-data: {"title":"Video 1","url":"...","engine":"pornhub"}
+data: {"title":"Video 1","url":"...","source":"pornhub"}
 
 event: result
-data: {"title":"Video 2","url":"...","engine":"xvideos"}
+data: {"title":"Video 2","url":"...","source":"xvideos"}
 
 event: done
 data: {"total":2,"engines_completed":["pornhub","xvideos"]}
@@ -122,10 +146,68 @@ GET /api/v1/search.txt
 
 Returns plain text results (useful for CLI tools).
 
+---
+
+## Bangs
+
+### List All Bangs
+
+```
+GET /api/v1/bangs
+```
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "bang": "!pornhub",
+      "engine_name": "pornhub",
+      "display_name": "PornHub",
+      "short_code": "!ph"
+    },
+    {
+      "bang": "!xvideos",
+      "engine_name": "xvideos",
+      "display_name": "XVideos",
+      "short_code": "!xv"
+    }
+  ],
+  "count": 54
+}
+```
+
+### Autocomplete
+
+```
+GET /api/v1/bangs/autocomplete
+```
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `q` | string | Yes | Partial bang input (e.g., `!po`) |
+
 **Example:**
 
 ```bash
-curl "https://your-server.com/api/v1/search.txt?q=test"
+curl "https://your-server.com/api/v1/bangs/autocomplete?q=!po"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "suggestions": [
+    {"bang": "!pornhub", "short_code": "!ph", "display_name": "PornHub"},
+    {"bang": "!pornmd", "short_code": "!pmd", "display_name": "PornMD"}
+  ],
+  "type": "bang_start"
+}
 ```
 
 ---
@@ -138,13 +220,7 @@ curl "https://your-server.com/api/v1/search.txt?q=test"
 GET /api/v1/engines
 ```
 
-**Example:**
-
-```bash
-curl "https://your-server.com/api/v1/engines"
-```
-
-**Response:**
+**Example Response:**
 
 ```json
 {
@@ -152,15 +228,19 @@ curl "https://your-server.com/api/v1/engines"
   "data": [
     {
       "name": "pornhub",
+      "display_name": "PornHub",
       "enabled": true,
-      "priority": 100,
-      "categories": ["general", "amateur"]
+      "available": true,
+      "tier": 1,
+      "features": ["api", "pagination", "hd"]
     },
     {
       "name": "xvideos",
+      "display_name": "XVideos",
       "enabled": true,
-      "priority": 90,
-      "categories": ["general"]
+      "available": true,
+      "tier": 1,
+      "features": ["pagination", "hd"]
     }
   ]
 }
@@ -180,42 +260,6 @@ curl "https://your-server.com/api/v1/engines/pornhub"
 
 ---
 
-## Health
-
-### Health Check
-
-```
-GET /api/v1/healthz
-```
-
-**Example:**
-
-```bash
-curl "https://your-server.com/api/v1/healthz"
-```
-
-**Response:**
-
-```json
-{
-  "status": "healthy",
-  "version": "1.0.0",
-  "uptime": "24h15m",
-  "database": "ok",
-  "cache": "ok"
-}
-```
-
-### Simple Health (Plain Text)
-
-```
-GET /healthz
-```
-
-Returns `OK` if healthy.
-
----
-
 ## Stats
 
 ### Server Statistics
@@ -224,63 +268,67 @@ Returns `OK` if healthy.
 GET /api/v1/stats
 ```
 
-**Example:**
-
-```bash
-curl "https://your-server.com/api/v1/stats"
-```
-
 **Response:**
 
 ```json
 {
   "success": true,
   "data": {
-    "total_searches": 15420,
-    "engines_enabled": 47,
-    "cache_hits": 8234,
-    "uptime_seconds": 86400
+    "engines_count": 54,
+    "engines_enabled": 47
   }
 }
 ```
 
 ---
 
+## Health
+
+### Health Check (JSON)
+
+```
+GET /api/v1/healthz
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "engines_enabled": 47
+}
+```
+
+### Simple Health (Root)
+
+```
+GET /healthz
+```
+
+Also supports `/healthz.json` and `/healthz.txt` extensions.
+
+---
+
 ## Admin API
 
-All admin endpoints require Bearer token authentication.
+All admin endpoints require Bearer token authentication. Generate tokens at `/admin/server/security/tokens`.
 
-### Get API Token
-
-1. Log into admin panel at `/admin`
-2. Go to Profile → API Token
-3. Copy or regenerate your token
-
-### Statistics
+### Token Authentication
 
 ```bash
-curl -H "Authorization: Bearer TOKEN" \
-  "https://your-server.com/api/v1/admin/stats"
+# Using Authorization header
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "https://your-server.com/api/v1/admin/server/settings"
+
+# Using X-API-Token header
+curl -H "X-API-Token: YOUR_TOKEN" \
+  "https://your-server.com/api/v1/admin/server/settings"
 ```
 
-### Engine Management
+### Server Settings
 
 ```bash
-# List all engines with admin details
-curl -H "Authorization: Bearer TOKEN" \
-  "https://your-server.com/api/v1/admin/engines"
-
-# Enable/disable engine
-curl -X PUT -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"enabled": false}' \
-  "https://your-server.com/api/v1/admin/engines/pornhub"
-```
-
-### Server Configuration
-
-```bash
-# Get current config
+# Get current settings
 curl -H "Authorization: Bearer TOKEN" \
   "https://your-server.com/api/v1/admin/server/settings"
 
@@ -289,6 +337,64 @@ curl -X PUT -H "Authorization: Bearer TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"server": {"port": "8080"}}' \
   "https://your-server.com/api/v1/admin/server/settings"
+```
+
+### Engine Management
+
+```bash
+# List all engines with admin details
+curl -H "Authorization: Bearer TOKEN" \
+  "https://your-server.com/api/v1/admin/server/engines"
+```
+
+### Backup & Restore
+
+```bash
+# Create backup
+curl -X POST -H "Authorization: Bearer TOKEN" \
+  "https://your-server.com/api/v1/admin/server/system/backup"
+
+# List backups
+curl -H "Authorization: Bearer TOKEN" \
+  "https://your-server.com/api/v1/admin/server/system/backup"
+
+# Restore from backup
+curl -X POST -H "Authorization: Bearer TOKEN" \
+  -F "file=@backup.tar.gz" \
+  "https://your-server.com/api/v1/admin/server/system/backup/restore"
+```
+
+### Maintenance Mode
+
+```bash
+curl -X POST -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}' \
+  "https://your-server.com/api/v1/admin/maintenance"
+```
+
+### Scheduler
+
+```bash
+# List scheduled tasks
+curl -H "Authorization: Bearer TOKEN" \
+  "https://your-server.com/api/v1/admin/server/scheduler"
+
+# Run task manually
+curl -X POST -H "Authorization: Bearer TOKEN" \
+  "https://your-server.com/api/v1/admin/server/scheduler/{id}/run"
+```
+
+### Logs
+
+```bash
+# Access logs
+curl -H "Authorization: Bearer TOKEN" \
+  "https://your-server.com/api/v1/admin/server/logs/access"
+
+# Error logs
+curl -H "Authorization: Bearer TOKEN" \
+  "https://your-server.com/api/v1/admin/server/logs/error"
 ```
 
 ---
@@ -301,8 +407,7 @@ All errors follow this format:
 {
   "success": false,
   "error": "Error message",
-  "code": "ERROR_CODE",
-  "status": 400
+  "code": "ERROR_CODE"
 }
 ```
 
@@ -325,86 +430,33 @@ Default limits:
 - **API**: 120 requests/minute
 - **Admin**: 30 requests/minute
 
-When rate limited, you'll receive:
+Rate limit headers in responses:
+
+```
+X-RateLimit-Limit: 120
+X-RateLimit-Remaining: 115
+X-RateLimit-Reset: 1704067200
+```
+
+When rate limited:
 
 ```json
 {
   "success": false,
   "error": "Rate limit exceeded",
   "code": "RATE_LIMITED",
-  "status": 429,
   "retry_after": 30
 }
 ```
 
 ---
 
-## Code Examples
+## Documentation Endpoints
 
-### Python
-
-```python
-import requests
-
-# Search
-response = requests.get(
-    "https://your-server.com/api/v1/search",
-    params={"q": "test", "page": 1}
-)
-data = response.json()
-
-for result in data["results"]:
-    print(f"{result['title']} - {result['duration']}")
-```
-
-### JavaScript (Node.js)
-
-```javascript
-const fetch = require('node-fetch');
-
-async function search(query) {
-  const response = await fetch(
-    `https://your-server.com/api/v1/search?q=${encodeURIComponent(query)}`
-  );
-  const data = await response.json();
-  return data.results;
-}
-
-search('test').then(results => {
-  results.forEach(r => console.log(r.title));
-});
-```
-
-### Go
-
-```go
-package main
-
-import (
-    "encoding/json"
-    "fmt"
-    "net/http"
-    "net/url"
-)
-
-type SearchResponse struct {
-    Success bool `json:"success"`
-    Results []struct {
-        Title string `json:"title"`
-        URL   string `json:"url"`
-    } `json:"results"`
-}
-
-func main() {
-    resp, _ := http.Get("https://your-server.com/api/v1/search?q=" +
-        url.QueryEscape("test"))
-    defer resp.Body.Close()
-
-    var data SearchResponse
-    json.NewDecoder(resp.Body).Decode(&data)
-
-    for _, r := range data.Results {
-        fmt.Println(r.Title)
-    }
-}
-```
+| Endpoint | Description |
+|----------|-------------|
+| `/openapi` | Swagger UI |
+| `/openapi.json` | OpenAPI 3.0 spec (JSON) |
+| `/graphql` | GraphQL endpoint |
+| `/graphiql` | GraphQL playground |
+| `/graphql/schema` | GraphQL schema definition |

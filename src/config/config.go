@@ -22,9 +22,15 @@ var Version = "dev"
 
 // Config holds all application configuration per AI.md spec
 type Config struct {
-	Server ServerConfig `yaml:"server"`
-	Web    WebConfig    `yaml:"web"`
-	Search SearchConfig `yaml:"search"`
+	Server  ServerConfig  `yaml:"server"`
+	Web     WebConfig     `yaml:"web"`
+	Search  SearchConfig  `yaml:"search"`
+	Engines EnginesConfig `yaml:"engines"`
+}
+
+// EnginesConfig holds engine-specific settings
+type EnginesConfig struct {
+	UserAgent UserAgentConfig `yaml:"useragent"`
 }
 
 // ServerConfig holds server-related settings per AI.md
@@ -106,6 +112,8 @@ type ServerConfig struct {
 
 // AdminConfig holds admin panel settings
 type AdminConfig struct {
+	// Path is the admin panel URL path (default: "admin") per PART 17
+	Path        string          `yaml:"path"`
 	Email       string          `yaml:"email"`
 	Username    string          `yaml:"username"`
 	Password    string          `yaml:"password"`
@@ -546,7 +554,7 @@ type SearchConfig struct {
 	EngineTimeout      int      `yaml:"engine_timeout"`
 	ResultsPerPage     int      `yaml:"results_per_page"`
 	MaxPages           int      `yaml:"max_pages"`
-	// Minimum video duration (default 300 = 5 min)
+	// Minimum video duration in seconds (default 600 = 10 minutes)
 	MinDurationSeconds int `yaml:"min_duration_seconds"`
 	// Filter out premium/gold content
 	FilterPremium bool `yaml:"filter_premium"`
@@ -554,6 +562,100 @@ type SearchConfig struct {
 	SpoofTLS        bool                  `yaml:"spoof_tls"`
 	Tor             TorConfig             `yaml:"tor"`
 	AgeVerification AgeVerificationConfig `yaml:"age_verification"`
+}
+
+// UserAgentConfig holds user agent settings for engine requests
+// Configurable to allow updating without rebuild
+type UserAgentConfig struct {
+	// OS: windows, macos, linux (default: windows)
+	OS string `yaml:"os"`
+	// Version: OS version number (default: 11 for Windows)
+	Version string `yaml:"version"`
+	// Browser: chrome, firefox, edge (default: chrome)
+	Browser string `yaml:"browser"`
+	// BrowserVersion: browser version (default: latest stable)
+	BrowserVersion string `yaml:"browser_version"`
+}
+
+// String returns the formatted user agent string
+// Generates Chrome/Firefox/Edge user agent based on config
+func (ua UserAgentConfig) String() string {
+	// Map OS to NT version
+	var osString string
+	switch ua.OS {
+	case "windows":
+		// Windows 11 = NT 10.0, Windows 10 = NT 10.0
+		// Windows versions 10 and 11 both report as NT 10.0
+		osString = "Windows NT 10.0; Win64; x64"
+	case "macos":
+		// macOS version format: 10_15_7
+		version := ua.Version
+		if version == "" {
+			version = "14_0"
+		}
+		osString = "Macintosh; Intel Mac OS X " + version
+	case "linux":
+		osString = "X11; Linux x86_64"
+	default:
+		osString = "Windows NT 10.0; Win64; x64"
+	}
+
+	// Map browser to user agent format
+	browserVersion := ua.BrowserVersion
+	if browserVersion == "" {
+		browserVersion = "131"
+	}
+
+	switch ua.Browser {
+	case "firefox":
+		return "Mozilla/5.0 (" + osString + "; rv:" + browserVersion + ".0) Gecko/20100101 Firefox/" + browserVersion + ".0"
+	case "edge":
+		return "Mozilla/5.0 (" + osString + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + browserVersion + ".0.0.0 Safari/537.36 Edg/" + browserVersion + ".0.0.0"
+	case "chrome":
+		fallthrough
+	default:
+		return "Mozilla/5.0 (" + osString + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + browserVersion + ".0.0.0 Safari/537.36"
+	}
+}
+
+// SecChUa returns the Sec-Ch-Ua header value for Chrome/Edge
+// Returns empty string for Firefox (doesn't send this header)
+func (ua UserAgentConfig) SecChUa() string {
+	browserVersion := ua.BrowserVersion
+	if browserVersion == "" {
+		browserVersion = "131"
+	}
+
+	switch ua.Browser {
+	case "firefox":
+		return "" // Firefox doesn't send Sec-Ch-Ua
+	case "edge":
+		return `"Microsoft Edge";v="` + browserVersion + `", "Chromium";v="` + browserVersion + `", "Not_A Brand";v="24"`
+	case "chrome":
+		fallthrough
+	default:
+		return `"Google Chrome";v="` + browserVersion + `", "Chromium";v="` + browserVersion + `", "Not_A Brand";v="24"`
+	}
+}
+
+// SecChUaPlatform returns the Sec-Ch-Ua-Platform header value
+func (ua UserAgentConfig) SecChUaPlatform() string {
+	switch ua.OS {
+	case "macos":
+		return `"macOS"`
+	case "linux":
+		return `"Linux"`
+	case "windows":
+		fallthrough
+	default:
+		return `"Windows"`
+	}
+}
+
+// IsChromiumBased returns true if the browser is Chromium-based (Chrome, Edge)
+// Used to determine if Sec-Ch-* headers should be sent
+func (ua UserAgentConfig) IsChromiumBased() bool {
+	return ua.Browser != "firefox"
 }
 
 // TorConfig holds Tor proxy settings
@@ -586,7 +688,7 @@ func Default() *Config {
 		Server: ServerConfig{
 			Port:        "80",
 			FQDN:        fqdn,
-			Address:     "0.0.0.0",
+			Address:     "[::]",
 			Mode:        "production",
 			Title:       "Vidveil",
 			Description: "Privacy-respecting adult video search",
@@ -594,6 +696,7 @@ func Default() *Config {
 			Group:       "",
 			PIDFile:     true,
 			Admin: AdminConfig{
+				Path:     "admin",
 				Email:    "admin@" + fqdn,
 				Username: "administrator",
 				Password: generateToken(16),
@@ -834,8 +937,8 @@ func Default() *Config {
 			EngineTimeout:      15,
 			ResultsPerPage:     50,
 			MaxPages:           10,
-			// No minimum duration by default
-			MinDurationSeconds: 0,
+			// Default minimum duration: 10 minutes (600 seconds)
+			MinDurationSeconds: 600,
 			FilterPremium:      true,
 			// Disabled by default - can cause issues with some engines
 			// Enable only for Cloudflare-protected sites
@@ -854,6 +957,14 @@ func Default() *Config {
 				CookieDays: 30,
 			},
 		},
+		Engines: EnginesConfig{
+			UserAgent: UserAgentConfig{
+				OS:             "windows",
+				Version:        "11",
+				Browser:        "chrome",
+				BrowserVersion: "131",
+			},
+		},
 	}
 }
 
@@ -866,8 +977,8 @@ func GetPaths(configDir, dataDir string) *Paths {
 func Load(configDir, dataDir string) (*Config, string, error) {
 	paths := GetPaths(configDir, dataDir)
 
-	// Ensure directories exist
-	for _, dir := range []string{paths.Config, paths.Data, paths.Log} {
+	// Ensure directories exist per AI.md PART 8
+	for _, dir := range []string{paths.Config, paths.Data, paths.Cache, paths.Log} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, "", fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}

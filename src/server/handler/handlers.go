@@ -21,7 +21,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
-	"github.com/apimgr/vidveil/src/version"
+	"github.com/apimgr/vidveil/src/common/version"
 )
 
 // templatesFS holds the embedded templates filesystem
@@ -247,7 +247,7 @@ func (h *Handler) HomePage(w http.ResponseWriter, r *http.Request) {
 			"title":        h.cfg.Server.Title,
 			"description":  h.cfg.Server.Description,
 			"engine_count": engineCount,
-			"version":      "0.2.0",
+			"version":      version.Get(),
 		})
 		
 	case "text/plain":
@@ -256,7 +256,7 @@ func (h *Handler) HomePage(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "%s\n", h.cfg.Server.Title)
 		fmt.Fprintf(w, "%s\n\n", h.cfg.Server.Description)
 		fmt.Fprintf(w, "Search Engines: %d enabled\n", engineCount)
-		fmt.Fprintf(w, "Version: 0.2.0\n")
+		fmt.Fprintf(w, "Version: %s\n", version.Get())
 		
 	default:
 		// HTML response for browsers (default)
@@ -393,32 +393,32 @@ func (h *Handler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 	
-	version := "0.2.0"
-	
+	ver := version.Get()
+
 	switch format {
 	case "application/json":
 		// JSON response for API clients
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"title":         h.cfg.Server.Title,
-			"version":       version,
+			"version":       ver,
 			"build_date":    BuildDateTime,
 			"description":   h.cfg.Server.Description,
 		})
-		
+
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "%s\n", h.cfg.Server.Title)
-		fmt.Fprintf(w, "Version: %s\n", version)
+		fmt.Fprintf(w, "Version: %s\n", ver)
 		fmt.Fprintf(w, "Build Date: %s\n", BuildDateTime)
 		fmt.Fprintf(w, "\n%s\n", h.cfg.Server.Description)
-		
+
 	default:
 		// HTML response for browsers (default)
 		h.renderTemplate(w, "about", map[string]interface{}{
 			"Title":         "About - " + h.cfg.Server.Title,
 			"Theme":         h.cfg.Web.UI.Theme,
-			"Version":       version,
+			"Version":       ver,
 			"BuildDateTime": BuildDateTime,
 		})
 	}
@@ -428,30 +428,30 @@ func (h *Handler) AboutPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 	
-	version := "0.2.0"
-	
+	ver := version.Get()
+
 	switch format {
 	case "application/json":
 		// JSON response for API clients
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"title":   "Privacy Policy",
-			"version": version,
+			"version": ver,
 		})
-		
+
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "Privacy Policy - %s\n", h.cfg.Server.Title)
-		fmt.Fprintf(w, "Version: %s\n\n", version)
+		fmt.Fprintf(w, "Version: %s\n\n", ver)
 		fmt.Fprintf(w, "VidVeil is a privacy-respecting meta search engine.\n")
 		fmt.Fprintf(w, "We do not track, log, or collect any user data.\n")
-		
+
 	default:
 		// HTML response for browsers (default)
 		h.renderTemplate(w, "privacy", map[string]interface{}{
 			"Title":         "Privacy Policy - " + h.cfg.Server.Title,
 			"Theme":         h.cfg.Web.UI.Theme,
-			"Version":       version,
+			"Version":       ver,
 			"BuildDateTime": BuildDateTime,
 		})
 	}
@@ -462,7 +462,11 @@ func (h *Handler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 // detectResponseFormat determines response format per AI.md PART 17 lines 15194-15244
 func detectResponseFormat(r *http.Request) string {
 	// 0. Check URL path extension FIRST per AI.md PART 13 lines 11271-11272
+	// Use original path from context if available (set by extensionStripMiddleware)
 	path := r.URL.Path
+	if origPath, ok := r.Context().Value("vidveil.originalPath").(string); ok {
+		path = origPath
+	}
 	if strings.HasSuffix(path, ".json") {
 		return "application/json"
 	}
@@ -782,6 +786,14 @@ func (h *Handler) APISearchStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get page parameter for infinite scroll
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
+			page = pn
+		}
+	}
+
 	// Get engine names - bangs take priority, then URL param
 	engineNames := parsed.Engines
 	if len(engineNames) == 0 {
@@ -804,7 +816,7 @@ func (h *Handler) APISearchStream(w http.ResponseWriter, r *http.Request) {
 
 	// Stream results
 	ctx := r.Context()
-	resultsChan := h.engineMgr.SearchStream(ctx, searchQuery, 1, engineNames)
+	resultsChan := h.engineMgr.SearchStream(ctx, searchQuery, page, engineNames)
 
 	for result := range resultsChan {
 		data, err := json.Marshal(result)
@@ -823,6 +835,9 @@ func (h *Handler) APISearchStream(w http.ResponseWriter, r *http.Request) {
 
 // APISearch handles search API requests
 func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
+	// Detect response format per AI.md PART 14
+	format := detectResponseFormat(r)
+
 	query := r.URL.Query().Get("q")
 	if query == "" {
 		h.jsonError(w, "Query parameter 'q' is required", "MISSING_QUERY", http.StatusBadRequest)
@@ -879,6 +894,28 @@ func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
 	results.Data.HasBang = parsed.HasBang
 	results.Data.BangEngines = parsed.Engines
 
+	// Plain text format for .txt extension or Accept: text/plain
+	if format == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "query: %s\n", results.Data.Query)
+		fmt.Fprintf(w, "results: %d\n", len(results.Data.Results))
+		fmt.Fprintf(w, "---\n")
+		for i, r := range results.Data.Results {
+			fmt.Fprintf(w, "%d. %s\n", i+1, r.Title)
+			fmt.Fprintf(w, "   url: %s\n", r.URL)
+			fmt.Fprintf(w, "   source: %s\n", r.Source)
+			if r.Duration != "" {
+				fmt.Fprintf(w, "   duration: %s\n", r.Duration)
+			}
+			if r.Views != "" {
+				fmt.Fprintf(w, "   views: %s\n", r.Views)
+			}
+			fmt.Fprintf(w, "\n")
+		}
+		return
+	}
+
 	h.jsonResponse(w, results)
 }
 
@@ -930,7 +967,22 @@ func (h *Handler) APISearchText(w http.ResponseWriter, r *http.Request) {
 
 // APIBangs returns list of available bang shortcuts
 func (h *Handler) APIBangs(w http.ResponseWriter, r *http.Request) {
+	// Detect response format per AI.md PART 14
+	format := detectResponseFormat(r)
+
 	bangs := engine.ListBangs()
+
+	// Plain text format
+	if format == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "bangs: %d\n---\n", len(bangs))
+		for _, b := range bangs {
+			fmt.Fprintf(w, "!%s - %s\n", b.Bang, b.EngineName)
+		}
+		return
+	}
+
 	h.jsonResponse(w, map[string]interface{}{
 		"success": true,
 		"data":    bangs,
@@ -940,11 +992,26 @@ func (h *Handler) APIBangs(w http.ResponseWriter, r *http.Request) {
 
 // APIAutocomplete returns autocomplete suggestions for bangs
 func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
+	// Detect response format per AI.md PART 14
+	format := detectResponseFormat(r)
+
 	q := r.URL.Query().Get("q")
 	if q == "" {
+		// Return popular searches when query is empty
+		popular := engine.GetPopularSearches(10)
+		if format == "text/plain" {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "type: popular\nsuggestions: %d\n---\n", len(popular))
+			for _, term := range popular {
+				fmt.Fprintf(w, "%s\n", term)
+			}
+			return
+		}
 		h.jsonResponse(w, map[string]interface{}{
 			"success":     true,
-			"suggestions": []interface{}{},
+			"suggestions": popular,
+			"type":        "popular",
 		})
 		return
 	}
@@ -954,6 +1021,15 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 		// Remove the "!" prefix
 		prefix := q[1:]
 		suggestions := engine.Autocomplete(prefix)
+		if format == "text/plain" {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "type: bang\nsuggestions: %d\n---\n", len(suggestions))
+			for _, s := range suggestions {
+				fmt.Fprintf(w, "!%s - %s\n", s.Bang, s.EngineName)
+			}
+			return
+		}
 		h.jsonResponse(w, map[string]interface{}{
 			"success":     true,
 			"suggestions": suggestions,
@@ -968,6 +1044,15 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 		// Return first 10 bangs as suggestions
 		if len(bangs) > 10 {
 			bangs = bangs[:10]
+		}
+		if format == "text/plain" {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "type: bang_start\nsuggestions: %d\n---\n", len(bangs))
+			for _, b := range bangs {
+				fmt.Fprintf(w, "!%s - %s\n", b.Bang, b.EngineName)
+			}
+			return
 		}
 		h.jsonResponse(w, map[string]interface{}{
 			"success":     true,
@@ -984,6 +1069,15 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(lastWord, "!") && len(lastWord) > 1 {
 			prefix := lastWord[1:]
 			suggestions := engine.Autocomplete(prefix)
+			if format == "text/plain" {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprintf(w, "type: bang\nreplace: %s\nsuggestions: %d\n---\n", lastWord, len(suggestions))
+				for _, s := range suggestions {
+					fmt.Fprintf(w, "!%s - %s\n", s.Bang, s.EngineName)
+				}
+				return
+			}
 			// replace indicates what to replace in query
 			h.jsonResponse(w, map[string]interface{}{
 				"success":     true,
@@ -995,17 +1089,55 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// No bang autocomplete needed
+	// No bang in query - return search term suggestions
+	// Get the last word as the prefix for suggestions
+	lastWord := ""
+	if len(words) > 0 {
+		lastWord = strings.ToLower(words[len(words)-1])
+	} else {
+		lastWord = strings.ToLower(q)
+	}
+
+	termSuggestions := engine.AutocompleteSuggestions(lastWord, 10)
+
+	if format == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "type: search\nsuggestions: %d\n---\n", len(termSuggestions))
+		for _, s := range termSuggestions {
+			fmt.Fprintf(w, "%s\n", s.Term)
+		}
+		return
+	}
 	h.jsonResponse(w, map[string]interface{}{
 		"success":     true,
-		"suggestions": []interface{}{},
-		"type":        "none",
+		"suggestions": termSuggestions,
+		"type":        "search",
 	})
 }
 
 // APIEngines returns list of available engines
 func (h *Handler) APIEngines(w http.ResponseWriter, r *http.Request) {
+	// Detect response format per AI.md PART 14
+	format := detectResponseFormat(r)
+
 	engines := h.engineMgr.ListEngines()
+
+	// Plain text format
+	if format == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "engines: %d\n---\n", len(engines))
+		for _, e := range engines {
+			status := "enabled"
+			if !e.Enabled {
+				status = "disabled"
+			}
+			fmt.Fprintf(w, "%s (%s) - tier %d [%s]\n", e.Name, e.DisplayName, e.Tier, status)
+		}
+		return
+	}
+
 	h.jsonResponse(w, model.EnginesResponse{
 		Success: true,
 		Data:    engines,
@@ -1014,32 +1146,61 @@ func (h *Handler) APIEngines(w http.ResponseWriter, r *http.Request) {
 
 // APIEngineDetails returns details for a specific engine
 func (h *Handler) APIEngineDetails(w http.ResponseWriter, r *http.Request) {
+	// Detect response format per AI.md PART 14
+	format := detectResponseFormat(r)
+
 	name := chi.URLParam(r, "name")
-	engine, ok := h.engineMgr.GetEngine(name)
+	eng, ok := h.engineMgr.GetEngine(name)
 	if !ok {
 		h.jsonError(w, "Engine not found", "ENGINE_NOT_FOUND", http.StatusNotFound)
+		return
+	}
+
+	// Plain text format
+	if format == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "name: %s\n", eng.Name())
+		fmt.Fprintf(w, "display_name: %s\n", eng.DisplayName())
+		fmt.Fprintf(w, "tier: %d\n", eng.Tier())
+		fmt.Fprintf(w, "enabled: %t\n", eng.IsAvailable())
 		return
 	}
 
 	h.jsonResponse(w, map[string]interface{}{
 		"success": true,
 		"data": model.EngineInfo{
-			Name:        engine.Name(),
-			DisplayName: engine.DisplayName(),
-			Enabled:     engine.IsAvailable(),
-			Available:   engine.IsAvailable(),
-			Tier:        engine.Tier(),
+			Name:        eng.Name(),
+			DisplayName: eng.DisplayName(),
+			Enabled:     eng.IsAvailable(),
+			Available:   eng.IsAvailable(),
+			Tier:        eng.Tier(),
 		},
 	})
 }
 
 // APIStats returns public statistics
 func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
+	// Detect response format per AI.md PART 14
+	format := detectResponseFormat(r)
+
+	enabled := h.engineMgr.EnabledCount()
+	total := len(h.engineMgr.ListEngines())
+
+	// Plain text format
+	if format == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "engines_enabled: %d\n", enabled)
+		fmt.Fprintf(w, "engines_total: %d\n", total)
+		return
+	}
+
 	h.jsonResponse(w, map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
-			"engines_enabled": h.engineMgr.EnabledCount(),
-			"engines_total":   len(h.engineMgr.ListEngines()),
+			"engines_enabled": enabled,
+			"engines_total":   total,
 		},
 	})
 }
@@ -1049,23 +1210,26 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 // APIHealthCheck handles /api/v1/healthz endpoint (JSON only)
 // Per AI.md PART 13 lines 11351-11353: Same JSON as /healthz
 func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
+	// Detect response format per AI.md PART 14
+	format := detectResponseFormat(r)
+
 	// Build health response per AI.md PART 13
 	hostname, _ := os.Hostname()
 	uptime := getUptime()
 	timestamp := time.Now().UTC().Format(time.RFC3339)
-	
+
 	// Get mode from config
 	appMode := "production"
 	if h.cfg != nil && h.cfg.IsDevelopmentMode() {
 		appMode = "development"
 	}
-	
+
 	// Node ID (standalone or cluster)
 	nodeID := "standalone"
-	
+
 	// Cluster status
 	clusterEnabled := false
-	
+
 	// Build checks object - MUST be simple "ok"/"error" strings
 	// Per AI.md PART 13 lines 11292-11295
 	checks := map[string]string{
@@ -1073,10 +1237,24 @@ func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		"cache":    "ok",
 		"disk":     "ok",
 	}
-	
+
 	// Overall status
 	status := "healthy"
-	
+
+	// Plain text format for .txt extension or Accept: text/plain
+	if format == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "status: %s\n", status)
+		fmt.Fprintf(w, "version: %s\n", version.Get())
+		fmt.Fprintf(w, "mode: %s\n", appMode)
+		fmt.Fprintf(w, "uptime: %s\n", uptime)
+		fmt.Fprintf(w, "database: %s\n", checks["database"])
+		fmt.Fprintf(w, "cache: %s\n", checks["cache"])
+		fmt.Fprintf(w, "disk: %s\n", checks["disk"])
+		return
+	}
+
 	// JSON format per AI.md PART 13 lines 11312-11379
 	response := map[string]interface{}{
 		"status":    status,
@@ -1093,7 +1271,7 @@ func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		},
 		"checks": checks,
 	}
-	
+
 	WriteJSON(w, http.StatusOK, response)
 }
 
@@ -1153,7 +1331,7 @@ func (h *Handler) RenderErrorPage(w http.ResponseWriter, code int, title, messag
 		"SiteTitle": h.cfg.Web.Branding.AppName,
 	}
 
-	tmpl, err := template.ParseFS(templatesFS, "template/error.tmpl")
+	tmpl, err := template.ParseFS(templatesFS, "template/page/error.tmpl")
 	if err != nil {
 		// Fallback to plain text error
 		http.Error(w, fmt.Sprintf("%d %s: %s", code, title, message), code)
@@ -1185,22 +1363,22 @@ func (h *Handler) renderTemplate(w http.ResponseWriter, name string, data map[st
 	templateName := ""
 	switch name {
 	case "home":
-		templateFile = "template/index.tmpl"
+		templateFile = "template/page/index.tmpl"
 		templateName = "home"
 	case "search":
-		templateFile = "template/search.tmpl"
+		templateFile = "template/page/search.tmpl"
 		templateName = "search"
 	case "preferences":
-		templateFile = "template/preferences.tmpl"
+		templateFile = "template/page/preferences.tmpl"
 		templateName = "preferences"
 	case "about":
-		templateFile = "template/about.tmpl"
+		templateFile = "template/page/about.tmpl"
 		templateName = "about"
 	case "age-verify":
-		templateFile = "template/age-verify.tmpl"
+		templateFile = "template/page/age-verify.tmpl"
 		templateName = "age-verify"
 	case "privacy":
-		templateFile = "template/privacy.tmpl"
+		templateFile = "template/page/privacy.tmpl"
 		templateName = "privacy"
 	default:
 		http.Error(w, "Template not found", http.StatusInternalServerError)
@@ -1252,6 +1430,147 @@ func (h *Handler) renderTemplate(w http.ResponseWriter, name string, data map[st
 	if err := tmpl.ExecuteTemplate(w, templateName, data); err != nil {
 		http.Error(w, "Template execution error: "+err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// DebugEngine probes a specific engine and returns detailed results
+// GET /api/v1/debug/engine/{name}?q={query}
+// Returns: engine info, capabilities, sample results with all fields
+func (h *Handler) DebugEngine(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		query = "test" // Default test query
+	}
+
+	eng, ok := h.engineMgr.GetEngine(name)
+	if !ok {
+		h.jsonError(w, "Engine not found", "ENGINE_NOT_FOUND", http.StatusNotFound)
+		return
+	}
+
+	// Get engine capabilities
+	caps := eng.Capabilities()
+
+	// Perform test search
+	results, err := eng.Search(r.Context(), query, 1)
+
+	// Build debug response
+	response := map[string]interface{}{
+		"success": true,
+		"engine": map[string]interface{}{
+			"name":         eng.Name(),
+			"display_name": eng.DisplayName(),
+			"tier":         eng.Tier(),
+			"available":    eng.IsAvailable(),
+		},
+		"capabilities": caps,
+		"query":        query,
+	}
+
+	if err != nil {
+		response["error"] = err.Error()
+		response["results"] = []interface{}{}
+		response["result_count"] = 0
+	} else {
+		response["results"] = results
+		response["result_count"] = len(results)
+
+		// Analyze what fields are populated
+		fieldStats := analyzeResultFields(results)
+		response["field_stats"] = fieldStats
+	}
+
+	WriteJSON(w, http.StatusOK, response)
+}
+
+// analyzeResultFields checks which fields are populated in results
+func analyzeResultFields(results []model.Result) map[string]interface{} {
+	stats := map[string]int{
+		"has_title":        0,
+		"has_url":          0,
+		"has_thumbnail":    0,
+		"has_preview_url":  0,
+		"has_download_url": 0,
+		"has_duration":     0,
+		"has_views":        0,
+		"has_rating":       0,
+		"has_quality":      0,
+		"has_published":    0,
+	}
+
+	for _, r := range results {
+		if r.Title != "" {
+			stats["has_title"]++
+		}
+		if r.URL != "" {
+			stats["has_url"]++
+		}
+		if r.Thumbnail != "" {
+			stats["has_thumbnail"]++
+		}
+		if r.PreviewURL != "" {
+			stats["has_preview_url"]++
+		}
+		if r.DownloadURL != "" {
+			stats["has_download_url"]++
+		}
+		if r.Duration != "" || r.DurationSeconds > 0 {
+			stats["has_duration"]++
+		}
+		if r.Views != "" || r.ViewsCount > 0 {
+			stats["has_views"]++
+		}
+		if r.Rating > 0 {
+			stats["has_rating"]++
+		}
+		if r.Quality != "" {
+			stats["has_quality"]++
+		}
+		if !r.Published.IsZero() {
+			stats["has_published"]++
+		}
+	}
+
+	total := len(results)
+	return map[string]interface{}{
+		"total_results": total,
+		"fields":        stats,
+	}
+}
+
+// DebugEnginesList returns all engines with their capabilities
+// GET /api/v1/debug/engines
+func (h *Handler) DebugEnginesList(w http.ResponseWriter, r *http.Request) {
+	engines := h.engineMgr.ListEngines()
+
+	type engineDebug struct {
+		Name         string              `json:"name"`
+		DisplayName  string              `json:"display_name"`
+		Tier         int                 `json:"tier"`
+		Enabled      bool                `json:"enabled"`
+		Capabilities engine.Capabilities `json:"capabilities"`
+	}
+
+	var list []engineDebug
+	for _, info := range engines {
+		eng, ok := h.engineMgr.GetEngine(info.Name)
+		if !ok {
+			continue
+		}
+		list = append(list, engineDebug{
+			Name:         info.Name,
+			DisplayName:  info.DisplayName,
+			Tier:         info.Tier,
+			Enabled:      info.Enabled,
+			Capabilities: eng.Capabilities(),
+		})
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"count":   len(list),
+		"engines": list,
+	})
 }
 
 // ProxyThumbnail proxies external thumbnails to prevent tracking

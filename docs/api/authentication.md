@@ -25,7 +25,7 @@ X-API-Token: YOUR_API_TOKEN
 ### Generating Tokens
 
 1. Log in to the admin panel at `/admin`
-2. Go to Profile > API Tokens
+2. Go to Security > API Tokens (`/admin/server/security/tokens`)
 3. Click "Generate New Token"
 4. Copy and securely store the token (shown only once)
 

@@ -20,7 +20,18 @@ type YouPornEngine struct{ *BaseEngine }
 // NewYouPornEngine creates a new YouPorn engine
 func NewYouPornEngine(cfg *config.Config, torClient *tor.Client) *YouPornEngine {
 	e := &YouPornEngine{NewBaseEngine("youporn", "YouPorn", "https://www.youporn.com", 2, cfg, torClient)}
-	// Don't use spoofed TLS - standard client works for YouPorn
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:    true,
+		HasDownload:   false,
+		HasDuration:   true,
+		HasViews:      true,
+		HasRating:     true,
+		HasQuality:    true,
+		HasUploadDate: false,
+		PreviewSource: "data-mediabook",
+		APIType:       "html",
+	})
 	return e
 }
 
@@ -73,21 +84,32 @@ func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]m
 			thumbnail = "https:" + thumbnail
 		}
 
-		// Get duration
-		duration := parser.CleanText(s.Find(".video-duration").First().Text())
+		// Get preview URL - YouPorn uses data-mediabook on the img element
+		previewURL := parser.ExtractAttr(img, "data-mediabook")
+		if previewURL != "" {
+			previewURL = strings.ReplaceAll(previewURL, "&amp;", "&")
+		}
 
-		// Get views (if available)
-		views := parser.CleanText(s.Find(".video-views").First().Text())
+		// Get duration and parse to seconds
+		durationText := parser.CleanText(s.Find(".video-duration").First().Text())
+		duration, durationSeconds := parser.ParseDuration(durationText)
+
+		// Get views and parse to count - YouPorn uses span.info-views
+		viewsText := parser.CleanText(s.Find("span.info-views, .video-views").First().Text())
+		views, viewsCount := parser.ParseViews(viewsText)
 
 		results = append(results, model.Result{
-			ID:            GenerateResultID(videoURL, e.Name()),
-			URL:           videoURL,
-			Title:         title,
-			Thumbnail:     thumbnail,
-			Duration:      duration,
-			Views:         views,
-			Source:        e.Name(),
-			SourceDisplay: e.DisplayName(),
+			ID:              GenerateResultID(videoURL, e.Name()),
+			URL:             videoURL,
+			Title:           title,
+			Thumbnail:       thumbnail,
+			PreviewURL:      previewURL,
+			Duration:        duration,
+			DurationSeconds: durationSeconds,
+			Views:           views,
+			ViewsCount:      viewsCount,
+			Source:          e.Name(),
+			SourceDisplay:   e.DisplayName(),
 		})
 	})
 

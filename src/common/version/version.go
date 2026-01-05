@@ -79,14 +79,14 @@ func Get() string {
 return Version
 }
 
-// GetFull returns the full version string with v prefix for display
-// Per AI.md PART 13 lines 11427-11432
+// GetFull returns the full version string for display
+// Per AI.md PART 13: --version Output (no v prefix)
 func GetFull() string {
-return fmt.Sprintf("vidveil v%s\nBuilt: %s\nGo: %s\nOS/Arch: %s/%s",
-Version, BuildTime, GoVersion, GOOS, GOARCH)
+	return fmt.Sprintf("vidveil %s\nBuilt: %s\nGo: %s\nOS/Arch: %s/%s",
+		Version, BuildTime, GoVersion, GOOS, GOARCH)
 }
 
-// GetShort returns version with v prefix
+// GetShort returns version string (no v prefix per AI.md version rules)
 func GetShort() string {
-return "v" + Version
+	return Version
 }

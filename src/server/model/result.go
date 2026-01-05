@@ -12,6 +12,7 @@ type Result struct {
 	URL             string    `json:"url"`
 	Thumbnail       string    `json:"thumbnail"`
 	PreviewURL      string    `json:"preview_url,omitempty"`
+	DownloadURL     string    `json:"download_url,omitempty"`
 	Duration        string    `json:"duration"`
 	DurationSeconds int       `json:"duration_seconds"`
 	Views           string    `json:"views"`

@@ -20,10 +20,23 @@ type XVideosEngine struct {
 
 // NewXVideosEngine creates a new XVideos engine
 func NewXVideosEngine(cfg *config.Config, torClient *tor.Client) *XVideosEngine {
-	return &XVideosEngine{
+	e := &XVideosEngine{
 		BaseEngine: NewBaseEngine("xvideos", "XVideos", "https://www.xvideos.com", 1, cfg, torClient),
 		parser:     parser.NewXVideosParser(),
 	}
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:    true,
+		HasDownload:   false,
+		HasDuration:   true,
+		HasViews:      true,
+		HasRating:     false,
+		HasQuality:    true,
+		HasUploadDate: false,
+		PreviewSource: "data-pvv",
+		APIType:       "html",
+	})
+	return e
 }
 
 // Search performs a search on XVideos

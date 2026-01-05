@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 )
 
@@ -260,7 +261,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 		"data": map[string]interface{}{
 			"name":        h.cfg.Server.Title,
 			"description": h.cfg.Server.Description,
-			"version":     "0.2.0",
+			"version":     version.Get(),
 			"features": []string{
 				"Privacy-focused video meta-search",
 				"No tracking or personal data collection",

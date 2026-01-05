@@ -149,8 +149,11 @@ main {
     display: inline;
 }
 
-.hidden {
-    display: none !important;
+/* Use [hidden] attribute OR .hidden class - high specificity without !important per AI.md */
+[hidden],
+.hidden,
+.hidden.hidden {
+    display: none;
 }
 
 .d-block {
@@ -785,6 +788,47 @@ header .search-form {
     background: var(--bg-tertiary);
     padding: 2px 8px;
     border-radius: 4px;
+}
+
+/* Download link in video card */
+.video-card .download-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 1rem;
+    transition: background 0.2s, color 0.2s;
+    margin-left: auto;
+}
+
+.video-card .download-link:hover {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+/* Infinite scroll sentinel */
+.infinite-scroll-sentinel {
+    height: 1px;
+    width: 100%;
+}
+
+/* Load more indicator */
+.load-more-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: var(--text-secondary);
+}
+
+.load-more-indicator.hidden {
+    display: none;
 }
 
 .no-results {

@@ -68,7 +68,6 @@ func (m *Manager) InitializeEngines() {
 	m.engines["pornflip"] = NewPornFlipEngine(m.cfg, m.torClient)
 	m.engines["zenporn"] = NewZenPornEngine(m.cfg, m.torClient)
 	m.engines["gotporn"] = NewGotPornEngine(m.cfg, m.torClient)
-	m.engines["hdzog"] = NewHDZogEngine(m.cfg, m.torClient)
 	m.engines["xxxymovies"] = NewXXXYMoviesEngine(m.cfg, m.torClient)
 	m.engines["lovehomeporn"] = NewLoveHomePornEngine(m.cfg, m.torClient)
 

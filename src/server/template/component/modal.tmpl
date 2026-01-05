@@ -1,0 +1,18 @@
+{{/* Modal dialog component per AI.md PART 16 */}}
+{{define "modal"}}
+<dialog id="{{.ID}}" class="modal">
+  <div class="modal-header">
+    <h3 class="modal-title">{{.Title}}</h3>
+    <button type="button" class="modal-close" onclick="this.closest('dialog').close()" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body">
+    {{.Content}}
+  </div>
+  {{if .ShowFooter}}
+  <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" onclick="this.closest('dialog').close()">Cancel</button>
+    <button type="button" class="btn btn-primary" id="{{.ID}}-confirm">Confirm</button>
+  </div>
+  {{end}}
+</dialog>
+{{end}}

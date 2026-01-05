@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/admin"
 	"github.com/apimgr/vidveil/src/server/service/cluster"
@@ -575,7 +576,7 @@ func (h *AdminHandler) SystemInfoPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderAdminTemplate(w, r, "system", map[string]interface{}{
-		"Version":         "0.2.0",
+		"Version":         version.Get(),
 		"GoVersion":       runtime.Version(),
 		"BuildDate":       BuildDateTime,
 		"CommitID":        "unknown",
@@ -927,7 +928,7 @@ func (h *AdminHandler) MaintenancePage(w http.ResponseWriter, r *http.Request) {
 // UpdatesPage renders update management per PART 15
 func (h *AdminHandler) UpdatesPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "updates", map[string]interface{}{
-		"CurrentVersion":  "0.2.0",
+		"CurrentVersion":  version.Get(),
 		"LatestVersion":   "",
 		"UpdateAvailable": false,
 	})
@@ -937,7 +938,7 @@ func (h *AdminHandler) UpdatesPage(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) APIUpdatesStatus(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success":          true,
-		"current_version":  "0.2.0",
+		"current_version":  version.Get(),
 		"latest_version":   "",
 		"update_available": false,
 		"last_checked":     nil,
@@ -947,7 +948,7 @@ func (h *AdminHandler) APIUpdatesStatus(w http.ResponseWriter, r *http.Request) 
 // APIUpdatesCheck checks for available updates
 func (h *AdminHandler) APIUpdatesCheck(w http.ResponseWriter, r *http.Request) {
 	// Check for updates from GitHub releases
-	currentVersion := "0.2.0"
+	currentVersion := version.Get()
 	latestVersion := currentVersion
 	updateAvailable := false
 
@@ -1844,7 +1845,7 @@ func (h *AdminHandler) APIStatus(w http.ResponseWriter, r *http.Request) {
 			"status":  "running",
 			"mode":    h.cfg.Server.Mode,
 			"uptime":  uptime.String(),
-			"version": "0.2.0",
+			"version": version.Get(),
 		},
 	})
 }
@@ -3641,7 +3642,7 @@ func (h *AdminHandler) NodeSettingsPage(w http.ResponseWriter, r *http.Request) 
 		"Memory":            "N/A",
 		"DiskSpace":         "N/A",
 		"GoVersion":         runtime.Version(),
-		"AppVersion":        "0.2.0",
+		"AppVersion":        version.Get(),
 	})
 }
 
@@ -3664,7 +3665,7 @@ func (h *AdminHandler) NodeDetailPage(w http.ResponseWriter, r *http.Request) {
 			"Status":            "active",
 			"LastSeen":          "Just now",
 			"Uptime":            time.Since(h.startTime).Round(time.Second).String(),
-			"Version":           "0.2.0",
+			"Version":           version.Get(),
 			"CPUUsage":          0,
 			"MemoryUsage":       0,
 			"MemoryUsed":        "0 MB",

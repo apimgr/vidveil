@@ -1,29 +1,31 @@
 # Git
-.git
+.git/
 .gitignore
 
-# Build artifacts
+# GitHub/Gitea workflows
+.github/
+.gitea/
+
+# Entire docker directory
+docker/
+
+# Runtime volume data (NEVER include in image)
+rootfs/
+
+# Build output
 binaries/
 releases/
 
 # IDE
-.vscode/
 .idea/
-*.swp
-*.swo
+.vscode/
 
-# Documentation
+# AI config directories
+.claude/
+.cursor/
+.aider/
+.ai/
+.windsurf/
+
+# Docs
 *.md
-!README.md
-
-# Tests
-tests/
-*_test.go
-
-# Docker
-Dockerfile*
-docker-compose*.yml
-
-# Development
-.env
-*.local

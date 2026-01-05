@@ -18,6 +18,7 @@ const (
 type Paths struct {
 	Config string
 	Data   string
+	Cache  string
 	Log    string
 	Backup string
 }
@@ -40,6 +41,7 @@ func Get(configDir, dataDir string) *Paths {
 		paths.Data = GetDefaultDataDir(isRoot)
 	}
 
+	paths.Cache = GetDefaultCacheDir(isRoot)
 	paths.Log = GetDefaultLogDir(isRoot)
 	paths.Backup = GetDefaultBackupDir(isRoot)
 
@@ -106,7 +108,37 @@ func GetDefaultDataDir(isRoot bool) string {
 	}
 }
 
-// GetDefaultLogDir returns OS-appropriate log directory
+// GetDefaultCacheDir returns OS-appropriate cache directory per AI.md PART 8
+func GetDefaultCacheDir(isRoot bool) string {
+	switch runtime.GOOS {
+	case "linux":
+		if isRoot {
+			return fmt.Sprintf("/var/cache/%s/%s", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".cache", ProjectOrg, ProjectName)
+	case "darwin":
+		if isRoot {
+			return fmt.Sprintf("/Library/Caches/%s/%s", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, "Library", "Caches", ProjectOrg, ProjectName)
+	case "windows":
+		if isRoot {
+			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName, "cache")
+		}
+		return filepath.Join(os.Getenv("LocalAppData"), ProjectOrg, ProjectName, "cache")
+	// BSD and other Unix-like systems
+	default:
+		if isRoot {
+			return fmt.Sprintf("/var/cache/%s/%s", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".cache", ProjectOrg, ProjectName)
+	}
+}
+
+// GetDefaultLogDir returns OS-appropriate log directory per AI.md PART 8
 func GetDefaultLogDir(isRoot bool) string {
 	switch runtime.GOOS {
 	case "linux":
@@ -114,7 +146,8 @@ func GetDefaultLogDir(isRoot bool) string {
 			return fmt.Sprintf("/var/log/%s/%s", ProjectOrg, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, "logs")
+		// User log path: ~/.local/log/apimgr/vidveil/ per spec
+		return filepath.Join(home, ".local", "log", ProjectOrg, ProjectName)
 	case "darwin":
 		if isRoot {
 			return fmt.Sprintf("/Library/Logs/%s/%s", ProjectOrg, ProjectName)
@@ -132,11 +165,11 @@ func GetDefaultLogDir(isRoot bool) string {
 			return fmt.Sprintf("/var/log/%s/%s", ProjectOrg, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, "logs")
+		return filepath.Join(home, ".local", "log", ProjectOrg, ProjectName)
 	}
 }
 
-// GetDefaultBackupDir returns OS-appropriate backup directory
+// GetDefaultBackupDir returns OS-appropriate backup directory per AI.md PART 8
 func GetDefaultBackupDir(isRoot bool) string {
 	switch runtime.GOOS {
 	case "linux":
@@ -144,7 +177,8 @@ func GetDefaultBackupDir(isRoot bool) string {
 			return fmt.Sprintf("/mnt/Backups/%s/%s", ProjectOrg, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "backups", ProjectOrg, ProjectName)
+		// User backup path: ~/.local/share/Backups/apimgr/vidveil/ per spec
+		return filepath.Join(home, ".local", "share", "Backups", ProjectOrg, ProjectName)
 	case "darwin":
 		if isRoot {
 			return fmt.Sprintf("/Library/Backups/%s/%s", ProjectOrg, ProjectName)
@@ -162,6 +196,6 @@ func GetDefaultBackupDir(isRoot bool) string {
 			return fmt.Sprintf("/var/backups/%s/%s", ProjectOrg, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".local", "backups", ProjectOrg, ProjectName)
+		return filepath.Join(home, ".local", "share", "Backups", ProjectOrg, ProjectName)
 	}
 }

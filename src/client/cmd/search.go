@@ -19,22 +19,24 @@ var (
 	searchSafe    bool
 )
 
+// runSearch runs the search command per AI.md PART 36
+// No short flags except -h
 func runSearch(args []string) error {
 	// Parse search-specific flags
 	var query []string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
-		case "--limit", "-l":
+		case "--limit":
 			if i+1 < len(args) {
 				fmt.Sscanf(args[i+1], "%d", &searchLimit)
 				i++
 			}
-		case "--page", "-p":
+		case "--page":
 			if i+1 < len(args) {
 				fmt.Sscanf(args[i+1], "%d", &searchPage)
 				i++
 			}
-		case "--engines", "-e":
+		case "--engines":
 			if i+1 < len(args) {
 				searchEngines = args[i+1]
 				i++
@@ -85,6 +87,7 @@ func runSearch(args []string) error {
 	}
 }
 
+// searchHelp prints search command help per AI.md PART 36
 func searchHelp() {
 	fmt.Printf(`Search for videos
 
@@ -93,9 +96,9 @@ Usage:
   %s <query>              (shortcut)
 
 Flags:
-  -l, --limit int       Number of results (default: server default)
-  -p, --page int        Page number (default: 1)
-  -e, --engines string  Comma-separated list of engines
+      --limit int       Number of results (default: server default)
+      --page int        Page number (default: 1)
+      --engines string  Comma-separated list of engines
       --safe            Enable safe search
   -h, --help            Show help
 

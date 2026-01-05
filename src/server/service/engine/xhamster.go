@@ -79,7 +79,18 @@ type xhamsterVideo struct {
 // NewXHamsterEngine creates a new xHamster engine
 func NewXHamsterEngine(cfg *config.Config, torClient *tor.Client) *XHamsterEngine {
 	e := &XHamsterEngine{NewBaseEngine("xhamster", "xHamster", "https://xhamster.com", 1, cfg, torClient)}
-	// Don't use spoofed TLS - test with standard client first
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:    false, // JSON extraction doesn't include preview URLs
+		HasDownload:   false,
+		HasDuration:   true,
+		HasViews:      true,
+		HasRating:     false,
+		HasQuality:    false,
+		HasUploadDate: true,
+		PreviewSource: "",
+		APIType:       "json_extraction",
+	})
 	return e
 }
 

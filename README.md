@@ -177,7 +177,7 @@ Returns all available bang shortcuts.
 ### Autocomplete
 
 ```
-GET /api/v1/autocomplete?q={partial}
+GET /api/v1/bangs/autocomplete?q={partial}
 ```
 
 Returns bang suggestions for partial input (e.g., `!po` suggests PornHub, PornMD, etc.).
@@ -201,9 +201,10 @@ GET /api/v1/healthz
 | Endpoint | Description |
 |----------|-------------|
 | `/openapi` | Swagger UI |
-| `/openapi.json` | OpenAPI 3.0 spec (JSON only) |
+| `/openapi.json` | OpenAPI 3.0 spec (JSON) |
 | `/graphql` | GraphQL endpoint |
 | `/graphiql` | GraphQL playground |
+| `/graphql/schema` | GraphQL schema definition |
 
 ---
 
@@ -236,21 +237,23 @@ GET /api/v1/healthz
 
 ## Admin Panel
 
-Access at `/admin` (credentials shown on first run).
+Access at `/admin` (setup token shown on first run).
 
-| Section | Description |
-|---------|-------------|
-| Dashboard | Overview and statistics |
-| Server | Server settings |
-| Web | Branding, SEO, themes |
-| Security | Rate limiting, headers |
-| Database | SQLite management |
-| Email | SMTP configuration |
-| SSL | Let's Encrypt, certificates |
-| Scheduler | Scheduled tasks |
-| Engines | Enable/disable search engines |
-| Logs | Access and error logs |
-| Backup | Backup and restore |
+| Route | Section | Description |
+|-------|---------|-------------|
+| `/admin` | Dashboard | Overview and statistics |
+| `/admin/server/settings` | Settings | Server configuration |
+| `/admin/server/branding` | Branding | Logo, title, themes |
+| `/admin/server/ssl` | SSL/TLS | Let's Encrypt, certificates |
+| `/admin/server/email` | Email | SMTP configuration |
+| `/admin/server/scheduler` | Scheduler | Scheduled tasks |
+| `/admin/server/logs` | Logs | Access and error logs |
+| `/admin/server/database` | Database | SQLite management |
+| `/admin/server/security/*` | Security | Auth, tokens, rate limiting, firewall |
+| `/admin/server/network/*` | Network | Tor, GeoIP, blocklists |
+| `/admin/server/system/*` | System | Backup, maintenance, updates |
+| `/admin/server/users/*` | Users | Admin management |
+| `/admin/server/engines` | Engines | Search engine configuration |
 
 ---
 
@@ -262,9 +265,9 @@ A companion CLI client (`vidveil-cli`) is available for interacting with the ser
 
 ```bash
 # Download latest release
-curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-cli-linux-amd64
-chmod +x vidveil-cli-linux-amd64
-sudo mv vidveil-cli-linux-amd64 /usr/local/bin/vidveil-cli
+curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64-cli
+chmod +x vidveil-linux-amd64-cli
+sudo mv vidveil-linux-amd64-cli /usr/local/bin/vidveil-cli
 ```
 
 ### Configure

@@ -1,6 +1,5 @@
 # Vidveil Makefile
-# Per AI.md PART 26: EXACTLY 4 targets - build, release, docker, test
-# DO NOT ADD OTHER TARGETS
+# Per AI.md PART 26: 6 targets - build, release, docker, test, dev, clean
 
 # Infer PROJECTNAME and PROJECTORG from git remote or directory path (NEVER hardcode)
 PROJECTNAME := $(shell git remote get-url origin 2>/dev/null | sed -E -e 's|.*[/:]||' -e 's|\.git$$||' || basename "$$(pwd)")
@@ -52,7 +51,7 @@ GO_DOCKER := docker run --rm \
 	-e CGO_ENABLED=0 \
 	golang:alpine
 
-.PHONY: build release docker test
+.PHONY: build host release docker test dev clean
 
 # =============================================================================
 # BUILD - Build all platforms + host binary (via Docker with cached modules)
@@ -106,6 +105,39 @@ build:
 	fi
 
 	@echo "Build complete: $(BINDIR)/"
+
+# =============================================================================
+# HOST - Build host binaries only (fast development builds)
+# =============================================================================
+host:
+	@mkdir -p $(BINDIR)
+	@echo "Building host binaries version $(VERSION)..."
+	@mkdir -p $(GOCACHE) $(GOMODCACHE)
+
+	# Download modules first (cached)
+	@echo "Downloading Go modules..."
+	@$(GO_DOCKER) go mod download
+
+	# Build server binary
+	@echo "Building $(PROJECT)..."
+	@$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
+		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT) ./src"
+
+	# Build CLI binary (if exists)
+	@if [ -d "src/client" ]; then \
+		echo "Building $(PROJECT)-cli..."; \
+		$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
+			go build -ldflags \"$(CLI_LDFLAGS)\" -o $(BINDIR)/$(PROJECT)-cli ./src/client"; \
+	fi
+
+	# Build agent binary (if exists)
+	@if [ -d "src/agent" ]; then \
+		echo "Building $(PROJECT)-agent..."; \
+		$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
+			go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT)-agent ./src/agent"; \
+	fi
+
+	@echo "Host build complete: $(BINDIR)/"
 
 # =============================================================================
 # RELEASE - Manual local release (stable only)
@@ -180,3 +212,21 @@ test:
 	@$(GO_DOCKER) go mod download
 	@$(GO_DOCKER) go test -v -cover ./...
 	@echo "Tests complete"
+
+# =============================================================================
+# DEV - Quick build for local development/testing (to random temp dir)
+# =============================================================================
+# Fast: host platform only, no ldflags, random temp dir for isolation
+dev:
+	@mkdir -p $(GOCACHE) $(GOMODCACHE)
+	@BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG).XXXXXX") && \
+		echo "Quick dev build..." && \
+		$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
+		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
+		echo "Test:  docker run --rm -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
+
+# =============================================================================
+# CLEAN - Remove build artifacts
+# =============================================================================
+clean:
+	@rm -rf $(BINDIR) $(RELDIR)

@@ -33,6 +33,20 @@ const (
 	FeatureThumbnailPreview
 )
 
+// Capabilities describes what data an engine can provide
+// Per IDEA.md Engine Capability Declaration
+type Capabilities struct {
+	HasPreview    bool   `json:"has_preview"`     // Can provide PreviewURL
+	HasDownload   bool   `json:"has_download"`    // Can provide DownloadURL
+	HasDuration   bool   `json:"has_duration"`    // Can provide duration
+	HasViews      bool   `json:"has_views"`       // Can provide view count
+	HasRating     bool   `json:"has_rating"`      // Can provide rating
+	HasQuality    bool   `json:"has_quality"`     // Can provide quality badge
+	HasUploadDate bool   `json:"has_upload_date"` // Can provide upload date
+	PreviewSource string `json:"preview_source"`  // e.g., "data-preview", "data-mediabook", "api"
+	APIType       string `json:"api_type"`        // "api", "html", "json_extraction"
+}
+
 // Engine interface defines what a search engine must implement
 type Engine interface {
 	Name() string
@@ -41,6 +55,7 @@ type Engine interface {
 	IsAvailable() bool
 	SupportsFeature(feature Feature) bool
 	Tier() int
+	Capabilities() Capabilities
 }
 
 // ConfigurableEngine interface for engines that support configuration
@@ -60,11 +75,13 @@ type BaseEngine struct {
 	timeout        time.Duration
 	useTor         bool
 	useSpoofedTLS  bool
+	cfg            *config.Config
 	httpClient     *http.Client
 	spoofedClient  *http.Client
 	torClient      *tor.Client
 	circuitBreaker *retry.CircuitBreaker
 	retryConfig    *retry.Config
+	capabilities   Capabilities
 }
 
 // NewBaseEngine creates a new base engine
@@ -96,16 +113,17 @@ func NewBaseEngine(name, displayName, baseURL string, tier int, cfg *config.Conf
 
 	return &BaseEngine{
 		name:           name,
-		displayName:   displayName,
-		baseURL:       baseURL,
-		tier:          tier,
-		enabled:       true,
-		timeout:       timeout,
-		useTor:        false,
-		useSpoofedTLS: cfg.Search.SpoofTLS,
-		httpClient:    createHTTPClient(cfg.Search.EngineTimeout),
-		spoofedClient: utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
-		torClient:     torClient,
+		displayName:    displayName,
+		baseURL:        baseURL,
+		tier:           tier,
+		enabled:        true,
+		timeout:        timeout,
+		useTor:         false,
+		useSpoofedTLS:  cfg.Search.SpoofTLS,
+		cfg:            cfg,
+		httpClient:     createHTTPClient(cfg.Search.EngineTimeout),
+		spoofedClient:  utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
+		torClient:      torClient,
 		circuitBreaker: retry.NewCircuitBreaker(cbConfig),
 		retryConfig:    retryConfig,
 	}
@@ -146,6 +164,21 @@ func (e *BaseEngine) SetUseSpoofedTLS(use bool) {
 	e.useSpoofedTLS = use
 }
 
+// Capabilities returns the engine's data capabilities
+func (e *BaseEngine) Capabilities() Capabilities {
+	return e.capabilities
+}
+
+// SetCapabilities sets the engine's data capabilities
+func (e *BaseEngine) SetCapabilities(caps Capabilities) {
+	e.capabilities = caps
+}
+
+// BaseURL returns the engine's base URL
+func (e *BaseEngine) BaseURL() string {
+	return e.baseURL
+}
+
 // GetClient returns the appropriate HTTP client
 func (e *BaseEngine) GetClient() *http.Client {
 	if e.useTor && e.torClient != nil {
@@ -183,18 +216,27 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 			return err
 		}
 
-		// Set Firefox-like headers for consistency with StandardUserAgent
-		req.Header.Set("User-Agent", StandardUserAgent)
-		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
-		req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-		req.Header.Set("DNT", "1")
-		req.Header.Set("Sec-GPC", "1")
+		// Set browser headers using configured user agent
+		req.Header.Set("User-Agent", e.GetUserAgent())
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 		req.Header.Set("Connection", "keep-alive")
 		req.Header.Set("Upgrade-Insecure-Requests", "1")
 		req.Header.Set("Sec-Fetch-Dest", "document")
 		req.Header.Set("Sec-Fetch-Mode", "navigate")
 		req.Header.Set("Sec-Fetch-Site", "none")
 		req.Header.Set("Sec-Fetch-User", "?1")
+		// Sec-Ch-* headers only for Chromium-based browsers
+		if e.cfg != nil && e.cfg.Engines.UserAgent.IsChromiumBased() {
+			req.Header.Set("Sec-Ch-Ua", e.cfg.Engines.UserAgent.SecChUa())
+			req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
+			req.Header.Set("Sec-Ch-Ua-Platform", e.cfg.Engines.UserAgent.SecChUaPlatform())
+		} else if e.cfg == nil {
+			// Fallback to Chrome defaults
+			req.Header.Set("Sec-Ch-Ua", `"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"`)
+			req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
+			req.Header.Set("Sec-Ch-Ua-Platform", `"Windows"`)
+		}
 
 		// Apply custom modifier if provided
 		if mod != nil {
@@ -415,11 +457,15 @@ func createHTTPClient(timeoutSecs int) *http.Client {
 	}
 }
 
-// StandardUserAgent is the single user agent used for all requests
-// Windows 11 Firefox x86_64 - consistent fingerprint for reliability
-const StandardUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
+// DefaultUserAgent is the fallback user agent when config is nil
+// Windows 11 Chrome x86_64 - most common browser/OS combination for best compatibility
+const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-// getRandomUserAgent returns the standard user agent string
-func getRandomUserAgent() string {
-	return StandardUserAgent
+// GetUserAgent returns the configured user agent string
+// Uses search.useragent config for customizable user agent without rebuild
+func (e *BaseEngine) GetUserAgent() string {
+	if e.cfg != nil {
+		return e.cfg.Engines.UserAgent.String()
+	}
+	return DefaultUserAgent
 }

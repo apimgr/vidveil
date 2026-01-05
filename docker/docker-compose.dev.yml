@@ -28,7 +28,8 @@ services:
       - './rootfs/config:/config:z'
       - './rootfs/data:/data:z'
     ports:
-      - '64888:80'  # Accessible from all interfaces for development
+      # Accessible from all interfaces for development
+      - '64888:80'
     healthcheck:
       test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/80' || exit 1
       interval: 10s

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -31,8 +32,21 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/service"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
 	"github.com/apimgr/vidveil/src/server/service/tor"
-	"github.com/apimgr/vidveil/src/version"
+	"github.com/apimgr/vidveil/src/common/version"
 )
+
+// Build info - set via -ldflags at build time per PART 7
+var (
+	Version   = "dev"
+	CommitID  = "unknown"
+	BuildDate = "unknown"
+)
+
+func init() {
+	// Sync build info to version package for other code per PART 7
+	version.Version = Version
+	version.BuildTime = BuildDate
+}
 
 func main() {
 	args := os.Args[1:]
@@ -635,8 +649,11 @@ Source: https://github.com/apimgr/vidveil
 }
 
 func printVersion() {
-	// Use version package per AI.md PART 13 lines 11427-11432
-	fmt.Println(version.GetFull())
+	// Use main.go build variables per AI.md PART 13: --version Output
+	fmt.Printf("vidveil %s\n", Version)
+	fmt.Printf("Built: %s\n", BuildDate)
+	fmt.Printf("Go: %s\n", runtime.Version())
+	fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 }
 
 func checkStatus() int {

@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(AI.md)",
+      "Bash(./binaries/vidveil:*)",
+      "Bash(while pgrep -f 'go build.*vidveil')",
+      "Bash(done)",
+      "Bash(for engine in sunporno tnaflix drtuber hdzog gotporn tube8)",
+      "Bash(golang:1.24-alpine )",
+      "Bash(/root/Projects/github/apimgr/vidveil/binaries/vidveil:*)",
+      "Bash(/root/Projects/github/apimgr/vidveil/AI.md)",
+      "Bash(for f in README.md LICENSE.md AI.md TODO.AI.md Makefile release.txt go.mod .gitignore .dockerignore)",
+      "Bash([ -f \"$f\" ])",
+      "Bash(for d in src docker docs tests scripts .github binaries)",
+      "Bash([ -d \"$d\" ])",
+      "Bash(for d in config server)",
+      "Bash([ -d \"src/$d\" ])",
+      "Bash(for:*)"
+    ]
+  }
+}

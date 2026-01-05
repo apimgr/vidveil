@@ -20,7 +20,7 @@ type EpornerEngine struct {
 // epornerAPIResponse represents the API response
 type epornerAPIResponse struct {
 	Count      int            `json:"count"`
-	TotalCount int            `json:"total_count"`
+	TotalCount interface{}    `json:"total_count"` // API returns string or number
 	Videos     []epornerVideo `json:"videos"`
 }
 
@@ -39,9 +39,22 @@ type epornerVideo struct {
 
 // NewEpornerEngine creates a new Eporner engine
 func NewEpornerEngine(cfg *config.Config, torClient *tor.Client) *EpornerEngine {
-	return &EpornerEngine{
+	e := &EpornerEngine{
 		BaseEngine: NewBaseEngine("eporner", "Eporner", "https://www.eporner.com", 2, cfg, torClient),
 	}
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:    false,
+		HasDownload:   false,
+		HasDuration:   true,
+		HasViews:      true,
+		HasRating:     true,
+		HasQuality:    false,
+		HasUploadDate: true,
+		PreviewSource: "",
+		APIType:       "json",
+	})
+	return e
 }
 
 // Search performs a search on Eporner using their public JSON API

@@ -19,10 +19,23 @@ type PornMDEngine struct {
 
 // NewPornMDEngine creates a new PornMD engine
 func NewPornMDEngine(cfg *config.Config, torClient *tor.Client) *PornMDEngine {
-	return &PornMDEngine{
+	e := &PornMDEngine{
 		BaseEngine: NewBaseEngine("pornmd", "PornMD", "https://www.pornmd.com", 2, cfg, torClient),
 		parser:     parser.NewPornMDParser(),
 	}
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:    false,
+		HasDownload:   false,
+		HasDuration:   true,
+		HasViews:      false, // PornMD doesn't show view counts on search results
+		HasRating:     true,  // PornMD shows rating percentage
+		HasQuality:    false, // Quality info not consistently available
+		HasUploadDate: false,
+		PreviewSource: "",
+		APIType:       "html",
+	})
+	return e
 }
 
 // Search performs a search on PornMD

@@ -20,7 +20,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 )
 
-//go:embed static/css/* static/js/* static/img/* template/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl
+//go:embed static/css/* static/js/* static/img/* template/page/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl template/component/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -136,6 +136,43 @@ func (s *Server) setupMiddleware() {
 
 	// Rate limiting (AI.md PART 16)
 	s.router.Use(s.rateLimiter.Middleware)
+
+	// Extension stripping middleware per AI.md PART 14
+	// Strips .txt and .json extensions from API paths for routing
+	s.router.Use(extensionStripMiddleware)
+}
+
+// OriginalPathKey is the context key for storing the original request path
+// Uses string type for cross-package compatibility
+const OriginalPathKey = "vidveil.originalPath"
+
+// extensionStripMiddleware strips .txt and .json extensions from paths
+// Per AI.md PART 14: Content Negotiation - .txt and .json extensions should work on all API routes
+func extensionStripMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		// Only process API routes
+		if !strings.HasPrefix(path, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Store original path in context for detectResponseFormat
+		ctx := context.WithValue(r.Context(), OriginalPathKey, path)
+		r = r.WithContext(ctx)
+
+		// Check for .txt or .json extension
+		if strings.HasSuffix(path, ".txt") {
+			// Strip .txt for routing
+			r.URL.Path = strings.TrimSuffix(path, ".txt")
+		} else if strings.HasSuffix(path, ".json") {
+			// Strip .json for routing
+			r.URL.Path = strings.TrimSuffix(path, ".json")
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // setupRoutes configures all routes
@@ -168,6 +205,9 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/.well-known/change-password", handler.ChangePasswordRedirect)
 	s.router.Get("/humans.txt", h.HumansTxt)
 
+	// Debug endpoints (PART 6: only when --debug flag or DEBUG=true)
+	s.registerDebugRoutes(s.router)
+
 	// OpenAPI/Swagger documentation (AI.md PART 19: JSON only, no YAML)
 	s.router.Get("/openapi", handler.SwaggerUI(s.cfg))
 	s.router.Get("/openapi.json", handler.OpenAPISpec(s.cfg))
@@ -185,31 +225,17 @@ func (s *Server) setupRoutes() {
 		s.router.Get(s.cfg.Server.Metrics.Endpoint, metrics.Handler())
 	}
 
-	// Debug endpoints (development mode only per AI.md spec)
-	if s.cfg.IsDevelopmentMode() {
-		s.router.Route("/debug", func(r chi.Router) {
-			r.Get("/vars", handler.DebugVars)
-			r.Get("/pprof/", handler.DebugPprof)
-			r.Get("/pprof/cmdline", handler.DebugPprofCmdline)
-			r.Get("/pprof/profile", handler.DebugPprofProfile)
-			r.Get("/pprof/symbol", handler.DebugPprofSymbol)
-			r.Get("/pprof/trace", handler.DebugPprofTrace)
-			r.Get("/pprof/{name}", handler.DebugPprofHandler)
-		})
-	}
-
-	// Routes that require age verification
+	// Routes that require age verification (project-specific per PART 14)
 	s.router.Group(func(r chi.Router) {
 		r.Use(h.AgeVerifyMiddleware)
 
 		r.Get("/", h.HomePage)
 		r.Get("/search", h.SearchPage)
 		r.Get("/preferences", h.PreferencesPage)
-		r.Get("/about", h.AboutPage)
-		r.Get("/privacy", h.PrivacyPage)
+		// About/privacy are at /server/* per PART 14 Route Scopes
 	})
 
-	// Server routes per AI.md PART 31
+	// Server routes per AI.md PART 14 (Route Scopes)
 	server := handler.NewServerHandler(s.cfg)
 	s.router.Route("/server", func(r chi.Router) {
 		r.Get("/about", server.AboutPage)
@@ -219,7 +245,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/help", server.HelpPage)
 	})
 
-	// Auth routes per AI.md PART 31
+	// Auth routes per AI.md PART 14 (Route Scopes)
 	auth := handler.NewAuthHandler(s.cfg)
 	// Link admin handler for authentication
 	auth.SetAdminHandler(admin)
@@ -236,9 +262,9 @@ func (s *Server) setupRoutes() {
 		r.Get("/verify/{token}", auth.VerifyPage)
 	})
 
-	// User routes per AI.md PART 31
+	// User routes per AI.md PART 14 (Route Scopes - plural)
 	user := handler.NewUserHandler(s.cfg)
-	s.router.Route("/user", func(r chi.Router) {
+	s.router.Route("/users", func(r chi.Router) {
 		r.Get("/profile", user.ProfilePage)
 		r.Get("/settings", user.SettingsPage)
 		r.Get("/tokens", user.TokensPage)
@@ -247,9 +273,11 @@ func (s *Server) setupRoutes() {
 		r.Get("/security/2fa", user.SecurityPage)
 	})
 
-	// Admin panel routes - PART 15 and PART 31 compliant
-	s.router.Route("/admin", func(r chi.Router) {
-		// Login redirects to /auth/login per AI.md PART 31
+	// Admin panel routes - PART 14 (routes), PART 17 (admin panel)
+	// Path is configurable via server.admin.path (default: "admin")
+	adminPath := "/" + s.cfg.Server.Admin.Path
+	s.router.Route(adminPath, func(r chi.Router) {
+		// Login page per AI.md PART 17
 		r.Get("/login", admin.LoginPage)
 		r.Post("/login", admin.LoginPage)
 
@@ -258,7 +286,7 @@ func (s *Server) setupRoutes() {
 		r.Post("/logout", admin.LogoutHandler)
 
 		// Root: Setup token entry (first run) or dashboard (authenticated)
-		// Per AI.md PART 31: User navigates to /admin, enters setup token
+		// Per AI.md PART 17: User navigates to /admin, enters setup token
 		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
 			if admin.IsFirstRun() {
 				admin.SetupTokenPage(w, req)
@@ -275,17 +303,24 @@ func (s *Server) setupRoutes() {
 			admin.AuthMiddleware(http.HandlerFunc(admin.DashboardPage)).ServeHTTP(w, req)
 		})
 
-		// Protected admin routes per AI.md PART 15
+		// Protected admin routes per AI.md PART 17
+		// Valid root paths: /, /profile, /preferences, /notifications, /server/*
 		r.Group(func(r chi.Router) {
 			r.Use(admin.AuthMiddleware)
 			r.Use(admin.CSRFMiddleware)
 
-			// Dashboard
+			// Dashboard (root)
 			r.Get("/dashboard", admin.DashboardPage)
 
-			// Server section - includes setup wizard
-			// Root redirects to settings, pages/notifications/nodes per PART 24
+			// Admin's OWN profile per AI.md PART 17 (valid at root)
+			r.Get("/profile", admin.ProfilePage)
+
+			// Logout (valid at root)
+			r.Get("/logout", admin.LogoutHandler)
+
+			// Server section - ALL server management per AI.md PART 17
 			r.Route("/server", func(r chi.Router) {
+				// Settings
 				r.Get("/", admin.ServerSettingsPage)
 				r.Get("/settings", admin.ServerSettingsPage)
 				r.Get("/branding", admin.BrandingPage)
@@ -303,61 +338,49 @@ func (s *Server) setupRoutes() {
 				r.Get("/nodes/remove", admin.RemoveNodePage)
 				r.Get("/nodes/settings", admin.NodeSettingsPage)
 				r.Get("/nodes/{node}", admin.NodeDetailPage)
+
+				// Security section per AI.md PART 17 - under /server/
+				r.Route("/security", func(r chi.Router) {
+					r.Get("/", admin.SecurityAuthPage)
+					r.Get("/auth", admin.SecurityAuthPage)
+					r.Get("/tokens", admin.SecurityTokensPage)
+					r.Get("/ratelimit", admin.SecurityRateLimitPage)
+					r.Get("/firewall", admin.SecurityFirewallPage)
+				})
+
+				// Network section per AI.md PART 17 - under /server/
+				r.Route("/network", func(r chi.Router) {
+					r.Get("/", admin.TorPage)
+					r.Get("/tor", admin.TorPage)
+					r.Get("/geoip", admin.GeoIPPage)
+					r.Get("/blocklists", admin.BlocklistsPage)
+				})
+
+				// System section per AI.md PART 17 - under /server/
+				r.Route("/system", func(r chi.Router) {
+					r.Get("/", admin.BackupPage)
+					r.Get("/backup", admin.BackupPage)
+					r.Get("/maintenance", admin.MaintenancePage)
+					r.Get("/updates", admin.UpdatesPage)
+					r.Get("/info", admin.SystemInfoPage)
+				})
+
+				// Users section per AI.md PART 17 - under /server/
+				r.Route("/users", func(r chi.Router) {
+					r.Get("/admins", admin.UsersAdminsPage)
+				})
+
+				// Project-specific - under /server/
+				r.Get("/engines", admin.EnginesPage)
+
+				// Help - under /server/
+				r.Get("/help", admin.HelpPage)
 			})
 		})
 
 		// Setup wizard at /admin/server/setup (no auth, but requires valid token cookie)
 		r.Get("/server/setup", admin.SetupWizardPage)
 		r.Post("/server/setup", admin.SetupWizardPage)
-
-		// Protected admin routes per AI.md PART 15
-		r.Group(func(r chi.Router) {
-			r.Use(admin.AuthMiddleware)
-			r.Use(admin.CSRFMiddleware)
-
-			// Security section - root redirects to auth
-			r.Route("/security", func(r chi.Router) {
-				r.Get("/", admin.SecurityAuthPage)
-				r.Get("/auth", admin.SecurityAuthPage)
-				r.Get("/tokens", admin.SecurityTokensPage)
-				r.Get("/ratelimit", admin.SecurityRateLimitPage)
-				r.Get("/firewall", admin.SecurityFirewallPage)
-			})
-
-			// Network section - root redirects to tor
-			r.Route("/network", func(r chi.Router) {
-				r.Get("/", admin.TorPage)
-				r.Get("/tor", admin.TorPage)
-				r.Get("/geoip", admin.GeoIPPage)
-				r.Get("/blocklists", admin.BlocklistsPage)
-			})
-
-			// System section - root redirects to backup
-			r.Route("/system", func(r chi.Router) {
-				r.Get("/", admin.BackupPage)
-				r.Get("/backup", admin.BackupPage)
-				r.Get("/maintenance", admin.MaintenancePage)
-				r.Get("/updates", admin.UpdatesPage)
-				r.Get("/info", admin.SystemInfoPage)
-			})
-
-			// Project-specific
-			r.Get("/engines", admin.EnginesPage)
-
-			// Help
-			r.Get("/help", admin.HelpPage)
-
-			// Profile per AI.md PART 31
-			r.Get("/profile", admin.ProfilePage)
-
-			// Users section per AI.md PART 31
-			r.Route("/users", func(r chi.Router) {
-				r.Get("/admins", admin.UsersAdminsPage)
-			})
-
-			// Logout
-			r.Get("/logout", admin.LogoutHandler)
-		})
 
 		// Admin invite page (public, token validated in handler)
 		r.Get("/invite/{token}", admin.AdminInvitePage)
@@ -371,10 +394,9 @@ func (s *Server) setupRoutes() {
 		r.Get("/search/stream", h.APISearchStream)
 		r.Get("/search.txt", h.APISearchText)
 
-		// Bang endpoints (public)
+		// Bang endpoints (public) - per AI.md PART 37
 		r.Get("/bangs", h.APIBangs)
-r.Get("/proxy/thumbnail", h.ProxyThumbnail)
-		r.Get("/autocomplete", h.APIAutocomplete)
+		r.Get("/bangs/autocomplete", h.APIAutocomplete)
 
 		// Engine endpoints (public)
 		r.Get("/engines", h.APIEngines)
@@ -383,10 +405,16 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 		// Stats (public)
 		r.Get("/stats", h.APIStats)
 
+		// Debug endpoints (development only per IDEA.md)
+		r.Route("/debug", func(r chi.Router) {
+			r.Get("/engines", h.DebugEnginesList)
+			r.Get("/engine/{name}", h.DebugEngine)
+		})
+
 		// Health (public)
 		r.Get("/healthz", h.APIHealthCheck)
 
-		// Server API per AI.md PART 31
+		// Server API per AI.md PART 14
 		r.Route("/server", func(r chi.Router) {
 			r.Get("/about", server.APIAbout)
 			r.Get("/privacy", server.APIPrivacy)
@@ -394,7 +422,7 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 			r.Get("/help", server.APIHelp)
 		})
 
-		// Auth API per AI.md PART 31
+		// Auth API per AI.md PART 14
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", auth.APIRegister)
 			r.Post("/login", auth.APILogin)
@@ -405,8 +433,11 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 			r.Post("/refresh", auth.APIRefresh)
 		})
 
-		// User API per AI.md PART 31
-		r.Route("/user", func(r chi.Router) {
+		// Proxy endpoints (plural per PART 14)
+		r.Get("/proxy/thumbnails", h.ProxyThumbnail)
+
+		// User API per AI.md PART 14 (plural)
+		r.Route("/users", func(r chi.Router) {
 			r.Get("/profile", user.APIProfile)
 			r.Patch("/profile", user.APIProfile)
 			r.Post("/password", user.APIPassword)
@@ -416,8 +447,9 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 			r.Get("/2fa", user.API2FA)
 		})
 
-		// Admin Profile API (session or token) - PART 31 compliant
-		r.Route("/admin/profile", func(r chi.Router) {
+		// Admin Profile API (session or token) - PART 17
+		// Uses configurable admin path
+		r.Route("/"+s.cfg.Server.Admin.Path+"/profile", func(r chi.Router) {
 			r.Use(admin.SessionOrTokenMiddleware)
 			r.Post("/password", admin.APIProfilePassword)
 			r.Post("/token", admin.APIProfileToken)
@@ -425,22 +457,16 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 			r.Post("/recovery-keys/generate", admin.APIRecoveryKeysGenerate)
 		})
 
-		// Admin API (token required) - PART 12 & PART 31 compliant
-		r.Route("/admin", func(r chi.Router) {
+		// Admin API (token required) - PART 12, PART 17
+		r.Route("/"+s.cfg.Server.Admin.Path, func(r chi.Router) {
 			r.Use(admin.APITokenMiddleware)
 
-			// Users management per AI.md PART 31
+			// Users management per AI.md PART 17
 			r.Post("/users/admins/invite", admin.APIUsersAdminsInvite)
 			r.Get("/users/admins/invites", admin.APIUsersAdminsInvites)
 			r.Delete("/users/admins/invites/{id}", admin.APIUsersAdminsInviteRevoke)
 
-			// Legacy endpoints (kept for backwards compatibility)
-			r.Get("/stats", admin.APIStats)
-			r.Get("/engines", admin.APIEngines)
-			r.Get("/status", admin.APIStatus)
-			r.Get("/health", admin.APIHealth)
-
-			// Server settings per AI.md PART 31
+			// Server settings per AI.md PART 12
 			r.Route("/server", func(r chi.Router) {
 				// Settings
 				r.Get("/settings", admin.APIConfig)
@@ -449,7 +475,7 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 				r.Get("/health", admin.APIHealth)
 				r.Post("/restart", admin.APIMaintenanceMode)
 
-				// SSL per PART 31 - GET for status, POST /renew for force renewal
+				// SSL per PART 15
 				r.Route("/ssl", func(r chi.Router) {
 					r.Get("/", admin.APIConfig)
 					r.Patch("/", admin.APIConfig)
@@ -469,14 +495,14 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 					r.Post("/import", admin.APITorImport)
 				})
 
-				// Email per PART 31
+				// Email per PART 18
 				r.Route("/email", func(r chi.Router) {
 					r.Get("/", admin.APIConfig)
 					r.Patch("/", admin.APIConfig)
 					r.Post("/test", admin.APITestEmail)
 				})
 
-				// Scheduler per PART 31
+				// Scheduler per PART 19
 				r.Route("/scheduler", func(r chi.Router) {
 					r.Get("/", admin.APISchedulerTasks)
 					r.Get("/{id}", admin.APISchedulerTasks)
@@ -486,7 +512,7 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 					r.Post("/{id}/disable", admin.APISchedulerTasks)
 				})
 
-				// Backup per PART 31
+				// Backup per PART 22
 				r.Route("/backup", func(r chi.Router) {
 					r.Get("/", admin.APIBackup)
 					r.Post("/", admin.APIBackup)
@@ -496,14 +522,14 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 					r.Post("/restore", admin.APIRestore)
 				})
 
-				// Logs per PART 31
+				// Logs per PART 11
 				r.Route("/logs", func(r chi.Router) {
 					r.Get("/", admin.APILogsAccess)
 					r.Get("/{type}", admin.APILogsAccess)
 					r.Get("/{type}/download", admin.APILogsAccess)
 				})
 
-				// Pages per PART 31
+				// Pages per PART 17
 				r.Route("/pages", func(r chi.Router) {
 					r.Get("/", admin.APIPagesGet)
 					r.Put("/{slug}", admin.APIPageUpdate)
@@ -517,7 +543,7 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 					r.Post("/test", admin.APINotificationsTest)
 				})
 
-				// Database per PART 31 - test/backend for external DB connection
+				// Database per PART 10
 				r.Route("/database", func(r chi.Router) {
 					r.Get("/migrations", admin.APIDatabaseMigrations)
 					r.Post("/migrate", admin.APIDatabaseMigrate)
@@ -548,10 +574,11 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 				})
 			})
 
-			// Legacy routes (kept for backwards compatibility)
+			// Config routes per AI.md PART 37
 			r.Get("/config", admin.APIConfig)
 			r.Put("/config", admin.APIConfig)
 			r.Patch("/config", admin.APIConfig)
+			r.Get("/config/search", admin.APIConfig)
 			r.Post("/backup", admin.APIBackup)
 			r.Post("/maintenance", admin.APIMaintenanceMode)
 			r.Get("/logs/access", admin.APILogsAccess)
@@ -566,12 +593,7 @@ r.Get("/proxy/thumbnail", h.ProxyThumbnail)
 		})
 	})
 
-	// Shortcut API routes (without version prefix)
-	s.router.Get("/api/search", h.APISearch)
-	s.router.Get("/api/engines", h.APIEngines)
-	s.router.Get("/api/health", h.APIHealthCheck)
-
-	// Custom 404 handler per AI.md PART 30
+	// Custom 404 handler per AI.md PART 14
 	s.router.NotFound(h.NotFoundHandler)
 }
 

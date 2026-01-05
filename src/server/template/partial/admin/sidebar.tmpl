@@ -35,60 +35,60 @@
             </div>
         </div>
 
-        <!-- Security Section -->
+        <!-- Security Section per AI.md PART 17 - under /server/ -->
         <div class="nav-section" id="section-security">
             <button type="button" class="nav-section-header" onclick="toggleSection('security')" aria-expanded="true" aria-controls="section-security-links">
                 <span>Security</span>
                 <span class="chevron">▼</span>
             </button>
             <div class="nav-section-links" id="section-security-links">
-                <a href="/admin/security/auth" class="nav-link{{if eq .ActiveNav "security-auth"}} active{{end}}">Authentication</a>
-                <a href="/admin/security/tokens" class="nav-link{{if eq .ActiveNav "security-tokens"}} active{{end}}">API Tokens</a>
-                <a href="/admin/security/ratelimit" class="nav-link{{if eq .ActiveNav "security-ratelimit"}} active{{end}}">Rate Limiting</a>
-                <a href="/admin/security/firewall" class="nav-link{{if eq .ActiveNav "security-firewall"}} active{{end}}">Firewall</a>
+                <a href="/admin/server/security/auth" class="nav-link{{if eq .ActiveNav "security-auth"}} active{{end}}">Authentication</a>
+                <a href="/admin/server/security/tokens" class="nav-link{{if eq .ActiveNav "security-tokens"}} active{{end}}">API Tokens</a>
+                <a href="/admin/server/security/ratelimit" class="nav-link{{if eq .ActiveNav "security-ratelimit"}} active{{end}}">Rate Limiting</a>
+                <a href="/admin/server/security/firewall" class="nav-link{{if eq .ActiveNav "security-firewall"}} active{{end}}">Firewall</a>
             </div>
         </div>
 
-        <!-- Network Section -->
+        <!-- Network Section per AI.md PART 17 - under /server/ -->
         <div class="nav-section" id="section-network">
             <button type="button" class="nav-section-header" onclick="toggleSection('network')" aria-expanded="true" aria-controls="section-network-links">
                 <span>Network</span>
                 <span class="chevron">▼</span>
             </button>
             <div class="nav-section-links" id="section-network-links">
-                <a href="/admin/network/tor" class="nav-link{{if eq .ActiveNav "tor"}} active{{end}}">Tor</a>
-                <a href="/admin/network/geoip" class="nav-link{{if eq .ActiveNav "geoip"}} active{{end}}">GeoIP</a>
-                <a href="/admin/network/blocklists" class="nav-link{{if eq .ActiveNav "blocklists"}} active{{end}}">Blocklists</a>
+                <a href="/admin/server/network/tor" class="nav-link{{if eq .ActiveNav "tor"}} active{{end}}">Tor</a>
+                <a href="/admin/server/network/geoip" class="nav-link{{if eq .ActiveNav "geoip"}} active{{end}}">GeoIP</a>
+                <a href="/admin/server/network/blocklists" class="nav-link{{if eq .ActiveNav "blocklists"}} active{{end}}">Blocklists</a>
             </div>
         </div>
 
-        <!-- System Section -->
+        <!-- System Section per AI.md PART 17 - under /server/ -->
         <div class="nav-section" id="section-system">
             <button type="button" class="nav-section-header" onclick="toggleSection('system')" aria-expanded="true" aria-controls="section-system-links">
                 <span>System</span>
                 <span class="chevron">▼</span>
             </button>
             <div class="nav-section-links" id="section-system-links">
-                <a href="/admin/system/backup" class="nav-link{{if eq .ActiveNav "backup"}} active{{end}}">Backup</a>
-                <a href="/admin/system/maintenance" class="nav-link{{if eq .ActiveNav "maintenance"}} active{{end}}">Maintenance</a>
-                <a href="/admin/system/updates" class="nav-link{{if eq .ActiveNav "updates"}} active{{end}}">Updates</a>
-                <a href="/admin/system/info" class="nav-link{{if eq .ActiveNav "system"}} active{{end}}">System Info</a>
+                <a href="/admin/server/system/backup" class="nav-link{{if eq .ActiveNav "backup"}} active{{end}}">Backup</a>
+                <a href="/admin/server/system/maintenance" class="nav-link{{if eq .ActiveNav "maintenance"}} active{{end}}">Maintenance</a>
+                <a href="/admin/server/system/updates" class="nav-link{{if eq .ActiveNav "updates"}} active{{end}}">Updates</a>
+                <a href="/admin/server/system/info" class="nav-link{{if eq .ActiveNav "system"}} active{{end}}">System Info</a>
             </div>
         </div>
 
-        <!-- Users Section per AI.md PART 22 -->
+        <!-- Users Section per AI.md PART 17 - under /server/ -->
         <div class="nav-section" id="section-users">
             <button type="button" class="nav-section-header" onclick="toggleSection('users')" aria-expanded="true" aria-controls="section-users-links">
                 <span>Users</span>
                 <span class="chevron">▼</span>
             </button>
             <div class="nav-section-links" id="section-users-links">
-                <a href="/admin/users/admins" class="nav-link{{if eq .ActiveNav "users-admins"}} active{{end}}">Administrators</a>
+                <a href="/admin/server/users/admins" class="nav-link{{if eq .ActiveNav "users-admins"}} active{{end}}">Administrators</a>
             </div>
         </div>
 
-        <a href="/admin/engines" class="nav-link{{if eq .ActiveNav "engines"}} active{{end}}">Engines</a>
-        <a href="/admin/help" class="nav-link{{if eq .ActiveNav "help"}} active{{end}}">Help</a>
+        <a href="/admin/server/engines" class="nav-link{{if eq .ActiveNav "engines"}} active{{end}}">Engines</a>
+        <a href="/admin/server/help" class="nav-link{{if eq .ActiveNav "help"}} active{{end}}">Help</a>
     </div>
     <div class="nav-footer">
         <a href="/admin/profile" class="nav-link{{if eq .ActiveNav "profile"}} active{{end}}">Profile</a>

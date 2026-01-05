@@ -270,6 +270,7 @@ func TestAPIAutocomplete_Empty(t *testing.T) {
 	h := &Handler{cfg: cfg}
 
 	req := httptest.NewRequest("GET", "/api/v1/autocomplete", nil)
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
 
 	h.APIAutocomplete(rr, req)
@@ -292,8 +293,14 @@ func TestAPIAutocomplete_Empty(t *testing.T) {
 		t.Error("APIAutocomplete should return suggestions array")
 	}
 
-	if len(suggestions) != 0 {
-		t.Errorf("APIAutocomplete should return empty suggestions for no query, got %d", len(suggestions))
+	// Empty query returns popular searches
+	if len(suggestions) == 0 {
+		t.Error("APIAutocomplete should return popular suggestions for empty query")
+	}
+
+	// Check type is "popular"
+	if response["type"] != "popular" {
+		t.Errorf("APIAutocomplete should return type 'popular' for empty query, got %v", response["type"])
 	}
 }
 

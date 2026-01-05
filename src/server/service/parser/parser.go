@@ -88,39 +88,42 @@ func ExtractAttr(s *goquery.Selection, attrs ...string) string {
 }
 
 // ParseDuration parses various duration formats to (display string, seconds)
+// Handles mixed text like "HD 4:00" by extracting the time pattern
 func ParseDuration(duration string) (string, int) {
 	duration = strings.TrimSpace(duration)
 	if duration == "" {
 		return "", 0
 	}
 
-	// Clean up the duration string
-	duration = strings.ReplaceAll(duration, " ", "")
-
-	// Handle formats like "12:34" or "1:23:45"
-	parts := strings.Split(duration, ":")
-	switch len(parts) {
-	// mm:ss
-	case 2:
-		m, _ := strconv.Atoi(parts[0])
-		s, _ := strconv.Atoi(parts[1])
-		secs := m*60 + s
-		return duration, secs
-	// hh:mm:ss
-	case 3:
-		h, _ := strconv.Atoi(parts[0])
-		m, _ := strconv.Atoi(parts[1])
-		s, _ := strconv.Atoi(parts[2])
-		secs := h*3600 + m*60 + s
-		return duration, secs
+	// First try to extract time pattern from potentially mixed text (e.g., "HD 4:00")
+	// Match patterns: "1:23:45", "12:34", or just "12:34" with optional surrounding text
+	timeRe := regexp.MustCompile(`(\d{1,2}:\d{2}(?::\d{2})?)`)
+	if matches := timeRe.FindStringSubmatch(duration); len(matches) > 1 {
+		timeStr := matches[1]
+		parts := strings.Split(timeStr, ":")
+		switch len(parts) {
+		// mm:ss
+		case 2:
+			m, _ := strconv.Atoi(parts[0])
+			s, _ := strconv.Atoi(parts[1])
+			secs := m*60 + s
+			return timeStr, secs
+		// hh:mm:ss
+		case 3:
+			h, _ := strconv.Atoi(parts[0])
+			m, _ := strconv.Atoi(parts[1])
+			s, _ := strconv.Atoi(parts[2])
+			secs := h*3600 + m*60 + s
+			return timeStr, secs
+		}
 	}
 
 	// Try to parse "12 min" or "12min" format
-	re := regexp.MustCompile(`(\d+)\s*min`)
-	if matches := re.FindStringSubmatch(strings.ToLower(duration)); len(matches) > 1 {
+	minRe := regexp.MustCompile(`(\d+)\s*min`)
+	if matches := minRe.FindStringSubmatch(strings.ToLower(duration)); len(matches) > 1 {
 		m, _ := strconv.Atoi(matches[1])
 		secs := m * 60
-		return duration, secs
+		return matches[0], secs
 	}
 
 	return duration, 0

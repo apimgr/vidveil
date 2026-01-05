@@ -4,57 +4,172 @@ Endpoint: `/graphql`
 
 Interactive playground: `/graphiql`
 
+Schema definition: `/graphql/schema`
+
 ## Schema
 
 ```graphql
 type Query {
-  search(query: String!, engines: [String], page: Int): SearchResult!
-  engines: [Engine!]!
-  engine(name: String!): Engine
-  health: Health!
+  search(query: String!, page: Int, engines: String): SearchResult
+  bangs: [Bang]
+  autocomplete(prefix: String!): [Bang]
+  engines: [Engine]
+  health: Health
 }
 
 type SearchResult {
   query: String!
-  page: Int!
-  results: [Video!]!
-  total: Int!
+  results: [Result]
+  enginesUsed: [String]
+  enginesFailed: [String]
+  searchTimeMs: Int
+  pagination: Pagination
 }
 
-type Video {
+type Result {
+  id: String!
   title: String!
   url: String!
   thumbnail: String
-  duration: String
-  views: String
-  engine: String!
+  duration: Int
+  durationStr: String
+  views: Int
+  viewsStr: String
+  source: String!
+  sourceDisplay: String
+  description: String
+}
+
+type Bang {
+  bang: String!
+  engineName: String!
+  displayName: String!
+  shortCode: String!
 }
 
 type Engine {
   name: String!
+  displayName: String!
   enabled: Boolean!
-  bang: String
+  available: Boolean!
+  tier: Int!
+  features: [String]
+}
+
+type Pagination {
+  page: Int!
+  limit: Int!
+  total: Int!
+  pages: Int!
 }
 
 type Health {
   status: String!
-  uptime: String!
+  enginesEnabled: Int!
 }
 ```
 
-## Example Query
+## Example Queries
+
+### Search
 
 ```graphql
-query {
-  search(query: "example", page: 1) {
+query Search($query: String!, $page: Int) {
+  search(query: $query, page: $page) {
     query
     results {
+      id
       title
       url
-      duration
-      engine
+      thumbnail
+      durationStr
+      viewsStr
+      source
+      sourceDisplay
     }
-    total
+    enginesUsed
+    searchTimeMs
+    pagination {
+      page
+      pages
+      total
+    }
   }
 }
 ```
+
+Variables:
+```json
+{
+  "query": "example",
+  "page": 1
+}
+```
+
+### List Engines
+
+```graphql
+query {
+  engines {
+    name
+    displayName
+    enabled
+    available
+    tier
+    features
+  }
+}
+```
+
+### List Bangs
+
+```graphql
+query {
+  bangs {
+    bang
+    engineName
+    displayName
+    shortCode
+  }
+}
+```
+
+### Autocomplete
+
+```graphql
+query Autocomplete($prefix: String!) {
+  autocomplete(prefix: $prefix) {
+    bang
+    engineName
+    displayName
+    shortCode
+  }
+}
+```
+
+Variables:
+```json
+{
+  "prefix": "!po"
+}
+```
+
+### Health Check
+
+```graphql
+query {
+  health {
+    status
+    enginesEnabled
+  }
+}
+```
+
+## Using GraphiQL
+
+Navigate to `/graphiql` to access the interactive GraphQL playground with:
+
+- Query editor with syntax highlighting
+- Automatic schema documentation
+- Query history
+- Variable editor

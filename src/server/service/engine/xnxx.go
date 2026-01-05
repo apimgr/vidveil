@@ -20,10 +20,23 @@ type XNXXEngine struct {
 
 // NewXNXXEngine creates a new XNXX engine
 func NewXNXXEngine(cfg *config.Config, torClient *tor.Client) *XNXXEngine {
-	return &XNXXEngine{
+	e := &XNXXEngine{
 		BaseEngine: NewBaseEngine("xnxx", "XNXX", "https://www.xnxx.com", 1, cfg, torClient),
 		parser:     parser.NewXNXXParser(),
 	}
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:    false, // XNXX doesn't have preview URLs in search results
+		HasDownload:   false,
+		HasDuration:   true,
+		HasViews:      true,
+		HasRating:     false,
+		HasQuality:    true,
+		HasUploadDate: false,
+		PreviewSource: "",
+		APIType:       "html",
+	})
+	return e
 }
 
 // Search performs a search on XNXX

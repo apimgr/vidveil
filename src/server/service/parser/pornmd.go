@@ -2,6 +2,8 @@
 package parser
 
 import (
+	"strings"
+
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -33,8 +35,8 @@ func (p *PornMDParser) Parse(s *goquery.Selection) *VideoItem {
 	if href == "" {
 		return nil
 	}
-	// PornMD is a meta-search, URLs are already absolute
-	item.URL = href
+	// PornMD is a meta-search but URLs may be relative redirects
+	item.URL = MakeAbsoluteURL(href, p.BaseURL)
 
 	// Get title from link's title attribute
 	item.Title = ExtractAttr(link, "title")
@@ -57,19 +59,32 @@ func (p *PornMDParser) Parse(s *goquery.Selection) *VideoItem {
 		item.Thumbnail = MakeAbsoluteURL(item.Thumbnail, "https:")
 	}
 
-	// Get duration from badge spans (look for time format like "10:30")
-	s.Find("span").Each(func(i int, span *goquery.Selection) {
-		text := CleanText(span.Text())
-		if dur, secs := ParseDuration(text); secs > 0 {
-			item.Duration = dur
-			item.DurationSeconds = secs
-		}
-	})
+	// Get duration from .badge.float-right
+	// Structure: <span class="badge float-right">
+	//   <span class="font-bold italic">HD</span>
+	//   4:00  <!-- duration is in the parent span text -->
+	// </span>
+	durBadge := s.Find(".item-meta-container .badge.float-right").First()
+	if durBadge.Length() > 0 {
+		// Get all text from the badge (includes "HD" and duration)
+		fullText := CleanText(durBadge.Text())
+		// Try to parse duration from the text (ParseDuration handles "HD 4:00" or just "4:00")
+		item.Duration, item.DurationSeconds = ParseDuration(fullText)
+	}
 
-	// Get source info from badge
-	sourceElem := s.Find(".source, span.badge")
+	// Get rating from .item-score span (e.g., "88%")
+	ratingSpan := s.Find(".item-score").First()
+	if ratingSpan.Length() > 0 {
+		ratingText := CleanText(ratingSpan.Text())
+		if strings.HasSuffix(ratingText, "%") {
+			item.Rating = ratingText
+		}
+	}
+
+	// Get source info from .item-source
+	sourceElem := s.Find(".item-source").First()
 	sourceText := CleanText(sourceElem.Text())
-	if sourceText != "" && item.Duration != sourceText {
+	if sourceText != "" {
 		item.Description = "Source: " + sourceText
 	}
 

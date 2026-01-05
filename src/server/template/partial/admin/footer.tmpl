@@ -1,0 +1,18 @@
+{{define "admin/footer"}}
+{{/* AI.md PART 16: Admin footer (REQUIRED) */}}
+<footer class="admin-footer">
+    <div class="footer-links">
+        <a href="/server/about">About</a>
+        <span class="divider">|</span>
+        <a href="/server/privacy">Privacy</a>
+        <span class="divider">|</span>
+        <a href="/server/help">Help</a>
+        <span class="divider">|</span>
+        <a href="https://github.com/apimgr/vidveil" target="_blank">GitHub</a>
+    </div>
+    <div class="footer-version">
+        {{if .Version}}v{{.Version}}{{end}}
+        {{if .BuildDateTime}}<span class="divider">|</span>Built: {{.BuildDateTime}}{{end}}
+    </div>
+</footer>
+{{end}}

@@ -158,17 +158,30 @@ function setupVideoPreview() {
                 isPlaying = false;
             });
         } else {
-            // Mobile: tap to toggle preview
-            container.addEventListener('click', (e) => {
-                // Don't prevent link navigation on second tap
-                if (!isPlaying) {
-                    e.preventDefault();
-                    e.stopPropagation();
+            // Mobile: swipe right to preview
+            let touchStartX = 0;
+            let touchEndX = 0;
+            
+            container.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+            
+            container.addEventListener('touchend', (e) => {
+                touchEndX = e.changedTouches[0].screenX;
+                handleSwipeGesture();
+            }, { passive: true });
+            
+            function handleSwipeGesture() {
+                const swipeThreshold = 50; // minimum swipe distance
+                const swipeDistance = touchEndX - touchStartX;
+                
+                // Swipe right - show preview
+                if (swipeDistance > swipeThreshold && !isPlaying) {
                     video.style.opacity = '1';
                     staticImg.style.opacity = '0';
                     video.play().catch(() => {});
                     isPlaying = true;
-
+                    
                     // Auto-stop after 5 seconds
                     setTimeout(() => {
                         if (isPlaying) {
@@ -180,6 +193,30 @@ function setupVideoPreview() {
                         }
                     }, 5000);
                 }
+                // Swipe left - stop preview
+                else if (swipeDistance < -swipeThreshold && isPlaying) {
+                    video.style.opacity = '0';
+                    staticImg.style.opacity = '1';
+                    video.pause();
+                    video.currentTime = 0;
+                    isPlaying = false;
+                }
+            }
+            
+            // Tap to navigate (when not previewing)
+            container.addEventListener('click', (e) => {
+                // If not previewing, allow navigation
+                if (!isPlaying) {
+                    return; // Let link work normally
+                }
+                // If previewing, stop it
+                e.preventDefault();
+                e.stopPropagation();
+                video.style.opacity = '0';
+                staticImg.style.opacity = '1';
+                video.pause();
+                video.currentTime = 0;
+                isPlaying = false;
             });
         }
     });
@@ -697,7 +734,7 @@ if (document.readyState === 'loading') {
             return;
         }
 
-        fetch('/api/v1/autocomplete?q=' + encodeURIComponent(q))
+        fetch('/api/v1/bangs/autocomplete?q=' + encodeURIComponent(q))
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.success && data.suggestions && data.suggestions.length > 0) {
@@ -824,6 +861,10 @@ if (document.readyState === 'loading') {
     var searchCurrentSort = '';
     var startTime = Date.now();
     var isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    var currentPage = 1;
+    var isLoadingMore = false;
+    var hasMoreResults = true;
+    var infiniteScrollObserver = null;
 
     function initSearchPage() {
         var searchMeta = document.getElementById('search-meta');
@@ -869,6 +910,10 @@ if (document.readyState === 'loading') {
                         loadingEl.innerHTML = '<p>No results found.</p>';
                         loadingEl.classList.remove('hidden');
                     }
+                    hasMoreResults = false;
+                } else {
+                    // Setup infinite scroll after initial results load
+                    setupInfiniteScroll();
                 }
                 return;
             }
@@ -970,6 +1015,8 @@ if (document.readyState === 'loading') {
 
         var previewUrl = r.preview_url || '';
         var hasPreview = previewUrl && previewUrl.length > 0;
+        var downloadUrl = r.download_url || '';
+        var hasDownload = downloadUrl && downloadUrl.length > 0;
 
         var html = '<a href="' + escapeHtmlUtil(r.url) + '" target="_blank" rel="noopener noreferrer nofollow" class="card-link">';
         html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtmlUtil(previewUrl) + '"' : '') + '>';
@@ -991,6 +1038,10 @@ if (document.readyState === 'loading') {
         html += '<h3><a href="' + escapeHtmlUtil(r.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + escapeHtmlUtil(r.title || 'Untitled') + '</a></h3>';
         html += '<div class="meta"><span class="source">' + escapeHtmlUtil(r.source_display || r.source || '') + '</span>';
         if (r.views) html += '<span>' + escapeHtmlUtil(r.views) + '</span>';
+        // Download link (direct to source, not proxied)
+        if (hasDownload) {
+            html += '<a href="' + escapeHtmlUtil(downloadUrl) + '" target="_blank" rel="noopener noreferrer nofollow" class="download-link" title="Download video" onclick="event.stopPropagation()">&#x21E9;</a>';
+        }
         html += '</div></div>';
 
         card.innerHTML = html;
@@ -1191,6 +1242,103 @@ if (document.readyState === 'loading') {
             if (statusText) statusText.textContent = msg;
             if (engineStatus) engineStatus.textContent = enginesWithResults.size + ' engines';
         }
+    }
+
+    // Infinite scroll - loads more pages as user scrolls
+    function setupInfiniteScroll() {
+        var grid = document.getElementById('video-grid');
+        if (!grid || infiniteScrollObserver) return;
+
+        // Create sentinel element at end of grid
+        var sentinel = document.createElement('div');
+        sentinel.className = 'infinite-scroll-sentinel';
+        sentinel.id = 'scroll-sentinel';
+        grid.parentNode.insertBefore(sentinel, grid.nextSibling);
+
+        // Create load more indicator
+        var loadIndicator = document.createElement('div');
+        loadIndicator.className = 'load-more-indicator hidden';
+        loadIndicator.id = 'load-more-indicator';
+        loadIndicator.innerHTML = '<div class="spinner"></div><span>Loading more results...</span>';
+        grid.parentNode.insertBefore(loadIndicator, sentinel);
+
+        // Setup intersection observer
+        infiniteScrollObserver = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting && !isLoadingMore && hasMoreResults && !isSearching) {
+                    loadMoreResults();
+                }
+            });
+        }, {
+            rootMargin: '200px' // Start loading 200px before sentinel is visible
+        });
+
+        infiniteScrollObserver.observe(sentinel);
+    }
+
+    function loadMoreResults() {
+        if (isLoadingMore || !hasMoreResults) return;
+
+        isLoadingMore = true;
+        currentPage++;
+
+        var loadIndicator = document.getElementById('load-more-indicator');
+        if (loadIndicator) loadIndicator.classList.remove('hidden');
+
+        // Stream next page of results
+        var eventSource = new EventSource('/api/v1/search/stream?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage);
+        var gotResults = false;
+
+        eventSource.onmessage = function(event) {
+            var data = JSON.parse(event.data);
+
+            // Final done message
+            if (data.done && data.engine === 'all') {
+                eventSource.close();
+                isLoadingMore = false;
+                if (loadIndicator) loadIndicator.classList.add('hidden');
+
+                // If no results on this page, stop infinite scroll
+                if (!gotResults) {
+                    hasMoreResults = false;
+                    // Remove sentinel
+                    var sentinel = document.getElementById('scroll-sentinel');
+                    if (sentinel && infiniteScrollObserver) {
+                        infiniteScrollObserver.unobserve(sentinel);
+                    }
+                }
+                updateSearchStatus();
+                return;
+            }
+
+            // Skip done/error from individual engines
+            if (data.done || data.error) return;
+
+            // Got a result
+            if (data.result && data.result.title) {
+                gotResults = true;
+                var r = data.result;
+
+                // Check for duplicates by URL
+                var isDupe = allResults.some(function(existing) {
+                    return existing.url === r.url;
+                });
+
+                if (!isDupe) {
+                    allResults.push(r);
+                    addResultCard(r);
+
+                    var countEl = document.getElementById('result-count');
+                    if (countEl) countEl.textContent = allResults.length;
+                }
+            }
+        };
+
+        eventSource.onerror = function() {
+            eventSource.close();
+            isLoadingMore = false;
+            if (loadIndicator) loadIndicator.classList.add('hidden');
+        };
     }
 
     function hideSearchElement(id) {

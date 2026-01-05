@@ -226,7 +226,7 @@ func generateOpenAPISpec(cfg *config.Config) string {
         }
       }
     },
-    "/autocomplete": {
+    "/bangs/autocomplete": {
       "get": {
         "summary": "Autocomplete suggestions",
         "description": "Get autocomplete suggestions for bang shortcuts while typing",
@@ -289,19 +289,51 @@ func generateOpenAPISpec(cfg *config.Config) string {
         }
       }
     },
-    "/admin/stats": {
+    "/admin/server/settings": {
       "get": {
-        "summary": "Get admin statistics",
-        "description": "Returns detailed server statistics (requires API token)",
-        "operationId": "adminStats",
+        "summary": "Get server settings",
+        "description": "Returns server configuration (requires API token)",
+        "operationId": "getServerSettings",
         "tags": ["Admin"],
         "security": [{ "apiToken": [] }],
         "responses": {
           "200": {
-            "description": "Detailed statistics",
+            "description": "Server settings",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AdminStatsResponse" }
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update server settings",
+        "description": "Update server configuration (requires API token)",
+        "operationId": "updateServerSettings",
+        "tags": ["Admin"],
+        "security": [{ "apiToken": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
               }
             }
           },
@@ -316,22 +348,38 @@ func generateOpenAPISpec(cfg *config.Config) string {
         }
       }
     },
-    "/admin/backup": {
+    "/admin/server/system/backup": {
+      "get": {
+        "summary": "List backups",
+        "description": "List all available backups (requires API token)",
+        "operationId": "listBackups",
+        "tags": ["Admin"],
+        "security": [{ "apiToken": [] }],
+        "responses": {
+          "200": {
+            "description": "List of backups",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "summary": "Create backup",
         "description": "Creates a backup of configuration and data (requires API token)",
         "operationId": "createBackup",
         "tags": ["Admin"],
         "security": [{ "apiToken": [] }],
-        "parameters": [
-          {
-            "name": "file",
-            "in": "query",
-            "required": false,
-            "description": "Custom backup file path",
-            "schema": { "type": "string" }
-          }
-        ],
         "responses": {
           "200": {
             "description": "Backup created",
@@ -374,6 +422,69 @@ func generateOpenAPISpec(cfg *config.Config) string {
         "responses": {
           "200": {
             "description": "Maintenance mode updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/server/scheduler": {
+      "get": {
+        "summary": "List scheduled tasks",
+        "description": "List all scheduled tasks (requires API token)",
+        "operationId": "listSchedulerTasks",
+        "tags": ["Admin"],
+        "security": [{ "apiToken": [] }],
+        "responses": {
+          "200": {
+            "description": "List of tasks",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/server/logs/{type}": {
+      "get": {
+        "summary": "Get server logs",
+        "description": "Get access or error logs (requires API token)",
+        "operationId": "getServerLogs",
+        "tags": ["Admin"],
+        "security": [{ "apiToken": [] }],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "description": "Log type (access or error)",
+            "schema": { "type": "string", "enum": ["access", "error"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Log entries",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/SuccessResponse" }

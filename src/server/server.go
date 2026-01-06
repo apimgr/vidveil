@@ -16,6 +16,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/admin"
 	"github.com/apimgr/vidveil/src/server/service/engine"
+	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 )
@@ -37,6 +38,7 @@ type Server struct {
 	adminSvc     *admin.Service
 	migrationMgr MigrationManager
 	scheduler    *scheduler.Scheduler
+	logger       *logging.Logger
 	router       *chi.Mux
 	srv          *http.Server
 	rateLimiter  *ratelimit.Limiter
@@ -50,7 +52,7 @@ type MigrationManager interface {
 }
 
 // New creates a new server instance
-func New(cfg *config.Config, configDir, dataDir string, engineMgr *engine.Manager, adminSvc *admin.Service, migrationMgr MigrationManager, sched *scheduler.Scheduler) *Server {
+func New(cfg *config.Config, configDir, dataDir string, engineMgr *engine.Manager, adminSvc *admin.Service, migrationMgr MigrationManager, sched *scheduler.Scheduler, logger *logging.Logger) *Server {
 	// Set templates filesystem for handlers
 	handler.SetTemplatesFS(embeddedFS)
 	handler.SetAdminTemplatesFS(embeddedFS)
@@ -61,13 +63,18 @@ func New(cfg *config.Config, configDir, dataDir string, engineMgr *engine.Manage
 		cfg.Server.RateLimit.Requests,
 		cfg.Server.RateLimit.Window,
 	)
+	// Set logger for security event logging per AI.md PART 11
+	limiter.SetLogger(logger)
 
 	s := &Server{
 		cfg:          cfg,
+		configDir:    configDir,
+		dataDir:      dataDir,
 		engineMgr:    engineMgr,
 		adminSvc:     adminSvc,
 		migrationMgr: migrationMgr,
 		scheduler:    sched,
+		logger:       logger,
 		router:       chi.NewRouter(),
 		rateLimiter:  limiter,
 	}
@@ -181,6 +188,8 @@ func (s *Server) setupRoutes() {
 	admin := handler.NewAdminHandler(s.cfg, s.configDir, s.dataDir, s.engineMgr, s.adminSvc, s.migrationMgr)
 	// Set scheduler for admin panel management per AI.md PART 26
 	admin.SetScheduler(s.scheduler)
+	// Set logger for audit and security event logging per AI.md PART 11
+	admin.SetLogger(s.logger)
 	metrics := handler.NewMetrics(s.cfg, s.engineMgr)
 
 	// Maintenance mode middleware (applied globally, but allows admin access)
@@ -312,8 +321,14 @@ func (s *Server) setupRoutes() {
 			// Dashboard (root)
 			r.Get("/dashboard", admin.DashboardPage)
 
-			// Admin's OWN profile per AI.md PART 17 (valid at root)
+			// Admin's OWN profile per AI.md PART 17 line 18603 (valid at root)
 			r.Get("/profile", admin.ProfilePage)
+
+			// Admin's OWN preferences per AI.md PART 17 line 18604 (valid at root)
+			r.Get("/preferences", admin.PreferencesPage)
+
+			// Admin's OWN notifications per AI.md PART 17 line 18605 (valid at root)
+			r.Get("/notifications", admin.AdminNotificationsPage)
 
 			// Logout (valid at root)
 			r.Get("/logout", admin.LogoutHandler)
@@ -328,6 +343,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/scheduler", admin.SchedulerPage)
 				r.Get("/email", admin.EmailPage)
 				r.Get("/logs", admin.LogsPage)
+				r.Get("/logs/audit", admin.AuditLogsPage)
 				r.Get("/database", admin.DatabasePage)
 				r.Get("/web", admin.WebSettingsPage)
 				r.Get("/pages", admin.PagesPage)
@@ -356,14 +372,11 @@ func (s *Server) setupRoutes() {
 					r.Get("/blocklists", admin.BlocklistsPage)
 				})
 
-				// System section per AI.md PART 17 - under /server/
-				r.Route("/system", func(r chi.Router) {
-					r.Get("/", admin.BackupPage)
-					r.Get("/backup", admin.BackupPage)
-					r.Get("/maintenance", admin.MaintenancePage)
-					r.Get("/updates", admin.UpdatesPage)
-					r.Get("/info", admin.SystemInfoPage)
-				})
+				// System routes per AI.md PART 17 lines 18613-18615 - directly under /server/
+				r.Get("/backup", admin.BackupPage)
+				r.Get("/maintenance", admin.MaintenancePage)
+				r.Get("/updates", admin.UpdatesPage)
+				r.Get("/info", admin.SystemInfoPage)
 
 				// Users section per AI.md PART 17 - under /server/
 				r.Route("/users", func(r chi.Router) {
@@ -583,6 +596,7 @@ func (s *Server) setupRoutes() {
 			r.Post("/maintenance", admin.APIMaintenanceMode)
 			r.Get("/logs/access", admin.APILogsAccess)
 			r.Get("/logs/error", admin.APILogsError)
+			r.Get("/logs/audit", admin.APILogsAudit)
 			r.Post("/restore", admin.APIRestore)
 			r.Post("/test/email", admin.APITestEmail)
 			r.Post("/password", admin.APIPassword)

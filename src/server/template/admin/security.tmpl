@@ -117,15 +117,16 @@ async function changePassword(e) {
     } catch (e) { showError('Error: ' + e.message); }
 }
 
-async function regenerateToken() {
-    if (!confirm('Are you sure? This will invalidate your current API token.')) return;
-    try {
-        const resp = await fetch('/api/v1/admin/token/regenerate', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-            showSuccess('Token regenerated! New token: ' + data.data.token);
-        } else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+function regenerateToken() {
+    showConfirm('Are you sure? This will invalidate your current API token.', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/token/regenerate', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                showSuccess('Token regenerated! New token: ' + data.data.token);
+            } else { showError('Error: ' + data.error); }
+        } catch (e) { showError('Error: ' + e.message); }
+    });
 }
 </script>
 {{end}}

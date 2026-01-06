@@ -147,21 +147,21 @@ async function pingNode() {
     }
 }
 
-async function removeNode() {
-    if (!confirm('Remove this node from the cluster? This cannot be undone.')) return;
-
-    try {
-        const resp = await fetch('/api/v1/admin/server/nodes/{{.Node.ID}}', { method: 'DELETE' });
-        const result = await resp.json();
-        if (result.success) {
-            showSuccess('Node removed');
-            setTimeout(() => window.location.href = '/admin/server/nodes', 2000);
-        } else {
-            showError('Error: ' + result.error);
+function removeNode() {
+    showConfirm('Remove this node from the cluster? This cannot be undone.', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/server/nodes/{{.Node.ID}}', { method: 'DELETE' });
+            const result = await resp.json();
+            if (result.success) {
+                showSuccess('Node removed');
+                setTimeout(() => window.location.href = '/admin/server/nodes', 2000);
+            } else {
+                showError('Error: ' + result.error);
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
         }
-    } catch (e) {
-        showError('Error: ' + e.message);
-    }
+    });
 }
 </script>
 {{end}}

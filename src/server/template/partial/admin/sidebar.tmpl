@@ -3,8 +3,8 @@
     <div class="nav-brand">
         <div class="nav-brand-row">
             <a href="/admin">{{.SiteTitle}} Admin</a>
-            <!-- Notification Bell per AI.md PART 25 -->
-            <a href="/admin/server/notifications" class="notification-bell" id="notification-bell" title="Notifications" aria-label="Notifications">
+            <!-- Notification Bell per AI.md PART 17 line 18605 - admin's OWN notifications -->
+            <a href="/admin/notifications" class="notification-bell" id="notification-bell" title="Notifications" aria-label="Notifications">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                 {{if .UnreadNotifications}}<span class="notification-badge">{{.UnreadNotifications}}</span>{{end}}
             </a>
@@ -27,6 +27,7 @@
                 <a href="/admin/server/scheduler" class="nav-link{{if eq .ActiveNav "scheduler"}} active{{end}}">Scheduler</a>
                 <a href="/admin/server/email" class="nav-link{{if eq .ActiveNav "email"}} active{{end}}">Email</a>
                 <a href="/admin/server/logs" class="nav-link{{if eq .ActiveNav "logs"}} active{{end}}">Logs</a>
+                <a href="/admin/server/logs/audit" class="nav-link{{if eq .ActiveNav "logs-audit"}} active{{end}}">Audit Logs</a>
                 <a href="/admin/server/database" class="nav-link{{if eq .ActiveNav "database"}} active{{end}}">Database</a>
                 <a href="/admin/server/web" class="nav-link{{if eq .ActiveNav "web"}} active{{end}}">Web</a>
                 <a href="/admin/server/pages" class="nav-link{{if eq .ActiveNav "pages"}} active{{end}}">Pages</a>
@@ -62,17 +63,17 @@
             </div>
         </div>
 
-        <!-- System Section per AI.md PART 17 - under /server/ -->
+        <!-- System Section per AI.md PART 17 lines 18613-18615 - directly under /server/ -->
         <div class="nav-section" id="section-system">
             <button type="button" class="nav-section-header" onclick="toggleSection('system')" aria-expanded="true" aria-controls="section-system-links">
                 <span>System</span>
                 <span class="chevron">▼</span>
             </button>
             <div class="nav-section-links" id="section-system-links">
-                <a href="/admin/server/system/backup" class="nav-link{{if eq .ActiveNav "backup"}} active{{end}}">Backup</a>
-                <a href="/admin/server/system/maintenance" class="nav-link{{if eq .ActiveNav "maintenance"}} active{{end}}">Maintenance</a>
-                <a href="/admin/server/system/updates" class="nav-link{{if eq .ActiveNav "updates"}} active{{end}}">Updates</a>
-                <a href="/admin/server/system/info" class="nav-link{{if eq .ActiveNav "system"}} active{{end}}">System Info</a>
+                <a href="/admin/server/backup" class="nav-link{{if eq .ActiveNav "backup"}} active{{end}}">Backup</a>
+                <a href="/admin/server/maintenance" class="nav-link{{if eq .ActiveNav "maintenance"}} active{{end}}">Maintenance</a>
+                <a href="/admin/server/updates" class="nav-link{{if eq .ActiveNav "updates"}} active{{end}}">Updates</a>
+                <a href="/admin/server/info" class="nav-link{{if eq .ActiveNav "system"}} active{{end}}">System Info</a>
             </div>
         </div>
 
@@ -92,6 +93,7 @@
     </div>
     <div class="nav-footer">
         <a href="/admin/profile" class="nav-link{{if eq .ActiveNav "profile"}} active{{end}}">Profile</a>
+        <a href="/admin/preferences" class="nav-link{{if eq .ActiveNav "preferences"}} active{{end}}">Preferences</a>
         <a href="/admin/logout" class="nav-link nav-logout">Logout</a>
     </div>
 </nav>

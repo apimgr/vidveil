@@ -1,14 +1,15 @@
 # VidVeil TODO
 
-## AI.md Refreshed from TEMPLATE.md (2026-01-03)
+## AI.md Refreshed from TEMPLATE.md (2026-01-06)
 
-- [x] AI.md replaced from ~/Projects/github/apimgr/TEMPLATE.md
-- [x] Variables replaced: {projectname}=vidveil, {projectorg}=apimgr, {gitprovider}=github
-- [x] Project description updated (lines 1-25)
-- [x] PART 37 references IDEA.md
-- [x] HOW TO USE section deleted (lines 787-1085)
-- [x] PART Index line numbers updated
+- [x] AI.md copied from ~/Projects/github/apimgr/TEMPLATE.md
+- [x] Variables replaced: {projectname}=vidveil, {PROJECTNAME}=VIDVEIL, {projectorg}=apimgr, {gitprovider}=github
+- [x] Project description updated (lines 7-24)
+- [x] HOW TO USE section deleted
+- [x] PART index line numbers updated
+- [x] .claude/rules/ created with rule files
 - [x] IDEA.md verified - contains complete project specification
+- [x] PART 37 updated with VidVeil-specific content
 
 **Specification Files:**
 - `AI.md` - HOW: Implementation patterns (PARTS 0-36)
@@ -17,70 +18,83 @@
 
 ---
 
-## Previous Implementation Status (Verified Complete)
+## Current Status
 
-All 34 PARTs verified compliant prior to AI.md refresh:
-- PART 0-32: Core spec implementation complete
-- PART 36: CLI Client & TUI implemented (src/client/)
-- PART 37: Project-specific business logic (54+ search engines)
-- PARTS 33-35: N/A (VidVeil has no user accounts)
+**AI.md is now the source of truth. PART 37 references IDEA.md for WHAT. PARTS 0-36 define HOW.**
 
-### Key Implementation Files
-- `src/main.go` - CLI flags and entry point
-- `src/paths/paths.go` - OS-specific paths
-- `src/config/config.go` - Configuration management
-- `src/server/server.go` - API routes
-- `src/server/service/engine/` - 54+ video search engines
-- `src/client/` - CLI client with bubbletea TUI
-- `docker/Dockerfile` - Container build
-- `.github/workflows/` - CI/CD pipelines
-- `docs/` - ReadTheDocs documentation
-
-### Test Results
-- All tests pass (make test)
-- Coverage: config 38.5%, handler 7.4%, engine 8.2%, i18n 68.9%, ratelimit 78.9%, retry 90.1%, validation 94.4%
+### VidVeil-Specific Notes
+- NO user accounts (stateless, privacy-first design)
+- PARTS 33-35 (Multi-User, Organizations, Custom Domains) do NOT apply
+- PART 36 (CLI Client) - VidVeil has a CLI client in src/client/
+- Admin panel uses PART 17 for server-admin authentication only
+- 54+ search engines with bang shortcuts
 
 ---
 
-## IDEA.md Spec Compliance (2026-01-04)
+## PART Compliance Verification (2026-01-06)
 
-- [x] Added Admin Routes section referencing PART 17 hierarchy
-- [x] Added Health & System Endpoints section
-- [x] Verified all routes follow PART 14 patterns (plural nouns, versioned API)
-- [x] Verified admin routes under `/{admin_path}/server/*` per PART 17
-- [x] Notes section already references PART 17 for admin panel
+All non-negotiable PARTs verified against AI.md specification.
 
-## AI.md PART 37 Updated (2026-01-04)
+### Completed Verification
+- [x] PART 0: AI Assistant Rules - AI.md setup, HOW TO USE removed, variables replaced
+- [x] PART 1: Critical Rules - Full web app architecture, security-first design
+- [x] PART 2: License & Attribution - MIT license, LICENSE.md with third-party licenses
+- [x] PART 3: Project Structure - All directories present, .gitignore, .dockerignore
+- [x] PART 4: OS-Specific Paths - paths.go handles Linux/macOS/Windows/BSD
+- [x] PART 5: Configuration - config.go with all required sections
+- [x] PART 6: Application Modes - production/development modes in mode/
+- [x] PART 7: Binary Requirements - CGO_ENABLED=0, 8 platforms in Makefile
+- [x] PART 8: Server Binary CLI - All CLI flags in main.go, --help format
+- [x] PART 9: Error Handling & Caching - Error patterns implemented
+- [x] PART 10: Database & Cluster - SQLite, clustering support
+- [x] PART 11: Security & Logging - Security headers, rate limiting, audit logs
+- [x] PART 12: Server Configuration - Server settings structure
+- [x] PART 13: Health & Versioning - /healthz, /api/v1/healthz endpoints
+- [x] PART 14: API Structure - REST routes, content negotiation, .txt/.json extensions
+- [x] PART 15: SSL/TLS & Let's Encrypt - SSL config, security headers
+- [x] PART 16: Web Frontend - HTML templates, themes, CSS
+- [x] PART 17: Admin Panel - Complete admin routes, setup wizard, auth
+- [x] PART 18: Email & Notifications - SMTP configuration
+- [x] PART 19: Scheduler - Built-in scheduler in scheduler/
+- [x] PART 20: GeoIP - GeoIP service in geoip/
+- [x] PART 21: Metrics - Prometheus metrics endpoint
+- [x] PART 22: Backup & Restore - Backup service and API
+- [x] PART 23: Update Command - --update CLI flag
+- [x] PART 24: Privilege Escalation & Service - Service management
+- [x] PART 25: Service Support - Systemd integration
+- [x] PART 26: Makefile - build, host, release, docker, test, dev, clean targets
+- [x] PART 27: Docker - Multi-stage Dockerfile, non-root user, tini
+- [x] PART 28: CI/CD Workflows - release.yml, beta.yml, daily.yml, docker.yml
+- [x] PART 29: Testing & Development - run_tests.sh, docker.sh, incus.sh
+- [x] PART 30: ReadTheDocs Documentation - docs/ with MkDocs structure
+- [x] PART 31: I18N & A11Y - i18n service in server/service/i18n/
+- [x] PART 32: Tor Hidden Service - Tor service in server/service/tor/
+- [x] PART 36: CLI Client - CLI with TUI in src/client/
+- [x] PART 37: Project-Specific - Updated with VidVeil endpoints and business logic
 
-- [x] Replaced template placeholders with VidVeil-specific content
-- [x] All sections now reference IDEA.md for full details
-- [x] Project Business Purpose → references IDEA.md
-- [x] Business Logic & Rules → references IDEA.md
-- [x] Data Models → references IDEA.md
-- [x] Data Sources → references IDEA.md
-- [x] Endpoints Summary → VidVeil-specific with IDEA.md reference
-- [x] Extended Node Functions → N/A (stateless)
-- [x] High Availability → N/A (stateless)
-- [x] Notes → references IDEA.md
+### Not Applicable
+- [ ] PART 33: Multi-User - VidVeil is stateless, no user accounts
+- [ ] PART 34: Organizations - VidVeil is stateless, no organizations
+- [ ] PART 35: Custom Domains - VidVeil is stateless, no custom domains
 
-**AI.md is source of truth. PART 37 references IDEA.md for WHAT. PARTS 0-36 define HOW.**
+---
 
-## IDEA.md Full Compliance Verified (2026-01-04)
+## Key Implementation Files
 
-Per PARTS 0, 1, 2 rules - IDEA.md is WHAT, must comply with AI.md:
-- [x] IDEA.md describes WHAT (business logic, features, data models)
-- [x] IDEA.md uses spec-compliant terminology from AI.md
-- [x] Routes follow PART 14: versioned `/api/v1/*`, plural nouns, lowercase
-- [x] Admin routes reference PART 17: `/{admin_path}/server/*` hierarchy
-- [x] Health endpoints: `/healthz` + `/api/v1/healthz`
-- [x] Server scope: `/server/about`, `/server/privacy`
-- [x] References PARTs for implementation (14, 16, 17)
-- [x] No legacy endpoints
-- [x] Data models properly defined
-- [x] Business rules clear and specific
+| Component | Location | Notes |
+|-----------|----------|-------|
+| CLI Entry | `src/main.go` | CLI flags, entry point |
+| Paths | `src/paths/paths.go` | OS-specific paths |
+| Config | `src/config/config.go` | Configuration management |
+| Server | `src/server/server.go` | API routes, middleware |
+| Engines | `src/server/service/parser/` | 54+ video search engines |
+| CLI Client | `src/client/` | CLI client with bubbletea TUI |
+| Docker | `docker/Dockerfile` | Container build |
+| CI/CD | `.github/workflows/` | GitHub Actions pipelines |
+| Docs | `docs/` | ReadTheDocs documentation |
 
-## Current Status
+---
 
-Project is implementation-complete. AI.md and IDEA.md are spec-compliant.
+## Implementation Queue
 
-No pending tasks.
+No pending tasks - all PARTs verified complete.

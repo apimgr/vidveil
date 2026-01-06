@@ -16,7 +16,10 @@
       "Bash([ -d \"$d\" ])",
       "Bash(for d in config server)",
       "Bash([ -d \"src/$d\" ])",
-      "Bash(for:*)"
+      "Bash(for:*)",
+      "Bash(gh run:*)",
+      "Bash(xargs cat:*)",
+      "Bash(./tests/docker.sh:*)"
     ]
   }
 }

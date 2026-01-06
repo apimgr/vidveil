@@ -2172,3 +2172,201 @@ a:focus-visible {
         border: 1px solid #ccc;
     }
 }
+
+/* ============================================
+   Standalone Page Styles - per AI.md PART 16
+   (moved from inline styles)
+   ============================================ */
+
+/* Error Page */
+.error-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+    background: var(--bg-primary);
+}
+
+.error-code {
+    font-size: 8rem;
+    font-weight: bold;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 1rem;
+}
+
+.error-title {
+    font-size: 2rem;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+}
+
+.error-message {
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    max-width: 500px;
+}
+
+.error-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.error-actions a {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+/* Setup Page */
+.setup-container {
+    width: 100%;
+    max-width: 480px;
+}
+
+.setup-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+}
+
+.setup-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.setup-header h1 {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.setup-header p {
+    color: var(--text-secondary);
+}
+
+.password-strength {
+    height: 4px;
+    border-radius: 2px;
+    margin-top: 0.5rem;
+    background: var(--bg-primary);
+    overflow: hidden;
+}
+
+.password-strength-bar {
+    height: 100%;
+    transition: width 0.3s, background 0.3s;
+}
+
+.strength-weak { background: var(--error); width: 25%; }
+.strength-fair { background: #f59e0b; width: 50%; }
+.strength-good { background: #84cc16; width: 75%; }
+.strength-strong { background: var(--success); width: 100%; }
+
+/* Invite Page */
+.invite-container {
+    max-width: 400px;
+    margin: 100px auto;
+    padding: 20px;
+}
+
+.invite-box {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 30px;
+}
+
+.invite-title {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* Centered body for standalone pages */
+.centered-page-body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+/* Standalone page alert styles */
+.alert-success {
+    color: var(--success);
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+/* d-inline-block utility */
+.d-inline-block {
+    display: inline-block;
+}
+
+.text-decoration-none {
+    text-decoration: none;
+}
+
+.text-accent {
+    color: var(--accent);
+}
+
+/* Notification Toast - per AI.md PART 16 (moved from inline JS) */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 1rem 1.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    z-index: 1000;
+    animation: slideIn 0.3s ease;
+}
+
+.notification-success {
+    border-color: var(--success);
+}
+
+.notification-error {
+    border-color: var(--error);
+}
+
+.notification-info {
+    border-color: var(--accent);
+}
+
+.notification-slide-out {
+    animation: slideOut 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}

@@ -1,25 +1,12 @@
 {{define "invite"}}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Accept Admin Invite - {{.SiteTitle}}</title>
     <link rel="stylesheet" href="/static/css/common.css">
-    <style>
-        .invite-container { max-width: 400px; margin: 100px auto; padding: 20px; }
-        .invite-box { background: #1a1a2e; border-radius: 8px; padding: 30px; }
-        .invite-title { text-align: center; margin-bottom: 20px; }
-        .error { color: #e74c3c; margin-bottom: 15px; text-align: center; }
-        .success { color: #10b981; margin-bottom: 15px; text-align: center; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; }
-        .form-group input { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #333; background: #0f0f1a; color: #fff; }
-        .form-group input:disabled { background: #333; }
-        .btn-primary { width: 100%; padding: 12px; background: #6c5ce7; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-        .btn-primary:hover { background: #5b4bc7; }
-        .help-text { font-size: 0.85em; color: #888; margin-top: 5px; }
-    </style>
+    {{/* Styles moved to common.css per AI.md PART 16 */}}
 </head>
 <body>
     <div class="invite-container">

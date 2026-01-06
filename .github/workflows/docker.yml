@@ -2,8 +2,7 @@ name: Docker Build
 
 on:
   push:
-    # ALL branches
-    branches: ['**']
+    branches: ['**']  # ALL branches
     tags:
       - 'v*'
       - '*.*.*'
@@ -15,7 +14,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  build-standard:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,7 +42,6 @@ jobs:
           echo "YYMM=$(date +"%y%m")" >> $GITHUB_ENV
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
-            # Strip 'v' prefix
             echo "VERSION=${VERSION#v}" >> $GITHUB_ENV
             echo "IS_TAG=true" >> $GITHUB_ENV
           else
@@ -52,21 +50,17 @@ jobs:
           fi
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
 
-      - name: Determine tags
+      - name: Determine tags (standard)
         id: tags
         run: |
           TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.COMMIT_ID }}"
 
           if [[ "${{ env.IS_TAG }}" == "true" ]]; then
-            # Release tag - version, latest, YYMM
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.YYMM }}"
           else
-            # All pushes get devel tag
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel"
-
-            # Beta branch also gets beta tag
             if [[ "${{ github.ref }}" == refs/heads/beta ]]; then
               TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:beta"
             fi
@@ -74,32 +68,39 @@ jobs:
 
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
-      - name: Build and push
+      - name: Build and push (standard)
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/Dockerfile
+          file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
-            VERSION="${{ env.VERSION }}"
-            BUILD_DATE="${{ env.BUILD_DATE }}"
-            COMMIT_ID="${{ env.COMMIT_ID }}"
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            COMMIT_ID=${{ env.COMMIT_ID }}
           labels: |
-            org.opencontainers.image.title="${{ env.PROJECTNAME }}"
-            org.opencontainers.image.version="${{ env.VERSION }}"
-            org.opencontainers.image.created="${{ env.BUILD_DATE }}"
-            org.opencontainers.image.revision="${{ env.COMMIT_ID }}"
-            org.opencontainers.image.source="${{ github.server_url }}/${{ github.repository }}"
+            org.opencontainers.image.vendor=apimgr
+            org.opencontainers.image.authors=apimgr
+            org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=MIT
           annotations: |
-            manifest:org.opencontainers.image.title="${{ env.PROJECTNAME }}"
-            manifest:org.opencontainers.image.description="Privacy-respecting meta search for adult video content"
-            manifest:org.opencontainers.image.version="${{ env.VERSION }}"
-            manifest:org.opencontainers.image.created="${{ env.BUILD_DATE }}"
-            manifest:org.opencontainers.image.revision="${{ env.COMMIT_ID }}"
-            manifest:org.opencontainers.image.source="${{ github.server_url }}/${{ github.repository }}"
-            manifest:org.opencontainers.image.url="${{ github.server_url }}/${{ github.repository }}"
-            manifest:org.opencontainers.image.documentation="${{ github.server_url }}/${{ github.repository }}"
-            manifest:org.opencontainers.image.vendor="apimgr"
-            manifest:org.opencontainers.image.licenses="MIT"
+            manifest:org.opencontainers.image.vendor=apimgr
+            manifest:org.opencontainers.image.authors=apimgr
+            manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            manifest:org.opencontainers.image.version=${{ env.VERSION }}
+            manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            manifest:org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.licenses=MIT

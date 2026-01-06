@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 21: Logging with Built-in Rotation
+// AI.md PART 11: Security & Logging with Built-in Rotation
 package logging
 
 import (

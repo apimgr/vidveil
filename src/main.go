@@ -45,6 +45,7 @@ var (
 func init() {
 	// Sync build info to version package for other code per PART 7
 	version.Version = Version
+	version.CommitID = CommitID
 	version.BuildTime = BuildDate
 }
 
@@ -83,6 +84,23 @@ func main() {
 		case "--version", "-v":
 			printVersion()
 			os.Exit(0)
+
+		case "--shell":
+			// Per AI.md PART 8: --shell completions [SHELL] or --shell init [SHELL]
+			if i+1 < len(args) {
+				i++
+				subCmd := args[i]
+				var shell string
+				if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+					i++
+					shell = args[i]
+				}
+				handleShellCommand(subCmd, shell)
+				os.Exit(0)
+			} else {
+				fmt.Fprintln(os.Stderr, "Usage: --shell [completions|init] [SHELL]")
+				os.Exit(1)
+			}
 
 		case "--status":
 			os.Exit(checkStatus())
@@ -473,8 +491,8 @@ func main() {
 	sched.Start(context.Background())
 	defer sched.Stop()
 
-	// Create server with admin service, migration manager, and scheduler
-	srv := server.New(cfg, configDir, dataDir, engineMgr, adminSvc, migrationMgr, sched)
+	// Create server with admin service, migration manager, scheduler, and logger per AI.md PART 11
+	srv := server.New(cfg, configDir, dataDir, engineMgr, adminSvc, migrationMgr, sched, logger)
 
 	// Start live config watcher per AI.md PART 1 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, cfg)
@@ -590,6 +608,8 @@ Usage: vidveil [options]
 Options:
   --help              Show this help message
   --version           Show version information
+  --shell completions [SHELL]  Print shell completions (auto-detect if SHELL omitted)
+  --shell init [SHELL]         Print shell init command (auto-detect if SHELL omitted)
   --status            Check server status and health
   --mode <mode>       Set application mode (production or development)
   --config <dir>      Set configuration directory
@@ -642,6 +662,8 @@ Environment Variables:
 
 Default behavior:
   Running without arguments initializes (if needed) and starts the server.
+
+Shells: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
 
 Documentation: https://vidveil.apimgr.us
 Source: https://github.com/apimgr/vidveil
@@ -699,6 +721,141 @@ func checkStatus() int {
 	fmt.Println("⚠️  Status: Running (unhealthy)")
 	fmt.Printf("   Port: %s\n", cfg.Server.Port)
 	return 1
+}
+
+// handleShellCommand handles --shell completions and --shell init per PART 8
+func handleShellCommand(subCmd, shell string) {
+	binaryName := filepath.Base(os.Args[0])
+
+	// Auto-detect shell from $SHELL if not specified
+	if shell == "" {
+		shellEnv := os.Getenv("SHELL")
+		if shellEnv != "" {
+			shell = filepath.Base(shellEnv)
+		} else {
+			shell = "bash"
+		}
+	}
+
+	switch subCmd {
+	case "completions":
+		printCompletions(shell, binaryName)
+	case "init":
+		printInit(shell, binaryName)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown --shell command: %s\nUsage: --shell [completions|init] [SHELL]\n", subCmd)
+		os.Exit(1)
+	}
+}
+
+// printCompletions prints shell completion script to stdout per PART 8
+func printCompletions(shell, binaryName string) {
+	switch shell {
+	case "bash":
+		printBashCompletions(binaryName)
+	case "zsh":
+		printZshCompletions(binaryName)
+	case "fish":
+		printFishCompletions(binaryName)
+	case "powershell", "pwsh":
+		printPowerShellCompletions(binaryName)
+	case "sh", "dash", "ksh":
+		printBashCompletions(binaryName)
+	default:
+		fmt.Fprintf(os.Stderr, "Unsupported shell: %s\n", shell)
+		os.Exit(1)
+	}
+}
+
+// printInit prints shell init command per PART 8
+func printInit(shell, binaryName string) {
+	switch shell {
+	case "bash":
+		fmt.Printf("source <(%s --shell completions bash)\n", binaryName)
+	case "zsh":
+		fmt.Printf("source <(%s --shell completions zsh)\n", binaryName)
+	case "fish":
+		fmt.Printf("%s --shell completions fish | source\n", binaryName)
+	case "sh", "dash", "ksh":
+		fmt.Printf("eval \"$(%s --shell completions %s)\"\n", binaryName, shell)
+	case "powershell", "pwsh":
+		fmt.Printf("Invoke-Expression (& %s --shell completions powershell)\n", binaryName)
+	default:
+		fmt.Fprintf(os.Stderr, "Unsupported shell: %s\n", shell)
+		os.Exit(1)
+	}
+}
+
+func printBashCompletions(binaryName string) {
+	fmt.Printf(`_%s_completions() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local opts="--help --version --shell --config --data --cache --log --backup --pid --address --port --mode --status --daemon --debug --service --maintenance --update"
+    COMPREPLY=($(compgen -W "$opts" -- "$cur"))
+}
+complete -F _%s_completions %s
+`, binaryName, binaryName, binaryName)
+}
+
+func printZshCompletions(binaryName string) {
+	fmt.Printf(`#compdef %s
+
+_arguments \
+    '(-h --help)'{-h,--help}'[Show help]' \
+    '(-v --version)'{-v,--version}'[Show version]' \
+    '--shell[Shell completions]:command:(completions init)' \
+    '--config[Config directory]:directory:_files -/' \
+    '--data[Data directory]:directory:_files -/' \
+    '--cache[Cache directory]:directory:_files -/' \
+    '--log[Log directory]:directory:_files -/' \
+    '--backup[Backup directory]:directory:_files -/' \
+    '--pid[PID file]:file:_files' \
+    '--address[Listen address]:address:' \
+    '--port[Listen port]:port:' \
+    '--mode[Application mode]:mode:(production development)' \
+    '--status[Show status]' \
+    '--daemon[Run as daemon]' \
+    '--debug[Enable debug mode]' \
+    '--service[Service command]:command:(start stop restart reload install uninstall)' \
+    '--maintenance[Maintenance command]:command:(backup restore update mode setup)' \
+    '--update[Update command]:command:(check yes)'
+`, binaryName)
+}
+
+func printFishCompletions(binaryName string) {
+	fmt.Printf(`complete -c %s -s h -l help -d 'Show help'
+complete -c %s -s v -l version -d 'Show version'
+complete -c %s -l shell -d 'Shell completions' -xa 'completions init'
+complete -c %s -l config -d 'Config directory' -r
+complete -c %s -l data -d 'Data directory' -r
+complete -c %s -l cache -d 'Cache directory' -r
+complete -c %s -l log -d 'Log directory' -r
+complete -c %s -l backup -d 'Backup directory' -r
+complete -c %s -l pid -d 'PID file' -r
+complete -c %s -l address -d 'Listen address'
+complete -c %s -l port -d 'Listen port'
+complete -c %s -l mode -d 'Application mode' -xa 'production development'
+complete -c %s -l status -d 'Show status'
+complete -c %s -l daemon -d 'Run as daemon'
+complete -c %s -l debug -d 'Enable debug mode'
+complete -c %s -l service -d 'Service command' -xa 'start stop restart reload install uninstall'
+complete -c %s -l maintenance -d 'Maintenance command' -xa 'backup restore update mode setup'
+complete -c %s -l update -d 'Update command' -xa 'check yes'
+`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
+}
+
+func printPowerShellCompletions(binaryName string) {
+	fmt.Printf(`Register-ArgumentCompleter -Native -CommandName %s -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $completions = @(
+        '--help', '--version', '--shell', '--config', '--data', '--cache',
+        '--log', '--backup', '--pid', '--address', '--port', '--mode',
+        '--status', '--daemon', '--debug', '--service', '--maintenance', '--update'
+    )
+    $completions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    }
+}
+`, binaryName)
 }
 
 func handleServiceCommand(cmd string) {

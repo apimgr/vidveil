@@ -1,6 +1,6 @@
 # vidveil - Privacy-respecting adult video meta search engine (Development)
 # nginx proxy address - http://localhost:64888
-# Per PART 28: DEBUG commented out (set to true for debugging)
+# Per PART 6: DEBUG commented out (set to true for debugging)
 
 name: vidveil
 

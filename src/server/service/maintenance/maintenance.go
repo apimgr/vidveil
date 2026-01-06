@@ -38,7 +38,10 @@ type BackupOptions struct {
 	Password    string // Encryption password (empty = no encryption)
 	IncludeSSL  bool   // Include SSL certificates
 	IncludeData bool   // Include data directory
-	MaxBackups  int    // Maximum backups to keep (0 = unlimited, default 4)
+	MaxBackups  int    // Maximum daily backups to keep (0 = use default 1)
+	KeepWeekly  int    // Weekly backups (Sunday) to keep (0 = disabled)
+	KeepMonthly int    // Monthly backups (1st) to keep (0 = disabled)
+	KeepYearly  int    // Yearly backups (Jan 1st) to keep (0 = disabled)
 }
 
 // BackupManifest contains backup metadata per AI.md PART 22
@@ -66,7 +69,7 @@ func (m *Manager) Backup(backupFile string) error {
 	return m.BackupWithOptions(BackupOptions{
 		Filename:    backupFile,
 		IncludeData: true,
-		MaxBackups:  4,
+		MaxBackups:  1, // Default per AI.md PART 22
 	})
 }
 
@@ -183,12 +186,12 @@ func (m *Manager) BackupWithOptions(opts BackupOptions) error {
 		return fmt.Errorf("backup verification failed: %w", err)
 	}
 
-	// Apply retention policy (default max 4)
+	// Apply retention policy (default max 1 per AI.md PART 22)
 	maxBackups := opts.MaxBackups
 	if maxBackups == 0 {
-		maxBackups = 4
+		maxBackups = 1
 	}
-	if err := m.applyRetention(maxBackups); err != nil {
+	if err := m.applyRetentionWithOptions(maxBackups, opts.KeepWeekly, opts.KeepMonthly, opts.KeepYearly); err != nil {
 		fmt.Printf("Warning: failed to apply retention policy: %v\n", err)
 	}
 
@@ -320,10 +323,16 @@ func (m *Manager) verifyBackup(backupFile, expectedChecksum, password string) er
 	return nil
 }
 
-// applyRetention removes old backups to stay under max limit
+// applyRetention removes old backups to stay under max limit (legacy wrapper)
 func (m *Manager) applyRetention(maxBackups int) error {
+	return m.applyRetentionWithOptions(maxBackups, 0, 0, 0)
+}
+
+// applyRetentionWithOptions removes old backups per AI.md PART 22 retention policy
+// Priority order: yearly > monthly > weekly > daily
+func (m *Manager) applyRetentionWithOptions(maxBackups, keepWeekly, keepMonthly, keepYearly int) error {
 	if maxBackups <= 0 {
-		return nil
+		maxBackups = 1 // Default per PART 22
 	}
 
 	backups, err := m.ListBackups()
@@ -336,12 +345,77 @@ func (m *Manager) applyRetention(maxBackups int) error {
 		return backups[i].Modified.After(backups[j].Modified)
 	})
 
-	// Delete oldest backups exceeding limit
-	for i := maxBackups; i < len(backups); i++ {
-		if err := os.Remove(backups[i].Path); err != nil {
-			fmt.Printf("Warning: failed to delete old backup %s: %v\n", backups[i].Filename, err)
-		} else {
-			fmt.Printf("Deleted old backup: %s\n", backups[i].Filename)
+	// Track which backups to keep (by index)
+	keep := make(map[int]string) // index -> reason
+
+	// Count trackers
+	yearlyKept := 0
+	monthlyKept := 0
+	weeklyKept := 0
+	dailyKept := 0
+
+	// Pass 1: Mark yearly backups (Jan 1st) - highest priority
+	for i, b := range backups {
+		if keepYearly > 0 && yearlyKept < keepYearly {
+			// Check if this is a Jan 1st backup
+			if b.Modified.Month() == time.January && b.Modified.Day() == 1 {
+				keep[i] = "yearly"
+				yearlyKept++
+			}
+		}
+	}
+
+	// Pass 2: Mark monthly backups (1st of month)
+	for i, b := range backups {
+		if _, ok := keep[i]; ok {
+			continue // Already kept
+		}
+		if keepMonthly > 0 && monthlyKept < keepMonthly {
+			// Check if this is a 1st of month backup
+			if b.Modified.Day() == 1 {
+				keep[i] = "monthly"
+				monthlyKept++
+			}
+		}
+	}
+
+	// Pass 3: Mark weekly backups (Sunday)
+	for i, b := range backups {
+		if _, ok := keep[i]; ok {
+			continue // Already kept
+		}
+		if keepWeekly > 0 && weeklyKept < keepWeekly {
+			// Check if this is a Sunday backup
+			if b.Modified.Weekday() == time.Sunday {
+				keep[i] = "weekly"
+				weeklyKept++
+			}
+		}
+	}
+
+	// Pass 4: Mark daily backups (max_backups) - lowest priority
+	for i := range backups {
+		if _, ok := keep[i]; ok {
+			continue // Already kept
+		}
+		if dailyKept < maxBackups {
+			keep[i] = "daily"
+			dailyKept++
+		}
+	}
+
+	// Delete backups not marked for keeping
+	for i, b := range backups {
+		if _, ok := keep[i]; !ok {
+			// Skip incremental files (vidveil-daily.tar.gz, vidveil-hourly.tar.gz)
+			if strings.HasPrefix(b.Filename, "vidveil-daily") || strings.HasPrefix(b.Filename, "vidveil-hourly") {
+				continue
+			}
+			if err := os.Remove(b.Path); err != nil {
+				fmt.Printf("Warning: failed to delete old backup %s: %v\n", b.Filename, err)
+			} else {
+				fmt.Printf("Deleted old backup: %s\n", b.Filename)
+			}
 		}
 	}
 
@@ -778,8 +852,8 @@ if file.IsDir() {
 continue
 }
 
-// Only include .tar.gz files
-if !strings.HasSuffix(file.Name(),".tar.gz"){
+// Only include .tar.gz and .tar.gz.enc files per AI.md PART 22
+if !strings.HasSuffix(file.Name(), ".tar.gz") && !strings.HasSuffix(file.Name(), ".tar.gz.enc") {
 continue
 }
 

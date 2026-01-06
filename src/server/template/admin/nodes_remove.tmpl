@@ -63,7 +63,7 @@
 
 {{define "scripts"}}
 <script>
-async function removeNode(e) {
+function removeNode(e) {
     e.preventDefault();
 
     const confirmText = document.getElementById('confirm-text').value;
@@ -72,27 +72,25 @@ async function removeNode(e) {
         return;
     }
 
-    if (!confirm('Are you absolutely sure you want to remove this node from the cluster?')) {
-        return;
-    }
-
-    try {
-        const resp = await fetch('/api/v1/admin/server/nodes/leave', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await resp.json();
-        if (data.success) {
-            showSuccess('Node removed from cluster. Restarting in single-node mode...');
-            setTimeout(() => {
-                window.location.href = '/admin/server/nodes';
-            }, 3000);
-        } else {
-            showError('Error: ' + data.error);
+    showConfirm('Are you absolutely sure you want to remove this node from the cluster?', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/server/nodes/leave', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showSuccess('Node removed from cluster. Restarting in single-node mode...');
+                setTimeout(() => {
+                    window.location.href = '/admin/server/nodes';
+                }, 3000);
+            } else {
+                showError('Error: ' + data.error);
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
         }
-    } catch (e) {
-        showError('Error: ' + e.message);
-    }
+    });
 }
 </script>
 {{end}}

@@ -325,26 +325,15 @@ function showNotification(message, type = 'info') {
     // Remove existing notifications
     document.querySelectorAll('.notification').forEach(n => n.remove());
 
+    // Create notification element - styles are in common.css per AI.md PART 16
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 1rem 1.5rem;
-        background: var(--bg-secondary);
-        border: 1px solid var(--${type === 'success' ? 'success' : type === 'error' ? 'error' : 'accent'});
-        border-radius: 8px;
-        color: var(--text-primary);
-        z-index: 1000;
-        animation: slideIn 0.3s ease;
-    `;
 
     document.body.appendChild(notification);
 
     setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
+        notification.classList.add('notification-slide-out');
         setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
@@ -417,19 +406,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         engineCountEl.textContent = count;
     }
 
-    // Add animation styles
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOut {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
-    `;
-    document.head.appendChild(style);
+    // Animation styles are now in common.css per AI.md PART 16
 
     // Initialize home page features
     initHomePage();
@@ -527,6 +504,42 @@ function showSuccess(msg) { showToast(msg, 'success'); }
 function showError(msg) { showToast(msg, 'error'); }
 function showWarning(msg) { showToast(msg, 'warning'); }
 function showInfo(msg) { showToast(msg, 'info'); }
+
+// Confirmation modal per AI.md PART 16 (replaces confirm())
+function showConfirm(message, onConfirm, onCancel) {
+    var modal = document.createElement('dialog');
+    modal.className = 'modal confirm-modal';
+    modal.innerHTML = '<div class="modal-header">' +
+        '<h3 class="modal-title">Confirm Action</h3>' +
+        '<button type="button" class="modal-close" aria-label="Close">&times;</button>' +
+        '</div>' +
+        '<div class="modal-body"><p>' + message + '</p></div>' +
+        '<div class="modal-footer">' +
+        '<button type="button" class="btn btn-secondary cancel-btn">Cancel</button>' +
+        '<button type="button" class="btn btn-primary confirm-btn">Confirm</button>' +
+        '</div>';
+    document.body.appendChild(modal);
+    modal.showModal();
+    modal.querySelector('.modal-close').onclick = function() {
+        modal.close();
+        modal.remove();
+        if (onCancel) onCancel();
+    };
+    modal.querySelector('.cancel-btn').onclick = function() {
+        modal.close();
+        modal.remove();
+        if (onCancel) onCancel();
+    };
+    modal.querySelector('.confirm-btn').onclick = function() {
+        modal.close();
+        modal.remove();
+        if (onConfirm) onConfirm();
+    };
+    modal.addEventListener('cancel', function() {
+        modal.remove();
+        if (onCancel) onCancel();
+    });
+}
 
 // Admin keyboard shortcuts per AI.md PART 15
 function setupAdminKeyboardShortcuts() {
@@ -1429,3 +1442,4 @@ window.showSuccess = showSuccess;
 window.showError = showError;
 window.showWarning = showWarning;
 window.showInfo = showInfo;
+window.showConfirm = showConfirm;

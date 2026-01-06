@@ -1,0 +1,105 @@
+{{define "content"}}
+<div class="card">
+    <h2>Admin Preferences</h2>
+    <p>Configure your personal admin panel preferences. These settings only affect your session.</p>
+</div>
+
+<div class="card">
+    <h2>Interface Settings</h2>
+    <form id="preferences-form">
+        <div class="form-group">
+            <label for="theme">Theme:</label>
+            <select id="theme" name="theme">
+                <option value="dark">Dark (Default)</option>
+                <option value="light">Light</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="sidebar-collapsed">
+                <input type="checkbox" id="sidebar-collapsed" name="sidebarCollapsed">
+                Start with sidebar collapsed
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label for="compact-mode">
+                <input type="checkbox" id="compact-mode" name="compactMode">
+                Compact mode (smaller fonts and spacing)
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Preferences</button>
+            <button type="button" class="btn btn-secondary" onclick="resetPreferences()">Reset to Defaults</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Notification Preferences</h2>
+    <form id="notification-prefs-form">
+        <div class="form-group">
+            <label for="desktop-notifications">
+                <input type="checkbox" id="desktop-notifications" name="desktopNotifications">
+                Enable desktop notifications
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label for="sound-notifications">
+                <input type="checkbox" id="sound-notifications" name="soundNotifications">
+                Play sound for alerts
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Notification Settings</button>
+        </div>
+    </form>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+const ADMIN_PREFS_KEY = 'vidveil_admin_prefs';
+
+function loadPreferences() {
+    const saved = JSON.parse(localStorage.getItem(ADMIN_PREFS_KEY) || '{}');
+    if (saved.theme) document.getElementById('theme').value = saved.theme;
+    if (saved.sidebarCollapsed) document.getElementById('sidebar-collapsed').checked = saved.sidebarCollapsed;
+    if (saved.compactMode) document.getElementById('compact-mode').checked = saved.compactMode;
+    if (saved.desktopNotifications) document.getElementById('desktop-notifications').checked = saved.desktopNotifications;
+    if (saved.soundNotifications) document.getElementById('sound-notifications').checked = saved.soundNotifications;
+}
+
+function savePreferences(e) {
+    e.preventDefault();
+    const prefs = {
+        theme: document.getElementById('theme').value,
+        sidebarCollapsed: document.getElementById('sidebar-collapsed').checked,
+        compactMode: document.getElementById('compact-mode').checked
+    };
+    localStorage.setItem(ADMIN_PREFS_KEY, JSON.stringify(prefs));
+    showSuccess('Preferences saved!');
+}
+
+function resetPreferences() {
+    localStorage.removeItem(ADMIN_PREFS_KEY);
+    loadPreferences();
+    showInfo('Preferences reset to defaults');
+}
+
+document.getElementById('preferences-form').addEventListener('submit', savePreferences);
+document.getElementById('notification-prefs-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const prefs = JSON.parse(localStorage.getItem(ADMIN_PREFS_KEY) || '{}');
+    prefs.desktopNotifications = document.getElementById('desktop-notifications').checked;
+    prefs.soundNotifications = document.getElementById('sound-notifications').checked;
+    localStorage.setItem(ADMIN_PREFS_KEY, JSON.stringify(prefs));
+    showSuccess('Notification settings saved!');
+});
+
+loadPreferences();
+</script>
+{{end}}

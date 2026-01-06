@@ -6,62 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Code}} - {{.Title}} | {{.SiteTitle}}</title>
     <link rel="stylesheet" href="/static/css/common.css">
-    <style>
-        .error-page {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 2rem;
-            background: var(--bg-primary);
-        }
-        .error-code {
-            font-size: 8rem;
-            font-weight: bold;
-            color: var(--accent);
-            line-height: 1;
-            margin-bottom: 1rem;
-        }
-        .error-title {
-            font-size: 2rem;
-            color: var(--text-primary);
-            margin-bottom: 1rem;
-        }
-        .error-message {
-            color: var(--text-secondary);
-            margin-bottom: 2rem;
-            max-width: 500px;
-        }
-        .error-actions {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-        .error-actions a {
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-        .btn-primary {
-            background: var(--accent);
-            color: var(--bg-primary);
-        }
-        .btn-primary:hover {
-            background: var(--accent-hover);
-        }
-        .btn-secondary {
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-        }
-        .btn-secondary:hover {
-            background: var(--bg-tertiary);
-        }
-    </style>
+    {{/* Styles moved to common.css per AI.md PART 16 */}}
 </head>
 <body>
     <div class="error-page">

@@ -1,13 +1,13 @@
 package server
 
 import (
-	"encoding/json"
 	"expvar"
 	"net/http"
 	"net/http/pprof"
 	"runtime"
 
 	"github.com/apimgr/vidveil/src/mode"
+	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -65,14 +65,14 @@ func (s *Server) handleDebugConfig(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cfg)
+	// Per AI.md PART 14: Use 2-space indent JSON with trailing newline
+	handler.WriteJSON(w, http.StatusOK, cfg)
 }
 
 func (s *Server) handleDebugRoutes(w http.ResponseWriter, r *http.Request) {
 	routes := []map[string]string{}
 
-	chi.Walk(s.router, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+	chi.Walk(s.router, func(method string, route string, h http.Handler, middlewares ...func(http.Handler) http.Handler) error {
 		routes = append(routes, map[string]string{
 			"method": method,
 			"route":  route,
@@ -80,8 +80,7 @@ func (s *Server) handleDebugRoutes(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(routes)
+	handler.WriteJSON(w, http.StatusOK, routes)
 }
 
 func (s *Server) handleDebugCache(w http.ResponseWriter, r *http.Request) {
@@ -90,8 +89,7 @@ func (s *Server) handleDebugCache(w http.ResponseWriter, r *http.Request) {
 		"entries": 0,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	handler.WriteJSON(w, http.StatusOK, stats)
 }
 
 func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
@@ -101,8 +99,7 @@ func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
 		data := map[string]interface{}{
 			"status": "database not available",
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(data)
+		handler.WriteJSON(w, http.StatusOK, data)
 		return
 	}
 
@@ -117,8 +114,7 @@ func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
 		"max_lifetime_closed": stats.MaxLifetimeClosed,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	handler.WriteJSON(w, http.StatusOK, data)
 }
 
 func (s *Server) handleDebugScheduler(w http.ResponseWriter, r *http.Request) {
@@ -127,8 +123,7 @@ func (s *Server) handleDebugScheduler(w http.ResponseWriter, r *http.Request) {
 		"tasks":  []string{},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	handler.WriteJSON(w, http.StatusOK, data)
 }
 
 func (s *Server) handleDebugMemory(w http.ResponseWriter, r *http.Request) {
@@ -136,15 +131,14 @@ func (s *Server) handleDebugMemory(w http.ResponseWriter, r *http.Request) {
 	runtime.ReadMemStats(&m)
 
 	data := map[string]interface{}{
-		"alloc_mb":        m.Alloc / 1024 / 1024,
-		"total_alloc_mb":  m.TotalAlloc / 1024 / 1024,
-		"sys_mb":          m.Sys / 1024 / 1024,
-		"num_gc":          m.NumGC,
-		"goroutines":      runtime.NumGoroutine(),
+		"alloc_mb":       m.Alloc / 1024 / 1024,
+		"total_alloc_mb": m.TotalAlloc / 1024 / 1024,
+		"sys_mb":         m.Sys / 1024 / 1024,
+		"num_gc":         m.NumGC,
+		"goroutines":     runtime.NumGoroutine(),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	handler.WriteJSON(w, http.StatusOK, data)
 }
 
 func (s *Server) handleDebugGoroutines(w http.ResponseWriter, r *http.Request) {
@@ -152,6 +146,5 @@ func (s *Server) handleDebugGoroutines(w http.ResponseWriter, r *http.Request) {
 		"count": runtime.NumGoroutine(),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	handler.WriteJSON(w, http.StatusOK, data)
 }

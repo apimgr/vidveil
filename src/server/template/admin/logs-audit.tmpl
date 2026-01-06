@@ -1,0 +1,126 @@
+{{define "content"}}
+<div class="card">
+    <h2>Audit Log Viewer</h2>
+    <p class="text-muted">Security events, admin actions, and configuration changes per AI.md PART 17.</p>
+
+    <div class="log-controls">
+        <div class="form-group inline">
+            <label for="log-filter">Category</label>
+            <select id="log-filter" onchange="refreshAuditLogs()">
+                <option value="all">All Events</option>
+                <option value="auth">Authentication</option>
+                <option value="config">Configuration</option>
+                <option value="admin">Admin Actions</option>
+                <option value="security">Security Events</option>
+            </select>
+        </div>
+        <div class="form-group inline">
+            <label for="log-lines">Lines</label>
+            <select id="log-lines" onchange="refreshAuditLogs()">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+            </select>
+        </div>
+        <button onclick="refreshAuditLogs()" class="btn btn-secondary">Refresh</button>
+        <button onclick="downloadAuditLogs()" class="btn btn-secondary">Download</button>
+    </div>
+
+    <div id="audit-log-container" class="log-viewer">
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Category</th>
+                    <th>Action</th>
+                    <th>Actor</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody id="audit-log-body">
+                <tr><td colspan="5" class="text-center">Loading audit logs...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Audit Log Info</h2>
+    <dl class="info-list">
+        <dt>Log File</dt>
+        <dd><code id="audit-filename">{{.Config.Server.Logs.Audit.Filename}}</code></dd>
+        <dt>Retention</dt>
+        <dd>{{.Config.Server.Logs.Audit.Rotate}} (rotated daily)</dd>
+        <dt>Format</dt>
+        <dd>JSON Lines (one entry per line)</dd>
+    </dl>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+async function refreshAuditLogs() {
+    const lines = document.getElementById('log-lines').value;
+    const filter = document.getElementById('log-filter').value;
+    const tbody = document.getElementById('audit-log-body');
+
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
+
+    try {
+        const resp = await fetch('/api/v1/admin/logs/audit?lines=' + lines + '&filter=' + filter);
+        const data = await resp.json();
+
+        if (!data.success) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-error">Error: ' + data.error + '</td></tr>';
+            return;
+        }
+
+        if (!data.data.lines || data.data.lines.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No audit log entries found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.data.lines.map(function(line) {
+            try {
+                const entry = JSON.parse(line);
+                return '<tr>' +
+                    '<td><time>' + (entry.timestamp || entry.time || '-') + '</time></td>' +
+                    '<td><span class="badge badge-' + getCategoryClass(entry.category) + '">' + (entry.category || '-') + '</span></td>' +
+                    '<td>' + escapeHtml(entry.action || entry.event || '-') + '</td>' +
+                    '<td>' + escapeHtml(entry.actor || entry.user || '-') + '</td>' +
+                    '<td><code>' + escapeHtml(entry.details || entry.message || '-') + '</code></td>' +
+                    '</tr>';
+            } catch (e) {
+                return '<tr><td colspan="5"><code>' + escapeHtml(line) + '</code></td></tr>';
+            }
+        }).join('');
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-error">Error: ' + e.message + '</td></tr>';
+    }
+}
+
+function getCategoryClass(category) {
+    switch (category) {
+        case 'auth': return 'info';
+        case 'config': return 'warning';
+        case 'admin': return 'primary';
+        case 'security': return 'error';
+        default: return 'secondary';
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function downloadAuditLogs() {
+    window.location.href = '/api/v1/admin/logs/audit?download=true';
+}
+
+document.addEventListener('DOMContentLoaded', refreshAuditLogs);
+</script>
+{{end}}

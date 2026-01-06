@@ -96,37 +96,7 @@
     </form>
 </div>
 
-<style>
-.log-viewer {
-    background: #1e1e2e;
-    border-radius: 8px;
-    padding: 1rem;
-    max-height: 500px;
-    overflow-y: auto;
-}
-.log-viewer pre {
-    margin: 0;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.85rem;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-}
-.log-controls {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-end;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-}
-.form-group.inline {
-    margin-bottom: 0;
-}
-.log-line-error { color: #f38ba8; }
-.log-line-warn { color: #fab387; }
-.log-line-info { color: #89dceb; }
-.log-line-debug { color: #a6adc8; }
-</style>
+{{/* Styles moved to admin.css per AI.md PART 16 */}}
 {{end}}
 
 {{define "scripts"}}
@@ -210,14 +180,15 @@ async function downloadLogs() {
     window.location.href = '/api/v1/admin/logs/download';
 }
 
-async function clearLogs() {
-    if (!confirm('Are you sure you want to clear all logs?')) return;
-    try {
-        const resp = await fetch('/api/v1/admin/logs/clear', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) { showSuccess('Logs cleared!'); refreshLogs(); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+function clearLogs() {
+    showConfirm('Are you sure you want to clear all logs?', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/logs/clear', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) { showSuccess('Logs cleared!'); refreshLogs(); }
+            else { showError('Error: ' + data.error); }
+        } catch (e) { showError('Error: ' + e.message); }
+    });
 }
 
 // Load logs on page load

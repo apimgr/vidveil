@@ -1,131 +1,14 @@
 {{define "setup"}}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Initial Setup - {{.SiteTitle}}</title>
-    <style>
-        :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --text-primary: #f1f5f9;
-            --text-secondary: #94a3b8;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --success: #10b981;
-            --error: #ef4444;
-            --border: #334155;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-        .setup-container {
-            width: 100%;
-            max-width: 480px;
-        }
-        .setup-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 2rem;
-        }
-        .setup-header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .setup-header h1 {
-            font-size: 1.75rem;
-            margin-bottom: 0.5rem;
-        }
-        .setup-header p {
-            color: var(--text-secondary);
-        }
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            background: var(--bg-primary);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 1rem;
-        }
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
-        .help-text {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            margin-top: 0.25rem;
-        }
-        .btn {
-            width: 100%;
-            padding: 0.875rem 1.5rem;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .btn:hover {
-            background: var(--accent-hover);
-        }
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .alert {
-            padding: 1rem;
-            border-radius: 6px;
-            margin-bottom: 1.5rem;
-        }
-        .alert-error {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid var(--error);
-            color: var(--error);
-        }
-        .alert-info {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid var(--accent);
-        }
-        .password-strength {
-            height: 4px;
-            border-radius: 2px;
-            margin-top: 0.5rem;
-            background: var(--bg-primary);
-            overflow: hidden;
-        }
-        .password-strength-bar {
-            height: 100%;
-            transition: width 0.3s, background 0.3s;
-        }
-        .strength-weak { background: var(--error); width: 25%; }
-        .strength-fair { background: #f59e0b; width: 50%; }
-        .strength-good { background: #84cc16; width: 75%; }
-        .strength-strong { background: var(--success); width: 100%; }
-    </style>
+    <link rel="stylesheet" href="/static/css/common.css">
+    {{/* Styles moved to common.css per AI.md PART 16 */}}
 </head>
-<body>
+<body class="centered-page-body">
     <div class="setup-container">
         <div class="setup-card">
             <div class="setup-header">

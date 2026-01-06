@@ -9,13 +9,13 @@
 **Privacy-respecting meta search engine for adult video content that aggregates results from 54+ video sites without tracking, logging, or analytics.**
 
 **Key Features:**
-- No tracking, logging, or analytics - complete privacy
-- 54+ engines with bang shortcuts for targeted searches
+- 54+ video search engines with bang shortcuts (!ph, !xv, etc.)
 - SSE streaming for real-time results as engines respond
 - Thumbnail proxy prevents engine tracking of users
 - Single static binary with all assets embedded
 - Built-in Tor hidden service support
-- Full admin panel for configuration
+- Full admin panel for server configuration
+- No user accounts - stateless, privacy-first design
 
 **Target Users:**
 - Privacy-conscious users seeking adult content without tracking
@@ -137,27 +137,51 @@
 
 **NEVER run Go or binaries on host. ALL development uses containers.**
 
-### Building (ALWAYS Docker)
+### Building (ALWAYS via Makefile - Local Development)
 
-| NEVER (on host) | ALWAYS (Docker `golang:alpine`) |
-|-----------------|--------------------------------|
-| `go build ...` | `docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build ...` |
-| `go test ...` | `docker run --rm -v $(pwd):/build -w /build golang:alpine go test ...` |
-| `go run ...` | `docker run --rm -v $(pwd):/build -w /build golang:alpine go run ...` |
+| Command | Purpose | Output Location | When to Use |
+|---------|---------|-----------------|-------------|
+| `make dev` | **Development & Debugging** | `${TMPDIR}/${PROJECTORG}.XXXXXX/` | Active coding, quick tests |
+| `make host` | **Production Testing** | `binaries/` (with version) | Test prod builds locally |
+| `make build` | **Full Release** | `binaries/` (all 8 platforms) | Before release |
+| `make test` | **Unit Tests** | Coverage report | After code changes |
 
-### Testing (Docker OR Incus)
+| NEVER (on host) | ALWAYS (Makefile targets) |
+|-----------------|---------------------------|
+| `go build ...` | `make dev` or `make host` or `make build` |
+| `go test ...` | `make test` |
+| `go run ...` | `make dev` then run binary in Docker |
 
-| Type | Container | Use For |
-|------|-----------|---------|
-| **Quick tests** | Docker `alpine:latest` | Unit tests, CI/CD, fast iteration |
-| **Full OS tests** | Incus `debian:latest` | Systemd, services, integration (PREFERRED) |
+**Makefile targets use Docker internally (`golang:alpine`) with GODIR/GOCACHE - host stays clean.**
 
-### Debugging (Incus Preferred)
+### Debugging & Quick Tests (Docker with Tools)
+
+**For local debugging and quick tests, use Docker with required tools:**
+
+```bash
+# After make dev, debug in Docker with tools
+BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECTORG}.*/ | head -1)
+docker run --rm -it -v "$BUILD_DIR:/app" alpine:latest sh -c "
+  apk add --no-cache curl bash file jq  # Required debug tools
+  /app/vidveil --help
+  /app/vidveil --version
+  # Interactive debugging...
+"
+```
+
+| Tool | Purpose |
+|------|---------|
+| `curl` | API testing, HTTP requests |
+| `bash` | Shell scripting, interactive debugging |
+| `file` | Binary verification |
+| `jq` | JSON parsing and formatting |
+
+### Integration Testing (Incus Preferred)
 
 | Container | Best For | Why |
 |-----------|----------|-----|
-| **Incus** | Interactive debugging | Full OS, persistent, SSH-able, real systemd |
-| **Docker** | Quick checks | Ephemeral, fast startup, limited environment |
+| **Incus** (PREFERRED) | Full integration, systemd | Full OS, persistent, SSH-able, real services |
+| **Docker** (fallback) | Quick checks | Ephemeral, fast startup, limited environment |
 
 ### AI as Beta Tester
 
@@ -174,26 +198,35 @@
 - Consistent environment (same as CI/CD and production)
 - No Go installation required on host
 - No host contamination with test data
-- Reproducible builds
+- Reproducible builds (GODIR/GOCACHE speeds up rebuilds)
 
-**Quick reference:**
+**Local Development Workflow:**
 ```bash
-# Build (ALWAYS Docker)
-docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/vidveil ./src
+# 1. Active development
+make dev                # Quick build to temp dir
 
-# Test - Quick (Docker)
-docker run --rm -v $(pwd):/build -w /build golang:alpine go test -v ./...
+# 2. Debug in Docker (with tools)
+BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECTORG}.*/ | head -1)
+docker run --rm -it -v "$BUILD_DIR:/app" alpine:latest sh -c "
+  apk add --no-cache curl bash file jq
+  /app/vidveil --help
+"
 
-# Test - Full OS (Incus - PREFERRED)
-incus launch images:debian/12 test-app
-incus file push binaries/vidveil test-app/usr/local/bin/
-incus exec test-app -- vidveil --help
+# 3. Unit tests
+make test
 
-# Run (use temp dir workflow)
-cd $(mktemp -d) && cp -r /path/to/project/* . && docker-compose -f docker/docker-compose.dev.yml up
+# 4. Integration tests
+./tests/run_tests.sh    # Auto-detects incus/docker
+
+# 5. Production test (before release)
+make host               # Build with version info
+./tests/incus.sh        # Full systemd testing (PREFERRED)
+
+# 6. Full release build
+make build              # All 8 platforms
 ```
 
-**See PART 29: TESTING & DEVELOPMENT for complete workflows.**
+**See PART 26: MAKEFILE and PART 29: TESTING & DEVELOPMENT for complete details.**
 
 ## Runtime Detection Rules (NON-NEGOTIABLE)
 
@@ -651,14 +684,25 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 | File/Directory | Required | Purpose |
 |----------------|:--------:|---------|
-| `.claude/` | Optional | Claude AI configuration directory |
+| `.claude/` | ✓ | Claude Code configuration |
+| `.claude/rules/` | ✓ | Auto-loaded rule files (ai-rules.md, build-rules.md, etc.) |
+| `.claude/CLAUDE.md` | Optional | Project memory |
 | `.cursor/` | Optional | Cursor AI configuration directory |
 | `.aider/` | Optional | Aider AI configuration directory |
 | `.ai/` | Optional | Generic AI configuration directory |
 | `.windsurf/` | Optional | Windsurf AI configuration directory |
 | Other AI config dirs | Optional | Any AI assistant configuration directories |
 
-**Note:** AI configuration directories are allowed in project root for tool-specific settings.
+**Claude Code Rules Files (.claude/rules/):**
+
+| File | Purpose |
+|------|---------|
+| `ai-rules.md` | AI behavior rules (@AI.md PART 0) |
+| `directory-structure.md` | Project structure rules (@AI.md PART 4) |
+| `build-rules.md` | Build/make rules (@AI.md PART 26) |
+| `testing-rules.md` | Testing rules (@AI.md PART 29) |
+
+**Note:** Claude Code auto-loads all `.md` files from `.claude/rules/` on startup.
 
 ### Allowed Root Directories (Exhaustive List)
 
@@ -671,7 +715,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | `tests/` | ✓ | Test scripts (run_tests.sh, docker.sh, incus.sh) | No |
 | `.github/` | If GitHub | GitHub Actions, templates | No |
 | `.gitea/` | If Gitea | Gitea Actions, templates | No |
-| `.claude/` | Optional | Claude AI config | No |
+| `.claude/` | ✓ | Claude Code config (rules/ required) | No |
 | `.cursor/` | Optional | Cursor AI config | No |
 | `.aider/` | Optional | Aider AI config | No |
 | `binaries/` | Auto | Build output | **Yes** |
@@ -783,18 +827,17 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | **Backup Dir** | Where backups live (`{backup_dir}`, default: `/mnt/Backups/apimgr/vidveil`) |
 | **PID File** | Process ID file path (`{pid_file}`, default: `/var/run/apimgr/vidveil.pid`) |
 
----
 
 ## How to Read This Large File
 
-**AI.md is ~1.5MB and ~42,000 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1.6MB and ~43,000 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
-| File size | ~1.5MB |
-| Line count | ~42,810 lines |
+| File size | ~1.6MB |
+| Line count | ~43,233 lines |
 | Read limit | ~500 lines per read |
 | Full reads needed | ~85 reads (impractical) |
 
@@ -806,45 +849,45 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 | PART | Line | Topic | When to Read |
 |------|------|-------|--------------|
-| 0 | 941 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
-| 1 | 2631 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | 3353 | License & Attribution | License requirements |
-| 3 | 3692 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | 4455 | OS-Specific Paths | Path handling |
-| 5 | 4640 | Configuration | Config file work, **Path Security** |
-| 6 | 5951 | Application Modes | Mode handling, debug endpoints |
-| 7 | 6559 | Binary Requirements | Binary building, **Display detection** |
-| 8 | 7026 | Server Binary CLI | CLI flags/commands |
-| 9 | 9771 | Error Handling & Caching | Error/cache patterns |
-| 10 | 10148 | Database & Cluster | Database work |
-| 11 | 10563 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
-| 12 | 12425 | Server Configuration | Server settings |
-| 13 | 12692 | Health & Versioning | Health endpoints |
-| 14 | 13181 | API Structure | REST/GraphQL/Route Compliance |
-| 15 | 14446 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | 15265 | Web Frontend | Frontend/UI, **Unified Response Format** |
-| 17 | 18544 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
-| 18 | 20570 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | 21966 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | 22451 | GeoIP | GeoIP features |
-| 21 | 22524 | Metrics | Metrics/monitoring |
-| 22 | 23545 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | 24252 | Update Command | Update feature |
-| 24 | 24308 | Privilege Escalation & Service | Service/privilege work |
-| 25 | 24695 | Service Support | Systemd/service templates |
-| 26 | 24824 | Makefile | Build system, **make host** |
-| 27 | 25485 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | 26841 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | 29328 | Testing & Development | Testing/dev workflow, **100% Coverage** |
-| 30 | 30666 | ReadTheDocs Documentation | Documentation |
-| 31 | 31378 | I18N & A11Y | Internationalization |
-| 32 | 31799 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | 32535 | Multi-User | **OPTIONAL** - regular user accounts/registration, vanity URLs |
-| 34 | 35877 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 35 | 36521 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 36 | 37544 | CLI Client & Agent | **OPTIONAL** - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context** |
-| 37 | 41000 | Project-Specific Sections | **WHAT** (IDEA.md) - 0-36 = HOW |
-| FINAL | 41325 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+| 0 | 984 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
+| 1 | 2674 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | 3394 | License & Attribution | License requirements |
+| 3 | 3733 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | 4534 | OS-Specific Paths | Path handling |
+| 5 | 4719 | Configuration | Config file work, **Path Security** |
+| 6 | 6030 | Application Modes | Mode handling, debug endpoints |
+| 7 | 6638 | Binary Requirements | Binary building, **Display detection** |
+| 8 | 7105 | Server Binary CLI | CLI flags/commands |
+| 9 | 9850 | Error Handling & Caching | Error/cache patterns |
+| 10 | 10227 | Database & Cluster | Database work |
+| 11 | 10642 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | 12504 | Server Configuration | Server settings |
+| 13 | 12771 | Health & Versioning | Health endpoints |
+| 14 | 13260 | API Structure | REST/GraphQL/Route Compliance |
+| 15 | 14525 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | 15344 | Web Frontend | Frontend/UI, **Unified Response Format** |
+| 17 | 18623 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | 20649 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | 22045 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | 22530 | GeoIP | GeoIP features |
+| 21 | 22603 | Metrics | Metrics/monitoring |
+| 22 | 23624 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | 24331 | Update Command | Update feature |
+| 24 | 24387 | Privilege Escalation & Service | Service/privilege work |
+| 25 | 24774 | Service Support | Systemd/service templates |
+| 26 | 24903 | Makefile | Build system, **make host** |
+| 27 | 25620 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | 26976 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | 29486 | Testing & Development | Testing/dev workflow, **100% Coverage** |
+| 30 | 31127 | ReadTheDocs Documentation | Documentation |
+| 31 | 31840 | I18N & A11Y | Internationalization |
+| 32 | 32261 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | 32997 | Multi-User | **OPTIONAL** - regular user accounts/registration, vanity URLs |
+| 34 | 36339 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 35 | 36983 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 36 | 38006 | CLI Client & Agent | **OPTIONAL** - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context** |
+| 37 | 41460 | Project-Specific Sections | **WHAT** (IDEA.md) - 0-36 = HOW |
+| FINAL | 41785 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
 
 **When Implementing OPTIONAL PARTs (33-36):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -2714,17 +2757,15 @@ These are not roleplay - they ARE these roles when the work requires it. Each pr
 | **Debugging** | Incus `debian:latest` | PREFERRED - persistent, SSH-able |
 
 ```bash
-# CORRECT - Use Makefile (wraps Docker)
+# CORRECT - Use Makefile targets
 make dev                    # Quick build to {tempdir}/apimgr.XXXXXX/vidveil
-make build                  # Full build to binaries/
+make host                   # Build with version info to binaries/
+make build                  # Full cross-platform build to binaries/
+make test                   # Run unit tests
 
-# ALSO CORRECT - Direct Docker build
-docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 golang:alpine go build -o /build/binaries/vidveil ./src
-
-# CORRECT - Full OS test with Incus (PREFERRED)
-incus launch images:debian/12 test-app
-incus file push binaries/vidveil test-app/usr/local/bin/
-incus exec test-app -- vidveil --help
+# CORRECT - Integration tests
+./tests/run_tests.sh        # Auto-detects incus/docker
+./tests/incus.sh            # Full OS test with systemd (PREFERRED)
 
 # WRONG - Never run go directly on host
 go build -o binary/vidveil ./src
@@ -3553,7 +3594,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: 'stable'
 
       - name: Install go-licenses
         run: go install github.com/google/go-licenses@latest
@@ -3831,7 +3872,13 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 │       ├── beta.yml        # Beta releases
 │       ├── daily.yml       # Daily builds
 │       └── docker.yml      # Docker images
-├── .claude/                # Claude AI configuration (optional)
+├── .claude/                # Claude Code configuration
+│   ├── rules/              # Auto-loaded rule files (REQUIRED)
+│   │   ├── ai-rules.md         # AI behavior rules
+│   │   ├── directory-structure.md  # Project structure rules
+│   │   ├── build-rules.md      # Build/make rules
+│   │   └── testing-rules.md    # Testing rules
+│   └── CLAUDE.md           # Project memory (optional)
 ├── .cursor/                # Cursor AI configuration (optional)
 ├── .aider/                 # Aider AI configuration (optional)
 ├── .ai/                    # Generic AI configuration (optional)
@@ -4021,24 +4068,37 @@ rootfs/
 # Git
 .git/
 .gitignore
+.gitattributes
 
-# GitHub/Gitea workflows
+# CI/CD workflows (not needed in container)
 .github/
 .gitea/
-
-# Entire docker directory
-docker/
+.forgejo/
+.gitlab-ci.yml
+Jenkinsfile
 
 # Runtime volume data (NEVER include in image)
 rootfs/
 
-# Build output
+# Build output (container builds from source)
 binaries/
 releases/
+
+# Tests (not needed in production image)
+tests/
+
+# Documentation (not needed in container)
+docs/
+*.md
+
+# Build files (not needed - build happens inside Docker)
+Makefile
 
 # IDE
 .idea/
 .vscode/
+*.swp
+*.swo
 
 # AI config directories
 .claude/
@@ -4046,12 +4106,30 @@ releases/
 .aider/
 .ai/
 .windsurf/
-
-# Docs
-*.md
 ```
 
-**Note:** `docker/` is ignored but `COPY docker/rootfs/ /` still works because we build using host docker - files are copied from host filesystem during build, not from build context.
+**What .dockerignore MUST include:**
+
+| Category | Files/Dirs | Why Exclude |
+|----------|------------|-------------|
+| **Git** | `.git/`, `.gitignore`, `.gitattributes` | Not needed, adds size |
+| **CI/CD** | `.github/`, `.gitea/`, `.forgejo/`, `.gitlab-ci.yml`, `Jenkinsfile` | CI files not needed in container |
+| **Runtime** | `rootfs/` | Runtime volumes, not build-time |
+| **Build output** | `binaries/`, `releases/` | Container builds from source |
+| **Tests** | `tests/` | Test scripts not needed in production |
+| **Docs** | `docs/`, `*.md` | Documentation not needed in container |
+| **Build files** | `Makefile` | Build happens inside Docker, not needed |
+| **IDE** | `.idea/`, `.vscode/`, `*.swp` | Editor files |
+| **AI config** | `.claude/`, `.cursor/`, etc. | AI assistant config |
+
+**What .dockerignore MUST NOT include:**
+
+| Files/Dirs | Why Keep |
+|------------|----------|
+| `src/` | Source code - required for build |
+| `go.mod`, `go.sum` | Go module files - required |
+| `docker/` | Dockerfile, rootfs overlay - required |
+| `docker/rootfs/` | Build-time overlay files (entrypoint.sh) |
 
 **RULE: Keep the base directory organized and clean - no clutter!**
 
@@ -4164,10 +4242,11 @@ cd /path/to/project && docker build -f docker/Dockerfile .
 
 | Rule | Description |
 |------|-------------|
-| **Always Latest Stable** | Use latest stable Go version (never hardcode specific version in docs) |
+| **Always Latest Stable** | Use latest stable Go version (NEVER hardcode specific versions) |
 | **Build Only** | Go is only for building, not runtime (single static binary) |
 | **go.mod** | Set to current latest stable version |
 | **Docker** | Use `golang:alpine` for builds (always has latest stable Go) |
+| **CI/CD** | Use `go-version: 'stable'` in workflows (NEVER hardcode like `1.21`) |
 | **No Pinning** | Don't pin to patch versions unless compatibility issue |
 
 **go.mod Example:**
@@ -4346,9 +4425,9 @@ require (
 **Notes:**
 - Version numbers are examples - always use latest stable versions
 - Not all projects need all modules - include only what you use
-- Clean up unused dependencies: `docker run --rm -v $(pwd):/build -w /build golang:alpine go mod tidy`
+- Clean up unused dependencies: handled automatically by `make build/host/dev`
 - MongoDB uses native driver, not database/sql
-- **NEVER run `go` directly - always use `docker run ... golang:alpine go ...`**
+- **NEVER run `go` directly - always use Makefile targets (`make dev`, `make test`, etc.)**
 
 ## Password Hashing (NON-NEGOTIABLE)
 
@@ -24823,16 +24902,18 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, s c
 
 # PART 26: MAKEFILE (NON-NEGOTIABLE)
 
-**Four targets only. DO NOT ADD MORE.**
+**Six core targets. DO NOT ADD MORE.**
 
 ## Targets
 
-| Target | Description | Output |
-|--------|-------------|--------|
-| `build` | Build all platforms + host binary | `binaries/` |
-| `release` | Release with source archive | `releases/` |
-| `docker` | Build and push container to registry | `$REGISTRY` |
-| `test` | Run all tests | - |
+| Target | Purpose | Output Location | When to Use |
+|--------|---------|-----------------|-------------|
+| `dev` | Quick development build | `${TMPDIR}/${PROJECTORG}.XXXXXX/` | Active coding, quick tests |
+| `host` | Production test build | `binaries/` (with version) | Test prod builds locally |
+| `build` | Full release (all 8 platforms) | `binaries/` | Before release |
+| `test` | Run unit tests | Coverage report | After code changes |
+| `release` | Release with source archive | `releases/` | Creating releases |
+| `docker` | Build and push container | `$REGISTRY` | Container deployment |
 
 ## Versioning (NON-NEGOTIABLE)
 
@@ -24944,7 +25025,7 @@ format_version_tag() {
 ```
 binaries/
 ├── vidveil                      # Host server
-├── vidveil-cli                  # Host CLI (if src/cli/ exists)
+├── vidveil-cli                  # Host CLI (if src/client/ exists)
 ├── vidveil-agent                # Host agent (if src/agent/ exists)
 ├── vidveil-linux-amd64          # Server distributions
 ├── vidveil-linux-arm64
@@ -25032,8 +25113,9 @@ build: clean
 	@echo "Building version $(VERSION)..."
 	@mkdir -p $(GOCACHE) $(GODIR)
 
-	# Download modules first (cached)
-	@echo "Downloading Go modules..."
+	# Tidy and download modules
+	@echo "Tidying and downloading Go modules..."
+	@$(GO_DOCKER) go mod tidy
 	@$(GO_DOCKER) go mod download
 
 	# Build for host OS/ARCH
@@ -25063,8 +25145,9 @@ host: clean
 	@echo "Building host binaries version $(VERSION)..."
 	@mkdir -p $(GOCACHE) $(GODIR)
 
-	# Download modules first (cached)
-	@echo "Downloading Go modules..."
+	# Tidy and download modules
+	@echo "Tidying and downloading Go modules..."
+	@$(GO_DOCKER) go mod tidy
 	@$(GO_DOCKER) go mod download
 
 	# Build server binary
@@ -25073,10 +25156,10 @@ host: clean
 		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME) ./src"
 
 	# Build CLI binary (if exists)
-	@if [ -d "src/cli" ]; then \
+	@if [ -d "src/client" ]; then \
 		echo "Building $(PROJECTNAME)-cli..."; \
 		$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
-			go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME)-cli ./src/cli"; \
+			go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME)-cli ./src/client"; \
 	fi
 
 	# Build agent binary (if exists)
@@ -25153,25 +25236,40 @@ docker:
 	@echo "Docker push complete: $(REGISTRY):$(VERSION)"
 
 # =============================================================================
-# TEST - Run all tests (via Docker with cached modules)
+# TEST - Run all tests with coverage enforcement (via Docker)
 # =============================================================================
 test:
-	@echo "Running tests in Docker..."
+	@echo "Running tests with coverage..."
 	@mkdir -p $(GOCACHE) $(GODIR)
 	@$(GO_DOCKER) go mod download
-	@$(GO_DOCKER) go test -v -cover ./...
-	@echo "Tests complete"
+	@$(GO_DOCKER) go test -v -cover -coverprofile=coverage.out ./...
+	@COVERAGE=$$($(GO_DOCKER) go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
+	if [ $$(echo "$$COVERAGE < 100" | bc -l) -eq 1 ]; then \
+		echo "ERROR: Coverage is $$COVERAGE%, must be 100%"; \
+		exit 1; \
+	fi
+	@echo "Tests complete - Coverage: 100% ✓"
 
 # =============================================================================
 # DEV - Quick build for local development/testing (to random temp dir)
 # =============================================================================
 # Fast: host platform only, no ldflags, random temp dir for isolation
+# Builds server + CLI + agent (if they exist)
 dev:
 	@mkdir -p $(GOCACHE) $(GODIR)
+	@$(GO_DOCKER) go mod tidy
 	@BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG).XXXXXX") && \
-		echo "Quick dev build..." && \
+		echo "Quick dev build to $$BUILD_DIR..." && \
 		$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
+		if [ -d "src/client" ]; then \
+			$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME)-cli ./src/client && \
+			echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
+		fi && \
+		if [ -d "src/agent" ]; then \
+			$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME)-agent ./src/agent && \
+			echo "Built: $$BUILD_DIR/$(PROJECTNAME)-agent"; \
+		fi && \
 		echo "Test:  docker run --rm -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
 
 # =============================================================================
@@ -25280,25 +25378,62 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 5. Uses Docker (`golang:alpine`) - keeps host clean
 6. **Use for local testing before full cross-platform build**
 
-**When to use:**
+**When to use (Local Development - NOT CI/CD):**
 
-| Command | Use Case | Speed |
-|---------|----------|-------|
-| `make dev` | Quick iteration during development (temp dir, no version) | Fastest |
-| `make host` | Local testing with version info before full build | Fast |
-| `make build` | Full cross-platform build (all 8 platforms) | Slow |
-| `make test` | Run unit test suite | Fast |
-| `./tests/run_tests.sh` | Integration tests (auto-detects incus/docker) | Medium |
-| `./tests/docker.sh` | Integration tests in Docker (`alpine:latest`) | Medium |
-| `./tests/incus.sh` | Full integration + systemd tests (`debian:latest`) | Slow |
+| Command | Purpose | Output | When to Use |
+|---------|---------|--------|-------------|
+| `make dev` | **Development & Debugging** | `${TMPDIR}/${PROJECTORG}.XXXXXX/` | Active coding, quick tests, debugging |
+| `make host` | **Production Testing** | `binaries/` (with version) | Test production builds locally before release |
+| `make build` | **Full Release Build** | `binaries/` (all 8 platforms) | Before tagging release, cross-platform verification |
+| `make test` | **Unit Tests** | Coverage report | After code changes, before commits |
+
+**Local Development Workflow:**
+
+| Stage | Command | Purpose |
+|-------|---------|---------|
+| **1. Coding** | `make dev` | Rapid iteration - builds to temp dir, no version info |
+| **2. Quick Test** | Run binary in Docker | Debug with curl, file, bash tools |
+| **3. Unit Tests** | `make test` | Verify logic, coverage |
+| **4. Integration** | `./tests/run_tests.sh` | Full server + CLI + agent tests |
+| **5. Production Test** | `make host` | Build with version info to `binaries/` |
+| **6. Release** | `make build` | Full cross-platform build (8 platforms) |
+
+**Debugging in Docker (Local Development):**
+
+```bash
+# After make dev, test in Docker with debug tools
+BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECTORG}.*/ | head -1)
+docker run --rm -it \
+  -v "$BUILD_DIR:/app" \
+  alpine:latest sh -c "
+    apk add --no-cache curl bash file jq
+    /app/$VIDVEIL --help
+    /app/$VIDVEIL --version
+    # Debug interactively...
+  "
+```
+
+**Integration Tests:**
+
+| Script | Container | Best For |
+|--------|-----------|----------|
+| `./tests/run_tests.sh` | Auto-detect | General testing (picks best available) |
+| `./tests/docker.sh` | Docker `alpine:latest` | Quick integration tests |
+| `./tests/incus.sh` | Incus `debian:latest` | **PREFERRED** - Full OS, systemd, realistic |
 
 **Typical workflow:**
-```
-make dev                # Rapid iteration while coding
-make host               # Build with version info locally
+```bash
+# Active development
+make dev                # Quick build to temp dir
+make test               # Unit tests
+
+# Before commit
 ./tests/run_tests.sh    # Integration tests (auto-detects incus/docker)
-make build              # Full cross-platform build before release
-./tests/incus.sh        # Full systemd testing before release (preferred)
+
+# Before release
+make host               # Production build locally
+./tests/incus.sh        # Full systemd testing (PREFERRED)
+make build              # Full cross-platform build
 ```
 
 ## Directory Rules (NON-NEGOTIABLE)
@@ -26158,9 +26293,9 @@ RUN mkdir -p /config/vidveil /config/vidveil/security /config/vidveil/tor \
     && chown -R postgres:postgres /data/db/postgres /run/postgresql
 
 # Copy configs and entrypoint
-COPY rootfs/ /
+COPY docker/rootfs/ /
 
-# Copy application binary
+# Copy application binary from builder or pre-built
 COPY vidveil /usr/local/bin/
 RUN chmod +x /usr/local/bin/vidveil /usr/local/bin/entrypoint.sh
 
@@ -26385,11 +26520,11 @@ valkeyURL := "unix:///run/valkey/valkey.sock"
 **Build Commands:**
 
 ```bash
-# Standard image
-docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest -f docker/Dockerfile docker/
+# Standard image (context is project root)
+docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest -f docker/Dockerfile .
 
-# All-in-one image
-docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil-aio:latest -f docker/Dockerfile.aio docker/
+# All-in-one image (context is project root)
+docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil-aio:latest -f docker/Dockerfile.aio .
 ```
 
 **When to use All-in-One:**
@@ -26416,7 +26551,7 @@ docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil-aio:latest -f docke
 **Build-time `docker/rootfs/`** (in repo):
 ```
 docker/
-├── Dockerfile           # COPY rootfs/ / ← copies into container image
+├── Dockerfile           # COPY docker/rootfs/ / ← copies into container image
 ├── docker-compose.yml
 └── rootfs/              # BUILD overlay - committed to git
     └── usr/local/bin/
@@ -26440,7 +26575,7 @@ $TEMP_DIR/
     └── data/
 ```
 
-**Why same name works:** The `./rootfs/` path in docker-compose.yml is relative to where docker-compose runs from, not where it lives in the repo. Dockerfile's `COPY rootfs/ /` uses build context (`docker/`).
+**Why same name works:** The `./rootfs/` path in docker-compose.yml is relative to where docker-compose runs from, not where it lives in the repo. Dockerfile's `COPY docker/rootfs/ /` uses build context (`.` project root).
 
 ### Volume Paths (Host Side)
 
@@ -26842,6 +26977,29 @@ networks:
 
 **All projects MUST have CI/CD workflows appropriate for their git hosting platform.**
 
+## CI/CD vs Local Development (IMPORTANT)
+
+**CI/CD workflows are DIFFERENT from local development. Do NOT mix them.**
+
+| Aspect | Local Development | CI/CD Workflows |
+|--------|-------------------|-----------------|
+| **Go installation** | Docker `golang:alpine` | `actions/setup-go@v5` or runner's Go |
+| **Caching** | GODIR/GOCACHE in `~/.local/share/go` | CI-native caching (setup-go has built-in) |
+| **Build command** | `make dev`, `make host`, `make build` | Direct `go build` with explicit flags |
+| **Testing** | Docker/Incus containers | Runner environment |
+| **Makefile** | ALWAYS use Makefile targets | NEVER use Makefile (explicit commands) |
+
+**CI/CD workflows MUST:**
+- Use explicit `go build` commands with all flags visible
+- Use CI-native caching (NOT local GODIR/GOCACHE paths)
+- Set VERSION, COMMIT_ID, BUILD_DATE explicitly
+- Build all platforms in matrix
+
+**CI/CD workflows MUST NOT:**
+- Reference local user paths like `~/.local/share/go` (use `/tmp/` or CI-native caching)
+- Use Makefile targets (commands must be explicit for visibility)
+- Depend on local Docker containers for builds (GitHub/Gitea Actions use native Go)
+
 | Git Host | CI System | Config Location | Self-Hosted |
 |----------|-----------|-----------------|-------------|
 | GitHub | GitHub Actions | `.github/workflows/*.yml` | No (github.com only) |
@@ -27004,7 +27162,7 @@ jobs:
             -czf binaries/${{ env.PROJECTNAME }}-${{ env.VERSION }}-source.tar.gz .
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: binaries/*
@@ -27107,7 +27265,7 @@ jobs:
         run: echo "${{ env.VERSION }}" > binaries/version.txt
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
           files: binaries/*
@@ -27221,7 +27379,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: daily
           name: "Daily Build ${{ env.VERSION }}"
@@ -27330,7 +27488,7 @@ jobs:
       - name: Build and push (standard)
         uses: docker/build-push-action@v5
         with:
-          context: docker
+          context: .
           file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
@@ -27423,7 +27581,7 @@ jobs:
       - name: Build and push (all-in-one)
         uses: docker/build-push-action@v5
         with:
-          context: docker
+          context: .
           file: docker/Dockerfile.aio
           platforms: linux/amd64,linux/arm64
           push: true
@@ -27649,7 +27807,7 @@ jobs:
             -czf binaries/${{ env.PROJECTNAME }}-${{ env.VERSION }}-source.tar.gz .
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: binaries/*
@@ -27752,7 +27910,7 @@ jobs:
         run: echo "${{ env.VERSION }}" > binaries/version.txt
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
           files: binaries/*
@@ -27867,7 +28025,7 @@ jobs:
           git push origin :refs/tags/daily 2>/dev/null || true
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: daily
           name: "Daily Build ${{ env.VERSION }}"
@@ -28069,7 +28227,7 @@ jobs:
       - name: Build and push (all-in-one)
         uses: docker/build-push-action@v5
         with:
-          context: docker
+          context: .
           file: docker/Dockerfile.aio
           platforms: linux/amd64,linux/arm64
           push: true
@@ -28572,7 +28730,7 @@ docker:build-aio:
         --annotation "manifest:org.opencontainers.image.documentation=${CI_PROJECT_URL}" \
         $TAGS \
         --push \
-        docker
+        .
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
     - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
@@ -29225,7 +29383,7 @@ pipeline {
                             --annotation "manifest:org.opencontainers.image.documentation=https://${GIT_FQDN}/${PROJECTORG}/$VIDVEIL" \
                             ${tags} \
                             --push \
-                            docker
+                            .
                     """
                 }
             }
@@ -29523,7 +29681,7 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 - Test individual functions and packages
 - No server running required
 - Fast, run frequently during development
-- Run with `docker run ... golang:alpine go test ./...`
+- Run with `make test`
 
 **Integration Tests (`tests/*.sh`):**
 - Test complete running server
@@ -29642,18 +29800,11 @@ curl /links/abc123                   # Link details (text)
 
 **Running Go tests:**
 ```bash
-# Run all unit tests (via Docker)
+# Run all unit tests
 make test
-
-# Or directly:
-docker run --rm -v $(pwd):/build -w /build golang:alpine go test -v -cover ./...
-
-# Run specific package tests
-docker run --rm -v $(pwd):/build -w /build golang:alpine go test -v ./src/config/
-
-# Run with coverage
-docker run --rm -v $(pwd):/build -w /build golang:alpine go test -cover ./...
 ```
+
+**Note:** Makefile targets use Docker internally. See PART 26 for underlying commands.
 
 ## 100% Test Coverage (NON-NEGOTIABLE)
 
@@ -29672,14 +29823,8 @@ docker run --rm -v $(pwd):/build -w /build golang:alpine go test -cover ./...
 
 **Go Code (Unit Tests):**
 ```bash
-# Must show 100% for all packages
-docker run --rm -v $(pwd):/build -w /build golang:alpine \
-  go test -cover -coverprofile=coverage.out ./...
-
-# Verify coverage
-docker run --rm -v $(pwd):/build -w /build golang:alpine \
-  go tool cover -func=coverage.out | grep total | awk '{print $3}'
-# Must output: 100.0%
+# Run tests with coverage enforcement (fails if below 100%)
+make test
 ```
 
 **Endpoints (Integration Tests):**
@@ -29841,23 +29986,6 @@ verify_all_endpoints_tested
 | "It's just logging" | Mock the logger and test |
 | "It's third-party code" | Test your integration with it |
 
-### Makefile Target
-
-```makefile
-.PHONY: coverage
-coverage:
-	@echo "Running tests with coverage..."
-	@docker run --rm -v $(pwd):/build -w /build golang:alpine \
-		go test -cover -coverprofile=coverage.out ./...
-	@COVERAGE=$$(docker run --rm -v $(pwd):/build -w /build golang:alpine \
-		go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
-	if [ $$(echo "$$COVERAGE < 100" | bc -l) -eq 1 ]; then \
-		echo "ERROR: Coverage is $$COVERAGE%, must be 100%"; \
-		exit 1; \
-	fi
-	@echo "Coverage: 100% ✓"
-```
-
 **When to run which tests:**
 
 | When | Run This | Purpose |
@@ -29908,6 +30036,7 @@ docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
 # 2. Test (prefer Incus, fallback to Docker)
 if command -v incus &>/dev/null; then
   # PREFERRED: Full OS test in Incus (debian + systemd)
+  # Use latest Debian stable (currently 12/bookworm)
   echo "Testing with Incus (Debian + systemd)..."
   incus launch images:debian/12 test-vidveil
   incus file push binaries/vidveil test-vidveil/usr/local/bin/
@@ -29945,18 +30074,26 @@ fi
 | `tests/incus.sh` | Beta testing with Incus | `debian:latest` | Full integration + systemd tests |
 
 **docker.sh and incus.sh MUST:**
-1. Build binary using Docker (golang:alpine) in temp directory
-2. Copy binary to test container
-3. Run full beta test suite:
-   - Version and help checks
+1. Set up Go cache directories (GODIR/GOCACHE) for faster builds
+2. Build all binaries using Docker (golang:alpine) in temp directory:
+   - Server (`./src`)
+   - CLI client (`./src/client`) if exists
+   - Agent (`./src/agent`) if exists
+3. Install test tools in container (Docker: `apk add --no-cache curl bash file jq`)
+4. Copy binaries to test container
+5. Start server and capture logs (for setup token extraction)
+6. Run full beta test suite:
+   - Version and help checks (server, CLI, agent if built)
    - Binary info verification
-   - Start server and test API endpoints
-   - Test API .txt extension (for simplicity)
+   - **Binary rename tests** (copy binary, verify --help shows new name)
+   - **Admin setup** (use setup token → create admin → login → generate API token)
+   - Test API endpoints (.txt extension, Accept headers)
    - Test frontend smart detection (browser → HTML, CLI → text)
-   - Test Accept headers (application/json, text/plain, text/html)
    - Test project-specific endpoints (from PART 37)
    - Test admin authentication (see "Testing Admin Routes")
-4. Clean up on exit
+   - **CLI full functionality** (with API token against running server)
+   - **Agent full functionality** (with API token against running server)
+7. Clean up on exit
 
 #### tests/docker.sh
 
@@ -29974,19 +30111,47 @@ PROJECTORG=$(basename "$(dirname "$PWD")")
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
 trap "rm -rf $BUILD_DIR" EXIT
 
-echo "Building binary in Docker..."
-docker run --rm \
-  -v "$(pwd):/build" \
+# Go cache directories (same as Makefile)
+GODIR="${HOME}/.local/share/go"
+GOCACHE="${HOME}/.local/share/go/build"
+mkdir -p "$GODIR" "$GOCACHE"
+
+# Common docker run for Go builds
+GO_DOCKER="docker run --rm \
+  -v $(pwd):/build \
+  -v ${GOCACHE}:/root/.cache/go-build \
+  -v ${GODIR}:/go \
   -w /build \
   -e CGO_ENABLED=0 \
-  golang:alpine go build -o "$BUILD_DIR/$VIDVEIL" ./src
+  golang:alpine"
+
+echo "Building server binary in Docker..."
+$GO_DOCKER go build -o "$BUILD_DIR/$VIDVEIL" ./src
+
+# Build CLI client if exists
+if [ -d "src/client" ]; then
+    echo "Building CLI client in Docker..."
+    $GO_DOCKER go build -o "$BUILD_DIR/$VIDVEIL-cli" ./src/client
+fi
+
+# Build agent if exists
+if [ -d "src/agent" ]; then
+    echo "Building agent in Docker..."
+    $GO_DOCKER go build -o "$BUILD_DIR/$VIDVEIL-agent" ./src/agent
+fi
 
 echo "Testing in Docker (Alpine)..."
 docker run --rm \
   -v "$BUILD_DIR:/app" \
   alpine:latest sh -c "
     set -e
+
+    # Install required tools for testing
+    apk add --no-cache curl bash file jq >/dev/null
+
     chmod +x /app/$VIDVEIL
+    [ -f /app/$VIDVEIL-cli ] && chmod +x /app/$VIDVEIL-cli
+    [ -f /app/$VIDVEIL-agent ] && chmod +x /app/$VIDVEIL-agent
 
     echo '=== Version Check ==='
     /app/$VIDVEIL --version
@@ -29999,9 +30164,11 @@ docker run --rm \
     file /app/$VIDVEIL
 
     echo '=== Starting Server for API Tests ==='
-    /app/$VIDVEIL --port 64580 &
+    /app/$VIDVEIL --port 64580 > /tmp/server.log 2>&1 &
     SERVER_PID=\$!
     sleep 3
+    # Show setup token if present (for debugging)
+    grep -i 'setup.*token' /tmp/server.log 2>/dev/null || true
 
     echo '=== API Endpoint Tests ==='
     # Test JSON response (default)
@@ -30046,6 +30213,112 @@ docker run --rm \
     #
     # Test ALL project-specific endpoints defined in PART 37
 
+    echo '=== Admin Setup & API Token Creation ==='
+    # Get setup token from server output (captured during startup)
+    SETUP_TOKEN=\$(cat /tmp/server.log 2>/dev/null | grep -oP 'Setup Token.*:\\s*\\K[a-f0-9]+' | head -1 || echo '')
+
+    if [ -n \"\$SETUP_TOKEN\" ]; then
+        echo \"Setup token found: \${SETUP_TOKEN:0:8}...\"
+
+        # Create admin account
+        curl -sf -X POST \\
+            -H \"X-Setup-Token: \$SETUP_TOKEN\" \\
+            -H \"Content-Type: application/json\" \\
+            -d '{\"username\":\"testadmin\",\"password\":\"TestPass123!\"}' \\
+            http://localhost:64580/api/v1/admin/setup || echo 'Admin setup failed (may already exist)'
+
+        # Login and get session
+        SESSION=\$(curl -sf -X POST \\
+            -H \"Content-Type: application/json\" \\
+            -d '{\"username\":\"testadmin\",\"password\":\"TestPass123!\"}' \\
+            http://localhost:64580/api/v1/admin/login | grep -oP '\"session_token\":\\s*\"\\K[^\"]+' || echo '')
+
+        if [ -n \"\$SESSION\" ]; then
+            echo '✓ Admin login successful'
+
+            # Generate API token for CLI/Agent testing
+            API_TOKEN=\$(curl -sf -X POST \\
+                -H \"Authorization: Bearer \$SESSION\" \\
+                http://localhost:64580/api/v1/admin/profile/token | grep -oP '\"token\":\\s*\"\\K[^\"]+' || echo '')
+
+            if [ -n \"\$API_TOKEN\" ]; then
+                echo \"✓ API token created: \${API_TOKEN:0:12}...\"
+            else
+                echo 'API token creation failed (continuing without token)'
+            fi
+        else
+            echo 'Admin login failed (continuing without session)'
+        fi
+    else
+        echo 'No setup token found (server may already be configured)'
+    fi
+
+    echo '=== Binary Rename Tests ==='
+    # Test that binaries show ACTUAL name in --help/--version (not hardcoded)
+    cp /app/$VIDVEIL /app/renamed-server
+    chmod +x /app/renamed-server
+    if /app/renamed-server --help 2>&1 | grep -q 'renamed-server'; then
+        echo '✓ Server binary rename works (--help shows actual name)'
+    else
+        echo '✗ FAILED: Server --help does not show renamed binary name'
+    fi
+
+    echo '=== CLI Client Tests (if exists) ==='
+    if [ -f /app/$VIDVEIL-cli ]; then
+        /app/$VIDVEIL-cli --version || echo 'FAILED: CLI --version'
+        /app/$VIDVEIL-cli --help || echo 'FAILED: CLI --help'
+
+        # Test binary rename
+        cp /app/$VIDVEIL-cli /app/renamed-cli
+        chmod +x /app/renamed-cli
+        if /app/renamed-cli --help 2>&1 | grep -q 'renamed-cli'; then
+            echo '✓ CLI binary rename works'
+        else
+            echo '✗ FAILED: CLI --help does not show renamed binary name'
+        fi
+
+        # Full CLI functionality tests against server
+        echo '--- CLI Full Functionality Tests ---'
+        if [ -n \"\${API_TOKEN:-}\" ]; then
+            # Test with API token
+            /app/$VIDVEIL-cli --server http://localhost:64580 --token \"\$API_TOKEN\" status || echo 'CLI status failed'
+            # Project-specific CLI commands go here (PART 37)
+            # Example: /app/$VIDVEIL-cli --server http://localhost:64580 --token \"\$API_TOKEN\" list
+        else
+            # Test without token (anonymous if allowed)
+            /app/$VIDVEIL-cli --server http://localhost:64580 status || echo 'CLI status (no token) failed or not applicable'
+        fi
+    else
+        echo 'CLI client not built - skipping'
+    fi
+
+    echo '=== Agent Tests (if exists) ==='
+    if [ -f /app/$VIDVEIL-agent ]; then
+        /app/$VIDVEIL-agent --version || echo 'FAILED: Agent --version'
+        /app/$VIDVEIL-agent --help || echo 'FAILED: Agent --help'
+
+        # Test binary rename
+        cp /app/$VIDVEIL-agent /app/renamed-agent
+        chmod +x /app/renamed-agent
+        if /app/renamed-agent --help 2>&1 | grep -q 'renamed-agent'; then
+            echo '✓ Agent binary rename works'
+        else
+            echo '✗ FAILED: Agent --help does not show renamed binary name'
+        fi
+
+        # Full Agent functionality tests against server
+        echo '--- Agent Full Functionality Tests ---'
+        if [ -n \"\${API_TOKEN:-}\" ]; then
+            # Test agent registration/status with API token
+            /app/$VIDVEIL-agent --server http://localhost:64580 --token \"\$API_TOKEN\" status || echo 'Agent status failed'
+            # Project-specific agent commands go here (PART 37)
+        else
+            echo 'Agent tests skipped (no API token)'
+        fi
+    else
+        echo 'Agent not built - skipping'
+    fi
+
     echo '=== Stopping Server ==='
     kill \$SERVER_PID
     wait \$SERVER_PID 2>/dev/null || true
@@ -30075,26 +30348,66 @@ PROJECTNAME=$(basename "$PWD")
 PROJECTORG=$(basename "$(dirname "$PWD")")
 CONTAINER_NAME="test-$VIDVEIL-$$"
 
+# Incus image - use latest Debian stable (update when new stable releases)
+INCUS_IMAGE="images:debian/12"
+
 # Create temp directory for build
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
 trap "rm -rf $BUILD_DIR; incus delete $CONTAINER_NAME --force 2>/dev/null || true" EXIT
 
-echo "Building binary in Docker..."
-docker run --rm \
-  -v "$(pwd):/build" \
+# Go cache directories (same as Makefile)
+GODIR="${HOME}/.local/share/go"
+GOCACHE="${HOME}/.local/share/go/build"
+mkdir -p "$GODIR" "$GOCACHE"
+
+# Common docker run for Go builds
+GO_DOCKER="docker run --rm \
+  -v $(pwd):/build \
+  -v ${GOCACHE}:/root/.cache/go-build \
+  -v ${GODIR}:/go \
   -w /build \
   -e CGO_ENABLED=0 \
-  golang:alpine go build -o "$BUILD_DIR/$VIDVEIL" ./src
+  golang:alpine"
+
+echo "Building server binary in Docker..."
+$GO_DOCKER go build -o "$BUILD_DIR/$VIDVEIL" ./src
+
+# Build CLI client if exists
+if [ -d "src/client" ]; then
+    echo "Building CLI client in Docker..."
+    $GO_DOCKER go build -o "$BUILD_DIR/$VIDVEIL-cli" ./src/client
+fi
+
+# Build agent if exists
+if [ -d "src/agent" ]; then
+    echo "Building agent in Docker..."
+    $GO_DOCKER go build -o "$BUILD_DIR/$VIDVEIL-agent" ./src/agent
+fi
 
 echo "Launching Incus container (Debian + systemd)..."
-incus launch images:debian/12 "$CONTAINER_NAME"
+incus launch "$INCUS_IMAGE" "$CONTAINER_NAME"
 
 # Wait for container to be ready
 sleep 2
 
-echo "Copying binary to container..."
+echo "Copying binaries to container..."
 incus file push "$BUILD_DIR/$VIDVEIL" "$CONTAINER_NAME/usr/local/bin/"
 incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/$VIDVEIL"
+
+# Copy CLI client if built
+if [ -f "$BUILD_DIR/$VIDVEIL-cli" ]; then
+    incus file push "$BUILD_DIR/$VIDVEIL-cli" "$CONTAINER_NAME/usr/local/bin/"
+    incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/$VIDVEIL-cli"
+fi
+
+# Copy agent if built
+if [ -f "$BUILD_DIR/$VIDVEIL-agent" ]; then
+    incus file push "$BUILD_DIR/$VIDVEIL-agent" "$CONTAINER_NAME/usr/local/bin/"
+    incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/$VIDVEIL-agent"
+fi
+
+# Ensure curl is available for testing
+incus exec "$CONTAINER_NAME" -- bash -c "command -v curl || apt-get update && apt-get install -y curl" >/dev/null 2>&1
 
 echo "Running tests in Incus..."
 incus exec "$CONTAINER_NAME" -- bash -c "
@@ -30164,6 +30477,111 @@ incus exec "$CONTAINER_NAME" -- bash -c "
     #
     # Test ALL project-specific endpoints defined in PART 37
 
+    echo '=== Admin Setup & API Token Creation ==='
+    # Get setup token from journal
+    SETUP_TOKEN=\$(journalctl -u $VIDVEIL --no-pager 2>/dev/null | grep -oP 'Setup Token.*:\\s*\\K[a-f0-9]+' | head -1 || echo '')
+
+    if [ -n \"\$SETUP_TOKEN\" ]; then
+        echo \"Setup token found: \${SETUP_TOKEN:0:8}...\"
+
+        # Create admin account
+        curl -sf -X POST \\
+            -H \"X-Setup-Token: \$SETUP_TOKEN\" \\
+            -H \"Content-Type: application/json\" \\
+            -d '{\"username\":\"testadmin\",\"password\":\"TestPass123!\"}' \\
+            http://localhost:80/api/v1/admin/setup || echo 'Admin setup failed (may already exist)'
+
+        # Login and get session
+        SESSION=\$(curl -sf -X POST \\
+            -H \"Content-Type: application/json\" \\
+            -d '{\"username\":\"testadmin\",\"password\":\"TestPass123!\"}' \\
+            http://localhost:80/api/v1/admin/login | grep -oP '\"session_token\":\\s*\"\\K[^\"]+' || echo '')
+
+        if [ -n \"\$SESSION\" ]; then
+            echo '✓ Admin login successful'
+
+            # Generate API token for CLI/Agent testing
+            API_TOKEN=\$(curl -sf -X POST \\
+                -H \"Authorization: Bearer \$SESSION\" \\
+                http://localhost:80/api/v1/admin/profile/token | grep -oP '\"token\":\\s*\"\\K[^\"]+' || echo '')
+
+            if [ -n \"\$API_TOKEN\" ]; then
+                echo \"✓ API token created: \${API_TOKEN:0:12}...\"
+            else
+                echo 'API token creation failed (continuing without token)'
+            fi
+        else
+            echo 'Admin login failed (continuing without session)'
+        fi
+    else
+        echo 'No setup token found (server may already be configured)'
+    fi
+
+    echo '=== Binary Rename Tests ==='
+    # Test that binaries show ACTUAL name in --help/--version (not hardcoded)
+    cp /usr/local/bin/$VIDVEIL /tmp/renamed-server
+    chmod +x /tmp/renamed-server
+    if /tmp/renamed-server --help 2>&1 | grep -q 'renamed-server'; then
+        echo '✓ Server binary rename works (--help shows actual name)'
+    else
+        echo '✗ FAILED: Server --help does not show renamed binary name'
+    fi
+
+    echo '=== CLI Client Tests (if exists) ==='
+    if [ -f /usr/local/bin/$VIDVEIL-cli ]; then
+        $VIDVEIL-cli --version || echo 'FAILED: CLI --version'
+        $VIDVEIL-cli --help || echo 'FAILED: CLI --help'
+
+        # Test binary rename
+        cp /usr/local/bin/$VIDVEIL-cli /tmp/renamed-cli
+        chmod +x /tmp/renamed-cli
+        if /tmp/renamed-cli --help 2>&1 | grep -q 'renamed-cli'; then
+            echo '✓ CLI binary rename works'
+        else
+            echo '✗ FAILED: CLI --help does not show renamed binary name'
+        fi
+
+        # Full CLI functionality tests against server
+        echo '--- CLI Full Functionality Tests ---'
+        if [ -n \"\${API_TOKEN:-}\" ]; then
+            # Test with API token
+            $VIDVEIL-cli --server http://localhost:80 --token \"\$API_TOKEN\" status || echo 'CLI status failed'
+            # Project-specific CLI commands go here (PART 37)
+        else
+            # Test without token (anonymous if allowed)
+            $VIDVEIL-cli --server http://localhost:80 status || echo 'CLI status (no token) failed or not applicable'
+        fi
+    else
+        echo 'CLI client not installed - skipping'
+    fi
+
+    echo '=== Agent Tests (if exists) ==='
+    if [ -f /usr/local/bin/$VIDVEIL-agent ]; then
+        $VIDVEIL-agent --version || echo 'FAILED: Agent --version'
+        $VIDVEIL-agent --help || echo 'FAILED: Agent --help'
+
+        # Test binary rename
+        cp /usr/local/bin/$VIDVEIL-agent /tmp/renamed-agent
+        chmod +x /tmp/renamed-agent
+        if /tmp/renamed-agent --help 2>&1 | grep -q 'renamed-agent'; then
+            echo '✓ Agent binary rename works'
+        else
+            echo '✗ FAILED: Agent --help does not show renamed binary name'
+        fi
+
+        # Full Agent functionality tests against server
+        echo '--- Agent Full Functionality Tests ---'
+        if [ -n \"\${API_TOKEN:-}\" ]; then
+            # Test agent registration/status with API token
+            $VIDVEIL-agent --server http://localhost:80 --token \"\$API_TOKEN\" status || echo 'Agent status failed'
+            # Project-specific agent commands go here (PART 37)
+        else
+            echo 'Agent tests skipped (no API token)'
+        fi
+    else
+        echo 'Agent not installed - skipping'
+    fi
+
     echo '=== Service Stop Test ==='
     systemctl stop $VIDVEIL
 
@@ -30203,8 +30621,16 @@ fi
 |------|-------------|
 | **Location** | `tests/run_tests.sh`, `tests/docker.sh`, `tests/incus.sh` |
 | **Permissions** | Executable (`chmod +x tests/*.sh`) |
-| **Build method** | ALWAYS use Docker (golang:alpine) |
+| **Build method** | ALWAYS use Docker (golang:alpine) with GODIR/GOCACHE |
+| **Go cache** | Use `GODIR="${HOME}/.local/share/go"` and `GOCACHE="${HOME}/.local/share/go/build"` |
 | **Build location** | ALWAYS use temp directory |
+| **Build all components** | Build server, CLI client (if `src/client/` exists), agent (if `src/agent/` exists) |
+| **Test container tools** | Docker alpine MUST install: `apk add --no-cache curl bash file jq` |
+| **Test all binaries** | Test `--version` and `--help` for server, CLI client, and agent if built |
+| **Binary rename test** | Copy binary with new name, verify `--help` shows renamed name (not hardcoded) |
+| **Admin setup** | Use setup token to create admin account, login, generate API token |
+| **CLI full functionality** | Test CLI with API token against running server (not just --help) |
+| **Agent full functionality** | Test agent with API token against running server (not just --help) |
 | **API endpoint testing** | MUST test .txt extension and Accept headers on API routes |
 | **Frontend testing** | MUST test smart detection (CLI → text, browser → HTML) |
 | **Content negotiation** | Test JSON, text/plain, and text/html responses |
@@ -30420,52 +30846,75 @@ PROJECT_PATH="/root/Projects/github/apimgr/vidveil"  # Example 1
 # PROJECT_PATH="~/myproject"                               # Example 3
 # PROJECT_PATH="/workspace/dev/myproject"                  # Example 4
 
+# Go cache directories (same as Makefile - speeds up builds significantly)
+GODIR="${HOME}/.local/share/go"
+GOCACHE="${HOME}/.local/share/go/build"
+mkdir -p "$GODIR" "$GOCACHE"
+
+# Common docker run for Go commands
+GO_DOCKER="docker run --rm \
+  -v $PROJECT_PATH:/build \
+  -v $GOCACHE:/root/.cache/go-build \
+  -v $GODIR:/go \
+  -w /build \
+  -e CGO_ENABLED=0"
+
 # Build (outputs to binaries/ which can be mounted into test containers)
-docker run --rm -v $PROJECT_PATH:/build -w /build -e CGO_ENABLED=0 \
-  golang:alpine go build -o /build/binaries/vidveil ./src
+$GO_DOCKER golang:alpine go build -o /build/binaries/vidveil ./src
 
 # Run tests
-docker run --rm -v $PROJECT_PATH:/build -w /build \
-  golang:alpine go test ./...
+$GO_DOCKER golang:alpine go test ./...
 
 # Run specific test
-docker run --rm -v $PROJECT_PATH:/build -w /build \
-  golang:alpine go test -v ./src/server/...
+$GO_DOCKER golang:alpine go test -v ./src/server/...
 
 # Tidy modules
-docker run --rm -v $PROJECT_PATH:/build -w /build \
-  golang:alpine go mod tidy
+$GO_DOCKER golang:alpine go mod tidy
 
 # Download dependencies
-docker run --rm -v $PROJECT_PATH:/build -w /build \
-  golang:alpine go mod download
+$GO_DOCKER golang:alpine go mod download
 
 # Check formatting
-docker run --rm -v $PROJECT_PATH:/build -w /build \
-  golang:alpine go fmt ./...
+$GO_DOCKER golang:alpine go fmt ./...
 
 # Run vet
-docker run --rm -v $PROJECT_PATH:/build -w /build \
-  golang:alpine go vet ./...
+$GO_DOCKER golang:alpine go vet ./...
 
 # Interactive shell (for debugging)
-docker run --rm -it -v $PROJECT_PATH:/build -w /build \
+docker run --rm -it \
+  -v $PROJECT_PATH:/build \
+  -v $GOCACHE:/root/.cache/go-build \
+  -v $GODIR:/go \
+  -w /build \
   golang:alpine sh
 ```
 
 ## Build and Test (NON-NEGOTIABLE)
 
-**Build outputs to `binaries/`, test by running in container.**
+**Build outputs to `binaries/`, test by running in container. Always use GODIR/GOCACHE for faster builds.**
 
 ```bash
-# Build
-docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
+# Go cache directories (same as Makefile)
+GODIR="${HOME}/.local/share/go"
+GOCACHE="${HOME}/.local/share/go/build"
+mkdir -p "$GODIR" "$GOCACHE"
+
+# Build (with caching)
+docker run --rm \
+  -v $(pwd):/build \
+  -v $GOCACHE:/root/.cache/go-build \
+  -v $GODIR:/go \
+  -w /build -e CGO_ENABLED=0 \
   golang:alpine go build -o /build/binaries/vidveil ./src
 
-# Test in Docker (quick)
-docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/vidveil --help
+# Test in Docker (quick) - install tools first
+docker run --rm -v $(pwd)/binaries:/app alpine:latest sh -c "
+  apk add --no-cache curl bash file jq >/dev/null
+  /app/vidveil --help
+"
 
-# Test in Incus (full OS with systemd)
+# Test in Incus (full OS with systemd) - PREFERRED
+# Use latest Debian stable (currently 12/bookworm)
 incus launch images:debian/12 test-vidveil
 incus file push binaries/vidveil test-vidveil/usr/local/bin/
 incus exec test-vidveil -- vidveil --help
@@ -30475,17 +30924,29 @@ incus delete test-vidveil --force
 ### Testing with Config/Data
 
 ```bash
+# Go cache directories (same as Makefile)
+GODIR="${HOME}/.local/share/go"
+GOCACHE="${HOME}/.local/share/go/build"
+mkdir -p "$GODIR" "$GOCACHE"
+
 # Create prefixed temp dir for test data
 TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
 
-# Build to binaries/
-docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
+# Build to binaries/ (with caching)
+docker run --rm \
+  -v $(pwd):/build \
+  -v $GOCACHE:/root/.cache/go-build \
+  -v $GODIR:/go \
+  -w /build -e CGO_ENABLED=0 \
   golang:alpine go build -o /build/binaries/vidveil ./src
 
-# Quick test in Docker
-docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/vidveil --help
-docker run --rm -v $(pwd)/binaries:/app alpine:latest /app/vidveil --version
+# Quick test in Docker (install tools first)
+docker run --rm -v $(pwd)/binaries:/app alpine:latest sh -c "
+  apk add --no-cache curl bash file jq >/dev/null
+  /app/vidveil --help
+  /app/vidveil --version
+"
 
 # Full test with config/data in Docker
 docker run --rm \
@@ -30513,7 +30974,7 @@ mkdir -p $TEST_DIR/{config,data,logs}
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
   golang:alpine go build -o /build/binaries/vidveil ./src
 
-# Launch Incus container
+# Launch Incus container (use latest Debian stable)
 incus launch images:debian/12 test-vidveil
 
 # Push binary and test data
@@ -30834,13 +31295,14 @@ extra:
 ```yaml
 # ReadTheDocs configuration
 # https://docs.readthedocs.io/en/stable/config-file/v2.html
+# NOTE: Update os/python to latest LTS versions periodically
 
 version: 2
 
 build:
-  os: ubuntu-22.04
+  os: ubuntu-24.04          # Use latest Ubuntu LTS
   tools:
-    python: "3.11"
+    python: "3.12"          # Use latest stable Python
 
 mkdocs:
   configuration: mkdocs.yml
@@ -38856,7 +39318,7 @@ On every startup, the CLI MUST:
    - No root/admin ownership ever
 
 ```go
-// src/cli/init.go
+// src/client/init.go
 package cli
 
 import (
@@ -38908,7 +39370,7 @@ func EnsureFile(path string, perm os.FileMode) error {
 #### Path Resolution (Go)
 
 ```go
-// src/cli/paths/paths.go
+// src/client/paths/paths.go
 package paths
 
 import (
@@ -39678,9 +40140,10 @@ func GetBinaryName() string {
 }
 ```
 
-**Build command:**
+**Build command (CI/CD injects version from git tag):**
 ```bash
-go build -ldflags "-X main.ProjectName=pastebin -X main.Version=1.2.3" -o vidveil-cli ./src/client
+# VERSION comes from git tag (see PART 26/28 for version handling)
+go build -ldflags "-X main.ProjectName=vidveil -X main.Version=${VERSION}" -o vidveil-cli ./src/client
 ```
 
 ### Server-Side Client Detection
@@ -39806,33 +40269,30 @@ vidveil-cli --text "notes.txt"      # Force text mode (not file)
 
 ## Build Integration
 
-### Makefile Targets
+**CLI builds follow the same container-only development rules as the server. See PART 26: MAKEFILE for complete targets.**
 
-```makefile
-# Build both server and CLI (if src/client exists)
-build:
-	CGO_ENABLED=0 go build -o binaries/vidveil ./src
-	@if [ -d "src/client" ]; then \
-		CGO_ENABLED=0 go build -o binaries/vidveil-cli ./src/client; \
-	fi
+### Local Development (Makefile + Docker)
 
-# Build CLI only
-build-cli:
-	CGO_ENABLED=0 go build -o binaries/vidveil-cli ./src/client
+```bash
+# Quick dev build (server + CLI + agent if exist)
+make dev
+# Output: ${TMPDIR}/${PROJECTORG}.XXXXXX/vidveil, vidveil-cli, vidveil-agent
 
-# Release builds (8 platforms)
-release:
-	# Server binaries
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/vidveil-linux-amd64 ./src
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/vidveil-linux-arm64 ./src
-	# ... (other platforms)
+# Production test build
+make host
+# Output: binaries/vidveil, binaries/vidveil-cli (with version)
 
-	# CLI binaries (if src/client exists)
-	@if [ -d "src/client" ]; then \
-		GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/vidveil-cli-linux-amd64 ./src/client; \
-		GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o dist/vidveil-cli-linux-arm64 ./src/client; \
-	fi
-	# ... (other platforms)
+# Full release (all 8 platforms)
+make build
+# Output: binaries/vidveil-{os}-{arch}, binaries/vidveil-cli-{os}-{arch}
+```
+
+### CI/CD (Direct go build - NOT Makefile)
+
+```bash
+# CI/CD uses actions/setup-go@v5, NOT Docker containers
+# See PART 28: CI/CD WORKFLOWS for complete examples
+go build -ldflags "${LDFLAGS}" -o $VIDVEIL-cli ./src/client
 ```
 
 ### Directory Structure
@@ -41106,47 +41566,112 @@ IDEA.md describes WHAT, but must use spec-compliant terminology:
 
 ## Project Business Purpose
 
-**See `IDEA.md` → "Project Business Purpose" section.**
+**See IDEA.md: "Project Business Purpose" section**
 
-VidVeil: Privacy-respecting meta search engine for adult video content.
-- Aggregates 54+ video sites without tracking
-- SSE streaming for real-time results
-- Bang shortcuts for targeted searches
-- Thumbnail proxy prevents engine tracking
+VidVeil is a privacy-respecting meta search engine for adult video content that aggregates results from 54+ video sites without tracking, logging, or analytics.
+
+Target Users:
+- Privacy-conscious users seeking adult content without tracking
+- Self-hosters wanting their own private search instance
+- Developers needing a unified API across multiple adult video platforms
+- Tor users requiring anonymous access to adult content
+
+Unique Value:
+- No tracking, logging, or analytics - complete privacy
+- 54+ engines with bang shortcuts for targeted searches
+- SSE streaming for real-time results as engines respond
+- Thumbnail proxy prevents engine tracking of users
+- Single static binary with all assets embedded
+- Built-in Tor hidden service support
 
 ## Business Logic & Rules
 
-**See `IDEA.md` → "Business Logic & Rules" section.**
+**See IDEA.md: "Business Logic & Rules" section**
 
-Key rules:
-- Bang syntax: `!xx query` searches specific engine
-- Multiple bangs supported: `!ph !rt query`
-- All thumbnails proxied through server
-- No user accounts (stateless, privacy-first)
-- Admin panel for server configuration only (per PART 17)
+Business Rules:
+- Bang search syntax: `!xx query` where `!xx` is engine shortcut
+- Multiple bangs supported: `!ph !rt query` searches both engines
+- Without bang, search queries all enabled engines
+- SSE streaming delivers results as each engine responds
+- All thumbnails proxied through server to prevent tracking
+- Autocomplete suggests bang shortcuts as user types
+- Results are merged from all queried engines
+- Page parameter supports infinite scroll
+- No user accounts - stateless, privacy-first design
+- Admin panel requires authentication (server-admin only)
+
+Validation:
+- Query must be non-empty
+- Page must be >= 1 (default: 1)
+- Bang shortcuts must exist in bangs list
+- Engine names must be valid registered engines
 
 ## Data Models
 
-**See `IDEA.md` → "Data Models" section.**
+**See IDEA.md: "Data Models" section for complete definitions**
 
-Core models:
-- `VideoResult`: Search result with ID, title, thumbnail, preview, duration, views
-- `Engine`: Search engine with name, bang, tier, capabilities
-- `SearchResponse`: Query results with engines used, search time
+```go
+// VideoResult represents a single video search result
+type VideoResult struct {
+    ID           string   `json:"id"`           // Video identifier (engine-specific)
+    Title        string   `json:"title"`        // Video title
+    Engine       string   `json:"engine"`       // Source engine name
+    URL          string   `json:"url"`          // URL to video page on source site
+    DownloadURL  string   `json:"download_url,omitempty"` // Direct download URL (if available)
+    Thumbnail    string   `json:"thumbnail"`    // Proxied thumbnail URL (static image)
+    PreviewURL   string   `json:"preview_url,omitempty"`  // Preview video URL for hover/swipe
+    Duration     int      `json:"duration"`     // Video duration in seconds
+    Views        int64    `json:"views,omitempty"`        // View count (if available)
+    UploadDate   string   `json:"upload_date,omitempty"`  // Upload date (if available)
+    Quality      string   `json:"quality,omitempty"`      // Video quality (HD, 4K, etc.)
+}
+
+// Engine represents a search engine
+type Engine struct {
+    Name        string `json:"name"`         // Internal engine name
+    DisplayName string `json:"display_name"` // Display name
+    Bang        string `json:"bang"`         // Bang shortcut (e.g., "ph" for !ph)
+    Tier        int    `json:"tier"`         // Engine tier (1=API, 2=JSON, 3+=HTML)
+    Enabled     bool   `json:"enabled"`      // Whether engine is enabled
+    Method      string `json:"method"`       // Search method (api, json, html)
+    HasPreview  bool   `json:"has_preview"`  // Supports preview URLs
+    HasDownload bool   `json:"has_download"` // Supports download URLs
+}
+
+// SearchResponse represents search results
+type SearchResponse struct {
+    Query        string        `json:"query"`                   // Original query (with bangs)
+    SearchQuery  string        `json:"search_query"`            // Cleaned query (bangs removed)
+    HasBang      bool          `json:"has_bang"`                // Whether query contained bang(s)
+    BangEngines  []string      `json:"bang_engines,omitempty"`  // Engines targeted by bangs
+    Results      []VideoResult `json:"results"`                 // Search results
+    EnginesUsed  []string      `json:"engines_used"`            // Engines used in search
+    SearchTimeMs int64         `json:"search_time_ms"`          // Search time in milliseconds
+}
+```
 
 ## Data Sources
 
-**See `IDEA.md` → "Data Sources" section.**
+**See IDEA.md: "Data Sources" section**
 
-Sources:
-- External APIs: PornHub, RedTube, Eporner (Tier 1)
-- HTML parsing: XVideos, XNXX, xHamster, YouPorn, 38+ others (Tier 2-3)
+Data Sources:
+- External APIs: PornHub Webmasters API, RedTube Public API, Eporner v2 JSON API
+- HTML Parsing: XVideos, XNXX, xHamster, YouPorn, and 38+ other sites
+- Engine definitions embedded in binary (bangs, URLs, parsing rules)
+
+Update Strategy:
 - Engine definitions embedded at build time
-- Search results fetched real-time (no caching)
+- Search results fetched in real-time from external sites
+- Thumbnails proxied through server on-demand
+- No local storage of search results (stateless)
+
+Data Location:
+- src/server/service/parser/*.go: Engine definitions and parsing logic
+- No persistent data storage - all searches are real-time
 
 ## Project-Specific Endpoints Summary
 
-**See `IDEA.md` → "Project-Specific Endpoints Summary" section for full details.**
+**See IDEA.md: "Project-Specific Endpoints Summary" section**
 
 **Endpoint Implementation Rules:**
 
@@ -41154,45 +41679,88 @@ Sources:
 |---------------|---------------------|-------|
 | **Standard API** | Follow PART 14: API STRUCTURE | `/api/v1/*` patterns, response formats |
 | **Frontend** | Follow PART 16: WEB FRONTEND | HTML templates, themes, accessibility |
-| **Admin** | Follow PART 17: ADMIN PANEL | `/{admin_path}/server/*` hierarchy |
+| **Compatibility** | Follow PART 14: External API Compatibility | External services ONLY - match their exact format |
 | **Legacy** | **NEVER KEEP** | Old/changed/removed endpoints - DELETE them |
 
-**VidVeil Endpoints Purpose (WHAT they do):**
+**PART 37 describes WHAT endpoints do (business purpose). PARTs 14/16 define HOW to implement them.**
 
-| Purpose | Description |
-|---------|-------------|
-| **Search** | Search videos across 54+ engines with bang shortcuts |
-| **Stream** | SSE streaming of results as engines respond |
-| **Bangs** | List and autocomplete bang shortcuts |
-| **Engines** | List available search engines and capabilities |
-| **Proxy** | Proxy thumbnails to prevent engine tracking |
-| **Health** | Health check for monitoring |
-| **Admin** | Server configuration (per PART 17) |
+### Admin Routes
+
+**Admin panel follows PART 17: ADMIN PANEL hierarchy exactly.**
+
+| Route Type | Pattern | Reference |
+|------------|---------|-----------|
+| **Admin Web** | `/{admin_path}/*` | PART 17 |
+| **Admin API** | `/api/v1/{admin_path}/*` | PART 17 |
+| **Server Management** | `/{admin_path}/server/*` | PART 17 (all server config) |
+
+VidVeil admin manages: engines (enable/disable), rate limiting, Tor settings, GeoIP, backups.
+No user management (VidVeil is stateless, no user accounts).
+
+### Health & System Endpoints
+
+| Method | URL | Description |
+|--------|-----|-------------|
+| GET | `/healthz` | Health check (plain text) |
+| GET | `/api/v1/healthz` | Health check (JSON) |
+| GET | `/api/v1/version` | Version info |
+| GET | `/api/v1/stats` | Search statistics |
+
+### VidVeil Endpoints
+
+**Search Endpoints:**
+| Method | URL | Description |
+|--------|-----|-------------|
+| GET | `/api/v1/search?q={query}&page={page}&engines={engines}` | Search videos across engines |
+| GET | `/api/v1/search/stream?q={query}&page={page}` | SSE stream of search results |
+| GET | `/api/v1/bangs/autocomplete?q={partial}` | Bang shortcut suggestions |
+
+**Engine Endpoints:**
+| Method | URL | Description |
+|--------|-----|-------------|
+| GET | `/api/v1/engines` | List all available engines |
+| GET | `/api/v1/engines/{name}` | Get specific engine info |
+| GET | `/api/v1/bangs` | List all bang shortcuts |
+
+**Proxy Endpoints:**
+| Method | URL | Description |
+|--------|-----|-------------|
+| GET | `/api/v1/proxy/thumbnails?url={encoded_url}` | Proxy thumbnail image |
+
+**Frontend Pages:**
+| URL | Description |
+|-----|-------------|
+| `/` | Home page with search |
+| `/search?q={query}` | Search results page |
+| `/preferences` | User preferences (theme, engines) |
+| `/server/about` | About page |
+| `/server/privacy` | Privacy policy |
 
 **Business Behavior:**
-- Bang shortcuts target specific engines (`!ph`, `!xv`, etc.)
-- Multiple bangs combine searches (`!ph !rt query`)
-- SSE delivers results as each engine responds
-- All thumbnails proxied (privacy)
-- Stateless - no user accounts, no session storage
+- Search supports bang shortcuts (`!ph amateur` searches PornHub only)
+- Multiple bangs combine: `!ph !rt query` searches both engines
+- SSE stream delivers results as each engine responds
+- Autocomplete suggests bangs as user types `!` prefix
+- Thumbnails proxied to prevent engine tracking
+- Infinite scroll supported via page parameter
+- No cookies or session storage (stateless)
 
 ## Extended Node Functions (If Applicable)
 
-**Not applicable for VidVeil.** VidVeil is stateless - nodes only sync config.
+**Not applicable for VidVeil.** VidVeil is a stateless search aggregator with no node-specific functions beyond standard clustering (config sync).
 
 ## High Availability Requirements (If Applicable)
 
-**Not applicable for VidVeil.** VidVeil is stateless - any instance handles any request. Standard load balancing provides sufficient availability.
+**Not applicable for VidVeil.** VidVeil is stateless - any instance can handle any request. Standard load balancing provides sufficient availability.
 
 ## Notes
 
-**See `IDEA.md` → "Notes" section.**
-
-- VidVeil has NO user accounts - privacy-first, stateless
-- All searches real-time - no result caching
-- Thumbnail proxy caches temporarily to reduce repeated fetches
-- Admin panel is server configuration only (per PART 17)
-- Tor support for hidden service operation
+- VidVeil has NO user accounts - it's a privacy-first, stateless search aggregator
+- All searches are real-time - no caching of search results
+- Thumbnail proxy caches images temporarily to reduce repeated fetches
+- Engine availability may vary - some external sites may block or rate limit
+- Tor support allows operation as a hidden service for maximum privacy
+- Admin panel is for server configuration only (per PART 17), not user management
 
 ---
 
@@ -41282,15 +41850,16 @@ Sources:
 **Container-Only (NO HOST EXECUTION):**
 | NEVER | ALWAYS |
 |-------|--------|
-| `go build` on host | `docker run ... golang:alpine go build ...` |
-| `go test` on host | `docker run ... golang:alpine go test ...` |
+| `go build` on host | `make dev` or `make host` or `make build` |
+| `go test` on host | `make test` (includes coverage enforcement) |
+| `go mod tidy` on host | Handled by `make build/host/dev` automatically |
 | `./binaries/vidveil` on host | Run binary inside Docker/Incus container |
-| Go installed on host | Use Docker `golang:alpine` for all Go operations |
+| Go installed on host | Use Makefile targets (they use Docker internally) |
 
 **GODIR (Go Module Cache):**
 ```bash
-GODIR := $(HOME)/.local/share/go    # Host path for Go module cache
-GOCACHE := $(HOME)/.cache/go-build  # Host path for build cache
+GODIR := $(HOME)/.local/share/go        # Host path for Go module cache
+GOCACHE := $(HOME)/.local/share/go/build  # Host path for build cache
 # Mount in Docker: -v $(GODIR):/go -v $(GOCACHE):/root/.cache/go-build
 ```
 
@@ -41639,7 +42208,7 @@ make docker # Build Docker image
 - [ ] Multi-stage Dockerfile
 - [ ] Alpine base image
 - [ ] tini as init process
-- [ ] Non-root user in container
+- [ ] Runs as root (app manages user/permissions at runtime)
 - [ ] Proper labels (OCI standard)
 - [ ] Health check in Dockerfile
 - [ ] docker-compose.yml for production
@@ -41953,7 +42522,7 @@ make docker # Build Docker image
 - [ ] Multi-stage build (builder + runtime)
 - [ ] Alpine base image for runtime
 - [ ] `tini` as init process (PID 1)
-- [ ] Non-root user in container
+- [ ] Runs as root (app manages user/permissions at runtime)
 - [ ] HEALTHCHECK instruction present
 - [ ] OCI labels (org.opencontainers.image.*)
 - [ ] No secrets in image layers
@@ -42194,7 +42763,7 @@ make docker # Build Docker image
 - [ ] Makefile: build, release, docker, test
 - [ ] CI/CD: release, beta, daily, docker workflows
 - [ ] 8 platform builds (4 OS × 2 arch)
-- [ ] Docker: Alpine base, tini init, non-root user
+- [ ] Docker: Alpine base, tini init, runs as root
 
 ### Building & Testing
 

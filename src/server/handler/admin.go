@@ -26,6 +26,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/cluster"
 	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/engine"
+	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 	"github.com/go-chi/chi/v5"
@@ -89,6 +90,7 @@ type AdminHandler struct {
 	migrationMgr MigrationManager
 	torSvc       TorService
 	scheduler    *scheduler.Scheduler
+	logger       *logging.Logger
 	sessions     map[string]adminSession
 	// csrfTokens maps sessionID to csrfToken
 	csrfTokens   map[string]string
@@ -127,6 +129,11 @@ func (h *AdminHandler) SetTorService(t TorService) {
 	h.torSvc = t
 }
 
+// SetLogger sets the logger for audit and security event logging per AI.md PART 11
+func (h *AdminHandler) SetLogger(l *logging.Logger) {
+	h.logger = l
+}
+
 // IsFirstRun checks if this is the first run (no admin exists)
 func (h *AdminHandler) IsFirstRun() bool {
 	return h.adminSvc.IsFirstRun()
@@ -156,20 +163,78 @@ func (h *AdminHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 // AuthenticateAdmin handles admin login (called from AuthHandler)
 // Returns session ID on success, empty string on failure
 func (h *AdminHandler) AuthenticateAdmin(username, password string) (string, error) {
+	return h.AuthenticateAdminWithContext(username, password, "", "")
+}
+
+// AuthenticateAdminWithContext handles admin login with request context for audit logging
+// Per AI.md PART 11 line 11277: admin.login event
+func (h *AdminHandler) AuthenticateAdminWithContext(username, password, remoteAddr, userAgent string) (string, error) {
 	adminUser, err := h.adminSvc.Authenticate(username, password)
 	if err != nil {
+		// Log failed login attempt per AI.md PART 11 line 11279
+		if h.logger != nil {
+			h.logger.Audit("admin.login_failed", username, "auth", map[string]interface{}{
+				"reason":     "authentication_error",
+				"ip":         remoteAddr,
+				"user_agent": userAgent,
+			})
+			h.logger.Security("admin.login_failed", remoteAddr, map[string]interface{}{
+				"username":   username,
+				"reason":     "authentication_error",
+				"user_agent": userAgent,
+			})
+		}
 		return "", err
 	}
 	if adminUser == nil {
+		// Log failed login attempt per AI.md PART 11 line 11279
+		if h.logger != nil {
+			h.logger.Audit("admin.login_failed", username, "auth", map[string]interface{}{
+				"reason":     "invalid_credentials",
+				"ip":         remoteAddr,
+				"user_agent": userAgent,
+			})
+			h.logger.Security("admin.login_failed", remoteAddr, map[string]interface{}{
+				"username":   username,
+				"reason":     "invalid_credentials",
+				"user_agent": userAgent,
+			})
+		}
 		return "", fmt.Errorf("invalid credentials")
 	}
-	return h.createSessionWithID(adminUser.Username, adminUser.ID), nil
+
+	sessionID := h.createSessionWithID(adminUser.Username, adminUser.ID)
+
+	// Log successful login per AI.md PART 11 line 11277
+	if h.logger != nil {
+		h.logger.Audit("admin.login", adminUser.Username, "auth", map[string]interface{}{
+			"ip":         remoteAddr,
+			"user_agent": userAgent,
+			"mfa_used":   false,
+		})
+	}
+
+	return sessionID, nil
 }
 
 // LogoutHandler logs out the admin
 func (h *AdminHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	var username string
+	var sessionDuration time.Duration
+
 	if cookie, err := r.Cookie(adminSessionCookieName); err == nil {
+		if session, ok := h.sessions[cookie.Value]; ok {
+			username = session.username
+			sessionDuration = time.Since(session.createdAt)
+		}
 		delete(h.sessions, cookie.Value)
+	}
+
+	// Log logout per AI.md PART 11 line 11278
+	if h.logger != nil && username != "" {
+		h.logger.Audit("admin.logout", username, "auth", map[string]interface{}{
+			"session_duration_seconds": int64(sessionDuration.Seconds()),
+		})
 	}
 
 	http.SetCookie(w, &http.Cookie{
@@ -257,6 +322,14 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 			data["Error"] = err.Error()
 			h.renderSetupWizardPage(w, data)
 			return
+		}
+
+		// Log admin creation per AI.md PART 11 line 11280
+		if h.logger != nil {
+			h.logger.Audit("admin.created", adminUser.Username, "admin", map[string]interface{}{
+				"created_by": "setup_wizard",
+				"ip":         r.RemoteAddr,
+			})
 		}
 
 		// Clear setup token cookie
@@ -382,6 +455,11 @@ func (h *AdminHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 // LogsPage renders the logs viewer
 func (h *AdminHandler) LogsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "logs", nil)
+}
+
+// AuditLogsPage renders audit log viewer per PART 17
+func (h *AdminHandler) AuditLogsPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, r, "logs-audit", nil)
 }
 
 // === PART 12 Required Admin Sections ===
@@ -1022,6 +1100,20 @@ func (h *AdminHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// PreferencesPage displays admin's personal preferences per AI.md PART 17 line 18604
+func (h *AdminHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, r, "preferences", map[string]interface{}{
+		"Title": "Preferences",
+	})
+}
+
+// AdminNotificationsPage displays admin's personal notifications per AI.md PART 17 line 18605
+func (h *AdminHandler) AdminNotificationsPage(w http.ResponseWriter, r *http.Request) {
+	h.renderAdminTemplate(w, r, "admin-notifications", map[string]interface{}{
+		"Title": "Notifications",
+	})
+}
+
 // APIProfilePassword handles password change via API per AI.md PART 31
 func (h *AdminHandler) APIProfilePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1254,6 +1346,15 @@ func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 			data["Error"] = err.Error()
 			h.renderInvitePage(w, data)
 			return
+		}
+
+		// Log admin creation via invite per AI.md PART 11 line 11280
+		if h.logger != nil {
+			h.logger.Audit("admin.created", invite.Username, "admin", map[string]interface{}{
+				"created_by": "invite",
+				"invited_by": invite.CreatedBy,
+				"ip":         r.RemoteAddr,
+			})
 		}
 
 		data["Valid"] = false
@@ -1891,6 +1992,19 @@ func (h *AdminHandler) APILogsError(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"data": map[string]interface{}{
 			"filename": h.cfg.Server.Logs.Error.Filename,
+			"lines":    lines,
+		},
+	})
+}
+
+// APILogsAudit returns audit logs per PART 17
+func (h *AdminHandler) APILogsAudit(w http.ResponseWriter, r *http.Request) {
+	lines := h.readLogLines(h.cfg.Server.Logs.Audit.Filename, 100)
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"filename": h.cfg.Server.Logs.Audit.Filename,
 			"lines":    lines,
 		},
 	})
@@ -3254,8 +3368,10 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	if _, ok := data["Title"]; !ok {
 		titles := map[string]string{
 			"dashboard":          "Dashboard",
-			"profile":            "Profile",
-			"users-admins":       "Administrators",
+			"profile":             "Profile",
+			"preferences":         "Preferences",
+			"admin-notifications": "Your Notifications",
+			"users-admins":        "Administrators",
 			"invite":             "Admin Invite",
 			"nodes":              "Cluster Nodes",
 			"pages":              "Standard Pages",

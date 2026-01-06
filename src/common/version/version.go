@@ -10,19 +10,22 @@ import (
 )
 
 var (
-// Version is the application version
-// Loaded from release.txt, git tag, or defaults to "dev"
-Version = "dev"
+	// Version is the application version
+	// Loaded from release.txt, git tag, or defaults to "dev"
+	Version = "dev"
 
-// BuildTime is the build timestamp
-BuildTime = "unknown"
+	// CommitID is the git commit hash
+	CommitID = "unknown"
 
-// GoVersion is the Go version used to build
-GoVersion = runtime.Version()
+	// BuildTime is the build timestamp
+	BuildTime = "unknown"
 
-// OS/Arch platform
-GOOS   = runtime.GOOS
-GOARCH = runtime.GOARCH
+	// GoVersion is the Go version used to build
+	GoVersion = runtime.Version()
+
+	// OS/Arch platform
+	GOOS   = runtime.GOOS
+	GOARCH = runtime.GOARCH
 )
 
 func init() {

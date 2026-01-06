@@ -108,6 +108,9 @@ type ServerConfig struct {
 
 	// Security (PART 22) - Blocklists, CVE, etc
 	Security SecurityConfig `yaml:"security"`
+
+	// Backup (PART 22) - Backup & Restore settings
+	Backup BackupConfig `yaml:"backup"`
 }
 
 // AdminConfig holds admin panel settings
@@ -433,6 +436,31 @@ type CVEConfig struct {
 	FilterByCPE  bool   `yaml:"filter_by_cpe"`
 }
 
+// BackupConfig holds backup settings per AI.md PART 22
+type BackupConfig struct {
+	Retention  BackupRetentionConfig  `yaml:"retention"`
+	Encryption BackupEncryptionConfig `yaml:"encryption"`
+}
+
+// BackupRetentionConfig holds backup retention settings per AI.md PART 22
+type BackupRetentionConfig struct {
+	// MaxBackups: daily full backups to keep (default: 1)
+	MaxBackups int `yaml:"max_backups"`
+	// KeepWeekly: weekly backups (Sunday) to keep (0 = disabled)
+	KeepWeekly int `yaml:"keep_weekly"`
+	// KeepMonthly: monthly backups (1st of month) to keep (0 = disabled)
+	KeepMonthly int `yaml:"keep_monthly"`
+	// KeepYearly: yearly backups (Jan 1st) to keep (0 = disabled)
+	KeepYearly int `yaml:"keep_yearly"`
+}
+
+// BackupEncryptionConfig holds backup encryption settings per AI.md PART 22
+type BackupEncryptionConfig struct {
+	// Enabled: true if backup password was set
+	Enabled bool `yaml:"enabled"`
+	// PasswordHint: optional hint for password (never store actual password)
+	PasswordHint string `yaml:"password_hint,omitempty"`
+}
 
 // SessionConfig holds session settings
 type SessionConfig struct {
@@ -898,6 +926,18 @@ func Default() *Config {
 					RequestsPerDay:    0,
 				},
 			},
+			// Backup settings per AI.md PART 22
+			Backup: BackupConfig{
+				Retention: BackupRetentionConfig{
+					MaxBackups:  1, // Default per PART 22: 1 daily backup
+					KeepWeekly:  0, // Disabled by default
+					KeepMonthly: 0, // Disabled by default
+					KeepYearly:  0, // Disabled by default
+				},
+				Encryption: BackupEncryptionConfig{
+					Enabled: false, // Not encrypted by default
+				},
+			},
 		},
 		Web: WebConfig{
 			UI: UIConfig{
@@ -1023,6 +1063,12 @@ func Load(configDir, dataDir string) (*Config, string, error) {
 	cfg := Default()
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, "", fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	// Enforce audit log format as JSON only per AI.md PART 11 line 11197
+	// "audit: format: json only (text not supported for audit - must be machine-parseable)"
+	if cfg.Server.Logs.Audit.Format != "" && cfg.Server.Logs.Audit.Format != "json" {
+		cfg.Server.Logs.Audit.Format = "json"
 	}
 
 	return cfg, configPath, nil

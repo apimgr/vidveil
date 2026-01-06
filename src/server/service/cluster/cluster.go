@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 20: Cluster Mode Support
+// AI.md PART 10: Database & Cluster
 package cluster
 
 import (
@@ -35,7 +35,22 @@ type Lock struct {
 	Metadata   string    `json:"metadata,omitempty"`
 }
 
-// Manager handles cluster operations per AI.md PART 20
+// Node state constants per AI.md PART 10
+const (
+	NodeStateHealthy  = "healthy"  // Heartbeat received within 30 seconds
+	NodeStateDegraded = "degraded" // Heartbeat missed (30-90 seconds)
+	NodeStateOffline  = "offline"  // No heartbeat for 5+ minutes
+	NodeStateRemoved  = "removed"  // Manually removed by admin
+)
+
+// Timing constants per AI.md PART 10
+const (
+	HeartbeatInterval   = 30 * time.Second // How often nodes send heartbeats
+	DegradedThreshold   = 90 * time.Second // 3 missed heartbeats = degraded
+	OfflineThreshold    = 5 * time.Minute  // No heartbeat for 5 min = offline
+)
+
+// Manager handles cluster operations per AI.md PART 10
 type Manager struct {
 	nodeID        string
 	db            *sql.DB
@@ -45,7 +60,8 @@ type Manager struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	heartbeatInt  time.Duration
-	failoverTime  time.Duration
+	degradedTime  time.Duration
+	offlineTime   time.Duration
 }
 
 // NewManager creates a new cluster manager
@@ -58,8 +74,9 @@ func NewManager(db *sql.DB) (*Manager, error) {
 	return &Manager{
 		nodeID:       nodeID,
 		db:           db,
-		heartbeatInt: 10 * time.Second,
-		failoverTime: 30 * time.Second,
+		heartbeatInt: HeartbeatInterval, // 30 seconds per PART 10
+		degradedTime: DegradedThreshold, // 90 seconds per PART 10
+		offlineTime:  OfflineThreshold,  // 5 minutes per PART 10
 	}, nil
 }
 
@@ -107,9 +124,9 @@ func (m *Manager) Stop() {
 	}
 	m.enabled = false
 
-	// Mark node as inactive
+	// Mark node as offline per AI.md PART 10
 	if m.db != nil {
-		m.db.Exec("UPDATE cluster_nodes SET status = 'inactive' WHERE id = ?", m.nodeID)
+		m.db.Exec("UPDATE cluster_nodes SET status = ? WHERE id = ?", NodeStateOffline, m.nodeID)
 	}
 }
 
@@ -121,10 +138,11 @@ func (m *Manager) registerNode() error {
 	// Will be updated from config
 	port := 0
 
+	// Use 'healthy' state per AI.md PART 10
 	_, err := m.db.Exec(`
 		INSERT OR REPLACE INTO cluster_nodes (id, hostname, address, port, last_heartbeat, status)
-		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'active')
-	`, m.nodeID, hostname, address, port)
+		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+	`, m.nodeID, hostname, address, port, NodeStateHealthy)
 
 	return err
 }
@@ -159,36 +177,59 @@ func (m *Manager) primaryElectionLoop() {
 	}
 }
 
-// electPrimary performs primary election
+// electPrimary performs primary election per AI.md PART 10
 func (m *Manager) electPrimary() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Mark failed nodes
-	failThreshold := time.Now().Add(-m.failoverTime)
+	now := time.Now()
+
+	// Update node states per AI.md PART 10 thresholds:
+	// - healthy: heartbeat within 30 seconds
+	// - degraded: heartbeat missed (30-90 seconds)
+	// - offline: no heartbeat for 5+ minutes
+
+	// Mark nodes as offline (5+ minutes without heartbeat)
+	offlineThreshold := now.Add(-m.offlineTime)
 	m.db.Exec(`
 		UPDATE cluster_nodes
-		SET status = 'failed', is_primary = 0
-		WHERE last_heartbeat < ? AND status = 'active'
-	`, failThreshold)
+		SET status = ?, is_primary = 0
+		WHERE last_heartbeat < ? AND status != ? AND status != ?
+	`, NodeStateOffline, offlineThreshold, NodeStateOffline, NodeStateRemoved)
 
-	// Check if there's a current primary
+	// Mark nodes as degraded (90 seconds - 5 minutes without heartbeat)
+	degradedThreshold := now.Add(-m.degradedTime)
+	m.db.Exec(`
+		UPDATE cluster_nodes
+		SET status = ?
+		WHERE last_heartbeat < ? AND last_heartbeat >= ? AND status = ?
+	`, NodeStateDegraded, degradedThreshold, offlineThreshold, NodeStateHealthy)
+
+	// Mark nodes as healthy (heartbeat within 30 seconds)
+	healthyThreshold := now.Add(-m.heartbeatInt)
+	m.db.Exec(`
+		UPDATE cluster_nodes
+		SET status = ?
+		WHERE last_heartbeat >= ? AND status != ?
+	`, NodeStateHealthy, healthyThreshold, NodeStateRemoved)
+
+	// Check if there's a current primary among healthy nodes
 	var primaryID string
 	err := m.db.QueryRow(`
 		SELECT id FROM cluster_nodes
-		WHERE is_primary = 1 AND status = 'active'
+		WHERE is_primary = 1 AND status = ?
 		LIMIT 1
-	`).Scan(&primaryID)
+	`, NodeStateHealthy).Scan(&primaryID)
 
 	if err == sql.ErrNoRows {
-		// No primary - elect one (oldest active node)
+		// No healthy primary - elect one (node with lowest ID per PART 10)
 		var electID string
 		err := m.db.QueryRow(`
 			SELECT id FROM cluster_nodes
-			WHERE status = 'active'
-			ORDER BY joined_at ASC
+			WHERE status = ?
+			ORDER BY id ASC
 			LIMIT 1
-		`).Scan(&electID)
+		`, NodeStateHealthy).Scan(&electID)
 
 		if err == nil && electID != "" {
 			m.db.Exec("UPDATE cluster_nodes SET is_primary = 0")
@@ -381,7 +422,7 @@ func (m *Manager) Stats() map[string]interface{} {
 	// Count nodes
 	var totalNodes, activeNodes int
 	m.db.QueryRow("SELECT COUNT(*) FROM cluster_nodes").Scan(&totalNodes)
-	m.db.QueryRow("SELECT COUNT(*) FROM cluster_nodes WHERE status = 'active'").Scan(&activeNodes)
+	m.db.QueryRow("SELECT COUNT(*) FROM cluster_nodes WHERE status = ?", NodeStateHealthy).Scan(&activeNodes)
 
 	stats["total_nodes"] = totalNodes
 	stats["active_nodes"] = activeNodes

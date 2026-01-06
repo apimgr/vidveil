@@ -270,15 +270,152 @@ func TestSetHeaders(t *testing.T) {
 }
 
 func TestNewDefaults(t *testing.T) {
-	// Test with zero/negative values - should use defaults
+	// Test with zero/negative values - should use defaults per AI.md PART 1
 	limiter := New(true, 0, 0)
 
-	if limiter.requests != 120 {
-		t.Errorf("Expected default requests=120, got %d", limiter.requests)
+	if limiter.requests != 100 {
+		t.Errorf("Expected default requests=100 (per PART 1), got %d", limiter.requests)
 	}
 
 	expectedWindow := time.Duration(60) * time.Second
 	if limiter.window != expectedWindow {
 		t.Errorf("Expected default window=%v, got %v", expectedWindow, limiter.window)
+	}
+}
+
+// TestEndpointLimiters tests endpoint-specific rate limiting per AI.md PART 1
+func TestEndpointLimiters(t *testing.T) {
+	el := NewEndpointLimiters(true)
+
+	// Verify all endpoint types have limiters
+	endpoints := []string{
+		EndpointLogin,
+		EndpointPasswordReset,
+		EndpointAPIAuth,
+		EndpointAPIUnauth,
+		EndpointRegistration,
+		EndpointFileUpload,
+		EndpointDefault,
+	}
+
+	for _, ep := range endpoints {
+		l := el.Get(ep)
+		if l == nil {
+			t.Errorf("Endpoint %s should have a limiter", ep)
+		}
+	}
+}
+
+// TestEndpointLimiterDefaults verifies default limits per AI.md PART 1
+func TestEndpointLimiterDefaults(t *testing.T) {
+	el := NewEndpointLimiters(true)
+
+	tests := []struct {
+		endpoint        string
+		expectedRequests int
+		expectedWindow   time.Duration
+	}{
+		{EndpointLogin, 5, 15 * time.Minute},
+		{EndpointPasswordReset, 3, time.Hour},
+		{EndpointAPIAuth, 100, time.Minute},
+		{EndpointAPIUnauth, 20, time.Minute},
+		{EndpointRegistration, 5, time.Hour},
+		{EndpointFileUpload, 10, time.Hour},
+	}
+
+	for _, tt := range tests {
+		l := el.Get(tt.endpoint)
+		if l.requests != tt.expectedRequests {
+			t.Errorf("%s: expected %d requests, got %d", tt.endpoint, tt.expectedRequests, l.requests)
+		}
+		if l.window != tt.expectedWindow {
+			t.Errorf("%s: expected %v window, got %v", tt.endpoint, tt.expectedWindow, l.window)
+		}
+	}
+}
+
+// TestEndpointLimiterLoginLimit tests login rate limit (5 per 15 min per PART 1)
+func TestEndpointLimiterLoginLimit(t *testing.T) {
+	el := NewEndpointLimiters(true)
+	ip := "192.168.1.1"
+
+	// First 5 login attempts should be allowed
+	for i := 0; i < 5; i++ {
+		if !el.AllowLogin(ip) {
+			t.Errorf("Login attempt %d should be allowed", i+1)
+		}
+	}
+
+	// 6th login attempt should be denied
+	if el.AllowLogin(ip) {
+		t.Error("6th login attempt should be denied per PART 1")
+	}
+}
+
+// TestEndpointLimiterAPIAuthLimit tests authenticated API limit (100 per min per PART 1)
+func TestEndpointLimiterAPIAuthLimit(t *testing.T) {
+	el := NewEndpointLimiters(true)
+	ip := "192.168.1.1"
+
+	// All 100 requests should be allowed
+	for i := 0; i < 100; i++ {
+		if !el.AllowAPIAuth(ip) {
+			t.Errorf("API auth request %d should be allowed", i+1)
+		}
+	}
+
+	// 101st request should be denied
+	if el.AllowAPIAuth(ip) {
+		t.Error("101st API auth request should be denied per PART 1")
+	}
+}
+
+// TestEndpointLimiterAPIUnauthLimit tests unauthenticated API limit (20 per min per PART 1)
+func TestEndpointLimiterAPIUnauthLimit(t *testing.T) {
+	el := NewEndpointLimiters(true)
+	ip := "192.168.1.1"
+
+	// First 20 requests should be allowed
+	for i := 0; i < 20; i++ {
+		if !el.AllowAPIUnauth(ip) {
+			t.Errorf("API unauth request %d should be allowed", i+1)
+		}
+	}
+
+	// 21st request should be denied
+	if el.AllowAPIUnauth(ip) {
+		t.Error("21st API unauth request should be denied per PART 1")
+	}
+}
+
+// TestEndpointLimiterIndependence tests that different endpoints have independent limits
+func TestEndpointLimiterIndependence(t *testing.T) {
+	el := NewEndpointLimiters(true)
+	ip := "192.168.1.1"
+
+	// Exhaust login limit
+	for i := 0; i < 5; i++ {
+		el.AllowLogin(ip)
+	}
+	if el.AllowLogin(ip) {
+		t.Error("Login should be rate limited")
+	}
+
+	// API auth should still work (different limiter)
+	if !el.AllowAPIAuth(ip) {
+		t.Error("API auth should be allowed (independent limiter)")
+	}
+}
+
+// TestEndpointLimiterDisabled tests that disabled limiters allow all requests
+func TestEndpointLimiterDisabled(t *testing.T) {
+	el := NewEndpointLimiters(false)
+	ip := "192.168.1.1"
+
+	// Should allow unlimited requests when disabled
+	for i := 0; i < 100; i++ {
+		if !el.AllowLogin(ip) {
+			t.Errorf("Login %d should be allowed when disabled", i+1)
+		}
 	}
 }

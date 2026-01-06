@@ -117,38 +117,38 @@ async function saveNodeSettings(e) {
     }
 }
 
-async function stepDown() {
-    if (!confirm('Step down as primary? Another node will be elected as the new primary.')) return;
-
-    try {
-        const resp = await fetch('/api/v1/admin/server/nodes/stepdown', { method: 'POST' });
-        const result = await resp.json();
-        if (result.success) {
-            showSuccess('Stepped down as primary');
-            setTimeout(() => location.reload(), 2000);
-        } else {
-            showError('Error: ' + result.error);
+function stepDown() {
+    showConfirm('Step down as primary? Another node will be elected as the new primary.', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/server/nodes/stepdown', { method: 'POST' });
+            const result = await resp.json();
+            if (result.success) {
+                showSuccess('Stepped down as primary');
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                showError('Error: ' + result.error);
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
         }
-    } catch (e) {
-        showError('Error: ' + e.message);
-    }
+    });
 }
 
-async function regenerateNodeID() {
-    if (!confirm('Regenerate node ID? This will require re-joining the cluster.')) return;
-
-    try {
-        const resp = await fetch('/api/v1/admin/server/nodes/regenerate-id', { method: 'POST' });
-        const result = await resp.json();
-        if (result.success) {
-            showSuccess('Node ID regenerated: ' + result.data.node_id);
-            setTimeout(() => location.reload(), 2000);
-        } else {
-            showError('Error: ' + result.error);
+function regenerateNodeID() {
+    showConfirm('Regenerate node ID? This will require re-joining the cluster.', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/server/nodes/regenerate-id', { method: 'POST' });
+            const result = await resp.json();
+            if (result.success) {
+                showSuccess('Node ID regenerated: ' + result.data.node_id);
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                showError('Error: ' + result.error);
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
         }
-    } catch (e) {
-        showError('Error: ' + e.message);
-    }
+    });
 }
 </script>
 {{end}}

@@ -1,14 +1,119 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 16: Rate Limiting
+// AI.md PART 1: Rate Limiting (endpoint-specific limits)
 package ratelimit
 
 import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/apimgr/vidveil/src/server/service/logging"
 )
 
-// Limiter implements a sliding window rate limiter per PART 16
+// Endpoint types for rate limiting per AI.md PART 1
+const (
+	EndpointLogin          = "login"
+	EndpointPasswordReset  = "password_reset"
+	EndpointAPIAuth        = "api_authenticated"
+	EndpointAPIUnauth      = "api_unauthenticated"
+	EndpointRegistration   = "registration"
+	EndpointFileUpload     = "file_upload"
+	EndpointDefault        = "default"
+)
+
+// Default rate limits per AI.md PART 1
+// | Endpoint Type | Limit | Window |
+// |---------------|-------|--------|
+// | Login attempts | 5 | 15 min |
+// | Password reset | 3 | 1 hour |
+// | API (authenticated) | 100 | 1 min |
+// | API (unauthenticated) | 20 | 1 min |
+// | Registration | 5 | 1 hour |
+// | File upload | 10 | 1 hour |
+var DefaultLimits = map[string]struct {
+	Requests int
+	Window   time.Duration
+}{
+	EndpointLogin:         {5, 15 * time.Minute},
+	EndpointPasswordReset: {3, time.Hour},
+	EndpointAPIAuth:       {100, time.Minute},
+	EndpointAPIUnauth:     {20, time.Minute},
+	EndpointRegistration:  {5, time.Hour},
+	EndpointFileUpload:    {10, time.Hour},
+	EndpointDefault:       {100, time.Minute},
+}
+
+// EndpointLimiters holds multiple rate limiters for different endpoint types per AI.md PART 1
+type EndpointLimiters struct {
+	limiters map[string]*Limiter
+	logger   *logging.Logger
+	mu       sync.RWMutex
+}
+
+// NewEndpointLimiters creates endpoint-specific rate limiters per AI.md PART 1
+func NewEndpointLimiters(enabled bool) *EndpointLimiters {
+	el := &EndpointLimiters{
+		limiters: make(map[string]*Limiter),
+	}
+
+	for endpoint, limits := range DefaultLimits {
+		el.limiters[endpoint] = New(enabled, limits.Requests, int(limits.Window.Seconds()))
+	}
+
+	return el
+}
+
+// SetLogger sets the logger for all endpoint limiters
+func (el *EndpointLimiters) SetLogger(logger *logging.Logger) {
+	el.mu.Lock()
+	defer el.mu.Unlock()
+	el.logger = logger
+	for _, l := range el.limiters {
+		l.SetLogger(logger)
+	}
+}
+
+// Get returns the rate limiter for a specific endpoint type
+func (el *EndpointLimiters) Get(endpoint string) *Limiter {
+	el.mu.RLock()
+	defer el.mu.RUnlock()
+	if l, ok := el.limiters[endpoint]; ok {
+		return l
+	}
+	return el.limiters[EndpointDefault]
+}
+
+// AllowLogin checks rate limit for login attempts per AI.md PART 1 (5 per 15 min)
+func (el *EndpointLimiters) AllowLogin(ip string) bool {
+	return el.Get(EndpointLogin).Allow(ip)
+}
+
+// AllowPasswordReset checks rate limit for password reset per AI.md PART 1 (3 per hour)
+func (el *EndpointLimiters) AllowPasswordReset(ip string) bool {
+	return el.Get(EndpointPasswordReset).Allow(ip)
+}
+
+// AllowAPIAuth checks rate limit for authenticated API per AI.md PART 1 (100 per min)
+func (el *EndpointLimiters) AllowAPIAuth(ip string) bool {
+	return el.Get(EndpointAPIAuth).Allow(ip)
+}
+
+// AllowAPIUnauth checks rate limit for unauthenticated API per AI.md PART 1 (20 per min)
+func (el *EndpointLimiters) AllowAPIUnauth(ip string) bool {
+	return el.Get(EndpointAPIUnauth).Allow(ip)
+}
+
+// AllowRegistration checks rate limit for registration per AI.md PART 1 (5 per hour)
+func (el *EndpointLimiters) AllowRegistration(ip string) bool {
+	return el.Get(EndpointRegistration).Allow(ip)
+}
+
+// AllowFileUpload checks rate limit for file uploads per AI.md PART 1 (10 per hour)
+func (el *EndpointLimiters) AllowFileUpload(ip string) bool {
+	return el.Get(EndpointFileUpload).Allow(ip)
+}
+
+// Limiter implements a sliding window rate limiter per PART 1
 type Limiter struct {
 	mu      sync.RWMutex
 	enabled bool
@@ -17,6 +122,8 @@ type Limiter struct {
 	// Time window
 	window  time.Duration
 	clients map[string]*clientInfo
+	// Logger for security events per AI.md PART 11
+	logger *logging.Logger
 }
 
 type clientInfo struct {
@@ -25,13 +132,13 @@ type clientInfo struct {
 }
 
 // New creates a new rate limiter
-// Default: 120 requests per 60 seconds (from config)
+// Default: 100 requests per 60 seconds per AI.md PART 1
 func New(enabled bool, requests int, windowSeconds int) *Limiter {
-	// Default per AI.md PART 16
+	// Default per AI.md PART 1 (API authenticated)
 	if requests <= 0 {
-		requests = 120
+		requests = 100
 	}
-	// Default per AI.md PART 16
+	// Default per AI.md PART 1
 	if windowSeconds <= 0 {
 		windowSeconds = 60
 	}
@@ -47,6 +154,11 @@ func New(enabled bool, requests int, windowSeconds int) *Limiter {
 	go l.cleanup()
 
 	return l
+}
+
+// SetLogger sets the logger for security event logging per AI.md PART 11
+func (l *Limiter) SetLogger(logger *logging.Logger) {
+	l.logger = logger
 }
 
 // Allow checks if a request from the given IP should be allowed
@@ -193,12 +305,21 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Set rate limit headers per PART 16
+		// Set rate limit headers per PART 1
 		w.Header().Set("X-RateLimit-Limit", itoa(l.requests))
 		w.Header().Set("X-RateLimit-Remaining", itoa(l.Remaining(ip)))
 		w.Header().Set("X-RateLimit-Reset", itoa(int(l.Reset(ip).Unix())))
 
 		if !l.Allow(ip) {
+			// Log security event per AI.md PART 11 line 11400: security.rate_limit_exceeded
+			if l.logger != nil {
+				l.logger.Security("rate_limit_exceeded", ip, map[string]interface{}{
+					"endpoint": r.URL.Path,
+					"method":   r.Method,
+					"limit":    l.requests,
+					"window":   int(l.window.Seconds()),
+				})
+			}
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, "Too many requests. Please try again later.", http.StatusTooManyRequests)
 			return

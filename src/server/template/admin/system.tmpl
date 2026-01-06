@@ -103,17 +103,18 @@
 
 {{define "scripts"}}
 <script>
-async function restartServer() {
-    if (!confirm('Are you sure you want to restart the server?')) return;
-    try {
-        showInfo('Restarting server...');
-        const resp = await fetch('/api/v1/admin/server/restart', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-            showSuccess('Server restarting...');
-            setTimeout(() => { location.reload(); }, 3000);
-        } else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+function restartServer() {
+    showConfirm('Are you sure you want to restart the server?', async function() {
+        try {
+            showInfo('Restarting server...');
+            const resp = await fetch('/api/v1/admin/server/restart', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                showSuccess('Server restarting...');
+                setTimeout(() => { location.reload(); }, 3000);
+            } else { showError('Error: ' + data.error); }
+        } catch (e) { showError('Error: ' + e.message); }
+    });
 }
 
 async function reloadConfig() {
@@ -150,15 +151,16 @@ async function checkUpdates() {
     } catch (e) { showError('Error: ' + e.message); }
 }
 
-async function applyUpdate() {
-    if (!confirm('Apply update? The server will restart after updating.')) return;
-    try {
-        showInfo('Applying update...');
-        const resp = await fetch('/api/v1/admin/updates/apply', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) { showSuccess('Update applied! Server restarting...'); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+function applyUpdate() {
+    showConfirm('Apply update? The server will restart after updating.', async function() {
+        try {
+            showInfo('Applying update...');
+            const resp = await fetch('/api/v1/admin/updates/apply', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) { showSuccess('Update applied! Server restarting...'); }
+            else { showError('Error: ' + data.error); }
+        } catch (e) { showError('Error: ' + e.message); }
+    });
 }
 
 function downloadDiagnostics() {

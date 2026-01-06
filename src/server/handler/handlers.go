@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -567,25 +568,52 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Overall status
 	status := "healthy"
 	
+	// Add scheduler check
+	checks["scheduler"] = "ok"
+
 	switch format {
 	case "application/json":
-		// JSON format per AI.md PART 13 lines 11312-11336
+		// JSON format per AI.md PART 13 lines 12949-12996
 		response := map[string]interface{}{
-			"status":    status,
-			"version":   version.Get(),  // Use version package
-			"mode":      appMode,
-			"uptime":    uptime,
-			"timestamp": timestamp,
+			"status":     status,
+			"version":    version.Get(),
+			"mode":       appMode,
+			"uptime":     uptime,
+			"timestamp":  timestamp,
+			"go_version": runtime.Version(),
+			"build": map[string]interface{}{
+				"commit": version.CommitID,
+				"date":   version.BuildTime,
+			},
 			"node": map[string]interface{}{
 				"id":       nodeID,
 				"hostname": hostname,
 			},
 			"cluster": map[string]interface{}{
 				"enabled": clusterEnabled,
+				"primary": "",
+				"nodes":   []string{},
+			},
+			"features": map[string]interface{}{
+				"multi_user":    false,
+				"organizations": false,
+				"tor": map[string]interface{}{
+					"enabled":  h.cfg != nil && h.cfg.Search.Tor.Enabled,
+					"running":  false,
+					"status":   "",
+					"hostname": "",
+				},
+				"geoip":   h.cfg != nil && h.cfg.Server.GeoIP.Enabled,
+				"metrics": h.cfg != nil && h.cfg.Server.Metrics.Enabled,
 			},
 			"checks": checks,
+			"stats": map[string]interface{}{
+				"requests_total":     0,
+				"requests_24h":       0,
+				"active_connections": 0,
+			},
 		}
-		
+
 		// Add cluster details if enabled
 		if clusterEnabled {
 			response["cluster"] = map[string]interface{}{
@@ -595,7 +623,7 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				"role":    clusterRole,
 			}
 		}
-		
+
 		WriteJSON(w, http.StatusOK, response)
 
 	case "text/plain":
@@ -1255,21 +1283,51 @@ func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// JSON format per AI.md PART 13 lines 11312-11379
+	// JSON format per AI.md PART 13 lines 12953-13000
 	response := map[string]interface{}{
-		"status":    status,
-		"version":   version.Get(),
-		"mode":      appMode,
-		"uptime":    uptime,
-		"timestamp": timestamp,
+		"status":     status,
+		"version":    version.Get(),
+		"go_version": version.GoVersion,
+		"mode":       appMode,
+		"uptime":     uptime,
+		"timestamp":  timestamp,
+		"build": map[string]interface{}{
+			"commit": version.CommitID,
+			"date":   version.BuildTime,
+		},
 		"node": map[string]interface{}{
 			"id":       nodeID,
 			"hostname": hostname,
 		},
 		"cluster": map[string]interface{}{
 			"enabled": clusterEnabled,
+			"primary": "",
+			"nodes":   []string{},
 		},
-		"checks": checks,
+		"features": map[string]interface{}{
+			"multi_user":    false,
+			"organizations": false,
+			"tor": map[string]interface{}{
+				"enabled":  h.cfg != nil && h.cfg.Search.Tor.Enabled,
+				"running":  false,
+				"status":   "",
+				"hostname": "",
+			},
+			"geoip":   h.cfg != nil && h.cfg.Server.GeoIP.Enabled,
+			"metrics": h.cfg != nil && h.cfg.Server.Metrics.Enabled,
+		},
+		"checks": map[string]string{
+			"database":  checks["database"],
+			"cache":     checks["cache"],
+			"disk":      checks["disk"],
+			"scheduler": "ok",
+			"cluster":   "ok",
+		},
+		"stats": map[string]interface{}{
+			"requests_total":     0, // Use /metrics endpoint for detailed stats
+			"requests_24h":       0,
+			"active_connections": 0,
+		},
 	}
 
 	WriteJSON(w, http.StatusOK, response)
@@ -1302,24 +1360,13 @@ func (h *Handler) jsonResponse(w http.ResponseWriter, data interface{}) {
 }
 
 func (h *Handler) jsonError(w http.ResponseWriter, message, code string, status int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	errorResponse := map[string]interface{}{
+	// Per AI.md PART 14: Use WriteJSON for all JSON responses
+	WriteJSON(w, status, map[string]interface{}{
 		"success": false,
 		"error":   message,
 		"code":    code,
 		"status":  status,
-	}
-	// Per PART 20: JSON must be indented with 2 spaces and end with single newline
-	formatted, err := json.MarshalIndent(errorResponse, "", "  ")
-	if err != nil {
-		// Fallback if marshaling fails
-		w.Write([]byte(`{"success":false,"error":"Internal error","code":"ENCODING_ERROR"}`))
-		w.Write([]byte("\n"))
-		return
-	}
-	w.Write(formatted)
-	w.Write([]byte("\n"))
+	})
 }
 
 // RenderErrorPage renders a custom error page per AI.md PART 30

@@ -45,9 +45,13 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
-		// Authenticate admin using admin handler
+		// Authenticate admin using admin handler with context for audit logging per AI.md PART 11
 		if h.adminHdl != nil {
-			sessionID, err := h.adminHdl.AuthenticateAdmin(username, password)
+			sessionID, err := h.adminHdl.AuthenticateAdminWithContext(
+				username, password,
+				r.RemoteAddr,
+				r.UserAgent(),
+			)
 			if err == nil && sessionID != "" {
 				http.SetCookie(w, &http.Cookie{
 					Name:     "vidveil_admin_session",

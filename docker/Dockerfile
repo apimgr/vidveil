@@ -60,10 +60,17 @@ RUN apk add --no-cache \
     curl \
     bash \
     tini \
-    tor
+    tor \
+    su-exec
 
-# Create directories with proper structure
-RUN mkdir -p /config /config/security /config/tor /data/db /data/log /data/tor /data/backup
+# Create non-root user per AI.md PART 27 (NON-NEGOTIABLE)
+# UID 1000 for compatibility with host volume mounts
+RUN addgroup -g 1000 vidveil && \
+    adduser -D -s /bin/sh -u 1000 -G vidveil vidveil
+
+# Create directories with proper structure and ownership
+RUN mkdir -p /config /config/security /config/tor /data/db /data/log /data/tor /data/backup && \
+    chown -R vidveil:vidveil /config /data
 
 # Copy binary from builder stage (multi-stage build)
 COPY --from=builder /build/binary/vidveil /usr/local/bin/vidveil
@@ -92,6 +99,9 @@ STOPSIGNAL SIGRTMIN+3
 # Health check (long start period for services that need initialization)
 HEALTHCHECK --start-period=10m --interval=5m --timeout=15s --retries=3 \
     CMD /usr/local/bin/vidveil --status || exit 1
+
+# Switch to non-root user per AI.md PART 27 (NON-NEGOTIABLE)
+USER vidveil
 
 # Use tini as init with signal propagation
 # -p SIGTERM: propagate SIGTERM to child processes

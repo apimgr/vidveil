@@ -142,25 +142,23 @@ async function testConnection() {
     }
 }
 
-async function regenerateToken() {
-    if (!confirm('Regenerate the cluster join token? Existing nodes using the old token will need to be updated.')) {
-        return;
-    }
-
-    try {
-        const resp = await fetch('/api/v1/admin/server/nodes/token', {
-            method: 'POST'
-        });
-        const data = await resp.json();
-        if (data.success) {
-            document.getElementById('join-token').value = data.data.token;
-            showSuccess('Join token regenerated');
-        } else {
-            showError('Error: ' + data.error);
+function regenerateToken() {
+    showConfirm('Regenerate the cluster join token? Existing nodes using the old token will need to be updated.', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/server/nodes/token', {
+                method: 'POST'
+            });
+            const data = await resp.json();
+            if (data.success) {
+                document.getElementById('join-token').value = data.data.token;
+                showSuccess('Join token regenerated');
+            } else {
+                showError('Error: ' + data.error);
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
         }
-    } catch (e) {
-        showError('Error: ' + e.message);
-    }
+    });
 }
 </script>
 {{end}}

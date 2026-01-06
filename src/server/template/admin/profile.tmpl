@@ -145,21 +145,21 @@ async function changePassword(e) {
     }
 }
 
-async function regenerateToken() {
-    if (!confirm('Are you sure? This will invalidate your current API token.')) return;
-
-    try {
-        const resp = await fetch('/api/v1/admin/profile/token', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-            document.getElementById('new-token').textContent = data.data.token;
-            document.getElementById('token-modal').showModal(); // Native dialog API
-        } else {
-            showError(data.error || 'Failed to regenerate token');
+function regenerateToken() {
+    showConfirm('Are you sure? This will invalidate your current API token.', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/profile/token', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                document.getElementById('new-token').textContent = data.data.token;
+                document.getElementById('token-modal').showModal();
+            } else {
+                showError(data.error || 'Failed to regenerate token');
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
         }
-    } catch (e) {
-        showError('Error: ' + e.message);
-    }
+    });
 }
 
 function closeTokenModal() {
@@ -178,23 +178,23 @@ async function enable2FA() {
     window.location.href = '/admin/security/auth?action=enable2fa';
 }
 
-async function disable2FA() {
-    if (!confirm('Are you sure you want to disable two-factor authentication?')) return;
-
-    try {
-        const resp = await fetch('/api/v1/admin/profile/2fa', {
-            method: 'DELETE'
-        });
-        const data = await resp.json();
-        if (data.success) {
-            showSuccess('Two-factor authentication disabled');
-            location.reload();
-        } else {
-            showError(data.error || 'Failed to disable 2FA');
+function disable2FA() {
+    showConfirm('Are you sure you want to disable two-factor authentication?', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/profile/2fa', {
+                method: 'DELETE'
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showSuccess('Two-factor authentication disabled');
+                location.reload();
+            } else {
+                showError(data.error || 'Failed to disable 2FA');
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
         }
-    } catch (e) {
-        showError('Error: ' + e.message);
-    }
+    });
 }
 
 // Recovery Keys Functions
@@ -222,25 +222,25 @@ async function loadRecoveryKeysStatus() {
     }
 }
 
-async function generateRecoveryKeys() {
-    if (!confirm('Generate new recovery keys? This will invalidate all existing keys.')) return;
-
-    try {
-        const resp = await fetch('/api/v1/admin/profile/recovery-keys/generate', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-            recoveryKeysData = data.data.keys;
-            const listDiv = document.getElementById('recovery-keys-list');
-            listDiv.innerHTML = data.data.keys.map((key, i) =>
-                '<div class="recovery-key"><span>' + (i + 1) + '.</span> <code>' + key + '</code></div>'
-            ).join('');
-            document.getElementById('recovery-keys-modal').showModal(); // Native dialog API
-        } else {
-            showError(data.error || 'Failed to generate recovery keys');
+function generateRecoveryKeys() {
+    showConfirm('Generate new recovery keys? This will invalidate all existing keys.', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/profile/recovery-keys/generate', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                recoveryKeysData = data.data.keys;
+                const listDiv = document.getElementById('recovery-keys-list');
+                listDiv.innerHTML = data.data.keys.map((key, i) =>
+                    '<div class="recovery-key"><span>' + (i + 1) + '.</span> <code>' + key + '</code></div>'
+                ).join('');
+                document.getElementById('recovery-keys-modal').showModal();
+            } else {
+                showError(data.error || 'Failed to generate recovery keys');
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
         }
-    } catch (e) {
-        showError('Error: ' + e.message);
-    }
+    });
 }
 
 function closeRecoveryModal() {

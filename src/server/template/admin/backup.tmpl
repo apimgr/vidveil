@@ -155,59 +155,63 @@ function downloadBackup(id) {
     window.location.href = '/api/v1/admin/backup/' + id + '/download';
 }
 
-async function restoreBackup(id) {
-    if (!confirm('Are you sure? This will restore the server to this backup state. The server will restart.')) return;
-    try {
-        showInfo('Restoring backup...');
-        const resp = await fetch('/api/v1/admin/backup/' + id + '/restore', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) { showSuccess('Restore initiated. Server will restart...'); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+function restoreBackup(id) {
+    showConfirm('Are you sure? This will restore the server to this backup state. The server will restart.', async function() {
+        try {
+            showInfo('Restoring backup...');
+            const resp = await fetch('/api/v1/admin/backup/' + id + '/restore', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) { showSuccess('Restore initiated. Server will restart...'); }
+            else { showError('Error: ' + data.error); }
+        } catch (e) { showError('Error: ' + e.message); }
+    });
 }
 
-async function deleteBackup(id) {
-    if (!confirm('Delete this backup?')) return;
-    try {
-        const resp = await fetch('/api/v1/admin/backup/' + id, { method: 'DELETE' });
-        const data = await resp.json();
-        if (data.success) { showSuccess('Backup deleted!'); location.reload(); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+function deleteBackup(id) {
+    showConfirm('Delete this backup?', async function() {
+        try {
+            const resp = await fetch('/api/v1/admin/backup/' + id, { method: 'DELETE' });
+            const data = await resp.json();
+            if (data.success) { showSuccess('Backup deleted!'); location.reload(); }
+            else { showError('Error: ' + data.error); }
+        } catch (e) { showError('Error: ' + e.message); }
+    });
 }
 
-async function uploadRestore(e) {
+function uploadRestore(e) {
     e.preventDefault();
     const file = document.getElementById('restore-file').files[0];
     if (!file) { showError('Please select a backup file'); return; }
-    if (!confirm('Are you sure? This will restore the server from this backup. The server will restart.')) return;
-    const formData = new FormData();
-    formData.append('backup', file);
-    try {
-        showInfo('Uploading and restoring...');
-        const resp = await fetch('/api/v1/admin/backup/upload', { method: 'POST', body: formData });
-        const data = await resp.json();
-        if (data.success) { showSuccess('Restore initiated. Server will restart...'); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+    showConfirm('Are you sure? This will restore the server from this backup. The server will restart.', async function() {
+        const formData = new FormData();
+        formData.append('backup', file);
+        try {
+            showInfo('Uploading and restoring...');
+            const resp = await fetch('/api/v1/admin/backup/upload', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (data.success) { showSuccess('Restore initiated. Server will restart...'); }
+            else { showError('Error: ' + data.error); }
+        } catch (e) { showError('Error: ' + e.message); }
+    });
 }
 
 function exportConfig() {
     window.location.href = '/api/v1/admin/config/export';
 }
 
-async function importConfig(e) {
+function importConfig(e) {
     const file = e.target.files[0];
     if (!file) return;
-    if (!confirm('Import this configuration? Current settings will be overwritten.')) return;
-    const formData = new FormData();
-    formData.append('config', file);
-    try {
-        const resp = await fetch('/api/v1/admin/config/import', { method: 'POST', body: formData });
-        const data = await resp.json();
-        if (data.success) { showSuccess('Configuration imported!'); location.reload(); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+    showConfirm('Import this configuration? Current settings will be overwritten.', async function() {
+        const formData = new FormData();
+        formData.append('config', file);
+        try {
+            const resp = await fetch('/api/v1/admin/config/import', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (data.success) { showSuccess('Configuration imported!'); location.reload(); }
+            else { showError('Error: ' + data.error); }
+        } catch (e) { showError('Error: ' + e.message); }
+    });
 }
 
 function showInfo(msg) {

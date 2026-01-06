@@ -19,7 +19,8 @@
       "Bash(for:*)",
       "Bash(gh run:*)",
       "Bash(xargs cat:*)",
-      "Bash(./tests/docker.sh:*)"
+      "Bash(./tests/docker.sh:*)",
+      "Bash(golang:alpine sh -c \"\n    apk add --no-cache shadow >/dev/null 2>&1 || true\n    CGO_ENABLED=0 go build -o /tmp/vidveil ./src\n    echo ''=== Starting binary as root ===''\n    timeout 3 /tmp/vidveil --config /data/config --data /data/data --port 8080 --mode development 2>&1 || true\n    echo ''''\n    echo ''=== Checking user/group creation ===''\n    grep vidveil /etc/passwd || echo ''vidveil user NOT found''\n    grep vidveil /etc/group || echo ''vidveil group NOT found''\n    echo ''''\n    echo ''=== Checking directory ownership ===''\n    ls -la /data/\n  \")"
     ]
   }
 }

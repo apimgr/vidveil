@@ -1017,9 +1017,16 @@ func GetPaths(configDir, dataDir string) *Paths {
 func Load(configDir, dataDir string) (*Config, string, error) {
 	paths := GetPaths(configDir, dataDir)
 
-	// Ensure directories exist per AI.md PART 8
-	for _, dir := range []string{paths.Config, paths.Data, paths.Cache, paths.Log} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+	// Ensure directories exist per AI.md PART 8 and PART 27
+	// Binary handles ALL directory creation with proper permissions
+	// Permissions: root=0755, user=0700 per AI.md line 7240-7241
+	dbDir := filepath.Join(paths.Data, "db")
+	dirPerm := os.FileMode(0755)
+	if os.Getuid() != 0 {
+		dirPerm = 0700
+	}
+	for _, dir := range []string{paths.Config, paths.Data, paths.Cache, paths.Log, dbDir} {
+		if err := os.MkdirAll(dir, dirPerm); err != nil {
 			return nil, "", fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}

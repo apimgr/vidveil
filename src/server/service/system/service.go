@@ -563,3 +563,154 @@ func IsRoot() bool {
 		return os.Getuid() == 0
 	}
 }
+
+// IsContainer checks if running in a container environment per AI.md PART 27
+func IsContainer() bool {
+	// Check for /.dockerenv
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	// Check container env var
+	if os.Getenv("container") != "" {
+		return true
+	}
+	// Check for common container init systems
+	if data, err := os.ReadFile("/proc/1/comm"); err == nil {
+		comm := strings.TrimSpace(string(data))
+		switch comm {
+		case "tini", "dumb-init", "s6-svscan", "runsv", "runsvdir":
+			return true
+		}
+	}
+	return false
+}
+
+// EnsureSystemUser creates system user/group on startup per AI.md PART 27
+// "Binary handles EVERYTHING else: directories, permissions, user/group, Tor, etc."
+// Returns uid, gid for chown operations. Returns 0, 0 if not running as root.
+func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
+	// Only create user if running as root
+	if !IsRoot() {
+		// Running as non-root user, use current user
+		return os.Getuid(), os.Getgid(), nil
+	}
+
+	// On Windows, skip user creation (use Virtual Service Account)
+	if runtime.GOOS == "windows" {
+		return 0, 0, nil
+	}
+
+	// Check if user already exists
+	output, err := exec.Command("id", "-u", appName).Output()
+	if err == nil {
+		// User exists, get UID
+		uidStr := strings.TrimSpace(string(output))
+		uid, _ = strconv.Atoi(uidStr)
+
+		// Get GID
+		output, err = exec.Command("id", "-g", appName).Output()
+		if err == nil {
+			gidStr := strings.TrimSpace(string(output))
+			gid, _ = strconv.Atoi(gidStr)
+		}
+
+		// Ensure directories are owned by this user
+		for _, dir := range dirs {
+			if dir != "" {
+				os.MkdirAll(dir, 0755)
+				exec.Command("chown", "-R", fmt.Sprintf("%s:%s", appName, appName), dir).Run()
+			}
+		}
+
+		return uid, gid, nil
+	}
+
+	// User doesn't exist, create it
+	// Find available UID/GID in 100-999 range per AI.md PART 24
+	id := findAvailableID(100, 999)
+
+	// Determine home directory (use first data dir if available)
+	homeDir := "/nonexistent"
+	if len(dirs) > 0 && dirs[0] != "" {
+		homeDir = dirs[0]
+	}
+
+	// Try standard Linux commands first (Debian, RHEL, etc.)
+	if _, err := exec.LookPath("groupadd"); err == nil {
+		exec.Command("groupadd", "-g", strconv.Itoa(id), appName).Run()
+		cmd := exec.Command("useradd",
+			"-r",                              // System account
+			"-u", strconv.Itoa(id),            // UID
+			"-g", appName,                     // Primary group
+			"-d", homeDir,                     // Home directory
+			"-s", "/sbin/nologin",             // No login shell
+			"-c", appName+" service account",  // Comment
+			appName,
+		)
+		cmd.Run()
+	} else {
+		// Alpine Linux uses addgroup/adduser (busybox)
+		exec.Command("addgroup", "-g", strconv.Itoa(id), "-S", appName).Run()
+		cmd := exec.Command("adduser",
+			"-D",                          // Don't assign password
+			"-S",                          // System user
+			"-H",                          // No home directory
+			"-u", strconv.Itoa(id),        // UID
+			"-G", appName,                 // Primary group
+			"-s", "/sbin/nologin",         // No login shell
+			appName,
+		)
+		cmd.Run()
+	}
+
+	// Create directories and set ownership
+	for _, dir := range dirs {
+		if dir != "" {
+			os.MkdirAll(dir, 0755)
+			exec.Command("chown", "-R", fmt.Sprintf("%s:%s", appName, appName), dir).Run()
+		}
+	}
+
+	return id, id, nil
+}
+
+// findAvailableID finds an available UID/GID in the given range per AI.md PART 24
+func findAvailableID(min, max int) int {
+	// Start from top of range (999) and work down
+	for id := max; id >= min; id-- {
+		idStr := strconv.Itoa(id)
+
+		// Check if UID is unused
+		uidUsed := false
+		// Try getent first (standard Linux)
+		if _, err := exec.Command("getent", "passwd", idStr).Output(); err == nil {
+			uidUsed = true
+		} else {
+			// Fallback: grep /etc/passwd for :UID: pattern
+			// grep -q returns 0 if found, non-zero if not found
+			if err := exec.Command("grep", "-q", ":"+idStr+":", "/etc/passwd").Run(); err == nil {
+				uidUsed = true
+			}
+		}
+		if uidUsed {
+			continue
+		}
+
+		// Check if GID is unused
+		gidUsed := false
+		if _, err := exec.Command("getent", "group", idStr).Output(); err == nil {
+			gidUsed = true
+		} else {
+			if err := exec.Command("grep", "-q", ":"+idStr+":", "/etc/group").Run(); err == nil {
+				gidUsed = true
+			}
+		}
+		if gidUsed {
+			continue
+		}
+
+		// Both available
+		return id
+	}
+	return min
+}

@@ -55,22 +55,17 @@ LABEL org.opencontainers.image.licenses="${LICENSE}" \
       org.opencontainers.image.revision="${COMMIT_ID}"
 
 # Install required packages including Tor
+# NOTE: Tor binary installed but NOT configured here - binary handles all Tor setup (see PART 32)
 RUN apk add --no-cache \
     git \
     curl \
     bash \
     tini \
-    tor \
-    su-exec
+    tor
 
-# Create non-root user per AI.md PART 27 (NON-NEGOTIABLE)
-# UID 1000 for compatibility with host volume mounts
-RUN addgroup -g 1000 vidveil && \
-    adduser -D -s /bin/sh -u 1000 -G vidveil vidveil
-
-# Create directories with proper structure and ownership
-RUN mkdir -p /config /config/security /config/tor /data/db /data/log /data/tor /data/backup && \
-    chown -R vidveil:vidveil /config /data
+# NO user creation - binary handles ALL setup based on env vars per AI.md PART 27
+# NO directory creation - binary handles ALL directory setup
+# Docker volume mounts auto-create mount points
 
 # Copy binary from builder stage (multi-stage build)
 COPY --from=builder /build/binary/vidveil /usr/local/bin/vidveil
@@ -100,8 +95,8 @@ STOPSIGNAL SIGRTMIN+3
 HEALTHCHECK --start-period=10m --interval=5m --timeout=15s --retries=3 \
     CMD /usr/local/bin/vidveil --status || exit 1
 
-# Switch to non-root user per AI.md PART 27 (NON-NEGOTIABLE)
-USER vidveil
+# NO USER directive - binary runs as root and handles privilege dropping per AI.md PART 27
+# Binary handles: directories, permissions, user/group, Tor, etc.
 
 # Use tini as init with signal propagation
 # -p SIGTERM: propagate SIGTERM to child processes

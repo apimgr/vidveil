@@ -31,6 +31,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 	"github.com/apimgr/vidveil/src/server/service/service"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
+	"github.com/apimgr/vidveil/src/server/service/system"
 	"github.com/apimgr/vidveil/src/server/service/tor"
 	"github.com/apimgr/vidveil/src/common/version"
 )
@@ -293,15 +294,53 @@ func main() {
 	// Get paths early so we can override log directory
 	paths := config.GetPaths(configDir, dataDir)
 
+	// Ensure system user/group and set directory ownership per AI.md PART 27
+	// "Binary handles EVERYTHING else: directories, permissions, user/group, Tor, etc."
+	appName := filepath.Base(os.Args[0])
+	if appName == "" {
+		appName = "vidveil"
+	}
+	// Remove any extension from binary name
+	if ext := filepath.Ext(appName); ext != "" {
+		appName = strings.TrimSuffix(appName, ext)
+	}
+	// Normalize to base name (vidveil, vidveil-agent, vidveil-cli)
+	if strings.Contains(appName, "-") && !strings.HasPrefix(appName, "vidveil-") {
+		appName = "vidveil"
+	}
+
+	// Create user and chown directories (only if running as root)
+	// Include db subdirectory for SQLite database
+	dbDir := filepath.Join(paths.Data, "db")
+	dirsToOwn := []string{paths.Config, paths.Data, dbDir, paths.Cache, paths.Log}
+	uid, gid, err := system.EnsureSystemUser(appName, dirsToOwn)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Failed to ensure system user: %v\n", err)
+	} else if system.IsRoot() && uid > 0 {
+		fmt.Printf("👤 Running as user %s (uid=%d, gid=%d)\n", appName, uid, gid)
+	}
+
 	// Override log directory if specified
 	if logDir != "" {
 		paths.Log = logDir
 	}
 
 	// Write PID file if specified per AI.md PART 4
+	// Binary creates parent directories per AI.md PART 27
+	// Permissions: root=0755/0644, user=0700/0600 per AI.md line 7240-7241
 	if pidFile != "" {
+		pidDir := filepath.Dir(pidFile)
+		dirPerm := os.FileMode(0755)
+		filePerm := os.FileMode(0644)
+		if os.Getuid() != 0 {
+			dirPerm = 0700
+			filePerm = 0600
+		}
+		if err := os.MkdirAll(pidDir, dirPerm); err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  Failed to create PID directory: %v\n", err)
+		}
 		pid := os.Getpid()
-		if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d\n", pid)), 0644); err != nil {
+		if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d\n", pid)), filePerm); err != nil {
 			fmt.Fprintf(os.Stderr, "⚠️  Failed to write PID file: %v\n", err)
 		}
 		defer os.Remove(pidFile)

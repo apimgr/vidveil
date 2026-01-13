@@ -1,6 +1,6 @@
 ## Project Business Purpose
 
-Purpose: Privacy-respecting meta search engine for adult video content that aggregates results from 54+ video sites without tracking, logging, or analytics.
+Purpose: Privacy-respecting meta search engine for adult video content that aggregates results from 51 video sites without tracking, logging, or analytics.
 
 Target Users:
 - Privacy-conscious users seeking adult content without tracking
@@ -10,7 +10,7 @@ Target Users:
 
 Unique Value:
 - No tracking, logging, or analytics - complete privacy
-- 54+ engines with bang shortcuts for targeted searches
+- 51 engines with bang shortcuts for targeted searches
 - SSE streaming for real-time results as engines respond
 - Thumbnail proxy prevents engine tracking of users
 - Single static binary with all assets embedded
@@ -166,9 +166,15 @@ No user management (VidVeil is stateless, no user accounts).
 **Search Endpoints:**
 | Method | URL | Description |
 |--------|-----|-------------|
-| GET | `/api/v1/search?q={query}&page={page}&engines={engines}` | Search videos across engines |
-| GET | `/api/v1/search/stream?q={query}&page={page}` | SSE stream of search results |
+| GET | `/api/v1/search?q={query}&page={page}&engines={engines}` | Search videos (content negotiation) |
 | GET | `/api/v1/bangs/autocomplete?q={partial}` | Bang shortcut suggestions |
+
+**Search Content Negotiation:**
+| Accept Header | Response |
+|---------------|----------|
+| `application/json` (default) | JSON with caching |
+| `text/event-stream` | SSE streaming results as engines respond |
+| `text/plain` | Plain text format |
 
 **Engine Endpoints:**
 | Method | URL | Description |
@@ -194,7 +200,7 @@ No user management (VidVeil is stateless, no user accounts).
 **Business Behavior:**
 - Search supports bang shortcuts (`!ph amateur` searches PornHub only)
 - Multiple bangs combine: `!ph !rt query` searches both engines
-- SSE stream delivers results as each engine responds
+- SSE streaming via `Accept: text/event-stream` delivers results as each engine responds
 - Autocomplete suggests bangs as user types `!` prefix
 - Thumbnails proxied to prevent engine tracking
 - Infinite scroll supported via page parameter

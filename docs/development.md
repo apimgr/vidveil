@@ -41,7 +41,7 @@ vidveil/
 │   │   ├── handler/    # HTTP handlers
 │   │   ├── model/      # Data models
 │   │   ├── service/    # Business logic
-│   │   │   └── engine/ # Search engines (54+)
+│   │   │   └── engine/ # Search engines (51)
 │   │   ├── static/     # CSS, JS, images
 │   │   └── template/   # HTML templates
 │   ├── client/         # CLI client (optional)

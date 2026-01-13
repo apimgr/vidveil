@@ -18,7 +18,7 @@ func NewDrTuberEngine(cfg *config.Config, torClient *tor.Client) *DrTuberEngine 
 }
 
 // Search performs a search on DrTuber
-func (e *DrTuberEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *DrTuberEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/videos?search_type=videos&search_id={query}&p={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "a.th.ch-video")
 }

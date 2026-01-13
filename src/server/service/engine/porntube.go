@@ -18,7 +18,7 @@ func NewPornTubeEngine(cfg *config.Config, torClient *tor.Client) *PornTubeEngin
 }
 
 // Search performs a search on PornTube
-func (e *PornTubeEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *PornTubeEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search?q={query}&p={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video_container")
 }

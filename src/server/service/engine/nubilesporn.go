@@ -18,7 +18,7 @@ func NewNubilesPornEngine(cfg *config.Config, torClient *tor.Client) *NubilesPor
 }
 
 // Search performs a search on NubilesPorn
-func (e *NubilesPornEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *NubilesPornEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/{query}/?page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.scene, article.video, div.video-item")
 }

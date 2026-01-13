@@ -79,7 +79,7 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		// Write metrics in Prometheus format
 		fmt.Fprintf(w, "# HELP vidveil_info Application information\n")
 		fmt.Fprintf(w, "# TYPE vidveil_info gauge\n")
-		fmt.Fprintf(w, "vidveil_info{version=\"%s\",go_version=\"%s\"} 1\n", version.Get(), runtime.Version())
+		fmt.Fprintf(w, "vidveil_info{version=\"%s\",go_version=\"%s\"} 1\n", version.GetVersion(), runtime.Version())
 		fmt.Fprintf(w, "\n")
 
 		// Uptime

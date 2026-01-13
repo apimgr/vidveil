@@ -1,0 +1,69 @@
+{{define "nojs/search"}}
+<!DOCTYPE html>
+<html lang="en" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    {{template "public/header" .}}
+    <main class="results" id="main-content" role="main" aria-label="Search results">
+        <p class="meta" aria-live="polite"><span>{{len .Results}}</span> results for "{{.Query}}"</p>
+        
+        <div class="filters" role="group" aria-label="Filter and sort options">
+            <form method="get" action="/search" class="filter-form">
+                <input type="hidden" name="q" value="{{.Query}}">
+                <label for="filter-duration">Duration:</label>
+                <select id="filter-duration" name="duration">
+                    <option value="">Any</option>
+                    <option value="short" {{if eq .Duration "short"}}selected{{end}}>Under 10 min</option>
+                    <option value="medium" {{if eq .Duration "medium"}}selected{{end}}>10-30 min</option>
+                    <option value="long" {{if eq .Duration "long"}}selected{{end}}>Over 30 min</option>
+                </select>
+                
+                <label for="sort-by">Sort:</label>
+                <select id="sort-by" name="sort">
+                    <option value="">Relevance</option>
+                    <option value="duration-desc" {{if eq .Sort "duration-desc"}}selected{{end}}>Longest</option>
+                    <option value="duration-asc" {{if eq .Sort "duration-asc"}}selected{{end}}>Shortest</option>
+                    <option value="views" {{if eq .Sort "views"}}selected{{end}}>Most Viewed</option>
+                </select>
+                
+                <button type="submit">Apply Filters</button>
+            </form>
+        </div>
+        
+        <div class="video-grid" role="list" aria-label="Video results">
+            {{range .Results}}
+            <div class="video-card" role="listitem">
+                <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
+                    <img src="/thumbnail?url={{urlquery .Thumbnail}}" alt="Thumbnail for {{.Title}}" loading="lazy">
+                    <div class="video-info">
+                        <h3 class="video-title">{{.Title}}</h3>
+                        <p class="video-meta">
+                            <span class="duration">{{.Duration}}</span>
+                            {{if .Views}}<span class="views">{{.Views}} views</span>{{end}}
+                        </p>
+                        <p class="video-source">{{.Source}}</p>
+                    </div>
+                </a>
+            </div>
+            {{end}}
+        </div>
+        
+        {{if .HasMore}}
+        <div class="pagination">
+            <form method="get" action="/search">
+                <input type="hidden" name="q" value="{{.Query}}">
+                <input type="hidden" name="page" value="{{.NextPage}}">
+                {{if .Duration}}<input type="hidden" name="duration" value="{{.Duration}}">{{end}}
+                {{if .Sort}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+                <button type="submit">Load More Results</button>
+            </form>
+        </div>
+        {{end}}
+    </main>
+    {{template "public/footer" .}}
+</body>
+</html>
+{{end}}

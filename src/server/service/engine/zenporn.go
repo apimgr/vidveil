@@ -18,7 +18,7 @@ func NewZenPornEngine(cfg *config.Config, torClient *tor.Client) *ZenPornEngine 
 }
 
 // Search performs a search on ZenPorn
-func (e *ZenPornEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *ZenPornEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/{query}/?page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "article.thumb")
 }

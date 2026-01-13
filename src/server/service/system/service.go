@@ -169,16 +169,23 @@ func (sm *ServiceManager) hasRunit() bool {
 
 // installLinux installs service on Linux per AI.md PART 5
 func (sm *ServiceManager) installLinux() error {
+	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Starting Linux service installation\n")
+	
 	// Create system user per AI.md PART 4
+	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Calling createLinuxUser\n")
 	if err := sm.createLinuxUser(); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
+	
+	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: User creation completed\n")
 
 	// Install based on init system
 	if sm.hasSystemd() {
+		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing systemd service\n")
 		return sm.installSystemd()
 	}
 	if sm.hasRunit() {
+		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing runit service\n")
 		return sm.installRunit()
 	}
 	return fmt.Errorf("no supported init system found (systemd or runit)")
@@ -186,18 +193,27 @@ func (sm *ServiceManager) installLinux() error {
 
 // createLinuxUser creates system user per AI.md PART 4
 func (sm *ServiceManager) createLinuxUser() error {
+	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Checking if user '%s' exists...\n", sm.user)
+	
 	// Check if user exists
 	_, err := exec.Command("id", sm.user).CombinedOutput()
 	// User already exists
 	if err == nil {
+		fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' already exists, skipping creation\n", sm.user)
 		return nil
 	}
+	
+	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' does not exist, creating...\n", sm.user)
 
-	// Find available UID in 100-999 range per AI.md PART 4
-	uid := sm.findAvailableUID(100, 999)
+	// Find available UID in 200-899 range per AI.md PART 24
+	uid := sm.findAvailableUID(200, 899)
+	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Found available UID: %d\n", uid)
 
 	// Create group
-	exec.Command("groupadd", "-g", strconv.Itoa(uid), sm.group).Run()
+	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Creating group '%s' with GID %d\n", sm.group, uid)
+	if err := exec.Command("groupadd", "-g", strconv.Itoa(uid), sm.group).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: groupadd failed: %v\n", err)
+	}
 
 	// Create system user with:
 	// -r: System account
@@ -206,6 +222,7 @@ func (sm *ServiceManager) createLinuxUser() error {
 	// -d: Home directory
 	// -s: No login shell
 	// -c: Comment/description
+	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Creating user '%s' with UID %d\n", sm.user, uid)
 	cmd := exec.Command("useradd",
 		"-r",
 		"-u", strconv.Itoa(uid),
@@ -216,11 +233,21 @@ func (sm *ServiceManager) createLinuxUser() error {
 		sm.user,
 	)
 	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: useradd failed: %v\n", err)
 		return fmt.Errorf("failed to create user: %w", err)
 	}
+	
+	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' created successfully\n", sm.user)
 
-	// Create and set ownership of directories
-	for _, dir := range []string{sm.configDir, sm.dataDir} {
+	// Create and set ownership of directories per PART 25
+	// All directories must exist for systemd's ReadWritePaths to work
+	dirs := []string{
+		"/etc/apimgr/" + sm.appName,
+		"/var/lib/apimgr/" + sm.appName,
+		"/var/cache/apimgr/" + sm.appName,
+		"/var/log/apimgr/" + sm.appName,
+	}
+	for _, dir := range dirs {
 		os.MkdirAll(dir, 0755)
 		exec.Command("chown", "-R", fmt.Sprintf("%s:%s", sm.user, sm.group), dir).Run()
 	}
@@ -239,39 +266,38 @@ func (sm *ServiceManager) findAvailableUID(min, max int) int {
 	return min
 }
 
-// installSystemd installs systemd service unit per AI.md PART 5
+// installSystemd installs systemd service unit per AI.md PART 25
+// Service starts as root, binary drops privileges after port binding
 func (sm *ServiceManager) installSystemd() error {
 	unitPath := fmt.Sprintf("/etc/systemd/system/%s.service", sm.appName)
 
+	// Per PART 25: NO User/Group - binary drops privileges after port binding
 	unit := fmt.Sprintf(`[Unit]
-Description=%s
-Documentation=https://github.com/apimgr/%s
+Description=%s service
+Documentation=https://apimgr.github.io/%s
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=%s
-Group=%s
-ExecStart=%s --config %s --data %s
-ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/usr/local/bin/%s
 Restart=on-failure
 RestartSec=5
-LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
 
-# Security hardening
-NoNewPrivileges=yes
+# Security hardening (binary drops privileges after port binding)
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-ReadWritePaths=%s %s
+ReadWritePaths=/etc/apimgr/%s
+ReadWritePaths=/var/lib/apimgr/%s
+ReadWritePaths=/var/cache/apimgr/%s
+ReadWritePaths=/var/log/apimgr/%s
 
 [Install]
 WantedBy=multi-user.target
-`, sm.description, sm.appName, sm.user, sm.group, sm.binaryPath, sm.configDir, sm.dataDir, sm.configDir, sm.dataDir)
+`, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName)
 
 	if err := os.WriteFile(unitPath, []byte(unit), 0644); err != nil {
 		return fmt.Errorf("failed to write systemd unit: %w", err)
@@ -286,27 +312,28 @@ WantedBy=multi-user.target
 	return nil
 }
 
-// installRunit installs runit service per AI.md PART 5
+// installRunit installs runit service per AI.md PART 25
+// Binary drops privileges after port binding - no chpst needed
 func (sm *ServiceManager) installRunit() error {
 	serviceDir := fmt.Sprintf("/etc/sv/%s", sm.appName)
 	os.MkdirAll(serviceDir, 0755)
 
-	// Create run script
+	// Per PART 25: Simple run script, binary handles privilege dropping
 	runScript := fmt.Sprintf(`#!/bin/sh
-exec chpst -u %s:%s %s --config %s --data %s 2>&1
-`, sm.user, sm.group, sm.binaryPath, sm.configDir, sm.dataDir)
+exec /usr/local/bin/%s 2>&1
+`, sm.appName)
 
 	runPath := filepath.Join(serviceDir, "run")
 	if err := os.WriteFile(runPath, []byte(runScript), 0755); err != nil {
 		return fmt.Errorf("failed to write run script: %w", err)
 	}
 
-	// Create log directory and script
+	// Create log directory and script per PART 25
 	logDir := filepath.Join(serviceDir, "log")
 	os.MkdirAll(logDir, 0755)
 
 	logScript := fmt.Sprintf(`#!/bin/sh
-exec svlogd -tt /var/log/%s
+exec svlogd -tt /var/log/apimgr/%s
 `, sm.appName)
 	if err := os.WriteFile(filepath.Join(logDir, "run"), []byte(logScript), 0755); err != nil {
 		return err
@@ -320,51 +347,41 @@ exec svlogd -tt /var/log/%s
 	return nil
 }
 
-// installDarwin installs launchd service on macOS per AI.md PART 5
+// installDarwin installs launchd service on macOS per AI.md PART 25
+// Binary drops privileges after port binding - no UserName/GroupName needed
 func (sm *ServiceManager) installDarwin() error {
-	// Create user per AI.md PART 4 (macOS uses dscl)
-	if err := sm.createDarwinUser(); err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
-	}
+	// Per PART 25: Path is /Library/LaunchDaemons/apimgr.{appname}.plist
+	plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
 
-	plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.appName)
-
+	// Per PART 25: No UserName/GroupName - binary handles privilege dropping
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>%s</string>
+    <string>apimgr.%s</string>
     <key>ProgramArguments</key>
     <array>
-        <string>%s</string>
-        <string>--config</string>
-        <string>%s</string>
-        <string>--data</string>
-        <string>%s</string>
+        <string>/usr/local/bin/%s</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
-    <key>UserName</key>
-    <string>%s</string>
-    <key>GroupName</key>
-    <string>%s</string>
     <key>StandardOutPath</key>
-    <string>/var/log/%s.log</string>
+    <string>/var/log/apimgr/%s/stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/%s.error.log</string>
+    <string>/var/log/apimgr/%s/stderr.log</string>
 </dict>
 </plist>
-`, sm.appName, sm.binaryPath, sm.configDir, sm.dataDir, sm.user, sm.group, sm.appName, sm.appName)
+`, sm.appName, sm.appName, sm.appName, sm.appName)
 
 	if err := os.WriteFile(plistPath, []byte(plist), 0644); err != nil {
 		return fmt.Errorf("failed to write plist: %w", err)
 	}
 
 	fmt.Printf("LaunchDaemon installed: %s\n", plistPath)
-	fmt.Printf("Start with: launchctl load %s\n", plistPath)
+	fmt.Printf("Start with: sudo launchctl load %s\n", plistPath)
 	return nil
 }
 
@@ -377,10 +394,10 @@ func (sm *ServiceManager) createDarwinUser() error {
 		return nil
 	}
 
-	// Find available UID
-	uid := sm.findAvailableUID(100, 999)
+	// Find available UID in 200-899 range per AI.md PART 24
+	uid := sm.findAvailableUID(200, 899)
 
-	// Create user using dscl per AI.md PART 4
+	// Create user using dscl per AI.md PART 24
 	commands := [][]string{
 		{"dscl", ".", "-create", fmt.Sprintf("/Users/%s", sm.user)},
 		{"dscl", ".", "-create", fmt.Sprintf("/Users/%s", sm.user), "UniqueID", strconv.Itoa(uid)},
@@ -399,15 +416,12 @@ func (sm *ServiceManager) createDarwinUser() error {
 	return nil
 }
 
-// installBSD installs rc.d service on BSD per AI.md PART 5
+// installBSD installs rc.d service on BSD per AI.md PART 25
+// Binary drops privileges after port binding
 func (sm *ServiceManager) installBSD() error {
-	// Create user using pw per AI.md PART 4
-	if err := sm.createBSDUser(); err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
-	}
-
 	rcPath := fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.appName)
 
+	// Per PART 25: Simple rc.d script, binary handles privilege dropping
 	rcScript := fmt.Sprintf(`#!/bin/sh
 
 # PROVIDE: %s
@@ -418,17 +432,11 @@ func (sm *ServiceManager) installBSD() error {
 
 name="%s"
 rcvar="${name}_enable"
+command="/usr/local/bin/%s"
 
 load_rc_config $name
-
-: ${%s_enable:="NO"}
-: ${%s_user:="%s"}
-
-command="%s"
-command_args="--config %s --data %s"
-
 run_rc_command "$1"
-`, sm.appName, sm.appName, sm.appName, sm.appName, sm.user, sm.binaryPath, sm.configDir, sm.dataDir)
+`, sm.appName, sm.appName, sm.appName)
 
 	if err := os.WriteFile(rcPath, []byte(rcScript), 0755); err != nil {
 		return fmt.Errorf("failed to write rc script: %w", err)
@@ -448,13 +456,13 @@ func (sm *ServiceManager) createBSDUser() error {
 		return nil
 	}
 
-	// Find available UID
-	uid := sm.findAvailableUID(100, 999)
+	// Find available UID in 200-899 range per AI.md PART 24
+	uid := sm.findAvailableUID(200, 899)
 
-	// Create group
+	// Create group per AI.md PART 24
 	exec.Command("pw", "groupadd", sm.group, "-g", strconv.Itoa(uid)).Run()
 
-	// Create user using pw per AI.md PART 4
+	// Create user using pw per AI.md PART 24
 	return exec.Command("pw", "useradd", sm.user,
 		"-u", strconv.Itoa(uid),
 		"-g", sm.group,
@@ -512,7 +520,8 @@ func (sm *ServiceManager) uninstallLinux() error {
 
 // uninstallDarwin removes macOS service
 func (sm *ServiceManager) uninstallDarwin() error {
-	plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.appName)
+	// Per PART 25: Path is /Library/LaunchDaemons/apimgr.{appname}.plist
+	plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
 	exec.Command("launchctl", "unload", plistPath).Run()
 	os.Remove(plistPath)
 	fmt.Printf("Service %s uninstalled\n", sm.appName)
@@ -564,25 +573,144 @@ func IsRoot() bool {
 	}
 }
 
-// IsContainer checks if running in a container environment per AI.md PART 27
+// IsContainer checks if running in a container environment per AI.md PART 8 lines 7726-7772
 func IsContainer() bool {
-	// Check for /.dockerenv
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		return true
+	// File-based detection per PART 8 lines 7732-7740
+	containerFiles := []string{
+		"/.dockerenv",        // Docker
+		"/run/.containerenv", // Podman
+		"/dev/lxc",           // LXC/LXD/Incus
 	}
-	// Check container env var
-	if os.Getenv("container") != "" {
-		return true
-	}
-	// Check for common container init systems
-	if data, err := os.ReadFile("/proc/1/comm"); err == nil {
-		comm := strings.TrimSpace(string(data))
-		switch comm {
-		case "tini", "dumb-init", "s6-svscan", "runsv", "runsvdir":
+	for _, f := range containerFiles {
+		if _, err := os.Stat(f); err == nil {
 			return true
 		}
 	}
+
+	// Environment variable detection per PART 8 lines 7743-7748
+	if os.Getenv("container") != "" {
+		return true // Generic (systemd-nspawn, lxc, etc.)
+	}
+	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return true // Kubernetes
+	}
+
+	// Check parent process name for container init systems per PART 8 lines 7752-7758
+	parentName := getParentProcessName()
+	switch parentName {
+	case "tini", "dumb-init", "s6-svscan", "runsv", "runsvdir", "catatonit":
+		return true
+	case "vidveil":
+		// Parent is our own binary - likely container entrypoint
+		return true
+	}
+
+	// Check cgroup for container indicators per PART 8 lines 7762-7768
+	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+		content := string(data)
+		if strings.Contains(content, "docker") ||
+			strings.Contains(content, "kubepods") ||
+			strings.Contains(content, "lxc") {
+			return true
+		}
+	}
+
 	return false
+}
+
+// getParentProcessName returns the name of the parent process per PART 8 lines 7827-7843
+func getParentProcessName() string {
+	ppid := os.Getppid()
+
+	// Linux: read /proc/{ppid}/comm
+	if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", ppid)); err == nil {
+		return strings.TrimSpace(string(data))
+	}
+
+	// macOS/BSD: use ps command
+	cmd := exec.Command("ps", "-p", strconv.Itoa(ppid), "-o", "comm=")
+	if output, err := cmd.Output(); err == nil {
+		return strings.TrimSpace(string(output))
+	}
+
+	return ""
+}
+
+// DetectServiceManager returns the active service manager per AI.md PART 8 lines 7774-7825
+func DetectServiceManager() string {
+	// Check for container environment first
+	if IsContainer() {
+		return "container"
+	}
+
+	// Check parent process / init system
+	ppid := os.Getppid()
+
+	// systemd: parent is systemd or PPID=1 with systemd running
+	if ppid == 1 {
+		if _, err := os.Stat("/run/systemd/system"); err == nil {
+			return "systemd"
+		}
+	}
+	// Also check INVOCATION_ID (set by systemd)
+	if os.Getenv("INVOCATION_ID") != "" {
+		return "systemd"
+	}
+
+	// launchd: macOS with PPID=1
+	if runtime.GOOS == "darwin" && ppid == 1 {
+		return "launchd"
+	}
+
+	// runit: check for SVDIR
+	if os.Getenv("SVDIR") != "" {
+		return "runit"
+	}
+
+	// s6: check for S6_* vars
+	if os.Getenv("S6_LOGGING") != "" {
+		return "s6"
+	}
+
+	// SysV init: /etc/init.d script, no systemd
+	if ppid == 1 {
+		if _, err := os.Stat("/etc/init.d"); err == nil {
+			if _, err := os.Stat("/run/systemd/system"); os.IsNotExist(err) {
+				return "sysv"
+			}
+		}
+	}
+
+	// rc.d (BSD): check for rc.subr
+	if _, err := os.Stat("/etc/rc.subr"); err == nil {
+		return "rcd"
+	}
+
+	return "manual"
+}
+
+// ShouldDaemonize determines if we should daemonize based on context per PART 8 lines 7845-7867
+func ShouldDaemonize(isServiceStart bool, daemonFlag bool, configDaemonize bool) bool {
+	if isServiceStart {
+		// Service start - detect manager and ignore config
+		switch DetectServiceManager() {
+		case "systemd", "launchd", "runit", "s6", "docker", "container":
+			// Always foreground
+			return false
+		case "sysv", "rcd":
+			// Always daemonize
+			return true
+		default:
+			// Unknown, default to foreground
+			return false
+		}
+	}
+
+	// Manual start - respect flag and config
+	if daemonFlag {
+		return true
+	}
+	return configDaemonize
 }
 
 // EnsureSystemUser creates system user/group on startup per AI.md PART 27
@@ -626,8 +754,8 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 	}
 
 	// User doesn't exist, create it
-	// Find available UID/GID in 100-999 range per AI.md PART 24
-	id := findAvailableID(100, 999)
+	// Find available UID/GID in 200-899 range per AI.md PART 24
+	id := findAvailableID(200, 899)
 
 	// Determine home directory (use first data dir if available)
 	homeDir := "/nonexistent"

@@ -62,6 +62,12 @@ func ConfigFile() string {
 	return filepath.Join(ConfigDir(), "cli.yml")
 }
 
+// TokenFile returns the CLI token file path
+// Per AI.md PART 36: Token stored separately from config for security
+func TokenFile() string {
+	return filepath.Join(DataDir(), "token")
+}
+
 // LogFile returns the CLI log file path
 func LogFile() string {
 	return filepath.Join(LogDir(), "cli.log")

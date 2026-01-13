@@ -145,6 +145,90 @@ func (m *Manager) Disable() error {
 	}
 }
 
+// Status returns the current service status per AI.md PART 25
+func (m *Manager) Status() (string, error) {
+	switch runtime.GOOS {
+	case "linux":
+		return m.linuxStatus()
+	case "darwin":
+		return m.darwinStatus()
+	case "windows":
+		return m.windowsStatus()
+	case "freebsd", "openbsd", "netbsd":
+		return m.bsdStatus()
+	default:
+		return "unknown", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+}
+
+// linuxStatus returns service status on Linux
+func (m *Manager) linuxStatus() (string, error) {
+	if m.hasSystemd() {
+		out, err := exec.Command("systemctl", "is-active", m.name).Output()
+		status := strings.TrimSpace(string(out))
+		if err != nil {
+			if status == "inactive" || status == "dead" {
+				return "stopped", nil
+			}
+			return "stopped", nil
+		}
+		if status == "active" {
+			return "running", nil
+		}
+		return status, nil
+	}
+	if m.hasRunit() {
+		out, err := exec.Command("sv", "status", m.name).CombinedOutput()
+		if err != nil {
+			return "stopped", nil
+		}
+		if strings.HasPrefix(string(out), "run:") {
+			return "running", nil
+		}
+		return "stopped", nil
+	}
+	return "unknown", fmt.Errorf("no supported service manager found")
+}
+
+// darwinStatus returns service status on macOS
+func (m *Manager) darwinStatus() (string, error) {
+	out, err := exec.Command("launchctl", "list", m.launchdLabel()).CombinedOutput()
+	if err != nil {
+		return "stopped", nil
+	}
+	if len(out) > 0 {
+		return "running", nil
+	}
+	return "stopped", nil
+}
+
+// windowsStatus returns service status on Windows
+func (m *Manager) windowsStatus() (string, error) {
+	out, err := exec.Command("sc", "query", m.name).CombinedOutput()
+	if err != nil {
+		return "stopped", nil
+	}
+	if strings.Contains(string(out), "RUNNING") {
+		return "running", nil
+	}
+	if strings.Contains(string(out), "STOPPED") {
+		return "stopped", nil
+	}
+	return "unknown", nil
+}
+
+// bsdStatus returns service status on BSD
+func (m *Manager) bsdStatus() (string, error) {
+	out, err := exec.Command("service", m.name, "status").CombinedOutput()
+	if err != nil {
+		return "stopped", nil
+	}
+	if strings.Contains(strings.ToLower(string(out)), "running") {
+		return "running", nil
+	}
+	return "stopped", nil
+}
+
 // Linux - systemd and runit support
 func (m *Manager) linuxStart() error {
 	if m.hasSystemd() {
@@ -230,21 +314,34 @@ func (m *Manager) hasRunit() bool {
 func (m *Manager) installSystemd() error {
 	unitPath := filepath.Join("/etc/systemd/system", m.name+".service")
 
+	// Per AI.md PART 25: systemd unit file with security hardening
 	content := fmt.Sprintf(`[Unit]
 Description=%s
-After=network.target
+Documentation=https://apimgr.github.io/%s
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
+User=%s
+Group=%s
 ExecStart=%s
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
 
+# Security hardening per AI.md PART 25
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/apimgr/%s
+ReadWritePaths=/var/log/apimgr/%s
+
 [Install]
 WantedBy=multi-user.target
-`, m.description, m.execPath)
+`, m.description, m.name, m.name, m.name, m.execPath, m.name, m.name)
 
 	if err := os.WriteFile(unitPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write unit file: %w", err)

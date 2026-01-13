@@ -122,22 +122,31 @@ else
     fail "Service is not active"
 fi
 
+# Detect port from service logs (random 64xxx per AI.md PART 5)
+info "Detecting service port..."
+SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 50 | grep -oP 'Listening on \[::\]:\K[0-9]+' | tail -1 || echo "")
+if [ -z "$SERVICE_PORT" ]; then
+    # Fallback: try to find port from ss/netstat
+    SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- ss -tlnp | grep vidveil | grep -oP ':\K[0-9]+' | head -1 || echo "64080")
+fi
+info "Service running on port: ${SERVICE_PORT}"
+
 # Step 9: Test HTTP endpoints
 info "Testing API endpoints..."
-if incus exec "${INSTANCE_NAME}" -- curl -s http://localhost:80/healthz | grep -q "Status:\|healthy\|enabled"; then
+if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/healthz" | grep -q "status:\|healthy\|ok"; then
     pass "Health endpoint responding"
 else
     fail "Health endpoint not responding"
 fi
 
 # Test vidveil-specific endpoints
-if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:80/api/v1/engines" | grep -q "success"; then
+if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/api/v1/engines" | grep -qE "engines:|success"; then
     pass "Engines API responding"
 else
     fail "Engines API not responding"
 fi
 
-if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:80/api/v1/bangs" | grep -q "success"; then
+if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/api/v1/bangs" | grep -qE "bangs:|success"; then
     pass "Bangs API responding"
 else
     fail "Bangs API not responding"
@@ -145,7 +154,7 @@ fi
 
 # Test SSE streaming (informational - may fail without configured engines)
 info "Testing SSE streaming..."
-SSE_OUTPUT=$(incus exec "${INSTANCE_NAME}" -- timeout 5 curl -s -N "http://localhost:80/api/v1/search/stream?q=test" 2>/dev/null || true)
+SSE_OUTPUT=$(incus exec "${INSTANCE_NAME}" -- timeout 5 curl -s -N "http://localhost:${SERVICE_PORT}/api/v1/search/stream?q=test" 2>/dev/null || true)
 if echo "$SSE_OUTPUT" | grep -q "data:\|event:"; then
     pass "SSE streaming responding"
 else

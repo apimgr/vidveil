@@ -18,7 +18,7 @@ func NewPornFlipEngine(cfg *config.Config, torClient *tor.Client) *PornFlipEngin
 }
 
 // Search performs a search on PornFlip
-func (e *PornFlipEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *PornFlipEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search?search={query}&page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-item, div.thumb-item")
 }

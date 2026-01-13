@@ -1,102 +1,247 @@
+{{define "title"}}Logs{{end}}
+
 {{define "content"}}
-<div class="card">
-    <h2>Log Configuration</h2>
-    <form id="log-form" onsubmit="saveLogSettings(event)">
-        <div class="form-group">
-            <label for="log-level">Log Level</label>
-            <select id="log-level">
-                <option value="debug"{{if eq .Config.Server.Logging.Level "debug"}} selected{{end}}>Debug</option>
-                <option value="info"{{if eq .Config.Server.Logging.Level "info"}} selected{{end}}>Info</option>
-                <option value="warn"{{if eq .Config.Server.Logging.Level "warn"}} selected{{end}}>Warning</option>
-                <option value="error"{{if eq .Config.Server.Logging.Level "error"}} selected{{end}}>Error</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="log-format">Log Format</label>
-            <select id="log-format">
-                <option value="json"{{if eq .Config.Server.Logging.Format "json"}} selected{{end}}>JSON</option>
-                <option value="text"{{if eq .Config.Server.Logging.Format "text"}} selected{{end}}>Text</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="log-output">Output</label>
-            <select id="log-output">
-                <option value="stdout"{{if eq .Config.Server.Logging.Output "stdout"}} selected{{end}}>Standard Output</option>
-                <option value="file"{{if eq .Config.Server.Logging.Output "file"}} selected{{end}}>File</option>
-                <option value="both"{{if eq .Config.Server.Logging.Output "both"}} selected{{end}}>Both</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="log-path">Log File Path</label>
-            <input type="text" id="log-path" value="{{.Config.Server.Logging.Path}}" placeholder="/var/log/vidveil/app.log">
-        </div>
-        <div class="form-group">
-            <label for="log-max-size">Max File Size (MB)</label>
-            <input type="number" id="log-max-size" value="{{.Config.Server.Logging.MaxSize}}" placeholder="100">
-        </div>
-        <div class="form-group">
-            <label for="log-max-backups">Max Backups</label>
-            <input type="number" id="log-max-backups" value="{{.Config.Server.Logging.MaxBackups}}" placeholder="5">
-        </div>
-        <div class="button-group">
-            <button type="submit" class="btn btn-primary">Save Changes</button>
-        </div>
-    </form>
-</div>
-
-<div class="card">
-    <h2>Log Viewer</h2>
-    <div class="log-controls">
-        <div class="form-group inline">
-            <label for="log-filter">Filter</label>
-            <select id="log-filter" onchange="refreshLogs()">
-                <option value="all">All</option>
-                <option value="error">Errors Only</option>
-                <option value="warn">Warnings+</option>
-                <option value="info">Info+</option>
-            </select>
-        </div>
-        <div class="form-group inline">
-            <label for="log-lines">Lines</label>
-            <select id="log-lines" onchange="refreshLogs()">
-                <option value="50">50</option>
-                <option value="100" selected>100</option>
-                <option value="500">500</option>
-                <option value="1000">1000</option>
-            </select>
-        </div>
-        <button onclick="refreshLogs()" class="btn btn-secondary">Refresh</button>
-        <button onclick="downloadLogs()" class="btn btn-secondary">Download</button>
-        <button onclick="clearLogs()" class="btn btn-warning">Clear Logs</button>
+<div class="admin-section">
+    <h1>Log Viewer</h1>
+    
+    {{if .Error}}
+    <div class="alert alert-error">
+        <strong>Error:</strong> {{.Error}}
     </div>
-    <div id="log-container" class="log-viewer">
-        <pre id="log-output">Loading logs...</pre>
+    {{end}}
+    
+    <div class="card">
+        <div class="log-controls">
+            <form method="get" action="/admin/logs" class="log-filter-form">
+                <label for="type">Log Type:</label>
+                <select id="type" name="type" onchange="this.form.submit()">
+                    <option value="access" {{if eq .LogType "access"}}selected{{end}}>Access</option>
+                    <option value="error" {{if eq .LogType "error"}}selected{{end}}>Error</option>
+                    <option value="audit" {{if eq .LogType "audit"}}selected{{end}}>Audit</option>
+                    <option value="security" {{if eq .LogType "security"}}selected{{end}}>Security</option>
+                    <option value="debug" {{if eq .LogType "debug"}}selected{{end}}>Debug</option>
+                </select>
+                
+                <label for="limit">Show:</label>
+                <select id="limit" name="limit" onchange="this.form.submit()">
+                    <option value="100" {{if eq .Limit 100}}selected{{end}}>Last 100</option>
+                    <option value="250" {{if eq .Limit 250}}selected{{end}}>Last 250</option>
+                    <option value="500" {{if eq .Limit 500}}selected{{end}}>Last 500</option>
+                    <option value="1000" {{if eq .Limit 1000}}selected{{end}}>Last 1000</option>
+                </select>
+                
+                <label for="search">Search:</label>
+                <input type="text" id="search" name="search" value="{{.Search}}" placeholder="Filter logs...">
+                
+                <button type="submit">Refresh</button>
+                <a href="/admin/logs?type={{.LogType}}&limit={{.Limit}}" class="button">Clear Search</a>
+            </form>
+        </div>
+        
+        {{if .Entries}}
+        <div class="log-viewer">
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Level</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Entries}}
+                    <tr class="log-entry log-level-{{.Level}}">
+                        <td class="log-timestamp">{{.Timestamp}}</td>
+                        <td class="log-level">{{.Level}}</td>
+                        <td class="log-message">{{.Message}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="log-info">
+            Showing {{len .Entries}} entries (most recent first)
+        </div>
+        {{else}}
+        <div class="alert alert-info">
+            <p>No log entries found.</p>
+            {{if .Search}}
+            <p>Try clearing your search filter.</p>
+            {{end}}
+        </div>
+        {{end}}
     </div>
+    
+    <style>
+    .log-controls {
+        padding: 1rem;
+        background: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    [data-theme="dark"] .log-controls {
+        background: #2a2a2a;
+        border-bottom-color: #444;
+    }
+    
+    .log-filter-form {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .log-filter-form label {
+        font-weight: 600;
+    }
+    
+    .log-filter-form select,
+    .log-filter-form input[type="text"] {
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    [data-theme="dark"] .log-filter-form select,
+    [data-theme="dark"] .log-filter-form input[type="text"] {
+        background: #333;
+        border-color: #555;
+        color: #eee;
+    }
+    
+    .log-filter-form input[type="text"] {
+        min-width: 200px;
+    }
+    
+    .log-filter-form button,
+    .log-filter-form .button {
+        padding: 0.5rem 1rem;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .log-filter-form button:hover,
+    .log-filter-form .button:hover {
+        background: #0056b3;
+    }
+    
+    .log-viewer {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    
+    .log-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: monospace;
+        font-size: 0.9rem;
+    }
+    
+    .log-table th {
+        background: #f5f5f5;
+        padding: 0.5rem;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid #ddd;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    
+    [data-theme="dark"] .log-table th {
+        background: #2a2a2a;
+        border-bottom-color: #444;
+    }
+    
+    .log-table td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #eee;
+    }
+    
+    [data-theme="dark"] .log-table td {
+        border-bottom-color: #333;
+    }
+    
+    .log-entry:hover {
+        background: #f9f9f9;
+    }
+    
+    [data-theme="dark"] .log-entry:hover {
+        background: #333;
+    }
+    
+    .log-timestamp {
+        white-space: nowrap;
+        color: #666;
+    }
+    
+    [data-theme="dark"] .log-timestamp {
+        color: #999;
+    }
+    
+    .log-level {
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    
+    .log-level-DEBUG { color: #6c757d; }
+    .log-level-INFO { color: #17a2b8; }
+    .log-level-WARN { color: #ffc107; }
+    .log-level-ERROR { color: #dc3545; }
+    
+    .log-message {
+        word-break: break-all;
+    }
+    
+    .log-info {
+        padding: 1rem;
+        text-align: center;
+        color: #666;
+        border-top: 1px solid #ddd;
+    }
+    
+    [data-theme="dark"] .log-info {
+        color: #999;
+        border-top-color: #444;
+    }
+    
+    .alert {
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 4px;
+    }
+    
+    .alert-error {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+    
+    .alert-info {
+        background: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+    }
+    
+    [data-theme="dark"] .alert-error {
+        background: #3a1f1f;
+        border-color: #5a2a2a;
+        color: #f8d7da;
+    }
+    
+    [data-theme="dark"] .alert-info {
+        background: #1f2f3a;
+        border-color: #2a4a5a;
+        color: #d1ecf1;
+    }
+    </style>
 </div>
-
-<div class="card">
-    <h2>Access Logs</h2>
-    <form id="access-log-form" onsubmit="saveAccessLogSettings(event)">
-        <div class="form-group">
-            <label class="toggle-label">
-                <input type="checkbox" id="access-enabled"{{if .Config.Server.Logging.Access.Enabled}} checked{{end}}>
-                <span>Enable Access Logging</span>
-            </label>
-        </div>
-        <div class="form-group">
-            <label class="toggle-label">
-                <input type="checkbox" id="access-anonymize"{{if .Config.Server.Logging.Access.Anonymize}} checked{{end}}>
-                <span>Anonymize IP Addresses</span>
-            </label>
-            <p class="help-text">Hash IP addresses for privacy</p>
-        </div>
-        <div class="button-group">
-            <button type="submit" class="btn btn-primary">Save Changes</button>
-        </div>
-    </form>
-</div>
-
-{{/* Styles moved to admin.css per AI.md PART 16 */}}
 {{end}}
 
 {{define "scripts"}}

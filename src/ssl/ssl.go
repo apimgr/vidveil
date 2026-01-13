@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Package ssl provides SSL/TLS certificate management
 // This is a re-export package that wraps src/server/service/ssl
 package ssl

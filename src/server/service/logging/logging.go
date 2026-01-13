@@ -30,7 +30,7 @@ const (
 )
 
 // RotatingFile implements io.Writer with automatic rotation
-// AI.md PART 21: Built-in rotation support (no external logrotate needed)
+// AI.md PART 11: Built-in rotation support (no external logrotate needed)
 type RotatingFile struct {
 	mu   sync.Mutex
 	path string
@@ -49,7 +49,7 @@ type RotatingFile struct {
 	keepCount int
 }
 
-// RotationConfig holds rotation settings per PART 21
+// RotationConfig holds rotation settings per PART 11
 type RotationConfig struct {
 	// e.g., "50MB", "100KB"
 	MaxSize string
@@ -150,7 +150,7 @@ func (rf *RotatingFile) Write(p []byte) (n int, err error) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	// Check if rotation is needed (size OR time, whichever comes first per PART 21)
+	// Check if rotation is needed (size OR time, whichever comes first per PART 11)
 	if rf.needsRotation() {
 		if err := rf.rotate(); err != nil {
 			// Log rotation error but continue writing
@@ -211,7 +211,7 @@ func (rf *RotatingFile) rotate() error {
 	if rf.compress {
 		go rf.compressFile(rotatedPath)
 	} else if rf.keepCount == 0 {
-		// Delete immediately if not keeping rotated files (PART 21 default)
+		// Delete immediately if not keeping rotated files (PART 11 default)
 		go os.Remove(rotatedPath)
 	}
 
@@ -260,7 +260,7 @@ func (rf *RotatingFile) compressFile(path string) {
 	// Remove original after successful compression
 	os.Remove(path)
 
-	// If not keeping files, remove compressed too (PART 21 default)
+	// If not keeping files, remove compressed too (PART 11 default)
 	if rf.keepCount == 0 {
 		os.Remove(path + ".gz")
 	}
@@ -316,7 +316,7 @@ func (rf *RotatingFile) Close() error {
 	return nil
 }
 
-// MaskEmail masks an email address per AI.md PART 21
+// MaskEmail masks an email address per AI.md PART 11
 // "user@example.com" -> "u***@e***.com"
 func MaskEmail(email string) string {
 	if email == "" {
@@ -342,7 +342,7 @@ func MaskEmail(email string) string {
 	return maskedUser + "@***"
 }
 
-// MaskUsername masks a username per AI.md PART 21
+// MaskUsername masks a username per AI.md PART 11
 // "johndoe" -> "joh***"
 func MaskUsername(username string) string {
 	if username == "" {
@@ -354,7 +354,7 @@ func MaskUsername(username string) string {
 	return username[:3] + "***"
 }
 
-// MaskIP masks an IP address per AI.md PART 21
+// MaskIP masks an IP address per AI.md PART 11
 // "192.168.1.100" -> "192.168.xxx.xxx"
 func MaskIP(ip string) string {
 	if ip == "" {
@@ -374,7 +374,7 @@ func MaskIP(ip string) string {
 	return ip[:len(ip)/2] + "***"
 }
 
-// SanitizeLogFields masks sensitive fields in log data per AI.md PART 21
+// SanitizeLogFields masks sensitive fields in log data per AI.md PART 11
 func SanitizeLogFields(fields map[string]interface{}) map[string]interface{} {
 	if fields == nil {
 		return nil
@@ -472,7 +472,7 @@ func New(cfg *config.Config) (*Logger, error) {
 		l.level = LevelInfo
 	}
 
-	// Setup debug log with rotation per PART 21
+	// Setup debug log with rotation per PART 11
 	if cfg.Server.Logs.Debug.Enabled && cfg.Server.Logs.Debug.Filename != "" {
 		keep := parseKeepString(cfg.Server.Logs.Debug.Keep)
 		if err := l.addFileOutput("debug", cfg.Server.Logs.Debug.Filename, cfg.Server.Logs.Debug.Rotate, keep); err != nil {
@@ -480,7 +480,7 @@ func New(cfg *config.Config) (*Logger, error) {
 		}
 	}
 
-	// Setup access log with rotation per PART 21
+	// Setup access log with rotation per PART 11
 	if cfg.Server.Logs.Access.Enabled && cfg.Server.Logs.Access.Filename != "" {
 		keep := parseKeepString(cfg.Server.Logs.Access.Keep)
 		if err := l.addFileOutput("access", cfg.Server.Logs.Access.Filename, cfg.Server.Logs.Access.Rotate, keep); err != nil {
@@ -488,7 +488,7 @@ func New(cfg *config.Config) (*Logger, error) {
 		}
 	}
 
-	// Setup server log with rotation per PART 21
+	// Setup server log with rotation per PART 11
 	if cfg.Server.Logs.Server.Enabled && cfg.Server.Logs.Server.Filename != "" {
 		keep := parseKeepString(cfg.Server.Logs.Server.Keep)
 		if err := l.addFileOutput("server", cfg.Server.Logs.Server.Filename, cfg.Server.Logs.Server.Rotate, keep); err != nil {
@@ -496,7 +496,7 @@ func New(cfg *config.Config) (*Logger, error) {
 		}
 	}
 
-	// Setup error log with rotation per PART 21
+	// Setup error log with rotation per PART 11
 	if cfg.Server.Logs.Error.Enabled && cfg.Server.Logs.Error.Filename != "" {
 		keep := parseKeepString(cfg.Server.Logs.Error.Keep)
 		if err := l.addFileOutput("error", cfg.Server.Logs.Error.Filename, cfg.Server.Logs.Error.Rotate, keep); err != nil {
@@ -504,7 +504,7 @@ func New(cfg *config.Config) (*Logger, error) {
 		}
 	}
 
-	// Setup audit log with rotation per PART 21
+	// Setup audit log with rotation per PART 11
 	if cfg.Server.Logs.Audit.Enabled && cfg.Server.Logs.Audit.Filename != "" {
 		keep := parseKeepString(cfg.Server.Logs.Audit.Keep)
 		if err := l.addFileOutput("audit", cfg.Server.Logs.Audit.Filename, cfg.Server.Logs.Audit.Rotate, keep); err != nil {
@@ -512,7 +512,7 @@ func New(cfg *config.Config) (*Logger, error) {
 		}
 	}
 
-	// Setup security log with rotation per PART 21
+	// Setup security log with rotation per PART 11
 	if cfg.Server.Logs.Security.Enabled && cfg.Server.Logs.Security.Filename != "" {
 		keep := parseKeepString(cfg.Server.Logs.Security.Keep)
 		if err := l.addFileOutput("security", cfg.Server.Logs.Security.Filename, cfg.Server.Logs.Security.Rotate, keep); err != nil {
@@ -523,7 +523,7 @@ func New(cfg *config.Config) (*Logger, error) {
 	return l, nil
 }
 
-// addFileOutput adds a rotating file output per PART 21
+// addFileOutput adds a rotating file output per PART 11
 func (l *Logger) addFileOutput(name, path, rotate string, keep int) error {
 	// Parse rotation config from string like "weekly,50MB" or "daily" or "100MB"
 	rotCfg := parseRotationString(rotate)
@@ -539,15 +539,15 @@ func (l *Logger) addFileOutput(name, path, rotate string, keep int) error {
 	return nil
 }
 
-// parseRotationString parses rotation string like "weekly,50MB" per PART 21
+// parseRotationString parses rotation string like "weekly,50MB" per PART 11
 // Supports: "weekly,50MB" = rotate on weekly OR 50MB, whichever comes first
 func parseRotationString(s string) RotationConfig {
-	// Default per PART 21
+	// Default per PART 11
 	cfg := RotationConfig{
 		MaxSize:  "50MB",
 		Interval: "",
 		Compress: false,
-		// Delete immediately after rotation (default per PART 21)
+		// Delete immediately after rotation (default per PART 11)
 		Keep: 0,
 	}
 
@@ -600,6 +600,44 @@ func (l *Logger) Close() {
 			f.Close()
 		}
 	}
+}
+
+// Reopen reopens all log files (called on SIGUSR1 for log rotation per AI.md PART 8)
+func (l *Logger) Reopen() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	for name, w := range l.outputs {
+		if rf, ok := w.(*RotatingFile); ok {
+			rf.Reopen()
+		}
+		_ = name // Used for future logging
+	}
+}
+
+// Reopen closes and reopens the log file (for SIGUSR1 log rotation per AI.md PART 8)
+func (rf *RotatingFile) Reopen() error {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	// Close current file
+	if rf.file != nil {
+		rf.file.Close()
+	}
+
+	// Reopen file
+	f, err := os.OpenFile(rf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	rf.file = f
+	rf.currentSize = 0
+	if info, err := f.Stat(); err == nil {
+		rf.currentSize = info.Size()
+	}
+
+	return nil
 }
 
 // log writes a log entry
@@ -661,7 +699,7 @@ func (l *Logger) Access(method, path, remoteAddr, userAgent string, status int, 
 	})
 }
 
-// Audit logs an audit event with automatic PII masking per AI.md PART 21
+// Audit logs an audit event with automatic PII masking per AI.md PART 11
 func (l *Logger) Audit(action, user, resource string, details map[string]interface{}) {
 	fields := map[string]interface{}{
 		"action":   action,
@@ -675,7 +713,7 @@ func (l *Logger) Audit(action, user, resource string, details map[string]interfa
 	l.log(LevelInfo, "audit", "Audit event", SanitizeLogFields(fields))
 }
 
-// Security logs a security event with automatic PII masking per AI.md PART 21
+// Security logs a security event with automatic PII masking per AI.md PART 11
 func (l *Logger) Security(event, remoteAddr string, details map[string]interface{}) {
 	fields := map[string]interface{}{
 		"event":       event,

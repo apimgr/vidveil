@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Package scheduler provides background task scheduling
 // This is a re-export package that wraps src/server/service/scheduler
 package scheduler

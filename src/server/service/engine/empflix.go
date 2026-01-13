@@ -18,7 +18,7 @@ func NewEMPFlixEngine(cfg *config.Config, torClient *tor.Client) *EMPFlixEngine 
 }
 
 // Search performs a search on EMPFlix
-func (e *EMPFlixEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *EMPFlixEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search.php?what={query}&page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.item-video, div.video-item")
 }

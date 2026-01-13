@@ -9,16 +9,16 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/mode"
+	"github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server"
+	daemonpkg "github.com/apimgr/vidveil/src/server/daemon"
 	"github.com/apimgr/vidveil/src/server/service/admin"
 	"github.com/apimgr/vidveil/src/server/service/blocklist"
 	"github.com/apimgr/vidveil/src/server/service/cluster"
@@ -29,7 +29,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
-	"github.com/apimgr/vidveil/src/server/service/service"
+	signalpkg "github.com/apimgr/vidveil/src/server/signal"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
 	"github.com/apimgr/vidveil/src/server/service/system"
 	"github.com/apimgr/vidveil/src/server/service/tor"
@@ -259,6 +259,9 @@ func main() {
 	if backupDir == "" && os.Getenv("BACKUP_DIR") != "" {
 		backupDir = os.Getenv("BACKUP_DIR")
 	}
+	if pidFile == "" && os.Getenv("PID_FILE") != "" {
+		pidFile = os.Getenv("PID_FILE")
+	}
 	if port == "" && os.Getenv("PORT") != "" {
 		port = os.Getenv("PORT")
 	}
@@ -276,12 +279,13 @@ func main() {
 	// This must happen before starting the server
 	mode.Initialize(modeStr, debug)
 
-	// Handle daemon mode per AI.md PART 4
+	// Handle daemon mode per AI.md PART 8 lines 7880-7955
 	if daemon {
-		// Daemonize: fork to background
-		// For now, just log that daemon mode was requested
-		// Full implementation requires platform-specific code
-		fmt.Println("🔄 Running in daemon mode...")
+		if err := daemonpkg.Daemonize(); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Failed to daemonize: %v\n", err)
+			os.Exit(1)
+		}
+		// If we get here, we're either the child or daemonization failed
 	}
 
 	// Load configuration
@@ -325,25 +329,17 @@ func main() {
 		paths.Log = logDir
 	}
 
-	// Write PID file if specified per AI.md PART 4
-	// Binary creates parent directories per AI.md PART 27
-	// Permissions: root=0755/0644, user=0700/0600 per AI.md line 7240-7241
+	// Write PID file if specified per AI.md PART 8
+	// Uses signal package which handles stale PID detection per AI.md lines 7294-7327
+	// - Checks if PID file exists and process is running
+	// - Verifies process is actually our binary (not PID reuse)
+	// - Removes stale PID files automatically
 	if pidFile != "" {
-		pidDir := filepath.Dir(pidFile)
-		dirPerm := os.FileMode(0755)
-		filePerm := os.FileMode(0644)
-		if os.Getuid() != 0 {
-			dirPerm = 0700
-			filePerm = 0600
+		if err := signalpkg.WritePIDFile(pidFile, appName); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+			os.Exit(1)
 		}
-		if err := os.MkdirAll(pidDir, dirPerm); err != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  Failed to create PID directory: %v\n", err)
-		}
-		pid := os.Getpid()
-		if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d\n", pid)), filePerm); err != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  Failed to write PID file: %v\n", err)
-		}
-		defer os.Remove(pidFile)
+		defer signalpkg.RemovePIDFile(pidFile)
 	}
 
 	// Override with command line flags
@@ -388,7 +384,7 @@ func main() {
 	}
 
 	// Initialize cluster manager per PART 24
-	// Cluster mode auto-detected: SQLite = single instance, PostgreSQL/MySQL = cluster
+	// Cluster mode auto-detected: SQLite = single instance, PostgreSQL/MySQL/MSSQL = cluster
 	// For now, we use SQLite so cluster is in single-instance mode
 	// In production with external DB, this would enable automatically
 	clusterMgr, err := cluster.NewManager(migrationMgr.GetDB())
@@ -484,7 +480,7 @@ func main() {
 		},
 		BackupAuto: func(ctx context.Context) error {
 			// Automatic backup per PART 25 (disabled by default)
-			maint := maintenance.New(paths.Config, paths.Data, version.Get())
+			maint := maintenance.New(paths.Config, paths.Data, version.GetVersion())
 			return maint.Backup("")
 		},
 		HealthcheckSelf: func(ctx context.Context) error {
@@ -572,7 +568,7 @@ func main() {
 		fmt.Println()
 		fmt.Println("╔══════════════════════════════════════════════════════════════════════╗")
 		fmt.Println("║                                                                      ║")
-		fmt.Printf("║   VIDVEIL v%-58s ║\n", version.Get())
+		fmt.Printf("║   VIDVEIL v%-58s ║\n", version.GetVersion())
 		fmt.Println("║                                                                      ║")
 		fmt.Printf("║   Status: %-60s ║\n", statusText)
 		fmt.Println("║                                                                      ║")
@@ -620,14 +616,26 @@ func main() {
 		}
 	}()
 
-	// Wait for shutdown signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	// Configure signal handlers per AI.md PART 8
+	// SIGUSR1 (10) → Reopen logs (log rotation)
+	// SIGUSR2 (12) → Status dump
+	signalpkg.SetLogReopenFunc(func() {
+		logger.Reopen()
+	})
+	signalpkg.SetStatusDumpFunc(func() {
+		// Dump status to stderr
+		fmt.Fprintf(os.Stderr, "[STATUS] Server running on %s:%s\n", cfg.Server.Address, cfg.Server.Port)
+		fmt.Fprintf(os.Stderr, "[STATUS] Mode: %s, Debug: %v\n", cfg.Server.Mode, mode.IsDebugEnabled())
+		fmt.Fprintf(os.Stderr, "[STATUS] Uptime: %v\n", time.Since(time.Now()))
+	})
 
-	sig := <-quit
+	// Wait for shutdown signal per AI.md PART 8
+	// Handles: SIGTERM(15), SIGINT(2), SIGQUIT(3), SIGRTMIN+3(37)
+	// Ignores: SIGHUP(1) - config auto-reloads via file watcher
+	sig := signalpkg.WaitForShutdown(context.Background())
 	fmt.Printf("\n🛑 Received %v, shutting down gracefully...\n", sig)
 
-	// Graceful shutdown with timeout (30 seconds per AI.md)
+	// Graceful shutdown with timeout (30 seconds per AI.md PART 8 line 8063)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -640,78 +648,50 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Printf(`Vidveil v%s - Privacy-respecting adult video meta search engine
+	// Per AI.md PART 8 lines 7191-7229: Exact --help output format
+	binaryName := filepath.Base(os.Args[0])
+	fmt.Printf(`%s %s - Privacy-respecting adult video meta search engine
 
-Usage: vidveil [options]
+Usage:
+  %s [flags]
 
-Options:
-  --help              Show this help message
-  --version           Show version information
-  --shell completions [SHELL]  Print shell completions (auto-detect if SHELL omitted)
-  --shell init [SHELL]         Print shell init command (auto-detect if SHELL omitted)
-  --status            Check server status and health
-  --mode <mode>       Set application mode (production or development)
-  --config <dir>      Set configuration directory
-  --data <dir>        Set data directory
-  --cache <dir>       Set cache directory
-  --log <dir>         Set log directory
-  --backup <dir>      Set backup directory
-  --pid <file>        Set PID file path
-  --address <addr>    Set listen address
-  --port <port>       Set port (e.g., 8888 or 80,443)
-  --debug             Enable debug mode (enables /debug/pprof endpoints)
-  --daemon            Run in background (daemonize)
+Information:
+  -h, --help                        Show help (--help for any command shows its help)
+  -v, --version                     Show version
+      --status                      Show server status and health
 
-Update (AI.md PART 8):
-  --update                Check and perform in-place update with restart
-  --update yes            Same as --update (default)
-  --update check          Check for updates without installing (no privileges required)
-  --update branch <name>  Set update branch (stable, beta, daily)
+Shell Integration:
+      --shell completions [SHELL]   Print shell completions
+      --shell init [SHELL]          Print shell init command
+      --shell --help                Show shell help
+
+Server Configuration:
+      --mode {production|development}  Application mode (default: production)
+      --config DIR                  Config directory
+      --data DIR                    Data directory
+      --cache DIR                   Cache directory
+      --log DIR                     Log directory
+      --backup DIR                  Backup directory
+      --pid FILE                    PID file path
+      --address ADDR                Listen address (default: 0.0.0.0)
+      --port PORT                   Listen port (default: random 64xxx, 80 in container)
+      --daemon                      Run as daemon (detach from terminal)
+      --debug                       Enable debug mode
 
 Service Management:
-  --service start         Start the service
-  --service stop          Stop the service
-  --service restart       Restart the service
-  --service reload        Reload configuration
-  --service --install     Install as system service
-  --service --uninstall   Uninstall system service
-  --service --disable     Disable the service
-  --service --help        Show service help
+      --service CMD                 Service management (--service --help for details)
+      --maintenance CMD             Maintenance operations (--maintenance --help for details)
+      --update [CMD]                Check/perform updates (--update --help for details)
 
-Maintenance:
-  --maintenance backup [file]     Create backup
-  --maintenance restore [file]    Restore from backup
-  --maintenance update            Alias for --update yes
-  --maintenance mode <on|off>     Enable/disable maintenance mode
-  --maintenance setup             Reset admin credentials (recovery)
-
-Environment Variables:
-  MODE                Application mode (runtime, always checked)
-
-  Initialization only (used once on first run):
-  CONFIG_DIR          Configuration directory
-  DATA_DIR            Data directory
-  CACHE_DIR           Cache directory
-  LOG_DIR             Log directory
-  BACKUP_DIR          Backup directory
-  PORT                Server port
-  LISTEN              Listen address
-  APPLICATION_NAME    Application title
-  APPLICATION_TAGLINE Application description
-
-Default behavior:
-  Running without arguments initializes (if needed) and starts the server.
-
-Shells: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
-
-Documentation: https://vidveil.apimgr.us
-Source: https://github.com/apimgr/vidveil
-`, version.Get())
+Run '%s <command> --help' for detailed help on any command.
+`, binaryName, version.GetVersion(), binaryName, binaryName)
 }
 
 func printVersion() {
 	// Use main.go build variables per AI.md PART 13: --version Output
-	fmt.Printf("vidveil %s\n", Version)
+	// Per AI.md PART 8: Use actual binary name, not hardcoded
+	binaryName := filepath.Base(os.Args[0])
+	fmt.Printf("%s %s\n", binaryName, Version)
 	fmt.Printf("Built: %s\n", BuildDate)
 	fmt.Printf("Go: %s\n", runtime.Version())
 	fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
@@ -781,8 +761,24 @@ func handleShellCommand(subCmd, shell string) {
 		printCompletions(shell, binaryName)
 	case "init":
 		printInit(shell, binaryName)
+	case "--help", "help", "-h":
+		// Per AI.md PART 8: --shell --help prints help and exits 0
+		fmt.Println(`Shell Integration Commands:
+  vidveil --shell completions [SHELL]   Print shell completions script
+  vidveil --shell init [SHELL]          Print shell init command for eval
+
+Supported Shells:
+  bash, zsh, fish, powershell, pwsh, sh, dash, ksh
+
+Examples:
+  # Add to ~/.bashrc or ~/.zshrc
+  eval "$(vidveil --shell init)"
+
+  # Or source completions directly
+  source <(vidveil --shell completions bash)`)
+		os.Exit(0)
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown --shell command: %s\nUsage: --shell [completions|init] [SHELL]\n", subCmd)
+		fmt.Fprintf(os.Stderr, "Unknown --shell command: %s\nUsage: --shell [completions|init|--help] [SHELL]\n", subCmd)
 		os.Exit(1)
 	}
 }
@@ -854,7 +850,7 @@ _arguments \
     '--status[Show status]' \
     '--daemon[Run as daemon]' \
     '--debug[Enable debug mode]' \
-    '--service[Service command]:command:(start stop restart reload install uninstall)' \
+    '--service[Service command]:command:(start stop restart reload status install uninstall)' \
     '--maintenance[Maintenance command]:command:(backup restore update mode setup)' \
     '--update[Update command]:command:(check yes)'
 `, binaryName)
@@ -876,7 +872,7 @@ complete -c %s -l mode -d 'Application mode' -xa 'production development'
 complete -c %s -l status -d 'Show status'
 complete -c %s -l daemon -d 'Run as daemon'
 complete -c %s -l debug -d 'Enable debug mode'
-complete -c %s -l service -d 'Service command' -xa 'start stop restart reload install uninstall'
+complete -c %s -l service -d 'Service command' -xa 'start stop restart reload status install uninstall'
 complete -c %s -l maintenance -d 'Maintenance command' -xa 'backup restore update mode setup'
 complete -c %s -l update -d 'Update command' -xa 'check yes'
 `, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
@@ -898,11 +894,21 @@ func printPowerShellCompletions(binaryName string) {
 }
 
 func handleServiceCommand(cmd string) {
-	svc, err := service.New("vidveil", "Vidveil", "Privacy-respecting adult video meta search engine")
+	// Per AI.md PART 4 & 5: Use system.NewServiceManager which creates system user
+	// Get binary path
+	binaryPath, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Service error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "❌ Failed to get executable path: %v\n", err)
 		os.Exit(1)
 	}
+	
+	// Get default paths per AI.md PART 4
+	isRoot := os.Geteuid() == 0
+	configDir := paths.GetDefaultConfigDir(isRoot)
+	dataDir := paths.GetDefaultDataDir(isRoot)
+	
+	// Use system.NewServiceManager which handles user creation per AI.md PART 4
+	svc := system.NewServiceManager("vidveil", binaryPath, configDir, dataDir)
 
 	switch cmd {
 	case "start":
@@ -937,6 +943,22 @@ func handleServiceCommand(cmd string) {
 		}
 		fmt.Println("✅ Configuration reloaded")
 
+	case "status":
+		// Per AI.md PART 25: Show service status
+		status, err := svc.Status()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Failed to get status: %v\n", err)
+			os.Exit(1)
+		}
+		switch status {
+		case "running":
+			fmt.Println("✅ Vidveil service is running")
+		case "stopped":
+			fmt.Println("⏹️ Vidveil service is stopped")
+		default:
+			fmt.Printf("❓ Vidveil service status: %s\n", status)
+		}
+
 	case "--install":
 		fmt.Println("Installing Vidveil as system service...")
 		if err := svc.Install(); err != nil {
@@ -950,14 +972,7 @@ func handleServiceCommand(cmd string) {
 			fmt.Fprintf(os.Stderr, "❌ Failed to uninstall: %v\n", err)
 			os.Exit(1)
 		}
-
-	case "--disable":
-		fmt.Println("Disabling Vidveil service...")
-		if err := svc.Disable(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to disable: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("✅ Service disabled")
+		fmt.Println("✅ Service uninstalled")
 
 	case "--help":
 		fmt.Println(`Service Management Commands:
@@ -966,9 +981,9 @@ func handleServiceCommand(cmd string) {
   vidveil --service stop          Stop the service
   vidveil --service restart       Restart the service
   vidveil --service reload        Reload configuration
+  vidveil --service status        Show service status
   vidveil --service --install     Install as system service
   vidveil --service --uninstall   Uninstall system service
-  vidveil --service --disable     Disable the service
 
 Supported service managers:
   - systemd (Linux)
@@ -986,13 +1001,13 @@ Supported service managers:
 
 // handleUpdateCommand implements AI.md PART 14 --update command
 func handleUpdateCommand(cmd, arg string) {
-	maint := maintenance.New("", "", version.Get())
+	maint := maintenance.New("", "", version.GetVersion())
 
 	switch cmd {
 	case "check":
 		// Check for updates without installing (no privileges required)
 		fmt.Println("Checking for updates...")
-		fmt.Printf("Current version: %s\n", version.Get())
+		fmt.Printf("Current version: %s\n", version.GetVersion())
 
 		info, err := maint.CheckUpdate()
 		if err != nil {
@@ -1019,7 +1034,7 @@ func handleUpdateCommand(cmd, arg string) {
 	case "yes", "":
 		// Check and perform in-place update with restart
 		fmt.Println("Checking for updates...")
-		fmt.Printf("Current version: %s\n", version.Get())
+		fmt.Printf("Current version: %s\n", version.GetVersion())
 
 		info, err := maint.CheckUpdate()
 		if err != nil {
@@ -1066,10 +1081,9 @@ func handleUpdateCommand(cmd, arg string) {
 		fmt.Printf("✅ Update branch set to: %s\n", arg)
 		os.Exit(0)
 
-	default:
-		fmt.Printf("❌ Unknown update command: %s\n", cmd)
-		fmt.Println(`
-Update Commands (AI.md PART 14):
+	case "--help", "help", "-h":
+		// Per AI.md PART 8: --update --help prints help and exits 0
+		fmt.Println(`Update Commands:
   vidveil --update              Check and perform in-place update with restart
   vidveil --update yes          Same as --update (default)
   vidveil --update check        Check for updates without installing
@@ -1079,12 +1093,20 @@ Update Branches:
   stable (default)  Release builds (v*, *.*.*)
   beta              Pre-release builds (*-beta)
   daily             Daily builds (YYYYMMDDHHMM)`)
+		os.Exit(0)
+
+	default:
+		fmt.Printf("❌ Unknown update command: %s\n", cmd)
+		fmt.Println(`
+Usage: vidveil --update [check|yes|branch <name>|--help]
+
+Run 'vidveil --update --help' for detailed help.`)
 		os.Exit(1)
 	}
 }
 
 func handleMaintenanceCommand(cmd, arg string) {
-	maint := maintenance.New("", "", version.Get())
+	maint := maintenance.New("", "", version.GetVersion())
 
 	switch cmd {
 	case "backup":
@@ -1158,15 +1180,28 @@ func handleMaintenanceCommand(cmd, arg string) {
 		fmt.Println("╚══════════════════════════════════════════════════════════════════╝")
 		fmt.Println()
 
+	case "--help", "help", "-h":
+		// Per AI.md PART 8: --maintenance --help prints help and exits 0
+		fmt.Println(`Maintenance Commands:
+  vidveil --maintenance backup [file]     Create backup (optional custom filename)
+  vidveil --maintenance restore [file]    Restore from backup (latest if no file)
+  vidveil --maintenance update            Check and apply updates (alias for --update)
+  vidveil --maintenance mode <on|off>     Enable/disable maintenance mode
+  vidveil --maintenance setup             Reset admin credentials (recovery)
+
+Examples:
+  vidveil --maintenance backup                    # Backup to default location
+  vidveil --maintenance backup /tmp/backup.tar   # Backup to specific file
+  vidveil --maintenance restore                   # Restore from most recent
+  vidveil --maintenance mode on                   # Enable maintenance mode`)
+		os.Exit(0)
+
 	default:
 		fmt.Printf("❌ Unknown maintenance command: %s\n", cmd)
 		fmt.Println(`
-Maintenance Commands:
-  vidveil --maintenance backup [file]     Create backup
-  vidveil --maintenance restore [file]    Restore from backup
-  vidveil --maintenance update            Check and apply updates
-  vidveil --maintenance mode <on|off>     Enable/disable maintenance mode
-  vidveil --maintenance setup             Reset admin credentials (recovery)`)
+Usage: vidveil --maintenance [backup|restore|update|mode|setup|--help]
+
+Run 'vidveil --maintenance --help' for detailed help.`)
 		os.Exit(1)
 	}
 }

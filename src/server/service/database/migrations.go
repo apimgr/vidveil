@@ -1,39 +1,29 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 20: Database Migrations
+// AI.md PART 10: Database & Cluster - Schema Management
+// Per PART 10: "ALL apps use CREATE TABLE IF NOT EXISTS for self-creating schema"
+// Per PART 10: "No migrations table | Keep it simple"
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
 
-// Migration represents a database migration
-type Migration struct {
-	Version     int64     `json:"version"`
-	Name        string    `json:"name"`
-	AppliedAt   time.Time `json:"applied_at"`
-	Description string    `json:"description"`
-	Up          func(*sql.Tx) error `json:"-"`
-	Down        func(*sql.Tx) error `json:"-"`
+// SchemaManager handles database schema creation per AI.md PART 10
+// Uses CREATE TABLE IF NOT EXISTS - no migrations tracking table
+type SchemaManager struct {
+	db     *sql.DB
+	dbPath string
 }
 
-// MigrationManager handles database migrations per AI.md PART 20
-type MigrationManager struct {
-	db         *sql.DB
-	dbPath     string
-	migrations []*Migration
-	mu         sync.Mutex
-}
-
-// NewMigrationManager creates a new migration manager
-func NewMigrationManager(dbPath string) (*MigrationManager, error) {
+// NewSchemaManager creates a new schema manager
+func NewSchemaManager(dbPath string) (*SchemaManager, error) {
 	// Ensure directory exists
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -45,550 +35,287 @@ func NewMigrationManager(dbPath string) (*MigrationManager, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	mm := &MigrationManager{
-		db:         db,
-		dbPath:     dbPath,
-		migrations: make([]*Migration, 0),
-	}
-
-	// Create schema_migrations table if it doesn't exist
-	if err := mm.createMigrationsTable(); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	return mm, nil
+	return &SchemaManager{
+		db:     db,
+		dbPath: dbPath,
+	}, nil
 }
 
-// createMigrationsTable creates the schema_migrations table per AI.md
-func (mm *MigrationManager) createMigrationsTable() error {
-	_, err := mm.db.Exec(`
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version INTEGER PRIMARY KEY,
+// EnsureSchema creates all required tables if they don't exist
+// Per AI.md PART 10: Idempotent, safe to run multiple times
+func (sm *SchemaManager) EnsureSchema() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create all tables using CREATE TABLE IF NOT EXISTS
+	tables := []string{
+		// Sessions table for admin authentication
+		`CREATE TABLE IF NOT EXISTS sessions (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			username TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME NOT NULL,
+			ip_address TEXT,
+			user_agent TEXT
+		)`,
+
+		// Audit log table for tracking admin actions
+		`CREATE TABLE IF NOT EXISTS audit_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+			user_id TEXT,
+			username TEXT,
+			action TEXT NOT NULL,
+			resource TEXT,
+			details TEXT,
+			ip_address TEXT,
+			user_agent TEXT
+		)`,
+
+		// Settings table for runtime config
+		`CREATE TABLE IF NOT EXISTS settings (
+			key TEXT PRIMARY KEY,
+			value TEXT,
+			type TEXT DEFAULT 'string',
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_by TEXT
+		)`,
+
+		// Scheduled tasks table
+		`CREATE TABLE IF NOT EXISTS scheduled_tasks (
+			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
-			description TEXT,
-			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
+			schedule TEXT NOT NULL,
+			enabled INTEGER DEFAULT 1,
+			last_run DATETIME,
+			next_run DATETIME,
+			last_result TEXT,
+			last_error TEXT,
+			run_count INTEGER DEFAULT 0,
+			fail_count INTEGER DEFAULT 0
+		)`,
+
+		// Task history table
+		`CREATE TABLE IF NOT EXISTS task_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			task_id TEXT NOT NULL,
+			start_time DATETIME NOT NULL,
+			end_time DATETIME,
+			duration_ms INTEGER,
+			result TEXT,
+			error TEXT,
+			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
+		)`,
+
+		// Cluster nodes table for distributed mode
+		`CREATE TABLE IF NOT EXISTS cluster_nodes (
+			id TEXT PRIMARY KEY,
+			hostname TEXT NOT NULL,
+			address TEXT NOT NULL,
+			port INTEGER NOT NULL,
+			is_primary INTEGER DEFAULT 0,
+			last_heartbeat DATETIME,
+			joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			status TEXT DEFAULT 'active'
+		)`,
+
+		// Distributed locks table for cluster coordination
+		`CREATE TABLE IF NOT EXISTS distributed_locks (
+			name TEXT PRIMARY KEY,
+			holder_id TEXT NOT NULL,
+			acquired_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME NOT NULL,
+			metadata TEXT
+		)`,
+
+		// Notifications table
+		`CREATE TABLE IF NOT EXISTS notifications (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			message TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			read_at DATETIME,
+			dismissed_at DATETIME,
+			priority TEXT DEFAULT 'normal',
+			metadata TEXT
+		)`,
+
+		// Admin credentials table per AI.md PART 31
+		`CREATE TABLE IF NOT EXISTS admin_credentials (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			totp_secret TEXT,
+			totp_enabled INTEGER DEFAULT 0,
+			totp_backup_codes TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			last_login DATETIME,
+			login_count INTEGER DEFAULT 0,
+			is_primary INTEGER DEFAULT 0,
+			invited_by INTEGER,
+			invite_token TEXT,
+			invite_expires DATETIME,
+			FOREIGN KEY (invited_by) REFERENCES admin_credentials(id)
+		)`,
+
+		// Setup tokens table per AI.md PART 31
+		`CREATE TABLE IF NOT EXISTS setup_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			token TEXT UNIQUE NOT NULL,
+			purpose TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME NOT NULL,
+			used_at DATETIME,
+			used_by TEXT
+		)`,
+
+		// API tokens table per AI.md PART 31
+		`CREATE TABLE IF NOT EXISTS api_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			admin_id INTEGER NOT NULL,
+			name TEXT NOT NULL,
+			token_hash TEXT UNIQUE NOT NULL,
+			token_prefix TEXT NOT NULL,
+			permissions TEXT DEFAULT '*',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME,
+			last_used DATETIME,
+			use_count INTEGER DEFAULT 0,
+			FOREIGN KEY (admin_id) REFERENCES admin_credentials(id)
+		)`,
+
+		// SMTP config table per AI.md PART 31
+		`CREATE TABLE IF NOT EXISTS smtp_config (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			host TEXT,
+			port INTEGER DEFAULT 587,
+			username TEXT,
+			password_encrypted TEXT,
+			from_address TEXT,
+			from_name TEXT,
+			encryption TEXT DEFAULT 'tls',
+			verified INTEGER DEFAULT 0,
+			verified_at DATETIME,
+			auto_detected INTEGER DEFAULT 0,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Recovery keys table for 2FA backup
+		`CREATE TABLE IF NOT EXISTS recovery_keys (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			admin_id INTEGER NOT NULL,
+			key_hash TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			used_at DATETIME,
+			FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE CASCADE
+		)`,
+
+		// Pages table for standard page content
+		`CREATE TABLE IF NOT EXISTS pages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			slug TEXT NOT NULL UNIQUE,
+			title TEXT NOT NULL,
+			content TEXT NOT NULL,
+			meta_description TEXT,
+			enabled INTEGER DEFAULT 1,
+			updated_by INTEGER,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (updated_by) REFERENCES admin_credentials(id)
+		)`,
+	}
+
+	// Execute all table creation statements
+	for _, ddl := range tables {
+		if _, err := sm.db.ExecContext(ctx, ddl); err != nil {
+			return fmt.Errorf("failed to create table: %w", err)
+		}
+	}
+
+	// Insert default pages if not exist
+	_, err := sm.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO pages (slug, title, content, meta_description) VALUES
+		('about', 'About', 'Welcome to our service. This page describes what we do and our mission.', 'About our service'),
+		('privacy', 'Privacy Policy', 'Your privacy is important to us. This policy describes how we handle your data.', 'Privacy policy'),
+		('contact', 'Contact Us', 'Get in touch with us using the form below or via email.', 'Contact information'),
+		('help', 'Help & FAQ', 'Find answers to common questions and get help with our service.', 'Help and frequently asked questions')
 	`)
-	return err
-}
-
-// RegisterMigration registers a new migration
-func (mm *MigrationManager) RegisterMigration(version int64, name, description string, up, down func(*sql.Tx) error) {
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
-
-	mm.migrations = append(mm.migrations, &Migration{
-		Version:     version,
-		Name:        name,
-		Description: description,
-		Up:          up,
-		Down:        down,
-	})
-
-	// Keep migrations sorted by version
-	sort.Slice(mm.migrations, func(i, j int) bool {
-		return mm.migrations[i].Version < mm.migrations[j].Version
-	})
-}
-
-// RunMigrations runs all pending migrations on startup per AI.md
-func (mm *MigrationManager) RunMigrations() error {
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
-
-	applied, err := mm.getAppliedMigrations()
 	if err != nil {
-		return err
-	}
-
-	appliedMap := make(map[int64]bool)
-	for _, v := range applied {
-		appliedMap[v] = true
-	}
-
-	for _, m := range mm.migrations {
-		if appliedMap[m.Version] {
-			continue
-		}
-
-		if err := mm.applyMigration(m); err != nil {
-			return fmt.Errorf("migration %d (%s) failed: %w", m.Version, m.Name, err)
-		}
+		return fmt.Errorf("failed to insert default pages: %w", err)
 	}
 
 	return nil
 }
 
-// applyMigration applies a single migration with automatic rollback on failure
-func (mm *MigrationManager) applyMigration(m *Migration) error {
-	tx, err := mm.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-
-	// Run the up migration
-	if err := m.Up(tx); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("up migration failed: %w", err)
-	}
-
-	// Record the migration
-	_, err = tx.Exec(
-		"INSERT INTO schema_migrations (version, name, description) VALUES (?, ?, ?)",
-		m.Version, m.Name, m.Description,
-	)
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to record migration: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit migration: %w", err)
-	}
-
-	fmt.Printf("Applied migration %d: %s\n", m.Version, m.Name)
-	return nil
+// GetDB returns the database connection
+func (sm *SchemaManager) GetDB() *sql.DB {
+	return sm.db
 }
 
-// RollbackMigration rolls back the last migration
-func (mm *MigrationManager) RollbackMigration() error {
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
-
-	// Get the last applied migration
-	var version int64
-	var name string
-	err := mm.db.QueryRow(
-		"SELECT version, name FROM schema_migrations ORDER BY version DESC LIMIT 1",
-	).Scan(&version, &name)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("no migrations to rollback")
-		}
-		return fmt.Errorf("failed to get last migration: %w", err)
-	}
-
-	// Find the migration
-	var migration *Migration
-	for _, m := range mm.migrations {
-		if m.Version == version {
-			migration = m
-			break
-		}
-	}
-
-	if migration == nil || migration.Down == nil {
-		return fmt.Errorf("migration %d has no rollback function", version)
-	}
-
-	tx, err := mm.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-
-	// Run the down migration
-	if err := migration.Down(tx); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("down migration failed: %w", err)
-	}
-
-	// Remove the migration record
-	_, err = tx.Exec("DELETE FROM schema_migrations WHERE version = ?", version)
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to remove migration record: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit rollback: %w", err)
-	}
-
-	fmt.Printf("Rolled back migration %d: %s\n", version, name)
-	return nil
+// Close closes the database connection
+func (sm *SchemaManager) Close() error {
+	return sm.db.Close()
 }
 
-// getAppliedMigrations returns a list of applied migration versions
-func (mm *MigrationManager) getAppliedMigrations() ([]int64, error) {
-	rows, err := mm.db.Query("SELECT version FROM schema_migrations ORDER BY version")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+// MigrationManager is an alias for SchemaManager for backward compatibility
+// Deprecated: Use SchemaManager instead
+type MigrationManager = SchemaManager
 
-	var versions []int64
-	for rows.Next() {
-		var v int64
-		if err := rows.Scan(&v); err != nil {
-			return nil, err
-		}
-		versions = append(versions, v)
-	}
-
-	return versions, rows.Err()
+// NewMigrationManager creates a new schema manager (backward compatibility)
+// Deprecated: Use NewSchemaManager instead
+func NewMigrationManager(dbPath string) (*SchemaManager, error) {
+	return NewSchemaManager(dbPath)
 }
 
-// GetMigrationStatus returns the status of all migrations
-func (mm *MigrationManager) GetMigrationStatus() ([]map[string]interface{}, error) {
-	mm.mu.Lock()
-	defer mm.mu.Unlock()
+// RegisterDefaultMigrations is a no-op for backward compatibility
+// Per AI.md PART 10: No migrations table, use EnsureSchema instead
+func (sm *SchemaManager) RegisterDefaultMigrations() {
+	// No-op: Tables are created via EnsureSchema()
+}
 
-	applied, err := mm.getAppliedMigrations()
-	if err != nil {
-		return nil, err
-	}
+// RunMigrations calls EnsureSchema for backward compatibility
+// Per AI.md PART 10: No migrations table, use EnsureSchema instead
+func (sm *SchemaManager) RunMigrations() error {
+	return sm.EnsureSchema()
+}
 
-	appliedMap := make(map[int64]bool)
-	for _, v := range applied {
-		appliedMap[v] = true
-	}
+// GetMigrationStatus returns the status of all tables (for interface compatibility)
+// Per AI.md PART 10: No migrations table - reports table existence instead
+func (sm *SchemaManager) GetMigrationStatus() ([]map[string]interface{}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// Get applied_at times
-	appliedTimes := make(map[int64]time.Time)
-	rows, err := mm.db.Query("SELECT version, applied_at FROM schema_migrations")
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var v int64
-			var t time.Time
-			if err := rows.Scan(&v, &t); err == nil {
-				appliedTimes[v] = t
-			}
-		}
+	// List all tables we manage
+	tables := []string{
+		"sessions", "audit_log", "settings", "scheduled_tasks", "task_history",
+		"cluster_nodes", "distributed_locks", "notifications", "admin_credentials",
+		"setup_tokens", "api_tokens", "smtp_config", "recovery_keys", "pages",
 	}
 
 	var status []map[string]interface{}
-	for _, m := range mm.migrations {
-		s := map[string]interface{}{
-			"version":     m.Version,
-			"name":        m.Name,
-			"description": m.Description,
-			"applied":     appliedMap[m.Version],
+	for _, table := range tables {
+		exists := false
+		// Check if table exists
+		row := sm.db.QueryRowContext(ctx,
+			"SELECT name FROM sqlite_master WHERE type='table' AND name=?", table)
+		var name string
+		if err := row.Scan(&name); err == nil {
+			exists = true
 		}
-		if t, ok := appliedTimes[m.Version]; ok {
-			s["applied_at"] = t
-		}
-		status = append(status, s)
+
+		status = append(status, map[string]interface{}{
+			"name":    table,
+			"applied": exists,
+		})
 	}
 
 	return status, nil
 }
 
-// GetDB returns the database connection
-func (mm *MigrationManager) GetDB() *sql.DB {
-	return mm.db
-}
-
-// Close closes the database connection
-func (mm *MigrationManager) Close() error {
-	return mm.db.Close()
-}
-
-// RegisterDefaultMigrations registers the default migrations for vidveil
-func (mm *MigrationManager) RegisterDefaultMigrations() {
-	// Migration 1: Create sessions table
-	mm.RegisterMigration(1, "create_sessions_table", "Create sessions table for admin authentication", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS sessions (
-				id TEXT PRIMARY KEY,
-				user_id TEXT NOT NULL,
-				username TEXT NOT NULL,
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				expires_at DATETIME NOT NULL,
-				ip_address TEXT,
-				user_agent TEXT
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS sessions")
-		return err
-	})
-
-	// Migration 2: Create audit_log table
-	mm.RegisterMigration(2, "create_audit_log_table", "Create audit log table for tracking admin actions", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS audit_log (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-				user_id TEXT,
-				username TEXT,
-				action TEXT NOT NULL,
-				resource TEXT,
-				details TEXT,
-				ip_address TEXT,
-				user_agent TEXT
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS audit_log")
-		return err
-	})
-
-	// Migration 3: Create settings table for runtime config
-	mm.RegisterMigration(3, "create_settings_table", "Create settings table for runtime configuration", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS settings (
-				key TEXT PRIMARY KEY,
-				value TEXT,
-				type TEXT DEFAULT 'string',
-				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				updated_by TEXT
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS settings")
-		return err
-	})
-
-	// Migration 4: Create scheduled_tasks table
-	mm.RegisterMigration(4, "create_scheduled_tasks_table", "Create scheduled tasks tracking table", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS scheduled_tasks (
-				id TEXT PRIMARY KEY,
-				name TEXT NOT NULL,
-				schedule TEXT NOT NULL,
-				enabled INTEGER DEFAULT 1,
-				last_run DATETIME,
-				next_run DATETIME,
-				last_result TEXT,
-				last_error TEXT,
-				run_count INTEGER DEFAULT 0,
-				fail_count INTEGER DEFAULT 0
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS scheduled_tasks")
-		return err
-	})
-
-	// Migration 5: Create task_history table
-	mm.RegisterMigration(5, "create_task_history_table", "Create task run history table", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS task_history (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				task_id TEXT NOT NULL,
-				start_time DATETIME NOT NULL,
-				end_time DATETIME,
-				duration_ms INTEGER,
-				result TEXT,
-				error TEXT,
-				FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS task_history")
-		return err
-	})
-
-	// Migration 6: Create cluster_nodes table for cluster mode
-	mm.RegisterMigration(6, "create_cluster_nodes_table", "Create cluster nodes table for distributed mode", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS cluster_nodes (
-				id TEXT PRIMARY KEY,
-				hostname TEXT NOT NULL,
-				address TEXT NOT NULL,
-				port INTEGER NOT NULL,
-				is_primary INTEGER DEFAULT 0,
-				last_heartbeat DATETIME,
-				joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				status TEXT DEFAULT 'active'
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS cluster_nodes")
-		return err
-	})
-
-	// Migration 7: Create distributed_locks table
-	mm.RegisterMigration(7, "create_distributed_locks_table", "Create distributed locks table for cluster coordination", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS distributed_locks (
-				name TEXT PRIMARY KEY,
-				holder_id TEXT NOT NULL,
-				acquired_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				expires_at DATETIME NOT NULL,
-				metadata TEXT
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS distributed_locks")
-		return err
-	})
-
-	// Migration 8: Create notifications table
-	mm.RegisterMigration(8, "create_notifications_table", "Create notifications table", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS notifications (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				type TEXT NOT NULL,
-				title TEXT NOT NULL,
-				message TEXT,
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				read_at DATETIME,
-				dismissed_at DATETIME,
-				priority TEXT DEFAULT 'normal',
-				metadata TEXT
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS notifications")
-		return err
-	})
-
-	// Migration 9: Create admin_credentials table per AI.md PART 31
-	// Admin credentials stored in database, NOT config file
-	mm.RegisterMigration(9, "create_admin_credentials_table", "Create admin credentials table per PART 31", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS admin_credentials (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				username TEXT UNIQUE NOT NULL,
-				password_hash TEXT NOT NULL,
-				totp_secret TEXT,
-				totp_enabled INTEGER DEFAULT 0,
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				last_login DATETIME,
-				login_count INTEGER DEFAULT 0,
-				is_primary INTEGER DEFAULT 0,
-				invited_by INTEGER,
-				invite_token TEXT,
-				invite_expires DATETIME,
-				FOREIGN KEY (invited_by) REFERENCES admin_credentials(id)
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS admin_credentials")
-		return err
-	})
-
-	// Migration 10: Create setup_tokens table per AI.md PART 31
-	// One-time setup tokens for first run
-	mm.RegisterMigration(10, "create_setup_tokens_table", "Create setup tokens table per PART 31", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS setup_tokens (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				token TEXT UNIQUE NOT NULL,
-				purpose TEXT NOT NULL,
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				expires_at DATETIME NOT NULL,
-				used_at DATETIME,
-				used_by TEXT
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS setup_tokens")
-		return err
-	})
-
-	// Migration 11: Create api_tokens table per AI.md PART 31
-	// API tokens for programmatic access
-	mm.RegisterMigration(11, "create_api_tokens_table", "Create API tokens table per PART 31", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS api_tokens (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				admin_id INTEGER NOT NULL,
-				name TEXT NOT NULL,
-				token_hash TEXT UNIQUE NOT NULL,
-				token_prefix TEXT NOT NULL,
-				permissions TEXT DEFAULT '*',
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				expires_at DATETIME,
-				last_used DATETIME,
-				use_count INTEGER DEFAULT 0,
-				FOREIGN KEY (admin_id) REFERENCES admin_credentials(id)
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS api_tokens")
-		return err
-	})
-
-	// Migration 12: Create smtp_config table per AI.md PART 31
-	// SMTP configuration stored in database
-	mm.RegisterMigration(12, "create_smtp_config_table", "Create SMTP config table per PART 31", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS smtp_config (
-				id INTEGER PRIMARY KEY CHECK (id = 1),
-				host TEXT,
-				port INTEGER DEFAULT 587,
-				username TEXT,
-				password_encrypted TEXT,
-				from_address TEXT,
-				from_name TEXT,
-				encryption TEXT DEFAULT 'tls',
-				verified INTEGER DEFAULT 0,
-				verified_at DATETIME,
-				auto_detected INTEGER DEFAULT 0,
-				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS smtp_config")
-		return err
-	})
-
-	// Migration 13: Create recovery_keys table per AI.md PART 31
-	// Recovery keys for 2FA backup access
-	mm.RegisterMigration(13, "create_recovery_keys_table", "Create recovery keys table for 2FA backup", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS recovery_keys (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				admin_id INTEGER NOT NULL,
-				key_hash TEXT NOT NULL,
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				used_at DATETIME,
-				FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE CASCADE
-			)
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS recovery_keys")
-		return err
-	})
-
-	// Migration 14: Create pages table per AI.md PART 31
-	// Standard pages content (about, privacy, contact, help)
-	mm.RegisterMigration(14, "create_pages_table", "Create pages table for standard page content", func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			CREATE TABLE IF NOT EXISTS pages (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				slug TEXT NOT NULL UNIQUE,
-				title TEXT NOT NULL,
-				content TEXT NOT NULL,
-				meta_description TEXT,
-				enabled INTEGER DEFAULT 1,
-				updated_by INTEGER,
-				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				FOREIGN KEY (updated_by) REFERENCES admin_credentials(id)
-			)
-		`)
-		if err != nil {
-			return err
-		}
-
-		// Insert default pages
-		_, err = tx.Exec(`
-			INSERT OR IGNORE INTO pages (slug, title, content, meta_description) VALUES
-			('about', 'About', 'Welcome to our service. This page describes what we do and our mission.', 'About our service'),
-			('privacy', 'Privacy Policy', 'Your privacy is important to us. This policy describes how we handle your data.', 'Privacy policy'),
-			('contact', 'Contact Us', 'Get in touch with us using the form below or via email.', 'Contact information'),
-			('help', 'Help & FAQ', 'Find answers to common questions and get help with our service.', 'Help and frequently asked questions')
-		`)
-		return err
-	}, func(tx *sql.Tx) error {
-		_, err := tx.Exec("DROP TABLE IF EXISTS pages")
-		return err
-	})
+// RollbackMigration is not supported with simple schema management
+// Per AI.md PART 10: No migrations table, rollback not tracked
+func (sm *SchemaManager) RollbackMigration() error {
+	return fmt.Errorf("rollback not supported: per AI.md PART 10, use CREATE TABLE IF NOT EXISTS pattern")
 }

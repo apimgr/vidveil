@@ -3,27 +3,28 @@
 // See AI.md PART 7 for specification
 package display
 
-// Mode represents the display mode for the application
-type Mode int
+// DisplayMode represents the display mode for the application
+// Per AI.md PART 1: "Mode" alone is ambiguous - could be app mode, theme mode, etc.
+type DisplayMode int
 
 const (
-	ModeHeadless Mode = iota // No display, no TTY (daemon, service, cron)
-	ModeCLI                  // Command-line only (piped or command provided)
-	ModeTUI                  // Terminal UI (interactive terminal)
-	ModeGUI                  // Native graphical UI
+	DisplayModeHeadless DisplayMode = iota // No display, no TTY (daemon, service, cron)
+	DisplayModeCLI                         // Command-line only (piped or command provided)
+	DisplayModeTUI                         // Terminal UI (interactive terminal)
+	DisplayModeGUI                         // Native graphical UI
 )
 
 // String returns the string representation of the display mode
-func (m Mode) String() string {
+func (m DisplayMode) String() string {
 	return [...]string{"headless", "cli", "tui", "gui"}[m]
 }
 
 // SupportsInteraction returns true if the mode supports user interaction
-func (m Mode) SupportsInteraction() bool {
-	return m >= ModeTUI
+func (m DisplayMode) SupportsInteraction() bool {
+	return m >= DisplayModeTUI
 }
 
 // SupportsColors returns true if the mode supports ANSI colors
-func (m Mode) SupportsColors() bool {
-	return m >= ModeCLI
+func (m DisplayMode) SupportsColors() bool {
+	return m >= DisplayModeCLI
 }

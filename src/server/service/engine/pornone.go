@@ -18,7 +18,7 @@ func NewPornOneEngine(cfg *config.Config, torClient *tor.Client) *PornOneEngine 
 }
 
 // Search performs a search on PornOne
-func (e *PornOneEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *PornOneEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/?q={query}&page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-item, div.thumb, article.video")
 }

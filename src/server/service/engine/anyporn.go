@@ -18,7 +18,7 @@ func NewAnyPornEngine(cfg *config.Config, torClient *tor.Client) *AnyPornEngine 
 }
 
 // Search performs a search on AnyPorn
-func (e *AnyPornEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *AnyPornEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/?q={query}&p={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.item")
 }

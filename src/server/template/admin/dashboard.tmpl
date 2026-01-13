@@ -1,40 +1,208 @@
 {{define "content"}}
+<!-- Status Banner per AI.md PART 17 -->
+<div class="status-banner {{.StatusClass}}">
+    <span class="status-icon">{{if eq .Status "Online"}}✅{{else if eq .Status "Maintenance"}}⚠️{{else}}🔴{{end}}</span>
+    <span class="status-text">{{.Status}}</span>
+    <span class="status-uptime">⏱️ Uptime: {{.Uptime}}</span>
+</div>
+
+<!-- Stats Grid per AI.md PART 17 -->
 <div class="stats-grid">
     <div class="stat-card">
+        <div class="stat-icon">🔌</div>
         <div class="stat-value">{{.EnabledCount}}</div>
         <div class="stat-label">Engines Active</div>
     </div>
     <div class="stat-card">
+        <div class="stat-icon">📊</div>
         <div class="stat-value">{{.EngineCount}}</div>
         <div class="stat-label">Total Engines</div>
     </div>
     <div class="stat-card">
-        <div class="stat-value">{{.MemoryMB}} MB</div>
-        <div class="stat-label">Memory Usage</div>
+        <div class="stat-icon">💾</div>
+        <div class="stat-value">{{.MemoryUsed}} MB</div>
+        <div class="stat-label">Memory Used</div>
     </div>
     <div class="stat-card">
+        <div class="stat-icon">⚡</div>
         <div class="stat-value">{{.Goroutines}}</div>
         <div class="stat-label">Goroutines</div>
     </div>
 </div>
 
-<div class="card">
-    <h2>System Info</h2>
-    <table class="info-table">
-        <tr><td>Mode</td><td>{{.Mode}}</td></tr>
-        <tr><td>Go Version</td><td>{{.GoVersion}}</td></tr>
-        <tr><td>OS / Arch</td><td>{{.OS}} / {{.Arch}}</td></tr>
-        <tr><td>Server Port</td><td>{{.Port}}</td></tr>
-        <tr><td>Tor Enabled</td><td>{{.TorEnabled}}</td></tr>
-    </table>
-</div>
+<div class="dashboard-grid">
+    <!-- System Resources per AI.md PART 17 -->
+    <div class="card">
+        <h2>🖥️ System Resources</h2>
+        <div class="resource-item">
+            <div class="resource-label">
+                <span>Memory</span>
+                <span>{{.MemoryUsed}} / {{.MemoryTotal}} MB</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{.MemoryPercent}}%"></div>
+            </div>
+        </div>
+        <table class="info-table">
+            <tr><td>Mode</td><td>{{.Mode}}</td></tr>
+            <tr><td>Go Version</td><td>{{.GoVersion}}</td></tr>
+            <tr><td>OS / Arch</td><td>{{.OS}} / {{.Arch}}</td></tr>
+            <tr><td>Server Port</td><td>{{.Port}}</td></tr>
+            <tr><td>Tor</td><td>{{if .TorEnabled}}✅ Enabled{{else}}❌ Disabled{{end}}</td></tr>
+        </table>
+    </div>
 
-<div class="card">
-    <h2>Quick Actions</h2>
-    <div class="button-group">
-        <button onclick="location.href='/admin/system/backup'" class="btn btn-primary">Create Backup</button>
-        <button onclick="location.href='/admin/engines'" class="btn btn-secondary">Manage Engines</button>
-        <button onclick="location.href='/admin/server/logs'" class="btn btn-secondary">View Logs</button>
+    <!-- Quick Actions per AI.md PART 17 -->
+    <div class="card">
+        <h2>⚡ Quick Actions</h2>
+        <div class="quick-actions">
+            <a href="/admin/server/backup" class="quick-action-btn">
+                <span class="quick-action-icon">💾</span>
+                <span class="quick-action-label">Create Backup</span>
+            </a>
+            <a href="/admin/engines" class="quick-action-btn">
+                <span class="quick-action-icon">🔌</span>
+                <span class="quick-action-label">Manage Engines</span>
+            </a>
+            <a href="/admin/server/logs" class="quick-action-btn">
+                <span class="quick-action-icon">📋</span>
+                <span class="quick-action-label">View Logs</span>
+            </a>
+            <a href="/admin/server/settings" class="quick-action-btn">
+                <span class="quick-action-icon">⚙️</span>
+                <span class="quick-action-label">Settings</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Scheduled Tasks per AI.md PART 17 -->
+    <div class="card">
+        <h2>📅 Scheduled Tasks</h2>
+        {{if .NextTasks}}
+        <table class="info-table">
+            <thead><tr><th>Task</th><th>Next Run</th></tr></thead>
+            <tbody>
+            {{range .NextTasks}}
+            <tr><td>{{.Name}}</td><td>{{.NextRun}}</td></tr>
+            {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state-mini">
+            <p>No scheduled tasks</p>
+        </div>
+        {{end}}
+    </div>
+
+    <!-- Recent Activity per AI.md PART 17 -->
+    <div class="card">
+        <h2>📜 Recent Activity</h2>
+        {{if .RecentActivity}}
+        <table class="info-table">
+            <thead><tr><th>Action</th><th>User</th><th>Time</th></tr></thead>
+            <tbody>
+            {{range .RecentActivity}}
+            <tr><td>{{.Action}}</td><td>{{.Username}}</td><td>{{.Timestamp}}</td></tr>
+            {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty-state-mini">
+            <p>No recent activity</p>
+        </div>
+        {{end}}
     </div>
 </div>
+
+<style>
+/* Dashboard-specific styles per AI.md PART 17 */
+.status-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    font-size: 1.1rem;
+}
+.status-healthy { background: var(--color-success-bg); color: var(--color-success); }
+.status-degraded { background: var(--color-warning-bg); color: var(--color-warning); }
+.status-unhealthy { background: var(--color-error-bg); color: var(--color-error); }
+.status-uptime { font-size: 0.9rem; opacity: 0.8; }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.stat-card {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    text-align: center;
+}
+.stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+.stat-value { font-size: 1.75rem; font-weight: 700; color: var(--color-text); }
+.stat-label { font-size: 0.875rem; color: var(--color-muted); margin-top: 0.25rem; }
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.resource-item { margin-bottom: 1rem; }
+.resource-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+.progress-bar {
+    height: 8px;
+    background: var(--color-bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+.quick-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--color-text);
+    transition: all 0.2s;
+}
+.quick-action-btn:hover {
+    background: var(--color-hover);
+    border-color: var(--color-primary);
+}
+.quick-action-icon { font-size: 1.5rem; }
+.quick-action-label { font-size: 0.875rem; }
+
+.empty-state-mini {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--color-muted);
+}
+</style>
 {{end}}

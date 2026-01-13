@@ -18,7 +18,7 @@ func NewPornHDEngine(cfg *config.Config, torClient *tor.Client) *PornHDEngine {
 }
 
 // Search performs a search on PornHD
-func (e *PornHDEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *PornHDEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search?search={query}&page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.card.sub")
 }

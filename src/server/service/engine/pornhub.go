@@ -43,7 +43,7 @@ func NewPornHubEngine(cfg *config.Config, torClient *tor.Client) *PornHubEngine 
 }
 
 // Search performs a search on PornHub using HTML scraping
-func (e *PornHubEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *PornHubEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	// PornHub search URL
 	searchURL := fmt.Sprintf("%s/video/search?search=%s&page=%d",
 		e.baseURL, url.QueryEscape(query), page)
@@ -59,7 +59,7 @@ func (e *PornHubEngine) Search(ctx context.Context, query string, page int) ([]m
 		return nil, err
 	}
 
-	var results []model.Result
+	var results []model.VideoResult
 
 	doc.Find(e.parser.ItemSelector()).Each(func(i int, s *goquery.Selection) {
 		item := e.parser.Parse(s)
@@ -71,9 +71,9 @@ func (e *PornHubEngine) Search(ctx context.Context, query string, page int) ([]m
 	return results, nil
 }
 
-// convertToResult converts VideoItem to model.Result
-func (e *PornHubEngine) convertToResult(item *parser.VideoItem) model.Result {
-	result := model.Result{
+// convertToResult converts VideoItem to model.VideoResult
+func (e *PornHubEngine) convertToResult(item *parser.VideoItem) model.VideoResult {
+	result := model.VideoResult{
 		ID:              GenerateResultID(item.URL, e.Name()),
 		URL:             item.URL,
 		Title:           item.Title,

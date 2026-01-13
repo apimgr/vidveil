@@ -166,6 +166,22 @@ func (h *AdminHandler) AuthenticateAdmin(username, password string) (string, err
 	return h.AuthenticateAdminWithContext(username, password, "", "")
 }
 
+// CheckCredentials validates credentials and returns admin info (for 2FA flow)
+// Per AI.md PART 17: First step of 2FA login flow
+func (h *AdminHandler) CheckCredentials(username, password string) (*admin.Admin, error) {
+	adminUser, err := h.adminSvc.Authenticate(username, password)
+	if err != nil {
+		return nil, err
+	}
+	return adminUser, nil
+}
+
+// CreateSessionForAdmin creates a session for an already-authenticated admin
+// Per AI.md PART 17: Called after 2FA verification
+func (h *AdminHandler) CreateSessionForAdmin(adminUser *admin.Admin) string {
+	return h.createSessionWithID(adminUser.Username, adminUser.ID)
+}
+
 // AuthenticateAdminWithContext handles admin login with request context for audit logging
 // Per AI.md PART 11 line 11277: admin.login event
 func (h *AdminHandler) AuthenticateAdminWithContext(username, password, remoteAddr, userAgent string) (string, error) {
@@ -319,7 +335,8 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 		// Create admin account using admin service
 		adminUser, err := h.adminSvc.CreateAdminWithSetupToken(tokenCookie.Value, username, password)
 		if err != nil {
-			data["Error"] = err.Error()
+			// Per AI.md PART 9: Never expose error details in responses
+			data["Error"] = "Failed to create admin account"
 			h.renderSetupWizardPage(w, data)
 			return
 		}
@@ -421,23 +438,92 @@ func (h *AdminHandler) renderSetupWizardPage(w http.ResponseWriter, data map[str
 	}
 }
 
-// DashboardPage renders the admin dashboard
+// DashboardPage renders the admin dashboard per AI.md PART 17
 func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
+	// Calculate uptime per AI.md PART 17
+	uptime := time.Since(startTime)
+	uptimeStr := formatUptime(uptime)
+
+	// Status per AI.md PART 17 - Online/Maintenance/Error
+	status := "Online"
+	statusClass := "status-healthy"
+
+	// Get scheduled tasks info using ListTasks()
+	var nextTasks []map[string]interface{}
+	if h.scheduler != nil {
+		tasks := h.scheduler.ListTasks()
+		for i, task := range tasks {
+			if i >= 5 {
+				break
+			}
+			nextTasks = append(nextTasks, map[string]interface{}{
+				"Name":    task.Name,
+				"NextRun": task.NextRun.Format("15:04:05"),
+			})
+		}
+	}
+
+	// Recent activity placeholder - actual audit logging per AI.md PART 11
+	var recentActivity []map[string]interface{}
+
+	// System resources per AI.md PART 17
+	memTotal := m.Sys / 1024 / 1024
+	memUsed := m.Alloc / 1024 / 1024
+	memPercent := 0
+	if memTotal > 0 {
+		memPercent = int(memUsed * 100 / memTotal)
+	}
+
 	h.renderAdminTemplate(w, r, "dashboard", map[string]interface{}{
-		"EngineCount":   len(h.engineMgr.ListEngines()),
-		"EnabledCount":  h.engineMgr.EnabledCount(),
-		"MemoryMB":      m.Alloc / 1024 / 1024,
+		// Status widget per AI.md PART 17
+		"Status":      status,
+		"StatusClass": statusClass,
+		"Uptime":      uptimeStr,
+
+		// Engine stats
+		"EngineCount":  len(h.engineMgr.ListEngines()),
+		"EnabledCount": h.engineMgr.EnabledCount(),
+
+		// System resources per AI.md PART 17
+		"MemoryUsed":    memUsed,
+		"MemoryTotal":   memTotal,
+		"MemoryPercent": memPercent,
 		"Goroutines":    runtime.NumGoroutine(),
-		"GoVersion":     runtime.Version(),
-		"OS":            runtime.GOOS,
-		"Arch":          runtime.GOARCH,
-		"Mode":          h.cfg.Server.Mode,
-		"Port":          h.cfg.Server.Port,
-		"TorEnabled":    h.cfg.Search.Tor.Enabled,
+
+		// System info
+		"GoVersion":  runtime.Version(),
+		"OS":         runtime.GOOS,
+		"Arch":       runtime.GOARCH,
+		"Mode":       h.cfg.Server.Mode,
+		"Port":       h.cfg.Server.Port,
+		"TorEnabled": h.cfg.Search.Tor.Enabled,
+
+		// Scheduled tasks per AI.md PART 17
+		"NextTasks": nextTasks,
+
+		// Recent activity per AI.md PART 17
+		"RecentActivity": recentActivity,
 	})
+}
+
+// startTime tracks when the server started (for uptime)
+var startTime = time.Now()
+
+// formatUptime formats duration in human-readable format
+func formatUptime(d time.Duration) string {
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
 // EnginesPage renders the engines management page
@@ -452,9 +538,39 @@ func (h *AdminHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(h.renderSettingsPage()))
 }
 
-// LogsPage renders the logs viewer
+// LogsPage renders the logs viewer per AI.md PART 17 lines 22621-22651
 func (h *AdminHandler) LogsPage(w http.ResponseWriter, r *http.Request) {
-	h.renderAdminTemplate(w, r, "logs", nil)
+	// Parse query parameters for filtering
+	logType := r.URL.Query().Get("type")
+	if logType == "" {
+		logType = "access"
+	}
+	
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
+			limit = l
+		}
+	}
+	
+	search := r.URL.Query().Get("search")
+	
+	// Read log entries
+	entries, err := h.readLogEntries(logType, limit, search)
+	if err != nil {
+		h.renderAdminTemplate(w, r, "logs", map[string]interface{}{
+			"Error": fmt.Sprintf("Failed to read logs: %v", err),
+		})
+		return
+	}
+	
+	h.renderAdminTemplate(w, r, "logs", map[string]interface{}{
+		"LogType": logType,
+		"Limit":   limit,
+		"Search":  search,
+		"Entries": entries,
+	})
 }
 
 // AuditLogsPage renders audit log viewer per PART 17
@@ -654,7 +770,7 @@ func (h *AdminHandler) SystemInfoPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderAdminTemplate(w, r, "system", map[string]interface{}{
-		"Version":         version.Get(),
+		"Version":         version.GetVersion(),
 		"GoVersion":       runtime.Version(),
 		"BuildDate":       BuildDateTime,
 		"CommitID":        "unknown",
@@ -696,8 +812,9 @@ func (h *AdminHandler) NodesPage(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) PagesPage(w http.ResponseWriter, r *http.Request) {
 	pages, err := h.getPages()
 	if err != nil {
+		// Per AI.md PART 9: Never expose error details in responses
 		h.renderAdminTemplate(w, r, "pages", map[string]interface{}{
-			"Error": err.Error(),
+			"Error": "Failed to load pages",
 			"Pages": []PageInfo{},
 		})
 		return
@@ -752,11 +869,11 @@ func (h *AdminHandler) getPages() ([]PageInfo, error) {
 func (h *AdminHandler) APIPagesGet(w http.ResponseWriter, r *http.Request) {
 	pages, err := h.getPages()
 	if err != nil {
-		h.jsonError(w, err.Error(), "ERR_DATABASE", http.StatusInternalServerError)
+		h.jsonError(w, "Database error", "ERR_DATABASE", http.StatusInternalServerError)
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    pages,
 	})
 }
@@ -787,12 +904,12 @@ func (h *AdminHandler) APIPageUpdate(w http.ResponseWriter, r *http.Request) {
 		updated_by = ?, updated_at = ? WHERE slug = ?
 	`, req.Title, req.Content, req.MetaDescription, req.Enabled, adminID, time.Now(), slug)
 	if err != nil {
-		h.jsonError(w, err.Error(), "ERR_DATABASE", http.StatusInternalServerError)
+		h.jsonError(w, "Database error", "ERR_DATABASE", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Page updated successfully",
 	})
 }
@@ -825,12 +942,12 @@ func (h *AdminHandler) APIPageReset(w http.ResponseWriter, r *http.Request) {
 		updated_by = ?, updated_at = ? WHERE slug = ?
 	`, def.title, def.content, def.meta, adminID, time.Now(), slug)
 	if err != nil {
-		h.jsonError(w, err.Error(), "ERR_DATABASE", http.StatusInternalServerError)
+		h.jsonError(w, "Database error", "ERR_DATABASE", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Page reset to default",
 	})
 }
@@ -843,7 +960,7 @@ func (h *AdminHandler) NotificationsPage(w http.ResponseWriter, r *http.Request)
 // APINotificationsGet returns current notification settings
 func (h *AdminHandler) APINotificationsGet(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    h.cfg.Server.Notifications,
 	})
 }
@@ -884,12 +1001,12 @@ func (h *AdminHandler) APINotificationsUpdate(w http.ResponseWriter, r *http.Req
 	paths := config.GetPaths("", "")
 	configPath := filepath.Join(paths.Config, "server.yml")
 	if err := config.Save(h.cfg, configPath); err != nil {
-		h.jsonError(w, err.Error(), "ERR_CONFIG_SAVE", http.StatusInternalServerError)
+		h.jsonError(w, "Failed to save configuration", "ERR_CONFIG_SAVE", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Notification settings saved",
 	})
 }
@@ -931,7 +1048,7 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": fmt.Sprintf("Test notification sent to %s", req.Email),
 	})
 }
@@ -1006,7 +1123,7 @@ func (h *AdminHandler) MaintenancePage(w http.ResponseWriter, r *http.Request) {
 // UpdatesPage renders update management per PART 15
 func (h *AdminHandler) UpdatesPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "updates", map[string]interface{}{
-		"CurrentVersion":  version.Get(),
+		"CurrentVersion":  version.GetVersion(),
 		"LatestVersion":   "",
 		"UpdateAvailable": false,
 	})
@@ -1015,8 +1132,8 @@ func (h *AdminHandler) UpdatesPage(w http.ResponseWriter, r *http.Request) {
 // APIUpdatesStatus returns the current update status
 func (h *AdminHandler) APIUpdatesStatus(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success":          true,
-		"current_version":  version.Get(),
+		"ok":          true,
+		"current_version":  version.GetVersion(),
 		"latest_version":   "",
 		"update_available": false,
 		"last_checked":     nil,
@@ -1026,7 +1143,7 @@ func (h *AdminHandler) APIUpdatesStatus(w http.ResponseWriter, r *http.Request) 
 // APIUpdatesCheck checks for available updates
 func (h *AdminHandler) APIUpdatesCheck(w http.ResponseWriter, r *http.Request) {
 	// Check for updates from GitHub releases
-	currentVersion := version.Get()
+	currentVersion := version.GetVersion()
 	latestVersion := currentVersion
 	updateAvailable := false
 
@@ -1052,7 +1169,7 @@ func (h *AdminHandler) APIUpdatesCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success":          true,
+		"ok":          true,
 		"current_version":  currentVersion,
 		"latest_version":   latestVersion,
 		"update_available": updateAvailable,
@@ -1138,12 +1255,12 @@ func (h *AdminHandler) APIProfilePassword(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.adminSvc.ChangePassword(adminID, body.CurrentPassword, body.NewPassword); err != nil {
-		h.jsonError(w, err.Error(), "ERR_PASSWORD_CHANGE", http.StatusBadRequest)
+		h.jsonError(w, "Password change failed", "ERR_PASSWORD_CHANGE", http.StatusBadRequest)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Password updated successfully",
 	})
 }
@@ -1164,12 +1281,12 @@ func (h *AdminHandler) APIProfileToken(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.adminSvc.RegenerateAPIToken(adminID)
 	if err != nil {
-		h.jsonError(w, err.Error(), "ERR_TOKEN_REGENERATE", http.StatusInternalServerError)
+		h.jsonError(w, "Token regeneration failed", "ERR_TOKEN_REGENERATE", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"token": token,
 		},
@@ -1199,12 +1316,12 @@ func (h *AdminHandler) APIRecoveryKeysStatus(w http.ResponseWriter, r *http.Requ
 
 	status, err := h.adminSvc.GetRecoveryKeysStatus(adminID)
 	if err != nil {
-		h.jsonError(w, err.Error(), "ERR_RECOVERY_KEYS", http.StatusInternalServerError)
+		h.jsonError(w, "Recovery key operation failed", "ERR_RECOVERY_KEYS", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    status,
 	})
 }
@@ -1224,12 +1341,12 @@ func (h *AdminHandler) APIRecoveryKeysGenerate(w http.ResponseWriter, r *http.Re
 
 	keys, err := h.adminSvc.GenerateRecoveryKeys(adminID)
 	if err != nil {
-		h.jsonError(w, err.Error(), "ERR_RECOVERY_KEYS", http.StatusInternalServerError)
+		h.jsonError(w, "Recovery key operation failed", "ERR_RECOVERY_KEYS", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"keys":    keys,
 			"warning": "These keys will only be shown once. Save them securely.",
@@ -1343,7 +1460,8 @@ func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 		// Create the admin account
 		_, err := h.adminSvc.CreateAdminWithInvite(token, invite.Username, password)
 		if err != nil {
-			data["Error"] = err.Error()
+			// Per AI.md PART 9: Never expose error details in responses
+			data["Error"] = "Failed to create admin account"
 			h.renderInvitePage(w, data)
 			return
 		}
@@ -1413,7 +1531,7 @@ func (h *AdminHandler) APIUsersAdminsInvite(w http.ResponseWriter, r *http.Reque
 	// Generate invite token
 	token, err := h.adminSvc.CreateAdminInvite(adminID, body.Username, time.Duration(body.ExpiresHours)*time.Hour)
 	if err != nil {
-		h.jsonError(w, err.Error(), "ERR_INVITE_FAILED", http.StatusBadRequest)
+		h.jsonError(w, "Invite creation failed", "ERR_INVITE_FAILED", http.StatusBadRequest)
 		return
 	}
 
@@ -1429,7 +1547,7 @@ func (h *AdminHandler) APIUsersAdminsInvite(w http.ResponseWriter, r *http.Reque
 	inviteURL := fmt.Sprintf("%s://%s/admin/invite/%s", scheme, host, token)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"invite_url": inviteURL,
 			"expires_in": fmt.Sprintf("%d hours", body.ExpiresHours),
@@ -1441,12 +1559,12 @@ func (h *AdminHandler) APIUsersAdminsInvite(w http.ResponseWriter, r *http.Reque
 func (h *AdminHandler) APIUsersAdminsInvites(w http.ResponseWriter, r *http.Request) {
 	invites, err := h.adminSvc.ListPendingInvites()
 	if err != nil {
-		h.jsonError(w, err.Error(), "ERR_INVITES_LIST", http.StatusInternalServerError)
+		h.jsonError(w, "Failed to list invites", "ERR_INVITES_LIST", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    invites,
 	})
 }
@@ -1466,12 +1584,12 @@ func (h *AdminHandler) APIUsersAdminsInviteRevoke(w http.ResponseWriter, r *http
 	}
 
 	if err := h.adminSvc.RevokeInvite(inviteID); err != nil {
-		h.jsonError(w, err.Error(), "ERR_REVOKE_FAILED", http.StatusInternalServerError)
+		h.jsonError(w, "Revocation failed", "ERR_REVOKE_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Invite revoked",
 	})
 }
@@ -1505,7 +1623,7 @@ func (h *AdminHandler) SessionOrTokenMiddleware(next http.Handler) http.Handler 
 		}
 
 		WriteJSON(w, http.StatusUnauthorized, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Authentication required",
 		})
 	})
@@ -1524,7 +1642,7 @@ func (h *AdminHandler) APITokenMiddleware(next http.Handler) http.Handler {
 
 		if !h.validateToken(token) {
 			WriteJSON(w, http.StatusUnauthorized, map[string]interface{}{
-				"success": false,
+				"ok": false,
 				"error":   "Invalid or missing API token",
 			})
 			return
@@ -1540,7 +1658,7 @@ func (h *AdminHandler) APIStats(w http.ResponseWriter, r *http.Request) {
 	runtime.ReadMemStats(&m)
 
 	stats := map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"engines": map[string]interface{}{
 				"total":   len(h.engineMgr.ListEngines()),
@@ -1574,7 +1692,7 @@ func (h *AdminHandler) APIEngines(w http.ResponseWriter, r *http.Request) {
 	engines := h.engineMgr.ListEngines()
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    engines,
 	})
 }
@@ -1590,12 +1708,12 @@ func (h *AdminHandler) APIBackup(w http.ResponseWriter, r *http.Request) {
 	backupFile := r.URL.Query().Get("file")
 
 	if err := maint.Backup(backupFile); err != nil {
-		h.jsonError(w, err.Error(), "ERR_BACKUP_FAILED", http.StatusInternalServerError)
+		h.jsonError(w, "Backup failed", "ERR_BACKUP_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Backup created successfully",
 	})
 }
@@ -1608,12 +1726,12 @@ func (h *AdminHandler) APIDatabaseMigrate(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.migrationMgr.RunMigrations(); err != nil {
-		h.jsonError(w, err.Error(), "ERR_MIGRATION_FAILED", http.StatusInternalServerError)
+		h.jsonError(w, "Migration failed", "ERR_MIGRATION_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Migrations completed successfully",
 	})
 }
@@ -1627,12 +1745,12 @@ func (h *AdminHandler) APIDatabaseVacuum(w http.ResponseWriter, r *http.Request)
 	}
 
 	if _, err := db.Exec("VACUUM"); err != nil {
-		h.jsonError(w, err.Error(), "ERR_VACUUM_FAILED", http.StatusInternalServerError)
+		h.jsonError(w, "Database vacuum failed", "ERR_VACUUM_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Database vacuum completed",
 	})
 }
@@ -1646,12 +1764,12 @@ func (h *AdminHandler) APIDatabaseAnalyze(w http.ResponseWriter, r *http.Request
 	}
 
 	if _, err := db.Exec("ANALYZE"); err != nil {
-		h.jsonError(w, err.Error(), "ERR_ANALYZE_FAILED", http.StatusInternalServerError)
+		h.jsonError(w, "Database analyze failed", "ERR_ANALYZE_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Database analysis completed",
 	})
 }
@@ -1665,12 +1783,12 @@ func (h *AdminHandler) APIDatabaseMigrations(w http.ResponseWriter, r *http.Requ
 
 	migrations, err := h.migrationMgr.GetMigrationStatus()
 	if err != nil {
-		h.jsonError(w, err.Error(), "ERR_GET_MIGRATIONS", http.StatusInternalServerError)
+		h.jsonError(w, "Failed to get migrations", "ERR_GET_MIGRATIONS", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    migrations,
 	})
 }
@@ -1712,7 +1830,7 @@ func (h *AdminHandler) APIDatabaseTest(w http.ResponseWriter, r *http.Request) {
 	// For now, return a simulated success
 	// Version would be actual version from DB
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Connection successful",
 		"data": map[string]interface{}{
 			"driver":  req.Driver,
@@ -1760,7 +1878,7 @@ func (h *AdminHandler) APIDatabaseBackend(w http.ResponseWriter, r *http.Request
 	// 5. Trigger a restart
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Database backend changed to " + req.Driver,
 		"data": map[string]interface{}{
 			"driver":          req.Driver,
@@ -1789,12 +1907,12 @@ func (h *AdminHandler) APIMaintenanceMode(w http.ResponseWriter, r *http.Request
 
 	enable := enabled == "true" || enabled == "1"
 	if err := maint.SetMaintenanceMode(enable); err != nil {
-		h.jsonError(w, err.Error(), "ERR_MAINTENANCE_FAILED", http.StatusInternalServerError)
+		h.jsonError(w, "Maintenance operation failed", "ERR_MAINTENANCE_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Maintenance mode updated",
 		"enabled": enable,
 	})
@@ -1828,7 +1946,7 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
+			"ok": true,
 			"data":    safeCfg,
 		})
 
@@ -1905,34 +2023,38 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 			paths := config.GetPaths("", "")
 			configPath := filepath.Join(paths.Config, "server.yml")
 			if err := config.Save(h.cfg, configPath); err != nil {
-				h.jsonError(w, "Failed to save configuration: "+err.Error(), "ERR_INTERNAL", http.StatusInternalServerError)
+				// Per AI.md PART 9: Never expose error details in responses
+				h.jsonError(w, "Failed to save configuration", "ERR_INTERNAL", http.StatusInternalServerError)
 				return
 			}
 		}
 
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
+			"ok": true,
 			"message": "Configuration updated (restart required for some changes)",
 		})
 
 	default:
 		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Method not allowed",
 		})
 	}
 }
 
-// jsonError sends a standardized error response per PART 24
+// jsonError sends a standardized error response per AI.md PART 14
 func (h *AdminHandler) jsonError(w http.ResponseWriter, message, code string, status int) {
 	if status == 0 {
 		status = http.StatusInternalServerError
 	}
+	// Per AI.md PART 14: Error response format
+	// - ok: false
+	// - error: ERROR_CODE (machine-readable)
+	// - message: Human readable message
 	WriteJSON(w, status, map[string]interface{}{
-		"success": false,
-		"error":   message,
-		"code":    code,
-		"status":  status,
+		"ok":      false,
+		"error":   code,
+		"message": message,
 	})
 }
 
@@ -1941,12 +2063,12 @@ func (h *AdminHandler) APIStatus(w http.ResponseWriter, r *http.Request) {
 	uptime := time.Since(h.startTime)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"status":  "running",
 			"mode":    h.cfg.Server.Mode,
 			"uptime":  uptime.String(),
-			"version": version.Get(),
+			"version": version.GetVersion(),
 		},
 	})
 }
@@ -1957,7 +2079,7 @@ func (h *AdminHandler) APIHealth(w http.ResponseWriter, r *http.Request) {
 	runtime.ReadMemStats(&m)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"status": "healthy",
 			"checks": map[string]string{
@@ -1976,7 +2098,7 @@ func (h *AdminHandler) APILogsAccess(w http.ResponseWriter, r *http.Request) {
 	lines := h.readLogLines(h.cfg.Server.Logs.Access.Filename, 100)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"filename": h.cfg.Server.Logs.Access.Filename,
 			"lines":    lines,
@@ -1989,7 +2111,7 @@ func (h *AdminHandler) APILogsError(w http.ResponseWriter, r *http.Request) {
 	lines := h.readLogLines(h.cfg.Server.Logs.Error.Filename, 100)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"filename": h.cfg.Server.Logs.Error.Filename,
 			"lines":    lines,
@@ -2002,7 +2124,7 @@ func (h *AdminHandler) APILogsAudit(w http.ResponseWriter, r *http.Request) {
 	lines := h.readLogLines(h.cfg.Server.Logs.Audit.Filename, 100)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"filename": h.cfg.Server.Logs.Audit.Filename,
 			"lines":    lines,
@@ -2014,7 +2136,7 @@ func (h *AdminHandler) APILogsAudit(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Method not allowed",
 		})
 		return
@@ -2024,15 +2146,17 @@ func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 	backupFile := r.URL.Query().Get("file")
 
 	if err := maint.Restore(backupFile); err != nil {
+		// Per AI.md PART 9: Never expose error details in responses
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
+			"ok":      false,
+			"error":   "ERR_RESTORE_FAILED",
+			"message": "Restore operation failed",
 		})
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Restore completed successfully",
 	})
 }
@@ -2041,7 +2165,7 @@ func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) APITestEmail(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Method not allowed",
 		})
 		return
@@ -2049,7 +2173,7 @@ func (h *AdminHandler) APITestEmail(w http.ResponseWriter, r *http.Request) {
 
 	// Email sending would be implemented with SMTP
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Test email sent (if email is configured)",
 	})
 }
@@ -2080,12 +2204,12 @@ func (h *AdminHandler) APIPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Change password using admin service (database)
 	if err := h.adminSvc.ChangePassword(session.adminID, body.CurrentPassword, body.NewPassword); err != nil {
-		h.jsonError(w, err.Error(), "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		h.jsonError(w, "Authentication failed", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Password changed successfully",
 	})
 }
@@ -2109,7 +2233,7 @@ func (h *AdminHandler) APITokenRegenerate(w http.ResponseWriter, r *http.Request
 	// In production, this would update the database/config
 	// For now, just return the new token (shown only once per AI.md)
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Token regenerated - save this token now, it will not be shown again",
 		"token":   newToken,
 	})
@@ -2126,7 +2250,7 @@ func (h *AdminHandler) APISchedulerTasks(w http.ResponseWriter, r *http.Request)
 
 	tasks := h.scheduler.ListTasks()
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    tasks,
 	})
 }
@@ -2153,12 +2277,12 @@ func (h *AdminHandler) APISchedulerRunTask(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.scheduler.RunTaskNow(taskID); err != nil {
-		h.jsonError(w, err.Error(), "ERR_TASK_FAILED", http.StatusInternalServerError)
+		h.jsonError(w, "Task execution failed", "ERR_TASK_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Task triggered",
 	})
 }
@@ -2182,7 +2306,7 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 
 	history := h.scheduler.GetHistory(taskID, limit)
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    history,
 	})
 }
@@ -2196,7 +2320,7 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 // Status and onion_address would check actual Tor connection/manager
 func (h *AdminHandler) APITorStatus(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"enabled":       h.cfg.Search.Tor.Enabled,
 			"status":        "disconnected",
@@ -2223,9 +2347,11 @@ func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Per AI.md PART 9: Never expose error details in responses
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"success": false,
-			"error":   "Invalid request body: " + err.Error(),
+			"ok":      false,
+			"error":   "ERR_INVALID_REQUEST",
+			"message": "Invalid request body",
 		})
 		return
 	}
@@ -2258,7 +2384,7 @@ func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": updated,
+		"ok": updated,
 		"message": "Tor settings updated",
 	})
 }
@@ -2269,7 +2395,7 @@ func (h *AdminHandler) APITorRegenerate(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	// Would trigger Tor manager to regenerate address
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Tor circuit regenerated",
 	})
 }
@@ -2281,7 +2407,7 @@ func (h *AdminHandler) APITorVanityStatus(w http.ResponseWriter, r *http.Request
 
 	if h.torSvc == nil {
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
+			"ok": true,
 			"data": map[string]interface{}{
 				"active":        false,
 				"pending_ready": false,
@@ -2293,7 +2419,7 @@ func (h *AdminHandler) APITorVanityStatus(w http.ResponseWriter, r *http.Request
 	status := h.torSvc.GetVanityStatus()
 	if status == nil {
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
+			"ok": true,
 			"data": map[string]interface{}{
 				"active":        false,
 				"pending_ready": false,
@@ -2306,7 +2432,7 @@ func (h *AdminHandler) APITorVanityStatus(w http.ResponseWriter, r *http.Request
 	pendingReady := !status.Active && status.Attempts > 0
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"active":        status.Active,
 			"prefix":        status.Prefix,
@@ -2342,12 +2468,12 @@ func (h *AdminHandler) APITorVanityStart(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.torSvc.GenerateVanityAddress(req.Prefix); err != nil {
-		h.jsonError(w, err.Error(), "ERR_VANITY_START", http.StatusBadRequest)
+		h.jsonError(w, "Vanity address generation failed", "ERR_VANITY_START", http.StatusBadRequest)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Vanity generation started for prefix: " + req.Prefix,
 	})
 }
@@ -2362,7 +2488,7 @@ func (h *AdminHandler) APITorVanityCancel(w http.ResponseWriter, r *http.Request
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Vanity generation cancelled",
 	})
 }
@@ -2378,12 +2504,12 @@ func (h *AdminHandler) APITorVanityApply(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.torSvc.ApplyVanityAddress(); err != nil {
-		h.jsonError(w, err.Error(), "ERR_VANITY_APPLY", http.StatusBadRequest)
+		h.jsonError(w, "Failed to apply vanity address", "ERR_VANITY_APPLY", http.StatusBadRequest)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Vanity address applied - restart Tor service to use new address",
 	})
 }
@@ -2399,7 +2525,7 @@ func (h *AdminHandler) APITorImport(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Invalid request body",
 		})
 		return
@@ -2407,7 +2533,7 @@ func (h *AdminHandler) APITorImport(w http.ResponseWriter, r *http.Request) {
 
 	if req.PrivateKey == "" {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Private key is required",
 		})
 		return
@@ -2415,7 +2541,7 @@ func (h *AdminHandler) APITorImport(w http.ResponseWriter, r *http.Request) {
 
 	// Would import the key and restart Tor
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Tor keys imported successfully",
 	})
 }
@@ -2428,7 +2554,7 @@ func (h *AdminHandler) APITorTest(w http.ResponseWriter, r *http.Request) {
 	// Check if Tor service is available
 	if h.torSvc == nil {
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Tor service not initialized",
 		})
 		return
@@ -2437,7 +2563,7 @@ func (h *AdminHandler) APITorTest(w http.ResponseWriter, r *http.Request) {
 	// Test the Tor connection
 	result := h.torSvc.TestConnection()
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    result,
 	})
 }
@@ -2813,26 +2939,14 @@ func (h *AdminHandler) renderSettingsPage() string {
 }
 
 func (h *AdminHandler) renderLogsPage() string {
-	return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logs - Admin - ` + h.cfg.Server.Title + `</title>
-    ` + adminStyles() + `
-</head>
-<body>
-    ` + h.renderAdminNav("logs") + `
-    <main class="admin-main">
-        <h1>Logs</h1>
-
+	// This function is no longer used - logs are rendered via renderAdminTemplate
+	// Keeping for backwards compatibility
+	return h.renderAdminPage("logs", "Logs", `
         <div class="card">
-            <p class="text-muted">Log viewing is not yet implemented.</p>
-            <p>Logs are written to: <code>` + h.cfg.Server.Logs.Server.Filename + `</code></p>
+            <p>Please use the new log viewer interface.</p>
+            <p><a href="/admin/logs?type=access">View Access Logs</a></p>
         </div>
-    </main>
-</body>
-</html>`
+    `)
 }
 
 func (h *AdminHandler) renderAdminNav(active string) string {
@@ -3414,12 +3528,14 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	// Load layout template
 	layoutContent, err := adminTemplatesFS.ReadFile("template/layouts/admin.tmpl")
 	if err != nil {
-		http.Error(w, "Admin layout not found: "+err.Error(), http.StatusInternalServerError)
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	tmpl, err = tmpl.Parse(string(layoutContent))
 	if err != nil {
-		http.Error(w, "Layout parse error: "+err.Error(), http.StatusInternalServerError)
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -3427,18 +3543,21 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	contentFile := "template/admin/" + templateName + ".tmpl"
 	contentData, err := adminTemplatesFS.ReadFile(contentFile)
 	if err != nil {
-		http.Error(w, "Admin template not found: "+contentFile+": "+err.Error(), http.StatusInternalServerError)
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	tmpl, err = tmpl.Parse(string(contentData))
 	if err != nil {
-		http.Error(w, "Template parse error: "+err.Error(), http.StatusInternalServerError)
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "admin", data); err != nil {
-		http.Error(w, "Template execution error: "+err.Error(), http.StatusInternalServerError)
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
 
@@ -3577,7 +3696,7 @@ func (h *AdminHandler) APINodesGet(w http.ResponseWriter, r *http.Request) {
 	hostname, _ := os.Hostname()
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"this_node": map[string]interface{}{
 				"id":         hostname,
@@ -3618,7 +3737,7 @@ func (h *AdminHandler) APINodeAdd(w http.ResponseWriter, r *http.Request) {
 	nodeID := fmt.Sprintf("%s:%d", req.Address, req.Port)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Node added successfully",
 		"data": map[string]interface{}{
 			"node_id": nodeID,
@@ -3654,7 +3773,7 @@ func (h *AdminHandler) APINodeTest(w http.ResponseWriter, r *http.Request) {
 	// In production: actually test connection
 	// For now, return simulated success
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Connection successful",
 		"data": map[string]interface{}{
 			"node_id":  fmt.Sprintf("%s:%d", req.Address, req.Port),
@@ -3680,7 +3799,7 @@ func (h *AdminHandler) APINodeTokenRegenerate(w http.ResponseWriter, r *http.Req
 	newToken := hex.EncodeToString(tokenBytes)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Join token regenerated",
 		"data": map[string]interface{}{
 			"token": newToken,
@@ -3701,7 +3820,7 @@ func (h *AdminHandler) APINodeRemove(w http.ResponseWriter, r *http.Request) {
 
 	// In production: actually remove from cluster
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": fmt.Sprintf("Node %s removed from cluster", nodeID),
 	})
 }
@@ -3732,7 +3851,7 @@ func (h *AdminHandler) APINodeLeave(w http.ResponseWriter, r *http.Request) {
 	// 4. Restart in single-node mode
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Node removed from cluster - restarting in single-node mode",
 	})
 }
@@ -3758,7 +3877,7 @@ func (h *AdminHandler) NodeSettingsPage(w http.ResponseWriter, r *http.Request) 
 		"Memory":            "N/A",
 		"DiskSpace":         "N/A",
 		"GoVersion":         runtime.Version(),
-		"AppVersion":        version.Get(),
+		"AppVersion":        version.GetVersion(),
 	})
 }
 
@@ -3781,7 +3900,7 @@ func (h *AdminHandler) NodeDetailPage(w http.ResponseWriter, r *http.Request) {
 			"Status":            "active",
 			"LastSeen":          "Just now",
 			"Uptime":            time.Since(h.startTime).Round(time.Second).String(),
-			"Version":           version.Get(),
+			"Version":           version.GetVersion(),
 			"CPUUsage":          0,
 			"MemoryUsage":       0,
 			"MemoryUsed":        "0 MB",
@@ -3826,7 +3945,7 @@ func (h *AdminHandler) APINodeSettings(w http.ResponseWriter, r *http.Request) {
 
 	// In production: update node settings in config and cluster
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Node settings updated",
 	})
 }
@@ -3838,7 +3957,7 @@ func (h *AdminHandler) APINodeStepDown(w http.ResponseWriter, r *http.Request) {
 
 	// In production: trigger leader election
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Stepped down as primary, election triggered",
 	})
 }
@@ -3852,7 +3971,7 @@ func (h *AdminHandler) APINodeRegenerateID(w http.ResponseWriter, r *http.Reques
 	newID := hex.EncodeToString(make([]byte, 8))
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Node ID regenerated",
 		"data": map[string]interface{}{
 			"node_id": newID,
@@ -3873,11 +3992,166 @@ func (h *AdminHandler) APINodePing(w http.ResponseWriter, r *http.Request) {
 
 	// In production: actually ping the node
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"node_id": nodeID,
 			"latency": "< 1ms",
 			"status":  "reachable",
 		},
 	})
+}
+
+// LogEntry represents a single log entry for the viewer
+type LogEntry struct {
+	Timestamp string
+	Level     string
+	Message   string
+	Details   string
+}
+
+// readLogEntries reads and parses log file entries per AI.md PART 17
+func (h *AdminHandler) readLogEntries(logType string, limit int, search string) ([]LogEntry, error) {
+	var filename string
+	
+	switch logType {
+	case "access":
+		filename = h.cfg.Server.Logs.Access.Filename
+	case "error":
+		filename = h.cfg.Server.Logs.Error.Filename
+	case "audit":
+		filename = h.cfg.Server.Logs.Audit.Filename
+	case "security":
+		filename = h.cfg.Server.Logs.Security.Filename
+	case "debug":
+		if h.cfg.Server.Logs.Debug.Enabled {
+			filename = h.cfg.Server.Logs.Debug.Filename
+		} else {
+			return nil, fmt.Errorf("debug logging is not enabled")
+		}
+	default:
+		return nil, fmt.Errorf("invalid log type: %s", logType)
+	}
+	
+	if filename == "" {
+		return nil, fmt.Errorf("log file not configured for type: %s", logType)
+	}
+	
+	// Open log file
+	file, err := os.Open(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []LogEntry{}, nil // Empty log is not an error
+		}
+		return nil, err
+	}
+	defer file.Close()
+	
+	// Read last N lines (reverse reading for recent entries)
+	var entries []LogEntry
+	scanner := bufio.NewScanner(file)
+	
+	// Collect all lines first (for simplicity - can optimize later)
+	var lines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+		
+		// Apply search filter if provided
+		if search != "" && !containsInsensitive(line, search) {
+			continue
+		}
+		
+		lines = append(lines, line)
+	}
+	
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	
+	// Get last N entries (most recent)
+	start := len(lines) - limit
+	if start < 0 {
+		start = 0
+	}
+	
+	for i := start; i < len(lines); i++ {
+		entry := h.parseLogLine(lines[i])
+		entries = append(entries, entry)
+	}
+	
+	// Reverse to show most recent first
+	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+		entries[i], entries[j] = entries[j], entries[i]
+	}
+	
+	return entries, nil
+}
+
+// parseLogLine parses a single log line into structured entry
+func (h *AdminHandler) parseLogLine(line string) LogEntry {
+	// Simple parsing - can be enhanced based on actual log format
+	// Expected format: timestamp level message [details]
+	entry := LogEntry{
+		Timestamp: "",
+		Level:     "INFO",
+		Message:   line,
+		Details:   "",
+	}
+	
+	// Try to extract timestamp (first 19 chars if ISO format)
+	if len(line) >= 19 {
+		entry.Timestamp = line[:19]
+		line = line[19:]
+	}
+	
+	// Try to extract level
+	if len(line) > 0 && line[0] == ' ' {
+		line = line[1:]
+	}
+	if len(line) >= 5 {
+		level := line[:5]
+		switch level {
+		case "DEBUG", "INFO ", "WARN ", "ERROR":
+			entry.Level = level
+			if len(line) > 5 {
+				entry.Message = line[6:]
+			}
+		}
+	}
+	
+	return entry
+}
+
+// containsInsensitive is a case-insensitive substring check
+func containsInsensitive(s, substr string) bool {
+	s = toLowerSimple(s)
+	substr = toLowerSimple(substr)
+	return indexOfString(s, substr) >= 0
+}
+
+func toLowerSimple(s string) string {
+	b := make([]byte, len(s))
+	for i := range s {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b[i] = c
+	}
+	return string(b)
+}
+
+func indexOfString(s, substr string) int {
+	n := len(substr)
+	if n == 0 {
+		return 0
+	}
+	for i := 0; i <= len(s)-n; i++ {
+		if s[i:i+n] == substr {
+			return i
+		}
+	}
+	return -1
 }

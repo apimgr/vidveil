@@ -1,0 +1,58 @@
+{{define "nojs/about"}}
+<!DOCTYPE html>
+<html lang="en" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    {{template "public/header" .}}
+    <main class="about">
+        <h1>About Vidveil</h1>
+        <section>
+            <h2>What is Vidveil?</h2>
+            <p>Vidveil is a privacy-respecting meta search engine for adult videos. It aggregates results from {{.EngineCount}} adult video sites without tracking you or storing your search history.</p>
+        </section>
+        <section>
+            <h2>Features</h2>
+            <ul>
+                <li>{{.EngineCount}} search engines across major adult video sites</li>
+                <li>Full Tor support for anonymous searching</li>
+                <li>No tracking, no cookies, no logs</li>
+                <li>Fast parallel search across all engines</li>
+                <li>Video thumbnails, duration, and view counts</li>
+                <li>Configurable engine selection</li>
+                <li>Dark and light themes</li>
+                <li>REST API and GraphQL support</li>
+                <li>Self-hostable single binary</li>
+            </ul>
+        </section>
+        <section>
+            <h2>API</h2>
+            <p>Vidveil provides REST, GraphQL, and OpenAPI documentation:</p>
+            <div class="api-endpoints">
+                <code>GET /api/v1/search?q={query}&amp;page={page}</code>
+                <code>GET /api/v1/engines</code>
+                <code>GET /api/v1/healthz</code>
+                <code>POST /graphql</code>
+            </div>
+            <p><a href="/openapi">View API Documentation (Swagger)</a></p>
+        </section>
+        <section>
+            <h2>Self-Hosting</h2>
+            <p>Vidveil is distributed as a single static binary with embedded assets:</p>
+            <pre><code># Direct run
+./vidveil --port 8080
+
+# Docker
+docker run -p 8080:80 ghcr.io/apimgr/vidveil</code></pre>
+        </section>
+        <section>
+            <h2>Legal</h2>
+            <p>Vidveil is a meta search engine that aggregates publicly available content from third-party websites. We do not host any content. All search results link directly to their original sources.</p>
+            <p>Users must be 18+ years old to use this service.</p>
+        </section>
+    </main>
+    {{template "public/footer" .}}
+</body>
+</html>
+{{end}}

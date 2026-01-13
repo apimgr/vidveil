@@ -214,8 +214,9 @@ func TestAuthHandler_APILogin(t *testing.T) {
 		t.Errorf("APILogin returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != false {
-		t.Error("APILogin should return success: false (not implemented)")
+	// Per AI.md PART 14: API uses "ok" field, not "success"
+	if response["ok"] != false {
+		t.Error("APILogin should return ok: false (not implemented)")
 	}
 
 	if response["code"] != "NOT_IMPLEMENTED" {
@@ -237,8 +238,9 @@ func TestAuthHandler_APILogout(t *testing.T) {
 		t.Errorf("APILogout returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != true {
-		t.Error("APILogout should return success: true")
+	// Per AI.md PART 14: API uses "ok" field, not "success"
+	if response["ok"] != true {
+		t.Error("APILogout should return ok: true")
 	}
 }
 
@@ -256,8 +258,9 @@ func TestAuthHandler_APIRegister(t *testing.T) {
 		t.Errorf("APIRegister returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != false {
-		t.Error("APIRegister should return success: false")
+	// Per AI.md PART 14: API uses "ok" field, not "success"
+	if response["ok"] != false {
+		t.Error("APIRegister should return ok: false")
 	}
 
 	if response["code"] != "NOT_IMPLEMENTED" {
@@ -426,8 +429,9 @@ func TestUserHandler_APIProfile_GET(t *testing.T) {
 		t.Errorf("APIProfile returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != true {
-		t.Error("APIProfile GET should return success: true")
+	// Per AI.md PART 14: API uses "ok" field, not "success"
+	if response["ok"] != true {
+		t.Error("APIProfile GET should return ok: true")
 	}
 
 	data, ok := response["data"].(map[string]interface{})
@@ -454,8 +458,9 @@ func TestUserHandler_APIProfile_PATCH(t *testing.T) {
 		t.Errorf("APIProfile returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != false {
-		t.Error("APIProfile PATCH should return success: false (not supported)")
+	// Per AI.md PART 14: API uses "ok" field, not "success"
+	if response["ok"] != false {
+		t.Error("APIProfile PATCH should return ok: false (not supported)")
 	}
 }
 
@@ -492,8 +497,9 @@ func TestUserHandler_APITokens(t *testing.T) {
 		t.Errorf("APITokens returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != true {
-		t.Error("APITokens should return success: true")
+	// Per AI.md PART 14: API uses "ok" field, not "success"
+	if response["ok"] != true {
+		t.Error("APITokens should return ok: true")
 	}
 
 	data, ok := response["data"].([]interface{})
@@ -520,8 +526,9 @@ func TestUserHandler_APISessions(t *testing.T) {
 		t.Errorf("APISessions returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != true {
-		t.Error("APISessions should return success: true")
+	// Per AI.md PART 14: API uses "ok" field, not "success"
+	if response["ok"] != true {
+		t.Error("APISessions should return ok: true")
 	}
 }
 
@@ -539,8 +546,9 @@ func TestUserHandler_API2FA(t *testing.T) {
 		t.Errorf("API2FA returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != true {
-		t.Error("API2FA should return success: true")
+	// Per AI.md PART 14: API uses "ok" field, not "success"
+	if response["ok"] != true {
+		t.Error("API2FA should return ok: true")
 	}
 
 	data, ok := response["data"].(map[string]interface{})

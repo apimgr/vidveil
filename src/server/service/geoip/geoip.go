@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 10: GeoIP Support
+// AI.md PART 20: GeoIP
 package geoip
 
 import (

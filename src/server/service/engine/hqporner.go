@@ -18,7 +18,7 @@ func NewHqpornerEngine(cfg *config.Config, torClient *tor.Client) *HqpornerEngin
 }
 
 // Search performs a search on Hqporner
-func (e *HqpornerEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *HqpornerEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/?q={query}&p={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.box, div.video-item")
 }

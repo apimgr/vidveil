@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// PART 22: Security & Logging - IP/Domain Blocklist Service
+// AI.md PART 11: Security & Logging - IP/Domain Blocklist Service
 package blocklist
 
 import (

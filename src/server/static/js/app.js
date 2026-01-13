@@ -771,10 +771,12 @@ if (document.readyState === 'loading') {
 
     function saveHomeSearchToHistory(query) {
         if (!query || query.trim().length < 2) return;
+        query = query.trim(); // Strip whitespace per AI.md
         var history = getHomeSearchHistory();
 
-        // Remove duplicate if exists
-        history = history.filter(function(h) { return h.query !== query; });
+        // Remove duplicate if exists (case-insensitive per AI.md)
+        var queryLower = query.toLowerCase();
+        history = history.filter(function(h) { return h.query.toLowerCase().trim() !== queryLower; });
 
         // Add to front
         history.unshift({ query: query, timestamp: Date.now() });
@@ -825,12 +827,24 @@ if (document.readyState === 'loading') {
             return;
         }
 
+        // Deduplicate history (case-insensitive) per AI.md
+        var seen = {};
+        var deduped = [];
+        history.forEach(function(item) {
+            var key = item.query.toLowerCase().trim();
+            if (!seen[key]) {
+                seen[key] = true;
+                deduped.push(item);
+            }
+        });
+        history = deduped;
+
         var html = '<div class="history-header"><span>Recent Searches</span><button type="button" onclick="Vidveil.Home.clearHistory()" class="history-clear" aria-label="Clear search history">Clear</button></div>';
         html += '<div class="history-items">';
 
         history.slice(0, 8).forEach(function(item) {
             html += '<div class="history-item">';
-            html += '<a href="/search?q=' + encodeURIComponent(item.query) + '" class="history-link">' + escapeHtmlUtil(item.query) + '</a>';
+            html += '<a href="/search?q=' + encodeURIComponent(item.query) + '" class="history-link" onclick="showSearchSpinner(this, event)">' + escapeHtmlUtil(item.query) + '</a>';
             html += '<span class="history-time">' + formatTimeAgo(item.timestamp) + '</span>';
             html += '<button type="button" onclick="event.preventDefault();Vidveil.Home.removeFromHistory(\'' + escapeHtmlUtil(item.query).replace(/'/g, "\\'") + '\')" class="history-remove" aria-label="Remove from history">×</button>';
             html += '</div>';
@@ -840,6 +854,17 @@ if (document.readyState === 'loading') {
         homeHistoryDiv.innerHTML = html;
         homeHistoryDiv.style.display = 'block';
     }
+
+    // Show spinner when clicking search history link
+    function showSearchSpinner(link, event) {
+        // Change link text to spinner
+        link.innerHTML = '<span class="btn-spinner"></span> Searching...';
+        link.classList.add('searching');
+        // Allow navigation to continue
+        return true;
+    }
+
+    window.showSearchSpinner = showSearchSpinner;
 
     // Export home functions
     window.initHomePage = initHomePage;

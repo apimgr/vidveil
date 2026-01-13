@@ -18,7 +18,7 @@ func NewTube8Engine(cfg *config.Config, torClient *tor.Client) *Tube8Engine {
 }
 
 // Search performs a search on Tube8
-func (e *Tube8Engine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *Tube8Engine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/searches?q={query}&page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-box, div.thumbnail-card")
 }

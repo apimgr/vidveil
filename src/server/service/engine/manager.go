@@ -171,7 +171,7 @@ func (m *Manager) Search(ctx context.Context, query string, page int, engineName
 	}()
 
 	// Collect results
-	var allResults []model.Result
+	var allResults []model.VideoResult
 	var enginesUsed []string
 	var enginesFailed []string
 
@@ -200,7 +200,7 @@ func (m *Manager) Search(ctx context.Context, query string, page int, engineName
 	elapsed := time.Since(startTime)
 
 	return &model.SearchResponse{
-		Success: true,
+		Ok: true,
 		Data: model.SearchData{
 			Query:         query,
 			Results:       allResults,
@@ -218,7 +218,7 @@ func (m *Manager) Search(ctx context.Context, query string, page int, engineName
 }
 
 // sortByRelevance sorts results by relevance score
-func sortByRelevance(results []model.Result, query string) {
+func sortByRelevance(results []model.VideoResult, query string) {
 	queryLower := strings.ToLower(query)
 	queryWords := strings.Fields(queryLower)
 	if len(queryWords) == 0 {
@@ -237,7 +237,7 @@ func sortByRelevance(results []model.Result, query string) {
 }
 
 // calculateRelevanceScore computes a relevance score for a result
-func calculateRelevanceScore(r model.Result, queryLower string, queryWords []string) float64 {
+func calculateRelevanceScore(r model.VideoResult, queryLower string, queryWords []string) float64 {
 	titleLower := strings.ToLower(r.Title)
 	score := 0.0
 
@@ -380,13 +380,13 @@ func (m *Manager) EnabledCount() int {
 // engineResult holds the result from a single engine search
 type engineResult struct {
 	engine  string
-	results []model.Result
+	results []model.VideoResult
 	err     error
 }
 
 // StreamResult represents a single result sent via SSE
 type StreamResult struct {
-	Result model.Result `json:"result,omitempty"`
+	Result model.VideoResult `json:"result,omitempty"`
 	Engine string        `json:"engine"`
 	Done   bool          `json:"done"`
 	Error  string        `json:"error,omitempty"`

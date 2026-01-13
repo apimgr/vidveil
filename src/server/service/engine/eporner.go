@@ -58,7 +58,7 @@ func NewEpornerEngine(cfg *config.Config, torClient *tor.Client) *EpornerEngine 
 }
 
 // Search performs a search on Eporner using their public JSON API
-func (e *EpornerEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *EpornerEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	// Use Eporner's public JSON API
 	// API docs: https://www.eporner.com/api/
 	perPage := 50
@@ -78,7 +78,7 @@ func (e *EpornerEngine) Search(ctx context.Context, query string, page int) ([]m
 		return nil, err
 	}
 
-	var results []model.Result
+	var results []model.VideoResult
 	for _, v := range apiResp.Videos {
 		// Get thumbnail URL
 		thumb := ""
@@ -91,7 +91,7 @@ func (e *EpornerEngine) Search(ctx context.Context, query string, page int) ([]m
 		// Format view count
 		views := formatViewCount(v.Views)
 
-		results = append(results, model.Result{
+		results = append(results, model.VideoResult{
 			ID:              GenerateResultID(v.URL, e.Name()),
 			URL:             v.URL,
 			Title:           v.Title,

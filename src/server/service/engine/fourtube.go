@@ -18,7 +18,7 @@ func NewFourTubeEngine(cfg *config.Config, torClient *tor.Client) *FourTubeEngin
 }
 
 // Search performs a search on 4Tube
-func (e *FourTubeEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *FourTubeEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search?q={query}&p={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.card")
 }

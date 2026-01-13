@@ -22,8 +22,9 @@
                 <option value="sqlite"{{if eq .DBDriver "sqlite3"}} selected{{end}}>SQLite (Default)</option>
                 <option value="postgres"{{if eq .DBDriver "postgres"}} selected{{end}}>PostgreSQL</option>
                 <option value="mysql"{{if eq .DBDriver "mysql"}} selected{{end}}>MySQL/MariaDB</option>
+                <option value="mssql"{{if eq .DBDriver "mssql"}} selected{{end}}>Microsoft SQL Server</option>
             </select>
-            <span class="help-text">SQLite for single instance, PostgreSQL/MySQL for cluster mode</span>
+            <span class="help-text">SQLite for single instance, PostgreSQL/MySQL/MSSQL for cluster mode</span>
         </div>
 
         <div id="external-db-settings" class="{{if eq .DBDriver "sqlite3"}}d-none{{end}}">
@@ -165,6 +166,8 @@ function toggleBackendSettings() {
         portInput.placeholder = '5432';
     } else if (driver === 'mysql' && !portInput.value) {
         portInput.placeholder = '3306';
+    } else if (driver === 'mssql' && !portInput.value) {
+        portInput.placeholder = '1433';
     }
 }
 
@@ -178,7 +181,7 @@ async function testConnection() {
     const data = {
         driver: driver,
         host: document.getElementById('db-host').value,
-        port: parseInt(document.getElementById('db-port').value) || (driver === 'postgres' ? 5432 : 3306),
+        port: parseInt(document.getElementById('db-port').value) || (driver === 'postgres' ? 5432 : (driver === 'mssql' ? 1433 : 3306)),
         database: document.getElementById('db-name').value,
         user: document.getElementById('db-user').value,
         password: document.getElementById('db-pass').value,
@@ -217,7 +220,7 @@ function switchBackend(e) {
 
         if (driver !== 'sqlite') {
             data.host = document.getElementById('db-host').value;
-            data.port = parseInt(document.getElementById('db-port').value) || (driver === 'postgres' ? 5432 : 3306);
+            data.port = parseInt(document.getElementById('db-port').value) || (driver === 'postgres' ? 5432 : (driver === 'mssql' ? 1433 : 3306));
             data.database = document.getElementById('db-name').value;
             data.user = document.getElementById('db-user').value;
             data.password = document.getElementById('db-pass').value;

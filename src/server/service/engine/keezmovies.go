@@ -18,7 +18,7 @@ func NewKeezMoviesEngine(cfg *config.Config, torClient *tor.Client) *KeezMoviesE
 }
 
 // Search performs a search on KeezMovies
-func (e *KeezMoviesEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *KeezMoviesEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/{query}?page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "li.video-item, div.video-item, div.videoblock")
 }

@@ -33,7 +33,7 @@ type SearchResult struct {
 
 // SearchResponse is the API response for search
 type SearchResponse struct {
-	Success bool           `json:"success"`
+	Ok      bool           `json:"ok"`
 	Query   string         `json:"query"`
 	Results []SearchResult `json:"results"`
 	Count   int            `json:"count"`
@@ -42,7 +42,7 @@ type SearchResponse struct {
 
 // VersionResponse is the API response for version
 type VersionResponse struct {
-	Success bool   `json:"success"`
+	Ok      bool   `json:"ok"`
 	Version string `json:"version"`
 	Commit  string `json:"commit"`
 	Built   string `json:"built"`

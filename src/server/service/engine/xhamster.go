@@ -95,7 +95,7 @@ func NewXHamsterEngine(cfg *config.Config, torClient *tor.Client) *XHamsterEngin
 }
 
 // Search performs a search on xHamster by extracting JSON from the page
-func (e *XHamsterEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *XHamsterEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	// xHamster uses /search/{query} for page 1, /search/{query}/{page} for others
 	var searchURL string
 	if page <= 1 {
@@ -135,7 +135,7 @@ func (e *XHamsterEngine) Search(ctx context.Context, query string, page int) ([]
 		return nil, fmt.Errorf("failed to parse initials: %w", err)
 	}
 
-	var results []model.Result
+	var results []model.VideoResult
 	for _, v := range initials.SearchResult.VideoThumbProps {
 		if v.Title == "" || v.PageURL == "" {
 			continue
@@ -147,7 +147,7 @@ func (e *XHamsterEngine) Search(ctx context.Context, query string, page int) ([]
 		// Format views
 		views := formatViewCount(v.Views)
 
-		results = append(results, model.Result{
+		results = append(results, model.VideoResult{
 			ID:              GenerateResultID(v.PageURL, e.Name()),
 			URL:             v.PageURL,
 			Title:           v.Title,

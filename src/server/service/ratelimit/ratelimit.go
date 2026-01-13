@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 1: Rate Limiting (endpoint-specific limits)
+// AI.md PART 12: Server Configuration - Rate Limiting
 package ratelimit
 
 import (

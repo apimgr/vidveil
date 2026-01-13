@@ -11,7 +11,7 @@ import (
 )
 
 // genericSearch performs a generic search using common patterns
-func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]model.Result, error) {
+func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]model.VideoResult, error) {
 	resp, err := e.MakeRequest(ctx, url)
 	if err != nil {
 		return nil, err
@@ -23,7 +23,7 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 		return nil, err
 	}
 
-	var results []model.Result
+	var results []model.VideoResult
 	doc.Find(selector).Each(func(i int, s *goquery.Selection) {
 		r := parseGenericVideoItem(s, e.baseURL, e.Name(), e.DisplayName())
 		if r.Title != "" && r.URL != "" {
@@ -34,8 +34,8 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 }
 
 // parseGenericVideoItem extracts video data using common patterns
-func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisplay string) model.Result {
-	var r model.Result
+func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisplay string) model.VideoResult {
+	var r model.VideoResult
 
 	// Find link - check if element itself is a link first
 	var link *goquery.Selection

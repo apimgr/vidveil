@@ -18,7 +18,7 @@ func NewNonkTubeEngine(cfg *config.Config, torClient *tor.Client) *NonkTubeEngin
 }
 
 // Search performs a search on NonkTube
-func (e *NonkTubeEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *NonkTubeEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/{query}/?p={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-item, div.thumb")
 }

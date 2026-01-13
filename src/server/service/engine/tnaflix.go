@@ -18,7 +18,7 @@ func NewTNAFlixEngine(cfg *config.Config, torClient *tor.Client) *TNAFlixEngine 
 }
 
 // Search performs a search on TNAFlix
-func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search.php?what={query}&page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.col-xs-6.col-md-4")
 }

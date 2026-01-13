@@ -12,20 +12,21 @@ import (
 
 // DisplayEnv holds information about the current display environment
 type DisplayEnv struct {
-	Mode         Mode   // Current display mode
-	HasDisplay   bool   // X11, Wayland, Windows, macOS display
-	DisplayType  string // "x11", "wayland", "windows", "macos", "none"
-	IsTerminal   bool   // stdout is a TTY
-	IsSSH        bool   // Running over SSH
-	IsMosh       bool   // Running over mosh
-	IsScreen     bool   // Running in screen/tmux
-	TerminalType string // TERM value
-	Cols         int    // Terminal columns (0 if no terminal)
-	Rows         int    // Terminal rows (0 if no terminal)
+	Mode         DisplayMode // Current display mode
+	HasDisplay   bool        // X11, Wayland, Windows, macOS display
+	DisplayType  string      // "x11", "wayland", "windows", "macos", "none"
+	IsTerminal   bool        // stdout is a TTY
+	IsSSH        bool        // Running over SSH
+	IsMosh       bool        // Running over mosh
+	IsScreen     bool        // Running in screen/tmux
+	TerminalType string      // TERM value
+	Cols         int         // Terminal columns (0 if no terminal)
+	Rows         int         // Terminal rows (0 if no terminal)
 }
 
-// Detect detects the current display environment
-func Detect() DisplayEnv {
+// DetectDisplayEnv detects the current display environment
+// Per AI.md PART 1: "Detect()" alone doesn't say what it detects
+func DetectDisplayEnv() DisplayEnv {
 	env := DisplayEnv{}
 
 	// Check terminal
@@ -54,24 +55,24 @@ func Detect() DisplayEnv {
 }
 
 // determineMode determines the display mode based on environment
-func (e *DisplayEnv) determineMode() Mode {
+func (e *DisplayEnv) determineMode() DisplayMode {
 	// No TTY and no display = headless
 	if !e.IsTerminal && !e.HasDisplay {
-		return ModeHeadless
+		return DisplayModeHeadless
 	}
 
 	// Has native display = GUI possible
 	if e.HasDisplay && !e.IsSSH && !e.IsMosh {
-		return ModeGUI
+		return DisplayModeGUI
 	}
 
 	// Has terminal = TUI possible
 	if e.IsTerminal {
-		return ModeTUI
+		return DisplayModeTUI
 	}
 
 	// Fallback to CLI
-	return ModeCLI
+	return DisplayModeCLI
 }
 
 // String returns a string representation of the display environment

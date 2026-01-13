@@ -84,6 +84,13 @@ func TestValidatePassword(t *testing.T) {
 		{"1234567", true, "at least 8 characters"},
 		{"", true, "at least 8 characters"},
 
+		// Invalid - leading/trailing whitespace per AI.md PART 1
+		{" StrongP@ss1", true, "leading or trailing whitespace"},
+		{"StrongP@ss1 ", true, "leading or trailing whitespace"},
+		{" StrongP@ss1 ", true, "leading or trailing whitespace"},
+		{"\tStrongP@ss1", true, "leading or trailing whitespace"},
+		{"StrongP@ss1\n", true, "leading or trailing whitespace"},
+
 		// Invalid - missing requirements
 		{"password123", true, "uppercase letter"},
 		{"12345678", true, "uppercase letter"},

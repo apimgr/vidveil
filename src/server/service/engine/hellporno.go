@@ -18,7 +18,7 @@ func NewHellPornoEngine(cfg *config.Config, torClient *tor.Client) *HellPornoEng
 }
 
 // Search performs a search on HellPorno
-func (e *HellPornoEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *HellPornoEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/?q={query}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-thumb")
 }

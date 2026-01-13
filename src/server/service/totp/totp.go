@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 31: Two-Factor Authentication (2FA) Support
+// AI.md PART 11: Security - Two-Factor Authentication (2FA) Support
 package totp
 
 import (

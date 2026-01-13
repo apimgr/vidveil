@@ -36,7 +36,7 @@ func NewYouPornEngine(cfg *config.Config, torClient *tor.Client) *YouPornEngine 
 }
 
 // Search performs a search on YouPorn
-func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	// YouPorn search URL format
 	searchURL := fmt.Sprintf("%s/search/?query=%s&page=%d", e.baseURL, url.QueryEscape(query), page)
 
@@ -51,7 +51,7 @@ func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]m
 		return nil, fmt.Errorf("failed to parse HTML: %w", err)
 	}
 
-	var results []model.Result
+	var results []model.VideoResult
 
 	// YouPorn uses .video-box for video containers
 	doc.Find(".video-box").Each(func(i int, s *goquery.Selection) {
@@ -98,7 +98,7 @@ func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]m
 		viewsText := parser.CleanText(s.Find("span.info-views, .video-views").First().Text())
 		views, viewsCount := parser.ParseViews(viewsText)
 
-		results = append(results, model.Result{
+		results = append(results, model.VideoResult{
 			ID:              GenerateResultID(videoURL, e.Name()),
 			URL:             videoURL,
 			Title:           title,

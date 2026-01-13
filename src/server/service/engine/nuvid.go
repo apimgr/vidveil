@@ -18,7 +18,7 @@ func NewNuvidEngine(cfg *config.Config, torClient *tor.Client) *NuvidEngine {
 }
 
 // Search performs a search on Nuvid
-func (e *NuvidEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *NuvidEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/{query}/", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "a.th.video-thumb")
 }

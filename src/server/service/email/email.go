@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 16: Email Templates
+// AI.md PART 18: Email & Notifications
 package email
 
 import (

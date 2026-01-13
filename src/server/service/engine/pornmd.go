@@ -39,7 +39,7 @@ func NewPornMDEngine(cfg *config.Config, torClient *tor.Client) *PornMDEngine {
 }
 
 // Search performs a search on PornMD
-func (e *PornMDEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *PornMDEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/straight/{query}?page={page}", query, page)
 	resp, err := e.MakeRequest(ctx, searchURL)
 	if err != nil {
@@ -52,7 +52,7 @@ func (e *PornMDEngine) Search(ctx context.Context, query string, page int) ([]mo
 		return nil, err
 	}
 
-	var results []model.Result
+	var results []model.VideoResult
 	doc.Find(e.parser.ItemSelector()).Each(func(i int, s *goquery.Selection) {
 		item := e.parser.Parse(s)
 		if item != nil && item.Title != "" && item.URL != "" && !item.IsPremium {
@@ -62,7 +62,7 @@ func (e *PornMDEngine) Search(ctx context.Context, query string, page int) ([]mo
 	return results, nil
 }
 
-func (e *PornMDEngine) convertToResult(item *parser.VideoItem) model.Result {
+func (e *PornMDEngine) convertToResult(item *parser.VideoItem) model.VideoResult {
 	desc := item.Quality
 	if item.Description != "" {
 		if desc != "" {
@@ -71,7 +71,7 @@ func (e *PornMDEngine) convertToResult(item *parser.VideoItem) model.Result {
 			desc = item.Description
 		}
 	}
-	return model.Result{
+	return model.VideoResult{
 		ID:              GenerateResultID(item.URL, e.Name()),
 		URL:             item.URL,
 		Title:           item.Title,

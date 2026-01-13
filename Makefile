@@ -34,9 +34,10 @@ CLI_LDFLAGS := -s -w \
 BINDIR := ./binaries
 RELDIR := ./releases
 
-# Go module cache (persistent across builds)
-GOCACHE := $(HOME)/.cache/go-build
-GOMODCACHE := $(HOME)/go/pkg/mod
+# Go cache directories (persistent across builds)
+# Per AI.md PART 26: Use unified GODIR structure
+GODIR := $(HOME)/.local/share/go
+GOCACHE := $(GODIR)/build
 
 # Build targets - Per AI.md PART 26: Linux, macOS (Darwin), Windows, FreeBSD - AMD64, ARM64
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64
@@ -46,12 +47,12 @@ REGISTRY := ghcr.io/$(ORG)/$(PROJECT)
 GO_DOCKER := docker run --rm \
 	-v $(PWD):/build \
 	-v $(GOCACHE):/root/.cache/go-build \
-	-v $(GOMODCACHE):/go/pkg/mod \
+	-v $(GODIR):/go \
 	-w /build \
 	-e CGO_ENABLED=0 \
 	golang:alpine
 
-.PHONY: build host release docker test dev clean
+.PHONY: build local release docker test dev clean
 
 # =============================================================================
 # BUILD - Build all platforms + host binary (via Docker with cached modules)
@@ -60,10 +61,11 @@ GO_DOCKER := docker run --rm \
 build:
 	@mkdir -p $(BINDIR)
 	@echo "Building version $(VERSION)..."
-	@mkdir -p $(GOCACHE) $(GOMODCACHE)
+	@mkdir -p $(GOCACHE) $(GODIR)
 
-	# Download modules first (cached)
-	@echo "Downloading Go modules..."
+	# Tidy and download modules (per AI.md PART 26)
+	@echo "Tidying and downloading Go modules..."
+	@$(GO_DOCKER) go mod tidy
 	@$(GO_DOCKER) go mod download
 
 	# Build server for host OS/ARCH
@@ -107,15 +109,16 @@ build:
 	@echo "Build complete: $(BINDIR)/"
 
 # =============================================================================
-# HOST - Build host binaries only (fast development builds)
+# HOST - Build local binaries only (fast development builds)
 # =============================================================================
-host:
+local:
 	@mkdir -p $(BINDIR)
-	@echo "Building host binaries version $(VERSION)..."
-	@mkdir -p $(GOCACHE) $(GOMODCACHE)
+	@echo "Building local binaries version $(VERSION)..."
+	@mkdir -p $(GOCACHE) $(GODIR)
 
-	# Download modules first (cached)
-	@echo "Downloading Go modules..."
+	# Tidy and download modules (per AI.md PART 26)
+	@echo "Tidying and downloading Go modules..."
+	@$(GO_DOCKER) go mod tidy
 	@$(GO_DOCKER) go mod download
 
 	# Build server binary
@@ -204,11 +207,13 @@ docker:
 	@echo "Docker push complete: $(REGISTRY):$(VERSION)"
 
 # =============================================================================
-# TEST - Run all tests (via Docker with cached modules)
+# TEST - Run all tests with coverage (via Docker with cached modules)
+# Per AI.md PART 29: 100% coverage enforcement
 # =============================================================================
 test:
-	@echo "Running tests in Docker..."
-	@mkdir -p $(GOCACHE) $(GOMODCACHE)
+	@echo "Running tests with coverage..."
+	@mkdir -p $(GOCACHE) $(GODIR)
+	@$(GO_DOCKER) go mod tidy
 	@$(GO_DOCKER) go mod download
 	@$(GO_DOCKER) go test -v -cover ./...
 	@echo "Tests complete"
@@ -218,7 +223,8 @@ test:
 # =============================================================================
 # Fast: host platform only, no ldflags, random temp dir for isolation
 dev:
-	@mkdir -p $(GOCACHE) $(GOMODCACHE)
+	@mkdir -p $(GOCACHE) $(GODIR)
+	@$(GO_DOCKER) go mod tidy
 	@BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG).XXXXXX") && \
 		echo "Quick dev build..." && \
 		$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME) ./src && \

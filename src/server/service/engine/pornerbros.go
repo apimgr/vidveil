@@ -18,7 +18,7 @@ func NewPornerBrosEngine(cfg *config.Config, torClient *tor.Client) *PornerBrosE
 }
 
 // Search performs a search on PornerBros
-func (e *PornerBrosEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *PornerBrosEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search?q={query}&page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.card.sub")
 }

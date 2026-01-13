@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 package server
 
 import (
@@ -13,7 +14,7 @@ import (
 
 // registerDebugRoutes registers debug endpoints (--debug/DEBUG=true only)
 func (s *Server) registerDebugRoutes(r chi.Router) {
-	if !mode.IsDebug() {
+	if !mode.IsDebugEnabled() {
 		return
 	}
 
@@ -51,7 +52,7 @@ func (s *Server) handleDebugConfig(w http.ResponseWriter, r *http.Request) {
 			"address": s.cfg.Server.Address,
 			"port":    s.cfg.Server.Port,
 			"mode":    s.cfg.Server.Mode,
-			"debug":   mode.IsDebug(),
+			"debug":   mode.IsDebugEnabled(),
 		},
 		"database": map[string]interface{}{
 			"driver":     s.cfg.Server.Database.Driver,

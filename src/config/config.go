@@ -711,10 +711,12 @@ type Paths = paths.Paths
 // Default returns a Config with sensible defaults per AI.md
 func Default() *Config {
 	fqdn := getHostname()
+	// Per AI.md PART 5: Default port is random 64xxx (non-privileged, no root required)
+	defaultPort := fmt.Sprintf("%d", findUnusedPort())
 
 	return &Config{
 		Server: ServerConfig{
-			Port:        "80",
+			Port:        defaultPort,
 			FQDN:        fqdn,
 			Address:     "[::]",
 			Mode:        "production",
@@ -1072,13 +1074,81 @@ func Load(configDir, dataDir string) (*Config, string, error) {
 		return nil, "", fmt.Errorf("failed to parse config: %w", err)
 	}
 
+	// Validate and fix invalid config values per AI.md PART 12
+	validateConfig(cfg)
+
+	return cfg, configPath, nil
+}
+
+// validateConfig validates all config values, replacing invalid with defaults per AI.md PART 12
+// Rule: If config setting is invalid, warn and replace with default. Never fail startup.
+func validateConfig(cfg *Config) {
+	defaults := Default()
+
+	// Validate port (must be valid or use random per PART 8/12)
+	if cfg.Server.Port != "" {
+		// Parse port(s) - could be "8080" or "8080,8443"
+		ports := strings.Split(cfg.Server.Port, ",")
+		for _, p := range ports {
+			port := strings.TrimSpace(p)
+			if port == "" {
+				continue
+			}
+			portNum := 0
+			fmt.Sscanf(port, "%d", &portNum)
+			if portNum < 1 || portNum > 65535 {
+				randomPort := findUnusedPort()
+				fmt.Fprintf(os.Stderr, "Warning: invalid port %s, using random port %d\n", port, randomPort)
+				cfg.Server.Port = fmt.Sprintf("%d", randomPort)
+				break
+			}
+		}
+	}
+
+	// Validate mode (must be production or development)
+	if cfg.Server.Mode != "" && cfg.Server.Mode != "production" && cfg.Server.Mode != "development" {
+		fmt.Fprintf(os.Stderr, "Warning: invalid mode %q, using default %q\n", cfg.Server.Mode, defaults.Server.Mode)
+		cfg.Server.Mode = defaults.Server.Mode
+	}
+
+	// Validate rate limit window (must be positive)
+	if cfg.Server.RateLimit.Window < 0 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid rate_limit.window %d, using default 60\n", cfg.Server.RateLimit.Window)
+		cfg.Server.RateLimit.Window = 60
+	}
+
+	// Validate rate limit requests (must be positive)
+	if cfg.Server.RateLimit.Requests < 0 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid rate_limit.requests %d, using default 120\n", cfg.Server.RateLimit.Requests)
+		cfg.Server.RateLimit.Requests = 120
+	}
+
+	// Validate SSL settings
+	if cfg.Server.SSL.Enabled && cfg.Server.SSL.LetsEncrypt.Enabled {
+		if cfg.Server.SSL.LetsEncrypt.Email == "" {
+			fmt.Fprintf(os.Stderr, "Warning: SSL Let's Encrypt enabled but no email configured\n")
+		}
+	}
+
+	// Validate session same_site (must be strict, lax, or none)
+	sameSite := strings.ToLower(cfg.Server.Session.SameSite)
+	if sameSite != "" && sameSite != "strict" && sameSite != "lax" && sameSite != "none" {
+		fmt.Fprintf(os.Stderr, "Warning: invalid session.same_site %q, using default 'lax'\n", cfg.Server.Session.SameSite)
+		cfg.Server.Session.SameSite = "lax"
+	}
+
+	// Validate compression level (1-9)
+	if cfg.Server.Compression.Level < 0 || cfg.Server.Compression.Level > 9 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid compression.level %d, using default 5\n", cfg.Server.Compression.Level)
+		cfg.Server.Compression.Level = 5
+	}
+
 	// Enforce audit log format as JSON only per AI.md PART 11 line 11197
 	// "audit: format: json only (text not supported for audit - must be machine-parseable)"
 	if cfg.Server.Logs.Audit.Format != "" && cfg.Server.Logs.Audit.Format != "json" {
+		fmt.Fprintf(os.Stderr, "Warning: audit log format must be 'json', ignoring %q\n", cfg.Server.Logs.Audit.Format)
 		cfg.Server.Logs.Audit.Format = "json"
 	}
-
-	return cfg, configPath, nil
 }
 
 // Save saves configuration to file
@@ -1481,4 +1551,32 @@ func getGlobalIPv4() string {
 		}
 	}
 	return ""
+}
+
+// GetPublicURL returns the public-facing URL for this server
+// Used by /api/autodiscover endpoint per AI.md PART 37 line 38133
+func (c *Config) GetPublicURL() string {
+	// Use FQDN if configured
+	if c.Server.FQDN != "" {
+		return fmt.Sprintf("https://%s", c.Server.FQDN)
+	}
+
+	// Otherwise, build from address and port
+	scheme := "http"
+	host := c.Server.Address
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "localhost"
+	}
+
+	// Port is a string, parse it
+	port := c.Server.Port
+
+	return fmt.Sprintf("%s://%s:%s", scheme, host, port)
+}
+
+// GetClusterNodes returns the list of cluster node URLs
+// Used by /api/autodiscover endpoint per AI.md PART 37 line 38134
+func (c *Config) GetClusterNodes() []string {
+	// Return empty array for now - cluster support is not yet implemented
+	return []string{}
 }

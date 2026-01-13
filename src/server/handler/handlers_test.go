@@ -159,8 +159,8 @@ func TestJSONResponse(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	h.jsonResponse(rr, map[string]interface{}{
-		"success": true,
-		"data":    "test",
+		"ok":   true,
+		"data": "test",
 	})
 
 	if rr.Code != http.StatusOK {
@@ -177,8 +177,9 @@ func TestJSONResponse(t *testing.T) {
 		t.Errorf("jsonResponse returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != true {
-		t.Error("jsonResponse should contain success: true")
+	// Per model.SearchResponse: API uses "ok" field, not "success"
+	if response["ok"] != true {
+		t.Error("jsonResponse should contain ok: true")
 	}
 }
 
@@ -203,16 +204,19 @@ func TestJSONError(t *testing.T) {
 		t.Errorf("jsonError returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != false {
-		t.Error("jsonError should contain success: false")
+	// Per AI.md PART 14: Error response format
+	if response["ok"] != false {
+		t.Error("jsonError should contain ok: false")
 	}
 
-	if response["error"] != "Test error" {
-		t.Errorf("jsonError error = %s, want 'Test error'", response["error"])
+	// Per AI.md PART 14: error field contains the ERROR_CODE
+	if response["error"] != "TEST_ERROR" {
+		t.Errorf("jsonError error = %s, want 'TEST_ERROR'", response["error"])
 	}
 
-	if response["code"] != "TEST_ERROR" {
-		t.Errorf("jsonError code = %s, want 'TEST_ERROR'", response["code"])
+	// Per AI.md PART 14: message field contains human-readable message
+	if response["message"] != "Test error" {
+		t.Errorf("jsonError message = %s, want 'Test error'", response["message"])
 	}
 }
 
@@ -235,33 +239,25 @@ func TestAPISearch_MissingQuery(t *testing.T) {
 		t.Errorf("APISearch returned invalid JSON: %v", err)
 	}
 
-	if response["code"] != "MISSING_QUERY" {
-		t.Errorf("APISearch error code = %s, want 'MISSING_QUERY'", response["code"])
+	// Per AI.md PART 14: error field contains the ERROR_CODE
+	if response["error"] != "MISSING_QUERY" {
+		t.Errorf("APISearch error = %s, want 'MISSING_QUERY'", response["error"])
 	}
 }
 
-func TestAPISearchText_MissingQuery(t *testing.T) {
+func TestAPISearch_TextFormat_MissingQuery(t *testing.T) {
 	cfg := createTestConfig()
 	h := &Handler{cfg: cfg}
 
-	req := httptest.NewRequest("GET", "/api/v1/search/text", nil)
+	req := httptest.NewRequest("GET", "/api/v1/search", nil)
+	req.Header.Set("Accept", "text/plain")
 	rr := httptest.NewRecorder()
 
-	h.APISearchText(rr, req)
+	h.APISearch(rr, req)
 
-	// Missing query should return bad request before hitting engine manager
+	// Missing query should return bad request (JSON error response)
 	if rr.Code != http.StatusBadRequest {
-		t.Errorf("APISearchText returned status %d, want %d", rr.Code, http.StatusBadRequest)
-	}
-
-	body := rr.Body.String()
-	if !strings.Contains(body, "required") {
-		t.Error("APISearchText should indicate query is required")
-	}
-
-	contentType := rr.Header().Get("Content-Type")
-	if contentType != "text/plain" {
-		t.Errorf("APISearchText Content-Type = %s, want text/plain", contentType)
+		t.Errorf("APISearch returned status %d, want %d", rr.Code, http.StatusBadRequest)
 	}
 }
 
@@ -284,8 +280,9 @@ func TestAPIAutocomplete_Empty(t *testing.T) {
 		t.Errorf("APIAutocomplete returned invalid JSON: %v", err)
 	}
 
-	if response["success"] != true {
-		t.Error("APIAutocomplete should return success: true")
+	// Per model.SearchResponse: API uses "ok" field, not "success"
+	if response["ok"] != true {
+		t.Error("APIAutocomplete should return ok: true")
 	}
 
 	suggestions, ok := response["suggestions"].([]interface{})

@@ -1,41 +1,120 @@
 /* Vidveil - Dracula Theme (Dark Default) */
-/* Mobile-first responsive design per BASE spec */
+/* Mobile-first responsive design per AI.md PART 16 */
 
 :root {
-    --bg-primary: #282a36;
-    --bg-secondary: #44475a;
-    --bg-tertiary: #1e1f29;
+    /* Colors - Dracula theme */
+    --primary-color: #bd93f9;
+    --success-color: #50fa7b;
+    --warning-color: #ffb86c;
+    --danger-color: #ff5555;
+    --bg-color: #282a36;
+    --text-color: #f8f8f2;
+    --border-color: #44475a;
+
+    /* AI.md PART 16: Component CSS variables */
+    --color-primary: #bd93f9;
+    --color-primary-bg: rgba(189, 147, 249, 0.15);
+    --color-success: #50fa7b;
+    --color-success-bg: rgba(80, 250, 123, 0.15);
+    --color-warning: #ffb86c;
+    --color-warning-bg: rgba(255, 184, 108, 0.15);
+    --color-error: #ff5555;
+    --color-error-bg: rgba(255, 85, 85, 0.15);
+    --color-danger: #ff5555;
+    --color-info: #8be9fd;
+    --color-info-bg: rgba(139, 233, 253, 0.15);
+    --color-bg: #282a36;
+    --color-bg-secondary: #44475a;
+    --color-bg-tertiary: #1e1f29;
+    --color-text: #f8f8f2;
+    --color-text-secondary: #7585b8;
+    --color-muted: #888;
+    --color-border: #44475a;
+    --color-hover: #44475a;
+
+    /* Legacy aliases (for backward compatibility) */
+    --bg-primary: var(--color-bg);
+    --bg-secondary: var(--color-bg-secondary);
+    --bg-tertiary: var(--color-bg-tertiary);
     --bg-card: #383a4a;
-    --text-primary: #f8f8f2;
-    --text-secondary: #7585b8;
-    --text-muted: #888;
-    --accent: #bd93f9;
+    --text-primary: var(--color-text);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted: var(--color-muted);
+    --accent: var(--color-primary);
     --accent-hover: #ff79c6;
-    --accent-alt: #8be9fd;
-    --success: #50fa7b;
-    --warning: #ffb86c;
-    --error: #ff5555;
-    --border: #44475a;
+    --accent-alt: var(--color-info);
+    --success: var(--color-success);
+    --warning: var(--color-warning);
+    --error: var(--color-error);
+    --border: var(--color-border);
     --shadow: rgba(0, 0, 0, 0.3);
     --link-color: royalblue;
 
-    /* BASE spec: Mobile-first widths */
+    /* Typography per AI.md PART 16 */
+    --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-size-base: 1rem;
+
+    /* Spacing per AI.md PART 16 */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 2rem;
+
+    /* Borders per AI.md PART 16 */
+    --border-radius: 0.25rem;
+
+    /* AI.md PART 16: Mobile-first widths */
     --content-width: 98%;
     --content-margin: 1%;
 }
 
-[data-theme="light"] {
-    --bg-primary: #f5f5f5;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #e8e8e8;
+/* AI.md PART 16: Theme class on html element */
+html.theme-light {
+    /* Colors - Light theme */
+    --primary-color: #7c3aed;
+    --success-color: #22c55e;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --bg-color: #f5f5f5;
+    --text-color: #282a36;
+    --border-color: #d1d5db;
+
+    /* AI.md PART 16: Component CSS variables */
+    --color-primary: #7c3aed;
+    --color-primary-bg: rgba(124, 58, 237, 0.1);
+    --color-success: #22c55e;
+    --color-success-bg: rgba(34, 197, 94, 0.1);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.1);
+    --color-error: #ef4444;
+    --color-error-bg: rgba(239, 68, 68, 0.1);
+    --color-danger: #ef4444;
+    --color-info: #0891b2;
+    --color-info-bg: rgba(8, 145, 178, 0.1);
+    --color-bg: #f5f5f5;
+    --color-bg-secondary: #ffffff;
+    --color-bg-tertiary: #e8e8e8;
+    --color-text: #282a36;
+    --color-text-secondary: #7585b8;
+    --color-muted: #6b7280;
+    --color-border: #d1d5db;
+    --color-hover: #e5e7eb;
+
+    /* Legacy aliases */
+    --bg-primary: var(--color-bg);
+    --bg-secondary: var(--color-bg-secondary);
+    --bg-tertiary: var(--color-bg-tertiary);
     --bg-card: #ffffff;
-    --text-primary: #282a36;
-    --text-secondary: #7585b8;
-    --text-muted: #888;
-    --accent: #7c3aed;
+    --text-primary: var(--color-text);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted: var(--color-muted);
+    --accent: var(--color-primary);
     --accent-hover: #5b21b6;
-    --accent-alt: #0891b2;
-    --border: #d1d5db;
+    --accent-alt: var(--color-info);
+    --success: var(--color-success);
+    --warning: var(--color-warning);
+    --error: var(--color-error);
+    --border: var(--color-border);
     --shadow: rgba(0, 0, 0, 0.1);
 }
 
@@ -1324,38 +1403,99 @@ header .search-form {
     }
 }
 
-/* Toast Notifications */
-.toast {
+/* Toast Container per AI.md PART 16 */
+#toast-container {
     position: fixed;
-    bottom: -100px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 1rem 2rem;
-    border-radius: 8px;
-    font-weight: 500;
+    top: 1rem;
+    right: 1rem;
     z-index: 10000;
-    transition: bottom 0.3s ease;
-    box-shadow: 0 4px 20px var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: calc(100vh - 2rem);
+    overflow: hidden;
+}
+
+/* Toast Notifications per AI.md PART 16 */
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px var(--shadow);
+    animation: toastSlideIn 0.3s ease-out;
+    position: relative;
+    min-width: 280px;
+    max-width: 360px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-left: 4px solid var(--border);
 }
 
 .toast.show {
-    bottom: 2rem;
+    animation: toastSlideIn 0.3s ease-out;
 }
 
-.toast.success {
+.toast-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.toast-message {
+    flex: 1;
+    font-size: 0.9rem;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    line-height: 1;
+}
+
+.toast-close:hover {
+    color: var(--text-primary);
+}
+
+.toast-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 0 0 4px 4px;
+}
+
+.toast-success, .toast.success {
     background: var(--success);
     color: var(--bg-primary);
+    border-left-color: var(--success);
 }
 
-.toast.info {
+.toast-info, .toast.info {
     background: var(--accent);
     color: var(--bg-primary);
+    border-left-color: var(--accent);
 }
 
-.toast.error {
+.toast-warning, .toast.warning {
+    background: var(--warning);
+    color: var(--bg-primary);
+    border-left-color: var(--warning);
+}
+
+.toast-error, .toast.error {
     background: var(--error);
     color: white;
+    border-left-color: var(--error);
 }
+
+@keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes toastCountdown { from { width: 100%; } to { width: 0%; } }
 
 /* Mobile swipe hint for video preview */
 .swipe-hint {
@@ -1900,6 +2040,17 @@ a:focus-visible {
     color: var(--accent);
 }
 
+.history-link.searching {
+    color: var(--accent);
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+.history-link.searching .btn-spinner {
+    border-color: rgba(122, 162, 247, 0.3);
+    border-top-color: var(--accent);
+}
+
 .history-time {
     color: var(--text-muted);
     font-size: 0.7rem;
@@ -2369,4 +2520,513 @@ a:focus-visible {
         transform: translateX(100%);
         opacity: 0;
     }
+}
+
+/* Cookie Consent Banner per AI.md PART 12 - GDPR/CCPA compliance */
+.cookie-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 1rem;
+    z-index: 9999;
+    box-shadow: 0 -2px 10px var(--shadow);
+}
+
+.cookie-banner-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.cookie-message {
+    flex: 1 1 300px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.cookie-message .policy-link {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.cookie-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.cookie-buttons .btn-decline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cookie-buttons .btn-decline:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.cookie-buttons .btn-accept {
+    background: var(--accent);
+    border: none;
+    color: var(--bg-primary);
+    padding: 0.5rem 1.25rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.cookie-buttons .btn-accept:hover {
+    background: var(--accent-hover);
+}
+
+@media (max-width: 600px) {
+    .cookie-banner-content {
+        flex-direction: column;
+        text-align: center;
+    }
+    .cookie-buttons {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ===========================================
+   FORM VALIDATION per AI.md PART 16
+   =========================================== */
+
+/* Form group with validation states */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius);
+    background: var(--color-bg-tertiary);
+    color: var(--color-text);
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+/* Error state */
+.form-group.error input,
+.form-group.error select,
+.form-group.error textarea {
+    border-color: var(--color-error);
+}
+
+.form-group.error input:focus,
+.form-group.error select:focus,
+.form-group.error textarea:focus {
+    box-shadow: 0 0 0 3px var(--color-error-bg);
+}
+
+/* Success state */
+.form-group.success input,
+.form-group.success select,
+.form-group.success textarea {
+    border-color: var(--color-success);
+}
+
+.form-group.success input:focus,
+.form-group.success select:focus,
+.form-group.success textarea:focus {
+    box-shadow: 0 0 0 3px var(--color-success-bg);
+}
+
+/* Field error message */
+.field-error {
+    color: var(--color-error);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+/* Field success message */
+.field-success {
+    color: var(--color-success);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+/* Field hint/help text */
+.field-hint {
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+/* ===========================================
+   EMPTY STATES per AI.md PART 16
+   =========================================== */
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    text-align: center;
+    min-height: 200px;
+}
+
+.empty-state-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 1.5rem;
+    color: var(--color-muted);
+    opacity: 0.5;
+}
+
+.empty-state-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.empty-state-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-message {
+    color: var(--color-muted);
+    margin-bottom: 1.5rem;
+    max-width: 400px;
+    line-height: 1.5;
+}
+
+.empty-state .btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--border-radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.empty-state .btn-primary {
+    background: var(--color-primary);
+    color: var(--color-bg);
+    border: none;
+}
+
+.empty-state .btn-primary:hover {
+    opacity: 0.9;
+}
+
+/* ===========================================
+   NOTIFICATION BELL per AI.md PART 16
+   =========================================== */
+
+.notification-bell {
+    position: relative;
+}
+
+.bell-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    color: var(--color-text-secondary);
+    transition: color 0.2s;
+}
+
+.bell-button:hover {
+    color: var(--color-text);
+}
+
+.bell-icon {
+    width: 24px;
+    height: 24px;
+}
+
+.notification-bell .badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: var(--color-danger);
+    color: white;
+    font-size: 0.7rem;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
+.notification-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    width: 360px;
+    max-height: 400px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.notification-dropdown[hidden] {
+    display: none;
+}
+
+.dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    font-weight: 600;
+}
+
+.mark-all-read {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.mark-all-read:hover {
+    text-decoration: underline;
+}
+
+.notification-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.2s;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.notification-item:hover {
+    background: var(--color-hover);
+}
+
+.notification-item.unread {
+    background: var(--color-primary-bg);
+}
+
+.notification-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    flex-shrink: 0;
+    margin-top: 0.5rem;
+}
+
+.notification-item:not(.unread) .notification-dot {
+    visibility: hidden;
+}
+
+.notification-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--color-bg-tertiary);
+    font-size: 0.875rem;
+}
+
+.notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.notification-title {
+    display: block;
+    font-weight: 500;
+    color: var(--color-text);
+    margin-bottom: 0.25rem;
+}
+
+.notification-message {
+    display: block;
+    font-size: 0.875rem;
+    color: var(--color-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.notification-time {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    margin-top: 0.25rem;
+}
+
+.dropdown-footer {
+    display: block;
+    text-align: center;
+    padding: 0.75rem;
+    color: var(--color-primary);
+    text-decoration: none;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.875rem;
+}
+
+.dropdown-footer:hover {
+    background: var(--color-hover);
+}
+
+/* ===========================================
+   PROFILE MENU per AI.md PART 16
+   =========================================== */
+
+.profile-menu {
+    position: relative;
+}
+
+.profile-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+}
+
+.profile-menu .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.dropdown-arrow {
+    width: 16px;
+    height: 16px;
+    color: var(--color-muted);
+}
+
+.profile-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    min-width: 200px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+}
+
+.profile-dropdown[hidden] {
+    display: none;
+}
+
+.profile-dropdown .dropdown-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.profile-dropdown .username {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.profile-dropdown .dropdown-item {
+    display: block;
+    padding: 0.5rem 1rem;
+    color: var(--color-text);
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.profile-dropdown .dropdown-item:hover {
+    background: var(--color-hover);
+}
+
+.profile-dropdown .dropdown-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 0.5rem 0;
+}
+
+.profile-dropdown .theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.profile-dropdown .theme-toggle button {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.profile-dropdown .theme-toggle button:hover {
+    background: var(--color-hover);
+}
+
+.profile-dropdown .logout {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-error);
 }

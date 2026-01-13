@@ -1,0 +1,31 @@
+{{define "nojs/home"}}
+<!DOCTYPE html>
+<html lang="en" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <main class="home" id="main-content" role="main">
+        <h1>Vidveil</h1>
+        <p>{{.Description}}</p>
+        <form action="/search" method="get" class="search-form" role="search" aria-label="Video search">
+            <label for="search-input" class="visually-hidden">Search query</label>
+            <div class="search-wrapper">
+                <input type="text" id="search-input" name="q" placeholder="Search videos... (try !ph or !rt)" autofocus required aria-required="true" aria-label="Enter search terms">
+            </div>
+            <button type="submit" aria-label="Submit search">Search</button>
+        </form>
+        <p class="bang-hint">Use bangs to search specific sites: <code>!ph</code> PornHub, <code>!rt</code> RedTube, <code>!xv</code> XVideos, <code>!xh</code> xHamster</p>
+        <div class="engine-stats" role="contentinfo" aria-label="Service statistics">
+            <span class="stat"><strong>{{.EngineCount}}</strong> engines</span>
+            <span class="divider" aria-hidden="true">|</span>
+            <span class="stat">No tracking</span>
+            <span class="divider" aria-hidden="true">|</span>
+            <span class="stat">Tor support</span>
+        </div>
+    </main>
+    {{template "public/footer" .}}
+</body>
+</html>
+{{end}}

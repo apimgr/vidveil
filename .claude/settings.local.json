@@ -3,24 +3,12 @@
     "allow": [
       "Bash(wc:*)",
       "Bash(AI.md)",
-      "Bash(./binaries/vidveil:*)",
-      "Bash(while pgrep -f 'go build.*vidveil')",
+      "Bash(for dir in src docker tests)",
       "Bash(done)",
-      "Bash(for engine in sunporno tnaflix drtuber hdzog gotporn tube8)",
-      "Bash(golang:1.24-alpine )",
-      "Bash(/root/Projects/github/apimgr/vidveil/binaries/vidveil:*)",
-      "Bash(/root/Projects/github/apimgr/vidveil/AI.md)",
-      "Bash(for f in README.md LICENSE.md AI.md TODO.AI.md Makefile release.txt go.mod .gitignore .dockerignore)",
-      "Bash([ -f \"$f\" ])",
-      "Bash(for d in src docker docs tests scripts .github binaries)",
-      "Bash([ -d \"$d\" ])",
-      "Bash(for d in config server)",
-      "Bash([ -d \"src/$d\" ])",
-      "Bash(for:*)",
-      "Bash(gh run:*)",
-      "Bash(xargs cat:*)",
-      "Bash(./tests/docker.sh:*)",
-      "Bash(golang:alpine sh -c \"\n    apk add --no-cache shadow >/dev/null 2>&1 || true\n    CGO_ENABLED=0 go build -o /tmp/vidveil ./src\n    echo ''=== Starting binary as root ===''\n    timeout 3 /tmp/vidveil --config /data/config --data /data/data --port 8080 --mode development 2>&1 || true\n    echo ''''\n    echo ''=== Checking user/group creation ===''\n    grep vidveil /etc/passwd || echo ''vidveil user NOT found''\n    grep vidveil /etc/group || echo ''vidveil group NOT found''\n    echo ''''\n    echo ''=== Checking directory ownership ===''\n    ls -la /data/\n  \")"
+      "Bash(./tests/run_tests.sh:*)",
+      "Bash(./tests/incus.sh)",
+      "Bash(tee:*)",
+      "Bash(__NEW_LINE_a6433bc5dc56a18a__ echo \"\")"
     ]
   }
 }

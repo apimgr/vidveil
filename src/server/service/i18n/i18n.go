@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 25: Internationalization (i18n) Support
+// AI.md PART 31: I18N & A11Y - Internationalization Support
 package i18n
 
 import (

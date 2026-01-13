@@ -1,0 +1,51 @@
+{{define "nojs/privacy"}}
+<!DOCTYPE html>
+<html lang="en" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    {{template "public/header" .}}
+    <main class="privacy">
+        <h1>Privacy Policy</h1>
+        <section>
+            <h2>Our Commitment to Privacy</h2>
+            <p>Vidveil is built with privacy as its core principle. We believe your search activity is your business, not ours.</p>
+        </section>
+        <section>
+            <h2>What We Don't Collect</h2>
+            <ul>
+                <li>Search queries are not logged or stored</li>
+                <li>No user accounts or registration required</li>
+                <li>No tracking cookies or analytics</li>
+                <li>No IP address logging</li>
+                <li>No browser fingerprinting</li>
+                <li>No third-party trackers or advertising</li>
+            </ul>
+        </section>
+        <section>
+            <h2>What We Do Store</h2>
+            <p>The only data stored is your preferences (theme, enabled engines), which are saved locally in your browser using localStorage. This data never leaves your device.</p>
+        </section>
+        <section>
+            <h2>Third-Party Sites</h2>
+            <p>When you click on a search result, you will be redirected to the original video site. Those third-party sites have their own privacy policies and may collect data about you. We recommend using a VPN or Tor for additional privacy.</p>
+        </section>
+        <section>
+            <h2>Tor Support</h2>
+            <p>Vidveil fully supports Tor routing for maximum anonymity. When enabled, all search requests to video sites are routed through the Tor network, hiding your IP address from those sites.</p>
+        </section>
+        <section>
+            <h2>Self-Hosting</h2>
+            <p>For complete control over your privacy, you can self-host Vidveil. The application is distributed as a single binary with no external dependencies, making it easy to run on your own server.</p>
+        </section>
+        <section>
+            <h2>Open Source</h2>
+            <p>Vidveil is open source. You can audit the code yourself to verify our privacy claims.</p>
+            <p><a href="https://github.com/apimgr/vidveil" target="_blank">View Source Code on GitHub</a></p>
+        </section>
+    </main>
+    {{template "public/footer" .}}
+</body>
+</html>
+{{end}}

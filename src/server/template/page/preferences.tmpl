@@ -1,6 +1,6 @@
 {{define "preferences"}}
 <!DOCTYPE html>
-<html lang="en" data-theme="{{.Theme}}">
+<html lang="en" class="theme-{{.Theme}}">
 <head>
     {{template "public/head" .}}
 </head>
@@ -113,9 +113,10 @@
             const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
             const prefs = { ...defaults, ...saved };
 
-            // Set theme
+            // Set theme - use class instead of data-theme per AI.md PART 16
             document.getElementById('theme').value = prefs.theme;
-            document.documentElement.setAttribute('data-theme', prefs.theme);
+            document.documentElement.classList.remove('theme-dark', 'theme-light');
+            document.documentElement.classList.add('theme-' + prefs.theme);
 
             // Set results per page
             document.getElementById('results-per-page').value = prefs.resultsPerPage;
@@ -158,8 +159,9 @@
 
             localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 
-            // Apply theme immediately
-            document.documentElement.setAttribute('data-theme', prefs.theme);
+            // Apply theme immediately - use class instead of data-theme per AI.md PART 16
+            document.documentElement.classList.remove('theme-dark', 'theme-light');
+            document.documentElement.classList.add('theme-' + prefs.theme);
 
             showToast('Preferences saved!', 'success');
 
@@ -200,9 +202,10 @@
             });
         };
 
-        // Theme change preview
+        // Theme change preview - use class instead of data-theme per AI.md PART 16
         document.getElementById('theme').addEventListener('change', function() {
-            document.documentElement.setAttribute('data-theme', this.value);
+            document.documentElement.classList.remove('theme-dark', 'theme-light');
+            document.documentElement.classList.add('theme-' + this.value);
         });
 
         // Form submit handler

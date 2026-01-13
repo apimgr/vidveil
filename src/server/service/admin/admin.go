@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 31: Admin Credentials Management
+// AI.md PART 17: Admin Panel - Admin Credentials Management
 // Admin credentials stored in database, NOT config file
 // Password hashing uses Argon2id per AI.md PART 2
 package admin
@@ -813,4 +813,107 @@ func (s *Service) CleanupExpiredTokens() error {
 	}
 
 	return nil
+}
+
+// GetTOTPSecret returns the TOTP secret for an admin (for 2FA verification)
+// Per AI.md PART 17: TOTP Two-Factor Authentication
+func (s *Service) GetTOTPSecret(adminID int64) (string, error) {
+	var secret sql.NullString
+	err := s.db.QueryRow(`
+		SELECT totp_secret FROM admin_credentials WHERE id = ?
+	`, adminID).Scan(&secret)
+
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("admin not found")
+	}
+	if err != nil {
+		return "", fmt.Errorf("database error: %w", err)
+	}
+
+	if !secret.Valid || secret.String == "" {
+		return "", fmt.Errorf("TOTP not configured")
+	}
+
+	return secret.String, nil
+}
+
+// GetTOTPBackupCodes returns the backup codes for an admin
+// Per AI.md PART 17: 10 one-time recovery codes
+func (s *Service) GetTOTPBackupCodes(adminID int64) ([]string, error) {
+	var codesJSON sql.NullString
+	err := s.db.QueryRow(`
+		SELECT totp_backup_codes FROM admin_credentials WHERE id = ?
+	`, adminID).Scan(&codesJSON)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("admin not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("database error: %w", err)
+	}
+
+	if !codesJSON.Valid || codesJSON.String == "" {
+		return []string{}, nil
+	}
+
+	// Parse JSON array of codes
+	codes := strings.Split(codesJSON.String, ",")
+	return codes, nil
+}
+
+// UseBackupCode marks a backup code as used and removes it
+// Returns true if code was valid and removed
+func (s *Service) UseBackupCode(adminID int64, code string) (bool, error) {
+	codes, err := s.GetTOTPBackupCodes(adminID)
+	if err != nil {
+		return false, err
+	}
+
+	code = strings.ToUpper(strings.ReplaceAll(code, "-", ""))
+	newCodes := make([]string, 0, len(codes))
+	found := false
+
+	for _, c := range codes {
+		normalized := strings.ToUpper(strings.ReplaceAll(c, "-", ""))
+		if normalized == code {
+			found = true
+			continue // Skip this code (remove it)
+		}
+		newCodes = append(newCodes, c)
+	}
+
+	if !found {
+		return false, nil
+	}
+
+	// Update backup codes
+	codesStr := strings.Join(newCodes, ",")
+	_, err = s.db.Exec(`
+		UPDATE admin_credentials SET totp_backup_codes = ? WHERE id = ?
+	`, codesStr, adminID)
+
+	return true, err
+}
+
+// EnableTOTP enables 2FA for an admin account
+// Per AI.md PART 17: QR code + manual entry key at /admin/profile/security
+func (s *Service) EnableTOTP(adminID int64, secret string, backupCodes []string) error {
+	codesStr := strings.Join(backupCodes, ",")
+	_, err := s.db.Exec(`
+		UPDATE admin_credentials
+		SET totp_enabled = TRUE, totp_secret = ?, totp_backup_codes = ?, updated_at = ?
+		WHERE id = ?
+	`, secret, codesStr, time.Now(), adminID)
+	return err
+}
+
+// DisableTOTP disables 2FA for an admin account
+// Per AI.md PART 17: Requires current TOTP code or recovery key to disable
+func (s *Service) DisableTOTP(adminID int64) error {
+	_, err := s.db.Exec(`
+		UPDATE admin_credentials
+		SET totp_enabled = FALSE, totp_secret = NULL, totp_backup_codes = NULL, updated_at = ?
+		WHERE id = ?
+	`, time.Now(), adminID)
+	return err
 }

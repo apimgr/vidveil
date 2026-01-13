@@ -6,231 +6,416 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/apimgr/vidveil/src/common/terminal"
+	"github.com/apimgr/vidveil/src/common/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Dracula colors per AI.md PART 36
-var (
-	colorBackground = lipgloss.Color("#282a36")
-	colorForeground = lipgloss.Color("#f8f8f2")
-	colorSelection  = lipgloss.Color("#44475a")
-	colorComment    = lipgloss.Color("#6272a4")
-	colorCyan       = lipgloss.Color("#8be9fd")
-	colorGreen      = lipgloss.Color("#50fa7b")
-	colorOrange     = lipgloss.Color("#ffb86c")
-	colorPink       = lipgloss.Color("#ff79c6")
-	colorPurple     = lipgloss.Color("#bd93f9")
-	colorRed        = lipgloss.Color("#ff5555")
-	colorYellow     = lipgloss.Color("#f1fa8c")
-)
-
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Foreground(colorPurple).
-			Bold(true).
-			Padding(0, 1)
-
-	inputStyle = lipgloss.NewStyle().
-			Foreground(colorForeground).
-			Background(colorSelection).
-			Padding(0, 1)
-
-	resultStyle = lipgloss.NewStyle().
-			Foreground(colorForeground)
-
-	selectedStyle = lipgloss.NewStyle().
-			Foreground(colorCyan).
-			Bold(true)
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(colorComment)
-
-	statusStyle = lipgloss.NewStyle().
-			Foreground(colorGreen)
-
-	errorStyle = lipgloss.NewStyle().
-			Foreground(colorRed)
-)
-
-type model struct {
-	query    string
-	cursor   int
-	results  []searchResult
-	selected int
-	err      error
-	loading  bool
-	width    int
-	height   int
-	quitting bool
+// TUIStyles holds lipgloss styles derived from theme.Palette
+// Per AI.md PART 36: TUI Styles from Palette
+// Per AI.md PART 1: Type names MUST be specific
+type TUIStyles struct {
+	Base     lipgloss.Style
+	Title    lipgloss.Style
+	Input    lipgloss.Style
+	Result   lipgloss.Style
+	Selected lipgloss.Style
+	Help     lipgloss.Style
+	Status   lipgloss.Style
+	Error    lipgloss.Style
+	Warning  lipgloss.Style
+	Muted    lipgloss.Style
+	Border   lipgloss.Style
 }
 
-type searchResult struct {
+// TUILayoutConfig provides TUI-specific layout settings based on SizeMode
+// Per AI.md PART 36: Responsive Layout
+// Per AI.md PART 1: Type names MUST be specific
+type TUILayoutConfig struct {
+	ShowBorders    bool
+	ShowHeader     bool
+	ShowFooter     bool
+	ShowSidebar    bool
+	SidebarWidth   int
+	MaxColumns     int
+	TruncateAt     int
+	UseAbbrev      bool
+	VerticalScroll bool
+}
+
+// CreateTUIStylesFromPalette creates TUIStyles from theme.Palette
+// Per AI.md PART 36: TUI Styles from Palette
+// Per AI.md PART 1: Function names MUST reveal intent
+func CreateTUIStylesFromPalette(palette theme.Palette) TUIStyles {
+	return TUIStyles{
+		Base: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Foreground)).
+			Background(lipgloss.Color(palette.Background)),
+		Title: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Primary)).
+			Bold(true).
+			Padding(0, 1),
+		Input: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Foreground)).
+			Background(lipgloss.Color(palette.Surface)).
+			Padding(0, 1),
+		Result: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Foreground)),
+		Selected: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Info)).
+			Bold(true),
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Muted)),
+		Status: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Success)),
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Error)),
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Warning)),
+		Muted: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Muted)),
+		Border: lipgloss.NewStyle().
+			BorderForeground(lipgloss.Color(palette.Border)),
+	}
+}
+
+// GetTUILayoutConfig returns layout config for a terminal.SizeMode
+// Per AI.md PART 36: Responsive Layout
+// Per AI.md PART 1: Function names MUST reveal intent
+func GetTUILayoutConfig(sizeMode terminal.SizeMode) TUILayoutConfig {
+	configs := map[terminal.SizeMode]TUILayoutConfig{
+		terminal.SizeModeMicro: {
+			ShowBorders:    false,
+			ShowHeader:     false,
+			ShowFooter:     false,
+			ShowSidebar:    false,
+			MaxColumns:     2,
+			TruncateAt:     30,
+			UseAbbrev:      true,
+			VerticalScroll: true,
+		},
+		terminal.SizeModeMinimal: {
+			ShowBorders:    false,
+			ShowHeader:     true,
+			ShowFooter:     true,
+			ShowSidebar:    false,
+			MaxColumns:     3,
+			TruncateAt:     40,
+			UseAbbrev:      true,
+			VerticalScroll: true,
+		},
+		terminal.SizeModeCompact: {
+			ShowBorders:    true,
+			ShowHeader:     true,
+			ShowFooter:     true,
+			ShowSidebar:    false,
+			MaxColumns:     4,
+			TruncateAt:     60,
+			UseAbbrev:      false,
+			VerticalScroll: true,
+		},
+		terminal.SizeModeStandard: {
+			ShowBorders:    true,
+			ShowHeader:     true,
+			ShowFooter:     true,
+			ShowSidebar:    false,
+			MaxColumns:     6,
+			TruncateAt:     80,
+			UseAbbrev:      false,
+			VerticalScroll: true,
+		},
+		terminal.SizeModeWide: {
+			ShowBorders:    true,
+			ShowHeader:     true,
+			ShowFooter:     true,
+			ShowSidebar:    true,
+			SidebarWidth:   30,
+			MaxColumns:     8,
+			TruncateAt:     120,
+			UseAbbrev:      false,
+			VerticalScroll: true,
+		},
+		terminal.SizeModeUltrawide: {
+			ShowBorders:    true,
+			ShowHeader:     true,
+			ShowFooter:     true,
+			ShowSidebar:    true,
+			SidebarWidth:   40,
+			MaxColumns:     12,
+			TruncateAt:     200,
+			UseAbbrev:      false,
+			VerticalScroll: false,
+		},
+		terminal.SizeModeMassive: {
+			ShowBorders:    true,
+			ShowHeader:     true,
+			ShowFooter:     true,
+			ShowSidebar:    true,
+			SidebarWidth:   50,
+			MaxColumns:     20,
+			TruncateAt:     0, // No truncation
+			UseAbbrev:      false,
+			VerticalScroll: false,
+		},
+	}
+	if config, ok := configs[sizeMode]; ok {
+		return config
+	}
+	return configs[terminal.SizeModeStandard]
+}
+
+// Global TUI styles - initialized on startup
+// Per AI.md PART 1: Variable names must be specific
+var tuiStyles TUIStyles
+
+// TUIModel represents the TUI application state
+// Per AI.md PART 1: Type names MUST be specific - "model" is ambiguous
+type TUIModel struct {
+	searchQuery     string
+	cursorPosition  int
+	searchResults   []TUISearchResult
+	selectedIndex   int
+	lastError       error
+	isLoading       bool
+	terminalWidth   int
+	terminalHeight  int
+	isQuitting      bool
+	sizeMode        terminal.SizeMode
+	layoutConfig    TUILayoutConfig
+}
+
+// TUISearchResult represents a single search result in TUI
+// Per AI.md PART 1: Type names MUST be specific - "searchResult" is ambiguous
+type TUISearchResult struct {
 	Title    string
 	URL      string
 	Duration string
 	Engine   string
 }
 
-type searchDoneMsg struct {
-	results []searchResult
+// TUISearchDoneMsg is sent when search completes
+// Per AI.md PART 1: Type names MUST be specific - "searchDoneMsg" is ambiguous
+type TUISearchDoneMsg struct {
+	results []TUISearchResult
 	err     error
 }
 
-func initialModel() model {
-	return model{
-		query:   "",
-		results: nil,
+// CreateInitialTUIModel creates the initial TUI model
+// Per AI.md PART 1: Function names MUST reveal intent - "initialModel" is ambiguous
+func CreateInitialTUIModel() TUIModel {
+	// Initialize styles from theme palette
+	// Per AI.md PART 36: TUI uses theme.Palette from src/common/theme
+	themeMode := "dark"
+	if cliConfig != nil && cliConfig.TUI.Theme != "" {
+		themeMode = cliConfig.TUI.Theme
+	}
+	tuiStyles = CreateTUIStylesFromPalette(theme.Get(themeMode))
+
+	// Get initial terminal size and layout config
+	termSize := terminal.GetSize()
+	layoutConfig := GetTUILayoutConfig(termSize.Mode)
+
+	return TUIModel{
+		searchQuery:   "",
+		searchResults: nil,
+		terminalWidth: termSize.Cols,
+		terminalHeight: termSize.Rows,
+		sizeMode:       termSize.Mode,
+		layoutConfig:   layoutConfig,
 	}
 }
 
-func (m model) Init() tea.Cmd {
+// Init implements tea.Model
+func (m TUIModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update implements tea.Model
+func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
-			if m.query == "" || len(m.results) > 0 {
-				m.quitting = true
+			if m.searchQuery == "" || len(m.searchResults) > 0 {
+				m.isQuitting = true
 				return m, tea.Quit
 			}
 			// Clear query if not empty
-			m.query = ""
-			m.results = nil
+			m.searchQuery = ""
+			m.searchResults = nil
 			return m, nil
 
 		case "enter":
-			if m.query != "" && !m.loading {
-				m.loading = true
-				return m, doSearch(m.query)
+			if m.searchQuery != "" && !m.isLoading {
+				m.isLoading = true
+				return m, ExecuteTUISearch(m.searchQuery)
 			}
-			if len(m.results) > 0 && m.selected < len(m.results) {
+			if len(m.searchResults) > 0 && m.selectedIndex < len(m.searchResults) {
 				// Open selected result
-				fmt.Printf("\nOpening: %s\n", m.results[m.selected].URL)
+				fmt.Printf("\nOpening: %s\n", m.searchResults[m.selectedIndex].URL)
 				return m, tea.Quit
 			}
 
 		case "up", "k":
-			if m.selected > 0 {
-				m.selected--
+			if m.selectedIndex > 0 {
+				m.selectedIndex--
 			}
 
 		case "down", "j":
-			if m.selected < len(m.results)-1 {
-				m.selected++
+			if m.selectedIndex < len(m.searchResults)-1 {
+				m.selectedIndex++
 			}
 
 		case "backspace":
-			if len(m.query) > 0 {
-				m.query = m.query[:len(m.query)-1]
+			if len(m.searchQuery) > 0 {
+				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
 			}
 
 		case "esc":
-			m.query = ""
-			m.results = nil
-			m.err = nil
+			m.searchQuery = ""
+			m.searchResults = nil
+			m.lastError = nil
 
 		default:
 			if len(msg.String()) == 1 {
-				m.query += msg.String()
+				m.searchQuery += msg.String()
 			}
 		}
 
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		// Per AI.md PART 36: Window Resize Handling
+		m.terminalWidth = msg.Width
+		m.terminalHeight = msg.Height
 
-	case searchDoneMsg:
-		m.loading = false
-		m.results = msg.results
-		m.err = msg.err
-		m.selected = 0
+		// Recalculate size mode and layout config
+		m.sizeMode = terminal.GetSize().Mode
+		m.layoutConfig = GetTUILayoutConfig(m.sizeMode)
+
+	case TUISearchDoneMsg:
+		m.isLoading = false
+		m.searchResults = msg.results
+		m.lastError = msg.err
+		m.selectedIndex = 0
 	}
 
 	return m, nil
 }
 
-func (m model) View() string {
-	if m.quitting {
+// View implements tea.Model
+// Per AI.md PART 36: Responsive Layout based on SizeMode
+func (m TUIModel) View() string {
+	if m.isQuitting {
 		return ""
 	}
 
-	var b strings.Builder
+	var viewBuilder strings.Builder
+	layout := m.layoutConfig
 
-	// Title
-	b.WriteString(titleStyle.Render("VidVeil TUI") + "\n\n")
+	// Title - show based on layout config
+	if layout.ShowHeader {
+		viewBuilder.WriteString(tuiStyles.Title.Render("VidVeil TUI") + "\n\n")
+	}
 
 	// Search input
-	b.WriteString("Search: ")
-	b.WriteString(inputStyle.Render(m.query + "_"))
-	b.WriteString("\n\n")
+	viewBuilder.WriteString("Search: ")
+	viewBuilder.WriteString(tuiStyles.Input.Render(m.searchQuery + "_"))
+	viewBuilder.WriteString("\n\n")
 
 	// Status
-	if m.loading {
-		b.WriteString(statusStyle.Render("Searching...") + "\n\n")
-	} else if m.err != nil {
-		b.WriteString(errorStyle.Render("Error: "+m.err.Error()) + "\n\n")
+	if m.isLoading {
+		viewBuilder.WriteString(tuiStyles.Status.Render("Searching...") + "\n\n")
+	} else if m.lastError != nil {
+		viewBuilder.WriteString(tuiStyles.Error.Render("Error: "+m.lastError.Error()) + "\n\n")
 	}
 
 	// Results
-	if len(m.results) > 0 {
-		b.WriteString(fmt.Sprintf("Results (%d):\n", len(m.results)))
-		b.WriteString(strings.Repeat("-", 50) + "\n")
+	if len(m.searchResults) > 0 {
+		viewBuilder.WriteString(fmt.Sprintf("Results (%d):\n", len(m.searchResults)))
+		if layout.ShowBorders {
+			viewBuilder.WriteString(strings.Repeat("-", 50) + "\n")
+		}
 
-		for i, r := range m.results {
-			if i >= 10 {
-				b.WriteString(fmt.Sprintf("  ... and %d more\n", len(m.results)-10))
+		// Determine how many results to show based on terminal height
+		maxResults := 10
+		if m.terminalHeight > 0 {
+			maxResults = m.terminalHeight - 10 // Reserve space for header/footer
+			if maxResults < 3 {
+				maxResults = 3
+			}
+			if maxResults > len(m.searchResults) {
+				maxResults = len(m.searchResults)
+			}
+		}
+
+		for i, result := range m.searchResults {
+			if i >= maxResults {
+				viewBuilder.WriteString(tuiStyles.Muted.Render(fmt.Sprintf("  ... and %d more\n", len(m.searchResults)-maxResults)))
 				break
 			}
 
-			line := fmt.Sprintf("  %s [%s] - %s", r.Title, r.Duration, r.Engine)
-			if len(line) > 70 {
-				line = line[:67] + "..."
+			// Truncate based on layout config
+			truncateAt := layout.TruncateAt
+			if truncateAt == 0 || truncateAt > m.terminalWidth-10 {
+				truncateAt = m.terminalWidth - 10
+			}
+			if truncateAt < 30 {
+				truncateAt = 30
 			}
 
-			if i == m.selected {
-				b.WriteString(selectedStyle.Render("> "+line) + "\n")
+			line := fmt.Sprintf("  %s [%s] - %s", result.Title, result.Duration, result.Engine)
+			if len(line) > truncateAt {
+				line = line[:truncateAt-3] + "..."
+			}
+
+			if i == m.selectedIndex {
+				viewBuilder.WriteString(tuiStyles.Selected.Render("> "+line) + "\n")
 			} else {
-				b.WriteString(resultStyle.Render("  "+line) + "\n")
+				viewBuilder.WriteString(tuiStyles.Result.Render("  "+line) + "\n")
 			}
 		}
-		b.WriteString("\n")
+		viewBuilder.WriteString("\n")
 	}
 
-	// Help
-	help := "q: quit | enter: search/open | esc: clear | j/k: navigate"
-	b.WriteString(helpStyle.Render(help))
+	// Help - show based on layout config
+	if layout.ShowFooter {
+		helpText := "q: quit | enter: search/open | esc: clear | j/k: navigate"
+		if layout.UseAbbrev {
+			helpText = "q:quit | ↵:search | esc:clear | j/k:nav"
+		}
+		viewBuilder.WriteString(tuiStyles.Help.Render(helpText))
+	}
 
-	return b.String()
+	return viewBuilder.String()
 }
 
-func doSearch(query string) tea.Cmd {
+// ExecuteTUISearch performs a search from TUI
+// Per AI.md PART 1: Function names MUST reveal intent - "doSearch" is ambiguous
+func ExecuteTUISearch(searchQuery string) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := client.Search(query, 0, 20, nil, false)
+		resp, err := apiClient.Search(searchQuery, 0, 20, nil, false)
 		if err != nil {
-			return searchDoneMsg{err: err}
+			return TUISearchDoneMsg{err: err}
 		}
 
-		var results []searchResult
-		for _, r := range resp.Results {
-			results = append(results, searchResult{
-				Title:    r.Title,
-				URL:      r.URL,
-				Duration: r.Duration,
-				Engine:   r.Engine,
+		var searchResults []TUISearchResult
+		for _, result := range resp.Results {
+			searchResults = append(searchResults, TUISearchResult{
+				Title:    result.Title,
+				URL:      result.URL,
+				Duration: result.Duration,
+				Engine:   result.Engine,
 			})
 		}
 
-		return searchDoneMsg{results: results}
+		return TUISearchDoneMsg{results: searchResults}
 	}
 }
 
-func runTUI() error {
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
-	_, err := p.Run()
+// RunInteractiveTUI runs the interactive TUI
+// Per AI.md PART 1: Function names MUST reveal intent - "runTUI" is ambiguous
+func RunInteractiveTUI() error {
+	tuiProgram := tea.NewProgram(CreateInitialTUIModel(), tea.WithAltScreen())
+	_, err := tuiProgram.Run()
 	return err
 }

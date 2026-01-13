@@ -57,7 +57,7 @@ engines:
     pornhub: true
     xhamster: true
     redtube: true
-    # ... all 54+ engines
+    # ... all 51 engines
   
   # Per-engine timeout (seconds)
   timeout: 5

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 23: Database Abstraction Layer
+// AI.md PART 10: Database & Cluster
 package database
 
 import (
@@ -12,6 +12,7 @@ import (
 	// Database drivers - imported for side effects
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/microsoft/go-mssqldb"
 )
 
 // Driver represents a database driver type
@@ -21,6 +22,7 @@ const (
 	DriverSQLite   Driver = "sqlite"
 	DriverPostgres Driver = "postgres"
 	DriverMySQL    Driver = "mysql"
+	DriverMSSQL    Driver = "mssql"
 )
 
 // Config holds database connection configuration
@@ -61,6 +63,8 @@ func NewDatabase(cfg Config) (*Database, error) {
 		db, err = openPostgres(cfg)
 	case DriverMySQL, "mariadb":
 		db, err = openMySQL(cfg)
+	case DriverMSSQL, "sqlserver":
+		db, err = openMSSQL(cfg)
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", cfg.Driver)
 	}
@@ -69,10 +73,11 @@ func NewDatabase(cfg Config) (*Database, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool
+	// Configure connection pool per AI.md PART 10
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(1 * time.Minute) // Per PART 10 requirement
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -149,6 +154,25 @@ func openMySQL(cfg Config) (*sql.DB, error) {
 	return sql.Open("mysql", dsn)
 }
 
+// openMSSQL opens a Microsoft SQL Server database connection
+func openMSSQL(cfg Config) (*sql.DB, error) {
+	port := cfg.Port
+	if port == 0 {
+		port = 1433
+	}
+
+	host := cfg.Host
+	if host == "" {
+		host = "localhost"
+	}
+
+	// DSN format for MSSQL: sqlserver://user:password@host:port?database=dbname
+	dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%d?database=%s",
+		cfg.User, cfg.Password, host, port, cfg.Name)
+
+	return sql.Open("sqlserver", dsn)
+}
+
 // DB returns the underlying *sql.DB connection
 func (d *Database) DB() *sql.DB {
 	d.mu.RLock()
@@ -162,8 +186,11 @@ func (d *Database) Driver() Driver {
 }
 
 // Exec executes a query without returning rows
+// Per AI.md PART 10: All queries MUST have timeouts (10s for writes)
 func (d *Database) Exec(query string, args ...interface{}) (sql.Result, error) {
-	return d.db.Exec(query, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return d.db.ExecContext(ctx, query, args...)
 }
 
 // ExecContext executes a query without returning rows with context
@@ -172,8 +199,11 @@ func (d *Database) ExecContext(ctx context.Context, query string, args ...interf
 }
 
 // Query executes a query that returns rows
+// Per AI.md PART 10: All queries MUST have timeouts (5s for reads)
 func (d *Database) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	return d.db.Query(query, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return d.db.QueryContext(ctx, query, args...)
 }
 
 // QueryContext executes a query that returns rows with context
@@ -182,8 +212,11 @@ func (d *Database) QueryContext(ctx context.Context, query string, args ...inter
 }
 
 // QueryRow executes a query that returns at most one row
+// Per AI.md PART 10: All queries MUST have timeouts (5s for reads)
 func (d *Database) QueryRow(query string, args ...interface{}) *sql.Row {
-	return d.db.QueryRow(query, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return d.db.QueryRowContext(ctx, query, args...)
 }
 
 // QueryRowContext executes a query that returns at most one row with context
@@ -192,8 +225,11 @@ func (d *Database) QueryRowContext(ctx context.Context, query string, args ...in
 }
 
 // Begin starts a new transaction
+// Per AI.md PART 10: Transactions have 30s timeout
 func (d *Database) Begin() (*sql.Tx, error) {
-	return d.db.Begin()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return d.db.BeginTx(ctx, nil)
 }
 
 // BeginTx starts a new transaction with context and options
@@ -285,4 +321,59 @@ func (d *Database) Version() (string, error) {
 	var version string
 	err := d.db.QueryRow(query).Scan(&version)
 	return version, err
+}
+
+// Query timeout constants per AI.md PART 10
+const (
+	TimeoutSimpleSelect  = 5 * time.Second  // Simple SELECT queries
+	TimeoutComplexSelect = 15 * time.Second // Complex SELECT with JOINs
+	TimeoutWrite         = 10 * time.Second // INSERT/UPDATE/DELETE
+	TimeoutBulk          = 60 * time.Second // Bulk operations
+	TimeoutMigration     = 5 * time.Minute  // Schema changes
+	TimeoutReport        = 2 * time.Minute  // Aggregation reports
+	TimeoutTransaction   = 30 * time.Second // Default transaction timeout
+)
+
+// WithTimeout creates a context with the specified timeout
+// Per AI.md PART 10: All database queries MUST have timeouts
+func WithTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, timeout)
+}
+
+// WithTransaction executes a function within a transaction
+// Per AI.md PART 10 transaction patterns
+func (d *Database) WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
+	// Transaction timeout per PART 10
+	ctx, cancel := context.WithTimeout(ctx, TimeoutTransaction)
+	defer cancel()
+
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	if err := fn(tx); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// HandleQueryError translates database errors to appropriate error codes
+// Per AI.md PART 10
+func HandleQueryError(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case err == context.DeadlineExceeded:
+		return fmt.Errorf("TIMEOUT: query timed out")
+	case err == sql.ErrNoRows:
+		return fmt.Errorf("NOT_FOUND: resource not found")
+	case err == context.Canceled:
+		return fmt.Errorf("CANCELED: request was canceled")
+	default:
+		return fmt.Errorf("SERVER_ERROR: database error: %w", err)
+	}
 }

@@ -257,11 +257,11 @@ func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 // APIAbout handles GET /api/v1/server/about
 func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"name":        h.cfg.Server.Title,
 			"description": h.cfg.Server.Description,
-			"version":     version.Get(),
+			"version":     version.GetVersion(),
 			"features": []string{
 				"Privacy-focused video meta-search",
 				"No tracking or personal data collection",
@@ -275,7 +275,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 // APIPrivacy handles GET /api/v1/server/privacy
 func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"policy_version": "1.0",
 			"last_updated":   time.Now().Format("2006-01-02"),
@@ -299,7 +299,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Method not allowed",
 			"code":    "METHOD_NOT_ALLOWED",
 		})
@@ -309,7 +309,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 	// Parse form data
 	if err := r.ParseForm(); err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Invalid form data",
 			"code":    "INVALID_REQUEST",
 		})
@@ -322,7 +322,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 
 	if subject == "" || message == "" {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"success": false,
+			"ok": false,
 			"error":   "Subject and message are required",
 			"code":    "MISSING_FIELDS",
 		})
@@ -331,7 +331,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 
 	// In a real implementation, this would send an email or store the message
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"message": "Message received successfully",
 	})
 }
@@ -339,7 +339,7 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 // APIHelp handles GET /api/v1/server/help
 func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"search": map[string]interface{}{
 				"endpoint":    "/search or /api/v1/search",

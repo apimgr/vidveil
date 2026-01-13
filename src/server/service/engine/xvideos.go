@@ -40,7 +40,7 @@ func NewXVideosEngine(cfg *config.Config, torClient *tor.Client) *XVideosEngine 
 }
 
 // Search performs a search on XVideos
-func (e *XVideosEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *XVideosEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	// XVideos uses 0-based pagination
 	searchURL := fmt.Sprintf("%s/?k=%s&p=%d", e.baseURL, query, page-1)
 
@@ -55,7 +55,7 @@ func (e *XVideosEngine) Search(ctx context.Context, query string, page int) ([]m
 		return nil, err
 	}
 
-	var results []model.Result
+	var results []model.VideoResult
 
 	doc.Find(e.parser.ItemSelector()).Each(func(i int, s *goquery.Selection) {
 		item := e.parser.Parse(s)
@@ -67,9 +67,9 @@ func (e *XVideosEngine) Search(ctx context.Context, query string, page int) ([]m
 	return results, nil
 }
 
-// convertToResult converts VideoItem to model.Result
-func (e *XVideosEngine) convertToResult(item *parser.VideoItem) model.Result {
-	return model.Result{
+// convertToResult converts VideoItem to model.VideoResult
+func (e *XVideosEngine) convertToResult(item *parser.VideoItem) model.VideoResult {
+	return model.VideoResult{
 		ID:              GenerateResultID(item.URL, e.Name()),
 		URL:             item.URL,
 		Title:           item.Title,

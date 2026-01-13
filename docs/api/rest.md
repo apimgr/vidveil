@@ -274,7 +274,7 @@ GET /api/v1/stats
 {
   "success": true,
   "data": {
-    "engines_count": 54,
+    "engines_count": 51,
     "engines_enabled": 47
   }
 }

@@ -457,7 +457,7 @@ func (s *SingleInstanceManager) WithLock(name string, ttl time.Duration, fn func
 
 // GenerateJoinToken generates a secure random join token for cluster
 func GenerateJoinToken() string {
-b := make([]byte, 16)
-rand.Read(b)
-return hex.EncodeToString(b)
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }

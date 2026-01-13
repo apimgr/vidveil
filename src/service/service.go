@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Package service provides system service management (systemd, launchd, Windows Service)
 // This is a re-export package that wraps src/server/service/system/service
 package service

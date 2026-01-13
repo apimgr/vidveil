@@ -24,4 +24,60 @@
 
     <a href="/healthz" class="footer-timestamp">Last update: {{.BuildDateTime}}</a>
 </footer>
+
+{{/* Cookie Consent Banner per AI.md PART 12 - GDPR/CCPA compliance */}}
+<div id="cookie-consent" class="cookie-banner" data-sold="false" style="display: none;">
+    <div class="cookie-banner-content">
+        <span class="cookie-message">
+            We use cookies for essential site functionality and, with your consent, for preferences. Your data is stored on our servers and is never sold.
+            <a href="/server/privacy" class="policy-link">Privacy Policy</a>
+        </span>
+        <div class="cookie-buttons">
+            <button class="btn-decline" onclick="declineCookies()">Decline</button>
+            <button class="btn-accept" onclick="acceptCookies()">Accept</button>
+        </div>
+    </div>
+</div>
+<script>
+// Cookie Consent per AI.md PART 12
+(function() {
+    var stored = localStorage.getItem('cookieConsent');
+    var banner = document.getElementById('cookie-consent');
+    if (!stored && banner) {
+        banner.style.display = 'block';
+    }
+    if (stored) {
+        try {
+            var consent = JSON.parse(stored);
+            applyConsent(consent);
+        } catch (e) {
+            localStorage.removeItem('cookieConsent');
+            if (banner) banner.style.display = 'block';
+        }
+    }
+})();
+
+function acceptCookies() {
+    var consent = { essential: true, preferences: true, analytics: false, timestamp: Date.now() };
+    saveAndApplyConsent(consent);
+}
+
+function declineCookies() {
+    var consent = { essential: true, preferences: false, analytics: false, timestamp: Date.now() };
+    saveAndApplyConsent(consent);
+}
+
+function saveAndApplyConsent(consent) {
+    localStorage.setItem('cookieConsent', JSON.stringify(consent));
+    var banner = document.getElementById('cookie-consent');
+    if (banner) banner.style.display = 'none';
+    applyConsent(consent);
+}
+
+function applyConsent(consent) {
+    if (consent.preferences) {
+        document.cookie = "preferencesEnabled=true; path=/; max-age=31536000; SameSite=Lax";
+    }
+}
+</script>
 {{end}}

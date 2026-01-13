@@ -12,83 +12,87 @@ import (
 	"github.com/apimgr/vidveil/src/client/api"
 )
 
+// Search command flags
+// Per AI.md PART 1: Variable names MUST reveal intent
 var (
-	searchLimit   int
-	searchPage    int
-	searchEngines string
-	searchSafe    bool
+	searchResultLimit   int
+	searchPageNumber    int
+	searchEngineFilter  string
+	searchSafeModeEnabled bool
 )
 
-// runSearch runs the search command per AI.md PART 36
+// RunSearchCommand runs the search command per AI.md PART 36
+// Per AI.md PART 1: Function names MUST reveal intent - "runSearch" is ambiguous
 // No short flags except -h
-func runSearch(args []string) error {
+func RunSearchCommand(args []string) error {
 	// Parse search-specific flags
-	var query []string
+	var queryParts []string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--limit":
 			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%d", &searchLimit)
+				fmt.Sscanf(args[i+1], "%d", &searchResultLimit)
 				i++
 			}
 		case "--page":
 			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%d", &searchPage)
+				fmt.Sscanf(args[i+1], "%d", &searchPageNumber)
 				i++
 			}
 		case "--engines":
 			if i+1 < len(args) {
-				searchEngines = args[i+1]
+				searchEngineFilter = args[i+1]
 				i++
 			}
 		case "--safe":
-			searchSafe = true
+			searchSafeModeEnabled = true
 		case "--help", "-h":
-			searchHelp()
+			PrintSearchCommandHelp()
 			return nil
 		default:
 			// Skip if it starts with - (unknown flag)
 			if !strings.HasPrefix(args[i], "-") {
-				query = append(query, args[i])
+				queryParts = append(queryParts, args[i])
 			}
 		}
 	}
 
-	if len(query) == 0 {
+	if len(queryParts) == 0 {
 		return fmt.Errorf("search query required")
 	}
 
-	queryStr := strings.Join(query, " ")
+	searchQueryString := strings.Join(queryParts, " ")
 
 	// Parse engines
-	var engines []string
-	if searchEngines != "" {
-		engines = strings.Split(searchEngines, ",")
+	var engineList []string
+	if searchEngineFilter != "" {
+		engineList = strings.Split(searchEngineFilter, ",")
 	}
 
 	// Perform search
-	resp, err := client.Search(queryStr, searchPage, searchLimit, engines, searchSafe)
+	searchResponse, err := apiClient.Search(searchQueryString, searchPageNumber, searchResultLimit, engineList, searchSafeModeEnabled)
 	if err != nil {
 		return err
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("search failed: %s", resp.Error)
+	if !searchResponse.Ok {
+		return fmt.Errorf("search failed: %s", searchResponse.Error)
 	}
 
 	// Output results
-	switch cfg.Output.Format {
+	switch cliConfig.Output.Format {
 	case "json":
-		return outputJSON(resp)
+		return OutputSearchResultsAsJSON(searchResponse)
 	case "plain":
-		return outputPlain(resp)
+		return OutputSearchResultsAsPlain(searchResponse)
 	default:
-		return outputTable(resp)
+		return OutputSearchResultsAsTable(searchResponse)
 	}
 }
 
-// searchHelp prints search command help per AI.md PART 36
-func searchHelp() {
+// PrintSearchCommandHelp prints search command help per AI.md PART 36
+// Per AI.md PART 1: Function names MUST reveal intent - "searchHelp" is ambiguous
+func PrintSearchCommandHelp() {
 	fmt.Printf(`Search for videos
 
 Usage:
@@ -110,50 +114,58 @@ Examples:
 `, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
 }
 
-func outputJSON(resp interface{}) error {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(resp)
+// OutputSearchResultsAsJSON outputs search results as JSON
+// Per AI.md PART 1: Function names MUST reveal intent - "outputJSON" is ambiguous
+func OutputSearchResultsAsJSON(responseData interface{}) error {
+	jsonEncoder := json.NewEncoder(os.Stdout)
+	jsonEncoder.SetIndent("", "  ")
+	return jsonEncoder.Encode(responseData)
 }
 
-func outputPlain(resp *api.SearchResponse) error {
-	for _, r := range resp.Results {
-		fmt.Printf("%s\n", r.Title)
-		fmt.Printf("  %s\n", r.URL)
-		if r.Duration != "" {
-			fmt.Printf("  Duration: %s", r.Duration)
+// OutputSearchResultsAsPlain outputs search results as plain text
+// Per AI.md PART 1: Function names MUST reveal intent - "outputPlain" is ambiguous
+func OutputSearchResultsAsPlain(searchResponse *api.SearchResponse) error {
+	for _, result := range searchResponse.Results {
+		fmt.Printf("%s\n", result.Title)
+		fmt.Printf("  %s\n", result.URL)
+		if result.Duration != "" {
+			fmt.Printf("  Duration: %s", result.Duration)
 		}
-		if r.Views != "" {
-			fmt.Printf("  Views: %s", r.Views)
+		if result.Views != "" {
+			fmt.Printf("  Views: %s", result.Views)
 		}
 		fmt.Println()
 		fmt.Println()
 	}
-	fmt.Printf("Found %d results for \"%s\"\n", resp.Count, resp.Query)
+	fmt.Printf("Found %d results for \"%s\"\n", searchResponse.Count, searchResponse.Query)
 	return nil
 }
 
-func outputTable(resp *api.SearchResponse) error {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+// OutputSearchResultsAsTable outputs search results as a table
+// Per AI.md PART 1: Function names MUST reveal intent - "outputTable" is ambiguous
+func OutputSearchResultsAsTable(searchResponse *api.SearchResponse) error {
+	tableWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
 	// Header
-	fmt.Fprintf(w, "TITLE\tDURATION\tENGINE\tURL\n")
-	fmt.Fprintf(w, "-----\t--------\t------\t---\n")
+	fmt.Fprintf(tableWriter, "TITLE\tDURATION\tENGINE\tURL\n")
+	fmt.Fprintf(tableWriter, "-----\t--------\t------\t---\n")
 
-	for _, r := range resp.Results {
-		title := truncate(r.Title, 50)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", title, r.Duration, r.Engine, r.URL)
+	for _, result := range searchResponse.Results {
+		truncatedTitle := TruncateSearchResultText(result.Title, 50)
+		fmt.Fprintf(tableWriter, "%s\t%s\t%s\t%s\n", truncatedTitle, result.Duration, result.Engine, result.URL)
 	}
 
-	w.Flush()
+	tableWriter.Flush()
 
-	fmt.Printf("\nFound %d results for \"%s\"\n", resp.Count, resp.Query)
+	fmt.Printf("\nFound %d results for \"%s\"\n", searchResponse.Count, searchResponse.Query)
 	return nil
 }
 
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
+// TruncateSearchResultText truncates text for display
+// Per AI.md PART 1: Function names MUST reveal intent - "truncate" is ambiguous
+func TruncateSearchResultText(text string, maxLength int) string {
+	if len(text) <= maxLength {
+		return text
 	}
-	return s[:max-3] + "..."
+	return text[:maxLength-3] + "..."
 }

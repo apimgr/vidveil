@@ -18,7 +18,7 @@ func NewSpankWireEngine(cfg *config.Config, torClient *tor.Client) *SpankWireEng
 }
 
 // Search performs a search on SpankWire
-func (e *SpankWireEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *SpankWireEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/videos/{query}?page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "li.video-item, div.video-item, div.videoblock")
 }

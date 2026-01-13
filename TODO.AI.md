@@ -1,100 +1,105 @@
-# VidVeil TODO
+# VidVeil TODO and Compliance Status
 
-## AI.md Refreshed from TEMPLATE.md (2026-01-06)
+## Status Summary
 
-- [x] AI.md copied from ~/Projects/github/apimgr/TEMPLATE.md
-- [x] Variables replaced: {projectname}=vidveil, {PROJECTNAME}=VIDVEIL, {projectorg}=apimgr, {gitprovider}=github
-- [x] Project description updated (lines 7-24)
-- [x] HOW TO USE section deleted
-- [x] PART index line numbers updated
-- [x] .claude/rules/ created with rule files
-- [x] IDEA.md verified - contains complete project specification
-- [x] PART 37 updated with VidVeil-specific content
+**Last Updated:** 2026-01-13
+**AI.md Version:** Fresh from TEMPLATE.md (47,665 lines)
+**Template Variables:** All replaced (vidveil, apimgr, github)
 
-**Specification Files:**
-- `AI.md` - HOW: Implementation patterns (PARTS 0-36)
-- `IDEA.md` - WHAT: Project idea, data models, endpoints, business logic
-- `TODO.AI.md` - Task tracking
+## Session Changes (2026-01-13)
+
+### Completed This Session
+
+#### 1. AI.md Refresh
+- [x] Copied fresh TEMPLATE.md to AI.md (47,665 lines)
+- [x] Read PART 0 completely (AI Assistant Rules, lines 1010-2567)
+- [x] Replaced all template variables:
+  - `{projectname}` -> `vidveil`
+  - `{PROJECTNAME}` -> `VIDVEIL`
+  - `{projectorg}` -> `apimgr`
+  - `{PROJECTORG}` -> `APIMGR`
+  - `{gitprovider}` -> `github`
+
+### Previous Session Work (Uncommitted)
+
+#### Search Endpoint Merge (Content Negotiation)
+- [x] Merged `/api/v1/search` and `/api/v1/search/stream` into single endpoint
+- [x] Added content negotiation via Accept headers:
+  - `application/json` -> JSON response
+  - `text/event-stream` -> SSE streaming
+  - `text/plain` -> Plain text
+- [x] Updated `detectResponseFormat()` with SSE detection
+- [x] Created `handleSearchSSE()` helper function
+- [x] Removed `APISearchStream` and `APISearchText` functions
+- [x] Updated routes in `server.go`
+
+**Files Changed:**
+| File | Change |
+|------|--------|
+| `src/server/handler/handlers.go` | Content negotiation, SSE helper |
+| `src/server/server.go` | Removed /search/stream route |
+| `src/server/handler/handlers_test.go` | Updated tests |
+| `IDEA.md` | Updated search endpoint docs |
+
+#### PART 25 Service Compliance
+- [x] Updated systemd template (no User/Group - binary drops privileges)
+- [x] Updated runit template (simplified, no chpst)
+- [x] Updated launchd template (apimgr.vidveil.plist path)
+- [x] Updated rc.d template (simplified)
+- [x] Added `ReadWritePaths` for all 4 required directories
+- [x] Fixed directory creation in `createLinuxUser()`
+
+**Files Changed:**
+| File | Change |
+|------|--------|
+| `src/server/service/system/service.go` | All service templates updated |
+
+#### Privilege Dropping Implementation
+- [x] Created `privilege_unix.go` - Unix privilege dropping via syscall
+- [x] Created `privilege_windows.go` - No-op (VSA handles isolation)
+- [x] Created `windows_service.go` - Windows svc integration
+- [x] Created `windows_service_other.go` - Stubs for non-Windows
+
+**New Files:**
+| File | Purpose |
+|------|---------|
+| `src/server/service/system/privilege_unix.go` | Setuid/Setgid after port binding |
+| `src/server/service/system/privilege_windows.go` | No-op for Windows |
+| `src/server/service/system/windows_service.go` | golang.org/x/sys/windows/svc |
+| `src/server/service/system/windows_service_other.go` | Build stubs |
+
+#### Integration Tests
+- [x] Fixed systemd namespace failure (ReadWritePaths requires dirs to exist)
+- [x] All 13 integration tests passing
+
+#### Port Configuration Fix
+- [x] Changed default port from `"80"` to random `64xxx`
+- [x] Updated `tests/incus.sh` with dynamic port detection
+
+## Current State
+
+| Component | Status |
+|-----------|--------|
+| Build (`make host`) | Working |
+| Unit tests (`make test`) | Working |
+| Integration tests (`./tests/incus.sh`) | 13/13 Passing |
+| Systemd service | Working (privilege drop, port 64xxx) |
+| Search endpoint | Merged with content negotiation |
+
+## Pending Tasks
+
+- [ ] All changes are uncommitted (per SPEC: AI cannot commit)
+
+## Key PART 0 Rules
+
+1. **AI.md is source of truth** - ALWAYS read relevant PART before implementing
+2. **Re-read before every task** - Combat spec drift
+3. **No report files** - Fix issues directly (no AUDIT.md, COMPLIANCE.md, etc.)
+4. **IDEA.md = WHAT** - Business logic, data models, features
+5. **AI.md (PARTS 0-37) = HOW** - Implementation patterns, standards
+6. **Cannot commit** - Write to `.git/COMMIT_MESS` instead
+7. **Ask when uncertain** - Asking is 50x cheaper than guessing wrong
 
 ---
 
-## Current Status
-
-**AI.md is now the source of truth. PART 37 references IDEA.md for WHAT. PARTS 0-36 define HOW.**
-
-### VidVeil-Specific Notes
-- NO user accounts (stateless, privacy-first design)
-- PARTS 33-35 (Multi-User, Organizations, Custom Domains) do NOT apply
-- PART 36 (CLI Client) - VidVeil has a CLI client in src/client/
-- Admin panel uses PART 17 for server-admin authentication only
-- 54+ search engines with bang shortcuts
-
----
-
-## PART Compliance Verification (2026-01-06)
-
-All non-negotiable PARTs verified against AI.md specification.
-
-### Completed Verification
-- [x] PART 0: AI Assistant Rules - AI.md setup, HOW TO USE removed, variables replaced
-- [x] PART 1: Critical Rules - Full web app architecture, security-first design
-- [x] PART 2: License & Attribution - MIT license, LICENSE.md with third-party licenses
-- [x] PART 3: Project Structure - All directories present, .gitignore, .dockerignore
-- [x] PART 4: OS-Specific Paths - paths.go handles Linux/macOS/Windows/BSD
-- [x] PART 5: Configuration - config.go with all required sections
-- [x] PART 6: Application Modes - production/development modes in mode/
-- [x] PART 7: Binary Requirements - CGO_ENABLED=0, 8 platforms in Makefile
-- [x] PART 8: Server Binary CLI - All CLI flags in main.go, --help format
-- [x] PART 9: Error Handling & Caching - Error patterns implemented
-- [x] PART 10: Database & Cluster - SQLite, clustering support
-- [x] PART 11: Security & Logging - Security headers, rate limiting, audit logs
-- [x] PART 12: Server Configuration - Server settings structure
-- [x] PART 13: Health & Versioning - /healthz, /api/v1/healthz endpoints
-- [x] PART 14: API Structure - REST routes, content negotiation, .txt/.json extensions
-- [x] PART 15: SSL/TLS & Let's Encrypt - SSL config, security headers
-- [x] PART 16: Web Frontend - HTML templates, themes, CSS
-- [x] PART 17: Admin Panel - Complete admin routes, setup wizard, auth
-- [x] PART 18: Email & Notifications - SMTP configuration
-- [x] PART 19: Scheduler - Built-in scheduler in scheduler/
-- [x] PART 20: GeoIP - GeoIP service in geoip/
-- [x] PART 21: Metrics - Prometheus metrics endpoint
-- [x] PART 22: Backup & Restore - Backup service and API
-- [x] PART 23: Update Command - --update CLI flag
-- [x] PART 24: Privilege Escalation & Service - Service management
-- [x] PART 25: Service Support - Systemd integration
-- [x] PART 26: Makefile - build, host, release, docker, test, dev, clean targets
-- [x] PART 27: Docker - Multi-stage Dockerfile, non-root user, tini
-- [x] PART 28: CI/CD Workflows - release.yml, beta.yml, daily.yml, docker.yml
-- [x] PART 29: Testing & Development - run_tests.sh, docker.sh, incus.sh
-- [x] PART 30: ReadTheDocs Documentation - docs/ with MkDocs structure
-- [x] PART 31: I18N & A11Y - i18n service in server/service/i18n/
-- [x] PART 32: Tor Hidden Service - Tor service in server/service/tor/
-- [x] PART 36: CLI Client - CLI with TUI in src/client/
-- [x] PART 37: Project-Specific - Updated with VidVeil endpoints and business logic
-
-### Not Applicable
-- [ ] PART 33: Multi-User - VidVeil is stateless, no user accounts
-- [ ] PART 34: Organizations - VidVeil is stateless, no organizations
-- [ ] PART 35: Custom Domains - VidVeil is stateless, no custom domains
-
----
-
-## Key Implementation Files
-
-| Component | Location | Notes |
-|-----------|----------|-------|
-| CLI Entry | `src/main.go` | CLI flags, entry point |
-| Paths | `src/paths/paths.go` | OS-specific paths |
-| Config | `src/config/config.go` | Configuration management |
-| Server | `src/server/server.go` | API routes, middleware |
-| Engines | `src/server/service/parser/` | 54+ video search engines |
-| CLI Client | `src/client/` | CLI client with bubbletea TUI |
-| Docker | `docker/Dockerfile` | Container build |
-| CI/CD | `.github/workflows/` | GitHub Actions pipelines |
-| Docs | `docs/` | ReadTheDocs documentation |
-
----
-
-## Implementation Queue
-
-No pending tasks - all PARTs verified complete.
+**Remember:** AI.md (HOW) + IDEA.md (WHAT) = Complete specification

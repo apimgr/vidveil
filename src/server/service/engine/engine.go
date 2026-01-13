@@ -51,7 +51,7 @@ type Capabilities struct {
 type Engine interface {
 	Name() string
 	DisplayName() string
-	Search(ctx context.Context, query string, page int) ([]model.Result, error)
+	Search(ctx context.Context, query string, page int) ([]model.VideoResult, error)
 	IsAvailable() bool
 	SupportsFeature(feature Feature) bool
 	Tier() int

@@ -18,6 +18,8 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
+	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 )
 
@@ -93,6 +95,15 @@ func (s *Server) setupMiddleware() {
 	// Real IP
 	s.router.Use(middleware.RealIP)
 
+	// URL Variables resolution per AI.md PART 13 (reverse proxy headers)
+	s.router.Use(urlvars.Global().Middleware)
+
+	// Trailing slash handling per AI.md PART 14 - redirect /path/ to /path
+	s.router.Use(middleware.RedirectSlashes)
+
+	// Path Security (AI.md PART 5 - must be early in chain)
+	s.router.Use(paths.PathSecurityMiddleware)
+
 	// Logger
 	s.router.Use(middleware.Logger)
 
@@ -109,7 +120,7 @@ func (s *Server) setupMiddleware() {
 		MaxAge:           300,
 	}))
 
-	// Security headers (AI.md PART 15 NON-NEGOTIABLE)
+	// Security headers per AI.md PART 11 (NON-NEGOTIABLE)
 	s.router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -119,6 +130,11 @@ func (s *Server) setupMiddleware() {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; connect-src 'self'")
 			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+			// HSTS header per AI.md PART 11 - only when SSL enabled
+			// max-age=31536000 (1 year), includeSubDomains, preload
+			if s.cfg.Server.SSL.Enabled {
+				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+			}
 			// Add Request ID to response headers per AI.md PART 17
 			if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 				w.Header().Set("X-Request-ID", reqID)
@@ -262,6 +278,9 @@ func (s *Server) setupRoutes() {
 		r.Get("/login", auth.LoginPage)
 		r.Post("/login", auth.LoginPage)
 		r.Get("/logout", auth.LogoutPage)
+		// Per AI.md PART 17: 2FA verification step (after password, before session)
+		r.Get("/2fa", auth.TwoFactorPage)
+		r.Post("/2fa", auth.TwoFactorPage)
 		r.Get("/register", auth.RegisterPage)
 		r.Post("/register", auth.RegisterPage)
 		r.Get("/password/forgot", auth.PasswordForgotPage)
@@ -400,12 +419,17 @@ func (s *Server) setupRoutes() {
 		r.Post("/invite/{token}", admin.AdminInvitePage)
 	})
 
+	// API autodiscover endpoint (non-versioned per AI.md PART 37 line 38158)
+	// Clients need this BEFORE they know the API version
+	s.router.Get("/api/autodiscover", h.Autodiscover)
+
 	// API v1 routes
 	s.router.Route("/api/v1", func(r chi.Router) {
-		// Search endpoints (public) - includes SSE streaming
+		// Search endpoint (public) - content negotiation for JSON, SSE, text
+		// Accept: application/json (default) - JSON response with caching
+		// Accept: text/event-stream - SSE streaming results as engines respond
+		// Accept: text/plain or .txt extension - plain text format
 		r.Get("/search", h.APISearch)
-		r.Get("/search/stream", h.APISearchStream)
-		r.Get("/search.txt", h.APISearchText)
 
 		// Bang endpoints (public) - per AI.md PART 37
 		r.Get("/bangs", h.APIBangs)
@@ -424,8 +448,9 @@ func (s *Server) setupRoutes() {
 			r.Get("/engine/{name}", h.DebugEngine)
 		})
 
-		// Health (public)
+		// Health and version (public)
 		r.Get("/healthz", h.APIHealthCheck)
+		r.Get("/version", h.APIVersion)
 
 		// Server API per AI.md PART 14
 		r.Route("/server", func(r chi.Router) {

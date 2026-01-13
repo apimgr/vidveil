@@ -18,7 +18,7 @@ func NewSunPornoEngine(cfg *config.Config, torClient *tor.Client) *SunPornoEngin
 }
 
 // Search performs a search on SunPorno
-func (e *SunPornoEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *SunPornoEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/videos?q={query}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "a.item.drclass")
 }

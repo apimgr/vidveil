@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Package admin provides admin panel functionality
 // This is a re-export package that wraps src/server/service/admin
 package admin

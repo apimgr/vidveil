@@ -190,7 +190,7 @@ func (h *Handler) AgeVerifyPage(w http.ResponseWriter, r *http.Request) {
 		redirect = "/"
 	}
 
-	h.renderTemplate(w, "age-verify", map[string]interface{}{
+	h.renderResponse(w, r, "age-verify", map[string]interface{}{
 		"Title":    "Age Verification - " + h.cfg.Server.Title,
 		"Theme":    h.cfg.Web.UI.Theme,
 		"Redirect": redirect,
@@ -248,7 +248,7 @@ func (h *Handler) HomePage(w http.ResponseWriter, r *http.Request) {
 			"title":        h.cfg.Server.Title,
 			"description":  h.cfg.Server.Description,
 			"engine_count": engineCount,
-			"version":      version.Get(),
+			"version":      version.GetVersion(),
 		})
 		
 	case "text/plain":
@@ -257,11 +257,11 @@ func (h *Handler) HomePage(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "%s\n", h.cfg.Server.Title)
 		fmt.Fprintf(w, "%s\n\n", h.cfg.Server.Description)
 		fmt.Fprintf(w, "Search Engines: %d enabled\n", engineCount)
-		fmt.Fprintf(w, "Version: %s\n", version.Get())
+		fmt.Fprintf(w, "Version: %s\n", version.GetVersion())
 		
 	default:
 		// HTML response for browsers (default)
-		h.renderTemplate(w, "home", map[string]interface{}{
+		h.renderResponse(w, r, "home", map[string]interface{}{
 			"Title":         h.cfg.Server.Title,
 			"Description":   h.cfg.Server.Description,
 			"Theme":         h.cfg.Web.UI.Theme,
@@ -273,7 +273,8 @@ func (h *Handler) HomePage(w http.ResponseWriter, r *http.Request) {
 
 // SearchPage renders search results with content negotiation per AI.md PART 17
 func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
+	// Strip leading/trailing whitespace from query per AI.md
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -281,7 +282,7 @@ func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 	// Parse bangs from query (e.g., "!ph amateur" -> search pornhub for "amateur")
 	parsed := engine.ParseBangs(query)
-	searchQuery := parsed.Query
+	searchQuery := strings.TrimSpace(parsed.Query)
 	if searchQuery == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -336,7 +337,7 @@ func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		resultsJSON, _ := json.Marshal(results.Data.Results)
 
 		// ResultsJSON is safe JSON for script template use
-		h.renderTemplate(w, "search", map[string]interface{}{
+		h.renderResponse(w, r, "search", map[string]interface{}{
 			"Title":       query + " - " + h.cfg.Server.Title,
 			"Query":       query,
 			"SearchQuery": searchQuery,
@@ -381,7 +382,7 @@ func (h *Handler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
 		
 	default:
 		// HTML response for browsers (default)
-		h.renderTemplate(w, "preferences", map[string]interface{}{
+		h.renderResponse(w, r, "preferences", map[string]interface{}{
 			"Title":         "Preferences - " + h.cfg.Server.Title,
 			"Theme":         h.cfg.Web.UI.Theme,
 			"Engines":       engines,
@@ -394,7 +395,7 @@ func (h *Handler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 	
-	ver := version.Get()
+	ver := version.GetVersion()
 
 	switch format {
 	case "application/json":
@@ -416,7 +417,7 @@ func (h *Handler) AboutPage(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		// HTML response for browsers (default)
-		h.renderTemplate(w, "about", map[string]interface{}{
+		h.renderResponse(w, r, "about", map[string]interface{}{
 			"Title":         "About - " + h.cfg.Server.Title,
 			"Theme":         h.cfg.Web.UI.Theme,
 			"Version":       ver,
@@ -429,7 +430,7 @@ func (h *Handler) AboutPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 	
-	ver := version.Get()
+	ver := version.GetVersion()
 
 	switch format {
 	case "application/json":
@@ -449,7 +450,7 @@ func (h *Handler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		// HTML response for browsers (default)
-		h.renderTemplate(w, "privacy", map[string]interface{}{
+		h.renderResponse(w, r, "privacy", map[string]interface{}{
 			"Title":         "Privacy Policy - " + h.cfg.Server.Title,
 			"Theme":         h.cfg.Web.UI.Theme,
 			"Version":       ver,
@@ -478,6 +479,10 @@ func detectResponseFormat(r *http.Request) string {
 	// 1. Check Accept header (explicit preference)
 	accept := r.Header.Get("Accept")
 
+	// SSE streaming takes priority for search endpoints
+	if strings.Contains(accept, "text/event-stream") {
+		return "text/event-stream"
+	}
 	if strings.Contains(accept, "text/html") {
 		return "text/html"
 	}
@@ -525,6 +530,47 @@ func detectResponseFormat(r *http.Request) string {
 	return "text/html"
 }
 
+// getAPIResponseFormat determines format for /api/** routes per AI.md PART 14 lines 14967-14986
+// Returns "text" or "json" (raw strings, not MIME types)
+// Priority: .txt extension > Accept header > CLI detection > default JSON
+func getAPIResponseFormat(r *http.Request) string {
+	// 1. Check .txt extension FIRST (highest priority)
+	if strings.HasSuffix(r.URL.Path, ".txt") {
+		return "text"
+	}
+
+	// 2. Check Accept header (explicit preference - overrides UA detection)
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "application/json") {
+		return "json"
+	}
+	if strings.Contains(accept, "text/plain") {
+		return "text"
+	}
+
+	// 3. Check if non-interactive client (CLI tools like curl, wget)
+	// Per AI.md PART 14 line 15000: CLI Tool column shows "Text"
+	ua := strings.ToLower(r.Header.Get("User-Agent"))
+	cliTools := []string{
+		"curl/", "wget/", "httpie/",
+		"libcurl/", "python-requests/",
+		"go-http-client/", "axios/", "node-fetch/",
+	}
+	for _, tool := range cliTools {
+		if strings.Contains(ua, tool) {
+			return "text"
+		}
+	}
+
+	// Empty User-Agent = likely HTTP tool (non-interactive)
+	if ua == "" {
+		return "text"
+	}
+
+	// 4. Default to JSON for API routes (browsers, API clients)
+	return "json"
+}
+
 // HealthCheck returns health status with content negotiation
 // Per AI.md PART 16: Supports HTML (default), JSON (Accept: application/json), and Text
 // HealthCheck handles /healthz endpoint with content negotiation
@@ -564,19 +610,27 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	if clusterEnabled {
 		checks["cluster"] = "ok"
 	}
-	
-	// Overall status
-	status := "healthy"
-	
+
 	// Add scheduler check
 	checks["scheduler"] = "ok"
+
+	// Overall status - per AI.md PART 13: derive from checks
+	status := "healthy"
+	httpStatus := http.StatusOK
+	for _, v := range checks {
+		if v != "ok" {
+			status = "unhealthy"
+			httpStatus = http.StatusServiceUnavailable
+			break
+		}
+	}
 
 	switch format {
 	case "application/json":
 		// JSON format per AI.md PART 13 lines 12949-12996
 		response := map[string]interface{}{
 			"status":     status,
-			"version":    version.Get(),
+			"version":    version.GetVersion(),
 			"mode":       appMode,
 			"uptime":     uptime,
 			"timestamp":  timestamp,
@@ -624,13 +678,14 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		WriteJSON(w, http.StatusOK, response)
+		WriteJSON(w, httpStatus, response)
 
 	case "text/plain":
 		// Plain text format per AI.md PART 13 lines 11338-11349
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(httpStatus)
 		fmt.Fprintf(w, "status: %s\n", status)
-		fmt.Fprintf(w, "version: %s\n", version.Get())
+		fmt.Fprintf(w, "version: %s\n", version.GetVersion())
 		fmt.Fprintf(w, "mode: %s\n", appMode)
 		fmt.Fprintf(w, "uptime: %s\n", uptime)
 		fmt.Fprintf(w, "database: %s\n", checks["database"])
@@ -641,26 +696,195 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 
 	default:
-		// HTML format (default) per AI.md PART 13 lines 11299-11308
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(`<!DOCTYPE html>
-<html>
-<head><title>Health Check</title></head>
-<body>
-<h1>VidVeil Health Check</h1>
-<p>Status: <strong>` + status + `</strong></p>
-<p>Version: ` + version.Get() + `</p>
-<p>Mode: ` + appMode + `</p>
-<p>Uptime: ` + uptime + `</p>
-<p>Hostname: ` + hostname + `</p>
-<h2>Checks</h2>
-<ul>
-<li>Database: ` + checks["database"] + `</li>
-<li>Cache: ` + checks["cache"] + `</li>
-<li>Disk: ` + checks["disk"] + `</li>
-</ul>
-</body>
-</html>`))
+		// HTML format (default) per AI.md PART 13 with full template
+		h.renderHealthzHTML(w, r, status, httpStatus, appMode, uptime, hostname, timestamp, checks, clusterEnabled, clusterStatus, clusterNodes, clusterRole)
+	}
+}
+
+// HealthzHTMLData holds all data for healthz template per AI.md PART 13
+type HealthzHTMLData struct {
+	Title              string
+	Theme              string
+	Version            string
+	BuildDateTime      string
+
+	// Project info
+	ProjectName        string
+	ProjectDescription string
+
+	// Status
+	StatusClass        string
+	StatusIcon         string
+	StatusText         string
+
+	// Version info
+	GoVersion          string
+	BuildCommit        string
+	BuildDate          string
+	Uptime             string
+	Mode               string
+	ModeDisplay        string
+
+	// Cluster
+	ClusterEnabled     bool
+	ClusterStatus      string
+	ClusterStatusClass string
+	ClusterStatusIcon  string
+	ClusterPrimary     string
+	ClusterRole        string
+	ClusterNodes       []ClusterNodeData
+
+	// Features
+	Features           FeaturesData
+
+	// Checks
+	Checks             ChecksData
+
+	// Stats
+	Stats              StatsData
+
+	// Timestamp
+	Timestamp          string
+	TimestampDisplay   string
+}
+
+type ClusterNodeData struct {
+	URL       string
+	IsPrimary bool
+}
+
+type FeaturesData struct {
+	MultiUser     bool
+	Organizations bool
+	TorEnabled    bool
+	TorRunning    bool
+	TorHostname   string
+	GeoIP         bool
+	Metrics       bool
+}
+
+type ChecksData struct {
+	Database  string
+	Cache     string
+	Disk      string
+	Scheduler string
+	Cluster   string
+}
+
+type StatsData struct {
+	TotalRequests     string
+	Requests24h       string
+	ActiveConnections string
+}
+
+// renderHealthzHTML renders the healthz HTML template per AI.md PART 13
+func (h *Handler) renderHealthzHTML(w http.ResponseWriter, r *http.Request, status string, httpStatus int, appMode, uptime, hostname, timestamp string, checks map[string]string, clusterEnabled bool, clusterStatus string, clusterNodes int, clusterRole string) {
+	// Parse timestamp
+	ts, _ := time.Parse(time.RFC3339, timestamp)
+
+	// Build template data per AI.md PART 13
+	data := HealthzHTMLData{
+		Title:              "Vidveil - Health Status",
+		Theme:              "dark",
+		Version:            version.GetVersion(),
+		BuildDateTime:      version.BuildTime,
+
+		// Project info
+		ProjectName:        "Vidveil",
+		ProjectDescription: "Privacy-respecting adult video meta search",
+
+		// Version info
+		GoVersion:          runtime.Version(),
+		BuildCommit:        version.CommitID,
+		BuildDate:          version.BuildTime,
+		Uptime:             uptime,
+		Mode:               appMode,
+
+		// Checks
+		Checks: ChecksData{
+			Database:  checks["database"],
+			Cache:     checks["cache"],
+			Disk:      checks["disk"],
+			Scheduler: checks["scheduler"],
+			Cluster:   checks["cluster"],
+		},
+
+		// Stats (Prometheus metrics in /metrics endpoint per AI.md PART 21)
+		Stats: StatsData{
+			TotalRequests:     "See /metrics",
+			Requests24h:       "See /metrics",
+			ActiveConnections: "See /metrics",
+		},
+
+		// Timestamp
+		Timestamp:        timestamp,
+		TimestampDisplay: ts.Format("Jan 02, 2006 3:04 PM"),
+
+		// Cluster
+		ClusterEnabled:   clusterEnabled,
+	}
+
+	// Status display
+	switch status {
+	case "healthy":
+		data.StatusClass = "healthy"
+		data.StatusIcon = "✅"
+		data.StatusText = "All Systems Operational"
+	case "unhealthy":
+		data.StatusClass = "unhealthy"
+		data.StatusIcon = "🔴"
+		data.StatusText = "System Unhealthy"
+	default:
+		data.StatusClass = "degraded"
+		data.StatusIcon = "⚠️"
+		data.StatusText = "System Degraded"
+	}
+
+	// Mode display
+	if appMode == "production" {
+		data.ModeDisplay = "Production"
+	} else {
+		data.ModeDisplay = "Development"
+	}
+
+	// Features
+	if h.cfg != nil {
+		data.Features.TorEnabled = h.cfg.Search.Tor.Enabled
+		data.Features.GeoIP = h.cfg.Server.GeoIP.Enabled
+		data.Features.Metrics = h.cfg.Server.Metrics.Enabled
+	}
+
+	// Cluster info
+	if clusterEnabled {
+		data.ClusterStatus = clusterStatus
+		data.ClusterRole = clusterRole
+		if checks["cluster"] == "ok" {
+			data.ClusterStatusClass = "ok"
+			data.ClusterStatusIcon = "✅"
+		} else {
+			data.ClusterStatusClass = "error"
+			data.ClusterStatusIcon = "❌"
+		}
+	}
+
+	// Parse and execute template
+	tmpl, err := template.ParseFS(templatesFS,
+		"template/page/healthz.tmpl",
+		"template/partial/public/head.tmpl",
+		"template/partial/public/footer.tmpl",
+		"template/partial/public/scripts.tmpl",
+	)
+	if err != nil {
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(httpStatus)
+	if err := tmpl.ExecuteTemplate(w, "healthz", data); err != nil {
+		// Can't call http.Error after WriteHeader - just log the error
+		return
 	}
 }
 
@@ -798,70 +1022,8 @@ func (h *Handler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(sitemap))
 }
 
-// APISearchStream handles SSE streaming search API requests
-func (h *Handler) APISearchStream(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
-	if query == "" {
-		h.jsonError(w, "Query parameter 'q' is required", "MISSING_QUERY", http.StatusBadRequest)
-		return
-	}
-
-	// Parse bangs from query
-	parsed := engine.ParseBangs(query)
-	searchQuery := parsed.Query
-	if searchQuery == "" {
-		h.jsonError(w, "Query cannot be empty after bang parsing", "EMPTY_QUERY", http.StatusBadRequest)
-		return
-	}
-
-	// Get page parameter for infinite scroll
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
-			page = pn
-		}
-	}
-
-	// Get engine names - bangs take priority, then URL param
-	engineNames := parsed.Engines
-	if len(engineNames) == 0 {
-		if e := r.URL.Query().Get("engines"); e != "" {
-			engineNames = strings.Split(e, ",")
-		}
-	}
-
-	// Set SSE headers
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		h.jsonError(w, "Streaming not supported", "STREAMING_ERROR", http.StatusInternalServerError)
-		return
-	}
-
-	// Stream results
-	ctx := r.Context()
-	resultsChan := h.engineMgr.SearchStream(ctx, searchQuery, page, engineNames)
-
-	for result := range resultsChan {
-		data, err := json.Marshal(result)
-		if err != nil {
-			continue
-		}
-
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
-	}
-
-	// Send final done message
-	fmt.Fprintf(w, "data: {\"done\":true,\"engine\":\"all\"}\n\n")
-	flusher.Flush()
-}
-
-// APISearch handles search API requests
+// APISearch handles search API requests with content negotiation
+// Supports: JSON (default), SSE streaming (Accept: text/event-stream), plain text
 func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := detectResponseFormat(r)
@@ -893,6 +1055,12 @@ func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
 		if e := r.URL.Query().Get("engines"); e != "" {
 			engineNames = strings.Split(e, ",")
 		}
+	}
+
+	// SSE streaming mode - stream results as they arrive from engines
+	if format == "text/event-stream" {
+		h.handleSearchSSE(w, r, searchQuery, page, engineNames)
+		return
 	}
 
 	// Check cache first (skip cache param allows bypassing)
@@ -947,50 +1115,37 @@ func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
 	h.jsonResponse(w, results)
 }
 
-// APISearchText handles search API requests returning text
-func (h *Handler) APISearchText(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
-	if query == "" {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Error: Query parameter 'q' is required"))
+// handleSearchSSE handles SSE streaming for search results
+func (h *Handler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string) {
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.jsonError(w, "Streaming not supported", "STREAMING_ERROR", http.StatusInternalServerError)
 		return
 	}
 
-	// Parse bangs from query
-	parsed := engine.ParseBangs(query)
-	searchQuery := parsed.Query
-	if searchQuery == "" {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Error: Query cannot be empty after bang parsing"))
-		return
-	}
+	// Stream results
+	ctx := r.Context()
+	resultsChan := h.engineMgr.SearchStream(ctx, searchQuery, page, engineNames)
 
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
-			page = pn
+	for result := range resultsChan {
+		data, err := json.Marshal(result)
+		if err != nil {
+			continue
 		}
+
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
 	}
 
-	// Get engine names - bangs take priority, then URL param
-	engineNames := parsed.Engines
-	if len(engineNames) == 0 {
-		if e := r.URL.Query().Get("engines"); e != "" {
-			engineNames = strings.Split(e, ",")
-		}
-	}
-
-	results := h.engineMgr.Search(r.Context(), searchQuery, page, engineNames)
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	for _, result := range results.Data.Results {
-		w.Write([]byte(result.Title + "\n"))
-		w.Write([]byte(result.URL + "\n"))
-		w.Write([]byte("Duration: " + result.Duration + " | Source: " + result.SourceDisplay + "\n"))
-		w.Write([]byte("\n"))
-	}
+	// Send final done message
+	fmt.Fprintf(w, "data: {\"done\":true,\"engine\":\"all\"}\n\n")
+	flusher.Flush()
 }
 
 // APIBangs returns list of available bang shortcuts
@@ -1012,7 +1167,7 @@ func (h *Handler) APIBangs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonResponse(w, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data":    bangs,
 		"count":   len(bangs),
 	})
@@ -1037,7 +1192,7 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.jsonResponse(w, map[string]interface{}{
-			"success":     true,
+			"ok":     true,
 			"suggestions": popular,
 			"type":        "popular",
 		})
@@ -1059,7 +1214,7 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.jsonResponse(w, map[string]interface{}{
-			"success":     true,
+			"ok":     true,
 			"suggestions": suggestions,
 			"type":        "bang",
 		})
@@ -1083,7 +1238,7 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.jsonResponse(w, map[string]interface{}{
-			"success":     true,
+			"ok":     true,
 			"suggestions": bangs,
 			"type":        "bang_start",
 		})
@@ -1108,7 +1263,7 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 			}
 			// replace indicates what to replace in query
 			h.jsonResponse(w, map[string]interface{}{
-				"success":     true,
+				"ok":     true,
 				"suggestions": suggestions,
 				"type":        "bang",
 				"replace":     lastWord,
@@ -1138,7 +1293,7 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.jsonResponse(w, map[string]interface{}{
-		"success":     true,
+		"ok":     true,
 		"suggestions": termSuggestions,
 		"type":        "search",
 	})
@@ -1167,8 +1322,8 @@ func (h *Handler) APIEngines(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonResponse(w, model.EnginesResponse{
-		Success: true,
-		Data:    engines,
+		Ok:   true,
+		Data: engines,
 	})
 }
 
@@ -1196,7 +1351,7 @@ func (h *Handler) APIEngineDetails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonResponse(w, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": model.EngineInfo{
 			Name:        eng.Name(),
 			DisplayName: eng.DisplayName(),
@@ -1225,11 +1380,23 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonResponse(w, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"data": map[string]interface{}{
 			"engines_enabled": enabled,
 			"engines_total":   total,
 		},
+	})
+}
+
+// APIVersion returns server version info
+// Per AI.md PART 13: /api/v1/version endpoint for CLI compatibility checking
+// Response format matches client/api/client.go VersionResponse struct
+func (h *Handler) APIVersion(w http.ResponseWriter, r *http.Request) {
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
+		"version": version.GetVersion(),
+		"commit":  version.CommitID,
+		"built":   version.BuildTime,
 	})
 }
 
@@ -1238,8 +1405,8 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 // APIHealthCheck handles /api/v1/healthz endpoint (JSON only)
 // Per AI.md PART 13 lines 11351-11353: Same JSON as /healthz
 func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
-	// Detect response format per AI.md PART 14
-	format := detectResponseFormat(r)
+	// API routes default to JSON but support text output per AI.md PART 14 lines 14944-15002
+	// Format detection: .txt extension > Accept header > client type > default JSON
 
 	// Build health response per AI.md PART 13
 	hostname, _ := os.Hostname()
@@ -1266,27 +1433,38 @@ func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		"disk":     "ok",
 	}
 
-	// Overall status
+	// Overall status - per AI.md PART 13: derive from checks
 	status := "healthy"
+	httpStatus := http.StatusOK
+	for _, v := range checks {
+		if v != "ok" {
+			status = "unhealthy"
+			httpStatus = http.StatusServiceUnavailable
+			break
+		}
+	}
 
-	// Plain text format for .txt extension or Accept: text/plain
-	if format == "text/plain" {
+	// Detect response format per AI.md PART 14 lines 14967-14986
+	format := getAPIResponseFormat(r)
+
+	// Text output for CLI tools (raw data, not HTML2TextConverter)
+	if format == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(httpStatus)
 		fmt.Fprintf(w, "status: %s\n", status)
-		fmt.Fprintf(w, "version: %s\n", version.Get())
+		fmt.Fprintf(w, "version: %s\n", version.GetVersion())
 		fmt.Fprintf(w, "mode: %s\n", appMode)
 		fmt.Fprintf(w, "uptime: %s\n", uptime)
-		fmt.Fprintf(w, "database: %s\n", checks["database"])
-		fmt.Fprintf(w, "cache: %s\n", checks["cache"])
-		fmt.Fprintf(w, "disk: %s\n", checks["disk"])
+		for k, v := range checks {
+			fmt.Fprintf(w, "%s: %s\n", k, v)
+		}
 		return
 	}
 
-	// JSON format per AI.md PART 13 lines 12953-13000
+	// JSON response (default) - per AI.md PART 13 lines 14264-14312
 	response := map[string]interface{}{
 		"status":     status,
-		"version":    version.Get(),
+		"version":    version.GetVersion(),
 		"go_version": version.GoVersion,
 		"mode":       appMode,
 		"uptime":     uptime,
@@ -1330,7 +1508,7 @@ func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(w, httpStatus, response)
 }
 
 // serverStartTime is set when the server starts
@@ -1360,12 +1538,14 @@ func (h *Handler) jsonResponse(w http.ResponseWriter, data interface{}) {
 }
 
 func (h *Handler) jsonError(w http.ResponseWriter, message, code string, status int) {
-	// Per AI.md PART 14: Use WriteJSON for all JSON responses
+	// Per AI.md PART 14: Error response format
+	// - ok: false
+	// - error: ERROR_CODE (machine-readable)
+	// - message: Human readable message
 	WriteJSON(w, status, map[string]interface{}{
-		"success": false,
-		"error":   message,
-		"code":    code,
-		"status":  status,
+		"ok":      false,
+		"error":   code,
+		"message": message,
 	})
 }
 
@@ -1455,7 +1635,8 @@ func (h *Handler) renderTemplate(w http.ResponseWriter, name string, data map[st
 		}
 		_, err = tmpl.Parse(string(content))
 		if err != nil {
-			http.Error(w, "Partial parse error ("+pf+"): "+err.Error(), http.StatusInternalServerError)
+			// Per AI.md PART 9: Never expose error details in responses
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -1463,19 +1644,22 @@ func (h *Handler) renderTemplate(w http.ResponseWriter, name string, data map[st
 	// Read and parse the main template
 	content, err := templatesFS.ReadFile(templateFile)
 	if err != nil {
-		http.Error(w, "Template file not found: "+err.Error(), http.StatusInternalServerError)
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	_, err = tmpl.Parse(string(content))
 	if err != nil {
-		http.Error(w, "Template parse error: "+err.Error(), http.StatusInternalServerError)
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, templateName, data); err != nil {
-		http.Error(w, "Template execution error: "+err.Error(), http.StatusInternalServerError)
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
 
@@ -1503,7 +1687,7 @@ func (h *Handler) DebugEngine(w http.ResponseWriter, r *http.Request) {
 
 	// Build debug response
 	response := map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"engine": map[string]interface{}{
 			"name":         eng.Name(),
 			"display_name": eng.DisplayName(),
@@ -1515,7 +1699,8 @@ func (h *Handler) DebugEngine(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		response["error"] = err.Error()
+		// Per AI.md PART 9: Never expose error details in responses
+		response["error"] = "Search failed"
 		response["results"] = []interface{}{}
 		response["result_count"] = 0
 	} else {
@@ -1531,7 +1716,7 @@ func (h *Handler) DebugEngine(w http.ResponseWriter, r *http.Request) {
 }
 
 // analyzeResultFields checks which fields are populated in results
-func analyzeResultFields(results []model.Result) map[string]interface{} {
+func analyzeResultFields(results []model.VideoResult) map[string]interface{} {
 	stats := map[string]int{
 		"has_title":        0,
 		"has_url":          0,
@@ -1614,7 +1799,7 @@ func (h *Handler) DebugEnginesList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
+		"ok": true,
 		"count":   len(list),
 		"engines": list,
 	})
@@ -1674,4 +1859,24 @@ w.Header().Set("Cache-Control", "public, max-age=3600")
 
 // Proxy the image
 io.Copy(w, resp.Body)
+}
+
+// Autodiscover returns server connection settings for CLI/agent auto-configuration
+// Per AI.md PART 37 line 38078: /api/autodiscover (NON-NEGOTIABLE)
+// This endpoint is NOT versioned because clients need it BEFORE they know the API version
+func (h *Handler) Autodiscover(w http.ResponseWriter, r *http.Request) {
+	// Build response per AI.md PART 37 lines 38086-38146
+	response := map[string]interface{}{
+		"primary":     h.cfg.GetPublicURL(),
+		"cluster":     h.cfg.GetClusterNodes(),
+		"api_version": "v1", // Per AI.md PART 14: versioned API
+		"timeout":     30,   // Default timeout in seconds
+		"retry":       3,    // Default retry attempts
+		"retry_delay": 1,    // Default seconds between retries
+	}
+
+	// NEVER include admin_path - security by obscurity per AI.md PART 37 line 38123
+	// NEVER include secrets, internal IPs, or sensitive data
+
+	WriteJSON(w, http.StatusOK, response)
 }

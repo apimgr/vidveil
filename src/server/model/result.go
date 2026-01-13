@@ -5,8 +5,9 @@ import (
 	"time"
 )
 
-// Result represents a single video search result
-type Result struct {
+// VideoResult represents a single video search result
+// Per AI.md PART 1: "Result" alone is ambiguous - result of what?
+type VideoResult struct {
 	ID              string    `json:"id"`
 	Title           string    `json:"title"`
 	URL             string    `json:"url"`
@@ -26,12 +27,13 @@ type Result struct {
 }
 
 // SearchResponse represents the API response for a search
+// Per AI.md PART 14: Error response format uses error (code) + message (human-readable)
 type SearchResponse struct {
-	Success    bool             `json:"success"`
+	Ok         bool             `json:"ok"`
 	Data       SearchData       `json:"data"`
 	Pagination PaginationData   `json:"pagination"`
-	Error      string           `json:"error,omitempty"`
-	Code       string           `json:"code,omitempty"`
+	Error      string           `json:"error,omitempty"`   // ERROR_CODE (machine-readable)
+	Message    string           `json:"message,omitempty"` // Human-readable message
 }
 
 // SearchData holds the search results and metadata
@@ -42,7 +44,7 @@ type SearchResponse struct {
 type SearchData struct {
 	Query         string   `json:"query"`
 	SearchQuery   string   `json:"search_query,omitempty"`
-	Results       []Result `json:"results"`
+	Results       []VideoResult `json:"results"`
 	EnginesUsed   []string `json:"engines_used"`
 	EnginesFailed []string `json:"engines_failed"`
 	SearchTimeMS  int64    `json:"search_time_ms"`
@@ -71,6 +73,6 @@ type EngineInfo struct {
 
 // EnginesResponse represents the API response for engines list
 type EnginesResponse struct {
-	Success bool         `json:"success"`
+	Ok      bool         `json:"ok"`
 	Data    []EngineInfo `json:"data"`
 }

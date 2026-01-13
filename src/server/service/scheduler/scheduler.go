@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 26: Built-in Scheduler
+// AI.md PART 19: Scheduler
 package scheduler
 
 import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/robfig/cron/v3"
 )
 
 // TaskFunc is a function that executes a scheduled task
@@ -18,7 +21,7 @@ type Task struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	// Schedule format: hourly, daily, weekly, monthly, or cron expression
+	// Schedule format: hourly, daily, weekly, monthly, or cron expression (e.g., "0 2 * * *")
 	Schedule   string    `json:"schedule"`
 	Enabled    bool      `json:"enabled"`
 	LastRun    time.Time `json:"last_run"`
@@ -28,8 +31,11 @@ type Task struct {
 	NextRun    time.Time `json:"next_run"`
 	RunCount   int64     `json:"run_count"`
 	FailCount  int64     `json:"fail_count"`
-	Interval   time.Duration `json:"-"`
-	fn         TaskFunc
+	// Interval is for simple duration-based schedules
+	Interval time.Duration `json:"-"`
+	// cronSched is for cron-expression schedules per AI.md PART 22
+	cronSched cron.Schedule `json:"-"`
+	fn        TaskFunc
 }
 
 // TaskHistory represents a historical run of a task
@@ -64,14 +70,10 @@ func New() *Scheduler {
 }
 
 // RegisterTask registers a new scheduled task
+// Per AI.md PART 22: Supports cron expressions (e.g., "0 2 * * *") or simple intervals
 func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn TaskFunc) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	interval, err := parseSchedule(schedule)
-	if err != nil {
-		return fmt.Errorf("invalid schedule '%s': %w", schedule, err)
-	}
 
 	task := &Task{
 		ID:          id,
@@ -80,17 +82,43 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 		Schedule:    schedule,
 		Enabled:     true,
 		LastResult:  "pending",
-		Interval:    interval,
 		fn:          fn,
 	}
-	task.NextRun = time.Now().Add(interval)
+
+	// Try parsing as cron expression first (per AI.md PART 22)
+	if cronSched, err := parseCronSchedule(schedule); err == nil {
+		task.cronSched = cronSched
+		task.NextRun = cronSched.Next(time.Now())
+	} else {
+		// Fall back to simple interval
+		interval, err := parseInterval(schedule)
+		if err != nil {
+			return fmt.Errorf("invalid schedule '%s': %w", schedule, err)
+		}
+		task.Interval = interval
+		task.NextRun = time.Now().Add(interval)
+	}
 
 	s.tasks[id] = task
 	return nil
 }
 
-// parseSchedule converts schedule string to duration per AI.md
-func parseSchedule(schedule string) (time.Duration, error) {
+// parseCronSchedule parses a cron expression per AI.md PART 22
+// Supports standard cron format: minute hour day-of-month month day-of-week
+func parseCronSchedule(schedule string) (cron.Schedule, error) {
+	// Check if it looks like a cron expression (5 space-separated fields)
+	fields := strings.Fields(schedule)
+	if len(fields) != 5 {
+		return nil, fmt.Errorf("not a cron expression")
+	}
+
+	// Use standard cron parser (minute hour dom month dow)
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	return parser.Parse(schedule)
+}
+
+// parseInterval converts schedule string to duration per AI.md
+func parseInterval(schedule string) (time.Duration, error) {
 	switch schedule {
 	case "hourly":
 		return time.Hour, nil
@@ -190,7 +218,12 @@ func (s *Scheduler) runTask(task *Task) {
 	duration := endTime.Sub(startTime)
 
 	task.LastRun = startTime
-	task.NextRun = startTime.Add(task.Interval)
+	// Calculate next run: use cron schedule if available, else use interval
+	if task.cronSched != nil {
+		task.NextRun = task.cronSched.Next(startTime)
+	} else {
+		task.NextRun = startTime.Add(task.Interval)
+	}
 	task.RunCount++
 
 	hist := TaskHistory{
@@ -246,7 +279,12 @@ func (s *Scheduler) EnableTask(taskID string) error {
 
 	task.Enabled = true
 	if task.NextRun.Before(time.Now()) {
-		task.NextRun = time.Now().Add(task.Interval)
+		// Calculate next run: use cron schedule if available, else use interval
+		if task.cronSched != nil {
+			task.NextRun = task.cronSched.Next(time.Now())
+		} else {
+			task.NextRun = time.Now().Add(task.Interval)
+		}
 	}
 	return nil
 }
@@ -266,12 +304,8 @@ func (s *Scheduler) DisableTask(taskID string) error {
 }
 
 // SetSchedule updates a task's schedule
+// Per AI.md PART 22: Supports cron expressions or simple intervals
 func (s *Scheduler) SetSchedule(taskID, schedule string) error {
-	interval, err := parseSchedule(schedule)
-	if err != nil {
-		return err
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -280,9 +314,23 @@ func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
+	// Try parsing as cron expression first
+	if cronSched, err := parseCronSchedule(schedule); err == nil {
+		task.cronSched = cronSched
+		task.Interval = 0
+		task.NextRun = cronSched.Next(time.Now())
+	} else {
+		// Fall back to simple interval
+		interval, err := parseInterval(schedule)
+		if err != nil {
+			return fmt.Errorf("invalid schedule '%s': %w", schedule, err)
+		}
+		task.cronSched = nil
+		task.Interval = interval
+		task.NextRun = time.Now().Add(interval)
+	}
+
 	task.Schedule = schedule
-	task.Interval = interval
-	task.NextRun = time.Now().Add(interval)
 	return nil
 }
 
@@ -451,11 +499,11 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 			"daily", funcs.LogRotation)
 	}
 
-	// backup.auto - Disabled by default (registered but disabled)
+	// backup.auto - Per AI.md PART 22: Daily at 02:00, disabled by default
 	if funcs.BackupAuto != nil {
 		s.RegisterTask("backup.auto", "Automatic Backup",
 			"Create automatic backups of configuration and databases",
-			"daily", funcs.BackupAuto)
+			"0 2 * * *", funcs.BackupAuto) // Cron: 02:00 daily per AI.md PART 22
 		// Disable by default per AI.md PART 26
 		s.DisableTask("backup.auto")
 	}

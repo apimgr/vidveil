@@ -16,18 +16,19 @@ var (
 	debugEnabled = false
 )
 
-// Mode represents the application mode
-type Mode int
+// AppMode represents the application mode per AI.md PART 1
+// Per AI.md PART 1: "Mode" alone is ambiguous - could be display mode, app mode, etc.
+type AppMode int
 
 const (
 	// Production mode (default) - secure defaults, minimal logging
-	Production Mode = iota
+	Production AppMode = iota
 	// Development mode - relaxed security, verbose logging
 	Development
 )
 
 // String returns the mode as a string
-func (m Mode) String() string {
+func (m AppMode) String() string {
 	switch m {
 	case Development:
 		return "development"
@@ -68,30 +69,35 @@ func updateProfilingSettings() {
 	}
 }
 
-// Current returns the current mode
-func Current() Mode {
+// CurrentAppMode returns the current application mode
+// Per AI.md PART 1: Function names must reveal intent
+func CurrentAppMode() AppMode {
 	return currentMode
 }
 
-// IsDevelopment returns true if in development mode
-func IsDevelopment() bool {
+// IsAppModeDevelopment returns true if in development mode
+// Per AI.md PART 1: Boolean functions must be specific about what they check
+func IsAppModeDevelopment() bool {
 	return currentMode == Development
 }
 
-// IsProduction returns true if in production mode
-func IsProduction() bool {
+// IsAppModeProduction returns true if in production mode
+// Per AI.md PART 1: Boolean functions must be specific about what they check
+func IsAppModeProduction() bool {
 	return currentMode == Production
 }
 
-// IsDebug returns true if debug mode is enabled (--debug or DEBUG=true)
+// IsDebugEnabled returns true if debug mode is enabled (--debug or DEBUG=true)
 // Debug mode is separate from development mode
-func IsDebug() bool {
+// Per AI.md PART 1: "IsDebug" is ambiguous - debug what?
+func IsDebugEnabled() bool {
 	return debugEnabled
 }
 
-// ModeString returns mode string with debug suffix if enabled
+// AppModeString returns mode string with debug suffix if enabled
 // Example: "production", "production [debugging]", "development [debugging]"
-func ModeString() string {
+// Per AI.md PART 1: Function names must reveal intent
+func AppModeString() string {
 	s := currentMode.String()
 	if debugEnabled {
 		s += " [debugging]"
@@ -128,7 +134,7 @@ func Initialize(modeFlag string, debugFlag bool) {
 // ConsoleIcon returns an emoji icon for the current mode
 // Used for console output per AI.md
 func ConsoleIcon() string {
-	if IsProduction() {
+	if IsAppModeProduction() {
 		return "🔒"
 	}
 	return "🔧"
@@ -137,35 +143,35 @@ func ConsoleIcon() string {
 // ConsoleModeMessage returns a formatted mode message for console output
 // Example: "🔒 Running in mode: production [debugging]"
 func ConsoleModeMessage() string {
-	return ConsoleIcon() + " Running in mode: " + ModeString()
+	return ConsoleIcon() + " Running in mode: " + AppModeString()
 }
 
 // ShouldLogVerbose returns true if verbose logging should be enabled
 // Verbose in development mode OR when debug is enabled
 func ShouldLogVerbose() bool {
-	return IsDevelopment() || IsDebug()
+	return IsAppModeDevelopment() || IsDebugEnabled()
 }
 
 // ShouldCacheTemplates returns true if templates should be cached
 // Cached in production mode, not cached in development (hot reload)
 func ShouldCacheTemplates() bool {
-	return IsProduction() && !IsDebug()
+	return IsAppModeProduction() && !IsDebugEnabled()
 }
 
 // ShouldCacheStatic returns true if static files should be cached
 // Cached in production mode, not cached in development (hot reload)
 func ShouldCacheStatic() bool {
-	return IsProduction() && !IsDebug()
+	return IsAppModeProduction() && !IsDebugEnabled()
 }
 
 // ShouldShowStackTraces returns true if stack traces should be shown in errors
 // Shown in development mode or when debug is enabled
 func ShouldShowStackTraces() bool {
-	return IsDevelopment() || IsDebug()
+	return IsAppModeDevelopment() || IsDebugEnabled()
 }
 
 // ShouldEnableDebugEndpoints returns true if debug endpoints should be registered
 // Only enabled when debug flag is set, regardless of mode
 func ShouldEnableDebugEndpoints() bool {
-	return IsDebug()
+	return IsDebugEnabled()
 }

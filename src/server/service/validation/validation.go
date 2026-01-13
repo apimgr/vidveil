@@ -225,7 +225,16 @@ func ValidateAdminPassword(password string) error {
 }
 
 // ValidatePasswordWithPolicy validates password with configurable admin flag
+// Per AI.md PART 1: Passwords must not have leading/trailing whitespace
 func ValidatePasswordWithPolicy(password string, isAdmin bool) error {
+	// Per AI.md PART 1: Reject passwords with leading/trailing whitespace
+	if password != strings.TrimSpace(password) {
+		return &UsernameError{
+			Field:   "password",
+			Message: "Password cannot have leading or trailing whitespace",
+		}
+	}
+
 	minLen := 8
 	if isAdmin {
 		minLen = 12

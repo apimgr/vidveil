@@ -40,7 +40,7 @@ func NewXNXXEngine(cfg *config.Config, torClient *tor.Client) *XNXXEngine {
 }
 
 // Search performs a search on XNXX
-func (e *XNXXEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *XNXXEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/{query}/{page}", query, page)
 
 	resp, err := e.MakeRequest(ctx, searchURL)
@@ -54,7 +54,7 @@ func (e *XNXXEngine) Search(ctx context.Context, query string, page int) ([]mode
 		return nil, err
 	}
 
-	var results []model.Result
+	var results []model.VideoResult
 
 	// Use parser's item selector
 	doc.Find(e.parser.ItemSelector()).Each(func(i int, s *goquery.Selection) {
@@ -72,9 +72,9 @@ func (e *XNXXEngine) Search(ctx context.Context, query string, page int) ([]mode
 	return results, nil
 }
 
-// convertToResult converts VideoItem to model.Result
-func (e *XNXXEngine) convertToResult(item *parser.VideoItem) model.Result {
-	return model.Result{
+// convertToResult converts VideoItem to model.VideoResult
+func (e *XNXXEngine) convertToResult(item *parser.VideoItem) model.VideoResult {
+	return model.VideoResult{
 		ID:              GenerateResultID(item.URL, e.Name()),
 		URL:             item.URL,
 		Title:           item.Title,

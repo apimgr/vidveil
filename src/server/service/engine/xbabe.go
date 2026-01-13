@@ -18,7 +18,7 @@ func NewXBabeEngine(cfg *config.Config, torClient *tor.Client) *XBabeEngine {
 }
 
 // Search performs a search on XBabe
-func (e *XBabeEngine) Search(ctx context.Context, query string, page int) ([]model.Result, error) {
+func (e *XBabeEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/?s={query}&page={page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "div.thumb")
 }

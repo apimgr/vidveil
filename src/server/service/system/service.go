@@ -274,7 +274,7 @@ func (sm *ServiceManager) installSystemd() error {
 	// Per PART 25: NO User/Group - binary drops privileges after port binding
 	unit := fmt.Sprintf(`[Unit]
 Description=%s service
-Documentation=https://apimgr.github.io/%s
+Documentation=https://x.scour.li
 After=network-online.target
 Wants=network-online.target
 

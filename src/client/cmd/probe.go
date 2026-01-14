@@ -175,22 +175,19 @@ func probeEngineByName(name, query string) EngineProbeResult {
 	if infoURL := fmt.Sprintf("%s/api/v1/engines/%s", apiClient.GetBaseURL(), name); infoURL != "" {
 		if resp, err := apiClient.FetchURLResponseBytes(infoURL); err == nil {
 			var info struct {
-				Ok     bool                   `json:"ok"`
-				Engine map[string]interface{} `json:"engine"`
+				Ok   bool `json:"ok"`
+				Data struct {
+					DisplayName  string                 `json:"display_name"`
+					Tier         int                    `json:"tier"`
+					Enabled      bool                   `json:"enabled"`
+					Capabilities map[string]interface{} `json:"capabilities"`
+				} `json:"data"`
 			}
-			if json.Unmarshal(resp, &info) == nil && info.Ok && info.Engine != nil {
-				if dn, ok := info.Engine["display_name"].(string); ok {
-					result.DisplayName = dn
-				}
-				if tier, ok := info.Engine["tier"].(float64); ok {
-					result.Tier = int(tier)
-				}
-				if caps, ok := info.Engine["capabilities"].(map[string]interface{}); ok {
-					result.Capabilities = caps
-				}
-				if enabled, ok := info.Engine["enabled"].(bool); ok {
-					result.Enabled = enabled
-				}
+			if json.Unmarshal(resp, &info) == nil && info.Ok {
+				result.DisplayName = info.Data.DisplayName
+				result.Tier = info.Data.Tier
+				result.Enabled = info.Data.Enabled
+				result.Capabilities = info.Data.Capabilities
 			}
 		}
 	}

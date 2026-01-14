@@ -63,12 +63,19 @@ type PaginationData struct {
 
 // EngineInfo represents information about a search engine
 type EngineInfo struct {
-	Name        string   `json:"name"`
-	DisplayName string   `json:"display_name"`
-	Enabled     bool     `json:"enabled"`
-	Available   bool     `json:"available"`
-	Features    []string `json:"features"`
-	Tier        int      `json:"tier"`
+	Name        string            `json:"name"`
+	DisplayName string            `json:"display_name"`
+	Enabled     bool              `json:"enabled"`
+	Available   bool              `json:"available"`
+	Features    []string          `json:"features"`
+	Tier        int               `json:"tier"`
+	Capabilities *EngineCapabilities `json:"capabilities,omitempty"`
+}
+
+// EngineCapabilities represents engine feature support
+type EngineCapabilities struct {
+	HasPreview  bool `json:"has_preview"`
+	HasDownload bool `json:"has_download"`
 }
 
 // EnginesResponse represents the API response for engines list

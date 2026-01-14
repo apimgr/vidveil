@@ -1339,6 +1339,8 @@ func (h *Handler) APIEngineDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	caps := eng.Capabilities()
+
 	// Plain text format
 	if format == "text/plain" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -1347,6 +1349,8 @@ func (h *Handler) APIEngineDetails(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "display_name: %s\n", eng.DisplayName())
 		fmt.Fprintf(w, "tier: %d\n", eng.Tier())
 		fmt.Fprintf(w, "enabled: %t\n", eng.IsAvailable())
+		fmt.Fprintf(w, "has_preview: %t\n", caps.HasPreview)
+		fmt.Fprintf(w, "has_download: %t\n", caps.HasDownload)
 		return
 	}
 
@@ -1358,6 +1362,10 @@ func (h *Handler) APIEngineDetails(w http.ResponseWriter, r *http.Request) {
 			Enabled:     eng.IsAvailable(),
 			Available:   eng.IsAvailable(),
 			Tier:        eng.Tier(),
+			Capabilities: &model.EngineCapabilities{
+				HasPreview:  caps.HasPreview,
+				HasDownload: caps.HasDownload,
+			},
 		},
 	})
 }

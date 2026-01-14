@@ -27,7 +27,7 @@ func NewXVideosEngine(cfg *config.Config, torClient *tor.Client) *XVideosEngine 
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
 		HasPreview:    true,
-		HasDownload:   false,
+		HasDownload:   true,
 		HasDuration:   true,
 		HasViews:      true,
 		HasRating:     false,
@@ -75,6 +75,7 @@ func (e *XVideosEngine) convertToResult(item *parser.VideoItem) model.VideoResul
 		Title:           item.Title,
 		Thumbnail:       item.Thumbnail,
 		PreviewURL:      item.PreviewURL,
+		DownloadURL:     item.DownloadURL,
 		Duration:        item.Duration,
 		DurationSeconds: item.DurationSeconds,
 		Views:           item.Views,

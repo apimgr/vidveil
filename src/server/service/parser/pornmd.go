@@ -59,6 +59,15 @@ func (p *PornMDParser) Parse(s *goquery.Selection) *VideoItem {
 		item.Thumbnail = MakeAbsoluteURL(item.Thumbnail, "https:")
 	}
 
+	// Try to extract download URL from data attributes (if available in search results)
+	item.DownloadURL = ExtractAttr(img, "data-video-url", "data-download")
+	if item.DownloadURL == "" {
+		item.DownloadURL = ExtractAttr(link, "data-video-url", "data-download")
+	}
+	if item.DownloadURL != "" {
+		item.DownloadURL = MakeAbsoluteURL(item.DownloadURL, "https:")
+	}
+
 	// Get duration from .badge.float-right
 	// Structure: <span class="badge float-right">
 	//   <span class="font-bold italic">HD</span>

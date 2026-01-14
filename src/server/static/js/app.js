@@ -541,6 +541,335 @@ function showConfirm(message, onConfirm, onCancel) {
     });
 }
 
+// ============================================================================
+// Download Privacy Warning (IDEA.md: one-time warning for direct downloads)
+// ============================================================================
+var DOWNLOAD_WARNING_KEY = 'vidveil_download_warning_dismissed';
+
+function isDownloadWarningDismissed() {
+    try {
+        return localStorage.getItem(DOWNLOAD_WARNING_KEY) === 'true';
+    } catch (e) {
+        return false;
+    }
+}
+
+function dismissDownloadWarning() {
+    try {
+        localStorage.setItem(DOWNLOAD_WARNING_KEY, 'true');
+    } catch (e) {}
+}
+
+function handleDownloadClick(event, downloadUrl) {
+    if (isDownloadWarningDismissed()) {
+        return true; // Allow navigation
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    showConfirm(
+        'Downloads connect directly to the source site, which exposes your IP address. ' +
+        'Consider using a VPN or Tor Browser for privacy. This warning will not be shown again.',
+        function() {
+            dismissDownloadWarning();
+            window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+        }
+    );
+    return false;
+}
+
+// ============================================================================
+// Local Favorites (IDEA.md: localStorage-only bookmarks)
+// ============================================================================
+(function() {
+    'use strict';
+    var FAVORITES_KEY = 'vidveil_favorites';
+    var MAX_FAVORITES = 500;
+
+    function getFavorites() {
+        try {
+            return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveFavorites(favorites) {
+        try {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+        } catch (e) {
+            console.error('Failed to save favorites:', e);
+        }
+    }
+
+    function addFavorite(video) {
+        var favorites = getFavorites();
+        // Check for duplicate by URL
+        if (favorites.some(function(f) { return f.url === video.url; })) {
+            showInfo('Already in favorites');
+            return false;
+        }
+        favorites.unshift({
+            id: video.id || '',
+            title: video.title || 'Untitled',
+            url: video.url,
+            thumbnail: video.thumbnail || '',
+            duration: video.duration || '',
+            source: video.source || '',
+            sourceDisplay: video.source_display || video.source || '',
+            savedAt: Date.now()
+        });
+        // Limit favorites
+        if (favorites.length > MAX_FAVORITES) {
+            favorites = favorites.slice(0, MAX_FAVORITES);
+        }
+        saveFavorites(favorites);
+        showSuccess('Added to favorites');
+        return true;
+    }
+
+    function removeFavorite(url) {
+        var favorites = getFavorites().filter(function(f) { return f.url !== url; });
+        saveFavorites(favorites);
+        showSuccess('Removed from favorites');
+        return true;
+    }
+
+    function isFavorite(url) {
+        return getFavorites().some(function(f) { return f.url === url; });
+    }
+
+    function toggleFavorite(video) {
+        if (isFavorite(video.url)) {
+            removeFavorite(video.url);
+            return false;
+        } else {
+            addFavorite(video);
+            return true;
+        }
+    }
+
+    function exportFavorites() {
+        var data = JSON.stringify(getFavorites(), null, 2);
+        var blob = new Blob([data], {type: 'application/json'});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'vidveil-favorites.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showSuccess('Favorites exported');
+    }
+
+    function importFavorites(file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                var imported = JSON.parse(e.target.result);
+                if (Array.isArray(imported)) {
+                    saveFavorites(imported);
+                    showSuccess('Favorites imported (' + imported.length + ' items)');
+                } else {
+                    showError('Invalid file format');
+                }
+            } catch (err) {
+                showError('Failed to parse file');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function clearFavorites() {
+        showConfirm('Are you sure you want to clear all favorites?', function() {
+            saveFavorites([]);
+            showSuccess('All favorites cleared');
+        });
+    }
+
+    // Export to Vidveil namespace
+    window.Vidveil = window.Vidveil || {};
+    window.Vidveil.Favorites = {
+        get: getFavorites,
+        add: addFavorite,
+        remove: removeFavorite,
+        isFavorite: isFavorite,
+        toggle: toggleFavorite,
+        export: exportFavorites,
+        import: importFavorites,
+        clear: clearFavorites
+    };
+})();
+
+// ============================================================================
+// Long-Press Context Menu (IDEA.md: mobile quick actions)
+// ============================================================================
+(function() {
+    'use strict';
+    var longPressTimer = null;
+    var LONG_PRESS_DURATION = 500;
+    var activeMenu = null;
+
+    function closeContextMenu() {
+        if (activeMenu) {
+            activeMenu.remove();
+            activeMenu = null;
+        }
+    }
+
+    function showVideoContextMenu(card, touch) {
+        closeContextMenu();
+
+        // Extract video data from card
+        var link = card.querySelector('a[href]');
+        var url = link ? link.href : '';
+        var title = card.querySelector('h3 a');
+        var titleText = title ? title.textContent : 'Video';
+        var downloadLink = card.querySelector('.download-link');
+        var downloadUrl = downloadLink ? downloadLink.href : '';
+        var thumb = card.querySelector('img');
+        var thumbnail = thumb ? (thumb.dataset.src || thumb.src) : '';
+        var source = card.dataset.source || '';
+        var sourceDisplay = card.querySelector('.source');
+        var sourceText = sourceDisplay ? sourceDisplay.textContent : source;
+        var duration = card.querySelector('.duration');
+        var durationText = duration ? duration.textContent : '';
+
+        var video = {
+            url: url,
+            title: titleText,
+            thumbnail: thumbnail,
+            source: source,
+            source_display: sourceText,
+            duration: durationText
+        };
+
+        var isFav = window.Vidveil.Favorites.isFavorite(url);
+
+        var menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.style.position = 'fixed';
+        menu.style.zIndex = '10000';
+
+        // Position menu at touch point, adjusting for screen edges
+        var x = touch.clientX;
+        var y = touch.clientY;
+        var menuWidth = 200;
+        var menuHeight = 160;
+        if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+        if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+        if (x < 10) x = 10;
+        if (y < 10) y = 10;
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+
+        var menuHtml = '<ul class="context-menu-list">';
+        menuHtml += '<li class="context-menu-item" data-action="favorite">' + (isFav ? '&#x2665; Remove from Favorites' : '&#x2661; Add to Favorites') + '</li>';
+        menuHtml += '<li class="context-menu-item" data-action="open">&#x2197; Open in New Tab</li>';
+        menuHtml += '<li class="context-menu-item" data-action="copy">&#x1F4CB; Copy Link</li>';
+        if (downloadUrl) {
+            menuHtml += '<li class="context-menu-item" data-action="download">&#x21E9; Download</li>';
+        }
+        menuHtml += '</ul>';
+        menu.innerHTML = menuHtml;
+
+        document.body.appendChild(menu);
+        activeMenu = menu;
+
+        // Handle menu item clicks
+        menu.addEventListener('click', function(e) {
+            var item = e.target.closest('.context-menu-item');
+            if (!item) return;
+            var action = item.dataset.action;
+
+            switch (action) {
+                case 'favorite':
+                    window.Vidveil.Favorites.toggle(video);
+                    break;
+                case 'open':
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                    break;
+                case 'copy':
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(url).then(function() {
+                            showSuccess('Link copied to clipboard');
+                        });
+                    } else {
+                        // Fallback
+                        var input = document.createElement('input');
+                        input.value = url;
+                        document.body.appendChild(input);
+                        input.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(input);
+                        showSuccess('Link copied');
+                    }
+                    break;
+                case 'download':
+                    handleDownloadClick(e, downloadUrl);
+                    break;
+            }
+            closeContextMenu();
+        });
+
+        // Close on outside tap (delayed to prevent immediate close)
+        setTimeout(function() {
+            document.addEventListener('touchstart', function handler(e) {
+                if (!menu.contains(e.target)) {
+                    closeContextMenu();
+                }
+                document.removeEventListener('touchstart', handler);
+            });
+            document.addEventListener('click', function handler(e) {
+                if (!menu.contains(e.target)) {
+                    closeContextMenu();
+                }
+                document.removeEventListener('click', handler);
+            });
+        }, 100);
+    }
+
+    function setupLongPress() {
+        document.addEventListener('touchstart', function(e) {
+            var card = e.target.closest('.video-card');
+            if (!card) return;
+
+            longPressTimer = setTimeout(function() {
+                e.preventDefault();
+                showVideoContextMenu(card, e.touches[0]);
+            }, LONG_PRESS_DURATION);
+        }, { passive: false });
+
+        document.addEventListener('touchend', function() {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        });
+
+        document.addEventListener('touchmove', function() {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        });
+    }
+
+    // Initialize on DOMContentLoaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupLongPress);
+    } else {
+        setupLongPress();
+    }
+
+    // Export
+    window.Vidveil = window.Vidveil || {};
+    window.Vidveil.ContextMenu = {
+        show: showVideoContextMenu,
+        close: closeContextMenu
+    };
+})();
+
 // Admin keyboard shortcuts per AI.md PART 15
 function setupAdminKeyboardShortcuts() {
     var keySequence = '';
@@ -927,7 +1256,7 @@ if (document.readyState === 'loading') {
     function streamResults(minDuration) {
         if (!searchQuery) return;
 
-        var eventSource = new EventSource('/api/v1/search/stream?q=' + encodeURIComponent(searchQuery));
+        var eventSource = new EventSource('/api/v1/search?q=' + encodeURIComponent(searchQuery));
         var firstResult = true;
 
         eventSource.onmessage = function(event) {
@@ -1076,9 +1405,9 @@ if (document.readyState === 'loading') {
         html += '<h3><a href="' + escapeHtmlUtil(r.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + escapeHtmlUtil(r.title || 'Untitled') + '</a></h3>';
         html += '<div class="meta"><span class="source">' + escapeHtmlUtil(r.source_display || r.source || '') + '</span>';
         if (r.views) html += '<span>' + escapeHtmlUtil(r.views) + '</span>';
-        // Download link (direct to source, not proxied)
+        // Download link (direct to source, not proxied) with privacy warning
         if (hasDownload) {
-            html += '<a href="' + escapeHtmlUtil(downloadUrl) + '" target="_blank" rel="noopener noreferrer nofollow" class="download-link" title="Download video" onclick="event.stopPropagation()">&#x21E9;</a>';
+            html += '<a href="' + escapeHtmlUtil(downloadUrl) + '" target="_blank" rel="noopener noreferrer nofollow" class="download-link" title="Download video" onclick="return handleDownloadClick(event, \'' + escapeHtmlUtil(downloadUrl).replace(/'/g, "\\'") + '\')">&#x21E9;</a>';
         }
         html += '</div></div>';
 
@@ -1324,7 +1653,7 @@ if (document.readyState === 'loading') {
         if (loadIndicator) loadIndicator.classList.remove('hidden');
 
         // Stream next page of results
-        var eventSource = new EventSource('/api/v1/search/stream?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage);
+        var eventSource = new EventSource('/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage);
         var gotResults = false;
 
         eventSource.onmessage = function(event) {
@@ -1468,3 +1797,4 @@ window.showError = showError;
 window.showWarning = showWarning;
 window.showInfo = showInfo;
 window.showConfirm = showConfirm;
+window.handleDownloadClick = handleDownloadClick;

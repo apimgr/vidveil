@@ -80,6 +80,15 @@ func (p *XVideosParser) Parse(s *goquery.Selection) *VideoItem {
 		item.PreviewURL = MakeAbsoluteURL(item.PreviewURL, "https:")
 	}
 
+	// Try to extract download URL from data attributes (if available in search results)
+	item.DownloadURL = ExtractAttr(img, "data-video-url", "data-download", "data-src-video")
+	if item.DownloadURL == "" {
+		item.DownloadURL = ExtractAttr(s, "data-video-url", "data-download")
+	}
+	if item.DownloadURL != "" {
+		item.DownloadURL = MakeAbsoluteURL(item.DownloadURL, "https:")
+	}
+
 	// Get duration - use First() to avoid duplication
 	durElem := s.Find(".duration").First()
 	if durElem.Length() == 0 {

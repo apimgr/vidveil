@@ -133,6 +133,42 @@ func (c *Client) Health() (bool, error) {
 	return resp.StatusCode == 200, nil
 }
 
+// GetBaseURL returns the base URL of the server
+func (c *Client) GetBaseURL() string {
+	return c.baseURL
+}
+
+// FetchURLResponseBytes performs a GET request and returns response body as bytes
+func (c *Client) FetchURLResponseBytes(url string) ([]byte, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Accept", "application/json")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("cannot connect to server at %s: %w", c.baseURL, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response: %w", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	return body, nil
+}
+
 // get performs a GET request and decodes JSON response
 func (c *Client) get(url string, result interface{}) error {
 	req, err := http.NewRequest("GET", url, nil)

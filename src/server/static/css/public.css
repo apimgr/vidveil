@@ -235,3 +235,80 @@
     display: flex;
   }
 }
+
+/* ============================================================================
+   Context Menu (Long-Press Mobile) - IDEA.md
+   ============================================================================ */
+.context-menu {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  min-width: 180px;
+  overflow: hidden;
+  animation: contextMenuFadeIn 0.15s ease-out;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0;
+}
+
+.context-menu-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.context-menu-item:hover,
+.context-menu-item:active {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.1));
+}
+
+/* Favorite button on video cards */
+.favorite-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.favorite-btn:hover {
+  color: var(--accent);
+  transform: scale(1.1);
+}
+
+.favorite-btn.favorited {
+  color: #ff4081;
+}
+
+/* Download link styling */
+.download-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 1.1rem;
+  padding: 0.25rem;
+  transition: color 0.2s ease;
+}
+
+.download-link:hover {
+  color: var(--accent);
+}

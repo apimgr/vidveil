@@ -27,7 +27,7 @@ func NewXNXXEngine(cfg *config.Config, torClient *tor.Client) *XNXXEngine {
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
 		HasPreview:    false, // XNXX doesn't have preview URLs in search results
-		HasDownload:   false,
+		HasDownload:   true,
 		HasDuration:   true,
 		HasViews:      true,
 		HasRating:     false,
@@ -80,6 +80,7 @@ func (e *XNXXEngine) convertToResult(item *parser.VideoItem) model.VideoResult {
 		Title:           item.Title,
 		Thumbnail:       item.Thumbnail,
 		PreviewURL:      item.PreviewURL,
+		DownloadURL:     item.DownloadURL,
 		Duration:        item.Duration,
 		DurationSeconds: item.DurationSeconds,
 		Views:           item.Views,

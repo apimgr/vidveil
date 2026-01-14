@@ -58,6 +58,7 @@ type VideoItem struct {
 	Title           string
 	Thumbnail       string
 	PreviewURL      string
+	DownloadURL     string
 	Duration        string
 	DurationSeconds int
 	Views           string

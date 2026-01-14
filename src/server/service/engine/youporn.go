@@ -90,6 +90,18 @@ func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]m
 			previewURL = strings.ReplaceAll(previewURL, "&amp;", "&")
 		}
 
+		// Try to extract download URL from data attributes (if available in search results)
+		downloadURL := parser.ExtractAttr(img, "data-video-url", "data-download", "data-mp4")
+		if downloadURL == "" {
+			downloadURL = parser.ExtractAttr(s, "data-video-url", "data-download")
+		}
+		if downloadURL != "" {
+			downloadURL = strings.ReplaceAll(downloadURL, "&amp;", "&")
+			if strings.HasPrefix(downloadURL, "//") {
+				downloadURL = "https:" + downloadURL
+			}
+		}
+
 		// Get duration and parse to seconds
 		durationText := parser.CleanText(s.Find(".video-duration").First().Text())
 		duration, durationSeconds := parser.ParseDuration(durationText)
@@ -104,6 +116,7 @@ func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]m
 			Title:           title,
 			Thumbnail:       thumbnail,
 			PreviewURL:      previewURL,
+			DownloadURL:     downloadURL,
 			Duration:        duration,
 			DurationSeconds: durationSeconds,
 			Views:           views,

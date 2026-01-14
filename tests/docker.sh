@@ -150,7 +150,7 @@ test_endpoint GET "/api/v1/search.txt?q=test" "200" "Search .txt extension"
 # Step 7: Test Accept headers (PART 13 requirement)
 info "Testing Accept headers..."
 RESPONSE=$(docker exec vidveil-test curl -s -H "Accept: application/json" "http://localhost:8080/api/v1/engines" 2>/dev/null)
-if echo "$RESPONSE" | grep -q '"success"'; then
+if echo "$RESPONSE" | grep -q '"ok"'; then
     pass "JSON Accept header"
 else
     fail "JSON Accept header"
@@ -161,7 +161,7 @@ info "Testing SSE streaming endpoint..."
 # Test SSE with timeout and capture output
 # Note: External search engines may not respond in test environment
 # Testing that endpoint responds with proper SSE format (event/data lines)
-SSE_OUTPUT=$(docker exec vidveil-test timeout 10 curl -s -N "http://localhost:8080/api/v1/search/stream?q=test" 2>/dev/null || true)
+SSE_OUTPUT=$(docker exec vidveil-test timeout 10 curl -s -N -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=test" 2>/dev/null || true)
 
 # SSE should return event: and data: lines (even if no results)
 if echo "$SSE_OUTPUT" | grep -qE "(data:|event:)"; then
@@ -183,7 +183,7 @@ else
 fi
 
 # Test SSE with bang
-SSE_BANG=$(docker exec vidveil-test timeout 5 curl -s -N "http://localhost:8080/api/v1/search/stream?q=!ph+test" 2>/dev/null || true)
+SSE_BANG=$(docker exec vidveil-test timeout 5 curl -s -N -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=!ph+test" 2>/dev/null || true)
 if echo "$SSE_BANG" | grep -q "data:"; then
     pass "SSE streaming - with bang shortcuts"
 else
@@ -191,7 +191,7 @@ else
 fi
 
 # Test SSE error - missing query
-SSE_ERROR=$(docker exec vidveil-test curl -s -w "\n%{http_code}" "http://localhost:8080/api/v1/search/stream" 2>/dev/null)
+SSE_ERROR=$(docker exec vidveil-test curl -s -w "\n%{http_code}" -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search" 2>/dev/null)
 SSE_STATUS=$(echo "$SSE_ERROR" | tail -n1)
 if [ "$SSE_STATUS" = "400" ]; then
     pass "SSE streaming - missing query error (HTTP 400)"

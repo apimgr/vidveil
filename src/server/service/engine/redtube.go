@@ -30,7 +30,7 @@ func NewRedTubeEngine(cfg *config.Config, torClient *tor.Client) *RedTubeEngine 
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
 		HasPreview:    true,
-		HasDownload:   false,
+		HasDownload:   true,
 		HasDuration:   true,
 		HasViews:      true,
 		HasRating:     true,
@@ -79,6 +79,7 @@ func (e *RedTubeEngine) convertToResult(item *parser.VideoItem) model.VideoResul
 		Title:           item.Title,
 		Thumbnail:       item.Thumbnail,
 		PreviewURL:      item.PreviewURL,
+		DownloadURL:     item.DownloadURL,
 		Duration:        item.Duration,
 		DurationSeconds: item.DurationSeconds,
 		Views:           item.Views,

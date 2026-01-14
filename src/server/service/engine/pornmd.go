@@ -26,7 +26,7 @@ func NewPornMDEngine(cfg *config.Config, torClient *tor.Client) *PornMDEngine {
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
 		HasPreview:    false,
-		HasDownload:   false,
+		HasDownload:   true,
 		HasDuration:   true,
 		HasViews:      false, // PornMD doesn't show view counts on search results
 		HasRating:     true,  // PornMD shows rating percentage
@@ -77,6 +77,7 @@ func (e *PornMDEngine) convertToResult(item *parser.VideoItem) model.VideoResult
 		Title:           item.Title,
 		Thumbnail:       item.Thumbnail,
 		PreviewURL:      item.PreviewURL,
+		DownloadURL:     item.DownloadURL,
 		Duration:        item.Duration,
 		DurationSeconds: item.DurationSeconds,
 		Views:           item.Views,

@@ -508,7 +508,7 @@ func generateOpenAPISpec(cfg *config.Config) string {
       "SearchResponse": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean" },
+          "ok": { "type": "boolean" },
           "data": {
             "type": "object",
             "properties": {
@@ -559,7 +559,7 @@ func generateOpenAPISpec(cfg *config.Config) string {
       "EnginesResponse": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean" },
+          "ok": { "type": "boolean" },
           "data": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/EngineInfo" }
@@ -583,7 +583,7 @@ func generateOpenAPISpec(cfg *config.Config) string {
       "StatsResponse": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean" },
+          "ok": { "type": "boolean" },
           "data": {
             "type": "object",
             "properties": {
@@ -596,7 +596,7 @@ func generateOpenAPISpec(cfg *config.Config) string {
       "AdminStatsResponse": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean" },
+          "ok": { "type": "boolean" },
           "data": {
             "type": "object",
             "properties": {
@@ -639,21 +639,21 @@ func generateOpenAPISpec(cfg *config.Config) string {
       "SuccessResponse": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean" },
+          "ok": { "type": "boolean" },
           "message": { "type": "string" }
         }
       },
       "Error": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean" },
+          "ok": { "type": "boolean" },
           "error": { "type": "string" }
         }
       },
       "BangsResponse": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean" },
+          "ok": { "type": "boolean" },
           "data": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/BangInfo" }
@@ -673,7 +673,7 @@ func generateOpenAPISpec(cfg *config.Config) string {
       "AutocompleteResponse": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean" },
+          "ok": { "type": "boolean" },
           "suggestions": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/BangInfo" }

@@ -104,6 +104,8 @@ func ExecuteCLI() error {
 		return RunLoginCommand(args[1:])
 	case "shell":
 		return RunShellCommand(args[1:])
+	case "probe":
+		return RunProbeCommand(args[1:])
 	default:
 		// Treat first arg as search query
 		return RunSearchCommand(args)
@@ -295,6 +297,7 @@ Usage:
 
 Commands:
   search <query>    Search for videos
+  probe             Test engine availability
   login             Save API token to config
   shell             Shell completion commands
 

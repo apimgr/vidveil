@@ -2,7 +2,9 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -18,7 +20,17 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 	}
 	defer resp.Body.Close()
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	// Read body for debug logging
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Log raw response when debug is enabled
+	DebugLogEngineResponse(e.Name(), url, body)
+
+	// Parse HTML from body
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -30,6 +42,10 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 			results = append(results, r)
 		}
 	})
+
+	// Log parse results when debug is enabled
+	DebugLogEngineParseResult(e.Name(), len(results), nil)
+
 	return results, nil
 }
 

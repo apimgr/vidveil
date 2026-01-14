@@ -60,6 +60,15 @@ func (p *XNXXParser) Parse(s *goquery.Selection) *VideoItem {
 		item.Thumbnail = "https:" + item.Thumbnail
 	}
 
+	// Try to extract download URL from data attributes (if available in search results)
+	item.DownloadURL = ExtractAttr(img, "data-video-url", "data-download", "data-src-video")
+	if item.DownloadURL == "" {
+		item.DownloadURL = ExtractAttr(s, "data-video-url", "data-download")
+	}
+	if item.DownloadURL != "" && !strings.HasPrefix(item.DownloadURL, "http") {
+		item.DownloadURL = "https:" + item.DownloadURL
+	}
+
 	// Get duration - XNXX format: "36min" in p.metadata text content
 	metaElem := s.Find("p.metadata")
 	if metaElem.Length() > 0 {

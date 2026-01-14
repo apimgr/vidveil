@@ -389,7 +389,7 @@ if cacheSize > 1024*1024*1024 {
 | **NEVER use Makefile in CI** | Workflows have explicit commands with all env vars |
 | **GitHub/Gitea/Jenkins must match** | Same platforms, same env vars, same logic |
 | **VERSION from tag** | Strip `v` prefix from semver only: `v1.2.3` → `1.2.3`, `dev` → `dev` |
-| **LDFLAGS** | `-s -w -X 'main.Version=...' -X 'main.CommitID=...' -X 'main.BuildDate=...'` |
+| **LDFLAGS** | `-s -w -X 'main.Version=...' -X 'main.CommitID=...' -X 'main.BuildDate=...' -X 'main.OfficialSite=...'` |
 | **Docker builds on EVERY push** | Any branch push triggers Docker image build |
 | **Docker tags** | Any push → `devel`, `{commit}`; beta → adds `beta`; tag → `{version}`, `latest`, `YYMM`, `{commit}` |
 
@@ -856,14 +856,14 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 ## How to Read This Large File
 
-**AI.md is ~1.7MB and ~47,664 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1.7MB and ~47,688 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
 | File size | ~1.7MB |
-| Line count | ~47,664 lines |
+| Line count | ~47,688 lines |
 | Read limit | ~500 lines per read |
 | Full reads needed | ~95 reads (impractical) |
 
@@ -900,20 +900,20 @@ This distinction exists for clarity. When referring to OS-level resources that b
 | 22 | ~26534 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
 | 23 | ~27263 | Update Command | Update feature |
 | 24 | ~27319 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~28216 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~28400 | Makefile | Build system, **make local** |
-| 27 | ~29117 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~30477 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~32987 | Testing & Development | Testing/dev workflow, **100% Coverage** |
-| 30 | ~34638 | ReadTheDocs Documentation | Documentation |
-| 31 | ~35351 | I18N & A11Y | Internationalization |
-| 32 | ~35772 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~36508 | CLI Client & Agent | CLI **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~40604 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~44175 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~44816 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~45839 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~46093 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+| 25 | ~28217 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~28401 | Makefile | Build system, **make local** |
+| 27 | ~29127 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~30487 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~33001 | Testing & Development | Testing/dev workflow, **100% Coverage** |
+| 30 | ~34652 | ReadTheDocs Documentation | Documentation |
+| 31 | ~35365 | I18N & A11Y | Internationalization |
+| 32 | ~35786 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~36522 | CLI Client & Agent | CLI **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~40628 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~44199 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~44840 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~45863 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~46117 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -28574,11 +28574,16 @@ BUILD_DATE := $(shell date +"%%B %%-d, %%Y at %%H:%%M:%%S")
 COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 # COMMIT_ID used directly - no VCS_REF alias
 
+# Official site (empty if none - users must use --server flag)
+# Set in AI.md or README.md, or leave empty for self-hosted projects
+OFFICIALSITE ?=
+
 # Linker flags to embed build info
 LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
-	-X 'main.BuildDate=$(BUILD_DATE)'
+	-X 'main.BuildDate=$(BUILD_DATE)' \
+	-X 'main.OfficialSite=$(OFFICIALSITE)'
 
 # Directories
 BINDIR := binaries
@@ -28777,7 +28782,7 @@ clean:
 	@rm -rf $(BINDIR) $(RELDIR)
 ```
 
-## Embedded Build Info 
+## Embedded Build Info
 
 Every binary MUST have these values embedded at build time:
 
@@ -28786,19 +28791,23 @@ Every binary MUST have these values embedded at build time:
 | `Version` | `1.2.3` | Semantic version from release.txt |
 | `CommitID` | `a1b2c3d` | Git short commit hash |
 | `BuildDate` | `December 4, 2025 at 13:05:13` | Build timestamp |
+| `OfficialSite` | `https://api.example.com` | Default server URL (empty if self-hosted) |
 
 **Go code requirement** (in `main.go` or `version.go`):
 
 ```go
 // Build info - set via -ldflags at build time
 var (
-    Version   = "dev"
-    CommitID  = "unknown"
-    BuildDate = "unknown"
+    Version      = "dev"
+    CommitID     = "unknown"
+    BuildDate    = "unknown"
+    OfficialSite = ""  // Empty = users must use --server flag
 )
 ```
 
 **Build date format:** Uses build system timezone or `TZ` env var.
+
+**OfficialSite usage:** If set, CLI/Agent use this as default `--server` value. If empty, users must provide `--server` flag or configure in cli.yml/agent.yml.
 
 ## Go Module Caching
 
@@ -29271,7 +29280,7 @@ RUN go mod download
 # Copy source and build
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
-    -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'" \
+    -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'" \
     -o /build/binary/{projectname} src
 
 # =============================================================================
@@ -30534,7 +30543,7 @@ All workflows MUST set these environment variables:
 #   echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 #   echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
 # Then use in build step:
-#   LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+#   LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
 ```
 
 ## Release Workflow (Stable)
@@ -30591,6 +30600,8 @@ jobs:
           echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
+          # OFFICIALSITE: Set in repository secrets or leave empty for self-hosted
+          echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
 
       - name: Build server
         env:
@@ -30598,7 +30609,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
@@ -30609,7 +30620,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
@@ -30718,7 +30729,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }} ./src
 
       # CLI build - only if src/client/ directory exists
@@ -30729,7 +30740,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli ./src/client
 
       - name: Upload server artifact
@@ -30825,7 +30836,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }} ./src
 
       # CLI build - only if src/client/ directory exists
@@ -30836,7 +30847,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli ./src/client
 
       - name: Upload server artifact
@@ -31243,7 +31254,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
@@ -31254,7 +31265,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
@@ -31363,7 +31374,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }} ./src
 
       # CLI build - only if src/client/ directory exists
@@ -31374,7 +31385,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli ./src/client
 
       - name: Upload server artifact
@@ -31470,7 +31481,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }} ./src
 
       # CLI build - only if src/client/ directory exists
@@ -31481,7 +31492,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli ./src/client
 
       - name: Upload server artifact
@@ -31852,7 +31863,9 @@ stages:
     - export VERSION="${CI_COMMIT_TAG#v}"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
-    - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'"
+    # OFFICIALSITE: Set in GitLab CI/CD Variables or leave empty for self-hosted
+    - export OFFICIALSITE="${OFFICIALSITE:-}"
+    - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
 
 # =============================================================================
 # RELEASE BUILDS (Tag Push: v* or semver)
@@ -32064,7 +32077,7 @@ build:beta:linux:
     - export VERSION="$(date +%Y%m%d%H%M%S)-beta"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
-    - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'"
+    - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
@@ -32090,7 +32103,7 @@ build:daily:linux:
     - export VERSION="$(date +%Y%m%d%H%M%S)"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
-    - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'"
+    - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
@@ -32380,7 +32393,7 @@ pipeline {
                     }
                     env.COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     env.BUILD_DATE = sh(script: 'date +"%a %b %d, %Y at %H:%M:%S %Z"', returnStdout: true).trim()
-                    env.LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}'"
+                    env.LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}' -X 'main.OfficialSite=${env.OFFICIALSITE}'"
                     env.HAS_CLI = sh(script: '[ -d src/client ] && echo true || echo false', returnStdout: true).trim()
                 }
                 sh 'mkdir -p ${BINDIR} ${RELDIR}'
@@ -38343,6 +38356,16 @@ Flags:
 ```
 
 **Official site (`{officialsite}`) is defined in the project's AI.md or README.md and compiled into the binary.**
+
+**What official site affects:**
+- README.md: Default production site URL in examples
+- CLI/Agent: Default `--server` URL (so users don't need to specify)
+
+**What official site does NOT affect:**
+- Docker labels (use `{projectorg}`, `{projectname}`, `{fqdn}`)
+- Documentation structure or content
+- Build artifacts or binary metadata
+- Any runtime behavior (just a compiled default)
 
 Sources for official site (check in order):
 1. AI.md: `Official Site: https://...` or `{officialsite}: https://...`

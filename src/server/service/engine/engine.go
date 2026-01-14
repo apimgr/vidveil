@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/retry"
 	"github.com/apimgr/vidveil/src/server/service/tor"
@@ -468,4 +470,37 @@ func (e *BaseEngine) GetUserAgent() string {
 		return e.cfg.Engines.UserAgent.String()
 	}
 	return DefaultUserAgent
+}
+
+// DebugLogEngineResponse logs raw response body when --debug is enabled
+// Per IDEA.md: Verbose logging helps identify site changes and extraction opportunities
+// Per AI.md: Debug features tied to --debug flag
+func DebugLogEngineResponse(engineName, requestURL string, body []byte) {
+	if !mode.IsDebugEnabled() {
+		return
+	}
+
+	// Truncate to 2000 chars as per IDEA.md spec
+	bodyStr := string(body)
+	if len(bodyStr) > 2000 {
+		bodyStr = bodyStr[:2000] + "\n... [truncated]"
+	}
+
+	log.Printf("[DEBUG ENGINE] %s request: %s\n[DEBUG ENGINE] %s response (%d bytes):\n%s\n",
+		engineName, requestURL, engineName, len(body), bodyStr)
+}
+
+// DebugLogEngineParseResult logs parsing results when --debug is enabled
+// Helps identify extraction successes/failures and missing fields
+func DebugLogEngineParseResult(engineName string, resultCount int, fieldStats map[string]int) {
+	if !mode.IsDebugEnabled() {
+		return
+	}
+
+	statsStr := ""
+	for field, count := range fieldStats {
+		statsStr += fmt.Sprintf(" %s=%d", field, count)
+	}
+
+	log.Printf("[DEBUG ENGINE] %s parsed %d results:%s\n", engineName, resultCount, statsStr)
 }

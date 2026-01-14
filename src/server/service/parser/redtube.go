@@ -64,6 +64,18 @@ func (p *RedTubeParser) Parse(s *goquery.Selection) *VideoItem {
 		item.PreviewURL = strings.ReplaceAll(item.PreviewURL, "&amp;", "&")
 	}
 
+	// Try to extract download URL from data attributes (if available in search results)
+	item.DownloadURL = ExtractAttr(img, "data-video-url", "data-download", "data-mp4")
+	if item.DownloadURL == "" {
+		item.DownloadURL = ExtractAttr(s, "data-video-url", "data-download")
+	}
+	if item.DownloadURL != "" {
+		item.DownloadURL = strings.ReplaceAll(item.DownloadURL, "&amp;", "&")
+		if !strings.HasPrefix(item.DownloadURL, "http") {
+			item.DownloadURL = "https:" + item.DownloadURL
+		}
+	}
+
 	// Duration in .video-properties or .tm_video_duration
 	durElem := s.Find(".video-properties, .tm_video_duration, .duration span")
 	item.Duration, item.DurationSeconds = ParseDuration(CleanText(durElem.Text()))

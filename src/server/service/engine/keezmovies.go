@@ -13,8 +13,8 @@ import (
 type KeezMoviesEngine struct{ *BaseEngine }
 
 // NewKeezMoviesEngine creates a new KeezMovies engine
-func NewKeezMoviesEngine(cfg *config.Config, torClient *tor.Client) *KeezMoviesEngine {
-	return &KeezMoviesEngine{NewBaseEngine("keezmovies", "KeezMovies", "https://www.keezmovies.com", 3, cfg, torClient)}
+func NewKeezMoviesEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *KeezMoviesEngine {
+	return &KeezMoviesEngine{NewBaseEngine("keezmovies", "KeezMovies", "https://www.keezmovies.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on KeezMovies

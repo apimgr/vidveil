@@ -19,9 +19,9 @@ type XVideosEngine struct {
 }
 
 // NewXVideosEngine creates a new XVideos engine
-func NewXVideosEngine(cfg *config.Config, torClient *tor.Client) *XVideosEngine {
+func NewXVideosEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *XVideosEngine {
 	e := &XVideosEngine{
-		BaseEngine: NewBaseEngine("xvideos", "XVideos", "https://www.xvideos.com", 1, cfg, torClient),
+		BaseEngine: NewBaseEngine("xvideos", "XVideos", "https://www.xvideos.com", 1, appConfig, torClient),
 		parser:     parser.NewXVideosParser(),
 	}
 	// Set capabilities per IDEA.md

@@ -21,7 +21,7 @@ import (
 var Version = "dev"
 
 // Config holds all application configuration per AI.md spec
-type Config struct {
+type AppConfig struct {
 	Server  ServerConfig  `yaml:"server"`
 	Web     WebConfig     `yaml:"web"`
 	Search  SearchConfig  `yaml:"search"`
@@ -704,17 +704,17 @@ type AgeVerificationConfig struct {
 	CookieDays int  `yaml:"cookie_days"`
 }
 
-// Paths holds resolved directory paths
-// Paths is now defined in paths package
-type Paths = paths.Paths
+// AppPaths holds resolved directory paths
+// AppPaths is now defined in paths package
+type AppPaths = paths.AppPaths
 
-// Default returns a Config with sensible defaults per AI.md
-func Default() *Config {
+// DefaultAppConfig returns an AppConfig with sensible defaults per AI.md
+func DefaultAppConfig() *AppConfig {
 	fqdn := getHostname()
 	// Per AI.md PART 5: Default port is random 64xxx (non-privileged, no root required)
 	defaultPort := fmt.Sprintf("%d", findUnusedPort())
 
-	return &Config{
+	return &AppConfig{
 		Server: ServerConfig{
 			Port:        defaultPort,
 			FQDN:        fqdn,
@@ -1010,14 +1010,14 @@ func Default() *Config {
 	}
 }
 
-// GetPaths returns OS-appropriate paths (delegated to paths package)
-func GetPaths(configDir, dataDir string) *Paths {
-	return paths.Get(configDir, dataDir)
+// GetAppPaths returns OS-appropriate paths (delegated to paths package)
+func GetAppPaths(configDir, dataDir string) *AppPaths {
+	return paths.GetAppPaths(configDir, dataDir)
 }
 
-// Load loads configuration from file or creates default
-func Load(configDir, dataDir string) (*Config, string, error) {
-	paths := GetPaths(configDir, dataDir)
+// LoadAppConfig loads configuration from file or creates default
+func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
+	paths := GetAppPaths(configDir, dataDir)
 
 	// Ensure directories exist per AI.md PART 8 and PART 27
 	// Binary handles ALL directory creation with proper permissions
@@ -1047,13 +1047,13 @@ func Load(configDir, dataDir string) (*Config, string, error) {
 	// Check if config exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		// Create default config
-		cfg := Default()
+		cfg := DefaultAppConfig()
 
 		// Set paths in config
 		cfg.Server.SSL.CertPath = filepath.Join(paths.Config, "ssl", "certs")
 		cfg.Server.Database.SQLite.Dir = filepath.Join(paths.Data, "db")
 
-		if err := Save(cfg, configPath); err != nil {
+		if err := SaveAppConfig(cfg, configPath); err != nil {
 			return nil, "", fmt.Errorf("failed to save default config: %w", err)
 		}
 
@@ -1069,7 +1069,7 @@ func Load(configDir, dataDir string) (*Config, string, error) {
 	}
 
 	// Start with defaults
-	cfg := Default()
+	cfg := DefaultAppConfig()
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, "", fmt.Errorf("failed to parse config: %w", err)
 	}
@@ -1082,8 +1082,8 @@ func Load(configDir, dataDir string) (*Config, string, error) {
 
 // validateConfig validates all config values, replacing invalid with defaults per AI.md PART 12
 // Rule: If config setting is invalid, warn and replace with default. Never fail startup.
-func validateConfig(cfg *Config) {
-	defaults := Default()
+func validateConfig(cfg *AppConfig) {
+	defaults := DefaultAppConfig()
 
 	// Validate port (must be valid or use random per PART 8/12)
 	if cfg.Server.Port != "" {
@@ -1151,8 +1151,8 @@ func validateConfig(cfg *Config) {
 	}
 }
 
-// Save saves configuration to file
-func Save(cfg *Config, path string) error {
+// SaveAppConfig saves configuration to file
+func SaveAppConfig(cfg *AppConfig, path string) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
@@ -1231,8 +1231,8 @@ func generateToken(length int) string {
 
 
 
-// IsContainer detects if running in a container (tini as PID 1)
-func IsContainer() bool {
+// IsRunningInContainer detects if running in a container (tini as PID 1)
+func IsRunningInContainer() bool {
 	// Check if PID 1 is tini
 	if data, err := os.ReadFile("/proc/1/comm"); err == nil {
 		return strings.TrimSpace(string(data)) == "tini"
@@ -1245,13 +1245,13 @@ func IsContainer() bool {
 }
 
 // IsDevelopmentMode returns true if running in development mode
-func (c *Config) IsDevelopmentMode() bool {
+func (c *AppConfig) IsDevelopmentMode() bool {
 	mode := strings.ToLower(c.Server.Mode)
 	return mode == "development" || mode == "dev"
 }
 
 // IsProductionMode returns true if running in production mode
-func (c *Config) IsProductionMode() bool {
+func (c *AppConfig) IsProductionMode() bool {
 	return !c.IsDevelopmentMode()
 }
 
@@ -1320,19 +1320,19 @@ func IsValidSSLHost(host string) bool {
 // Watches config file and reloads on changes
 
 // ReloadCallback is called when configuration is reloaded
-type ReloadCallback func(*Config)
+type ReloadCallback func(*AppConfig)
 
 // ConfigWatcher watches for config file changes
 type ConfigWatcher struct {
 	configPath string
-	cfg        *Config
+	appConfig  *AppConfig
 	callbacks  []ReloadCallback
 	stopChan   chan struct{}
 	lastMod    int64
 }
 
 // NewWatcher creates a new config watcher
-func NewWatcher(configPath string, cfg *Config) *ConfigWatcher {
+func NewWatcher(configPath string, appConfig *AppConfig) *ConfigWatcher {
 	info, _ := os.Stat(configPath)
 	var lastMod int64
 	if info != nil {
@@ -1341,7 +1341,7 @@ func NewWatcher(configPath string, cfg *Config) *ConfigWatcher {
 
 	return &ConfigWatcher{
 		configPath: configPath,
-		cfg:        cfg,
+		appConfig:  appConfig,
 		callbacks:  make([]ReloadCallback, 0),
 		stopChan:   make(chan struct{}),
 		lastMod:    lastMod,
@@ -1395,31 +1395,31 @@ func (w *ConfigWatcher) reload() {
 		return
 	}
 
-	newCfg := Default()
+	newCfg := DefaultAppConfig()
 	if err := yaml.Unmarshal(data, newCfg); err != nil {
 		fmt.Printf("⚠️  Failed to parse config for reload: %v\n", err)
 		return
 	}
 
 	// Update the shared config (settings that can live-reload)
-	w.cfg.Server.Title = newCfg.Server.Title
-	w.cfg.Server.Description = newCfg.Server.Description
-	w.cfg.Server.RateLimit = newCfg.Server.RateLimit
-	w.cfg.Server.Email = newCfg.Server.Email
-	w.cfg.Server.Notifications = newCfg.Server.Notifications
-	w.cfg.Server.Schedule = newCfg.Server.Schedule
-	w.cfg.Server.SSL.LetsEncrypt = newCfg.Server.SSL.LetsEncrypt
-	w.cfg.Server.Metrics = newCfg.Server.Metrics
-	w.cfg.Server.Logs = newCfg.Server.Logs
-	w.cfg.Server.GeoIP = newCfg.Server.GeoIP
-	w.cfg.Web = newCfg.Web
-	w.cfg.Search = newCfg.Search
+	w.appConfig.Server.Title = newCfg.Server.Title
+	w.appConfig.Server.Description = newCfg.Server.Description
+	w.appConfig.Server.RateLimit = newCfg.Server.RateLimit
+	w.appConfig.Server.Email = newCfg.Server.Email
+	w.appConfig.Server.Notifications = newCfg.Server.Notifications
+	w.appConfig.Server.Schedule = newCfg.Server.Schedule
+	w.appConfig.Server.SSL.LetsEncrypt = newCfg.Server.SSL.LetsEncrypt
+	w.appConfig.Server.Metrics = newCfg.Server.Metrics
+	w.appConfig.Server.Logs = newCfg.Server.Logs
+	w.appConfig.Server.GeoIP = newCfg.Server.GeoIP
+	w.appConfig.Web = newCfg.Web
+	w.appConfig.Search = newCfg.Search
 
 	fmt.Printf("🔄 Configuration reloaded\n")
 
 	// Notify callbacks
 	for _, callback := range w.callbacks {
-		callback(w.cfg)
+		callback(w.appConfig)
 	}
 }
 
@@ -1432,7 +1432,7 @@ func (w *ConfigWatcher) Reload() error {
 // GetDisplayHost returns the appropriate host for display per AI.md lines 2333-2457
 // Never shows: 0.0.0.0, 127.0.0.1, localhost, [::]
 // Uses global IP if dev TLD or localhost detected
-func GetDisplayHost(_ *Config) string {
+func GetDisplayHost(_ *AppConfig) string {
 	fqdn := GetFQDN()
 
 	// If valid production FQDN and not localhost, use it (lines 2443-2445)
@@ -1555,7 +1555,7 @@ func getGlobalIPv4() string {
 
 // GetPublicURL returns the public-facing URL for this server
 // Used by /api/autodiscover endpoint per AI.md PART 37 line 38133
-func (c *Config) GetPublicURL() string {
+func (c *AppConfig) GetPublicURL() string {
 	// Use FQDN if configured
 	if c.Server.FQDN != "" {
 		return fmt.Sprintf("https://%s", c.Server.FQDN)
@@ -1576,7 +1576,7 @@ func (c *Config) GetPublicURL() string {
 
 // GetClusterNodes returns the list of cluster node URLs
 // Used by /api/autodiscover endpoint per AI.md PART 37 line 38134
-func (c *Config) GetClusterNodes() []string {
+func (c *AppConfig) GetClusterNodes() []string {
 	// Return empty array for now - cluster support is not yet implemented
 	return []string{}
 }

@@ -58,7 +58,7 @@ var (
 // Per AI.md PART 1: Variable names MUST be specific
 var (
 	cliConfig *CLIConfig
-	apiClient *api.Client
+	apiClient *api.APIClient
 )
 
 // ExecuteCLI runs the CLI application
@@ -281,7 +281,7 @@ func LoadCLIConfigFromFile() {
 // InitAPIClient initializes the API client
 // Per AI.md PART 1: Function names MUST reveal intent - "initClient" is ambiguous
 func InitAPIClient() {
-	apiClient = api.NewClient(cliConfig.Server.Address, cliConfig.Server.Token, cliConfig.Server.Timeout)
+	apiClient = api.NewAPIClient(cliConfig.Server.Address, cliConfig.Server.Token, cliConfig.Server.Timeout)
 	// Per AI.md PART 36: User-Agent uses hardcoded project name with version
 	apiClient.SetUserAgent(Version)
 }

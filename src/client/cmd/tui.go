@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// TUIStyles holds lipgloss styles derived from theme.Palette
+// TUIStyles holds lipgloss styles derived from theme.ColorPalette
 // Per AI.md PART 36: TUI Styles from Palette
 // Per AI.md PART 1: Type names MUST be specific
 type TUIStyles struct {
@@ -44,10 +44,10 @@ type TUILayoutConfig struct {
 	VerticalScroll bool
 }
 
-// CreateTUIStylesFromPalette creates TUIStyles from theme.Palette
+// CreateTUIStylesFromPalette creates TUIStyles from theme.ColorPalette
 // Per AI.md PART 36: TUI Styles from Palette
 // Per AI.md PART 1: Function names MUST reveal intent
-func CreateTUIStylesFromPalette(palette theme.Palette) TUIStyles {
+func CreateTUIStylesFromPalette(palette theme.ColorPalette) TUIStyles {
 	return TUIStyles{
 		Base: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(palette.Foreground)).
@@ -205,15 +205,15 @@ type TUISearchDoneMsg struct {
 // Per AI.md PART 1: Function names MUST reveal intent - "initialModel" is ambiguous
 func CreateInitialTUIModel() TUIModel {
 	// Initialize styles from theme palette
-	// Per AI.md PART 36: TUI uses theme.Palette from src/common/theme
+	// Per AI.md PART 36: TUI uses theme.ColorPalette from src/common/theme
 	themeMode := "dark"
 	if cliConfig != nil && cliConfig.TUI.Theme != "" {
 		themeMode = cliConfig.TUI.Theme
 	}
-	tuiStyles = CreateTUIStylesFromPalette(theme.Get(themeMode))
+	tuiStyles = CreateTUIStylesFromPalette(theme.GetColorPalette(themeMode))
 
 	// Get initial terminal size and layout config
-	termSize := terminal.GetSize()
+	termSize := terminal.GetTerminalSize()
 	layoutConfig := GetTUILayoutConfig(termSize.Mode)
 
 	return TUIModel{
@@ -289,7 +289,7 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.terminalHeight = msg.Height
 
 		// Recalculate size mode and layout config
-		m.sizeMode = terminal.GetSize().Mode
+		m.sizeMode = terminal.GetTerminalSize().Mode
 		m.layoutConfig = GetTUILayoutConfig(m.sizeMode)
 
 	case TUISearchDoneMsg:

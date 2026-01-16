@@ -13,8 +13,8 @@ import (
 type XBabeEngine struct{ *BaseEngine }
 
 // NewXBabeEngine creates a new XBabe engine
-func NewXBabeEngine(cfg *config.Config, torClient *tor.Client) *XBabeEngine {
-	return &XBabeEngine{NewBaseEngine("xbabe", "XBabe", "https://xbabe.com", 4, cfg, torClient)}
+func NewXBabeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *XBabeEngine {
+	return &XBabeEngine{NewBaseEngine("xbabe", "XBabe", "https://xbabe.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on XBabe

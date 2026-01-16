@@ -13,8 +13,8 @@ import (
 type TxxxEngine struct{ *BaseEngine }
 
 // NewTxxxEngine creates a new Txxx engine
-func NewTxxxEngine(cfg *config.Config, torClient *tor.Client) *TxxxEngine {
-	return &TxxxEngine{NewBaseEngine("txxx", "Txxx", "https://www.txxx.com", 3, cfg, torClient)}
+func NewTxxxEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *TxxxEngine {
+	return &TxxxEngine{NewBaseEngine("txxx", "Txxx", "https://www.txxx.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on Txxx

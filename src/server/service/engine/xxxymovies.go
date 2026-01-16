@@ -13,8 +13,8 @@ import (
 type XXXYMoviesEngine struct{ *BaseEngine }
 
 // NewXXXYMoviesEngine creates a new XXXYMovies engine
-func NewXXXYMoviesEngine(cfg *config.Config, torClient *tor.Client) *XXXYMoviesEngine {
-	return &XXXYMoviesEngine{NewBaseEngine("xxxymovies", "XXXYMovies", "https://www.xxxymovies.com", 3, cfg, torClient)}
+func NewXXXYMoviesEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *XXXYMoviesEngine {
+	return &XXXYMoviesEngine{NewBaseEngine("xxxymovies", "XXXYMovies", "https://www.xxxymovies.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on XXXYMovies

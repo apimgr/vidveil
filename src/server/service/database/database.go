@@ -25,8 +25,8 @@ const (
 	DriverMSSQL    Driver = "mssql"
 )
 
-// Config holds database connection configuration
-type Config struct {
+// DatabaseConfig holds database connection configuration
+type DatabaseConfig struct {
 	Driver   Driver `yaml:"driver"`
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
@@ -40,19 +40,19 @@ type Config struct {
 	BusyTimeout int    `yaml:"busy_timeout"`
 }
 
-// Database provides a unified interface for multiple database backends
-type Database struct {
+// AppDatabase provides a unified interface for multiple database backends
+type AppDatabase struct {
 	db       *sql.DB
 	driver   Driver
-	config   Config
+	config   DatabaseConfig
 	mu       sync.RWMutex
 	ctx      context.Context
 	cancel   context.CancelFunc
 	isLeader bool
 }
 
-// NewDatabase creates a new database connection based on the driver
-func NewDatabase(cfg Config) (*Database, error) {
+// NewAppDatabase creates a new database connection based on the driver
+func NewAppDatabase(cfg DatabaseConfig) (*AppDatabase, error) {
 	var db *sql.DB
 	var err error
 
@@ -81,7 +81,7 @@ func NewDatabase(cfg Config) (*Database, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &Database{
+	return &AppDatabase{
 		db:     db,
 		driver: cfg.Driver,
 		config: cfg,
@@ -91,7 +91,7 @@ func NewDatabase(cfg Config) (*Database, error) {
 }
 
 // openSQLite opens a SQLite database connection
-func openSQLite(cfg Config) (*sql.DB, error) {
+func openSQLite(cfg DatabaseConfig) (*sql.DB, error) {
 	dsn := cfg.Path
 	if dsn == "" {
 		dsn = "vidveil.db"
@@ -112,7 +112,7 @@ func openSQLite(cfg Config) (*sql.DB, error) {
 }
 
 // openPostgres opens a PostgreSQL database connection
-func openPostgres(cfg Config) (*sql.DB, error) {
+func openPostgres(cfg DatabaseConfig) (*sql.DB, error) {
 	sslMode := cfg.SSLMode
 	if sslMode == "" {
 		sslMode = "disable"
@@ -136,7 +136,7 @@ func openPostgres(cfg Config) (*sql.DB, error) {
 }
 
 // openMySQL opens a MySQL/MariaDB database connection
-func openMySQL(cfg Config) (*sql.DB, error) {
+func openMySQL(cfg DatabaseConfig) (*sql.DB, error) {
 	port := cfg.Port
 	if port == 0 {
 		port = 3306
@@ -155,7 +155,7 @@ func openMySQL(cfg Config) (*sql.DB, error) {
 }
 
 // openMSSQL opens a Microsoft SQL Server database connection
-func openMSSQL(cfg Config) (*sql.DB, error) {
+func openMSSQL(cfg DatabaseConfig) (*sql.DB, error) {
 	port := cfg.Port
 	if port == 0 {
 		port = 1433
@@ -174,99 +174,99 @@ func openMSSQL(cfg Config) (*sql.DB, error) {
 }
 
 // DB returns the underlying *sql.DB connection
-func (d *Database) DB() *sql.DB {
+func (d *AppDatabase) DB() *sql.DB {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.db
 }
 
 // Driver returns the database driver type
-func (d *Database) Driver() Driver {
+func (d *AppDatabase) Driver() Driver {
 	return d.driver
 }
 
 // Exec executes a query without returning rows
 // Per AI.md PART 10: All queries MUST have timeouts (10s for writes)
-func (d *Database) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (d *AppDatabase) Exec(query string, args ...interface{}) (sql.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return d.db.ExecContext(ctx, query, args...)
 }
 
 // ExecContext executes a query without returning rows with context
-func (d *Database) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (d *AppDatabase) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	return d.db.ExecContext(ctx, query, args...)
 }
 
 // Query executes a query that returns rows
 // Per AI.md PART 10: All queries MUST have timeouts (5s for reads)
-func (d *Database) Query(query string, args ...interface{}) (*sql.Rows, error) {
+func (d *AppDatabase) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return d.db.QueryContext(ctx, query, args...)
 }
 
 // QueryContext executes a query that returns rows with context
-func (d *Database) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (d *AppDatabase) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	return d.db.QueryContext(ctx, query, args...)
 }
 
 // QueryRow executes a query that returns at most one row
 // Per AI.md PART 10: All queries MUST have timeouts (5s for reads)
-func (d *Database) QueryRow(query string, args ...interface{}) *sql.Row {
+func (d *AppDatabase) QueryRow(query string, args ...interface{}) *sql.Row {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return d.db.QueryRowContext(ctx, query, args...)
 }
 
 // QueryRowContext executes a query that returns at most one row with context
-func (d *Database) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+func (d *AppDatabase) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	return d.db.QueryRowContext(ctx, query, args...)
 }
 
 // Begin starts a new transaction
 // Per AI.md PART 10: Transactions have 30s timeout
-func (d *Database) Begin() (*sql.Tx, error) {
+func (d *AppDatabase) Begin() (*sql.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return d.db.BeginTx(ctx, nil)
 }
 
 // BeginTx starts a new transaction with context and options
-func (d *Database) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
+func (d *AppDatabase) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
 	return d.db.BeginTx(ctx, opts)
 }
 
 // Ping verifies the database connection
-func (d *Database) Ping() error {
+func (d *AppDatabase) Ping() error {
 	return d.db.Ping()
 }
 
 // PingContext verifies the database connection with context
-func (d *Database) PingContext(ctx context.Context) error {
+func (d *AppDatabase) PingContext(ctx context.Context) error {
 	return d.db.PingContext(ctx)
 }
 
 // Close closes the database connection
-func (d *Database) Close() error {
+func (d *AppDatabase) Close() error {
 	d.cancel()
 	return d.db.Close()
 }
 
 // Stats returns database connection statistics
-func (d *Database) Stats() sql.DBStats {
+func (d *AppDatabase) Stats() sql.DBStats {
 	return d.db.Stats()
 }
 
 // SetLeader sets whether this node is the cluster leader
-func (d *Database) SetLeader(isLeader bool) {
+func (d *AppDatabase) SetLeader(isLeader bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.isLeader = isLeader
 }
 
 // IsLeader returns whether this node is the cluster leader
-func (d *Database) IsLeader() bool {
+func (d *AppDatabase) IsLeader() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.isLeader
@@ -274,7 +274,7 @@ func (d *Database) IsLeader() bool {
 
 // TranslateQuery translates a query for the specific database driver
 // This handles differences in SQL syntax between databases
-func (d *Database) TranslateQuery(query string) string {
+func (d *AppDatabase) TranslateQuery(query string) string {
 	switch d.driver {
 	case DriverPostgres:
 		// PostgreSQL uses $1, $2, etc. for placeholders
@@ -290,7 +290,7 @@ func (d *Database) TranslateQuery(query string) string {
 }
 
 // TableExists checks if a table exists in the database
-func (d *Database) TableExists(tableName string) (bool, error) {
+func (d *AppDatabase) TableExists(tableName string) (bool, error) {
 	var query string
 	switch d.driver {
 	case DriverPostgres:
@@ -307,7 +307,7 @@ func (d *Database) TableExists(tableName string) (bool, error) {
 }
 
 // Version returns the database server version
-func (d *Database) Version() (string, error) {
+func (d *AppDatabase) Version() (string, error) {
 	var query string
 	switch d.driver {
 	case DriverPostgres:
@@ -342,7 +342,7 @@ func WithTimeout(ctx context.Context, timeout time.Duration) (context.Context, c
 
 // WithTransaction executes a function within a transaction
 // Per AI.md PART 10 transaction patterns
-func (d *Database) WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
+func (d *AppDatabase) WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
 	// Transaction timeout per PART 10
 	ctx, cancel := context.WithTimeout(ctx, TimeoutTransaction)
 	defer cancel()

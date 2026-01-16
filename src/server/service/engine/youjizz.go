@@ -15,8 +15,8 @@ import (
 type YouJizzEngine struct{ *BaseEngine }
 
 // NewYouJizzEngine creates a new YouJizz engine
-func NewYouJizzEngine(cfg *config.Config, torClient *tor.Client) *YouJizzEngine {
-	return &YouJizzEngine{NewBaseEngine("youjizz", "YouJizz", "https://www.youjizz.com", 3, cfg, torClient)}
+func NewYouJizzEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *YouJizzEngine {
+	return &YouJizzEngine{NewBaseEngine("youjizz", "YouJizz", "https://www.youjizz.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on YouJizz

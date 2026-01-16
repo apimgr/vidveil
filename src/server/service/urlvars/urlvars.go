@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// Config holds URL detection configuration per AI.md
-type Config struct {
+// URLVarsConfig holds URL detection configuration per AI.md
+type URLVarsConfig struct {
 	Learning     bool          `yaml:"learning" json:"learning"`
 	MinSamples   int           `yaml:"min_samples" json:"min_samples"`
 	SampleWindow time.Duration `yaml:"sample_window" json:"sample_window"`
@@ -20,9 +20,9 @@ type Config struct {
 	LiveReload   bool          `yaml:"live_reload" json:"live_reload"`
 }
 
-// DefaultConfig returns sane defaults per AI.md
-func DefaultConfig() Config {
-	return Config{
+// DefaultURLVarsConfig returns sane defaults per AI.md
+func DefaultURLVarsConfig() URLVarsConfig {
+	return URLVarsConfig{
 		Learning:     true,
 		MinSamples:   3,
 		SampleWindow: 5 * time.Minute,
@@ -39,33 +39,33 @@ type domainObservation struct {
 	lastSeen  time.Time
 }
 
-// Resolver handles URL variable resolution per AI.md PART 13
-type Resolver struct {
+// URLResolver handles URL variable resolution per AI.md PART 13
+type URLResolver struct {
 	mu           sync.RWMutex
-	config       Config
+	config       URLVarsConfig
 	observations map[string]*domainObservation
 	baseDomain   string
 	wildcard     string
 	logger       func(format string, args ...interface{})
 }
 
-// New creates a new URL resolver
-func New(cfg Config) *Resolver {
-	return &Resolver{
+// NewURLResolver creates a new URL resolver
+func NewURLResolver(cfg URLVarsConfig) *URLResolver {
+	return &URLResolver{
 		config:       cfg,
 		observations: make(map[string]*domainObservation),
 	}
 }
 
 // SetLogger sets the logger function
-func (r *Resolver) SetLogger(logger func(format string, args ...interface{})) {
+func (r *URLResolver) SetLogger(logger func(format string, args ...interface{})) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.logger = logger
 }
 
 // log logs a message if logger is set and LogChanges is enabled
-func (r *Resolver) log(format string, args ...interface{}) {
+func (r *URLResolver) log(format string, args ...interface{}) {
 	if r.logger != nil && r.config.LogChanges {
 		r.logger(format, args...)
 	}
@@ -74,7 +74,7 @@ func (r *Resolver) log(format string, args ...interface{}) {
 // GetURLVars returns resolved URL variables from request per AI.md
 // Checks reverse proxy headers first, triggers live reload on detection
 // Port is empty string for 80/443 (always stripped)
-func (r *Resolver) GetURLVars(req *http.Request) (proto, fqdn, port string) {
+func (r *URLResolver) GetURLVars(req *http.Request) (proto, fqdn, port string) {
 	proto = r.resolveProto(req)
 	fqdn = r.resolveFQDN(req)
 	port = r.resolvePort(req, proto)
@@ -88,7 +88,7 @@ func (r *Resolver) GetURLVars(req *http.Request) (proto, fqdn, port string) {
 }
 
 // resolveProto resolves protocol per AI.md priority order
-func (r *Resolver) resolveProto(req *http.Request) string {
+func (r *URLResolver) resolveProto(req *http.Request) string {
 	// Priority 1: X-Forwarded-Proto
 	if proto := req.Header.Get("X-Forwarded-Proto"); proto != "" {
 		return strings.ToLower(proto)
@@ -114,7 +114,7 @@ func (r *Resolver) resolveProto(req *http.Request) string {
 }
 
 // resolveFQDN resolves FQDN per AI.md priority order
-func (r *Resolver) resolveFQDN(req *http.Request) string {
+func (r *URLResolver) resolveFQDN(req *http.Request) string {
 	// Priority 1: Reverse Proxy Headers
 	if host := req.Header.Get("X-Forwarded-Host"); host != "" {
 		// Strip port if present
@@ -165,7 +165,7 @@ func (r *Resolver) resolveFQDN(req *http.Request) string {
 
 // resolvePort resolves port per AI.md priority order
 // Returns empty string for 80/443 (port stripping)
-func (r *Resolver) resolvePort(req *http.Request, proto string) string {
+func (r *URLResolver) resolvePort(req *http.Request, proto string) string {
 	var port string
 
 	// Priority 1: X-Forwarded-Port
@@ -243,7 +243,7 @@ func getPublicIP() string {
 }
 
 // recordObservation records a domain observation for learning
-func (r *Resolver) recordObservation(domain string) {
+func (r *URLResolver) recordObservation(domain string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -274,7 +274,7 @@ func (r *Resolver) recordObservation(domain string) {
 }
 
 // inferPatterns infers base domain and wildcard from observations
-func (r *Resolver) inferPatterns() {
+func (r *URLResolver) inferPatterns() {
 	if len(r.observations) < r.config.MinSamples {
 		return
 	}
@@ -337,7 +337,7 @@ func extractBaseDomain(hostname string) string {
 
 // BuildURL constructs full URL with automatic port stripping per AI.md
 // :80 and :443 are NEVER included
-func (r *Resolver) BuildURL(req *http.Request, path string) string {
+func (r *URLResolver) BuildURL(req *http.Request, path string) string {
 	proto, fqdn, port := r.GetURLVars(req)
 	if port == "" {
 		return proto + "://" + fqdn + path
@@ -347,7 +347,7 @@ func (r *Resolver) BuildURL(req *http.Request, path string) string {
 
 // GetBaseDomain returns inferred base domain from learning
 // Returns: "myapp.com" even if accessed via "www.myapp.com"
-func (r *Resolver) GetBaseDomain() string {
+func (r *URLResolver) GetBaseDomain() string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.baseDomain
@@ -355,7 +355,7 @@ func (r *Resolver) GetBaseDomain() string {
 
 // GetWildcardDomain returns inferred wildcard if detected
 // Returns: "*.myapp.com" or empty if no wildcard pattern
-func (r *Resolver) GetWildcardDomain() string {
+func (r *URLResolver) GetWildcardDomain() string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.wildcard
@@ -380,40 +380,40 @@ func GetAllDomains() []string {
 
 // Global resolver instance
 var (
-	globalResolver *Resolver
+	globalResolver *URLResolver
 	globalOnce     sync.Once
 )
 
-// Global returns the global resolver instance
-func Global() *Resolver {
+// GlobalResolver returns the global resolver instance
+func GlobalResolver() *URLResolver {
 	globalOnce.Do(func() {
-		globalResolver = New(DefaultConfig())
+		globalResolver = NewURLResolver(DefaultURLVarsConfig())
 	})
 	return globalResolver
 }
 
 // GetURLVars is a convenience function using global resolver
 func GetURLVars(req *http.Request) (proto, fqdn, port string) {
-	return Global().GetURLVars(req)
+	return GlobalResolver().GetURLVars(req)
 }
 
 // BuildURL is a convenience function using global resolver
 func BuildURL(req *http.Request, path string) string {
-	return Global().BuildURL(req, path)
+	return GlobalResolver().BuildURL(req, path)
 }
 
 // GetBaseDomain is a convenience function using global resolver
 func GetBaseDomain() string {
-	return Global().GetBaseDomain()
+	return GlobalResolver().GetBaseDomain()
 }
 
 // GetWildcardDomain is a convenience function using global resolver
 func GetWildcardDomain() string {
-	return Global().GetWildcardDomain()
+	return GlobalResolver().GetWildcardDomain()
 }
 
 // Middleware returns HTTP middleware that sets X-Resolved-* headers for templates
-func (r *Resolver) Middleware(next http.Handler) http.Handler {
+func (r *URLResolver) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		proto, fqdn, port := r.GetURLVars(req)
 		// Set resolved values as headers for downstream handlers

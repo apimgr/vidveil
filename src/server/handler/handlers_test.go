@@ -13,8 +13,8 @@ import (
 )
 
 // createTestConfig returns a test configuration
-func createTestConfig() *config.Config {
-	return &config.Config{
+func createTestConfig() *config.AppConfig {
+	return &config.AppConfig{
 		Server: config.ServerConfig{
 			Title:       "Test Vidveil",
 			Description: "Test Description",
@@ -47,7 +47,7 @@ func TestHealthCheck(t *testing.T) {
 
 func TestRobotsTxt(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	req := httptest.NewRequest("GET", "/robots.txt", nil)
 	rr := httptest.NewRecorder()
@@ -87,7 +87,7 @@ func TestRobotsTxt(t *testing.T) {
 
 func TestSecurityTxt(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	req := httptest.NewRequest("GET", "/.well-known/security.txt", nil)
 	rr := httptest.NewRecorder()
@@ -119,7 +119,7 @@ func TestSecurityTxt(t *testing.T) {
 
 func TestSitemapXML(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	req := httptest.NewRequest("GET", "/sitemap.xml", nil)
 	rr := httptest.NewRecorder()
@@ -155,7 +155,7 @@ func TestSitemapXML(t *testing.T) {
 
 func TestJSONResponse(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	rr := httptest.NewRecorder()
 	h.jsonResponse(rr, map[string]interface{}{
@@ -185,7 +185,7 @@ func TestJSONResponse(t *testing.T) {
 
 func TestJSONError(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	rr := httptest.NewRecorder()
 	h.jsonError(rr, "Test error", "TEST_ERROR", http.StatusBadRequest)
@@ -222,7 +222,7 @@ func TestJSONError(t *testing.T) {
 
 func TestAPISearch_MissingQuery(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	req := httptest.NewRequest("GET", "/api/v1/search", nil)
 	rr := httptest.NewRecorder()
@@ -247,7 +247,7 @@ func TestAPISearch_MissingQuery(t *testing.T) {
 
 func TestAPISearch_TextFormat_MissingQuery(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	req := httptest.NewRequest("GET", "/api/v1/search", nil)
 	req.Header.Set("Accept", "text/plain")
@@ -263,7 +263,7 @@ func TestAPISearch_TextFormat_MissingQuery(t *testing.T) {
 
 func TestAPIAutocomplete_Empty(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	req := httptest.NewRequest("GET", "/api/v1/autocomplete", nil)
 	req.Header.Set("Accept", "application/json")
@@ -303,7 +303,7 @@ func TestAPIAutocomplete_Empty(t *testing.T) {
 
 func TestAgeVerifyMiddleware_StaticBypass(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	// Test that static files bypass age verification
 	handler := h.AgeVerifyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -336,7 +336,7 @@ func TestAgeVerifyMiddleware_StaticBypass(t *testing.T) {
 
 func TestAgeVerifyMiddleware_RequiresVerification(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	handler := h.AgeVerifyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -360,7 +360,7 @@ func TestAgeVerifyMiddleware_RequiresVerification(t *testing.T) {
 
 func TestAgeVerifyMiddleware_WithCookie(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	handler := h.AgeVerifyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -383,7 +383,7 @@ func TestAgeVerifyMiddleware_WithCookie(t *testing.T) {
 
 func TestAgeVerifySubmit(t *testing.T) {
 	cfg := createTestConfig()
-	h := &Handler{cfg: cfg}
+	h := &SearchHandler{appConfig: cfg}
 
 	// GET request should redirect
 	req := httptest.NewRequest("GET", "/age-verify/submit", nil)
@@ -443,13 +443,13 @@ func TestNewHandler(t *testing.T) {
 	cfg := createTestConfig()
 
 	// Test handler creation
-	h := New(cfg, nil)
+	h := NewSearchHandler(cfg, nil)
 
 	if h == nil {
 		t.Fatal("New should return non-nil handler")
 	}
 
-	if h.cfg != cfg {
+	if h.appConfig != cfg {
 		t.Error("Handler should store config reference")
 	}
 

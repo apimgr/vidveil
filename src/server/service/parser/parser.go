@@ -11,45 +11,45 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// Parser interface for site-specific parsing
-type Parser interface {
+// VideoSiteParser interface for site-specific HTML parsing
+type VideoSiteParser interface {
 	ItemSelector() string
 	Parse(s *goquery.Selection) *VideoItem
 }
 
-// ParserRegistry manages parser instances by site name
-type ParserRegistry struct {
+// VideoSiteParserRegistry manages parser instances by site name
+type VideoSiteParserRegistry struct {
 	mu      sync.RWMutex
-	parsers map[string]Parser
+	parsers map[string]VideoSiteParser
 }
 
-// Global registry instance
-var registry = &ParserRegistry{
-	parsers: make(map[string]Parser),
+// Global parser registry instance
+var parserRegistry = &VideoSiteParserRegistry{
+	parsers: make(map[string]VideoSiteParser),
 }
 
-// Register adds a parser to the registry
-func Register(name string, p Parser) {
-	registry.mu.Lock()
-	defer registry.mu.Unlock()
-	registry.parsers[name] = p
+// RegisterParser adds a parser to the registry
+func RegisterParser(name string, p VideoSiteParser) {
+	parserRegistry.mu.Lock()
+	defer parserRegistry.mu.Unlock()
+	parserRegistry.parsers[name] = p
 }
 
 // GetParser retrieves a parser by name
-func GetParser(name string) Parser {
-	registry.mu.RLock()
-	defer registry.mu.RUnlock()
-	return registry.parsers[name]
+func GetParser(name string) VideoSiteParser {
+	parserRegistry.mu.RLock()
+	defer parserRegistry.mu.RUnlock()
+	return parserRegistry.parsers[name]
 }
 
 // init registers all built-in parsers
 func init() {
-	Register("pornhub", NewPornHubParser())
-	Register("xvideos", NewXVideosParser())
-	Register("xnxx", NewXNXXParser())
-	Register("redtube", NewRedTubeParser())
-	Register("eporner", NewEpornerParser())
-	Register("pornmd", NewPornMDParser())
+	RegisterParser("pornhub", NewPornHubParser())
+	RegisterParser("xvideos", NewXVideosParser())
+	RegisterParser("xnxx", NewXNXXParser())
+	RegisterParser("redtube", NewRedTubeParser())
+	RegisterParser("eporner", NewEpornerParser())
+	RegisterParser("pornmd", NewPornMDParser())
 }
 
 // VideoItem represents parsed video data

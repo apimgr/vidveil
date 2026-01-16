@@ -13,8 +13,8 @@ import (
 	"time"
 )
 
-// Node represents a cluster node
-type Node struct {
+// ClusterNode represents a cluster node
+type ClusterNode struct {
 	ID            string    `json:"id"`
 	Hostname      string    `json:"hostname"`
 	Address       string    `json:"address"`
@@ -26,8 +26,8 @@ type Node struct {
 	Status string `json:"status"`
 }
 
-// Lock represents a distributed lock
-type Lock struct {
+// DistributedLock represents a distributed lock
+type DistributedLock struct {
 	Name       string    `json:"name"`
 	HolderID   string    `json:"holder_id"`
 	AcquiredAt time.Time `json:"acquired_at"`
@@ -50,8 +50,8 @@ const (
 	OfflineThreshold    = 5 * time.Minute  // No heartbeat for 5 min = offline
 )
 
-// Manager handles cluster operations per AI.md PART 10
-type Manager struct {
+// ClusterManager handles cluster operations per AI.md PART 10
+type ClusterManager struct {
 	nodeID        string
 	db            *sql.DB
 	isPrimary     bool
@@ -64,14 +64,14 @@ type Manager struct {
 	offlineTime   time.Duration
 }
 
-// NewManager creates a new cluster manager
-func NewManager(db *sql.DB) (*Manager, error) {
+// NewClusterManager creates a new cluster manager
+func NewClusterManager(db *sql.DB) (*ClusterManager, error) {
 	nodeID, err := generateNodeID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate node ID: %w", err)
 	}
 
-	return &Manager{
+	return &ClusterManager{
 		nodeID:       nodeID,
 		db:           db,
 		heartbeatInt: HeartbeatInterval, // 30 seconds per PART 10
@@ -91,7 +91,7 @@ func generateNodeID() (string, error) {
 }
 
 // Start starts the cluster manager
-func (m *Manager) Start(ctx context.Context) error {
+func (m *ClusterManager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	m.enabled = true
@@ -115,7 +115,7 @@ func (m *Manager) Start(ctx context.Context) error {
 }
 
 // Stop stops the cluster manager
-func (m *Manager) Stop() {
+func (m *ClusterManager) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -131,7 +131,7 @@ func (m *Manager) Stop() {
 }
 
 // registerNode registers this node in the cluster
-func (m *Manager) registerNode() error {
+func (m *ClusterManager) registerNode() error {
 	hostname, _ := os.Hostname()
 	// Will be updated from config
 	address := "0.0.0.0"
@@ -148,7 +148,7 @@ func (m *Manager) registerNode() error {
 }
 
 // heartbeatLoop sends periodic heartbeats
-func (m *Manager) heartbeatLoop() {
+func (m *ClusterManager) heartbeatLoop() {
 	ticker := time.NewTicker(m.heartbeatInt)
 	defer ticker.Stop()
 
@@ -163,7 +163,7 @@ func (m *Manager) heartbeatLoop() {
 }
 
 // primaryElectionLoop handles primary election per AI.md
-func (m *Manager) primaryElectionLoop() {
+func (m *ClusterManager) primaryElectionLoop() {
 	ticker := time.NewTicker(m.heartbeatInt * 2)
 	defer ticker.Stop()
 
@@ -178,7 +178,7 @@ func (m *Manager) primaryElectionLoop() {
 }
 
 // electPrimary performs primary election per AI.md PART 10
-func (m *Manager) electPrimary() {
+func (m *ClusterManager) electPrimary() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -248,7 +248,7 @@ func (m *Manager) electPrimary() {
 }
 
 // lockCleanupLoop cleans up expired locks
-func (m *Manager) lockCleanupLoop() {
+func (m *ClusterManager) lockCleanupLoop() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -263,26 +263,26 @@ func (m *Manager) lockCleanupLoop() {
 }
 
 // IsPrimary returns whether this node is the primary
-func (m *Manager) IsPrimary() bool {
+func (m *ClusterManager) IsPrimary() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.isPrimary
 }
 
 // IsEnabled returns whether cluster mode is enabled
-func (m *Manager) IsEnabled() bool {
+func (m *ClusterManager) IsEnabled() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.enabled
 }
 
 // GetNodeID returns this node's ID
-func (m *Manager) GetNodeID() string {
+func (m *ClusterManager) GetNodeID() string {
 	return m.nodeID
 }
 
 // GetNodes returns all cluster nodes
-func (m *Manager) GetNodes() ([]Node, error) {
+func (m *ClusterManager) GetNodes() ([]ClusterNode, error) {
 	rows, err := m.db.Query(`
 		SELECT id, hostname, address, port, is_primary, last_heartbeat, joined_at, status
 		FROM cluster_nodes
@@ -293,9 +293,9 @@ func (m *Manager) GetNodes() ([]Node, error) {
 	}
 	defer rows.Close()
 
-	var nodes []Node
+	var nodes []ClusterNode
 	for rows.Next() {
-		var n Node
+		var n ClusterNode
 		var isPrimary int
 		err := rows.Scan(&n.ID, &n.Hostname, &n.Address, &n.Port, &isPrimary, &n.LastHeartbeat, &n.JoinedAt, &n.Status)
 		if err != nil {
@@ -309,7 +309,7 @@ func (m *Manager) GetNodes() ([]Node, error) {
 }
 
 // AcquireLock attempts to acquire a distributed lock
-func (m *Manager) AcquireLock(name string, ttl time.Duration) (bool, error) {
+func (m *ClusterManager) AcquireLock(name string, ttl time.Duration) (bool, error) {
 	expiresAt := time.Now().Add(ttl)
 
 	// Try to insert the lock
@@ -345,14 +345,14 @@ func (m *Manager) AcquireLock(name string, ttl time.Duration) (bool, error) {
 }
 
 // ReleaseLock releases a distributed lock
-func (m *Manager) ReleaseLock(name string) error {
+func (m *ClusterManager) ReleaseLock(name string) error {
 	_, err := m.db.Exec("DELETE FROM distributed_locks WHERE name = ? AND holder_id = ?", name, m.nodeID)
 	return err
 }
 
 // GetLock returns information about a lock
-func (m *Manager) GetLock(name string) (*Lock, error) {
-	var lock Lock
+func (m *ClusterManager) GetLock(name string) (*DistributedLock, error) {
+	var lock DistributedLock
 	err := m.db.QueryRow(`
 		SELECT name, holder_id, acquired_at, expires_at, COALESCE(metadata, '')
 		FROM distributed_locks
@@ -370,7 +370,7 @@ func (m *Manager) GetLock(name string) (*Lock, error) {
 }
 
 // ListLocks returns all current locks
-func (m *Manager) ListLocks() ([]Lock, error) {
+func (m *ClusterManager) ListLocks() ([]DistributedLock, error) {
 	rows, err := m.db.Query(`
 		SELECT name, holder_id, acquired_at, expires_at, COALESCE(metadata, '')
 		FROM distributed_locks
@@ -381,9 +381,9 @@ func (m *Manager) ListLocks() ([]Lock, error) {
 	}
 	defer rows.Close()
 
-	var locks []Lock
+	var locks []DistributedLock
 	for rows.Next() {
-		var l Lock
+		var l DistributedLock
 		err := rows.Scan(&l.Name, &l.HolderID, &l.AcquiredAt, &l.ExpiresAt, &l.Metadata)
 		if err != nil {
 			continue
@@ -395,7 +395,7 @@ func (m *Manager) ListLocks() ([]Lock, error) {
 }
 
 // WithLock executes a function while holding a lock
-func (m *Manager) WithLock(name string, ttl time.Duration, fn func() error) error {
+func (m *ClusterManager) WithLock(name string, ttl time.Duration, fn func() error) error {
 	acquired, err := m.AcquireLock(name, ttl)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
@@ -409,7 +409,7 @@ func (m *Manager) WithLock(name string, ttl time.Duration, fn func() error) erro
 }
 
 // Stats returns cluster statistics
-func (m *Manager) Stats() map[string]interface{} {
+func (m *ClusterManager) Stats() map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

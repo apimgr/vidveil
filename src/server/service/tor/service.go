@@ -23,12 +23,12 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// Service represents the embedded Tor hidden service per AI.md PART 32
+// TorService represents the embedded Tor hidden service per AI.md PART 32
 // Uses github.com/cretz/bine for dedicated Tor process management
-type Service struct {
-	cfg     *Config
+type TorService struct {
+	cfg     *TorServiceConfig
 	dataDir string
-	logger  *logging.Logger
+	logger  *logging.AppLogger
 
 	// bine Tor instance - manages dedicated Tor process
 	torInstance *tor.Tor
@@ -40,7 +40,7 @@ type Service struct {
 	publicKey    ed25519.PublicKey
 
 	// Status tracking
-	status    Status
+	status    TorServiceStatus
 	startTime time.Time
 	mu        sync.RWMutex
 
@@ -53,25 +53,25 @@ type Service struct {
 	vanityStatus *VanityStatus
 }
 
-// Config holds Tor service configuration per AI.md PART 32
-type Config struct {
+// TorServiceConfig holds Tor service configuration per AI.md PART 32
+type TorServiceConfig struct {
 	// Default: true (enabled by default per PART 32)
 	Enabled bool `yaml:"enabled"`
 	// Set from paths.GetDataDir() + "/tor"
 	DataDir string `yaml:"-"`
 }
 
-// Status represents Tor service status
-type Status string
+// TorServiceStatus represents Tor service status
+type TorServiceStatus string
 
 const (
-	StatusDisabled     Status = "disabled"
-	StatusStarting     Status = "starting"
-	StatusConnected    Status = "connected"
-	StatusDisconnected Status = "disconnected"
-	StatusError        Status = "error"
+	TorServiceStatusDisabled     TorServiceStatus = "disabled"
+	TorServiceStatusStarting     TorServiceStatus = "starting"
+	TorServiceStatusConnected    TorServiceStatus = "connected"
+	TorServiceStatusDisconnected TorServiceStatus = "disconnected"
+	TorServiceStatusError        TorServiceStatus = "error"
 	// Tor binary not found
-	StatusNoTorBinary Status = "no_tor_binary"
+	TorServiceStatusNoTorBinary TorServiceStatus = "no_tor_binary"
 )
 
 // VanityStatus tracks vanity address generation progress
@@ -83,31 +83,31 @@ type VanityStatus struct {
 	ElapsedTime string    `json:"elapsed_time"`
 }
 
-// New creates a new Tor service instance
-func New(dataDir string, enabled bool, logger *logging.Logger) *Service {
-	return &Service{
-		cfg: &Config{
+// NewTorService creates a new Tor service instance
+func NewTorService(dataDir string, enabled bool, logger *logging.AppLogger) *TorService {
+	return &TorService{
+		cfg: &TorServiceConfig{
 			Enabled: enabled,
 			DataDir: filepath.Join(dataDir, "tor"),
 		},
 		dataDir: filepath.Join(dataDir, "tor"),
-		status:  StatusDisabled,
+		status:  TorServiceStatusDisabled,
 		logger:  logger,
 	}
 }
 
 // Start initializes the Tor hidden service using bine
 // Per AI.md PART 32: Uses dedicated Tor process via bine library
-func (s *Service) Start(ctx context.Context, localPort int) error {
+func (s *TorService) Start(ctx context.Context, localPort int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if !s.cfg.Enabled {
-		s.status = StatusDisabled
+		s.status = TorServiceStatusDisabled
 		return nil
 	}
 
-	s.status = StatusStarting
+	s.status = TorServiceStatusStarting
 	s.startTime = time.Now()
 	s.localPort = localPort
 
@@ -115,11 +115,11 @@ func (s *Service) Start(ctx context.Context, localPort int) error {
 	torDataDir := filepath.Join(s.dataDir, "data")
 	siteDir := filepath.Join(s.dataDir, "site")
 	if err := os.MkdirAll(torDataDir, 0700); err != nil {
-		s.status = StatusError
+		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to create tor data directory: %w", err)
 	}
 	if err := os.MkdirAll(siteDir, 0700); err != nil {
-		s.status = StatusError
+		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to create tor site directory: %w", err)
 	}
 
@@ -128,11 +128,11 @@ func (s *Service) Start(ctx context.Context, localPort int) error {
 	if err != nil {
 		// Tor binary not found - fall back to key-only mode
 		s.logger.Info("Tor binary not found in PATH, running in key-only mode", nil)
-		s.status = StatusNoTorBinary
+		s.status = TorServiceStatusNoTorBinary
 
 		// Still load/generate keys for address generation
 		if err := s.loadOrGenerateKeys(); err != nil {
-			s.status = StatusError
+			s.status = TorServiceStatusError
 			return fmt.Errorf("failed to load/generate keys: %w", err)
 		}
 		s.onionAddress = s.generateOnionAddress()
@@ -143,7 +143,7 @@ func (s *Service) Start(ctx context.Context, localPort int) error {
 
 	// Load or generate hidden service keys first
 	if err := s.loadOrGenerateKeys(); err != nil {
-		s.status = StatusError
+		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to load/generate keys: %w", err)
 	}
 	s.onionAddress = s.generateOnionAddress()
@@ -167,7 +167,7 @@ func (s *Service) Start(ctx context.Context, localPort int) error {
 	s.logger.Info("Starting dedicated Tor process...", nil)
 	t, err := tor.Start(ctx, startConf)
 	if err != nil {
-		s.status = StatusError
+		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to start dedicated tor: %w", err)
 	}
 	s.torInstance = t
@@ -180,7 +180,7 @@ func (s *Service) Start(ctx context.Context, localPort int) error {
 	if err := t.EnableNetwork(dialCtx, true); err != nil {
 		t.Close()
 		s.torInstance = nil
-		s.status = StatusError
+		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to enable tor network: %w", err)
 	}
 
@@ -197,21 +197,21 @@ func (s *Service) Start(ctx context.Context, localPort int) error {
 	if err != nil {
 		t.Close()
 		s.torInstance = nil
-		s.status = StatusError
+		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to create onion service: %w", err)
 	}
 	s.onionSvc = onionSvc
 
 	// The onion address was already calculated from our keys
 	// No need to update from listener - we already have the correct address
-	s.status = StatusConnected
+	s.status = TorServiceStatusConnected
 	s.logger.Info("Hidden service started", map[string]interface{}{"onion_address": s.onionAddress})
 
 	return nil
 }
 
 // Stop shuts down the Tor service
-func (s *Service) Stop() error {
+func (s *TorService) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -235,12 +235,12 @@ func (s *Service) Stop() error {
 		s.torInstance = nil
 	}
 
-	s.status = StatusDisconnected
+	s.status = TorServiceStatusDisconnected
 	return nil
 }
 
 // loadOrGenerateKeys loads existing keys or generates new ones
-func (s *Service) loadOrGenerateKeys() error {
+func (s *TorService) loadOrGenerateKeys() error {
 	siteDir := filepath.Join(s.dataDir, "site")
 	secretKeyPath := filepath.Join(siteDir, "hs_ed25519_secret_key")
 	publicKeyPath := filepath.Join(siteDir, "hs_ed25519_public_key")
@@ -309,7 +309,7 @@ func (s *Service) loadOrGenerateKeys() error {
 
 // generateOnionAddress generates .onion address from public key
 // This implements the Tor v3 onion address format
-func (s *Service) generateOnionAddress() string {
+func (s *TorService) generateOnionAddress() string {
 	// Tor v3 address = base32(pubkey || checksum || version)
 	// checksum = SHA3-256(".onion checksum" || pubkey || version)[:2]
 	// version = 0x03
@@ -336,25 +336,25 @@ func (s *Service) generateOnionAddress() string {
 }
 
 // GetOnionAddress returns the current .onion address
-func (s *Service) GetOnionAddress() string {
+func (s *TorService) GetOnionAddress() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.onionAddress
 }
 
 // GetStatus returns the current service status
-func (s *Service) GetStatus() Status {
+func (s *TorService) GetStatus() TorServiceStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.status
 }
 
 // GetUptime returns the service uptime as a string
-func (s *Service) GetUptime() string {
+func (s *TorService) GetUptime() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.status != StatusConnected {
+	if s.status != TorServiceStatusConnected {
 		return "0s"
 	}
 
@@ -372,22 +372,22 @@ func (s *Service) GetUptime() string {
 }
 
 // IsEnabled returns whether Tor is enabled
-func (s *Service) IsEnabled() bool {
+func (s *TorService) IsEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg.Enabled
 }
 
 // IsRunning returns whether Tor process is actually running
-func (s *Service) IsRunning() bool {
+func (s *TorService) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.torInstance != nil && s.status == StatusConnected
+	return s.torInstance != nil && s.status == TorServiceStatusConnected
 }
 
 // RegenerateAddress generates a new random .onion address
 // This deletes existing keys and generates new ones
-func (s *Service) RegenerateAddress() error {
+func (s *TorService) RegenerateAddress() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -436,7 +436,7 @@ func (s *Service) RegenerateAddress() error {
 
 // GenerateVanityAddress starts background generation of a vanity address
 // maxPrefixLength is limited to 6 characters per AI.md PART 32
-func (s *Service) GenerateVanityAddress(prefix string) error {
+func (s *TorService) GenerateVanityAddress(prefix string) error {
 	prefix = strings.ToLower(prefix)
 
 	// Validate prefix
@@ -476,7 +476,7 @@ func (s *Service) GenerateVanityAddress(prefix string) error {
 }
 
 // runVanityGeneration runs the vanity address generation in background
-func (s *Service) runVanityGeneration(ctx context.Context, prefix string) {
+func (s *TorService) runVanityGeneration(ctx context.Context, prefix string) {
 	var attempts int64
 	for {
 		select {
@@ -555,7 +555,7 @@ func (s *Service) runVanityGeneration(ctx context.Context, prefix string) {
 }
 
 // CancelVanityGeneration cancels any in-progress vanity generation
-func (s *Service) CancelVanityGeneration() {
+func (s *TorService) CancelVanityGeneration() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -566,7 +566,7 @@ func (s *Service) CancelVanityGeneration() {
 }
 
 // GetVanityStatus returns the current vanity generation status
-func (s *Service) GetVanityStatus() *VanityStatus {
+func (s *TorService) GetVanityStatus() *VanityStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -585,7 +585,7 @@ func (s *Service) GetVanityStatus() *VanityStatus {
 }
 
 // ApplyVanityAddress applies the pending vanity address
-func (s *Service) ApplyVanityAddress() error {
+func (s *TorService) ApplyVanityAddress() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -617,7 +617,7 @@ func (s *Service) ApplyVanityAddress() error {
 }
 
 // ImportKeys imports externally generated keys
-func (s *Service) ImportKeys(secretKey []byte) error {
+func (s *TorService) ImportKeys(secretKey []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -645,7 +645,7 @@ func (s *Service) ImportKeys(secretKey []byte) error {
 }
 
 // GetInfo returns current Tor service info for API/status
-func (s *Service) GetInfo() map[string]interface{} {
+func (s *TorService) GetInfo() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -654,9 +654,9 @@ func (s *Service) GetInfo() map[string]interface{} {
 		"status":  string(s.status),
 	}
 
-	if s.cfg.Enabled && (s.status == StatusConnected || s.status == StatusNoTorBinary) {
+	if s.cfg.Enabled && (s.status == TorServiceStatusConnected || s.status == TorServiceStatusNoTorBinary) {
 		info["onion_address"] = s.onionAddress
-		if s.status == StatusConnected {
+		if s.status == TorServiceStatusConnected {
 			info["uptime"] = s.GetUptime()
 			info["process_running"] = true
 		} else {
@@ -678,14 +678,14 @@ func (s *Service) GetInfo() map[string]interface{} {
 }
 
 // GetPublicKeyHex returns the public key as hex string
-func (s *Service) GetPublicKeyHex() string {
+func (s *TorService) GetPublicKeyHex() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return hex.EncodeToString(s.publicKey)
 }
 
 // Restart restarts the Tor service with new configuration
-func (s *Service) Restart(ctx context.Context) error {
+func (s *TorService) Restart(ctx context.Context) error {
 	localPort := s.localPort
 	if err := s.Stop(); err != nil {
 		return err
@@ -702,7 +702,7 @@ type TestConnectionResult struct {
 }
 
 // TestConnection tests if the Tor hidden service is working
-func (s *Service) TestConnection() *TestConnectionResult {
+func (s *TorService) TestConnection() *TestConnectionResult {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -717,7 +717,7 @@ func (s *Service) TestConnection() *TestConnectionResult {
 	}
 
 	// Check if Tor is running
-	if s.status != StatusConnected {
+	if s.status != TorServiceStatusConnected {
 		result.Message = fmt.Sprintf("Tor is not connected (status: %s)", s.status)
 		return result
 	}

@@ -37,9 +37,9 @@ func (m AppMode) String() string {
 	}
 }
 
-// Set sets the application mode from a string
+// SetAppMode sets the application mode from a string
 // Accepts: dev, development, prod, production
-func Set(m string) {
+func SetAppMode(m string) {
 	switch strings.ToLower(m) {
 	case "dev", "development":
 		currentMode = Development
@@ -105,26 +105,26 @@ func AppModeString() string {
 	return s
 }
 
-// FromEnv sets mode and debug from environment variables
+// SetAppModeFromEnv sets mode and debug from environment variables
 // MODE env var sets mode, DEBUG env var sets debug
-func FromEnv() {
+func SetAppModeFromEnv() {
 	if m := os.Getenv("MODE"); m != "" {
-		Set(m)
+		SetAppMode(m)
 	}
 	if config.IsTruthy(os.Getenv("DEBUG")) {
 		SetDebug(true)
 	}
 }
 
-// Initialize initializes mode from CLI flags and environment
+// InitializeAppMode initializes mode from CLI flags and environment
 // CLI flags take priority over environment variables
-func Initialize(modeFlag string, debugFlag bool) {
+func InitializeAppMode(modeFlag string, debugFlag bool) {
 	// Start with environment
-	FromEnv()
+	SetAppModeFromEnv()
 
 	// CLI flags override environment
 	if modeFlag != "" {
-		Set(modeFlag)
+		SetAppMode(modeFlag)
 	}
 	if debugFlag {
 		SetDebug(true)

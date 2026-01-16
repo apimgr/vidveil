@@ -13,8 +13,8 @@ import (
 type NuvidEngine struct{ *BaseEngine }
 
 // NewNuvidEngine creates a new Nuvid engine
-func NewNuvidEngine(cfg *config.Config, torClient *tor.Client) *NuvidEngine {
-	return &NuvidEngine{NewBaseEngine("nuvid", "Nuvid", "https://www.nuvid.com", 3, cfg, torClient)}
+func NewNuvidEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *NuvidEngine {
+	return &NuvidEngine{NewBaseEngine("nuvid", "Nuvid", "https://www.nuvid.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on Nuvid

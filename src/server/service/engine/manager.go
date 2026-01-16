@@ -13,105 +13,105 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
-// Manager manages all search engines
-type Manager struct {
-	engines   map[string]Engine
-	cfg       *config.Config
-	torClient *tor.Client
+// EngineManager manages all search engines
+type EngineManager struct {
+	engines   map[string]SearchEngine
+	appConfig *config.AppConfig
+	torClient *tor.TorClient
 	mu        sync.RWMutex
 }
 
-// NewManager creates a new engine manager
-func NewManager(cfg *config.Config) *Manager {
-	var torClient *tor.Client
-	if cfg.Search.Tor.Enabled {
-		torClient = tor.NewClient(cfg.Search.Tor.Proxy, cfg.Search.Tor.Timeout)
+// NewEngineManager creates a new engine manager
+func NewEngineManager(appConfig *config.AppConfig) *EngineManager {
+	var torClient *tor.TorClient
+	if appConfig.Search.Tor.Enabled {
+		torClient = tor.NewTorClient(appConfig.Search.Tor.Proxy, appConfig.Search.Tor.Timeout)
 	}
 
-	return &Manager{
-		engines:   make(map[string]Engine),
-		cfg:       cfg,
+	return &EngineManager{
+		engines:   make(map[string]SearchEngine),
+		appConfig: appConfig,
 		torClient: torClient,
 	}
 }
 
 // InitializeEngines sets up all available engines
-func (m *Manager) InitializeEngines() {
+func (m *EngineManager) InitializeEngines() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// Tier 1 - Major Sites (always enabled by default)
-	m.engines["pornhub"] = NewPornHubEngine(m.cfg, m.torClient)
-	m.engines["xvideos"] = NewXVideosEngine(m.cfg, m.torClient)
-	m.engines["xnxx"] = NewXNXXEngine(m.cfg, m.torClient)
-	m.engines["redtube"] = NewRedTubeEngine(m.cfg, m.torClient)
-	m.engines["xhamster"] = NewXHamsterEngine(m.cfg, m.torClient)
+	m.engines["pornhub"] = NewPornHubEngine(m.appConfig, m.torClient)
+	m.engines["xvideos"] = NewXVideosEngine(m.appConfig, m.torClient)
+	m.engines["xnxx"] = NewXNXXEngine(m.appConfig, m.torClient)
+	m.engines["redtube"] = NewRedTubeEngine(m.appConfig, m.torClient)
+	m.engines["xhamster"] = NewXHamsterEngine(m.appConfig, m.torClient)
 
 	// Tier 2 - Popular Sites (enabled by default)
-	m.engines["eporner"] = NewEpornerEngine(m.cfg, m.torClient)
-	m.engines["youporn"] = NewYouPornEngine(m.cfg, m.torClient)
-	m.engines["pornmd"] = NewPornMDEngine(m.cfg, m.torClient)
+	m.engines["eporner"] = NewEpornerEngine(m.appConfig, m.torClient)
+	m.engines["youporn"] = NewYouPornEngine(m.appConfig, m.torClient)
+	m.engines["pornmd"] = NewPornMDEngine(m.appConfig, m.torClient)
 
 	// Tier 3 - Additional Sites (disabled by default, enable via config)
-	m.engines["4tube"] = NewFourTubeEngine(m.cfg, m.torClient)
-	m.engines["fux"] = NewFuxEngine(m.cfg, m.torClient)
-	m.engines["porntube"] = NewPornTubeEngine(m.cfg, m.torClient)
-	m.engines["youjizz"] = NewYouJizzEngine(m.cfg, m.torClient)
-	m.engines["sunporno"] = NewSunPornoEngine(m.cfg, m.torClient)
-	m.engines["txxx"] = NewTxxxEngine(m.cfg, m.torClient)
-	m.engines["nuvid"] = NewNuvidEngine(m.cfg, m.torClient)
-	m.engines["tnaflix"] = NewTNAFlixEngine(m.cfg, m.torClient)
-	m.engines["drtuber"] = NewDrTuberEngine(m.cfg, m.torClient)
-	m.engines["empflix"] = NewEMPFlixEngine(m.cfg, m.torClient)
-	m.engines["hellporno"] = NewHellPornoEngine(m.cfg, m.torClient)
-	m.engines["alphaporno"] = NewAlphaPornoEngine(m.cfg, m.torClient)
-	m.engines["pornflip"] = NewPornFlipEngine(m.cfg, m.torClient)
-	m.engines["zenporn"] = NewZenPornEngine(m.cfg, m.torClient)
-	m.engines["gotporn"] = NewGotPornEngine(m.cfg, m.torClient)
-	m.engines["xxxymovies"] = NewXXXYMoviesEngine(m.cfg, m.torClient)
-	m.engines["lovehomeporn"] = NewLoveHomePornEngine(m.cfg, m.torClient)
+	m.engines["4tube"] = NewFourTubeEngine(m.appConfig, m.torClient)
+	m.engines["fux"] = NewFuxEngine(m.appConfig, m.torClient)
+	m.engines["porntube"] = NewPornTubeEngine(m.appConfig, m.torClient)
+	m.engines["youjizz"] = NewYouJizzEngine(m.appConfig, m.torClient)
+	m.engines["sunporno"] = NewSunPornoEngine(m.appConfig, m.torClient)
+	m.engines["txxx"] = NewTxxxEngine(m.appConfig, m.torClient)
+	m.engines["nuvid"] = NewNuvidEngine(m.appConfig, m.torClient)
+	m.engines["tnaflix"] = NewTNAFlixEngine(m.appConfig, m.torClient)
+	m.engines["drtuber"] = NewDrTuberEngine(m.appConfig, m.torClient)
+	m.engines["empflix"] = NewEMPFlixEngine(m.appConfig, m.torClient)
+	m.engines["hellporno"] = NewHellPornoEngine(m.appConfig, m.torClient)
+	m.engines["alphaporno"] = NewAlphaPornoEngine(m.appConfig, m.torClient)
+	m.engines["pornflip"] = NewPornFlipEngine(m.appConfig, m.torClient)
+	m.engines["zenporn"] = NewZenPornEngine(m.appConfig, m.torClient)
+	m.engines["gotporn"] = NewGotPornEngine(m.appConfig, m.torClient)
+	m.engines["xxxymovies"] = NewXXXYMoviesEngine(m.appConfig, m.torClient)
+	m.engines["lovehomeporn"] = NewLoveHomePornEngine(m.appConfig, m.torClient)
 
 	// Tier 4 - Additional yt-dlp supported sites
-	m.engines["pornerbros"] = NewPornerBrosEngine(m.cfg, m.torClient)
-	m.engines["nonktube"] = NewNonkTubeEngine(m.cfg, m.torClient)
-	m.engines["nubilesporn"] = NewNubilesPornEngine(m.cfg, m.torClient)
-	m.engines["pornbox"] = NewPornboxEngine(m.cfg, m.torClient)
-	m.engines["porntop"] = NewPornTopEngine(m.cfg, m.torClient)
-	m.engines["pornotube"] = NewPornotubeEngine(m.cfg, m.torClient)
-	m.engines["vporn"] = NewVPornEngine(m.cfg, m.torClient)
-	m.engines["pornhd"] = NewPornHDEngine(m.cfg, m.torClient)
-	m.engines["xbabe"] = NewXBabeEngine(m.cfg, m.torClient)
-	m.engines["pornone"] = NewPornOneEngine(m.cfg, m.torClient)
-	m.engines["pornhat"] = NewPornHatEngine(m.cfg, m.torClient)
-	m.engines["porntrex"] = NewPornTrexEngine(m.cfg, m.torClient)
-	m.engines["hqporner"] = NewHqpornerEngine(m.cfg, m.torClient)
-	m.engines["vjav"] = NewVJAVEngine(m.cfg, m.torClient)
-	m.engines["flyflv"] = NewFlyflvEngine(m.cfg, m.torClient)
-	m.engines["tube8"] = NewTube8Engine(m.cfg, m.torClient)
-	m.engines["xtube"] = NewXtubeEngine(m.cfg, m.torClient)
+	m.engines["pornerbros"] = NewPornerBrosEngine(m.appConfig, m.torClient)
+	m.engines["nonktube"] = NewNonkTubeEngine(m.appConfig, m.torClient)
+	m.engines["nubilesporn"] = NewNubilesPornEngine(m.appConfig, m.torClient)
+	m.engines["pornbox"] = NewPornboxEngine(m.appConfig, m.torClient)
+	m.engines["porntop"] = NewPornTopEngine(m.appConfig, m.torClient)
+	m.engines["pornotube"] = NewPornotubeEngine(m.appConfig, m.torClient)
+	m.engines["vporn"] = NewVPornEngine(m.appConfig, m.torClient)
+	m.engines["pornhd"] = NewPornHDEngine(m.appConfig, m.torClient)
+	m.engines["xbabe"] = NewXBabeEngine(m.appConfig, m.torClient)
+	m.engines["pornone"] = NewPornOneEngine(m.appConfig, m.torClient)
+	m.engines["pornhat"] = NewPornHatEngine(m.appConfig, m.torClient)
+	m.engines["porntrex"] = NewPornTrexEngine(m.appConfig, m.torClient)
+	m.engines["hqporner"] = NewHqpornerEngine(m.appConfig, m.torClient)
+	m.engines["vjav"] = NewVJAVEngine(m.appConfig, m.torClient)
+	m.engines["flyflv"] = NewFlyflvEngine(m.appConfig, m.torClient)
+	m.engines["tube8"] = NewTube8Engine(m.appConfig, m.torClient)
+	m.engines["xtube"] = NewXtubeEngine(m.appConfig, m.torClient)
 
 	// Tier 5 - New engines
-	m.engines["anyporn"] = NewAnyPornEngine(m.cfg, m.torClient)
-	m.engines["superporn"] = NewSuperPornEngine(m.cfg, m.torClient)
-	m.engines["tubegalore"] = NewTubeGaloreEngine(m.cfg, m.torClient)
-	m.engines["motherless"] = NewMotherlessEngine(m.cfg, m.torClient)
+	m.engines["anyporn"] = NewAnyPornEngine(m.appConfig, m.torClient)
+	m.engines["superporn"] = NewSuperPornEngine(m.appConfig, m.torClient)
+	m.engines["tubegalore"] = NewTubeGaloreEngine(m.appConfig, m.torClient)
+	m.engines["motherless"] = NewMotherlessEngine(m.appConfig, m.torClient)
 
 	// Tier 6 - Additional engines
-	m.engines["keezmovies"] = NewKeezMoviesEngine(m.cfg, m.torClient)
-	m.engines["spankwire"] = NewSpankWireEngine(m.cfg, m.torClient)
-	m.engines["extremetube"] = NewExtremeTubeEngine(m.cfg, m.torClient)
-	m.engines["3movs"] = NewThreeMovsEngine(m.cfg, m.torClient)
-	m.engines["sleazyneasy"] = NewSleazyNeasyEngine(m.cfg, m.torClient)
+	m.engines["keezmovies"] = NewKeezMoviesEngine(m.appConfig, m.torClient)
+	m.engines["spankwire"] = NewSpankWireEngine(m.appConfig, m.torClient)
+	m.engines["extremetube"] = NewExtremeTubeEngine(m.appConfig, m.torClient)
+	m.engines["3movs"] = NewThreeMovsEngine(m.appConfig, m.torClient)
+	m.engines["sleazyneasy"] = NewSleazyNeasyEngine(m.appConfig, m.torClient)
 
 	// Apply configuration
 	m.applyConfig()
 }
 
 // applyConfig applies engine-specific configuration
-func (m *Manager) applyConfig() {
+func (m *EngineManager) applyConfig() {
 	// All engines are enabled by default
 	// DefaultEngines config can limit which engines to use
-	defaultEngines := m.cfg.Search.DefaultEngines
+	defaultEngines := m.appConfig.Search.DefaultEngines
 
 	// If default_engines is specified, only enable those
 	if len(defaultEngines) > 0 {
@@ -121,16 +121,16 @@ func (m *Manager) applyConfig() {
 		}
 
 		for name, engine := range m.engines {
-			if configurable, ok := engine.(ConfigurableEngine); ok {
+			if configurable, ok := engine.(ConfigurableSearchEngine); ok {
 				configurable.SetEnabled(enabledSet[name])
 			}
 		}
 	}
 
 	// Apply Tor settings if force_all is enabled
-	if m.cfg.Search.Tor.ForceAll {
+	if m.appConfig.Search.Tor.ForceAll {
 		for _, engine := range m.engines {
-			if configurable, ok := engine.(ConfigurableEngine); ok {
+			if configurable, ok := engine.(ConfigurableSearchEngine); ok {
 				configurable.SetUseTor(true)
 			}
 		}
@@ -138,7 +138,7 @@ func (m *Manager) applyConfig() {
 }
 
 // Search performs a search across enabled engines
-func (m *Manager) Search(ctx context.Context, query string, page int, engineNames []string) *model.SearchResponse {
+func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string) *model.SearchResponse {
 	startTime := time.Now()
 
 	m.mu.RLock()
@@ -153,7 +153,7 @@ func (m *Manager) Search(ctx context.Context, query string, page int, engineName
 
 	for _, engine := range enginesToUse {
 		wg.Add(1)
-		go func(e Engine) {
+		go func(e SearchEngine) {
 			defer wg.Done()
 			results, err := e.Search(ctx, query, page)
 			resultsChan <- engineResult{
@@ -175,7 +175,7 @@ func (m *Manager) Search(ctx context.Context, query string, page int, engineName
 	var enginesUsed []string
 	var enginesFailed []string
 
-	minDuration := m.cfg.Search.MinDurationSeconds
+	minDuration := m.appConfig.Search.MinDurationSeconds
 
 	for result := range resultsChan {
 		if result.err != nil {
@@ -210,9 +210,9 @@ func (m *Manager) Search(ctx context.Context, query string, page int, engineName
 		},
 		Pagination: model.PaginationData{
 			Page:  page,
-			Limit: m.cfg.Search.ResultsPerPage,
+			Limit: m.appConfig.Search.ResultsPerPage,
 			Total: len(allResults),
-			Pages: (len(allResults) + m.cfg.Search.ResultsPerPage - 1) / m.cfg.Search.ResultsPerPage,
+			Pages: (len(allResults) + m.appConfig.Search.ResultsPerPage - 1) / m.appConfig.Search.ResultsPerPage,
 		},
 	}
 }
@@ -314,8 +314,8 @@ func calculateRelevanceScore(r model.VideoResult, queryLower string, queryWords 
 }
 
 // getEnginesToUse returns the engines to use for search
-func (m *Manager) getEnginesToUse(engineNames []string) []Engine {
-	var engines []Engine
+func (m *EngineManager) getEnginesToUse(engineNames []string) []SearchEngine {
+	var engines []SearchEngine
 
 	if len(engineNames) == 0 {
 		// Use all enabled engines
@@ -337,7 +337,7 @@ func (m *Manager) getEnginesToUse(engineNames []string) []Engine {
 }
 
 // GetEngine returns a specific engine by name
-func (m *Manager) GetEngine(name string) (Engine, bool) {
+func (m *EngineManager) GetEngine(name string) (SearchEngine, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	engine, ok := m.engines[name]
@@ -345,7 +345,7 @@ func (m *Manager) GetEngine(name string) (Engine, bool) {
 }
 
 // ListEngines returns information about all engines
-func (m *Manager) ListEngines() []model.EngineInfo {
+func (m *EngineManager) ListEngines() []model.EngineInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -364,7 +364,7 @@ func (m *Manager) ListEngines() []model.EngineInfo {
 }
 
 // EnabledCount returns the number of enabled engines
-func (m *Manager) EnabledCount() int {
+func (m *EngineManager) EnabledCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -393,7 +393,7 @@ type StreamResult struct {
 }
 
 // SearchStream performs a search across enabled engines and streams results via channel
-func (m *Manager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
+func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
 	go func() {
@@ -404,11 +404,11 @@ func (m *Manager) SearchStream(ctx context.Context, query string, page int, engi
 		m.mu.RUnlock()
 
 		var wg sync.WaitGroup
-		minDuration := m.cfg.Search.MinDurationSeconds
+		minDuration := m.appConfig.Search.MinDurationSeconds
 
 		for _, engine := range enginesToUse {
 			wg.Add(1)
-			go func(e Engine) {
+			go func(e SearchEngine) {
 				defer wg.Done()
 
 				results, err := e.Search(ctx, query, page)
@@ -449,7 +449,7 @@ func (m *Manager) SearchStream(ctx context.Context, query string, page int, engi
 }
 
 // getFeatures returns the features supported by an engine
-func getFeatures(engine Engine) []string {
+func getFeatures(engine SearchEngine) []string {
 	var features []string
 	if engine.SupportsFeature(FeaturePagination) {
 		features = append(features, "pagination")

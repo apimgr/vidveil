@@ -13,8 +13,8 @@ import (
 type NubilesPornEngine struct{ *BaseEngine }
 
 // NewNubilesPornEngine creates a new NubilesPorn engine
-func NewNubilesPornEngine(cfg *config.Config, torClient *tor.Client) *NubilesPornEngine {
-	return &NubilesPornEngine{NewBaseEngine("nubilesporn", "NubilesPorn", "https://nubiles-porn.com", 4, cfg, torClient)}
+func NewNubilesPornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *NubilesPornEngine {
+	return &NubilesPornEngine{NewBaseEngine("nubilesporn", "NubilesPorn", "https://nubiles-porn.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on NubilesPorn

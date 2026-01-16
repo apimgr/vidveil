@@ -13,8 +13,8 @@ import (
 type TubeGaloreEngine struct{ *BaseEngine }
 
 // NewTubeGaloreEngine creates a new TubeGalore engine
-func NewTubeGaloreEngine(cfg *config.Config, torClient *tor.Client) *TubeGaloreEngine {
-	return &TubeGaloreEngine{NewBaseEngine("tubegalore", "TubeGalore", "https://www.tubegalore.com", 3, cfg, torClient)}
+func NewTubeGaloreEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *TubeGaloreEngine {
+	return &TubeGaloreEngine{NewBaseEngine("tubegalore", "TubeGalore", "https://www.tubegalore.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on TubeGalore

@@ -13,14 +13,14 @@ import (
 
 // GraphQLHandler handles GraphQL requests
 type GraphQLHandler struct {
-	cfg       *config.Config
-	engineMgr *engine.Manager
+	appConfig *config.AppConfig
+	engineMgr *engine.EngineManager
 }
 
 // NewGraphQLHandler creates a new GraphQL handler
-func NewGraphQLHandler(cfg *config.Config, engineMgr *engine.Manager) *GraphQLHandler {
+func NewGraphQLHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *GraphQLHandler {
 	return &GraphQLHandler{
-		cfg:       cfg,
+		appConfig: appConfig,
 		engineMgr: engineMgr,
 	}
 }

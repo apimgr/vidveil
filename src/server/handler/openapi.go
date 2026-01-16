@@ -8,8 +8,8 @@ import (
 )
 
 // OpenAPISpec returns the OpenAPI 3.0 specification in JSON format
-func OpenAPISpec(cfg *config.Config) http.HandlerFunc {
-	spec := generateOpenAPISpec(cfg)
+func OpenAPISpec(appConfig *config.AppConfig) http.HandlerFunc {
+	spec := generateOpenAPISpec(appConfig)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -18,7 +18,7 @@ func OpenAPISpec(cfg *config.Config) http.HandlerFunc {
 }
 
 // SwaggerUI returns an HTML page with Swagger UI
-func SwaggerUI(cfg *config.Config) http.HandlerFunc {
+func SwaggerUI(appConfig *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(`<!DOCTYPE html>
@@ -55,10 +55,10 @@ func SwaggerUI(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func generateOpenAPISpec(cfg *config.Config) string {
-	serverURL := "http://localhost:" + cfg.Server.Port
-	if cfg.Server.FQDN != "" {
-		serverURL = "http://" + cfg.Server.FQDN
+func generateOpenAPISpec(appConfig *config.AppConfig) string {
+	serverURL := "http://localhost:" + appConfig.Server.Port
+	if appConfig.Server.FQDN != "" {
+		serverURL = "http://" + appConfig.Server.FQDN
 	}
 
 	return `{

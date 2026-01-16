@@ -13,8 +13,8 @@ import (
 type TNAFlixEngine struct{ *BaseEngine }
 
 // NewTNAFlixEngine creates a new TNAFlix engine
-func NewTNAFlixEngine(cfg *config.Config, torClient *tor.Client) *TNAFlixEngine {
-	return &TNAFlixEngine{NewBaseEngine("tnaflix", "TNAFlix", "https://www.tnaflix.com", 3, cfg, torClient)}
+func NewTNAFlixEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *TNAFlixEngine {
+	return &TNAFlixEngine{NewBaseEngine("tnaflix", "TNAFlix", "https://www.tnaflix.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on TNAFlix

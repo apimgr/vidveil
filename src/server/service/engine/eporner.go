@@ -38,9 +38,9 @@ type epornerVideo struct {
 }
 
 // NewEpornerEngine creates a new Eporner engine
-func NewEpornerEngine(cfg *config.Config, torClient *tor.Client) *EpornerEngine {
+func NewEpornerEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *EpornerEngine {
 	e := &EpornerEngine{
-		BaseEngine: NewBaseEngine("eporner", "Eporner", "https://www.eporner.com", 2, cfg, torClient),
+		BaseEngine: NewBaseEngine("eporner", "Eporner", "https://www.eporner.com", 2, appConfig, torClient),
 	}
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{

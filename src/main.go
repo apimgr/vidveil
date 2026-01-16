@@ -277,7 +277,7 @@ func main() {
 
 	// Initialize mode and debug per AI.md PART 5
 	// This must happen before starting the server
-	mode.Initialize(modeStr, debug)
+	mode.InitializeAppMode(modeStr, debug)
 
 	// Handle daemon mode per AI.md PART 8 lines 7880-7955
 	if daemon {
@@ -289,14 +289,14 @@ func main() {
 	}
 
 	// Load configuration
-	cfg, configPath, err := config.Load(configDir, dataDir)
+	appConfig, configPath, err := config.LoadAppConfig(configDir, dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Get paths early so we can override log directory
-	paths := config.GetPaths(configDir, dataDir)
+	paths := config.GetAppPaths(configDir, dataDir)
 
 	// Ensure system user/group and set directory ownership per AI.md PART 27
 	// "Binary handles EVERYTHING else: directories, permissions, user/group, Tor, etc."
@@ -320,7 +320,7 @@ func main() {
 	uid, gid, err := system.EnsureSystemUser(appName, dirsToOwn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  Failed to ensure system user: %v\n", err)
-	} else if system.IsRoot() && uid > 0 {
+	} else if system.IsRunningAsRoot() && uid > 0 {
 		fmt.Printf("👤 Running as user %s (uid=%d, gid=%d)\n", appName, uid, gid)
 	}
 
@@ -344,19 +344,19 @@ func main() {
 
 	// Override with command line flags
 	if address != "" {
-		cfg.Server.Address = address
+		appConfig.Server.Address = address
 	}
 	if port != "" {
-		cfg.Server.Port = port
+		appConfig.Server.Port = port
 	}
 
 	// Apply mode (CLI > env > config, normalized)
 	if modeStr != "" {
-		cfg.Server.Mode = config.NormalizeMode(modeStr)
-	} else if cfg.Server.Mode == "" {
-		cfg.Server.Mode = "production"
+		appConfig.Server.Mode = config.NormalizeMode(modeStr)
+	} else if appConfig.Server.Mode == "" {
+		appConfig.Server.Mode = "production"
 	} else {
-		cfg.Server.Mode = config.NormalizeMode(cfg.Server.Mode)
+		appConfig.Server.Mode = config.NormalizeMode(appConfig.Server.Mode)
 	}
 
 	// Initialize database per AI.md PART 24
@@ -377,7 +377,7 @@ func main() {
 	}
 
 	// Initialize admin service per AI.md PART 31
-	adminSvc := admin.NewService(migrationMgr.GetDB())
+	adminSvc := admin.NewAdminService(migrationMgr.GetDB())
 	if err := adminSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Failed to initialize admin service: %v\n", err)
 		os.Exit(1)
@@ -387,61 +387,61 @@ func main() {
 	// Cluster mode auto-detected: SQLite = single instance, PostgreSQL/MySQL/MSSQL = cluster
 	// For now, we use SQLite so cluster is in single-instance mode
 	// In production with external DB, this would enable automatically
-	clusterMgr, err := cluster.NewManager(migrationMgr.GetDB())
+	clusterMgr, err := cluster.NewClusterManager(migrationMgr.GetDB())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  Cluster manager initialization failed: %v\n", err)
 	}
 
 	// Initialize search engines
-	engineMgr := engine.NewManager(cfg)
+	engineMgr := engine.NewEngineManager(appConfig)
 	engineMgr.InitializeEngines()
 
 	// Initialize services per AI.md specifications
 	// SSL service (PART 21)
-	sslSvc := ssl.New(cfg)
+	sslSvc := ssl.NewSSLManager(appConfig)
 	if err := sslSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  SSL service initialization failed: %v\n", err)
 	}
 
 	// GeoIP service (PART 28)
-	geoipSvc := geoip.New(cfg)
+	geoipSvc := geoip.NewGeoIPService(appConfig)
 	if err := geoipSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  GeoIP service initialization failed: %v\n", err)
 	}
 
 	// Initialize logger per PART 21
-	logger, err := logging.New(cfg)
+	logger, err := logging.NewAppLogger(appConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  Logger initialization failed: %v\n", err)
 		// Create a basic logger that doesn't write to files
-		logger = &logging.Logger{}
+		logger = &logging.AppLogger{}
 	}
 	defer logger.Close()
 
 	// Tor service (PART 30) - needs data dir, enabled flag, and logger
 	torDataDir := filepath.Join(paths.Data, "tor")
-	torSvc := tor.New(torDataDir, cfg.Search.Tor.Enabled, logger)
+	torSvc := tor.NewTorService(torDataDir, appConfig.Search.Tor.Enabled, logger)
 
 	// Blocklist service (PART 22)
-	blocklistSvc := blocklist.New(cfg)
+	blocklistSvc := blocklist.NewBlocklistService(appConfig)
 	if err := blocklistSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  Blocklist service initialization failed: %v\n", err)
 	}
 
 	// CVE service (PART 22)
-	cveSvc := cve.New(cfg)
+	cveSvc := cve.NewCVEService(appConfig)
 	if err := cveSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  CVE service initialization failed: %v\n", err)
 	}
 
 	// Initialize scheduler per AI.md PART 27
-	sched := scheduler.New()
+	sched := scheduler.NewScheduler()
 
 	// Register all built-in tasks per AI.md PART 27
 	sched.RegisterBuiltinTasks(scheduler.BuiltinTaskFuncs{
 		SSLRenewal: func(ctx context.Context) error {
 			// SSL certificate renewal check per PART 21
-			if !cfg.Server.SSL.Enabled {
+			if !appConfig.Server.SSL.Enabled {
 				return nil
 			}
 			if sslSvc.NeedsRenewal() {
@@ -451,7 +451,7 @@ func main() {
 		},
 		GeoIPUpdate: func(ctx context.Context) error {
 			// GeoIP database update per PART 28
-			if !cfg.Server.GeoIP.Enabled {
+			if !appConfig.Server.GeoIP.Enabled {
 				return nil
 			}
 			return geoipSvc.Update()
@@ -480,7 +480,7 @@ func main() {
 		},
 		BackupAuto: func(ctx context.Context) error {
 			// Automatic backup per PART 25 (disabled by default)
-			maint := maintenance.New(paths.Config, paths.Data, version.GetVersion())
+			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
 			return maint.Backup("")
 		},
 		HealthcheckSelf: func(ctx context.Context) error {
@@ -489,7 +489,7 @@ func main() {
 		},
 		TorHealth: func(ctx context.Context) error {
 			// Tor health check per PART 30 - only if Tor enabled
-			if !cfg.Search.Tor.Enabled {
+			if !appConfig.Search.Tor.Enabled {
 				return nil
 			}
 			// Check if Tor service is running
@@ -527,12 +527,12 @@ func main() {
 	defer sched.Stop()
 
 	// Create server with admin service, migration manager, scheduler, and logger per AI.md PART 11
-	srv := server.New(cfg, configDir, dataDir, engineMgr, adminSvc, migrationMgr, sched, logger)
+	srv := server.NewServer(appConfig, configDir, dataDir, engineMgr, adminSvc, migrationMgr, sched, logger)
 
 	// Start live config watcher per AI.md PART 1 NON-NEGOTIABLE
-	configWatcher := config.NewWatcher(configPath, cfg)
-	configWatcher.OnReload(func(newCfg *config.Config) {
-		// Config has been reloaded - the shared cfg pointer is already updated
+	configWatcher := config.NewWatcher(configPath, appConfig)
+	configWatcher.OnReload(func(newCfg *config.AppConfig) {
+		// Config has been reloaded - the shared appConfig pointer is already updated
 		// Additional reload actions can be added here if needed
 	})
 	configWatcher.Start()
@@ -541,10 +541,10 @@ func main() {
 	// Start server in goroutine
 	go func() {
 		// Build listen address properly handling IPv6
-		listenAddr := cfg.Server.Address + ":" + cfg.Server.Port
+		listenAddr := appConfig.Server.Address + ":" + appConfig.Server.Port
 		// Per AI.md line 6197-6199: Never show localhost, 127.0.0.1, 0.0.0.0
 		// Show only one address, the most relevant
-		displayAddr := getDisplayAddress(cfg)
+		displayAddr := getDisplayAddress(appConfig)
 
 		// Console output per AI.md PART 31 lines 10230-10258
 		isFirstRun := adminSvc.IsFirstRun()
@@ -556,9 +556,9 @@ func main() {
 		// Check SMTP status per AI.md PART 31 lines 10267-10306
 		smtpStatus := "Not detected (email features disabled)"
 		smtpInfo := ""
-		if cfg.Server.Email.Enabled {
-			smtpHost := cfg.Server.Email.Host
-			smtpPort := cfg.Server.Email.Port
+		if appConfig.Server.Email.Enabled {
+			smtpHost := appConfig.Server.Email.Host
+			smtpPort := appConfig.Server.Email.Port
 			if smtpHost != "" && smtpPort > 0 {
 				smtpStatus = fmt.Sprintf("Auto-detected (%s:%d)", smtpHost, smtpPort)
 				smtpInfo = fmt.Sprintf("%s:%d (enabled)", smtpHost, smtpPort)
@@ -589,7 +589,7 @@ func main() {
 			}
 		}
 		fmt.Printf("║   📧 SMTP: %-59s ║\n", smtpStatus)
-		if !cfg.Server.Email.Enabled {
+		if !appConfig.Server.Email.Enabled {
 			fmt.Println("║      Configure manually at /admin/server/email                       ║")
 		}
 		fmt.Println("║                                                                      ║")
@@ -597,8 +597,8 @@ func main() {
 			fmt.Println("║   ⚠️  Save the setup token! It will not be shown again.               ║")
 			fmt.Println("║                                                                      ║")
 		}
-		if cfg.Search.Tor.Enabled {
-			fmt.Printf("║   🧅 Tor: %-60s ║\n", cfg.Search.Tor.Proxy)
+		if appConfig.Search.Tor.Enabled {
+			fmt.Printf("║   🧅 Tor: %-60s ║\n", appConfig.Search.Tor.Proxy)
 			fmt.Println("║                                                                      ║")
 		}
 		fmt.Println("╚══════════════════════════════════════════════════════════════════════╝")
@@ -624,8 +624,8 @@ func main() {
 	})
 	signalpkg.SetStatusDumpFunc(func() {
 		// Dump status to stderr
-		fmt.Fprintf(os.Stderr, "[STATUS] Server running on %s:%s\n", cfg.Server.Address, cfg.Server.Port)
-		fmt.Fprintf(os.Stderr, "[STATUS] Mode: %s, Debug: %v\n", cfg.Server.Mode, mode.IsDebugEnabled())
+		fmt.Fprintf(os.Stderr, "[STATUS] Server running on %s:%s\n", appConfig.Server.Address, appConfig.Server.Port)
+		fmt.Fprintf(os.Stderr, "[STATUS] Mode: %s, Debug: %v\n", appConfig.Server.Mode, mode.IsDebugEnabled())
 		fmt.Fprintf(os.Stderr, "[STATUS] Uptime: %v\n", time.Since(time.Now()))
 	})
 
@@ -699,22 +699,22 @@ func printVersion() {
 
 func checkStatus() int {
 	// Get paths
-	paths := config.GetPaths("", "")
+	appPaths := config.GetAppPaths("", "")
 
 	// Try to load config to check if initialized
-	cfg, _, err := config.Load("", "")
+	statusConfig, _, err := config.LoadAppConfig("", "")
 	if err != nil {
 		fmt.Println("❌ Status: Not initialized")
-		fmt.Printf("   Config dir: %s\n", paths.Config)
+		fmt.Printf("   Config dir: %s\n", appPaths.Config)
 		return 1
 	}
 
 	// Try to connect to the server
-	addr := net.JoinHostPort("127.0.0.1", cfg.Server.Port)
+	addr := net.JoinHostPort("127.0.0.1", statusConfig.Server.Port)
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		fmt.Println("⚠️  Status: Stopped")
-		fmt.Printf("   Port: %s (not listening)\n", cfg.Server.Port)
+		fmt.Printf("   Port: %s (not listening)\n", statusConfig.Server.Port)
 		return 1
 	}
 	conn.Close()
@@ -725,20 +725,20 @@ func checkStatus() int {
 	resp, err := client.Get(healthURL)
 	if err != nil {
 		fmt.Println("⚠️  Status: Running (health check failed)")
-		fmt.Printf("   Port: %s\n", cfg.Server.Port)
+		fmt.Printf("   Port: %s\n", statusConfig.Server.Port)
 		return 1
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 {
 		fmt.Println("✅ Status: Running")
-		fmt.Printf("   Port: %s\n", cfg.Server.Port)
-		fmt.Printf("   FQDN: %s\n", cfg.Server.FQDN)
+		fmt.Printf("   Port: %s\n", statusConfig.Server.Port)
+		fmt.Printf("   FQDN: %s\n", statusConfig.Server.FQDN)
 		return 0
 	}
 
 	fmt.Println("⚠️  Status: Running (unhealthy)")
-	fmt.Printf("   Port: %s\n", cfg.Server.Port)
+	fmt.Printf("   Port: %s\n", statusConfig.Server.Port)
 	return 1
 }
 
@@ -945,7 +945,7 @@ func handleServiceCommand(cmd string) {
 
 	case "status":
 		// Per AI.md PART 25: Show service status
-		status, err := svc.Status()
+		status, err := svc.GetServiceStatus()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "❌ Failed to get status: %v\n", err)
 			os.Exit(1)
@@ -1001,7 +1001,7 @@ Supported service managers:
 
 // handleUpdateCommand implements AI.md PART 14 --update command
 func handleUpdateCommand(cmd, arg string) {
-	maint := maintenance.New("", "", version.GetVersion())
+	maint := maintenance.NewMaintenanceManager("", "", version.GetVersion())
 
 	switch cmd {
 	case "check":
@@ -1106,7 +1106,7 @@ Run 'vidveil --update --help' for detailed help.`)
 }
 
 func handleMaintenanceCommand(cmd, arg string) {
-	maint := maintenance.New("", "", version.GetVersion())
+	maint := maintenance.NewMaintenanceManager("", "", version.GetVersion())
 
 	switch cmd {
 	case "backup":
@@ -1206,7 +1206,7 @@ Run 'vidveil --maintenance --help' for detailed help.`)
 	}
 }
 
-func getDisplayAddress(cfg *config.Config) string {
+func getDisplayAddress(serverConfig *config.AppConfig) string {
 	// Per AI.md PART 13: Never show 0.0.0.0, 127.0.0.1, localhost, etc.
-	return net.JoinHostPort(config.GetDisplayHost(cfg), cfg.Server.Port)
+	return net.JoinHostPort(config.GetDisplayHost(serverConfig), serverConfig.Server.Port)
 }

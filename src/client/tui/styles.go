@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 36: CLI Client - TUI Styles from Palette
+// AI.md PART 36: CLI Client - TUI TUIStyles from Palette
 package tui
 
 import (
@@ -7,8 +7,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Styles holds the TUI styles derived from the theme palette
-type Styles struct {
+// TUIStyles holds the TUI styles derived from the theme palette
+type TUIStyles struct {
 	Base     lipgloss.Style
 	Title    lipgloss.Style
 	Selected lipgloss.Style
@@ -19,9 +19,9 @@ type Styles struct {
 	Border   lipgloss.Style
 }
 
-// StylesFromPalette creates TUI styles from a theme palette
-func StylesFromPalette(p theme.Palette) Styles {
-	return Styles{
+// TUIStylesFromPalette creates TUI styles from a theme palette
+func TUIStylesFromPalette(p theme.ColorPalette) TUIStyles {
+	return TUIStyles{
 		Base: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(p.Foreground)).
 			Background(lipgloss.Color(p.Background)),
@@ -38,12 +38,12 @@ func StylesFromPalette(p theme.Palette) Styles {
 	}
 }
 
-// DefaultStyles returns the default dark theme styles
-func DefaultStyles() Styles {
-	return StylesFromPalette(theme.Dark)
+// DefaultTUIStyles returns the default dark theme styles
+func DefaultTUIStyles() TUIStyles {
+	return TUIStylesFromPalette(theme.Dark)
 }
 
-// LightStyles returns light theme styles
-func LightStyles() Styles {
-	return StylesFromPalette(theme.Light)
+// LightTUIStyles returns light theme styles
+func LightTUIStyles() TUIStyles {
+	return TUIStylesFromPalette(theme.Light)
 }

@@ -8,7 +8,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	if translator == nil {
 		t.Fatal("New() returned nil")
@@ -20,26 +20,26 @@ func TestNew(t *testing.T) {
 }
 
 func TestTranslate(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	// Test existing key
-	result := translator.T("en", "nav.home")
+	result := translator.Translate("en", "nav.home")
 	if result == "" || result == "nav.home" {
 		t.Errorf("Expected translation for 'nav.home', got '%s'", result)
 	}
 
 	// Test missing key returns key itself
-	result = translator.T("en", "nonexistent.key")
+	result = translator.Translate("en", "nonexistent.key")
 	if result != "nonexistent.key" {
 		t.Errorf("Expected 'nonexistent.key' for missing translation, got '%s'", result)
 	}
 }
 
 func TestTranslateFormat(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	// Test formatted translation with time.minutes (has %d)
-	result := translator.TF("en", "time.minutes", 42)
+	result := translator.TranslateFormat("en", "time.minutes", 42)
 	if result == "" {
 		t.Error("Expected formatted translation, got empty string")
 	}
@@ -76,7 +76,7 @@ func TestParseAcceptLanguage(t *testing.T) {
 }
 
 func TestAvailableLocales(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	locales := translator.AvailableLocales()
 
@@ -99,7 +99,7 @@ func TestAvailableLocales(t *testing.T) {
 }
 
 func TestMiddleware(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get locale from X-Locale header (set by middleware)
@@ -124,7 +124,7 @@ func TestMiddleware(t *testing.T) {
 }
 
 func TestTemplateFunc(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	fn := translator.TemplateFunc("en")
 
@@ -140,7 +140,7 @@ func TestTemplateFunc(t *testing.T) {
 }
 
 func TestTranslationKeys(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	// Test common keys that should exist
 	keys := []string{
@@ -159,7 +159,7 @@ func TestTranslationKeys(t *testing.T) {
 
 	for _, key := range keys {
 		t.Run(key, func(t *testing.T) {
-			result := translator.T("en", key)
+			result := translator.Translate("en", key)
 			if result == key {
 				t.Errorf("Translation missing for key '%s'", key)
 			}
@@ -168,7 +168,7 @@ func TestTranslationKeys(t *testing.T) {
 }
 
 func TestHasLocale(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	if !translator.HasLocale("en") {
 		t.Error("Should have 'en' locale")
@@ -180,18 +180,18 @@ func TestHasLocale(t *testing.T) {
 }
 
 func TestAddTranslation(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	translator.AddTranslation("en", "test.key", "Test Value")
 
-	result := translator.T("en", "test.key")
+	result := translator.Translate("en", "test.key")
 	if result != "Test Value" {
 		t.Errorf("Expected 'Test Value', got '%s'", result)
 	}
 }
 
 func TestGetLocale(t *testing.T) {
-	translator := New()
+	translator := NewTranslator()
 
 	// Test with Accept-Language header
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -212,13 +212,13 @@ func TestGetLocale(t *testing.T) {
 
 func TestGlobalTranslator(t *testing.T) {
 	// Test the global convenience functions
-	result := T("en", "nav.home")
+	result := Translate("en", "nav.home")
 	if result == "" || result == "nav.home" {
-		t.Errorf("T() should return translation, got '%s'", result)
+		t.Errorf("Translate() should return translation, got '%s'", result)
 	}
 
-	result2 := TF("en", "time.minutes", 5)
+	result2 := TranslateFormat("en", "time.minutes", 5)
 	if result2 == "" || result2 == "time.minutes" {
-		t.Errorf("TF() should return formatted translation, got '%s'", result2)
+		t.Errorf("TranslateFormat() should return formatted translation, got '%s'", result2)
 	}
 }

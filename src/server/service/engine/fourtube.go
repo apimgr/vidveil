@@ -13,8 +13,8 @@ import (
 type FourTubeEngine struct{ *BaseEngine }
 
 // NewFourTubeEngine creates a new 4Tube engine
-func NewFourTubeEngine(cfg *config.Config, torClient *tor.Client) *FourTubeEngine {
-	return &FourTubeEngine{NewBaseEngine("4tube", "4Tube", "https://www.4tube.com", 3, cfg, torClient)}
+func NewFourTubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *FourTubeEngine {
+	return &FourTubeEngine{NewBaseEngine("4tube", "4Tube", "https://www.4tube.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on 4Tube

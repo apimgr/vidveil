@@ -12,7 +12,7 @@ import (
 )
 
 // ResizeHandler is a callback for terminal resize events
-type ResizeHandler func(size Size)
+type ResizeHandler func(size TerminalSize)
 
 // WatchResize watches for terminal resize events (SIGWINCH)
 // Returns a channel that will be closed when the watcher stops
@@ -29,7 +29,7 @@ func WatchResize(handler ResizeHandler) chan struct{} {
 			select {
 			case <-sigChan:
 				if handler != nil {
-					handler(GetSize())
+					handler(GetTerminalSize())
 				}
 			case <-done:
 				return

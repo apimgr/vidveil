@@ -24,8 +24,8 @@ const (
 	CityURL    = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city.mmdb"
 )
 
-// Result holds GeoIP lookup results
-type Result struct {
+// GeoIPResult holds GeoIP lookup results
+type GeoIPResult struct {
 	IP          string  `json:"ip"`
 	Country     string  `json:"country,omitempty"`
 	CountryCode string  `json:"country_code,omitempty"`
@@ -39,11 +39,11 @@ type Result struct {
 	ASNOrg      string  `json:"asn_org,omitempty"`
 }
 
-// Service provides GeoIP lookup functionality
-type Service struct {
-	mu      sync.RWMutex
-	cfg     *config.Config
-	dataDir string
+// GeoIPService provides GeoIP lookup functionality
+type GeoIPService struct {
+	mu        sync.RWMutex
+	appConfig *config.AppConfig
+	dataDir   string
 
 	asnDB     *maxminddb.Reader
 	countryDB *maxminddb.Reader
@@ -88,23 +88,24 @@ type cityRecord struct {
 	} `maxminddb:"location"`
 }
 
-// New creates a new GeoIP service
-func New(cfg *config.Config) *Service {
-	dataDir := cfg.Server.GeoIP.Dir
+// NewGeoIPService creates a new GeoIP service
+// Per AI.md PART 4: Security DBs go in {config}/security/geoip/
+func NewGeoIPService(appConfig *config.AppConfig) *GeoIPService {
+	dataDir := appConfig.Server.GeoIP.Dir
 	if dataDir == "" {
-		paths := config.GetPaths("", "")
-		dataDir = filepath.Join(paths.Data, "geoip")
+		paths := config.GetAppPaths("", "")
+		dataDir = filepath.Join(paths.Config, "security", "geoip")
 	}
 
-	return &Service{
-		cfg:     cfg,
-		dataDir: dataDir,
+	return &GeoIPService{
+		appConfig: appConfig,
+		dataDir:   dataDir,
 	}
 }
 
 // Initialize downloads databases if needed and opens them
-func (s *Service) Initialize() error {
-	if !s.cfg.Server.GeoIP.Enabled {
+func (s *GeoIPService) Initialize() error {
+	if !s.appConfig.Server.GeoIP.Enabled {
 		return nil
 	}
 
@@ -122,8 +123,8 @@ func (s *Service) Initialize() error {
 }
 
 // downloadIfMissing downloads databases that don't exist
-func (s *Service) downloadIfMissing() error {
-	dbs := s.cfg.Server.GeoIP.Databases
+func (s *GeoIPService) downloadIfMissing() error {
+	dbs := s.appConfig.Server.GeoIP.Databases
 
 	if dbs.ASN {
 		asnPath := filepath.Join(s.dataDir, "asn.mmdb")
@@ -156,7 +157,7 @@ func (s *Service) downloadIfMissing() error {
 }
 
 // downloadFile downloads a file from URL to path
-func (s *Service) downloadFile(url, path string) error {
+func (s *GeoIPService) downloadFile(url, path string) error {
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -184,11 +185,11 @@ func (s *Service) downloadFile(url, path string) error {
 }
 
 // openDatabases opens all configured databases
-func (s *Service) openDatabases() error {
+func (s *GeoIPService) openDatabases() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	dbs := s.cfg.Server.GeoIP.Databases
+	dbs := s.appConfig.Server.GeoIP.Databases
 
 	if dbs.ASN {
 		asnPath := filepath.Join(s.dataDir, "asn.mmdb")
@@ -228,17 +229,17 @@ func (s *Service) openDatabases() error {
 }
 
 // Lookup performs a GeoIP lookup for an IP address
-func (s *Service) Lookup(ipStr string) *Result {
-	if !s.cfg.Server.GeoIP.Enabled {
-		return &Result{IP: ipStr}
+func (s *GeoIPService) Lookup(ipStr string) *GeoIPResult {
+	if !s.appConfig.Server.GeoIP.Enabled {
+		return &GeoIPResult{IP: ipStr}
 	}
 
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
-		return &Result{IP: ipStr}
+		return &GeoIPResult{IP: ipStr}
 	}
 
-	result := &Result{IP: ipStr}
+	result := &GeoIPResult{IP: ipStr}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -287,12 +288,12 @@ func (s *Service) Lookup(ipStr string) *Result {
 }
 
 // IsBlocked checks if an IP is from a blocked country
-func (s *Service) IsBlocked(ipStr string) bool {
-	if !s.cfg.Server.GeoIP.Enabled {
+func (s *GeoIPService) IsBlocked(ipStr string) bool {
+	if !s.appConfig.Server.GeoIP.Enabled {
 		return false
 	}
 
-	denyList := s.cfg.Server.GeoIP.DenyCountries
+	denyList := s.appConfig.Server.GeoIP.DenyCountries
 	if len(denyList) == 0 {
 		return false
 	}
@@ -311,15 +312,15 @@ func (s *Service) IsBlocked(ipStr string) bool {
 }
 
 // Update downloads fresh databases
-func (s *Service) Update() error {
-	if !s.cfg.Server.GeoIP.Enabled {
+func (s *GeoIPService) Update() error {
+	if !s.appConfig.Server.GeoIP.Enabled {
 		return nil
 	}
 
 	// Close existing databases
 	s.Close()
 
-	dbs := s.cfg.Server.GeoIP.Databases
+	dbs := s.appConfig.Server.GeoIP.Databases
 
 	if dbs.ASN {
 		asnPath := filepath.Join(s.dataDir, "asn.mmdb")
@@ -346,19 +347,19 @@ func (s *Service) Update() error {
 }
 
 // LastUpdate returns when databases were last updated
-func (s *Service) LastUpdate() time.Time {
+func (s *GeoIPService) LastUpdate() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.lastUpdate
 }
 
 // IsEnabled returns whether GeoIP is enabled
-func (s *Service) IsEnabled() bool {
-	return s.cfg.Server.GeoIP.Enabled
+func (s *GeoIPService) IsEnabled() bool {
+	return s.appConfig.Server.GeoIP.Enabled
 }
 
 // Close closes all database readers
-func (s *Service) Close() {
+func (s *GeoIPService) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

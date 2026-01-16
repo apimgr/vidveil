@@ -26,9 +26,9 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Manager handles maintenance operations
-type Manager struct {
-	paths   *config.Paths
+// MaintenanceManager handles maintenance operations
+type MaintenanceManager struct {
+	paths   *config.AppPaths
 	version string
 }
 
@@ -56,16 +56,16 @@ type BackupManifest struct {
 	Checksum         string   `json:"checksum"`
 }
 
-// New creates a new maintenance manager
-func New(configDir, dataDir, version string) *Manager {
-	return &Manager{
-		paths:   config.GetPaths(configDir, dataDir),
+// NewMaintenanceManager creates a new maintenance manager
+func NewMaintenanceManager(configDir, dataDir, version string) *MaintenanceManager {
+	return &MaintenanceManager{
+		paths:   config.GetAppPaths(configDir, dataDir),
 		version: version,
 	}
 }
 
 // Backup creates a backup of configuration and data (simple version)
-func (m *Manager) Backup(backupFile string) error {
+func (m *MaintenanceManager) Backup(backupFile string) error {
 	return m.BackupWithOptions(BackupOptions{
 		Filename:    backupFile,
 		IncludeData: true,
@@ -74,7 +74,7 @@ func (m *Manager) Backup(backupFile string) error {
 }
 
 // BackupWithOptions creates a backup with full options per AI.md PART 22
-func (m *Manager) BackupWithOptions(opts BackupOptions) error {
+func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 	// Generate filename per PART 22: vidveil_backup_YYYY-MM-DD_HHMMSS.tar.gz
 	backupFile := opts.Filename
 	if backupFile == "" {
@@ -201,7 +201,7 @@ func (m *Manager) BackupWithOptions(opts BackupOptions) error {
 }
 
 // encryptBackup encrypts data using AES-256-GCM with Argon2id key derivation
-func (m *Manager) encryptBackup(data []byte, password string) ([]byte, error) {
+func (m *MaintenanceManager) encryptBackup(data []byte, password string) ([]byte, error) {
 	// Generate salt
 	salt := make([]byte, 16)
 	if _, err := io.ReadFull(cryptoRand.Reader, salt); err != nil {
@@ -240,7 +240,7 @@ func (m *Manager) encryptBackup(data []byte, password string) ([]byte, error) {
 }
 
 // decryptBackup decrypts AES-256-GCM encrypted data
-func (m *Manager) decryptBackup(data []byte, password string) ([]byte, error) {
+func (m *MaintenanceManager) decryptBackup(data []byte, password string) ([]byte, error) {
 	if len(data) < 28 { // 16 salt + 12 nonce minimum
 		return nil, fmt.Errorf("invalid encrypted data")
 	}
@@ -273,7 +273,7 @@ func (m *Manager) decryptBackup(data []byte, password string) ([]byte, error) {
 }
 
 // verifyBackup verifies backup integrity
-func (m *Manager) verifyBackup(backupFile, expectedChecksum, password string) error {
+func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password string) error {
 	data, err := os.ReadFile(backupFile)
 	if err != nil {
 		return err
@@ -324,13 +324,13 @@ func (m *Manager) verifyBackup(backupFile, expectedChecksum, password string) er
 }
 
 // applyRetention removes old backups to stay under max limit (legacy wrapper)
-func (m *Manager) applyRetention(maxBackups int) error {
+func (m *MaintenanceManager) applyRetention(maxBackups int) error {
 	return m.applyRetentionWithOptions(maxBackups, 0, 0, 0)
 }
 
 // applyRetentionWithOptions removes old backups per AI.md PART 22 retention policy
 // Priority order: yearly > monthly > weekly > daily
-func (m *Manager) applyRetentionWithOptions(maxBackups, keepWeekly, keepMonthly, keepYearly int) error {
+func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, keepMonthly, keepYearly int) error {
 	if maxBackups <= 0 {
 		maxBackups = 1 // Default per PART 22
 	}
@@ -423,12 +423,12 @@ func (m *Manager) applyRetentionWithOptions(maxBackups, keepWeekly, keepMonthly,
 }
 
 // Restore restores from a backup file (simple version)
-func (m *Manager) Restore(backupFile string) error {
+func (m *MaintenanceManager) Restore(backupFile string) error {
 	return m.RestoreWithPassword(backupFile, "")
 }
 
 // RestoreWithPassword restores from a backup file with optional decryption
-func (m *Manager) RestoreWithPassword(backupFile, password string) error {
+func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) error {
 	if backupFile == "" {
 		// Find most recent backup
 		files, err := filepath.Glob(filepath.Join(m.paths.Backup, "vidveil_backup_*.tar.gz*"))
@@ -521,7 +521,7 @@ func (m *Manager) RestoreWithPassword(backupFile, password string) error {
 }
 
 // CheckUpdate checks for available updates from GitHub releases
-func (m *Manager) CheckUpdate() (*UpdateInfo, error) {
+func (m *MaintenanceManager) CheckUpdate() (*UpdateInfo, error) {
 	// Fetch latest release from GitHub API
 	resp, err := http.Get("https://api.github.com/repos/apimgr/vidveil/releases/latest")
 	if err != nil {
@@ -563,7 +563,7 @@ func (m *Manager) CheckUpdate() (*UpdateInfo, error) {
 }
 
 // ApplyUpdate downloads and applies an update
-func (m *Manager) ApplyUpdate(downloadURL string) error {
+func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 	if downloadURL == "" {
 		info, err := m.CheckUpdate()
 		if err != nil {
@@ -638,7 +638,7 @@ func (m *Manager) ApplyUpdate(downloadURL string) error {
 }
 
 // SetMaintenanceMode enables or disables maintenance mode
-func (m *Manager) SetMaintenanceMode(enabled bool) error {
+func (m *MaintenanceManager) SetMaintenanceMode(enabled bool) error {
 	modeFile := filepath.Join(m.paths.Data, "maintenance.flag")
 
 	if enabled {
@@ -661,7 +661,7 @@ func (m *Manager) SetMaintenanceMode(enabled bool) error {
 }
 
 // IsMaintenanceMode checks if maintenance mode is active
-func (m *Manager) IsMaintenanceMode() bool {
+func (m *MaintenanceManager) IsMaintenanceMode() bool {
 	modeFile := filepath.Join(m.paths.Data, "maintenance.flag")
 	_, err := os.Stat(modeFile)
 	return err == nil
@@ -669,7 +669,7 @@ func (m *Manager) IsMaintenanceMode() bool {
 
 // ResetAdminCredentials clears admin password/token and generates new setup token
 // per AI.md PART 26
-func (m *Manager) ResetAdminCredentials() (string, error) {
+func (m *MaintenanceManager) ResetAdminCredentials() (string, error) {
 	// Generate new setup token
 	tokenBytes := make([]byte, 32)
 	if _, err := io.ReadFull(cryptoRand.Reader, tokenBytes); err != nil {
@@ -696,7 +696,7 @@ func (m *Manager) ResetAdminCredentials() (string, error) {
 }
 
 // SetUpdateBranch sets the update branch (stable, beta, daily) per AI.md PART 14
-func (m *Manager) SetUpdateBranch(branch string) error {
+func (m *MaintenanceManager) SetUpdateBranch(branch string) error {
 	branchFile := filepath.Join(m.paths.Config, "update-branch")
 
 	// Validate branch
@@ -719,7 +719,7 @@ func (m *Manager) SetUpdateBranch(branch string) error {
 }
 
 // GetUpdateBranch gets the current update branch (defaults to stable)
-func (m *Manager) GetUpdateBranch() string {
+func (m *MaintenanceManager) GetUpdateBranch() string {
 	branchFile := filepath.Join(m.paths.Config, "update-branch")
 	data, err := os.ReadFile(branchFile)
 	// Default per AI.md
@@ -734,7 +734,7 @@ func (m *Manager) GetUpdateBranch() string {
 }
 
 // Helper to add directory to tar
-func (m *Manager) addDirToTar(tw *tar.Writer, srcDir, prefix string) error {
+func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -833,7 +833,7 @@ SizeHuman string
 }
 
 // ListBackups lists all available backups in the backup directory
-func (m *Manager) ListBackups() ([]BackupInfo, error) {
+func (m *MaintenanceManager) ListBackups() ([]BackupInfo, error) {
 backupDir := m.paths.Backup
 
 // Ensure backup directory exists

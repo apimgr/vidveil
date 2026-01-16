@@ -73,9 +73,9 @@ func LogFile() string {
 	return filepath.Join(LogDir(), "cli.log")
 }
 
-// EnsureDirs creates all CLI directories with correct permissions.
+// EnsureClientDirs creates all CLI directories with correct permissions.
 // Called on every startup before any file operations.
-func EnsureDirs() error {
+func EnsureClientDirs() error {
 	dirs := []string{
 		ConfigDir(),
 		DataDir(),

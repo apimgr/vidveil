@@ -20,15 +20,15 @@ const (
 	ElevationFailed
 )
 
-// IsElevated checks if the current process has root privileges
-func IsElevated() bool {
+// IsRunningElevated checks if the current process has root privileges
+func IsRunningElevated() bool {
 	return os.Getuid() == 0
 }
 
 // RequestElevation attempts to restart with elevated privileges using sudo/doas/pkexec
 // per AI.md PART 4 escalation order
 func RequestElevation(args ...string) ElevationResult {
-	if IsElevated() {
+	if IsRunningElevated() {
 		return ElevationAlreadyAdmin
 	}
 
@@ -38,7 +38,7 @@ func RequestElevation(args ...string) ElevationResult {
 
 // RunAsAdmin runs a command with elevated privileges
 func RunAsAdmin(command string, args ...string) error {
-	if IsElevated() {
+	if IsRunningElevated() {
 		cmd := exec.Command(command, args...)
 		return cmd.Run()
 	}
@@ -61,7 +61,7 @@ func RunAsAdmin(command string, args ...string) error {
 // Returns false (no exit needed) and nil error if already root
 // Returns false and error if not root and no escalation available
 func RequireAdmin(operation string) (bool, error) {
-	if IsElevated() {
+	if IsRunningElevated() {
 		return false, nil
 	}
 

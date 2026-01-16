@@ -33,17 +33,17 @@ func GetTemplatesFS() embed.FS {
 
 // Server represents the HTTP server
 type Server struct {
-	cfg          *config.Config
+	appConfig    *config.AppConfig
 	configDir    string
 	dataDir      string
-	engineMgr    *engine.Manager
-	adminSvc     *admin.Service
+	engineMgr    *engine.EngineManager
+	adminSvc     *admin.AdminService
 	migrationMgr MigrationManager
 	scheduler    *scheduler.Scheduler
-	logger       *logging.Logger
+	logger       *logging.AppLogger
 	router       *chi.Mux
 	srv          *http.Server
-	rateLimiter  *ratelimit.Limiter
+	rateLimiter  *ratelimit.RateLimiter
 }
 
 // MigrationManager interface for database migrations
@@ -53,23 +53,23 @@ type MigrationManager interface {
 	RollbackMigration() error
 }
 
-// New creates a new server instance
-func New(cfg *config.Config, configDir, dataDir string, engineMgr *engine.Manager, adminSvc *admin.Service, migrationMgr MigrationManager, sched *scheduler.Scheduler, logger *logging.Logger) *Server {
+// NewServer creates a new server instance
+func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr *engine.EngineManager, adminSvc *admin.AdminService, migrationMgr MigrationManager, sched *scheduler.Scheduler, logger *logging.AppLogger) *Server {
 	// Set templates filesystem for handlers
 	handler.SetTemplatesFS(embeddedFS)
 	handler.SetAdminTemplatesFS(embeddedFS)
 
 	// Create rate limiter per PART 16
-	limiter := ratelimit.New(
-		cfg.Server.RateLimit.Enabled,
-		cfg.Server.RateLimit.Requests,
-		cfg.Server.RateLimit.Window,
+	limiter := ratelimit.NewRateLimiter(
+		appConfig.Server.RateLimit.Enabled,
+		appConfig.Server.RateLimit.Requests,
+		appConfig.Server.RateLimit.Window,
 	)
 	// Set logger for security event logging per AI.md PART 11
 	limiter.SetLogger(logger)
 
 	s := &Server{
-		cfg:          cfg,
+		appConfig:    appConfig,
 		configDir:    configDir,
 		dataDir:      dataDir,
 		engineMgr:    engineMgr,
@@ -96,7 +96,7 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(middleware.RealIP)
 
 	// URL Variables resolution per AI.md PART 13 (reverse proxy headers)
-	s.router.Use(urlvars.Global().Middleware)
+	s.router.Use(urlvars.GlobalResolver().Middleware)
 
 	// Trailing slash handling per AI.md PART 14 - redirect /path/ to /path
 	s.router.Use(middleware.RedirectSlashes)
@@ -132,7 +132,7 @@ func (s *Server) setupMiddleware() {
 			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 			// HSTS header per AI.md PART 11 - only when SSL enabled
 			// max-age=31536000 (1 year), includeSubDomains, preload
-			if s.cfg.Server.SSL.Enabled {
+			if s.appConfig.Server.SSL.Enabled {
 				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 			}
 			// Add Request ID to response headers per AI.md PART 17
@@ -200,13 +200,13 @@ func extensionStripMiddleware(next http.Handler) http.Handler {
 
 // setupRoutes configures all routes
 func (s *Server) setupRoutes() {
-	h := handler.New(s.cfg, s.engineMgr)
-	admin := handler.NewAdminHandler(s.cfg, s.configDir, s.dataDir, s.engineMgr, s.adminSvc, s.migrationMgr)
+	h := handler.NewSearchHandler(s.appConfig, s.engineMgr)
+	admin := handler.NewAdminHandler(s.appConfig, s.configDir, s.dataDir, s.engineMgr, s.adminSvc, s.migrationMgr)
 	// Set scheduler for admin panel management per AI.md PART 26
 	admin.SetScheduler(s.scheduler)
 	// Set logger for audit and security event logging per AI.md PART 11
 	admin.SetLogger(s.logger)
-	metrics := handler.NewMetrics(s.cfg, s.engineMgr)
+	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
 
 	// Maintenance mode middleware (applied globally, but allows admin access)
 	s.router.Use(h.MaintenanceModeMiddleware)
@@ -234,20 +234,20 @@ func (s *Server) setupRoutes() {
 	s.registerDebugRoutes(s.router)
 
 	// OpenAPI/Swagger documentation (AI.md PART 19: JSON only, no YAML)
-	s.router.Get("/openapi", handler.SwaggerUI(s.cfg))
-	s.router.Get("/openapi.json", handler.OpenAPISpec(s.cfg))
-	s.router.Get("/swagger", handler.SwaggerUI(s.cfg))
-	s.router.Get("/api-docs", handler.SwaggerUI(s.cfg))
+	s.router.Get("/openapi", handler.SwaggerUI(s.appConfig))
+	s.router.Get("/openapi.json", handler.OpenAPISpec(s.appConfig))
+	s.router.Get("/swagger", handler.SwaggerUI(s.appConfig))
+	s.router.Get("/api-docs", handler.SwaggerUI(s.appConfig))
 
 	// GraphQL endpoint
-	gql := handler.NewGraphQLHandler(s.cfg, s.engineMgr)
+	gql := handler.NewGraphQLHandler(s.appConfig, s.engineMgr)
 	s.router.HandleFunc("/graphql", gql.Handle)
 	s.router.Get("/graphiql", gql.GraphiQL)
 	s.router.Get("/graphql/schema", gql.GraphQLSchema)
 
 	// Prometheus metrics
-	if s.cfg.Server.Metrics.Enabled {
-		s.router.Get(s.cfg.Server.Metrics.Endpoint, metrics.Handler())
+	if s.appConfig.Server.Metrics.Enabled {
+		s.router.Get(s.appConfig.Server.Metrics.Endpoint, metrics.Handler())
 	}
 
 	// Routes that require age verification (project-specific per PART 14)
@@ -261,7 +261,7 @@ func (s *Server) setupRoutes() {
 	})
 
 	// Server routes per AI.md PART 14 (Route Scopes)
-	server := handler.NewServerHandler(s.cfg)
+	server := handler.NewServerHandler(s.appConfig)
 	s.router.Route("/server", func(r chi.Router) {
 		r.Get("/about", server.AboutPage)
 		r.Get("/privacy", server.PrivacyPage)
@@ -271,7 +271,7 @@ func (s *Server) setupRoutes() {
 	})
 
 	// Auth routes per AI.md PART 14 (Route Scopes)
-	auth := handler.NewAuthHandler(s.cfg)
+	auth := handler.NewAuthHandler(s.appConfig)
 	// Link admin handler for authentication
 	auth.SetAdminHandler(admin)
 	s.router.Route("/auth", func(r chi.Router) {
@@ -291,7 +291,7 @@ func (s *Server) setupRoutes() {
 	})
 
 	// User routes per AI.md PART 14 (Route Scopes - plural)
-	user := handler.NewUserHandler(s.cfg)
+	user := handler.NewUserHandler(s.appConfig)
 	s.router.Route("/users", func(r chi.Router) {
 		r.Get("/profile", user.ProfilePage)
 		r.Get("/settings", user.SettingsPage)
@@ -303,7 +303,7 @@ func (s *Server) setupRoutes() {
 
 	// Admin panel routes - PART 14 (routes), PART 17 (admin panel)
 	// Path is configurable via server.admin.path (default: "admin")
-	adminPath := "/" + s.cfg.Server.Admin.Path
+	adminPath := "/" + s.appConfig.Server.Admin.Path
 	s.router.Route(adminPath, func(r chi.Router) {
 		// Login page per AI.md PART 17
 		r.Get("/login", admin.LoginPage)
@@ -487,7 +487,7 @@ func (s *Server) setupRoutes() {
 
 		// Admin Profile API (session or token) - PART 17
 		// Uses configurable admin path
-		r.Route("/"+s.cfg.Server.Admin.Path+"/profile", func(r chi.Router) {
+		r.Route("/"+s.appConfig.Server.Admin.Path+"/profile", func(r chi.Router) {
 			r.Use(admin.SessionOrTokenMiddleware)
 			r.Post("/password", admin.APIProfilePassword)
 			r.Post("/token", admin.APIProfileToken)
@@ -496,7 +496,7 @@ func (s *Server) setupRoutes() {
 		})
 
 		// Admin API (token required) - PART 12, PART 17
-		r.Route("/"+s.cfg.Server.Admin.Path, func(r chi.Router) {
+		r.Route("/"+s.appConfig.Server.Admin.Path, func(r chi.Router) {
 			r.Use(admin.APITokenMiddleware)
 
 			// Users management per AI.md PART 17

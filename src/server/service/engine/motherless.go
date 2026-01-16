@@ -13,8 +13,8 @@ import (
 type MotherlessEngine struct{ *BaseEngine }
 
 // NewMotherlessEngine creates a new Motherless engine
-func NewMotherlessEngine(cfg *config.Config, torClient *tor.Client) *MotherlessEngine {
-	return &MotherlessEngine{NewBaseEngine("motherless", "Motherless", "https://motherless.com", 3, cfg, torClient)}
+func NewMotherlessEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *MotherlessEngine {
+	return &MotherlessEngine{NewBaseEngine("motherless", "Motherless", "https://motherless.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on Motherless

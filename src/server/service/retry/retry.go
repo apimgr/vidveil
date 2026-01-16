@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// Config holds retry configuration
-type Config struct {
+// RetryConfig holds retry configuration
+type RetryConfig struct {
 	// Maximum number of attempts (default: 3)
 	MaxAttempts int
 	// Initial delay between retries (default: 100ms)
@@ -26,9 +26,9 @@ type Config struct {
 	RetryableErrors []error
 }
 
-// DefaultConfig returns default retry configuration
-func DefaultConfig() *Config {
-	return &Config{
+// DefaultRetryConfig returns default retry configuration
+func DefaultRetryConfig() *RetryConfig {
+	return &RetryConfig{
 		MaxAttempts:  3,
 		InitialDelay: 100 * time.Millisecond,
 		MaxDelay:     30 * time.Second,
@@ -43,10 +43,10 @@ type Operation func() error
 // OperationWithResult is a function that returns a result and can be retried
 type OperationWithResult[T any] func() (T, error)
 
-// Do executes an operation with retry logic
-func Do(ctx context.Context, cfg *Config, op Operation) error {
+// ExecuteWithRetry executes an operation with retry logic
+func ExecuteWithRetry(ctx context.Context, cfg *RetryConfig, op Operation) error {
 	if cfg == nil {
-		cfg = DefaultConfig()
+		cfg = DefaultRetryConfig()
 	}
 
 	var lastErr error
@@ -98,12 +98,12 @@ func Do(ctx context.Context, cfg *Config, op Operation) error {
 	return lastErr
 }
 
-// DoWithResult executes an operation that returns a result with retry logic
-func DoWithResult[T any](ctx context.Context, cfg *Config, op OperationWithResult[T]) (T, error) {
+// ExecuteWithRetryResult executes an operation that returns a result with retry logic
+func ExecuteWithRetryResult[T any](ctx context.Context, cfg *RetryConfig, op OperationWithResult[T]) (T, error) {
 	var result T
 
 	if cfg == nil {
-		cfg = DefaultConfig()
+		cfg = DefaultRetryConfig()
 	}
 
 	var lastErr error
@@ -183,9 +183,9 @@ func addJitter(d time.Duration, factor float64) time.Duration {
 }
 
 // Backoff calculates the backoff duration for a given attempt
-func Backoff(attempt int, cfg *Config) time.Duration {
+func Backoff(attempt int, cfg *RetryConfig) time.Duration {
 	if cfg == nil {
-		cfg = DefaultConfig()
+		cfg = DefaultRetryConfig()
 	}
 
 	if attempt <= 0 {

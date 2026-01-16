@@ -6,9 +6,9 @@ package admin
 import serveradmin "github.com/apimgr/vidveil/src/server/service/admin"
 
 // Re-export main types and functions from server/service/admin
-type Service = serveradmin.Service
-type Admin = serveradmin.Admin
+type AdminService = serveradmin.AdminService
+type AdminUser = serveradmin.AdminUser
 
 var (
-	NewService = serveradmin.NewService
+	NewAdminService = serveradmin.NewAdminService
 )

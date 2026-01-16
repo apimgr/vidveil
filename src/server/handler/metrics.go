@@ -13,10 +13,10 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/engine"
 )
 
-// Metrics holds application metrics
-type Metrics struct {
-	cfg       *config.Config
-	engineMgr *engine.Manager
+// ServerMetrics holds application metrics
+type ServerMetrics struct {
+	appConfig *config.AppConfig
+	engineMgr *engine.EngineManager
 	startTime time.Time
 
 	// Counters
@@ -27,43 +27,43 @@ type Metrics struct {
 }
 
 // NewMetrics creates a new metrics collector
-func NewMetrics(cfg *config.Config, engineMgr *engine.Manager) *Metrics {
-	return &Metrics{
-		cfg:       cfg,
+func NewMetrics(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *ServerMetrics {
+	return &ServerMetrics{
+		appConfig: appConfig,
 		engineMgr: engineMgr,
 		startTime: time.Now(),
 	}
 }
 
 // IncrementRequests increments the total request counter
-func (m *Metrics) IncrementRequests() {
+func (m *ServerMetrics) IncrementRequests() {
 	atomic.AddUint64(&m.requestsTotal, 1)
 }
 
 // IncrementSearches increments the search counter
-func (m *Metrics) IncrementSearches() {
+func (m *ServerMetrics) IncrementSearches() {
 	atomic.AddUint64(&m.searchesTotal, 1)
 }
 
 // IncrementSearchErrors increments the search error counter
-func (m *Metrics) IncrementSearchErrors() {
+func (m *ServerMetrics) IncrementSearchErrors() {
 	atomic.AddUint64(&m.searchErrors, 1)
 }
 
 // IncrementAPIRequests increments the API request counter
-func (m *Metrics) IncrementAPIRequests() {
+func (m *ServerMetrics) IncrementAPIRequests() {
 	atomic.AddUint64(&m.apiRequestsTotal, 1)
 }
 
 // Handler returns the Prometheus metrics handler
-func (m *Metrics) Handler() http.HandlerFunc {
+func (m *ServerMetrics) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Check for token if metrics require auth
-		if m.cfg.Server.Metrics.Token != "" {
+		if m.appConfig.Server.Metrics.Token != "" {
 			token := r.Header.Get("Authorization")
-			if token != "Bearer "+m.cfg.Server.Metrics.Token {
+			if token != "Bearer "+m.appConfig.Server.Metrics.Token {
 				token = r.URL.Query().Get("token")
-				if token != m.cfg.Server.Metrics.Token {
+				if token != m.appConfig.Server.Metrics.Token {
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
@@ -141,7 +141,7 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		fmt.Fprintf(w, "\n")
 
 		// Memory metrics
-		if m.cfg.Server.Metrics.IncludeSystem {
+		if m.appConfig.Server.Metrics.IncludeSystem {
 			fmt.Fprintf(w, "# HELP go_memstats_alloc_bytes Number of bytes allocated and still in use\n")
 			fmt.Fprintf(w, "# TYPE go_memstats_alloc_bytes gauge\n")
 			fmt.Fprintf(w, "go_memstats_alloc_bytes %d\n", memStats.Alloc)
@@ -181,7 +181,7 @@ func (m *Metrics) Handler() http.HandlerFunc {
 }
 
 // MetricsMiddleware creates middleware that tracks request metrics
-func (m *Metrics) MetricsMiddleware(next http.Handler) http.Handler {
+func (m *ServerMetrics) MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.IncrementRequests()
 		next.ServeHTTP(w, r)

@@ -25,8 +25,8 @@ type Translator struct {
 	mu           sync.RWMutex
 }
 
-// New creates a new translator
-func New() *Translator {
+// NewTranslator creates a new translator
+func NewTranslator() *Translator {
 	t := &Translator{
 		translations: make(map[string]map[string]string),
 		fallback:     DefaultLocale,
@@ -198,8 +198,8 @@ func (t *Translator) loadDefaultTranslations() {
 	}
 }
 
-// T translates a key for the given locale
-func (t *Translator) T(locale, key string) string {
+// Translate translates a key for the given locale
+func (t *Translator) Translate(locale, key string) string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -231,9 +231,9 @@ func (t *Translator) T(locale, key string) string {
 	return key
 }
 
-// TF translates with format arguments
-func (t *Translator) TF(locale, key string, args ...interface{}) string {
-	return fmt.Sprintf(t.T(locale, key), args...)
+// TranslateFormat translates with format arguments
+func (t *Translator) TranslateFormat(locale, key string, args ...interface{}) string {
+	return fmt.Sprintf(t.Translate(locale, key), args...)
 }
 
 // GetLocale extracts the preferred locale from an HTTP request per AI.md
@@ -365,30 +365,30 @@ func (t *Translator) Middleware(next http.Handler) http.Handler {
 func (t *Translator) TemplateFunc(locale string) func(key string, args ...interface{}) string {
 	return func(key string, args ...interface{}) string {
 		if len(args) > 0 {
-			return t.TF(locale, key, args...)
+			return t.TranslateFormat(locale, key, args...)
 		}
-		return t.T(locale, key)
+		return t.Translate(locale, key)
 	}
 }
 
 // Global translator instance
-var global *Translator
-var once sync.Once
+var globalTranslator *Translator
+var translatorOnce sync.Once
 
-// Global returns the global translator instance
-func Global() *Translator {
-	once.Do(func() {
-		global = New()
+// GlobalTranslator returns the global translator instance
+func GlobalTranslator() *Translator {
+	translatorOnce.Do(func() {
+		globalTranslator = NewTranslator()
 	})
-	return global
+	return globalTranslator
 }
 
-// T is a convenience function for the global translator
-func T(locale, key string) string {
-	return Global().T(locale, key)
+// Translate is a convenience function for the global translator
+func Translate(locale, key string) string {
+	return GlobalTranslator().Translate(locale, key)
 }
 
-// TF is a convenience function for the global translator with formatting
-func TF(locale, key string, args ...interface{}) string {
-	return Global().TF(locale, key, args...)
+// TranslateFormat is a convenience function for the global translator with formatting
+func TranslateFormat(locale, key string, args ...interface{}) string {
+	return GlobalTranslator().TranslateFormat(locale, key, args...)
 }

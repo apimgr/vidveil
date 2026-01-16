@@ -8,8 +8,8 @@ import (
 	"net/http"
 )
 
-// Response is the unified response structure per AI.md PART 9
-type Response struct {
+// APIResponse is the unified response structure per AI.md PART 9
+type APIResponse struct {
 	OK      bool   `json:"ok"`
 	Data    any    `json:"data,omitempty"`
 	Error   string `json:"error,omitempty"`
@@ -20,7 +20,7 @@ type Response struct {
 func SendOK(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	// Use MarshalIndent with 2-space indentation per PART 14
-	response := Response{OK: true, Data: data}
+	response := APIResponse{OK: true, Data: data}
 	output, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -38,7 +38,7 @@ func SendError(w http.ResponseWriter, code string, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	// Use MarshalIndent with 2-space indentation per PART 14
-	response := Response{OK: false, Error: code, Message: message}
+	response := APIResponse{OK: false, Error: code, Message: message}
 	output, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
 		w.Write([]byte(`{"ok":false,"error":"SERVER_ERROR","message":"Failed to encode error"}`))
@@ -113,7 +113,7 @@ const (
 
 // renderResponse renders appropriate response based on client type
 // Per AI.md PART 14 lines 15389-15450: Different clients get different formats
-func (h *Handler) renderResponse(w http.ResponseWriter, r *http.Request, name string, data map[string]interface{}) {
+func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, name string, data map[string]interface{}) {
 	// 1. Our CLI client - INTERACTIVE, receives JSON, renders own TUI/GUI
 	if isOurCliClient(r) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -196,7 +196,7 @@ func isHttpTool(r *http.Request) bool {
 }
 
 // renderSimpleHTML creates basic HTML for HTTP tools (to be converted to text)
-func (h *Handler) renderSimpleHTML(name string, data map[string]interface{}) string {
+func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{}) string {
 	html := "<html><body>"
 	
 	switch name {

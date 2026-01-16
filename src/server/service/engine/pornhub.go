@@ -22,9 +22,9 @@ type PornHubEngine struct {
 }
 
 // NewPornHubEngine creates a new PornHub engine
-func NewPornHubEngine(cfg *config.Config, torClient *tor.Client) *PornHubEngine {
+func NewPornHubEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *PornHubEngine {
 	e := &PornHubEngine{
-		BaseEngine: NewBaseEngine("pornhub", "PornHub", "https://www.pornhub.com", 1, cfg, torClient),
+		BaseEngine: NewBaseEngine("pornhub", "PornHub", "https://www.pornhub.com", 1, appConfig, torClient),
 		parser:     parser.NewPornHubParser(),
 	}
 	// Set capabilities per IDEA.md

@@ -45,7 +45,7 @@ type SyncChannel interface {
 
 // SyncManager manages cross-database synchronization
 type SyncManager struct {
-	db        *Database
+	db        *AppDatabase
 	channel   SyncChannel
 	nodeID    string
 	mu        sync.RWMutex
@@ -61,7 +61,7 @@ type SyncManager struct {
 }
 
 // NewSyncManager creates a new sync manager
-func NewSyncManager(db *Database, channel SyncChannel, nodeID string) *SyncManager {
+func NewSyncManager(db *AppDatabase, channel SyncChannel, nodeID string) *SyncManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &SyncManager{
 		db:      db,

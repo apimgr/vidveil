@@ -10,22 +10,22 @@ import (
 	"strings"
 )
 
-// Manager handles system service management
-type Manager struct {
+// SystemServiceManager handles system service management
+type SystemServiceManager struct {
 	name        string
 	displayName string
 	description string
 	execPath    string
 }
 
-// New creates a new service manager
-func New(name, displayName, description string) (*Manager, error) {
+// NewSystemServiceManager creates a new service manager
+func NewSystemServiceManager(name, displayName, description string) (*SystemServiceManager, error) {
 	execPath, err := os.Executable()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	return &Manager{
+	return &SystemServiceManager{
 		name:        name,
 		displayName: displayName,
 		description: description,
@@ -34,7 +34,7 @@ func New(name, displayName, description string) (*Manager, error) {
 }
 
 // Start starts the service
-func (m *Manager) Start() error {
+func (m *SystemServiceManager) Start() error {
 	switch runtime.GOOS {
 	case "linux":
 		return m.linuxStart()
@@ -50,7 +50,7 @@ func (m *Manager) Start() error {
 }
 
 // Stop stops the service
-func (m *Manager) Stop() error {
+func (m *SystemServiceManager) Stop() error {
 	switch runtime.GOOS {
 	case "linux":
 		return m.linuxStop()
@@ -66,7 +66,7 @@ func (m *Manager) Stop() error {
 }
 
 // Restart restarts the service
-func (m *Manager) Restart() error {
+func (m *SystemServiceManager) Restart() error {
 	switch runtime.GOOS {
 	case "linux":
 		return m.linuxRestart()
@@ -82,7 +82,7 @@ func (m *Manager) Restart() error {
 }
 
 // Reload sends SIGHUP to reload configuration
-func (m *Manager) Reload() error {
+func (m *SystemServiceManager) Reload() error {
 	switch runtime.GOOS {
 	case "linux":
 		return m.linuxReload()
@@ -98,7 +98,7 @@ func (m *Manager) Reload() error {
 }
 
 // Install installs the service
-func (m *Manager) Install() error {
+func (m *SystemServiceManager) Install() error {
 	switch runtime.GOOS {
 	case "linux":
 		return m.linuxInstall()
@@ -114,7 +114,7 @@ func (m *Manager) Install() error {
 }
 
 // Uninstall removes the service
-func (m *Manager) Uninstall() error {
+func (m *SystemServiceManager) Uninstall() error {
 	switch runtime.GOOS {
 	case "linux":
 		return m.linuxUninstall()
@@ -130,7 +130,7 @@ func (m *Manager) Uninstall() error {
 }
 
 // Disable disables the service from starting at boot
-func (m *Manager) Disable() error {
+func (m *SystemServiceManager) Disable() error {
 	switch runtime.GOOS {
 	case "linux":
 		return m.linuxDisable()
@@ -145,8 +145,8 @@ func (m *Manager) Disable() error {
 	}
 }
 
-// Status returns the current service status per AI.md PART 25
-func (m *Manager) Status() (string, error) {
+// GetServiceStatus returns the current service status per AI.md PART 25
+func (m *SystemServiceManager) GetServiceStatus() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
 		return m.linuxStatus()
@@ -162,7 +162,7 @@ func (m *Manager) Status() (string, error) {
 }
 
 // linuxStatus returns service status on Linux
-func (m *Manager) linuxStatus() (string, error) {
+func (m *SystemServiceManager) linuxStatus() (string, error) {
 	if m.hasSystemd() {
 		out, err := exec.Command("systemctl", "is-active", m.name).Output()
 		status := strings.TrimSpace(string(out))
@@ -191,7 +191,7 @@ func (m *Manager) linuxStatus() (string, error) {
 }
 
 // darwinStatus returns service status on macOS
-func (m *Manager) darwinStatus() (string, error) {
+func (m *SystemServiceManager) darwinStatus() (string, error) {
 	out, err := exec.Command("launchctl", "list", m.launchdLabel()).CombinedOutput()
 	if err != nil {
 		return "stopped", nil
@@ -203,7 +203,7 @@ func (m *Manager) darwinStatus() (string, error) {
 }
 
 // windowsStatus returns service status on Windows
-func (m *Manager) windowsStatus() (string, error) {
+func (m *SystemServiceManager) windowsStatus() (string, error) {
 	out, err := exec.Command("sc", "query", m.name).CombinedOutput()
 	if err != nil {
 		return "stopped", nil
@@ -218,7 +218,7 @@ func (m *Manager) windowsStatus() (string, error) {
 }
 
 // bsdStatus returns service status on BSD
-func (m *Manager) bsdStatus() (string, error) {
+func (m *SystemServiceManager) bsdStatus() (string, error) {
 	out, err := exec.Command("service", m.name, "status").CombinedOutput()
 	if err != nil {
 		return "stopped", nil
@@ -230,7 +230,7 @@ func (m *Manager) bsdStatus() (string, error) {
 }
 
 // Linux - systemd and runit support
-func (m *Manager) linuxStart() error {
+func (m *SystemServiceManager) linuxStart() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "start", m.name)
 	}
@@ -240,7 +240,7 @@ func (m *Manager) linuxStart() error {
 	return fmt.Errorf("no supported service manager found")
 }
 
-func (m *Manager) linuxStop() error {
+func (m *SystemServiceManager) linuxStop() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "stop", m.name)
 	}
@@ -250,7 +250,7 @@ func (m *Manager) linuxStop() error {
 	return fmt.Errorf("no supported service manager found")
 }
 
-func (m *Manager) linuxRestart() error {
+func (m *SystemServiceManager) linuxRestart() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "restart", m.name)
 	}
@@ -260,7 +260,7 @@ func (m *Manager) linuxRestart() error {
 	return fmt.Errorf("no supported service manager found")
 }
 
-func (m *Manager) linuxReload() error {
+func (m *SystemServiceManager) linuxReload() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "reload", m.name)
 	}
@@ -270,7 +270,7 @@ func (m *Manager) linuxReload() error {
 	return fmt.Errorf("no supported service manager found")
 }
 
-func (m *Manager) linuxInstall() error {
+func (m *SystemServiceManager) linuxInstall() error {
 	if m.hasSystemd() {
 		return m.installSystemd()
 	}
@@ -280,7 +280,7 @@ func (m *Manager) linuxInstall() error {
 	return fmt.Errorf("no supported service manager found (need systemd or runit)")
 }
 
-func (m *Manager) linuxUninstall() error {
+func (m *SystemServiceManager) linuxUninstall() error {
 	if m.hasSystemd() {
 		return m.uninstallSystemd()
 	}
@@ -290,7 +290,7 @@ func (m *Manager) linuxUninstall() error {
 	return fmt.Errorf("no supported service manager found")
 }
 
-func (m *Manager) linuxDisable() error {
+func (m *SystemServiceManager) linuxDisable() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "disable", m.name)
 	}
@@ -301,17 +301,17 @@ func (m *Manager) linuxDisable() error {
 	return fmt.Errorf("no supported service manager found")
 }
 
-func (m *Manager) hasSystemd() bool {
+func (m *SystemServiceManager) hasSystemd() bool {
 	_, err := exec.LookPath("systemctl")
 	return err == nil
 }
 
-func (m *Manager) hasRunit() bool {
+func (m *SystemServiceManager) hasRunit() bool {
 	_, err := exec.LookPath("sv")
 	return err == nil
 }
 
-func (m *Manager) installSystemd() error {
+func (m *SystemServiceManager) installSystemd() error {
 	unitPath := filepath.Join("/etc/systemd/system", m.name+".service")
 
 	// Per AI.md PART 25: systemd unit file with security hardening
@@ -359,7 +359,7 @@ WantedBy=multi-user.target
 	return nil
 }
 
-func (m *Manager) uninstallSystemd() error {
+func (m *SystemServiceManager) uninstallSystemd() error {
 	_ = runCmd("systemctl", "stop", m.name)
 	_ = runCmd("systemctl", "disable", m.name)
 
@@ -374,7 +374,7 @@ func (m *Manager) uninstallSystemd() error {
 	return nil
 }
 
-func (m *Manager) installRunit() error {
+func (m *SystemServiceManager) installRunit() error {
 	svcDir := filepath.Join("/etc/sv", m.name)
 	runPath := filepath.Join("/etc/service", m.name)
 
@@ -415,7 +415,7 @@ exec svlogd -tt ./main
 	return nil
 }
 
-func (m *Manager) uninstallRunit() error {
+func (m *SystemServiceManager) uninstallRunit() error {
 	runPath := filepath.Join("/etc/service", m.name)
 	svcDir := filepath.Join("/etc/sv", m.name)
 
@@ -437,24 +437,24 @@ func (m *Manager) uninstallRunit() error {
 }
 
 // macOS - launchd support
-func (m *Manager) darwinStart() error {
+func (m *SystemServiceManager) darwinStart() error {
 	return runCmd("launchctl", "start", m.launchdLabel())
 }
 
-func (m *Manager) darwinStop() error {
+func (m *SystemServiceManager) darwinStop() error {
 	return runCmd("launchctl", "stop", m.launchdLabel())
 }
 
-func (m *Manager) darwinRestart() error {
+func (m *SystemServiceManager) darwinRestart() error {
 	_ = m.darwinStop()
 	return m.darwinStart()
 }
 
-func (m *Manager) darwinReload() error {
+func (m *SystemServiceManager) darwinReload() error {
 	return runCmd("launchctl", "kickstart", "-k", "gui/"+m.launchdLabel())
 }
 
-func (m *Manager) darwinInstall() error {
+func (m *SystemServiceManager) darwinInstall() error {
 	plistPath := m.launchdPlistPath()
 
 	content := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
@@ -491,7 +491,7 @@ func (m *Manager) darwinInstall() error {
 	return nil
 }
 
-func (m *Manager) darwinUninstall() error {
+func (m *SystemServiceManager) darwinUninstall() error {
 	plistPath := m.launchdPlistPath()
 
 	_ = runCmd("launchctl", "unload", plistPath)
@@ -504,33 +504,33 @@ func (m *Manager) darwinUninstall() error {
 	return nil
 }
 
-func (m *Manager) darwinDisable() error {
+func (m *SystemServiceManager) darwinDisable() error {
 	return runCmd("launchctl", "unload", "-w", m.launchdPlistPath())
 }
 
-func (m *Manager) launchdLabel() string {
+func (m *SystemServiceManager) launchdLabel() string {
 	return "com.apimgr." + m.name
 }
 
-func (m *Manager) launchdPlistPath() string {
+func (m *SystemServiceManager) launchdPlistPath() string {
 	return filepath.Join("/Library/LaunchDaemons", m.launchdLabel()+".plist")
 }
 
 // Windows - Windows Service Manager
-func (m *Manager) windowsStart() error {
+func (m *SystemServiceManager) windowsStart() error {
 	return runCmd("sc", "start", m.name)
 }
 
-func (m *Manager) windowsStop() error {
+func (m *SystemServiceManager) windowsStop() error {
 	return runCmd("sc", "stop", m.name)
 }
 
-func (m *Manager) windowsRestart() error {
+func (m *SystemServiceManager) windowsRestart() error {
 	_ = m.windowsStop()
 	return m.windowsStart()
 }
 
-func (m *Manager) windowsInstall() error {
+func (m *SystemServiceManager) windowsInstall() error {
 	// Create service using sc command
 	err := runCmd("sc", "create", m.name,
 		"binPath=", m.execPath,
@@ -548,7 +548,7 @@ func (m *Manager) windowsInstall() error {
 	return nil
 }
 
-func (m *Manager) windowsUninstall() error {
+func (m *SystemServiceManager) windowsUninstall() error {
 	_ = m.windowsStop()
 
 	if err := runCmd("sc", "delete", m.name); err != nil {
@@ -559,28 +559,28 @@ func (m *Manager) windowsUninstall() error {
 	return nil
 }
 
-func (m *Manager) windowsDisable() error {
+func (m *SystemServiceManager) windowsDisable() error {
 	return runCmd("sc", "config", m.name, "start=", "disabled")
 }
 
 // BSD - rc.d support
-func (m *Manager) bsdStart() error {
+func (m *SystemServiceManager) bsdStart() error {
 	return runCmd("service", m.name, "start")
 }
 
-func (m *Manager) bsdStop() error {
+func (m *SystemServiceManager) bsdStop() error {
 	return runCmd("service", m.name, "stop")
 }
 
-func (m *Manager) bsdRestart() error {
+func (m *SystemServiceManager) bsdRestart() error {
 	return runCmd("service", m.name, "restart")
 }
 
-func (m *Manager) bsdReload() error {
+func (m *SystemServiceManager) bsdReload() error {
 	return runCmd("service", m.name, "reload")
 }
 
-func (m *Manager) bsdInstall() error {
+func (m *SystemServiceManager) bsdInstall() error {
 	rcPath := filepath.Join("/usr/local/etc/rc.d", m.name)
 
 	content := fmt.Sprintf(`#!/bin/sh
@@ -623,7 +623,7 @@ run_rc_command "$1"
 	return nil
 }
 
-func (m *Manager) bsdUninstall() error {
+func (m *SystemServiceManager) bsdUninstall() error {
 	_ = m.bsdStop()
 
 	rcPath := filepath.Join("/usr/local/etc/rc.d", m.name)
@@ -635,7 +635,7 @@ func (m *Manager) bsdUninstall() error {
 	return nil
 }
 
-func (m *Manager) bsdDisable() error {
+func (m *SystemServiceManager) bsdDisable() error {
 	rcConf := "/etc/rc.conf.local"
 	data, err := os.ReadFile(rcConf)
 	if err != nil {

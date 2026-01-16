@@ -13,8 +13,8 @@ import (
 type LoveHomePornEngine struct{ *BaseEngine }
 
 // NewLoveHomePornEngine creates a new LoveHomePorn engine
-func NewLoveHomePornEngine(cfg *config.Config, torClient *tor.Client) *LoveHomePornEngine {
-	return &LoveHomePornEngine{NewBaseEngine("lovehomeporn", "LoveHomePorn", "https://lovehomeporn.com", 3, cfg, torClient)}
+func NewLoveHomePornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *LoveHomePornEngine {
+	return &LoveHomePornEngine{NewBaseEngine("lovehomeporn", "LoveHomePorn", "https://lovehomeporn.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on LoveHomePorn

@@ -13,8 +13,8 @@ import (
 type PornOneEngine struct{ *BaseEngine }
 
 // NewPornOneEngine creates a new PornOne engine
-func NewPornOneEngine(cfg *config.Config, torClient *tor.Client) *PornOneEngine {
-	return &PornOneEngine{NewBaseEngine("pornone", "PornOne", "https://pornone.com", 4, cfg, torClient)}
+func NewPornOneEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *PornOneEngine {
+	return &PornOneEngine{NewBaseEngine("pornone", "PornOne", "https://pornone.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on PornOne

@@ -82,15 +82,15 @@ type VanityStatus struct {
 
 // AdminHandler handles admin panel routes per AI.md PART 12
 type AdminHandler struct {
-	cfg          *config.Config
+	appConfig    *config.AppConfig
 	configDir    string
 	dataDir      string
-	engineMgr    *engine.Manager
-	adminSvc     *admin.Service
+	engineMgr    *engine.EngineManager
+	adminSvc     *admin.AdminService
 	migrationMgr MigrationManager
 	torSvc       TorService
 	scheduler    *scheduler.Scheduler
-	logger       *logging.Logger
+	logger       *logging.AppLogger
 	sessions     map[string]adminSession
 	// csrfTokens maps sessionID to csrfToken
 	csrfTokens   map[string]string
@@ -105,9 +105,9 @@ type adminSession struct {
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(cfg *config.Config, configDir, dataDir string, engineMgr *engine.Manager, adminSvc *admin.Service, migrationMgr MigrationManager) *AdminHandler {
+func NewAdminHandler(appConfig *config.AppConfig, configDir, dataDir string, engineMgr *engine.EngineManager, adminSvc *admin.AdminService, migrationMgr MigrationManager) *AdminHandler {
 	return &AdminHandler{
-		cfg:          cfg,
+		appConfig:    appConfig,
 		configDir:    configDir,
 		dataDir:      dataDir,
 		engineMgr:    engineMgr,
@@ -130,7 +130,7 @@ func (h *AdminHandler) SetTorService(t TorService) {
 }
 
 // SetLogger sets the logger for audit and security event logging per AI.md PART 11
-func (h *AdminHandler) SetLogger(l *logging.Logger) {
+func (h *AdminHandler) SetLogger(l *logging.AppLogger) {
 	h.logger = l
 }
 
@@ -168,7 +168,7 @@ func (h *AdminHandler) AuthenticateAdmin(username, password string) (string, err
 
 // CheckCredentials validates credentials and returns admin info (for 2FA flow)
 // Per AI.md PART 17: First step of 2FA login flow
-func (h *AdminHandler) CheckCredentials(username, password string) (*admin.Admin, error) {
+func (h *AdminHandler) CheckCredentials(username, password string) (*admin.AdminUser, error) {
 	adminUser, err := h.adminSvc.Authenticate(username, password)
 	if err != nil {
 		return nil, err
@@ -178,7 +178,7 @@ func (h *AdminHandler) CheckCredentials(username, password string) (*admin.Admin
 
 // CreateSessionForAdmin creates a session for an already-authenticated admin
 // Per AI.md PART 17: Called after 2FA verification
-func (h *AdminHandler) CreateSessionForAdmin(adminUser *admin.Admin) string {
+func (h *AdminHandler) CreateSessionForAdmin(adminUser *admin.AdminUser) string {
 	return h.createSessionWithID(adminUser.Username, adminUser.ID)
 }
 
@@ -316,8 +316,9 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"SiteTitle": h.cfg.Server.Title,
+		"SiteTitle": h.appConfig.Server.Title,
 		"Error":     "",
+		"Theme":     h.appConfig.Web.UI.Theme,
 	}
 
 	if r.Method == http.MethodPost {
@@ -415,7 +416,7 @@ func (h *AdminHandler) renderSetupTokenPage(w http.ResponseWriter, errorMsg stri
         </div>
     </div>
 </body>
-</html>`, h.cfg.Server.Title, func() string {
+</html>`, h.appConfig.Server.Title, func() string {
 		if errorMsg != "" {
 			return fmt.Sprintf(`<div class="error">%s</div>`, errorMsg)
 		}
@@ -497,9 +498,9 @@ func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		"GoVersion":  runtime.Version(),
 		"OS":         runtime.GOOS,
 		"Arch":       runtime.GOARCH,
-		"Mode":       h.cfg.Server.Mode,
-		"Port":       h.cfg.Server.Port,
-		"TorEnabled": h.cfg.Search.Tor.Enabled,
+		"Mode":       h.appConfig.Server.Mode,
+		"Port":       h.appConfig.Server.Port,
+		"TorEnabled": h.appConfig.Search.Tor.Enabled,
 
 		// Scheduled tasks per AI.md PART 17
 		"NextTasks": nextTasks,
@@ -593,8 +594,8 @@ func (h *AdminHandler) WebSettingsPage(w http.ResponseWriter, r *http.Request) {
 // SecuritySettingsPage renders security settings (Section 4)
 func (h *AdminHandler) SecuritySettingsPage(w http.ResponseWriter, r *http.Request) {
 	tokenPrefix := ""
-	if len(h.cfg.Server.Admin.Token) > 8 {
-		tokenPrefix = h.cfg.Server.Admin.Token[:8]
+	if len(h.appConfig.Server.Admin.Token) > 8 {
+		tokenPrefix = h.appConfig.Server.Admin.Token[:8]
 	}
 	h.renderAdminTemplate(w, r, "security", map[string]interface{}{
 		"TokenPrefix": tokenPrefix,
@@ -603,7 +604,7 @@ func (h *AdminHandler) SecuritySettingsPage(w http.ResponseWriter, r *http.Reque
 
 // DatabasePage renders database & cache settings (Section 5)
 func (h *AdminHandler) DatabasePage(w http.ResponseWriter, r *http.Request) {
-	dbPath := h.cfg.Server.Database.SQLite.Dir
+	dbPath := h.appConfig.Server.Database.SQLite.Dir
 	if dbPath == "" {
 		dbPath = "default"
 	}
@@ -636,18 +637,18 @@ func (h *AdminHandler) DatabasePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// External database settings (for Postgres/MySQL)
-	dbHost := h.cfg.Server.Database.Host
-	dbPort := h.cfg.Server.Database.Port
-	dbName := h.cfg.Server.Database.Name
-	dbUser := h.cfg.Server.Database.User
-	dbSSLMode := h.cfg.Server.Database.SSLMode
+	dbHost := h.appConfig.Server.Database.Host
+	dbPort := h.appConfig.Server.Database.Port
+	dbName := h.appConfig.Server.Database.Name
+	dbUser := h.appConfig.Server.Database.User
+	dbSSLMode := h.appConfig.Server.Database.SSLMode
 	if dbSSLMode == "" {
 		dbSSLMode = "disable"
 	}
 
 	// DBSize would require file stat, LastBackup would come from backup service
 	h.renderAdminTemplate(w, r, "database", map[string]interface{}{
-		"DBDriver":     h.cfg.Server.Database.Driver,
+		"DBDriver":     h.appConfig.Server.Database.Driver,
 		"DBPath":       dbPath,
 		"DBSize":       "N/A",
 		"TableCount":   tableCount,
@@ -692,8 +693,8 @@ func (h *AdminHandler) EmailPage(w http.ResponseWriter, r *http.Request) {
 // SSLPage renders SSL/TLS settings (Section 7)
 func (h *AdminHandler) SSLPage(w http.ResponseWriter, r *http.Request) {
 	sslMode := "disabled"
-	if h.cfg.Server.SSL.Enabled {
-		if h.cfg.Server.SSL.LetsEncrypt.Enabled {
+	if h.appConfig.Server.SSL.Enabled {
+		if h.appConfig.Server.SSL.LetsEncrypt.Enabled {
 			sslMode = "letsencrypt"
 		} else {
 			sslMode = "custom"
@@ -701,8 +702,8 @@ func (h *AdminHandler) SSLPage(w http.ResponseWriter, r *http.Request) {
 	}
 	h.renderAdminTemplate(w, r, "ssl", map[string]interface{}{
 		"SSLMode":    sslMode,
-		"SSLEnabled": h.cfg.Server.SSL.Enabled,
-		"SSLDomain":  h.cfg.Server.SSL.LetsEncrypt.Domain,
+		"SSLEnabled": h.appConfig.Server.SSL.Enabled,
+		"SSLDomain":  h.appConfig.Server.SSL.LetsEncrypt.Domain,
 		"SSLExpiry":  "N/A",
 		"SSLIssuer":  "N/A",
 	})
@@ -730,7 +731,7 @@ func (h *AdminHandler) SchedulerPage(w http.ResponseWriter, r *http.Request) {
 // BackupPage renders backup & maintenance (Section 10)
 func (h *AdminHandler) BackupPage(w http.ResponseWriter, r *http.Request) {
 	// Get list of available backups from maintenance service
-	maint := maintenance.New(h.configDir, h.dataDir, "")
+	maint := maintenance.NewMaintenanceManager(h.configDir, h.dataDir, "")
 	backupInfos, err := maint.ListBackups()
 	
 	// Convert to map format for template
@@ -772,7 +773,7 @@ func (h *AdminHandler) SystemInfoPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "system", map[string]interface{}{
 		"Version":         version.GetVersion(),
 		"GoVersion":       runtime.Version(),
-		"BuildDate":       BuildDateTime,
+		"BuildDate":       BuildDateTime(),
 		"CommitID":        "unknown",
 		"Uptime":          time.Since(h.startTime).Round(time.Second).String(),
 		"StartTime":       h.startTime.Format("2006-01-02 15:04:05"),
@@ -961,7 +962,7 @@ func (h *AdminHandler) NotificationsPage(w http.ResponseWriter, r *http.Request)
 func (h *AdminHandler) APINotificationsGet(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
-		"data":    h.cfg.Server.Notifications,
+		"data":    h.appConfig.Server.Notifications,
 	})
 }
 
@@ -987,20 +988,20 @@ func (h *AdminHandler) APINotificationsUpdate(w http.ResponseWriter, r *http.Req
 	}
 
 	// Update config
-	h.cfg.Server.Notifications.Enabled = req.Enabled
-	h.cfg.Server.Notifications.Email = req.Email
-	h.cfg.Server.Notifications.Bell = req.Bell
-	h.cfg.Server.Notifications.Types.Startup = req.Types.Startup
-	h.cfg.Server.Notifications.Types.Shutdown = req.Types.Shutdown
-	h.cfg.Server.Notifications.Types.Error = req.Types.Error
-	h.cfg.Server.Notifications.Types.Security = req.Types.Security
-	h.cfg.Server.Notifications.Types.Update = req.Types.Update
-	h.cfg.Server.Notifications.Types.CertExpiry = req.Types.CertExpiry
+	h.appConfig.Server.Notifications.Enabled = req.Enabled
+	h.appConfig.Server.Notifications.Email = req.Email
+	h.appConfig.Server.Notifications.Bell = req.Bell
+	h.appConfig.Server.Notifications.Types.Startup = req.Types.Startup
+	h.appConfig.Server.Notifications.Types.Shutdown = req.Types.Shutdown
+	h.appConfig.Server.Notifications.Types.Error = req.Types.Error
+	h.appConfig.Server.Notifications.Types.Security = req.Types.Security
+	h.appConfig.Server.Notifications.Types.Update = req.Types.Update
+	h.appConfig.Server.Notifications.Types.CertExpiry = req.Types.CertExpiry
 
 	// Save config
-	paths := config.GetPaths("", "")
+	paths := config.GetAppPaths("", "")
 	configPath := filepath.Join(paths.Config, "server.yml")
-	if err := config.Save(h.cfg, configPath); err != nil {
+	if err := config.SaveAppConfig(h.appConfig, configPath); err != nil {
 		h.jsonError(w, "Failed to save configuration", "ERR_CONFIG_SAVE", http.StatusInternalServerError)
 		return
 	}
@@ -1014,13 +1015,13 @@ func (h *AdminHandler) APINotificationsUpdate(w http.ResponseWriter, r *http.Req
 // APINotificationsTest sends a test notification
 func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Request) {
 	// Check if email is enabled
-	if !h.cfg.Server.Notifications.Enabled || !h.cfg.Server.Notifications.Email {
+	if !h.appConfig.Server.Notifications.Enabled || !h.appConfig.Server.Notifications.Email {
 		h.jsonError(w, "Email notifications are not enabled", "ERR_NOT_ENABLED", http.StatusBadRequest)
 		return
 	}
 
 	// Check if SMTP is configured
-	if h.cfg.Server.Email.Host == "" {
+	if h.appConfig.Server.Email.Host == "" {
 		h.jsonError(w, "SMTP is not configured", "ERR_SMTP_NOT_CONFIGURED", http.StatusBadRequest)
 		return
 	}
@@ -1030,10 +1031,10 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 		Email string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		req.Email = h.cfg.Server.Email.From
+		req.Email = h.appConfig.Server.Email.From
 	}
 	if req.Email == "" {
-		req.Email = h.cfg.Server.Email.From
+		req.Email = h.appConfig.Server.Email.From
 	}
 	if req.Email == "" {
 		h.jsonError(w, "No recipient email specified", "ERR_NO_RECIPIENT", http.StatusBadRequest)
@@ -1041,7 +1042,7 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Send test email via email service
-	emailSvc := email.New(h.cfg)
+	emailSvc := email.NewEmailService(h.appConfig)
 	if err := emailSvc.SendTest(req.Email); err != nil {
 		h.jsonError(w, fmt.Sprintf("Failed to send test email: %v", err), "ERR_EMAIL_SEND", http.StatusInternalServerError)
 		return
@@ -1057,10 +1058,10 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 // TorConnected and OnionEnabled would check actual Tor connection/service
 func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "tor", map[string]interface{}{
-		"TorEnabled":      h.cfg.Search.Tor.Enabled,
+		"TorEnabled":      h.appConfig.Search.Tor.Enabled,
 		"TorConnected":    false,
-		"TorProxy":        h.cfg.Search.Tor.Proxy,
-		"TorControlPort":  strconv.Itoa(h.cfg.Search.Tor.ControlPort),
+		"TorProxy":        h.appConfig.Search.Tor.Proxy,
+		"TorControlPort":  strconv.Itoa(h.appConfig.Search.Tor.ControlPort),
 		"TorCircuit":      "N/A",
 		"OnionEnabled":    false,
 		"OnionAddress":    "",
@@ -1087,8 +1088,8 @@ func (h *AdminHandler) SecurityAuthPage(w http.ResponseWriter, r *http.Request) 
 // SecurityTokensPage renders API token management per PART 15
 func (h *AdminHandler) SecurityTokensPage(w http.ResponseWriter, r *http.Request) {
 	tokenPrefix := ""
-	if len(h.cfg.Server.Admin.Token) > 8 {
-		tokenPrefix = h.cfg.Server.Admin.Token[:8]
+	if len(h.appConfig.Server.Admin.Token) > 8 {
+		tokenPrefix = h.appConfig.Server.Admin.Token[:8]
 	}
 	h.renderAdminTemplate(w, r, "security-tokens", map[string]interface{}{
 		"TokenPrefix": tokenPrefix,
@@ -1431,9 +1432,10 @@ func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"SiteTitle": h.cfg.Server.Title,
+		"SiteTitle": h.appConfig.Server.Title,
 		"Token":     token,
 		"Valid":     false,
+		"Theme":     h.appConfig.Web.UI.Theme,
 	}
 
 	// Validate invite token
@@ -1537,12 +1539,12 @@ func (h *AdminHandler) APIUsersAdminsInvite(w http.ResponseWriter, r *http.Reque
 
 	// Build invite URL
 	scheme := "https"
-	if h.cfg.Server.Mode == "development" {
+	if h.appConfig.Server.Mode == "development" {
 		scheme = "http"
 	}
-	host := h.cfg.Server.FQDN
+	host := h.appConfig.Server.FQDN
 	if host == "" {
-		host = fmt.Sprintf("localhost:%s", h.cfg.Server.Port)
+		host = fmt.Sprintf("localhost:%s", h.appConfig.Server.Port)
 	}
 	inviteURL := fmt.Sprintf("%s://%s/admin/invite/%s", scheme, host, token)
 
@@ -1677,9 +1679,9 @@ func (h *AdminHandler) APIStats(w http.ResponseWriter, r *http.Request) {
 				"arch":       runtime.GOARCH,
 			},
 			"config": map[string]interface{}{
-				"port":           h.cfg.Server.Port,
-				"tor_enabled":    h.cfg.Search.Tor.Enabled,
-				"results_per_page": h.cfg.Search.ResultsPerPage,
+				"port":           h.appConfig.Server.Port,
+				"tor_enabled":    h.appConfig.Search.Tor.Enabled,
+				"results_per_page": h.appConfig.Search.ResultsPerPage,
 			},
 		},
 	}
@@ -1704,7 +1706,7 @@ func (h *AdminHandler) APIBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	maint := maintenance.New("", "", "")
+	maint := maintenance.NewMaintenanceManager("", "", "")
 	backupFile := r.URL.Query().Get("file")
 
 	if err := maint.Backup(backupFile); err != nil {
@@ -1894,7 +1896,7 @@ func (h *AdminHandler) APIMaintenanceMode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	maint := maintenance.New("", "", "")
+	maint := maintenance.NewMaintenanceManager("", "", "")
 
 	enabled := r.URL.Query().Get("enabled")
 	if enabled == "" {
@@ -1929,20 +1931,20 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 		// Return sanitized config (no passwords/tokens)
 		safeCfg := map[string]interface{}{
 			"server": map[string]interface{}{
-				"port":        h.cfg.Server.Port,
-				"address":     h.cfg.Server.Address,
-				"fqdn":        h.cfg.Server.FQDN,
-				"mode":        h.cfg.Server.Mode,
-				"title":       h.cfg.Server.Title,
-				"description": h.cfg.Server.Description,
+				"port":        h.appConfig.Server.Port,
+				"address":     h.appConfig.Server.Address,
+				"fqdn":        h.appConfig.Server.FQDN,
+				"mode":        h.appConfig.Server.Mode,
+				"title":       h.appConfig.Server.Title,
+				"description": h.appConfig.Server.Description,
 			},
 			"web": map[string]interface{}{
-				"theme": h.cfg.Web.UI.Theme,
-				"cors":  h.cfg.Web.CORS,
+				"theme": h.appConfig.Web.UI.Theme,
+				"cors":  h.appConfig.Web.CORS,
 			},
 			"search": map[string]interface{}{
-				"results_per_page": h.cfg.Search.ResultsPerPage,
-				"tor_enabled":      h.cfg.Search.Tor.Enabled,
+				"results_per_page": h.appConfig.Search.ResultsPerPage,
+				"tor_enabled":      h.appConfig.Search.Tor.Enabled,
 			},
 		}
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
@@ -1962,57 +1964,57 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 		updated := false
 		if serverCfg, ok := updates["server"].(map[string]interface{}); ok {
 			if title, ok := serverCfg["title"].(string); ok {
-				h.cfg.Server.Title = title
+				h.appConfig.Server.Title = title
 				updated = true
 			}
 			if desc, ok := serverCfg["description"].(string); ok {
-				h.cfg.Server.Description = desc
+				h.appConfig.Server.Description = desc
 				updated = true
 			}
 			if mode, ok := serverCfg["mode"].(string); ok {
-				h.cfg.Server.Mode = config.NormalizeMode(mode)
+				h.appConfig.Server.Mode = config.NormalizeMode(mode)
 				updated = true
 			}
 			if fqdn, ok := serverCfg["fqdn"].(string); ok {
-				h.cfg.Server.FQDN = fqdn
+				h.appConfig.Server.FQDN = fqdn
 				updated = true
 			}
 		}
 		if webCfg, ok := updates["web"].(map[string]interface{}); ok {
 			if theme, ok := webCfg["theme"].(string); ok {
-				h.cfg.Web.UI.Theme = theme
+				h.appConfig.Web.UI.Theme = theme
 				updated = true
 			}
 		}
 		if searchCfg, ok := updates["search"].(map[string]interface{}); ok {
 			if rpp, ok := searchCfg["results_per_page"].(float64); ok {
-				h.cfg.Search.ResultsPerPage = int(rpp)
+				h.appConfig.Search.ResultsPerPage = int(rpp)
 				updated = true
 			}
 			// Tor settings per AI.md PART 32
 			if torCfg, ok := searchCfg["tor"].(map[string]interface{}); ok {
 				if enabled, ok := torCfg["enabled"].(bool); ok {
-					h.cfg.Search.Tor.Enabled = enabled
+					h.appConfig.Search.Tor.Enabled = enabled
 					updated = true
 				}
 				if proxy, ok := torCfg["proxy"].(string); ok {
-					h.cfg.Search.Tor.Proxy = proxy
+					h.appConfig.Search.Tor.Proxy = proxy
 					updated = true
 				}
 				if port, ok := torCfg["control_port"].(float64); ok {
-					h.cfg.Search.Tor.ControlPort = int(port)
+					h.appConfig.Search.Tor.ControlPort = int(port)
 					updated = true
 				}
 				if forceAll, ok := torCfg["force_all"].(bool); ok {
-					h.cfg.Search.Tor.ForceAll = forceAll
+					h.appConfig.Search.Tor.ForceAll = forceAll
 					updated = true
 				}
 				if rotate, ok := torCfg["rotate_circuit"].(bool); ok {
-					h.cfg.Search.Tor.RotateCircuit = rotate
+					h.appConfig.Search.Tor.RotateCircuit = rotate
 					updated = true
 				}
 				if fallback, ok := torCfg["clearnet_fallback"].(bool); ok {
-					h.cfg.Search.Tor.ClearnetFallback = fallback
+					h.appConfig.Search.Tor.ClearnetFallback = fallback
 					updated = true
 				}
 			}
@@ -2020,9 +2022,9 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 
 		if updated {
 			// Save config to file
-			paths := config.GetPaths("", "")
+			paths := config.GetAppPaths("", "")
 			configPath := filepath.Join(paths.Config, "server.yml")
-			if err := config.Save(h.cfg, configPath); err != nil {
+			if err := config.SaveAppConfig(h.appConfig, configPath); err != nil {
 				// Per AI.md PART 9: Never expose error details in responses
 				h.jsonError(w, "Failed to save configuration", "ERR_INTERNAL", http.StatusInternalServerError)
 				return
@@ -2066,7 +2068,7 @@ func (h *AdminHandler) APIStatus(w http.ResponseWriter, r *http.Request) {
 		"ok": true,
 		"data": map[string]interface{}{
 			"status":  "running",
-			"mode":    h.cfg.Server.Mode,
+			"mode":    h.appConfig.Server.Mode,
 			"uptime":  uptime.String(),
 			"version": version.GetVersion(),
 		},
@@ -2095,12 +2097,12 @@ func (h *AdminHandler) APIHealth(w http.ResponseWriter, r *http.Request) {
 
 // APILogsAccess returns access logs
 func (h *AdminHandler) APILogsAccess(w http.ResponseWriter, r *http.Request) {
-	lines := h.readLogLines(h.cfg.Server.Logs.Access.Filename, 100)
+	lines := h.readLogLines(h.appConfig.Server.Logs.Access.Filename, 100)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
-			"filename": h.cfg.Server.Logs.Access.Filename,
+			"filename": h.appConfig.Server.Logs.Access.Filename,
 			"lines":    lines,
 		},
 	})
@@ -2108,12 +2110,12 @@ func (h *AdminHandler) APILogsAccess(w http.ResponseWriter, r *http.Request) {
 
 // APILogsError returns error logs
 func (h *AdminHandler) APILogsError(w http.ResponseWriter, r *http.Request) {
-	lines := h.readLogLines(h.cfg.Server.Logs.Error.Filename, 100)
+	lines := h.readLogLines(h.appConfig.Server.Logs.Error.Filename, 100)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
-			"filename": h.cfg.Server.Logs.Error.Filename,
+			"filename": h.appConfig.Server.Logs.Error.Filename,
 			"lines":    lines,
 		},
 	})
@@ -2121,12 +2123,12 @@ func (h *AdminHandler) APILogsError(w http.ResponseWriter, r *http.Request) {
 
 // APILogsAudit returns audit logs per PART 17
 func (h *AdminHandler) APILogsAudit(w http.ResponseWriter, r *http.Request) {
-	lines := h.readLogLines(h.cfg.Server.Logs.Audit.Filename, 100)
+	lines := h.readLogLines(h.appConfig.Server.Logs.Audit.Filename, 100)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
-			"filename": h.cfg.Server.Logs.Audit.Filename,
+			"filename": h.appConfig.Server.Logs.Audit.Filename,
 			"lines":    lines,
 		},
 	})
@@ -2142,7 +2144,7 @@ func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	maint := maintenance.New("", "", "")
+	maint := maintenance.NewMaintenanceManager("", "", "")
 	backupFile := r.URL.Query().Get("file")
 
 	if err := maint.Restore(backupFile); err != nil {
@@ -2322,12 +2324,12 @@ func (h *AdminHandler) APITorStatus(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
-			"enabled":       h.cfg.Search.Tor.Enabled,
+			"enabled":       h.appConfig.Search.Tor.Enabled,
 			"status":        "disconnected",
 			"onion_address": "",
 			"uptime":        "",
-			"proxy":         h.cfg.Search.Tor.Proxy,
-			"control_port":  h.cfg.Search.Tor.ControlPort,
+			"proxy":         h.appConfig.Search.Tor.Proxy,
+			"control_port":  h.appConfig.Search.Tor.ControlPort,
 		},
 	})
 }
@@ -2359,27 +2361,27 @@ func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
 	// Update config
 	updated := false
 	if req.Enabled != nil {
-		h.cfg.Search.Tor.Enabled = *req.Enabled
+		h.appConfig.Search.Tor.Enabled = *req.Enabled
 		updated = true
 	}
 	if req.Proxy != nil {
-		h.cfg.Search.Tor.Proxy = *req.Proxy
+		h.appConfig.Search.Tor.Proxy = *req.Proxy
 		updated = true
 	}
 	if req.ControlPort != nil {
-		h.cfg.Search.Tor.ControlPort = *req.ControlPort
+		h.appConfig.Search.Tor.ControlPort = *req.ControlPort
 		updated = true
 	}
 	if req.ForceAll != nil {
-		h.cfg.Search.Tor.ForceAll = *req.ForceAll
+		h.appConfig.Search.Tor.ForceAll = *req.ForceAll
 		updated = true
 	}
 	if req.RotateCircuit != nil {
-		h.cfg.Search.Tor.RotateCircuit = *req.RotateCircuit
+		h.appConfig.Search.Tor.RotateCircuit = *req.RotateCircuit
 		updated = true
 	}
 	if req.ClearnetFallback != nil {
-		h.cfg.Search.Tor.ClearnetFallback = *req.ClearnetFallback
+		h.appConfig.Search.Tor.ClearnetFallback = *req.ClearnetFallback
 		updated = true
 	}
 
@@ -2570,7 +2572,7 @@ func (h *AdminHandler) APITorTest(w http.ResponseWriter, r *http.Request) {
 
 // Helper to read log file lines
 func (h *AdminHandler) readLogLines(filename string, maxLines int) []string {
-	paths := config.GetPaths("", "")
+	paths := config.GetAppPaths("", "")
 	logPath := filepath.Join(paths.Data, "logs", filename)
 
 	file, err := os.Open(logPath)
@@ -2599,7 +2601,7 @@ func (h *AdminHandler) validateToken(token string) bool {
 	if token == "" {
 		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(token), []byte(h.cfg.Server.Admin.Token)) == 1
+	return subtle.ConstantTimeCompare([]byte(token), []byte(h.appConfig.Server.Admin.Token)) == 1
 }
 
 func (h *AdminHandler) createSessionWithID(username string, adminID int64) string {
@@ -2737,7 +2739,7 @@ func (h *AdminHandler) renderDashboard() string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - ` + h.cfg.Server.Title + `</title>
+    <title>Admin Dashboard - ` + h.appConfig.Server.Title + `</title>
     ` + adminStyles() + `
 </head>
 <body>
@@ -2767,11 +2769,11 @@ func (h *AdminHandler) renderDashboard() string {
         <div class="card">
             <h2>System Info</h2>
             <table class="info-table">
-                <tr><td>Mode</td><td>` + h.cfg.Server.Mode + `</td></tr>
+                <tr><td>Mode</td><td>` + h.appConfig.Server.Mode + `</td></tr>
                 <tr><td>Go Version</td><td>` + runtime.Version() + `</td></tr>
                 <tr><td>OS / Arch</td><td>` + runtime.GOOS + ` / ` + runtime.GOARCH + `</td></tr>
-                <tr><td>Server Port</td><td>` + h.cfg.Server.Port + `</td></tr>
-                <tr><td>Tor Enabled</td><td>` + strconv.FormatBool(h.cfg.Search.Tor.Enabled) + `</td></tr>
+                <tr><td>Server Port</td><td>` + h.appConfig.Server.Port + `</td></tr>
+                <tr><td>Tor Enabled</td><td>` + strconv.FormatBool(h.appConfig.Search.Tor.Enabled) + `</td></tr>
             </table>
         </div>
 
@@ -2864,7 +2866,7 @@ func (h *AdminHandler) renderEnginesPage() string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Engines - Admin - ` + h.cfg.Server.Title + `</title>
+    <title>Engines - Admin - ` + h.appConfig.Server.Title + `</title>
     ` + adminStyles() + `
 </head>
 <body>
@@ -2898,7 +2900,7 @@ func (h *AdminHandler) renderSettingsPage() string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - Admin - ` + h.cfg.Server.Title + `</title>
+    <title>Settings - Admin - ` + h.appConfig.Server.Title + `</title>
     ` + adminStyles() + `
 </head>
 <body>
@@ -2909,7 +2911,7 @@ func (h *AdminHandler) renderSettingsPage() string {
         <div class="card">
             <h2>Server Configuration</h2>
             <p class="text-muted">Configuration is managed via server.yml</p>
-            <p>Config path: <code>` + h.cfg.Server.FQDN + `</code></p>
+            <p>Config path: <code>` + h.appConfig.Server.FQDN + `</code></p>
         </div>
 
         <div class="card">
@@ -2929,7 +2931,7 @@ func (h *AdminHandler) renderSettingsPage() string {
         if (tokenVisible) {
             el.textContent = '••••••••••••••••';
         } else {
-            el.textContent = '` + h.cfg.Server.Admin.Token + `';
+            el.textContent = '` + h.appConfig.Server.Admin.Token + `';
         }
         tokenVisible = !tokenVisible;
     }
@@ -2987,18 +2989,18 @@ func (h *AdminHandler) renderServerSettingsPage() string {
         <div class="card">
             <h2>Server Configuration</h2>
             <table class="info-table">
-                <tr><td>Port</td><td>`+h.cfg.Server.Port+`</td></tr>
-                <tr><td>Address</td><td>`+h.cfg.Server.Address+`</td></tr>
-                <tr><td>FQDN</td><td>`+h.cfg.Server.FQDN+`</td></tr>
-                <tr><td>Mode</td><td>`+h.cfg.Server.Mode+`</td></tr>
-                <tr><td>Title</td><td>`+h.cfg.Server.Title+`</td></tr>
+                <tr><td>Port</td><td>`+h.appConfig.Server.Port+`</td></tr>
+                <tr><td>Address</td><td>`+h.appConfig.Server.Address+`</td></tr>
+                <tr><td>FQDN</td><td>`+h.appConfig.Server.FQDN+`</td></tr>
+                <tr><td>Mode</td><td>`+h.appConfig.Server.Mode+`</td></tr>
+                <tr><td>Title</td><td>`+h.appConfig.Server.Title+`</td></tr>
             </table>
         </div>
         <div class="card">
             <h2>Admin Settings</h2>
             <table class="info-table">
-                <tr><td>Username</td><td>`+h.cfg.Server.Admin.Username+`</td></tr>
-                <tr><td>Email</td><td>`+h.cfg.Server.Admin.Email+`</td></tr>
+                <tr><td>Username</td><td>`+h.appConfig.Server.Admin.Username+`</td></tr>
+                <tr><td>Email</td><td>`+h.appConfig.Server.Admin.Email+`</td></tr>
             </table>
         </div>`)
 }
@@ -3008,15 +3010,15 @@ func (h *AdminHandler) renderWebSettingsPage() string {
         <div class="card">
             <h2>UI Configuration</h2>
             <table class="info-table">
-                <tr><td>Theme</td><td>`+h.cfg.Web.UI.Theme+`</td></tr>
-                <tr><td>CORS</td><td>`+h.cfg.Web.CORS+`</td></tr>
+                <tr><td>Theme</td><td>`+h.appConfig.Web.UI.Theme+`</td></tr>
+                <tr><td>CORS</td><td>`+h.appConfig.Web.CORS+`</td></tr>
             </table>
         </div>
         <div class="card">
             <h2>Search Settings</h2>
             <table class="info-table">
-                <tr><td>Results Per Page</td><td>`+strconv.Itoa(h.cfg.Search.ResultsPerPage)+`</td></tr>
-                <tr><td>Tor Enabled</td><td>`+strconv.FormatBool(h.cfg.Search.Tor.Enabled)+`</td></tr>
+                <tr><td>Results Per Page</td><td>`+strconv.Itoa(h.appConfig.Search.ResultsPerPage)+`</td></tr>
+                <tr><td>Tor Enabled</td><td>`+strconv.FormatBool(h.appConfig.Search.Tor.Enabled)+`</td></tr>
             </table>
         </div>`)
 }
@@ -3026,28 +3028,28 @@ func (h *AdminHandler) renderSecuritySettingsPage() string {
         <div class="card">
             <h2>Security Headers</h2>
             <table class="info-table">
-                <tr><td>Enabled</td><td>`+strconv.FormatBool(h.cfg.Server.SecurityHeaders.Enabled)+`</td></tr>
-                <tr><td>HSTS</td><td>`+strconv.FormatBool(h.cfg.Server.SecurityHeaders.HSTS)+`</td></tr>
-                <tr><td>X-Frame-Options</td><td>`+h.cfg.Server.SecurityHeaders.XFrameOptions+`</td></tr>
+                <tr><td>Enabled</td><td>`+strconv.FormatBool(h.appConfig.Server.SecurityHeaders.Enabled)+`</td></tr>
+                <tr><td>HSTS</td><td>`+strconv.FormatBool(h.appConfig.Server.SecurityHeaders.HSTS)+`</td></tr>
+                <tr><td>X-Frame-Options</td><td>`+h.appConfig.Server.SecurityHeaders.XFrameOptions+`</td></tr>
             </table>
         </div>
         <div class="card">
             <h2>Rate Limiting</h2>
             <table class="info-table">
-                <tr><td>Enabled</td><td>`+strconv.FormatBool(h.cfg.Server.RateLimit.Enabled)+`</td></tr>
-                <tr><td>Requests</td><td>`+strconv.Itoa(h.cfg.Server.RateLimit.Requests)+`</td></tr>
-                <tr><td>Window</td><td>`+strconv.Itoa(h.cfg.Server.RateLimit.Window)+` seconds</td></tr>
+                <tr><td>Enabled</td><td>`+strconv.FormatBool(h.appConfig.Server.RateLimit.Enabled)+`</td></tr>
+                <tr><td>Requests</td><td>`+strconv.Itoa(h.appConfig.Server.RateLimit.Requests)+`</td></tr>
+                <tr><td>Window</td><td>`+strconv.Itoa(h.appConfig.Server.RateLimit.Window)+` seconds</td></tr>
             </table>
         </div>`)
 }
 
 func (h *AdminHandler) renderDatabasePage() string {
-	cacheType := h.cfg.Server.Cache.Type
+	cacheType := h.appConfig.Server.Cache.Type
 	if cacheType == "" {
 		cacheType = "memory"
 	}
-	cacheTTL := h.cfg.Server.Cache.TTL
-	journalMode := h.cfg.Server.Database.SQLite.JournalMode
+	cacheTTL := h.appConfig.Server.Cache.TTL
+	journalMode := h.appConfig.Server.Database.SQLite.JournalMode
 	if journalMode == "" {
 		journalMode = "WAL"
 	}
@@ -3067,13 +3069,13 @@ func (h *AdminHandler) renderDatabasePage() string {
             <div class="form-group">
                 <label for="db_driver">Driver</label>
                 <select id="db_driver" name="driver" disabled aria-describedby="db_driver_help">
-                    <option value="sqlite" `+sel(h.cfg.Server.Database.Driver, "sqlite")+`>SQLite (Default)</option>
+                    <option value="sqlite" `+sel(h.appConfig.Server.Database.Driver, "sqlite")+`>SQLite (Default)</option>
                 </select>
                 <small id="db_driver_help" class="help-text">Database driver. SQLite is recommended for single-instance deployments.</small>
             </div>
             <div class="form-group">
                 <label>Database Directory</label>
-                <input type="text" value="`+h.cfg.Server.Database.SQLite.Dir+`" readonly class="readonly-field">
+                <input type="text" value="`+h.appConfig.Server.Database.SQLite.Dir+`" readonly class="readonly-field">
                 <small class="help-text">Directory where database files are stored. Change via config file.</small>
             </div>
             <div class="form-group">
@@ -3082,7 +3084,7 @@ func (h *AdminHandler) renderDatabasePage() string {
                 <small class="help-text">SQLite journal mode. WAL provides better concurrency.</small>
             </div>
             <table class="info-table">
-                <tr><td>Current Driver</td><td>`+h.cfg.Server.Database.Driver+`</td></tr>
+                <tr><td>Current Driver</td><td>`+h.appConfig.Server.Database.Driver+`</td></tr>
                 <tr><td>Status</td><td><span class="badge badge-success">Connected</span></td></tr>
             </table>
         </div>
@@ -3117,9 +3119,9 @@ func (h *AdminHandler) renderEmailPage() string {
         <div class="card">
             <h2>Email Configuration</h2>
             <table class="info-table">
-                <tr><td>Enabled</td><td>`+strconv.FormatBool(h.cfg.Server.Email.Enabled)+`</td></tr>
-                <tr><td>SMTP Host</td><td>`+h.cfg.Server.Email.Host+`</td></tr>
-                <tr><td>From</td><td>`+h.cfg.Server.Email.From+`</td></tr>
+                <tr><td>Enabled</td><td>`+strconv.FormatBool(h.appConfig.Server.Email.Enabled)+`</td></tr>
+                <tr><td>SMTP Host</td><td>`+h.appConfig.Server.Email.Host+`</td></tr>
+                <tr><td>From</td><td>`+h.appConfig.Server.Email.From+`</td></tr>
             </table>
             <div class="button-group" style="margin-top: 1rem;">
                 <button onclick="testEmail()" class="btn btn-primary">Send Test Email</button>
@@ -3144,11 +3146,11 @@ func (h *AdminHandler) renderEmailPage() string {
 
 func (h *AdminHandler) renderSSLPage() string {
 	sslStatus := "Disabled"
-	if h.cfg.Server.SSL.Enabled {
+	if h.appConfig.Server.SSL.Enabled {
 		sslStatus = "Enabled"
 	}
 	leStatus := "Disabled"
-	if h.cfg.Server.SSL.LetsEncrypt.Enabled {
+	if h.appConfig.Server.SSL.LetsEncrypt.Enabled {
 		leStatus = "Enabled"
 	}
 
@@ -3157,15 +3159,15 @@ func (h *AdminHandler) renderSSLPage() string {
             <h2>SSL/TLS Status</h2>
             <table class="info-table">
                 <tr><td>SSL Enabled</td><td>`+sslStatus+`</td></tr>
-                <tr><td>Certificate Path</td><td>`+h.cfg.Server.SSL.CertPath+`</td></tr>
+                <tr><td>Certificate Path</td><td>`+h.appConfig.Server.SSL.CertPath+`</td></tr>
             </table>
         </div>
         <div class="card">
             <h2>Let's Encrypt</h2>
             <table class="info-table">
                 <tr><td>Enabled</td><td>`+leStatus+`</td></tr>
-                <tr><td>Email</td><td>`+h.cfg.Server.SSL.LetsEncrypt.Email+`</td></tr>
-                <tr><td>Challenge Type</td><td>`+h.cfg.Server.SSL.LetsEncrypt.Challenge+`</td></tr>
+                <tr><td>Email</td><td>`+h.appConfig.Server.SSL.LetsEncrypt.Email+`</td></tr>
+                <tr><td>Challenge Type</td><td>`+h.appConfig.Server.SSL.LetsEncrypt.Challenge+`</td></tr>
             </table>
         </div>`)
 }
@@ -3328,7 +3330,7 @@ func (h *AdminHandler) renderSystemInfoPage() string {
 
 // renderTorPage renders Tor hidden service admin page per AI.md PART 32
 func (h *AdminHandler) renderTorPage() string {
-	torEnabled := h.cfg.Search.Tor.Enabled
+	torEnabled := h.appConfig.Search.Tor.Enabled
 	enabledStr := "Disabled"
 	statusClass := "badge-error"
 	if torEnabled {
@@ -3341,11 +3343,11 @@ func (h *AdminHandler) renderTorPage() string {
             <h2>Hidden Service Status</h2>
             <table class="info-table">
                 <tr><td>Status</td><td><span class="badge `+statusClass+`">`+enabledStr+`</span></td></tr>
-                <tr><td>Proxy</td><td>`+h.cfg.Search.Tor.Proxy+`</td></tr>
-                <tr><td>Control Port</td><td>`+strconv.Itoa(h.cfg.Search.Tor.ControlPort)+`</td></tr>
-                <tr><td>Force All Traffic</td><td>`+strconv.FormatBool(h.cfg.Search.Tor.ForceAll)+`</td></tr>
-                <tr><td>Rotate Circuit</td><td>`+strconv.FormatBool(h.cfg.Search.Tor.RotateCircuit)+`</td></tr>
-                <tr><td>Clearnet Fallback</td><td>`+strconv.FormatBool(h.cfg.Search.Tor.ClearnetFallback)+`</td></tr>
+                <tr><td>Proxy</td><td>`+h.appConfig.Search.Tor.Proxy+`</td></tr>
+                <tr><td>Control Port</td><td>`+strconv.Itoa(h.appConfig.Search.Tor.ControlPort)+`</td></tr>
+                <tr><td>Force All Traffic</td><td>`+strconv.FormatBool(h.appConfig.Search.Tor.ForceAll)+`</td></tr>
+                <tr><td>Rotate Circuit</td><td>`+strconv.FormatBool(h.appConfig.Search.Tor.RotateCircuit)+`</td></tr>
+                <tr><td>Clearnet Fallback</td><td>`+strconv.FormatBool(h.appConfig.Search.Tor.ClearnetFallback)+`</td></tr>
             </table>
         </div>
         <div class="card">
@@ -3359,27 +3361,27 @@ func (h *AdminHandler) renderTorPage() string {
                 </div>
                 <div class="form-group">
                     <label for="tor-proxy">SOCKS5 Proxy</label>
-                    <input type="text" id="tor-proxy" value="`+h.cfg.Search.Tor.Proxy+`" placeholder="socks5://127.0.0.1:9050">
+                    <input type="text" id="tor-proxy" value="`+h.appConfig.Search.Tor.Proxy+`" placeholder="socks5://127.0.0.1:9050">
                 </div>
                 <div class="form-group">
                     <label for="tor-control-port">Control Port</label>
-                    <input type="number" id="tor-control-port" value="`+strconv.Itoa(h.cfg.Search.Tor.ControlPort)+`" placeholder="9051">
+                    <input type="number" id="tor-control-port" value="`+strconv.Itoa(h.appConfig.Search.Tor.ControlPort)+`" placeholder="9051">
                 </div>
                 <div class="form-group">
                     <label class="toggle-label">
-                        <input type="checkbox" id="tor-force-all" `+func() string { if h.cfg.Search.Tor.ForceAll { return "checked" }; return "" }()+`>
+                        <input type="checkbox" id="tor-force-all" `+func() string { if h.appConfig.Search.Tor.ForceAll { return "checked" }; return "" }()+`>
                         <span>Force all traffic through Tor</span>
                     </label>
                 </div>
                 <div class="form-group">
                     <label class="toggle-label">
-                        <input type="checkbox" id="tor-rotate" `+func() string { if h.cfg.Search.Tor.RotateCircuit { return "checked" }; return "" }()+`>
+                        <input type="checkbox" id="tor-rotate" `+func() string { if h.appConfig.Search.Tor.RotateCircuit { return "checked" }; return "" }()+`>
                         <span>Rotate circuit per request</span>
                     </label>
                 </div>
                 <div class="form-group">
                     <label class="toggle-label">
-                        <input type="checkbox" id="tor-clearnet" `+func() string { if h.cfg.Search.Tor.ClearnetFallback { return "checked" }; return "" }()+`>
+                        <input type="checkbox" id="tor-clearnet" `+func() string { if h.appConfig.Search.Tor.ClearnetFallback { return "checked" }; return "" }()+`>
                         <span>Fallback to clearnet if Tor fails</span>
                     </label>
                 </div>
@@ -3466,9 +3468,9 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	if data == nil {
 		data = make(map[string]interface{})
 	}
-	data["Config"] = h.cfg
+	data["Config"] = h.appConfig
 	data["ActiveNav"] = templateName
-	data["SiteTitle"] = h.cfg.Server.Title
+	data["SiteTitle"] = h.appConfig.Server.Title
 
 	// Add session info for header display per AI.md PART 31
 	if r != nil {
@@ -3568,7 +3570,7 @@ func (h *AdminHandler) renderAdminPage(active, title, content string) string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>` + title + ` - Admin - ` + h.cfg.Server.Title + `</title>
+    <title>` + title + ` - Admin - ` + h.appConfig.Server.Title + `</title>
     ` + adminStyles() + `
 </head>
 <body>
@@ -3648,7 +3650,7 @@ func (h *AdminHandler) AddNodePage(w http.ResponseWriter, r *http.Request) {
 	joinToken := cluster.GenerateJoinToken()
 
 	data := map[string]interface{}{
-		"DefaultPort": h.cfg.Server.Port,
+		"DefaultPort": h.appConfig.Server.Port,
 		"JoinToken":   joinToken,
 	}
 
@@ -3864,8 +3866,8 @@ func (h *AdminHandler) NodeSettingsPage(w http.ResponseWriter, r *http.Request) 
 		"NodeID":            hostname,
 		"NodeName":          hostname,
 		"Hostname":          hostname,
-		"AdvertisedAddress": h.cfg.Server.Address,
-		"AdvertisedPort":    h.cfg.Server.Port,
+		"AdvertisedAddress": h.appConfig.Server.Address,
+		"AdvertisedPort":    h.appConfig.Server.Port,
 		"Priority":          50,
 		"IsVoter":           true,
 		"IsPrimary":         true,
@@ -3895,7 +3897,7 @@ func (h *AdminHandler) NodeDetailPage(w http.ResponseWriter, r *http.Request) {
 			"Name":              nodeID,
 			"Hostname":          nodeID,
 			"Address":           "127.0.0.1",
-			"Port":              h.cfg.Server.Port,
+			"Port":              h.appConfig.Server.Port,
 			"IsPrimary":         isThisNode,
 			"Status":            "active",
 			"LastSeen":          "Just now",
@@ -4015,16 +4017,16 @@ func (h *AdminHandler) readLogEntries(logType string, limit int, search string) 
 	
 	switch logType {
 	case "access":
-		filename = h.cfg.Server.Logs.Access.Filename
+		filename = h.appConfig.Server.Logs.Access.Filename
 	case "error":
-		filename = h.cfg.Server.Logs.Error.Filename
+		filename = h.appConfig.Server.Logs.Error.Filename
 	case "audit":
-		filename = h.cfg.Server.Logs.Audit.Filename
+		filename = h.appConfig.Server.Logs.Audit.Filename
 	case "security":
-		filename = h.cfg.Server.Logs.Security.Filename
+		filename = h.appConfig.Server.Logs.Security.Filename
 	case "debug":
-		if h.cfg.Server.Logs.Debug.Enabled {
-			filename = h.cfg.Server.Logs.Debug.Filename
+		if h.appConfig.Server.Logs.Debug.Enabled {
+			filename = h.appConfig.Server.Logs.Debug.Filename
 		} else {
 			return nil, fmt.Errorf("debug logging is not enabled")
 		}

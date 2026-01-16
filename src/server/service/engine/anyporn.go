@@ -13,8 +13,8 @@ import (
 type AnyPornEngine struct{ *BaseEngine }
 
 // NewAnyPornEngine creates a new AnyPorn engine
-func NewAnyPornEngine(cfg *config.Config, torClient *tor.Client) *AnyPornEngine {
-	return &AnyPornEngine{NewBaseEngine("anyporn", "AnyPorn", "https://www.anyporn.com", 3, cfg, torClient)}
+func NewAnyPornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *AnyPornEngine {
+	return &AnyPornEngine{NewBaseEngine("anyporn", "AnyPorn", "https://www.anyporn.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on AnyPorn

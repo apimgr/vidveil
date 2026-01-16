@@ -26,9 +26,9 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// Manager handles SSL/TLS certificates including Let's Encrypt
-type Manager struct {
-	cfg         *config.Config
+// SSLManager handles SSL/TLS certificates including Let's Encrypt
+type SSLManager struct {
+	appConfig   *config.AppConfig
 	certPath    string
 	mu          sync.RWMutex
 	certificate *tls.Certificate
@@ -52,24 +52,24 @@ type CertInfo struct {
 	ChallenType string    `json:"challenge_type"`
 }
 
-// New creates a new SSL manager
-func New(cfg *config.Config) *Manager {
-	certPath := cfg.Server.SSL.CertPath
+// NewSSLManager creates a new SSL manager
+func NewSSLManager(appConfig *config.AppConfig) *SSLManager {
+	certPath := appConfig.Server.SSL.CertPath
 	if certPath == "" {
-		paths := config.GetPaths("", "")
+		paths := config.GetAppPaths("", "")
 		certPath = filepath.Join(paths.Config, "ssl", "certs")
 	}
 
-	return &Manager{
-		cfg:           cfg,
+	return &SSLManager{
+		appConfig:     appConfig,
 		certPath:      certPath,
 		httpChallenge: make(map[string]string),
 	}
 }
 
 // Initialize sets up SSL if enabled
-func (m *Manager) Initialize() error {
-	if !m.cfg.Server.SSL.Enabled {
+func (m *SSLManager) Initialize() error {
+	if !m.appConfig.Server.SSL.Enabled {
 		return nil
 	}
 
@@ -80,7 +80,7 @@ func (m *Manager) Initialize() error {
 
 	// Check for existing Let's Encrypt certs first (per AI.md PART 8)
 	letsEncryptPath := "/etc/letsencrypt/live"
-	domain := m.cfg.Server.FQDN
+	domain := m.appConfig.Server.FQDN
 	if domain != "" {
 		leCertPath := filepath.Join(letsEncryptPath, domain, "fullchain.pem")
 		leKeyPath := filepath.Join(letsEncryptPath, domain, "privkey.pem")
@@ -103,7 +103,7 @@ func (m *Manager) Initialize() error {
 	}
 
 	// If Let's Encrypt is enabled and we have a valid domain, request cert
-	if m.cfg.Server.SSL.LetsEncrypt.Enabled && domain != "" {
+	if m.appConfig.Server.SSL.LetsEncrypt.Enabled && domain != "" {
 		if config.IsValidSSLHost(domain) {
 			return m.RequestCertificate(domain)
 		}
@@ -116,7 +116,7 @@ func (m *Manager) Initialize() error {
 }
 
 // copyLetsEncryptCerts copies certs from Let's Encrypt directory
-func (m *Manager) copyLetsEncryptCerts(certPath, keyPath string) error {
+func (m *SSLManager) copyLetsEncryptCerts(certPath, keyPath string) error {
 	destCert := filepath.Join(m.certPath, "cert.pem")
 	destKey := filepath.Join(m.certPath, "key.pem")
 
@@ -142,7 +142,7 @@ func (m *Manager) copyLetsEncryptCerts(certPath, keyPath string) error {
 }
 
 // loadCertificate loads an existing certificate
-func (m *Manager) loadCertificate(certFile, keyFile string) error {
+func (m *SSLManager) loadCertificate(certFile, keyFile string) error {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return fmt.Errorf("failed to load certificate: %w", err)
@@ -156,7 +156,7 @@ func (m *Manager) loadCertificate(certFile, keyFile string) error {
 }
 
 // generateSelfSigned generates a self-signed certificate
-func (m *Manager) generateSelfSigned() error {
+func (m *SSLManager) generateSelfSigned() error {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return fmt.Errorf("failed to generate private key: %w", err)
@@ -167,7 +167,7 @@ func (m *Manager) generateSelfSigned() error {
 		return fmt.Errorf("failed to generate serial number: %w", err)
 	}
 
-	domain := m.cfg.Server.FQDN
+	domain := m.appConfig.Server.FQDN
 	if domain == "" {
 		domain, _ = os.Hostname()
 	}
@@ -219,12 +219,12 @@ func (m *Manager) generateSelfSigned() error {
 
 // RequestCertificate requests a certificate from Let's Encrypt
 // Supports HTTP-01, TLS-ALPN-01, and DNS-01 challenges per AI.md PART 8
-func (m *Manager) RequestCertificate(domain string) error {
+func (m *SSLManager) RequestCertificate(domain string) error {
 	if !config.IsValidSSLHost(domain) {
 		return fmt.Errorf("invalid domain for SSL: %s", domain)
 	}
 
-	challenge := strings.ToLower(m.cfg.Server.SSL.LetsEncrypt.Challenge)
+	challenge := strings.ToLower(m.appConfig.Server.SSL.LetsEncrypt.Challenge)
 
 	switch challenge {
 	case "http-01":
@@ -240,12 +240,12 @@ func (m *Manager) RequestCertificate(domain string) error {
 }
 
 // requestHTTP01 requests a certificate using HTTP-01 challenge via autocert
-func (m *Manager) requestHTTP01(domain string) error {
+func (m *SSLManager) requestHTTP01(domain string) error {
 	// HTTP-01 challenge requires port 80 to be accessible
 	fmt.Printf("Requesting Let's Encrypt certificate for %s using HTTP-01 challenge\n", domain)
 
 	// Get email for Let's Encrypt registration
-	email := m.cfg.Server.SSL.LetsEncrypt.Email
+	email := m.appConfig.Server.SSL.LetsEncrypt.Email
 	if email == "" {
 		email = "admin@" + domain
 	}
@@ -268,11 +268,11 @@ func (m *Manager) requestHTTP01(domain string) error {
 
 // requestTLSALPN01 requests a certificate using TLS-ALPN-01 challenge
 // This challenge is handled automatically by autocert when using TLS
-func (m *Manager) requestTLSALPN01(domain string) error {
+func (m *SSLManager) requestTLSALPN01(domain string) error {
 	fmt.Printf("Requesting Let's Encrypt certificate for %s using TLS-ALPN-01 challenge\n", domain)
 
 	// Get email for Let's Encrypt registration
-	email := m.cfg.Server.SSL.LetsEncrypt.Email
+	email := m.appConfig.Server.SSL.LetsEncrypt.Email
 	if email == "" {
 		email = "admin@" + domain
 	}
@@ -297,10 +297,10 @@ func (m *Manager) requestTLSALPN01(domain string) error {
 // requestDNS01 requests a certificate using DNS-01 challenge
 // DNS-01 requires external DNS provider integration which is not directly supported by autocert
 // This implementation falls back to self-signed but can use external certbot-generated certs
-func (m *Manager) requestDNS01(domain string) error {
+func (m *SSLManager) requestDNS01(domain string) error {
 	fmt.Printf("Requesting Let's Encrypt certificate for %s using DNS-01 challenge\n", domain)
 
-	providerType := m.cfg.Server.SSL.LetsEncrypt.DNSProviderType
+	providerType := m.appConfig.Server.SSL.LetsEncrypt.DNSProviderType
 	if providerType == "" {
 		return fmt.Errorf("DNS-01 challenge requires dns_provider_type to be set")
 	}
@@ -326,7 +326,7 @@ func (m *Manager) requestDNS01(domain string) error {
 }
 
 // GetCertificate returns the current certificate for TLS config
-func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+func (m *SSLManager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -338,7 +338,7 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 }
 
 // GetTLSConfig returns a TLS configuration
-func (m *Manager) GetTLSConfig() *tls.Config {
+func (m *SSLManager) GetTLSConfig() *tls.Config {
 	// If using autocert, use its TLS config
 	if m.useAutocert && m.autocertMgr != nil {
 		return m.autocertMgr.TLSConfig()
@@ -358,7 +358,7 @@ func (m *Manager) GetTLSConfig() *tls.Config {
 
 // GetHTTPHandler returns the HTTP handler for ACME challenges
 // This should be used to handle HTTP-01 challenges on port 80
-func (m *Manager) GetHTTPHandler() http.Handler {
+func (m *SSLManager) GetHTTPHandler() http.Handler {
 	if m.useAutocert && m.autocertMgr != nil {
 		return m.autocertMgr.HTTPHandler(nil)
 	}
@@ -366,12 +366,12 @@ func (m *Manager) GetHTTPHandler() http.Handler {
 }
 
 // IsAutocertEnabled returns whether autocert is being used
-func (m *Manager) IsAutocertEnabled() bool {
+func (m *SSLManager) IsAutocertEnabled() bool {
 	return m.useAutocert
 }
 
 // GetCertInfo returns information about the current certificate
-func (m *Manager) GetCertInfo() (*CertInfo, error) {
+func (m *SSLManager) GetCertInfo() (*CertInfo, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -404,13 +404,13 @@ func (m *Manager) GetCertInfo() (*CertInfo, error) {
 		NotAfter:    cert.NotAfter,
 		DaysLeft:    daysLeft,
 		IsValid:     time.Now().Before(cert.NotAfter) && time.Now().After(cert.NotBefore),
-		AutoRenew:   m.cfg.Server.SSL.LetsEncrypt.Enabled,
-		ChallenType: m.cfg.Server.SSL.LetsEncrypt.Challenge,
+		AutoRenew:   m.appConfig.Server.SSL.LetsEncrypt.Enabled,
+		ChallenType: m.appConfig.Server.SSL.LetsEncrypt.Challenge,
 	}, nil
 }
 
 // NeedsRenewal checks if the certificate needs renewal (< 30 days)
-func (m *Manager) NeedsRenewal() bool {
+func (m *SSLManager) NeedsRenewal() bool {
 	info, err := m.GetCertInfo()
 	if err != nil {
 		return true
@@ -419,8 +419,8 @@ func (m *Manager) NeedsRenewal() bool {
 }
 
 // RenewCertificate renews the certificate if needed
-func (m *Manager) RenewCertificate(ctx context.Context) error {
-	if !m.cfg.Server.SSL.Enabled {
+func (m *SSLManager) RenewCertificate(ctx context.Context) error {
+	if !m.appConfig.Server.SSL.Enabled {
 		return nil
 	}
 
@@ -428,13 +428,13 @@ func (m *Manager) RenewCertificate(ctx context.Context) error {
 		return nil
 	}
 
-	domain := m.cfg.Server.FQDN
+	domain := m.appConfig.Server.FQDN
 	if domain == "" || !config.IsValidSSLHost(domain) {
 		// Can't renew with Let's Encrypt, regenerate self-signed
 		return m.generateSelfSigned()
 	}
 
-	if m.cfg.Server.SSL.LetsEncrypt.Enabled {
+	if m.appConfig.Server.SSL.LetsEncrypt.Enabled {
 		return m.RequestCertificate(domain)
 	}
 
@@ -442,7 +442,7 @@ func (m *Manager) RenewCertificate(ctx context.Context) error {
 }
 
 // HTTP01Handler handles HTTP-01 ACME challenges
-func (m *Manager) HTTP01Handler(w http.ResponseWriter, r *http.Request) {
+func (m *SSLManager) HTTP01Handler(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimPrefix(r.URL.Path, "/.well-known/acme-challenge/")
 
 	m.mu.RLock()
@@ -459,14 +459,14 @@ func (m *Manager) HTTP01Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // SetHTTP01Challenge sets an HTTP-01 challenge response
-func (m *Manager) SetHTTP01Challenge(token, keyAuth string) {
+func (m *SSLManager) SetHTTP01Challenge(token, keyAuth string) {
 	m.mu.Lock()
 	m.httpChallenge[token] = keyAuth
 	m.mu.Unlock()
 }
 
 // ClearHTTP01Challenge clears an HTTP-01 challenge
-func (m *Manager) ClearHTTP01Challenge(token string) {
+func (m *SSLManager) ClearHTTP01Challenge(token string) {
 	m.mu.Lock()
 	delete(m.httpChallenge, token)
 	m.mu.Unlock()

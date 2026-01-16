@@ -88,8 +88,8 @@ func (sm *ServiceManager) Reload() error {
 	return sm.runServiceCommand("reload")
 }
 
-// Status returns the service status
-func (sm *ServiceManager) Status() (string, error) {
+// GetServiceStatus returns the service status
+func (sm *ServiceManager) GetServiceStatus() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
 		if sm.hasSystemd() {
@@ -297,7 +297,7 @@ ReadWritePaths=/var/log/apimgr/%s
 
 [Install]
 WantedBy=multi-user.target
-`, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName)
+`, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName)
 
 	if err := os.WriteFile(unitPath, []byte(unit), 0644); err != nil {
 		return fmt.Errorf("failed to write systemd unit: %w", err)
@@ -561,8 +561,8 @@ func DetectEscalation() string {
 	return ""
 }
 
-// IsRoot checks if running as root/administrator
-func IsRoot() bool {
+// IsRunningAsRoot checks if running as root/administrator
+func IsRunningAsRoot() bool {
 	switch runtime.GOOS {
 	case "windows":
 		// Check if running with admin privileges
@@ -573,8 +573,8 @@ func IsRoot() bool {
 	}
 }
 
-// IsContainer checks if running in a container environment per AI.md PART 8 lines 7726-7772
-func IsContainer() bool {
+// IsRunningInContainer checks if running in a container environment per AI.md PART 8 lines 7726-7772
+func IsRunningInContainer() bool {
 	// File-based detection per PART 8 lines 7732-7740
 	containerFiles := []string{
 		"/.dockerenv",        // Docker
@@ -639,7 +639,7 @@ func getParentProcessName() string {
 // DetectServiceManager returns the active service manager per AI.md PART 8 lines 7774-7825
 func DetectServiceManager() string {
 	// Check for container environment first
-	if IsContainer() {
+	if IsRunningInContainer() {
 		return "container"
 	}
 
@@ -718,7 +718,7 @@ func ShouldDaemonize(isServiceStart bool, daemonFlag bool, configDaemonize bool)
 // Returns uid, gid for chown operations. Returns 0, 0 if not running as root.
 func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 	// Only create user if running as root
-	if !IsRoot() {
+	if !IsRunningAsRoot() {
 		// Running as non-root user, use current user
 		return os.Getuid(), os.Getgid(), nil
 	}

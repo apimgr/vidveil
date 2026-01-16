@@ -17,12 +17,12 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// Service manages CVE (Common Vulnerabilities and Exposures) database per PART 22
-type Service struct {
-	cfg      *config.Config
-	dataDir  string
-	mu       sync.RWMutex
-	cveData  map[string]CVEItem // CVE-ID -> CVE details
+// CVEService manages CVE (Common Vulnerabilities and Exposures) database per PART 22
+type CVEService struct {
+	appConfig *config.AppConfig
+	dataDir   string
+	mu        sync.RWMutex
+	cveData   map[string]CVEItem // CVE-ID -> CVE details
 }
 
 // CVEItem represents a CVE entry
@@ -69,21 +69,21 @@ type NVDResponse struct {
 	} `json:"CVE_Items"`
 }
 
-// New creates a new CVE service
-func New(cfg *config.Config) *Service {
+// NewCVEService creates a new CVE service
+func NewCVEService(appConfig *config.AppConfig) *CVEService {
 	// Get data directory per PART 4 (OS-Specific Paths)
-	paths := config.GetPaths("", "")
+	paths := config.GetAppPaths("", "")
 	dataDir := filepath.Join(paths.Config, "security", "cve")
 
-	return &Service{
-		cfg:     cfg,
-		dataDir: dataDir,
+	return &CVEService{
+		appConfig: appConfig,
+		dataDir:   dataDir,
 		cveData: make(map[string]CVEItem),
 	}
 }
 
 // Initialize creates directory structure per PART 22
-func (s *Service) Initialize() error {
+func (s *CVEService) Initialize() error {
 	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create CVE directory: %w", err)
 	}
@@ -91,12 +91,12 @@ func (s *Service) Initialize() error {
 }
 
 // Update downloads and updates CVE database per PART 27
-func (s *Service) Update(ctx context.Context) error {
-	if !s.cfg.Server.Security.CVE.Enabled {
+func (s *CVEService) Update(ctx context.Context) error {
+	if !s.appConfig.Server.Security.CVE.Enabled {
 		return nil
 	}
 
-	source := s.cfg.Server.Security.CVE.Source
+	source := s.appConfig.Server.Security.CVE.Source
 	if source == "" {
 		// Default NVD source per PART 22 specification
 		source = "https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-recent.json.gz"
@@ -113,7 +113,7 @@ func (s *Service) Update(ctx context.Context) error {
 }
 
 // downloadCVEFeed downloads and parses CVE data from NVD
-func (s *Service) downloadCVEFeed(ctx context.Context, source string) error {
+func (s *CVEService) downloadCVEFeed(ctx context.Context, source string) error {
 	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: 120 * time.Second, // CVE feeds can be large
@@ -152,7 +152,7 @@ func (s *Service) downloadCVEFeed(ctx context.Context, source string) error {
 }
 
 // loadCVEData loads CVE data from JSON file
-func (s *Service) loadCVEData(filename string) error {
+func (s *CVEService) loadCVEData(filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open CVE data: %w", err)
@@ -195,7 +195,7 @@ func (s *Service) loadCVEData(filename string) error {
 		}
 
 		// Filter by CPE if enabled per PART 22 specification
-		if s.cfg.Server.Security.CVE.FilterByCPE && len(cpes) == 0 {
+		if s.appConfig.Server.Security.CVE.FilterByCPE && len(cpes) == 0 {
 			continue
 		}
 
@@ -218,7 +218,7 @@ func (s *Service) loadCVEData(filename string) error {
 }
 
 // calculateSeverity returns severity level based on CVSS score
-func (s *Service) calculateSeverity(cvss float64) string {
+func (s *CVEService) calculateSeverity(cvss float64) string {
 	switch {
 	case cvss >= 9.0:
 		return "CRITICAL"
@@ -234,7 +234,7 @@ func (s *Service) calculateSeverity(cvss float64) string {
 }
 
 // GetCVE retrieves a specific CVE by ID
-func (s *Service) GetCVE(cveID string) (CVEItem, bool) {
+func (s *CVEService) GetCVE(cveID string) (CVEItem, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -243,7 +243,7 @@ func (s *Service) GetCVE(cveID string) (CVEItem, bool) {
 }
 
 // SearchByCPE searches CVEs affecting a specific CPE
-func (s *Service) SearchByCPE(cpe string) []CVEItem {
+func (s *CVEService) SearchByCPE(cpe string) []CVEItem {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -263,7 +263,7 @@ func (s *Service) SearchByCPE(cpe string) []CVEItem {
 }
 
 // GetStats returns CVE database statistics
-func (s *Service) GetStats() map[string]interface{} {
+func (s *CVEService) GetStats() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -281,7 +281,7 @@ func (s *Service) GetStats() map[string]interface{} {
 }
 
 // LastUpdate returns the last update timestamp
-func (s *Service) LastUpdate() time.Time {
+func (s *CVEService) LastUpdate() time.Time {
 	timestampFile := filepath.Join(s.dataDir, ".last_updated")
 	data, err := os.ReadFile(timestampFile)
 	if err != nil {

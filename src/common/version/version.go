@@ -84,20 +84,20 @@ func GetVersion() string {
 	return Version
 }
 
-// GetFull returns the full version string for display
+// GetFullVersion returns the full version string for display
 // Per AI.md PART 13: --version Output (no v prefix)
-func GetFull() string {
+func GetFullVersion() string {
 	return fmt.Sprintf("vidveil %s\nBuilt: %s\nGo: %s\nOS/Arch: %s/%s",
 		Version, BuildTime, GoVersion, GOOS, GOARCH)
 }
 
-// GetShort returns version string (no v prefix per AI.md version rules)
-func GetShort() string {
+// GetShortVersion returns version string (no v prefix per AI.md version rules)
+func GetShortVersion() string {
 	return Version
 }
 
-// Info returns version info as a map for JSON responses
-func Info() map[string]string {
+// GetVersionInfo returns version info as a map for JSON responses
+func GetVersionInfo() map[string]string {
 	return map[string]string{
 		"version":    Version,
 		"commit":     CommitID,

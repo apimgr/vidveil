@@ -12,13 +12,13 @@ import (
 
 // ServerHandler handles /server/ routes per AI.md PART 31
 type ServerHandler struct {
-	cfg *config.Config
+	appConfig *config.AppConfig
 }
 
 // NewServerHandler creates a new server handler
-func NewServerHandler(cfg *config.Config) *ServerHandler {
+func NewServerHandler(appConfig *config.AppConfig) *ServerHandler {
 	return &ServerHandler{
-		cfg: cfg,
+		appConfig: appConfig,
 	}
 }
 
@@ -30,18 +30,18 @@ func (h *ServerHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About - ` + h.cfg.Server.Title + `</title>
+    <title>About - ` + h.appConfig.Server.Title + `</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="dark-theme">
     <div class="container">
         <header>
-            <h1>About ` + h.cfg.Server.Title + `</h1>
+            <h1>About ` + h.appConfig.Server.Title + `</h1>
         </header>
         <main>
             <section>
-                <h2>What is ` + h.cfg.Server.Title + `?</h2>
-                <p>` + h.cfg.Server.Description + `</p>
+                <h2>What is ` + h.appConfig.Server.Title + `?</h2>
+                <p>` + h.appConfig.Server.Description + `</p>
             </section>
             <section>
                 <h2>Features</h2>
@@ -75,7 +75,7 @@ func (h *ServerHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy - ` + h.cfg.Server.Title + `</title>
+    <title>Privacy Policy - ` + h.appConfig.Server.Title + `</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="dark-theme">
@@ -86,7 +86,7 @@ func (h *ServerHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
         <main>
             <section>
                 <h2>Data Collection</h2>
-                <p>` + h.cfg.Server.Title + ` is designed with privacy in mind:</p>
+                <p>` + h.appConfig.Server.Title + ` is designed with privacy in mind:</p>
                 <ul>
                     <li>We do not track your searches</li>
                     <li>We do not store your IP address</li>
@@ -133,7 +133,7 @@ func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contact - ` + h.cfg.Server.Title + `</title>
+    <title>Contact - ` + h.appConfig.Server.Title + `</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="dark-theme">
@@ -183,7 +183,7 @@ func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Reque
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Message Sent - ` + h.cfg.Server.Title + `</title>
+    <title>Message Sent - ` + h.appConfig.Server.Title + `</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="dark-theme">
@@ -208,7 +208,7 @@ func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Help - ` + h.cfg.Server.Title + `</title>
+    <title>Help - ` + h.appConfig.Server.Title + `</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="dark-theme">
@@ -259,8 +259,8 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
-			"name":        h.cfg.Server.Title,
-			"description": h.cfg.Server.Description,
+			"name":        h.appConfig.Server.Title,
+			"description": h.appConfig.Server.Description,
 			"version":     version.GetVersion(),
 			"features": []string{
 				"Privacy-focused video meta-search",

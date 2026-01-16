@@ -12,8 +12,9 @@ import (
 	"github.com/apimgr/vidveil/src/common/theme"
 )
 
-// Config holds banner configuration
-type Config struct {
+// BannerConfig holds banner configuration
+// Per AI.md PART 1: Type names MUST be specific, not generic "Config"
+type BannerConfig struct {
 	AppName    string
 	Version    string
 	Mode       string   // production/development
@@ -23,29 +24,30 @@ type Config struct {
 	SetupToken string
 }
 
-// Print prints the startup banner based on terminal size
-func Print(cfg Config) {
-	size := terminal.GetSize()
+// PrintStartupBanner prints the startup banner based on terminal size
+// Per AI.md PART 1: Function names MUST reveal intent
+func PrintStartupBanner(config BannerConfig) {
+	size := terminal.GetTerminalSize()
 
 	switch {
 	case size.Mode >= terminal.SizeModeStandard:
-		printFull(cfg, size)
+		printFullBanner(config, size)
 	case size.Mode >= terminal.SizeModeCompact:
-		printCompact(cfg)
+		printCompactBanner(config)
 	case size.Mode >= terminal.SizeModeMinimal:
-		printMinimal(cfg)
+		printMinimalBanner(config)
 	default:
-		printMicro(cfg)
+		printMicroBanner(config)
 	}
 }
 
-// printFull prints the full banner with ASCII art
-func printFull(cfg Config, size terminal.Size) {
-	symbols := terminal.GetSymbols()
-	p := theme.Get("auto")
+// printFullBanner prints the full banner with ASCII art
+func printFullBanner(config BannerConfig, size terminal.TerminalSize) {
+	symbols := terminal.GetTerminalSymbols()
+	p := theme.GetColorPalette("auto")
 
 	// Print ASCII art
-	art := GetASCIIArt(cfg.AppName)
+	art := GetASCIIArt(config.AppName)
 	for _, line := range art {
 		fmt.Println(line)
 	}
@@ -54,78 +56,78 @@ func printFull(cfg Config, size terminal.Size) {
 
 	// Print version and mode
 	modeColor := "\033[32m" // Green for production
-	if cfg.Mode == "development" {
+	if config.Mode == "development" {
 		modeColor = "\033[33m" // Yellow for development
 	}
-	if cfg.Debug {
+	if config.Debug {
 		modeColor = "\033[35m" // Magenta for debug
 	}
-	fmt.Printf("  Version: %s  %sMode: %s\033[0m\n", cfg.Version, modeColor, cfg.Mode)
+	fmt.Printf("  Version: %s  %sMode: %s\033[0m\n", config.Version, modeColor, config.Mode)
 
 	// Print URLs
-	if len(cfg.URLs) > 0 {
+	if len(config.URLs) > 0 {
 		fmt.Println()
 		fmt.Printf("  %s Listening on:\n", symbols.Arrow)
-		for _, url := range cfg.URLs {
+		for _, url := range config.URLs {
 			fmt.Printf("    %s %s\n", symbols.Bullet, url)
 		}
 	}
 
 	// Print setup token if applicable
-	if cfg.ShowSetup && cfg.SetupToken != "" {
+	if config.ShowSetup && config.SetupToken != "" {
 		fmt.Println()
 		fmt.Printf("  \033[33m%s First-time setup:\033[0m\n", symbols.Arrow)
-		fmt.Printf("    Setup Token: %s\n", cfg.SetupToken)
+		fmt.Printf("    Setup Token: %s\n", config.SetupToken)
 	}
 
 	// Print theme info
-	themeName := theme.Name("auto")
+	themeName := theme.GetColorPaletteName("auto")
 	_ = p // Use palette for potential future color output
 	fmt.Printf("\n  Theme: %s\n", themeName)
 
 	fmt.Println()
 }
 
-// printCompact prints a compact banner without ASCII art
-func printCompact(cfg Config) {
-	symbols := terminal.GetSymbols()
+// printCompactBanner prints a compact banner without ASCII art
+func printCompactBanner(config BannerConfig) {
+	symbols := terminal.GetTerminalSymbols()
 
 	modeSymbol := symbols.Checkmark
-	if cfg.Debug {
+	if config.Debug {
 		modeSymbol = "D"
 	}
 
-	fmt.Printf("%s %s %s [%s %s]\n", symbols.Bullet, cfg.AppName, cfg.Version, modeSymbol, cfg.Mode)
+	fmt.Printf("%s %s %s [%s %s]\n", symbols.Bullet, config.AppName, config.Version, modeSymbol, config.Mode)
 
-	if len(cfg.URLs) > 0 {
-		fmt.Printf("%s %s\n", symbols.Arrow, strings.Join(cfg.URLs, ", "))
+	if len(config.URLs) > 0 {
+		fmt.Printf("%s %s\n", symbols.Arrow, strings.Join(config.URLs, ", "))
 	}
 
-	if cfg.ShowSetup && cfg.SetupToken != "" {
-		fmt.Printf("%s Setup: %s\n", symbols.Arrow, cfg.SetupToken)
+	if config.ShowSetup && config.SetupToken != "" {
+		fmt.Printf("%s Setup: %s\n", symbols.Arrow, config.SetupToken)
 	}
 }
 
-// printMinimal prints a minimal one-line banner
-func printMinimal(cfg Config) {
-	symbols := terminal.GetSymbols()
+// printMinimalBanner prints a minimal one-line banner
+func printMinimalBanner(config BannerConfig) {
+	symbols := terminal.GetTerminalSymbols()
 	url := ""
-	if len(cfg.URLs) > 0 {
-		url = " " + cfg.URLs[0]
+	if len(config.URLs) > 0 {
+		url = " " + config.URLs[0]
 	}
-	fmt.Printf("%s %s %s%s\n", symbols.Bullet, cfg.AppName, cfg.Version, url)
+	fmt.Printf("%s %s %s%s\n", symbols.Bullet, config.AppName, config.Version, url)
 }
 
-// printMicro prints the most minimal banner for very small terminals
-func printMicro(cfg Config) {
-	fmt.Printf("%s %s\n", cfg.AppName, cfg.Version)
+// printMicroBanner prints the most minimal banner for very small terminals
+func printMicroBanner(config BannerConfig) {
+	fmt.Printf("%s %s\n", config.AppName, config.Version)
 }
 
-// PrintToWriter prints the banner to a specific writer
-func PrintToWriter(w *os.File, cfg Config) {
+// PrintStartupBannerToWriter prints the banner to a specific writer
+func PrintStartupBannerToWriter(w *os.File, config BannerConfig) {
 	// Redirect stdout temporarily
 	oldStdout := os.Stdout
 	os.Stdout = w
-	Print(cfg)
+	PrintStartupBanner(config)
 	os.Stdout = oldStdout
 }

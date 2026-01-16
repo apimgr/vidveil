@@ -13,8 +13,8 @@ import (
 type ExtremeTubeEngine struct{ *BaseEngine }
 
 // NewExtremeTubeEngine creates a new ExtremeTube engine
-func NewExtremeTubeEngine(cfg *config.Config, torClient *tor.Client) *ExtremeTubeEngine {
-	return &ExtremeTubeEngine{NewBaseEngine("extremetube", "ExtremeTube", "https://www.extremetube.com", 3, cfg, torClient)}
+func NewExtremeTubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *ExtremeTubeEngine {
+	return &ExtremeTubeEngine{NewBaseEngine("extremetube", "ExtremeTube", "https://www.extremetube.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on ExtremeTube

@@ -13,8 +13,8 @@ import (
 type FuxEngine struct{ *BaseEngine }
 
 // NewFuxEngine creates a new Fux engine
-func NewFuxEngine(cfg *config.Config, torClient *tor.Client) *FuxEngine {
-	return &FuxEngine{NewBaseEngine("fux", "Fux", "https://www.fux.com", 3, cfg, torClient)}
+func NewFuxEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *FuxEngine {
+	return &FuxEngine{NewBaseEngine("fux", "Fux", "https://www.fux.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on Fux

@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// Symbols provides Unicode and ASCII symbol sets
-type Symbols struct {
+// TerminalSymbols provides Unicode and ASCII symbol sets
+type TerminalSymbols struct {
 	Checkmark    string
 	Cross        string
 	Arrow        string
@@ -30,7 +30,7 @@ type Symbols struct {
 }
 
 // Unicode symbols (for terminals that support UTF-8)
-var UnicodeSymbols = Symbols{
+var UnicodeSymbols = TerminalSymbols{
 	Checkmark:   "✓",
 	Cross:       "✗",
 	Arrow:       "→",
@@ -51,7 +51,7 @@ var UnicodeSymbols = Symbols{
 }
 
 // ASCII symbols (for terminals without UTF-8 support)
-var ASCIISymbols = Symbols{
+var ASCIISymbols = TerminalSymbols{
 	Checkmark:   "+",
 	Cross:       "x",
 	Arrow:       "->",
@@ -71,8 +71,8 @@ var ASCIISymbols = Symbols{
 	BoxCross:    "+",
 }
 
-// GetSymbols returns the appropriate symbol set based on terminal capabilities
-func GetSymbols() Symbols {
+// GetTerminalSymbols returns the appropriate symbol set based on terminal capabilities
+func GetTerminalSymbols() TerminalSymbols {
 	if SupportsUnicode() {
 		return UnicodeSymbols
 	}

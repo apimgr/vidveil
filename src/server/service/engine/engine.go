@@ -49,8 +49,8 @@ type Capabilities struct {
 	APIType       string `json:"api_type"`        // "api", "html", "json_extraction"
 }
 
-// Engine interface defines what a search engine must implement
-type Engine interface {
+// SearchEngine interface defines what a search engine must implement
+type SearchEngine interface {
 	Name() string
 	DisplayName() string
 	Search(ctx context.Context, query string, page int) ([]model.VideoResult, error)
@@ -60,9 +60,9 @@ type Engine interface {
 	Capabilities() Capabilities
 }
 
-// ConfigurableEngine interface for engines that support configuration
-type ConfigurableEngine interface {
-	Engine
+// ConfigurableSearchEngine interface for engines that support configuration
+type ConfigurableSearchEngine interface {
+	SearchEngine
 	SetEnabled(enabled bool)
 	SetUseTor(useTor bool)
 }
@@ -77,18 +77,18 @@ type BaseEngine struct {
 	timeout        time.Duration
 	useTor         bool
 	useSpoofedTLS  bool
-	cfg            *config.Config
+	appConfig      *config.AppConfig
 	httpClient     *http.Client
 	spoofedClient  *http.Client
-	torClient      *tor.Client
+	torClient      *tor.TorClient
 	circuitBreaker *retry.CircuitBreaker
-	retryConfig    *retry.Config
+	retryConfig    *retry.RetryConfig
 	capabilities   Capabilities
 }
 
 // NewBaseEngine creates a new base engine
-func NewBaseEngine(name, displayName, baseURL string, tier int, cfg *config.Config, torClient *tor.Client) *BaseEngine {
-	timeout := time.Duration(cfg.Search.EngineTimeout) * time.Second
+func NewBaseEngine(name, displayName, baseURL string, tier int, appConfig *config.AppConfig, torClient *tor.TorClient) *BaseEngine {
+	timeout := time.Duration(appConfig.Search.EngineTimeout) * time.Second
 
 	// Create circuit breaker for this engine
 	cbConfig := retry.DefaultCircuitBreakerConfig(name)
@@ -99,7 +99,7 @@ func NewBaseEngine(name, displayName, baseURL string, tier int, cfg *config.Conf
 	cbConfig.Timeout = 30 * time.Second
 
 	// Create retry config for transient errors
-	retryConfig := &retry.Config{
+	retryConfig := &retry.RetryConfig{
 		MaxAttempts:  3,
 		InitialDelay: 100 * time.Millisecond,
 		MaxDelay:     2 * time.Second,
@@ -121,9 +121,9 @@ func NewBaseEngine(name, displayName, baseURL string, tier int, cfg *config.Conf
 		enabled:        true,
 		timeout:        timeout,
 		useTor:         false,
-		useSpoofedTLS:  cfg.Search.SpoofTLS,
-		cfg:            cfg,
-		httpClient:     createHTTPClient(cfg.Search.EngineTimeout),
+		useSpoofedTLS:  appConfig.Search.SpoofTLS,
+		appConfig:      appConfig,
+		httpClient:     createHTTPClient(appConfig.Search.EngineTimeout),
 		spoofedClient:  utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
 		torClient:      torClient,
 		circuitBreaker: retry.NewCircuitBreaker(cbConfig),
@@ -212,7 +212,7 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 	var lastErr error
 
 	// Execute with retry logic
-	err := retry.Do(ctx, e.retryConfig, func() error {
+	err := retry.ExecuteWithRetry(ctx, e.retryConfig, func() error {
 		req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 		if err != nil {
 			return err
@@ -229,11 +229,11 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 		req.Header.Set("Sec-Fetch-Site", "none")
 		req.Header.Set("Sec-Fetch-User", "?1")
 		// Sec-Ch-* headers only for Chromium-based browsers
-		if e.cfg != nil && e.cfg.Engines.UserAgent.IsChromiumBased() {
-			req.Header.Set("Sec-Ch-Ua", e.cfg.Engines.UserAgent.SecChUa())
+		if e.appConfig != nil && e.appConfig.Engines.UserAgent.IsChromiumBased() {
+			req.Header.Set("Sec-Ch-Ua", e.appConfig.Engines.UserAgent.SecChUa())
 			req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
-			req.Header.Set("Sec-Ch-Ua-Platform", e.cfg.Engines.UserAgent.SecChUaPlatform())
-		} else if e.cfg == nil {
+			req.Header.Set("Sec-Ch-Ua-Platform", e.appConfig.Engines.UserAgent.SecChUaPlatform())
+		} else if e.appConfig == nil {
 			// Fallback to Chrome defaults
 			req.Header.Set("Sec-Ch-Ua", `"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"`)
 			req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
@@ -311,9 +311,9 @@ func classifyHTTPError(err error) error {
 	return err
 }
 
-// CircuitBreakerState returns the current circuit breaker state for this engine
-func (e *BaseEngine) CircuitBreakerState() retry.State {
-	return e.circuitBreaker.State()
+// GetCircuitBreakerState returns the current circuit breaker state for this engine
+func (e *BaseEngine) GetCircuitBreakerState() retry.CircuitBreakerState {
+	return e.circuitBreaker.GetState()
 }
 
 // ResetCircuitBreaker resets the circuit breaker to closed state
@@ -323,7 +323,7 @@ func (e *BaseEngine) ResetCircuitBreaker() {
 
 // IsCircuitOpen returns true if the circuit breaker is open
 func (e *BaseEngine) IsCircuitOpen() bool {
-	return e.circuitBreaker.State() == retry.StateOpen
+	return e.circuitBreaker.GetState() == retry.CircuitBreakerStateOpen
 }
 
 // AddCookies is a helper to add cookies to a request
@@ -466,8 +466,8 @@ const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 // GetUserAgent returns the configured user agent string
 // Uses search.useragent config for customizable user agent without rebuild
 func (e *BaseEngine) GetUserAgent() string {
-	if e.cfg != nil {
-		return e.cfg.Engines.UserAgent.String()
+	if e.appConfig != nil {
+		return e.appConfig.Engines.UserAgent.String()
 	}
 	return DefaultUserAgent
 }

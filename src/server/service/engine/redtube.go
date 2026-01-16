@@ -22,9 +22,9 @@ type RedTubeEngine struct {
 }
 
 // NewRedTubeEngine creates a new RedTube engine
-func NewRedTubeEngine(cfg *config.Config, torClient *tor.Client) *RedTubeEngine {
+func NewRedTubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *RedTubeEngine {
 	e := &RedTubeEngine{
-		BaseEngine: NewBaseEngine("redtube", "RedTube", "https://www.redtube.com", 1, cfg, torClient),
+		BaseEngine: NewBaseEngine("redtube", "RedTube", "https://www.redtube.com", 1, appConfig, torClient),
 		parser:     parser.NewRedTubeParser(),
 	}
 	// Set capabilities per IDEA.md

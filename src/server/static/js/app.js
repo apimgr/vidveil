@@ -5,7 +5,9 @@
 // Theme Management
 // ============================================================================
 function setTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
+    // Per AI.md PART 16: Use class instead of data-theme attribute
+    document.documentElement.classList.remove('theme-dark', 'theme-light');
+    document.documentElement.classList.add('theme-' + theme);
     localStorage.setItem('vidveil-theme', theme);
 }
 

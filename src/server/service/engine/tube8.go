@@ -13,8 +13,8 @@ import (
 type Tube8Engine struct{ *BaseEngine }
 
 // NewTube8Engine creates a new Tube8 engine
-func NewTube8Engine(cfg *config.Config, torClient *tor.Client) *Tube8Engine {
-	return &Tube8Engine{NewBaseEngine("tube8", "Tube8", "https://www.tube8.com", 4, cfg, torClient)}
+func NewTube8Engine(appConfig *config.AppConfig, torClient *tor.TorClient) *Tube8Engine {
+	return &Tube8Engine{NewBaseEngine("tube8", "Tube8", "https://www.tube8.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on Tube8

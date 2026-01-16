@@ -13,8 +13,8 @@ import (
 type ThreeMovsEngine struct{ *BaseEngine }
 
 // NewThreeMovsEngine creates a new 3Movs engine
-func NewThreeMovsEngine(cfg *config.Config, torClient *tor.Client) *ThreeMovsEngine {
-	return &ThreeMovsEngine{NewBaseEngine("3movs", "3Movs", "https://www.3movs.com", 3, cfg, torClient)}
+func NewThreeMovsEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *ThreeMovsEngine {
+	return &ThreeMovsEngine{NewBaseEngine("3movs", "3Movs", "https://www.3movs.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on 3Movs

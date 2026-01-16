@@ -29,7 +29,7 @@ func DetectTheme(r *http.Request) string {
 }
 
 // GenerateSpec generates the OpenAPI 3.0 specification
-func GenerateSpec(cfg *config.Config) string {
+func GenerateSpec(appConfig *config.AppConfig) string {
 	spec := map[string]interface{}{
 		"openapi": "3.0.0",
 		"info": map[string]interface{}{
@@ -131,19 +131,19 @@ func GenerateSpec(cfg *config.Config) string {
 }
 
 // Handler returns the Swagger UI handler
-func Handler(cfg *config.Config) http.HandlerFunc {
+func Handler(appConfig *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Theme detection (light/dark/auto) - see theme.go
 		theme := DetectTheme(r)
-		
+
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(generateSwaggerUI(cfg, theme)))
+		w.Write([]byte(generateSwaggerUI(appConfig, theme)))
 	}
 }
 
 // SpecHandler returns the OpenAPI 3.0 specification in JSON format
-func SpecHandler(cfg *config.Config) http.HandlerFunc {
-	spec := GenerateSpec(cfg)
+func SpecHandler(appConfig *config.AppConfig) http.HandlerFunc {
+	spec := GenerateSpec(appConfig)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -151,7 +151,7 @@ func SpecHandler(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func generateSwaggerUI(cfg *config.Config, theme string) string {
+func generateSwaggerUI(appConfig *config.AppConfig, theme string) string {
 	bgColor := "#282a36" // dark theme default
 	if theme == "light" {
 		bgColor = "#ffffff"

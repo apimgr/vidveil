@@ -13,8 +13,8 @@ import (
 type ZenPornEngine struct{ *BaseEngine }
 
 // NewZenPornEngine creates a new ZenPorn engine
-func NewZenPornEngine(cfg *config.Config, torClient *tor.Client) *ZenPornEngine {
-	return &ZenPornEngine{NewBaseEngine("zenporn", "ZenPorn", "https://zenporn.com", 3, cfg, torClient)}
+func NewZenPornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *ZenPornEngine {
+	return &ZenPornEngine{NewBaseEngine("zenporn", "ZenPorn", "https://zenporn.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on ZenPorn

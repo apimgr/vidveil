@@ -13,8 +13,8 @@ import (
 type PornFlipEngine struct{ *BaseEngine }
 
 // NewPornFlipEngine creates a new PornFlip engine
-func NewPornFlipEngine(cfg *config.Config, torClient *tor.Client) *PornFlipEngine {
-	return &PornFlipEngine{NewBaseEngine("pornflip", "PornFlip", "https://www.pornflip.com", 3, cfg, torClient)}
+func NewPornFlipEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *PornFlipEngine {
+	return &PornFlipEngine{NewBaseEngine("pornflip", "PornFlip", "https://www.pornflip.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on PornFlip

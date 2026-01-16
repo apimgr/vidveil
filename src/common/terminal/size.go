@@ -22,15 +22,15 @@ const (
 	SizeModeMassive                   // 400+ cols and 80+ rows
 )
 
-// Size holds terminal dimensions and size mode
-type Size struct {
+// TerminalSize holds terminal dimensions and size mode
+type TerminalSize struct {
 	Cols int
 	Rows int
 	Mode SizeMode
 }
 
-// GetSize returns the current terminal size
-func GetSize() Size {
+// GetTerminalSize returns the current terminal size
+func GetTerminalSize() TerminalSize {
 	cols, rows, _ := term.GetSize(os.Stdout.Fd())
 	if cols == 0 {
 		cols = 80
@@ -39,7 +39,7 @@ func GetSize() Size {
 		rows = 24
 	}
 
-	return Size{
+	return TerminalSize{
 		Cols: cols,
 		Rows: rows,
 		Mode: calculateMode(cols, rows),

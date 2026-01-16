@@ -13,8 +13,8 @@ import (
 type PornTopEngine struct{ *BaseEngine }
 
 // NewPornTopEngine creates a new PornTop engine
-func NewPornTopEngine(cfg *config.Config, torClient *tor.Client) *PornTopEngine {
-	return &PornTopEngine{NewBaseEngine("porntop", "PornTop", "https://porntop.com", 4, cfg, torClient)}
+func NewPornTopEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *PornTopEngine {
+	return &PornTopEngine{NewBaseEngine("porntop", "PornTop", "https://porntop.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on PornTop

@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// Client is the API client for VidVeil
-type Client struct {
+// APIClient is the API client for VidVeil
+type APIClient struct {
 	baseURL    string
 	token      string
 	httpClient *http.Client
@@ -48,8 +48,8 @@ type VersionResponse struct {
 	Built   string `json:"built"`
 }
 
-// NewClient creates a new API client
-func NewClient(baseURL, token string, timeout int) *Client {
+// NewAPIClient creates a new API client
+func NewAPIClient(baseURL, token string, timeout int) *APIClient {
 	if baseURL == "" {
 		baseURL = "https://x.scour.li"
 	}
@@ -57,7 +57,7 @@ func NewClient(baseURL, token string, timeout int) *Client {
 		timeout = 30
 	}
 
-	return &Client{
+	return &APIClient{
 		baseURL: baseURL,
 		token:   token,
 		httpClient: &http.Client{
@@ -69,12 +69,12 @@ func NewClient(baseURL, token string, timeout int) *Client {
 }
 
 // SetUserAgent sets the user agent (called from main with version)
-func (c *Client) SetUserAgent(version string) {
+func (c *APIClient) SetUserAgent(version string) {
 	c.userAgent = fmt.Sprintf("vidveil-cli/%s", version)
 }
 
 // Search performs a video search
-func (c *Client) Search(query string, page, limit int, engines []string, safeSearch bool) (*SearchResponse, error) {
+func (c *APIClient) Search(query string, page, limit int, engines []string, safeSearch bool) (*SearchResponse, error) {
 	params := url.Values{}
 	params.Set("q", query)
 	if page > 0 {
@@ -103,7 +103,7 @@ func (c *Client) Search(query string, page, limit int, engines []string, safeSea
 }
 
 // GetVersion gets server version info
-func (c *Client) GetVersion() (*VersionResponse, error) {
+func (c *APIClient) GetVersion() (*VersionResponse, error) {
 	url := fmt.Sprintf("%s/api/v1/version", c.baseURL)
 
 	var resp VersionResponse
@@ -115,7 +115,7 @@ func (c *Client) GetVersion() (*VersionResponse, error) {
 }
 
 // Health checks if the server is reachable
-func (c *Client) Health() (bool, error) {
+func (c *APIClient) Health() (bool, error) {
 	url := fmt.Sprintf("%s/api/v1/healthz", c.baseURL)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -134,12 +134,12 @@ func (c *Client) Health() (bool, error) {
 }
 
 // GetBaseURL returns the base URL of the server
-func (c *Client) GetBaseURL() string {
+func (c *APIClient) GetBaseURL() string {
 	return c.baseURL
 }
 
 // FetchURLResponseBytes performs a GET request and returns response body as bytes
-func (c *Client) FetchURLResponseBytes(url string) ([]byte, error) {
+func (c *APIClient) FetchURLResponseBytes(url string) ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
@@ -170,7 +170,7 @@ func (c *Client) FetchURLResponseBytes(url string) ([]byte, error) {
 }
 
 // get performs a GET request and decodes JSON response
-func (c *Client) get(url string, result interface{}) error {
+func (c *APIClient) get(url string, result interface{}) error {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("creating request: %w", err)

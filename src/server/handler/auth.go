@@ -26,18 +26,18 @@ type PendingAuth struct {
 
 // AuthHandler handles authentication routes per AI.md PART 31
 type AuthHandler struct {
-	cfg         *config.Config
+	appConfig   *config.AppConfig
 	adminHdl    *AdminHandler
-	totpSvc     *totp.Service
+	totpSvc     *totp.TOTPService
 	pendingAuth map[string]*PendingAuth // pending 2FA tokens
 	mu          sync.RWMutex
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(cfg *config.Config) *AuthHandler {
+func NewAuthHandler(appConfig *config.AppConfig) *AuthHandler {
 	return &AuthHandler{
-		cfg:         cfg,
-		totpSvc:     totp.New(cfg.Server.Title),
+		appConfig:   appConfig,
+		totpSvc:     totp.NewTOTPService(appConfig.Server.Title),
 		pendingAuth: make(map[string]*PendingAuth),
 	}
 }
@@ -337,7 +337,7 @@ func (h *AuthHandler) render2FAPage(w http.ResponseWriter, errorMsg string) {
         </div>
     </div>
 </body>
-</html>`, h.cfg.Server.Title, errorHtml)
+</html>`, h.appConfig.Server.Title, errorHtml)
 	w.Write([]byte(html))
 }
 
@@ -392,7 +392,7 @@ func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
         </div>
     </div>
 </body>
-</html>`, h.cfg.Server.Title, errorHtml)
+</html>`, h.appConfig.Server.Title, errorHtml)
 	w.Write([]byte(html))
 }
 
@@ -520,13 +520,13 @@ func (h *AuthHandler) APIRefresh(w http.ResponseWriter, r *http.Request) {
 
 // UserHandler handles /user/ routes per AI.md PART 31
 type UserHandler struct {
-	cfg *config.Config
+	appConfig *config.AppConfig
 }
 
 // NewUserHandler creates a new user handler
-func NewUserHandler(cfg *config.Config) *UserHandler {
+func NewUserHandler(appConfig *config.AppConfig) *UserHandler {
 	return &UserHandler{
-		cfg: cfg,
+		appConfig: appConfig,
 	}
 }
 
@@ -576,7 +576,7 @@ func (h *UserHandler) APIProfile(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"ok": true,
 			"data": map[string]interface{}{
-				"theme":      h.cfg.Web.UI.Theme,
+				"theme":      h.appConfig.Web.UI.Theme,
 				"created_at": time.Now().Format(time.RFC3339),
 			},
 		})

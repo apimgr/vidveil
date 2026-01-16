@@ -13,8 +13,8 @@ import (
 type DrTuberEngine struct{ *BaseEngine }
 
 // NewDrTuberEngine creates a new DrTuber engine
-func NewDrTuberEngine(cfg *config.Config, torClient *tor.Client) *DrTuberEngine {
-	return &DrTuberEngine{NewBaseEngine("drtuber", "DrTuber", "https://www.drtuber.com", 3, cfg, torClient)}
+func NewDrTuberEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *DrTuberEngine {
+	return &DrTuberEngine{NewBaseEngine("drtuber", "DrTuber", "https://www.drtuber.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on DrTuber

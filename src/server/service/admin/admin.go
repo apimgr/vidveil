@@ -20,8 +20,8 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Service manages admin credentials per AI.md PART 31
-type Service struct {
+// AdminService manages admin credentials per AI.md PART 31
+type AdminService struct {
 	db           *sql.DB
 	mu           sync.RWMutex
 	setupToken   string
@@ -29,8 +29,8 @@ type Service struct {
 	tokenExpires time.Time
 }
 
-// Admin represents an admin user
-type Admin struct {
+// AdminUser represents an admin user
+type AdminUser struct {
 	ID           int64     `json:"id"`
 	Username     string    `json:"username"`
 	TOTPEnabled  bool      `json:"totp_enabled"`
@@ -40,21 +40,21 @@ type Admin struct {
 	IsPrimary    bool      `json:"is_primary"`
 }
 
-// NewService creates a new admin service
-func NewService(db *sql.DB) *Service {
-	return &Service{
+// NewAdminService creates a new admin service
+func NewAdminService(db *sql.DB) *AdminService {
+	return &AdminService{
 		db: db,
 	}
 }
 
 // GetDB returns the database connection for admin-related queries
-func (s *Service) GetDB() *sql.DB {
+func (s *AdminService) GetDB() *sql.DB {
 	return s.db
 }
 
 // Initialize checks for first run and generates setup token if needed
 // Per AI.md PART 31: App is FULLY FUNCTIONAL before setup
-func (s *Service) Initialize() error {
+func (s *AdminService) Initialize() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -93,21 +93,21 @@ func (s *Service) Initialize() error {
 }
 
 // IsFirstRun returns true if no admin accounts exist
-func (s *Service) IsFirstRun() bool {
+func (s *AdminService) IsFirstRun() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.isFirstRun
 }
 
 // GetSetupToken returns the setup token (only shown once)
-func (s *Service) GetSetupToken() string {
+func (s *AdminService) GetSetupToken() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.setupToken
 }
 
 // ValidateSetupToken checks if a setup token is valid
-func (s *Service) ValidateSetupToken(token string) bool {
+func (s *AdminService) ValidateSetupToken(token string) bool {
 	var usedAt sql.NullTime
 	var expires time.Time
 
@@ -136,7 +136,7 @@ func (s *Service) ValidateSetupToken(token string) bool {
 // CreateAdmin creates a new admin account
 // Uses Argon2id for password hashing per AI.md PART 2
 // Server admin accounts are exempt from username blocklist per PART 31
-func (s *Service) CreateAdmin(username, password string, isPrimary bool) (*Admin, error) {
+func (s *AdminService) CreateAdmin(username, password string, isPrimary bool) (*AdminUser, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -167,7 +167,7 @@ func (s *Service) CreateAdmin(username, password string, isPrimary bool) (*Admin
 	id, _ := result.LastInsertId()
 	s.isFirstRun = false
 
-	return &Admin{
+	return &AdminUser{
 		ID:        id,
 		Username:  username,
 		IsPrimary: isPrimary,
@@ -176,7 +176,7 @@ func (s *Service) CreateAdmin(username, password string, isPrimary bool) (*Admin
 }
 
 // CreateAdminWithSetupToken creates admin using setup token
-func (s *Service) CreateAdminWithSetupToken(token, username, password string) (*Admin, error) {
+func (s *AdminService) CreateAdminWithSetupToken(token, username, password string) (*AdminUser, error) {
 	if !s.ValidateSetupToken(token) {
 		return nil, fmt.Errorf("invalid or expired setup token")
 	}
@@ -195,8 +195,8 @@ func (s *Service) CreateAdminWithSetupToken(token, username, password string) (*
 
 // Authenticate validates admin credentials
 // Uses Argon2id for password verification per AI.md PART 2
-func (s *Service) Authenticate(username, password string) (*Admin, error) {
-	var admin Admin
+func (s *AdminService) Authenticate(username, password string) (*AdminUser, error) {
+	var admin AdminUser
 	var passwordHash string
 
 	err := s.db.QueryRow(`
@@ -233,7 +233,7 @@ func (s *Service) Authenticate(username, password string) (*Admin, error) {
 
 // ChangePassword updates admin password
 // Uses Argon2id for password hashing per AI.md PART 2
-func (s *Service) ChangePassword(adminID int64, currentPassword, newPassword string) error {
+func (s *AdminService) ChangePassword(adminID int64, currentPassword, newPassword string) error {
 	var passwordHash string
 	err := s.db.QueryRow(`
 		SELECT password_hash FROM admin_credentials WHERE id = ?
@@ -263,7 +263,7 @@ func (s *Service) ChangePassword(adminID int64, currentPassword, newPassword str
 }
 
 // GenerateInviteToken creates an invite token for a new admin
-func (s *Service) GenerateInviteToken(invitedBy int64) (string, error) {
+func (s *AdminService) GenerateInviteToken(invitedBy int64) (string, error) {
 	token, err := generateSecureToken(32)
 	if err != nil {
 		return "", err
@@ -284,7 +284,7 @@ func (s *Service) GenerateInviteToken(invitedBy int64) (string, error) {
 }
 
 // CreateAPIToken generates an API token for an admin
-func (s *Service) CreateAPIToken(adminID int64, name string, permissions string) (string, error) {
+func (s *AdminService) CreateAPIToken(adminID int64, name string, permissions string) (string, error) {
 	token, err := generateSecureToken(32)
 	if err != nil {
 		return "", err
@@ -305,7 +305,7 @@ func (s *Service) CreateAPIToken(adminID int64, name string, permissions string)
 }
 
 // ValidateAPIToken checks if an API token is valid
-func (s *Service) ValidateAPIToken(token string) (int64, error) {
+func (s *AdminService) ValidateAPIToken(token string) (int64, error) {
 	var adminID int64
 	var expires sql.NullTime
 
@@ -335,7 +335,7 @@ func (s *Service) ValidateAPIToken(token string) (int64, error) {
 }
 
 // GetAdminCount returns the number of admin accounts
-func (s *Service) GetAdminCount() (int, error) {
+func (s *AdminService) GetAdminCount() (int, error) {
 	var count int
 	err := s.db.QueryRow("SELECT COUNT(*) FROM admin_credentials").Scan(&count)
 	return count, err
@@ -349,7 +349,7 @@ type AdminInvite struct {
 }
 
 // CreateAdminInvite creates an invite for a new admin per AI.md PART 31
-func (s *Service) CreateAdminInvite(createdBy int64, username string, expiresIn time.Duration) (string, error) {
+func (s *AdminService) CreateAdminInvite(createdBy int64, username string, expiresIn time.Duration) (string, error) {
 	// Validate username
 	if err := validation.ValidateUsername(username, true); err != nil {
 		return "", err
@@ -381,7 +381,7 @@ func (s *Service) CreateAdminInvite(createdBy int64, username string, expiresIn 
 }
 
 // ValidateInviteToken validates an admin invite token per AI.md PART 31
-func (s *Service) ValidateInviteToken(token string) (*AdminInvite, error) {
+func (s *AdminService) ValidateInviteToken(token string) (*AdminInvite, error) {
 	var invite AdminInvite
 	var usedAt sql.NullTime
 	var createdBy sql.NullInt64
@@ -416,7 +416,7 @@ func (s *Service) ValidateInviteToken(token string) (*AdminInvite, error) {
 }
 
 // CreateAdminWithInvite creates an admin account from an invite token per AI.md PART 31
-func (s *Service) CreateAdminWithInvite(token, username, password string) (*Admin, error) {
+func (s *AdminService) CreateAdminWithInvite(token, username, password string) (*AdminUser, error) {
 	// Validate the token
 	invite, err := s.ValidateInviteToken(token)
 	if err != nil {
@@ -451,7 +451,7 @@ type PendingInvite struct {
 }
 
 // ListPendingInvites returns all pending (unused, unexpired) admin invites
-func (s *Service) ListPendingInvites() ([]PendingInvite, error) {
+func (s *AdminService) ListPendingInvites() ([]PendingInvite, error) {
 	rows, err := s.db.Query(`
 		SELECT st.id, st.username, st.expires_at, st.created_at, COALESCE(ac.username, 'System') as created_by
 		FROM setup_tokens st
@@ -478,7 +478,7 @@ func (s *Service) ListPendingInvites() ([]PendingInvite, error) {
 }
 
 // RevokeInvite revokes a pending admin invite
-func (s *Service) RevokeInvite(inviteID int64) error {
+func (s *AdminService) RevokeInvite(inviteID int64) error {
 	result, err := s.db.Exec(`
 		DELETE FROM setup_tokens
 		WHERE id = ? AND purpose = 'admin_invite' AND used_at IS NULL
@@ -495,7 +495,7 @@ func (s *Service) RevokeInvite(inviteID int64) error {
 }
 
 // CleanupExpiredInvites removes expired invites (called by scheduler)
-func (s *Service) CleanupExpiredInvites() (int64, error) {
+func (s *AdminService) CleanupExpiredInvites() (int64, error) {
 	result, err := s.db.Exec(`
 		DELETE FROM setup_tokens
 		WHERE purpose = 'admin_invite' AND expires_at < ?
@@ -556,8 +556,8 @@ func hashPassword(password string) (string, error) {
 }
 
 // GetAdmin retrieves admin details by ID
-func (s *Service) GetAdmin(adminID int64) (*Admin, error) {
-	var admin Admin
+func (s *AdminService) GetAdmin(adminID int64) (*AdminUser, error) {
+	var admin AdminUser
 	var lastLogin sql.NullTime
 
 	err := s.db.QueryRow(`
@@ -581,7 +581,7 @@ func (s *Service) GetAdmin(adminID int64) (*Admin, error) {
 }
 
 // GetAPITokenInfo returns info about admin's API token
-func (s *Service) GetAPITokenInfo(adminID int64) (prefix string, lastUsed *time.Time, useCount int, err error) {
+func (s *AdminService) GetAPITokenInfo(adminID int64) (prefix string, lastUsed *time.Time, useCount int, err error) {
 	var lu sql.NullTime
 
 	err = s.db.QueryRow(`
@@ -603,7 +603,7 @@ func (s *Service) GetAPITokenInfo(adminID int64) (prefix string, lastUsed *time.
 }
 
 // RegenerateAPIToken creates a new API token, replacing any existing one
-func (s *Service) RegenerateAPIToken(adminID int64) (string, error) {
+func (s *AdminService) RegenerateAPIToken(adminID int64) (string, error) {
 	// Delete existing tokens for this admin
 	_, err := s.db.Exec("DELETE FROM api_tokens WHERE admin_id = ?", adminID)
 	if err != nil {
@@ -681,7 +681,7 @@ type RecoveryKeyInfo struct {
 
 // GenerateRecoveryKeys generates 10 recovery keys for an admin
 // Returns the plaintext keys (only shown once) and stores hashes in database
-func (s *Service) GenerateRecoveryKeys(adminID int64) ([]string, error) {
+func (s *AdminService) GenerateRecoveryKeys(adminID int64) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -720,7 +720,7 @@ func (s *Service) GenerateRecoveryKeys(adminID int64) ([]string, error) {
 
 // ValidateRecoveryKey validates a recovery key and marks it as used if valid
 // Returns true if the key was valid and unused
-func (s *Service) ValidateRecoveryKey(adminID int64, key string) (bool, error) {
+func (s *AdminService) ValidateRecoveryKey(adminID int64, key string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -755,7 +755,7 @@ func (s *Service) ValidateRecoveryKey(adminID int64, key string) (bool, error) {
 }
 
 // GetRecoveryKeysStatus returns info about an admin's recovery keys
-func (s *Service) GetRecoveryKeysStatus(adminID int64) (*RecoveryKeyInfo, error) {
+func (s *AdminService) GetRecoveryKeysStatus(adminID int64) (*RecoveryKeyInfo, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -783,7 +783,7 @@ func (s *Service) GetRecoveryKeysStatus(adminID int64) (*RecoveryKeyInfo, error)
 
 // CleanupExpiredSessions removes expired admin sessions (called by scheduler)
 // Per AI.md PART 26: session.cleanup runs hourly
-func (s *Service) CleanupExpiredSessions() error {
+func (s *AdminService) CleanupExpiredSessions() error {
 	_, err := s.db.Exec(`
 		DELETE FROM admin_sessions WHERE expires_at < ?
 	`, time.Now())
@@ -795,7 +795,7 @@ func (s *Service) CleanupExpiredSessions() error {
 
 // CleanupExpiredTokens removes expired API tokens and reset tokens (called by scheduler)
 // Per AI.md PART 26: token.cleanup runs daily
-func (s *Service) CleanupExpiredTokens() error {
+func (s *AdminService) CleanupExpiredTokens() error {
 	// Clean up expired setup tokens (password reset, invites, etc.)
 	_, err := s.db.Exec(`
 		DELETE FROM setup_tokens WHERE expires_at < ?
@@ -817,7 +817,7 @@ func (s *Service) CleanupExpiredTokens() error {
 
 // GetTOTPSecret returns the TOTP secret for an admin (for 2FA verification)
 // Per AI.md PART 17: TOTP Two-Factor Authentication
-func (s *Service) GetTOTPSecret(adminID int64) (string, error) {
+func (s *AdminService) GetTOTPSecret(adminID int64) (string, error) {
 	var secret sql.NullString
 	err := s.db.QueryRow(`
 		SELECT totp_secret FROM admin_credentials WHERE id = ?
@@ -839,7 +839,7 @@ func (s *Service) GetTOTPSecret(adminID int64) (string, error) {
 
 // GetTOTPBackupCodes returns the backup codes for an admin
 // Per AI.md PART 17: 10 one-time recovery codes
-func (s *Service) GetTOTPBackupCodes(adminID int64) ([]string, error) {
+func (s *AdminService) GetTOTPBackupCodes(adminID int64) ([]string, error) {
 	var codesJSON sql.NullString
 	err := s.db.QueryRow(`
 		SELECT totp_backup_codes FROM admin_credentials WHERE id = ?
@@ -863,7 +863,7 @@ func (s *Service) GetTOTPBackupCodes(adminID int64) ([]string, error) {
 
 // UseBackupCode marks a backup code as used and removes it
 // Returns true if code was valid and removed
-func (s *Service) UseBackupCode(adminID int64, code string) (bool, error) {
+func (s *AdminService) UseBackupCode(adminID int64, code string) (bool, error) {
 	codes, err := s.GetTOTPBackupCodes(adminID)
 	if err != nil {
 		return false, err
@@ -897,7 +897,7 @@ func (s *Service) UseBackupCode(adminID int64, code string) (bool, error) {
 
 // EnableTOTP enables 2FA for an admin account
 // Per AI.md PART 17: QR code + manual entry key at /admin/profile/security
-func (s *Service) EnableTOTP(adminID int64, secret string, backupCodes []string) error {
+func (s *AdminService) EnableTOTP(adminID int64, secret string, backupCodes []string) error {
 	codesStr := strings.Join(backupCodes, ",")
 	_, err := s.db.Exec(`
 		UPDATE admin_credentials
@@ -909,7 +909,7 @@ func (s *Service) EnableTOTP(adminID int64, secret string, backupCodes []string)
 
 // DisableTOTP disables 2FA for an admin account
 // Per AI.md PART 17: Requires current TOTP code or recovery key to disable
-func (s *Service) DisableTOTP(adminID int64) error {
+func (s *AdminService) DisableTOTP(adminID int64) error {
 	_, err := s.db.Exec(`
 		UPDATE admin_credentials
 		SET totp_enabled = FALSE, totp_secret = NULL, totp_backup_codes = NULL, updated_at = ?

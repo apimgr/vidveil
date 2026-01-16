@@ -9,7 +9,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	limiter := New(true, 100, 60)
+	limiter := NewRateLimiter(true, 100, 60)
 
 	if limiter == nil {
 		t.Fatal("New() returned nil")
@@ -30,7 +30,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNewDisabled(t *testing.T) {
-	limiter := New(false, 100, 60)
+	limiter := NewRateLimiter(false, 100, 60)
 
 	if limiter == nil {
 		t.Fatal("New() returned nil")
@@ -43,7 +43,7 @@ func TestNewDisabled(t *testing.T) {
 
 func TestAllow(t *testing.T) {
 	// 5 requests per second
-	limiter := New(true, 5, 1)
+	limiter := NewRateLimiter(true, 5, 1)
 
 	ip := "192.168.1.1"
 
@@ -61,7 +61,7 @@ func TestAllow(t *testing.T) {
 }
 
 func TestAllowDisabled(t *testing.T) {
-	limiter := New(false, 1, 60)
+	limiter := NewRateLimiter(false, 1, 60)
 
 	ip := "192.168.1.1"
 
@@ -74,7 +74,7 @@ func TestAllowDisabled(t *testing.T) {
 }
 
 func TestAllowDifferentIPs(t *testing.T) {
-	limiter := New(true, 2, 60)
+	limiter := NewRateLimiter(true, 2, 60)
 
 	// Different IPs should have separate limits
 	if !limiter.Allow("192.168.1.1") {
@@ -98,7 +98,7 @@ func TestAllowDifferentIPs(t *testing.T) {
 
 func TestWindowReset(t *testing.T) {
 	// 2 requests per 1 second
-	limiter := New(true, 2, 1)
+	limiter := NewRateLimiter(true, 2, 1)
 
 	ip := "192.168.1.1"
 
@@ -120,7 +120,7 @@ func TestWindowReset(t *testing.T) {
 }
 
 func TestMiddleware(t *testing.T) {
-	limiter := New(true, 2, 60)
+	limiter := NewRateLimiter(true, 2, 60)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -161,7 +161,7 @@ func TestMiddleware(t *testing.T) {
 }
 
 func TestMiddlewareXForwardedFor(t *testing.T) {
-	limiter := New(true, 1, 60)
+	limiter := NewRateLimiter(true, 1, 60)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -194,7 +194,7 @@ func TestMiddlewareXForwardedFor(t *testing.T) {
 }
 
 func TestRateLimitHeaders(t *testing.T) {
-	limiter := New(true, 10, 60)
+	limiter := NewRateLimiter(true, 10, 60)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -223,7 +223,7 @@ func TestRateLimitHeaders(t *testing.T) {
 }
 
 func TestRemaining(t *testing.T) {
-	limiter := New(true, 5, 60)
+	limiter := NewRateLimiter(true, 5, 60)
 	ip := "192.168.1.1"
 
 	// Initially should have all requests remaining
@@ -241,7 +241,7 @@ func TestRemaining(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
-	limiter := New(true, 5, 60)
+	limiter := NewRateLimiter(true, 5, 60)
 	ip := "192.168.1.1"
 
 	// Make a request to establish a window
@@ -259,7 +259,7 @@ func TestReset(t *testing.T) {
 }
 
 func TestSetHeaders(t *testing.T) {
-	limiter := New(true, 10, 60)
+	limiter := NewRateLimiter(true, 10, 60)
 
 	rr := httptest.NewRecorder()
 	limiter.SetHeaders(rr, "192.168.1.1")
@@ -271,7 +271,7 @@ func TestSetHeaders(t *testing.T) {
 
 func TestNewDefaults(t *testing.T) {
 	// Test with zero/negative values - should use defaults per AI.md PART 1
-	limiter := New(true, 0, 0)
+	limiter := NewRateLimiter(true, 0, 0)
 
 	if limiter.requests != 100 {
 		t.Errorf("Expected default requests=100 (per PART 1), got %d", limiter.requests)

@@ -19,9 +19,9 @@ type XNXXEngine struct {
 }
 
 // NewXNXXEngine creates a new XNXX engine
-func NewXNXXEngine(cfg *config.Config, torClient *tor.Client) *XNXXEngine {
+func NewXNXXEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *XNXXEngine {
 	e := &XNXXEngine{
-		BaseEngine: NewBaseEngine("xnxx", "XNXX", "https://www.xnxx.com", 1, cfg, torClient),
+		BaseEngine: NewBaseEngine("xnxx", "XNXX", "https://www.xnxx.com", 1, appConfig, torClient),
 		parser:     parser.NewXNXXParser(),
 	}
 	// Set capabilities per IDEA.md

@@ -8,25 +8,25 @@ import (
 	"time"
 )
 
-// State represents the circuit breaker state
-type State int
+// CircuitBreakerState represents the circuit breaker state
+type CircuitBreakerState int
 
 const (
 	// Normal operation, requests pass through
-	StateClosed State = iota
+	CircuitBreakerStateClosed CircuitBreakerState = iota
 	// Circuit is open, requests fail immediately
-	StateOpen
+	CircuitBreakerStateOpen
 	// Testing if service recovered
-	StateHalfOpen
+	CircuitBreakerStateHalfOpen
 )
 
-func (s State) String() string {
+func (s CircuitBreakerState) String() string {
 	switch s {
-	case StateClosed:
+	case CircuitBreakerStateClosed:
 		return "closed"
-	case StateOpen:
+	case CircuitBreakerStateOpen:
 		return "open"
-	case StateHalfOpen:
+	case CircuitBreakerStateHalfOpen:
 		return "half-open"
 	default:
 		return "unknown"
@@ -38,7 +38,7 @@ type CircuitBreaker struct {
 	mu sync.RWMutex
 
 	name            string
-	state           State
+	state           CircuitBreakerState
 	failureCount    int
 	successCount    int
 	lastFailureTime time.Time
@@ -50,7 +50,7 @@ type CircuitBreaker struct {
 	successThreshold int
 	// Time to wait before half-open
 	timeout       time.Duration
-	onStateChange func(name string, from, to State)
+	onStateChange func(name string, from, to CircuitBreakerState)
 }
 
 // CircuitBreakerConfig holds circuit breaker configuration
@@ -62,7 +62,7 @@ type CircuitBreakerConfig struct {
 	SuccessThreshold int
 	// Default: 30s
 	Timeout       time.Duration
-	OnStateChange func(name string, from, to State)
+	OnStateChange func(name string, from, to CircuitBreakerState)
 }
 
 // DefaultCircuitBreakerConfig returns default configuration
@@ -83,7 +83,7 @@ func NewCircuitBreaker(cfg *CircuitBreakerConfig) *CircuitBreaker {
 
 	return &CircuitBreaker{
 		name:             cfg.Name,
-		state:            StateClosed,
+		state:            CircuitBreakerStateClosed,
 		failureThreshold: cfg.FailureThreshold,
 		successThreshold: cfg.SuccessThreshold,
 		timeout:          cfg.Timeout,
@@ -138,18 +138,18 @@ func (cb *CircuitBreaker) AllowRequest() bool {
 	cb.mu.RUnlock()
 
 	switch state {
-	case StateClosed:
+	case CircuitBreakerStateClosed:
 		return true
 
-	case StateOpen:
+	case CircuitBreakerStateOpen:
 		// Check if timeout has passed
 		if time.Since(lastFailure) > cb.timeout {
-			cb.transitionTo(StateHalfOpen)
+			cb.transitionTo(CircuitBreakerStateHalfOpen)
 			return true
 		}
 		return false
 
-	case StateHalfOpen:
+	case CircuitBreakerStateHalfOpen:
 		return true
 
 	default:
@@ -163,14 +163,14 @@ func (cb *CircuitBreaker) RecordSuccess() {
 	defer cb.mu.Unlock()
 
 	switch cb.state {
-	case StateClosed:
+	case CircuitBreakerStateClosed:
 		// Reset failure count on success
 		cb.failureCount = 0
 
-	case StateHalfOpen:
+	case CircuitBreakerStateHalfOpen:
 		cb.successCount++
 		if cb.successCount >= cb.successThreshold {
-			cb.setState(StateClosed)
+			cb.setState(CircuitBreakerStateClosed)
 			cb.failureCount = 0
 			cb.successCount = 0
 		}
@@ -185,21 +185,21 @@ func (cb *CircuitBreaker) RecordFailure() {
 	cb.lastFailureTime = time.Now()
 
 	switch cb.state {
-	case StateClosed:
+	case CircuitBreakerStateClosed:
 		cb.failureCount++
 		if cb.failureCount >= cb.failureThreshold {
-			cb.setState(StateOpen)
+			cb.setState(CircuitBreakerStateOpen)
 		}
 
-	case StateHalfOpen:
+	case CircuitBreakerStateHalfOpen:
 		// Any failure in half-open goes back to open
-		cb.setState(StateOpen)
+		cb.setState(CircuitBreakerStateOpen)
 		cb.successCount = 0
 	}
 }
 
-// State returns the current state
-func (cb *CircuitBreaker) State() State {
+// GetState returns the current circuit breaker state
+func (cb *CircuitBreaker) GetState() CircuitBreakerState {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	return cb.state
@@ -217,13 +217,13 @@ func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	cb.state = StateClosed
+	cb.state = CircuitBreakerStateClosed
 	cb.failureCount = 0
 	cb.successCount = 0
 }
 
 // transitionTo transitions to a new state (thread-safe with lock upgrade)
-func (cb *CircuitBreaker) transitionTo(newState State) {
+func (cb *CircuitBreaker) transitionTo(newState CircuitBreakerState) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -233,7 +233,7 @@ func (cb *CircuitBreaker) transitionTo(newState State) {
 }
 
 // setState sets the state and calls the callback (must hold lock)
-func (cb *CircuitBreaker) setState(newState State) {
+func (cb *CircuitBreaker) setState(newState CircuitBreakerState) {
 	oldState := cb.state
 	cb.state = newState
 

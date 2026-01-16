@@ -11,17 +11,17 @@ import (
 	"golang.org/x/net/proxy"
 )
 
-// Client provides HTTP client functionality through Tor
-type Client struct {
+// TorClient provides HTTP client functionality through Tor
+type TorClient struct {
 	proxyAddr  string
 	timeout    time.Duration
 	httpClient *http.Client
 	dialer     proxy.Dialer
 }
 
-// NewClient creates a new Tor client
-func NewClient(proxyAddr string, timeoutSecs int) *Client {
-	c := &Client{
+// NewTorClient creates a new Tor client
+func NewTorClient(proxyAddr string, timeoutSecs int) *TorClient {
+	c := &TorClient{
 		proxyAddr: proxyAddr,
 		timeout:   time.Duration(timeoutSecs) * time.Second,
 	}
@@ -52,12 +52,12 @@ func NewClient(proxyAddr string, timeoutSecs int) *Client {
 }
 
 // HTTPClient returns the HTTP client configured to use Tor
-func (c *Client) HTTPClient() *http.Client {
+func (c *TorClient) HTTPClient() *http.Client {
 	return c.httpClient
 }
 
 // IsAvailable checks if Tor proxy is available
-func (c *Client) IsAvailable() bool {
+func (c *TorClient) IsAvailable() bool {
 	if c.dialer == nil {
 		return false
 	}
@@ -72,7 +72,7 @@ func (c *Client) IsAvailable() bool {
 }
 
 // GetExitIP returns the current Tor exit node IP
-func (c *Client) GetExitIP() (string, error) {
+func (c *TorClient) GetExitIP() (string, error) {
 	resp, err := c.httpClient.Get("https://check.torproject.org/api/ip")
 	if err != nil {
 		return "", fmt.Errorf("failed to get exit IP: %w", err)
@@ -86,7 +86,7 @@ func (c *Client) GetExitIP() (string, error) {
 }
 
 // RotateCircuit requests a new Tor circuit (requires control port)
-func (c *Client) RotateCircuit(controlPort int, password string) error {
+func (c *TorClient) RotateCircuit(controlPort int, password string) error {
 	// Connect to Tor control port
 	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", controlPort))
 	if err != nil {

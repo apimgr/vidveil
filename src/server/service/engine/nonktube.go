@@ -13,8 +13,8 @@ import (
 type NonkTubeEngine struct{ *BaseEngine }
 
 // NewNonkTubeEngine creates a new NonkTube engine
-func NewNonkTubeEngine(cfg *config.Config, torClient *tor.Client) *NonkTubeEngine {
-	return &NonkTubeEngine{NewBaseEngine("nonktube", "NonkTube", "https://www.nonktube.com", 4, cfg, torClient)}
+func NewNonkTubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *NonkTubeEngine {
+	return &NonkTubeEngine{NewBaseEngine("nonktube", "NonkTube", "https://www.nonktube.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on NonkTube

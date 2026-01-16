@@ -16,8 +16,8 @@ import (
 // TaskFunc is a function that executes a scheduled task
 type TaskFunc func(ctx context.Context) error
 
-// Task represents a scheduled task
-type Task struct {
+// ScheduledTask represents a scheduled task
+type ScheduledTask struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -50,7 +50,7 @@ type TaskHistory struct {
 
 // Scheduler manages scheduled tasks per AI.md PART 9
 type Scheduler struct {
-	tasks    map[string]*Task
+	tasks    map[string]*ScheduledTask
 	history  []TaskHistory
 	mu       sync.RWMutex
 	ctx      context.Context
@@ -59,10 +59,10 @@ type Scheduler struct {
 	maxHist  int
 }
 
-// New creates a new scheduler
-func New() *Scheduler {
+// NewScheduler creates a new scheduler
+func NewScheduler() *Scheduler {
 	return &Scheduler{
-		tasks:   make(map[string]*Task),
+		tasks:   make(map[string]*ScheduledTask),
 		history: make([]TaskHistory, 0),
 		// Keep last 100 history entries
 		maxHist: 100,
@@ -75,7 +75,7 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	task := &Task{
+	task := &ScheduledTask{
 		ID:          id,
 		Name:        name,
 		Description: description,
@@ -184,7 +184,7 @@ func (s *Scheduler) run() {
 // checkAndRunTasks checks all tasks and runs any that are due
 func (s *Scheduler) checkAndRunTasks() {
 	s.mu.RLock()
-	tasks := make([]*Task, 0, len(s.tasks))
+	tasks := make([]*ScheduledTask, 0, len(s.tasks))
 	for _, task := range s.tasks {
 		tasks = append(tasks, task)
 	}
@@ -199,7 +199,7 @@ func (s *Scheduler) checkAndRunTasks() {
 }
 
 // runTask executes a single task
-func (s *Scheduler) runTask(task *Task) {
+func (s *Scheduler) runTask(task *ScheduledTask) {
 	s.mu.Lock()
 	task.LastResult = "running"
 	startTime := time.Now()
@@ -335,7 +335,7 @@ func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 }
 
 // GetTask returns a task by ID
-func (s *Scheduler) GetTask(taskID string) (*Task, error) {
+func (s *Scheduler) GetTask(taskID string) (*ScheduledTask, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -350,11 +350,11 @@ func (s *Scheduler) GetTask(taskID string) (*Task, error) {
 }
 
 // ListTasks returns all registered tasks
-func (s *Scheduler) ListTasks() []*Task {
+func (s *Scheduler) ListTasks() []*ScheduledTask {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	tasks := make([]*Task, 0, len(s.tasks))
+	tasks := make([]*ScheduledTask, 0, len(s.tasks))
 	for _, task := range s.tasks {
 		taskCopy := *task
 		tasks = append(tasks, &taskCopy)

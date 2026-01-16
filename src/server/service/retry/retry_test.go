@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-func TestDefaultConfig(t *testing.T) {
-	cfg := DefaultConfig()
+func TestDefaultRetryConfig(t *testing.T) {
+	cfg := DefaultRetryConfig()
 
 	if cfg.MaxAttempts != 3 {
 		t.Errorf("Expected MaxAttempts 3, got %d", cfg.MaxAttempts)
@@ -32,11 +32,11 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-func TestDoSuccess(t *testing.T) {
+func TestExecuteWithRetrySuccess(t *testing.T) {
 	ctx := context.Background()
 	attempts := 0
 
-	err := Do(ctx, nil, func() error {
+	err := ExecuteWithRetry(ctx, nil, func() error {
 		attempts++
 		return nil
 	})
@@ -50,10 +50,10 @@ func TestDoSuccess(t *testing.T) {
 	}
 }
 
-func TestDoRetryThenSuccess(t *testing.T) {
+func TestExecuteWithRetryRetryThenSuccess(t *testing.T) {
 	ctx := context.Background()
 	attempts := 0
-	cfg := &Config{
+	cfg := &RetryConfig{
 		MaxAttempts:  3,
 		InitialDelay: 10 * time.Millisecond,
 		MaxDelay:     100 * time.Millisecond,
@@ -61,7 +61,7 @@ func TestDoRetryThenSuccess(t *testing.T) {
 		Jitter:       0,
 	}
 
-	err := Do(ctx, cfg, func() error {
+	err := ExecuteWithRetry(ctx, cfg, func() error {
 		attempts++
 		if attempts < 3 {
 			return ErrTemporary
@@ -78,10 +78,10 @@ func TestDoRetryThenSuccess(t *testing.T) {
 	}
 }
 
-func TestDoMaxAttemptsExceeded(t *testing.T) {
+func TestExecuteWithRetryMaxAttemptsExceeded(t *testing.T) {
 	ctx := context.Background()
 	attempts := 0
-	cfg := &Config{
+	cfg := &RetryConfig{
 		MaxAttempts:  3,
 		InitialDelay: 10 * time.Millisecond,
 		MaxDelay:     100 * time.Millisecond,
@@ -89,7 +89,7 @@ func TestDoMaxAttemptsExceeded(t *testing.T) {
 		Jitter:       0,
 	}
 
-	err := Do(ctx, cfg, func() error {
+	err := ExecuteWithRetry(ctx, cfg, func() error {
 		attempts++
 		return ErrTemporary
 	})
@@ -103,11 +103,11 @@ func TestDoMaxAttemptsExceeded(t *testing.T) {
 	}
 }
 
-func TestDoNonRetryableError(t *testing.T) {
+func TestExecuteWithRetryNonRetryableError(t *testing.T) {
 	ctx := context.Background()
 	attempts := 0
 	nonRetryable := errors.New("non-retryable error")
-	cfg := &Config{
+	cfg := &RetryConfig{
 		MaxAttempts:     3,
 		InitialDelay:    10 * time.Millisecond,
 		MaxDelay:        100 * time.Millisecond,
@@ -116,7 +116,7 @@ func TestDoNonRetryableError(t *testing.T) {
 		RetryableErrors: []error{ErrTemporary},
 	}
 
-	err := Do(ctx, cfg, func() error {
+	err := ExecuteWithRetry(ctx, cfg, func() error {
 		attempts++
 		return nonRetryable
 	})
@@ -131,10 +131,10 @@ func TestDoNonRetryableError(t *testing.T) {
 	}
 }
 
-func TestDoContextCanceled(t *testing.T) {
+func TestExecuteWithRetryContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	attempts := 0
-	cfg := &Config{
+	cfg := &RetryConfig{
 		MaxAttempts:  5,
 		InitialDelay: 100 * time.Millisecond,
 		MaxDelay:     1 * time.Second,
@@ -148,7 +148,7 @@ func TestDoContextCanceled(t *testing.T) {
 		cancel()
 	}()
 
-	err := Do(ctx, cfg, func() error {
+	err := ExecuteWithRetry(ctx, cfg, func() error {
 		attempts++
 		return ErrTemporary
 	})
@@ -158,11 +158,11 @@ func TestDoContextCanceled(t *testing.T) {
 	}
 }
 
-func TestDoWithResult(t *testing.T) {
+func TestExecuteWithRetryResult(t *testing.T) {
 	ctx := context.Background()
 	attempts := 0
 
-	result, err := DoWithResult(ctx, nil, func() (string, error) {
+	result, err := ExecuteWithRetryResult(ctx, nil, func() (string, error) {
 		attempts++
 		if attempts < 2 {
 			return "", ErrTemporary
@@ -184,7 +184,7 @@ func TestDoWithResult(t *testing.T) {
 }
 
 func TestBackoff(t *testing.T) {
-	cfg := &Config{
+	cfg := &RetryConfig{
 		InitialDelay: 100 * time.Millisecond,
 		MaxDelay:     10 * time.Second,
 		Multiplier:   2.0,
@@ -212,7 +212,7 @@ func TestBackoff(t *testing.T) {
 }
 
 func TestBackoffMaxDelay(t *testing.T) {
-	cfg := &Config{
+	cfg := &RetryConfig{
 		InitialDelay: 100 * time.Millisecond,
 		MaxDelay:     500 * time.Millisecond,
 		Multiplier:   2.0,

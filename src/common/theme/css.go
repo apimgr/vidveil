@@ -9,7 +9,7 @@ import (
 )
 
 // ToCSS generates CSS variables for the palette
-func (p Palette) ToCSS() string {
+func (p ColorPalette) ToCSS() string {
 	var sb strings.Builder
 	sb.WriteString(":root {\n")
 	sb.WriteString(fmt.Sprintf("  --bg-color: %s;\n", p.Background))
@@ -30,7 +30,7 @@ func (p Palette) ToCSS() string {
 }
 
 // ToCSSClass generates CSS class definitions for theme elements
-func (p Palette) ToCSSClass(className string) string {
+func (p ColorPalette) ToCSSClass(className string) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf(".%s {\n", className))
 	sb.WriteString(fmt.Sprintf("  --bg-color: %s;\n", p.Background))
@@ -51,7 +51,7 @@ func (p Palette) ToCSSClass(className string) string {
 }
 
 // ToLipgloss returns lipgloss-compatible color values for terminal UI
-func (p Palette) ToLipgloss() map[string]string {
+func (p ColorPalette) ToLipgloss() map[string]string {
 	return map[string]string{
 		"background":  p.Background,
 		"foreground":  p.Foreground,

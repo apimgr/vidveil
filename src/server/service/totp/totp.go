@@ -24,20 +24,20 @@ const (
 	BackupCodeLength = 8
 )
 
-// Service handles TOTP operations for 2FA
-type Service struct {
+// TOTPService handles TOTP operations for 2FA
+type TOTPService struct {
 	issuer string
 }
 
-// New creates a new TOTP service
-func New(issuer string) *Service {
-	return &Service{
+// NewTOTPService creates a new TOTP service
+func NewTOTPService(issuer string) *TOTPService {
+	return &TOTPService{
 		issuer: issuer,
 	}
 }
 
 // GenerateSecret generates a new TOTP secret
-func (s *Service) GenerateSecret() (string, error) {
+func (s *TOTPService) GenerateSecret() (string, error) {
 	secret := make([]byte, 20)
 	if _, err := rand.Read(secret); err != nil {
 		return "", fmt.Errorf("failed to generate secret: %w", err)
@@ -46,7 +46,7 @@ func (s *Service) GenerateSecret() (string, error) {
 }
 
 // GenerateBackupCodes generates one-time use backup codes
-func (s *Service) GenerateBackupCodes() ([]string, error) {
+func (s *TOTPService) GenerateBackupCodes() ([]string, error) {
 	codes := make([]string, BackupCodeCount)
 	charset := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -66,7 +66,7 @@ func (s *Service) GenerateBackupCodes() ([]string, error) {
 }
 
 // GetProvisioningURI generates the otpauth:// URI for authenticator apps
-func (s *Service) GetProvisioningURI(accountName, secret string) string {
+func (s *TOTPService) GetProvisioningURI(accountName, secret string) string {
 	// otpauth://totp/ISSUER:ACCOUNT?secret=SECRET&issuer=ISSUER&algorithm=SHA1&digits=6&period=30
 	return fmt.Sprintf(
 		"otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=%d&period=%d",
@@ -80,7 +80,7 @@ func (s *Service) GetProvisioningURI(accountName, secret string) string {
 }
 
 // ValidateCode validates a TOTP code
-func (s *Service) ValidateCode(secret, code string) bool {
+func (s *TOTPService) ValidateCode(secret, code string) bool {
 	// Allow 1 time step before and after for clock drift
 	now := time.Now().Unix()
 	for i := int64(-1); i <= 1; i++ {
@@ -94,7 +94,7 @@ func (s *Service) ValidateCode(secret, code string) bool {
 }
 
 // ValidateBackupCode checks if a backup code is valid (caller must track used codes)
-func (s *Service) ValidateBackupCode(code string, validCodes []string) bool {
+func (s *TOTPService) ValidateBackupCode(code string, validCodes []string) bool {
 	code = strings.ToUpper(strings.ReplaceAll(code, "-", ""))
 	for _, valid := range validCodes {
 		normalizedValid := strings.ToUpper(strings.ReplaceAll(valid, "-", ""))
@@ -106,7 +106,7 @@ func (s *Service) ValidateBackupCode(code string, validCodes []string) bool {
 }
 
 // generateCode generates a TOTP code for a given counter
-func (s *Service) generateCode(secret string, counter int64) string {
+func (s *TOTPService) generateCode(secret string, counter int64) string {
 	// Decode the base32 secret
 	secret = strings.ToUpper(strings.TrimSpace(secret))
 	secretBytes, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
@@ -131,8 +131,8 @@ func (s *Service) generateCode(secret string, counter int64) string {
 	return fmt.Sprintf("%06d", code%1000000)
 }
 
-// Config holds 2FA configuration per AI.md PART 31
-type Config struct {
+// TOTPConfig holds 2FA configuration per AI.md PART 31
+type TOTPConfig struct {
 	// Enabled allows 2FA to be enabled by users
 	Enabled bool `yaml:"enabled"`
 	// Required forces all users to enable 2FA
@@ -141,9 +141,9 @@ type Config struct {
 	RememberDeviceDays int `yaml:"remember_device_days"`
 }
 
-// DefaultConfig returns the default 2FA configuration
-func DefaultConfig() Config {
-	return Config{
+// DefaultTOTPConfig returns the default 2FA configuration
+func DefaultTOTPConfig() TOTPConfig {
+	return TOTPConfig{
 		Enabled:            true,
 		Required:           false,
 		RememberDeviceDays: 30,
@@ -159,7 +159,7 @@ type SetupData struct {
 }
 
 // Setup generates all data needed to enable 2FA for an account
-func (s *Service) Setup(accountName string) (*SetupData, error) {
+func (s *TOTPService) Setup(accountName string) (*SetupData, error) {
 	secret, err := s.GenerateSecret()
 	if err != nil {
 		return nil, err

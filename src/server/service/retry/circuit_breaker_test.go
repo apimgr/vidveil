@@ -10,8 +10,8 @@ import (
 func TestNewCircuitBreaker(t *testing.T) {
 	cb := NewCircuitBreaker(nil)
 
-	if cb.State() != StateClosed {
-		t.Errorf("Expected StateClosed, got %v", cb.State())
+	if cb.GetState() != CircuitBreakerStateClosed {
+		t.Errorf("Expected CircuitBreakerStateClosed, got %v", cb.GetState())
 	}
 
 	if cb.name != "default" {
@@ -67,8 +67,8 @@ func TestCircuitBreakerAllowRequest(t *testing.T) {
 	cb.RecordFailure()
 
 	// Circuit should now be open
-	if cb.State() != StateOpen {
-		t.Errorf("Expected StateOpen after threshold, got %v", cb.State())
+	if cb.GetState() != CircuitBreakerStateOpen {
+		t.Errorf("Expected CircuitBreakerStateOpen after threshold, got %v", cb.GetState())
 	}
 
 	// Open circuit should block requests
@@ -90,8 +90,8 @@ func TestCircuitBreakerHalfOpen(t *testing.T) {
 	// Open the circuit
 	cb.RecordFailure()
 
-	if cb.State() != StateOpen {
-		t.Errorf("Expected StateOpen, got %v", cb.State())
+	if cb.GetState() != CircuitBreakerStateOpen {
+		t.Errorf("Expected CircuitBreakerStateOpen, got %v", cb.GetState())
 	}
 
 	// Wait for timeout
@@ -102,8 +102,8 @@ func TestCircuitBreakerHalfOpen(t *testing.T) {
 		t.Error("Should allow request after timeout (half-open)")
 	}
 
-	if cb.State() != StateHalfOpen {
-		t.Errorf("Expected StateHalfOpen, got %v", cb.State())
+	if cb.GetState() != CircuitBreakerStateHalfOpen {
+		t.Errorf("Expected CircuitBreakerStateHalfOpen, got %v", cb.GetState())
 	}
 }
 
@@ -130,8 +130,8 @@ func TestCircuitBreakerRecovery(t *testing.T) {
 	cb.RecordSuccess()
 	cb.RecordSuccess()
 
-	if cb.State() != StateClosed {
-		t.Errorf("Expected StateClosed after recovery, got %v", cb.State())
+	if cb.GetState() != CircuitBreakerStateClosed {
+		t.Errorf("Expected CircuitBreakerStateClosed after recovery, got %v", cb.GetState())
 	}
 
 	// Requests should be allowed again
@@ -165,8 +165,8 @@ func TestCircuitBreakerHalfOpenFailure(t *testing.T) {
 	// Then a failure should reopen
 	cb.RecordFailure()
 
-	if cb.State() != StateOpen {
-		t.Errorf("Expected StateOpen after half-open failure, got %v", cb.State())
+	if cb.GetState() != CircuitBreakerStateOpen {
+		t.Errorf("Expected CircuitBreakerStateOpen after half-open failure, got %v", cb.GetState())
 	}
 }
 
@@ -184,15 +184,15 @@ func TestCircuitBreakerReset(t *testing.T) {
 	// Open the circuit
 	cb.RecordFailure()
 
-	if cb.State() != StateOpen {
-		t.Errorf("Expected StateOpen, got %v", cb.State())
+	if cb.GetState() != CircuitBreakerStateOpen {
+		t.Errorf("Expected CircuitBreakerStateOpen, got %v", cb.GetState())
 	}
 
 	// Reset
 	cb.Reset()
 
-	if cb.State() != StateClosed {
-		t.Errorf("Expected StateClosed after reset, got %v", cb.State())
+	if cb.GetState() != CircuitBreakerStateClosed {
+		t.Errorf("Expected CircuitBreakerStateClosed after reset, got %v", cb.GetState())
 	}
 
 	if cb.FailureCount() != 0 {
@@ -267,18 +267,18 @@ func TestCircuitBreakerExecuteWithResult(t *testing.T) {
 
 func TestCircuitBreakerStateString(t *testing.T) {
 	tests := []struct {
-		state    State
+		state    CircuitBreakerState
 		expected string
 	}{
-		{StateClosed, "closed"},
-		{StateOpen, "open"},
-		{StateHalfOpen, "half-open"},
-		{State(99), "unknown"},
+		{CircuitBreakerStateClosed, "closed"},
+		{CircuitBreakerStateOpen, "open"},
+		{CircuitBreakerStateHalfOpen, "half-open"},
+		{CircuitBreakerState(99), "unknown"},
 	}
 
 	for _, tt := range tests {
 		if tt.state.String() != tt.expected {
-			t.Errorf("State(%d).String() = '%s', want '%s'", tt.state, tt.state.String(), tt.expected)
+			t.Errorf("CircuitBreakerState(%d).String() = '%s', want '%s'", tt.state, tt.state.String(), tt.expected)
 		}
 	}
 }
@@ -349,20 +349,20 @@ func TestCircuitBreakerRegistryResetAll(t *testing.T) {
 	cb1.RecordFailure()
 	cb2.RecordFailure()
 
-	if cb1.State() != StateOpen {
+	if cb1.GetState() != CircuitBreakerStateOpen {
 		t.Error("cb1 should be open")
 	}
-	if cb2.State() != StateOpen {
+	if cb2.GetState() != CircuitBreakerStateOpen {
 		t.Error("cb2 should be open")
 	}
 
 	// Reset all
 	registry.ResetAll()
 
-	if cb1.State() != StateClosed {
+	if cb1.GetState() != CircuitBreakerStateClosed {
 		t.Error("cb1 should be closed after reset")
 	}
-	if cb2.State() != StateClosed {
+	if cb2.GetState() != CircuitBreakerStateClosed {
 		t.Error("cb2 should be closed after reset")
 	}
 }

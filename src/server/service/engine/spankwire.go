@@ -13,8 +13,8 @@ import (
 type SpankWireEngine struct{ *BaseEngine }
 
 // NewSpankWireEngine creates a new SpankWire engine
-func NewSpankWireEngine(cfg *config.Config, torClient *tor.Client) *SpankWireEngine {
-	return &SpankWireEngine{NewBaseEngine("spankwire", "SpankWire", "https://www.spankwire.com", 3, cfg, torClient)}
+func NewSpankWireEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *SpankWireEngine {
+	return &SpankWireEngine{NewBaseEngine("spankwire", "SpankWire", "https://www.spankwire.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on SpankWire

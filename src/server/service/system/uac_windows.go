@@ -31,9 +31,9 @@ const (
 	TokenElevationTypeLimited = 3
 )
 
-// IsElevated checks if the current process has administrator privileges
+// IsRunningElevated checks if the current process has administrator privileges
 // per AI.md PART 4 Windows requirements
-func IsElevated() bool {
+func IsRunningElevated() bool {
 	var token syscall.Token
 	currentProcess, _ := syscall.GetCurrentProcess()
 
@@ -83,7 +83,7 @@ const (
 // RequestElevation attempts to restart the current process with admin privileges
 // per AI.md PART 4: "UAC prompt (requires GUI)"
 func RequestElevation(args ...string) ElevationResult {
-	if IsElevated() {
+	if IsRunningElevated() {
 		return ElevationAlreadyAdmin
 	}
 
@@ -142,7 +142,7 @@ func shellExecute(hwnd uintptr, operation, file, parameters, directory string, s
 // RunAsAdmin runs a command with administrator privileges via UAC
 // Falls back to runas command if ShellExecute fails
 func RunAsAdmin(command string, args ...string) error {
-	if IsElevated() {
+	if IsRunningElevated() {
 		// Already admin, just run directly
 		cmd := exec.Command(command, args...)
 		return cmd.Run()
@@ -168,7 +168,7 @@ func RunAsAdmin(command string, args ...string) error {
 // Returns true if the program should exit (because a new elevated process was started)
 // per AI.md PART 4 flow
 func RequireAdmin(operation string) (bool, error) {
-	if IsElevated() {
+	if IsRunningElevated() {
 		return false, nil
 	}
 

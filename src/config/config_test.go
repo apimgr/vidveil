@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-func TestDefault(t *testing.T) {
-	cfg := Default()
+func TestDefaultAppConfig(t *testing.T) {
+	cfg := DefaultAppConfig()
 
 	if cfg == nil {
-		t.Fatal("Default() returned nil")
+		t.Fatal("DefaultAppConfig() returned nil")
 	}
 
 	// Check server defaults
@@ -106,12 +106,12 @@ func TestNormalizeMode(t *testing.T) {
 	}
 }
 
-func TestGetPaths(t *testing.T) {
+func TestGetAppPaths(t *testing.T) {
 	// Test with custom paths
 	customConfig := "/tmp/test-config"
 	customData := "/tmp/test-data"
 
-	paths := GetPaths(customConfig, customData)
+	paths := GetAppPaths(customConfig, customData)
 
 	if paths.Config != customConfig {
 		t.Errorf("Expected config path %q, got %q", customConfig, paths.Config)
@@ -166,18 +166,18 @@ func TestLoadAndSave(t *testing.T) {
 	configDir := filepath.Join(tmpDir, "config")
 	dataDir := filepath.Join(tmpDir, "data")
 
-	// Load should create default config
-	cfg, configPath, err := Load(configDir, dataDir)
+	// LoadAppConfig should create default config
+	cfg, configPath, err := LoadAppConfig(configDir, dataDir)
 	if err != nil {
-		t.Fatalf("Load() error: %v", err)
+		t.Fatalf("LoadAppConfig() error: %v", err)
 	}
 
 	if cfg == nil {
-		t.Fatal("Load() returned nil config")
+		t.Fatal("LoadAppConfig() returned nil config")
 	}
 
 	if configPath == "" {
-		t.Fatal("Load() returned empty config path")
+		t.Fatal("LoadAppConfig() returned empty config path")
 	}
 
 	// Verify config file was created
@@ -187,14 +187,14 @@ func TestLoadAndSave(t *testing.T) {
 
 	// Modify and save
 	cfg.Server.Title = "Test Title"
-	if err := Save(cfg, configPath); err != nil {
-		t.Fatalf("Save() error: %v", err)
+	if err := SaveAppConfig(cfg, configPath); err != nil {
+		t.Fatalf("SaveAppConfig() error: %v", err)
 	}
 
 	// Reload and verify
-	cfg2, _, err := Load(configDir, dataDir)
+	cfg2, _, err := LoadAppConfig(configDir, dataDir)
 	if err != nil {
-		t.Fatalf("Load() after save error: %v", err)
+		t.Fatalf("LoadAppConfig() after save error: %v", err)
 	}
 
 	if cfg2.Server.Title != "Test Title" {
@@ -214,7 +214,7 @@ func TestGetFQDN(t *testing.T) {
 }
 
 func TestGetDisplayHost(t *testing.T) {
-	cfg := Default()
+	cfg := DefaultAppConfig()
 
 	// Set DOMAIN to test
 	os.Setenv("DOMAIN", "vidveil.example.com")
@@ -229,7 +229,7 @@ func TestGetDisplayHost(t *testing.T) {
 }
 
 func TestIsDevelopmentMode(t *testing.T) {
-	cfg := Default()
+	cfg := DefaultAppConfig()
 
 	cfg.Server.Mode = "production"
 	if cfg.IsDevelopmentMode() {

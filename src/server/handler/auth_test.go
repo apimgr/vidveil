@@ -18,7 +18,7 @@ func TestNewAuthHandler(t *testing.T) {
 		t.Fatal("NewAuthHandler should return non-nil handler")
 	}
 
-	if h.cfg != cfg {
+	if h.appConfig != cfg {
 		t.Error("AuthHandler should store config reference")
 	}
 }
@@ -31,7 +31,7 @@ func TestNewUserHandler(t *testing.T) {
 		t.Fatal("NewUserHandler should return non-nil handler")
 	}
 
-	if h.cfg != cfg {
+	if h.appConfig != cfg {
 		t.Error("UserHandler should store config reference")
 	}
 }

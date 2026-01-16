@@ -175,26 +175,26 @@ Time: {timestamp}
 {app_url}`,
 }
 
-// Service provides email sending functionality
-type Service struct {
-	cfg         *config.Config
+// EmailService provides email sending functionality
+type EmailService struct {
+	appConfig   *config.AppConfig
 	templateDir string
 }
 
-// New creates a new email service
-func New(cfg *config.Config) *Service {
-	paths := config.GetPaths("", "")
+// NewEmailService creates a new email service
+func NewEmailService(appConfig *config.AppConfig) *EmailService {
+	paths := config.GetAppPaths("", "")
 	templateDir := filepath.Join(paths.Config, "templates", "email")
 
-	return &Service{
-		cfg:         cfg,
+	return &EmailService{
+		appConfig:   appConfig,
 		templateDir: templateDir,
 	}
 }
 
 // Send sends an email using a template
-func (s *Service) Send(templateName string, to string, vars map[string]string) error {
-	if !s.cfg.Server.Email.Enabled {
+func (s *EmailService) Send(templateName string, to string, vars map[string]string) error {
+	if !s.appConfig.Server.Email.Enabled {
 		return fmt.Errorf("email is not enabled")
 	}
 
@@ -220,7 +220,7 @@ func (s *Service) Send(templateName string, to string, vars map[string]string) e
 }
 
 // getTemplate returns template content, preferring custom over embedded
-func (s *Service) getTemplate(name string) (string, error) {
+func (s *EmailService) getTemplate(name string) (string, error) {
 	// Check for custom template first
 	customPath := filepath.Join(s.templateDir, name+".txt")
 	if data, err := os.ReadFile(customPath); err == nil {
@@ -241,7 +241,7 @@ func (s *Service) getTemplate(name string) (string, error) {
 }
 
 // parseTemplate extracts subject and body from template
-func (s *Service) parseTemplate(template string) (subject, body string) {
+func (s *EmailService) parseTemplate(template string) (subject, body string) {
 	parts := strings.SplitN(template, "\n---\n", 2)
 	if len(parts) != 2 {
 		return "Notification", template
@@ -260,7 +260,7 @@ func (s *Service) parseTemplate(template string) (subject, body string) {
 }
 
 // applyVars replaces {var} placeholders with values
-func (s *Service) applyVars(text string, vars map[string]string) string {
+func (s *EmailService) applyVars(text string, vars map[string]string) string {
 	for k, v := range vars {
 		text = strings.ReplaceAll(text, "{"+k+"}", v)
 	}
@@ -268,19 +268,19 @@ func (s *Service) applyVars(text string, vars map[string]string) string {
 }
 
 // getGlobalVars returns global template variables
-func (s *Service) getGlobalVars() map[string]string {
+func (s *EmailService) getGlobalVars() map[string]string {
 	return map[string]string{
-		"app_name":    s.cfg.Server.Title,
-		"app_url":     fmt.Sprintf("http://%s:%s", s.cfg.Server.FQDN, s.cfg.Server.Port),
-		"admin_email": s.cfg.Server.Admin.Email,
+		"app_name":    s.appConfig.Server.Title,
+		"app_url":     fmt.Sprintf("http://%s:%s", s.appConfig.Server.FQDN, s.appConfig.Server.Port),
+		"admin_email": s.appConfig.Server.Admin.Email,
 		"timestamp":   time.Now().Format(time.RFC3339),
 		"year":        fmt.Sprintf("%d", time.Now().Year()),
 	}
 }
 
 // sendEmail sends the actual email via SMTP
-func (s *Service) sendEmail(to, subject, body string) error {
-	emailCfg := s.cfg.Server.Email
+func (s *EmailService) sendEmail(to, subject, body string) error {
+	emailCfg := s.appConfig.Server.Email
 
 	// Try autodetect if enabled
 	host, port := emailCfg.Host, emailCfg.Port
@@ -297,7 +297,7 @@ func (s *Service) sendEmail(to, subject, body string) error {
 
 	from := emailCfg.From
 	if from == "" {
-		from = "noreply@" + s.cfg.Server.FQDN
+		from = "noreply@" + s.appConfig.Server.FQDN
 	}
 
 	// Build message
@@ -338,7 +338,7 @@ func (s *Service) sendEmail(to, subject, body string) error {
 }
 
 // sendTLS sends email over implicit TLS
-func (s *Service) sendTLS(addr, host string, auth smtp.Auth, from, to string, msg []byte) error {
+func (s *EmailService) sendTLS(addr, host string, auth smtp.Auth, from, to string, msg []byte) error {
 	tlsConfig := &tls.Config{
 		ServerName: host,
 	}
@@ -388,8 +388,8 @@ func (s *Service) sendTLS(addr, host string, auth smtp.Auth, from, to string, ms
 }
 
 // autodetectSMTP tries to find an SMTP server per AI.md PART 31 lines 10267-10284
-func (s *Service) autodetectSMTP() (string, int) {
-	hosts := s.cfg.Server.Email.AutodetectHost
+func (s *EmailService) autodetectSMTP() (string, int) {
+	hosts := s.appConfig.Server.Email.AutodetectHost
 	if len(hosts) == 0 {
 		// Per AI.md PART 31: Check localhost, 127.0.0.1, Docker host, gateway
 		hosts = []string{"localhost", "127.0.0.1", "172.17.0.1"}
@@ -399,7 +399,7 @@ func (s *Service) autodetectSMTP() (string, int) {
 		}
 	}
 
-	ports := s.cfg.Server.Email.AutodetectPort
+	ports := s.appConfig.Server.Email.AutodetectPort
 	if len(ports) == 0 {
 		ports = []int{25, 587, 465}
 	}
@@ -438,12 +438,12 @@ func getGatewayIP() string {
 }
 
 // SendTest sends a test email
-func (s *Service) SendTest(to string) error {
+func (s *EmailService) SendTest(to string) error {
 	return s.Send("test", to, nil)
 }
 
 // GetTemplateList returns list of available templates
-func (s *Service) GetTemplateList() []string {
+func (s *EmailService) GetTemplateList() []string {
 	templates := make([]string, 0, len(defaultTemplates))
 	for name := range defaultTemplates {
 		templates = append(templates, name)
@@ -452,12 +452,12 @@ func (s *Service) GetTemplateList() []string {
 }
 
 // GetTemplate returns a template's content
-func (s *Service) GetTemplate(name string) (string, error) {
+func (s *EmailService) GetTemplate(name string) (string, error) {
 	return s.getTemplate(name)
 }
 
 // SaveTemplate saves a custom template
-func (s *Service) SaveTemplate(name, content string) error {
+func (s *EmailService) SaveTemplate(name, content string) error {
 	if err := os.MkdirAll(s.templateDir, 0755); err != nil {
 		return err
 	}
@@ -466,7 +466,7 @@ func (s *Service) SaveTemplate(name, content string) error {
 }
 
 // ResetTemplate deletes a custom template (falls back to default)
-func (s *Service) ResetTemplate(name string) error {
+func (s *EmailService) ResetTemplate(name string) error {
 	path := filepath.Join(s.templateDir, name+".txt")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil
@@ -475,7 +475,7 @@ func (s *Service) ResetTemplate(name string) error {
 }
 
 // IsCustomTemplate checks if a template is customized
-func (s *Service) IsCustomTemplate(name string) bool {
+func (s *EmailService) IsCustomTemplate(name string) bool {
 	path := filepath.Join(s.templateDir, name+".txt")
 	_, err := os.Stat(path)
 	return err == nil

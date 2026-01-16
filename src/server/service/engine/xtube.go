@@ -13,8 +13,8 @@ import (
 type XtubeEngine struct{ *BaseEngine }
 
 // NewXtubeEngine creates a new Xtube engine
-func NewXtubeEngine(cfg *config.Config, torClient *tor.Client) *XtubeEngine {
-	return &XtubeEngine{NewBaseEngine("xtube", "Xtube", "https://www.xtube.com", 4, cfg, torClient)}
+func NewXtubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *XtubeEngine {
+	return &XtubeEngine{NewBaseEngine("xtube", "Xtube", "https://www.xtube.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on Xtube

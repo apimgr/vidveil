@@ -13,8 +13,8 @@ import (
 type SuperPornEngine struct{ *BaseEngine }
 
 // NewSuperPornEngine creates a new SuperPorn engine
-func NewSuperPornEngine(cfg *config.Config, torClient *tor.Client) *SuperPornEngine {
-	return &SuperPornEngine{NewBaseEngine("superporn", "SuperPorn", "https://www.superporn.com", 3, cfg, torClient)}
+func NewSuperPornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *SuperPornEngine {
+	return &SuperPornEngine{NewBaseEngine("superporn", "SuperPorn", "https://www.superporn.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on SuperPorn

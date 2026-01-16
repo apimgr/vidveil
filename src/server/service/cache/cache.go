@@ -19,8 +19,8 @@ const (
 	CacheTypeRedis  CacheType = "redis"
 )
 
-// Cache defines the interface for a distributed cache
-type Cache interface {
+// SearchResultCache defines the interface for a distributed search result cache
+type SearchResultCache interface {
 	Get(key string) (*model.SearchResponse, bool)
 	Set(key string, response *model.SearchResponse)
 	Delete(key string)
@@ -30,8 +30,8 @@ type Cache interface {
 	Close() error
 }
 
-// Config holds cache configuration
-type Config struct {
+// CacheConfig holds cache configuration
+type CacheConfig struct {
 	Type CacheType `yaml:"type"`
 	// TTL in seconds
 	TTL     int `yaml:"ttl"`
@@ -43,8 +43,8 @@ type Config struct {
 	Prefix   string `yaml:"prefix"`
 }
 
-// NewCache creates a new cache based on configuration
-func NewCache(cfg Config) (Cache, error) {
+// NewSearchResultCache creates a new cache based on configuration
+func NewSearchResultCache(cfg CacheConfig) (SearchResultCache, error) {
 	ttl := time.Duration(cfg.TTL) * time.Second
 	if ttl == 0 {
 		ttl = 5 * time.Minute
@@ -54,7 +54,7 @@ func NewCache(cfg Config) (Cache, error) {
 	case CacheTypeValkey, CacheTypeRedis:
 		return NewValkeyCache(cfg.Addr, cfg.Password, cfg.DB, cfg.Prefix, ttl)
 	default:
-		return New(ttl, cfg.MaxSize), nil
+		return NewSearchCache(ttl, cfg.MaxSize), nil
 	}
 }
 
@@ -73,8 +73,8 @@ type cacheEntry struct {
 	createdAt time.Time
 }
 
-// New creates a new search cache
-func New(ttl time.Duration, maxSize int) *SearchCache {
+// NewSearchCache creates a new search cache
+func NewSearchCache(ttl time.Duration, maxSize int) *SearchCache {
 	if ttl == 0 {
 		ttl = 5 * time.Minute
 	}
@@ -268,7 +268,7 @@ func NewValkeyCache(addr, password string, db int, prefix string, ttl time.Durat
 	// })
 
 	// For now, use in-memory fallback
-	fallback := New(ttl, 1000)
+	fallback := NewSearchCache(ttl, 1000)
 
 	return &ValkeyCache{
 		addr:     addr,
@@ -424,5 +424,5 @@ func (v *ValkeyCache) Close() error {
 }
 
 // Compile-time interface check
-var _ Cache = (*SearchCache)(nil)
-var _ Cache = (*ValkeyCache)(nil)
+var _ SearchResultCache = (*SearchCache)(nil)
+var _ SearchResultCache = (*ValkeyCache)(nil)

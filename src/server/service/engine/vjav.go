@@ -13,8 +13,8 @@ import (
 type VJAVEngine struct{ *BaseEngine }
 
 // NewVJAVEngine creates a new VJAV engine
-func NewVJAVEngine(cfg *config.Config, torClient *tor.Client) *VJAVEngine {
-	return &VJAVEngine{NewBaseEngine("vjav", "VJAV", "https://vjav.com", 4, cfg, torClient)}
+func NewVJAVEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *VJAVEngine {
+	return &VJAVEngine{NewBaseEngine("vjav", "VJAV", "https://vjav.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on VJAV

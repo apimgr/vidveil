@@ -13,8 +13,8 @@ import (
 type GotPornEngine struct{ *BaseEngine }
 
 // NewGotPornEngine creates a new GotPorn engine
-func NewGotPornEngine(cfg *config.Config, torClient *tor.Client) *GotPornEngine {
-	return &GotPornEngine{NewBaseEngine("gotporn", "GotPorn", "https://www.gotporn.com", 3, cfg, torClient)}
+func NewGotPornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *GotPornEngine {
+	return &GotPornEngine{NewBaseEngine("gotporn", "GotPorn", "https://www.gotporn.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on GotPorn

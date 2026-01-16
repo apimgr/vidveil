@@ -443,23 +443,23 @@ type LogEntry struct {
 	Fields    map[string]interface{} `json:"fields,omitempty"`
 }
 
-// Logger handles structured logging
-type Logger struct {
-	mu      sync.Mutex
-	level   Level
-	outputs map[string]io.Writer
-	cfg     *config.Config
+// AppLogger handles structured logging
+type AppLogger struct {
+	mu        sync.Mutex
+	level     Level
+	outputs   map[string]io.Writer
+	appConfig *config.AppConfig
 }
 
-// New creates a new logger
-func New(cfg *config.Config) (*Logger, error) {
-	l := &Logger{
-		outputs: make(map[string]io.Writer),
-		cfg:     cfg,
+// NewAppLogger creates a new logger
+func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
+	l := &AppLogger{
+		outputs:   make(map[string]io.Writer),
+		appConfig: appConfig,
 	}
 
 	// Parse log level
-	switch cfg.Server.Logs.Level {
+	switch appConfig.Server.Logs.Level {
 	case "debug":
 		l.level = LevelDebug
 	case "info":
@@ -473,49 +473,49 @@ func New(cfg *config.Config) (*Logger, error) {
 	}
 
 	// Setup debug log with rotation per PART 11
-	if cfg.Server.Logs.Debug.Enabled && cfg.Server.Logs.Debug.Filename != "" {
-		keep := parseKeepString(cfg.Server.Logs.Debug.Keep)
-		if err := l.addFileOutput("debug", cfg.Server.Logs.Debug.Filename, cfg.Server.Logs.Debug.Rotate, keep); err != nil {
+	if appConfig.Server.Logs.Debug.Enabled && appConfig.Server.Logs.Debug.Filename != "" {
+		keep := parseKeepString(appConfig.Server.Logs.Debug.Keep)
+		if err := l.addFileOutput("debug", appConfig.Server.Logs.Debug.Filename, appConfig.Server.Logs.Debug.Rotate, keep); err != nil {
 			return nil, fmt.Errorf("failed to open debug log: %w", err)
 		}
 	}
 
 	// Setup access log with rotation per PART 11
-	if cfg.Server.Logs.Access.Enabled && cfg.Server.Logs.Access.Filename != "" {
-		keep := parseKeepString(cfg.Server.Logs.Access.Keep)
-		if err := l.addFileOutput("access", cfg.Server.Logs.Access.Filename, cfg.Server.Logs.Access.Rotate, keep); err != nil {
+	if appConfig.Server.Logs.Access.Enabled && appConfig.Server.Logs.Access.Filename != "" {
+		keep := parseKeepString(appConfig.Server.Logs.Access.Keep)
+		if err := l.addFileOutput("access", appConfig.Server.Logs.Access.Filename, appConfig.Server.Logs.Access.Rotate, keep); err != nil {
 			return nil, fmt.Errorf("failed to open access log: %w", err)
 		}
 	}
 
 	// Setup server log with rotation per PART 11
-	if cfg.Server.Logs.Server.Enabled && cfg.Server.Logs.Server.Filename != "" {
-		keep := parseKeepString(cfg.Server.Logs.Server.Keep)
-		if err := l.addFileOutput("server", cfg.Server.Logs.Server.Filename, cfg.Server.Logs.Server.Rotate, keep); err != nil {
+	if appConfig.Server.Logs.Server.Enabled && appConfig.Server.Logs.Server.Filename != "" {
+		keep := parseKeepString(appConfig.Server.Logs.Server.Keep)
+		if err := l.addFileOutput("server", appConfig.Server.Logs.Server.Filename, appConfig.Server.Logs.Server.Rotate, keep); err != nil {
 			return nil, fmt.Errorf("failed to open server log: %w", err)
 		}
 	}
 
 	// Setup error log with rotation per PART 11
-	if cfg.Server.Logs.Error.Enabled && cfg.Server.Logs.Error.Filename != "" {
-		keep := parseKeepString(cfg.Server.Logs.Error.Keep)
-		if err := l.addFileOutput("error", cfg.Server.Logs.Error.Filename, cfg.Server.Logs.Error.Rotate, keep); err != nil {
+	if appConfig.Server.Logs.Error.Enabled && appConfig.Server.Logs.Error.Filename != "" {
+		keep := parseKeepString(appConfig.Server.Logs.Error.Keep)
+		if err := l.addFileOutput("error", appConfig.Server.Logs.Error.Filename, appConfig.Server.Logs.Error.Rotate, keep); err != nil {
 			return nil, fmt.Errorf("failed to open error log: %w", err)
 		}
 	}
 
 	// Setup audit log with rotation per PART 11
-	if cfg.Server.Logs.Audit.Enabled && cfg.Server.Logs.Audit.Filename != "" {
-		keep := parseKeepString(cfg.Server.Logs.Audit.Keep)
-		if err := l.addFileOutput("audit", cfg.Server.Logs.Audit.Filename, cfg.Server.Logs.Audit.Rotate, keep); err != nil {
+	if appConfig.Server.Logs.Audit.Enabled && appConfig.Server.Logs.Audit.Filename != "" {
+		keep := parseKeepString(appConfig.Server.Logs.Audit.Keep)
+		if err := l.addFileOutput("audit", appConfig.Server.Logs.Audit.Filename, appConfig.Server.Logs.Audit.Rotate, keep); err != nil {
 			return nil, fmt.Errorf("failed to open audit log: %w", err)
 		}
 	}
 
 	// Setup security log with rotation per PART 11
-	if cfg.Server.Logs.Security.Enabled && cfg.Server.Logs.Security.Filename != "" {
-		keep := parseKeepString(cfg.Server.Logs.Security.Keep)
-		if err := l.addFileOutput("security", cfg.Server.Logs.Security.Filename, cfg.Server.Logs.Security.Rotate, keep); err != nil {
+	if appConfig.Server.Logs.Security.Enabled && appConfig.Server.Logs.Security.Filename != "" {
+		keep := parseKeepString(appConfig.Server.Logs.Security.Keep)
+		if err := l.addFileOutput("security", appConfig.Server.Logs.Security.Filename, appConfig.Server.Logs.Security.Rotate, keep); err != nil {
 			return nil, fmt.Errorf("failed to open security log: %w", err)
 		}
 	}
@@ -524,7 +524,7 @@ func New(cfg *config.Config) (*Logger, error) {
 }
 
 // addFileOutput adds a rotating file output per PART 11
-func (l *Logger) addFileOutput(name, path, rotate string, keep int) error {
+func (l *AppLogger) addFileOutput(name, path, rotate string, keep int) error {
 	// Parse rotation config from string like "weekly,50MB" or "daily" or "100MB"
 	rotCfg := parseRotationString(rotate)
 	rotCfg.Keep = keep
@@ -589,7 +589,7 @@ func parseKeepString(s string) int {
 }
 
 // Close closes all log files
-func (l *Logger) Close() {
+func (l *AppLogger) Close() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -603,7 +603,7 @@ func (l *Logger) Close() {
 }
 
 // Reopen reopens all log files (called on SIGUSR1 for log rotation per AI.md PART 8)
-func (l *Logger) Reopen() {
+func (l *AppLogger) Reopen() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -641,7 +641,7 @@ func (rf *RotatingFile) Reopen() error {
 }
 
 // log writes a log entry
-func (l *Logger) log(level Level, output string, message string, fields map[string]interface{}) {
+func (l *AppLogger) log(level Level, output string, message string, fields map[string]interface{}) {
 	if level < l.level {
 		return
 	}
@@ -668,27 +668,27 @@ func (l *Logger) log(level Level, output string, message string, fields map[stri
 }
 
 // Debug logs a debug message
-func (l *Logger) Debug(message string, fields map[string]interface{}) {
+func (l *AppLogger) Debug(message string, fields map[string]interface{}) {
 	l.log(LevelDebug, "debug", message, fields)
 }
 
 // Info logs an info message
-func (l *Logger) Info(message string, fields map[string]interface{}) {
+func (l *AppLogger) Info(message string, fields map[string]interface{}) {
 	l.log(LevelInfo, "server", message, fields)
 }
 
 // Warn logs a warning message
-func (l *Logger) Warn(message string, fields map[string]interface{}) {
+func (l *AppLogger) Warn(message string, fields map[string]interface{}) {
 	l.log(LevelWarn, "server", message, fields)
 }
 
 // Error logs an error message
-func (l *Logger) Error(message string, fields map[string]interface{}) {
+func (l *AppLogger) Error(message string, fields map[string]interface{}) {
 	l.log(LevelError, "server", message, fields)
 }
 
 // Access logs an access log entry
-func (l *Logger) Access(method, path, remoteAddr, userAgent string, status int, duration time.Duration) {
+func (l *AppLogger) Access(method, path, remoteAddr, userAgent string, status int, duration time.Duration) {
 	l.log(LevelInfo, "access", "HTTP request", map[string]interface{}{
 		"method":      method,
 		"path":        path,
@@ -700,7 +700,7 @@ func (l *Logger) Access(method, path, remoteAddr, userAgent string, status int, 
 }
 
 // Audit logs an audit event with automatic PII masking per AI.md PART 11
-func (l *Logger) Audit(action, user, resource string, details map[string]interface{}) {
+func (l *AppLogger) Audit(action, user, resource string, details map[string]interface{}) {
 	fields := map[string]interface{}{
 		"action":   action,
 		"user":     MaskUsername(user),
@@ -714,7 +714,7 @@ func (l *Logger) Audit(action, user, resource string, details map[string]interfa
 }
 
 // Security logs a security event with automatic PII masking per AI.md PART 11
-func (l *Logger) Security(event, remoteAddr string, details map[string]interface{}) {
+func (l *AppLogger) Security(event, remoteAddr string, details map[string]interface{}) {
 	fields := map[string]interface{}{
 		"event":       event,
 		"remote_addr": MaskIP(remoteAddr),
@@ -728,11 +728,11 @@ func (l *Logger) Security(event, remoteAddr string, details map[string]interface
 
 // AccessLogMiddleware creates middleware for access logging
 type AccessLogMiddleware struct {
-	logger *Logger
+	logger *AppLogger
 }
 
 // NewAccessLogMiddleware creates access log middleware
-func NewAccessLogMiddleware(logger *Logger) *AccessLogMiddleware {
+func NewAccessLogMiddleware(logger *AppLogger) *AccessLogMiddleware {
 	return &AccessLogMiddleware{logger: logger}
 }
 

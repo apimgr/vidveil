@@ -13,8 +13,8 @@ import (
 type SleazyNeasyEngine struct{ *BaseEngine }
 
 // NewSleazyNeasyEngine creates a new SleazyNeasy engine
-func NewSleazyNeasyEngine(cfg *config.Config, torClient *tor.Client) *SleazyNeasyEngine {
-	return &SleazyNeasyEngine{NewBaseEngine("sleazyneasy", "SleazyNeasy", "https://www.sleazyneasy.com", 3, cfg, torClient)}
+func NewSleazyNeasyEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *SleazyNeasyEngine {
+	return &SleazyNeasyEngine{NewBaseEngine("sleazyneasy", "SleazyNeasy", "https://www.sleazyneasy.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on SleazyNeasy

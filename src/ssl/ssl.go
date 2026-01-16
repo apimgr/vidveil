@@ -6,8 +6,8 @@ package ssl
 import "github.com/apimgr/vidveil/src/server/service/ssl"
 
 // Re-export main types and functions from server/service/ssl
-type Manager = ssl.Manager
+type SSLManager = ssl.SSLManager
 
 var (
-	New = ssl.New
+	NewSSLManager = ssl.NewSSLManager
 )

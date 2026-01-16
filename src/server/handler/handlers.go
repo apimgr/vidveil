@@ -38,20 +38,20 @@ const (
 	ageVerifyCookieDays = 30
 )
 
-// Handler holds dependencies for HTTP handlers
-type Handler struct {
-	cfg         *config.Config
-	engineMgr   *engine.Manager
+// SearchHandler holds dependencies for HTTP handlers
+type SearchHandler struct {
+	appConfig   *config.AppConfig
+	engineMgr   *engine.EngineManager
 	searchCache *cache.SearchCache
 }
 
-// New creates a new handler instance
-func New(cfg *config.Config, engineMgr *engine.Manager) *Handler {
+// NewSearchHandler creates a new handler instance
+func NewSearchHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *SearchHandler {
 	// Initialize cache with 5 minute TTL and 1000 max entries
-	searchCache := cache.New(5*time.Minute, 1000)
+	searchCache := cache.NewSearchCache(5*time.Minute, 1000)
 
-	return &Handler{
-		cfg:         cfg,
+	return &SearchHandler{
+		appConfig:   appConfig,
 		engineMgr:   engineMgr,
 		searchCache: searchCache,
 	}
@@ -80,7 +80,7 @@ func WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 }
 
 // MaintenanceModeMiddleware checks if maintenance mode is enabled
-func (h *Handler) MaintenanceModeMiddleware(next http.Handler) http.Handler {
+func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip maintenance check for health endpoints and admin
 		path := r.URL.Path
@@ -92,7 +92,7 @@ func (h *Handler) MaintenanceModeMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Check if maintenance mode is active
-		paths := config.GetPaths("", "")
+		paths := config.GetAppPaths("", "")
 		modeFile := filepath.Join(paths.Data, "maintenance.flag")
 		if _, err := os.Stat(modeFile); err == nil {
 			// Maintenance mode is active
@@ -104,7 +104,7 @@ func (h *Handler) MaintenanceModeMiddleware(next http.Handler) http.Handler {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance - ` + h.cfg.Server.Title + `</title>
+    <title>Maintenance - ` + h.appConfig.Server.Title + `</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -140,7 +140,7 @@ func (h *Handler) MaintenanceModeMiddleware(next http.Handler) http.Handler {
 }
 
 // AgeVerifyMiddleware checks for age verification cookie
-func (h *Handler) AgeVerifyMiddleware(next http.Handler) http.Handler {
+func (h *SearchHandler) AgeVerifyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip age check for static files, health checks, and age verification endpoints
 		path := r.URL.Path
@@ -173,7 +173,7 @@ func (h *Handler) AgeVerifyMiddleware(next http.Handler) http.Handler {
 }
 
 // AgeVerifyPage shows the age verification gate
-func (h *Handler) AgeVerifyPage(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) AgeVerifyPage(w http.ResponseWriter, r *http.Request) {
 	// If already verified, redirect to home or specified redirect
 	cookie, err := r.Cookie(ageVerifyCookieName)
 	if err == nil && cookie.Value == "1" {
@@ -191,14 +191,14 @@ func (h *Handler) AgeVerifyPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderResponse(w, r, "age-verify", map[string]interface{}{
-		"Title":    "Age Verification - " + h.cfg.Server.Title,
-		"Theme":    h.cfg.Web.UI.Theme,
+		"Title":    "Age Verification - " + h.appConfig.Server.Title,
+		"Theme":    h.appConfig.Web.UI.Theme,
 		"Redirect": redirect,
 	})
 }
 
 // AgeVerifySubmit handles the age verification form submission
-func (h *Handler) AgeVerifySubmit(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) AgeVerifySubmit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/age-verify", http.StatusFound)
 		return
@@ -217,7 +217,7 @@ func (h *Handler) AgeVerifySubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 // setAgeVerifyCookie sets/renews the age verification cookie
-func (h *Handler) setAgeVerifyCookie(w http.ResponseWriter) {
+func (h *SearchHandler) setAgeVerifyCookie(w http.ResponseWriter) {
 	// 30 days in seconds, Secure should be true if using HTTPS
 	http.SetCookie(w, &http.Cookie{
 		Name:     ageVerifyCookieName,
@@ -231,12 +231,14 @@ func (h *Handler) setAgeVerifyCookie(w http.ResponseWriter) {
 	})
 }
 
-// Build time set at compile time
-var BuildDateTime = "December 4, 2025"
+// BuildDateTime returns the build time from version package
+func BuildDateTime() string {
+	return version.BuildTime
+}
 
 // HomePage renders the main search page
 // HomePage renders the home page with content negotiation per AI.md PART 17
-func (h *Handler) HomePage(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 	
 	engineCount := h.engineMgr.EnabledCount()
@@ -245,8 +247,8 @@ func (h *Handler) HomePage(w http.ResponseWriter, r *http.Request) {
 	case "application/json":
 		// JSON response for API clients
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"title":        h.cfg.Server.Title,
-			"description":  h.cfg.Server.Description,
+			"title":        h.appConfig.Server.Title,
+			"description":  h.appConfig.Server.Description,
 			"engine_count": engineCount,
 			"version":      version.GetVersion(),
 		})
@@ -254,25 +256,25 @@ func (h *Handler) HomePage(w http.ResponseWriter, r *http.Request) {
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "%s\n", h.cfg.Server.Title)
-		fmt.Fprintf(w, "%s\n\n", h.cfg.Server.Description)
+		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Title)
+		fmt.Fprintf(w, "%s\n\n", h.appConfig.Server.Description)
 		fmt.Fprintf(w, "Search Engines: %d enabled\n", engineCount)
 		fmt.Fprintf(w, "Version: %s\n", version.GetVersion())
 		
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "home", map[string]interface{}{
-			"Title":         h.cfg.Server.Title,
-			"Description":   h.cfg.Server.Description,
-			"Theme":         h.cfg.Web.UI.Theme,
-			"BuildDateTime": BuildDateTime,
+			"Title":         h.appConfig.Server.Title,
+			"Description":   h.appConfig.Server.Description,
+			"Theme":         h.appConfig.Web.UI.Theme,
+			"BuildDateTime": BuildDateTime(),
 			"EngineCount":   engineCount,
 		})
 	}
 }
 
 // SearchPage renders search results with content negotiation per AI.md PART 17
-func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	// Strip leading/trailing whitespace from query per AI.md
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query == "" {
@@ -338,13 +340,13 @@ func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 		// ResultsJSON is safe JSON for script template use
 		h.renderResponse(w, r, "search", map[string]interface{}{
-			"Title":       query + " - " + h.cfg.Server.Title,
+			"Title":       query + " - " + h.appConfig.Server.Title,
 			"Query":       query,
 			"SearchQuery": searchQuery,
 			"ResultsJSON": template.JS(resultsJSON),
 			"EnginesUsed": results.Data.EnginesUsed,
 			"SearchTime":  results.Data.SearchTimeMS,
-			"Theme":       h.cfg.Web.UI.Theme,
+			"Theme":       h.appConfig.Web.UI.Theme,
 			"HasBang":     parsed.HasBang,
 			"BangEngines": parsed.Engines,
 		})
@@ -352,7 +354,7 @@ func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // PreferencesPage renders user preferences with content negotiation per AI.md PART 17
-func (h *Handler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 	
 	engines := h.engineMgr.ListEngines()
@@ -363,14 +365,14 @@ func (h *Handler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"title":    "Preferences",
 			"engines":  engines,
-			"theme":    h.cfg.Web.UI.Theme,
+			"theme":    h.appConfig.Web.UI.Theme,
 		})
 		
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "Preferences - %s\n\n", h.cfg.Server.Title)
-		fmt.Fprintf(w, "Theme: %s\n", h.cfg.Web.UI.Theme)
+		fmt.Fprintf(w, "Preferences - %s\n\n", h.appConfig.Server.Title)
+		fmt.Fprintf(w, "Theme: %s\n", h.appConfig.Web.UI.Theme)
 		fmt.Fprintf(w, "\nAvailable Engines:\n")
 		for _, eng := range engines {
 			status := "disabled"
@@ -383,16 +385,16 @@ func (h *Handler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "preferences", map[string]interface{}{
-			"Title":         "Preferences - " + h.cfg.Server.Title,
-			"Theme":         h.cfg.Web.UI.Theme,
+			"Title":         "Preferences - " + h.appConfig.Server.Title,
+			"Theme":         h.appConfig.Web.UI.Theme,
 			"Engines":       engines,
-			"BuildDateTime": BuildDateTime,
+			"BuildDateTime": BuildDateTime(),
 		})
 	}
 }
 
 // AboutPage renders the about page with content negotiation per AI.md PART 17
-func (h *Handler) AboutPage(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 	
 	ver := version.GetVersion()
@@ -401,33 +403,33 @@ func (h *Handler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	case "application/json":
 		// JSON response for API clients
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"title":         h.cfg.Server.Title,
+			"title":         h.appConfig.Server.Title,
 			"version":       ver,
-			"build_date":    BuildDateTime,
-			"description":   h.cfg.Server.Description,
+			"build_date":    BuildDateTime(),
+			"description":   h.appConfig.Server.Description,
 		})
 
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "%s\n", h.cfg.Server.Title)
+		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Title)
 		fmt.Fprintf(w, "Version: %s\n", ver)
-		fmt.Fprintf(w, "Build Date: %s\n", BuildDateTime)
-		fmt.Fprintf(w, "\n%s\n", h.cfg.Server.Description)
+		fmt.Fprintf(w, "Build Date: %s\n", BuildDateTime())
+		fmt.Fprintf(w, "\n%s\n", h.appConfig.Server.Description)
 
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "about", map[string]interface{}{
-			"Title":         "About - " + h.cfg.Server.Title,
-			"Theme":         h.cfg.Web.UI.Theme,
+			"Title":         "About - " + h.appConfig.Server.Title,
+			"Theme":         h.appConfig.Web.UI.Theme,
 			"Version":       ver,
-			"BuildDateTime": BuildDateTime,
+			"BuildDateTime": BuildDateTime(),
 		})
 	}
 }
 
 // PrivacyPage renders the privacy policy page with content negotiation per AI.md PART 17
-func (h *Handler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 	
 	ver := version.GetVersion()
@@ -443,7 +445,7 @@ func (h *Handler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "Privacy Policy - %s\n", h.cfg.Server.Title)
+		fmt.Fprintf(w, "Privacy Policy - %s\n", h.appConfig.Server.Title)
 		fmt.Fprintf(w, "Version: %s\n\n", ver)
 		fmt.Fprintf(w, "VidVeil is a privacy-respecting meta search engine.\n")
 		fmt.Fprintf(w, "We do not track, log, or collect any user data.\n")
@@ -451,10 +453,10 @@ func (h *Handler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "privacy", map[string]interface{}{
-			"Title":         "Privacy Policy - " + h.cfg.Server.Title,
-			"Theme":         h.cfg.Web.UI.Theme,
+			"Title":         "Privacy Policy - " + h.appConfig.Server.Title,
+			"Theme":         h.appConfig.Web.UI.Theme,
 			"Version":       ver,
-			"BuildDateTime": BuildDateTime,
+			"BuildDateTime": BuildDateTime(),
 		})
 	}
 }
@@ -575,7 +577,7 @@ func getAPIResponseFormat(r *http.Request) string {
 // Per AI.md PART 16: Supports HTML (default), JSON (Accept: application/json), and Text
 // HealthCheck handles /healthz endpoint with content negotiation
 // Per AI.md PART 13 lines 11257-11379
-func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 
 	// Build health response per AI.md PART 13
@@ -585,7 +587,7 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	
 	// Get mode from config
 	appMode := "production"
-	if h.cfg != nil && h.cfg.IsDevelopmentMode() {
+	if h.appConfig != nil && h.appConfig.IsDevelopmentMode() {
 		appMode = "development"
 	}
 	
@@ -652,13 +654,13 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				"multi_user":    false,
 				"organizations": false,
 				"tor": map[string]interface{}{
-					"enabled":  h.cfg != nil && h.cfg.Search.Tor.Enabled,
+					"enabled":  h.appConfig != nil && h.appConfig.Search.Tor.Enabled,
 					"running":  false,
 					"status":   "",
 					"hostname": "",
 				},
-				"geoip":   h.cfg != nil && h.cfg.Server.GeoIP.Enabled,
-				"metrics": h.cfg != nil && h.cfg.Server.Metrics.Enabled,
+				"geoip":   h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
+				"metrics": h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
 			},
 			"checks": checks,
 			"stats": map[string]interface{}{
@@ -778,7 +780,7 @@ type StatsData struct {
 }
 
 // renderHealthzHTML renders the healthz HTML template per AI.md PART 13
-func (h *Handler) renderHealthzHTML(w http.ResponseWriter, r *http.Request, status string, httpStatus int, appMode, uptime, hostname, timestamp string, checks map[string]string, clusterEnabled bool, clusterStatus string, clusterNodes int, clusterRole string) {
+func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request, status string, httpStatus int, appMode, uptime, hostname, timestamp string, checks map[string]string, clusterEnabled bool, clusterStatus string, clusterNodes int, clusterRole string) {
 	// Parse timestamp
 	ts, _ := time.Parse(time.RFC3339, timestamp)
 
@@ -848,10 +850,10 @@ func (h *Handler) renderHealthzHTML(w http.ResponseWriter, r *http.Request, stat
 	}
 
 	// Features
-	if h.cfg != nil {
-		data.Features.TorEnabled = h.cfg.Search.Tor.Enabled
-		data.Features.GeoIP = h.cfg.Server.GeoIP.Enabled
-		data.Features.Metrics = h.cfg.Server.Metrics.Enabled
+	if h.appConfig != nil {
+		data.Features.TorEnabled = h.appConfig.Search.Tor.Enabled
+		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
+		data.Features.Metrics = h.appConfig.Server.Metrics.Enabled
 	}
 
 	// Cluster info
@@ -889,12 +891,12 @@ func (h *Handler) renderHealthzHTML(w http.ResponseWriter, r *http.Request, stat
 }
 
 // RobotsTxt returns robots.txt
-func (h *Handler) RobotsTxt(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) RobotsTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 
-	baseURL := "https://" + h.cfg.Server.FQDN
-	if h.cfg.Server.Port != "443" && h.cfg.Server.Port != "80" {
-		baseURL = fmt.Sprintf("https://%s:%s", h.cfg.Server.FQDN, h.cfg.Server.Port)
+	baseURL := "https://" + h.appConfig.Server.FQDN
+	if h.appConfig.Server.Port != "443" && h.appConfig.Server.Port != "80" {
+		baseURL = fmt.Sprintf("https://%s:%s", h.appConfig.Server.FQDN, h.appConfig.Server.Port)
 	}
 
 	w.Write([]byte(`User-agent: *
@@ -908,18 +910,18 @@ Sitemap: ` + baseURL + `/sitemap.xml
 }
 
 // SecurityTxt returns security.txt per RFC 9116 (PART 22)
-func (h *Handler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 
-	contact := h.cfg.Web.Security.Contact
+	contact := h.appConfig.Web.Security.Contact
 	if contact == "" {
-		contact = "security@" + h.cfg.Server.FQDN
+		contact = "security@" + h.appConfig.Server.FQDN
 	}
 	if !strings.HasPrefix(contact, "mailto:") {
 		contact = "mailto:" + contact
 	}
 
-	expires := h.cfg.Web.Security.Expires
+	expires := h.appConfig.Web.Security.Expires
 	if expires == "" {
 		// Default: 1 year from now
 		expires = time.Now().AddDate(1, 0, 0).Format(time.RFC3339)
@@ -932,18 +934,18 @@ Preferred-Languages: en
 }
 
 // HumansTxt returns humans.txt per humanstxt.org standard (PART 21)
-func (h *Handler) HumansTxt(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) HumansTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
 	// Get app info from config
-	appName := h.cfg.Web.Branding.AppName
+	appName := h.appConfig.Web.Branding.AppName
 	if appName == "" {
 		appName = "Vidveil"
 	}
 
-	appURL := "https://" + h.cfg.Server.FQDN
-	if h.cfg.Server.Port != "443" && h.cfg.Server.Port != "80" {
-		appURL = fmt.Sprintf("https://%s:%s", h.cfg.Server.FQDN, h.cfg.Server.Port)
+	appURL := "https://" + h.appConfig.Server.FQDN
+	if h.appConfig.Server.Port != "443" && h.appConfig.Server.Port != "80" {
+		appURL = fmt.Sprintf("https://%s:%s", h.appConfig.Server.FQDN, h.appConfig.Server.Port)
 	}
 
 	w.Write([]byte(fmt.Sprintf(`/* TEAM */
@@ -966,12 +968,12 @@ Components: Go, SQLite, Valkey/Redis
 }
 
 // SitemapXML returns sitemap.xml per AI.md PART 13
-func (h *Handler) SitemapXML(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 
-	baseURL := "https://" + h.cfg.Server.FQDN
-	if h.cfg.Server.Port != "443" && h.cfg.Server.Port != "80" {
-		baseURL = fmt.Sprintf("https://%s:%s", h.cfg.Server.FQDN, h.cfg.Server.Port)
+	baseURL := "https://" + h.appConfig.Server.FQDN
+	if h.appConfig.Server.Port != "443" && h.appConfig.Server.Port != "80" {
+		baseURL = fmt.Sprintf("https://%s:%s", h.appConfig.Server.FQDN, h.appConfig.Server.Port)
 	}
 
 	// Build sitemap with static pages per AI.md PART 13
@@ -1024,7 +1026,7 @@ func (h *Handler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 
 // APISearch handles search API requests with content negotiation
 // Supports: JSON (default), SSE streaming (Accept: text/event-stream), plain text
-func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := detectResponseFormat(r)
 
@@ -1116,7 +1118,7 @@ func (h *Handler) APISearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSearchSSE handles SSE streaming for search results
-func (h *Handler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string) {
+func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string) {
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -1149,7 +1151,7 @@ func (h *Handler) handleSearchSSE(w http.ResponseWriter, r *http.Request, search
 }
 
 // APIBangs returns list of available bang shortcuts
-func (h *Handler) APIBangs(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) APIBangs(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := detectResponseFormat(r)
 
@@ -1174,7 +1176,7 @@ func (h *Handler) APIBangs(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIAutocomplete returns autocomplete suggestions for bangs
-func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := detectResponseFormat(r)
 
@@ -1300,7 +1302,7 @@ func (h *Handler) APIAutocomplete(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIEngines returns list of available engines
-func (h *Handler) APIEngines(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) APIEngines(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := detectResponseFormat(r)
 
@@ -1328,7 +1330,7 @@ func (h *Handler) APIEngines(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIEngineDetails returns details for a specific engine
-func (h *Handler) APIEngineDetails(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) APIEngineDetails(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := detectResponseFormat(r)
 
@@ -1371,7 +1373,7 @@ func (h *Handler) APIEngineDetails(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIStats returns public statistics
-func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) APIStats(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := detectResponseFormat(r)
 
@@ -1399,7 +1401,7 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 // APIVersion returns server version info
 // Per AI.md PART 13: /api/v1/version endpoint for CLI compatibility checking
 // Response format matches client/api/client.go VersionResponse struct
-func (h *Handler) APIVersion(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) APIVersion(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":      true,
 		"version": version.GetVersion(),
@@ -1412,7 +1414,7 @@ func (h *Handler) APIVersion(w http.ResponseWriter, r *http.Request) {
 // Returns comprehensive health status with checks object for database/cache/disk
 // APIHealthCheck handles /api/v1/healthz endpoint (JSON only)
 // Per AI.md PART 13 lines 11351-11353: Same JSON as /healthz
-func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// API routes default to JSON but support text output per AI.md PART 14 lines 14944-15002
 	// Format detection: .txt extension > Accept header > client type > default JSON
 
@@ -1423,7 +1425,7 @@ func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 
 	// Get mode from config
 	appMode := "production"
-	if h.cfg != nil && h.cfg.IsDevelopmentMode() {
+	if h.appConfig != nil && h.appConfig.IsDevelopmentMode() {
 		appMode = "development"
 	}
 
@@ -1494,13 +1496,13 @@ func (h *Handler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 			"multi_user":    false,
 			"organizations": false,
 			"tor": map[string]interface{}{
-				"enabled":  h.cfg != nil && h.cfg.Search.Tor.Enabled,
+				"enabled":  h.appConfig != nil && h.appConfig.Search.Tor.Enabled,
 				"running":  false,
 				"status":   "",
 				"hostname": "",
 			},
-			"geoip":   h.cfg != nil && h.cfg.Server.GeoIP.Enabled,
-			"metrics": h.cfg != nil && h.cfg.Server.Metrics.Enabled,
+			"geoip":   h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
+			"metrics": h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
 		},
 		"checks": map[string]string{
 			"database":  checks["database"],
@@ -1541,11 +1543,11 @@ func getUptime() string {
 
 // jsonResponse is DEPRECATED - use WriteJSON instead
 // Kept temporarily for backward compatibility
-func (h *Handler) jsonResponse(w http.ResponseWriter, data interface{}) {
+func (h *SearchHandler) jsonResponse(w http.ResponseWriter, data interface{}) {
 	WriteJSON(w, http.StatusOK, data)
 }
 
-func (h *Handler) jsonError(w http.ResponseWriter, message, code string, status int) {
+func (h *SearchHandler) jsonError(w http.ResponseWriter, message, code string, status int) {
 	// Per AI.md PART 14: Error response format
 	// - ok: false
 	// - error: ERROR_CODE (machine-readable)
@@ -1558,12 +1560,13 @@ func (h *Handler) jsonError(w http.ResponseWriter, message, code string, status 
 }
 
 // RenderErrorPage renders a custom error page per AI.md PART 30
-func (h *Handler) RenderErrorPage(w http.ResponseWriter, code int, title, message string) {
+func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, code int, title, message string) {
 	data := map[string]interface{}{
 		"Code":      code,
 		"Title":     title,
 		"Message":   message,
-		"SiteTitle": h.cfg.Web.Branding.AppName,
+		"SiteTitle": h.appConfig.Web.Branding.AppName,
+		"Theme":     h.appConfig.Web.UI.Theme,
 	}
 
 	tmpl, err := template.ParseFS(templatesFS, "template/page/error.tmpl")
@@ -1581,18 +1584,18 @@ func (h *Handler) RenderErrorPage(w http.ResponseWriter, code int, title, messag
 }
 
 // NotFoundHandler handles 404 errors per AI.md PART 30
-func (h *Handler) NotFoundHandler(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) NotFoundHandler(w http.ResponseWriter, r *http.Request) {
 	h.RenderErrorPage(w, http.StatusNotFound, "Page Not Found",
 		"The page you're looking for doesn't exist or has been moved.")
 }
 
 // InternalErrorHandler handles 500 errors per AI.md PART 30
-func (h *Handler) InternalErrorHandler(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) InternalErrorHandler(w http.ResponseWriter, r *http.Request) {
 	h.RenderErrorPage(w, http.StatusInternalServerError, "Server Error",
 		"Something went wrong on our end. Please try again later.")
 }
 
-func (h *Handler) renderTemplate(w http.ResponseWriter, name string, data map[string]interface{}) {
+func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data map[string]interface{}) {
 	// Map template names to file paths
 	templateFile := ""
 	templateName := ""
@@ -1674,7 +1677,7 @@ func (h *Handler) renderTemplate(w http.ResponseWriter, name string, data map[st
 // DebugEngine probes a specific engine and returns detailed results
 // GET /api/v1/debug/engine/{name}?q={query}
 // Returns: engine info, capabilities, sample results with all fields
-func (h *Handler) DebugEngine(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) DebugEngine(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	query := r.URL.Query().Get("q")
 	if query == "" {
@@ -1780,7 +1783,7 @@ func analyzeResultFields(results []model.VideoResult) map[string]interface{} {
 
 // DebugEnginesList returns all engines with their capabilities
 // GET /api/v1/debug/engines
-func (h *Handler) DebugEnginesList(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) DebugEnginesList(w http.ResponseWriter, r *http.Request) {
 	engines := h.engineMgr.ListEngines()
 
 	type engineDebug struct {
@@ -1815,7 +1818,7 @@ func (h *Handler) DebugEnginesList(w http.ResponseWriter, r *http.Request) {
 
 // ProxyThumbnail proxies external thumbnails to prevent tracking
 // Per AI.md PART 36 lines 29497-29507
-func (h *Handler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 // Get URL parameter
 encodedURL := r.URL.Query().Get("url")
 if encodedURL == "" {
@@ -1872,11 +1875,11 @@ io.Copy(w, resp.Body)
 // Autodiscover returns server connection settings for CLI/agent auto-configuration
 // Per AI.md PART 37 line 38078: /api/autodiscover (NON-NEGOTIABLE)
 // This endpoint is NOT versioned because clients need it BEFORE they know the API version
-func (h *Handler) Autodiscover(w http.ResponseWriter, r *http.Request) {
+func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 	// Build response per AI.md PART 37 lines 38086-38146
 	response := map[string]interface{}{
-		"primary":     h.cfg.GetPublicURL(),
-		"cluster":     h.cfg.GetClusterNodes(),
+		"primary":     h.appConfig.GetPublicURL(),
+		"cluster":     h.appConfig.GetClusterNodes(),
 		"api_version": "v1", // Per AI.md PART 14: versioned API
 		"timeout":     30,   // Default timeout in seconds
 		"retry":       3,    // Default retry attempts

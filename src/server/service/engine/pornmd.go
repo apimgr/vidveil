@@ -18,9 +18,9 @@ type PornMDEngine struct {
 }
 
 // NewPornMDEngine creates a new PornMD engine
-func NewPornMDEngine(cfg *config.Config, torClient *tor.Client) *PornMDEngine {
+func NewPornMDEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *PornMDEngine {
 	e := &PornMDEngine{
-		BaseEngine: NewBaseEngine("pornmd", "PornMD", "https://www.pornmd.com", 2, cfg, torClient),
+		BaseEngine: NewBaseEngine("pornmd", "PornMD", "https://www.pornmd.com", 2, appConfig, torClient),
 		parser:     parser.NewPornMDParser(),
 	}
 	// Set capabilities per IDEA.md

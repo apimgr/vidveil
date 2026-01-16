@@ -13,13 +13,13 @@ import (
 	utls "github.com/refraction-networking/utls"
 )
 
-// Client provides HTTP client with spoofed TLS fingerprint
-type Client struct {
+// UTLSClient provides HTTP client with spoofed TLS fingerprint
+type UTLSClient struct {
 	httpClient *http.Client
 }
 
-// NewClient creates a new uTLS client that mimics Chrome's TLS fingerprint
-func NewClient(timeout time.Duration) *Client {
+// NewUTLSClient creates a new uTLS client that mimics Chrome's TLS fingerprint
+func NewUTLSClient(timeout time.Duration) *UTLSClient {
 	jar, _ := cookiejar.New(nil)
 
 	transport := &http.Transport{
@@ -32,7 +32,7 @@ func NewClient(timeout time.Duration) *Client {
 		TLSHandshakeTimeout: 10 * time.Second,
 	}
 
-	return &Client{
+	return &UTLSClient{
 		httpClient: &http.Client{
 			Timeout:   timeout,
 			Transport: transport,
@@ -54,7 +54,7 @@ func NewClient(timeout time.Duration) *Client {
 }
 
 // HTTPClient returns the underlying http.Client
-func (c *Client) HTTPClient() *http.Client {
+func (c *UTLSClient) HTTPClient() *http.Client {
 	return c.httpClient
 }
 

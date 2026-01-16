@@ -45,26 +45,26 @@ var DefaultLimits = map[string]struct {
 
 // EndpointLimiters holds multiple rate limiters for different endpoint types per AI.md PART 1
 type EndpointLimiters struct {
-	limiters map[string]*Limiter
-	logger   *logging.Logger
+	limiters map[string]*RateLimiter
+	logger   *logging.AppLogger
 	mu       sync.RWMutex
 }
 
 // NewEndpointLimiters creates endpoint-specific rate limiters per AI.md PART 1
 func NewEndpointLimiters(enabled bool) *EndpointLimiters {
 	el := &EndpointLimiters{
-		limiters: make(map[string]*Limiter),
+		limiters: make(map[string]*RateLimiter),
 	}
 
 	for endpoint, limits := range DefaultLimits {
-		el.limiters[endpoint] = New(enabled, limits.Requests, int(limits.Window.Seconds()))
+		el.limiters[endpoint] = NewRateLimiter(enabled, limits.Requests, int(limits.Window.Seconds()))
 	}
 
 	return el
 }
 
 // SetLogger sets the logger for all endpoint limiters
-func (el *EndpointLimiters) SetLogger(logger *logging.Logger) {
+func (el *EndpointLimiters) SetLogger(logger *logging.AppLogger) {
 	el.mu.Lock()
 	defer el.mu.Unlock()
 	el.logger = logger
@@ -74,7 +74,7 @@ func (el *EndpointLimiters) SetLogger(logger *logging.Logger) {
 }
 
 // Get returns the rate limiter for a specific endpoint type
-func (el *EndpointLimiters) Get(endpoint string) *Limiter {
+func (el *EndpointLimiters) Get(endpoint string) *RateLimiter {
 	el.mu.RLock()
 	defer el.mu.RUnlock()
 	if l, ok := el.limiters[endpoint]; ok {
@@ -113,8 +113,8 @@ func (el *EndpointLimiters) AllowFileUpload(ip string) bool {
 	return el.Get(EndpointFileUpload).Allow(ip)
 }
 
-// Limiter implements a sliding window rate limiter per PART 1
-type Limiter struct {
+// RateLimiter implements a sliding window rate limiter per PART 1
+type RateLimiter struct {
 	mu      sync.RWMutex
 	enabled bool
 	// Max requests per window
@@ -123,7 +123,7 @@ type Limiter struct {
 	window  time.Duration
 	clients map[string]*clientInfo
 	// Logger for security events per AI.md PART 11
-	logger *logging.Logger
+	logger *logging.AppLogger
 }
 
 type clientInfo struct {
@@ -131,9 +131,9 @@ type clientInfo struct {
 	mu         sync.Mutex
 }
 
-// New creates a new rate limiter
+// NewRateLimiter creates a new rate limiter
 // Default: 100 requests per 60 seconds per AI.md PART 1
-func New(enabled bool, requests int, windowSeconds int) *Limiter {
+func NewRateLimiter(enabled bool, requests int, windowSeconds int) *RateLimiter {
 	// Default per AI.md PART 1 (API authenticated)
 	if requests <= 0 {
 		requests = 100
@@ -143,7 +143,7 @@ func New(enabled bool, requests int, windowSeconds int) *Limiter {
 		windowSeconds = 60
 	}
 
-	l := &Limiter{
+	l := &RateLimiter{
 		enabled:  enabled,
 		requests: requests,
 		window:   time.Duration(windowSeconds) * time.Second,
@@ -157,12 +157,12 @@ func New(enabled bool, requests int, windowSeconds int) *Limiter {
 }
 
 // SetLogger sets the logger for security event logging per AI.md PART 11
-func (l *Limiter) SetLogger(logger *logging.Logger) {
+func (l *RateLimiter) SetLogger(logger *logging.AppLogger) {
 	l.logger = logger
 }
 
 // Allow checks if a request from the given IP should be allowed
-func (l *Limiter) Allow(ip string) bool {
+func (l *RateLimiter) Allow(ip string) bool {
 	if !l.enabled {
 		return true
 	}
@@ -203,7 +203,7 @@ func (l *Limiter) Allow(ip string) bool {
 }
 
 // Remaining returns how many requests are remaining for an IP
-func (l *Limiter) Remaining(ip string) int {
+func (l *RateLimiter) Remaining(ip string) int {
 	if !l.enabled {
 		return l.requests
 	}
@@ -233,7 +233,7 @@ func (l *Limiter) Remaining(ip string) int {
 }
 
 // Reset returns when the rate limit will reset for an IP
-func (l *Limiter) Reset(ip string) time.Time {
+func (l *RateLimiter) Reset(ip string) time.Time {
 	if !l.enabled {
 		return time.Now()
 	}
@@ -258,7 +258,7 @@ func (l *Limiter) Reset(ip string) time.Time {
 }
 
 // cleanup periodically removes stale entries
-func (l *Limiter) cleanup() {
+func (l *RateLimiter) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -288,7 +288,7 @@ func (l *Limiter) cleanup() {
 }
 
 // Middleware returns an HTTP middleware that enforces rate limiting
-func (l *Limiter) Middleware(next http.Handler) http.Handler {
+func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get client IP (use X-Real-IP or X-Forwarded-For if behind proxy)
 		ip := r.RemoteAddr
@@ -330,7 +330,7 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 }
 
 // SetHeaders sets rate limit response headers
-func (l *Limiter) SetHeaders(w http.ResponseWriter, ip string) {
+func (l *RateLimiter) SetHeaders(w http.ResponseWriter, ip string) {
 	w.Header().Set("X-RateLimit-Limit", itoa(l.requests))
 	w.Header().Set("X-RateLimit-Remaining", itoa(l.Remaining(ip)))
 	w.Header().Set("X-RateLimit-Reset", itoa(int(l.Reset(ip).Unix())))

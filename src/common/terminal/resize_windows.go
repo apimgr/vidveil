@@ -10,7 +10,7 @@ import (
 )
 
 // ResizeHandler is a callback for terminal resize events
-type ResizeHandler func(size Size)
+type ResizeHandler func(size TerminalSize)
 
 // WatchResize watches for terminal resize events on Windows
 // Windows doesn't have SIGWINCH, so we poll for size changes
@@ -21,14 +21,14 @@ func WatchResize(handler ResizeHandler) chan struct{} {
 	go func() {
 		defer close(done)
 
-		lastSize := GetSize()
+		lastSize := GetTerminalSize()
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
-				newSize := GetSize()
+				newSize := GetTerminalSize()
 				if newSize.Cols != lastSize.Cols || newSize.Rows != lastSize.Rows {
 					lastSize = newSize
 					if handler != nil {

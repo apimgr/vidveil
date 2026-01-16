@@ -3,8 +3,8 @@
 // See AI.md PART 7 for specification
 package theme
 
-// Palette defines the color scheme for the application
-type Palette struct {
+// ColorPalette defines the color scheme for the application
+type ColorPalette struct {
 	Background, Foreground         string
 	Primary, Secondary, Accent     string
 	Success, Warning, Error, Info  string
@@ -13,7 +13,7 @@ type Palette struct {
 
 var (
 	// Dark is the default dark color palette (Tokyo Night inspired)
-	Dark = Palette{
+	Dark = ColorPalette{
 		Background: "#1a1b26", Foreground: "#c0caf5",
 		Primary: "#7aa2f7", Secondary: "#9ece6a", Accent: "#bb9af7",
 		Success: "#9ece6a", Warning: "#e0af68", Error: "#f7768e", Info: "#7dcfff",
@@ -21,7 +21,7 @@ var (
 	}
 
 	// Light is the light color palette
-	Light = Palette{
+	Light = ColorPalette{
 		Background: "#ffffff", Foreground: "#1a1b26",
 		Primary: "#2e7de9", Secondary: "#587539", Accent: "#7847bd",
 		Success: "#587539", Warning: "#8c6c3e", Error: "#c64343", Info: "#007197",
@@ -29,9 +29,9 @@ var (
 	}
 )
 
-// Get returns the appropriate palette based on mode
+// GetColorPalette returns the appropriate palette based on mode
 // Supported modes: "dark", "light", "auto"
-func Get(mode string) Palette {
+func GetColorPalette(mode string) ColorPalette {
 	switch mode {
 	case "light":
 		return Light
@@ -45,8 +45,8 @@ func Get(mode string) Palette {
 	}
 }
 
-// Name returns the name of the palette based on mode
-func Name(mode string) string {
+// GetColorPaletteName returns the name of the palette based on mode
+func GetColorPaletteName(mode string) string {
 	switch mode {
 	case "light":
 		return "light"

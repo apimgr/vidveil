@@ -18,8 +18,8 @@ import (
 type YouPornEngine struct{ *BaseEngine }
 
 // NewYouPornEngine creates a new YouPorn engine
-func NewYouPornEngine(cfg *config.Config, torClient *tor.Client) *YouPornEngine {
-	e := &YouPornEngine{NewBaseEngine("youporn", "YouPorn", "https://www.youporn.com", 2, cfg, torClient)}
+func NewYouPornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *YouPornEngine {
+	e := &YouPornEngine{NewBaseEngine("youporn", "YouPorn", "https://www.youporn.com", 2, appConfig, torClient)}
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
 		HasPreview:    true,

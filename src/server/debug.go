@@ -49,20 +49,20 @@ func (s *Server) registerDebugRoutes(r chi.Router) {
 func (s *Server) handleDebugConfig(w http.ResponseWriter, r *http.Request) {
 	cfg := map[string]interface{}{
 		"server": map[string]interface{}{
-			"address": s.cfg.Server.Address,
-			"port":    s.cfg.Server.Port,
-			"mode":    s.cfg.Server.Mode,
+			"address": s.appConfig.Server.Address,
+			"port":    s.appConfig.Server.Port,
+			"mode":    s.appConfig.Server.Mode,
 			"debug":   mode.IsDebugEnabled(),
 		},
 		"database": map[string]interface{}{
-			"driver":     s.cfg.Server.Database.Driver,
-			"sqlite_dir": s.cfg.Server.Database.SQLite.Dir,
+			"driver":     s.appConfig.Server.Database.Driver,
+			"sqlite_dir": s.appConfig.Server.Database.SQLite.Dir,
 		},
 		"search": map[string]interface{}{
-			"concurrent_requests":  s.cfg.Search.ConcurrentRequests,
-			"engine_timeout":       s.cfg.Search.EngineTimeout,
-			"results_per_page":     s.cfg.Search.ResultsPerPage,
-			"min_duration_seconds": s.cfg.Search.MinDurationSeconds,
+			"concurrent_requests":  s.appConfig.Search.ConcurrentRequests,
+			"engine_timeout":       s.appConfig.Search.EngineTimeout,
+			"results_per_page":     s.appConfig.Search.ResultsPerPage,
+			"min_duration_seconds": s.appConfig.Search.MinDurationSeconds,
 		},
 	}
 

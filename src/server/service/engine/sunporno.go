@@ -13,8 +13,8 @@ import (
 type SunPornoEngine struct{ *BaseEngine }
 
 // NewSunPornoEngine creates a new SunPorno engine
-func NewSunPornoEngine(cfg *config.Config, torClient *tor.Client) *SunPornoEngine {
-	return &SunPornoEngine{NewBaseEngine("sunporno", "SunPorno", "https://www.sunporno.com", 3, cfg, torClient)}
+func NewSunPornoEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *SunPornoEngine {
+	return &SunPornoEngine{NewBaseEngine("sunporno", "SunPorno", "https://www.sunporno.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on SunPorno

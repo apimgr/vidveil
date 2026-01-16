@@ -13,8 +13,8 @@ import (
 type HqpornerEngine struct{ *BaseEngine }
 
 // NewHqpornerEngine creates a new Hqporner engine
-func NewHqpornerEngine(cfg *config.Config, torClient *tor.Client) *HqpornerEngine {
-	return &HqpornerEngine{NewBaseEngine("hqporner", "Hqporner", "https://hqporner.com", 4, cfg, torClient)}
+func NewHqpornerEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *HqpornerEngine {
+	return &HqpornerEngine{NewBaseEngine("hqporner", "Hqporner", "https://hqporner.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on Hqporner

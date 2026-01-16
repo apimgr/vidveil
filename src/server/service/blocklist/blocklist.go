@@ -18,33 +18,33 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// Service manages IP and domain blocklists per PART 22
-type Service struct {
-	cfg      *config.Config
-	dataDir  string
-	mu       sync.RWMutex
-	ipBlocks map[string]bool // IP addresses to block
-	subnets  []*net.IPNet    // CIDR blocks to check
-	domains  map[string]bool // Domains to block
+// BlocklistService manages IP and domain blocklists per PART 22
+type BlocklistService struct {
+	appConfig *config.AppConfig
+	dataDir   string
+	mu        sync.RWMutex
+	ipBlocks  map[string]bool // IP addresses to block
+	subnets   []*net.IPNet    // CIDR blocks to check
+	domains   map[string]bool // Domains to block
 }
 
-// New creates a new blocklist service
-func New(cfg *config.Config) *Service {
+// NewBlocklistService creates a new blocklist service
+func NewBlocklistService(appConfig *config.AppConfig) *BlocklistService {
 	// Get data directory per PART 4 (OS-Specific Paths)
-	paths := config.GetPaths("", "")
+	paths := config.GetAppPaths("", "")
 	dataDir := filepath.Join(paths.Config, "security", "blocklists")
 
-	return &Service{
-		cfg:      cfg,
-		dataDir:  dataDir,
-		ipBlocks: make(map[string]bool),
-		subnets:  make([]*net.IPNet, 0),
-		domains:  make(map[string]bool),
+	return &BlocklistService{
+		appConfig: appConfig,
+		dataDir:   dataDir,
+		ipBlocks:  make(map[string]bool),
+		subnets:   make([]*net.IPNet, 0),
+		domains:   make(map[string]bool),
 	}
 }
 
 // Initialize creates directory structure per PART 22
-func (s *Service) Initialize() error {
+func (s *BlocklistService) Initialize() error {
 	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create blocklist directory: %w", err)
 	}
@@ -52,13 +52,13 @@ func (s *Service) Initialize() error {
 }
 
 // Update downloads and updates all enabled blocklists per PART 27
-func (s *Service) Update(ctx context.Context) error {
+func (s *BlocklistService) Update(ctx context.Context) error {
 	// Check if blocklists are enabled in config
-	if !s.cfg.Server.Security.Blocklists.Enabled || len(s.cfg.Server.Security.Blocklists.Sources) == 0 {
+	if !s.appConfig.Server.Security.Blocklists.Enabled || len(s.appConfig.Server.Security.Blocklists.Sources) == 0 {
 		return nil
 	}
 
-	sources := s.cfg.Server.Security.Blocklists.Sources
+	sources := s.appConfig.Server.Security.Blocklists.Sources
 	var errors []string
 	
 	for _, source := range sources {
@@ -82,7 +82,7 @@ func (s *Service) Update(ctx context.Context) error {
 }
 
 // downloadAndParse downloads and parses a blocklist source
-func (s *Service) downloadAndParse(ctx context.Context, source config.BlocklistSource) error {
+func (s *BlocklistService) downloadAndParse(ctx context.Context, source config.BlocklistSource) error {
 	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: 30 * time.Second,
@@ -121,7 +121,7 @@ func (s *Service) downloadAndParse(ctx context.Context, source config.BlocklistS
 }
 
 // loadBlocklist loads a blocklist file into memory
-func (s *Service) loadBlocklist(filename, blockType string) error {
+func (s *BlocklistService) loadBlocklist(filename, blockType string) error {
 	file, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open blocklist: %w", err)
@@ -151,7 +151,7 @@ func (s *Service) loadBlocklist(filename, blockType string) error {
 }
 
 // parseIPLine parses an IP address or CIDR block
-func (s *Service) parseIPLine(line string) {
+func (s *BlocklistService) parseIPLine(line string) {
 	// Remove inline comments
 	if idx := strings.Index(line, "#"); idx >= 0 {
 		line = strings.TrimSpace(line[:idx])
@@ -173,7 +173,7 @@ func (s *Service) parseIPLine(line string) {
 }
 
 // parseDomainLine parses a domain name
-func (s *Service) parseDomainLine(line string) {
+func (s *BlocklistService) parseDomainLine(line string) {
 	// Remove inline comments
 	if idx := strings.Index(line, "#"); idx >= 0 {
 		line = strings.TrimSpace(line[:idx])
@@ -194,7 +194,7 @@ func (s *Service) parseDomainLine(line string) {
 }
 
 // IsBlocked checks if an IP address or domain is blocked
-func (s *Service) IsBlocked(ipOrDomain string) bool {
+func (s *BlocklistService) IsBlocked(ipOrDomain string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -233,7 +233,7 @@ func (s *Service) IsBlocked(ipOrDomain string) bool {
 }
 
 // GetStats returns blocklist statistics
-func (s *Service) GetStats() map[string]interface{} {
+func (s *BlocklistService) GetStats() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -246,7 +246,7 @@ func (s *Service) GetStats() map[string]interface{} {
 }
 
 // LastUpdate returns the last update timestamp
-func (s *Service) LastUpdate() time.Time {
+func (s *BlocklistService) LastUpdate() time.Time {
 	timestampFile := filepath.Join(s.dataDir, ".last_updated")
 	data, err := os.ReadFile(timestampFile)
 	if err != nil {

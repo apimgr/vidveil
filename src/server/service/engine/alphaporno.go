@@ -13,8 +13,8 @@ import (
 type AlphaPornoEngine struct{ *BaseEngine }
 
 // NewAlphaPornoEngine creates a new AlphaPorno engine
-func NewAlphaPornoEngine(cfg *config.Config, torClient *tor.Client) *AlphaPornoEngine {
-	return &AlphaPornoEngine{NewBaseEngine("alphaporno", "AlphaPorno", "https://www.alphaporno.com", 3, cfg, torClient)}
+func NewAlphaPornoEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *AlphaPornoEngine {
+	return &AlphaPornoEngine{NewBaseEngine("alphaporno", "AlphaPorno", "https://www.alphaporno.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on AlphaPorno

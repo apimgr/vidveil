@@ -15,8 +15,8 @@ const (
 	ProjectName = "vidveil"
 )
 
-// Paths holds OS-appropriate directory paths
-type Paths struct {
+// AppPaths holds OS-appropriate directory paths
+type AppPaths struct {
 	Config string
 	Data   string
 	Cache  string
@@ -24,11 +24,11 @@ type Paths struct {
 	Backup string
 }
 
-// Get returns OS-appropriate paths per AI.md PART 3
-func Get(configDir, dataDir string) *Paths {
+// GetAppPaths returns OS-appropriate paths per AI.md PART 3
+func GetAppPaths(configDir, dataDir string) *AppPaths {
 	isRoot := os.Geteuid() == 0
 
-	paths := &Paths{}
+	paths := &AppPaths{}
 
 	if configDir != "" {
 		paths.Config = configDir

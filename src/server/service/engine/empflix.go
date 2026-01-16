@@ -13,8 +13,8 @@ import (
 type EMPFlixEngine struct{ *BaseEngine }
 
 // NewEMPFlixEngine creates a new EMPFlix engine
-func NewEMPFlixEngine(cfg *config.Config, torClient *tor.Client) *EMPFlixEngine {
-	return &EMPFlixEngine{NewBaseEngine("empflix", "EMPFlix", "https://www.empflix.com", 3, cfg, torClient)}
+func NewEMPFlixEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *EMPFlixEngine {
+	return &EMPFlixEngine{NewBaseEngine("empflix", "EMPFlix", "https://www.empflix.com", 3, appConfig, torClient)}
 }
 
 // Search performs a search on EMPFlix

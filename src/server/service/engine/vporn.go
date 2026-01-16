@@ -13,8 +13,8 @@ import (
 type VPornEngine struct{ *BaseEngine }
 
 // NewVPornEngine creates a new VPorn engine
-func NewVPornEngine(cfg *config.Config, torClient *tor.Client) *VPornEngine {
-	return &VPornEngine{NewBaseEngine("vporn", "VPorn", "https://www.vporn.com", 4, cfg, torClient)}
+func NewVPornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *VPornEngine {
+	return &VPornEngine{NewBaseEngine("vporn", "VPorn", "https://www.vporn.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on VPorn

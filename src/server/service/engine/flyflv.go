@@ -13,8 +13,8 @@ import (
 type FlyflvEngine struct{ *BaseEngine }
 
 // NewFlyflvEngine creates a new Flyflv engine
-func NewFlyflvEngine(cfg *config.Config, torClient *tor.Client) *FlyflvEngine {
-	return &FlyflvEngine{NewBaseEngine("flyflv", "Flyflv", "https://www.flyflv.com", 4, cfg, torClient)}
+func NewFlyflvEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *FlyflvEngine {
+	return &FlyflvEngine{NewBaseEngine("flyflv", "Flyflv", "https://www.flyflv.com", 4, appConfig, torClient)}
 }
 
 // Search performs a search on Flyflv

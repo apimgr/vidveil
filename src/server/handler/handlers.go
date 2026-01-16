@@ -2,6 +2,7 @@
 package handler
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -882,12 +883,19 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(httpStatus)
-	if err := tmpl.ExecuteTemplate(w, "healthz", data); err != nil {
-		// Can't call http.Error after WriteHeader - just log the error
+	// Buffer template output to prevent proxy truncation issues
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "healthz", data); err != nil {
+		// Per AI.md PART 9: Never expose error details in responses
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+
+	// Set headers and write buffered response
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	w.WriteHeader(httpStatus)
+	w.Write(buf.Bytes())
 }
 
 // RobotsTxt returns robots.txt
@@ -1576,11 +1584,19 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, code int, title, 
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(code)
-	if err := tmpl.ExecuteTemplate(w, "error", data); err != nil {
+	// Buffer template output to prevent proxy truncation issues
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "error", data); err != nil {
+		// Fallback to plain text error
 		http.Error(w, fmt.Sprintf("%d %s: %s", code, title, message), code)
+		return
 	}
+
+	// Set headers and write buffered response
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	w.WriteHeader(code)
+	w.Write(buf.Bytes())
 }
 
 // NotFoundHandler handles 404 errors per AI.md PART 30
@@ -1667,11 +1683,21 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, templateName, data); err != nil {
+	// Buffer template output to prevent proxy truncation issues
+	// This ensures Content-Length is set and the response is written atomically,
+	// which avoids issues with nginx proxy_buffer_size limits (often 8KB)
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, templateName, data); err != nil {
 		// Per AI.md PART 9: Never expose error details in responses
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
+
+	// Set headers and write buffered response
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf.Bytes())
 }
 
 // DebugEngine probes a specific engine and returns detailed results

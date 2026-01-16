@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -638,11 +639,31 @@ func (s *Server) setupRoutes() {
 
 // ListenAndServe starts the HTTP server
 func (s *Server) ListenAndServe(addr string) error {
+	// Parse timeouts from config per AI.md PART 13
+	readTimeout := parseDuration(s.appConfig.Server.Limits.ReadTimeout, 30*time.Second)
+	writeTimeout := parseDuration(s.appConfig.Server.Limits.WriteTimeout, 30*time.Second)
+	idleTimeout := parseDuration(s.appConfig.Server.Limits.IdleTimeout, 120*time.Second)
+
 	s.srv = &http.Server{
-		Addr:    addr,
-		Handler: s.router,
+		Addr:         addr,
+		Handler:      s.router,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
 	}
 	return s.srv.ListenAndServe()
+}
+
+// parseDuration parses a duration string, returning the default if parsing fails
+func parseDuration(s string, defaultVal time.Duration) time.Duration {
+	if s == "" {
+		return defaultVal
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return defaultVal
+	}
+	return d
 }
 
 // Shutdown gracefully shuts down the server

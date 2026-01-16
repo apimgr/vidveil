@@ -232,9 +232,34 @@ func (h *SearchHandler) setAgeVerifyCookie(w http.ResponseWriter) {
 	})
 }
 
-// BuildDateTime returns the build time from version package
+// BuildDateTime returns the build time formatted per AI.md PART 16
+// Format: "January 2, 2006 at 15:04:05" (December 4, 2025 at 13:05:13)
 func BuildDateTime() string {
-	return version.BuildTime
+	raw := version.BuildTime
+	if raw == "" || raw == "unknown" {
+		return "unknown"
+	}
+
+	// Try to parse common build time formats
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+		"Jan 2 2006 15:04:05",
+		"Mon Jan 2 15:04:05 2006",
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, raw); err == nil {
+			// Format per AI.md PART 16: %B %-d, %Y at %H:%M:%S
+			return t.Format("January 2, 2006 at 15:04:05")
+		}
+	}
+
+	// If parsing fails, return raw value
+	return raw
 }
 
 // HomePage renders the main search page
@@ -341,15 +366,17 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 		// ResultsJSON is safe JSON for script template use
 		h.renderResponse(w, r, "search", map[string]interface{}{
-			"Title":       query + " - " + h.appConfig.Server.Title,
-			"Query":       query,
-			"SearchQuery": searchQuery,
-			"ResultsJSON": template.JS(resultsJSON),
-			"EnginesUsed": results.Data.EnginesUsed,
-			"SearchTime":  results.Data.SearchTimeMS,
-			"Theme":       h.appConfig.Web.UI.Theme,
-			"HasBang":     parsed.HasBang,
-			"BangEngines": parsed.Engines,
+			"Title":         query + " - " + h.appConfig.Server.Title,
+			"Query":         query,
+			"SearchQuery":   searchQuery,
+			"ResultsJSON":   template.JS(resultsJSON),
+			"EnginesUsed":   results.Data.EnginesUsed,
+			"SearchTime":    results.Data.SearchTimeMS,
+			"Theme":         h.appConfig.Web.UI.Theme,
+			"HasBang":       parsed.HasBang,
+			"BangEngines":   parsed.Engines,
+			"Version":       version.GetVersion(),
+			"BuildDateTime": BuildDateTime(),
 		})
 	}
 }
@@ -632,6 +659,10 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	case "application/json":
 		// JSON format per AI.md PART 13 lines 12949-12996
 		response := map[string]interface{}{
+			"project": map[string]interface{}{
+				"name":        h.appConfig.Server.Title,
+				"description": "Privacy-respecting adult video meta search",
+			},
 			"status":     status,
 			"version":    version.GetVersion(),
 			"mode":       appMode,
@@ -684,16 +715,19 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, httpStatus, response)
 
 	case "text/plain":
-		// Plain text format per AI.md PART 13 lines 11338-11349
+		// Plain text format per AI.md PART 13 lines 14713-14734
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(httpStatus)
 		fmt.Fprintf(w, "status: %s\n", status)
 		fmt.Fprintf(w, "version: %s\n", version.GetVersion())
 		fmt.Fprintf(w, "mode: %s\n", appMode)
 		fmt.Fprintf(w, "uptime: %s\n", uptime)
+		fmt.Fprintf(w, "go_version: %s\n", runtime.Version())
+		fmt.Fprintf(w, "build.commit: %s\n", version.CommitID)
 		fmt.Fprintf(w, "database: %s\n", checks["database"])
 		fmt.Fprintf(w, "cache: %s\n", checks["cache"])
 		fmt.Fprintf(w, "disk: %s\n", checks["disk"])
+		fmt.Fprintf(w, "scheduler: %s\n", checks["scheduler"])
 		if clusterEnabled {
 			fmt.Fprintf(w, "cluster: %s (%d nodes)\n", checks["cluster"], clusterNodes)
 		}
@@ -1465,7 +1499,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14 lines 14967-14986
 	format := getAPIResponseFormat(r)
 
-	// Text output for CLI tools (raw data, not HTML2TextConverter)
+	// Text output for CLI tools per AI.md PART 13 lines 14713-14734
 	if format == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(httpStatus)
@@ -1473,14 +1507,21 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "version: %s\n", version.GetVersion())
 		fmt.Fprintf(w, "mode: %s\n", appMode)
 		fmt.Fprintf(w, "uptime: %s\n", uptime)
-		for k, v := range checks {
-			fmt.Fprintf(w, "%s: %s\n", k, v)
-		}
+		fmt.Fprintf(w, "go_version: %s\n", version.GoVersion)
+		fmt.Fprintf(w, "build.commit: %s\n", version.CommitID)
+		fmt.Fprintf(w, "database: %s\n", checks["database"])
+		fmt.Fprintf(w, "cache: %s\n", checks["cache"])
+		fmt.Fprintf(w, "disk: %s\n", checks["disk"])
+		fmt.Fprintf(w, "scheduler: ok\n")
 		return
 	}
 
 	// JSON response (default) - per AI.md PART 13 lines 14264-14312
 	response := map[string]interface{}{
+		"project": map[string]interface{}{
+			"name":        h.appConfig.Server.Title,
+			"description": "Privacy-respecting adult video meta search",
+		},
 		"status":     status,
 		"version":    version.GetVersion(),
 		"go_version": version.GoVersion,

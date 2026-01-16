@@ -236,8 +236,15 @@ func (m *ClusterManager) electPrimary() {
 			m.db.Exec("UPDATE cluster_nodes SET is_primary = 1 WHERE id = ?", electID)
 
 			if electID == m.nodeID {
+				wasPrimary := m.isPrimary
 				m.isPrimary = true
-				fmt.Println("This node is now the primary")
+				// Only print message in true cluster mode (multiple nodes)
+				// and only when becoming primary (not on initial startup)
+				var nodeCount int
+				m.db.QueryRow("SELECT COUNT(*) FROM cluster_nodes WHERE status = ?", NodeStateHealthy).Scan(&nodeCount)
+				if nodeCount > 1 && !wasPrimary {
+					fmt.Println("[CLUSTER] This node is now the primary")
+				}
 			}
 		}
 	} else if primaryID == m.nodeID {

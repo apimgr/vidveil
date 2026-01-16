@@ -387,11 +387,20 @@ func (s *EmailService) sendTLS(addr, host string, auth smtp.Auth, from, to strin
 	return client.Quit()
 }
 
-// autodetectSMTP tries to find an SMTP server per AI.md PART 31 lines 10267-10284
+// autodetectSMTP tries to find an SMTP server per AI.md PART 18 lines 23679-23684
 func (s *EmailService) autodetectSMTP() (string, int) {
 	hosts := s.appConfig.Server.Email.AutodetectHost
+	ports := s.appConfig.Server.Email.AutodetectPort
+	return AutodetectSMTP(hosts, ports)
+}
+
+// AutodetectSMTP tries to find an SMTP server per AI.md PART 18
+// It performs actual SMTP EHLO handshake (not just TCP connect)
+// Returns host, port on success; empty string, 0 on failure
+func AutodetectSMTP(customHosts []string, customPorts []int) (string, int) {
+	hosts := customHosts
 	if len(hosts) == 0 {
-		// Per AI.md PART 31: Check localhost, 127.0.0.1, Docker host, gateway
+		// Per AI.md PART 18: Check localhost, 127.0.0.1, Docker host, gateway
 		hosts = []string{"localhost", "127.0.0.1", "172.17.0.1"}
 		// Try to get gateway IP
 		if gw := getGatewayIP(); gw != "" {
@@ -399,23 +408,73 @@ func (s *EmailService) autodetectSMTP() (string, int) {
 		}
 	}
 
-	ports := s.appConfig.Server.Email.AutodetectPort
+	ports := customPorts
 	if len(ports) == 0 {
 		ports = []int{25, 587, 465}
 	}
 
 	for _, host := range hosts {
 		for _, port := range ports {
-			addr := fmt.Sprintf("%s:%d", host, port)
-			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-			if err == nil {
-				conn.Close()
+			if testSMTPConnection(host, port) {
 				return host, port
 			}
 		}
 	}
 
 	return "", 0
+}
+
+// testSMTPConnection tests an SMTP server with EHLO handshake per AI.md PART 18
+func testSMTPConnection(host string, port int) bool {
+	addr := fmt.Sprintf("%s:%d", host, port)
+
+	// Connect with timeout
+	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+
+	// Set read/write deadline
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	// For port 465 (SMTPS), wrap in TLS first
+	if port == 465 {
+		tlsConn := tls.Client(conn, &tls.Config{
+			ServerName:         host,
+			InsecureSkipVerify: true, // Allow self-signed for local servers
+		})
+		if err := tlsConn.Handshake(); err != nil {
+			return false
+		}
+		conn = tlsConn
+	}
+
+	// Create SMTP client and do EHLO handshake
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return false
+	}
+	defer client.Quit()
+
+	// EHLO handshake - this is what the spec requires
+	if err := client.Hello("localhost"); err != nil {
+		return false
+	}
+
+	return true
+}
+
+// TestSMTPConfig tests a specific SMTP configuration per AI.md PART 18 lines 23686-23691
+// Returns nil on success, error on failure
+func TestSMTPConfig(host string, port int) error {
+	if host == "" {
+		return fmt.Errorf("no SMTP host configured")
+	}
+	if !testSMTPConnection(host, port) {
+		return fmt.Errorf("SMTP connection failed to %s:%d", host, port)
+	}
+	return nil
 }
 
 // getGatewayIP attempts to determine the default gateway IP

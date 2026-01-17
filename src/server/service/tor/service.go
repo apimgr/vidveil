@@ -23,7 +23,7 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// TorService represents the embedded Tor hidden service per AI.md PART 32
+// TorService represents the embedded Tor hidden service per AI.md PART 30
 // Uses github.com/cretz/bine for dedicated Tor process management
 type TorService struct {
 	cfg     *TorServiceConfig
@@ -51,9 +51,13 @@ type TorService struct {
 	vanityCtx    context.Context
 	vanityCancel context.CancelFunc
 	vanityStatus *VanityStatus
+
+	// Process monitoring per PART 30
+	monitorCtx    context.Context
+	monitorCancel context.CancelFunc
 }
 
-// TorServiceConfig holds Tor service configuration per AI.md PART 32
+// TorServiceConfig holds Tor service configuration per AI.md PART 30
 type TorServiceConfig struct {
 	// Set from paths.GetDataDir() + "/tor"
 	DataDir string `yaml:"-"`
@@ -201,13 +205,70 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 	s.status = TorServiceStatusConnected
 	s.logger.Info("Hidden service started", map[string]interface{}{"onion_address": s.onionAddress})
 
+	// Start process monitoring per PART 30
+	s.monitorCtx, s.monitorCancel = context.WithCancel(context.Background())
+	go s.monitorProcess()
+
 	return nil
+}
+
+// monitorProcess monitors Tor and restarts if it crashes per PART 30
+func (s *TorService) monitorProcess() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.monitorCtx.Done():
+			return
+		case <-ticker.C:
+			s.mu.RLock()
+			torInst := s.torInstance
+			status := s.status
+			s.mu.RUnlock()
+
+			if torInst == nil || status != TorServiceStatusConnected {
+				continue
+			}
+
+			// Check if Tor is still responsive via control connection
+			if _, err := torInst.Control.GetInfo("version"); err != nil {
+				s.logger.Warn("Tor process unresponsive, restarting...", map[string]interface{}{"error": err.Error()})
+
+				// Attempt restart
+				s.mu.Lock()
+				localPort := s.localPort
+				s.mu.Unlock()
+
+				if err := s.Stop(); err != nil {
+					s.logger.Warn("Error stopping Tor during restart", map[string]interface{}{"error": err.Error()})
+				}
+
+				// Restart in background to avoid blocking monitor
+				go func() {
+					ctx := context.Background()
+					if err := s.Start(ctx, localPort); err != nil {
+						s.logger.Warn("Failed to restart Tor", map[string]interface{}{"error": err.Error()})
+					} else {
+						s.logger.Info("Tor restarted successfully", nil)
+					}
+				}()
+				return // Exit this monitor, new one will be started
+			}
+		}
+	}
 }
 
 // Stop shuts down the Tor service
 func (s *TorService) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Cancel process monitoring per PART 30
+	if s.monitorCancel != nil {
+		s.monitorCancel()
+		s.monitorCancel = nil
+	}
 
 	// Cancel any vanity generation
 	if s.vanityCancel != nil {

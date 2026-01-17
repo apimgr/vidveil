@@ -121,6 +121,14 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 		return fmt.Errorf("failed to create tor site directory: %w", err)
 	}
 
+	// Fix ownership: Tor process runs as current user, so data dir must be owned by current user
+	// This fixes "is not owned by this user" errors when directories were created by different user
+	currentUID := os.Getuid()
+	currentGID := os.Getgid()
+	if err := os.Chown(torDataDir, currentUID, currentGID); err != nil {
+		s.logger.Warn("Failed to chown tor data directory", map[string]interface{}{"error": err.Error()})
+	}
+
 	// Check if Tor binary exists
 	torPath, err := exec.LookPath("tor")
 	if err != nil {

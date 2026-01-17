@@ -22,7 +22,7 @@ https://x.scour.li
 | Feature | Description |
 |---------|-------------|
 | **Privacy First** | No tracking, no logging, no analytics |
-| **54+ Engines** | Aggregates results from 54+ adult video sites |
+| **53+ Engines** | Aggregates results from 53+ adult video sites |
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
 | **SSE Streaming** | Real-time result streaming as engines respond |
@@ -215,7 +215,7 @@ Use bang shortcuts to search specific engines:
 
 **Multiple bangs**: `!ph !rt amateur` searches both PornHub and RedTube.
 
-**Full list**: See `/api/v1/bangs` for all 54+ engine shortcuts.
+**Full list**: See `/api/v1/bangs` for all 53+ engine shortcuts.
 
 ## Supported Engines
 
@@ -240,7 +240,7 @@ Use bang shortcuts to search specific engines:
 
 ### Tier 3+ - Additional Sites (38 engines)
 
-4Tube, Fux, PornTube, YouJizz, SunPorno, TXXX, Nuvid, TNAFlix, DrTuber, EMPFlix, HellPorno, AlphaPorno, PornFlip, ZenPorn, GotPorn, HDZog, XXXYMovies, LoveHomePorn, PornerBros, NonkTube, NubilesPorn, PornBox, PornTop, Pornotube, VPorn, PornHD, XBabe, PornOne, PornTrex, HQPorner, VJAV, FlyFLV, Tube8, XTube, AnyPorn, SuperPorn, TubeGalore, Motherless
+4Tube, Fux, PornTube, YouJizz, SunPorno, TXXX, Nuvid, TNAFlix, DrTuber, EMPFlix, HellPorno, AlphaPorno, PornFlip, ZenPorn, GotPorn, HDZog, XXXYMovies, LoveHomePorn, PornerBros, NonkTube, NubilesPorn, PornBox, PornTop, Pornotube, PornHD, XBabe, PornOne, PornTrex, HQPorner, VJAV, FlyFLV, Tube8, XTube, AnyPorn, SuperPorn, TubeGalore, Motherless
 
 ## Admin Panel
 

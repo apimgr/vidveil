@@ -22,7 +22,7 @@ func NewYouPornEngine(appConfig *config.AppConfig) *YouPornEngine {
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
 		HasPreview:    true,
-		HasDownload:   false,
+		HasDownload:   true,
 		HasDuration:   true,
 		HasViews:      true,
 		HasRating:     true,
@@ -99,6 +99,10 @@ func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]m
 			if strings.HasPrefix(downloadURL, "//") {
 				downloadURL = "https:" + downloadURL
 			}
+		}
+		// Use video page URL as download URL (works with yt-dlp)
+		if downloadURL == "" {
+			downloadURL = videoURL
 		}
 
 		// Get duration and parse to seconds

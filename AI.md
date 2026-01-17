@@ -128,7 +128,7 @@ IDEA.md is the project PLAN. AI.md (this file) is the SOURCE OF TRUTH.
 | **CGO_ENABLED=0** | ALWAYS. No exceptions. Pure Go only. |
 | **Single static binary** | All assets embedded with Go `embed` package |
 | **8 platforms required** | linux, darwin, windows, freebsd × amd64, arm64 |
-| **Binary naming** | `{project}-{os}-{arch}` (windows adds `.exe`) |
+| **Binary naming** | `{projectname}-{os}-{arch}` (windows adds `.exe`) |
 | **NEVER use -musl suffix** | Alpine builds are NOT musl-specific |
 | **Build source** | ALWAYS `src` directory |
 
@@ -432,7 +432,7 @@ src/                        # Go source code (REQUIRED)
 src/main.go                 # Server application entry point
 src/config/                 # Configuration package
 src/server/                 # HTTP server package
-src/client/                 # CLI client (REQUIRED - all projects)
+src/client/                 # client (REQUIRED - all projects)
 src/agent/                  # Agent (OPTIONAL - monitoring/management projects only)
 docker/                     # Docker files (REQUIRED)
 docker/Dockerfile           # Multi-stage Dockerfile
@@ -443,8 +443,8 @@ releases/                   # Release artifacts (gitignored)
 ```
 
 **Notes:**
-- `src/client/` is only present if the project includes a CLI client. See PART 33 for CLI details.
-- `src/agent/` is only present if the project includes an agent. See PART 33 for agent details.
+- `src/client/` is REQUIRED for all projects (client binary is mandatory). See PART 33 for client details.
+- `src/agent/` is OPTIONAL (only for monitoring/management projects). See PART 33 for agent details.
 - `docker/rootfs/` is for BUILD-TIME container overlay (copied into image). Runtime volumes (`./rootfs/config`, `./rootfs/data`) are NEVER in the repo - they exist only where docker-compose runs (production server or temp dir).
 
 ## File & Directory Naming Conventions
@@ -604,6 +604,15 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | Modify ENTRYPOINT/CMD | Customize via entrypoint.sh |
 | Use CGO | CGO_ENABLED=0 always |
 | Use `strconv.ParseBool()` | Use `config.ParseBool()` for all boolean parsing |
+| Hardcode dev machine values | Detect at runtime (hostname, IP, cores, memory) |
+| Use external cron for scheduling | Use internal scheduler (PART 19) |
+| Add comments to JSON files | JSON has no comment syntax |
+| Use `-musl` suffix in binary names | Alpine builds are not musl-specific |
+| Store tokens/passwords in plaintext | Passwords: Argon2id; Tokens: SHA-256 hash |
+| Implement usage limits/quotas | Rate limits protect servers; usage limits extract money |
+| Create enterprise/premium tiers | All features free for all users, always |
+| Use plural directory names | Use singular: `handler/`, `model/`, not `handlers/` |
+| Run Go locally | Use `make dev` / `make local` (containers only) |
 
 ## Files & Directories Master Rules
 
@@ -618,7 +627,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | **Config files** | lowercase, dot-extension | `server.yml`, `mkdocs.yml` | `SERVER.yml` |
 | **Documentation** | UPPERCASE.md | `README.md`, `LICENSE.md` | `readme.md` |
 | **Scripts** | lowercase, snake_case | `run_tests.sh` | `RunTests.sh` |
-| **Binaries** | `{project}-{os}-{arch}` | `echoip-linux-amd64` | `echoip_linux_amd64` |
+| **Binaries** | `{projectname}-{os}-{arch}` | `echoip-linux-amd64` | `echoip_linux_amd64` |
 
 ### NEVER Create These Files
 
@@ -694,14 +703,154 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 
 **Claude Code Rules (.claude/rules/):**
 
-When Claude Code starts, it should create `.claude/rules/` with these files:
+When Claude Code starts, it should create `.claude/rules/` with these cheatsheet files. Each file groups related topics and references the relevant PARTs in AI.md:
 
-| File | Source |
-|------|--------|
-| `ai-rules.md` | @AI.md PART 0 |
-| `directory-structure.md` | @AI.md PART 3 |
-| `build-rules.md` | @AI.md PART 26 |
-| `testing-rules.md` | @AI.md PART 29 |
+| File | PARTs | Topics Covered |
+|------|-------|----------------|
+| `ai-rules.md` | 0, 1 | AI behavior rules, critical rules, compliance |
+| `project-rules.md` | 2, 3, 4 | License/attribution, project structure, OS-specific paths |
+| `config-rules.md` | 5, 6, 12 | Configuration handling, application modes, server settings |
+| `binary-rules.md` | 7, 8, 33 | Binary requirements, server CLI, client/agent |
+| `backend-rules.md` | 9, 10, 11 | Error handling/caching, database/cluster, security/logging |
+| `api-rules.md` | 13, 14, 15 | Health/versioning, API structure/routes, SSL/TLS |
+| `frontend-rules.md` | 16, 17 | Web frontend (HTML/CSS/JS), admin panel |
+| `features-rules.md` | 18, 19, 20, 21, 22, 23 | Email, scheduler, GeoIP, metrics, backup, update |
+| `service-rules.md` | 24, 25 | Privilege escalation, service management (systemd/launchd/etc.) |
+| `makefile-rules.md` | 26 | Makefile (local dev/tests/debug only - NOT used in CI/CD) |
+| `docker-rules.md` | 27 | Docker/containers, Dockerfile, docker-compose |
+| `cicd-rules.md` | 28 | CI/CD workflows (GitHub/GitLab/Gitea Actions) |
+| `testing-rules.md` | 29, 30, 31 | Testing/development, documentation, i18n/a11y |
+| `optional-rules.md` | 32, 34, 35, 36 | Tor hidden service, multi-user, organizations, custom domains |
+
+**Note:** PART 37 (IDEA.md Reference) and FINAL (Compliance Checklist) are reference-only, not rule files.
+
+**Cursor Rules (.cursor/rules/):**
+
+Cursor uses `.mdc` files. Create the same logical groupings:
+
+| File | PARTs | Topics Covered |
+|------|-------|----------------|
+| `ai-rules.mdc` | 0, 1 | AI behavior rules, critical rules, compliance |
+| `project-rules.mdc` | 2, 3, 4 | License/attribution, project structure, OS-specific paths |
+| `config-rules.mdc` | 5, 6, 12 | Configuration handling, application modes, server settings |
+| `binary-rules.mdc` | 7, 8, 33 | Binary requirements, server CLI, client/agent |
+| `backend-rules.mdc` | 9, 10, 11 | Error handling/caching, database/cluster, security/logging |
+| `api-rules.mdc` | 13, 14, 15 | Health/versioning, API structure/routes, SSL/TLS |
+| `frontend-rules.mdc` | 16, 17 | Web frontend (HTML/CSS/JS), admin panel |
+| `features-rules.mdc` | 18, 19, 20, 21, 22, 23 | Email, scheduler, GeoIP, metrics, backup, update |
+| `service-rules.mdc` | 24, 25 | Privilege escalation, service management |
+| `makefile-rules.mdc` | 26 | Makefile (local dev/tests/debug only) |
+| `docker-rules.mdc` | 27 | Docker/containers, Dockerfile, docker-compose |
+| `cicd-rules.mdc` | 28 | CI/CD workflows (GitHub/GitLab/Gitea Actions) |
+| `testing-rules.mdc` | 29, 30, 31 | Testing/development, documentation, i18n/a11y |
+| `optional-rules.mdc` | 32, 34, 35, 36 | Tor, multi-user, organizations, custom domains |
+
+**Aider Rules (.aider/):**
+
+Aider uses a conventions file. Create `.aider/CONVENTIONS.md` with sections referencing AI.md PARTs:
+
+```markdown
+# Project Conventions (Auto-generated from AI.md)
+
+## AI Behavior (PART 0, 1)
+[Key rules from PART 0 and 1]
+
+## Project Structure (PART 2, 3, 4)
+[Key rules from PART 2, 3, 4]
+
+## Configuration (PART 5, 6, 12)
+[Key rules...]
+
+... (same groupings as .claude/rules/)
+```
+
+**Windsurf Rules (.windsurf/rules/):**
+
+Windsurf uses same structure as Cursor. Create `.mdc` files with same groupings as `.cursor/rules/`.
+
+**Generic AI Rules (.ai/):**
+
+Fallback for other AI tools. Create `.ai/rules/` with `.md` files using same groupings as `.claude/rules/`.
+
+**All AI config directories use the same logical grouping** - only the file extension differs:
+- Claude Code: `.md`
+- Cursor: `.mdc`
+- Windsurf: `.mdc`
+- Aider: Single `CONVENTIONS.md`
+- Generic: `.md`
+
+**Project Memory File (REQUIRED):**
+
+Each AI tool directory MUST have a project memory file containing critical rules that should ALWAYS be loaded:
+
+| Tool | File |
+|------|------|
+| Claude Code | `.claude/CLAUDE.md` |
+| Cursor | `.cursor/CURSOR.md` |
+| Windsurf | `.windsurf/WINDSURF.md` |
+| Aider | `.aider/AIDER.md` |
+| Generic | `.ai/AI.md` |
+
+**Required Content Structure (~50-100 lines max):**
+
+```markdown
+# {PROJECTNAME} - AI Quick Reference
+
+## Binary Terminology
+- **server** = `{projectname}` (main binary, runs as service)
+- **client** = `{projectname}-cli` (REQUIRED companion, CLI/TUI/GUI)
+- **agent** = `{projectname}-agent` (optional, runs on remote machines)
+
+## Key Placeholders
+- `{projectname}` = [actual project name]
+- `{projectorg}` = [organization name]
+- `{admin_path}` = [admin URL path, default: admin]
+
+## Account Types (CRITICAL)
+- **Server Admin** = manages the app (NOT a privileged OS user)
+- **Primary Admin** = first admin, cannot be deleted
+- **Regular User** = end-user (PART 34, optional feature)
+- Server Admins ≠ Regular Users (separate DB tables)
+
+## Cluster vs Managed Nodes (CRITICAL)
+- **Cluster Node** = another instance of THIS app (horizontal scaling)
+- **Managed Node** = EXTERNAL resource app controls/monitors (Docker hosts, etc.)
+- Most apps only have cluster nodes
+
+## NEVER Do (Top 10)
+1. Use bcrypt → Use Argon2id
+2. Put Dockerfile in root → `docker/Dockerfile`
+3. Use CGO → CGO_ENABLED=0 always
+4. Hardcode dev values → Detect at runtime
+5. Use external cron → Internal scheduler (PART 19)
+6. Store passwords plaintext → Argon2id (tokens use SHA-256)
+7. Create premium tiers → All features free
+8. Use Makefile in CI/CD → Explicit commands
+9. Guess or assume → Read spec or ask
+10. Skip platforms → Build all 8
+
+## File Locations
+- Config: `{config_dir}/server.yml`
+- Data: `{data_dir}/`
+- Logs: `{log_dir}/`
+- Source: `src/`
+- Docker: `docker/`
+
+## Where to Find Details
+- AI behavior: `rules/ai-rules.md` (PART 0, 1)
+- Project structure: `rules/project-rules.md` (PART 2, 3, 4)
+- Frontend/WebUI: `rules/frontend-rules.md` (PART 16, 17)
+- Full spec: `AI.md` (~48k lines)
+
+## Current Project State
+[AI should update this section with current implementation status]
+```
+
+**Rules:**
+- This file is ALWAYS loaded first by the AI tool
+- Keep it under 100 lines - it's a quick reference, not the full spec
+- Points to rules/ files and AI.md for details
+- "Current Project State" section updated by AI as work progresses
 
 ### Allowed Root Directories (Exhaustive List)
 
@@ -753,15 +902,55 @@ When Claude Code starts, it should create `.claude/rules/` with these files:
 
 **These terms have SPECIFIC meanings in this specification. Understand them before proceeding.**
 
+## Template Placeholders
+
+**These placeholders appear throughout this specification and MUST be replaced with actual values:**
+
+| Placeholder | Description | Example |
+|-------------|-------------|---------|
+| `{projectname}` | Project name (lowercase, no spaces/hyphens) | `jokes`, `echoip`, `pastebin` |
+| `{projectorg}` | Organization/owner name (lowercase) | `sneak`, `acme`, `mycompany` |
+| `{projectversion}` | Current version (semver format) | `1.0.0`, `2.3.1` |
+| `{PROJECTNAME}` | Uppercase project name (for constants, env vars) | `JOKES`, `ECHOIP` |
+| `{officialsite}` | Official project website | `https://jokes.example.com` |
+| `{fqdn}` | Fully qualified domain name | `api.example.com` |
+| `{admin_path}` | Admin panel URL path (configurable, default: `admin`) | `admin`, `manage`, `control` |
+| `{api_version}` | API version prefix (default: `v1`) | `v1`, `v2` |
+
+**Directory placeholders (with platform-specific defaults):**
+
+| Placeholder | Linux/BSD Default | macOS Default | Windows Default |
+|-------------|-------------------|---------------|-----------------|
+| `{config_dir}` | `/etc/{projectorg}/{projectname}` | `/Library/Application Support/{projectorg}/{projectname}` | `%PROGRAMDATA%\{projectorg}\{projectname}` |
+| `{data_dir}` | `/var/lib/{projectorg}/{projectname}` | `/Library/Application Support/{projectorg}/{projectname}` | `%PROGRAMDATA%\{projectorg}\{projectname}` |
+| `{log_dir}` | `/var/log/{projectorg}/{projectname}` | `/Library/Logs/{projectorg}/{projectname}` | `%PROGRAMDATA%\{projectorg}\{projectname}\logs` |
+| `{cache_dir}` | `/var/cache/{projectorg}/{projectname}` | `/Library/Caches/{projectorg}/{projectname}` | `%PROGRAMDATA%\{projectorg}\{projectname}\cache` |
+| `{backup_dir}` | `/mnt/Backups/{projectorg}/{projectname}` | `/Library/Application Support/{projectorg}/{projectname}/backups` | `%PROGRAMDATA%\{projectorg}\{projectname}\backups` |
+| `{pid_file}` | `/var/run/{projectorg}/{projectname}.pid` | `/var/run/{projectorg}/{projectname}.pid` | N/A (Windows uses SCM) |
+
+## Binary Terminology
+
+**Three binaries may be built from a project. All support renaming (affects help/docs, not directories/user/group):**
+
+| Term | Default Binary Name | Description |
+|------|---------------------|-------------|
+| **server** | `{projectname}` | The main application binary - runs as service/daemon, serves API/WebUI |
+| **client** | `{projectname}-cli` | Required companion binary - terminal interface with CLI/TUI/GUI modes |
+| **agent** | `{projectname}-agent` | Optional companion binary - runs on remote machines, reports to server |
+
+**Renaming behavior:**
+- Renaming a binary (e.g., `cp jokes myjokes`) changes user-visible output (help text, banners, User-Agent)
+- Renaming does NOT change: directories, system user/group, config file names, database paths
+- Binary detects its own name at runtime via `os.Args[0]` or `filepath.Base(os.Executable())`
+
 ## Core Terms
 
-**Note:** "Project", "App", and "Application" are used interchangeably throughout this document - they all refer to the complete codebase including all files, configuration, and functionality.
+**Note:** "Project", "App", and "Application" are used interchangeably throughout this document - they all refer to the complete codebase including all binaries (server, client, agent), configuration, and functionality.
 
 | Term | Definition |
 |------|------------|
-| **Project / App / Application** | The server binary you are building (`{projectname}`) - used interchangeably |
-| **App Instance** | A single running copy of the app (one process) |
-| **Server** | This application - the binary/service you are building |
+| **Project / App / Application** | The complete codebase you are building - includes server, client, agent binaries |
+| **App Instance** | A single running copy of a binary (one process) |
 | **System** | The operating system (Linux, macOS, Windows, FreeBSD) - NOT this application |
 
 ## Server vs System Distinction (CRITICAL)
@@ -793,79 +982,96 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 | Term | Definition |
 |------|------------|
-| **Managed Node** | An EXTERNAL resource the app controls (NOT an app instance) |
-| **Extended Node Function** | What the app does with managed nodes beyond config sync |
+| **Managed Node** | An EXTERNAL resource the app controls/monitors (NOT an app instance) - e.g., Docker hosts, monitored servers |
 | **HA (High Availability)** | Automatic failover for critical apps - specialized, not standard |
+| **API Token** | Authentication credential for API access - prefixed by owner type (`adm_`, `usr_`, `org_`) |
+| **Agent Token** | Scoped API token for agents - includes owner prefix (`adm_agt_`, `usr_agt_`, `org_agt_`) |
+| **Rate Limiting** | Server protection against abuse/DDoS - NOT usage limits for monetization (we never do that) |
+| **Background Job** | Server-side scheduled or queued task (backup, sync, cleanup) - managed by internal scheduler, NOT cron |
+| **Leader Election** | Process where cluster nodes elect a Primary Node for cluster-wide tasks |
 
 ## Managed Nodes vs Cluster Nodes
 
-**CRITICAL DISTINCTION:**
+**CRITICAL DISTINCTION** (see definitions above):
 
-| Type | What It Is | Example |
-|------|------------|---------|
-| **Cluster Node** | Instance of YOUR app | 3 copies of `jokes` running, syncing config |
-| **Managed Node** | External thing your app CONTROLS | Docker hosts that Watchtower manages |
+| Type | What It Is | Examples |
+|------|------------|----------|
+| Cluster Node | Another instance of THIS app (horizontal scaling) | 3 copies of `jokes` behind a load balancer, all syncing config |
+| Managed Node | An EXTERNAL resource this app controls/monitors | Docker hosts, VMs, network devices, IoT sensors, backup targets |
 
-**Most apps only have cluster nodes. Managed nodes are app-specific.**
+**Key difference:** Cluster nodes run your code. Managed nodes are things your code talks to.
+
+**Most apps only have cluster nodes. Managed nodes are app-specific and require PART 33 agent functionality.**
 
 ## Examples
 
-| App | Cluster Nodes | Managed Nodes | HA |
-|-----|:-------------:|:-------------:|:--:|
-| Jokes API | ✓ (app instances syncing) | ✗ | ✗ |
-| Watchtower-type | ✓ (app instances syncing) | ✓ (Docker hosts) | ✗ |
-| DNS Server | ✓ (app instances syncing) | ✗ | ✓ |
-| Monitoring App | ✓ (app instances syncing) | ✓ (monitored servers) | ✗ |
+| App Type | Cluster Nodes | Managed Nodes | HA |
+|----------|---------------|---------------|:--:|
+| **Simple API** (jokes, pastebin) | ✓ Multiple instances syncing config | ✗ None | ✗ |
+| **Container Manager** (Watchtower-type) | ✓ Multiple instances syncing config | ✓ Docker hosts to update | ✗ |
+| **Monitoring/Observability** | ✓ Multiple instances syncing config | ✓ Servers/services being monitored | ✗ |
+| **DNS Server** | ✓ Multiple instances syncing zones | ✗ None | ✓ |
+| **Backup Manager** | ✓ Multiple instances syncing schedules | ✓ Remote backup targets (NAS, S3, etc.) | ✗ |
+| **IoT Hub** | ✓ Multiple instances syncing device registry | ✓ IoT devices/sensors reporting in | ✗ |
+| **CI/CD Controller** | ✓ Multiple instances syncing job queue | ✓ Build runners/agents | ✗ |
+| **Network Manager** | ✓ Multiple instances syncing config | ✓ Routers, switches, firewalls | ✗ |
+| **VM Orchestrator** | ✓ Multiple instances syncing state | ✓ Hypervisors, VM guests | ✓ |
+| **Certificate Manager** | ✓ Multiple instances syncing cert inventory | ✓ Servers needing cert deployment | ✗ |
+
+**Reading the table:**
+- **Cluster Nodes column**: What the app instances sync (config, zones, schedules, etc.)
+- **Managed Nodes column**: What external resources the app controls (if any)
+- **HA column**: Whether the app handles automatic failover for critical services
 
 ## Account Types
 
 | Term | Definition |
 |------|------------|
 | **Server Admin** | Administrative account for managing the application (NOT a privileged user) |
-| **Primary Admin** | The first Server Admin created during setup wizard (cannot be deleted) |
-| **Additional Admin** | Server Admins added by Primary Admin or other admins |
-| **OIDC/LDAP Admin** | Server Admin access via external identity provider group mapping |
-| **Regular User** | End-user account that uses the application's features |
+| **Primary Admin** | A Server Admin - specifically the first one created during setup wizard (cannot be deleted, prevents lockout) |
+| **Additional Admin** | A Server Admin - added later by Primary Admin or other admins (can be deleted) |
+| **OIDC/LDAP Admin** | A Server Admin - authenticated via external identity provider instead of local password |
+| **Regular User** | End-user account that uses the application's features (PART 34, optional) |
 
 **CRITICAL:** Server Admins and Regular Users are completely separate account types stored in different database tables. A Server Admin is NOT a "privileged user."
+
+## Setup & First-Run Terms
+
+| Term | Definition |
+|------|------------|
+| **Setup Wizard** | First-run configuration flow - server has web-based wizard (`/{admin_path}/server/setup`) to create Primary Admin; client has TUI/GUI wizard to configure server connection |
+| **Setup Token** | One-time 32-char hex token generated on server first-run, displayed in console, required to access server's web-based setup wizard |
 
 ## Other Terms
 
 | Term | Definition |
 |------|------------|
-| **CLI Client** | Required INTERACTIVE companion binary (`{projectname}-cli`) with CLI mode (commands) and TUI mode (interactive menus/panels); receives JSON from server and renders beautiful output itself; NOT treated as non-interactive |
-| **Agent** | Optional companion binary (`{projectname}-agent`) that runs on remote machines to collect data/interact with the OS and send to server; server may send commands to agent (e.g., Docker container management, nginx/apache vhost creation) |
-| **TUI** | Terminal User Interface - interactive terminal app with menus/panels (our CLI client supports TUI mode) |
+| **TUI** | Terminal User Interface - interactive terminal app with menus/panels (client supports TUI mode) |
 | **Text Browsers** | INTERACTIVE browsers (lynx, w3m, links, elinks) that receive **no-JS HTML** and render it in text mode; NO JavaScript support - forms via POST, server-rendered only |
 | **HTTP Tools** | NON-INTERACTIVE tools (curl, wget, httpie) that receive pre-formatted text via HTML2TextConverter; they just dump output |
-| **Admin Panel** | WebUI at `/admin` for server administration |
-| **FQDN** | Fully Qualified Domain Name (e.g., `api.example.com`) - use `{fqdn}` |
+| **Admin Panel** | WebUI at `/{admin_path}` for server administration (path is configurable, default: `admin`) |
+| **WebUI** | Web User Interface - browser-based interface served by the server |
+| **SCM** | Windows Service Control Manager - manages Windows services (replaces PID files on Windows) |
 | **Hostname** | Short hostname (e.g., `web01`) - equivalent to `hostname -s` |
 | **Machine** | A named system - defaults to hostname, can be custom name |
 | **Local** | The system (OS) where the binary is currently running |
 | **Remote** | Context-dependent - generally means "not local" |
 | **~~Host~~** | **DO NOT USE** - ambiguous term, use FQDN, Hostname, or Machine instead |
-| **Config Dir** | Where config files live (`{config_dir}`, default: `/etc/{projectorg}/{projectname}`) |
-| **Data Dir** | Where runtime data lives (`{data_dir}`, default: `/var/lib/{projectorg}/{projectname}`) |
-| **Log Dir** | Where log files live (`{log_dir}`, default: `/var/log/{projectorg}/{projectname}`) |
-| **Cache Dir** | Where cache files live (`{cache_dir}`, default: `/var/cache/{projectorg}/{projectname}`) |
-| **Backup Dir** | Where backups live (`{backup_dir}`, default: `/mnt/Backups/{projectorg}/{projectname}`) |
-| **PID File** | Process ID file path (`{pid_file}`, default: `/var/run/{projectorg}/{projectname}.pid`) |
 
 ---
 
 ## How to Read This Large File
 
-**AI.md is ~1.7MB and ~47,771 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1.9MB and ~48,953 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
-| File size | ~1.7MB |
-| Line count | ~47,771 lines |
+| File size | ~1.9MB |
+| Line count | ~48,953 lines |
 | Read limit | ~500 lines per read |
-| Full reads needed | ~96 reads (impractical) |
+| Full reads needed | ~98 reads (impractical) |
 
 **Use the PART index to find relevant sections, then read each section COMPLETELY.**
 
@@ -875,45 +1081,45 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 | PART | Line | Topic | When to Read |
 |------|------|-------|--------------|
-| 0 | ~1010 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
-| 1 | ~2568 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | ~3423 | License & Attribution | License requirements |
-| 3 | ~3757 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | ~4559 | OS-Specific Paths | Path handling |
-| 5 | ~4744 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
-| 6 | ~6572 | Application Modes | Mode handling, debug endpoints |
-| 7 | ~7180 | Binary Requirements | Binary building, **Display detection** |
-| 8 | ~7654 | Server Binary CLI | CLI flags/commands |
-| 9 | ~10629 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~11006 | Database & Cluster | Database work |
-| 11 | ~11421 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
-| 12 | ~13304 | Server Configuration | Server settings |
-| 13 | ~14368 | Health & Versioning | Health endpoints |
-| 14 | ~14872 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~16464 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~17283 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~21604 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
-| 18 | ~23644 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | ~24959 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | ~25444 | GeoIP | GeoIP features |
-| 21 | ~25517 | Metrics | Metrics/monitoring |
-| 22 | ~26538 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | ~27267 | Update Command | Update feature |
-| 24 | ~27323 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~28221 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~28405 | Makefile | Build system, **make local** |
-| 27 | ~29131 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~30491 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~33005 | Testing & Development | Testing/dev workflow, **100% Coverage** |
-| 30 | ~34656 | ReadTheDocs Documentation | Documentation |
-| 31 | ~35369 | I18N & A11Y | Internationalization |
-| 32 | ~35790 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~36600 | CLI Client & Agent | CLI **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~40706 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~44277 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~44918 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~45941 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~46195 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+| 0 | ~1216 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
+| 1 | ~2775 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | ~3630 | License & Attribution | License requirements |
+| 3 | ~3964 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | ~4799 | OS-Specific Paths | Path handling |
+| 5 | ~4984 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
+| 6 | ~6897 | Application Modes | Mode handling, debug endpoints |
+| 7 | ~7505 | Binary Requirements | Binary building, **Display detection** |
+| 8 | ~8088 | Server Binary CLI | CLI flags/commands |
+| 9 | ~11063 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~11440 | Database & Cluster | Database work |
+| 11 | ~11855 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | ~13738 | Server Configuration | Server settings |
+| 13 | ~14802 | Health & Versioning | Health endpoints |
+| 14 | ~15306 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~16898 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~17751 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~22072 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | ~24112 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | ~25427 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | ~25912 | GeoIP | GeoIP features |
+| 21 | ~25985 | Metrics | Metrics/monitoring |
+| 22 | ~27006 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | ~27735 | Update Command | Update feature |
+| 24 | ~28214 | Privilege Escalation & Service | Service/privilege work |
+| 25 | ~29112 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~29296 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 27 | ~30022 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~31383 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~33897 | Testing & Development | Testing/dev workflow, **100% Coverage** |
+| 30 | ~35549 | ReadTheDocs Documentation | Documentation |
+| 31 | ~36262 | I18N & A11Y | Internationalization |
+| 32 | ~36683 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~37498 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~41892 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~45463 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~46104 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~47127 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~47381 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -1357,7 +1563,7 @@ See IDEA.md for the full project breakdown.
 ## After Work
 
 1. **Update IDEA.md** if features changed
-2. **Update AI.md** ONLY if changing OPTIONAL→REQUIRED (PARTS 33-35)
+2. **Update AI.md** ONLY if changing OPTIONAL→REQUIRED (PARTS 34-36)
 3. **Update TODO.AI.md** with any new tasks discovered
 4. **Verify compliance** - check against the FINAL CHECKPOINT
 5. **Update COMMIT_MESS** - only if files were changed (skip if no changes)
@@ -2226,6 +2432,7 @@ Enter choice [a-d]:
 - Include "Other" option when appropriate
 - Show valid range: `[1-4]` or `[a-d]`
 - Put recommended option first with "(recommended)" suffix
+- **Multiple questions: Present as wizard (one question at a time)** - don't overwhelm user with all questions at once during planning
 
 ## Migration Success Criteria
 
@@ -2329,7 +2536,7 @@ ls -la docker/
 | 37 | Project-Specific Sections | ✅ Customize for project |
 | FINAL | Compliance Checklist | ✅ Verify all items |
 
-### PART 33: CLI Client & Agent (REQUIRED)
+### PART 33: Client & Agent (REQUIRED)
 
 **CLI is REQUIRED for all projects. Agent is OPTIONAL (only for monitoring/remote management projects).**
 
@@ -2370,7 +2577,7 @@ ls -la docker/
 | Linktree clone | Weather API | Users want branded URLs |
 | Blog platform | Jokes API | Content published under user's domain |
 
-**PART 33: CLI Client**
+**PART 33: Client**
 
 | Include | Skip | Reason |
 |---------|------|--------|
@@ -2393,7 +2600,7 @@ ls -la docker/
 │            │                                                     │
 │            ▼                                                     │
 │   ┌──────────────────┐                                          │
-│   │ 2. Determine     │ ◄─── Decide CLI client, Custom domains   │
+│   │ 2. Determine     │ ◄─── Decide client, Custom domains   │
 │   │    optional      │                                          │
 │   └────────┬─────────┘                                          │
 │            │                                                     │
@@ -2546,7 +2753,7 @@ If blocked on current feature:
 
 ### Optional (if included)
 ```
-□ CLI client follows SPEC (if PART 33 included)
+□ client follows SPEC (if PART 33 included)
 □ Custom domains follows SPEC (if PART 36 included)
 ```
 
@@ -2575,7 +2782,7 @@ Every feature MUST work via:
 1. **Web browser** - HTML pages, forms, interactive UI
 2. **PWA (Progressive Web App)** - Installable, offline-capable, native-like experience
 3. **API clients** - JSON for curl, wget, automation, scripts
-4. **CLI clients** - Dedicated command-line tools (if PART 33 implemented)
+4. **clients** - Dedicated command-line tools (if PART 33 implemented)
 
 | Client Type | Examples | Response Format |
 |-------------|----------|-----------------|
@@ -3041,7 +3248,7 @@ func gUBE(e string) (*U, error) {
 
 | Rule | Description |
 |------|-------------|
-| **AI.md is SOURCE OF TRUTH** | Only modify for OPTIONAL→REQUIRED (PARTS 33-35) |
+| **AI.md is SOURCE OF TRUTH** | Only modify for OPTIONAL→REQUIRED (PARTS 34-36) |
 | **IDEA.md is the project PLAN** | Update when features change, must follow AI.md |
 | **Keep documentation current** | Update when project state changes |
 | **TODO.AI.md for 3+ tasks** | Required when doing 3 or more tasks |
@@ -3064,7 +3271,7 @@ IDEA.md (project spec - update as needed)
 3. **Official Site** - Link to official site (if defined, e.g., `https://{projectname}.{projectorg}.us`)
 4. **Features** - Key features list
 5. **Production** - Production deployment instructions (Docker, binary, systemd)
-6. **CLI Client** - Client CLI installation and usage (if applicable)
+6. **Client** - Client installation and usage (if applicable)
 7. **Configuration** - Key configuration options
 8. **API** - API endpoints summary (if applicable)
 9. **Other** - Additional info (troubleshooting, FAQ, etc.)
@@ -3181,9 +3388,9 @@ chmod +x {projectname}-linux-amd64
 ./{projectname}-linux-amd64
 ```
 
-## CLI Client
+## Client
 
-A companion CLI client is available for interacting with the server API.
+A companion client is available for interacting with the server API.
 
 ### Install
 
@@ -3897,15 +4104,48 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 │       ├── daily.yml       # Daily builds
 │       └── docker.yml      # Docker images
 ├── .claude/                # Claude Code configuration
-│   ├── rules/              # Auto-loaded rule files (REQUIRED)
-│   │   ├── ai-rules.md         # AI behavior rules
-│   │   ├── directory-structure.md  # Project structure rules
-│   │   ├── build-rules.md      # Build/make rules
-│   │   └── testing-rules.md    # Testing rules
-│   └── CLAUDE.md           # Project memory (optional)
+│   ├── rules/              # Auto-loaded cheatsheet files (REQUIRED)
+│   │   ├── ai-rules.md         # PART 0, 1: AI behavior, critical rules
+│   │   ├── project-rules.md    # PART 2, 3, 4: License, structure, paths
+│   │   ├── config-rules.md     # PART 5, 6, 12: Config, modes, server settings
+│   │   ├── binary-rules.md     # PART 7, 8, 33: Binary, CLI, client/agent
+│   │   ├── backend-rules.md    # PART 9, 10, 11: Errors, database, security
+│   │   ├── api-rules.md        # PART 13, 14, 15: Health, API, SSL/TLS
+│   │   ├── frontend-rules.md   # PART 16, 17: WebUI, admin panel
+│   │   ├── features-rules.md   # PART 18-23: Email, scheduler, GeoIP, metrics, backup, update
+│   │   ├── service-rules.md    # PART 24, 25: Privilege, service management
+│   │   ├── makefile-rules.md   # PART 26: Makefile (local dev only)
+│   │   ├── docker-rules.md     # PART 27: Docker/containers
+│   │   ├── cicd-rules.md       # PART 28: CI/CD workflows
+│   │   ├── testing-rules.md    # PART 29, 30, 31: Testing, docs, i18n
+│   │   └── optional-rules.md   # PART 32, 34-36: Tor, multi-user, orgs, domains
+│   └── CLAUDE.md           # Project memory - critical rules (REQUIRED)
 ├── .cursor/                # Cursor AI configuration (optional)
+│   ├── rules/              # Same groupings as .claude/rules/ but .mdc extension
+│   │   ├── ai-rules.mdc
+│   │   ├── project-rules.mdc
+│   │   ├── config-rules.mdc
+│   │   ├── binary-rules.mdc
+│   │   ├── backend-rules.mdc
+│   │   ├── api-rules.mdc
+│   │   ├── frontend-rules.mdc
+│   │   ├── features-rules.mdc
+│   │   ├── service-rules.mdc
+│   │   ├── makefile-rules.mdc
+│   │   ├── docker-rules.mdc
+│   │   ├── cicd-rules.mdc
+│   │   ├── testing-rules.mdc
+│   │   └── optional-rules.mdc
+│   └── CURSOR.md           # Project memory - critical rules (REQUIRED)
 ├── .aider/                 # Aider AI configuration (optional)
+│   ├── CONVENTIONS.md      # Single file with all rule sections
+│   └── AIDER.md            # Project memory - critical rules (REQUIRED)
+├── .windsurf/              # Windsurf AI configuration (optional)
+│   ├── rules/              # Same as .cursor/rules/ (.mdc files)
+│   └── WINDSURF.md         # Project memory - critical rules (REQUIRED)
 ├── .ai/                    # Generic AI configuration (optional)
+│   ├── rules/              # Same as .claude/rules/ (.md files)
+│   └── AI.md               # Project memory - critical rules (REQUIRED)
 ├── docs/                   # ReadTheDocs documentation ONLY (MkDocs)
 │   ├── index.md            # Documentation homepage
 │   ├── installation.md     # Installation guide
@@ -5919,18 +6159,21 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 
 **The binary MUST:**
 
-1. **Detect privilege level:**
-   ```go
-   if os.Geteuid() == 0 {
-       // Running as root - can bind any port, will drop privileges
-   } else {
-       // Running as user - ports >1024 only, user paths
-   }
-   ```
+1. **Platform-independent privilege detection (REQUIRED):**
 
-2. **Check if user can escalate (before asking):**
    ```go
-   // Unix-like: check if user can sudo
+   // --- privilege_unix.go ---
+   //go:build !windows
+   // +build !windows
+
+   import "os"
+
+   // isElevated returns true if running as root (Unix)
+   func isElevated() bool {
+       return os.Geteuid() == 0
+   }
+
+   // canEscalate checks if user can escalate privileges (Unix)
    func canEscalate() bool {
        // Check sudo -n (non-interactive) to see if user has sudo access
        cmd := exec.Command("sudo", "-n", "true")
@@ -5939,68 +6182,19 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
        }
 
        // Check if user is in sudo/wheel/admin group
-       user, _ := user.Current()
-       groups, _ := user.GroupIds()
+       u, _ := user.Current()
+       groups, _ := u.GroupIds()
        for _, gid := range groups {
            group, _ := user.LookupGroupId(gid)
-           if group.Name == "sudo" || group.Name == "wheel" || group.Name == "admin" {
+           if group != nil && (group.Name == "sudo" || group.Name == "wheel" || group.Name == "admin") {
                return true // Can sudo with password
            }
        }
        return false
    }
 
-   // Windows: check if user is admin or can elevate
-   func canEscalateWindows() bool {
-       // Check if running as admin
-       if isAdmin() {
-           return true
-       }
-       // Check if user is in Administrators group (can elevate via UAC)
-       return isInAdminGroup()
-   }
-   ```
-
-3. **Smart escalation flow:**
-   ```go
-   func handleEscalation(action string) error {
-       if os.Geteuid() == 0 || isAdmin() {
-           return nil // Already elevated
-       }
-
-       if !canEscalate() {
-           // User CANNOT escalate - don't ask, just inform
-           return fmt.Errorf("%s requires administrator privileges\n\n"+
-               "You do not have sudo/admin access. Contact your system administrator.", action)
-       }
-
-       // User CAN escalate - ask and re-exec with sudo
-       fmt.Printf("%s requires elevated privileges.\n", action)
-       fmt.Print("Escalate with sudo? [Y/n]: ")
-
-       var response string
-       fmt.Scanln(&response)
-       if response == "" || strings.ToLower(response) == "y" {
-           // Re-execute with sudo
-           return execWithSudo(os.Args)
-       }
-       return fmt.Errorf("escalation declined")
-   }
-   ```
-
-4. **Auto-escalate for service operations:**
-   ```go
-   // --service install/uninstall/start/stop require escalation
-   if serviceCmd != "" && os.Geteuid() != 0 {
-       if err := handleEscalation("Service management"); err != nil {
-           return err
-       }
-   }
-   ```
-
-5. **Re-execute with sudo (Unix-like):**
-   ```go
-   func execWithSudo(args []string) error {
+   // execElevated re-executes with elevated privileges (Unix)
+   func execElevated(args []string) error {
        sudoArgs := append([]string{"sudo"}, args...)
        cmd := exec.Command(sudoArgs[0], sudoArgs[1:]...)
        cmd.Stdin = os.Stdin
@@ -6010,28 +6204,150 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
    }
    ```
 
-6. **Windows UAC elevation:**
    ```go
-   // Windows: use ShellExecute with "runas" verb for UAC prompt
-   func execWithUAC(args []string) error {
+   // --- privilege_windows.go ---
+   //go:build windows
+   // +build windows
+
+   import (
+       "golang.org/x/sys/windows"
+       "unsafe"
+   )
+
+   // isElevated returns true if running as Administrator (Windows)
+   func isElevated() bool {
+       var sid *windows.SID
+       err := windows.AllocateAndInitializeSid(
+           &windows.SECURITY_NT_AUTHORITY,
+           2,
+           windows.SECURITY_BUILTIN_DOMAIN_RID,
+           windows.DOMAIN_ALIAS_RID_ADMINS,
+           0, 0, 0, 0, 0, 0,
+           &sid)
+       if err != nil {
+           return false
+       }
+       defer windows.FreeSid(sid)
+
+       token := windows.Token(0)
+       member, err := token.IsMember(sid)
+       return err == nil && member
+   }
+
+   // canEscalate checks if user can escalate via UAC (Windows)
+   func canEscalate() bool {
+       // If already elevated, no need to escalate
+       if isElevated() {
+           return true
+       }
+       // On Windows, any interactive user can potentially elevate via UAC
+       // (unless UAC is disabled or policy prevents it)
+       // Check if user is in Administrators group (can elevate)
+       return isInAdminGroup()
+   }
+
+   // isInAdminGroup checks if user is member of Administrators group
+   func isInAdminGroup() bool {
+       var sid *windows.SID
+       err := windows.AllocateAndInitializeSid(
+           &windows.SECURITY_NT_AUTHORITY,
+           2,
+           windows.SECURITY_BUILTIN_DOMAIN_RID,
+           windows.DOMAIN_ALIAS_RID_ADMINS,
+           0, 0, 0, 0, 0, 0,
+           &sid)
+       if err != nil {
+           return false
+       }
+       defer windows.FreeSid(sid)
+
+       token := windows.Token(0)
+       groups, err := token.GetTokenGroups()
+       if err != nil {
+           return false
+       }
+
+       for _, g := range groups.AllGroups() {
+           if windows.EqualSid(g.Sid, sid) {
+               return true
+           }
+       }
+       return false
+   }
+
+   // execElevated re-executes with elevated privileges via UAC (Windows)
+   func execElevated(args []string) error {
        verb := "runas"
        exe, _ := os.Executable()
        cwd, _ := os.Getwd()
        argStr := strings.Join(args[1:], " ")
-
-       return windows.ShellExecute(0, verb, exe, argStr, cwd, windows.SW_NORMAL)
+       return windows.ShellExecute(0, windows.StringToUTF16Ptr(verb),
+           windows.StringToUTF16Ptr(exe), windows.StringToUTF16Ptr(argStr),
+           windows.StringToUTF16Ptr(cwd), windows.SW_NORMAL)
    }
    ```
 
-7. **Bind privileged ports before dropping privileges:**
+2. **Detect privilege level (using platform-independent function):**
    ```go
-   if os.Geteuid() == 0 && port < 1024 {
+   if isElevated() {
+       // Running as root/admin - can bind any port, will drop privileges (Unix)
+   } else {
+       // Running as user - ports >1024 only, user paths
+   }
+   ```
+
+3. **Smart escalation flow:**
+   ```go
+   func handleEscalation(action string) error {
+       if isElevated() {
+           return nil // Already elevated
+       }
+
+       if !canEscalate() {
+           // User CANNOT escalate - don't ask, just inform
+           return fmt.Errorf("%s requires administrator privileges\n\n"+
+               "You do not have sudo/admin access. Contact your system administrator.", action)
+       }
+
+       // User CAN escalate - ask and re-exec with elevated privileges
+       fmt.Printf("%s requires elevated privileges.\n", action)
+       fmt.Print("Escalate? [Y/n]: ")
+
+       var response string
+       fmt.Scanln(&response)
+       if response == "" || strings.ToLower(response) == "y" {
+           // Re-execute with elevated privileges
+           return execElevated(os.Args)
+       }
+       return fmt.Errorf("escalation declined")
+   }
+   ```
+
+4. **Auto-escalate for service operations:**
+   ```go
+   // --service install/uninstall/start/stop require escalation
+   if serviceCmd != "" && !isElevated() {
+       if err := handleEscalation("Service management"); err != nil {
+           return err
+       }
+   }
+   ```
+
+5. **Bind privileged ports before dropping privileges (Unix only):**
+   ```go
+   //go:build !windows
+   // +build !windows
+
+   // Unix: bind privileged port while still root, then drop privileges
+   if isElevated() && port < 1024 {
        listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
        // Store listener, drop privileges later
    }
    ```
 
-8. **Error message when user cannot escalate:**
+   **Note:** Windows doesn't drop privileges (uses Virtual Service Account instead), so this pattern only applies to Unix-like systems.
+
+6. **Error message when user cannot escalate:**
    ```
    Error: Service installation requires administrator privileges.
 
@@ -6039,7 +6355,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
    Contact your system administrator to install the service.
    ```
 
-9. **Error message for port when not escalating:**
+7. **Error message for port when not escalating:**
    ```
    Error: Cannot bind to port 80
 
@@ -6068,7 +6384,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 | `--service restart` | ⚠️ Check | Which service type is installed? | User service |
 | `--service reload` | ⚠️ Check | Which service type is installed? | User service |
 | `--service status` | ❌ No | N/A - read-only | N/A |
-| `--port <1024` | ⚠️ Check | `os.Geteuid() == 0`? | Random >1024 |
+| `--port <1024` | ⚠️ Check | `isElevated()`? | Random >1024 |
 | `--maintenance backup` | ❌ No | Can write to backup dir? (already owned) | N/A |
 | `--maintenance restore` | 🔐 Auth | Requires admin auth OR root OR first-run | N/A |
 | `--maintenance update` | ⚠️ Check | Can write to binary path? | None (error) |
@@ -6153,12 +6469,17 @@ Binary checks:
 ```go
 // Service operations: check which type is installed
 func needsEscalationForService() bool {
-    // Check if system service exists
+    // Check if system service exists (Unix paths, Windows uses registry)
+    if runtime.GOOS == "windows" {
+        // Windows: check if service is registered
+        return !isElevated() && isWindowsServiceInstalled()
+    }
+    // Unix: check for system service files
     if fileExists("/etc/systemd/system/{projectname}.service") ||
        fileExists("/Library/LaunchDaemons/{projectorg}.{projectname}.plist") ||
        fileExists("/usr/local/etc/rc.d/{projectname}") {
-        // System service installed - need root to manage
-        return os.Geteuid() != 0
+        // System service installed - need elevated privileges to manage
+        return !isElevated()
     }
     // User service or no service - no escalation needed
     return false
@@ -6169,7 +6490,11 @@ func needsEscalationForPort(port int) bool {
     if port >= 1024 {
         return false // Unprivileged port
     }
-    return os.Geteuid() != 0 // Need root for <1024
+    // Windows: no concept of privileged ports (any user can bind any port)
+    if runtime.GOOS == "windows" {
+        return false
+    }
+    return !isElevated() // Unix: need root for <1024
 }
 
 // Update: check if binary is writable
@@ -6195,9 +6520,9 @@ func canSetup(token string) (bool, string) {
     if isDatabaseEmpty() {
         return true, "first-run"
     }
-    // Root: allowed with confirmation
-    if os.Geteuid() == 0 {
-        return true, "root"
+    // Elevated (root/admin): allowed with confirmation
+    if isElevated() {
+        return true, "elevated"
     }
     // Valid setup token: allowed (one-time)
     if token != "" && validateSetupToken(token) {
@@ -6213,9 +6538,9 @@ func canRestore() (bool, string) {
     if isDatabaseEmpty() {
         return true, "empty"
     }
-    // Root: allowed
-    if os.Geteuid() == 0 {
-        return true, "root"
+    // Elevated (root/admin): allowed
+    if isElevated() {
+        return true, "elevated"
     }
     // Service user: requires admin credentials (prompted)
     if isServiceUser() {
@@ -6227,8 +6552,8 @@ func canRestore() (bool, string) {
 
 // Mode change: check authorization
 func canChangeMode() (bool, string) {
-    if os.Geteuid() == 0 {
-        return true, "root"
+    if isElevated() {
+        return true, "elevated"
     }
     if isServiceUser() {
         return false, "need-creds" // Caller must prompt for creds
@@ -7440,6 +7765,115 @@ func (e DisplayEnv) IsAutoDetectDisplayModeCLI() bool      { return e.Mode == Di
 func (e DisplayEnv) IsAutoDetectDisplayModeHeadless() bool { return e.Mode == DisplayModeHeadless }
 ```
 
+### Platform-Specific Display Detection
+
+```go
+// --- detect_unix.go ---
+//go:build !windows
+// +build !windows
+
+package display
+
+import (
+    "os"
+    "os/exec"
+    "runtime"
+    "strings"
+)
+
+// detectPlatformDisplay - Unix/macOS display detection
+func (e *DisplayEnv) detectPlatformDisplay() {
+    // Check for Wayland first (preferred on Linux)
+    if waylandDisplay := os.Getenv("WAYLAND_DISPLAY"); waylandDisplay != "" {
+        e.HasDisplay = true
+        e.DisplayType = "wayland"
+        return
+    }
+
+    // Check for X11
+    if display := os.Getenv("DISPLAY"); display != "" {
+        e.HasDisplay = true
+        e.DisplayType = "x11"
+        return
+    }
+
+    // macOS: check if we have access to WindowServer
+    if runtime.GOOS == "darwin" {
+        // On macOS, display is always available unless:
+        // - Running over SSH
+        // - Running as a LaunchDaemon (no GUI session)
+        if !e.IsSSH && os.Getenv("__CFBundleIdentifier") != "" {
+            e.HasDisplay = true
+            e.DisplayType = "macos"
+            return
+        }
+        // Check if WindowServer is accessible
+        cmd := exec.Command("launchctl", "managername")
+        if output, err := cmd.Output(); err == nil {
+            if strings.Contains(string(output), "Aqua") {
+                e.HasDisplay = true
+                e.DisplayType = "macos"
+                return
+            }
+        }
+    }
+
+    e.HasDisplay = false
+    e.DisplayType = "none"
+}
+```
+
+```go
+// --- detect_windows.go ---
+//go:build windows
+// +build windows
+
+package display
+
+import (
+    "os"
+    "golang.org/x/sys/windows"
+)
+
+// detectPlatformDisplay - Windows display detection
+func (e *DisplayEnv) detectPlatformDisplay() {
+    // Windows always has a display unless running as a service
+    // Check if we're running as a Windows service (no interactive desktop)
+
+    // Method 1: Check if we have a console window
+    kernel32 := windows.NewLazySystemDLL("kernel32.dll")
+    getConsoleWindow := kernel32.NewProc("GetConsoleWindow")
+    hwnd, _, _ := getConsoleWindow.Call()
+
+    // Method 2: Check if we're in session 0 (service session)
+    var sessionID uint32
+    windows.ProcessIdToSessionId(windows.GetCurrentProcessId(), &sessionID)
+
+    if sessionID == 0 {
+        // Running as a service (session 0) - no interactive desktop
+        e.HasDisplay = false
+        e.DisplayType = "none"
+        return
+    }
+
+    // Check for remote desktop session
+    if os.Getenv("SESSIONNAME") == "RDP-Tcp#0" || os.Getenv("SESSIONNAME") != "" {
+        // Remote desktop - has display but may want different behavior
+        e.HasDisplay = true
+        e.DisplayType = "windows-rdp"
+        return
+    }
+
+    // Normal Windows session with display
+    e.HasDisplay = hwnd != 0
+    if e.HasDisplay {
+        e.DisplayType = "windows"
+    } else {
+        e.DisplayType = "none"
+    }
+}
+```
+
 ### Binary-Specific Behavior
 
 | Binary | GUI | TUI | CLI | Headless |
@@ -7653,7 +8087,7 @@ func PrintStartupBanner(cfg BannerConfig) {
 
 # PART 8: SERVER BINARY CLI 
 
-**These are the command-line flags for the SERVER binary (`{projectname}`), NOT the CLI client (`{projectname}-cli`).**
+**These are the command-line flags for the SERVER binary (`{projectname}`), NOT the client (`{projectname}-cli`).**
 
 ## Binary Types
 
@@ -7661,7 +8095,7 @@ func PrintStartupBanner(cfg BannerConfig) {
 |--------|--------------|---------|-----------|
 | **Server** | `{projectname}` | Runs the HTTP server | `--config`, `--data`, `--port`, `--mode` |
 | **Agent** | `{projectname}-agent` | Reports to server | `--server`, `--token`, `--config` |
-| **CLI Client** | `{projectname}-cli` | User interface to server | `--server`, `--token`, `--output` |
+| **Client** | `{projectname}-cli` | User interface to server | `--server`, `--token`, `--output` |
 
 **Shared flags (ALL binaries):** `--help`, `--version`, `--shell`, `--debug`
 
@@ -7702,7 +8136,7 @@ User-Agent: jokes/1.0.0             # Hardcoded project name
 Default config: /etc/apimgr/jokes/  # Hardcoded project name
 ```
 
-**For CLI client and agent flags, see PART 33.**
+**For client and agent flags, see PART 33.**
 
 **THESE SERVER COMMANDS CANNOT BE CHANGED. This is the complete command set.**
 
@@ -15306,7 +15740,7 @@ tail -c 2 file.txt | od -An -tx1
 
 **Frontend routes (`/**`) have BUILT-IN smart detection:**
 - Browser request → HTML + JavaScript (full interactive page)
-- Our CLI client → JSON (renders own TUI/GUI)
+- Our client → JSON (renders own TUI/GUI)
 - Text browsers (lynx, w3m) → HTML without JavaScript (`renderNoJSHTML()`)
 - HTTP tools (curl, wget) → Formatted text (`HTML2TextConverter()`)
 - Accept: text/plain → Formatted text
@@ -15498,12 +15932,12 @@ When an HTTP tool (curl, wget, httpie) is detected, the server MUST:
 
 | Type | Examples | Detection | Response | Interactive | JS Support |
 |------|----------|-----------|----------|-------------|------------|
-| **Our CLI Client** | `{projectname}-cli` | `{projectname}-cli/` in User-Agent | JSON (client handles formatting) | **YES** (TUI/GUI) | N/A |
+| **Our Client** | `{projectname}-cli` | `{projectname}-cli/` in User-Agent | JSON (client handles formatting) | **YES** (TUI/GUI) | N/A |
 | **Text Browsers** | lynx, w3m, links, elinks | User-Agent patterns | HTML **without JavaScript** (no-JS alternative) | **YES** (navigate, click) | **NO** |
 | **HTTP Tools** | curl, wget, httpie | User-Agent patterns | Formatted text (HTML2TextConverter) | **NO** (just dump output) | N/A |
 
 **Interactive clients handle their own rendering:**
-- **Our CLI Client** - receives JSON, renders beautiful TUI/GUI itself
+- **Our Client** - receives JSON, renders beautiful TUI/GUI itself
 - **Text Browsers** - receive **no-JS HTML alternative** (server-rendered, forms work via POST, no AJAX)
 
 **Non-interactive tools get pre-formatted text:**
@@ -15524,8 +15958,8 @@ When an HTTP tool (curl, wget, httpie) is detected, the server MUST:
 ```go
 // src/common/httputil/detect.go
 
-// isOurCliClient detects our own CLI client
-// Our CLI is INTERACTIVE (TUI/GUI) - receives JSON, renders itself
+// isOurCliClient detects our own client binary ({projectname}-cli)
+// Client is INTERACTIVE (TUI/GUI) - receives JSON, renders itself
 func isOurCliClient(r *http.Request) bool {
     ua := r.Header.Get("User-Agent")
     return strings.HasPrefix(ua, projectName+"-cli/")
@@ -15583,9 +16017,9 @@ func isHttpTool(r *http.Request) bool {
 
 // isNonInteractiveClient detects clients that need pre-formatted text
 // ONLY HTTP tools are non-interactive
-// Our CLI client and text browsers are INTERACTIVE (handle their own rendering)
+// Our client and text browsers are INTERACTIVE (handle their own rendering)
 func isNonInteractiveClient(r *http.Request) bool {
-    // Our CLI client is INTERACTIVE - receives JSON
+    // Our client is INTERACTIVE - receives JSON
     if isOurCliClient(r) {
         return false
     }
@@ -15609,12 +16043,12 @@ func isNonInteractiveClient(r *http.Request) bool {
 | Client Type | Frontend Route (`/**`) | API Route (`/api/**`) | Why |
 |-------------|------------------------|----------------------|-----|
 | Browser (Chrome, Firefox) | HTML + JS | JSON | Full browser with JavaScript |
-| **Our CLI Client** | JSON | JSON | Renders own TUI/GUI |
+| **Our Client** | JSON | JSON | Renders own TUI/GUI |
 | **Text Browsers** (lynx, w3m) | HTML (no-JS) | Plain text | INTERACTIVE but NO JavaScript |
 | **HTTP Tools** (curl, wget) | Formatted text | Plain text | NON-INTERACTIVE, just dump output |
 
 **Interactive Clients (render their own output):**
-- **Our CLI Client** - receives JSON, renders beautiful TUI/GUI with colors, tables, progress bars
+- **Our Client** - receives JSON, renders beautiful TUI/GUI with colors, tables, progress bars
 - **Text Browsers** - receive no-JS HTML (`renderNoJSHTML()`), render in text mode, forms via POST
 
 **Non-Interactive Clients (need pre-formatted output):**
@@ -15763,7 +16197,7 @@ ID: joke_123
 func handleFrontendRequest(w http.ResponseWriter, r *http.Request) {
     data := getData(r)
 
-    // 1. Our CLI client - INTERACTIVE, receives JSON, renders own TUI/GUI
+    // 1. Our client - INTERACTIVE, receives JSON, renders own TUI/GUI
     if isOurCliClient(r) {
         w.Header().Set("Content-Type", "application/json; charset=utf-8")
         json.NewEncoder(w).Encode(data)
@@ -15810,13 +16244,13 @@ func renderNoJSHTML(w http.ResponseWriter, data interface{}) {
 | Client Type | Detection | Response | Interactive | JS Support |
 |-------------|-----------|----------|-------------|------------|
 | Browser (Chrome, Firefox) | User-Agent | HTML + JS | **Yes** | **Yes** |
-| **Our CLI Client** (`{projectname}-cli`) | `isOurCliClient()` | JSON | **Yes** (TUI/GUI) | N/A |
+| **Our Client** (`{projectname}-cli`) | `isOurCliClient()` | JSON | **Yes** (TUI/GUI) | N/A |
 | **Text Browsers** (lynx, w3m, links) | `isTextBrowser()` | HTML (no-JS) | **Yes** (navigate, click) | **No** |
 | **HTTP Tools** (curl, wget, httpie) | `isHttpTool()` | Formatted text | **No** (just dump) | N/A |
 | Accept: text/plain | Header | Formatted text | No | N/A |
 
 **Key Points:**
-1. **Our CLI client is INTERACTIVE** - receives JSON, renders its own beautiful TUI/GUI
+1. **Our client is INTERACTIVE** - receives JSON, renders its own beautiful TUI/GUI
 2. **Text browsers are INTERACTIVE but NO JavaScript** - receive `renderNoJSHTML()` output (server-rendered, forms via POST)
 3. **HTTP tools are NON-INTERACTIVE** - receive `HTML2TextConverter()` output (just dump to terminal)
 4. **Four detection functions:** `isOurCliClient()`, `isTextBrowser()`, `isHttpTool()`, `isNonInteractiveClient()`
@@ -16924,8 +17358,13 @@ func init() {
 ```
 
 **Resize Handling (for long-running servers):**
+
 ```go
-// Handle SIGWINCH for terminal resize
+// --- resize_unix.go ---
+//go:build !windows
+// +build !windows
+
+// Handle SIGWINCH for terminal resize (Unix only)
 func watchTerminalSize(ctx context.Context) {
     sigCh := make(chan os.Signal, 1)
     signal.Notify(sigCh, syscall.SIGWINCH)
@@ -16938,6 +17377,35 @@ func watchTerminalSize(ctx context.Context) {
             width, height, _ := term.GetSize(int(os.Stdout.Fd()))
             runtime.TerminalWidth = width
             runtime.TerminalHeight = height
+        }
+    }
+}
+```
+
+```go
+// --- resize_windows.go ---
+//go:build windows
+// +build windows
+
+// Handle terminal resize (Windows - polling based)
+// Windows doesn't have SIGWINCH, so poll periodically
+func watchTerminalSize(ctx context.Context) {
+    ticker := time.NewTicker(500 * time.Millisecond)
+    defer ticker.Stop()
+
+    var lastWidth, lastHeight int
+
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            width, height, _ := term.GetSize(int(os.Stdout.Fd()))
+            if width != lastWidth || height != lastHeight {
+                lastWidth, lastHeight = width, height
+                runtime.TerminalWidth = width
+                runtime.TerminalHeight = height
+            }
         }
     }
 }
@@ -27316,6 +27784,429 @@ Your existing password and settings will be preserved.
 {projectname} --update branch stable
 ```
 
+## Self-Update Implementation
+
+**Self-update is platform-specific because Windows cannot replace a running executable.**
+
+### Update Flow
+
+```
+1. Check for updates (GitHub Releases API)
+2. Download new binary to temp location
+3. Verify checksum (SHA256)
+4. Replace running binary (PLATFORM-SPECIFIC)
+5. Restart service or re-exec
+```
+
+### Platform-Specific Binary Replacement
+
+```go
+// --- update_unix.go ---
+//go:build !windows
+// +build !windows
+
+package updater
+
+import (
+    "fmt"
+    "os"
+    "path/filepath"
+    "syscall"
+)
+
+// replaceBinary replaces the running binary (Unix)
+// On Unix, we can replace a running binary - the old binary stays in memory
+// until the process exits, then the new one takes over on next start
+func replaceBinary(currentPath, newBinaryPath string) error {
+    // Get current binary permissions
+    info, err := os.Stat(currentPath)
+    if err != nil {
+        return fmt.Errorf("failed to stat current binary: %w", err)
+    }
+
+    // Atomic rename: new binary replaces current
+    // This works because Unix allows renaming over a running executable
+    if err := os.Rename(newBinaryPath, currentPath); err != nil {
+        return fmt.Errorf("failed to replace binary: %w", err)
+    }
+
+    // Restore permissions
+    if err := os.Chmod(currentPath, info.Mode()); err != nil {
+        return fmt.Errorf("failed to restore permissions: %w", err)
+    }
+
+    return nil
+}
+
+// restartSelf re-executes the current process (Unix)
+func restartSelf() error {
+    exe, err := os.Executable()
+    if err != nil {
+        return err
+    }
+
+    // syscall.Exec replaces the current process
+    return syscall.Exec(exe, os.Args, os.Environ())
+}
+```
+
+```go
+// --- update_windows.go ---
+//go:build windows
+// +build windows
+
+package updater
+
+import (
+    "fmt"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "time"
+
+    "golang.org/x/sys/windows"
+)
+
+// replaceBinary replaces the running binary (Windows)
+// Windows cannot delete/rename a running executable, so we:
+// 1. Rename current binary to .old
+// 2. Move new binary to current path
+// 3. Schedule .old for deletion on reboot (or delete after restart)
+func replaceBinary(currentPath, newBinaryPath string) error {
+    oldPath := currentPath + ".old"
+
+    // Remove any existing .old file from previous update
+    os.Remove(oldPath)
+
+    // Rename running binary to .old (this works on Windows)
+    if err := os.Rename(currentPath, oldPath); err != nil {
+        return fmt.Errorf("failed to rename current binary: %w", err)
+    }
+
+    // Move new binary to current path
+    if err := os.Rename(newBinaryPath, currentPath); err != nil {
+        // Try to restore original
+        os.Rename(oldPath, currentPath)
+        return fmt.Errorf("failed to move new binary: %w", err)
+    }
+
+    // Schedule old binary for deletion on reboot
+    // MoveFileEx with MOVEFILE_DELAY_UNTIL_REBOOT
+    oldPathPtr, _ := windows.UTF16PtrFromString(oldPath)
+    windows.MoveFileEx(oldPathPtr, nil, windows.MOVEFILE_DELAY_UNTIL_REBOOT)
+
+    return nil
+}
+
+// restartSelf starts a new instance and exits (Windows)
+// Windows doesn't support exec() replacement, so we spawn new process and exit
+func restartSelf() error {
+    exe, err := os.Executable()
+    if err != nil {
+        return err
+    }
+
+    // Start new process
+    cmd := exec.Command(exe, os.Args[1:]...)
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    cmd.Stdin = os.Stdin
+
+    if err := cmd.Start(); err != nil {
+        return fmt.Errorf("failed to start new process: %w", err)
+    }
+
+    // Give the new process time to start
+    time.Sleep(100 * time.Millisecond)
+
+    // Exit current process
+    os.Exit(0)
+    return nil // unreachable
+}
+```
+
+### Shared Update Logic
+
+```go
+// --- update.go ---
+package updater
+
+import (
+    "context"
+    "crypto/sha256"
+    "encoding/hex"
+    "encoding/json"
+    "fmt"
+    "io"
+    "net/http"
+    "os"
+    "path/filepath"
+    "runtime"
+    "strings"
+)
+
+type Release struct {
+    TagName    string  `json:"tag_name"`
+    Prerelease bool    `json:"prerelease"`
+    Assets     []Asset `json:"assets"`
+}
+
+type Asset struct {
+    Name               string `json:"name"`
+    BrowserDownloadURL string `json:"browser_download_url"`
+}
+
+// CheckForUpdate checks GitHub releases for updates
+func CheckForUpdate(ctx context.Context, currentVersion, branch string) (*Release, error) {
+    // Determine API endpoint based on branch
+    var url string
+    switch branch {
+    case "stable":
+        url = "https://api.github.com/repos/{projectorg}/{projectname}/releases/latest"
+    default:
+        // For beta/daily, get all releases and filter
+        url = "https://api.github.com/repos/{projectorg}/{projectname}/releases"
+    }
+
+    req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+    if err != nil {
+        return nil, err
+    }
+    req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode == 404 {
+        return nil, nil // No updates available
+    }
+    if resp.StatusCode != 200 {
+        return nil, fmt.Errorf("GitHub API error: %d", resp.StatusCode)
+    }
+
+    if branch == "stable" {
+        var release Release
+        if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+            return nil, err
+        }
+        if release.TagName == currentVersion {
+            return nil, nil // Already up to date
+        }
+        return &release, nil
+    }
+
+    // For beta/daily, filter releases
+    var releases []Release
+    if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+        return nil, err
+    }
+
+    for _, r := range releases {
+        if matchesBranch(r, branch) && r.TagName != currentVersion {
+            return &r, nil
+        }
+    }
+    return nil, nil
+}
+
+// DoUpdate downloads and installs the update
+func DoUpdate(ctx context.Context, release *Release) error {
+    // Find the right asset for this platform
+    assetName := getBinaryName()
+    var downloadURL string
+    for _, asset := range release.Assets {
+        if asset.Name == assetName {
+            downloadURL = asset.BrowserDownloadURL
+            break
+        }
+    }
+    if downloadURL == "" {
+        return fmt.Errorf("no binary found for %s/%s", runtime.GOOS, runtime.GOARCH)
+    }
+
+    // Download to temp file
+    tmpFile, err := os.CreateTemp("", "{projectname}-update-*")
+    if err != nil {
+        return fmt.Errorf("failed to create temp file: %w", err)
+    }
+    tmpPath := tmpFile.Name()
+    defer os.Remove(tmpPath) // Clean up on error
+
+    req, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
+    if err != nil {
+        return err
+    }
+
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+        tmpFile.Close()
+        return fmt.Errorf("failed to download: %w", err)
+    }
+    tmpFile.Close()
+
+    // Make executable (Unix)
+    if runtime.GOOS != "windows" {
+        if err := os.Chmod(tmpPath, 0755); err != nil {
+            return fmt.Errorf("failed to set permissions: %w", err)
+        }
+    }
+
+    // Get current binary path
+    currentPath, err := os.Executable()
+    if err != nil {
+        return fmt.Errorf("failed to get executable path: %w", err)
+    }
+    currentPath, err = filepath.EvalSymlinks(currentPath)
+    if err != nil {
+        return fmt.Errorf("failed to resolve symlinks: %w", err)
+    }
+
+    // Replace binary (platform-specific)
+    if err := replaceBinary(currentPath, tmpPath); err != nil {
+        return err
+    }
+
+    return nil
+}
+
+// getBinaryName returns the expected binary name for this platform
+func getBinaryName() string {
+    name := "{projectname}-" + runtime.GOOS + "-" + runtime.GOARCH
+    if runtime.GOOS == "windows" {
+        name += ".exe"
+    }
+    return name
+}
+
+func matchesBranch(r Release, branch string) bool {
+    switch branch {
+    case "beta":
+        return strings.HasSuffix(r.TagName, "-beta")
+    case "daily":
+        // Daily builds are timestamps: YYYYMMDDHHMMSS
+        return len(r.TagName) == 14 && !strings.Contains(r.TagName, ".")
+    default:
+        return !r.Prerelease
+    }
+}
+```
+
+### Service-Aware Update
+
+**When running as a service, update must coordinate with service manager:**
+
+| Platform | Service Manager | Update Method |
+|----------|-----------------|---------------|
+| Linux (systemd) | systemd | Replace binary, `systemctl restart` |
+| Linux (other) | runit/s6/OpenRC | Replace binary, service-specific restart |
+| macOS | launchd | Replace binary, `launchctl kickstart` |
+| FreeBSD | rc.d | Replace binary, `service restart` |
+| Windows | SCM | Replace binary, `sc stop && sc start` |
+
+```go
+// restartService restarts the service after update
+func restartService() error {
+    switch runtime.GOOS {
+    case "linux":
+        return restartLinuxService()
+    case "darwin":
+        return restartDarwinService()
+    case "freebsd", "openbsd", "netbsd":
+        return restartBSDService()
+    case "windows":
+        return restartWindowsService()
+    default:
+        return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+    }
+}
+
+// --- service_linux.go ---
+//go:build linux
+// +build linux
+
+func restartLinuxService() error {
+    // Try systemd first
+    if _, err := exec.LookPath("systemctl"); err == nil {
+        cmd := exec.Command("systemctl", "restart", "{projectname}")
+        return cmd.Run()
+    }
+    // Fall back to generic service command
+    cmd := exec.Command("service", "{projectname}", "restart")
+    return cmd.Run()
+}
+
+// --- service_darwin.go ---
+//go:build darwin
+// +build darwin
+
+func restartDarwinService() error {
+    label := "{projectorg}.{projectname}"
+    // kickstart -k kills existing and starts fresh
+    cmd := exec.Command("launchctl", "kickstart", "-k", "system/"+label)
+    return cmd.Run()
+}
+
+// --- service_windows.go ---
+//go:build windows
+// +build windows
+
+func restartWindowsService() error {
+    // Stop service
+    stopCmd := exec.Command("sc", "stop", "{projectname}")
+    stopCmd.Run() // Ignore error if not running
+
+    // Wait for stop
+    time.Sleep(2 * time.Second)
+
+    // Start service
+    startCmd := exec.Command("sc", "start", "{projectname}")
+    return startCmd.Run()
+}
+
+// --- service_bsd.go ---
+//go:build freebsd || openbsd || netbsd
+// +build freebsd openbsd netbsd
+
+func restartBSDService() error {
+    cmd := exec.Command("service", "{projectname}", "restart")
+    return cmd.Run()
+}
+```
+
+### Update Checksum Verification
+
+**All downloads MUST be verified against checksums from the release:**
+
+```go
+// verifyChecksum verifies SHA256 checksum
+func verifyChecksum(filePath, expectedHash string) error {
+    f, err := os.Open(filePath)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+
+    h := sha256.New()
+    if _, err := io.Copy(h, f); err != nil {
+        return err
+    }
+
+    actualHash := hex.EncodeToString(h.Sum(nil))
+    if actualHash != expectedHash {
+        return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedHash, actualHash)
+    }
+    return nil
+}
+```
+
 ---
 
 
@@ -27326,7 +28217,7 @@ Your existing password and settings will be preserved.
 
 Application user creation **REQUIRES** privilege escalation. If the user cannot escalate privileges, the application runs as the current user with user-level directories.
 
-**IMPORTANT: See PART 5 "Smart Escalation Logic" (lines ~5967-5989) for the complete escalation flow:**
+**IMPORTANT: See PART 5 "Smart Escalation Logic" (lines ~6059-6094) for the complete escalation flow:**
 - Binary first checks if already root/admin → skips escalation prompt entirely
 - Only prompts if user CAN actually escalate (is in sudoers/wheel/admin group)
 - Never prompts if user cannot escalate → shows informative error instead
@@ -33604,7 +34495,7 @@ fi
 1. Set up Go cache directories (GODIR/GOCACHE) for faster builds
 2. Build all binaries using Docker (golang:alpine) in temp directory:
    - Server (`./src`)
-   - CLI client (`./src/client`) if exists
+   - client (`./src/client`) if exists
    - Agent (`./src/agent`) if exists
 3. Install test tools in container (Docker: `apk add --no-cache curl bash file jq`)
 4. Copy binaries to test container
@@ -33655,9 +34546,9 @@ GO_DOCKER="docker run --rm \
 echo "Building server binary in Docker..."
 $GO_DOCKER go build -o "$BUILD_DIR/${PROJECTNAME}" ./src
 
-# Build CLI client if exists
+# Build client if exists
 if [ -d "src/client" ]; then
-    echo "Building CLI client in Docker..."
+    echo "Building client in Docker..."
     $GO_DOCKER go build -o "$BUILD_DIR/${PROJECTNAME}-cli" ./src/client
 fi
 
@@ -33792,7 +34683,7 @@ docker run --rm \
         echo '✗ FAILED: Server --help does not show renamed binary name'
     fi
 
-    echo '=== CLI Client Tests (if exists) ==='
+    echo '=== Client Tests (if exists) ==='
     if [ -f /app/${PROJECTNAME}-cli ]; then
         /app/${PROJECTNAME}-cli --version || echo 'FAILED: CLI --version'
         /app/${PROJECTNAME}-cli --help || echo 'FAILED: CLI --help'
@@ -33818,7 +34709,7 @@ docker run --rm \
             /app/${PROJECTNAME}-cli --server http://localhost:64580 status || echo 'CLI status (no token) failed or not applicable'
         fi
     else
-        echo 'CLI client not built - skipping'
+        echo 'client not built - skipping'
     fi
 
     echo '=== Agent Tests (if exists) ==='
@@ -33901,9 +34792,9 @@ GO_DOCKER="docker run --rm \
 echo "Building server binary in Docker..."
 $GO_DOCKER go build -o "$BUILD_DIR/${PROJECTNAME}" ./src
 
-# Build CLI client if exists
+# Build client if exists
 if [ -d "src/client" ]; then
-    echo "Building CLI client in Docker..."
+    echo "Building client in Docker..."
     $GO_DOCKER go build -o "$BUILD_DIR/${PROJECTNAME}-cli" ./src/client
 fi
 
@@ -33923,7 +34814,7 @@ echo "Copying binaries to container..."
 incus file push "$BUILD_DIR/${PROJECTNAME}" "$CONTAINER_NAME/usr/local/bin/"
 incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/${PROJECTNAME}"
 
-# Copy CLI client if built
+# Copy client if built
 if [ -f "$BUILD_DIR/${PROJECTNAME}-cli" ]; then
     incus file push "$BUILD_DIR/${PROJECTNAME}-cli" "$CONTAINER_NAME/usr/local/bin/"
     incus exec "$CONTAINER_NAME" -- chmod +x "/usr/local/bin/${PROJECTNAME}-cli"
@@ -34058,7 +34949,7 @@ incus exec "$CONTAINER_NAME" -- bash -c "
         echo '✗ FAILED: Server --help does not show renamed binary name'
     fi
 
-    echo '=== CLI Client Tests (if exists) ==='
+    echo '=== Client Tests (if exists) ==='
     if [ -f /usr/local/bin/${PROJECTNAME}-cli ]; then
         ${PROJECTNAME}-cli --version || echo 'FAILED: CLI --version'
         ${PROJECTNAME}-cli --help || echo 'FAILED: CLI --help'
@@ -34083,7 +34974,7 @@ incus exec "$CONTAINER_NAME" -- bash -c "
             ${PROJECTNAME}-cli --server http://localhost:80 status || echo 'CLI status (no token) failed or not applicable'
         fi
     else
-        echo 'CLI client not installed - skipping'
+        echo 'client not installed - skipping'
     fi
 
     echo '=== Agent Tests (if exists) ==='
@@ -34155,9 +35046,9 @@ fi
 | **Build method** | ALWAYS use Docker (golang:alpine) with GODIR/GOCACHE |
 | **Go cache** | Use `GODIR="${HOME}/.local/share/go"` and `GOCACHE="${HOME}/.local/share/go/build"` |
 | **Build location** | ALWAYS use temp directory |
-| **Build all components** | Build server, CLI client (if `src/client/` exists), agent (if `src/agent/` exists) |
+| **Build all components** | Build server, client (if `src/client/` exists), agent (if `src/agent/` exists) |
 | **Test container tools** | Docker alpine MUST install: `apk add --no-cache curl bash file jq` |
-| **Test all binaries** | Test `--version` and `--help` for server, CLI client, and agent if built |
+| **Test all binaries** | Test `--version` and `--help` for server, client, and agent if built |
 | **Binary rename test** | Copy binary with new name, verify `--help` shows renamed name (not hardcoded) |
 | **Admin setup** | Use setup token to create admin account, login, generate API token |
 | **CLI full functionality** | Test CLI with API token against running server (not just --help) |
@@ -36604,13 +37495,13 @@ Tor Hidden Service: Connected
 
 
 
-# PART 33: CLI CLIENT & AGENT 
+# PART 33: CLIENT & AGENT
 
 ## Overview
 
-**CLI client is REQUIRED for all projects. Agent is PER-PROJECT determination.**
+**client is REQUIRED for all projects. Agent is PER-PROJECT determination.**
 
-Every server MUST have a companion CLI client. The CLI provides terminal-based access to all server functionality and is essential for:
+Every server MUST have a companion client. The client provides terminal-based access to all server functionality and is essential for:
 - Scripting and automation
 - Headless/SSH environments
 - CI/CD pipelines
@@ -36618,14 +37509,15 @@ Every server MUST have a companion CLI client. The CLI provides terminal-based a
 
 **Agent remains optional** - only needed for monitoring, remote management, or similar projects (see "When Agent is Needed" section).
 
-When a project includes a CLI client, it provides a terminal-based interface for interacting with the server. The CLI supports both standard command-line usage and an interactive TUI (Terminal User Interface) mode.
+When a project includes a client, it provides a terminal-based interface for interacting with the server. The client supports both standard command-line usage and an interactive TUI (Terminal User Interface) mode.
 
 | Attribute | Value |
 |-----------|-------|
 | Default binary name | `{projectname}-cli` |
 | Versioning | Same as main application |
 | Build | Part of same Makefile (`make build` produces both binaries) |
-| Config location | `~/.config/{projectorg}/{projectname}/cli.yml` |
+| Config location (Unix) | `~/.config/{projectorg}/{projectname}/cli.yml` |
+| Config location (Windows) | `%APPDATA%\{projectorg}\{projectname}\cli.yml` |
 
 ## Binary Naming Rules 
 
@@ -36662,7 +37554,7 @@ userAgent := fmt.Sprintf("%s-cli/%s", projectName, version)
 2. `--token-file` flag (file path)
 3. Environment variable: `{PROJECTNAME}_TOKEN`
 4. Config file: `cli.yml` → `token: xxx`
-5. Token file: `~/.config/{projectorg}/{projectname}/token`
+5. Token file: `{config_dir}/token` (Unix: `~/.config/{projectorg}/{projectname}/token`, Windows: `%APPDATA%\{projectorg}\{projectname}\token`)
 
 **Token format:** See PART 11 "API Token Security" for token format and validation.
 
@@ -36704,7 +37596,7 @@ export {PROJECTNAME}_TOKEN="usr_abc123..."
 
 # Store token (interactive login)
 {projectname}-cli login
-# Saves to ~/.config/{projectorg}/{projectname}/token
+# Saves to {config_dir}/token (see platform-specific paths above)
 ```
 
 ## User/Org Context (Smart Detection, NON-NEGOTIABLE)
@@ -37509,6 +38401,228 @@ func LaunchGUI(config *Config) error {
 }
 ```
 
+### Platform-Specific GUI Launchers
+
+```go
+// --- gui_linux.go ---
+//go:build linux && gui
+// +build linux,gui
+
+package gui
+
+import (
+    "github.com/diamondburned/gotk4/pkg/gtk/v4"
+    "github.com/diamondburned/gotk4/pkg/gio/v2"
+)
+
+func launchGTKGui(config *Config) error {
+    app := gtk.NewApplication("{projectorg}.{projectname}.cli", gio.ApplicationFlagsNone)
+
+    app.ConnectActivate(func() {
+        win := gtk.NewApplicationWindow(app)
+        win.SetTitle("{PROJECTNAME} CLI")
+        win.SetDefaultSize(800, 600)
+
+        // Build UI from config
+        buildMainWindow(win, config)
+
+        win.Show()
+    })
+
+    return app.Run(nil)
+}
+
+func buildMainWindow(win *gtk.ApplicationWindow, config *Config) {
+    // Main container
+    box := gtk.NewBox(gtk.OrientationVertical, 10)
+    box.SetMarginTop(10)
+    box.SetMarginBottom(10)
+    box.SetMarginStart(10)
+    box.SetMarginEnd(10)
+
+    // Header
+    header := gtk.NewHeaderBar()
+    header.SetShowTitleButtons(true)
+    win.SetTitlebar(header)
+
+    // Content area - implement based on CLI functionality
+    // ...
+
+    win.SetChild(box)
+}
+```
+
+```go
+// --- gui_darwin.go ---
+//go:build darwin && gui
+// +build darwin,gui
+
+package gui
+
+/*
+#cgo CFLAGS: -x objective-c
+#cgo LDFLAGS: -framework Cocoa
+#import <Cocoa/Cocoa.h>
+
+void launchCocoaApp(const char* title, int width, int height);
+*/
+import "C"
+import "unsafe"
+
+func launchCocoaGui(config *Config) error {
+    title := C.CString("{PROJECTNAME} CLI")
+    defer C.free(unsafe.Pointer(title))
+
+    C.launchCocoaApp(title, 800, 600)
+    return nil
+}
+
+// Objective-C implementation in gui_darwin.m:
+// @interface AppDelegate : NSObject <NSApplicationDelegate>
+// @property (strong) NSWindow *window;
+// @end
+//
+// @implementation AppDelegate
+// - (void)applicationDidFinishLaunching:(NSNotification *)notification {
+//     NSRect frame = NSMakeRect(0, 0, 800, 600);
+//     self.window = [[NSWindow alloc] initWithContentRect:frame
+//         styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+//                    NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable)
+//         backing:NSBackingStoreBuffered defer:NO];
+//     [self.window setTitle:@"{PROJECTNAME} CLI"];
+//     [self.window center];
+//     [self.window makeKeyAndOrderFront:nil];
+// }
+// @end
+```
+
+```go
+// --- gui_windows.go ---
+//go:build windows && gui
+// +build windows,gui
+
+package gui
+
+import (
+    "syscall"
+    "unsafe"
+
+    "golang.org/x/sys/windows"
+)
+
+var (
+    user32           = windows.NewLazySystemDLL("user32.dll")
+    createWindowExW  = user32.NewProc("CreateWindowExW")
+    defWindowProcW   = user32.NewProc("DefWindowProcW")
+    dispatchMessageW = user32.NewProc("DispatchMessageW")
+    getMessageW      = user32.NewProc("GetMessageW")
+    postQuitMessage  = user32.NewProc("PostQuitMessage")
+    registerClassExW = user32.NewProc("RegisterClassExW")
+    showWindow       = user32.NewProc("ShowWindow")
+    translateMessage = user32.NewProc("TranslateMessage")
+    updateWindow     = user32.NewProc("UpdateWindow")
+)
+
+const (
+    WS_OVERLAPPEDWINDOW = 0x00CF0000
+    WS_VISIBLE          = 0x10000000
+    SW_SHOW             = 5
+    WM_DESTROY          = 0x0002
+)
+
+func launchWin32Gui(config *Config) error {
+    className := windows.StringToUTF16Ptr("{projectname}_cli_window")
+    windowName := windows.StringToUTF16Ptr("{PROJECTNAME} CLI")
+
+    // Register window class
+    var wc WNDCLASSEXW
+    wc.CbSize = uint32(unsafe.Sizeof(wc))
+    wc.LpfnWndProc = syscall.NewCallback(wndProc)
+    wc.HInstance = 0
+    wc.LpszClassName = className
+
+    registerClassExW.Call(uintptr(unsafe.Pointer(&wc)))
+
+    // Create window
+    hwnd, _, _ := createWindowExW.Call(
+        0,
+        uintptr(unsafe.Pointer(className)),
+        uintptr(unsafe.Pointer(windowName)),
+        WS_OVERLAPPEDWINDOW|WS_VISIBLE,
+        100, 100, 800, 600, // x, y, width, height
+        0, 0, 0, 0,
+    )
+
+    showWindow.Call(hwnd, SW_SHOW)
+    updateWindow.Call(hwnd)
+
+    // Message loop
+    var msg MSG
+    for {
+        ret, _, _ := getMessageW.Call(
+            uintptr(unsafe.Pointer(&msg)), 0, 0, 0,
+        )
+        if ret == 0 {
+            break
+        }
+        translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+        dispatchMessageW.Call(uintptr(unsafe.Pointer(&msg)))
+    }
+
+    return nil
+}
+
+func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
+    switch msg {
+    case WM_DESTROY:
+        postQuitMessage.Call(0)
+        return 0
+    }
+    ret, _, _ := defWindowProcW.Call(hwnd, msg, wParam, lParam)
+    return ret
+}
+
+type WNDCLASSEXW struct {
+    CbSize        uint32
+    Style         uint32
+    LpfnWndProc   uintptr
+    CbClsExtra    int32
+    CbWndExtra    int32
+    HInstance     uintptr
+    HIcon         uintptr
+    HCursor       uintptr
+    HbrBackground uintptr
+    LpszMenuName  *uint16
+    LpszClassName *uint16
+    HIconSm       uintptr
+}
+
+type MSG struct {
+    Hwnd    uintptr
+    Message uint32
+    WParam  uintptr
+    LParam  uintptr
+    Time    uint32
+    Pt      struct{ X, Y int32 }
+}
+```
+
+```go
+// --- gui_bsd.go ---
+//go:build (freebsd || openbsd || netbsd) && gui
+// +build freebsd openbsd netbsd
+// +build gui
+
+package gui
+
+// BSD uses the same GTK implementation as Linux
+func launchGTKGui(config *Config) error {
+    // Same implementation as gui_linux.go
+    // GTK4 works on BSD systems
+    return launchGTKGuiImpl(config)
+}
+```
+
 ### SSH/Mosh Detection 
 
 **Remote sessions ALWAYS use TUI or CLI. Never attempt GUI over SSH/mosh.**
@@ -37836,7 +38950,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     return m, nil
 }
 
-// Server/Agent: Handle SIGWINCH for console output
+// Server/Agent: Handle window resize for console output
+// Platform-specific implementations below
+
+// --- watch_unix.go ---
+//go:build !windows
+// +build !windows
+
 func watchWindowSize(ctx context.Context, callback func(w, h int)) {
     sigCh := make(chan os.Signal, 1)
     signal.Notify(sigCh, syscall.SIGWINCH)
@@ -37848,6 +38968,31 @@ func watchWindowSize(ctx context.Context, callback func(w, h int)) {
         case <-sigCh:
             w, h, _ := term.GetSize(int(os.Stdout.Fd()))
             callback(w, h)
+        }
+    }
+}
+
+// --- watch_windows.go ---
+//go:build windows
+// +build windows
+
+func watchWindowSize(ctx context.Context, callback func(w, h int)) {
+    // Windows: Poll for size changes (no SIGWINCH)
+    ticker := time.NewTicker(500 * time.Millisecond)
+    defer ticker.Stop()
+
+    var lastW, lastH int
+
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            w, h, _ := term.GetSize(int(os.Stdout.Fd()))
+            if w != lastW || h != lastH {
+                lastW, lastH = w, h
+                callback(w, h)
+            }
         }
     }
 }
@@ -37988,7 +39133,7 @@ When launched with no arguments in an interactive terminal:
 
 ### Directory Structure
 
-**CLI client ALWAYS runs as user. NEVER as root/administrator. NEVER uses system directories.**
+**client ALWAYS runs as user. NEVER as root/administrator. NEVER uses system directories.**
 
 The CLI binary:
 - Runs as current user only (no privilege escalation)
@@ -37997,7 +39142,7 @@ The CLI binary:
 - Sets permissions and ownership before creating any files
 - Works identically across all platforms (Linux, macOS, Windows)
 
-The CLI client uses the same user directory structure as the server in user mode. This allows the CLI to share configuration with a locally running server when appropriate.
+The client uses the same user directory structure as the server in user mode. This allows the client to share configuration with a locally running server when appropriate.
 
 #### Linux / macOS
 
@@ -38084,11 +39229,45 @@ func EnsureDirs() error {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return fmt.Errorf("create dir %s: %w", dir, err)
 		}
-		// Ensure permissions even if dir existed
-		if err := os.Chmod(dir, 0700); err != nil {
-			return fmt.Errorf("chmod dir %s: %w", dir, err)
+		// Set permissions (platform-specific)
+		if err := setDirPermissions(dir); err != nil {
+			return fmt.Errorf("set permissions %s: %w", dir, err)
 		}
 	}
+	return nil
+}
+
+// --- permissions_unix.go ---
+//go:build !windows
+// +build !windows
+
+func setDirPermissions(dir string) error {
+	// Unix: ensure 0700 (user-only access)
+	return os.Chmod(dir, 0700)
+}
+
+func setFilePermissions(path string) error {
+	// Unix: ensure 0600 (user-only read/write)
+	return os.Chmod(path, 0600)
+}
+
+// --- permissions_windows.go ---
+//go:build windows
+// +build windows
+
+import "golang.org/x/sys/windows"
+
+func setDirPermissions(dir string) error {
+	// Windows: ACLs are inherited from parent by default in user directories
+	// %APPDATA% and %LOCALAPPDATA% already have user-only access
+	// No explicit ACL modification needed for user directories
+	return nil
+}
+
+func setFilePermissions(path string) error {
+	// Windows: files inherit ACLs from directory
+	// For sensitive files, we could set explicit ACLs, but for user
+	// directories this is not needed as they inherit from %APPDATA%
 	return nil
 }
 
@@ -38266,7 +39445,7 @@ func resolveYamlExtension(path string) string {
 
 ```yaml
 # ~/.config/{projectorg}/{projectname}/cli.yml
-# CLI client configuration - ALL options with defaults
+# client configuration - ALL options with defaults
 
 # Server connection
 server:
@@ -38346,7 +39525,7 @@ defaults:
 
 ### CLI Cluster Failover 
 
-**CLI client MUST support automatic cluster failover. Background node discovery keeps config current.**
+**client MUST support automatic cluster failover. Background node discovery keeps config current.**
 
 | Feature | Behavior |
 |---------|----------|
@@ -38783,7 +39962,7 @@ Run '{projectname}-cli <command> --help' for detailed help on any command.
 **If user renames binary:**
 ```bash
 $ mypaste --help
-mypaste {projectversion} - CLI client for {projectname} API   # Shows actual binary name
+mypaste {projectversion} - client for {projectname} API   # Shows actual binary name
 
 Usage:
   mypaste [command] [flags]                     # Shows actual binary name
@@ -38811,7 +39990,7 @@ pastebin {projectversion} ({COMMIT_SHA}) built {BUILD_DATE}
 
 ## Commands
 
-**CLI clients have project-specific commands only.** No standard commands required.
+**clients have project-specific commands only.** No standard commands required.
 
 Example commands (project-dependent):
 - `create`, `get`, `list`, `delete` (pastebin)
@@ -39261,7 +40440,7 @@ go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli ./src/client
 │   ├── config/
 │   ├── server/
 │   ├── ...
-│   └── client/             # CLI client (if project has CLI)
+│   └── client/             # client (if project has client)
 │       ├── main.go         # Entry point, mode detection
 │       ├── cmd/            # Command implementations
 │       │   ├── root.go     # Root command, --help, --version flags
@@ -39328,7 +40507,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 | **Minimal** | 40-59 | 10-15 | `SizeModeMinimal` | Single column, no borders, text only |
 | **Micro** | <40 | <10 | `SizeModeMicro` | Critical info only, scrollable |
 
-CLI client uses `common/terminal` from PART 7:
+client uses `common/terminal` from PART 7:
 ```go
 // CLI uses common/terminal package (defined in PART 7)
 import "{projectorg}/{projectname}/common/terminal"
@@ -39974,13 +41153,13 @@ Answer these questions for your specific project:
 |-----------|-------|
 | Binary naming | `{projectname}-agent-{os}-{arch}` |
 | Examples | `monitor-agent-linux-amd64`, `monitor-agent-windows-arm64` |
-| Versioning | Same as server and CLI client |
+| Versioning | Same as server and client |
 | Build | Part of same Makefile (`make build` builds all if `src/agent/` exists) |
 | Config file | `{config_dir}/agent.yml` (same dir as server) |
 | Data directory | `{data_dir}/` (same as server) |
 | Database | `{data_dir}/db/agent.db` (if needed, same dir as server) |
 | Privileges | **Root/Admin required** (for full system access) |
-| Update mechanism | Same as CLI client (self-update) |
+| Update mechanism | Same as client (self-update) |
 
 ### Agent Binary Structure (Same as Server)
 
@@ -40400,9 +41579,9 @@ mode: ""                           # production, development (empty = auto-detec
 
 **Same privilege escalation as server (see PART 24)** - agent requires root/admin for full system access.
 
-### Agent vs CLI Client vs Server
+### Agent vs Client vs Server
 
-| Aspect | Server | CLI Client | Agent |
+| Aspect | Server | Client | Agent |
 |--------|--------|------------|-------|
 | **Runs as** | Service/daemon | Interactive/one-shot | Service/daemon |
 | **Purpose** | Serve API, WebUI | User interaction | Data collection |
@@ -40414,9 +41593,9 @@ mode: ""                           # production, development (empty = auto-detec
 
 ### Execution Context 
 
-**CLI Client and Agent run in fundamentally different execution contexts:**
+**Client and Agent run in fundamentally different execution contexts:**
 
-| Aspect | CLI Client | Agent |
+| Aspect | Client | Agent |
 |--------|------------|-------|
 | **Execution context** | User context | System context |
 | **Runs as** | Current user | root/Administrator |
@@ -40432,13 +41611,13 @@ mode: ""                           # production, development (empty = auto-detec
 
 | Component | Context | Reason |
 |-----------|---------|--------|
-| **CLI Client** | User (`~/`) | User tool - accesses user's files, runs with user permissions, stores user-specific settings |
+| **Client** | User (`~/`) | User tool - accesses user's files, runs with user permissions, stores user-specific settings |
 | **Agent** | System (`/`) | System daemon - needs root for system metrics, hardware access, service management |
 
 **Path Examples:**
 
 ```bash
-# CLI Client (user context - runs as "alice")
+# Client (user context - runs as "alice")
 ~/.config/{projectorg}/{projectname}/cli.yml        # Alice's config
 ~/.local/share/{projectorg}/{projectname}/          # Alice's data
 ~/.local/log/{projectorg}/{projectname}/cli.log     # Alice's logs
@@ -40451,7 +41630,7 @@ mode: ""                           # production, development (empty = auto-detec
 
 **Platform-Specific Paths:**
 
-| Platform | CLI Client Config | Agent Config |
+| Platform | Client Config | Agent Config |
 |----------|-------------------|--------------|
 | **Linux** | `~/.config/{projectorg}/{projectname}/` | `/etc/{projectorg}/{projectname}/` |
 | **macOS** | `~/Library/Application Support/{projectorg}/{projectname}/` | `/Library/Application Support/{projectorg}/{projectname}/` |
@@ -40460,7 +41639,7 @@ mode: ""                           # production, development (empty = auto-detec
 
 ### Purpose Matching 
 
-**CLI Client and Agent are companion binaries designed FOR the Server. They match the server's intent, purpose, and functionality.**
+**Client and Agent are companion binaries designed FOR the Server. They match the server's intent, purpose, and functionality.**
 
 All three binaries are built for the SAME project and work together as a system:
 
@@ -40480,11 +41659,11 @@ All three binaries are built for the SAME project and work together as a system:
 │       │           │                                                        │
 │       ▼           ▼                                                        │
 │  ┌─────────────────────┐     ┌─────────────────────────┐                   │
-│  │     CLI CLIENT      │     │         AGENT           │                   │
+│  │ {projectname} CLIENT │     │         AGENT           │                   │
 │  │  {projectname}-cli  │     │  {projectname}-agent    │                   │
 │  └─────────────────────┘     └─────────────────────────┘                   │
 │                                                                            │
-│  CLI CLIENT:                      AGENT:                                   │
+│  {projectname} CLIENT:                AGENT:                                   │
 │  • Full remote admin              • Purpose-specific daemon                │
 │  • TUI/CLI/GUI modes              • Headless, no admin                     │
 │  • User context (~/)              • System context (/)                     │
@@ -40495,7 +41674,7 @@ All three binaries are built for the SAME project and work together as a system:
 
 **Real-World Examples:**
 
-| Product | Server | CLI Client | Agent |
+| Product | Server | Client | Agent |
 |---------|--------|------------|-------|
 | **Jenkins** | Jenkins Server (WebUI, job management) | Jenkins CLI (remote admin) | Jenkins Agent (executes builds on nodes) |
 | **Portainer** | Portainer Server (container management UI) | - | Portainer Agent (runs on Docker hosts) |
@@ -40516,7 +41695,7 @@ All three binaries are built for the SAME project and work together as a system:
 │  SERVER: Central control, WebUI, data storage, orchestration           │
 │  └─► Portainer, Zabbix Server, Jenkins, Proxmox VE, K8s API Server      │
 ├─────────────────────────────────────────────────────────────────────────┤
-│  CLI CLIENT: Full remote administration, scripting, automation           │
+│  CLIENT: Full remote administration, scripting, automation │
 │  └─► kubectl, pvesh, salt, zabbix_get, jenkins-cli                      │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  AGENT: Runs on managed hosts, reports to server, executes tasks         │
@@ -40529,7 +41708,7 @@ All three binaries are built for the SAME project and work together as a system:
 | Component | Purpose | Admin Capabilities | Modes |
 |-----------|---------|-------------------|-------|
 | **Server** | Central server | N/A (IS the admin) | Daemon/service |
-| **CLI Client** | Full remote administration | ✅ `--admin*` flags, full server control | TUI, CLI, GUI |
+| **Client** | Full remote administration | ✅ `--admin*` flags, full server control | TUI, CLI, GUI |
 | **Agent** | Purpose-specific work | ❌ No admin flags | Daemon/service (headless) |
 
 ### Agent Shares Server Structure 
@@ -40550,7 +41729,7 @@ The Agent is essentially the Server's "little sibling" - same professional struc
 | **Listens for connections** | ✅ Yes (`--port`, `--address`) | ❌ No |
 | **Connects to parent server** | ❌ No (IS the server) | ✅ Yes (`--server`, `--token`) |
 | **Setup wizard** | ✅ Yes (`--setup-token`) | ❌ No (registers with server) |
-| **Admin operations** | N/A (IS the server) | ❌ No (CLI Client's job) |
+| **Admin operations** | N/A (IS the server) | ❌ No (Client's job) |
 | **WebUI** | ✅ Yes | ❌ No (headless) |
 | **Database** | ✅ `server.db` | ✅ `agent.db` (if needed) |
 
@@ -40569,11 +41748,11 @@ SERVER STARTUP                          AGENT STARTUP
 8. Listen for connections               8. Begin agent tasks ← different
 ```
 
-### CLI Client = Full Server Access 
+### Client = Full Server Access
 
-**The CLI Client is a COMPLETE interface to the server. It can do EVERYTHING the server offers.**
+**The Client is a COMPLETE interface to the server. It can do EVERYTHING the server offers.**
 
-| CLI Client Capability | Description |
+| Client Capability | Description |
 |-----------------------|-------------|
 | **All user operations** | Everything a logged-in user can do |
 | **All org operations** | Everything org members can do |
@@ -40582,7 +41761,7 @@ SERVER STARTUP                          AGENT STARTUP
 | **CLI mode** | Scriptable command-line |
 | **GUI mode** | Native graphical interface (if available) |
 
-**Admin flags (CLI Client only):**
+**Admin flags (Client only):**
 ```bash
 {projectname}-cli --admin users list          # List all users
 {projectname}-cli --admin users create ...    # Create user
@@ -40628,7 +41807,7 @@ src/
 │   ├── version/      # Version info (shared across all binaries)
 │   └── ...           # Other shared packages as needed
 ├── server/           # Server-specific code
-├── client/           # CLI Client-specific code (TUI, GUI, admin commands)
+├── client/           # Client-specific code (TUI, GUI, admin commands)
 └── agent/            # Agent-specific code (collectors, reporters)
 ```
 
@@ -40639,20 +41818,20 @@ src/
 | **Shared packages** | `src/common/` used by server, client, and agent |
 | **Same API** | Client and Agent use server's API |
 | **Same models** | Shared data structures across all components |
-| **Cluster support** | Both CLI Client and Agent support automatic cluster failover |
+| **Cluster support** | Both Client and Agent support automatic cluster failover |
 
-### Cluster Support (CLI Client and Agent)
+### Cluster Support (Client and Agent)
 
-**Both CLI Client and Agent support automatic cluster failover. See dedicated sections for details:**
+**Both Client and Agent support automatic cluster failover. See dedicated sections for details:**
 
 | Component | Cluster Section | Config Key |
 |-----------|-----------------|------------|
-| **CLI Client** | "CLI Cluster Failover" | `server.primary`, `server.cluster` in `cli.yml` |
+| **Client** | "CLI Cluster Failover" | `server.primary`, `server.cluster` in `cli.yml` |
 | **Agent** | "Agent Cluster Failover" | `server.primary`, `server.cluster` in `agent.yml` |
 
 **Shared Cluster Behavior:**
 
-| Feature | CLI Client | Agent |
+| Feature | Client | Agent |
 |---------|------------|-------|
 | **Discovery** | Background `/api/autodiscover` | On connect `/api/autodiscover` |
 | **Auto-update** | Updates `cli.yml` with discovered nodes | Updates `agent.yml` with discovered nodes |
@@ -46732,9 +47911,9 @@ make docker # Build Docker image
 - [ ] DNS verification
 - [ ] Domain management in admin
 
-**PART 33: CLI Client & Agent**
+**PART 33: Client & Agent**
 
-*CLI Client (REQUIRED for all projects):*
+*Client (REQUIRED for all projects):*
 - [ ] Binary: `{projectname}-cli`
 - [ ] `src/client/` directory exists
 - [ ] Same version as server
@@ -46968,18 +48147,18 @@ make docker # Build Docker image
 ### Client Type Detection & Response 
 
 **Three Types of CLI Tools:**
-- [ ] **Our CLI Client** (`{projectname}-cli`) - INTERACTIVE, receives JSON, renders own TUI/GUI
+- [ ] **Our Client** (`{projectname}-cli`) - INTERACTIVE, receives JSON, renders own TUI/GUI
 - [ ] **Text Browsers** (lynx, w3m, links, elinks) - INTERACTIVE, receive no-JS HTML via `renderNoJSHTML()`, NO JavaScript
 - [ ] **HTTP Tools** (curl, wget, httpie) - NON-INTERACTIVE, receive formatted text via `HTML2TextConverter()`
 
 **Detection Functions:**
-- [ ] `isOurCliClient()` detects our CLI client (INTERACTIVE)
+- [ ] `isOurCliClient()` detects our client (INTERACTIVE)
 - [ ] `isTextBrowser()` detects text browsers (INTERACTIVE - lynx, w3m, links, elinks)
 - [ ] `isHttpTool()` detects HTTP tools (NON-INTERACTIVE - curl, wget, httpie, libcurl, etc.)
 - [ ] `isNonInteractiveClient()` returns true ONLY for HTTP tools (NOT our CLI or text browsers)
 - [ ] Empty User-Agent treated as HTTP tool (non-interactive)
 
-**Our CLI Client (INTERACTIVE):**
+**Our Client (INTERACTIVE):**
 - [ ] Receives JSON (not HTML or pre-formatted text)
 - [ ] Renders beautiful TUI/GUI itself
 - [ ] Supports CLI mode (commands) and TUI mode (interactive)
@@ -47610,7 +48789,7 @@ Implement as needed for your project:
 1. **PART 34:** Multi-User (if project needs Regular User accounts)
 2. **PART 35:** Organizations (requires PART 34)
 3. **PART 36:** Custom Domains (if users/orgs need branded domains)
-4. **PART 33:** CLI Client (if project needs command-line tool)
+4. **PART 33:** Client (if project needs command-line tool)
 
 #### Step 9: Documentation (PART 30)
 

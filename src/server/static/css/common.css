@@ -1836,6 +1836,18 @@ header .search-form {
     border: 0;
 }
 
+/* SR-only focusable - becomes visible when focused (for skip links) */
+.sr-only-focusable:focus,
+.sr-only-focusable:active {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+}
+
 /* Focus indicators - visible outline for keyboard navigation */
 :focus {
     outline: 2px solid var(--accent);

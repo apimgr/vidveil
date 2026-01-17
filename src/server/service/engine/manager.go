@@ -71,7 +71,7 @@ func (m *EngineManager) InitializeEngines() {
 	m.engines["pornbox"] = NewPornboxEngine(m.appConfig)
 	m.engines["porntop"] = NewPornTopEngine(m.appConfig)
 	m.engines["pornotube"] = NewPornotubeEngine(m.appConfig)
-	m.engines["vporn"] = NewVPornEngine(m.appConfig)
+	// vporn removed - site inaccessible (geo-blocked/Cloudflare)
 	m.engines["pornhd"] = NewPornHDEngine(m.appConfig)
 	m.engines["xbabe"] = NewXBabeEngine(m.appConfig)
 	m.engines["pornone"] = NewPornOneEngine(m.appConfig)

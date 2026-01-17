@@ -73,13 +73,18 @@ func (e *XNXXEngine) Search(ctx context.Context, query string, page int) ([]mode
 
 // convertToResult converts VideoItem to model.VideoResult
 func (e *XNXXEngine) convertToResult(item *parser.VideoItem) model.VideoResult {
+	// Use video page URL as download URL (works with yt-dlp)
+	downloadURL := item.DownloadURL
+	if downloadURL == "" {
+		downloadURL = item.URL
+	}
 	return model.VideoResult{
 		ID:              GenerateResultID(item.URL, e.Name()),
 		URL:             item.URL,
 		Title:           item.Title,
 		Thumbnail:       item.Thumbnail,
 		PreviewURL:      item.PreviewURL,
-		DownloadURL:     item.DownloadURL,
+		DownloadURL:     downloadURL,
 		Duration:        item.Duration,
 		DurationSeconds: item.DurationSeconds,
 		Views:           item.Views,

@@ -16,6 +16,40 @@ function getTheme() {
 }
 
 // ============================================================================
+// Screen Reader Announcements (AI.md PART 31: A11Y)
+// ============================================================================
+var announcer = null;
+
+function initAnnouncer() {
+    if (announcer) return;
+    announcer = document.createElement('div');
+    announcer.setAttribute('role', 'status');
+    announcer.setAttribute('aria-live', 'polite');
+    announcer.setAttribute('aria-atomic', 'true');
+    announcer.className = 'sr-only';
+    announcer.id = 'a11y-announcer';
+    document.body.appendChild(announcer);
+}
+
+// Announce messages to screen readers without moving focus
+function announce(message, priority) {
+    if (!announcer) initAnnouncer();
+    // Clear first, then set after delay to trigger announcement
+    announcer.textContent = '';
+    announcer.setAttribute('aria-live', priority === 'assertive' ? 'assertive' : 'polite');
+    setTimeout(function() {
+        announcer.textContent = message;
+    }, 100);
+}
+
+// Initialize announcer when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAnnouncer);
+} else {
+    initAnnouncer();
+}
+
+// ============================================================================
 // Preferences Management
 // ============================================================================
 const defaultPrefs = {
@@ -507,40 +541,44 @@ function showError(msg) { showToast(msg, 'error'); }
 function showWarning(msg) { showToast(msg, 'warning'); }
 function showInfo(msg) { showToast(msg, 'info'); }
 
-// Confirmation modal per AI.md PART 16 (replaces confirm())
+// Confirmation modal per AI.md PART 16 & PART 31 (A11Y)
+var confirmModalCounter = 0;
 function showConfirm(message, onConfirm, onCancel) {
+    var id = 'confirm-modal-' + (++confirmModalCounter);
     var modal = document.createElement('dialog');
     modal.className = 'modal confirm-modal';
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', id + '-title');
+    modal.setAttribute('aria-describedby', id + '-desc');
     modal.innerHTML = '<div class="modal-header">' +
-        '<h3 class="modal-title">Confirm Action</h3>' +
+        '<h3 class="modal-title" id="' + id + '-title">Confirm Action</h3>' +
         '<button type="button" class="modal-close" aria-label="Close">&times;</button>' +
         '</div>' +
-        '<div class="modal-body"><p>' + message + '</p></div>' +
+        '<div class="modal-body"><p id="' + id + '-desc">' + message + '</p></div>' +
         '<div class="modal-footer">' +
         '<button type="button" class="btn btn-secondary cancel-btn">Cancel</button>' +
         '<button type="button" class="btn btn-primary confirm-btn">Confirm</button>' +
         '</div>';
     document.body.appendChild(modal);
+    var triggerElement = document.activeElement;
     modal.showModal();
-    modal.querySelector('.modal-close').onclick = function() {
+    // Focus on confirm button per PART 31 (first focusable element)
+    modal.querySelector('.confirm-btn').focus();
+
+    function closeModal(callback) {
         modal.close();
         modal.remove();
-        if (onCancel) onCancel();
-    };
-    modal.querySelector('.cancel-btn').onclick = function() {
-        modal.close();
-        modal.remove();
-        if (onCancel) onCancel();
-    };
-    modal.querySelector('.confirm-btn').onclick = function() {
-        modal.close();
-        modal.remove();
-        if (onConfirm) onConfirm();
-    };
-    modal.addEventListener('cancel', function() {
-        modal.remove();
-        if (onCancel) onCancel();
-    });
+        // Return focus to trigger element per PART 31
+        if (triggerElement && triggerElement.focus) {
+            triggerElement.focus();
+        }
+        if (callback) callback();
+    }
+
+    modal.querySelector('.modal-close').onclick = function() { closeModal(onCancel); };
+    modal.querySelector('.cancel-btn').onclick = function() { closeModal(onCancel); };
+    modal.querySelector('.confirm-btn').onclick = function() { closeModal(onConfirm); };
+    modal.addEventListener('cancel', function() { closeModal(onCancel); });
 }
 
 // ============================================================================
@@ -1280,9 +1318,13 @@ if (document.readyState === 'loading') {
                         loadingEl.classList.remove('hidden');
                     }
                     hasMoreResults = false;
+                    // A11Y: Announce no results to screen readers
+                    announce('No results found for ' + searchQuery);
                 } else {
                     // Setup infinite scroll after initial results load
                     setupInfiniteScroll();
+                    // A11Y: Announce result count to screen readers
+                    announce(allResults.length + ' results found');
                 }
                 return;
             }
@@ -1784,7 +1826,8 @@ Object.assign(window.Vidveil, {
     showNotification: showNotification,
     fetchAPI: fetchAPI,
     toggleNav: toggleNav,
-    closeNav: closeNav
+    closeNav: closeNav,
+    announce: announce
 });
 
 // Make nav functions globally available for onclick handlers
@@ -1800,3 +1843,4 @@ window.showWarning = showWarning;
 window.showInfo = showInfo;
 window.showConfirm = showConfirm;
 window.handleDownloadClick = handleDownloadClick;
+window.announce = announce;

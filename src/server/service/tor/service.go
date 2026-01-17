@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +19,9 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/server/service/logging"
+	"github.com/cretz/bine/control"
 	"github.com/cretz/bine/tor"
+	bineed25519 "github.com/cretz/bine/torutil/ed25519"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -33,7 +34,6 @@ type TorService struct {
 
 	// bine Tor instance - manages dedicated Tor process
 	torInstance *tor.Tor
-	onionSvc    net.Listener
 
 	// Hidden service state
 	onionAddress string
@@ -203,15 +203,27 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 		return fmt.Errorf("failed to enable tor network: %w", err)
 	}
 
-	// Create hidden service on port 80 forwarding to localPort
+	// Create hidden service forwarding .onion:80 to localhost:localPort
+	// Per AI.md PART 32: Use AddOnion directly (not Listen) because HTTP server
+	// is already listening on localPort - we just need Tor to forward traffic to it
 	s.logger.Info("Creating hidden service", map[string]interface{}{
 		"remote_port": 80,
 		"local_port":  localPort,
 	})
-	onionSvc, err := t.Listen(ctx, &tor.ListenConf{
-		RemotePorts: []int{80},
-		LocalPort:   localPort,
-		Key:         s.privateKey,
+
+	// Use control protocol to add onion service pointing to our HTTP server
+	// The HTTP server listens on 0.0.0.0:localPort, Tor forwards .onion:80 → 127.0.0.1:localPort
+
+	// Convert Go ed25519 key to bine's ed25519 KeyPair
+	bineKeyPair := bineed25519.FromCryptoPrivateKey(s.privateKey)
+
+	// AddOnion with ED25519-V3 key
+	resp, err := t.Control.AddOnion(&control.AddOnionRequest{
+		Key:   &control.ED25519Key{KeyPair: bineKeyPair},
+		Flags: []string{"DiscardPK"}, // Don't return key in response (we already have it)
+		Ports: []*control.KeyVal{
+			{Key: "80", Val: fmt.Sprintf("127.0.0.1:%d", localPort)},
+		},
 	})
 	if err != nil {
 		t.Close()
@@ -219,10 +231,16 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to create onion service: %w", err)
 	}
-	s.onionSvc = onionSvc
 
-	// The onion address was already calculated from our keys
-	// No need to update from listener - we already have the correct address
+	// Verify the onion address matches our calculated address
+	if resp.ServiceID+".onion" != s.onionAddress {
+		s.logger.Warn("Onion address mismatch", map[string]interface{}{
+			"expected": s.onionAddress,
+			"got":      resp.ServiceID + ".onion",
+		})
+		s.onionAddress = resp.ServiceID + ".onion"
+	}
+
 	s.status = TorServiceStatusConnected
 	s.logger.Info("Hidden service started", map[string]interface{}{"onion_address": s.onionAddress})
 
@@ -296,11 +314,8 @@ func (s *TorService) Stop() error {
 		s.vanityCancel()
 	}
 
-	// Close onion service listener
-	if s.onionSvc != nil {
-		s.onionSvc.Close()
-		s.onionSvc = nil
-	}
+	// Note: We use AddOnion (not Listen) so no local listener to close
+	// The onion service is removed automatically when Tor process closes
 
 	// Close dedicated Tor process
 	if s.torInstance != nil {
@@ -802,9 +817,9 @@ func (s *TorService) TestConnection() *TestConnectionResult {
 		return result
 	}
 
-	// Check if the onion service listener is active
-	if s.onionSvc == nil {
-		result.Message = "Tor onion service listener is not active"
+	// Check if Tor instance is active
+	if s.torInstance == nil {
+		result.Message = "Tor process is not running"
 		return result
 	}
 

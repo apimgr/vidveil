@@ -7,7 +7,7 @@ const STATIC_ASSETS = [
   '/static/css/common.css',
   '/static/js/app.js',
   '/static/manifest.json',
-  '/static/img/placeholder.svg'
+  '/static/images/placeholder.svg'
 ];
 
 // Install event - cache static assets

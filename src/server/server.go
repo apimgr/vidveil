@@ -24,7 +24,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 )
 
-//go:embed static/css/* static/js/* static/img/* static/icons/* static/icon/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl template/component/*.tmpl
+//go:embed static/css/* static/js/* static/images/* static/icons/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl template/component/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -231,6 +231,8 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
 	s.router.Get("/.well-known/change-password", handler.ChangePasswordRedirect)
 	s.router.Get("/humans.txt", h.HumansTxt)
+	s.router.Get("/favicon.ico", h.Favicon)
+	s.router.Get("/apple-touch-icon.png", h.AppleTouchIcon)
 
 	// Debug endpoints (PART 6: only when --debug flag or DEBUG=true)
 	s.registerDebugRoutes(s.router)

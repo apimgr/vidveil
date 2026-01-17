@@ -1431,7 +1431,7 @@ if (document.readyState === 'loading') {
 
         var html = '<a href="' + escapeHtmlUtil(r.url) + '" target="_blank" rel="noopener noreferrer nofollow" class="card-link">';
         html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtmlUtil(previewUrl) + '"' : '') + '>';
-        html += '<img class="thumb-static" src="' + escapeHtmlUtil(r.thumbnail || '/static/img/placeholder.svg') + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" onerror="this.src=\'/static/img/placeholder.svg\'">';
+        html += '<img class="thumb-static" src="' + escapeHtmlUtil(r.thumbnail || '/static/images/placeholder.svg') + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" onerror="this.src=\'/static/images/placeholder.svg\'">';
 
         if (hasPreview) {
             html += '<video class="thumb-preview" muted loop playsinline preload="none">';

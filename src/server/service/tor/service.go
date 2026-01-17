@@ -122,14 +122,20 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 		return fmt.Errorf("failed to create tor site directory: %w", err)
 	}
 
-	// Per AI.md PART 32: Enforce ownership (current user) on all Tor directories
+	// Per AI.md PART 32: Enforce ownership (current user) on all Tor directories recursively
 	// This fixes "is not owned by this user" errors when directories were created by different user
-	currentUID := os.Getuid()
-	currentGID := os.Getgid()
-	for _, dir := range []string{torDataDir, siteDir} {
-		if err := os.Chown(dir, currentUID, currentGID); err != nil {
-			// Non-fatal on Windows (no chown)
-			if runtime.GOOS != "windows" {
+	// Must be recursive because Tor creates subdirectories (e.g., data/keys)
+	if runtime.GOOS != "windows" {
+		currentUID := os.Getuid()
+		currentGID := os.Getgid()
+		for _, dir := range []string{torDataDir, siteDir} {
+			err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				return os.Chown(path, currentUID, currentGID)
+			})
+			if err != nil {
 				s.status = TorServiceStatusError
 				return fmt.Errorf("chown tor dir %s: %w", dir, err)
 			}

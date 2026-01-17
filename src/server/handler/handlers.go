@@ -1073,6 +1073,18 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(sitemap))
 }
 
+// Favicon serves favicon.ico - redirects to embedded ICO file
+// Per AI.md PART 16: /favicon.ico served (embedded default or custom)
+func (h *SearchHandler) Favicon(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/static/images/favicon.ico", http.StatusMovedPermanently)
+}
+
+// AppleTouchIcon serves apple-touch-icon.png - redirects to embedded PNG icon
+// Per AI.md PART 16: Browsers request this at root level
+func (h *SearchHandler) AppleTouchIcon(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/static/icons/icon-192.png", http.StatusMovedPermanently)
+}
+
 // APISearch handles search API requests with content negotiation
 // Supports: JSON (default), SSE streaming (Accept: text/event-stream), plain text
 func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {

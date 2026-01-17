@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // SpankWireEngine searches SpankWire
 type SpankWireEngine struct{ *BaseEngine }
 
 // NewSpankWireEngine creates a new SpankWire engine
-func NewSpankWireEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *SpankWireEngine {
-	return &SpankWireEngine{NewBaseEngine("spankwire", "SpankWire", "https://www.spankwire.com", 3, appConfig, torClient)}
+func NewSpankWireEngine(appConfig *config.AppConfig) *SpankWireEngine {
+	return &SpankWireEngine{NewBaseEngine("spankwire", "SpankWire", "https://www.spankwire.com", 3, appConfig)}
 }
 
 // Search performs a search on SpankWire

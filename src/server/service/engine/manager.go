@@ -10,28 +10,21 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // EngineManager manages all search engines
+// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
 type EngineManager struct {
 	engines   map[string]SearchEngine
 	appConfig *config.AppConfig
-	torClient *tor.TorClient
 	mu        sync.RWMutex
 }
 
 // NewEngineManager creates a new engine manager
 func NewEngineManager(appConfig *config.AppConfig) *EngineManager {
-	var torClient *tor.TorClient
-	if appConfig.Search.Tor.Enabled {
-		torClient = tor.NewTorClient(appConfig.Search.Tor.Proxy, appConfig.Search.Tor.Timeout)
-	}
-
 	return &EngineManager{
 		engines:   make(map[string]SearchEngine),
 		appConfig: appConfig,
-		torClient: torClient,
 	}
 }
 
@@ -41,67 +34,67 @@ func (m *EngineManager) InitializeEngines() {
 	defer m.mu.Unlock()
 
 	// Tier 1 - Major Sites (always enabled by default)
-	m.engines["pornhub"] = NewPornHubEngine(m.appConfig, m.torClient)
-	m.engines["xvideos"] = NewXVideosEngine(m.appConfig, m.torClient)
-	m.engines["xnxx"] = NewXNXXEngine(m.appConfig, m.torClient)
-	m.engines["redtube"] = NewRedTubeEngine(m.appConfig, m.torClient)
-	m.engines["xhamster"] = NewXHamsterEngine(m.appConfig, m.torClient)
+	m.engines["pornhub"] = NewPornHubEngine(m.appConfig)
+	m.engines["xvideos"] = NewXVideosEngine(m.appConfig)
+	m.engines["xnxx"] = NewXNXXEngine(m.appConfig)
+	m.engines["redtube"] = NewRedTubeEngine(m.appConfig)
+	m.engines["xhamster"] = NewXHamsterEngine(m.appConfig)
 
 	// Tier 2 - Popular Sites (enabled by default)
-	m.engines["eporner"] = NewEpornerEngine(m.appConfig, m.torClient)
-	m.engines["youporn"] = NewYouPornEngine(m.appConfig, m.torClient)
-	m.engines["pornmd"] = NewPornMDEngine(m.appConfig, m.torClient)
+	m.engines["eporner"] = NewEpornerEngine(m.appConfig)
+	m.engines["youporn"] = NewYouPornEngine(m.appConfig)
+	m.engines["pornmd"] = NewPornMDEngine(m.appConfig)
 
 	// Tier 3 - Additional Sites (disabled by default, enable via config)
-	m.engines["4tube"] = NewFourTubeEngine(m.appConfig, m.torClient)
-	m.engines["fux"] = NewFuxEngine(m.appConfig, m.torClient)
-	m.engines["porntube"] = NewPornTubeEngine(m.appConfig, m.torClient)
-	m.engines["youjizz"] = NewYouJizzEngine(m.appConfig, m.torClient)
-	m.engines["sunporno"] = NewSunPornoEngine(m.appConfig, m.torClient)
-	m.engines["txxx"] = NewTxxxEngine(m.appConfig, m.torClient)
-	m.engines["nuvid"] = NewNuvidEngine(m.appConfig, m.torClient)
-	m.engines["tnaflix"] = NewTNAFlixEngine(m.appConfig, m.torClient)
-	m.engines["drtuber"] = NewDrTuberEngine(m.appConfig, m.torClient)
-	m.engines["empflix"] = NewEMPFlixEngine(m.appConfig, m.torClient)
-	m.engines["hellporno"] = NewHellPornoEngine(m.appConfig, m.torClient)
-	m.engines["alphaporno"] = NewAlphaPornoEngine(m.appConfig, m.torClient)
-	m.engines["pornflip"] = NewPornFlipEngine(m.appConfig, m.torClient)
-	m.engines["zenporn"] = NewZenPornEngine(m.appConfig, m.torClient)
-	m.engines["gotporn"] = NewGotPornEngine(m.appConfig, m.torClient)
-	m.engines["xxxymovies"] = NewXXXYMoviesEngine(m.appConfig, m.torClient)
-	m.engines["lovehomeporn"] = NewLoveHomePornEngine(m.appConfig, m.torClient)
+	m.engines["4tube"] = NewFourTubeEngine(m.appConfig)
+	m.engines["fux"] = NewFuxEngine(m.appConfig)
+	m.engines["porntube"] = NewPornTubeEngine(m.appConfig)
+	m.engines["youjizz"] = NewYouJizzEngine(m.appConfig)
+	m.engines["sunporno"] = NewSunPornoEngine(m.appConfig)
+	m.engines["txxx"] = NewTxxxEngine(m.appConfig)
+	m.engines["nuvid"] = NewNuvidEngine(m.appConfig)
+	m.engines["tnaflix"] = NewTNAFlixEngine(m.appConfig)
+	m.engines["drtuber"] = NewDrTuberEngine(m.appConfig)
+	m.engines["empflix"] = NewEMPFlixEngine(m.appConfig)
+	m.engines["hellporno"] = NewHellPornoEngine(m.appConfig)
+	m.engines["alphaporno"] = NewAlphaPornoEngine(m.appConfig)
+	m.engines["pornflip"] = NewPornFlipEngine(m.appConfig)
+	m.engines["zenporn"] = NewZenPornEngine(m.appConfig)
+	m.engines["gotporn"] = NewGotPornEngine(m.appConfig)
+	m.engines["xxxymovies"] = NewXXXYMoviesEngine(m.appConfig)
+	m.engines["lovehomeporn"] = NewLoveHomePornEngine(m.appConfig)
 
 	// Tier 4 - Additional yt-dlp supported sites
-	m.engines["pornerbros"] = NewPornerBrosEngine(m.appConfig, m.torClient)
-	m.engines["nonktube"] = NewNonkTubeEngine(m.appConfig, m.torClient)
-	m.engines["nubilesporn"] = NewNubilesPornEngine(m.appConfig, m.torClient)
-	m.engines["pornbox"] = NewPornboxEngine(m.appConfig, m.torClient)
-	m.engines["porntop"] = NewPornTopEngine(m.appConfig, m.torClient)
-	m.engines["pornotube"] = NewPornotubeEngine(m.appConfig, m.torClient)
-	m.engines["vporn"] = NewVPornEngine(m.appConfig, m.torClient)
-	m.engines["pornhd"] = NewPornHDEngine(m.appConfig, m.torClient)
-	m.engines["xbabe"] = NewXBabeEngine(m.appConfig, m.torClient)
-	m.engines["pornone"] = NewPornOneEngine(m.appConfig, m.torClient)
-	m.engines["pornhat"] = NewPornHatEngine(m.appConfig, m.torClient)
-	m.engines["porntrex"] = NewPornTrexEngine(m.appConfig, m.torClient)
-	m.engines["hqporner"] = NewHqpornerEngine(m.appConfig, m.torClient)
-	m.engines["vjav"] = NewVJAVEngine(m.appConfig, m.torClient)
-	m.engines["flyflv"] = NewFlyflvEngine(m.appConfig, m.torClient)
-	m.engines["tube8"] = NewTube8Engine(m.appConfig, m.torClient)
-	m.engines["xtube"] = NewXtubeEngine(m.appConfig, m.torClient)
+	m.engines["pornerbros"] = NewPornerBrosEngine(m.appConfig)
+	m.engines["nonktube"] = NewNonkTubeEngine(m.appConfig)
+	m.engines["nubilesporn"] = NewNubilesPornEngine(m.appConfig)
+	m.engines["pornbox"] = NewPornboxEngine(m.appConfig)
+	m.engines["porntop"] = NewPornTopEngine(m.appConfig)
+	m.engines["pornotube"] = NewPornotubeEngine(m.appConfig)
+	m.engines["vporn"] = NewVPornEngine(m.appConfig)
+	m.engines["pornhd"] = NewPornHDEngine(m.appConfig)
+	m.engines["xbabe"] = NewXBabeEngine(m.appConfig)
+	m.engines["pornone"] = NewPornOneEngine(m.appConfig)
+	m.engines["pornhat"] = NewPornHatEngine(m.appConfig)
+	m.engines["porntrex"] = NewPornTrexEngine(m.appConfig)
+	m.engines["hqporner"] = NewHqpornerEngine(m.appConfig)
+	m.engines["vjav"] = NewVJAVEngine(m.appConfig)
+	m.engines["flyflv"] = NewFlyflvEngine(m.appConfig)
+	m.engines["tube8"] = NewTube8Engine(m.appConfig)
+	m.engines["xtube"] = NewXtubeEngine(m.appConfig)
 
 	// Tier 5 - New engines
-	m.engines["anyporn"] = NewAnyPornEngine(m.appConfig, m.torClient)
-	m.engines["superporn"] = NewSuperPornEngine(m.appConfig, m.torClient)
-	m.engines["tubegalore"] = NewTubeGaloreEngine(m.appConfig, m.torClient)
-	m.engines["motherless"] = NewMotherlessEngine(m.appConfig, m.torClient)
+	m.engines["anyporn"] = NewAnyPornEngine(m.appConfig)
+	m.engines["superporn"] = NewSuperPornEngine(m.appConfig)
+	m.engines["tubegalore"] = NewTubeGaloreEngine(m.appConfig)
+	m.engines["motherless"] = NewMotherlessEngine(m.appConfig)
 
 	// Tier 6 - Additional engines
-	m.engines["keezmovies"] = NewKeezMoviesEngine(m.appConfig, m.torClient)
-	m.engines["spankwire"] = NewSpankWireEngine(m.appConfig, m.torClient)
-	m.engines["extremetube"] = NewExtremeTubeEngine(m.appConfig, m.torClient)
-	m.engines["3movs"] = NewThreeMovsEngine(m.appConfig, m.torClient)
-	m.engines["sleazyneasy"] = NewSleazyNeasyEngine(m.appConfig, m.torClient)
+	m.engines["keezmovies"] = NewKeezMoviesEngine(m.appConfig)
+	m.engines["spankwire"] = NewSpankWireEngine(m.appConfig)
+	m.engines["extremetube"] = NewExtremeTubeEngine(m.appConfig)
+	m.engines["3movs"] = NewThreeMovsEngine(m.appConfig)
+	m.engines["sleazyneasy"] = NewSleazyNeasyEngine(m.appConfig)
 
 	// Apply configuration
 	m.applyConfig()
@@ -127,14 +120,6 @@ func (m *EngineManager) applyConfig() {
 		}
 	}
 
-	// Apply Tor settings if force_all is enabled
-	if m.appConfig.Search.Tor.ForceAll {
-		for _, engine := range m.engines {
-			if configurable, ok := engine.(ConfigurableSearchEngine); ok {
-				configurable.SetUseTor(true)
-			}
-		}
-	}
 }
 
 // Search performs a search across enabled engines

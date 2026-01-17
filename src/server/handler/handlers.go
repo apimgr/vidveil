@@ -699,7 +699,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 			"features": map[string]interface{}{
 				"multi_user":    false,
 				"organizations": false,
-				"tor":           h.appConfig != nil && h.appConfig.Search.Tor.Enabled,
+				"tor":           h.appConfig != nil && false,
 				"geoip":         h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 				"metrics":       h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
 			},
@@ -893,7 +893,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 
 	// Features
 	if h.appConfig != nil {
-		data.Features.TorEnabled = h.appConfig.Search.Tor.Enabled
+		data.Features.TorEnabled = false
 		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
 		data.Features.Metrics = h.appConfig.Server.Metrics.Enabled
 	}
@@ -1551,7 +1551,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		"features": map[string]interface{}{
 			"multi_user":    false,
 			"organizations": false,
-			"tor":           h.appConfig != nil && h.appConfig.Search.Tor.Enabled,
+			"tor":           h.appConfig != nil && false,
 			"geoip":         h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 			"metrics":       h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
 		},

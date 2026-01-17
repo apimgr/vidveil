@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // TxxxEngine searches Txxx
 type TxxxEngine struct{ *BaseEngine }
 
 // NewTxxxEngine creates a new Txxx engine
-func NewTxxxEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *TxxxEngine {
-	return &TxxxEngine{NewBaseEngine("txxx", "Txxx", "https://www.txxx.com", 3, appConfig, torClient)}
+func NewTxxxEngine(appConfig *config.AppConfig) *TxxxEngine {
+	return &TxxxEngine{NewBaseEngine("txxx", "Txxx", "https://www.txxx.com", 3, appConfig)}
 }
 
 // Search performs a search on Txxx

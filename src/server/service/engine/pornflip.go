@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // PornFlipEngine searches PornFlip
 type PornFlipEngine struct{ *BaseEngine }
 
 // NewPornFlipEngine creates a new PornFlip engine
-func NewPornFlipEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *PornFlipEngine {
-	return &PornFlipEngine{NewBaseEngine("pornflip", "PornFlip", "https://www.pornflip.com", 3, appConfig, torClient)}
+func NewPornFlipEngine(appConfig *config.AppConfig) *PornFlipEngine {
+	return &PornFlipEngine{NewBaseEngine("pornflip", "PornFlip", "https://www.pornflip.com", 3, appConfig)}
 }
 
 // Search performs a search on PornFlip

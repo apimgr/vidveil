@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // XtubeEngine searches Xtube
 type XtubeEngine struct{ *BaseEngine }
 
 // NewXtubeEngine creates a new Xtube engine
-func NewXtubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *XtubeEngine {
-	return &XtubeEngine{NewBaseEngine("xtube", "Xtube", "https://www.xtube.com", 4, appConfig, torClient)}
+func NewXtubeEngine(appConfig *config.AppConfig) *XtubeEngine {
+	return &XtubeEngine{NewBaseEngine("xtube", "Xtube", "https://www.xtube.com", 4, appConfig)}
 }
 
 // Search performs a search on Xtube

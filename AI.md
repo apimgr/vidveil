@@ -856,16 +856,16 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 ## How to Read This Large File
 
-**AI.md is ~1.7MB and ~47,688 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1.7MB and ~47,771 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
 | File size | ~1.7MB |
-| Line count | ~47,688 lines |
+| Line count | ~47,771 lines |
 | Read limit | ~500 lines per read |
-| Full reads needed | ~95 reads (impractical) |
+| Full reads needed | ~96 reads (impractical) |
 
 **Use the PART index to find relevant sections, then read each section COMPLETELY.**
 
@@ -884,36 +884,36 @@ This distinction exists for clarity. When referring to OS-level resources that b
 | 6 | ~6572 | Application Modes | Mode handling, debug endpoints |
 | 7 | ~7180 | Binary Requirements | Binary building, **Display detection** |
 | 8 | ~7654 | Server Binary CLI | CLI flags/commands |
-| 9 | ~10625 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~11002 | Database & Cluster | Database work |
-| 11 | ~11417 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
-| 12 | ~13300 | Server Configuration | Server settings |
-| 13 | ~14364 | Health & Versioning | Health endpoints |
-| 14 | ~14868 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~16460 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~17279 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~21600 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
-| 18 | ~23640 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | ~24955 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | ~25440 | GeoIP | GeoIP features |
-| 21 | ~25513 | Metrics | Metrics/monitoring |
-| 22 | ~26534 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | ~27263 | Update Command | Update feature |
-| 24 | ~27319 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~28217 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~28401 | Makefile | Build system, **make local** |
-| 27 | ~29127 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~30487 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~33001 | Testing & Development | Testing/dev workflow, **100% Coverage** |
-| 30 | ~34652 | ReadTheDocs Documentation | Documentation |
-| 31 | ~35365 | I18N & A11Y | Internationalization |
-| 32 | ~35786 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~36522 | CLI Client & Agent | CLI **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~40628 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~44199 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~44840 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~45863 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~46117 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+| 9 | ~10629 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~11006 | Database & Cluster | Database work |
+| 11 | ~11421 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | ~13304 | Server Configuration | Server settings |
+| 13 | ~14368 | Health & Versioning | Health endpoints |
+| 14 | ~14872 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~16464 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~17283 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~21604 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | ~23644 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | ~24959 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | ~25444 | GeoIP | GeoIP features |
+| 21 | ~25517 | Metrics | Metrics/monitoring |
+| 22 | ~26538 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | ~27267 | Update Command | Update feature |
+| 24 | ~27323 | Privilege Escalation & Service | Service/privilege work |
+| 25 | ~28221 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~28405 | Makefile | Build system, **make local** |
+| 27 | ~29131 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~30491 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~33005 | Testing & Development | Testing/dev workflow, **100% Coverage** |
+| 30 | ~34656 | ReadTheDocs Documentation | Documentation |
+| 31 | ~35369 | I18N & A11Y | Internationalization |
+| 32 | ~35790 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~36600 | CLI Client & Agent | CLI **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~40706 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~44277 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~44918 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~45941 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~46195 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -8147,12 +8147,16 @@ PHASE 5: Server startup (actual server start)
     │   └─ ... and others (see PART 19)
     └─ Start scheduler goroutine
 
-17. Start Tor (if tor binary available):
+17. Start Tor (if tor binary available) - see PART 32:
     ├─ tor not found in PATH → log INFO "Tor not available", skip
     ├─ tor found:
-    │   ├─ Write/update {config_dir}/tor/torrc
-    │   ├─ Start tor process with app user ownership
-    │   ├─ Wait for bootstrap (up to 60s)
+    │   ├─ Create directories: {config_dir}/tor/, {data_dir}/tor/, {data_dir}/tor/site/
+    │   ├─ Set permissions: 0700 for dirs, 0600 for files
+    │   ├─ Generate and write {config_dir}/tor/torrc
+    │   ├─ Start dedicated tor process (TorrcFile + DataDir)
+    │   ├─ Control: Unix socket (Unix/macOS/BSD) or localhost TCP (Windows)
+    │   ├─ Wait for bootstrap (up to 3 min)
+    │   ├─ Create hidden service, log .onion address
     │   └─ Error → log WARN, continue without Tor (non-fatal)
 
 18. Start HTTP server:
@@ -14808,7 +14812,7 @@ When not in cluster mode:
 | `cluster.nodes` | Array of all node URLs (for failover) |
 | `cluster.role` | member (all nodes are equal) |
 | `features.*` | Enabled features (bool or object) |
-| `features.tor.enabled` | Tor hidden service enabled (config) |
+| `features.tor.enabled` | Tor hidden service enabled (auto-detected or admin setting) |
 | `features.tor.running` | Tor process currently running |
 | `features.tor.status` | healthy, error:{short message} |
 | `features.tor.hostname` | Onion address (if running) |
@@ -15293,7 +15297,7 @@ tail -c 2 file.txt | od -An -tx1
 | Endpoint | Default | Browser | curl/CLI | API Client |
 |----------|---------|---------|----------|------------|
 | `/` (public pages) | HTML | HTML | Text | HTML |
-| `/admin/*` | HTML | HTML | HTML | HTML |
+| `/{admin_path}/*` | HTML | HTML | HTML | HTML |
 | `/api/{api_version}/*` | JSON | JSON | Text | JSON |
 | `/healthz` | HTML | HTML | Text | JSON (Accept: application/json) |
 | `*.txt` extension | Text | Text | Text | Text |
@@ -16360,11 +16364,11 @@ Need additional compatible endpoints?"
 | `/graphql` | GET | None | GraphiQL interface |
 | `/graphql` | POST | None | GraphQL queries |
 | `/metrics` | GET | Optional | Prometheus metrics |
-| `/admin` | GET | Session | Admin panel login |
-| `/admin/*` | ALL | Session | Admin panel pages |
+| `/{admin_path}` | GET | Session | Admin panel login |
+| `/{admin_path}/*` | ALL | Session | Admin panel pages |
 | `/api/autodiscover` | GET | None | Server settings for CLI/agent (non-versioned) |
 | `/api/{api_version}/healthz` | GET | None | Health check (JSON) |
-| `/api/{api_version}/admin/*` | ALL | Bearer | Admin API |
+| `/api/{api_version}/{admin_path}/*` | ALL | Bearer | Admin API |
 
 **NOTE: No `/openapi.yaml` endpoint. JSON only.**
 
@@ -18942,7 +18946,7 @@ src/server/template/
 | Layout | Routes | Design Philosophy |
 |--------|--------|-------------------|
 | `public.tmpl` | `/`, `/auth/*`, `/server/*`, `/users/*` | Clean, marketing-friendly, top navigation |
-| `admin.tmpl` | `/admin/*` | Dashboard-style, sidebar navigation, data-dense |
+| `admin.tmpl` | `/{admin_path}/*` | Dashboard-style, sidebar navigation, data-dense |
 
 ### Public Layout (`public.tmpl`)
 
@@ -22047,7 +22051,7 @@ func RegisterAdminRoutes(r *mux.Router) {
 
 | Feature | Description |
 |---------|-------------|
-| Login page | `/admin` (when not logged in) |
+| Login page | `/{admin_path}` (when not logged in) |
 | Login form | Username/password, centered card |
 | Session | Cookie-based (30 days default, configurable) |
 | CSRF | Protection on all forms |
@@ -22077,8 +22081,8 @@ func RegisterAdminRoutes(r *mux.Router) {
 
 | Route | Server Admin Access |
 |-------|---------------------|
-| `/admin/*` | Full access |
-| `/users/*` | NO - treated as guest (redirect to `/admin`) |
+| `/{admin_path}/*` | Full access |
+| `/users/*` | NO - treated as guest (redirect to `/{admin_path}`) |
 | `/auth/login` | Login page |
 | `/auth/logout` | Logout |
 | Public routes (`/`, `/server/*`, etc.) | Guest view (no user-specific content) |
@@ -22681,7 +22685,7 @@ Admin Panel Header:
 
 | Route | Page | Description |
 |-------|------|-------------|
-| `/admin` | Login | Login form (if not authenticated) |
+| `/{admin_path}` | Login | Login form (if not authenticated) |
 | `/{admin_path}/dashboard` | Dashboard | Overview, stats, quick actions |
 | `/{admin_path}/server/settings` | Server Settings | Port, mode, FQDN, etc. |
 | `/{admin_path}/server/branding` | Branding | Title, logo, favicon, colors |
@@ -23077,7 +23081,7 @@ Check for valid admin session
 | Aspect | Admin Session | User Session |
 |--------|---------------|--------------|
 | Cookie name | `admin_session` | `user_session` |
-| Valid routes | `/admin/**` only | `/**` except `/admin/**` |
+| Valid routes | `/{admin_path}/**` only | `/**` except `/{admin_path}/**` |
 | Stored in | `server.db` (admin_sessions) | `users.db` (user_sessions) |
 | Credentials | `admins` table | `users` table |
 | Default duration | 30 days | 7 days |
@@ -30430,6 +30434,7 @@ networks:
 |----------|-------------|
 | Auto-detection | Tor starts automatically if `tor` binary is installed |
 | Always enabled | Docker image includes `tor`, so always enabled in containers |
+| Config location | Torrc in `/config/{projectname}/tor/torrc` |
 | Data persistence | Tor keys in `/data/{projectname}/tor/site/` (survives restart) |
 | .onion address | Persists across container restarts via volume mount |
 | Binary owns Tor | Tor dirs under `{projectname}/`, not separate service |
@@ -33024,6 +33029,7 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 |------|----------|--------------|
 | `server.yml` | `{config_dir}/server.yml` (see PART 4) | Server first run |
 | `cli.yml` | `~/.config/{projectorg}/{projectname}/cli.yml` | CLI first run |
+| Tor config | `{config_dir}/tor/torrc` (see PART 32) | When Tor enabled |
 | Tor data | `{data_dir}/tor/` (see PART 32) | When Tor enabled |
 
 **Why runtime-generated?**
@@ -35789,6 +35795,11 @@ func TestAccessibility(t *testing.T) {
 
 **ALL projects MUST have built-in Tor hidden service support.**
 
+**Tor is used EXCLUSIVELY for hidden services (server-side .onion hosting). It is NOT used for:**
+- SOCKS proxy / browsing through Tor
+- Outbound connections via Tor
+- Tor relay or exit node functionality
+
 Tor integration uses **external Tor binary** via `github.com/cretz/bine`. This maintains `CGO_ENABLED=0` compatibility for static binaries while providing full Tor hidden service functionality.
 
 ## Configuration
@@ -35797,10 +35808,8 @@ Tor integration uses **external Tor binary** via `github.com/cretz/bine`. This m
 server:
   tor:
     # Path to Tor binary (auto-detected if empty)
+    # Leave empty for auto-detection (recommended)
     binary: ""
-    # Data directory for this instance's Tor data
-    # Default: {data_dir}/tor/
-    data_dir: ""
 ```
 
 **Notes:**
@@ -35808,10 +35817,14 @@ server:
 - **Auto-enabled if tor binary is installed** - no enable flag needed
 - Binary manages its OWN Tor instance (not system Tor)
 - When binary stops, its Tor instance stops (clean shutdown)
-- .onion address derived from keys in `{data_dir}/tor/site/`
 - Completely isolated from any system Tor installation
 - **App handles EVERYTHING** - directory creation, permissions, torrc generation, process management
 - No external scripts needed - all Tor management is built into the server binary
+
+**Tor directories are NOT configurable** - always derived from app's directories:
+- Config: `{config_dir}/tor/` (torrc file)
+- Data: `{data_dir}/tor/` (runtime data, hidden service keys)
+- Log: `{log_dir}/tor.log`
 
 ## Tor Process Management 
 
@@ -35830,15 +35843,25 @@ This prevents conflicts with any existing Tor installation on the system.
    │   └─ BSD: /usr/local/bin/tor
    └─ NOT FOUND: Log INFO, disable Tor features, continue without Tor
 
-2. Start DEDICATED Tor process:
-   ├─ Use application's own DataDir: `{data_dir}/tor/`
-   ├─ Use random available ControlPort (not 9051)
-   ├─ Disable SocksPort (server-only, not browsing)
+2. Create directories with proper permissions:
+   ├─ `{config_dir}/tor/` (0700) - torrc location
+   ├─ `{data_dir}/tor/` (0700) - Tor runtime data
+   └─ `{data_dir}/tor/site/` (0700) - Hidden service keys
+
+3. Generate and write torrc:
+   ├─ Generate torrc content with getTorConfig()
+   └─ Write to `{config_dir}/tor/torrc` (0600)
+
+4. Start DEDICATED Tor process:
+   ├─ TorrcFile: `{config_dir}/tor/torrc`
+   ├─ DataDir: `{data_dir}/tor/`
+   ├─ Control connection: Unix socket (Unix/macOS/BSD) or localhost TCP (Windows)
+   ├─ Disable SocksPort (hidden-service-only, not browsing)
    ├─ Completely isolated from system Tor
    ├─ Wait for bootstrap completion
    └─ Create hidden service via ADD_ONION
 
-3. On application shutdown:
+5. On application shutdown:
    └─ Terminate the dedicated Tor process
 ```
 
@@ -35846,11 +35869,12 @@ This prevents conflicts with any existing Tor installation on the system.
 
 | Reason | Description |
 |--------|-------------|
-| **No conflicts** | System Tor uses 9050/9051, we use random ports |
+| **No conflicts** | System Tor uses 9050/9051, we use Unix socket (or localhost TCP on Windows) |
 | **Isolation** | Our DataDir is separate from system Tor |
 | **Clean shutdown** | We control the process lifecycle |
 | **No permissions issues** | Don't need access to system Tor control |
 | **Predictable behavior** | Always same configuration |
+| **Security** | Unix socket is local-only; Windows uses 127.0.0.1 only |
 
 ### Tor Logging Levels 
 
@@ -35883,24 +35907,59 @@ Use `github.com/cretz/bine` (pure Go, CGO_ENABLED=0 compatible):
 ```go
 import (
     "github.com/cretz/bine/tor"
+    "runtime"
 )
 
 func startDedicatedTor(ctx context.Context, localPort int) (*tor.Tor, *tor.OnionService, error) {
-    // Start OUR OWN Tor process - completely separate from system Tor
-    t, err := tor.Start(ctx, &tor.StartConf{
-        // Our own data directory - isolated from system Tor
-        DataDir: paths.GetDataDir() + "/tor",
+    configDir := paths.GetConfigDir()
+    dataDir := paths.GetDataDir()
 
-        // Let bine pick available ports (avoids conflict with system Tor 9050/9051)
-        // These are set automatically to available ports
-        NoAutoSocksPort: false,
+    // Ensure all Tor directories exist with proper permissions
+    if err := ensureTorDirs(); err != nil {
+        return nil, nil, fmt.Errorf("failed to create tor directories: %w", err)
+    }
+
+    // Paths
+    torrcPath := filepath.Join(configDir, "tor", "torrc")
+    torDataDir := filepath.Join(dataDir, "tor")
+    controlSocket := filepath.Join(torDataDir, "control.sock")
+
+    // Generate and write torrc to config directory
+    torrcContent := getTorConfig(controlSocket)
+    if err := ensureTorFile(torrcPath, []byte(torrcContent)); err != nil {
+        return nil, nil, fmt.Errorf("failed to write torrc: %w", err)
+    }
+
+    // Build platform-specific StartConf
+    conf := &tor.StartConf{
+        // Use our custom torrc from config directory
+        TorrcFile: torrcPath,
+
+        // Runtime data directory - isolated from system Tor
+        DataDir: torDataDir,
+
+        // Disable SOCKS - hidden service only, not for browsing
+        NoAutoSocksPort: true,
 
         // Optional: specify path if not in PATH
         // ExePath: "/usr/bin/tor",
 
         // Debug output (development only)
         // DebugWriter: os.Stderr,
-    })
+    }
+
+    // Platform-specific control connection
+    if runtime.GOOS == "windows" {
+        // Windows: Unix sockets not supported, use localhost TCP
+        // bine will auto-select available port when ControlPort is 0
+        // We don't set ControlSocket, so it uses TCP
+    } else {
+        // Unix/macOS/BSD: Use Unix socket (more secure, no network exposure)
+        conf.ControlSocket = controlSocket
+    }
+
+    // Start OUR OWN Tor process - completely separate from system Tor
+    t, err := tor.Start(ctx, conf)
     if err != nil {
         return nil, nil, fmt.Errorf("failed to start dedicated tor: %w", err)
     }
@@ -35937,15 +35996,20 @@ func shutdownTor(t *tor.Tor) error {
 }
 ```
 
-### Port Allocation
+### Port/Socket Allocation
 
-| Port | System Tor | Our Tor |
-|------|------------|---------|
-| SocksPort | 9050 | 0 (disabled - server only) |
-| ControlPort | 9051 | Random available |
-| DataDir | `/var/lib/tor` | `{data_dir}/tor/` |
+| Resource | System Tor | Our Tor (Unix) | Our Tor (Windows) |
+|----------|------------|----------------|-------------------|
+| SocksPort | 9050 | 0 (disabled) | 0 (disabled) |
+| ControlPort | 9051 | 0 (disabled) | 127.0.0.1:random |
+| ControlSocket | N/A | `{data_dir}/tor/control.sock` | N/A (not supported) |
+| DataDir | `/var/lib/tor` | `{data_dir}/tor/` | `{data_dir}\tor\` |
 
-**bine automatically selects available ControlPort**, ensuring no conflict with system Tor. SocksPort is disabled since we're running as a hidden service server, not browsing through Tor.
+**Platform-specific control connection:**
+- **Unix/macOS/BSD**: Use Unix ControlSocket (more secure, no network exposure)
+- **Windows**: Use TCP ControlPort on `127.0.0.1` with random available port (Unix sockets not supported)
+
+SocksPort is disabled on all platforms - hidden service only, not for browsing.
 
 ### Tor Configuration Optimizations 
 
@@ -35953,24 +36017,33 @@ func shutdownTor(t *tor.Tor) error {
 
 ```go
 // Optimized torrc settings for hidden-service-only mode
-func getTorConfig() string {
-    return `
+// controlSocket is only used on Unix; ignored on Windows
+func getTorConfig(controlSocket string) string {
+    // Platform-specific control connection
+    var controlConfig string
+    if runtime.GOOS == "windows" {
+        // Windows: Unix sockets not supported, use localhost TCP
+        controlConfig = "ControlPort auto"
+    } else {
+        // Unix/macOS/BSD: Use Unix socket (more secure, no network exposure)
+        controlConfig = fmt.Sprintf("ControlPort 0\nControlSocket %s", controlSocket)
+    }
+
+    return fmt.Sprintf(`
 # Hidden service only - not a relay or exit
 SocksPort 0
-# No SOCKS proxy needed - we're server only
 
-# Disable unused features
+# Platform-specific control connection
+%s
+
+# Disable unused features - not a relay or exit
 ExitRelay 0
 ExitPolicy reject *:*
-# Never act as exit node
-
-# Don't relay traffic for others
 ORPort 0
 DirPort 0
 
 # Reduce circuit building (we only need service circuits)
 MaxCircuitDirtiness 600
-# Keep circuits longer
 
 # Reduce bandwidth for Tor overhead
 BandwidthRate 1 MB
@@ -35978,7 +36051,6 @@ BandwidthBurst 2 MB
 
 # Hidden service optimizations
 HiddenServiceSingleHopMode 0
-# Keep full anonymity (3 hops)
 
 # Faster startup
 FetchDirInfoEarly 1
@@ -35986,31 +36058,33 @@ FetchDirInfoExtraEarly 1
 
 # Reduce memory usage
 DisableDebuggerAttachment 1
-`
+`, controlConfig)
 }
 ```
 
 | Setting | Value | Reason |
 |---------|-------|--------|
-| `SocksPort 0` | Disabled | Not browsing, server only |
+| `SocksPort 0` | Disabled | Hidden service only, not browsing |
+| `ControlPort` | `0` (Unix) / `auto` (Windows) | Unix uses socket; Windows uses localhost TCP |
+| `ControlSocket` | `{data_dir}/tor/control.sock` | Unix only - secure, no network exposure |
 | `ExitRelay 0` | Disabled | Not an exit node |
 | `ORPort 0` | Disabled | Not relaying traffic |
 | `DirPort 0` | Disabled | Not a directory server |
 | `ExitPolicy reject *:*` | Block all | Extra safety |
 | `MaxCircuitDirtiness 600` | 10 minutes | Keep circuits longer |
 
-### Tor Process Lifecycle 
+### Tor Process Lifecycle
 
 **The application MUST fully manage the Tor process lifecycle.**
 
-| Event | Action |
-|-------|--------|
-| **App Start** | Find Tor binary → Start dedicated Tor process → Wait for bootstrap → Create hidden service |
-| **App Running** | Monitor Tor process, restart if crashed |
-| **App Shutdown** | Terminate Tor process gracefully (SIGTERM) |
-| **App Crash** | Tor process should terminate (child process dies with parent) |
-| **SIGTERM/SIGINT** | Graceful shutdown: stop Tor, then exit |
-| **SIGHUP** | Reload config, restart Tor if settings changed |
+| Event | Action | Notes |
+|-------|--------|-------|
+| **App Start** | Find Tor binary → Start dedicated Tor process → Wait for bootstrap → Create hidden service | All platforms |
+| **App Running** | Monitor Tor process, restart if crashed | All platforms |
+| **App Shutdown** | Terminate Tor process gracefully | Unix: SIGTERM; Windows: TerminateProcess |
+| **App Crash** | Tor process should terminate (child process dies with parent) | All platforms |
+| **Shutdown signal** | Graceful shutdown: stop Tor, then exit | Unix: SIGTERM/SIGINT; Windows: CTRL_C_EVENT |
+| **Reload signal** | Reload config, restart Tor if settings changed | Unix: SIGHUP; Windows: N/A (use API) |
 
 ### Tor Restart Triggers 
 
@@ -36210,24 +36284,27 @@ No impact on binary size - Tor is external. Application binary remains small and
 
 **Tor dirs are ALWAYS under the app's dirs (binary owns Tor):**
 
-| Data | Location |
-|------|----------|
-| Tor config directory | `{config_dir}/tor/` |
-| Tor config file | `{config_dir}/tor/torrc` |
-| Tor data directory | `{data_dir}/tor/` |
-| Hidden service keys | `{data_dir}/tor/site/` |
-| Tor process PID | `{data_dir}/tor/tor.pid` |
-| Tor log file | `{log_dir}/tor.log` |
+| Data | Location | Notes |
+|------|----------|-------|
+| Tor config directory | `{config_dir}/tor/` | |
+| Tor config file | `{config_dir}/tor/torrc` | |
+| Tor data directory | `{data_dir}/tor/` | |
+| Control socket | `{data_dir}/tor/control.sock` | Unix/macOS/BSD only |
+| Hidden service keys | `{data_dir}/tor/site/` | |
+| Tor process PID | `{data_dir}/tor/tor.pid` | |
+| Tor log file | `{log_dir}/tor.log` | |
 
-**This applies to ALL environments:**
+**Paths resolve to (based on environment):**
 
-| Environment | Tor Config | Tor Data | Tor Log |
-|-------------|------------|----------|---------|
-| Docker | `/config/{projectname}/tor/` | `/data/{projectname}/tor/` | `/data/log/{projectname}/tor.log` |
-| Linux root | `/etc/{projectorg}/{projectname}/tor/` | `/var/lib/{projectorg}/{projectname}/tor/` | `/var/log/{projectorg}/{projectname}/tor.log` |
-| Linux user | `~/.config/{projectorg}/{projectname}/tor/` | `~/.local/share/{projectorg}/{projectname}/tor/` | `~/.local/log/{projectorg}/{projectname}/tor.log` |
-| macOS | `~/Library/Application Support/.../tor/` | Same | `~/Library/Logs/{projectorg}/{projectname}/tor.log` |
-| Windows | `%AppData%\...\tor\` | Same | `%AppData%\...\log\tor.log` |
+| Environment | {config_dir} | {data_dir} | {log_dir} |
+|-------------|--------------|------------|-----------|
+| Docker | `/config/{projectname}/` | `/data/{projectname}/` | `/data/log/{projectname}/` |
+| Linux root | `/etc/{projectorg}/{projectname}/` | `/var/lib/{projectorg}/{projectname}/` | `/var/log/{projectorg}/{projectname}/` |
+| Linux user | `~/.config/{projectorg}/{projectname}/` | `~/.local/share/{projectorg}/{projectname}/` | `~/.local/log/{projectorg}/{projectname}/` |
+| macOS | `~/Library/Application Support/{projectorg}/{projectname}/` | Same as config | `~/Library/Logs/{projectorg}/{projectname}/` |
+| Windows | `%AppData%\{projectorg}\{projectname}\` | Same as config | `%AppData%\{projectorg}\{projectname}\log\` |
+
+**Tor directories are ALWAYS `{config_dir}/tor/`, `{data_dir}/tor/`, `{log_dir}/tor.log` - never hardcoded paths.**
 
 ### Runtime Directory Handling 
 
@@ -36302,25 +36379,27 @@ func ensureTorFile(path string, content []byte) error {
 | Rule | Description |
 |------|-------------|
 | **Create before write** | Dirs must exist before creating torrc or keys |
-| **Permissions: 0700** | Tor directories are private (owner only, `rwx------`) |
-| **Permissions: 0600** | Tor files are private (owner only, `rw-------`) |
+| **Permissions: 0700** | Tor directories are private (Unix: `rwx------`) |
+| **Permissions: 0600** | Tor files are private (Unix: `rw-------`) |
 | **Ownership** | Current user/group (NOT tor user, app owns everything) |
-| **Enforce on exist** | Always chmod/chown even if dir/file already exists |
+| **Enforce on exist** | Always chmod/chown even if dir/file already exists (Unix only) |
 | **Idempotent** | Safe to call multiple times |
+| **Windows** | chmod/chown skipped; Windows uses inherited ACLs from user profile |
 
-**Tor File Permissions:**
+**Tor File Permissions (Unix - Windows uses inherited ACLs):**
 
-| File/Dir | Path | Permissions | Owner |
-|----------|------|-------------|-------|
-| Config dir | `{config_dir}/tor/` | `0700` | app user |
-| torrc | `{config_dir}/tor/torrc` | `0600` | app user |
-| Data dir | `{data_dir}/tor/` | `0700` | app user |
-| Site dir | `{data_dir}/tor/site/` | `0700` | app user |
-| Private key | `{data_dir}/tor/site/hs_ed25519_secret_key` | `0600` | app user |
-| Public key | `{data_dir}/tor/site/hs_ed25519_public_key` | `0600` | app user |
-| Hostname | `{data_dir}/tor/site/hostname` | `0600` | app user |
-| PID file | `{data_dir}/tor/tor.pid` | `0600` | app user |
-| Log file | `{log_dir}/tor.log` | `0600` | app user |
+| File/Dir | Path | Permissions | Owner | Notes |
+|----------|------|-------------|-------|-------|
+| Config dir | `{config_dir}/tor/` | `0700` | app user | |
+| torrc | `{config_dir}/tor/torrc` | `0600` | app user | |
+| Data dir | `{data_dir}/tor/` | `0700` | app user | |
+| Control socket | `{data_dir}/tor/control.sock` | `0600` | app user | Unix only |
+| Site dir | `{data_dir}/tor/site/` | `0700` | app user | |
+| Private key | `{data_dir}/tor/site/hs_ed25519_secret_key` | `0600` | app user | |
+| Public key | `{data_dir}/tor/site/hs_ed25519_public_key` | `0600` | app user | |
+| Hostname | `{data_dir}/tor/site/hostname` | `0600` | app user | |
+| PID file | `{data_dir}/tor/tor.pid` | `0600` | app user | |
+| Log file | `{log_dir}/tor.log` | `0600` | app user | |
 
 ## Admin Panel
 
@@ -36381,7 +36460,7 @@ func ensureTorFile(path string, content []byte) error {
 
 For prefixes longer than 6 characters, use external tools with GPU acceleration. The admin panel includes documentation (expandable help section):
 
-**Using mkp224o (CPU):**
+**Using mkp224o (Linux/macOS/BSD):**
 ```bash
 # Install
 git clone https://github.com/cathugger/mkp224o
@@ -36396,7 +36475,7 @@ cd mkp224o && ./autogen.sh && ./configure && make
 #   └── hs_ed25519_secret_key
 ```
 
-**Using mkp224o (GPU - much faster):**
+**Using mkp224o with GPU (Linux/macOS - much faster):**
 ```bash
 # With CUDA support
 ./configure --enable-cuda
@@ -36405,6 +36484,11 @@ make
 # Generate
 ./mkp224o -d ./keys myapp12
 ```
+
+**Windows users:**
+- Use WSL (Windows Subsystem for Linux) to run mkp224o
+- Or use pre-built Windows binaries if available from trusted sources
+- Generated keys are portable - generate on any platform, import via admin panel
 
 **Importing keys:**
 1. Generate keys using mkp224o or similar tool
@@ -36456,10 +36540,11 @@ make
 
 | Scenario | Behavior |
 |----------|----------|
-| First run | Tor starts, generates .onion address, saves to config |
-| Subsequent runs | Tor starts, uses existing .onion address |
-| Disabled in config | Tor does not start, no .onion available |
-| Regenerate address | Old keys deleted, new .onion generated, config updated |
+| First run (tor found) | Tor starts, generates .onion address, keys saved to `{data_dir}/tor/site/` |
+| Subsequent runs | Tor starts, loads existing keys, same .onion address |
+| Tor binary not found | Log INFO, continue without Tor (not an error) |
+| Regenerate address | Old keys deleted from `{data_dir}/tor/site/`, new .onion generated |
+| Import keys | Keys replaced in `{data_dir}/tor/site/`, Tor restarts with new address |
 | Network issues | Tor retries connection automatically |
 
 ## CLI
@@ -40648,7 +40733,7 @@ binaries/
 | **Purpose** | Manage server, configuration | Use application features |
 | **Storage** | `admins` table | `users` table |
 | **Required** | **YES - all projects** | **NO - optional** |
-| **Access** | `/admin/*` only | `/users/*` routes |
+| **Access** | `/{admin_path}/*` only | `/users/*` routes |
 | **Created by** | Setup wizard, admin invite | Registration, admin invitation |
 
 **See PART 17: ADMIN PANEL for Server Admin authentication, setup wizard, MFA, and admin management.**
@@ -40839,7 +40924,7 @@ Admin clicks "Invite New User"
 
 | Route | Regular User Access |
 |-------|---------------------|
-| `/admin/*` | NO - 403 Forbidden (unless user has admin role) |
+| `/{admin_path}/*` | NO - 403 Forbidden (unless user has admin role) |
 | `/users/*` | Full access to own profile, settings, tokens |
 | `/auth/login` | Login page |
 | `/auth/logout` | Logout |
@@ -42493,7 +42578,7 @@ PATCH /api/{api_version}/users/settings
 | **Params over queries** | Use path params, limit query params to defined cases |
 | **Duplicated when needed** | Same resource may exist in multiple scopes |
 | **Auth under /auth/** | NEVER `/login`, `/register`, `/password/*` at root - ALWAYS `/auth/login`, `/auth/register`, `/auth/password/*`, etc. |
-| **Admin scoped** | `/admin/**` requires authenticated admin - unauthenticated flows (invites) go through `/auth/` |
+| **Admin scoped** | `/{admin_path}/**` requires authenticated admin - unauthenticated flows (invites) go through `/auth/` |
 
 **Note:** `{api_version}` defaults to `v1` but is configurable via `server.api_version` in server.yml. Do not hardcode `v1` in code.
 
@@ -42671,7 +42756,7 @@ curl https://api.example.com/api/autodiscover
 
 | Cookie | Scope | Max Age | Notes |
 |--------|-------|---------|-------|
-| `admin_session` | `/admin/` | 30 days | Admin web sessions |
+| `admin_session` | `/{admin_path}/` | 30 days | Admin web sessions |
 | `user_session` | `/users/`, `/orgs/` | 7 days | User web sessions |
 
 ## Web Routes
@@ -42750,11 +42835,11 @@ Organizations - only for projects with multi-user collaboration.
 | `/orgs/{slug}/security/sessions` | Active sessions (org-wide) |
 | `/orgs/{slug}/billing` | Billing & subscription (if applicable) |
 
-### Admin (`/admin/`)
+### Admin (`/{admin_path}/`)
 
 | Path | Description |
 |------|-------------|
-| `/admin` | Dashboard |
+| `/{admin_path}` | Dashboard |
 | `/{admin_path}/profile` | Your admin account (password, API token, 2FA) |
 | `/{admin_path}/profile/preferences` | Admin preferences (theme, notifications) |
 
@@ -46618,6 +46703,7 @@ make docker # Build Docker image
 - [ ] .onion address generation
 - [ ] Vanity address generation option
 - [ ] Tor status in admin panel
+- [ ] Tor config in `{config_dir}/tor/torrc`
 - [ ] Tor data in `{data_dir}/tor/`
 - [ ] Tor fields in `/api/{api_version}/healthz`:
   - [ ] `features.tor.enabled` (yes/no)

@@ -11,7 +11,6 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/parser"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // PornHubEngine implements the PornHub search engine using HTML scraping
@@ -22,9 +21,9 @@ type PornHubEngine struct {
 }
 
 // NewPornHubEngine creates a new PornHub engine
-func NewPornHubEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *PornHubEngine {
+func NewPornHubEngine(appConfig *config.AppConfig) *PornHubEngine {
 	e := &PornHubEngine{
-		BaseEngine: NewBaseEngine("pornhub", "PornHub", "https://www.pornhub.com", 1, appConfig, torClient),
+		BaseEngine: NewBaseEngine("pornhub", "PornHub", "https://www.pornhub.com", 1, appConfig),
 		parser:     parser.NewPornHubParser(),
 	}
 	// Set capabilities per IDEA.md

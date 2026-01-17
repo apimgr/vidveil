@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // SleazyNeasyEngine searches SleazyNeasy
 type SleazyNeasyEngine struct{ *BaseEngine }
 
 // NewSleazyNeasyEngine creates a new SleazyNeasy engine
-func NewSleazyNeasyEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *SleazyNeasyEngine {
-	return &SleazyNeasyEngine{NewBaseEngine("sleazyneasy", "SleazyNeasy", "https://www.sleazyneasy.com", 3, appConfig, torClient)}
+func NewSleazyNeasyEngine(appConfig *config.AppConfig) *SleazyNeasyEngine {
+	return &SleazyNeasyEngine{NewBaseEngine("sleazyneasy", "SleazyNeasy", "https://www.sleazyneasy.com", 3, appConfig)}
 }
 
 // Search performs a search on SleazyNeasy

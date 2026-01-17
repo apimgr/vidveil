@@ -9,7 +9,6 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // EpornerEngine searches Eporner using their public JSON API
@@ -38,9 +37,9 @@ type epornerVideo struct {
 }
 
 // NewEpornerEngine creates a new Eporner engine
-func NewEpornerEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *EpornerEngine {
+func NewEpornerEngine(appConfig *config.AppConfig) *EpornerEngine {
 	e := &EpornerEngine{
-		BaseEngine: NewBaseEngine("eporner", "Eporner", "https://www.eporner.com", 2, appConfig, torClient),
+		BaseEngine: NewBaseEngine("eporner", "Eporner", "https://www.eporner.com", 2, appConfig),
 	}
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{

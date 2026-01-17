@@ -1,65 +1,18 @@
 {{define "content"}}
+{{/* Per AI.md PART 30: Tor is ONLY for hidden service, NOT for outbound proxy */}}
 <div class="card">
-    <h2>Tor Status</h2>
+    <h2>Hidden Service Status</h2>
     <table class="info-table">
-        <tr><td>Tor Enabled</td><td>{{if .TorEnabled}}<span class="badge badge-success">Active</span>{{else}}<span class="badge badge-warning">Disabled</span>{{end}}</td></tr>
-        <tr><td>Connection</td><td>{{if .TorConnected}}<span class="badge badge-success">Connected</span>{{else}}<span class="badge badge-error">Disconnected</span>{{end}}</td></tr>
-        {{if .TorEnabled}}
-        <tr><td>SOCKS Proxy</td><td>{{.TorProxy}}</td></tr>
-        <tr><td>Control Port</td><td>{{.TorControlPort}}</td></tr>
-        <tr><td>Current Circuit</td><td>{{.TorCircuit}}</td></tr>
+        <tr><td>Tor Binary</td><td>{{if .TorInstalled}}<span class="badge badge-success">Installed</span>{{else}}<span class="badge badge-warning">Not Installed</span>{{end}}</td></tr>
+        <tr><td>Service Status</td><td>{{if .TorRunning}}<span class="badge badge-success">Running</span>{{else}}<span class="badge badge-warning">Stopped</span>{{end}}</td></tr>
+        {{if .TorRunning}}
+        <tr><td>.onion Address</td><td>{{if .OnionAddress}}<code>{{.OnionAddress}}</code>{{else}}<span class="text-muted">Not configured</span>{{end}}</td></tr>
         {{end}}
     </table>
+    <p class="help-text mt-md">Hidden service auto-starts when Tor binary is installed. No configuration required.</p>
 </div>
 
-<div class="card">
-    <h2>Tor Configuration</h2>
-    <form id="tor-form" onsubmit="saveTorSettings(event)">
-        <div class="form-group">
-            <label class="toggle-label">
-                <input type="checkbox" id="tor-enabled"{{if .Config.Search.Tor.Enabled}} checked{{end}}>
-                <span>Enable Tor</span>
-            </label>
-        </div>
-        <div class="form-group">
-            <label for="tor-proxy">SOCKS Proxy Address</label>
-            <input type="text" id="tor-proxy" value="{{.Config.Search.Tor.Proxy}}" placeholder="127.0.0.1:9050">
-            <p class="help-text">Tor SOCKS5 proxy address</p>
-        </div>
-        <div class="form-group">
-            <label for="tor-control">Control Port</label>
-            <input type="text" id="tor-control" value="{{.Config.Search.Tor.ControlPort}}" placeholder="127.0.0.1:9051">
-            <p class="help-text">Tor control port for circuit management</p>
-        </div>
-        <div class="form-group">
-            <label class="toggle-label">
-                <input type="checkbox" id="tor-force-all"{{if .Config.Search.Tor.ForceAll}} checked{{end}}>
-                <span>Force All Traffic Through Tor</span>
-            </label>
-            <p class="help-text">Route all search requests through Tor</p>
-        </div>
-        <div class="form-group">
-            <label class="toggle-label">
-                <input type="checkbox" id="tor-rotate"{{if .Config.Search.Tor.RotateCircuit}} checked{{end}}>
-                <span>Auto-Rotate Circuit</span>
-            </label>
-            <p class="help-text">Automatically rotate Tor circuit on each request</p>
-        </div>
-        <div class="form-group">
-            <label class="toggle-label">
-                <input type="checkbox" id="tor-clearnet-fallback"{{if .Config.Search.Tor.ClearnetFallback}} checked{{end}}>
-                <span>Clearnet Fallback</span>
-            </label>
-            <p class="help-text">Fall back to clearnet if Tor fails</p>
-        </div>
-        <div class="button-group">
-            <button type="submit" class="btn btn-primary">Save Changes</button>
-            <button type="button" onclick="testTor()" class="btn btn-secondary">Test Connection</button>
-            <button type="button" onclick="rotateTorCircuit()" class="btn btn-secondary">Rotate Circuit</button>
-        </div>
-    </form>
-</div>
-
+{{if .TorInstalled}}
 <div class="card">
     <h2>Onion Service</h2>
     <table class="info-table">
@@ -71,7 +24,7 @@
     <form id="onion-form" onsubmit="saveOnionSettings(event)">
         <div class="form-group">
             <label class="toggle-label">
-                <input type="checkbox" id="onion-enabled"{{if .Config.Server.Tor.Onion.Enabled}} checked{{end}}>
+                <input type="checkbox" id="onion-enabled"{{if .OnionEnabled}} checked{{end}}>
                 <span>Enable Onion Service</span>
             </label>
         </div>
@@ -147,65 +100,31 @@
         </div>
     </form>
 </div>
+{{else}}
+<div class="card">
+    <div class="alert alert-info">
+        <strong>Tor not installed</strong>
+        <p>Install Tor to enable hidden service functionality.</p>
+        <code>apt install tor</code> or <code>apk add tor</code>
+    </div>
+</div>
+{{end}}
 {{end}}
 
 {{define "scripts"}}
 <script>
-async function saveTorSettings(e) {
+async function saveOnionSettings(e) {
     e.preventDefault();
     try {
         const resp = await fetch('/api/v1/admin/server/tor', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                enabled: document.getElementById('tor-enabled').checked,
-                proxy: document.getElementById('tor-proxy').value,
-                control_port: document.getElementById('tor-control').value,
-                force_all: document.getElementById('tor-force-all').checked,
-                rotate_circuit: document.getElementById('tor-rotate').checked,
-                clearnet_fallback: document.getElementById('tor-clearnet-fallback').checked
+                enabled: document.getElementById('onion-enabled').checked
             })
         });
         const data = await resp.json();
-        if (data.success) { showSuccess('Tor settings saved!'); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
-}
-
-async function testTor() {
-    try {
-        const resp = await fetch('/api/v1/admin/server/tor/test', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) { showSuccess('Tor connection successful! IP: ' + data.data.ip); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
-}
-
-async function rotateTorCircuit() {
-    try {
-        const resp = await fetch('/api/v1/admin/server/tor/regenerate', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) { showSuccess('Circuit rotated successfully!'); location.reload(); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
-}
-
-async function saveOnionSettings(e) {
-    e.preventDefault();
-    try {
-        const resp = await fetch('/api/v1/admin/config', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                server: {
-                    tor: {
-                        onion: { enabled: document.getElementById('onion-enabled').checked }
-                    }
-                }
-            })
-        });
-        const data = await resp.json();
-        if (data.success) { showSuccess('Onion service settings saved!'); }
+        if (data.success) { showSuccess('Hidden service settings saved!'); }
         else { showError('Error: ' + data.error); }
     } catch (e) { showError('Error: ' + e.message); }
 }

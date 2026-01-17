@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // TubeGaloreEngine searches TubeGalore
 type TubeGaloreEngine struct{ *BaseEngine }
 
 // NewTubeGaloreEngine creates a new TubeGalore engine
-func NewTubeGaloreEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *TubeGaloreEngine {
-	return &TubeGaloreEngine{NewBaseEngine("tubegalore", "TubeGalore", "https://www.tubegalore.com", 3, appConfig, torClient)}
+func NewTubeGaloreEngine(appConfig *config.AppConfig) *TubeGaloreEngine {
+	return &TubeGaloreEngine{NewBaseEngine("tubegalore", "TubeGalore", "https://www.tubegalore.com", 3, appConfig)}
 }
 
 // Search performs a search on TubeGalore

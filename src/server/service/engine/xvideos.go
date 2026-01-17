@@ -9,7 +9,6 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/parser"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // XVideosEngine implements the XVideos search engine
@@ -19,9 +18,9 @@ type XVideosEngine struct {
 }
 
 // NewXVideosEngine creates a new XVideos engine
-func NewXVideosEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *XVideosEngine {
+func NewXVideosEngine(appConfig *config.AppConfig) *XVideosEngine {
 	e := &XVideosEngine{
-		BaseEngine: NewBaseEngine("xvideos", "XVideos", "https://www.xvideos.com", 1, appConfig, torClient),
+		BaseEngine: NewBaseEngine("xvideos", "XVideos", "https://www.xvideos.com", 1, appConfig),
 		parser:     parser.NewXVideosParser(),
 	}
 	// Set capabilities per IDEA.md

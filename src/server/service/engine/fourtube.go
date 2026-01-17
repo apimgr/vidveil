@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // FourTubeEngine searches 4Tube
 type FourTubeEngine struct{ *BaseEngine }
 
 // NewFourTubeEngine creates a new 4Tube engine
-func NewFourTubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *FourTubeEngine {
-	return &FourTubeEngine{NewBaseEngine("4tube", "4Tube", "https://www.4tube.com", 3, appConfig, torClient)}
+func NewFourTubeEngine(appConfig *config.AppConfig) *FourTubeEngine {
+	return &FourTubeEngine{NewBaseEngine("4tube", "4Tube", "https://www.4tube.com", 3, appConfig)}
 }
 
 // Search performs a search on 4Tube

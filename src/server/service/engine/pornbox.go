@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // PornboxEngine searches Pornbox
 type PornboxEngine struct{ *BaseEngine }
 
 // NewPornboxEngine creates a new Pornbox engine
-func NewPornboxEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *PornboxEngine {
-	return &PornboxEngine{NewBaseEngine("pornbox", "Pornbox", "https://pornbox.com", 4, appConfig, torClient)}
+func NewPornboxEngine(appConfig *config.AppConfig) *PornboxEngine {
+	return &PornboxEngine{NewBaseEngine("pornbox", "Pornbox", "https://pornbox.com", 4, appConfig)}
 }
 
 // Search performs a search on Pornbox

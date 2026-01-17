@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // FuxEngine searches Fux
 type FuxEngine struct{ *BaseEngine }
 
 // NewFuxEngine creates a new Fux engine
-func NewFuxEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *FuxEngine {
-	return &FuxEngine{NewBaseEngine("fux", "Fux", "https://www.fux.com", 3, appConfig, torClient)}
+func NewFuxEngine(appConfig *config.AppConfig) *FuxEngine {
+	return &FuxEngine{NewBaseEngine("fux", "Fux", "https://www.fux.com", 3, appConfig)}
 }
 
 // Search performs a search on Fux

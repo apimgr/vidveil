@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // HqpornerEngine searches Hqporner
 type HqpornerEngine struct{ *BaseEngine }
 
 // NewHqpornerEngine creates a new Hqporner engine
-func NewHqpornerEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *HqpornerEngine {
-	return &HqpornerEngine{NewBaseEngine("hqporner", "Hqporner", "https://hqporner.com", 4, appConfig, torClient)}
+func NewHqpornerEngine(appConfig *config.AppConfig) *HqpornerEngine {
+	return &HqpornerEngine{NewBaseEngine("hqporner", "Hqporner", "https://hqporner.com", 4, appConfig)}
 }
 
 // Search performs a search on Hqporner

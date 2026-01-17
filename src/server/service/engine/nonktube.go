@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // NonkTubeEngine searches NonkTube
 type NonkTubeEngine struct{ *BaseEngine }
 
 // NewNonkTubeEngine creates a new NonkTube engine
-func NewNonkTubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *NonkTubeEngine {
-	return &NonkTubeEngine{NewBaseEngine("nonktube", "NonkTube", "https://www.nonktube.com", 4, appConfig, torClient)}
+func NewNonkTubeEngine(appConfig *config.AppConfig) *NonkTubeEngine {
+	return &NonkTubeEngine{NewBaseEngine("nonktube", "NonkTube", "https://www.nonktube.com", 4, appConfig)}
 }
 
 // Search performs a search on NonkTube

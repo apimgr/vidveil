@@ -9,7 +9,6 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/parser"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // XNXXEngine implements the XNXX search engine
@@ -19,9 +18,9 @@ type XNXXEngine struct {
 }
 
 // NewXNXXEngine creates a new XNXX engine
-func NewXNXXEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *XNXXEngine {
+func NewXNXXEngine(appConfig *config.AppConfig) *XNXXEngine {
 	e := &XNXXEngine{
-		BaseEngine: NewBaseEngine("xnxx", "XNXX", "https://www.xnxx.com", 1, appConfig, torClient),
+		BaseEngine: NewBaseEngine("xnxx", "XNXX", "https://www.xnxx.com", 1, appConfig),
 		parser:     parser.NewXNXXParser(),
 	}
 	// Set capabilities per IDEA.md

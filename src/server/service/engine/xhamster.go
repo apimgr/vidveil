@@ -10,7 +10,6 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // extractJSON extracts a JSON object from bytes by counting braces
@@ -77,8 +76,8 @@ type xhamsterVideo struct {
 }
 
 // NewXHamsterEngine creates a new xHamster engine
-func NewXHamsterEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *XHamsterEngine {
-	e := &XHamsterEngine{NewBaseEngine("xhamster", "xHamster", "https://xhamster.com", 1, appConfig, torClient)}
+func NewXHamsterEngine(appConfig *config.AppConfig) *XHamsterEngine {
+	e := &XHamsterEngine{NewBaseEngine("xhamster", "xHamster", "https://xhamster.com", 1, appConfig)}
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
 		HasPreview:    false, // JSON extraction doesn't include preview URLs

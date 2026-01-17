@@ -11,7 +11,6 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/parser"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // RedTubeEngine implements the RedTube search engine using HTML scraping
@@ -22,9 +21,9 @@ type RedTubeEngine struct {
 }
 
 // NewRedTubeEngine creates a new RedTube engine
-func NewRedTubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *RedTubeEngine {
+func NewRedTubeEngine(appConfig *config.AppConfig) *RedTubeEngine {
 	e := &RedTubeEngine{
-		BaseEngine: NewBaseEngine("redtube", "RedTube", "https://www.redtube.com", 1, appConfig, torClient),
+		BaseEngine: NewBaseEngine("redtube", "RedTube", "https://www.redtube.com", 1, appConfig),
 		parser:     parser.NewRedTubeParser(),
 	}
 	// Set capabilities per IDEA.md

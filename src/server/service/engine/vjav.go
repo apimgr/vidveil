@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // VJAVEngine searches VJAV
 type VJAVEngine struct{ *BaseEngine }
 
 // NewVJAVEngine creates a new VJAV engine
-func NewVJAVEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *VJAVEngine {
-	return &VJAVEngine{NewBaseEngine("vjav", "VJAV", "https://vjav.com", 4, appConfig, torClient)}
+func NewVJAVEngine(appConfig *config.AppConfig) *VJAVEngine {
+	return &VJAVEngine{NewBaseEngine("vjav", "VJAV", "https://vjav.com", 4, appConfig)}
 }
 
 // Search performs a search on VJAV

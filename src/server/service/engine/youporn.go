@@ -11,15 +11,14 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/parser"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // YouPornEngine searches YouPorn
 type YouPornEngine struct{ *BaseEngine }
 
 // NewYouPornEngine creates a new YouPorn engine
-func NewYouPornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *YouPornEngine {
-	e := &YouPornEngine{NewBaseEngine("youporn", "YouPorn", "https://www.youporn.com", 2, appConfig, torClient)}
+func NewYouPornEngine(appConfig *config.AppConfig) *YouPornEngine {
+	e := &YouPornEngine{NewBaseEngine("youporn", "YouPorn", "https://www.youporn.com", 2, appConfig)}
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
 		HasPreview:    true,

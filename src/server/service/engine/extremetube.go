@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // ExtremeTubeEngine searches ExtremeTube
 type ExtremeTubeEngine struct{ *BaseEngine }
 
 // NewExtremeTubeEngine creates a new ExtremeTube engine
-func NewExtremeTubeEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *ExtremeTubeEngine {
-	return &ExtremeTubeEngine{NewBaseEngine("extremetube", "ExtremeTube", "https://www.extremetube.com", 3, appConfig, torClient)}
+func NewExtremeTubeEngine(appConfig *config.AppConfig) *ExtremeTubeEngine {
+	return &ExtremeTubeEngine{NewBaseEngine("extremetube", "ExtremeTube", "https://www.extremetube.com", 3, appConfig)}
 }
 
 // Search performs a search on ExtremeTube

@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // TNAFlixEngine searches TNAFlix
 type TNAFlixEngine struct{ *BaseEngine }
 
 // NewTNAFlixEngine creates a new TNAFlix engine
-func NewTNAFlixEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *TNAFlixEngine {
-	return &TNAFlixEngine{NewBaseEngine("tnaflix", "TNAFlix", "https://www.tnaflix.com", 3, appConfig, torClient)}
+func NewTNAFlixEngine(appConfig *config.AppConfig) *TNAFlixEngine {
+	return &TNAFlixEngine{NewBaseEngine("tnaflix", "TNAFlix", "https://www.tnaflix.com", 3, appConfig)}
 }
 
 // Search performs a search on TNAFlix

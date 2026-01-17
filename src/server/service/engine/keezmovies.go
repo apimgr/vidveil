@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // KeezMoviesEngine searches KeezMovies
 type KeezMoviesEngine struct{ *BaseEngine }
 
 // NewKeezMoviesEngine creates a new KeezMovies engine
-func NewKeezMoviesEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *KeezMoviesEngine {
-	return &KeezMoviesEngine{NewBaseEngine("keezmovies", "KeezMovies", "https://www.keezmovies.com", 3, appConfig, torClient)}
+func NewKeezMoviesEngine(appConfig *config.AppConfig) *KeezMoviesEngine {
+	return &KeezMoviesEngine{NewBaseEngine("keezmovies", "KeezMovies", "https://www.keezmovies.com", 3, appConfig)}
 }
 
 // Search performs a search on KeezMovies

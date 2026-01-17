@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // ZenPornEngine searches ZenPorn
 type ZenPornEngine struct{ *BaseEngine }
 
 // NewZenPornEngine creates a new ZenPorn engine
-func NewZenPornEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *ZenPornEngine {
-	return &ZenPornEngine{NewBaseEngine("zenporn", "ZenPorn", "https://zenporn.com", 3, appConfig, torClient)}
+func NewZenPornEngine(appConfig *config.AppConfig) *ZenPornEngine {
+	return &ZenPornEngine{NewBaseEngine("zenporn", "ZenPorn", "https://zenporn.com", 3, appConfig)}
 }
 
 // Search performs a search on ZenPorn

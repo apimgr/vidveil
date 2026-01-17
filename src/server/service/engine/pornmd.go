@@ -8,7 +8,6 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/parser"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // PornMDEngine searches PornMD (meta-search)
@@ -18,9 +17,9 @@ type PornMDEngine struct {
 }
 
 // NewPornMDEngine creates a new PornMD engine
-func NewPornMDEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *PornMDEngine {
+func NewPornMDEngine(appConfig *config.AppConfig) *PornMDEngine {
 	e := &PornMDEngine{
-		BaseEngine: NewBaseEngine("pornmd", "PornMD", "https://www.pornmd.com", 2, appConfig, torClient),
+		BaseEngine: NewBaseEngine("pornmd", "PornMD", "https://www.pornmd.com", 2, appConfig),
 		parser:     parser.NewPornMDParser(),
 	}
 	// Set capabilities per IDEA.md

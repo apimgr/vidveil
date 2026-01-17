@@ -54,7 +54,9 @@ type MigrationManager interface {
 }
 
 // TorService interface for Tor hidden service management
+// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
 type TorService interface {
+	IsRunning() bool
 	GenerateVanityAddress(prefix string) error
 	GetVanityStatus() *VanityStatus
 	CancelVanityGeneration()
@@ -500,7 +502,7 @@ func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		"Arch":       runtime.GOARCH,
 		"Mode":       h.appConfig.Server.Mode,
 		"Port":       h.appConfig.Server.Port,
-		"TorEnabled": h.appConfig.Search.Tor.Enabled,
+		"TorEnabled": h.torSvc != nil,
 
 		// Scheduled tasks per AI.md PART 17
 		"NextTasks": nextTasks,
@@ -1054,18 +1056,33 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// TorPage renders Tor hidden service settings (AI.md PART 32)
-// TorConnected and OnionEnabled would check actual Tor connection/service
+// TorPage renders Tor hidden service settings (AI.md PART 30)
+// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
 func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
+	// Check if Tor binary is installed
+	torInstalled := h.torSvc != nil
+	torRunning := false
+	onionAddress := ""
+	onionEnabled := false
+
+	if h.torSvc != nil {
+		torRunning = h.torSvc.IsRunning()
+		torInfo := h.torSvc.GetInfo()
+		if torInfo != nil {
+			if addr, ok := torInfo["onion_address"].(string); ok {
+				onionAddress = addr
+			}
+			if enabled, ok := torInfo["enabled"].(bool); ok {
+				onionEnabled = enabled
+			}
+		}
+	}
+
 	h.renderAdminTemplate(w, r, "tor", map[string]interface{}{
-		"TorEnabled":      h.appConfig.Search.Tor.Enabled,
-		"TorConnected":    false,
-		"TorProxy":        h.appConfig.Search.Tor.Proxy,
-		"TorControlPort":  strconv.Itoa(h.appConfig.Search.Tor.ControlPort),
-		"TorCircuit":      "N/A",
-		"OnionEnabled":    false,
-		"OnionAddress":    "",
-		"VanityJobs":      []map[string]interface{}{},
+		"TorInstalled":  torInstalled,
+		"TorRunning":    torRunning,
+		"OnionAddress":  onionAddress,
+		"OnionEnabled":  onionEnabled,
 	})
 }
 
@@ -1680,7 +1697,7 @@ func (h *AdminHandler) APIStats(w http.ResponseWriter, r *http.Request) {
 			},
 			"config": map[string]interface{}{
 				"port":           h.appConfig.Server.Port,
-				"tor_enabled":    h.appConfig.Search.Tor.Enabled,
+				"tor_enabled":    h.torSvc != nil,
 				"results_per_page": h.appConfig.Search.ResultsPerPage,
 			},
 		},
@@ -1944,7 +1961,7 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 			},
 			"search": map[string]interface{}{
 				"results_per_page": h.appConfig.Search.ResultsPerPage,
-				"tor_enabled":      h.appConfig.Search.Tor.Enabled,
+				"tor_enabled":      h.torSvc != nil,
 			},
 		}
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
@@ -1991,33 +2008,8 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 				h.appConfig.Search.ResultsPerPage = int(rpp)
 				updated = true
 			}
-			// Tor settings per AI.md PART 32
-			if torCfg, ok := searchCfg["tor"].(map[string]interface{}); ok {
-				if enabled, ok := torCfg["enabled"].(bool); ok {
-					h.appConfig.Search.Tor.Enabled = enabled
-					updated = true
-				}
-				if proxy, ok := torCfg["proxy"].(string); ok {
-					h.appConfig.Search.Tor.Proxy = proxy
-					updated = true
-				}
-				if port, ok := torCfg["control_port"].(float64); ok {
-					h.appConfig.Search.Tor.ControlPort = int(port)
-					updated = true
-				}
-				if forceAll, ok := torCfg["force_all"].(bool); ok {
-					h.appConfig.Search.Tor.ForceAll = forceAll
-					updated = true
-				}
-				if rotate, ok := torCfg["rotate_circuit"].(bool); ok {
-					h.appConfig.Search.Tor.RotateCircuit = rotate
-					updated = true
-				}
-				if fallback, ok := torCfg["clearnet_fallback"].(bool); ok {
-					h.appConfig.Search.Tor.ClearnetFallback = fallback
-					updated = true
-				}
-			}
+			// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+			// Tor proxy settings removed - hidden service managed via TorService
 		}
 
 		if updated {
@@ -2314,80 +2306,40 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 }
 
 // =====================================================
-// Tor API handlers per AI.md PART 32
+// Tor API handlers per AI.md PART 30
+// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
 // =====================================================
 
 // APITorStatus returns Tor hidden service status
 // GET /api/v1/admin/server/tor
-// Status and onion_address would check actual Tor connection/manager
 func (h *AdminHandler) APITorStatus(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
-		"data": map[string]interface{}{
-			"enabled":       h.appConfig.Search.Tor.Enabled,
+	// Get hidden service info from TorService
+	var torInfo map[string]interface{}
+	if h.torSvc != nil {
+		torInfo = h.torSvc.GetInfo()
+	}
+	if torInfo == nil {
+		torInfo = map[string]interface{}{
+			"enabled":       false,
 			"status":        "disconnected",
 			"onion_address": "",
-			"uptime":        "",
-			"proxy":         h.appConfig.Search.Tor.Proxy,
-			"control_port":  h.appConfig.Search.Tor.ControlPort,
-		},
+		}
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":   true,
+		"data": torInfo,
 	})
 }
 
-// APITorUpdate updates Tor settings
+// APITorUpdate is deprecated - Tor proxy settings removed per PART 30
 // PATCH /api/v1/admin/server/tor
 func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var req struct {
-		Enabled          *bool   `json:"enabled"`
-		Proxy            *string `json:"proxy"`
-		ControlPort      *int    `json:"control_port"`
-		ForceAll         *bool   `json:"force_all"`
-		RotateCircuit    *bool   `json:"rotate_circuit"`
-		ClearnetFallback *bool   `json:"clearnet_fallback"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
-		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"ok":      false,
-			"error":   "ERR_INVALID_REQUEST",
-			"message": "Invalid request body",
-		})
-		return
-	}
-
-	// Update config
-	updated := false
-	if req.Enabled != nil {
-		h.appConfig.Search.Tor.Enabled = *req.Enabled
-		updated = true
-	}
-	if req.Proxy != nil {
-		h.appConfig.Search.Tor.Proxy = *req.Proxy
-		updated = true
-	}
-	if req.ControlPort != nil {
-		h.appConfig.Search.Tor.ControlPort = *req.ControlPort
-		updated = true
-	}
-	if req.ForceAll != nil {
-		h.appConfig.Search.Tor.ForceAll = *req.ForceAll
-		updated = true
-	}
-	if req.RotateCircuit != nil {
-		h.appConfig.Search.Tor.RotateCircuit = *req.RotateCircuit
-		updated = true
-	}
-	if req.ClearnetFallback != nil {
-		h.appConfig.Search.Tor.ClearnetFallback = *req.ClearnetFallback
-		updated = true
-	}
-
+	// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+	// Tor hidden service is auto-managed, no settings to update
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": updated,
-		"message": "Tor settings updated",
+		"ok":      true,
+		"message": "Tor hidden service is auto-managed when tor binary is installed",
 	})
 }
 
@@ -2773,7 +2725,7 @@ func (h *AdminHandler) renderDashboard() string {
                 <tr><td>Go Version</td><td>` + runtime.Version() + `</td></tr>
                 <tr><td>OS / Arch</td><td>` + runtime.GOOS + ` / ` + runtime.GOARCH + `</td></tr>
                 <tr><td>Server Port</td><td>` + h.appConfig.Server.Port + `</td></tr>
-                <tr><td>Tor Enabled</td><td>` + strconv.FormatBool(h.appConfig.Search.Tor.Enabled) + `</td></tr>
+                <tr><td>Tor Enabled</td><td>` + strconv.FormatBool(h.torSvc != nil) + `</td></tr>
             </table>
         </div>
 
@@ -3018,7 +2970,7 @@ func (h *AdminHandler) renderWebSettingsPage() string {
             <h2>Search Settings</h2>
             <table class="info-table">
                 <tr><td>Results Per Page</td><td>`+strconv.Itoa(h.appConfig.Search.ResultsPerPage)+`</td></tr>
-                <tr><td>Tor Enabled</td><td>`+strconv.FormatBool(h.appConfig.Search.Tor.Enabled)+`</td></tr>
+                <tr><td>Tor Enabled</td><td>`+strconv.FormatBool(h.torSvc != nil)+`</td></tr>
             </table>
         </div>`)
 }
@@ -3328,67 +3280,39 @@ func (h *AdminHandler) renderSystemInfoPage() string {
         </div>`)
 }
 
-// renderTorPage renders Tor hidden service admin page per AI.md PART 32
+// renderTorPage renders Tor hidden service admin page per AI.md PART 30
+// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
 func (h *AdminHandler) renderTorPage() string {
-	torEnabled := h.appConfig.Search.Tor.Enabled
-	enabledStr := "Disabled"
+	// Get hidden service info from TorService
+	statusStr := "Not available"
 	statusClass := "badge-error"
-	if torEnabled {
-		enabledStr = "Enabled"
-		statusClass = "badge-success"
+	onionAddr := ""
+
+	if h.torSvc != nil {
+		info := h.torSvc.GetInfo()
+		if info != nil {
+			if status, ok := info["status"].(string); ok {
+				if status == "connected" {
+					statusStr = "Connected"
+					statusClass = "badge-success"
+				} else {
+					statusStr = status
+				}
+			}
+			if addr, ok := info["onion_address"].(string); ok {
+				onionAddr = addr
+			}
+		}
 	}
 
 	return h.renderAdminPage("tor", "Tor Hidden Service", `
         <div class="card">
             <h2>Hidden Service Status</h2>
+            <p class="text-muted">Per PART 30: Tor is auto-enabled when tor binary is installed. No configuration needed.</p>
             <table class="info-table">
-                <tr><td>Status</td><td><span class="badge `+statusClass+`">`+enabledStr+`</span></td></tr>
-                <tr><td>Proxy</td><td>`+h.appConfig.Search.Tor.Proxy+`</td></tr>
-                <tr><td>Control Port</td><td>`+strconv.Itoa(h.appConfig.Search.Tor.ControlPort)+`</td></tr>
-                <tr><td>Force All Traffic</td><td>`+strconv.FormatBool(h.appConfig.Search.Tor.ForceAll)+`</td></tr>
-                <tr><td>Rotate Circuit</td><td>`+strconv.FormatBool(h.appConfig.Search.Tor.RotateCircuit)+`</td></tr>
-                <tr><td>Clearnet Fallback</td><td>`+strconv.FormatBool(h.appConfig.Search.Tor.ClearnetFallback)+`</td></tr>
+                <tr><td>Status</td><td><span class="badge `+statusClass+`">`+statusStr+`</span></td></tr>
+                <tr><td>.onion Address</td><td><code>`+onionAddr+`</code></td></tr>
             </table>
-        </div>
-        <div class="card">
-            <h2>Configuration</h2>
-            <form id="tor-form" onsubmit="saveTorConfig(event)">
-                <div class="form-group">
-                    <label class="toggle-label">
-                        <input type="checkbox" id="tor-enabled" `+func() string { if torEnabled { return "checked" }; return "" }()+`>
-                        <span>Enable Tor Hidden Service</span>
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label for="tor-proxy">SOCKS5 Proxy</label>
-                    <input type="text" id="tor-proxy" value="`+h.appConfig.Search.Tor.Proxy+`" placeholder="socks5://127.0.0.1:9050">
-                </div>
-                <div class="form-group">
-                    <label for="tor-control-port">Control Port</label>
-                    <input type="number" id="tor-control-port" value="`+strconv.Itoa(h.appConfig.Search.Tor.ControlPort)+`" placeholder="9051">
-                </div>
-                <div class="form-group">
-                    <label class="toggle-label">
-                        <input type="checkbox" id="tor-force-all" `+func() string { if h.appConfig.Search.Tor.ForceAll { return "checked" }; return "" }()+`>
-                        <span>Force all traffic through Tor</span>
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label class="toggle-label">
-                        <input type="checkbox" id="tor-rotate" `+func() string { if h.appConfig.Search.Tor.RotateCircuit { return "checked" }; return "" }()+`>
-                        <span>Rotate circuit per request</span>
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label class="toggle-label">
-                        <input type="checkbox" id="tor-clearnet" `+func() string { if h.appConfig.Search.Tor.ClearnetFallback { return "checked" }; return "" }()+`>
-                        <span>Fallback to clearnet if Tor fails</span>
-                    </label>
-                </div>
-                <div class="button-group">
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
         </div>
         <div class="card">
             <h2>Vanity Address</h2>
@@ -3404,29 +3328,6 @@ func (h *AdminHandler) renderTorPage() string {
             <div id="vanity-status" class="text-muted" style="margin-top: 1rem;"></div>
         </div>
         <script>
-        async function saveTorConfig(e) {
-            e.preventDefault();
-            try {
-                const resp = await fetch('/api/v1/admin/config', {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        search: {
-                            tor: {
-                                enabled: document.getElementById('tor-enabled').checked,
-                                proxy: document.getElementById('tor-proxy').value,
-                                control_port: parseInt(document.getElementById('tor-control-port').value),
-                                force_all: document.getElementById('tor-force-all').checked,
-                                rotate_circuit: document.getElementById('tor-rotate').checked,
-                                clearnet_fallback: document.getElementById('tor-clearnet').checked
-                            }
-                        }
-                    })
-                });
-                const data = await resp.json();
-                if (data.success) { showSuccess('Tor settings saved!'); } else { showError('Error: ' + data.error); }
-            } catch (e) { showError('Error: ' + e.message); }
-        }
         async function startVanity() {
             const prefix = document.getElementById('vanity-prefix').value;
             if (!prefix || prefix.length < 2) { showError('Prefix must be at least 2 characters'); return; }

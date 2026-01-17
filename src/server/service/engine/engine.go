@@ -21,7 +21,6 @@ import (
 	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/retry"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 	"github.com/apimgr/vidveil/src/server/service/utls"
 )
 
@@ -64,10 +63,10 @@ type SearchEngine interface {
 type ConfigurableSearchEngine interface {
 	SearchEngine
 	SetEnabled(enabled bool)
-	SetUseTor(useTor bool)
 }
 
 // BaseEngine provides common functionality for all engines
+// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
 type BaseEngine struct {
 	name           string
 	displayName    string
@@ -75,19 +74,17 @@ type BaseEngine struct {
 	tier           int
 	enabled        bool
 	timeout        time.Duration
-	useTor         bool
 	useSpoofedTLS  bool
 	appConfig      *config.AppConfig
 	httpClient     *http.Client
 	spoofedClient  *http.Client
-	torClient      *tor.TorClient
 	circuitBreaker *retry.CircuitBreaker
 	retryConfig    *retry.RetryConfig
 	capabilities   Capabilities
 }
 
 // NewBaseEngine creates a new base engine
-func NewBaseEngine(name, displayName, baseURL string, tier int, appConfig *config.AppConfig, torClient *tor.TorClient) *BaseEngine {
+func NewBaseEngine(name, displayName, baseURL string, tier int, appConfig *config.AppConfig) *BaseEngine {
 	timeout := time.Duration(appConfig.Search.EngineTimeout) * time.Second
 
 	// Create circuit breaker for this engine
@@ -120,12 +117,10 @@ func NewBaseEngine(name, displayName, baseURL string, tier int, appConfig *confi
 		tier:           tier,
 		enabled:        true,
 		timeout:        timeout,
-		useTor:         false,
 		useSpoofedTLS:  appConfig.Search.SpoofTLS,
 		appConfig:      appConfig,
 		httpClient:     createHTTPClient(appConfig.Search.EngineTimeout),
 		spoofedClient:  utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
-		torClient:      torClient,
 		circuitBreaker: retry.NewCircuitBreaker(cbConfig),
 		retryConfig:    retryConfig,
 	}
@@ -156,11 +151,6 @@ func (e *BaseEngine) SetEnabled(enabled bool) {
 	e.enabled = enabled
 }
 
-// SetUseTor sets whether to use Tor for requests
-func (e *BaseEngine) SetUseTor(useTor bool) {
-	e.useTor = useTor
-}
-
 // SetUseSpoofedTLS sets whether to use spoofed TLS fingerprint for Cloudflare bypass
 func (e *BaseEngine) SetUseSpoofedTLS(use bool) {
 	e.useSpoofedTLS = use
@@ -182,10 +172,8 @@ func (e *BaseEngine) BaseURL() string {
 }
 
 // GetClient returns the appropriate HTTP client
+// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
 func (e *BaseEngine) GetClient() *http.Client {
-	if e.useTor && e.torClient != nil {
-		return e.torClient.HTTPClient()
-	}
 	if e.useSpoofedTLS && e.spoofedClient != nil {
 		return e.spoofedClient
 	}

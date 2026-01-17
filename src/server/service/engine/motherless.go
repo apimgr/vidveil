@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // MotherlessEngine searches Motherless
 type MotherlessEngine struct{ *BaseEngine }
 
 // NewMotherlessEngine creates a new Motherless engine
-func NewMotherlessEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *MotherlessEngine {
-	return &MotherlessEngine{NewBaseEngine("motherless", "Motherless", "https://motherless.com", 3, appConfig, torClient)}
+func NewMotherlessEngine(appConfig *config.AppConfig) *MotherlessEngine {
+	return &MotherlessEngine{NewBaseEngine("motherless", "Motherless", "https://motherless.com", 3, appConfig)}
 }
 
 // Search performs a search on Motherless

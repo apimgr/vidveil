@@ -51,14 +51,18 @@ search:
   results_per_page: 20
 ```
 
-## Tor Settings
+## Tor Hidden Service
 
-```yaml
-search:
-  tor:
-    enabled: false
-    proxy: "socks5://127.0.0.1:9050"
+Tor hidden service is **auto-enabled** when the `tor` binary is installed. No configuration required.
+
+```bash
+# Install Tor to enable hidden service
+apt install tor    # Debian/Ubuntu
+apk add tor        # Alpine
 ```
+
+The hidden service starts automatically and generates a `.onion` address.
+Data is stored in `{data_dir}/tor/`.
 
 ## Rate Limiting
 

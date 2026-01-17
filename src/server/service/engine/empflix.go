@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // EMPFlixEngine searches EMPFlix
 type EMPFlixEngine struct{ *BaseEngine }
 
 // NewEMPFlixEngine creates a new EMPFlix engine
-func NewEMPFlixEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *EMPFlixEngine {
-	return &EMPFlixEngine{NewBaseEngine("empflix", "EMPFlix", "https://www.empflix.com", 3, appConfig, torClient)}
+func NewEMPFlixEngine(appConfig *config.AppConfig) *EMPFlixEngine {
+	return &EMPFlixEngine{NewBaseEngine("empflix", "EMPFlix", "https://www.empflix.com", 3, appConfig)}
 }
 
 // Search performs a search on EMPFlix

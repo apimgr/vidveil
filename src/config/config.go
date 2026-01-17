@@ -576,6 +576,7 @@ type CookieConsentConfig struct {
 }
 
 // SearchConfig holds search-specific settings (project-specific)
+// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
 type SearchConfig struct {
 	DefaultEngines     []string `yaml:"default_engines"`
 	ConcurrentRequests int      `yaml:"concurrent_requests"`
@@ -588,7 +589,6 @@ type SearchConfig struct {
 	FilterPremium bool `yaml:"filter_premium"`
 	// Use spoofed TLS fingerprint (Chrome) to bypass Cloudflare
 	SpoofTLS        bool                  `yaml:"spoof_tls"`
-	Tor             TorConfig             `yaml:"tor"`
 	AgeVerification AgeVerificationConfig `yaml:"age_verification"`
 }
 
@@ -684,18 +684,6 @@ func (ua UserAgentConfig) SecChUaPlatform() string {
 // Used to determine if Sec-Ch-* headers should be sent
 func (ua UserAgentConfig) IsChromiumBased() bool {
 	return ua.Browser != "firefox"
-}
-
-// TorConfig holds Tor proxy settings
-type TorConfig struct {
-	Enabled          bool   `yaml:"enabled"`
-	Proxy            string `yaml:"proxy"`
-	ForceAll         bool   `yaml:"force_all"`
-	RotateCircuit    bool   `yaml:"rotate_circuit"`
-	ControlPort      int    `yaml:"control_port"`
-	ControlPassword  string `yaml:"control_password"`
-	Timeout          int    `yaml:"timeout"`
-	ClearnetFallback bool   `yaml:"clearnet_fallback"`
 }
 
 // AgeVerificationConfig holds age verification settings
@@ -985,15 +973,6 @@ func DefaultAppConfig() *AppConfig {
 			// Disabled by default - can cause issues with some engines
 			// Enable only for Cloudflare-protected sites
 			SpoofTLS: false,
-			Tor: TorConfig{
-				Enabled:          false,
-				Proxy:            "socks5://127.0.0.1:9050",
-				ForceAll:         false,
-				RotateCircuit:    false,
-				ControlPort:      9051,
-				Timeout:          30,
-				ClearnetFallback: true,
-			},
 			AgeVerification: AgeVerificationConfig{
 				Enabled:    true,
 				CookieDays: 30,

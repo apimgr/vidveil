@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // DrTuberEngine searches DrTuber
 type DrTuberEngine struct{ *BaseEngine }
 
 // NewDrTuberEngine creates a new DrTuber engine
-func NewDrTuberEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *DrTuberEngine {
-	return &DrTuberEngine{NewBaseEngine("drtuber", "DrTuber", "https://www.drtuber.com", 3, appConfig, torClient)}
+func NewDrTuberEngine(appConfig *config.AppConfig) *DrTuberEngine {
+	return &DrTuberEngine{NewBaseEngine("drtuber", "DrTuber", "https://www.drtuber.com", 3, appConfig)}
 }
 
 // Search performs a search on DrTuber

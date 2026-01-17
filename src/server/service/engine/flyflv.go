@@ -6,15 +6,14 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/tor"
 )
 
 // FlyflvEngine searches Flyflv
 type FlyflvEngine struct{ *BaseEngine }
 
 // NewFlyflvEngine creates a new Flyflv engine
-func NewFlyflvEngine(appConfig *config.AppConfig, torClient *tor.TorClient) *FlyflvEngine {
-	return &FlyflvEngine{NewBaseEngine("flyflv", "Flyflv", "https://www.flyflv.com", 4, appConfig, torClient)}
+func NewFlyflvEngine(appConfig *config.AppConfig) *FlyflvEngine {
+	return &FlyflvEngine{NewBaseEngine("flyflv", "Flyflv", "https://www.flyflv.com", 4, appConfig)}
 }
 
 // Search performs a search on Flyflv

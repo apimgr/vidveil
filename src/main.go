@@ -490,8 +490,9 @@ func main() {
 			return nil
 		},
 		TorHealth: func(ctx context.Context) error {
-			// Tor health check per PART 30 - only if Tor enabled
-			if !appConfig.Search.Tor.Enabled {
+			// Tor health check per PART 30 - only if hidden service enabled
+			// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+			if torSvc == nil {
 				return nil
 			}
 			// Check if Tor service is running
@@ -636,9 +637,13 @@ func main() {
 			fmt.Println("║   ⚠️  Save the setup token! It will not be shown again.               ║")
 			fmt.Println("║                                                                      ║")
 		}
-		if appConfig.Search.Tor.Enabled {
-			fmt.Printf("║   🧅 Tor: %-60s ║\n", appConfig.Search.Tor.Proxy)
-			fmt.Println("║                                                                      ║")
+		// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+		if torSvc != nil && torSvc.IsRunning() {
+			info := torSvc.GetInfo()
+			if onion, ok := info["onion_address"].(string); ok && onion != "" {
+				fmt.Printf("║   🧅 Hidden Service: %-50s ║\n", onion)
+				fmt.Println("║                                                                      ║")
+			}
 		}
 		fmt.Println("╚══════════════════════════════════════════════════════════════════════╝")
 		fmt.Println()

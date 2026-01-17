@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 36: CLI Client
+// AI.md PART 33: CLI Client
 package main
 
 import (
@@ -20,7 +20,7 @@ var (
 )
 
 func main() {
-	// Per AI.md PART 36: Ensure directories exist on every startup
+	// Per AI.md PART 33: Ensure directories exist on every startup
 	// Creates config, data, cache, log dirs with 0700 permissions
 	if err := paths.EnsureClientDirs(); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to create directories: %v\n", err)

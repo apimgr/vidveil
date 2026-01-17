@@ -576,7 +576,7 @@ type CookieConsentConfig struct {
 }
 
 // SearchConfig holds search-specific settings (project-specific)
-// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 type SearchConfig struct {
 	DefaultEngines     []string `yaml:"default_engines"`
 	ConcurrentRequests int      `yaml:"concurrent_requests"`

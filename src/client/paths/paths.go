@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 36: CLI Client - OS-specific paths
+// AI.md PART 33: CLI Client - OS-specific paths
 package paths
 
 import (
@@ -63,7 +63,7 @@ func ConfigFile() string {
 }
 
 // TokenFile returns the CLI token file path
-// Per AI.md PART 36: Token stored separately from config for security
+// Per AI.md PART 33: Token stored separately from config for security
 func TokenFile() string {
 	return filepath.Join(DataDir(), "token")
 }

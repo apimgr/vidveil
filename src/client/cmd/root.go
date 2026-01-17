@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 36: CLI Client - Root Command
+// AI.md PART 33: CLI Client - Root Command
 package cmd
 
 import (
@@ -40,7 +40,7 @@ type CLIConfig struct {
 	} `yaml:"tui"`
 }
 
-// Global flags per AI.md PART 36
+// Global flags per AI.md PART 33
 // Short flags only for -h (help) and -v (version)
 // Per AI.md PART 1: Variable names MUST reveal intent
 var (
@@ -62,7 +62,7 @@ var (
 )
 
 // ExecuteCLI runs the CLI application
-// Per AI.md PART 36: Auto-detect TUI mode when interactive terminal + no command
+// Per AI.md PART 33: Auto-detect TUI mode when interactive terminal + no command
 func ExecuteCLI() error {
 	args := os.Args[1:]
 
@@ -75,7 +75,7 @@ func ExecuteCLI() error {
 	// Initialize API client
 	InitAPIClient()
 
-	// Per AI.md PART 36: Automatic Mode Detection using display.DetectDisplayEnv()
+	// Per AI.md PART 33: Automatic Mode Detection using display.DetectDisplayEnv()
 	// - Interactive terminal + no command = TUI mode
 	// - Interactive terminal + only config flags = TUI mode
 	// - Interactive terminal + command provided = CLI mode
@@ -92,7 +92,7 @@ func ExecuteCLI() error {
 	}
 
 	// Route to command
-	// Per AI.md PART 36: No tui command (auto-launches), no config command (edit cli.yml directly)
+	// Per AI.md PART 33: No tui command (auto-launches), no config command (edit cli.yml directly)
 	switch args[0] {
 	case "help", "-h", "--help":
 		PrintCLIHelpMessage()
@@ -115,8 +115,8 @@ func ExecuteCLI() error {
 }
 
 // ParseCLIGlobalFlags parses global CLI flags
-// Per AI.md PART 36: Short flags only for -h (help) and -v (version)
-// Per AI.md PART 36: NO --tui/--cli/--gui flags - UI mode is auto-detected
+// Per AI.md PART 33: Short flags only for -h (help) and -v (version)
+// Per AI.md PART 33: NO --tui/--cli/--gui flags - UI mode is auto-detected
 // Note: -h/--help and -v/--version only trigger exit if they appear BEFORE any command
 func ParseCLIGlobalFlags(args []string) []string {
 	var remaining []string
@@ -213,7 +213,7 @@ func LoadCLIConfigFromFile() {
 	cliConfig.TUI.Theme = "default"
 	cliConfig.TUI.ShowHints = true
 
-	// Determine config path per AI.md PART 36
+	// Determine config path per AI.md PART 33
 	// Uses paths module for OS-specific resolution
 	if cliConfigFilePath == "" {
 		cliConfigFilePath = paths.ConfigFile()
@@ -225,7 +225,7 @@ func LoadCLIConfigFromFile() {
 		yaml.Unmarshal(data, cliConfig)
 	}
 
-	// Per AI.md PART 36: Token priority
+	// Per AI.md PART 33: Token priority
 	// 1. --token flag (highest)
 	// 2. --token-file flag
 	// 3. VIDVEIL_TOKEN env var
@@ -233,7 +233,7 @@ func LoadCLIConfigFromFile() {
 	// 5. token file at default path (lowest)
 
 	// Environment variables (lower priority than flags)
-	// Per AI.md PART 36: Use VIDVEIL_TOKEN not VIDVEIL_CLI_TOKEN
+	// Per AI.md PART 33: Use VIDVEIL_TOKEN not VIDVEIL_CLI_TOKEN
 	if cliConfig.Server.Token == "" {
 		if env := os.Getenv("VIDVEIL_TOKEN"); env != "" {
 			cliConfig.Server.Token = env
@@ -282,7 +282,7 @@ func LoadCLIConfigFromFile() {
 // Per AI.md PART 1: Function names MUST reveal intent - "initClient" is ambiguous
 func InitAPIClient() {
 	apiClient = api.NewAPIClient(cliConfig.Server.Address, cliConfig.Server.Token, cliConfig.Server.Timeout)
-	// Per AI.md PART 36: User-Agent uses hardcoded project name with version
+	// Per AI.md PART 33: User-Agent uses hardcoded project name with version
 	apiClient.SetUserAgent(Version)
 }
 
@@ -333,6 +333,6 @@ Use "%s [command] --help" for more information about a command.
 // PrintCLIVersionInfo prints CLI version information
 // Per AI.md PART 1: Function names MUST reveal intent - "printVersion" is ambiguous
 func PrintCLIVersionInfo() {
-	// Per AI.md PART 36: CLI --version format
+	// Per AI.md PART 33: CLI --version format
 	fmt.Printf("%s %s (%s) built %s\n", BinaryName, Version, CommitID, BuildDate)
 }

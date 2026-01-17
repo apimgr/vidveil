@@ -23,7 +23,7 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// TorService represents the embedded Tor hidden service per AI.md PART 30
+// TorService represents the embedded Tor hidden service per AI.md PART 32
 // Uses github.com/cretz/bine for dedicated Tor process management
 type TorService struct {
 	cfg     *TorServiceConfig
@@ -52,12 +52,12 @@ type TorService struct {
 	vanityCancel context.CancelFunc
 	vanityStatus *VanityStatus
 
-	// Process monitoring per PART 30
+	// Process monitoring per PART 32
 	monitorCtx    context.Context
 	monitorCancel context.CancelFunc
 }
 
-// TorServiceConfig holds Tor service configuration per AI.md PART 30
+// TorServiceConfig holds Tor service configuration per AI.md PART 32
 type TorServiceConfig struct {
 	// Set from paths.GetDataDir() + "/tor"
 	DataDir string `yaml:"-"`
@@ -205,14 +205,14 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 	s.status = TorServiceStatusConnected
 	s.logger.Info("Hidden service started", map[string]interface{}{"onion_address": s.onionAddress})
 
-	// Start process monitoring per PART 30
+	// Start process monitoring per PART 32
 	s.monitorCtx, s.monitorCancel = context.WithCancel(context.Background())
 	go s.monitorProcess()
 
 	return nil
 }
 
-// monitorProcess monitors Tor and restarts if it crashes per PART 30
+// monitorProcess monitors Tor and restarts if it crashes per PART 32
 func (s *TorService) monitorProcess() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -264,7 +264,7 @@ func (s *TorService) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Cancel process monitoring per PART 30
+	// Cancel process monitoring per PART 32
 	if s.monitorCancel != nil {
 		s.monitorCancel()
 		s.monitorCancel = nil

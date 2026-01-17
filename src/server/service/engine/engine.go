@@ -66,7 +66,7 @@ type ConfigurableSearchEngine interface {
 }
 
 // BaseEngine provides common functionality for all engines
-// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 type BaseEngine struct {
 	name           string
 	displayName    string
@@ -172,7 +172,7 @@ func (e *BaseEngine) BaseURL() string {
 }
 
 // GetClient returns the appropriate HTTP client
-// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 func (e *BaseEngine) GetClient() *http.Client {
 	if e.useSpoofedTLS && e.spoofedClient != nil {
 		return e.spoofedClient

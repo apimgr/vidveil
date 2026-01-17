@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 36: CLI Client - TUI Responsive Layout
+// AI.md PART 33: CLI Client - TUI Responsive Layout
 package tui
 
 // LayoutMode represents the terminal size category
@@ -142,7 +142,7 @@ func (m LayoutMode) Config() LayoutConfig {
 	return configs[m]
 }
 
-// Spacing constants per AI.md PART 36
+// Spacing constants per AI.md PART 33
 const (
 	SpaceXS = 1 // Micro spacing
 	SpaceS  = 2 // Small spacing

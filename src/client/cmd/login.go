@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 36: CLI Client - Login Command
+// AI.md PART 33: CLI Client - Login Command
 package cmd
 
 import (
@@ -15,7 +15,7 @@ import (
 
 // RunLoginCommand handles the login command
 // Per AI.md PART 1: Function names MUST reveal intent - "runLogin" is ambiguous
-// Per AI.md PART 36: Saves token for future use
+// Per AI.md PART 33: Saves token for future use
 func RunLoginCommand(args []string) error {
 	// Parse args for help
 	for _, arg := range args {

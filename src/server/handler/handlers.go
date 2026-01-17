@@ -1886,7 +1886,7 @@ func (h *SearchHandler) DebugEnginesList(w http.ResponseWriter, r *http.Request)
 }
 
 // ProxyThumbnail proxies external thumbnails to prevent tracking
-// Per AI.md PART 36 lines 29497-29507
+// Per IDEA.md: Privacy proxy for thumbnails
 func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 // Get URL parameter
 encodedURL := r.URL.Query().Get("url")
@@ -1934,7 +1934,7 @@ contentType = "image/jpeg" // Default
 }
 w.Header().Set("Content-Type", contentType)
 
-// Cache control per AI.md PART 36: 1 hour
+// Cache control: 1 hour
 w.Header().Set("Cache-Control", "public, max-age=3600")
 
 // Proxy the image

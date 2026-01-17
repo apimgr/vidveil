@@ -490,8 +490,8 @@ func main() {
 			return nil
 		},
 		TorHealth: func(ctx context.Context) error {
-			// Tor health check per PART 30 - only if hidden service enabled
-			// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+			// Tor health check per PART 32 - only if hidden service enabled
+			// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 			if torSvc == nil {
 				return nil
 			}
@@ -525,7 +525,7 @@ func main() {
 		}
 	}
 
-	// Start Tor hidden service per PART 30 (in background to not block HTTP server)
+	// Start Tor hidden service per PART 32 (in background to not block HTTP server)
 	// Auto-enabled if tor binary is installed - no enable flag needed
 	// Parse port from config
 	torPort, _ := strconv.Atoi(appConfig.Server.Port)
@@ -536,7 +536,7 @@ func main() {
 	go func() {
 		torCtx := context.Background()
 		if err := torSvc.Start(torCtx, torPort); err != nil {
-			// PART 30: Tor errors are WARN level, server continues without Tor
+			// PART 32: Tor errors are WARN level, server continues without Tor
 			fmt.Fprintf(os.Stderr, "⚠️  Tor hidden service: %v\n", err)
 		}
 	}()
@@ -637,7 +637,7 @@ func main() {
 			fmt.Println("║   ⚠️  Save the setup token! It will not be shown again.               ║")
 			fmt.Println("║                                                                      ║")
 		}
-		// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+		// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 		if torSvc != nil && torSvc.IsRunning() {
 			info := torSvc.GetInfo()
 			if onion, ok := info["onion_address"].(string); ok && onion != "" {

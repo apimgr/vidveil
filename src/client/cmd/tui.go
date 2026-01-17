@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 36: CLI Client - TUI Command
+// AI.md PART 33: CLI Client - TUI Command
 package cmd
 
 import (
@@ -13,7 +13,7 @@ import (
 )
 
 // TUIStyles holds lipgloss styles derived from theme.ColorPalette
-// Per AI.md PART 36: TUI Styles from Palette
+// Per AI.md PART 33: TUI Styles from Palette
 // Per AI.md PART 1: Type names MUST be specific
 type TUIStyles struct {
 	Base     lipgloss.Style
@@ -30,7 +30,7 @@ type TUIStyles struct {
 }
 
 // TUILayoutConfig provides TUI-specific layout settings based on SizeMode
-// Per AI.md PART 36: Responsive Layout
+// Per AI.md PART 33: Responsive Layout
 // Per AI.md PART 1: Type names MUST be specific
 type TUILayoutConfig struct {
 	ShowBorders    bool
@@ -45,7 +45,7 @@ type TUILayoutConfig struct {
 }
 
 // CreateTUIStylesFromPalette creates TUIStyles from theme.ColorPalette
-// Per AI.md PART 36: TUI Styles from Palette
+// Per AI.md PART 33: TUI Styles from Palette
 // Per AI.md PART 1: Function names MUST reveal intent
 func CreateTUIStylesFromPalette(palette theme.ColorPalette) TUIStyles {
 	return TUIStyles{
@@ -81,7 +81,7 @@ func CreateTUIStylesFromPalette(palette theme.ColorPalette) TUIStyles {
 }
 
 // GetTUILayoutConfig returns layout config for a terminal.SizeMode
-// Per AI.md PART 36: Responsive Layout
+// Per AI.md PART 33: Responsive Layout
 // Per AI.md PART 1: Function names MUST reveal intent
 func GetTUILayoutConfig(sizeMode terminal.SizeMode) TUILayoutConfig {
 	configs := map[terminal.SizeMode]TUILayoutConfig{
@@ -205,7 +205,7 @@ type TUISearchDoneMsg struct {
 // Per AI.md PART 1: Function names MUST reveal intent - "initialModel" is ambiguous
 func CreateInitialTUIModel() TUIModel {
 	// Initialize styles from theme palette
-	// Per AI.md PART 36: TUI uses theme.ColorPalette from src/common/theme
+	// Per AI.md PART 33: TUI uses theme.ColorPalette from src/common/theme
 	themeMode := "dark"
 	if cliConfig != nil && cliConfig.TUI.Theme != "" {
 		themeMode = cliConfig.TUI.Theme
@@ -284,7 +284,7 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		// Per AI.md PART 36: Window Resize Handling
+		// Per AI.md PART 33: Window Resize Handling
 		m.terminalWidth = msg.Width
 		m.terminalHeight = msg.Height
 
@@ -303,7 +303,7 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View implements tea.Model
-// Per AI.md PART 36: Responsive Layout based on SizeMode
+// Per AI.md PART 33: Responsive Layout based on SizeMode
 func (m TUIModel) View() string {
 	if m.isQuitting {
 		return ""

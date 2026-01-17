@@ -13,7 +13,7 @@ import (
 )
 
 // EngineManager manages all search engines
-// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 type EngineManager struct {
 	engines   map[string]SearchEngine
 	appConfig *config.AppConfig

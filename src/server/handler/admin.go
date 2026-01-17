@@ -54,7 +54,7 @@ type MigrationManager interface {
 }
 
 // TorService interface for Tor hidden service management
-// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 type TorService interface {
 	IsRunning() bool
 	GenerateVanityAddress(prefix string) error
@@ -1056,8 +1056,8 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// TorPage renders Tor hidden service settings (AI.md PART 30)
-// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+// TorPage renders Tor hidden service settings (AI.md PART 32)
+// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
 	// Check if Tor binary is installed
 	torInstalled := h.torSvc != nil
@@ -2008,7 +2008,7 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 				h.appConfig.Search.ResultsPerPage = int(rpp)
 				updated = true
 			}
-			// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+			// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 			// Tor proxy settings removed - hidden service managed via TorService
 		}
 
@@ -2306,8 +2306,8 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 }
 
 // =====================================================
-// Tor API handlers per AI.md PART 30
-// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+// Tor API handlers per AI.md PART 32
+// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 // =====================================================
 
 // APITorStatus returns Tor hidden service status
@@ -2332,10 +2332,10 @@ func (h *AdminHandler) APITorStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APITorUpdate is deprecated - Tor proxy settings removed per PART 30
+// APITorUpdate is deprecated - Tor proxy settings removed per PART 32
 // PATCH /api/v1/admin/server/tor
 func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
-	// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+	// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 	// Tor hidden service is auto-managed, no settings to update
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":      true,
@@ -3280,8 +3280,8 @@ func (h *AdminHandler) renderSystemInfoPage() string {
         </div>`)
 }
 
-// renderTorPage renders Tor hidden service admin page per AI.md PART 30
-// Per PART 30: Tor is ONLY for hidden service, NOT for outbound proxy
+// renderTorPage renders Tor hidden service admin page per AI.md PART 32
+// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 func (h *AdminHandler) renderTorPage() string {
 	// Get hidden service info from TorService
 	statusStr := "Not available"
@@ -3308,7 +3308,7 @@ func (h *AdminHandler) renderTorPage() string {
 	return h.renderAdminPage("tor", "Tor Hidden Service", `
         <div class="card">
             <h2>Hidden Service Status</h2>
-            <p class="text-muted">Per PART 30: Tor is auto-enabled when tor binary is installed. No configuration needed.</p>
+            <p class="text-muted">Per PART 32: Tor is auto-enabled when tor binary is installed. No configuration needed.</p>
             <table class="info-table">
                 <tr><td>Status</td><td><span class="badge `+statusClass+`">`+statusStr+`</span></td></tr>
                 <tr><td>.onion Address</td><td><code>`+onionAddr+`</code></td></tr>

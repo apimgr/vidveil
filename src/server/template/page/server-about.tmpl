@@ -1,0 +1,48 @@
+{{define "server-about"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content-area">
+    <header class="page-header">
+        <h1>About {{.AppName}}</h1>
+    </header>
+
+    <section class="card">
+        <h2>What is {{.AppName}}?</h2>
+        <p>{{.AppDescription}}</p>
+    </section>
+
+    <section class="card">
+        <h2>Features</h2>
+        <ul class="feature-list-simple">
+            <li>Privacy-focused video meta-search</li>
+            <li>No tracking or personal data collection</li>
+            <li>Aggregates results from 50+ video sources</li>
+            <li>Bang shortcuts for targeted searches</li>
+            <li>SSE streaming for real-time results</li>
+            <li>Thumbnail proxy prevents tracking</li>
+            <li>Open source and self-hostable</li>
+        </ul>
+    </section>
+
+    <section class="card">
+        <h2>Version Information</h2>
+        <div class="info-grid">
+            <div class="info-row">
+                <span class="info-label">Version</span>
+                <span class="info-value"><code>{{.Version}}</code></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Build</span>
+                <span class="info-value">{{.BuildDateTime}}</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Source Code</h2>
+        <p>VidVeil is open source software. View the source code and contribute on <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">GitHub</a>.</p>
+    </section>
+</div>
+{{end}}

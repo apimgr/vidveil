@@ -44,6 +44,7 @@ type SearchHandler struct {
 	appConfig   *config.AppConfig
 	engineMgr   *engine.EngineManager
 	searchCache *cache.SearchCache
+	metrics     *ServerMetrics
 }
 
 // NewSearchHandler creates a new handler instance
@@ -56,6 +57,19 @@ func NewSearchHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManag
 		engineMgr:   engineMgr,
 		searchCache: searchCache,
 	}
+}
+
+// SetMetrics sets the metrics collector for statistics display
+func (h *SearchHandler) SetMetrics(m *ServerMetrics) {
+	h.metrics = m
+}
+
+// getSearchCount returns total searches from metrics
+func (h *SearchHandler) getSearchCount() uint64 {
+	if h.metrics != nil {
+		return h.metrics.GetSearchesTotal()
+	}
+	return 0
 }
 
 // WriteJSON writes a JSON response with 2-space indentation and trailing newline
@@ -685,14 +699,9 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 			"features": map[string]interface{}{
 				"multi_user":    false,
 				"organizations": false,
-				"tor": map[string]interface{}{
-					"enabled":  h.appConfig != nil && h.appConfig.Search.Tor.Enabled,
-					"running":  false,
-					"status":   "",
-					"hostname": "",
-				},
-				"geoip":   h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
-				"metrics": h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
+				"tor":           h.appConfig != nil && h.appConfig.Search.Tor.Enabled,
+				"geoip":         h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
+				"metrics":       h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
 			},
 			"checks": checks,
 			"stats": map[string]interface{}{
@@ -777,7 +786,7 @@ type HealthzHTMLData struct {
 	// Checks
 	Checks             ChecksData
 
-	// Stats
+	// Stats (VidVeil-specific per IDEA.md)
 	Stats              StatsData
 
 	// Timestamp
@@ -790,14 +799,11 @@ type ClusterNodeData struct {
 	IsPrimary bool
 }
 
+// FeaturesData - VidVeil is stateless, no multi-user/orgs per IDEA.md
 type FeaturesData struct {
-	MultiUser     bool
-	Organizations bool
-	TorEnabled    bool
-	TorRunning    bool
-	TorHostname   string
-	GeoIP         bool
-	Metrics       bool
+	TorEnabled bool
+	GeoIP      bool
+	Metrics    bool
 }
 
 type ChecksData struct {
@@ -808,10 +814,11 @@ type ChecksData struct {
 	Cluster   string
 }
 
+// StatsData holds statistics for healthz display (VidVeil-specific per IDEA.md)
 type StatsData struct {
-	TotalRequests     string
-	Requests24h       string
-	ActiveConnections string
+	Searches       uint64
+	EnginesEnabled int
+	EnginesTotal   int
 }
 
 // renderHealthzHTML renders the healthz HTML template per AI.md PART 13
@@ -846,11 +853,11 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			Cluster:   checks["cluster"],
 		},
 
-		// Stats (Prometheus metrics in /metrics endpoint per AI.md PART 21)
+		// Stats (VidVeil-specific per IDEA.md)
 		Stats: StatsData{
-			TotalRequests:     "See /metrics",
-			Requests24h:       "See /metrics",
-			ActiveConnections: "See /metrics",
+			Searches:       h.getSearchCount(),
+			EnginesEnabled: h.engineMgr.EnabledCount(),
+			EnginesTotal:   len(h.engineMgr.ListEngines()),
 		},
 
 		// Timestamp
@@ -1544,14 +1551,9 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		"features": map[string]interface{}{
 			"multi_user":    false,
 			"organizations": false,
-			"tor": map[string]interface{}{
-				"enabled":  h.appConfig != nil && h.appConfig.Search.Tor.Enabled,
-				"running":  false,
-				"status":   "",
-				"hostname": "",
-			},
-			"geoip":   h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
-			"metrics": h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
+			"tor":           h.appConfig != nil && h.appConfig.Search.Tor.Enabled,
+			"geoip":         h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
+			"metrics":       h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
 		},
 		"checks": map[string]string{
 			"database":  checks["database"],

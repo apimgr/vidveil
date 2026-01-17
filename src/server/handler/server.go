@@ -3,7 +3,10 @@
 package handler
 
 import (
+	"bytes"
+	"html/template"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/apimgr/vidveil/src/common/version"
@@ -22,101 +25,99 @@ func NewServerHandler(appConfig *config.AppConfig) *ServerHandler {
 	}
 }
 
+// renderServerTemplate renders a server page template with common data
+func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName string, extraData map[string]interface{}) {
+	// Map template names to file paths
+	templateFile := ""
+	switch templateName {
+	case "server-about":
+		templateFile = "template/page/server-about.tmpl"
+	case "server-privacy":
+		templateFile = "template/page/server-privacy.tmpl"
+	case "server-contact":
+		templateFile = "template/page/server-contact.tmpl"
+	case "server-help":
+		templateFile = "template/page/server-help.tmpl"
+	default:
+		http.Error(w, "Template not found", http.StatusInternalServerError)
+		return
+	}
+
+	// Create base template with partials
+	tmpl := template.New(templateName)
+
+	// Load layout and partials first
+	partialFiles := []string{
+		"template/layout/public.tmpl",
+		"template/partial/public/head.tmpl",
+		"template/partial/public/header.tmpl",
+		"template/partial/public/nav.tmpl",
+		"template/partial/public/footer.tmpl",
+		"template/partial/public/scripts.tmpl",
+	}
+
+	for _, pf := range partialFiles {
+		content, err := templatesFS.ReadFile(pf)
+		if err != nil {
+			continue
+		}
+		_, err = tmpl.Parse(string(content))
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Read and parse the main template
+	content, err := templatesFS.ReadFile(templateFile)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = tmpl.Parse(string(content))
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Build common template data
+	versionInfo := version.GetVersionInfo()
+	data := map[string]interface{}{
+		"AppName":        h.appConfig.Server.Title,
+		"AppDescription": h.appConfig.Server.Description,
+		"Version":        versionInfo["version"],
+		"BuildDateTime":  versionInfo["build_time"],
+		"Theme":          "dark",
+	}
+
+	// Merge extra data
+	for k, v := range extraData {
+		data[k] = v
+	}
+
+	// Buffer template output
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, templateName, data); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Set headers and write buffered response
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf.Bytes())
+}
+
 // AboutPage renders /server/about web page
 func (h *ServerHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About - ` + h.appConfig.Server.Title + `</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body class="dark-theme">
-    <div class="container">
-        <header>
-            <h1>About ` + h.appConfig.Server.Title + `</h1>
-        </header>
-        <main>
-            <section>
-                <h2>What is ` + h.appConfig.Server.Title + `?</h2>
-                <p>` + h.appConfig.Server.Description + `</p>
-            </section>
-            <section>
-                <h2>Features</h2>
-                <ul>
-                    <li>Privacy-focused video meta-search</li>
-                    <li>No tracking or personal data collection</li>
-                    <li>Aggregates results from multiple sources</li>
-                    <li>Open source and self-hostable</li>
-                </ul>
-            </section>
-            <section>
-                <h2>Version</h2>
-                <p>Version 0.2.0</p>
-            </section>
-        </main>
-        <footer>
-            <a href="/">Home</a> |
-            <a href="/server/privacy">Privacy</a> |
-            <a href="/server/contact">Contact</a>
-        </footer>
-    </div>
-</body>
-</html>`))
+	h.renderServerTemplate(w, "server-about", nil)
 }
 
 // PrivacyPage renders /server/privacy web page
 func (h *ServerHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy - ` + h.appConfig.Server.Title + `</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body class="dark-theme">
-    <div class="container">
-        <header>
-            <h1>Privacy Policy</h1>
-        </header>
-        <main>
-            <section>
-                <h2>Data Collection</h2>
-                <p>` + h.appConfig.Server.Title + ` is designed with privacy in mind:</p>
-                <ul>
-                    <li>We do not track your searches</li>
-                    <li>We do not store your IP address</li>
-                    <li>We do not use cookies for tracking</li>
-                    <li>We do not share any data with third parties</li>
-                </ul>
-            </section>
-            <section>
-                <h2>Cookies</h2>
-                <p>We only use essential cookies for:</p>
-                <ul>
-                    <li>Age verification (required by law)</li>
-                    <li>User preferences (theme, safe search settings)</li>
-                </ul>
-            </section>
-            <section>
-                <h2>Third Party Services</h2>
-                <p>Search queries are forwarded to third-party video sites.
-                   Please refer to their respective privacy policies for information
-                   about how they handle your data.</p>
-            </section>
-        </main>
-        <footer>
-            <a href="/">Home</a> |
-            <a href="/server/about">About</a> |
-            <a href="/server/contact">Contact</a>
-        </footer>
-    </div>
-</body>
-</html>`))
+	h.renderServerTemplate(w, "server-privacy", nil)
 }
 
 // ContactPage renders /server/contact web page
@@ -127,129 +128,25 @@ func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contact - ` + h.appConfig.Server.Title + `</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body class="dark-theme">
-    <div class="container">
-        <header>
-            <h1>Contact Us</h1>
-        </header>
-        <main>
-            <section>
-                <p>For security issues, please see our
-                   <a href="/.well-known/security.txt">security.txt</a> file.</p>
-            </section>
-            <section>
-                <h2>Contact Form</h2>
-                <form method="POST" action="/server/contact">
-                    <div class="form-group">
-                        <label for="email">Email (optional)</label>
-                        <input type="email" id="email" name="email" placeholder="your@email.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="subject">Subject</label>
-                        <input type="text" id="subject" name="subject" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="message">Message</label>
-                        <textarea id="message" name="message" rows="5" required></textarea>
-                    </div>
-                    <button type="submit">Send Message</button>
-                </form>
-            </section>
-        </main>
-        <footer>
-            <a href="/">Home</a> |
-            <a href="/server/about">About</a> |
-            <a href="/server/privacy">Privacy</a>
-        </footer>
-    </div>
-</body>
-</html>`))
+	// Show contact form
+	h.renderServerTemplate(w, "server-contact", map[string]interface{}{
+		"ContactEnabled": true, // Contact form always available
+	})
 }
 
 // handleContactSubmit handles contact form submission
 func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Message Sent - ` + h.appConfig.Server.Title + `</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body class="dark-theme">
-    <div class="container">
-        <header>
-            <h1>Message Sent</h1>
-        </header>
-        <main>
-            <p>Thank you for your message. We will get back to you if needed.</p>
-            <p><a href="/">Return to Home</a></p>
-        </main>
-    </div>
-</body>
-</html>`))
+	// Parse form and show success message
+	h.renderServerTemplate(w, "server-contact", map[string]interface{}{
+		"ContactEnabled": true,
+		"Message":        "Thank you for your message. We will get back to you if needed.",
+		"MessageType":    "success",
+	})
 }
 
 // HelpPage renders /server/help web page
 func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Help - ` + h.appConfig.Server.Title + `</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body class="dark-theme">
-    <div class="container">
-        <header>
-            <h1>Help</h1>
-        </header>
-        <main>
-            <section>
-                <h2>How to Search</h2>
-                <p>Enter your search terms in the search box on the home page and press Enter or click Search.</p>
-            </section>
-            <section>
-                <h2>Search Tips</h2>
-                <ul>
-                    <li>Use specific keywords for better results</li>
-                    <li>You can select specific engines in Preferences</li>
-                    <li>Results are aggregated from multiple sources</li>
-                </ul>
-            </section>
-            <section>
-                <h2>Preferences</h2>
-                <p>Visit the <a href="/preferences">Preferences</a> page to customize:</p>
-                <ul>
-                    <li>Enable/disable specific search engines</li>
-                    <li>Change theme settings</li>
-                </ul>
-            </section>
-            <section>
-                <h2>API Access</h2>
-                <p>API documentation is available at <a href="/openapi">/openapi</a></p>
-            </section>
-        </main>
-        <footer>
-            <a href="/">Home</a> |
-            <a href="/server/about">About</a> |
-            <a href="/server/contact">Contact</a>
-        </footer>
-    </div>
-</body>
-</html>`))
+	h.renderServerTemplate(w, "server-help", nil)
 }
 
 // API Routes per AI.md PART 31

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -419,9 +420,9 @@ func main() {
 	}
 	defer logger.Close()
 
-	// Tor service (PART 30) - needs data dir, enabled flag, and logger
+	// Tor hidden service (PART 32) - auto-enabled if tor binary is found
 	torDataDir := filepath.Join(paths.Data, "tor")
-	torSvc := tor.NewTorService(torDataDir, appConfig.Search.Tor.Enabled, logger)
+	torSvc := tor.NewTorService(torDataDir, logger)
 
 	// Blocklist service (PART 22)
 	blocklistSvc := blocklist.NewBlocklistService(appConfig)
@@ -522,6 +523,23 @@ func main() {
 			defer clusterMgr.Stop()
 		}
 	}
+
+	// Start Tor hidden service per PART 30 (in background to not block HTTP server)
+	// Auto-enabled if tor binary is installed - no enable flag needed
+	// Parse port from config
+	torPort, _ := strconv.Atoi(appConfig.Server.Port)
+	if torPort == 0 {
+		torPort = 8080 // Default fallback
+	}
+	// Start Tor in background goroutine - HTTP server should be available immediately
+	go func() {
+		torCtx := context.Background()
+		if err := torSvc.Start(torCtx, torPort); err != nil {
+			// PART 30: Tor errors are WARN level, server continues without Tor
+			fmt.Fprintf(os.Stderr, "⚠️  Tor hidden service: %v\n", err)
+		}
+	}()
+	defer torSvc.Stop()
 
 	// Start scheduler
 	sched.Start(context.Background())

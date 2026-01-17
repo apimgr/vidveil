@@ -55,8 +55,6 @@ type TorService struct {
 
 // TorServiceConfig holds Tor service configuration per AI.md PART 32
 type TorServiceConfig struct {
-	// Default: true (enabled by default per PART 32)
-	Enabled bool `yaml:"enabled"`
 	// Set from paths.GetDataDir() + "/tor"
 	DataDir string `yaml:"-"`
 }
@@ -84,10 +82,10 @@ type VanityStatus struct {
 }
 
 // NewTorService creates a new Tor service instance
-func NewTorService(dataDir string, enabled bool, logger *logging.AppLogger) *TorService {
+// Per PART 32: Tor auto-enables if binary is found - no enable flag needed
+func NewTorService(dataDir string, logger *logging.AppLogger) *TorService {
 	return &TorService{
 		cfg: &TorServiceConfig{
-			Enabled: enabled,
 			DataDir: filepath.Join(dataDir, "tor"),
 		},
 		dataDir: filepath.Join(dataDir, "tor"),
@@ -98,14 +96,10 @@ func NewTorService(dataDir string, enabled bool, logger *logging.AppLogger) *Tor
 
 // Start initializes the Tor hidden service using bine
 // Per AI.md PART 32: Uses dedicated Tor process via bine library
+// Auto-enabled if tor binary is found - no enable flag needed
 func (s *TorService) Start(ctx context.Context, localPort int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	if !s.cfg.Enabled {
-		s.status = TorServiceStatusDisabled
-		return nil
-	}
 
 	s.status = TorServiceStatusStarting
 	s.startTime = time.Now()
@@ -371,11 +365,12 @@ func (s *TorService) GetUptime() string {
 	return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
 }
 
-// IsEnabled returns whether Tor is enabled
+// IsEnabled returns whether Tor hidden service is active
+// Per PART 32: Tor auto-enables if binary found
 func (s *TorService) IsEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.cfg.Enabled
+	return s.status == TorServiceStatusConnected || s.status == TorServiceStatusNoTorBinary
 }
 
 // IsRunning returns whether Tor process is actually running
@@ -649,12 +644,15 @@ func (s *TorService) GetInfo() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Per PART 32: Tor is enabled if binary found and running
+	enabled := s.status == TorServiceStatusConnected || s.status == TorServiceStatusNoTorBinary
+
 	info := map[string]interface{}{
-		"enabled": s.cfg.Enabled,
+		"enabled": enabled,
 		"status":  string(s.status),
 	}
 
-	if s.cfg.Enabled && (s.status == TorServiceStatusConnected || s.status == TorServiceStatusNoTorBinary) {
+	if enabled {
 		info["onion_address"] = s.onionAddress
 		if s.status == TorServiceStatusConnected {
 			info["uptime"] = s.GetUptime()
@@ -708,12 +706,6 @@ func (s *TorService) TestConnection() *TestConnectionResult {
 
 	result := &TestConnectionResult{
 		Status: string(s.status),
-	}
-
-	// Check if Tor is enabled
-	if !s.cfg.Enabled {
-		result.Message = "Tor is disabled in configuration"
-		return result
 	}
 
 	// Check if Tor is running

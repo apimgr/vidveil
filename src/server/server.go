@@ -24,7 +24,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 )
 
-//go:embed static/css/* static/js/* static/img/* static/icons/* static/icon/* static/sw.js static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl template/component/*.tmpl
+//go:embed static/css/* static/js/* static/img/* static/icons/* static/icon/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl template/component/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -208,6 +208,7 @@ func (s *Server) setupRoutes() {
 	// Set logger for audit and security event logging per AI.md PART 11
 	admin.SetLogger(s.logger)
 	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
+	h.SetMetrics(metrics)
 
 	// Maintenance mode middleware (applied globally, but allows admin access)
 	s.router.Use(h.MaintenanceModeMiddleware)

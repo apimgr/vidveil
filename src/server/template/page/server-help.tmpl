@@ -1,0 +1,72 @@
+{{define "server-help"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content-area">
+    <header class="page-header">
+        <h1>Help</h1>
+        <p class="page-subtitle">Learn how to use {{.AppName}}</p>
+    </header>
+
+    <section class="card">
+        <h2>Basic Search</h2>
+        <p>Simply type your search query and press Enter or click the search button. Results from all enabled engines will be displayed.</p>
+    </section>
+
+    <section class="card">
+        <h2>Bang Shortcuts</h2>
+        <p>Use bang shortcuts to search specific sites:</p>
+        <div class="code-example">
+            <code>!ph nature</code> - Search PornHub only<br>
+            <code>!xv sunset</code> - Search XVideos only<br>
+            <code>!ph !rt beach</code> - Search PornHub and RedTube
+        </div>
+        <p>Type <code>!</code> followed by the shortcut at the start of your search. Multiple bangs are supported.</p>
+    </section>
+
+    <section class="card">
+        <h2>Available Bangs</h2>
+        <p>View all available bang shortcuts on the <a href="/search?q=!">search page</a> by typing <code>!</code> in the search box.</p>
+    </section>
+
+    <section class="card">
+        <h2>Preferences</h2>
+        <p>Customize your experience in <a href="/preferences">Preferences</a>:</p>
+        <ul class="feature-list-simple">
+            <li>Theme (dark/light)</li>
+            <li>Safe search settings</li>
+            <li>Default engines</li>
+            <li>Results per page</li>
+        </ul>
+    </section>
+
+    <section class="card">
+        <h2>Keyboard Shortcuts</h2>
+        <div class="info-grid">
+            <div class="info-row">
+                <span class="info-label"><kbd>/</kbd></span>
+                <span class="info-value">Focus search box</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"><kbd>Esc</kbd></span>
+                <span class="info-value">Close modals/menus</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label"><kbd>?</kbd></span>
+                <span class="info-value">Show this help</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>API Access</h2>
+        <p>VidVeil provides a REST API for programmatic access. View the <a href="/openapi">API documentation</a> for details.</p>
+    </section>
+
+    <section class="card">
+        <h2>Need More Help?</h2>
+        <p>Check out our <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">GitHub repository</a> or <a href="/server/contact">contact us</a>.</p>
+    </section>
+</div>
+{{end}}

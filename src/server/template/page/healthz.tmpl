@@ -3,227 +3,151 @@
 <html lang="en" class="theme-{{.Theme}}">
 <head>
     {{template "public/head" .}}
-    <style>
-        /* Status Banner per AI.md PART 13 */
-        .status-banner {
-            padding: 1.5rem;
-            border-radius: 8px;
-            text-align: center;
-            font-size: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .status-healthy { background: var(--color-success-bg, #d4edda); color: var(--color-success, #155724); }
-        .status-unhealthy { background: var(--color-error-bg, #f8d7da); color: var(--color-error, #721c24); }
-        .status-degraded { background: var(--color-warning-bg, #fff3cd); color: var(--color-warning, #856404); }
-
-        /* Status Indicators */
-        .status-ok { color: var(--color-success, #28a745); }
-        .status-error { color: var(--color-error, #dc3545); }
-        .status-warning { color: var(--color-warning, #ffc107); }
-
-        /* Health Sections per AI.md PART 13 */
-        .health-section {
-            margin-bottom: 2rem;
-            padding: 1rem;
-            border: 1px solid var(--color-border, #dee2e6);
-            border-radius: 8px;
-            background: var(--color-bg-secondary, #f8f9fa);
-        }
-        .health-section h2 {
-            margin-top: 0;
-            border-bottom: 1px solid var(--color-border, #dee2e6);
-            padding-bottom: 0.5rem;
-        }
-
-        /* Info Grid (dl/dt/dd) */
-        .info-grid {
-            display: grid;
-            grid-template-columns: max-content 1fr;
-            gap: 0.5rem 1rem;
-            margin: 0;
-            padding: 0;
-        }
-        .info-grid dt { font-weight: 600; }
-        .info-grid dd { margin: 0; }
-
-        /* Checks Table */
-        .checks-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .checks-table th, .checks-table td {
-            padding: 0.5rem;
-            border: 1px solid var(--color-border, #dee2e6);
-            text-align: left;
-        }
-        .checks-table th {
-            background: var(--color-bg-tertiary, #e9ecef);
-        }
-
-        /* Feature List */
-        .feature-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        .feature-list li {
-            padding: 0.25rem 0;
-        }
-        .feature-enabled { color: var(--color-success, #28a745); }
-        .feature-disabled { color: var(--color-muted, #6c757d); }
-
-        /* Node List */
-        .node-list {
-            list-style: none;
-            padding: 0;
-            margin: 0.5rem 0 0 0;
-        }
-        .node-list li {
-            padding: 0.25rem 0;
-        }
-
-        /* Badges */
-        .badge {
-            display: inline-block;
-            padding: 0.25em 0.5em;
-            font-size: 0.875em;
-            border-radius: 4px;
-        }
-        .badge-production { background: var(--color-success-bg, #d4edda); color: var(--color-success, #155724); }
-        .badge-development { background: var(--color-warning-bg, #fff3cd); color: var(--color-warning, #856404); }
-        .badge-primary { background: var(--color-primary-bg, #cce5ff); color: var(--color-primary, #004085); }
-
-        /* Health Header */
-        .health-header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .health-header h1 {
-            margin-bottom: 0.5rem;
-        }
-        .project-description {
-            color: var(--color-muted, #6c757d);
-            font-size: 1.1rem;
-        }
-
-        /* Health Footer */
-        .health-footer {
-            text-align: center;
-            margin-top: 2rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--color-border, #dee2e6);
-            color: var(--color-muted, #6c757d);
-        }
-        .auto-refresh {
-            font-size: 0.875rem;
-        }
-
-        /* Stats Grid */
-        .stats-grid dd {
-            font-family: monospace;
-            font-size: 1.1rem;
-        }
-    </style>
 </head>
 <body>
     <a href="#main-content" class="skip-link">Skip to main content</a>
-    <main class="health-status" id="main-content" role="main">
+    {{template "public/header" .}}
+    {{template "public/nav" .}}
+    <main id="main-content" role="main" class="content-area">
         <!-- Project Info per AI.md PART 13 -->
-        <header class="health-header">
-            <h1>📦 {{.ProjectName}}</h1>
-            <p class="project-description">{{.ProjectDescription}}</p>
+        <header class="page-header">
+            <h1>{{.ProjectName}}</h1>
+            <p class="page-subtitle">{{.ProjectDescription}}</p>
         </header>
 
-        <h2>🏥 System Health</h2>
-
         <!-- Status Banner per AI.md PART 13 -->
-        <div class="status-banner status-{{.StatusClass}}">
+        <div class="card status-card status-{{.StatusClass}}">
             <span class="status-icon">{{.StatusIcon}}</span>
             <span class="status-text">{{.StatusText}}</span>
         </div>
 
         <!-- Version & Build Info per AI.md PART 13 -->
-        <section class="health-section">
-            <h2>ℹ️ Version</h2>
-            <dl class="info-grid">
-                <dt>🏷️ Version</dt><dd>{{.Version}}</dd>
-                <dt>🐹 Go Version</dt><dd>{{.GoVersion}}</dd>
-                <dt>🔨 Build</dt><dd>{{.BuildCommit}} ({{.BuildDate}})</dd>
-                <dt>⏱️ Uptime</dt><dd>{{.Uptime}}</dd>
-                <dt>🚀 Mode</dt><dd><span class="badge badge-{{.Mode}}">{{.ModeDisplay}}</span></dd>
-            </dl>
+        <section class="card">
+            <h2>Version</h2>
+            <div class="info-grid">
+                <div class="info-row">
+                    <span class="info-label">Version</span>
+                    <span class="info-value"><code>{{.Version}}</code></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Go Version</span>
+                    <span class="info-value"><code>{{.GoVersion}}</code></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Build</span>
+                    <span class="info-value"><code>{{.BuildCommit}}</code> ({{.BuildDate}})</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Uptime</span>
+                    <span class="info-value">{{.Uptime}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Mode</span>
+                    <span class="info-value"><span class="badge badge-{{.Mode}}">{{.ModeDisplay}}</span></span>
+                </div>
+            </div>
         </section>
 
         {{if .ClusterEnabled}}
         <!-- Cluster Info per AI.md PART 13 -->
-        <section class="health-section">
-            <h2>🔗 Cluster</h2>
-            <dl class="info-grid">
-                <dt>Status</dt><dd><span class="status-{{.ClusterStatusClass}}">{{.ClusterStatusIcon}} {{.ClusterStatus}}</span></dd>
-                <dt>👑 Primary</dt><dd><code>{{.ClusterPrimary}}</code></dd>
-                <dt>🎭 Role</dt><dd>{{.ClusterRole}}</dd>
-            </dl>
+        <section class="card">
+            <h2>Cluster</h2>
+            <div class="info-grid">
+                <div class="info-row">
+                    <span class="info-label">Status</span>
+                    <span class="info-value status-{{.ClusterStatusClass}}">{{.ClusterStatusIcon}} {{.ClusterStatus}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Primary</span>
+                    <span class="info-value"><code>{{.ClusterPrimary}}</code></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Role</span>
+                    <span class="info-value">{{.ClusterRole}}</span>
+                </div>
+            </div>
             {{if .ClusterNodes}}
-            <h3>🖥️ Nodes</h3>
-            <ul class="node-list">
+            <h3>Nodes</h3>
+            <ul class="list-plain">
                 {{range .ClusterNodes}}
-                <li><code>{{.URL}}</code>{{if .IsPrimary}} <span class="badge badge-primary">👑 Primary</span>{{else}} ✅{{end}}</li>
+                <li><code>{{.URL}}</code>{{if .IsPrimary}} <span class="badge badge-primary">Primary</span>{{end}}</li>
                 {{end}}
             </ul>
             {{end}}
         </section>
         {{end}}
 
-        <!-- Features per AI.md PART 13 -->
-        <section class="health-section">
-            <h2>🎛️ Features</h2>
-            <ul class="feature-list">
-                <li class="{{if .Features.MultiUser}}feature-enabled{{else}}feature-disabled{{end}}">👥 Multi-User: {{if .Features.MultiUser}}✅ Enabled{{else}}❌ Disabled{{end}}</li>
-                <li class="{{if .Features.Organizations}}feature-enabled{{else}}feature-disabled{{end}}">🏢 Organizations: {{if .Features.Organizations}}✅ Enabled{{else}}❌ Disabled{{end}}</li>
-                {{if .Features.TorEnabled}}
-                <li class="feature-enabled">🧅 Tor: <span class="status-{{if .Features.TorRunning}}ok{{else}}error{{end}}">{{if .Features.TorRunning}}✅ running{{else}}❌ stopped{{end}}</span>{{if .Features.TorHostname}} <code>{{.Features.TorHostname}}</code>{{end}}</li>
-                {{else}}
-                <li class="feature-disabled">🧅 Tor: ❌ Disabled</li>
-                {{end}}
-                <li class="{{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">🌍 GeoIP: {{if .Features.GeoIP}}✅ Enabled{{else}}❌ Disabled{{end}}</li>
-                <li class="{{if .Features.Metrics}}feature-enabled{{else}}feature-disabled{{end}}">📊 Metrics: {{if .Features.Metrics}}✅ Enabled{{else}}❌ Disabled{{end}}</li>
-            </ul>
+        <!-- Features per AI.md PART 13 (VidVeil: stateless per IDEA.md) -->
+        <section class="card">
+            <h2>Features</h2>
+            <div class="feature-grid">
+                <div class="feature-item {{if .Features.TorEnabled}}feature-enabled{{else}}feature-disabled{{end}}">
+                    <span class="feature-icon">{{if .Features.TorEnabled}}{{else}}{{end}}</span>
+                    <span class="feature-name">Tor Hidden Service</span>
+                </div>
+                <div class="feature-item {{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">
+                    <span class="feature-icon">{{if .Features.GeoIP}}{{else}}{{end}}</span>
+                    <span class="feature-name">GeoIP</span>
+                </div>
+                <div class="feature-item {{if .Features.Metrics}}feature-enabled{{else}}feature-disabled{{end}}">
+                    <span class="feature-icon">{{if .Features.Metrics}}{{else}}{{end}}</span>
+                    <span class="feature-name">Metrics</span>
+                </div>
+            </div>
         </section>
 
         <!-- Component Checks per AI.md PART 13 -->
-        <section class="health-section">
-            <h2>🔧 Component Status</h2>
-            <table class="checks-table">
-                <thead><tr><th>Component</th><th>Status</th></tr></thead>
-                <tbody>
-                    <tr><td>🗄️ Database</td><td class="status-{{if eq .Checks.Database "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Database "ok"}}✅ OK{{else}}❌ Error{{end}}</td></tr>
-                    <tr><td>💾 Cache</td><td class="status-{{if eq .Checks.Cache "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cache "ok"}}✅ OK{{else}}❌ Error{{end}}</td></tr>
-                    <tr><td>💿 Disk</td><td class="status-{{if eq .Checks.Disk "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Disk "ok"}}✅ OK{{else}}❌ Error{{end}}</td></tr>
-                    <tr><td>⏰ Scheduler</td><td class="status-{{if eq .Checks.Scheduler "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Scheduler "ok"}}✅ OK{{else}}❌ Error{{end}}</td></tr>
-                    {{if .ClusterEnabled}}
-                    <tr><td>🔗 Cluster</td><td class="status-{{if eq .Checks.Cluster "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cluster "ok"}}✅ OK{{else}}❌ Error{{end}}</td></tr>
-                    {{end}}
-                </tbody>
-            </table>
+        <section class="card">
+            <h2>Component Status</h2>
+            <div class="checks-grid">
+                <div class="check-item">
+                    <span class="check-name">Database</span>
+                    <span class="check-status status-{{if eq .Checks.Database "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Database "ok"}}OK{{else}}Error{{end}}</span>
+                </div>
+                <div class="check-item">
+                    <span class="check-name">Cache</span>
+                    <span class="check-status status-{{if eq .Checks.Cache "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cache "ok"}}OK{{else}}Error{{end}}</span>
+                </div>
+                <div class="check-item">
+                    <span class="check-name">Disk</span>
+                    <span class="check-status status-{{if eq .Checks.Disk "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Disk "ok"}}OK{{else}}Error{{end}}</span>
+                </div>
+                <div class="check-item">
+                    <span class="check-name">Scheduler</span>
+                    <span class="check-status status-{{if eq .Checks.Scheduler "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Scheduler "ok"}}OK{{else}}Error{{end}}</span>
+                </div>
+                {{if .ClusterEnabled}}
+                <div class="check-item">
+                    <span class="check-name">Cluster</span>
+                    <span class="check-status status-{{if eq .Checks.Cluster "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cluster "ok"}}OK{{else}}Error{{end}}</span>
+                </div>
+                {{end}}
+            </div>
         </section>
 
-        <!-- Statistics per AI.md PART 13 -->
-        <section class="health-section">
-            <h2>📈 Statistics</h2>
-            <dl class="info-grid stats-grid">
-                <dt>📥 Total Requests</dt><dd>{{.Stats.TotalRequests}}</dd>
-                <dt>📅 Requests (24h)</dt><dd>{{.Stats.Requests24h}}</dd>
-                <dt>🔌 Active Connections</dt><dd>{{.Stats.ActiveConnections}}</dd>
-            </dl>
+        <!-- Statistics (VidVeil-specific per IDEA.md) -->
+        <section class="card">
+            <h2>Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-value">{{.Stats.Searches}}</span>
+                    <span class="stat-label">Total Searches</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">{{.Stats.EnginesEnabled}} / {{.Stats.EnginesTotal}}</span>
+                    <span class="stat-label">Engines Enabled</span>
+                </div>
+            </div>
         </section>
 
-        <!-- Footer per AI.md PART 13 -->
-        <footer class="health-footer">
-            <p>🕐 Last checked: <time datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
+        <!-- Last Updated per AI.md PART 13 -->
+        <div class="health-meta">
+            <p>Last checked: <time datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
             <p class="auto-refresh">Auto-refreshing in <span id="countdown">30</span>s</p>
-        </footer>
+        </div>
     </main>
     {{template "public/footer" .}}
+    {{template "public/scripts" .}}
     <script>
         // Auto-refresh countdown per AI.md PART 13
         (function() {

@@ -55,6 +55,26 @@ func (m *ServerMetrics) IncrementAPIRequests() {
 	atomic.AddUint64(&m.apiRequestsTotal, 1)
 }
 
+// GetRequestsTotal returns total request count
+func (m *ServerMetrics) GetRequestsTotal() uint64 {
+	return atomic.LoadUint64(&m.requestsTotal)
+}
+
+// GetSearchesTotal returns total search count
+func (m *ServerMetrics) GetSearchesTotal() uint64 {
+	return atomic.LoadUint64(&m.searchesTotal)
+}
+
+// GetSearchErrors returns total search error count
+func (m *ServerMetrics) GetSearchErrors() uint64 {
+	return atomic.LoadUint64(&m.searchErrors)
+}
+
+// GetAPIRequestsTotal returns total API request count
+func (m *ServerMetrics) GetAPIRequestsTotal() uint64 {
+	return atomic.LoadUint64(&m.apiRequestsTotal)
+}
+
 // Handler returns the Prometheus metrics handler
 func (m *ServerMetrics) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

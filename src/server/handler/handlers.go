@@ -913,6 +913,8 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	tmpl, err := template.ParseFS(templatesFS,
 		"template/page/healthz.tmpl",
 		"template/partial/public/head.tmpl",
+		"template/partial/public/header.tmpl",
+		"template/partial/public/nav.tmpl",
 		"template/partial/public/footer.tmpl",
 		"template/partial/public/scripts.tmpl",
 	)

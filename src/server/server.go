@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"io/fs"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -655,6 +656,23 @@ func (s *Server) ListenAndServe(addr string) error {
 		IdleTimeout:  idleTimeout,
 	}
 	return s.srv.ListenAndServe()
+}
+
+// Serve serves on the given listener (for Tor hidden service)
+// Per AI.md PART 32: HTTP server serves on both TCP (clearnet) and Tor listener
+func (s *Server) Serve(listener net.Listener) error {
+	// Parse timeouts from config per AI.md PART 13
+	readTimeout := parseDuration(s.appConfig.Server.Limits.ReadTimeout, 30*time.Second)
+	writeTimeout := parseDuration(s.appConfig.Server.Limits.WriteTimeout, 30*time.Second)
+	idleTimeout := parseDuration(s.appConfig.Server.Limits.IdleTimeout, 120*time.Second)
+
+	torSrv := &http.Server{
+		Handler:      s.router,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
+	}
+	return torSrv.Serve(listener)
 }
 
 // parseDuration parses a duration string, returning the default if parsing fails

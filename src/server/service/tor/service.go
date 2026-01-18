@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,7 +20,6 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/server/service/logging"
-	"github.com/cretz/bine/control"
 	"github.com/cretz/bine/tor"
 	bineed25519 "github.com/cretz/bine/torutil/ed25519"
 	"golang.org/x/crypto/sha3"
@@ -35,6 +35,10 @@ type TorService struct {
 	// bine Tor instance - manages dedicated Tor process
 	torInstance *tor.Tor
 
+	// OnionService listener - implements net.Listener
+	// Per AI.md PART 32: Unix socket on Unix, high TCP port on Windows
+	onionService *tor.OnionService
+
 	// Hidden service state
 	onionAddress string
 	privateKey   ed25519.PrivateKey
@@ -45,7 +49,8 @@ type TorService struct {
 	startTime time.Time
 	mu        sync.RWMutex
 
-	// Local port the hidden service forwards to
+	// Local port the hidden service forwards to (Windows only)
+	// On Unix, uses Unix socket instead
 	localPort int
 
 	// Vanity generation
@@ -203,42 +208,83 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 		return fmt.Errorf("failed to enable tor network: %w", err)
 	}
 
-	// Create hidden service forwarding .onion:80 to localhost:localPort
-	// Per AI.md PART 32: Use AddOnion directly (not Listen) because HTTP server
-	// is already listening on localPort - we just need Tor to forward traffic to it
+	// Create hidden service using tor.Listen() with proper local listener
+	// Per AI.md PART 32: Unix socket on Unix, high TCP port (63000+) on Windows
 	s.logger.Info("Creating hidden service", map[string]interface{}{
 		"remote_port": 80,
-		"local_port":  localPort,
 	})
 
-	// Use control protocol to add onion service pointing to our HTTP server
-	// The HTTP server listens on 0.0.0.0:localPort, Tor forwards .onion:80 → 127.0.0.1:localPort
+	// Create local listener based on platform
+	var localListener net.Listener
+	if runtime.GOOS == "windows" {
+		// Windows: Unix sockets not supported, use high TCP port (63000+ range)
+		// Find available port in 63000-63999 range
+		var listenErr error
+		for port := 63000; port < 64000; port++ {
+			localListener, listenErr = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+			if listenErr == nil {
+				s.localPort = port
+				s.logger.Info("Using TCP port for hidden service", map[string]interface{}{"port": port})
+				break
+			}
+		}
+		if localListener == nil {
+			t.Close()
+			s.torInstance = nil
+			s.status = TorServiceStatusError
+			return fmt.Errorf("failed to find available port in 63000-63999 range: %w", listenErr)
+		}
+	} else {
+		// Unix/macOS/BSD: Use Unix socket (more secure, no port conflicts)
+		socketPath := filepath.Join(s.dataDir, "service.sock")
+		// Remove existing socket file if it exists
+		os.Remove(socketPath)
+		var listenErr error
+		localListener, listenErr = net.Listen("unix", socketPath)
+		if listenErr != nil {
+			t.Close()
+			s.torInstance = nil
+			s.status = TorServiceStatusError
+			return fmt.Errorf("failed to create unix socket %s: %w", socketPath, listenErr)
+		}
+		// Set socket permissions to 0600 per PART 32
+		if err := os.Chmod(socketPath, 0600); err != nil {
+			localListener.Close()
+			t.Close()
+			s.torInstance = nil
+			s.status = TorServiceStatusError
+			return fmt.Errorf("failed to chmod socket: %w", err)
+		}
+		s.logger.Info("Using Unix socket for hidden service", map[string]interface{}{"socket": socketPath})
+	}
 
 	// Convert Go ed25519 key to bine's ed25519 KeyPair
 	bineKeyPair := bineed25519.FromCryptoPrivateKey(s.privateKey)
 
-	// AddOnion with ED25519-V3 key
-	resp, err := t.Control.AddOnion(&control.AddOnionRequest{
-		Key:   &control.ED25519Key{KeyPair: bineKeyPair},
-		Flags: []string{"DiscardPK"}, // Don't return key in response (we already have it)
-		Ports: []*control.KeyVal{
-			{Key: "80", Val: fmt.Sprintf("127.0.0.1:%d", localPort)},
-		},
+	// Create hidden service with our pre-created local listener
+	onionSvc, err := t.Listen(ctx, &tor.ListenConf{
+		LocalListener: localListener, // Our Unix socket or TCP listener
+		RemotePorts:   []int{80},     // .onion:80
+		Key:           bineKeyPair,   // Use our existing key
+		Version3:      true,          // Ed25519 v3 onion
 	})
 	if err != nil {
+		localListener.Close()
 		t.Close()
 		s.torInstance = nil
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to create onion service: %w", err)
 	}
+	s.onionService = onionSvc
 
-	// Verify the onion address matches our calculated address
-	if resp.ServiceID+".onion" != s.onionAddress {
+	// Update onion address from the service (should match our calculated one)
+	actualAddress := onionSvc.ID + ".onion"
+	if actualAddress != s.onionAddress {
 		s.logger.Warn("Onion address mismatch", map[string]interface{}{
 			"expected": s.onionAddress,
-			"got":      resp.ServiceID + ".onion",
+			"got":      actualAddress,
 		})
-		s.onionAddress = resp.ServiceID + ".onion"
+		s.onionAddress = actualAddress
 	}
 
 	s.status = TorServiceStatusConnected
@@ -314,8 +360,11 @@ func (s *TorService) Stop() error {
 		s.vanityCancel()
 	}
 
-	// Note: We use AddOnion (not Listen) so no local listener to close
-	// The onion service is removed automatically when Tor process closes
+	// Close onion service listener
+	if s.onionService != nil {
+		s.onionService.Close()
+		s.onionService = nil
+	}
 
 	// Close dedicated Tor process
 	if s.torInstance != nil {
@@ -779,6 +828,18 @@ func (s *TorService) GetPublicKeyHex() string {
 	return hex.EncodeToString(s.publicKey)
 }
 
+// GetListener returns the OnionService listener (implements net.Listener)
+// The HTTP server should call Serve() on this listener to handle Tor traffic
+// Returns nil if Tor is not running
+func (s *TorService) GetListener() net.Listener {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.onionService == nil {
+		return nil
+	}
+	return s.onionService
+}
+
 // Restart restarts the Tor service with new configuration
 func (s *TorService) Restart(ctx context.Context) error {
 	localPort := s.localPort
@@ -817,9 +878,14 @@ func (s *TorService) TestConnection() *TestConnectionResult {
 		return result
 	}
 
-	// Check if Tor instance is active
+	// Check if Tor instance and onion service are active
 	if s.torInstance == nil {
 		result.Message = "Tor process is not running"
+		return result
+	}
+
+	if s.onionService == nil {
+		result.Message = "Onion service listener is not active"
 		return result
 	}
 

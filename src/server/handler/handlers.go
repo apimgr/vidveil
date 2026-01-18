@@ -697,11 +697,9 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				"nodes":   []string{},
 			},
 			"features": map[string]interface{}{
-				"multi_user":    false,
-				"organizations": false,
-				"tor":           h.appConfig != nil && false,
-				"geoip":         h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
-				"metrics":       h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
+				"tor":     h.appConfig != nil && false,
+				"geoip":   h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
+				"metrics": h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
 			},
 			"checks": checks,
 			"stats": map[string]interface{}{
@@ -1561,11 +1559,9 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 			"nodes":   []string{},
 		},
 		"features": map[string]interface{}{
-			"multi_user":    false,
-			"organizations": false,
-			"tor":           h.appConfig != nil && false,
-			"geoip":         h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
-			"metrics":       h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
+			"tor":     h.appConfig != nil && false,
+			"geoip":   h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
+			"metrics": h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
 		},
 		"checks": map[string]string{
 			"database":  checks["database"],

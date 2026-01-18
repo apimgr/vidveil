@@ -70,9 +70,9 @@ RUN apk add --no-cache \
 # Copy binary from builder stage (multi-stage build)
 COPY --from=builder /build/binary/vidveil /usr/local/bin/vidveil
 
-# Copy BUILD-TIME overlay (entrypoint.sh) from docker/rootfs/ into image
-# Note: This is docker/rootfs/ (build context), NOT runtime ./rootfs/ volumes
-COPY docker/rootfs/ /
+# Copy BUILD-TIME overlay (entrypoint.sh) from docker/file_system/ into image
+# Note: This is docker/file_system/ (build context), NOT runtime volumes
+COPY docker/file_system/ /
 
 # Copy Dockerfile to image (for reference and backup)
 COPY docker/Dockerfile /root/Dockerfile

@@ -49,6 +49,11 @@ type SearchHandler struct {
 
 // NewSearchHandler creates a new handler instance
 func NewSearchHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *SearchHandler {
+	// Use default config if nil per AI.md PART 5
+	if appConfig == nil {
+		appConfig = config.DefaultAppConfig()
+	}
+
 	// Initialize cache with 5 minute TTL and 1000 max entries
 	searchCache := cache.NewSearchCache(5*time.Minute, 1000)
 
@@ -669,12 +674,18 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get project name safely
+	projectName := "VidVeil"
+	if h.appConfig != nil && h.appConfig.Server.Title != "" {
+		projectName = h.appConfig.Server.Title
+	}
+
 	switch format {
 	case "application/json":
 		// JSON format per AI.md PART 13 lines 12949-12996
 		response := map[string]interface{}{
 			"project": map[string]interface{}{
-				"name":        h.appConfig.Server.Title,
+				"name":        projectName,
 				"description": "Privacy-respecting adult video meta search",
 			},
 			"status":     status,

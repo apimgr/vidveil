@@ -1235,7 +1235,8 @@ func (h *SearchHandler) APIBangs(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "bangs: %d\n---\n", len(bangs))
 		for _, b := range bangs {
-			fmt.Fprintf(w, "!%s - %s\n", b.Bang, b.EngineName)
+			// b.Bang already has ! prefix per bangs.go line 287
+			fmt.Fprintf(w, "%s - %s\n", b.Bang, b.EngineName)
 		}
 		return
 	}
@@ -1283,7 +1284,8 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintf(w, "type: bang\nsuggestions: %d\n---\n", len(suggestions))
 			for _, s := range suggestions {
-				fmt.Fprintf(w, "!%s - %s\n", s.Bang, s.EngineName)
+				// s.Bang already has ! prefix per bangs.go line 353
+				fmt.Fprintf(w, "%s - %s\n", s.Bang, s.EngineName)
 			}
 			return
 		}
@@ -1307,7 +1309,8 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintf(w, "type: bang_start\nsuggestions: %d\n---\n", len(bangs))
 			for _, b := range bangs {
-				fmt.Fprintf(w, "!%s - %s\n", b.Bang, b.EngineName)
+				// b.Bang already has ! prefix per bangs.go line 287
+				fmt.Fprintf(w, "%s - %s\n", b.Bang, b.EngineName)
 			}
 			return
 		}
@@ -1331,7 +1334,8 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 				w.WriteHeader(http.StatusOK)
 				fmt.Fprintf(w, "type: bang\nreplace: %s\nsuggestions: %d\n---\n", lastWord, len(suggestions))
 				for _, s := range suggestions {
-					fmt.Fprintf(w, "!%s - %s\n", s.Bang, s.EngineName)
+					// s.Bang already has ! prefix per bangs.go line 353
+					fmt.Fprintf(w, "%s - %s\n", s.Bang, s.EngineName)
 				}
 				return
 			}

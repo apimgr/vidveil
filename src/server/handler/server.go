@@ -20,6 +20,10 @@ type ServerHandler struct {
 
 // NewServerHandler creates a new server handler
 func NewServerHandler(appConfig *config.AppConfig) *ServerHandler {
+	// Use default config if nil per AI.md PART 5
+	if appConfig == nil {
+		appConfig = config.DefaultAppConfig()
+	}
 	return &ServerHandler{
 		appConfig: appConfig,
 	}
@@ -81,10 +85,12 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName
 		return
 	}
 
-	// Build common template data
+	// Build common template data per AI.md PART 16
 	versionInfo := version.GetVersionInfo()
+	appName := h.appConfig.Server.Title
 	data := map[string]interface{}{
-		"AppName":        h.appConfig.Server.Title,
+		"Title":          appName,                     // Required by head.tmpl
+		"AppName":        appName,
 		"AppDescription": h.appConfig.Server.Description,
 		"Version":        versionInfo["version"],
 		"BuildDateTime":  versionInfo["build_time"],

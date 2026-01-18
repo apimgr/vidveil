@@ -3,19 +3,13 @@
 {{end}}
 
 {{define "content"}}
-<div class="content-area">
-    <header class="page-header">
+<div class="content">
+    <div class="prose">
         <h1>About {{.AppName}}</h1>
-    </header>
-
-    <section class="card">
-        <h2>What is {{.AppName}}?</h2>
         <p>{{.AppDescription}}</p>
-    </section>
 
-    <section class="card">
         <h2>Features</h2>
-        <ul class="feature-list-simple">
+        <ul>
             <li>Privacy-focused video meta-search</li>
             <li>No tracking or personal data collection</li>
             <li>Aggregates results from 50+ video sources</li>
@@ -24,25 +18,13 @@
             <li>Thumbnail proxy prevents tracking</li>
             <li>Open source and self-hostable</li>
         </ul>
-    </section>
 
-    <section class="card">
         <h2>Version Information</h2>
-        <div class="info-grid">
-            <div class="info-row">
-                <span class="info-label">Version</span>
-                <span class="info-value"><code>{{.Version}}</code></span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Build</span>
-                <span class="info-value">{{.BuildDateTime}}</span>
-            </div>
-        </div>
-    </section>
+        <p><strong>Version:</strong> <code>{{.Version}}</code></p>
+        <p><strong>Build:</strong> {{.BuildDateTime}}</p>
 
-    <section class="card">
         <h2>Source Code</h2>
         <p>VidVeil is open source software. View the source code and contribute on <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">GitHub</a>.</p>
-    </section>
+    </div>
 </div>
 {{end}}

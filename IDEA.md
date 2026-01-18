@@ -156,10 +156,7 @@ No user management (VidVeil is stateless, no user accounts).
 
 | Method | URL | Description |
 |--------|-----|-------------|
-| GET | `/healthz` | Health check (plain text) |
-| GET | `/api/v1/healthz` | Health check (JSON) |
-| GET | `/api/v1/version` | Version info |
-| GET | `/api/v1/stats` | Search statistics |
+| GET | `/api/{api_version}/stats` | Search statistics |
 
 ### VidVeil Endpoints
 

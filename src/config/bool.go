@@ -79,3 +79,10 @@ func IsValidBool(s string) bool {
 	s = strings.TrimSpace(strings.ToLower(s))
 	return truthyValues[s] || falsyValues[s]
 }
+
+// ParseBool parses a string into a boolean using truthy/falsy values.
+// Returns true for truthy values, false for everything else (empty, falsy, invalid).
+// This is the primary function to use - NEVER use strconv.ParseBool().
+func ParseBool(s string) bool {
+	return IsTruthy(s)
+}

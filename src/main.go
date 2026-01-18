@@ -396,6 +396,11 @@ func main() {
 	// Initialize search engines
 	engineMgr := engine.NewEngineManager(appConfig)
 	engineMgr.InitializeEngines()
+	
+	// Set custom autocomplete terms from config (adds to built-in suggestions)
+	if len(appConfig.Search.CustomTerms) > 0 {
+		engine.SetCustomTerms(appConfig.Search.CustomTerms)
+	}
 
 	// Initialize services per AI.md specifications
 	// SSL service (PART 21)

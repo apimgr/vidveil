@@ -437,7 +437,7 @@ src/agent/                  # Agent (OPTIONAL - monitoring/management projects o
 docker/                     # Docker files (REQUIRED)
 docker/Dockerfile           # Multi-stage Dockerfile
 docker/docker-compose.yml   # Production docker-compose
-docker/rootfs/              # BUILD-TIME overlay (entrypoint.sh) - NOT runtime volumes
+docker/file_system/              # BUILD-TIME overlay (entrypoint.sh) - NOT runtime volumes
 binaries/                   # Build output (gitignored)
 releases/                   # Release artifacts (gitignored)
 ```
@@ -445,7 +445,7 @@ releases/                   # Release artifacts (gitignored)
 **Notes:**
 - `src/client/` is REQUIRED for all projects (client binary is mandatory). See PART 33 for client details.
 - `src/agent/` is OPTIONAL (only for monitoring/management projects). See PART 33 for agent details.
-- `docker/rootfs/` is for BUILD-TIME container overlay (copied into image). Runtime volumes (`./rootfs/config`, `./rootfs/data`) are NEVER in the repo - they exist only where docker-compose runs (production server or temp dir).
+- `docker/file_system/` is for BUILD-TIME container overlay (copied into image). Runtime volumes (`./rootfs/config`, `./rootfs/data`) are NEVER in the repo - they exist only where docker-compose runs (production server or temp dir).
 
 ## File & Directory Naming Conventions
 
@@ -1733,7 +1733,7 @@ Implemented core server functionality and admin panel.
 | **docker/Dockerfile** | PART 27, actual code | Build stages, packages, paths correct |
 | **docker/docker-compose.yml** | PART 27, actual config | Ports, volumes, env vars match |
 | **docker/docker-compose.dev.yml** | PART 27 | Dev workflow correct |
-| **docker/rootfs/** | Actual entrypoint needs | Scripts match what app expects |
+| **docker/file_system/** | Actual entrypoint needs | Scripts match what app expects |
 | **.github/workflows/*.yml** | PART 28, actual build | CI/CD builds what exists, tests what exists |
 | **.gitea/workflows/*.yml** | PART 28, actual build | Same as GitHub workflows |
 | **Jenkinsfile** | PART 28, actual build | Pipeline matches project |
@@ -2586,6 +2586,39 @@ ls -la docker/
 | Database management | Static content site | Bulk operations via CLI |
 
 **Once implemented, the optional PART becomes NON-NEGOTIABLE.**
+
+### CRITICAL: Unused Optional Features Must Not Exist in Code
+
+**If a project does NOT use PART 34, 35, or 36, those features must be completely absent from the codebase.**
+
+| Rule | Description |
+|------|-------------|
+| **No references** | Zero mentions of users, orgs, or custom domains in code |
+| **No conditionals** | No `if multiUserEnabled` or `if orgsEnabled` checks |
+| **No stubs** | No placeholder functions, empty tables, or "future" comments |
+| **No config options** | No `users.enabled: false` or similar toggle settings |
+| **No UI elements** | No hidden/disabled menu items for unused features |
+
+**The code should be written as if the unused features never existed.**
+
+| If NOT using... | These must NOT appear in code |
+|-----------------|------------------------------|
+| PART 34 (Multi-User) | `users` table, user registration, user preferences table, user API tokens, `/auth/register`, user profiles, `allow_user_preference` config options |
+| PART 35 (Organizations) | `organizations` table, org membership, org ownership, org API tokens, `/orgs/*` routes |
+| PART 36 (Custom Domains) | `custom_domains` table, domain verification, user/org domain settings, SSL for custom domains |
+
+**Why?** Unused code is dead code. It adds complexity, security surface, and maintenance burden for features that don't exist. If a feature isn't used, it shouldn't be in the codebase at all.
+
+**Client-Side Preferences (No PART 34 Required):**
+
+User preferences like theme, language, and UI settings can be stored client-side without PART 34:
+
+| Storage | Use Case | Persistence |
+|---------|----------|-------------|
+| `localStorage` | Theme, language, UI preferences | Until cleared |
+| Cookies | Session preferences, consent flags | Configurable expiry |
+
+These work for anonymous visitors and don't require user accounts. Server-side user preferences (stored in `user_preferences` table) require PART 34.
 
 ## AI Implementation Process
 
@@ -4170,7 +4203,7 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 │   ├── docker-compose.yml  # Production compose (NO debug)
 │   ├── docker-compose.dev.yml  # Development compose
 │   ├── docker-compose.test.yml # Test compose (DEBUG=true)
-│   └── rootfs/             # Container filesystem overlay
+│   └── file_system/        # Container filesystem overlay
 │       └── usr/
 │           └── local/
 │               └── bin/
@@ -4393,7 +4426,7 @@ Makefile
 | `src/` | Source code - required for build |
 | `go.mod`, `go.sum` | Go module files - required |
 | `docker/` | Dockerfile, rootfs overlay - required |
-| `docker/rootfs/` | Build-time overlay files (entrypoint.sh) |
+| `docker/file_system/` | Build-time overlay files (entrypoint.sh) |
 
 **RULE: Keep the base directory organized and clean - no clutter!**
 
@@ -30032,7 +30065,7 @@ docker/
 ├── docker-compose.yml      # Production compose (NO debug options)
 ├── docker-compose.dev.yml  # Development compose (DEBUG commented)
 ├── docker-compose.test.yml # Test compose (DEBUG=true enabled)
-└── rootfs/                 # Container filesystem overlay
+└── file_system/            # Container filesystem overlay
     └── usr/
         └── local/
             └── bin/
@@ -30043,7 +30076,7 @@ docker/
 - Docker build context is project root (`.`)
 - Dockerfile specified with `-f docker/Dockerfile`
 - Multi-stage build: Go binary compiled in builder stage
-- rootfs copied from `docker/rootfs/`
+- rootfs copied from `docker/file_system/`
 
 **Rules:**
 - NEVER place Dockerfile or docker-compose.yml in project root
@@ -30225,9 +30258,9 @@ RUN apk add --no-cache \
 # Copy binary from builder stage (multi-stage build)
 COPY --from=builder /build/binary/{projectname} /usr/local/bin/{projectname}
 
-# Copy BUILD-TIME overlay (entrypoint.sh) from docker/rootfs/ into image
-# Note: This is docker/rootfs/ (build context), NOT runtime ./rootfs/ volumes
-COPY docker/rootfs/ /
+# Copy BUILD-TIME overlay (entrypoint.sh) from docker/file_system/ into image
+# Note: This is docker/file_system/ (build context), NOT runtime ./rootfs/ volumes
+COPY docker/file_system/ /
 
 # Copy Dockerfile to image (for reference and backup)
 COPY docker/Dockerfile /root/Dockerfile
@@ -30269,7 +30302,7 @@ ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]
 
 ### Entrypoint Script (REQUIRED)
 
-**Location:** `docker/rootfs/usr/local/bin/entrypoint.sh`
+**Location:** `docker/file_system/usr/local/bin/entrypoint.sh`
 
 **Entrypoint is MINIMAL.** It only does:
 1. Set environment variables/flags
@@ -30695,7 +30728,7 @@ RUN mkdir -p /config/{projectname} /config/{projectname}/security /config/{proje
     && chown -R postgres:postgres /data/db/postgres /run/postgresql
 
 # Copy configs and entrypoint
-COPY docker/rootfs/ /
+COPY docker/file_system/ /
 
 # Copy application binary from builder or pre-built
 COPY {projectname} /usr/local/bin/
@@ -30721,7 +30754,7 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=90s --retries=3 \
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 ```
 
-**All-in-One supervisor config (`docker/rootfs/etc/supervisor/conf.d/services.conf`):**
+**All-in-One supervisor config (`docker/file_system/etc/supervisor/conf.d/services.conf`):**
 
 ```ini
 [supervisord]
@@ -30763,7 +30796,7 @@ stdout_logfile=/data/log/app.log
 stderr_logfile=/data/log/app.log
 ```
 
-**All-in-One PostgreSQL config (`docker/rootfs/etc/postgresql/postgresql-aio.conf`):**
+**All-in-One PostgreSQL config (`docker/file_system/etc/postgresql/postgresql-aio.conf`):**
 
 ```ini
 # PostgreSQL configuration optimized for AIO containers
@@ -30804,7 +30837,7 @@ autovacuum_naptime = 60s
 ssl = off
 ```
 
-**All-in-One Valkey config (`docker/rootfs/etc/valkey/valkey-aio.conf`):**
+**All-in-One Valkey config (`docker/file_system/etc/valkey/valkey-aio.conf`):**
 
 ```ini
 # Valkey configuration optimized for AIO containers
@@ -30820,7 +30853,7 @@ maxmemory 64mb
 maxmemory-policy allkeys-lru
 
 # Persistence (AOF for durability)
-dir /data/cache
+dir /data/db/valkey
 appendonly yes
 appendfsync everysec
 auto-aof-rewrite-percentage 100
@@ -30841,7 +30874,7 @@ logfile ""
 protected-mode no
 ```
 
-**All-in-One entrypoint.sh (`docker/rootfs/usr/local/bin/entrypoint.sh`):**
+**All-in-One entrypoint.sh (`docker/file_system/usr/local/bin/entrypoint.sh`):**
 
 ```bash
 #!/bin/bash
@@ -30947,15 +30980,15 @@ docker build -t {PLATFORM_CONTAINER_REGISTRY}/{projectorg}/{projectname}-aio:lat
 
 | Context | Location | Purpose | In Repo? |
 |---------|----------|---------|----------|
-| **Build-time** | `docker/rootfs/` | Container overlay (entrypoint.sh) | YES |
+| **Build-time** | `docker/file_system/` | Container overlay (entrypoint.sh) | YES |
 | **Runtime** | `./rootfs/` in docker-compose | Volume mounts (config, data) | NEVER |
 
-**Build-time `docker/rootfs/`** (in repo):
+**Build-time `docker/file_system/`** (in repo):
 ```
 docker/
-├── Dockerfile           # COPY docker/rootfs/ / ← copies into container image
+├── Dockerfile           # COPY docker/file_system/ / ← copies into container image
 ├── docker-compose.yml
-└── rootfs/              # BUILD overlay - committed to git
+└── file_system/         # BUILD overlay - committed to git
     └── usr/local/bin/
         └── entrypoint.sh
 ```
@@ -30977,7 +31010,7 @@ $TEMP_DIR/
     └── data/
 ```
 
-**Why same name works:** The `./rootfs/` path in docker-compose.yml is relative to where docker-compose runs from, not where it lives in the repo. Dockerfile's `COPY docker/rootfs/ /` uses build context (`.` project root).
+**Why same name works:** The `./rootfs/` path in docker-compose.yml is relative to where docker-compose runs from, not where it lives in the repo. Dockerfile's `COPY docker/file_system/ /` uses build context (`.` project root).
 
 ### Volume Paths (Local Side)
 
@@ -31007,7 +31040,7 @@ $TEMP_DIR/
 **Rules:**
 - Production volumes use `:z` suffix (SELinux shared label)
 - Development volumes omit `:z` (not needed in temp dir)
-- `docker/rootfs/` is for container overlay (entrypoint.sh) - NOT for runtime volumes
+- `docker/file_system/` is for container overlay (entrypoint.sh) - NOT for runtime volumes
 - NEVER create runtime `rootfs/` in the project repo
 
 ### Running Docker Compose 
@@ -36686,14 +36719,27 @@ func TestAccessibility(t *testing.T) {
 
 **ALL projects MUST have built-in Tor hidden service support.**
 
-**Tor is used EXCLUSIVELY for hidden services (server-side .onion hosting). It is NOT used for:**
-- SOCKS proxy / browsing through Tor
-- Outbound connections via Tor
+**Tor provides two capabilities:**
+1. **Hidden Service** - server-side .onion hosting (always enabled if Tor binary found)
+2. **Outbound Network** - route server's outbound requests through Tor (optional)
+
+**Tor is NOT used for:**
+- SOCKS proxy / browsing through Tor (client-side)
 - Tor relay or exit node functionality
 
 Tor integration uses **external Tor binary** via `github.com/cretz/bine`. This maintains `CGO_ENABLED=0` compatibility for static binaries while providing full Tor hidden service functionality.
 
+**Key Architecture Points:**
+- **Server binary owns Tor** - starts, stops, and manages Tor process lifecycle
+- **Hidden service maps to server port** - `.onion:80` → `localhost:{server_port}`
+- **Server enforces permissions** - creates all dirs/files with correct owner/group/perms
+- **HiddenServiceVersion 3** - v3 onion addresses (56 characters, ed25519) via ADD_ONION
+- **Unix socket for control** - No TCP exposure for Tor control on Unix/macOS/BSD
+- **SafeLogging enabled** - Scrubs sensitive info from Tor logs
+
 ## Configuration
+
+**Hidden service is ALWAYS enabled if Tor binary is found.** No enable/disable toggle - if Tor exists, use it.
 
 ```yaml
 server:
@@ -36701,21 +36747,245 @@ server:
     # Path to Tor binary (auto-detected if empty)
     # Leave empty for auto-detection (recommended)
     binary: ""
+
+    # --- Outbound Network Settings ---
+    # Use Tor network for outbound connections (server-wide default)
+    use_network: false
+
+    # Allow users to set their own Tor network preference
+    allow_user_preference: true
+
+    # --- Performance Settings ---
+    # Maximum circuits to keep open (higher = faster but more memory)
+    max_circuits: 32
+
+    # Circuit timeout in seconds (how long before giving up)
+    circuit_timeout: 60
+
+    # Bootstrap timeout in seconds (wait for Tor network connection)
+    bootstrap_timeout: 180
+
+    # --- Security Settings ---
+    # Scrub sensitive info from Tor logs
+    safe_logging: true
+
+    # Maximum concurrent streams per circuit
+    max_streams_per_circuit: 100
+
+    # Close circuit when stream limit exceeded
+    close_circuit_on_stream_limit: true
+
+    # --- Bandwidth Settings ---
+    # Maximum bandwidth rate per second (e.g., "1 MB", "500 KB")
+    bandwidth_rate: "1 MB"
+
+    # Maximum bandwidth burst per second (e.g., "2 MB", "1 MB")
+    bandwidth_burst: "2 MB"
+
+    # Maximum monthly bandwidth (e.g., "100 GB", "50 GB", "unlimited")
+    # Server tracks usage and warns at 80%, 90%, 95% thresholds
+    max_monthly_bandwidth: "100 GB"
+
+    # --- Hidden Service Settings ---
+    # Number of introduction points (3-10, more = resilient but more traffic)
+    num_intro_points: 3
+
+    # Virtual port for hidden service (what users connect to)
+    virtual_port: 80
 ```
+
+**CRITICAL: Port Requirements**
+- **NEVER use default Tor ports** (9050, 9051, etc.)
+- **Unix sockets preferred** for all Tor communication (Unix/macOS/BSD)
+- **If TCP required (Windows):** Use ports 62000-65535 ONLY
+- Server's Tor instance is completely isolated from any system Tor
 
 **Notes:**
 - Uses external Tor binary (not embedded) for CGO_ENABLED=0 compatibility
-- **Auto-enabled if tor binary is installed** - no enable flag needed
+- **Auto-enabled if tor binary is installed** - no enable flag needed, no disable option
 - Binary manages its OWN Tor instance (not system Tor)
 - When binary stops, its Tor instance stops (clean shutdown)
 - Completely isolated from any system Tor installation
 - **App handles EVERYTHING** - directory creation, permissions, torrc generation, process management
 - No external scripts needed - all Tor management is built into the server binary
 
+## Tor Network for Outbound Connections
+
+**Server can route outbound HTTP requests through Tor network for privacy.**
+
+This is separate from hosting a hidden service - it uses Tor's SOCKS5 proxy for outbound traffic.
+
+### Use Cases (15 App Examples)
+
+| # | App Type | Why Tor Network Helps |
+|---|----------|----------------------|
+| 1 | **Search Aggregator** | Anonymize queries to external search APIs (DuckDuckGo, etc.) |
+| 2 | **Price Comparison** | Avoid price discrimination based on IP/location |
+| 3 | **Security/Breach Checker** | Check haveibeenpwned without revealing what you're checking |
+| 4 | **Cryptocurrency Wallet** | Privacy for blockchain API queries, hide wallet activity |
+| 5 | **News/RSS Aggregator** | Fetch articles without revealing reading habits |
+| 6 | **Email Client/Relay** | Anonymous connections to email servers |
+| 7 | **DNS/WHOIS Lookup** | Anonymous domain research, hide investigation targets |
+| 8 | **VPN/Proxy Manager** | Anonymous connection testing, check for IP leaks |
+| 9 | **Social Media Manager** | Manage multiple accounts without IP correlation |
+| 10 | **Translation Service** | Private text translation, hide content being translated |
+| 11 | **Weather/Location Service** | Get location data without revealing actual location |
+| 12 | **Stock/Financial Tracker** | Anonymous market data fetching, hide trading interest |
+| 13 | **Package/Shipping Tracker** | Check deliveries without linking to identity |
+| 14 | **Vulnerability Scanner** | Anonymous security testing of external targets |
+| 15 | **Content Aggregator** | Anonymous web scraping, avoid rate limiting by IP |
+
+### Configuration Hierarchy
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Server Admin Setting: server.tor.use_network                       │
+│ Default: false (direct connections)                                 │
+└─────────────┬───────────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ Server Admin Setting: server.tor.allow_user_preference              │
+│ Default: true (users can override)                                  │
+└─────────────┬───────────────────────────────────────────────────────┘
+              │ if true
+              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ User Account Setting: user.preferences.use_tor_network              │
+│ Default: inherit from server (null = use server setting)            │
+│ Options: true (always), false (never), null (inherit)               │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+| Server Setting | User Preference | Result |
+|----------------|-----------------|--------|
+| `use_network: false`, `allow_user_preference: false` | (ignored) | Direct |
+| `use_network: true`, `allow_user_preference: false` | (ignored) | Tor |
+| `use_network: false`, `allow_user_preference: true` | `null` | Direct |
+| `use_network: false`, `allow_user_preference: true` | `true` | Tor |
+| `use_network: true`, `allow_user_preference: true` | `false` | Direct |
+| `use_network: true`, `allow_user_preference: true` | `null` | Tor |
+
+### User Preference Schema
+
+```yaml
+# In user account/preferences table
+user:
+  preferences:
+    # Use Tor network for outbound requests made on behalf of this user
+    # null = inherit server setting, true = always use Tor, false = never use Tor
+    use_tor_network: null
+```
+
+### Outbound Implementation
+
+**See full `TorService` struct and implementation in the main Implementation section below.**
+
+```go
+// ShouldUseTor determines if Tor network should be used for a request
+// based on server config and user preference
+func ShouldUseTor(serverConfig *Config, userPref *bool) bool {
+    // If user preferences not allowed, use server setting
+    if !serverConfig.Tor.AllowUserPreference {
+        return serverConfig.Tor.UseNetwork
+    }
+
+    // If user has no preference (nil), inherit server setting
+    if userPref == nil {
+        return serverConfig.Tor.UseNetwork
+    }
+
+    // User preference overrides
+    return *userPref
+}
+
+// Example: Making a request with user's Tor preference
+func (s *Service) FetchExternalData(ctx context.Context, userID int, url string) ([]byte, error) {
+    // Get user's Tor preference
+    user, _ := s.db.GetUser(userID)
+    useTor := ShouldUseTor(s.config, user.Preferences.UseTorNetwork)
+
+    // Get appropriate HTTP client (TorManager.GetHTTPClient handles routing)
+    client := s.torManager.GetHTTPClient(useTor)
+
+    req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+    resp, err := client.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+
+    return io.ReadAll(resp.Body)
+}
+```
+
+### torrc Configuration for Outbound
+
+When `use_network` or `allow_user_preference` is enabled, the torrc includes `SocksPort auto` for outbound connections. Otherwise `SocksPort 0` disables outbound.
+
+**See full `getTorConfig()` implementation in the Implementation section below.**
+
+### Admin Panel UI
+
+**Server Settings → Tor → Network Usage:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Tor Network for Outbound Connections                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ Route outbound requests through Tor:  [ ] Enabled (server-wide)    │
+│                                                                     │
+│ Allow users to set preference:        [✓] Enabled                  │
+│   └─ Users can override in their account settings                  │
+│                                                                     │
+│ ⓘ When enabled, external API requests (search, price checks,       │
+│   breach lookups, etc.) are routed through Tor for privacy.        │
+│   This is slower but provides anonymity.                           │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**User Settings → Privacy → Tor Network:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Tor Network Privacy                                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ Route my requests through Tor:                                      │
+│                                                                     │
+│   (•) Use server default (currently: Off)                          │
+│   ( ) Always use Tor network                                        │
+│   ( ) Never use Tor network                                         │
+│                                                                     │
+│ ⓘ Tor provides privacy by anonymizing your requests to external    │
+│   services. Requests may be slower when Tor is enabled.            │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
 **Tor directories are NOT configurable** - always derived from app's directories:
 - Config: `{config_dir}/tor/` (torrc file)
 - Data: `{data_dir}/tor/` (runtime data, hidden service keys)
 - Log: `{log_dir}/tor.log`
+
+## Platform-Specific Requirements
+
+### Unix/macOS/BSD (Preferred)
+- **Control connection**: Unix socket (`control.sock`) - no network exposure
+- **Hidden service target**: Server's HTTP port via localhost (bine handles via ADD_ONION)
+- **No TCP ports required** for Tor control communication
+
+### Windows Limitations
+
+**Windows CANNOT use Unix sockets for control connection.** Control uses TCP on localhost.
+
+| Feature | Unix/macOS/BSD | Windows |
+|---------|---------------|---------|
+| Control connection | Unix socket (`control.sock`) | TCP `127.0.0.1:auto` |
+| Hidden service target | `localhost:{server_port}` | `localhost:{server_port}` |
+| Security | No network exposure for control | Control on localhost only |
+
+**Note:** The hidden service forwards to the server's HTTP port on ALL platforms. Only the Tor control connection differs (Unix socket vs TCP).
 
 ## Tor Process Management 
 
@@ -36747,10 +37017,11 @@ This prevents conflicts with any existing Tor installation on the system.
    ├─ TorrcFile: `{config_dir}/tor/torrc`
    ├─ DataDir: `{data_dir}/tor/`
    ├─ Control connection: Unix socket (Unix/macOS/BSD) or localhost TCP (Windows)
-   ├─ Disable SocksPort (hidden-service-only, not browsing)
+   ├─ SocksPort: auto (if outbound enabled) or 0 (hidden service only)
    ├─ Completely isolated from system Tor
    ├─ Wait for bootstrap completion
-   └─ Create hidden service via ADD_ONION
+   ├─ Create hidden service via ADD_ONION
+   └─ Initialize Dialer (if outbound enabled)
 
 5. On application shutdown:
    └─ Terminate the dedicated Tor process
@@ -36797,28 +37068,118 @@ Use `github.com/cretz/bine` (pure Go, CGO_ENABLED=0 compatible):
 
 ```go
 import (
-    "github.com/cretz/bine/tor"
+    "context"
+    "crypto"
+    "fmt"
+    "log"
+    "net/http"
+    "os"
+    "path/filepath"
     "runtime"
+    "sync"
+    "time"
+
+    "github.com/cretz/bine/control"
+    "github.com/cretz/bine/tor"
+    "github.com/cretz/bine/torutil/ed25519"
 )
 
-func startDedicatedTor(ctx context.Context, localPort int) (*tor.Tor, *tor.OnionService, error) {
+// TorService manages the Tor hidden service and outbound connections.
+// Server binary fully owns and controls the Tor process lifecycle.
+type TorService struct {
+    tor        *tor.Tor
+    serviceID  string              // .onion address (without .onion suffix)
+    key        crypto.PrivateKey   // ED25519 private key for persistent address
+    serverPort int                 // Server's HTTP port that hidden service forwards to
+    dialer     *tor.Dialer         // For outbound Tor connections (nil if disabled)
+}
+
+// TorConfig holds Tor-related configuration from server config
+type TorConfig struct {
+    // Binary path (empty = auto-detect)
+    Binary string `yaml:"binary" json:"binary"`
+
+    // Outbound network settings
+    UseNetwork          bool `yaml:"use_network" json:"use_network"`
+    AllowUserPreference bool `yaml:"allow_user_preference" json:"allow_user_preference"`
+
+    // Performance settings
+    MaxCircuits      int `yaml:"max_circuits" json:"max_circuits"`           // 1-128, default 32
+    CircuitTimeout   int `yaml:"circuit_timeout" json:"circuit_timeout"`     // 10-300s, default 60
+    BootstrapTimeout int `yaml:"bootstrap_timeout" json:"bootstrap_timeout"` // 30-600s, default 180
+
+    // Security settings
+    SafeLogging               bool `yaml:"safe_logging" json:"safe_logging"`
+    MaxStreamsPerCircuit      int  `yaml:"max_streams_per_circuit" json:"max_streams_per_circuit"`             // 10-500, default 100
+    CloseCircuitOnStreamLimit bool `yaml:"close_circuit_on_stream_limit" json:"close_circuit_on_stream_limit"` // default true
+
+    // Bandwidth settings
+    BandwidthRate        string `yaml:"bandwidth_rate" json:"bandwidth_rate"`                 // e.g., "1 MB" per second
+    BandwidthBurst       string `yaml:"bandwidth_burst" json:"bandwidth_burst"`               // e.g., "2 MB" per second
+    MaxMonthlyBandwidth  string `yaml:"max_monthly_bandwidth" json:"max_monthly_bandwidth"`   // e.g., "100 GB", "unlimited"
+
+    // Hidden service settings
+    NumIntroPoints int `yaml:"num_intro_points" json:"num_intro_points"` // 3-10, default 3
+    VirtualPort    int `yaml:"virtual_port" json:"virtual_port"`         // 1-65535, default 80
+}
+
+// DefaultTorConfig returns the default Tor configuration
+func DefaultTorConfig() TorConfig {
+    return TorConfig{
+        Binary:                    "",       // auto-detect
+        UseNetwork:                false,
+        AllowUserPreference:       true,
+        MaxCircuits:               32,
+        CircuitTimeout:            60,
+        BootstrapTimeout:          180,
+        SafeLogging:               true,
+        MaxStreamsPerCircuit:      100,
+        CloseCircuitOnStreamLimit: true,
+        BandwidthRate:             "1 MB",
+        BandwidthBurst:            "2 MB",
+        MaxMonthlyBandwidth:       "100 GB", // default 100GB per month
+        NumIntroPoints:            3,
+        VirtualPort:               80,
+    }
+}
+
+// startDedicatedTor starts a Tor process owned by this server binary.
+// serverPort is the server's HTTP port that the hidden service will forward to.
+// cfg contains all Tor configuration settings (validated before calling).
+// The hidden service maps: .onion:{virtual_port} → 127.0.0.1:serverPort
+//
+// IMPORTANT: serverPort is the port where the server's HTTP listener is ALREADY running.
+// Tor forwards incoming .onion connections to this existing listener.
+// Hidden service is ALWAYS enabled if Tor binary is found.
+func startDedicatedTor(ctx context.Context, serverPort int, cfg *TorConfig) (*TorService, error) {
     configDir := paths.GetConfigDir()
     dataDir := paths.GetDataDir()
 
     // Ensure all Tor directories exist with proper permissions
+    // Server binary owns all Tor files - correct owner/group/permissions enforced
     if err := ensureTorDirs(); err != nil {
-        return nil, nil, fmt.Errorf("failed to create tor directories: %w", err)
+        return nil, fmt.Errorf("failed to create tor directories: %w", err)
     }
 
     // Paths
     torrcPath := filepath.Join(configDir, "tor", "torrc")
     torDataDir := filepath.Join(dataDir, "tor")
     controlSocket := filepath.Join(torDataDir, "control.sock")
+    keyPath := filepath.Join(dataDir, "tor", "site", "hs_ed25519_secret_key")
 
-    // Generate and write torrc to config directory
-    torrcContent := getTorConfig(controlSocket)
-    if err := ensureTorFile(torrcPath, []byte(torrcContent)); err != nil {
-        return nil, nil, fmt.Errorf("failed to write torrc: %w", err)
+    // Generate torrc content from config
+    torrcContent := getTorConfig(controlSocket, cfg)
+
+    // Create torrc only if it doesn't exist (persistent)
+    // torrc is preserved across restarts - only admin panel can update it
+    created, err := ensureTorrc(torrcPath, []byte(torrcContent))
+    if err != nil {
+        return nil, fmt.Errorf("failed to ensure torrc: %w", err)
+    }
+    if created {
+        log.Printf("Created new torrc at %s", torrcPath)
+    } else {
+        log.Printf("Using existing torrc at %s", torrcPath)
     }
 
     // Build platform-specific StartConf
@@ -36829,61 +37190,154 @@ func startDedicatedTor(ctx context.Context, localPort int) (*tor.Tor, *tor.Onion
         // Runtime data directory - isolated from system Tor
         DataDir: torDataDir,
 
-        // Disable SOCKS - hidden service only, not for browsing
+        // Let torrc control SocksPort (auto if outbound enabled, 0 if not)
         NoAutoSocksPort: true,
-
-        // Optional: specify path if not in PATH
-        // ExePath: "/usr/bin/tor",
 
         // Debug output (development only)
         // DebugWriter: os.Stderr,
     }
 
+    // Use custom Tor binary path if specified in config
+    if cfg.Binary != "" {
+        conf.ExePath = cfg.Binary
+    }
+
     // Platform-specific control connection
     if runtime.GOOS == "windows" {
-        // Windows: Unix sockets not supported, use localhost TCP
-        // bine will auto-select available port when ControlPort is 0
-        // We don't set ControlSocket, so it uses TCP
+        // Windows: Unix sockets NOT SUPPORTED, use localhost TCP
+        // bine auto-selects available port for ControlPort
     } else {
         // Unix/macOS/BSD: Use Unix socket (more secure, no network exposure)
         conf.ControlSocket = controlSocket
     }
 
     // Start OUR OWN Tor process - completely separate from system Tor
+    // Server starts → Tor starts; Server stops → Tor stops
     t, err := tor.Start(ctx, conf)
     if err != nil {
-        return nil, nil, fmt.Errorf("failed to start dedicated tor: %w", err)
+        return nil, fmt.Errorf("failed to start dedicated tor: %w", err)
     }
 
-    // Wait for Tor to bootstrap
-    dialCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+    // Wait for Tor to bootstrap (connect to network)
+    // Use bootstrap timeout from config (default 180 seconds = 3 minutes)
+    bootstrapTimeout := time.Duration(cfg.BootstrapTimeout) * time.Second
+    dialCtx, cancel := context.WithTimeout(ctx, bootstrapTimeout)
     defer cancel()
     if err := t.EnableNetwork(dialCtx, true); err != nil {
         t.Close()
-        return nil, nil, fmt.Errorf("failed to enable tor network: %w", err)
+        return nil, fmt.Errorf("failed to enable tor network: %w", err)
     }
 
-    // Create hidden service
-    onion, err := t.Listen(ctx, &tor.ListenConf{
-        RemotePorts: []int{80},
-        LocalPort:   localPort,
-    })
+    // Load or generate ED25519 key for persistent .onion address
+    var key crypto.PrivateKey
+    if keyData, err := os.ReadFile(keyPath); err == nil && len(keyData) > 0 {
+        // Load existing key for persistent address
+        key, err = ed25519.FromCryptoPrivateKey(keyData)
+        if err != nil {
+            t.Close()
+            return nil, fmt.Errorf("failed to parse existing key: %w", err)
+        }
+    }
+
+    // Create hidden service via ADD_ONION control command
+    // This forwards .onion:{virtual_port} → 127.0.0.1:serverPort (existing HTTP server)
+    addOnionReq := &control.AddOnionRequest{
+        // Port mapping: virtual port (from config) → server's HTTP port
+        Ports: []*control.KeyVal{
+            control.NewKeyVal(fmt.Sprintf("%d", cfg.VirtualPort), fmt.Sprintf("127.0.0.1:%d", serverPort)),
+        },
+    }
+
+    if key != nil {
+        // Use existing key for persistent .onion address
+        addOnionReq.Key = control.ED25519KeyFromBlob(key.(ed25519.PrivateKey))
+    } else {
+        // Generate new ED25519-V3 key (v3 onion address)
+        addOnionReq.Key = control.GenKey(control.KeyAlgoED25519V3)
+    }
+
+    // Call ADD_ONION via control connection
+    resp, err := t.Control.AddOnion(addOnionReq)
     if err != nil {
         t.Close()
-        return nil, nil, fmt.Errorf("failed to create onion service: %w", err)
+        return nil, fmt.Errorf("failed to create onion service: %w", err)
     }
 
-    // onion.ID contains the .onion address (without .onion suffix)
-    log.Printf("Tor hidden service started: %s.onion", onion.ID)
-    return t, onion, nil
+    // Save key for persistent address (if newly generated)
+    if key == nil && resp.Key != nil {
+        if err := saveOnionKey(keyPath, resp.Key); err != nil {
+            log.Printf("Warning: failed to save onion key: %v", err)
+        }
+    }
+
+    svc := &TorService{
+        tor:        t,
+        serviceID:  resp.ServiceID,
+        key:        key,
+        serverPort: serverPort,
+    }
+
+    // Initialize outbound dialer if enabled (server-wide or user preference allowed)
+    if cfg.UseNetwork || cfg.AllowUserPreference {
+        dialer, err := t.Dialer(ctx, nil)
+        if err != nil {
+            log.Printf("Warning: failed to create Tor dialer: %v", err)
+            // Continue without outbound - hidden service still works
+        } else {
+            svc.dialer = dialer
+            log.Printf("Tor outbound connections enabled")
+        }
+    }
+
+    log.Printf("Tor hidden service started: %s.onion:%d → 127.0.0.1:%d", resp.ServiceID, cfg.VirtualPort, serverPort)
+    return svc, nil
 }
 
-// Shutdown cleanly terminates our dedicated Tor process
-func shutdownTor(t *tor.Tor) error {
-    if t != nil {
-        return t.Close()
+// OnionAddress returns the full .onion address
+func (s *TorService) OnionAddress() string {
+    return s.serviceID + ".onion"
+}
+
+// OutboundEnabled returns true if Tor outbound connections are available
+func (s *TorService) OutboundEnabled() bool {
+    return s.dialer != nil
+}
+
+// GetHTTPClient returns an HTTP client, optionally routed through Tor
+// useTor: true = route through Tor SOCKS5 proxy, false = direct connection
+func (s *TorService) GetHTTPClient(useTor bool) *http.Client {
+    if !useTor || s.dialer == nil {
+        // Direct connection
+        return &http.Client{
+            Timeout: 30 * time.Second,
+        }
+    }
+
+    // Route through Tor network
+    return &http.Client{
+        Timeout: 60 * time.Second,  // Tor is slower
+        Transport: &http.Transport{
+            DialContext: s.dialer.DialContext,
+        },
+    }
+}
+
+// Close shuts down the Tor process
+func (s *TorService) Close() error {
+    if s.tor != nil {
+        return s.tor.Close()
     }
     return nil
+}
+
+// saveOnionKey saves the ED25519 private key for persistent .onion address
+func saveOnionKey(path string, key control.Key) error {
+    // Ensure directory exists
+    if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+        return err
+    }
+    // Write key with restricted permissions
+    return os.WriteFile(path, key.Blob(), 0600)
 }
 ```
 
@@ -36892,39 +37346,134 @@ func shutdownTor(t *tor.Tor) error {
 | Resource | System Tor | Our Tor (Unix) | Our Tor (Windows) |
 |----------|------------|----------------|-------------------|
 | SocksPort | 9050 | 0 (disabled) | 0 (disabled) |
-| ControlPort | 9051 | 0 (disabled) | 127.0.0.1:random |
+| ControlPort | 9051 | 0 (disabled) | 127.0.0.1:auto |
 | ControlSocket | N/A | `{data_dir}/tor/control.sock` | N/A (not supported) |
 | DataDir | `/var/lib/tor` | `{data_dir}/tor/` | `{data_dir}\tor\` |
 
+**How Hidden Service Forwarding Works:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ External Tor User                                                   │
+│ (Tor Browser)                                                       │
+└─────────────┬───────────────────────────────────────────────────────┘
+              │ connects to
+              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ Tor Network                                                         │
+│ xyz...abc.onion:80                                                  │
+└─────────────┬───────────────────────────────────────────────────────┘
+              │ forwards to (via ADD_ONION)
+              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ Server's Tor Process (owned by server binary)                      │
+│ Control: Unix socket (Unix) or 127.0.0.1:auto (Windows)            │
+└─────────────┬───────────────────────────────────────────────────────┘
+              │ connects to
+              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ Server's HTTP Listener                                              │
+│ 127.0.0.1:{server_port}  (server's existing HTTP port)             │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+- **bine uses `control.AddOnion()`** with port mapping: `80 → 127.0.0.1:{server_port}`
+- **Tor forwards to server's existing HTTP port** - no new listener created
+- **Same on ALL platforms** - only control connection differs (Unix socket vs TCP)
+- **Server port is NOT a Tor port** - it's the server's normal HTTP listener
+
 **Platform-specific control connection:**
-- **Unix/macOS/BSD**: Use Unix ControlSocket (more secure, no network exposure)
-- **Windows**: Use TCP ControlPort on `127.0.0.1` with random available port (Unix sockets not supported)
+- **Unix/macOS/BSD**: Unix socket (`control.sock`) - no network exposure
+- **Windows**: TCP on `127.0.0.1:auto` - localhost only (Unix sockets not supported)
 
-SocksPort is disabled on all platforms - hidden service only, not for browsing.
+**SocksPort configuration:**
+- `SocksPort 0` - hidden service only (no outbound)
+- `SocksPort auto` - enable outbound connections via SOCKS5 proxy
 
-### Tor Configuration Optimizations 
+### Tor Configuration Optimizations
 
-**Tor is used ONLY for hidden services. Optimize accordingly.**
+**Hidden Service → Server Port Mapping:**
+- **Uses `control.AddOnion()`** - NOT torrc-based HiddenServiceDir
+- Hidden service forwards `.onion:80` → `127.0.0.1:{server_port}` (server's existing HTTP port)
+- Port mapping specified via `control.KeyVal`: virtual port 80 → target `127.0.0.1:{server_port}`
+- Tor connects to server's existing HTTP listener - no new ports opened
 
 ```go
-// Optimized torrc settings for hidden-service-only mode
-// controlSocket is only used on Unix; ignored on Windows
-func getTorConfig(controlSocket string) string {
+// getTorConfig generates torrc content from TorConfig settings
+//
+// NOTE: Hidden service is created via control.AddOnion(), NOT torrc
+// The torrc only configures Tor daemon settings, not the hidden service itself
+//
+// PORT DETECTION: All ports use runtime detection via "auto" - never saved/hardcoded
+// - SocksPort auto: Tor picks available high port at startup
+// - ControlPort 127.0.0.1:auto: Tor picks available high port (Windows only)
+// - bine reads actual port from control connection after Tor starts
+//
+// NEVER uses default Tor ports (9050, 9051) - uses Unix sockets or auto high ports
+func getTorConfig(controlSocket string, cfg *TorConfig) string {
     // Platform-specific control connection
+    // NEVER use default ports 9050/9051 - use runtime detection
     var controlConfig string
     if runtime.GOOS == "windows" {
-        // Windows: Unix sockets not supported, use localhost TCP
-        controlConfig = "ControlPort auto"
+        // Windows: Unix sockets NOT SUPPORTED, use localhost TCP
+        // "auto" = Tor picks available high port at runtime (never saved)
+        controlConfig = "ControlPort 127.0.0.1:auto"
     } else {
-        // Unix/macOS/BSD: Use Unix socket (more secure, no network exposure)
+        // Unix/macOS/BSD: Use Unix socket (no TCP port at all)
         controlConfig = fmt.Sprintf("ControlPort 0\nControlSocket %s", controlSocket)
     }
 
+    // SocksPort: enabled for outbound connections, disabled for hidden service only
+    // "auto" = Tor picks available high port at runtime (never saved)
+    var socksConfig string
+    if cfg.UseNetwork || cfg.AllowUserPreference {
+        // Enable SOCKS for outbound - "auto" picks high port at runtime
+        socksConfig = "SocksPort auto"
+    } else {
+        socksConfig = "SocksPort 0"  // Disabled
+    }
+
+    // SafeLogging
+    safeLogging := "1"
+    if !cfg.SafeLogging {
+        safeLogging = "0"
+    }
+
+    // Monthly bandwidth accounting (if not "unlimited")
+    var accountingConfig string
+    if cfg.MaxMonthlyBandwidth != "" && cfg.MaxMonthlyBandwidth != "unlimited" {
+        // AccountingMax limits total bytes per accounting period
+        // AccountingStart sets when the period resets (month day 1)
+        accountingConfig = fmt.Sprintf(`
+# Monthly bandwidth limit
+AccountingStart month 1 00:00
+AccountingMax %s`, cfg.MaxMonthlyBandwidth)
+    }
+
     return fmt.Sprintf(`
-# Hidden service only - not a relay or exit
-SocksPort 0
+# ============================================================
+# Tor Configuration - Generated by server binary
+# This file is PERSISTENT - edits via admin panel are preserved
+# Manual edits may be overwritten when config is saved via admin
+# ============================================================
+
+# SOCKS port for outbound connections (0 = disabled, auto = runtime port)
+# NEVER uses default port 9050 - runtime detection only
+%s
 
 # Platform-specific control connection
+# NEVER uses default port 9051 - uses socket (Unix) or runtime port (Windows)
+%s
+
+# Security Hardening
+SafeLogging %s
+
+# Circuit limits
+MaxCircuitDirtiness 600
+
+# Bandwidth limits per second (from config)
+BandwidthRate %s
+BandwidthBurst %s
 %s
 
 # Disable unused features - not a relay or exit
@@ -36933,14 +37482,7 @@ ExitPolicy reject *:*
 ORPort 0
 DirPort 0
 
-# Reduce circuit building (we only need service circuits)
-MaxCircuitDirtiness 600
-
-# Reduce bandwidth for Tor overhead
-BandwidthRate 1 MB
-BandwidthBurst 2 MB
-
-# Hidden service optimizations
+# Hidden service optimizations (actual HS created via ADD_ONION)
 HiddenServiceSingleHopMode 0
 
 # Faster startup
@@ -36949,20 +37491,47 @@ FetchDirInfoExtraEarly 1
 
 # Reduce memory usage
 DisableDebuggerAttachment 1
-`, controlConfig)
+`, socksConfig, controlConfig, safeLogging, cfg.BandwidthRate, cfg.BandwidthBurst, accountingConfig)
 }
 ```
 
 | Setting | Value | Reason |
 |---------|-------|--------|
-| `SocksPort 0` | Disabled | Hidden service only, not browsing |
-| `ControlPort` | `0` (Unix) / `auto` (Windows) | Unix uses socket; Windows uses localhost TCP |
+| `SocksPort` | `0` / `auto` | `0` = hidden service only; `auto` = runtime port for outbound |
+| `ControlPort` | `0` (Unix) / `auto` (Windows) | Unix uses socket; Windows uses runtime localhost TCP |
 | `ControlSocket` | `{data_dir}/tor/control.sock` | Unix only - secure, no network exposure |
+| `SafeLogging 1` | Enabled | Scrubs sensitive info from Tor logs |
+| `AccountingStart` | `month 1 00:00` | Reset bandwidth counter on 1st of each month |
+| `AccountingMax` | e.g., `100 GB` | Monthly bandwidth limit (from config) |
 | `ExitRelay 0` | Disabled | Not an exit node |
 | `ORPort 0` | Disabled | Not relaying traffic |
 | `DirPort 0` | Disabled | Not a directory server |
 | `ExitPolicy reject *:*` | Block all | Extra safety |
 | `MaxCircuitDirtiness 600` | 10 minutes | Keep circuits longer |
+
+**Runtime Port Detection:**
+- Ports are NEVER hardcoded or saved - always detected at runtime
+- `SocksPort auto` → Tor picks available high port, bine reads it after startup
+- `ControlPort 127.0.0.1:auto` (Windows) → Tor picks available high port
+- Unix/macOS/BSD use Unix socket instead of TCP - no port needed
+
+**Hidden Service Settings (via `control.AddOnion()`, not torrc):**
+
+The hidden service is created using bine's `control.AddOnion()` method, which sends the ADD_ONION command to Tor:
+
+| Setting | How Applied | Description |
+|---------|-------------|-------------|
+| Version 3 | `control.GenKey(control.KeyAlgoED25519V3)` | v3 onion (56 chars, ed25519) |
+| Target port | `control.NewKeyVal("80", "127.0.0.1:{port}")` | Forwards to server's HTTP port |
+| Virtual port | Key in KeyVal (e.g., "80") | `.onion` port users connect to |
+| Key persistence | `{data_dir}/tor/site/hs_ed25519_secret_key` | Server saves/loads key for persistent address |
+
+**Required bine imports:**
+```go
+"github.com/cretz/bine/control"        // AddOnion, KeyVal, GenKey
+"github.com/cretz/bine/tor"            // Start, Tor, StartConf
+"github.com/cretz/bine/torutil/ed25519" // ED25519 key handling
+```
 
 ### Tor Process Lifecycle
 
@@ -36996,14 +37565,44 @@ DisableDebuggerAttachment 1
 
 ```go
 // TorManager handles all Tor lifecycle operations
+// Server binary fully owns the Tor process - starts/stops/restarts as needed
+// NOTE: Hidden service is ALWAYS enabled if Tor binary is found - no enable/disable toggle
 type TorManager struct {
-    mu        sync.Mutex
-    tor       *tor.Tor
-    onion     *tor.OnionService
-    dataDir   string
-    localPort int
-    ctx       context.Context
-    cancel    context.CancelFunc
+    mu         sync.Mutex
+    service    *TorService  // Our TorService wrapper
+    config     *TorConfig   // Tor configuration settings
+    dataDir    string
+    serverPort int          // Server's HTTP port to forward to
+    ctx        context.Context
+    cancel     context.CancelFunc
+}
+
+// NewTorManager creates a new Tor manager with the given configuration
+func NewTorManager(ctx context.Context, serverPort int, config *TorConfig) *TorManager {
+    return &TorManager{
+        config:     config,
+        dataDir:    filepath.Join(paths.GetDataDir(), "tor"),
+        serverPort: serverPort,
+        ctx:        ctx,
+    }
+}
+
+// Start initializes Tor if binary is found
+// Hidden service is ALWAYS enabled if Tor binary exists
+func (tm *TorManager) Start() error {
+    tm.mu.Lock()
+    defer tm.mu.Unlock()
+    return tm.startLocked()
+}
+
+// startLocked starts Tor (must be called with mutex held)
+func (tm *TorManager) startLocked() error {
+    service, err := startDedicatedTor(tm.ctx, tm.serverPort, tm.config)
+    if err != nil {
+        return err
+    }
+    tm.service = service
+    return nil
 }
 
 // Restart stops and starts Tor (used for config changes, recovery)
@@ -37012,13 +37611,41 @@ func (tm *TorManager) Restart() error {
     defer tm.mu.Unlock()
 
     // Stop existing
-    if tm.tor != nil {
-        tm.tor.Close()
-        tm.tor = nil
-        tm.onion = nil
+    if tm.service != nil {
+        tm.service.Close()
+        tm.service = nil
     }
 
-    // Start fresh
+    // Start fresh with current config
+    return tm.startLocked()
+}
+
+// UpdateConfig updates the configuration, regenerates torrc, and restarts Tor
+// This is called when admin saves new Tor settings via the admin panel
+func (tm *TorManager) UpdateConfig(config *TorConfig) error {
+    tm.mu.Lock()
+    defer tm.mu.Unlock()
+
+    tm.config = config
+
+    // Stop existing Tor process
+    if tm.service != nil {
+        tm.service.Close()
+        tm.service = nil
+    }
+
+    // Regenerate torrc with new settings (overwrite existing)
+    configDir := paths.GetConfigDir()
+    torrcPath := filepath.Join(configDir, "tor", "torrc")
+    controlSocket := filepath.Join(tm.dataDir, "control.sock")
+    torrcContent := getTorConfig(controlSocket, config)
+
+    if err := updateTorrc(torrcPath, []byte(torrcContent)); err != nil {
+        return fmt.Errorf("failed to update torrc: %w", err)
+    }
+    log.Printf("Updated torrc with new settings")
+
+    // Start Tor with new config
     return tm.startLocked()
 }
 
@@ -37028,10 +37655,9 @@ func (tm *TorManager) RegenerateAddress() (string, error) {
     defer tm.mu.Unlock()
 
     // Stop Tor
-    if tm.tor != nil {
-        tm.tor.Close()
-        tm.tor = nil
-        tm.onion = nil
+    if tm.service != nil {
+        tm.service.Close()
+        tm.service = nil
     }
 
     // Delete existing keys
@@ -37040,12 +37666,12 @@ func (tm *TorManager) RegenerateAddress() (string, error) {
         return "", fmt.Errorf("failed to remove old keys: %w", err)
     }
 
-    // Start Tor - new keys will be generated
+    // Start Tor - new keys will be generated by control.AddOnion
     if err := tm.startLocked(); err != nil {
         return "", err
     }
 
-    return tm.onion.ID + ".onion", nil
+    return tm.service.OnionAddress(), nil
 }
 
 // ApplyKeys stops Tor, replaces keys, and restarts
@@ -37054,10 +37680,9 @@ func (tm *TorManager) ApplyKeys(privateKey []byte) (string, error) {
     defer tm.mu.Unlock()
 
     // Stop Tor
-    if tm.tor != nil {
-        tm.tor.Close()
-        tm.tor = nil
-        tm.onion = nil
+    if tm.service != nil {
+        tm.service.Close()
+        tm.service = nil
     }
 
     // Write new keys
@@ -37073,26 +37698,43 @@ func (tm *TorManager) ApplyKeys(privateKey []byte) (string, error) {
         return "", err
     }
 
-    return tm.onion.ID + ".onion", nil
+    return tm.service.OnionAddress(), nil
 }
 
-// SetEnabled enables or disables Tor
-func (tm *TorManager) SetEnabled(enabled bool) error {
+// Close shuts down the Tor process
+func (tm *TorManager) Close() error {
     tm.mu.Lock()
     defer tm.mu.Unlock()
 
-    if enabled {
-        if tm.tor == nil {
-            return tm.startLocked()
-        }
-    } else {
-        if tm.tor != nil {
-            tm.tor.Close()
-            tm.tor = nil
-            tm.onion = nil
-        }
+    if tm.service != nil {
+        err := tm.service.Close()
+        tm.service = nil
+        return err
     }
     return nil
+}
+
+// OnionAddress returns the current .onion address (empty if not running)
+func (tm *TorManager) OnionAddress() string {
+    tm.mu.Lock()
+    defer tm.mu.Unlock()
+
+    if tm.service != nil {
+        return tm.service.OnionAddress()
+    }
+    return ""
+}
+
+// GetHTTPClient returns an HTTP client, optionally routed through Tor
+func (tm *TorManager) GetHTTPClient(useTor bool) *http.Client {
+    tm.mu.Lock()
+    defer tm.mu.Unlock()
+
+    if tm.service != nil {
+        return tm.service.GetHTTPClient(useTor)
+    }
+    // Fallback to direct connection if Tor not running
+    return &http.Client{Timeout: 30 * time.Second}
 }
 ```
 
@@ -37103,8 +37745,15 @@ func main() {
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
 
-    // Start Tor
-    torProcess, onion, err := startDedicatedTor(ctx, localPort)
+    // Server's HTTP port (already listening)
+    serverPort := 8080
+
+    // Get Tor configuration (from config file)
+    torConfig := config.Tor  // Uses TorConfig struct with all settings
+
+    // Start Tor - forwards .onion:{virtual_port} → 127.0.0.1:serverPort
+    // TorConfig contains all settings including outbound network options
+    torService, err := startDedicatedTor(ctx, serverPort, &torConfig)
     if err != nil {
         log.Printf("Warning: Tor disabled - %v", err)
         // Continue without Tor
@@ -37121,10 +37770,10 @@ func main() {
         <-sigChan
         log.Println("Shutting down...")
 
-        // Stop Tor FIRST
-        if torProcess != nil {
+        // Stop Tor FIRST (server owns Tor lifecycle)
+        if torService != nil {
             log.Println("Stopping Tor process...")
-            torProcess.Close()
+            torService.Close()
         }
 
         // Then cancel context for other goroutines
@@ -37139,7 +37788,8 @@ func main() {
 
 ```go
 // Monitor Tor and restart if it crashes
-func monitorTor(ctx context.Context, torProcess *tor.Tor, restartFunc func() (*tor.Tor, error)) {
+// Server binary is responsible for keeping Tor running
+func monitorTor(ctx context.Context, service *TorService, restartFunc func() (*TorService, error)) {
     ticker := time.NewTicker(30 * time.Second)
     defer ticker.Stop()
 
@@ -37149,16 +37799,16 @@ func monitorTor(ctx context.Context, torProcess *tor.Tor, restartFunc func() (*t
             return
         case <-ticker.C:
             // Check if Tor is still responsive
-            if torProcess != nil {
+            if service != nil && service.tor != nil {
                 // Ping control connection
-                if _, err := torProcess.Control.GetInfo("version"); err != nil {
+                if _, err := service.tor.Control.GetInfo("version"); err != nil {
                     log.Println("Tor process unresponsive, restarting...")
-                    torProcess.Close()
-                    newTor, err := restartFunc()
+                    service.Close()
+                    newService, err := restartFunc()
                     if err != nil {
                         log.Printf("Failed to restart Tor: %v", err)
                     } else {
-                        torProcess = newTor
+                        service = newService
                     }
                 }
             }
@@ -37173,15 +37823,15 @@ No impact on binary size - Tor is external. Application binary remains small and
 
 ### Storage Locations
 
-**Tor dirs are ALWAYS under the app's dirs (binary owns Tor):**
+**Tor dirs are ALWAYS under the app's dirs (server binary owns Tor):**
 
 | Data | Location | Notes |
 |------|----------|-------|
-| Tor config directory | `{config_dir}/tor/` | |
-| Tor config file | `{config_dir}/tor/torrc` | |
-| Tor data directory | `{data_dir}/tor/` | |
+| Tor config directory | `{config_dir}/tor/` | Server creates with 0700 |
+| Tor config file | `{config_dir}/tor/torrc` | Server generates with 0600 |
+| Tor data directory | `{data_dir}/tor/` | Server creates with 0700 |
 | Control socket | `{data_dir}/tor/control.sock` | Unix/macOS/BSD only |
-| Hidden service keys | `{data_dir}/tor/site/` | |
+| Hidden service keys | `{data_dir}/tor/site/` | Server creates with 0700 |
 | Tor process PID | `{data_dir}/tor/tor.pid` | |
 | Tor log file | `{log_dir}/tor.log` | |
 
@@ -37237,7 +37887,72 @@ func ensureTorDirs() error {
     return nil
 }
 
-// ensureTorFile creates/updates a file with correct permissions
+// ensureTorrc creates torrc only if it doesn't exist (persistent)
+// Returns true if file was created, false if it already existed
+func ensureTorrc(path string, content []byte) (bool, error) {
+    // Ensure parent dir exists
+    if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+        return false, fmt.Errorf("create parent dir: %w", err)
+    }
+
+    // Check if torrc already exists - DON'T overwrite
+    if _, err := os.Stat(path); err == nil {
+        // File exists - preserve it, just fix permissions
+        if err := os.Chmod(path, 0600); err != nil {
+            return false, fmt.Errorf("chmod file: %w", err)
+        }
+        return false, nil  // Not created, already existed
+    }
+
+    // File doesn't exist - create it
+    if err := os.WriteFile(path, content, 0600); err != nil {
+        return false, fmt.Errorf("write file: %w", err)
+    }
+
+    // Enforce ownership
+    uid := os.Getuid()
+    gid := os.Getgid()
+    if runtime.GOOS != "windows" {
+        if err := os.Chown(path, uid, gid); err != nil {
+            return false, fmt.Errorf("chown file: %w", err)
+        }
+    }
+
+    return true, nil  // Created new file
+}
+
+// updateTorrc overwrites torrc with new content (for config changes)
+// Only called when admin explicitly saves new Tor config
+func updateTorrc(path string, content []byte) error {
+    // Ensure parent dir exists
+    if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+        return fmt.Errorf("create parent dir: %w", err)
+    }
+
+    // Overwrite file with new content
+    if err := os.WriteFile(path, content, 0600); err != nil {
+        return fmt.Errorf("write file: %w", err)
+    }
+
+    // Enforce permissions
+    if err := os.Chmod(path, 0600); err != nil {
+        return fmt.Errorf("chmod file: %w", err)
+    }
+
+    // Enforce ownership
+    uid := os.Getuid()
+    gid := os.Getgid()
+    if runtime.GOOS != "windows" {
+        if err := os.Chown(path, uid, gid); err != nil {
+            return fmt.Errorf("chown file: %w", err)
+        }
+    }
+
+    return nil
+}
+
+// ensureTorFile creates/updates a generic Tor file with correct permissions
+// Used for files other than torrc (keys, etc.)
 func ensureTorFile(path string, content []byte) error {
     // Ensure parent dir exists
     if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -37281,14 +37996,14 @@ func ensureTorFile(path string, content []byte) error {
 
 | File/Dir | Path | Permissions | Owner | Notes |
 |----------|------|-------------|-------|-------|
-| Config dir | `{config_dir}/tor/` | `0700` | app user | |
-| torrc | `{config_dir}/tor/torrc` | `0600` | app user | |
-| Data dir | `{data_dir}/tor/` | `0700` | app user | |
+| Config dir | `{config_dir}/tor/` | `0700` | app user | Server creates/enforces |
+| torrc | `{config_dir}/tor/torrc` | `0600` | app user | Server generates |
+| Data dir | `{data_dir}/tor/` | `0700` | app user | Server creates/enforces |
 | Control socket | `{data_dir}/tor/control.sock` | `0600` | app user | Unix only |
-| Site dir | `{data_dir}/tor/site/` | `0700` | app user | |
-| Private key | `{data_dir}/tor/site/hs_ed25519_secret_key` | `0600` | app user | |
-| Public key | `{data_dir}/tor/site/hs_ed25519_public_key` | `0600` | app user | |
-| Hostname | `{data_dir}/tor/site/hostname` | `0600` | app user | |
+| Site dir | `{data_dir}/tor/site/` | `0700` | app user | Server creates/enforces |
+| Private key | `{data_dir}/tor/site/hs_ed25519_secret_key` | `0600` | app user | Tor creates |
+| Public key | `{data_dir}/tor/site/hs_ed25519_public_key` | `0600` | app user | Tor creates |
+| Hostname | `{data_dir}/tor/site/hostname` | `0600` | app user | Tor creates |
 | PID file | `{data_dir}/tor/tor.pid` | `0600` | app user | |
 | Log file | `{log_dir}/tor.log` | `0600` | app user | |
 
@@ -37296,38 +38011,217 @@ func ensureTorFile(path string, content []byte) error {
 
 ### /{admin_path}/server/tor (WebUI)
 
+**Hidden service is ALWAYS enabled if Tor binary is found.** No enable/disable toggle.
+
+#### Status Section (Read-Only)
+
 | Element | Type | Description |
 |---------|------|-------------|
-| Tor Service | Toggle switch | Start/Stop hidden service (auto-starts on boot) |
-| Status | Indicator | ● Connected / ○ Disconnected / ⚠ Error |
+| Tor Status | Indicator | ● Connected / ○ Not Installed / ⚠ Error |
+| Binary Path | Read-only text | Detected Tor binary location |
+| Binary Version | Read-only text | Tor version (e.g., "0.4.8.9") |
 | .onion Address | Read-only text | Full address with copy button |
-| Regenerate Address | Button | Creates new random .onion (requires confirmation modal) |
-| Vanity Prefix | Text input | Desired prefix (max 6 characters) |
-| Generate Vanity | Button | Starts background generation |
-| Vanity Status | Progress indicator | Shows when generating in background |
-| Import Keys | File upload | Import externally generated keys |
+| Uptime | Read-only text | Time since Tor started |
+| Circuits Active | Read-only text | Number of active circuits |
 
-**Status Card Example:**
+#### Configuration Settings (All Settings with Validation)
+
+**All settings validated before saving. Invalid settings show inline errors.**
+
+| Setting | Type | Default | Validation | Description |
+|---------|------|---------|------------|-------------|
+| **Outbound Network** | | | | |
+| `use_network` | Boolean | `false` | - | Use Tor for outbound connections |
+| `allow_user_preference` | Boolean | `true` | - | Allow users to override outbound setting |
+| **Performance** | | | | |
+| `max_circuits` | Integer | `32` | 1-128 | Maximum circuits to keep open |
+| `circuit_timeout` | Integer | `60` | 10-300 | Circuit timeout (seconds) |
+| `bootstrap_timeout` | Integer | `180` | 30-600 | Bootstrap timeout (seconds) |
+| **Security** | | | | |
+| `safe_logging` | Boolean | `true` | - | Scrub sensitive info from logs |
+| `max_streams_per_circuit` | Integer | `100` | 10-500 | Max streams per circuit |
+| `close_circuit_on_stream_limit` | Boolean | `true` | - | Close circuit on stream limit |
+| **Bandwidth** | | | | |
+| `bandwidth_rate` | String | `"1 MB"` | Pattern: `^\d+\s*(KB\|MB)$` | Max bandwidth rate/second |
+| `bandwidth_burst` | String | `"2 MB"` | Pattern: `^\d+\s*(KB\|MB)$`, >= rate | Max bandwidth burst/second |
+| `max_monthly_bandwidth` | String | `"100 GB"` | Pattern: `^\d+\s*(GB\|TB)\|unlimited$` | Monthly limit (or "unlimited") |
+| **Hidden Service** | | | | |
+| `num_intro_points` | Integer | `3` | 3-10 | Number of introduction points |
+| `virtual_port` | Integer | `80` | 1-65535 | Virtual port (.onion port) |
+
+#### Validation Rules
+
+```go
+type TorConfigValidation struct {
+    Field   string
+    Rule    string
+    Message string
+}
+
+var torValidationRules = []TorConfigValidation{
+    // Performance
+    {"max_circuits", "min:1,max:128", "Must be between 1 and 128"},
+    {"circuit_timeout", "min:10,max:300", "Must be between 10 and 300 seconds"},
+    {"bootstrap_timeout", "min:30,max:600", "Must be between 30 and 600 seconds"},
+
+    // Security
+    {"max_streams_per_circuit", "min:10,max:500", "Must be between 10 and 500"},
+
+    // Bandwidth
+    {"bandwidth_rate", "pattern:^\\d+\\s*(KB|MB)$", "Format: number + KB or MB (e.g., '1 MB')"},
+    {"bandwidth_burst", "pattern:^\\d+\\s*(KB|MB)$,gte:bandwidth_rate", "Must be >= bandwidth_rate"},
+    {"max_monthly_bandwidth", "pattern:^(\\d+\\s*(GB|TB)|unlimited)$", "Format: number + GB/TB or 'unlimited'"},
+
+    // Hidden Service
+    {"num_intro_points", "min:3,max:10", "Must be between 3 and 10"},
+    {"virtual_port", "min:1,max:65535", "Must be valid port (1-65535)"},
+}
+
+// ValidateTorConfig validates all Tor settings before saving
+func ValidateTorConfig(config *TorConfig) []ValidationError {
+    var errors []ValidationError
+
+    // Performance validation
+    if config.MaxCircuits < 1 || config.MaxCircuits > 128 {
+        errors = append(errors, ValidationError{
+            Field:   "max_circuits",
+            Message: "Must be between 1 and 128",
+        })
+    }
+
+    if config.CircuitTimeout < 10 || config.CircuitTimeout > 300 {
+        errors = append(errors, ValidationError{
+            Field:   "circuit_timeout",
+            Message: "Must be between 10 and 300 seconds",
+        })
+    }
+
+    // Bandwidth validation
+    rate, rateErr := parseBandwidth(config.BandwidthRate)
+    burst, burstErr := parseBandwidth(config.BandwidthBurst)
+
+    if rateErr != nil {
+        errors = append(errors, ValidationError{
+            Field:   "bandwidth_rate",
+            Message: "Invalid format. Use: '1 MB' or '500 KB'",
+        })
+    }
+
+    if burstErr != nil {
+        errors = append(errors, ValidationError{
+            Field:   "bandwidth_burst",
+            Message: "Invalid format. Use: '2 MB' or '1 MB'",
+        })
+    }
+
+    if rateErr == nil && burstErr == nil && burst < rate {
+        errors = append(errors, ValidationError{
+            Field:   "bandwidth_burst",
+            Message: "Must be greater than or equal to bandwidth_rate",
+        })
+    }
+
+    // Hidden service validation
+    if config.NumIntroPoints < 3 || config.NumIntroPoints > 10 {
+        errors = append(errors, ValidationError{
+            Field:   "num_intro_points",
+            Message: "Must be between 3 and 10",
+        })
+    }
+
+    return errors
+}
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Tor Hidden Service                                      │
-│                                                         │
-│ Status: ● Connected                                     │
-│ Address: abcd1234...wxyz.onion                  [Copy]  │
-│                                                         │
-│ [Regenerate Address]                                    │
-├─────────────────────────────────────────────────────────┤
-│ Vanity Address                                          │
-│                                                         │
-│ Prefix: [______] (max 6 chars)  [Generate]              │
-│                                                         │
-│ ⏳ Generating: "jokes" - 2h 15m elapsed...              │
-│    [Cancel]                                             │
-├─────────────────────────────────────────────────────────┤
-│ Import External Keys                      [Import Keys] │
-│ ⓘ Help: How to generate longer vanity addresses        │
-└─────────────────────────────────────────────────────────┘
+
+#### WebUI Layout
+
 ```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Tor Hidden Service                                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ Status: ● Connected              Uptime: 2d 5h 32m                  │
+│ Binary: /usr/bin/tor             Version: 0.4.8.9                   │
+│                                                                     │
+│ .onion Address:                                                     │
+│ ┌─────────────────────────────────────────────────────────────────┐ │
+│ │ abcdef1234567890abcdef1234567890abcdef1234567890abcdef12.onion  │ │
+│ └─────────────────────────────────────────────────────────[Copy]──┘ │
+│                                                                     │
+│ [Regenerate Address]                                                │
+├─────────────────────────────────────────────────────────────────────┤
+│ Vanity Address                                                      │
+│                                                                     │
+│ Prefix: [______] (max 6 chars)  [Generate]                          │
+│ ⏳ Generating: "myapp" - 2h 15m elapsed... [Cancel]                 │
+├─────────────────────────────────────────────────────────────────────┤
+│ Import External Keys                                   [Import Keys]│
+│ ⓘ Help: How to generate longer vanity addresses                    │
+├─────────────────────────────────────────────────────────────────────┤
+│ Configuration                                            [Expand ▼] │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│ ┌─ Outbound Network ────────────────────────────────────────────┐   │
+│ │ Use Tor for outbound connections:  [ ] Enabled                │   │
+│ │ Allow users to set preference:     [✓] Enabled                │   │
+│ └───────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│ ┌─ Performance ─────────────────────────────────────────────────┐   │
+│ │ Max circuits:         [32___]  (1-128)                        │   │
+│ │ Circuit timeout:      [60___]  seconds (10-300)               │   │
+│ │ Bootstrap timeout:    [180__]  seconds (30-600)               │   │
+│ └───────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│ ┌─ Security ────────────────────────────────────────────────────┐   │
+│ │ Safe logging:                    [✓] Enabled                  │   │
+│ │ Max streams per circuit:         [100__]  (10-500)            │   │
+│ │ Close circuit on stream limit:   [✓] Enabled                  │   │
+│ └───────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│ ┌─ Bandwidth ───────────────────────────────────────────────────┐   │
+│ │ Bandwidth rate:     [1___] [MB ▼]  (per second)               │   │
+│ │ Bandwidth burst:    [2___] [MB ▼]  (per second)               │   │
+│ │ Monthly limit:      [100_] [GB ▼]  ☐ Unlimited                │   │
+│ │   Current usage: 23.4 GB / 100 GB (23%)  ▓▓░░░░░░░░           │   │
+│ └───────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│ ┌─ Hidden Service ──────────────────────────────────────────────┐   │
+│ │ Introduction points:  [3___]  (3-10, more = resilient)        │   │
+│ │ Virtual port:         [80__]  (.onion port)                   │   │
+│ └───────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│                              [Cancel] [Save Configuration]          │
+│                                                                     │
+│ ⚠ Changes require Tor restart. Hidden service will be briefly      │
+│   unavailable during restart.                                       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Validation Error Display
+
+```
+┌─ Bandwidth ───────────────────────────────────────────────────┐
+│ Bandwidth rate:   [abc__] [MB ▼]                              │
+│                   ⚠ Invalid format. Use: '1 MB' or '500 KB'   │
+│ Bandwidth burst:  [1___] [MB ▼]                               │
+│                   ⚠ Must be greater than or equal to rate     │
+└───────────────────────────────────────────────────────────────┘
+```
+
+#### Save Flow
+
+1. User clicks "Save Configuration"
+2. Client-side validation runs (immediate feedback)
+3. If client validation passes, send PATCH request
+4. Server validates again (never trust client)
+5. If server validation fails, return errors with field names
+6. If validation passes:
+   - Save new config to file
+   - Regenerate torrc with new settings
+   - Restart Tor process
+   - Return success with new status
+7. WebUI shows "Configuration saved. Tor restarting..." toast
+8. Poll status endpoint until Tor reconnects
 
 ### Vanity Address Generation
 
@@ -37407,9 +38301,11 @@ make
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/{api_version}/{admin_path}/server/tor` | GET | Get Tor status and .onion address |
-| `/api/{api_version}/{admin_path}/server/tor` | PATCH | Update Tor settings |
+| `/api/{api_version}/{admin_path}/server/tor` | GET | Get Tor status, config, and .onion address |
+| `/api/{api_version}/{admin_path}/server/tor` | PATCH | Update Tor settings (validates before saving) |
+| `/api/{api_version}/{admin_path}/server/tor/validate` | POST | Validate config without saving |
 | `/api/{api_version}/{admin_path}/server/tor/regenerate` | POST | Regenerate .onion address |
+| `/api/{api_version}/{admin_path}/server/tor/restart` | POST | Restart Tor process |
 | `/api/{api_version}/{admin_path}/server/tor/vanity` | GET | Get vanity generation status |
 | `/api/{api_version}/{admin_path}/server/tor/vanity` | POST | Start vanity generation |
 | `/api/{api_version}/{admin_path}/server/tor/vanity` | DELETE | Cancel vanity generation |
@@ -37418,12 +38314,62 @@ make
 
 ### Response Format
 
+**GET `/api/{api_version}/{admin_path}/server/tor`**
+
 ```json
 {
-  "enabled": true,
-  "status": "connected",
-  "onion_address": "abcd1234efgh5678ijkl9012mnop3456qrst7890uvwx.onion",
-  "uptime": "2d 5h 30m"
+  "status": {
+    "state": "connected",
+    "binary_path": "/usr/bin/tor",
+    "binary_version": "0.4.8.9",
+    "onion_address": "exampleonionaddressv3fordemoabcdefghijklmnopqrstuvwxyz23.onion",
+    "uptime_seconds": 192600,
+    "circuits_active": 12
+  },
+  "config": {
+    "use_network": false,
+    "allow_user_preference": true,
+    "max_circuits": 32,
+    "circuit_timeout": 60,
+    "bootstrap_timeout": 180,
+    "safe_logging": true,
+    "max_streams_per_circuit": 100,
+    "close_circuit_on_stream_limit": true,
+    "bandwidth_rate": "1 MB",
+    "bandwidth_burst": "2 MB",
+    "num_intro_points": 3,
+    "virtual_port": 80
+  }
+}
+```
+
+**POST `/api/{api_version}/{admin_path}/server/tor/validate`** (or PATCH with invalid config)
+
+```json
+{
+  "valid": false,
+  "errors": [
+    {
+      "field": "max_circuits",
+      "message": "Must be between 1 and 128"
+    },
+    {
+      "field": "bandwidth_burst",
+      "message": "Must be greater than or equal to bandwidth_rate"
+    }
+  ]
+}
+```
+
+**PATCH `/api/{api_version}/{admin_path}/server/tor`** (success)
+
+```json
+{
+  "success": true,
+  "message": "Configuration saved. Tor restarting...",
+  "status": {
+    "state": "restarting"
+  }
 }
 ```
 
@@ -38718,7 +39664,7 @@ import (
 // Apply palette colors to CLI text output
 func (o *Output) PrintSuccess(msg string) {
     if o.colors {
-        fmt.Printf("\033[38;2;%sм%s\033[0m\n", hexToRGB(o.palette.Success), msg)
+        fmt.Printf("\033[38;2;%sm%s\033[0m\n", hexToRGB(o.palette.Success), msg)
     } else {
         fmt.Println(msg)
     }
@@ -38726,7 +39672,7 @@ func (o *Output) PrintSuccess(msg string) {
 
 func (o *Output) PrintError(msg string) {
     if o.colors {
-        fmt.Printf("\033[38;2;%sм%s\033[0m\n", hexToRGB(o.palette.Error), msg)
+        fmt.Printf("\033[38;2;%sm%s\033[0m\n", hexToRGB(o.palette.Error), msg)
     } else {
         fmt.Println(msg)
     }
@@ -47497,7 +48443,7 @@ cd "$TEMP_DIR" && docker compose up -d
 |--------------|--------|
 | `config/`, `data/`, `logs/`, `cache/` | Runtime dirs go to temp/OS paths |
 | `server.yml`, `cli.yml` | Generated at runtime, not in repo |
-| `rootfs/` in project root | Only in `docker/rootfs/` for build overlay |
+| `rootfs/` in project root | Only in `docker/file_system/` for build overlay |
 | `.env` with secrets | Use environment variables or admin panel |
 
 **Config Files:**
@@ -48642,7 +49588,7 @@ When bootstrapping a new project from this specification:
    # Create all required directories
    mkdir -p src/{config,server,swagger,graphql,mode,paths,ssl,scheduler,service,admin}
    mkdir -p src/server/{handler,service,model,store,template}
-   mkdir -p docker/rootfs/usr/local/bin
+   mkdir -p docker/file_system/usr/local/bin
    mkdir -p docs/stylesheets
    mkdir -p tests
    mkdir -p scripts
@@ -48670,7 +49616,7 @@ When bootstrapping a new project from this specification:
    touch docker/docker-compose.yml
    touch docker/docker-compose.dev.yml
    touch docker/docker-compose.test.yml
-   touch docker/rootfs/usr/local/bin/entrypoint.sh
+   touch docker/file_system/usr/local/bin/entrypoint.sh
 
    # ReadTheDocs files
    touch mkdocs.yml

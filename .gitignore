@@ -3,6 +3,13 @@ binaries/
 releases/
 rootfs/
 
+# AI Config (regenerated from AI.md)
+.claude/
+.cursor/
+.aider/
+.ai/
+.windsurf/
+
 # IDE
 .vscode/
 .idea/

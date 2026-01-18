@@ -590,6 +590,8 @@ type SearchConfig struct {
 	// Use spoofed TLS fingerprint (Chrome) to bypass Cloudflare
 	SpoofTLS        bool                  `yaml:"spoof_tls"`
 	AgeVerification AgeVerificationConfig `yaml:"age_verification"`
+	// Custom autocomplete terms to ADD to built-in suggestions
+	CustomTerms []string `yaml:"custom_terms"`
 }
 
 // UserAgentConfig holds user agent settings for engine requests

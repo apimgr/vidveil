@@ -1,3 +1,8 @@
+# ============================================
+# LOCAL DEVELOPMENT ONLY - NOT FOR CI/CD
+# CI/CD pipelines MUST use explicit commands
+# ============================================
+#
 # Vidveil Makefile
 # Per AI.md PART 26: 6 targets - build, release, docker, test, dev, clean
 

@@ -92,8 +92,9 @@ EXPOSE 80
 STOPSIGNAL SIGRTMIN+3
 
 # Health check (long start period for services that need initialization)
+# Note: Use curl instead of --status since --status reads config file port, not actual running port
 HEALTHCHECK --start-period=10m --interval=5m --timeout=15s --retries=3 \
-    CMD /usr/local/bin/vidveil --status || exit 1
+    CMD curl -sf http://localhost:80/healthz || exit 1
 
 # Use tini as init with signal propagation
 # -p SIGTERM: propagate SIGTERM to child processes

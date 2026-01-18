@@ -29,7 +29,7 @@ services:
     ports:
       - '172.17.0.1:64893:80'
     healthcheck:
-      test: /usr/local/bin/vidveil --status
+      test: curl -sf http://localhost:80/healthz || exit 1
       interval: 10s
       timeout: 5s
       retries: 3

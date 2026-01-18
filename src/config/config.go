@@ -1159,14 +1159,6 @@ func SaveAppConfig(cfg *AppConfig, path string) error {
 
 // Helper functions
 
-// ParseBool parses a boolean value from various string representations
-// Uses the full truthy/falsy value set from bool.go per AI.md PART 4
-// Returns false for empty or invalid values (backwards compatible)
-func ParseBool(value string) bool {
-	val, _ := ParseBoolWithDefault(value, false)
-	return val
-}
-
 // ParseBoolEnv parses a boolean value from an environment variable
 // Uses the full truthy/falsy value set from bool.go per AI.md PART 4
 func ParseBoolEnv(key string, defaultVal bool) bool {

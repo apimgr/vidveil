@@ -9,6 +9,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"embed"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
+	"github.com/apimgr/vidveil/src/server/service/tor"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -58,28 +60,13 @@ type MigrationManager interface {
 type TorService interface {
 	IsRunning() bool
 	GenerateVanityAddress(prefix string) error
-	GetVanityStatus() *VanityStatus
+	GetVanityStatus() *tor.VanityStatus
 	CancelVanityGeneration()
 	ApplyVanityAddress() error
+	RegenerateAddress() error
+	ImportKeys(secretKey []byte) error
 	GetInfo() map[string]interface{}
-	TestConnection() *TorTestResult
-}
-
-// TorTestResult holds the result of a Tor connection test
-type TorTestResult struct {
-	Connected    bool   `json:"connected"`
-	OnionAddress string `json:"onion_address,omitempty"`
-	Status       string `json:"status"`
-	Message      string `json:"message"`
-}
-
-// VanityStatus tracks vanity address generation progress
-type VanityStatus struct {
-	Active      bool      `json:"active"`
-	Prefix      string    `json:"prefix"`
-	StartTime   time.Time `json:"start_time"`
-	Attempts    int64     `json:"attempts"`
-	ElapsedTime string    `json:"elapsed_time"`
+	TestConnection() *tor.TestConnectionResult
 }
 
 // AdminHandler handles admin panel routes per AI.md PART 12
@@ -2347,10 +2334,23 @@ func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/admin/server/tor/regenerate
 func (h *AdminHandler) APITorRegenerate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	// Would trigger Tor manager to regenerate address
+
+	if h.torSvc == nil {
+		h.jsonError(w, "Tor service not available", "ERR_TOR_NOT_AVAILABLE", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := h.torSvc.RegenerateAddress(); err != nil {
+		h.jsonError(w, "Failed to regenerate address: "+err.Error(), "ERR_TOR_REGENERATE", http.StatusInternalServerError)
+		return
+	}
+
+	// Get updated info
+	info := h.torSvc.GetInfo()
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
-		"message": "Tor circuit regenerated",
+		"ok":      true,
+		"message": "Onion address regenerated - restart Tor service to use new address",
+		"data":    info,
 	})
 }
 
@@ -2473,30 +2473,53 @@ func (h *AdminHandler) APITorVanityApply(w http.ResponseWriter, r *http.Request)
 func (h *AdminHandler) APITorImport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	if h.torSvc == nil {
+		h.jsonError(w, "Tor service not available", "ERR_TOR_NOT_AVAILABLE", http.StatusServiceUnavailable)
+		return
+	}
+
 	var req struct {
 		PrivateKey string `json:"private_key"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"ok": false,
-			"error":   "Invalid request body",
+			"ok":    false,
+			"error": "Invalid request body",
 		})
 		return
 	}
 
 	if req.PrivateKey == "" {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"ok": false,
-			"error":   "Private key is required",
+			"ok":    false,
+			"error": "Private key is required",
 		})
 		return
 	}
 
-	// Would import the key and restart Tor
+	// Decode base64 private key
+	keyBytes, err := base64.StdEncoding.DecodeString(req.PrivateKey)
+	if err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"ok":    false,
+			"error": "Invalid base64 encoding",
+		})
+		return
+	}
+
+	// Import the key
+	if err := h.torSvc.ImportKeys(keyBytes); err != nil {
+		h.jsonError(w, "Failed to import keys: "+err.Error(), "ERR_TOR_IMPORT", http.StatusBadRequest)
+		return
+	}
+
+	// Get updated info
+	info := h.torSvc.GetInfo()
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
-		"message": "Tor keys imported successfully",
+		"ok":      true,
+		"message": "Tor keys imported successfully - restart Tor service to use new address",
+		"data":    info,
 	})
 }
 

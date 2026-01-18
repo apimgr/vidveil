@@ -1,0 +1,43 @@
+# vidveil - Test compose (DEBUG=true enabled)
+# nginx proxy address - http://172.17.0.1:64893
+
+name: vidveil
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vidveil-server
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - MODE=development
+      - PORT=80
+      - DEBUG=true
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - './rootfs/config:/config:z'
+      - './rootfs/data:/data:z'
+    ports:
+      - '172.17.0.1:64893:80'
+    healthcheck:
+      test: /usr/local/bin/vidveil --status
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - vidveil
+
+networks:
+  vidveil:
+    name: vidveil
+    external: false

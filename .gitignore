@@ -1,7 +1,12 @@
 # Binaries
 binaries/
 releases/
-/rootfs/
+
+# Runtime data (NEVER commit per AI.md PART 29)
+**/rootfs/
+*.db
+**/tor/data/
+**/tor/site/
 
 # AI Config (regenerated from AI.md)
 .claude/

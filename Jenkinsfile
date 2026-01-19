@@ -44,8 +44,9 @@ pipeline {
                     }
                     env.COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     env.BUILD_DATE = sh(script: 'date +"%a %b %d, %Y at %H:%M:%S %Z"', returnStdout: true).trim()
-                    env.LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}'"
-                    env.CLI_LDFLAGS = "-s -w -X 'main.ProjectName=${env.PROJECTNAME}' -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}'"
+                    // OFFICIALSITE from Jenkins credentials or environment
+                    env.OFFICIALSITE = env.OFFICIALSITE ?: ''
+                    env.LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}' -X 'main.OfficialSite=${env.OFFICIALSITE}'"
                     env.HAS_CLI = sh(script: '[ -d src/client ] && echo true || echo false', returnStdout: true).trim()
                 }
                 sh 'mkdir -p ${BINDIR} ${RELDIR}'
@@ -212,7 +213,7 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-amd64-cli ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-amd64-cli ./src/client
                         '''
                     }
                 }
@@ -229,7 +230,7 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-arm64-cli ./src/client
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-arm64-cli ./src/client
                         '''
                     }
                 }

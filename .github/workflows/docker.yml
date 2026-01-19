@@ -84,7 +84,7 @@ jobs:
             org.opencontainers.image.vendor=apimgr
             org.opencontainers.image.authors=apimgr
             org.opencontainers.image.title=${{ env.PROJECTNAME }}
-            org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            org.opencontainers.image.description=Privacy-respecting meta search engine for adult video content. Aggregates 50+ sites without tracking.
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
             org.opencontainers.image.revision=${{ env.COMMIT_ID }}
@@ -96,7 +96,7 @@ jobs:
             manifest:org.opencontainers.image.vendor=apimgr
             manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
-            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            manifest:org.opencontainers.image.description=Privacy-respecting meta search engine for adult video content. Aggregates 50+ sites without tracking.
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
             manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}

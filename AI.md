@@ -159,7 +159,7 @@ IDEA.md is the project PLAN. AI.md (this file) is the SOURCE OF TRUTH.
 
 ```bash
 # After make dev, debug in Docker with tools
-BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECTORG}.*/ | head -1)
+BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-*/ 2>/dev/null | head -1)
 docker run --rm -it -v "$BUILD_DIR:/app" alpine:latest sh -c "
   apk add --no-cache curl bash file jq  # Required debug tools
   /app/{projectname} --help
@@ -205,7 +205,7 @@ docker run --rm -it -v "$BUILD_DIR:/app" alpine:latest sh -c "
 make dev                # Quick build to temp dir
 
 # 2. Debug in Docker (with tools)
-BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECTORG}.*/ | head -1)
+BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-*/ 2>/dev/null | head -1)
 docker run --rm -it -v "$BUILD_DIR:/app" alpine:latest sh -c "
   apk add --no-cache curl bash file jq
   /app/{projectname} --help
@@ -1062,16 +1062,16 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 ## How to Read This Large File
 
-**AI.md is ~1.9MB and ~48,953 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1.8MB and ~50,234 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
-| File size | ~1.9MB |
-| Line count | ~48,953 lines |
+| File size | ~1.8MB |
+| Line count | ~50,234 lines |
 | Read limit | ~500 lines per read |
-| Full reads needed | ~98 reads (impractical) |
+| Full reads needed | ~100 reads (impractical) |
 
 **Use the PART index to find relevant sections, then read each section COMPLETELY.**
 
@@ -1082,44 +1082,44 @@ This distinction exists for clarity. When referring to OS-level resources that b
 | PART | Line | Topic | When to Read |
 |------|------|-------|--------------|
 | 0 | ~1216 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
-| 1 | ~2775 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | ~3630 | License & Attribution | License requirements |
-| 3 | ~3964 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | ~4799 | OS-Specific Paths | Path handling |
-| 5 | ~4984 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
-| 6 | ~6897 | Application Modes | Mode handling, debug endpoints |
-| 7 | ~7505 | Binary Requirements | Binary building, **Display detection** |
-| 8 | ~8088 | Server Binary CLI | CLI flags/commands |
-| 9 | ~11063 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~11440 | Database & Cluster | Database work |
-| 11 | ~11855 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
-| 12 | ~13738 | Server Configuration | Server settings |
-| 13 | ~14802 | Health & Versioning | Health endpoints |
-| 14 | ~15306 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~16898 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~17751 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~22072 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
-| 18 | ~24112 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | ~25427 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | ~25912 | GeoIP | GeoIP features |
-| 21 | ~25985 | Metrics | Metrics/monitoring |
-| 22 | ~27006 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | ~27735 | Update Command | Update feature |
-| 24 | ~28214 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~29112 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~29296 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 27 | ~30022 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~31383 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~33897 | Testing & Development | Testing/dev workflow, **100% Coverage** |
-| 30 | ~35549 | ReadTheDocs Documentation | Documentation |
-| 31 | ~36262 | I18N & A11Y | Internationalization |
-| 32 | ~36683 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~37498 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~41892 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~45463 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~46104 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~47127 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~47381 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+| 1 | ~2808 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | ~3663 | License & Attribution | License requirements |
+| 3 | ~3997 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | ~4832 | OS-Specific Paths | Path handling |
+| 5 | ~5017 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
+| 6 | ~6930 | Application Modes | Mode handling, debug endpoints |
+| 7 | ~7538 | Binary Requirements | Binary building, **Display detection** |
+| 8 | ~8121 | Server Binary CLI | CLI flags/commands |
+| 9 | ~11096 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~11473 | Database & Cluster | Database work |
+| 11 | ~11888 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | ~13771 | Server Configuration | Server settings |
+| 13 | ~14835 | Health & Versioning | Health endpoints |
+| 14 | ~15339 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~16931 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~17784 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~22206 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | ~24246 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | ~25561 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | ~26046 | GeoIP | GeoIP features |
+| 21 | ~26119 | Metrics | Metrics/monitoring |
+| 22 | ~27140 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | ~27869 | Update Command | Update feature |
+| 24 | ~28348 | Privilege Escalation & Service | Service/privilege work |
+| 25 | ~29246 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~29430 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 27 | ~30157 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~31525 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~34097 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 30 | ~35916 | ReadTheDocs Documentation | Documentation |
+| 31 | ~36629 | I18N & A11Y | Internationalization |
+| 32 | ~37050 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~38778 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~43172 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~46743 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~47384 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~48407 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~48661 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -1151,7 +1151,7 @@ When reading a PART and you encounter a reference like "See PART X" or "Read PAR
 2. Jump to the referenced PART and read it
 3. **Return to your original location** and continue reading
 
-Example: If you're reading PART 5 at line 4800 and it says "See PART 10", read PART 10, then **return to PART 5 line 4800** and continue.
+Example: If you're reading PART 5 at line 5017 and it says "See PART 10", read PART 10, then **return to PART 5 line 5017** and continue.
 
 **Never abandon your current PART after following a reference.**
 
@@ -19370,7 +19370,7 @@ See **JavaScript Rules** section below for `app.js` structure.
 <input type="checkbox" id="menu-toggle" hidden>
 <nav class="menu">
   <a href="/">Home</a>
-  <a href="/about">About</a>
+  <a href="/server/about">About</a>
 </nav>
 
 <style>
@@ -19544,7 +19544,7 @@ src/server/template/
 <!DOCTYPE html>
 <html lang="en" class="theme-dark">  <!-- or theme-light -->
 <head>
-  {{ template "partial/head.tmpl" . }}
+  {{ template "head" . }}
 </head>
 ```
 
@@ -21167,6 +21167,107 @@ When admin edits `custom_html`, show:
   <a href="/healthz">Last update: {builddatetime}</a>
 </footer>
 ```
+
+### Default Admin Footer (Admin Panel)
+
+**Location:** `partial/admin/footer.tmpl`
+
+```html
+<footer class="admin-footer">
+  <div class="admin-footer-content">
+    <!-- Version info -->
+    <span class="admin-footer-version">
+      <a href="/{admin_path}/server/info">{projectname} {projectversion}</a>
+    </span>
+
+    <span class="admin-footer-separator">•</span>
+
+    <!-- Documentation link -->
+    <span class="admin-footer-docs">
+      <a href="https://{projectorg}-{projectname}.readthedocs.io" target="_blank" rel="noopener">
+        Docs
+      </a>
+    </span>
+
+    <span class="admin-footer-separator">•</span>
+
+    <!-- Server status indicator -->
+    <span class="admin-footer-status">
+      {{ if .ServerStatus.Healthy }}
+        <span class="status-indicator status-ok" title="All systems operational">●</span>
+        <span>Healthy</span>
+      {{ else if .ServerStatus.Degraded }}
+        <span class="status-indicator status-warning" title="Some issues detected">●</span>
+        <span>Degraded</span>
+      {{ else }}
+        <span class="status-indicator status-error" title="System issues">●</span>
+        <span>Issues</span>
+      {{ end }}
+    </span>
+  </div>
+</footer>
+```
+
+**Admin Footer CSS:**
+```css
+.admin-footer {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.admin-footer-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.admin-footer-separator {
+  color: var(--text-muted);
+}
+
+.admin-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.admin-footer a:hover {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
+/* Status indicators */
+.status-indicator {
+  font-size: 0.75rem;
+  margin-right: 0.25rem;
+}
+
+.status-ok { color: var(--success-color); }
+.status-warning { color: var(--warning-color); }
+.status-error { color: var(--danger-color); }
+```
+
+**Admin Footer Contents:**
+
+| Element | Description |
+|---------|-------------|
+| Version | Links to `/{admin_path}/server/info` - shows project name and version |
+| Docs | External link to ReadTheDocs documentation |
+| Status | Server health indicator (green/yellow/red) with status text |
+
+**Admin Footer Rules:**
+
+| Rule | Description |
+|------|-------------|
+| **Compact** | Single line, minimal height |
+| **Informational** | Version, docs, status - no navigation |
+| **Status indicator** | Real-time server health from `/healthz` |
+| **Same position rules** | Bottom of page, scrolls with content, centered |
 
 ### Admin Panel (/{admin_path}/server/footer)
 
@@ -29689,7 +29790,8 @@ test:
 dev:
 	@mkdir -p $(GOCACHE) $(GODIR)
 	@$(GO_DOCKER) go mod tidy
-	@BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG).XXXXXX") && \
+	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECTORG)" && \
+		BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \
 		echo "Quick dev build to $$BUILD_DIR..." && \
 		$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
@@ -29837,7 +29939,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 ```bash
 # After make dev, test in Docker with debug tools
-BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECTORG}.*/ | head -1)
+BUILD_DIR=$(ls -td ${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-*/ 2>/dev/null | head -1)
 docker run --rm -it \
   -v "$BUILD_DIR:/app" \
   alpine:latest sh -c "
@@ -30062,10 +30164,10 @@ All Docker-related files MUST be in `docker/`:
 docker/
 ├── Dockerfile              # Production Dockerfile
 ├── Dockerfile.dev          # Development Dockerfile (optional)
-├── docker-compose.yml      # Production compose (NO debug options)
-├── docker-compose.dev.yml  # Development compose (DEBUG commented)
-├── docker-compose.test.yml # Test compose (DEBUG=true enabled)
-└── file_system/            # Container filesystem overlay
+├── docker-compose.yml      # Production compose - HUMAN USE ONLY
+├── docker-compose.dev.yml  # Development compose - HUMAN USE ONLY
+├── docker-compose.test.yml # Test compose - AI/AUTOMATED TESTING ONLY
+└── file_system/            # Container filesystem overlay (build-time only)
     └── usr/
         └── local/
             └── bin/
@@ -31123,11 +31225,13 @@ rm -rf "$TEMP_DIR"
 - No outdated .env.example files
 - Users can override by editing docker-compose.yml directly
 
-### Docker Compose (Development)
+### Docker Compose (Development) - HUMAN USE ONLY
 
 **Location:** `docker/docker-compose.dev.yml`
 
-**Development mode with optional debug. MUST use temp directory workflow.**
+**⚠️ FOR HUMAN USE ONLY - AI assistants must NEVER use this file.**
+
+Development mode with optional debug. Humans run this manually for local development.
 
 ```yaml
 name: {projectname}-dev
@@ -31170,11 +31274,13 @@ cp docker/docker-compose.dev.yml "$TEMP_DIR/docker-compose.yml"
 cd "$TEMP_DIR" && docker compose up -d
 ```
 
-### Docker Compose (Production)
+### Docker Compose (Production) - HUMAN USE ONLY
 
 **Location:** `docker/docker-compose.yml`
 
-**Production has NO debug options. Debug must be set via CLI if needed.**
+**⚠️ FOR HUMAN USE ONLY - AI assistants must NEVER use this file.**
+
+Production has NO debug options. Debug must be set via CLI if needed. Humans deploy this for production use.
 
 ```yaml
 name: {projectname}
@@ -31222,11 +31328,13 @@ cp docker/docker-compose.yml "$TEMP_DIR/"
 cd "$TEMP_DIR" && docker compose up -d
 ```
 
-### Docker Compose (Test)
+### Docker Compose (Test) - AI/AUTOMATED TESTING
 
 **Location:** `docker/docker-compose.test.yml`
 
-**For running tests in CI/CD or locally. Debug enabled for test visibility. MUST use temp directory workflow.**
+**✅ FOR AI AND AUTOMATED TESTING - This is the ONLY docker-compose file AI may use.**
+
+Debug enabled for test visibility. **MUST be copied to temp directory before use - NEVER run from project directory.**
 
 ```yaml
 name: {projectname}-test
@@ -31243,8 +31351,9 @@ services:
     ports:
       - "64581:80"
     volumes:
-      # TEMP DIR WORKFLOW: ./rootfs/ resolves to $TEMP_DIR/rootfs/
-      # NEVER run from project directory - always use temp dir workflow
+      # CRITICAL: ./rootfs/ must resolve to $TEMP_DIR/rootfs/, NOT project directory
+      # This file MUST be copied to a temp directory before running
+      # AI: NEVER run this from the project directory
       - ./rootfs/config:/config
       - ./rootfs/data:/data
     networks:
@@ -31256,7 +31365,7 @@ networks:
     external: false
 ```
 
-**Run:**
+**AI/Automated Testing Workflow (REQUIRED):**
 ```bash
 mkdir -p "${TMPDIR:-/tmp}/{projectorg}"
 TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/{projectorg}/{projectname}-XXXXXX")
@@ -31744,6 +31853,20 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            ext: .exe
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
+            goarch: arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -31766,7 +31889,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }} ./src
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -31777,20 +31900,20 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli ./src/client
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
 
   release:
     needs: build
@@ -31943,6 +32066,7 @@ jobs:
             org.opencontainers.image.vendor={projectorg}
             org.opencontainers.image.authors={projectorg}
             org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
             org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
@@ -31955,6 +32079,7 @@ jobs:
             manifest:org.opencontainers.image.vendor={projectorg}
             manifest:org.opencontainers.image.authors={projectorg}
             manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            manifest:org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
             manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
@@ -32389,6 +32514,20 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            ext: .exe
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
+            goarch: arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -32411,7 +32550,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }} ./src
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -32422,20 +32561,20 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli ./src/client
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
 
   release:
     needs: build
@@ -32582,6 +32721,7 @@ jobs:
             org.opencontainers.image.vendor={projectorg}
             org.opencontainers.image.authors={projectorg}
             org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
             org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
@@ -32594,6 +32734,7 @@ jobs:
             manifest:org.opencontainers.image.vendor={projectorg}
             manifest:org.opencontainers.image.authors={projectorg}
             manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            manifest:org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
             manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
             manifest:org.opencontainers.image.version=${{ env.VERSION }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
@@ -32995,12 +33136,9 @@ release:
 # BETA BUILDS (Push to beta branch)
 # =============================================================================
 
-build:beta:linux:
+build:beta:
   <<: *go-build
   stage: build
-  variables:
-    GOOS: linux
-    GOARCH: amd64
   before_script:
     - apk add --no-cache git bash
     - export VERSION="$(date +%Y%m%d%H%M%S)-beta"
@@ -33008,25 +33146,38 @@ build:beta:linux:
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
+    # Build all 8 platforms
+    - GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
+    - GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
+    - GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-amd64 ./src
+    - GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-arm64 ./src
+    - GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-amd64.exe ./src
+    - GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-arm64.exe ./src
+    - GOOS=freebsd GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-amd64 ./src
+    - GOOS=freebsd GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-arm64 ./src
+    # Build CLI if exists
+    - if [ -d "src/client" ]; then GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-linux-amd64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-linux-arm64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-darwin-amd64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-darwin-arm64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-amd64.exe ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-arm64.exe ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=freebsd GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-amd64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=freebsd GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-arm64 ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-linux-*
+      - ${PROJECTNAME}-*
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_BRANCH == "beta"
 
 # =============================================================================
-# DAILY BUILDS (Scheduled + main/master push)
+# DAILY BUILDS (Scheduled + main/master push) - All 8 platforms
 # =============================================================================
 
-build:daily:linux:
+build:daily:
   <<: *go-build
   stage: build
-  variables:
-    GOOS: linux
-    GOARCH: amd64
   before_script:
     - apk add --no-cache git bash
     - export VERSION="$(date +%Y%m%d%H%M%S)"
@@ -33034,11 +33185,27 @@ build:daily:linux:
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
   script:
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
-    - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
+    # Build all 8 platforms
+    - GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
+    - GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
+    - GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-amd64 ./src
+    - GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-arm64 ./src
+    - GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-amd64.exe ./src
+    - GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-arm64.exe ./src
+    - GOOS=freebsd GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-amd64 ./src
+    - GOOS=freebsd GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-arm64 ./src
+    # Build CLI if exists
+    - if [ -d "src/client" ]; then GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-linux-amd64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-linux-arm64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-darwin-amd64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-darwin-arm64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-amd64.exe ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-arm64.exe ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=freebsd GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-amd64 ./src/client; fi
+    - if [ -d "src/client" ]; then GOOS=freebsd GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-arm64 ./src/client; fi
   artifacts:
     paths:
-      - ${PROJECTNAME}-linux-*
+      - ${PROJECTNAME}-*
     expire_in: 1 day
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -33943,6 +34110,66 @@ Before proceeding, confirm you understand:
 
 **The project directory is for SOURCE CODE ONLY. All runtime/test data goes to the OS temp directory.**
 
+## AI Docker Compose Rules
+
+**AI assistants have STRICT rules about docker-compose usage:**
+
+### FORBIDDEN for AI (Human Use Only)
+
+| File | Purpose | Why AI Cannot Use |
+|------|---------|-------------------|
+| `docker/docker-compose.yml` | Production deployment | Human-only, production data |
+| `docker/docker-compose.dev.yml` | Development work | Human-only, manual testing |
+
+**AI must NEVER:**
+- Run `docker compose up` with `docker-compose.yml` or `docker-compose.dev.yml`
+- Use `./rootfs/` or `./docker/rootfs/` paths (project directory pollution)
+- Create or modify files in the project directory during testing
+- Mount project directory paths as volumes
+
+### ALLOWED for AI (Automated Testing Only)
+
+| File | Purpose | How AI Uses It |
+|------|---------|----------------|
+| `docker/docker-compose.test.yml` | Automated testing | Copy to temp dir, run from there |
+
+**AI testing workflow:**
+```bash
+# 1. Create temp directory (REQUIRED)
+mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
+mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
+
+# 2. Copy ONLY docker-compose.test.yml to temp dir
+cp docker/docker-compose.test.yml "$TEMP_DIR/docker-compose.yml"
+
+# 3. Run from temp dir (./rootfs resolves to $TEMP_DIR/rootfs)
+cd "$TEMP_DIR" && docker compose up -d
+
+# 4. Run tests...
+
+# 5. Cleanup
+cd - && docker compose -f "$TEMP_DIR/docker-compose.yml" down
+rm -rf "$TEMP_DIR"
+```
+
+### Path Rules
+
+| Path | Allowed | Why |
+|------|---------|-----|
+| `./rootfs/` | ❌ NEVER | Pollutes project directory |
+| `./docker/rootfs/` | ❌ NEVER | Pollutes project directory |
+| `./docker/file_system/` | ❌ NEVER for runtime | Build-time only (Dockerfile COPY) |
+| `$TEMP_DIR/rootfs/` | ✅ ALWAYS | Proper temp directory isolation |
+| `/tmp/{org}/{project}-XXXXXX/rootfs/` | ✅ ALWAYS | Full path equivalent |
+
+### Summary
+
+| Actor | docker-compose.yml | docker-compose.dev.yml | docker-compose.test.yml |
+|-------|-------------------|------------------------|------------------------|
+| **Human** | ✅ Production | ✅ Development | ✅ Testing |
+| **AI** | ❌ FORBIDDEN | ❌ FORBIDDEN | ✅ ONLY THIS (in temp dir) |
+
 ## Config Files: Runtime-Generated Only 
 
 **See Critical Rules: Files & Directories Master Rules - "NEVER Create These Files"**
@@ -34030,17 +34257,17 @@ Config files are NEVER in the repository. They are generated at RUNTIME:
 | **NEVER** | Use project directory for test/runtime data |
 | **NEVER** | Hardcode `/tmp` - use `os.TempDir()` or `mktemp` |
 | **NEVER** | Use bare `mktemp -d` without org prefix |
-| **ALWAYS** | Use `{projectorg}.` prefix for all temp dirs |
+| **ALWAYS** | Use `{projectorg}/{projectname}-` structure for all temp dirs |
 | **ALWAYS** | Detect org from git remote or directory path |
 
 ### Cleanup
 
 ```bash
 # Find all temp dirs for this org
-ls -la "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
+ls -la "${TMPDIR:-/tmp}/${PROJECTORG}/"
 
 # Clean all temp dirs for this org
-rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
+rm -rf "${TMPDIR:-/tmp}/${PROJECTORG}/"
 ```
 
 ### Correct vs Incorrect
@@ -34082,7 +34309,7 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 
 **Why this structure:**
 - Prevents conflicts between projects
-- Makes cleanup easy (`rm -rf /tmp/{projectorg}.*`)
+- Makes cleanup easy (`rm -rf /tmp/{projectorg}/`)
 - Identifies which project created temp files
 - Prevents pollution of root `/tmp` directory
 - Multiple projects can run simultaneously
@@ -34146,10 +34373,112 @@ rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/
 - ✓ Test ALL project-specific endpoints (IDEA.md)
 - ✓ If project has CRUD → Test full CRUD (Create, Read, Update, Delete)
 - ✓ Test both API endpoints (`/api/{api_version}/*`) AND frontend routes (`/**`)
-- ✓ Test API .txt extension (for simplicity)
-- ✓ Test Accept headers (application/json, text/plain, text/html)
+- ✓ Test ALL `.txt` endpoints (robots.txt, security.txt, API .txt extension)
+- ✓ Test content negotiation with ALL required Accept headers (see below)
 - ✓ Test frontend smart detection (browser → HTML, CLI → formatted text)
 - ✓ Test authentication (admin, user if applicable)
+
+### Content Negotiation Testing (REQUIRED)
+
+**Every route MUST be tested with ALL applicable Accept headers. No exceptions.**
+
+| Route Type | Required Accept Headers | Why |
+|------------|------------------------|-----|
+| **Frontend routes** (`/**`) | `text/html`, `text/plain` | Browsers get HTML, CLI/curl gets plain text |
+| **Backend/API routes** (`/api/*`) | `application/json`, `text/plain` | API clients get JSON, CLI/curl gets plain text |
+
+**Frontend Route Testing (ALL routes):**
+```bash
+# Every frontend route MUST be tested with BOTH:
+curl -H "Accept: text/html" /route          # Returns HTML
+curl -H "Accept: text/plain" /route         # Returns plain text
+
+# Example: Test user profile page
+curl -H "Accept: text/html" /users/john     # HTML page
+curl -H "Accept: text/plain" /users/john    # Plain text output
+```
+
+**Backend/API Route Testing (ALL routes):**
+```bash
+# Every API route MUST be tested with BOTH:
+curl -H "Accept: application/json" /api/v1/resource    # Returns JSON
+curl -H "Accept: text/plain" /api/v1/resource          # Returns plain text
+
+# Example: Test jokes API
+curl -H "Accept: application/json" /api/v1/jokes/random   # JSON response
+curl -H "Accept: text/plain" /api/v1/jokes/random         # Plain text response
+```
+
+**Backend .txt Endpoint Testing (ALL endpoints):**
+```bash
+# Every *.txt endpoint MUST be tested:
+curl /robots.txt                            # Robots file
+curl /security.txt                          # Security policy
+curl /.well-known/security.txt              # Security policy (well-known)
+curl /api/v1/jokes/random.txt               # API .txt extension
+
+# ALL API endpoints that support .txt MUST be tested with .txt
+curl /api/v1/users/john.txt                 # User profile as text
+curl /api/v1/weather/Chicago.txt            # Weather as text
+```
+
+**Test Matrix Template:**
+```bash
+#!/bin/bash
+# tests/test_content_negotiation.sh
+
+# Frontend routes - test BOTH text/html and text/plain
+frontend_routes=(
+    "/"
+    "/users"
+    "/users/john"
+    "/settings"
+)
+
+for route in "${frontend_routes[@]}"; do
+    # Test HTML response
+    curl -sf -H "Accept: text/html" "${BASE_URL}${route}" | grep -q "<!DOCTYPE html" || fail "HTML failed for $route"
+    # Test plain text response
+    curl -sf -H "Accept: text/plain" "${BASE_URL}${route}" | head -1 || fail "Plain text failed for $route"
+done
+
+# Backend routes - test BOTH application/json and text/plain
+api_routes=(
+    "/api/v1/status"
+    "/api/v1/jokes/random"
+    "/api/v1/users/john"
+)
+
+for route in "${api_routes[@]}"; do
+    # Test JSON response
+    curl -sf -H "Accept: application/json" "${BASE_URL}${route}" | jq . || fail "JSON failed for $route"
+    # Test plain text response
+    curl -sf -H "Accept: text/plain" "${BASE_URL}${route}" || fail "Plain text failed for $route"
+done
+
+# Backend .txt endpoints - test ALL of them
+txt_endpoints=(
+    "/robots.txt"
+    "/security.txt"
+    "/.well-known/security.txt"
+    "/api/v1/jokes/random.txt"
+    "/api/v1/users/john.txt"
+)
+
+for endpoint in "${txt_endpoints[@]}"; do
+    curl -sf "${BASE_URL}${endpoint}" || fail ".txt failed for $endpoint"
+done
+```
+
+**Coverage Verification:**
+
+| Test Type | Verification |
+|-----------|--------------|
+| Frontend + text/html | Response contains `<!DOCTYPE html` |
+| Frontend + text/plain | Response is plain text (no HTML tags) |
+| Backend + application/json | Response parses as valid JSON |
+| Backend + text/plain | Response is plain text |
+| *.txt endpoints | Response returns 200 with text content |
 
 **Example: User management project MUST test:**
 ```bash
@@ -34480,7 +34809,8 @@ verify_all_endpoints_tested
 
 ```bash
 # 1. Build in Docker (always use Docker for builds)
-BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
 docker run --rm -v $(pwd):/build -w /build -e CGO_ENABLED=0 \
   golang:alpine go build -o /build/binaries/{projectname} ./src
 
@@ -34559,7 +34889,8 @@ PROJECTNAME=$(basename "$PWD")
 PROJECTORG=$(basename "$(dirname "$PWD")")
 
 # Create temp directory for build
-BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
 trap "rm -rf $BUILD_DIR" EXIT
 
 # Go cache directories (same as Makefile)
@@ -34805,7 +35136,8 @@ CONTAINER_NAME="test-${PROJECTNAME}-$$"
 INCUS_IMAGE="images:debian/12"
 
 # Create temp directory for build
-BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
 trap "rm -rf $BUILD_DIR; incus delete $CONTAINER_NAME --force 2>/dev/null || true" EXIT
 
 # Go cache directories (same as Makefile)
@@ -35385,7 +35717,8 @@ GOCACHE="${HOME}/.local/share/go/build"
 mkdir -p "$GODIR" "$GOCACHE"
 
 # Create prefixed temp dir for test data
-TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
+TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build to binaries/ (with caching)
@@ -35422,7 +35755,8 @@ rm -rf $TEST_DIR
 
 ```bash
 # Create prefixed temp dir
-TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")
+mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
+TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
 mkdir -p $TEST_DIR/{config,data,logs}
 
 # Build
@@ -35553,7 +35887,7 @@ rm -rf $TEST_DIR
 | Project binaries | `rm -rf binaries/{projectname}*` |
 | Project releases | `rm -rf releases/{projectname}*` |
 
-**Note:** Always use `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX"` and save the path to a variable for cleanup. Temp dirs are auto-cleaned on reboot.
+**Note:** Always use `mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX"` and save the path to a variable for cleanup. Temp dirs are auto-cleaned on reboot.
 
 ### NEVER Delete Without Confirmation
 
@@ -48432,9 +48766,10 @@ GOCACHE := $(HOME)/.local/share/go/build  # Local machine path for build cache
 
 ```bash
 # Temp dir workflow
+mkdir -p "${TMPDIR:-/tmp}/${PROJECTORG}"
 TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
 mkdir -p "$TEMP_DIR/rootfs/config" "$TEMP_DIR/rootfs/data"
-cp docker/docker-compose.yml "$TEMP_DIR/"
+cp docker/docker-compose.test.yml "$TEMP_DIR/docker-compose.yml"
 cd "$TEMP_DIR" && docker compose up -d
 ```
 

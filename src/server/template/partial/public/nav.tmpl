@@ -5,7 +5,7 @@
     <div class="nav-links">
         <a href="/" class="nav-link{{if eq .ActiveNav "home"}} active{{end}}">Home</a>
         <a href="/search" class="nav-link{{if eq .ActiveNav "search"}} active{{end}}">Search</a>
-        <a href="/about" class="nav-link{{if eq .ActiveNav "about"}} active{{end}}">About</a>
+        <a href="/server/about" class="nav-link{{if eq .ActiveNav "about"}} active{{end}}">About</a>
     </div>
 
     {{/* Search form - visible on nav bar */}}
@@ -37,8 +37,8 @@
     </div>
     <a href="/" class="nav-panel-link">Home</a>
     <a href="/search" class="nav-panel-link">Search</a>
-    <a href="/about" class="nav-panel-link">About</a>
-    <a href="/privacy" class="nav-panel-link">Privacy</a>
+    <a href="/server/about" class="nav-panel-link">About</a>
+    <a href="/server/privacy" class="nav-panel-link">Privacy</a>
     <a href="/preferences" class="nav-panel-link">Preferences</a>
 </div>
 <div class="nav-overlay" id="nav-overlay" onclick="closeNav()"></div>

@@ -10,6 +10,17 @@ import (
 	"text/tabwriter"
 )
 
+// Probe field stats key constants
+// Per AI.md PART 1: No magic strings - use named constants
+const (
+	ProbeFieldStatHasThumbnail   = "has_thumbnail"
+	ProbeFieldStatHasPreviewURL  = "has_preview_url"
+	ProbeFieldStatHasDownloadURL = "has_download_url"
+	ProbeFieldStatHasDuration    = "has_duration"
+	ProbeFieldStatHasViews       = "has_views"
+	ProbeDefaultTestQuery        = "test"
+)
+
 // Probe command flags
 // Per AI.md PART 1: Variable names MUST reveal intent
 var (
@@ -38,7 +49,7 @@ func RunProbeCommand(args []string) error {
 	// Reset flags for each call
 	probeAllEngines = false
 	probeEngineFilter = ""
-	probeTestQuery = "test"
+	probeTestQuery = ProbeDefaultTestQuery
 	probeVerboseMode = false
 
 	// Parse probe-specific flags
@@ -147,23 +158,24 @@ func probeEngineByName(name, query string) EngineProbeResult {
 	result.ResultCount = searchResp.Count
 
 	// Count field stats
+	// Per AI.md PART 1: No magic strings - use named constants
 	fieldStats := map[string]int{
-		"has_thumbnail":    0,
-		"has_preview_url":  0,
-		"has_download_url": 0,
-		"has_duration":     0,
-		"has_views":        0,
+		ProbeFieldStatHasThumbnail:   0,
+		ProbeFieldStatHasPreviewURL:  0,
+		ProbeFieldStatHasDownloadURL: 0,
+		ProbeFieldStatHasDuration:    0,
+		ProbeFieldStatHasViews:       0,
 	}
 
 	for _, r := range searchResp.Results {
 		if r.Thumbnail != "" {
-			fieldStats["has_thumbnail"]++
+			fieldStats[ProbeFieldStatHasThumbnail]++
 		}
 		if r.Duration != "" {
-			fieldStats["has_duration"]++
+			fieldStats[ProbeFieldStatHasDuration]++
 		}
 		if r.Views != "" {
-			fieldStats["has_views"]++
+			fieldStats[ProbeFieldStatHasViews]++
 		}
 		// Note: preview_url and download_url would need to be added to SearchResult
 		// For now, we track what's available

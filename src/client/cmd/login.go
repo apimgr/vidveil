@@ -72,9 +72,10 @@ func RunLoginCommand(args []string) error {
 	}
 
 	// Load or create config
+	// Ignore unmarshal errors - use defaults if config is invalid
 	var fileCLIConfig CLIConfig
 	if data, err := os.ReadFile(configFileLocation); err == nil {
-		yaml.Unmarshal(data, &fileCLIConfig)
+		_ = yaml.Unmarshal(data, &fileCLIConfig)
 	}
 
 	// Update server address (don't store token in config, it's in token file)

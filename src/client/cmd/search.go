@@ -12,6 +12,12 @@ import (
 	"github.com/apimgr/vidveil/src/client/api"
 )
 
+// Search display constants
+// Per AI.md PART 1: No magic numbers - use named constants
+const (
+	SearchTitleTruncateLength = 50
+)
+
 // Search command flags
 // Per AI.md PART 1: Variable names MUST reveal intent
 var (
@@ -151,7 +157,7 @@ func OutputSearchResultsAsTable(searchResponse *api.SearchResponse) error {
 	fmt.Fprintf(tableWriter, "-----\t--------\t------\t---\n")
 
 	for _, result := range searchResponse.Results {
-		truncatedTitle := TruncateSearchResultText(result.Title, 50)
+		truncatedTitle := TruncateSearchResultText(result.Title, SearchTitleTruncateLength)
 		fmt.Fprintf(tableWriter, "%s\t%s\t%s\t%s\n", truncatedTitle, result.Duration, result.Engine, result.URL)
 	}
 

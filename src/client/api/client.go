@@ -11,6 +11,13 @@ import (
 	"time"
 )
 
+// API client defaults
+// Per AI.md PART 1: No magic strings/numbers - use named constants
+const (
+	APIClientDefaultServerURL       = "https://x.scour.li"
+	APIClientDefaultTimeoutSeconds  = 30
+)
+
 // APIClient is the API client for VidVeil
 type APIClient struct {
 	baseURL    string
@@ -51,10 +58,10 @@ type VersionResponse struct {
 // NewAPIClient creates a new API client
 func NewAPIClient(baseURL, token string, timeout int) *APIClient {
 	if baseURL == "" {
-		baseURL = "https://x.scour.li"
+		baseURL = APIClientDefaultServerURL
 	}
 	if timeout <= 0 {
-		timeout = 30
+		timeout = APIClientDefaultTimeoutSeconds
 	}
 
 	return &APIClient{

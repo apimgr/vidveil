@@ -64,7 +64,7 @@ func RunEnginesCommand(args []string) error {
 			enginesShowEnabledOnly = true
 		case "--disabled":
 			enginesShowDisabledOnly = true
-		case "--all", "-a":
+		case "--all":
 			enginesShowAllDetails = true
 		case "--help", "-h":
 			PrintEnginesCommandHelp()
@@ -133,7 +133,7 @@ Usage:
 Flags:
       --enabled    Show only enabled engines
       --disabled   Show only disabled engines
-      --all, -a    Show all details
+      --all        Show all details
   -h, --help       Show help
 
 Examples:

@@ -6,10 +6,22 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/apimgr/vidveil/src/client/browser"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/common/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+)
+
+// TUI display constants
+// Per AI.md PART 1: No magic numbers - use named constants
+const (
+	TUIDefaultMaxResults           = 10
+	TUIReservedSpaceForUI          = 10
+	TUIMinDisplayResults           = 3
+	TUITruncationPadding           = 10
+	TUIMinTruncationWidth          = 30
+	TUIDefaultTheme                = "dark"
 )
 
 // TUIStyles holds lipgloss styles derived from theme.ColorPalette
@@ -172,17 +184,19 @@ var tuiStyles TUIStyles
 // TUIModel represents the TUI application state
 // Per AI.md PART 1: Type names MUST be specific - "model" is ambiguous
 type TUIModel struct {
-	searchQuery     string
-	cursorPosition  int
-	searchResults   []TUISearchResult
-	selectedIndex   int
-	lastError       error
-	isLoading       bool
-	terminalWidth   int
-	terminalHeight  int
-	isQuitting      bool
-	sizeMode        terminal.SizeMode
-	layoutConfig    TUILayoutConfig
+	searchQuery      string
+	cursorPosition   int
+	searchResults    []TUISearchResult
+	selectedIndex    int
+	lastError        error
+	isLoading        bool
+	terminalWidth    int
+	terminalHeight   int
+	isQuitting       bool
+	sizeMode         terminal.SizeMode
+	layoutConfig     TUILayoutConfig
+	statusMessage    string
+	openedURL        string
 }
 
 // TUISearchResult represents a single search result in TUI
@@ -206,7 +220,7 @@ type TUISearchDoneMsg struct {
 func CreateInitialTUIModel() TUIModel {
 	// Initialize styles from theme palette
 	// Per AI.md PART 33: TUI uses theme.ColorPalette from src/common/theme
-	themeMode := "dark"
+	themeMode := TUIDefaultTheme
 	if cliConfig != nil && cliConfig.TUI.Theme != "" {
 		themeMode = cliConfig.TUI.Theme
 	}
@@ -247,14 +261,27 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter":
-			if m.searchQuery != "" && !m.isLoading {
+			if m.searchQuery != "" && !m.isLoading && len(m.searchResults) == 0 {
+				// No results yet, perform search
 				m.isLoading = true
+				m.statusMessage = ""
 				return m, ExecuteTUISearch(m.searchQuery)
 			}
 			if len(m.searchResults) > 0 && m.selectedIndex < len(m.searchResults) {
-				// Open selected result
-				fmt.Printf("\nOpening: %s\n", m.searchResults[m.selectedIndex].URL)
-				return m, tea.Quit
+				// Open selected result in browser
+				selectedURL := m.searchResults[m.selectedIndex].URL
+				if browser.CanOpenBrowser() {
+					if err := browser.OpenURL(selectedURL); err != nil {
+						m.lastError = err
+					} else {
+						m.openedURL = selectedURL
+						m.statusMessage = "Opened in browser"
+					}
+				} else {
+					// Can't open browser, show URL
+					m.statusMessage = fmt.Sprintf("URL: %s", selectedURL)
+				}
+				return m, nil
 			}
 
 		case "up", "k":
@@ -276,6 +303,30 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.searchQuery = ""
 			m.searchResults = nil
 			m.lastError = nil
+			m.statusMessage = ""
+			m.openedURL = ""
+
+		case "/":
+			// New search - clear results and focus on query
+			m.searchResults = nil
+			m.selectedIndex = 0
+			m.statusMessage = ""
+			m.openedURL = ""
+			return m, nil
+
+		case "o":
+			// Open current result without navigating
+			if len(m.searchResults) > 0 && m.selectedIndex < len(m.searchResults) {
+				selectedURL := m.searchResults[m.selectedIndex].URL
+				if browser.CanOpenBrowser() {
+					if err := browser.OpenURL(selectedURL); err != nil {
+						m.lastError = err
+					} else {
+						m.statusMessage = "Opened in browser"
+					}
+				}
+			}
+			return m, nil
 
 		default:
 			if len(msg.String()) == 1 {
@@ -327,6 +378,8 @@ func (m TUIModel) View() string {
 		viewBuilder.WriteString(tuiStyles.Status.Render("Searching...") + "\n\n")
 	} else if m.lastError != nil {
 		viewBuilder.WriteString(tuiStyles.Error.Render("Error: "+m.lastError.Error()) + "\n\n")
+	} else if m.statusMessage != "" {
+		viewBuilder.WriteString(tuiStyles.Status.Render(m.statusMessage) + "\n\n")
 	}
 
 	// Results
@@ -337,11 +390,12 @@ func (m TUIModel) View() string {
 		}
 
 		// Determine how many results to show based on terminal height
-		maxResults := 10
+		// Per AI.md PART 1: No magic numbers - use named constants
+		maxResults := TUIDefaultMaxResults
 		if m.terminalHeight > 0 {
-			maxResults = m.terminalHeight - 10 // Reserve space for header/footer
-			if maxResults < 3 {
-				maxResults = 3
+			maxResults = m.terminalHeight - TUIReservedSpaceForUI
+			if maxResults < TUIMinDisplayResults {
+				maxResults = TUIMinDisplayResults
 			}
 			if maxResults > len(m.searchResults) {
 				maxResults = len(m.searchResults)
@@ -355,12 +409,13 @@ func (m TUIModel) View() string {
 			}
 
 			// Truncate based on layout config
+			// Per AI.md PART 1: No magic numbers - use named constants
 			truncateAt := layout.TruncateAt
-			if truncateAt == 0 || truncateAt > m.terminalWidth-10 {
-				truncateAt = m.terminalWidth - 10
+			if truncateAt == 0 || truncateAt > m.terminalWidth-TUITruncationPadding {
+				truncateAt = m.terminalWidth - TUITruncationPadding
 			}
-			if truncateAt < 30 {
-				truncateAt = 30
+			if truncateAt < TUIMinTruncationWidth {
+				truncateAt = TUIMinTruncationWidth
 			}
 
 			line := fmt.Sprintf("  %s [%s] - %s", result.Title, result.Duration, result.Engine)
@@ -379,9 +434,17 @@ func (m TUIModel) View() string {
 
 	// Help - show based on layout config
 	if layout.ShowFooter {
-		helpText := "q: quit | enter: search/open | esc: clear | j/k: navigate"
-		if layout.UseAbbrev {
-			helpText = "q:quit | ↵:search | esc:clear | j/k:nav"
+		var helpText string
+		if len(m.searchResults) > 0 {
+			helpText = "q: quit | enter/o: open | /: new search | esc: clear | j/k: navigate"
+			if layout.UseAbbrev {
+				helpText = "q:quit | ↵/o:open | /:new | esc:clr | j/k:nav"
+			}
+		} else {
+			helpText = "q: quit | enter: search | esc: clear"
+			if layout.UseAbbrev {
+				helpText = "q:quit | ↵:search | esc:clr"
+			}
 		}
 		viewBuilder.WriteString(tuiStyles.Help.Render(helpText))
 	}

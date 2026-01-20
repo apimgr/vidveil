@@ -84,6 +84,16 @@ func ExecuteCLI() error {
 		// Use display.DetectDisplayEnv() from src/common/display for mode detection
 		displayEnv := display.DetectDisplayEnv()
 		if displayEnv.Mode == display.DisplayModeTUI && displayEnv.IsTerminal {
+			// Per AI.md PART 33: CLI First-Run Flow
+			// Run setup wizard if no server configured
+			if !IsServerConfigured() {
+				if err := RunSetupWizard(); err != nil {
+					return err
+				}
+				// Reload config after setup wizard
+				LoadCLIConfigFromFile()
+				InitAPIClient()
+			}
 			return RunInteractiveTUI()
 		}
 		// Non-interactive or headless: show help
@@ -99,15 +109,36 @@ func ExecuteCLI() error {
 	case "version", "-v", "--version":
 		PrintCLIVersionInfo()
 	case "search":
+		// Check server connection before search commands
+		if healthy, err := CheckServerConnection(); !healthy && cliConfig.Server.Address != "" {
+			PrintConnectionWarning(err)
+		}
 		return RunSearchCommand(args[1:])
+	case "engines":
+		// Check server connection before engines command
+		if healthy, err := CheckServerConnection(); !healthy && cliConfig.Server.Address != "" {
+			PrintConnectionWarning(err)
+		}
+		return RunEnginesCommand(args[1:])
+	case "bangs":
+		// Check server connection before bangs command
+		if healthy, err := CheckServerConnection(); !healthy && cliConfig.Server.Address != "" {
+			PrintConnectionWarning(err)
+		}
+		return RunBangsCommand(args[1:])
 	case "login":
 		return RunLoginCommand(args[1:])
 	case "shell":
 		return RunShellCommand(args[1:])
 	case "probe":
+		// Probe command tests connection itself
 		return RunProbeCommand(args[1:])
 	default:
 		// Treat first arg as search query
+		// Check server connection before search
+		if healthy, err := CheckServerConnection(); !healthy && cliConfig.Server.Address != "" {
+			PrintConnectionWarning(err)
+		}
 		return RunSearchCommand(args)
 	}
 
@@ -222,7 +253,8 @@ func LoadCLIConfigFromFile() {
 	// Read config file if exists
 	data, err := os.ReadFile(cliConfigFilePath)
 	if err == nil {
-		yaml.Unmarshal(data, cliConfig)
+		// Ignore unmarshal errors - use defaults if config is invalid
+		_ = yaml.Unmarshal(data, cliConfig)
 	}
 
 	// Per AI.md PART 33: Token priority
@@ -286,6 +318,30 @@ func InitAPIClient() {
 	apiClient.SetUserAgent(Version)
 }
 
+// CheckServerConnection checks if the server is reachable
+// Per AI.md PART 1: Function names MUST reveal intent
+// Returns true if healthy, false otherwise (with optional error)
+func CheckServerConnection() (bool, error) {
+	if apiClient == nil || cliConfig == nil || cliConfig.Server.Address == "" {
+		return false, nil
+	}
+	return apiClient.Health()
+}
+
+// PrintConnectionWarning prints a warning if server is unreachable
+// Per AI.md PART 1: Function names MUST reveal intent
+func PrintConnectionWarning(err error) {
+	if colorDisabled {
+		fmt.Fprintf(os.Stderr, "Warning: Cannot reach server at %s\n", cliConfig.Server.Address)
+	} else {
+		// Yellow warning
+		fmt.Fprintf(os.Stderr, "\033[33mWarning: Cannot reach server at %s\033[0m\n", cliConfig.Server.Address)
+	}
+	if err != nil && debugModeEnabled {
+		fmt.Fprintf(os.Stderr, "  Error: %v\n", err)
+	}
+}
+
 // PrintCLIHelpMessage prints CLI help message
 // Per AI.md PART 1: Function names MUST reveal intent - "printHelp" is ambiguous
 func PrintCLIHelpMessage() {
@@ -297,6 +353,8 @@ Usage:
 
 Commands:
   search <query>    Search for videos
+  engines           List available search engines
+  bangs             List bang shortcuts
   probe             Test engine availability
   login             Save API token to config
   shell             Shell completion commands
@@ -322,12 +380,14 @@ Note: Run without arguments to launch interactive TUI mode.
 Examples:
   %s "search term"                Search for videos
   %s search --limit 20 "test"     Search with limit
+  %s engines --enabled            List enabled engines
+  %s bangs                        List bang shortcuts
   %s --output json "query"        Output as JSON
   %s login                        Save token interactively
   %s shell completions bash       Output bash completions
 
 Use "%s [command] --help" for more information about a command.
-`, BinaryName, Version, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
+`, BinaryName, Version, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
 }
 
 // PrintCLIVersionInfo prints CLI version information

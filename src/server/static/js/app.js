@@ -1385,19 +1385,96 @@ if (document.readyState === 'loading') {
 
         eventSource.onerror = function(err) {
             eventSource.close();
-            isSearching = false;
+            // SSE failed - fallback to JSON API
             if (allResults.length === 0) {
-                var loadingEl = document.getElementById('initial-loading');
-                if (loadingEl) {
-                    loadingEl.innerHTML = '<p>Search failed. Please try again.</p>';
-                }
+                fallbackToJSONSearch(minDuration);
+            } else {
+                isSearching = false;
+                updateSearchStatus();
             }
-            updateSearchStatus();
         };
 
         // Update loading text
         var loadingText = document.getElementById('loading-text');
         if (loadingText) loadingText.textContent = 'Searching engines...';
+    }
+
+    // Fallback to JSON API when SSE fails (e.g., proxy doesn't support SSE)
+    function fallbackToJSONSearch(minDuration) {
+        var loadingText = document.getElementById('loading-text');
+        if (loadingText) loadingText.textContent = 'Loading results...';
+
+        fetch('/api/v1/search?q=' + encodeURIComponent(searchQuery), {
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('Search request failed');
+            }
+            return response.json();
+        })
+        .then(function(data) {
+            isSearching = false;
+            var elapsed = Date.now() - startTime;
+            var timeContainer = document.getElementById('search-time-container');
+            if (timeContainer) timeContainer.textContent = 'in ' + elapsed + 'ms';
+
+            if (!data.ok || !data.data || !data.data.results || data.data.results.length === 0) {
+                var loadingEl = document.getElementById('initial-loading');
+                if (loadingEl) {
+                    loadingEl.innerHTML = '<p>No results found.</p>';
+                    loadingEl.classList.remove('hidden');
+                }
+                hasMoreResults = false;
+                announce('No results found for ' + searchQuery);
+                updateSearchStatus();
+                return;
+            }
+
+            // Process results
+            hideSearchElement('initial-loading');
+            showSearchElement('search-meta');
+            showSearchElement('filters');
+
+            var results = data.data.results;
+            for (var i = 0; i < results.length; i++) {
+                var r = results[i];
+                // Apply min duration filter
+                if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
+                    continue;
+                }
+                allResults.push(r);
+                addResultCard(r);
+
+                // Add to source filter if new
+                var source = r.source || '';
+                if (source && !sourcesSet.has(source)) {
+                    sourcesSet.add(source);
+                    var filterSource = document.getElementById('filter-source');
+                    if (filterSource) {
+                        var opt = document.createElement('option');
+                        opt.value = source;
+                        opt.textContent = r.source_display || source;
+                        filterSource.appendChild(opt);
+                    }
+                }
+            }
+
+            var countEl = document.getElementById('result-count');
+            if (countEl) countEl.textContent = allResults.length;
+
+            setupInfiniteScroll();
+            announce(allResults.length + ' results found');
+            updateSearchStatus();
+        })
+        .catch(function(err) {
+            isSearching = false;
+            var loadingEl = document.getElementById('initial-loading');
+            if (loadingEl) {
+                loadingEl.innerHTML = '<p>Search failed. Please try again.</p>';
+            }
+            updateSearchStatus();
+        });
     }
 
     function addResultCard(r) {

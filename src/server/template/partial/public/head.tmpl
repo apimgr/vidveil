@@ -5,8 +5,8 @@
 <meta name="theme-color" content="#282a36">
 <meta name="description" content="Privacy-focused video search engine">
 <title>{{.Title}}</title>
-<link rel="stylesheet" href="/static/css/common.css">
-<link rel="stylesheet" href="/static/css/public.css">
+<link rel="stylesheet" href="/static/css/common.css?v={{.Version}}">
+<link rel="stylesheet" href="/static/css/public.css?v={{.Version}}">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="icon" href="/static/images/favicon.ico">
 <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
@@ -14,7 +14,7 @@
   // Register service worker for PWA (AI.md PART 16)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/static/js/sw.js')
+      navigator.serviceWorker.register('/static/js/sw.js?v={{.Version}}')
         .then(registration => console.log('ServiceWorker registered:', registration.scope))
         .catch(error => console.log('ServiceWorker registration failed:', error));
     });

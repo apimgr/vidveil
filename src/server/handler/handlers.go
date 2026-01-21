@@ -1707,6 +1707,11 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		return
 	}
 
+	// Inject version for cache busting in all templates
+	if data["Version"] == nil {
+		data["Version"] = version.GetVersion()
+	}
+
 	// Create base template with partials
 	tmpl := template.New(templateName)
 

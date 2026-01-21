@@ -134,7 +134,7 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 	if isHttpTool(r) {
 		// Render simple HTML content
 		html := h.renderSimpleHTML(name, data)
-		
+
 		// Convert to formatted text using full HTML2TextConverter
 		text := convertHTMLToText(html, 80)
 

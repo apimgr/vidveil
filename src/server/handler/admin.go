@@ -3395,6 +3395,10 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	data["Config"] = h.appConfig
 	data["ActiveNav"] = templateName
 	data["SiteTitle"] = h.appConfig.Server.Title
+	// Inject version for cache busting in all admin templates
+	if data["Version"] == nil {
+		data["Version"] = version.GetVersion()
+	}
 
 	// Add session info for header display per AI.md PART 31
 	if r != nil {

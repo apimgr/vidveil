@@ -25,7 +25,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 )
 
-//go:embed static/css/* static/js/* static/images/* static/icons/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl template/component/*.tmpl
+//go:embed static/css/* static/js/* static/images/* static/icons/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl template/component/*.tmpl template/nojs/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -61,7 +61,7 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 	handler.SetTemplatesFS(embeddedFS)
 	handler.SetAdminTemplatesFS(embeddedFS)
 
-	// Create rate limiter per PART 16
+	// Create rate limiter per PART 12
 	limiter := ratelimit.NewRateLimiter(
 		appConfig.Server.RateLimit.Enabled,
 		appConfig.Server.RateLimit.Requests,
@@ -137,11 +137,11 @@ func (s *Server) setupMiddleware() {
 			if s.appConfig.Server.SSL.Enabled {
 				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 			}
-			// Add Request ID to response headers per AI.md PART 17
+			// Add Request ID to response headers per AI.md PART 14
 			if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 				w.Header().Set("X-Request-ID", reqID)
 			}
-			// Cache-Control headers per AI.md PART 28
+			// Cache-Control headers per AI.md PART 9
 			path := r.URL.Path
 			if strings.HasPrefix(path, "/static/") {
 				// Static assets: cache for 1 year
@@ -159,7 +159,7 @@ func (s *Server) setupMiddleware() {
 		})
 	})
 
-	// Rate limiting (AI.md PART 16)
+	// Rate limiting (AI.md PART 12)
 	s.router.Use(s.rateLimiter.Middleware)
 
 	// Extension stripping middleware per AI.md PART 14
@@ -204,7 +204,7 @@ func extensionStripMiddleware(next http.Handler) http.Handler {
 func (s *Server) setupRoutes() {
 	h := handler.NewSearchHandler(s.appConfig, s.engineMgr)
 	admin := handler.NewAdminHandler(s.appConfig, s.configDir, s.dataDir, s.engineMgr, s.adminSvc, s.migrationMgr)
-	// Set scheduler for admin panel management per AI.md PART 26
+	// Set scheduler for admin panel management per AI.md PART 19
 	admin.SetScheduler(s.scheduler)
 	// Set logger for audit and security event logging per AI.md PART 11
 	admin.SetLogger(s.logger)
@@ -223,7 +223,7 @@ func (s *Server) setupRoutes() {
 	s.router.Post("/age-verify", h.AgeVerifySubmit)
 
 	// Health, robots, security.txt, and sitemap (no age verification)
-	// Per AI.md PART 13 lines 11271-11272: /healthz with extension support
+	// Per AI.md PART 13: /healthz with extension support
 	s.router.Get("/healthz", h.HealthCheck)
 	s.router.Get("/healthz.json", h.HealthCheck)
 	s.router.Get("/healthz.txt", h.HealthCheck)
@@ -238,7 +238,7 @@ func (s *Server) setupRoutes() {
 	// Debug endpoints (PART 6: only when --debug flag or DEBUG=true)
 	s.registerDebugRoutes(s.router)
 
-	// OpenAPI/Swagger documentation (AI.md PART 19: JSON only, no YAML)
+	// OpenAPI/Swagger documentation (AI.md PART 14: JSON only, no YAML)
 	s.router.Get("/openapi", handler.SwaggerUI(s.appConfig))
 	s.router.Get("/openapi.json", handler.OpenAPISpec(s.appConfig))
 	s.router.Get("/swagger", handler.SwaggerUI(s.appConfig))
@@ -345,13 +345,13 @@ func (s *Server) setupRoutes() {
 			// Dashboard (root)
 			r.Get("/dashboard", admin.DashboardPage)
 
-			// Admin's OWN profile per AI.md PART 17 line 18603 (valid at root)
+			// Admin's OWN profile per AI.md PART 17 (valid at root)
 			r.Get("/profile", admin.ProfilePage)
 
-			// Admin's OWN preferences per AI.md PART 17 line 18604 (valid at root)
+			// Admin's OWN preferences per AI.md PART 17 (valid at root)
 			r.Get("/preferences", admin.PreferencesPage)
 
-			// Admin's OWN notifications per AI.md PART 17 line 18605 (valid at root)
+			// Admin's OWN notifications per AI.md PART 17 (valid at root)
 			r.Get("/notifications", admin.AdminNotificationsPage)
 
 			// Logout (valid at root)
@@ -396,7 +396,7 @@ func (s *Server) setupRoutes() {
 					r.Get("/blocklists", admin.BlocklistsPage)
 				})
 
-				// System routes per AI.md PART 17 lines 18613-18615 - directly under /server/
+				// System routes per AI.md PART 17 - directly under /server/
 				r.Get("/backup", admin.BackupPage)
 				r.Get("/maintenance", admin.MaintenancePage)
 				r.Get("/updates", admin.UpdatesPage)
@@ -424,7 +424,7 @@ func (s *Server) setupRoutes() {
 		r.Post("/invite/{token}", admin.AdminInvitePage)
 	})
 
-	// API autodiscover endpoint (non-versioned per AI.md PART 37 line 38158)
+	// API autodiscover endpoint (non-versioned per AI.md PART 37)
 	// Clients need this BEFORE they know the API version
 	s.router.Get("/api/autodiscover", h.Autodiscover)
 
@@ -579,7 +579,7 @@ func (s *Server) setupRoutes() {
 					r.Post("/{slug}/reset", admin.APIPageReset)
 				})
 
-				// Notifications per PART 16
+				// Notifications per PART 18
 				r.Route("/notifications", func(r chi.Router) {
 					r.Get("/", admin.APINotificationsGet)
 					r.Put("/", admin.APINotificationsUpdate)
@@ -596,7 +596,7 @@ func (s *Server) setupRoutes() {
 					r.Put("/backend", admin.APIDatabaseBackend)
 				})
 
-				// Nodes per PART 24
+				// Nodes per PART 10
 				r.Route("/nodes", func(r chi.Router) {
 					r.Get("/", admin.APINodesGet)
 					r.Post("/", admin.APINodeAdd)
@@ -610,7 +610,7 @@ func (s *Server) setupRoutes() {
 					r.Delete("/{id}", admin.APINodeRemove)
 				})
 
-				// Updates per PART 18
+				// Updates per PART 23
 				r.Route("/updates", func(r chi.Router) {
 					r.Get("/", admin.APIUpdatesStatus)
 					r.Post("/check", admin.APIUpdatesCheck)

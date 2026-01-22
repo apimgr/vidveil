@@ -175,7 +175,7 @@ func main() {
 			}
 
 		case "--update":
-			// AI.md PART 14: --update [check|yes|branch {stable|beta|daily}]
+			// AI.md PART 23: --update [check|yes|branch {stable|beta|daily}]
 			// Default per spec
 			updateCmd = "yes"
 			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
@@ -228,7 +228,7 @@ func main() {
 		return
 	}
 
-	// Handle update command (AI.md PART 14)
+	// Handle update command (AI.md PART 23)
 	if updateCmd != "" {
 		handleUpdateCommand(updateCmd, updateArg)
 		return
@@ -277,11 +277,11 @@ func main() {
 		modeStr = os.Getenv("MODE")
 	}
 
-	// Initialize mode and debug per AI.md PART 5
+	// Initialize mode and debug per AI.md PART 6
 	// This must happen before starting the server
 	mode.InitializeAppMode(modeStr, debug)
 
-	// Handle daemon mode per AI.md PART 8 lines 7880-7955
+	// Handle daemon mode per AI.md PART 8
 	if daemon {
 		if err := daemonpkg.Daemonize(); err != nil {
 			fmt.Fprintf(os.Stderr, "❌ Failed to daemonize: %v\n", err)
@@ -332,7 +332,7 @@ func main() {
 	}
 
 	// Write PID file if specified per AI.md PART 8
-	// Uses signal package which handles stale PID detection per AI.md lines 7294-7327
+	// Uses signal package which handles stale PID detection per AI.md PART 8
 	// - Checks if PID file exists and process is running
 	// - Verifies process is actually our binary (not PID reuse)
 	// - Removes stale PID files automatically
@@ -361,7 +361,7 @@ func main() {
 		appConfig.Server.Mode = config.NormalizeMode(appConfig.Server.Mode)
 	}
 
-	// Initialize database per AI.md PART 24
+	// Initialize database per AI.md PART 10
 	// Two separate databases: server.db (admin/config) and users.db (user accounts)
 	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
 	migrationMgr, err := database.NewMigrationManager(serverDBPath)
@@ -378,7 +378,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize admin service per AI.md PART 31
+	// Initialize admin service per AI.md PART 17
 	adminSvc := admin.NewAdminService(migrationMgr.GetDB())
 	if err := adminSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Failed to initialize admin service: %v\n", err)
@@ -404,19 +404,19 @@ func main() {
 	}
 
 	// Initialize services per AI.md specifications
-	// SSL service (PART 21)
+	// SSL service (PART 15)
 	sslSvc := ssl.NewSSLManager(appConfig)
 	if err := sslSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  SSL service initialization failed: %v\n", err)
 	}
 
-	// GeoIP service (PART 28)
+	// GeoIP service (PART 20)
 	geoipSvc := geoip.NewGeoIPService(appConfig)
 	if err := geoipSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  GeoIP service initialization failed: %v\n", err)
 	}
 
-	// Initialize logger per PART 21
+	// Initialize logger per PART 11
 	logger, err := logging.NewAppLogger(appConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  Logger initialization failed: %v\n", err)
@@ -429,25 +429,25 @@ func main() {
 	torDataDir := filepath.Join(paths.Data, "tor")
 	torSvc := tor.NewTorService(torDataDir, logger)
 
-	// Blocklist service (PART 22)
+	// Blocklist service (PART 11)
 	blocklistSvc := blocklist.NewBlocklistService(appConfig)
 	if err := blocklistSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  Blocklist service initialization failed: %v\n", err)
 	}
 
-	// CVE service (PART 22)
+	// CVE service (PART 11)
 	cveSvc := cve.NewCVEService(appConfig)
 	if err := cveSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  CVE service initialization failed: %v\n", err)
 	}
 
-	// Initialize scheduler per AI.md PART 27
+	// Initialize scheduler per AI.md PART 19
 	sched := scheduler.NewScheduler()
 
-	// Register all built-in tasks per AI.md PART 27
+	// Register all built-in tasks per AI.md PART 19
 	sched.RegisterBuiltinTasks(scheduler.BuiltinTaskFuncs{
 		SSLRenewal: func(ctx context.Context) error {
-			// SSL certificate renewal check per PART 21
+			// SSL certificate renewal check per PART 15
 			if !appConfig.Server.SSL.Enabled {
 				return nil
 			}
@@ -457,41 +457,41 @@ func main() {
 			return nil
 		},
 		GeoIPUpdate: func(ctx context.Context) error {
-			// GeoIP database update per PART 28
+			// GeoIP database update per PART 20
 			if !appConfig.Server.GeoIP.Enabled {
 				return nil
 			}
 			return geoipSvc.Update()
 		},
 		BlocklistUpdate: func(ctx context.Context) error {
-			// IP/domain blocklist update per PART 22
+			// IP/domain blocklist update per PART 11
 			return blocklistSvc.Update(ctx)
 		},
 		CVEUpdate: func(ctx context.Context) error {
-			// CVE/security database update per PART 22
+			// CVE/security database update per PART 11
 			return cveSvc.Update(ctx)
 		},
 		SessionCleanup: func(ctx context.Context) error {
-			// Clean up expired sessions per PART 23
+			// Clean up expired sessions per PART 11
 			return adminSvc.CleanupExpiredSessions()
 		},
 		TokenCleanup: func(ctx context.Context) error {
-			// Clean up expired tokens per PART 23
+			// Clean up expired tokens per PART 11
 			return adminSvc.CleanupExpiredTokens()
 		},
 		LogRotation: func(ctx context.Context) error {
-			// Log rotation per PART 22
+			// Log rotation per PART 11
 			// Logging service handles rotation automatically via RotatingFile
 			// This task is a placeholder for manual rotation trigger if needed
 			return nil
 		},
 		BackupAuto: func(ctx context.Context) error {
-			// Automatic backup per PART 25 (disabled by default)
+			// Automatic backup per PART 22 (disabled by default)
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
 			return maint.Backup("")
 		},
 		HealthcheckSelf: func(ctx context.Context) error {
-			// Self health check per PART 27
+			// Self health check per PART 13
 			return nil
 		},
 		TorHealth: func(ctx context.Context) error {
@@ -507,7 +507,7 @@ func main() {
 			return nil
 		},
 		ClusterHeartbeat: func(ctx context.Context) error {
-			// Cluster heartbeat per PART 24 - runs every 30 seconds in cluster mode
+			// Cluster heartbeat per PART 10 - runs every 30 seconds in cluster mode
 			// Heartbeat runs automatically via cluster manager's heartbeatLoop()
 			// This task just verifies cluster is healthy
 			if clusterMgr == nil || !clusterMgr.IsEnabled() {
@@ -564,15 +564,15 @@ func main() {
 	go func() {
 		// Build listen address properly handling IPv6
 		listenAddr := appConfig.Server.Address + ":" + appConfig.Server.Port
-		// Per AI.md lines 10558-10564: Display Rules
+		// Per AI.md PART 13: Display Rules
 		// - Never show: 0.0.0.0, 127.0.0.1, localhost
 		// - Show only: One address, the most relevant
 		displayAddr := getDisplayAddress(appConfig)
 
-		// Console output per AI.md PART 31 lines 10230-10258
+		// Console output per AI.md PART 7
 		isFirstRun := adminSvc.IsFirstRun()
 
-		// Check SMTP status per AI.md PART 18 lines 23679-23691
+		// Check SMTP status per AI.md PART 18
 		smtpInfo := ""
 		if appConfig.Server.Email.Enabled {
 			smtpHost := appConfig.Server.Email.Host
@@ -595,7 +595,7 @@ func main() {
 			}
 		}
 
-		// Build URL per AI.md lines 10558-10607:
+		// Build URL per AI.md PART 13:
 		// - NEVER show localhost, 127.0.0.1, 0.0.0.0
 		// - Show only one address, the most relevant
 		// - Strip :80 and :443 from URLs
@@ -613,7 +613,7 @@ func main() {
 			setupToken = adminSvc.GetSetupToken()
 		}
 
-		// Print responsive startup banner per AI.md PART 7 lines 8102-8115
+		// Print responsive startup banner per AI.md PART 7
 		banner.PrintStartupBanner(banner.BannerConfig{
 			AppName:    "VidVeil",
 			Version:    version.GetVersion(),
@@ -624,7 +624,7 @@ func main() {
 			SetupToken: setupToken,
 		})
 
-		// Log INFO lines per AI.md lines 22737-22739
+		// Log INFO lines per AI.md PART 11
 		fmt.Printf("[INFO] Server started successfully\n")
 		fmt.Printf("[INFO] Listening on %s\n", listenAddr)
 		if smtpInfo != "" {
@@ -680,7 +680,7 @@ func main() {
 	sig := signalpkg.WaitForShutdown(context.Background())
 	fmt.Printf("\n🛑 Received %v, shutting down gracefully...\n", sig)
 
-	// Graceful shutdown with timeout (30 seconds per AI.md PART 8 line 8063)
+	// Graceful shutdown with timeout (30 seconds per AI.md PART 8)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -693,7 +693,7 @@ func main() {
 }
 
 func printHelp() {
-	// Per AI.md PART 8 lines 7191-7229: Exact --help output format
+	// Per AI.md PART 8: Exact --help output format
 	binaryName := filepath.Base(os.Args[0])
 	fmt.Printf(`%s %s - Privacy-respecting adult video meta search engine
 
@@ -939,7 +939,7 @@ func printPowerShellCompletions(binaryName string) {
 }
 
 func handleServiceCommand(cmd string) {
-	// Per AI.md PART 4 & 5: Use system.NewServiceManager which creates system user
+	// Per AI.md PART 24 and PART 25: Use system.NewServiceManager which creates system user
 	// Get binary path
 	binaryPath, err := os.Executable()
 	if err != nil {
@@ -1044,7 +1044,7 @@ Supported service managers:
 	}
 }
 
-// handleUpdateCommand implements AI.md PART 14 --update command
+// handleUpdateCommand implements AI.md PART 23 --update command
 func handleUpdateCommand(cmd, arg string) {
 	maint := maintenance.NewMaintenanceManager("", "", version.GetVersion())
 
@@ -1198,7 +1198,7 @@ func handleMaintenanceCommand(cmd, arg string) {
 		}
 
 	case "setup":
-		// Admin recovery per AI.md PART 26
+		// Admin recovery per AI.md PART 22
 		// Clears admin password and API token, generates new setup token
 		fmt.Println()
 		fmt.Println("╔══════════════════════════════════════════════════════════════════╗")

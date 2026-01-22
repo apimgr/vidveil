@@ -311,7 +311,7 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 		w.Header().Set("X-RateLimit-Reset", itoa(int(l.Reset(ip).Unix())))
 
 		if !l.Allow(ip) {
-			// Log security event per AI.md PART 11 line 11400: security.rate_limit_exceeded
+			// Log security event per AI.md PART 11
 			if l.logger != nil {
 				l.logger.Security("rate_limit_exceeded", ip, map[string]interface{}{
 					"endpoint": r.URL.Path,

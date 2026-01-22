@@ -387,7 +387,7 @@ func (s *EmailService) sendTLS(addr, host string, auth smtp.Auth, from, to strin
 	return client.Quit()
 }
 
-// autodetectSMTP tries to find an SMTP server per AI.md PART 18 lines 23679-23684
+// autodetectSMTP tries to find an SMTP server per AI.md PART 18
 func (s *EmailService) autodetectSMTP() (string, int) {
 	hosts := s.appConfig.Server.Email.AutodetectHost
 	ports := s.appConfig.Server.Email.AutodetectPort
@@ -465,7 +465,7 @@ func testSMTPConnection(host string, port int) bool {
 	return true
 }
 
-// TestSMTPConfig tests a specific SMTP configuration per AI.md PART 18 lines 23686-23691
+// TestSMTPConfig tests a specific SMTP configuration per AI.md PART 18
 // Returns nil on success, error on failure
 func TestSMTPConfig(host string, port int) error {
 	if host == "" {

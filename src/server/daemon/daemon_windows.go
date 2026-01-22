@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-// Daemonize on Windows is not supported per AI.md PART 8 lines 7939-7955
+// Daemonize on Windows is not supported per AI.md PART 8
 // Windows does not support traditional Unix daemonization
 // Instead, use Windows Services (--service install/start)
 func Daemonize() error {

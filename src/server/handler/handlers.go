@@ -78,7 +78,7 @@ func (h *SearchHandler) getSearchCount() uint64 {
 }
 
 // WriteJSON writes a JSON response with 2-space indentation and trailing newline
-// Per AI.md PART 14 lines 11223-11229: ALL JSON responses MUST be indented
+// Per AI.md PART 14: ALL JSON responses MUST be indented
 // Package-level function so all handler types can use it
 func WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -510,9 +510,9 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 
 // detectResponseFormat returns the response format based on Accept header
 // Per AI.md PART 19: Content Negotiation
-// detectResponseFormat determines response format per AI.md PART 17 lines 15194-15244
+// detectResponseFormat determines response format per AI.md PART 14
 func detectResponseFormat(r *http.Request) string {
-	// 0. Check URL path extension FIRST per AI.md PART 13 lines 11271-11272
+	// 0. Check URL path extension FIRST per AI.md PART 13
 	// Use original path from context if available (set by extensionStripMiddleware)
 	path := r.URL.Path
 	if origPath, ok := r.Context().Value("vidveil.originalPath").(string); ok {
@@ -579,7 +579,7 @@ func detectResponseFormat(r *http.Request) string {
 	return "text/html"
 }
 
-// getAPIResponseFormat determines format for /api/** routes per AI.md PART 14 lines 14967-14986
+// getAPIResponseFormat determines format for /api/** routes per AI.md PART 14
 // Returns "text" or "json" (raw strings, not MIME types)
 // Priority: .txt extension > Accept header > CLI detection > default JSON
 func getAPIResponseFormat(r *http.Request) string {
@@ -598,7 +598,7 @@ func getAPIResponseFormat(r *http.Request) string {
 	}
 
 	// 3. Check if non-interactive client (CLI tools like curl, wget)
-	// Per AI.md PART 14 line 15000: CLI Tool column shows "Text"
+	// Per AI.md PART 14: CLI Tool column shows "Text"
 	ua := strings.ToLower(r.Header.Get("User-Agent"))
 	cliTools := []string{
 		"curl/", "wget/", "httpie/",
@@ -623,7 +623,7 @@ func getAPIResponseFormat(r *http.Request) string {
 // HealthCheck returns health status with content negotiation
 // Per AI.md PART 16: Supports HTML (default), JSON (Accept: application/json), and Text
 // HealthCheck handles /healthz endpoint with content negotiation
-// Per AI.md PART 13 lines 11257-11379
+// Per AI.md PART 13
 func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 
@@ -648,7 +648,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	clusterRole := ""
 	
 	// Build checks object - MUST be simple "ok"/"error" strings
-	// Per AI.md PART 13 lines 11292-11295
+	// Per AI.md PART 13
 	checks := map[string]string{
 		"database": "ok",
 		"cache":    "ok",
@@ -682,7 +682,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 	switch format {
 	case "application/json":
-		// JSON format per AI.md PART 13 lines 12949-12996
+		// JSON format per AI.md PART 13
 		response := map[string]interface{}{
 			"project": map[string]interface{}{
 				"name":        projectName,
@@ -733,7 +733,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, httpStatus, response)
 
 	case "text/plain":
-		// Plain text format per AI.md PART 13 lines 14713-14734
+		// Plain text format per AI.md PART 13
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(httpStatus)
 		fmt.Fprintf(w, "status: %s\n", status)
@@ -1489,9 +1489,9 @@ func (h *SearchHandler) APIVersion(w http.ResponseWriter, r *http.Request) {
 // APIHealthCheck returns health status as JSON per AI.md PART 16
 // Returns comprehensive health status with checks object for database/cache/disk
 // APIHealthCheck handles /api/v1/healthz endpoint (JSON only)
-// Per AI.md PART 13 lines 11351-11353: Same JSON as /healthz
+// Per AI.md PART 13: Same JSON as /healthz
 func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
-	// API routes default to JSON but support text output per AI.md PART 14 lines 14944-15002
+	// API routes default to JSON but support text output per AI.md PART 14
 	// Format detection: .txt extension > Accept header > client type > default JSON
 
 	// Build health response per AI.md PART 13
@@ -1512,7 +1512,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	clusterEnabled := false
 
 	// Build checks object - MUST be simple "ok"/"error" strings
-	// Per AI.md PART 13 lines 11292-11295
+	// Per AI.md PART 13
 	checks := map[string]string{
 		"database": "ok",
 		"cache":    "ok",
@@ -1530,10 +1530,10 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Detect response format per AI.md PART 14 lines 14967-14986
+	// Detect response format per AI.md PART 14
 	format := getAPIResponseFormat(r)
 
-	// Text output for CLI tools per AI.md PART 13 lines 14713-14734
+	// Text output for CLI tools per AI.md PART 13
 	if format == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(httpStatus)
@@ -1550,7 +1550,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// JSON response (default) - per AI.md PART 13 lines 14264-14312
+	// JSON response (default) - per AI.md PART 13
 	response := map[string]interface{}{
 		"project": map[string]interface{}{
 			"name":        h.appConfig.Server.Title,
@@ -1702,6 +1702,25 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 	case "privacy":
 		templateFile = "template/page/privacy.tmpl"
 		templateName = "privacy"
+	// nojs templates for text browsers (lynx, w3m, links)
+	case "nojs/home":
+		templateFile = "template/nojs/home.tmpl"
+		templateName = "nojs/home"
+	case "nojs/search":
+		templateFile = "template/nojs/search.tmpl"
+		templateName = "nojs/search"
+	case "nojs/preferences":
+		templateFile = "template/nojs/preferences.tmpl"
+		templateName = "nojs/preferences"
+	case "nojs/about":
+		templateFile = "template/nojs/about.tmpl"
+		templateName = "nojs/about"
+	case "nojs/age-verify":
+		templateFile = "template/nojs/age-verify.tmpl"
+		templateName = "nojs/age-verify"
+	case "nojs/privacy":
+		templateFile = "template/nojs/privacy.tmpl"
+		templateName = "nojs/privacy"
 	default:
 		http.Error(w, "Template not found", http.StatusInternalServerError)
 		return
@@ -1972,10 +1991,10 @@ io.Copy(w, resp.Body)
 }
 
 // Autodiscover returns server connection settings for CLI/agent auto-configuration
-// Per AI.md PART 37 line 38078: /api/autodiscover (NON-NEGOTIABLE)
+// Per AI.md PART 37: /api/autodiscover (NON-NEGOTIABLE)
 // This endpoint is NOT versioned because clients need it BEFORE they know the API version
 func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
-	// Build response per AI.md PART 37 lines 38086-38146
+	// Build response per AI.md PART 37
 	response := map[string]interface{}{
 		"primary":     h.appConfig.GetPublicURL(),
 		"cluster":     h.appConfig.GetClusterNodes(),
@@ -1985,7 +2004,7 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 		"retry_delay": 1,    // Default seconds between retries
 	}
 
-	// NEVER include admin_path - security by obscurity per AI.md PART 37 line 38123
+	// NEVER include admin_path - security by obscurity per AI.md PART 37
 	// NEVER include secrets, internal IPs, or sensitive data
 
 	WriteJSON(w, http.StatusOK, response)

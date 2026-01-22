@@ -3,7 +3,7 @@
     <div class="nav-brand">
         <div class="nav-brand-row">
             <a href="/admin">{{.SiteTitle}} Admin</a>
-            <!-- Notification Bell per AI.md PART 17 line 18605 - admin's OWN notifications -->
+            <!-- Notification Bell per AI.md PART 17 - admin's OWN notifications -->
             <a href="/admin/notifications" class="notification-bell" id="notification-bell" title="Notifications" aria-label="Notifications">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                 {{if .UnreadNotifications}}<span class="notification-badge">{{.UnreadNotifications}}</span>{{end}}
@@ -63,7 +63,7 @@
             </div>
         </div>
 
-        <!-- System Section per AI.md PART 17 lines 18613-18615 - directly under /server/ -->
+        <!-- System Section per AI.md PART 17 - directly under /server/ -->
         <div class="nav-section" id="section-system">
             <button type="button" class="nav-section-header" onclick="toggleSection('system')" aria-expanded="true" aria-controls="section-system-links">
                 <span>System</span>

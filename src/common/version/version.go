@@ -31,7 +31,7 @@ var (
 
 func init() {
 	// Try to load version from release.txt in project root
-	// Per AI.md PART 13 lines 11419-11423
+	// Per AI.md PART 13
 	if v := loadVersionFromFile(); v != "" {
 		Version = v
 	}

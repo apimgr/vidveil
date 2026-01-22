@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Package httputil provides HTTP client detection and response utilities
-// See AI.md PART 14 lines 15113-15450
+// See AI.md PART 14
 package httputil
 
 import (

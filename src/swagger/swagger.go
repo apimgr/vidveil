@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// See AI.md PART 1 lines 481-484, PART 20 for API/Swagger rules
+// See AI.md PART 1 and PART 14 for API/Swagger rules
 package swagger
 
 import (
@@ -10,7 +10,7 @@ import (
 )
 
 // DetectTheme determines the UI theme (light/dark/auto) from request
-// See AI.md PART 17 for theme detection rules
+// See AI.md PART 16 for theme detection rules
 func DetectTheme(r *http.Request) string {
 	// Check cookie first
 	if cookie, err := r.Cookie("theme"); err == nil {

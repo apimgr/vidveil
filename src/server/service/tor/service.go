@@ -174,7 +174,7 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 
 	// Start dedicated Tor process using bine
 	// Per AI.md: Start OUR OWN Tor process - completely separate from system Tor
-	// Per AI.md PART 32 line 37393: Tor startup/runtime errors = WARN (server continues without Tor)
+	// Per AI.md PART 32: Tor startup/runtime errors = WARN (server continues without Tor)
 	// Suppress Tor's verbose output - only show errors when connection actually fails
 	startConf := &tor.StartConf{
 		// Our own data directory - isolated from system Tor

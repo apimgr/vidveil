@@ -124,7 +124,7 @@ type AdminConfig struct {
 	TwoFactor   TwoFactorConfig `yaml:"two_factor"`
 }
 
-// TwoFactorConfig holds 2FA settings per AI.md PART 31
+// TwoFactorConfig holds 2FA settings per AI.md PART 11
 type TwoFactorConfig struct {
 	// 2FA is enabled for this admin
 	Enabled bool `yaml:"enabled"`
@@ -201,7 +201,7 @@ type MetricsConfig struct {
 	Token         string `yaml:"token"`
 }
 
-// GeoIPConfig holds GeoIP settings per AI.md PART 10
+// GeoIPConfig holds GeoIP settings per AI.md PART 20
 type GeoIPConfig struct {
 	Enabled       bool              `yaml:"enabled"`
 	Dir           string            `yaml:"dir"`
@@ -217,7 +217,7 @@ type GeoIPDatabasesConfig struct {
 	City    bool `yaml:"city"`
 }
 
-// UsersConfig holds user management settings per AI.md PART 31
+// UsersConfig holds user management settings per AI.md PART 34
 type UsersConfig struct {
 	// Enable multi-user mode (default: false = admin-only)
 	Enabled bool `yaml:"enabled"`
@@ -303,13 +303,13 @@ type UserLimitsConfig struct {
 	RequestsPerDay int `yaml:"requests_per_day"`
 }
 
-// LogsConfig holds logging settings per AI.md PART 21
+// LogsConfig holds logging settings per AI.md PART 11
 type LogsConfig struct {
 	Level  string         `yaml:"level"`
 	Debug  DebugLogConfig `yaml:"debug"`
 	Access AccessLogConfig `yaml:"access"`
 	Server ServerLogConfig `yaml:"server"`
-	// AI.md PART 21: error.log
+	// AI.md PART 11: error.log
 	Error    ErrorLogConfig    `yaml:"error"`
 	Audit    AuditLogConfig    `yaml:"audit"`
 	Security SecurityLogConfig `yaml:"security"`
@@ -342,7 +342,7 @@ type ServerLogConfig struct {
 	Rotate   string `yaml:"rotate"`
 }
 
-// ErrorLogConfig holds error log settings per AI.md PART 21
+// ErrorLogConfig holds error log settings per AI.md PART 11
 type ErrorLogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Filename string `yaml:"filename"`
@@ -1002,7 +1002,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 
 	// Ensure directories exist per AI.md PART 8 and PART 27
 	// Binary handles ALL directory creation with proper permissions
-	// Permissions: root=0755, user=0700 per AI.md line 7240-7241
+	// Permissions: root=0755, user=0700 per AI.md PART 4
 	dbDir := filepath.Join(paths.Data, "db")
 	dirPerm := os.FileMode(0755)
 	if os.Getuid() != 0 {
@@ -1038,7 +1038,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 			return nil, "", fmt.Errorf("failed to save default config: %w", err)
 		}
 
-		// Console output is handled in main.go per AI.md PART 31
+		// Console output is handled in main.go per AI.md PART 7
 
 		return cfg, configPath, nil
 	}
@@ -1124,7 +1124,7 @@ func validateConfig(cfg *AppConfig) {
 		cfg.Server.Compression.Level = 5
 	}
 
-	// Enforce audit log format as JSON only per AI.md PART 11 line 11197
+	// Enforce audit log format as JSON only per AI.md PART 11
 	// "audit: format: json only (text not supported for audit - must be machine-parseable)"
 	if cfg.Server.Logs.Audit.Format != "" && cfg.Server.Logs.Audit.Format != "json" {
 		fmt.Fprintf(os.Stderr, "Warning: audit log format must be 'json', ignoring %q\n", cfg.Server.Logs.Audit.Format)
@@ -1160,7 +1160,7 @@ func SaveAppConfig(cfg *AppConfig, path string) error {
 // Helper functions
 
 // ParseBoolEnv parses a boolean value from an environment variable
-// Uses the full truthy/falsy value set from bool.go per AI.md PART 4
+// Uses the full truthy/falsy value set from bool.go per AI.md PART 5
 func ParseBoolEnv(key string, defaultVal bool) bool {
 	val := os.Getenv(key)
 	if val == "" {
@@ -1402,7 +1402,7 @@ func (w *ConfigWatcher) Reload() error {
 	return nil
 }
 
-// GetDisplayHost returns the appropriate host for display per AI.md lines 2333-2457
+// GetDisplayHost returns the appropriate host for display per AI.md PART 13
 // Never shows: 0.0.0.0, 127.0.0.1, localhost, [::]
 // Uses global IP if dev TLD or localhost detected
 func GetDisplayHost(_ *AppConfig) string {
@@ -1425,7 +1425,7 @@ func GetDisplayHost(_ *AppConfig) string {
 	return fqdn
 }
 
-// GetFQDN returns the FQDN per AI.md lines 2333-2366
+// GetFQDN returns the FQDN per AI.md PART 13
 func GetFQDN() string {
 	// 1. DOMAIN env var (explicit user override)
 	if domain := os.Getenv("DOMAIN"); domain != "" {
@@ -1460,7 +1460,7 @@ func GetFQDN() string {
 	return "localhost"
 }
 
-// isLoopback checks if host is a loopback address per AI.md lines 2368-2377
+// isLoopback checks if host is a loopback address per AI.md PART 13
 func isLoopback(host string) bool {
 	lower := strings.ToLower(host)
 	if lower == "localhost" {
@@ -1472,7 +1472,7 @@ func isLoopback(host string) bool {
 	return false
 }
 
-// isDevTLD checks if FQDN is a dev TLD per AI.md lines 2420-2432
+// isDevTLD checks if FQDN is a dev TLD per AI.md PART 13
 func isDevTLD(fqdn string) bool {
 	lower := strings.ToLower(fqdn)
 	if lower == "localhost" {
@@ -1494,7 +1494,7 @@ func isDevTLD(fqdn string) bool {
 	return false
 }
 
-// getGlobalIPv6 returns first global unicast IPv6 address per AI.md lines 2379-2392
+// getGlobalIPv6 returns first global unicast IPv6 address per AI.md PART 13
 func getGlobalIPv6() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -1510,7 +1510,7 @@ func getGlobalIPv6() string {
 	return ""
 }
 
-// getGlobalIPv4 returns first global unicast IPv4 address per AI.md lines 2394-2407
+// getGlobalIPv4 returns first global unicast IPv4 address per AI.md PART 13
 func getGlobalIPv4() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -1527,7 +1527,7 @@ func getGlobalIPv4() string {
 }
 
 // GetPublicURL returns the public-facing URL for this server
-// Used by /api/autodiscover endpoint per AI.md PART 37 line 38133
+// Used by /api/autodiscover endpoint per AI.md PART 37
 func (c *AppConfig) GetPublicURL() string {
 	// Use FQDN if configured
 	if c.Server.FQDN != "" {
@@ -1548,7 +1548,7 @@ func (c *AppConfig) GetPublicURL() string {
 }
 
 // GetClusterNodes returns the list of cluster node URLs
-// Used by /api/autodiscover endpoint per AI.md PART 37 line 38134
+// Used by /api/autodiscover endpoint per AI.md PART 37
 func (c *AppConfig) GetClusterNodes() []string {
 	// Return empty array for now - cluster support is not yet implemented
 	return []string{}

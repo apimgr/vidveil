@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-// Per AI.md PART 8 lines 8035-8042: Windows signal handling
+// Per AI.md PART 8: Windows signal handling
 // Windows only supports os.Interrupt (Ctrl+C, Ctrl+Break)
 // Windows Service Control handled via golang.org/x/sys/windows/svc
 
@@ -111,7 +111,7 @@ func gracefulShutdown(server *http.Server, pidFile string) {
 	os.Exit(0)
 }
 
-// KillProcess terminates process per AI.md PART 8 lines 8173-8179
+// KillProcess terminates process per AI.md PART 8
 // Windows doesn't have graceful signals - uses TerminateProcess
 func KillProcess(pid int, graceful bool) error {
 	process, err := os.FindProcess(pid)
@@ -158,7 +158,7 @@ func isOurProcess(pid int, binaryName string) bool {
 }
 
 // CheckPIDFile checks if PID file exists and if the process is still running
-// Per AI.md PART 8 lines 7294-7327
+// Per AI.md PART 8
 // Returns: (isRunning bool, pid int, err error)
 func CheckPIDFile(pidPath string, binaryName string) (bool, int, error) {
 	data, err := os.ReadFile(pidPath)
@@ -190,7 +190,7 @@ func CheckPIDFile(pidPath string, binaryName string) (bool, int, error) {
 }
 
 // WritePIDFile writes current process PID to file
-// Per AI.md PART 8 lines 7406-7420
+// Per AI.md PART 8
 func WritePIDFile(pidPath string, binaryName string) error {
 	// Check for existing running instance first
 	running, existingPID, err := CheckPIDFile(pidPath, binaryName)

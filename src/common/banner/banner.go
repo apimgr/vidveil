@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Package banner provides startup banner printing
-// Per AI.md PART 7 lines 8081-8115 and PART 17 lines 17284-17373
+// Per AI.md PART 7
 package banner
 
 import (
@@ -11,7 +11,7 @@ import (
 )
 
 // BannerConfig holds banner configuration
-// Per AI.md PART 7 lines 8092-8100
+// Per AI.md PART 7
 type BannerConfig struct {
 	AppName    string
 	Version    string
@@ -23,7 +23,7 @@ type BannerConfig struct {
 }
 
 // PrintStartupBanner prints the startup banner based on terminal size
-// Per AI.md PART 7 lines 8102-8115
+// Per AI.md PART 7
 func PrintStartupBanner(cfg BannerConfig) {
 	size := terminal.GetTerminalSize()
 
@@ -40,7 +40,7 @@ func PrintStartupBanner(cfg BannerConfig) {
 }
 
 // printStartupBannerFull prints full banner with ASCII art
-// Per AI.md PART 17 lines 17323-17333
+// Per AI.md PART 7
 func printStartupBannerFull(cfg BannerConfig) {
 	// Full ASCII art logo
 	fmt.Println(getASCIIArt(cfg.AppName))
@@ -61,7 +61,7 @@ func printStartupBannerFull(cfg BannerConfig) {
 }
 
 // printStartupBannerCompact prints compact banner without ASCII art
-// Per AI.md PART 17 lines 17336-17343
+// Per AI.md PART 7
 func printStartupBannerCompact(cfg BannerConfig) {
 	fmt.Printf("🚀 %s v%s\n", cfg.AppName, cfg.Version)
 	printStartupBannerAppModeLine(cfg.AppMode, cfg.Debug, true)
@@ -74,7 +74,7 @@ func printStartupBannerCompact(cfg BannerConfig) {
 }
 
 // printStartupBannerMinimal prints minimal banner without icons
-// Per AI.md PART 17 lines 17345-17351
+// Per AI.md PART 7
 func printStartupBannerMinimal(cfg BannerConfig) {
 	fmt.Printf("%s %s\n", cfg.AppName, cfg.Version)
 	for _, url := range cfg.URLs {
@@ -83,7 +83,7 @@ func printStartupBannerMinimal(cfg BannerConfig) {
 }
 
 // printStartupBannerMicro prints single line for very narrow terminals
-// Per AI.md PART 17 lines 17354-17360
+// Per AI.md PART 7
 func printStartupBannerMicro(cfg BannerConfig) {
 	if len(cfg.URLs) > 0 {
 		fmt.Printf("%s %s\n", cfg.AppName, extractHostPort(cfg.URLs[0]))
@@ -93,7 +93,7 @@ func printStartupBannerMicro(cfg BannerConfig) {
 }
 
 // printStartupBannerAppModeLine prints the mode line with optional icons
-// Per AI.md PART 17 lines 17363-17373
+// Per AI.md PART 7
 func printStartupBannerAppModeLine(appMode string, debug bool, useIcons bool) {
 	if useIcons {
 		icon := "🔒"
@@ -110,7 +110,7 @@ func printStartupBannerAppModeLine(appMode string, debug bool, useIcons bool) {
 }
 
 // getASCIIArt returns ASCII art for the app name
-// Per AI.md PART 17 line 17325
+// Per AI.md PART 7
 func getASCIIArt(appName string) string {
 	// VidVeil ASCII art
 	if strings.ToLower(appName) == "vidveil" {
@@ -127,7 +127,7 @@ func getASCIIArt(appName string) string {
 }
 
 // extractHostPort extracts host:port from a URL
-// Per AI.md PART 17 line 17350
+// Per AI.md PART 7
 func extractHostPort(url string) string {
 	// Remove protocol
 	s := url

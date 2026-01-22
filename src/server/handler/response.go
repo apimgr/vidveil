@@ -112,7 +112,7 @@ const (
 )
 
 // renderResponse renders appropriate response based on client type
-// Per AI.md PART 14 lines 15389-15450: Different clients get different formats
+// Per AI.md PART 14: Different clients get different formats
 func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, name string, data map[string]interface{}) {
 	// 1. Our CLI client - INTERACTIVE, receives JSON, renders own TUI/GUI
 	if isOurCliClient(r) {
@@ -147,7 +147,7 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 	h.renderTemplate(w, name, data)
 }
 
-// Client detection helpers per AI.md PART 14 lines 15150-15230
+// Client detection helpers per AI.md PART 14
 func isOurCliClient(r *http.Request) bool {
 	ua := r.Header.Get("User-Agent")
 	// Check for vidveil-cli/ prefix

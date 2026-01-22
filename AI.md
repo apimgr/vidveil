@@ -1,6 +1,7 @@
-# {PROJECTNAME} Specification
+# VidVeil Specification
 
-**Name**: {projectname}
+**Name**: vidveil
+**Organization**: apimgr
 
 ---
 
@@ -140,7 +141,7 @@ IDEA.md is the project PLAN. AI.md (this file) is the SOURCE OF TRUTH.
 
 | Command | Purpose | Output Location | When to Use |
 |---------|---------|-----------------|-------------|
-| `make dev` | **Development & Debugging** | `${TMPDIR}/${PROJECTORG}.XXXXXX/` | Active coding, quick tests |
+| `make dev` | **Development & Debugging** | `${TMPDIR}/${PROJECTORG}/${PROJECTNAME}-XXXXXX/` | Active coding, quick tests |
 | `make local` | **Production Testing** | `binaries/` (with version) | Test prod builds locally |
 | `make build` | **Full Release** | `binaries/` (all 8 platforms) | Before release |
 | `make test` | **Unit Tests** | Coverage report | After code changes |
@@ -1062,14 +1063,14 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 ## How to Read This Large File
 
-**AI.md is ~1.8MB and ~50,234 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1.9MB and ~50,697 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
-| File size | ~1.8MB |
-| Line count | ~50,234 lines |
+| File size | ~1.9MB |
+| Line count | ~50,697 lines |
 | Read limit | ~500 lines per read |
 | Full reads needed | ~100 reads (impractical) |
 
@@ -1085,41 +1086,41 @@ This distinction exists for clarity. When referring to OS-level resources that b
 | 1 | ~2808 | Critical Rules | **ALWAYS READ FIRST** |
 | 2 | ~3663 | License & Attribution | License requirements |
 | 3 | ~3997 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | ~4832 | OS-Specific Paths | Path handling |
-| 5 | ~5017 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
-| 6 | ~6930 | Application Modes | Mode handling, debug endpoints |
-| 7 | ~7538 | Binary Requirements | Binary building, **Display detection** |
-| 8 | ~8121 | Server Binary CLI | CLI flags/commands |
-| 9 | ~11096 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~11473 | Database & Cluster | Database work |
-| 11 | ~11888 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
-| 12 | ~13771 | Server Configuration | Server settings |
-| 13 | ~14835 | Health & Versioning | Health endpoints |
-| 14 | ~15339 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~16931 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~17784 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~22206 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
-| 18 | ~24246 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | ~25561 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | ~26046 | GeoIP | GeoIP features |
-| 21 | ~26119 | Metrics | Metrics/monitoring |
-| 22 | ~27140 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | ~27869 | Update Command | Update feature |
-| 24 | ~28348 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~29246 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~29430 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 27 | ~30157 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~31525 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~34097 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
-| 30 | ~35916 | ReadTheDocs Documentation | Documentation |
-| 31 | ~36629 | I18N & A11Y | Internationalization |
-| 32 | ~37050 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~38778 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~43172 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~46743 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~47384 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~48407 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~48661 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+| 4 | ~4865 | OS-Specific Paths | Path handling |
+| 5 | ~5050 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
+| 6 | ~6958 | Application Modes | Mode handling, debug endpoints |
+| 7 | ~7566 | Binary Requirements | Binary building, **Display detection** |
+| 8 | ~8149 | Server Binary CLI | CLI flags/commands |
+| 9 | ~11124 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~11501 | Database & Cluster | Database work |
+| 11 | ~11916 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | ~13799 | Server Configuration | Server settings |
+| 13 | ~14859 | Health & Versioning | Health endpoints |
+| 14 | ~15363 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~16955 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~17808 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~22230 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | ~24270 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | ~25590 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | ~26075 | GeoIP | GeoIP features |
+| 21 | ~26148 | Metrics | Metrics/monitoring |
+| 22 | ~27169 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | ~27898 | Update Command | Update feature |
+| 24 | ~28377 | Privilege Escalation & Service | Service/privilege work |
+| 25 | ~29275 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~29459 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 27 | ~30214 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~31582 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~34436 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 30 | ~36255 | ReadTheDocs Documentation | Documentation |
+| 31 | ~36968 | I18N & A11Y | Internationalization |
+| 32 | ~37389 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~39168 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~43562 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~47206 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~47847 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~48870 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~49124 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -2884,7 +2885,7 @@ When working on this project, the following roles are assumed based on the task:
 
 ```bash
 # CORRECT - Use Makefile targets
-make dev                    # Quick build to {tempdir}/{projectorg}.XXXXXX/{projectname}
+make dev                    # Quick build to {tempdir}/{projectorg}/{projectname}-XXXXXX/
 make local                   # Build with version info to binaries/
 make build                  # Full cross-platform build to binaries/
 make test                   # Run unit tests
@@ -4563,13 +4564,15 @@ require (
 
 ### Database Drivers
 
-| Database | Library | Driver Name | Notes |
-|----------|---------|-------------|-------|
-| **SQLite** | `modernc.org/sqlite` | `sqlite` | Pure Go, NO CGO |
-| **PostgreSQL** | `github.com/jackc/pgx/v5/stdlib` | `pgx` | Pure Go, best performance |
-| **MySQL/MariaDB** | `github.com/go-sql-driver/mysql` | `mysql` | Pure Go |
-| **MSSQL** | `github.com/microsoft/go-mssqldb` | `sqlserver` | Pure Go |
-| **MongoDB** | `go.mongodb.org/mongo-driver/mongo` | (native) | Pure Go, not database/sql |
+| Database | Library | Driver Name | Config Aliases | Notes |
+|----------|---------|-------------|----------------|-------|
+| **SQLite** | `modernc.org/sqlite` | `sqlite` | `sqlite2`, `sqlite3` | Pure Go, NO CGO |
+| **PostgreSQL** | `github.com/jackc/pgx/v5/stdlib` | `pgx` | `postgres` | Pure Go, best performance |
+| **MySQL/MariaDB** | `github.com/go-sql-driver/mysql` | `mysql` | `mariadb` | Pure Go |
+| **MSSQL** | `github.com/microsoft/go-mssqldb` | `sqlserver` | `mssql` | Pure Go |
+| **MongoDB** | `go.mongodb.org/mongo-driver/mongo` | (native) | `mongodb` | Pure Go, not database/sql |
+
+**Driver Name vs Config Aliases:** The "Driver Name" column shows what Go's `sql.Open()` expects. The "Config Aliases" column shows what users can put in config files - these get normalized to the actual driver name internally. Users should use the friendly aliases (`postgres`, `mysql`, `mssql`, `sqlite`) in configs.
 
 ### Cache/Cluster
 
@@ -4641,6 +4644,36 @@ require (
 - Cross-compilation works without toolchain setup
 - Same SQLite functionality, just pure Go
 
+**Driver Name Aliases:**
+
+| Config Value | Internal Driver | Notes |
+|--------------|-----------------|-------|
+| `sqlite` | `sqlite` | Primary name (recommended) |
+| `sqlite2` | `sqlite` | Alias - maps to sqlite |
+| `sqlite3` | `sqlite` | Alias - maps to sqlite |
+
+**Why aliases?** Users coming from `mattn/go-sqlite3` expect the driver name `sqlite3`. Users from older projects may use `sqlite2`. All three config values are accepted and resolve to the same `modernc.org/sqlite` driver internally.
+
+**Implementation:**
+```go
+// Normalize driver name (config parsing)
+// Maps user-friendly config values to actual Go driver names
+func normalizeDriver(driver string) string {
+    switch strings.ToLower(driver) {
+    case "sqlite", "sqlite2", "sqlite3":
+        return "sqlite"     // All map to modernc.org/sqlite
+    case "postgres":
+        return "pgx"        // pgx is the actual driver name
+    case "mysql", "mariadb":
+        return "mysql"      // MariaDB uses same driver as MySQL
+    case "mssql":
+        return "sqlserver"  // Microsoft driver uses "sqlserver"
+    default:
+        return driver
+    }
+}
+```
+
 **Usage:**
 ```go
 import (
@@ -4649,7 +4682,8 @@ import (
 )
 
 func openDB(path string) (*sql.DB, error) {
-    // Driver name is "sqlite" (not "sqlite3")
+    // Go driver name is always "sqlite" (modernc.org/sqlite)
+    // Config aliases (sqlite2, sqlite3) are normalized before this call
     return sql.Open("sqlite", path)
 }
 ```
@@ -5681,19 +5715,14 @@ server:
     # Self-healing settings
     self_healing:
       enabled: true
-      retry_interval: 30
-      # seconds between retry attempts
-      max_attempts: 0
-      # 0 = unlimited (keep trying forever)
+      retry_interval: 30s            # Seconds between retry attempts
+      max_attempts: 0                # 0 = unlimited (keep trying forever)
 
     # Auto-cleanup thresholds
     cleanup:
-      disk_threshold: 90
-      # Start cleanup when disk > 90% full
-      log_retention_days: 7
-      # Delete logs older than 7 days during cleanup
-      backup_keep_count: 5
-      # Keep last 5 backups during cleanup
+      disk_threshold: 90             # Start cleanup when disk > 90% full
+      log_retention_days: 7          # Delete logs older than 7 days during cleanup
+      backup_keep_count: 5           # Keep last 5 backups during cleanup
 
     # Notifications
     notify:
@@ -6008,7 +6037,7 @@ func (req *CreateUserRequest) Parse() (*User, error) {
 |----------|-------------|
 | `DOMAIN` | FQDN override (highest priority for hostname resolution) |
 | `MODE` | `production` (default) or `development` |
-| `DATABASE_DRIVER` | `file`, `sqlite`, `mariadb`, `mysql`, `postgres`, `mssql`, `mongodb` |
+| `DATABASE_DRIVER` | `file`, `sqlite` (+ `sqlite2`, `sqlite3`), `postgres`, `mysql` (+ `mariadb`), `mssql`, `mongodb` |
 | `DATABASE_URL` | Database connection string |
 | `SMTP_HOST` | SMTP server hostname (if set, skips autodetect) |
 | `SMTP_PORT` | SMTP server port (default: 587) |
@@ -7415,7 +7444,7 @@ server:
 
     # Log request/response bodies (up to max_body_log_size)
     log_bodies: false
-    max_body_log_size: 10240  # 10KB
+    max_body_log_size: 10KB
 
     # Block profiling rate (0 = disabled)
     block_profile_rate: 1
@@ -13851,17 +13880,13 @@ server:
     # Admin sessions (server.db admin_sessions table)
     admin:
       cookie_name: admin_session
-      # Cookie max age: 30 days (absolute session lifetime)
-      max_age: 2592000
-      # Idle timeout: 24 hours (session expires after inactivity)
-      idle_timeout: 86400
+      max_age: 30d                   # Absolute session lifetime
+      idle_timeout: 24h              # Session expires after inactivity
     # User sessions (users.db user_sessions table) - only if app has users
     user:
       cookie_name: user_session
-      # Cookie max age: 7 days
-      max_age: 604800
-      # Idle timeout: 24 hours
-      idle_timeout: 86400
+      max_age: 7d                    # Absolute session lifetime
+      idle_timeout: 24h              # Session expires after inactivity
     # Common settings (apply to both)
     extend_on_activity: true     # Reset idle timeout on each request
     # auto, true, false
@@ -14741,8 +14766,8 @@ server:
     # Key prefix to avoid collisions (use unique prefix per app)
     prefix: "{projectname}:"
 
-    # Default TTL in seconds
-    ttl: 3600
+    # Default TTL
+    ttl: 1h
 
     # Cluster settings (when using Valkey/Redis Cluster)
     cluster: false
@@ -16833,7 +16858,7 @@ Need additional compatible endpoints?"
 | `/metrics` | GET | Optional | Prometheus metrics |
 | `/{admin_path}` | GET | Session | Admin panel login |
 | `/{admin_path}/*` | ALL | Session | Admin panel pages |
-| `/api/autodiscover` | GET | None | Server settings for CLI/agent (non-versioned) |
+| `/api/autodiscover` | GET | None | Server settings, config schema, and options for CLI/agent (non-versioned) |
 | `/api/{api_version}/healthz` | GET | None | Health check (JSON) |
 | `/api/{api_version}/{admin_path}/*` | ALL | Bearer | Admin API |
 
@@ -22719,24 +22744,24 @@ func RegisterAdminRoutes(r *mux.Router) {
 ╠══════════════════════════════════════════════════════════════════════╣
 ║                                                                      ║
 ║   🌐 Web Interface:                                                   ║
-║      http://localhost:64521                                          ║
-║      http://192.168.1.100:64521                                      ║
+║      http://myserver.example.com:64580                               ║
+║      http://192.168.1.100:64580                                      ║
 ║                                                                      ║
 ║   🔧 Admin Panel:                                                     ║
-║      http://localhost:64521/{admin_path}                             ║
+║      http://myserver.example.com:64580/{admin_path}                  ║
 ║                                                                      ║
 ║   🔑 Setup Token (use at /{admin_path}):                              ║
 ║      a1b2c3d4e5f67890abcdef1234567890                                ║
 ║                                                                      ║
-║   📧 SMTP: Auto-detected (localhost:25)                               ║
+║   📧 SMTP: 172.17.0.1:25                                                ║
 ║                                                                      ║
 ║   ⚠️  Save the setup token! It will not be shown again.               ║
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 
 [INFO] Server started successfully
-[INFO] Listening on 0.0.0.0:64521
-[INFO] SMTP auto-detected: localhost:25 (enabled)
+[INFO] Listening on {address}:{port}
+[INFO] SMTP: 172.17.0.1:25
 ```
 
 ### App Usability Before Setup
@@ -24275,19 +24300,24 @@ Email templates allow Server Admins to customize ALL notification messages, incl
 
 **On first run, the server automatically detects local SMTP servers.**
 
-| Check | Hosts | Ports |
-|-------|-------|-------|
-| 1 | `localhost` | 25, 587, 465 |
-| 2 | `127.0.0.1` | 25, 587, 465 |
-| 3 | `172.17.0.1` (Docker host) | 25, 587, 465 |
-| 4 | Gateway IP | 25, 587, 465 |
+| Priority | Host | Description | Ports |
+|----------|------|-------------|-------|
+| 1 | `127.0.0.1` | Loopback (same machine) | 25, 587, 465 |
+| 2 | `172.17.0.1` | Docker bridge gateway | 25, 587, 465 |
+| 3 | `{gateway_ip}` | Default gateway IP | 25, 587, 465 |
+| 4 | `{fqdn}` | Detected FQDN (from GetFQDN) | 25, 587, 465 |
+| 5 | `{global_ipv4}` | Global IPv4 (if available) | 25, 587, 465 |
+| 6 | `mail.{fqdn}` | Common mail subdomain | 25, 587, 465 |
+| 7 | `smtp.{fqdn}` | Common SMTP subdomain | 25, 587, 465 |
 
 **Auto-Detection Process:**
-1. Try each host/port combination
+1. Try each host/port combination in priority order
 2. Attempt SMTP handshake (EHLO)
 3. First successful connection is used
-4. Save to `server.yml` and enable email features
-5. If all fail → email features disabled (not an error)
+4. Save detected `host:port` to `server.yml` and enable email features
+5. If all fail → email features disabled (not an error, just no SMTP available)
+
+**Display Note:** Detected SMTP `{host}:{port}` is shown in console/logs (exempt from "never show localhost" rules - users need to see the actual detected server for troubleshooting).
 
 **Connection Test (when host is set):**
 1. On every startup, test configured SMTP connection
@@ -29435,7 +29465,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, s c
 
 | Target | Purpose | Output Location | When to Use |
 |--------|---------|-----------------|-------------|
-| `dev` | Quick development build | `${TMPDIR}/${PROJECTORG}.XXXXXX/` | Active coding, quick tests |
+| `dev` | Quick development build | `${TMPDIR}/${PROJECTORG}/${PROJECTNAME}-XXXXXX/` | Active coding, quick tests |
 | `local` | Production test build | `binaries/` (with version) | Test prod builds locally |
 | `build` | Full release (all 8 platforms) | `binaries/` | Before release |
 | `test` | Run unit tests | Coverage report | After code changes |
@@ -29574,7 +29604,7 @@ binaries/
 
 | Context | Path |
 |---------|------|
-| Temp build | `$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}.XXXXXX")/{projectname}` |
+| Temp build | `$(mktemp -d "${TMPDIR:-/tmp}/${PROJECTORG}/${PROJECTNAME}-XXXXXX")` |
 
 **If built with musl → strip binary before release. Final name has NO `-musl` suffix.**
 
@@ -29655,17 +29685,45 @@ build: clean
 	@$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
 		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME) ./src"
 
-	# Build all platforms
+	# Build server for all platforms
 	@for platform in $(PLATFORMS); do \
 		OS=$${platform%/*}; \
 		ARCH=$${platform#*/}; \
 		OUTPUT=$(BINDIR)/$(PROJECTNAME)-$$OS-$$ARCH; \
 		[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
-		echo "Building $$OS/$$ARCH..."; \
+		echo "Building server $$OS/$$ARCH..."; \
 		$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
 			go build -ldflags \"$(LDFLAGS)\" \
-			-o $$OUTPUT src" || exit 1; \
+			-o $$OUTPUT ./src" || exit 1; \
 	done
+
+	# Build CLI for all platforms (if exists)
+	@if [ -d "src/client" ]; then \
+		for platform in $(PLATFORMS); do \
+			OS=$${platform%/*}; \
+			ARCH=$${platform#*/}; \
+			OUTPUT=$(BINDIR)/$(PROJECTNAME)-cli-$$OS-$$ARCH; \
+			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
+			echo "Building CLI $$OS/$$ARCH..."; \
+			$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
+				go build -ldflags \"$(LDFLAGS)\" \
+				-o $$OUTPUT ./src/client" || exit 1; \
+		done; \
+	fi
+
+	# Build agent for all platforms (if exists)
+	@if [ -d "src/agent" ]; then \
+		for platform in $(PLATFORMS); do \
+			OS=$${platform%/*}; \
+			ARCH=$${platform#*/}; \
+			OUTPUT=$(BINDIR)/$(PROJECTNAME)-agent-$$OS-$$ARCH; \
+			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
+			echo "Building agent $$OS/$$ARCH..."; \
+			$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
+				go build -ldflags \"$(LDFLAGS)\" \
+				-o $$OUTPUT ./src/agent" || exit 1; \
+		done; \
+	fi
 
 	@echo "Build complete: $(BINDIR)/"
 
@@ -29902,7 +29960,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 1. Quick build for local development/testing
 2. Builds local platform only (fastest)
 3. No `-ldflags` (version info not embedded)
-4. Outputs to `{tempdir}/{projectorg}.XXXXXX/{projectname}` (isolated, org-identifiable)
+4. Outputs to `{tempdir}/{projectorg}/{projectname}-XXXXXX/` (isolated, org-identifiable)
 5. Uses Docker (`golang:alpine`) - keeps local machine clean
 6. Easy cleanup: `rm -rf "${TMPDIR:-/tmp}"/${PROJECTORG}.*/` or auto-deleted on reboot
 
@@ -29919,7 +29977,7 @@ All Docker builds use persistent Go module caching to avoid re-downloading depen
 
 | Command | Purpose | Output | When to Use |
 |---------|---------|--------|-------------|
-| `make dev` | **Development & Debugging** | `${TMPDIR}/${PROJECTORG}.XXXXXX/` | Active coding, quick tests, debugging |
+| `make dev` | **Development & Debugging** | `${TMPDIR}/${PROJECTORG}/${PROJECTNAME}-XXXXXX/` | Active coding, quick tests, debugging |
 | `make local` | **Production Testing** | `binaries/` (with version) | Test production builds locally before release |
 | `make build` | **Full Release Build** | `binaries/` (all 8 platforms) | Before tagging release, cross-platform verification |
 | `make test` | **Unit Tests** | Coverage report | After code changes, before commits |
@@ -30237,7 +30295,7 @@ All Dockerfiles MUST include these labels:
 | `org.opencontainers.image.authors` | `{projectorg}` |
 | `org.opencontainers.image.title` | `{projectname}` |
 | `org.opencontainers.image.base.name` | `{projectname}` |
-| `org.opencontainers.image.description` | `Containerized version of {projectname}` |
+| `org.opencontainers.image.description` | `{projectname} - standard image (alpine)` or `{projectname} - all-in-one (...)` |
 | `org.opencontainers.image.licenses` | License (e.g., `MIT`) |
 | `org.opencontainers.image.created` | `${BUILD_DATE}` (ARG) |
 | `org.opencontainers.image.version` | `${VERSION}` (ARG) |
@@ -30330,7 +30388,7 @@ LABEL maintainer="{maintainer_name} <{maintainer_email}>" \
       org.opencontainers.image.authors="{projectorg}" \
       org.opencontainers.image.title="{projectname}" \
       org.opencontainers.image.base.name="{projectname}" \
-      org.opencontainers.image.description="Containerized version of {projectname}" \
+      org.opencontainers.image.description="{projectname} - standard image (alpine)" \
       org.opencontainers.image.url="{PLATFORM_REPO_URL}" \
       org.opencontainers.image.source="{PLATFORM_REPO_URL}" \
       org.opencontainers.image.documentation="{PLATFORM_REPO_URL}" \
@@ -30805,7 +30863,7 @@ networks:
 FROM debian:latest
 
 LABEL org.opencontainers.image.source="{PLATFORM_REPO_URL}"
-LABEL org.opencontainers.image.description="{projectname} - all-in-one container"
+LABEL org.opencontainers.image.description="{projectname} - all-in-one (debian + postgresql + valkey + tor)"
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Install dependencies (PostgreSQL + Valkey + Tor + Supervisor)
@@ -31674,6 +31732,24 @@ jobs:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
 
+      # Agent build - only if src/agent/ directory exists
+      - name: Build Agent
+        if: hashFiles('src/agent/') != ''
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }} ./src/agent
+
+      - name: Upload Agent artifact
+        if: hashFiles('src/agent/') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }}
+
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -31793,6 +31869,24 @@ jobs:
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
+
+      # Agent build - only if src/agent/ directory exists
+      - name: Build Agent
+        if: hashFiles('src/agent/') != ''
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent ./src/agent
+
+      - name: Upload Agent artifact
+        if: hashFiles('src/agent/') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
 
   release:
     needs: build
@@ -31914,6 +32008,24 @@ jobs:
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
+
+      # Agent build - only if src/agent/ directory exists
+      - name: Build Agent
+        if: hashFiles('src/agent/') != ''
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }} ./src/agent
+
+      - name: Upload Agent artifact
+        if: hashFiles('src/agent/') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }}
 
   release:
     needs: build
@@ -32335,6 +32447,24 @@ jobs:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
 
+      # Agent build - only if src/agent/ directory exists
+      - name: Build Agent
+        if: hashFiles('src/agent/') != ''
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }} ./src/agent
+
+      - name: Upload Agent artifact
+        if: hashFiles('src/agent/') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }}
+
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -32454,6 +32584,24 @@ jobs:
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
+
+      # Agent build - only if src/agent/ directory exists
+      - name: Build Agent
+        if: hashFiles('src/agent/') != ''
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent ./src/agent
+
+      - name: Upload Agent artifact
+        if: hashFiles('src/agent/') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
 
   release:
     needs: build
@@ -32575,6 +32723,24 @@ jobs:
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
+
+      # Agent build - only if src/agent/ directory exists
+      - name: Build Agent
+        if: hashFiles('src/agent/') != ''
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }} ./src/agent
+
+      - name: Upload Agent artifact
+        if: hashFiles('src/agent/') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }}
 
   release:
     needs: build
@@ -32950,6 +33116,7 @@ build:linux-amd64:
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
     - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-linux-amd64 ./src/client; fi
+    - if [ -d "src/agent" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-linux-amd64 ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-linux-amd64*
@@ -32966,6 +33133,7 @@ build:linux-arm64:
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
     - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-linux-arm64 ./src/client; fi
+    - if [ -d "src/agent" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-linux-arm64 ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-linux-arm64*
@@ -32982,6 +33150,7 @@ build:darwin-amd64:
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-amd64 ./src
     - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-darwin-amd64 ./src/client; fi
+    - if [ -d "src/agent" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-darwin-amd64 ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-darwin-amd64*
@@ -32998,6 +33167,7 @@ build:darwin-arm64:
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-arm64 ./src
     - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-darwin-arm64 ./src/client; fi
+    - if [ -d "src/agent" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-darwin-arm64 ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-darwin-arm64*
@@ -33014,6 +33184,7 @@ build:windows-amd64:
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-amd64.exe ./src
     - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-amd64.exe ./src/client; fi
+    - if [ -d "src/agent" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-windows-amd64.exe ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-windows-amd64*.exe
@@ -33030,6 +33201,7 @@ build:windows-arm64:
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-arm64.exe ./src
     - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-arm64.exe ./src/client; fi
+    - if [ -d "src/agent" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-windows-arm64.exe ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-windows-arm64*.exe
@@ -33046,6 +33218,7 @@ build:freebsd-amd64:
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-amd64 ./src
     - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-amd64 ./src/client; fi
+    - if [ -d "src/agent" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-freebsd-amd64 ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-freebsd-amd64*
@@ -33062,6 +33235,7 @@ build:freebsd-arm64:
   script:
     - go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-arm64 ./src
     - if [ -d "src/client" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-arm64 ./src/client; fi
+    - if [ -d "src/agent" ]; then go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-freebsd-arm64 ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-freebsd-arm64*
@@ -33164,6 +33338,15 @@ build:beta:
     - if [ -d "src/client" ]; then GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-arm64.exe ./src/client; fi
     - if [ -d "src/client" ]; then GOOS=freebsd GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-amd64 ./src/client; fi
     - if [ -d "src/client" ]; then GOOS=freebsd GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-arm64 ./src/client; fi
+    # Build Agent if exists
+    - if [ -d "src/agent" ]; then GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-linux-amd64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-linux-arm64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-darwin-amd64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-darwin-arm64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-windows-amd64.exe ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-windows-arm64.exe ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=freebsd GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-freebsd-amd64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=freebsd GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-freebsd-arm64 ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-*
@@ -33203,6 +33386,15 @@ build:daily:
     - if [ -d "src/client" ]; then GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-arm64.exe ./src/client; fi
     - if [ -d "src/client" ]; then GOOS=freebsd GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-amd64 ./src/client; fi
     - if [ -d "src/client" ]; then GOOS=freebsd GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-arm64 ./src/client; fi
+    # Build Agent if exists
+    - if [ -d "src/agent" ]; then GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-linux-amd64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-linux-arm64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-darwin-amd64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-darwin-arm64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-windows-amd64.exe ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-windows-arm64.exe ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=freebsd GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-freebsd-amd64 ./src/agent; fi
+    - if [ -d "src/agent" ]; then GOOS=freebsd GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-agent-freebsd-arm64 ./src/agent; fi
   artifacts:
     paths:
       - ${PROJECTNAME}-*
@@ -33255,7 +33447,7 @@ docker:build:
         --label "org.opencontainers.image.authors=${PROJECTORG}" \
         --label "org.opencontainers.image.title=${PROJECTNAME}" \
         --label "org.opencontainers.image.base.name=${PROJECTNAME}" \
-        --label "org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
+        --label "org.opencontainers.image.description=${PROJECTNAME} - standard image (alpine)" \
         --label "org.opencontainers.image.licenses=MIT" \
         --label "org.opencontainers.image.version=${VERSION}" \
         --label "org.opencontainers.image.created=${BUILD_DATE}" \
@@ -33266,7 +33458,8 @@ docker:build:
         --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
         --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
         --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}" \
-        --annotation "manifest:org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
+        --annotation "manifest:org.opencontainers.image.base.name=${PROJECTNAME}" \
+        --annotation "manifest:org.opencontainers.image.description=${PROJECTNAME} - standard image (alpine)" \
         --annotation "manifest:org.opencontainers.image.licenses=MIT" \
         --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
         --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
@@ -33491,6 +33684,7 @@ pipeline {
                     env.BUILD_DATE = sh(script: 'date +"%a %b %d, %Y at %H:%M:%S %Z"', returnStdout: true).trim()
                     env.LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}' -X 'main.OfficialSite=${env.OFFICIALSITE}'"
                     env.HAS_CLI = sh(script: '[ -d src/client ] && echo true || echo false', returnStdout: true).trim()
+                    env.HAS_AGENT = sh(script: '[ -d src/agent ] && echo true || echo false', returnStdout: true).trim()
                 }
                 sh 'mkdir -p ${BINDIR} ${RELDIR}'
                 echo "Build type: ${BUILD_TYPE}, Version: ${VERSION}"
@@ -33787,6 +33981,151 @@ pipeline {
             }
         }
 
+        // Agent builds - only if src/agent/ exists (matches GitHub Actions)
+        stage('Build Agent') {
+            when {
+                expression { env.HAS_AGENT == 'true' }
+            }
+            parallel {
+                stage('Agent Linux AMD64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GODIR}:/go \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=linux \
+                                -e GOARCH=amd64 \
+                                golang:alpine \
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-agent-linux-amd64 ./src/agent
+                        '''
+                    }
+                }
+                stage('Agent Linux ARM64') {
+                    agent { label 'arm64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GODIR}:/go \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=linux \
+                                -e GOARCH=arm64 \
+                                golang:alpine \
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-agent-linux-arm64 ./src/agent
+                        '''
+                    }
+                }
+                stage('Agent Darwin AMD64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GODIR}:/go \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=darwin \
+                                -e GOARCH=amd64 \
+                                golang:alpine \
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-agent-darwin-amd64 ./src/agent
+                        '''
+                    }
+                }
+                stage('Agent Darwin ARM64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GODIR}:/go \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=darwin \
+                                -e GOARCH=arm64 \
+                                golang:alpine \
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-agent-darwin-arm64 ./src/agent
+                        '''
+                    }
+                }
+                stage('Agent Windows AMD64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GODIR}:/go \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=windows \
+                                -e GOARCH=amd64 \
+                                golang:alpine \
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-agent-windows-amd64.exe ./src/agent
+                        '''
+                    }
+                }
+                stage('Agent Windows ARM64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GODIR}:/go \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=windows \
+                                -e GOARCH=arm64 \
+                                golang:alpine \
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-agent-windows-arm64.exe ./src/agent
+                        '''
+                    }
+                }
+                stage('Agent FreeBSD AMD64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GODIR}:/go \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=freebsd \
+                                -e GOARCH=amd64 \
+                                golang:alpine \
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-agent-freebsd-amd64 ./src/agent
+                        '''
+                    }
+                }
+                stage('Agent FreeBSD ARM64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GODIR}:/go \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=freebsd \
+                                -e GOARCH=arm64 \
+                                golang:alpine \
+                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-agent-freebsd-arm64 ./src/agent
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('Test') {
             agent { label 'amd64' }
             steps {
@@ -33905,7 +34244,7 @@ pipeline {
                             --label "org.opencontainers.image.authors=${PROJECTORG}" \
                             --label "org.opencontainers.image.title=${PROJECTNAME}" \
                             --label "org.opencontainers.image.base.name=${PROJECTNAME}" \
-                            --label "org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
+                            --label "org.opencontainers.image.description=${PROJECTNAME} - standard image (alpine)" \
                             --label "org.opencontainers.image.licenses=MIT" \
                             --label "org.opencontainers.image.version=${VERSION}" \
                             --label "org.opencontainers.image.created=${BUILD_DATE}" \
@@ -33916,7 +34255,8 @@ pipeline {
                             --annotation "manifest:org.opencontainers.image.vendor=${PROJECTORG}" \
                             --annotation "manifest:org.opencontainers.image.authors=${PROJECTORG}" \
                             --annotation "manifest:org.opencontainers.image.title=${PROJECTNAME}" \
-                            --annotation "manifest:org.opencontainers.image.description=Containerized version of ${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.base.name=${PROJECTNAME}" \
+                            --annotation "manifest:org.opencontainers.image.description=${PROJECTNAME} - standard image (alpine)" \
                             --annotation "manifest:org.opencontainers.image.licenses=MIT" \
                             --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
                             --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
@@ -34123,7 +34463,7 @@ Before proceeding, confirm you understand:
 
 **AI must NEVER:**
 - Run `docker compose up` with `docker-compose.yml` or `docker-compose.dev.yml`
-- Use `./rootfs/` or `./docker/rootfs/` paths (project directory pollution)
+- Use `./rootfs/`, `./docker/rootfs/`, or `./docker/file_system/` for runtime (project directory pollution)
 - Create or modify files in the project directory during testing
 - Mount project directory paths as volumes
 
@@ -36783,7 +37123,7 @@ server:
       - zh
     fallback_language: en
     cookie_name: lang
-    cookie_max_age: 31536000  # 1 year
+    cookie_max_age: 365d  # 1 year
 ```
 
 ---
@@ -37093,11 +37433,11 @@ server:
     # Maximum circuits to keep open (higher = faster but more memory)
     max_circuits: 32
 
-    # Circuit timeout in seconds (how long before giving up)
-    circuit_timeout: 60
+    # Circuit timeout (how long before giving up)
+    circuit_timeout: 60s
 
-    # Bootstrap timeout in seconds (wait for Tor network connection)
-    bootstrap_timeout: 180
+    # Bootstrap timeout (wait for Tor network connection)
+    bootstrap_timeout: 3m
 
     # --- Security Settings ---
     # Scrub sensitive info from Tor logs
@@ -37393,6 +37733,57 @@ This prevents conflicts with any existing Tor installation on the system.
 - Tor startup/runtime errors = **WARN** (server continues without Tor)
 - Server NEVER fails to start due to Tor issues
 - All Tor operations are best-effort, non-blocking
+
+**Console Output Rules:**
+- **Normal mode**: Silent during bootstrap, only show errors after timeout
+- **Debug mode**: Show all Tor messages (verbose output from Tor process)
+- **NEVER spam console** with bootstrap progress during normal operation
+- Success message (`Tor: {onion_address}`) shown once at startup, then silent unless errors
+
+| Event | When to Show | Message |
+|-------|--------------|---------|
+| Bootstrap starting | Never (silent) | - |
+| Bootstrap progress | Debug only | `Tor: bootstrap 45%...` |
+| Bootstrap success | Always (once) | `Tor: {onion_address}` |
+| Bootstrap slow (>30s) | Normal | `Tor: connecting...` |
+| Bootstrap failed | Always | `Tor: bootstrap failed: {reason}` |
+| Connection lost | Always | `Tor: connection lost, reconnecting` |
+| Runtime errors | Always | `Tor: {error}` |
+
+**Bootstrap timeout logic:**
+1. Start Tor silently (no console output)
+2. Wait up to 30 seconds without output
+3. If still bootstrapping after 30s → show `Tor: connecting...`
+4. If bootstrap completes → show onion address
+5. If bootstrap fails → show error message
+
+### Tor Process Ownership
+
+**Tor process MUST run as the same user the server runs as (after privilege drop).**
+
+| Server Started As | Server Runs As | Tor Runs As |
+|-------------------|----------------|-------------|
+| `root` | `{projectname}` (after drop) | `{projectname}` |
+| `{projectname}` | `{projectname}` | `{projectname}` |
+| Regular user | Regular user | Regular user |
+
+**Process:**
+1. Server starts (possibly as root for port binding)
+2. Server drops privileges to `{projectname}` user (if started as root)
+3. Server starts Tor process **as the current (dropped) user**
+4. Tor inherits user context from server process
+
+**CRITICAL:**
+- Tor process is a **child of the server process** - inherits user/group
+- Server does NOT need to explicitly set Tor's user - it inherits from parent
+- All Tor files/directories are owned by the server's running user
+- When server stops, Tor child process is terminated
+
+**Why same user?**
+- Tor needs read/write access to `{data_dir}/tor/` (owned by server user)
+- Tor control socket must be accessible by server
+- Simplifies permissions - no cross-user access needed
+- Clean process tree - server owns Tor lifecycle
 
 ## Implementation
 
@@ -40733,9 +41124,9 @@ server:
   cluster: []                      # Auto-discovered cluster nodes
   api_version: v1                  # API version prefix (default: v1, must match server)
   admin_path: admin                # Admin path (default: admin, must match server)
-  timeout: 30                      # Request timeout in seconds (match server default)
+  timeout: 30s                     # Request timeout (match server default)
   retry: 3                         # Retry attempts on failure
-  retry_delay: 1                   # Seconds between retries
+  retry_delay: 1s                  # Delay between retries
 
 # Authentication (required for multi-user, see PART 34/35)
 auth:
@@ -40763,14 +41154,14 @@ tui:
 logging:
   level: warn                      # debug, info, warn, error (match server default)
   file: ""                         # Log file path (empty = {log_dir}/cli.log)
-  max_size: 10                     # Max log file size in MB (match server default)
+  max_size: 10MB                   # Max log file size (match server default)
   max_files: 5                     # Max log files to keep (match server default)
 
 # Cache
 cache:
   enabled: true                    # Enable response caching
-  ttl: 300                         # Cache TTL in seconds (5 minutes)
-  max_size: 100                    # Max cache size in MB
+  ttl: 5m                          # Cache TTL (5 minutes)
+  max_size: 100MB                  # Max cache size
 
 # Debug
 debug: false                       # Enable debug mode (same as --debug)
@@ -41692,7 +42083,7 @@ func detectInput(args []string) (content string, source string) {
 ```bash
 # Quick dev build (server + CLI + agent if exist)
 make dev
-# Output: ${TMPDIR}/${PROJECTORG}.XXXXXX/{projectname}, {projectname}-cli, {projectname}-agent
+# Output: ${TMPDIR}/${PROJECTORG}/${PROJECTNAME}-XXXXXX/{projectname}, {projectname}-cli, {projectname}-agent
 
 # Production test build
 make local
@@ -42746,10 +43137,10 @@ server:
   cluster: []                      # Auto-discovered cluster nodes
   api_version: v1                  # API version prefix (default: v1, must match server)
   admin_path: admin                # Admin path (default: admin, must match server)
-  timeout: 30                      # Request timeout in seconds (match server default)
+  timeout: 30s                     # Request timeout (match server default)
   retry: 3                         # Retry attempts on failure
-  retry_delay: 5                   # Seconds between retries
-  reconnect_delay: 10              # Seconds before reconnect attempt
+  retry_delay: 5s                  # Delay between retries
+  reconnect_delay: 10s             # Delay before reconnect attempt
 
 # Authentication
 auth:
@@ -42766,7 +43157,7 @@ identity:
 # Data collection (project-specific)
 collection:
   enabled: true                    # Enable data collection
-  interval: 60                     # Collection interval in seconds
+  interval: 60s                    # Collection interval
   batch_size: 100                  # Max items per batch
   buffer_size: 1000                # Max buffered items if offline
 
@@ -42774,13 +43165,13 @@ collection:
 logging:
   level: info                      # debug, info, warn, error (match server default)
   file: ""                         # Log file path (empty = {log_dir}/agent.log)
-  max_size: 10                     # Max log file size in MB (match server default)
+  max_size: 10MB                   # Max log file size (match server default)
   max_files: 5                     # Max log files to keep (match server default)
 
 # Health reporting
 health:
   enabled: true                    # Report agent health to server
-  interval: 30                     # Health check interval in seconds
+  interval: 30s                    # Health check interval
 
 # Debug
 debug: false                       # Enable debug mode (same as --debug)
@@ -45119,7 +45510,37 @@ curl "/api/{api_version}/search/hello"                # Path-based search (also 
   "api_version": "v1",
   "timeout": 30,
   "retry": 3,
-  "retry_delay": 1
+  "retry_delay": 1,
+  "config": {
+    "database": {
+      "drivers": ["file", "sqlite", "postgres", "mysql", "mssql", "mongodb"],
+      "aliases": {
+        "sqlite2": "sqlite",
+        "sqlite3": "sqlite",
+        "mariadb": "mysql"
+      },
+      "ssl_modes": ["disable", "require", "verify-full"]
+    },
+    "cache": {
+      "types": ["none", "memory", "valkey", "redis"]
+    },
+    "formats": {
+      "duration": ["s", "m", "h", "d"],
+      "size": ["KB", "MB", "GB"]
+    },
+    "logging": {
+      "levels": ["debug", "info", "warn", "error"]
+    },
+    "smtp": {
+      "tls_modes": ["auto", "starttls", "tls", "none"]
+    },
+    "features": {
+      "clustering": true,
+      "tor": true,
+      "webauthn": true,
+      "oauth": ["google", "github", "gitlab", "microsoft"]
+    }
+  }
 }
 ```
 
@@ -45133,6 +45554,18 @@ curl "/api/{api_version}/search/hello"                # Path-based search (also 
 | `timeout` | int | Recommended request timeout in seconds |
 | `retry` | int | Recommended retry attempts |
 | `retry_delay` | int | Recommended seconds between retries |
+| `config` | object | Configuration schema, options, aliases, and enabled features |
+
+**Config Section:**
+
+| Field | Description |
+|-------|-------------|
+| `config.database` | Supported drivers, aliases (`sqlite2`→`sqlite`, `mariadb`→`mysql`), SSL modes |
+| `config.cache` | Supported cache types |
+| `config.formats` | Duration (`s`,`m`,`h`,`d`) and size (`KB`,`MB`,`GB`) unit suffixes |
+| `config.logging` | Valid log levels |
+| `config.smtp` | SMTP TLS mode options |
+| `config.features` | Server-enabled features (for conditional UI) |
 
 **Security :**
 
@@ -45159,12 +45592,43 @@ func AutodiscoverHandler(w http.ResponseWriter, r *http.Request) {
         "timeout":     cfg.Server.Timeout,
         "retry":       cfg.Server.Retry,
         "retry_delay": cfg.Server.RetryDelay,
+        "config": map[string]interface{}{
+            "database": map[string]interface{}{
+                "drivers": []string{"file", "sqlite", "postgres", "mysql", "mssql", "mongodb"},
+                "aliases": map[string]string{
+                    "sqlite2": "sqlite",
+                    "sqlite3": "sqlite",
+                    "mariadb": "mysql",
+                },
+                "ssl_modes": []string{"disable", "require", "verify-full"},
+            },
+            "cache": map[string]interface{}{
+                "types": []string{"none", "memory", "valkey", "redis"},
+            },
+            "formats": map[string]interface{}{
+                "duration": []string{"s", "m", "h", "d"},
+                "size":     []string{"KB", "MB", "GB"},
+            },
+            "logging": map[string]interface{}{
+                "levels": []string{"debug", "info", "warn", "error"},
+            },
+            "smtp": map[string]interface{}{
+                "tls_modes": []string{"auto", "starttls", "tls", "none"},
+            },
+            "features": map[string]interface{}{
+                "clustering": cfg.Cluster.Enabled,
+                "tor":        cfg.Tor.Enabled,
+                "webauthn":   cfg.Auth.WebAuthn.Enabled,
+                "oauth":      cfg.Auth.OAuth.EnabledProviders(),
+            },
+        },
     }
 
     // NEVER include admin_path - security by obscurity
     // NEVER include internal addresses
 
     w.Header().Set("Content-Type", "application/json")
+    w.Header().Set("Cache-Control", "public, max-age=3600")
     json.NewEncoder(w).Encode(response)
 }
 ```
@@ -47533,8 +47997,8 @@ server:
       # Allow wildcard domains (*.example.com)
       allow_wildcard: false
 
-      # Verification token TTL (24 hours)
-      verification_ttl: 86400
+      # Verification token TTL
+      verification_ttl: 24h
 
       # Renew SSL certs N days before expiry
       ssl_renewal_days: 7

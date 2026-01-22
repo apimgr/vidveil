@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Package httputil provides HTTP to text conversion for terminal output
-// See AI.md PART 14 lines 15252-15336
+// See AI.md PART 14
 package httputil
 
 import (

@@ -573,9 +573,9 @@ func IsRunningAsRoot() bool {
 	}
 }
 
-// IsRunningInContainer checks if running in a container environment per AI.md PART 8 lines 7726-7772
+// IsRunningInContainer checks if running in a container environment per AI.md PART 8
 func IsRunningInContainer() bool {
-	// File-based detection per PART 8 lines 7732-7740
+	// File-based detection per AI.md PART 8 7732-7740
 	containerFiles := []string{
 		"/.dockerenv",        // Docker
 		"/run/.containerenv", // Podman
@@ -587,7 +587,7 @@ func IsRunningInContainer() bool {
 		}
 	}
 
-	// Environment variable detection per PART 8 lines 7743-7748
+	// Environment variable detection per AI.md PART 8 7743-7748
 	if os.Getenv("container") != "" {
 		return true // Generic (systemd-nspawn, lxc, etc.)
 	}
@@ -595,7 +595,7 @@ func IsRunningInContainer() bool {
 		return true // Kubernetes
 	}
 
-	// Check parent process name for container init systems per PART 8 lines 7752-7758
+	// Check parent process name for container init systems per AI.md PART 8 7752-7758
 	parentName := getParentProcessName()
 	switch parentName {
 	case "tini", "dumb-init", "s6-svscan", "runsv", "runsvdir", "catatonit":
@@ -605,7 +605,7 @@ func IsRunningInContainer() bool {
 		return true
 	}
 
-	// Check cgroup for container indicators per PART 8 lines 7762-7768
+	// Check cgroup for container indicators per AI.md PART 8 7762-7768
 	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
 		content := string(data)
 		if strings.Contains(content, "docker") ||
@@ -618,7 +618,7 @@ func IsRunningInContainer() bool {
 	return false
 }
 
-// getParentProcessName returns the name of the parent process per PART 8 lines 7827-7843
+// getParentProcessName returns the name of the parent process per AI.md PART 8 7827-7843
 func getParentProcessName() string {
 	ppid := os.Getppid()
 
@@ -636,7 +636,7 @@ func getParentProcessName() string {
 	return ""
 }
 
-// DetectServiceManager returns the active service manager per AI.md PART 8 lines 7774-7825
+// DetectServiceManager returns the active service manager per AI.md PART 8
 func DetectServiceManager() string {
 	// Check for container environment first
 	if IsRunningInContainer() {
@@ -689,7 +689,7 @@ func DetectServiceManager() string {
 	return "manual"
 }
 
-// ShouldDaemonize determines if we should daemonize based on context per PART 8 lines 7845-7867
+// ShouldDaemonize determines if we should daemonize based on context per AI.md PART 8 7845-7867
 func ShouldDaemonize(isServiceStart bool, daemonFlag bool, configDaemonize bool) bool {
 	if isServiceStart {
 		// Service start - detect manager and ignore config

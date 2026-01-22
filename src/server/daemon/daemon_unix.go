@@ -11,7 +11,7 @@ import (
 	"syscall"
 )
 
-// Daemonize forks the process and detaches from terminal per AI.md PART 8 lines 7882-7925
+// Daemonize forks the process and detaches from terminal per AI.md PART 8
 func Daemonize() error {
 	// Already daemonized? Check if parent is init (PID 1)
 	if os.Getppid() == 1 {
@@ -36,7 +36,7 @@ func Daemonize() error {
 	cmd := exec.Command(execPath, args...)
 	cmd.Env = append(os.Environ(), "_DAEMON_CHILD=1")
 
-	// Detach from terminal per PART 8 lines 7908-7915
+	// Detach from terminal per AI.md PART 8 7908-7915
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -49,13 +49,13 @@ func Daemonize() error {
 		return fmt.Errorf("starting daemon: %w", err)
 	}
 
-	// Parent exits, child continues per PART 8 lines 7921-7923
+	// Parent exits, child continues per AI.md PART 8 7921-7923
 	fmt.Printf("Daemon started with PID %d\n", cmd.Process.Pid)
 	os.Exit(0)
 	return nil
 }
 
-// filterDaemonFlag removes --daemon from args to prevent infinite loop per PART 8 lines 7927-7936
+// filterDaemonFlag removes --daemon from args to prevent infinite loop per AI.md PART 8 7927-7936
 func filterDaemonFlag(args []string) []string {
 	filtered := make([]string, 0, len(args))
 	for _, arg := range args {

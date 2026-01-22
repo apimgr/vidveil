@@ -30,13 +30,16 @@
   - Shows warning if server unreachable
   - Non-blocking (commands still run)
 
-## Pending
+## SSE Status
 
-- [ ] **SSE Streaming** - Real-time search results (low priority for VidVeil)
-  - Accept: text/event-stream header
-  - Parse SSE events
-  - Display results as they arrive
-  - Note: VidVeil aggregates from 50+ sites, SSE would show incremental results
+- [x] **Server SSE** - Complete (`src/server/handler/handlers.go:handleSearchSSE`)
+- [x] **Web Frontend SSE** - Complete (`src/server/static/js/app.js:streamResults`)
+- [x] **CLI Search** - Uses JSON API (works well, all results returned at once)
+
+**Note:** CLI SSE streaming is optional. JSON API is preferred for CLI since:
+- Results are aggregated server-side before returning
+- Simpler output formatting for terminal
+- No need for progressive display in non-interactive mode
 
 ## CLI Structure
 

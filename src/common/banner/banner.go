@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Package banner provides startup banner printing
-// See AI.md PART 7 for specification
+// See AI.md PART 7 and PART 17 for specification
 package banner
 
 import (
@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/apimgr/vidveil/src/common/terminal"
-	"github.com/apimgr/vidveil/src/common/theme"
 )
 
 // BannerConfig holds banner configuration
@@ -20,18 +19,25 @@ type BannerConfig struct {
 	Mode       string   // production/development
 	Debug      bool
 	URLs       []string
-	ShowSetup  bool   // Show setup token (server only, first run)
+	AdminPath  string   // admin panel path (default: "admin")
+	ShowSetup  bool     // Show setup token (server only, first run)
 	SetupToken string
+	TorEnabled bool     // Tor hidden service enabled
+	TorAddress string   // .onion address if Tor enabled
+	SMTPStatus string   // SMTP status message (e.g., "Auto-detected (localhost:25)")
 }
 
+// BoxWidth is the standard width for the boxed banner
+const BoxWidth = 72
+
 // PrintStartupBanner prints the startup banner based on terminal size
-// Per AI.md PART 1: Function names MUST reveal intent
+// Per AI.md PART 17: Uses boxed format with Unicode box drawing characters
 func PrintStartupBanner(config BannerConfig) {
 	size := terminal.GetTerminalSize()
 
 	switch {
 	case size.Mode >= terminal.SizeModeStandard:
-		printFullBanner(config, size)
+		printFullBoxedBanner(config)
 	case size.Mode >= terminal.SizeModeCompact:
 		printCompactBanner(config)
 	case size.Mode >= terminal.SizeModeMinimal:
@@ -41,54 +47,139 @@ func PrintStartupBanner(config BannerConfig) {
 	}
 }
 
-// printFullBanner prints the full banner with ASCII art
-func printFullBanner(config BannerConfig, size terminal.TerminalSize) {
-	symbols := terminal.GetTerminalSymbols()
-	p := theme.GetColorPalette("auto")
+// printFullBoxedBanner prints the full boxed banner per AI.md PART 17 lines 22712-22739
+func printFullBoxedBanner(config BannerConfig) {
+	// Box drawing characters
+	topLeft := "╔"
+	topRight := "╗"
+	bottomLeft := "╚"
+	bottomRight := "╝"
+	horizontal := "═"
+	vertical := "║"
+	midLeft := "╠"
+	midRight := "╣"
 
-	// Print ASCII art
-	art := GetASCIIArt(config.AppName)
-	for _, line := range art {
-		fmt.Println(line)
+	// Build top border
+	topBorder := topLeft + strings.Repeat(horizontal, BoxWidth) + topRight
+	bottomBorder := bottomLeft + strings.Repeat(horizontal, BoxWidth) + bottomRight
+	midBorder := midLeft + strings.Repeat(horizontal, BoxWidth) + midRight
+
+	// Helper to print a line in the box
+	printLine := func(content string) {
+		// Calculate padding needed (accounting for emoji width)
+		contentLen := displayWidth(content)
+		padding := BoxWidth - contentLen - 2 // -2 for spaces around content
+		if padding < 0 {
+			padding = 0
+		}
+		fmt.Printf("%s  %s%s  %s\n", vertical, content, strings.Repeat(" ", padding), vertical)
 	}
 
-	fmt.Println()
+	// Empty line in box
+	printEmpty := func() {
+		fmt.Printf("%s%s%s\n", vertical, strings.Repeat(" ", BoxWidth), vertical)
+	}
 
-	// Print version and mode
-	modeColor := "\033[32m" // Green for production
+	// Print header section
+	fmt.Println(topBorder)
+	printEmpty()
+
+	// App name and version
+	appTitle := fmt.Sprintf("%s %s", strings.ToUpper(config.AppName), config.Version)
+	printLine(appTitle)
+	printEmpty()
+
+	// Status line
+	statusText := "Running"
+	if config.ShowSetup {
+		statusText = "Running (first run - setup available)"
+	}
+	modeIcon := "🔒"
 	if config.Mode == "development" {
-		modeColor = "\033[33m" // Yellow for development
+		modeIcon = "🔧"
 	}
 	if config.Debug {
-		modeColor = "\033[35m" // Magenta for debug
+		modeIcon = "🐛"
 	}
-	fmt.Printf("  Version: %s  %sMode: %s\033[0m\n", config.Version, modeColor, config.Mode)
+	printLine(fmt.Sprintf("Status: %s %s %s", statusText, modeIcon, config.Mode))
+	printEmpty()
 
-	// Print URLs
+	// Separator
+	fmt.Println(midBorder)
+	printEmpty()
+
+	// Web Interface URLs
 	if len(config.URLs) > 0 {
-		fmt.Println()
-		fmt.Printf("  %s Listening on:\n", symbols.Arrow)
+		printLine("🌐 Web Interface:")
 		for _, url := range config.URLs {
-			fmt.Printf("    %s %s\n", symbols.Bullet, url)
+			printLine(fmt.Sprintf("   %s", url))
 		}
+		printEmpty()
 	}
 
-	// Print setup token if applicable
+	// Admin Panel
+	if config.AdminPath != "" {
+		printLine("🔧 Admin Panel:")
+		// Use first URL as base
+		if len(config.URLs) > 0 {
+			baseURL := config.URLs[0]
+			// Remove trailing slash if present
+			baseURL = strings.TrimSuffix(baseURL, "/")
+			printLine(fmt.Sprintf("   %s/%s", baseURL, config.AdminPath))
+		}
+		printEmpty()
+	}
+
+	// Setup Token (first run only)
 	if config.ShowSetup && config.SetupToken != "" {
-		fmt.Println()
-		fmt.Printf("  \033[33m%s First-time setup:\033[0m\n", symbols.Arrow)
-		fmt.Printf("    Setup Token: %s\n", config.SetupToken)
+		printLine(fmt.Sprintf("🔑 Setup Token (use at /%s):", config.AdminPath))
+		printLine(fmt.Sprintf("   %s", config.SetupToken))
+		printEmpty()
 	}
 
-	// Print theme info
-	themeName := theme.GetColorPaletteName("auto")
-	_ = p // Use palette for potential future color output
-	fmt.Printf("\n  Theme: %s\n", themeName)
+	// Tor hidden service
+	if config.TorEnabled && config.TorAddress != "" {
+		printLine("🧅 Tor Hidden Service:")
+		printLine(fmt.Sprintf("   http://%s", config.TorAddress))
+		printEmpty()
+	}
 
+	// SMTP status
+	if config.SMTPStatus != "" {
+		printLine(fmt.Sprintf("📧 SMTP: %s", config.SMTPStatus))
+		printEmpty()
+	}
+
+	// Warning for first run
+	if config.ShowSetup && config.SetupToken != "" {
+		printLine("⚠️  Save the setup token! It will not be shown again.")
+		printEmpty()
+	}
+
+	// Print bottom border
+	fmt.Println(bottomBorder)
 	fmt.Println()
 }
 
-// printCompactBanner prints a compact banner without ASCII art
+// displayWidth calculates the display width of a string, accounting for emoji
+// Emoji typically take 2 columns in most terminals
+func displayWidth(s string) int {
+	width := 0
+	for _, r := range s {
+		if r > 0x1F000 || (r >= 0x2600 && r <= 0x27BF) || (r >= 0x1F300 && r <= 0x1F9FF) {
+			// Emoji - count as 2
+			width += 2
+		} else if r > 127 {
+			// Other Unicode - varies, estimate as 1
+			width += 1
+		} else {
+			width += 1
+		}
+	}
+	return width
+}
+
+// printCompactBanner prints a compact banner without box drawing
 func printCompactBanner(config BannerConfig) {
 	symbols := terminal.GetTerminalSymbols()
 
@@ -97,25 +188,30 @@ func printCompactBanner(config BannerConfig) {
 		modeSymbol = "D"
 	}
 
-	fmt.Printf("%s %s %s [%s %s]\n", symbols.Bullet, config.AppName, config.Version, modeSymbol, config.Mode)
+	fmt.Printf("🚀 %s %s [%s %s]\n", config.AppName, config.Version, modeSymbol, config.Mode)
 
 	if len(config.URLs) > 0 {
-		fmt.Printf("%s %s\n", symbols.Arrow, strings.Join(config.URLs, ", "))
+		fmt.Printf("🌐 %s\n", strings.Join(config.URLs, ", "))
+	}
+
+	if config.TorEnabled && config.TorAddress != "" {
+		fmt.Printf("🧅 %s\n", config.TorAddress)
 	}
 
 	if config.ShowSetup && config.SetupToken != "" {
-		fmt.Printf("%s Setup: %s\n", symbols.Arrow, config.SetupToken)
+		fmt.Printf("🔑 Setup: %s\n", config.SetupToken)
 	}
+
+	fmt.Println()
 }
 
 // printMinimalBanner prints a minimal one-line banner
 func printMinimalBanner(config BannerConfig) {
-	symbols := terminal.GetTerminalSymbols()
 	url := ""
 	if len(config.URLs) > 0 {
 		url = " " + config.URLs[0]
 	}
-	fmt.Printf("%s %s %s%s\n", symbols.Bullet, config.AppName, config.Version, url)
+	fmt.Printf("%s %s%s\n", config.AppName, config.Version, url)
 }
 
 // printMicroBanner prints the most minimal banner for very small terminals

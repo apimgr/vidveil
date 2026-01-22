@@ -174,6 +174,8 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 
 	// Start dedicated Tor process using bine
 	// Per AI.md: Start OUR OWN Tor process - completely separate from system Tor
+	// Per AI.md PART 32 line 37393: Tor startup/runtime errors = WARN (server continues without Tor)
+	// Suppress Tor's verbose output - only show errors when connection actually fails
 	startConf := &tor.StartConf{
 		// Our own data directory - isolated from system Tor
 		DataDir: torDataDir,
@@ -184,8 +186,17 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 		// Use found Tor binary
 		ExePath: torPath,
 
-		// Optional: Debug output for development
-		// DebugWriter: os.Stderr,
+		// NoHush=false means bine adds --hush flag to reduce Tor output
+		// This suppresses "You are running Tor as root" and bootstrap progress messages
+		NoHush: false,
+
+		// Redirect Tor debug output to discard (suppresses warnings like "Problem bootstrapping")
+		// If debug mode, could set to os.Stderr
+		DebugWriter: io.Discard,
+
+		// Extra args to further suppress warnings
+		// --quiet: Suppress non-error log messages
+		ExtraArgs: []string{"--quiet"},
 	}
 
 	s.logger.Info("Starting dedicated Tor process...", nil)

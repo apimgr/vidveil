@@ -34,6 +34,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/ssl"
 	"github.com/apimgr/vidveil/src/server/service/system"
 	"github.com/apimgr/vidveil/src/server/service/tor"
+	"github.com/apimgr/vidveil/src/common/banner"
 	"github.com/apimgr/vidveil/src/common/version"
 )
 
@@ -563,16 +564,13 @@ func main() {
 	go func() {
 		// Build listen address properly handling IPv6
 		listenAddr := appConfig.Server.Address + ":" + appConfig.Server.Port
-		// Per AI.md line 6197-6199: Never show localhost, 127.0.0.1, 0.0.0.0
-		// Show only one address, the most relevant
+		// Per AI.md lines 10558-10564: Display Rules
+		// - Never show: 0.0.0.0, 127.0.0.1, localhost
+		// - Show only: One address, the most relevant
 		displayAddr := getDisplayAddress(appConfig)
 
 		// Console output per AI.md PART 31 lines 10230-10258
 		isFirstRun := adminSvc.IsFirstRun()
-		statusText := "Running"
-		if isFirstRun {
-			statusText = "Running (first run - setup available)"
-		}
 
 		// Check SMTP status per AI.md PART 18 lines 23679-23691
 		smtpStatus := "Disabled"
@@ -606,48 +604,49 @@ func main() {
 			}
 		}
 
-		fmt.Println()
-		fmt.Println("╔══════════════════════════════════════════════════════════════════════╗")
-		fmt.Println("║                                                                      ║")
-		fmt.Printf("║   VIDVEIL v%-58s ║\n", version.GetVersion())
-		fmt.Println("║                                                                      ║")
-		fmt.Printf("║   Status: %-60s ║\n", statusText)
-		fmt.Println("║                                                                      ║")
-		fmt.Println("╠══════════════════════════════════════════════════════════════════════╣")
-		fmt.Println("║                                                                      ║")
-		fmt.Println("║   🌐 Web Interface:                                                   ║")
-		fmt.Printf("║      http://%-58s ║\n", displayAddr)
-		fmt.Println("║                                                                      ║")
-		fmt.Println("║   🔧 Admin Panel:                                                     ║")
-		fmt.Printf("║      http://%-58s ║\n", displayAddr+"/admin")
-		fmt.Println("║                                                                      ║")
-		if isFirstRun {
-			setupToken := adminSvc.GetSetupToken()
-			if setupToken != "" {
-				fmt.Println("║   🔑 Setup Token (use at /admin):                                     ║")
-				fmt.Printf("║      %-64s ║\n", setupToken)
-				fmt.Println("║                                                                      ║")
-			}
+		// Build URL per AI.md lines 10558-10607:
+		// - NEVER show localhost, 127.0.0.1, 0.0.0.0
+		// - Show only one address, the most relevant
+		// - Strip :80 and :443 from URLs
+		port := appConfig.Server.Port
+		displayURL := "http://" + displayAddr
+		if port == "80" {
+			displayURL = "http://" + config.GetDisplayHost(appConfig)
+		} else if port == "443" {
+			displayURL = "https://" + config.GetDisplayHost(appConfig)
 		}
-		fmt.Printf("║   📧 SMTP: %-59s ║\n", smtpStatus)
-		if !appConfig.Server.Email.Enabled {
-			fmt.Println("║      Configure manually at /admin/server/email                       ║")
-		}
-		fmt.Println("║                                                                      ║")
-		if isFirstRun {
-			fmt.Println("║   ⚠️  Save the setup token! It will not be shown again.               ║")
-			fmt.Println("║                                                                      ║")
-		}
-		// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
+
+		// Get Tor address if running
+		var torAddress string
 		if torSvc != nil && torSvc.IsRunning() {
 			info := torSvc.GetInfo()
 			if onion, ok := info["onion_address"].(string); ok && onion != "" {
-				fmt.Printf("║   🧅 Hidden Service: %-50s ║\n", onion)
-				fmt.Println("║                                                                      ║")
+				torAddress = onion
 			}
 		}
-		fmt.Println("╚══════════════════════════════════════════════════════════════════════╝")
-		fmt.Println()
+
+		// Get setup token for first run
+		var setupToken string
+		if isFirstRun {
+			setupToken = adminSvc.GetSetupToken()
+		}
+
+		// Print responsive startup banner per AI.md PART 17 lines 17284-17360
+		banner.PrintStartupBanner(banner.BannerConfig{
+			AppName:    "VidVeil",
+			Version:    version.GetVersion(),
+			Mode:       appConfig.Server.Mode,
+			Debug:      mode.IsDebugEnabled(),
+			URLs:       []string{displayURL},
+			AdminPath:  appConfig.Server.Admin.Path,
+			ShowSetup:  isFirstRun,
+			SetupToken: setupToken,
+			TorEnabled: torSvc != nil && torSvc.IsRunning(),
+			TorAddress: torAddress,
+			SMTPStatus: smtpStatus,
+		})
+
+		// Log INFO lines per AI.md lines 22737-22739
 		fmt.Printf("[INFO] Server started successfully\n")
 		fmt.Printf("[INFO] Listening on %s\n", listenAddr)
 		if smtpInfo != "" {

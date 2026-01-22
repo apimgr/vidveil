@@ -763,6 +763,10 @@ type HealthzHTMLData struct {
 	Version            string
 	BuildDateTime      string
 
+	// Nav template compatibility
+	ActiveNav          string
+	Query              string
+
 	// Project info
 	ProjectName        string
 	ProjectDescription string
@@ -842,6 +846,10 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		Version:            version.GetVersion(),
 		BuildDateTime:      version.BuildTime,
 
+		// Nav template compatibility
+		ActiveNav:          "healthz",
+		Query:              "",
+
 		// Project info
 		ProjectName:        "Vidveil",
 		ProjectDescription: "Privacy-respecting adult video meta search",
@@ -865,8 +873,8 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		// Stats (VidVeil-specific per IDEA.md)
 		Stats: StatsData{
 			Searches:       h.getSearchCount(),
-			EnginesEnabled: h.engineMgr.EnabledCount(),
-			EnginesTotal:   len(h.engineMgr.ListEngines()),
+			EnginesEnabled: func() int { if h.engineMgr != nil { return h.engineMgr.EnabledCount() }; return 0 }(),
+			EnginesTotal:   func() int { if h.engineMgr != nil { return len(h.engineMgr.ListEngines()) }; return 0 }(),
 		},
 
 		// Timestamp

@@ -1688,6 +1688,14 @@ func (h *SearchHandler) InternalErrorHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data map[string]interface{}) {
+	// Ensure required fields for nav.tmpl
+	if data["ActiveNav"] == nil {
+		data["ActiveNav"] = name
+	}
+	if data["Query"] == nil {
+		data["Query"] = ""
+	}
+
 	// Map template names to file paths
 	templateFile := ""
 	templateName := ""

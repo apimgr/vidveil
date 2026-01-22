@@ -95,6 +95,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName
 		"Version":        versionInfo["version"],
 		"BuildDateTime":  versionInfo["build_time"],
 		"Theme":          "dark",
+		"ActiveNav":      templateName,                // Required by nav.tmpl
+		"Query":          "",                          // Required by nav.tmpl
 	}
 
 	// Merge extra data

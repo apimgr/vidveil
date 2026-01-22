@@ -72,7 +72,7 @@
 async function saveSSLSettings(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/config', {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -94,7 +94,7 @@ async function saveSSLSettings(e) {
 
 async function renewCert() {
     try {
-        const resp = await fetch('/api/v1/admin/server/ssl/renew', { method: 'POST' });
+        const resp = await fetch(window.API_BASE + '/server/ssl/renew', { method: 'POST' });
         const data = await resp.json();
         if (data.success) { showSuccess('Certificate renewal started!'); }
         else { showError('Error: ' + data.error); }

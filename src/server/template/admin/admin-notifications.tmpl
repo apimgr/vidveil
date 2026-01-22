@@ -20,7 +20,7 @@
 <script>
 async function loadNotifications() {
     try {
-        const resp = await fetch('/api/v1/admin/notifications/personal');
+        const resp = await fetch(window.API_BASE + '/notifications/personal');
         const data = await resp.json();
         if (data.success && data.data && data.data.length > 0) {
             renderNotifications(data.data);
@@ -68,7 +68,7 @@ function formatTime(timestamp) {
 
 async function markAllRead() {
     try {
-        const resp = await fetch('/api/v1/admin/notifications/personal/read-all', { method: 'POST' });
+        const resp = await fetch(window.API_BASE + '/notifications/personal/read-all', { method: 'POST' });
         const data = await resp.json();
         if (data.success) {
             showSuccess('All notifications marked as read');
@@ -82,7 +82,7 @@ async function markAllRead() {
 async function clearAll() {
     if (!confirm('Clear all notifications?')) return;
     try {
-        const resp = await fetch('/api/v1/admin/notifications/personal/clear', { method: 'POST' });
+        const resp = await fetch(window.API_BASE + '/notifications/personal/clear', { method: 'POST' });
         const data = await resp.json();
         if (data.success) {
             showSuccess('All notifications cleared');
@@ -95,7 +95,7 @@ async function clearAll() {
 
 async function dismissNotification(id) {
     try {
-        const resp = await fetch('/api/v1/admin/notifications/personal/' + id, { method: 'DELETE' });
+        const resp = await fetch(window.API_BASE + '/notifications/personal/' + id, { method: 'DELETE' });
         const data = await resp.json();
         if (data.success) {
             loadNotifications();

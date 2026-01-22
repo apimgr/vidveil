@@ -75,7 +75,7 @@
 async function saveBranding(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/server/branding', {
+        const resp = await fetch(window.API_BASE + '/server/branding', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -93,7 +93,7 @@ async function saveBranding(e) {
 async function saveSEO(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/server/branding', {
+        const resp = await fetch(window.API_BASE + '/server/branding', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

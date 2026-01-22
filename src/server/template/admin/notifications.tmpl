@@ -130,7 +130,7 @@ async function saveNotifications(e) {
     };
 
     try {
-        const resp = await fetch('/api/v1/admin/server/notifications', {
+        const resp = await fetch(window.API_BASE + '/server/notifications', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -148,7 +148,7 @@ async function saveNotifications(e) {
 
 async function sendTestNotification() {
     try {
-        const resp = await fetch('/api/v1/admin/server/notifications/test', {
+        const resp = await fetch(window.API_BASE + '/server/notifications/test', {
             method: 'POST'
         });
         const result = await resp.json();

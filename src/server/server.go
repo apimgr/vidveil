@@ -100,8 +100,8 @@ func (s *Server) setupMiddleware() {
 	// URL Variables resolution per AI.md PART 13 (reverse proxy headers)
 	s.router.Use(urlvars.GlobalResolver().Middleware)
 
-	// Trailing slash handling per AI.md PART 14 - redirect /path/ to /path
-	s.router.Use(middleware.RedirectSlashes)
+	// URL Normalization per AI.md PART 16 - redirect /path/ to /path (MUST be early)
+	s.router.Use(URLNormalizeMiddleware)
 
 	// Path Security (AI.md PART 5 - must be early in chain)
 	s.router.Use(paths.PathSecurityMiddleware)
@@ -616,24 +616,6 @@ func (s *Server) setupRoutes() {
 					r.Post("/check", admin.APIUpdatesCheck)
 				})
 			})
-
-			// Config routes per AI.md PART 37
-			r.Get("/config", admin.APIConfig)
-			r.Put("/config", admin.APIConfig)
-			r.Patch("/config", admin.APIConfig)
-			r.Get("/config/search", admin.APIConfig)
-			r.Post("/backup", admin.APIBackup)
-			r.Post("/maintenance", admin.APIMaintenanceMode)
-			r.Get("/logs/access", admin.APILogsAccess)
-			r.Get("/logs/error", admin.APILogsError)
-			r.Get("/logs/audit", admin.APILogsAudit)
-			r.Post("/restore", admin.APIRestore)
-			r.Post("/test/email", admin.APITestEmail)
-			r.Post("/password", admin.APIPassword)
-			r.Post("/token/regenerate", admin.APITokenRegenerate)
-			r.Get("/scheduler/tasks", admin.APISchedulerTasks)
-			r.Post("/scheduler/run", admin.APISchedulerRunTask)
-			r.Get("/scheduler/history", admin.APISchedulerHistory)
 		})
 	})
 
@@ -693,4 +675,36 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		return s.srv.Shutdown(ctx)
 	}
 	return nil
+}
+
+// URLNormalizeMiddleware normalizes URLs for consistent routing per AI.md PART 16
+// - Removes trailing slashes (except for root "/")
+// - Redirects to canonical URL with 301 if normalization changed path
+func URLNormalizeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		// Root path "/" stays as-is
+		if path == "/" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Remove trailing slash (canonical form: no trailing slash)
+		if strings.HasSuffix(path, "/") {
+			// Exception: explicit file requests (e.g., /dir/index.html)
+			lastSlashIdx := strings.LastIndex(path, "/")
+			if lastSlashIdx >= 0 && !strings.Contains(path[lastSlashIdx:], ".") {
+				canonical := strings.TrimSuffix(path, "/")
+				// Preserve query string
+				if r.URL.RawQuery != "" {
+					canonical += "?" + r.URL.RawQuery
+				}
+				http.Redirect(w, r, canonical, http.StatusMovedPermanently)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

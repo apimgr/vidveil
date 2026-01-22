@@ -308,6 +308,7 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 		"SiteTitle": h.appConfig.Server.Title,
 		"Error":     "",
 		"Theme":     h.appConfig.Web.UI.Theme,
+		"AdminPath": "/" + h.appConfig.Server.Admin.Path,
 	}
 
 	if r.Method == http.MethodPost {
@@ -3385,6 +3386,8 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	data["Config"] = h.appConfig
 	data["ActiveNav"] = templateName
 	data["SiteTitle"] = h.appConfig.Server.Title
+	// Per AI.md PART 17: AdminPath available in all templates
+	data["AdminPath"] = "/" + h.appConfig.Server.Admin.Path
 	// Inject version for cache busting in all admin templates
 	if data["Version"] == nil {
 		data["Version"] = version.GetVersion()

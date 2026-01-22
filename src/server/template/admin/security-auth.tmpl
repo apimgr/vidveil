@@ -83,7 +83,7 @@ async function changePassword(e) {
         return;
     }
     try {
-        const resp = await fetch('/api/v1/admin/password', {
+        const resp = await fetch(window.API_BASE + '/profile/password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

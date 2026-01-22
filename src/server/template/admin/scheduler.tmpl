@@ -108,7 +108,7 @@
 async function saveCacheCleanup(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/config', {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -131,7 +131,7 @@ async function saveCacheCleanup(e) {
 
 async function runCleanupNow() {
     try {
-        const resp = await fetch('/api/v1/admin/cache/clear', { method: 'POST' });
+        const resp = await fetch(window.API_BASE + '/server/scheduler/cache/clear', { method: 'POST' });
         const data = await resp.json();
         if (data.success) { showSuccess('Cache cleanup completed!'); }
         else { showError('Error: ' + data.error); }
@@ -141,7 +141,7 @@ async function runCleanupNow() {
 async function saveDBMaintenance(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/config', {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -164,7 +164,7 @@ async function saveDBMaintenance(e) {
 async function saveStatsSettings(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/config', {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

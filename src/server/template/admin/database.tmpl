@@ -189,7 +189,7 @@ async function testConnection() {
     };
 
     try {
-        const resp = await fetch('/api/v1/admin/server/database/test', {
+        const resp = await fetch(window.API_BASE + '/server/database/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -228,7 +228,7 @@ function switchBackend(e) {
         }
 
         try {
-            const resp = await fetch('/api/v1/admin/server/database/backend', {
+            const resp = await fetch(window.API_BASE + '/server/database/backend', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
@@ -249,7 +249,7 @@ function switchBackend(e) {
 async function saveCacheSettings(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/config', {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -269,7 +269,7 @@ async function saveCacheSettings(e) {
 
 async function clearCache() {
     try {
-        const resp = await fetch('/api/v1/admin/cache/clear', { method: 'POST' });
+        const resp = await fetch(window.API_BASE + '/server/database/cache/clear', { method: 'POST' });
         const data = await resp.json();
         if (data.success) { showSuccess('Cache cleared!'); }
         else { showError('Error: ' + data.error); }
@@ -279,7 +279,7 @@ async function clearCache() {
 function runMigrations() {
     showConfirm('Run all pending database migrations? This action cannot be undone.', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/server/database/migrate', { method: 'POST' });
+            const resp = await fetch(window.API_BASE + '/server/database/migrate', { method: 'POST' });
             const data = await resp.json();
             if (data.success) {
                 showSuccess('Migrations completed successfully!');
@@ -293,7 +293,7 @@ function runMigrations() {
 
 async function vacuumDB() {
     try {
-        const resp = await fetch('/api/v1/admin/server/database/vacuum', { method: 'POST' });
+        const resp = await fetch(window.API_BASE + '/server/database/vacuum', { method: 'POST' });
         const data = await resp.json();
         if (data.success) { showSuccess('Database vacuum completed!'); }
         else { showError('Error: ' + data.error); }
@@ -302,7 +302,7 @@ async function vacuumDB() {
 
 async function analyzeDB() {
     try {
-        const resp = await fetch('/api/v1/admin/server/database/analyze', { method: 'POST' });
+        const resp = await fetch(window.API_BASE + '/server/database/analyze', { method: 'POST' });
         const data = await resp.json();
         if (data.success) { showSuccess('Database analysis completed!'); }
         else { showError('Error: ' + data.error); }

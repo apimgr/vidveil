@@ -20,7 +20,7 @@
             <div class="alert alert-error">{{.Error}}</div>
             {{end}}
 
-            <form method="POST" action="/admin/server/setup" id="setup-form">
+            <form method="POST" action="{{.AdminPath}}/server/setup" id="setup-form">
                 <div class="form-group">
                     <label for="username">Username</label>
                     <input type="text" id="username" name="username" required minlength="3" maxlength="32" pattern="[a-zA-Z0-9_]+" placeholder="admin">

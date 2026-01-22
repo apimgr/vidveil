@@ -68,7 +68,7 @@ async function refreshAuditLogs() {
     tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
 
     try {
-        const resp = await fetch('/api/v1/admin/logs/audit?lines=' + lines + '&filter=' + filter);
+        const resp = await fetch(window.API_BASE + '/server/logs/audit?lines=' + lines + '&filter=' + filter);
         const data = await resp.json();
 
         if (!data.success) {
@@ -118,7 +118,7 @@ function escapeHtml(text) {
 }
 
 function downloadAuditLogs() {
-    window.location.href = '/api/v1/admin/logs/audit?download=true';
+    window.location.href = window.API_BASE + '/server/logs/audit?download=true';
 }
 
 document.addEventListener('DOMContentLoaded', refreshAuditLogs);

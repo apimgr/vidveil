@@ -116,7 +116,7 @@
 async function saveOnionSettings(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/server/tor', {
+        const resp = await fetch(window.API_BASE + '/server/tor', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -132,7 +132,7 @@ async function saveOnionSettings(e) {
 function regenerateOnion() {
     showConfirm('Are you sure? This will generate a new .onion address and invalidate the current one.', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/server/tor/regenerate', { method: 'POST' });
+            const resp = await fetch(window.API_BASE + '/server/tor/regenerate', { method: 'POST' });
             const data = await resp.json();
             if (data.success) { showSuccess('New onion address generated!'); location.reload(); }
             else { showError('Error: ' + data.error); }
@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function checkVanityStatus() {
     try {
-        const resp = await fetch('/api/v1/admin/server/tor/vanity');
+        const resp = await fetch(window.API_BASE + '/server/tor/vanity');
         const data = await resp.json();
         if (!data.success) return;
 
@@ -205,7 +205,7 @@ async function generateVanity(e) {
     if (!/^[a-z2-7]+$/.test(prefix)) { showError('Prefix must only contain a-z and 2-7'); return; }
 
     try {
-        const resp = await fetch('/api/v1/admin/server/tor/vanity', {
+        const resp = await fetch(window.API_BASE + '/server/tor/vanity', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prefix: prefix })
@@ -227,7 +227,7 @@ async function generateVanity(e) {
 function applyVanity() {
     showConfirm('Apply this vanity address? This will replace your current .onion address.', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/server/tor/vanity/apply', { method: 'POST' });
+            const resp = await fetch(window.API_BASE + '/server/tor/vanity/apply', { method: 'POST' });
             const data = await resp.json();
             if (data.success) {
                 showSuccess('Vanity address applied! Restart Tor service to use new address.');
@@ -241,7 +241,7 @@ function applyVanity() {
 
 async function cancelVanity() {
     try {
-        const resp = await fetch('/api/v1/admin/server/tor/vanity', { method: 'DELETE' });
+        const resp = await fetch(window.API_BASE + '/server/tor/vanity', { method: 'DELETE' });
         const data = await resp.json();
         if (data.success) {
             showSuccess('Vanity generation cancelled');
@@ -257,7 +257,7 @@ async function importOnionKey(e) {
     const key = document.getElementById('onion-key').value;
     if (!key) { showError('Please enter a private key'); return; }
     try {
-        const resp = await fetch('/api/v1/admin/server/tor/import', {
+        const resp = await fetch(window.API_BASE + '/server/tor/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ private_key: key })

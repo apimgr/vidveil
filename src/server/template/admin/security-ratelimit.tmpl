@@ -76,7 +76,7 @@
 async function saveRateLimit(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/server/settings', {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -112,7 +112,7 @@
 async function saveBackupSettings(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/config', {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -135,7 +135,7 @@ async function saveBackupSettings(e) {
 async function createBackup() {
     try {
         showInfo('Creating backup...');
-        const resp = await fetch('/api/v1/admin/backup', {
+        const resp = await fetch(window.API_BASE + '/server/backup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -152,14 +152,14 @@ async function createBackup() {
 }
 
 function downloadBackup(id) {
-    window.location.href = '/api/v1/admin/backup/' + id + '/download';
+    window.location.href = window.API_BASE + '/server/backup/' + id + '/download';
 }
 
 function restoreBackup(id) {
     showConfirm('Are you sure? This will restore the server to this backup state. The server will restart.', async function() {
         try {
             showInfo('Restoring backup...');
-            const resp = await fetch('/api/v1/admin/backup/' + id + '/restore', { method: 'POST' });
+            const resp = await fetch(window.API_BASE + '/server/backup/' + id + '/restore', { method: 'POST' });
             const data = await resp.json();
             if (data.success) { showSuccess('Restore initiated. Server will restart...'); }
             else { showError('Error: ' + data.error); }
@@ -170,7 +170,7 @@ function restoreBackup(id) {
 function deleteBackup(id) {
     showConfirm('Delete this backup?', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/backup/' + id, { method: 'DELETE' });
+            const resp = await fetch(window.API_BASE + '/server/backup/' + id, { method: 'DELETE' });
             const data = await resp.json();
             if (data.success) { showSuccess('Backup deleted!'); location.reload(); }
             else { showError('Error: ' + data.error); }
@@ -187,7 +187,7 @@ function uploadRestore(e) {
         formData.append('backup', file);
         try {
             showInfo('Uploading and restoring...');
-            const resp = await fetch('/api/v1/admin/backup/upload', { method: 'POST', body: formData });
+            const resp = await fetch(window.API_BASE + '/server/backup/upload', { method: 'POST', body: formData });
             const data = await resp.json();
             if (data.success) { showSuccess('Restore initiated. Server will restart...'); }
             else { showError('Error: ' + data.error); }
@@ -196,7 +196,7 @@ function uploadRestore(e) {
 }
 
 function exportConfig() {
-    window.location.href = '/api/v1/admin/config/export';
+    window.location.href = window.API_BASE + '/server/settings/export';
 }
 
 function importConfig(e) {
@@ -206,7 +206,7 @@ function importConfig(e) {
         const formData = new FormData();
         formData.append('config', file);
         try {
-            const resp = await fetch('/api/v1/admin/config/import', { method: 'POST', body: formData });
+            const resp = await fetch(window.API_BASE + '/server/settings/import', { method: 'POST', body: formData });
             const data = await resp.json();
             if (data.success) { showSuccess('Configuration imported!'); location.reload(); }
             else { showError('Error: ' + data.error); }

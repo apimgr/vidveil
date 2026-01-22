@@ -73,7 +73,7 @@
 async function saveRateLimit(e) {
     e.preventDefault();
     try {
-        const resp = await fetch('/api/v1/admin/config', {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -101,7 +101,7 @@ async function changePassword(e) {
         return;
     }
     try {
-        const resp = await fetch('/api/v1/admin/password', {
+        const resp = await fetch(window.API_BASE + '/profile/password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -120,7 +120,7 @@ async function changePassword(e) {
 function regenerateToken() {
     showConfirm('Are you sure? This will invalidate your current API token.', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/token/regenerate', { method: 'POST' });
+            const resp = await fetch(window.API_BASE + '/profile/token', { method: 'POST' });
             const data = await resp.json();
             if (data.success) {
                 showSuccess('Token regenerated! New token: ' + data.data.token);

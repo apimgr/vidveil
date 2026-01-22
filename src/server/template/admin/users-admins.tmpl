@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', loadPendingInvites);
 
 async function loadPendingInvites() {
     try {
-        const resp = await fetch('/api/v1/admin/users/admins/invites');
+        const resp = await fetch(window.API_BASE + '/users/admins/invites');
         const data = await resp.json();
         if (data.success && data.data && data.data.length > 0) {
             const card = document.getElementById('pending-invites-card');
@@ -136,7 +136,7 @@ async function loadPendingInvites() {
 function revokeInvite(id) {
     showConfirm('Are you sure you want to revoke this invite?', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/users/admins/invites/' + id, {
+            const resp = await fetch(window.API_BASE + '/users/admins/invites/' + id, {
                 method: 'DELETE'
             });
             const data = await resp.json();
@@ -158,7 +158,7 @@ async function generateInvite(e) {
     const expires = document.getElementById('expires').value;
 
     try {
-        const resp = await fetch('/api/v1/admin/users/admins/invite', {
+        const resp = await fetch(window.API_BASE + '/users/admins/invite', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: username, expires_hours: parseInt(expires) })

@@ -10,7 +10,7 @@
     <div class="alert alert-success">{{.Success}}</div>
     {{end}}
 
-    <form id="add-node-form" method="POST" action="/admin/server/nodes/add">
+    <form id="add-node-form" method="POST" action="{{.AdminPath}}/server/nodes/add">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 
         <div class="form-group">
@@ -42,7 +42,7 @@
         <div class="form-actions">
             <button type="button" onclick="testConnection()" class="btn btn-secondary">Test Connection</button>
             <button type="submit" class="btn btn-primary">Add Node</button>
-            <a href="/admin/server/nodes" class="btn">Cancel</a>
+            <a href="{{.AdminPath}}/server/nodes" class="btn">Cancel</a>
         </div>
     </form>
 
@@ -120,7 +120,7 @@ async function testConnection() {
     alertDiv.textContent = 'Testing connection...';
 
     try {
-        const resp = await fetch('/api/v1/admin/server/nodes/test', {
+        const resp = await fetch(window.API_BASE + '/server/nodes/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ address, port: parseInt(port), token, verify_ssl: verifySSL })
@@ -145,7 +145,7 @@ async function testConnection() {
 function regenerateToken() {
     showConfirm('Regenerate the cluster join token? Existing nodes using the old token will need to be updated.', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/server/nodes/token', {
+            const resp = await fetch(window.API_BASE + '/server/nodes/token', {
                 method: 'POST'
             });
             const data = await resp.json();

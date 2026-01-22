@@ -1,3 +1,8 @@
 {{define "admin/scripts"}}
+<script>
+// API base path per AI.md PART 14 - use configurable paths
+window.API_BASE = '/api/v1/{{.Config.Server.Admin.Path}}';
+window.ADMIN_PATH = '/{{.Config.Server.Admin.Path}}';
+</script>
 <script src="/static/js/app.js?v={{.Version}}"></script>
 {{end}}

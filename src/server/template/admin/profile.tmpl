@@ -125,7 +125,7 @@ async function changePassword(e) {
     }
 
     try {
-        const resp = await fetch('/api/v1/admin/profile/password', {
+        const resp = await fetch(window.API_BASE + '/profile/password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -148,7 +148,7 @@ async function changePassword(e) {
 function regenerateToken() {
     showConfirm('Are you sure? This will invalidate your current API token.', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/profile/token', { method: 'POST' });
+            const resp = await fetch(window.API_BASE + '/profile/token', { method: 'POST' });
             const data = await resp.json();
             if (data.success) {
                 document.getElementById('new-token').textContent = data.data.token;
@@ -175,13 +175,13 @@ function copyToken() {
 }
 
 async function enable2FA() {
-    window.location.href = '/admin/security/auth?action=enable2fa';
+    window.location.href = '{{.AdminPath}}/server/security/auth?action=enable2fa';
 }
 
 function disable2FA() {
     showConfirm('Are you sure you want to disable two-factor authentication?', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/profile/2fa', {
+            const resp = await fetch(window.API_BASE + '/profile/2fa', {
                 method: 'DELETE'
             });
             const data = await resp.json();
@@ -202,7 +202,7 @@ let recoveryKeysData = [];
 
 async function loadRecoveryKeysStatus() {
     try {
-        const resp = await fetch('/api/v1/admin/profile/recovery-keys');
+        const resp = await fetch(window.API_BASE + '/profile/recovery-keys');
         const data = await resp.json();
         if (data.success) {
             const status = data.data;
@@ -225,7 +225,7 @@ async function loadRecoveryKeysStatus() {
 function generateRecoveryKeys() {
     showConfirm('Generate new recovery keys? This will invalidate all existing keys.', async function() {
         try {
-            const resp = await fetch('/api/v1/admin/profile/recovery-keys/generate', { method: 'POST' });
+            const resp = await fetch(window.API_BASE + '/profile/recovery-keys/generate', { method: 'POST' });
             const data = await resp.json();
             if (data.success) {
                 recoveryKeysData = data.data.keys;

@@ -39,7 +39,7 @@
 
 <div class="card">
     <h2>API Access</h2>
-    <p>The admin API allows programmatic access to all settings. See the <a href="/admin/security/tokens">API Tokens</a> page for authentication details.</p>
+    <p>The admin API allows programmatic access to all settings. See the <a href="{{.AdminPath}}/server/security/tokens">API Tokens</a> page for authentication details.</p>
 
     <h3>Example Request</h3>
     <div class="code-block">
@@ -84,7 +84,7 @@ document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
     if (e.key === '?') {
-        window.location.href = '/admin/help';
+        window.location.href = '{{.AdminPath}}/server/help';
     }
 });
 </script>

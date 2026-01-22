@@ -25,7 +25,7 @@
 <div class="card">
     <div class="card-header flex-between">
         <h2>Cluster Nodes</h2>
-        <a href="/admin/server/nodes/add" class="btn btn-primary">Add Node</a>
+        <a href="{{.AdminPath}}/server/nodes/add" class="btn btn-primary">Add Node</a>
     </div>
     {{if .Nodes}}
     <table class="data-table">
@@ -108,8 +108,8 @@
 <div class="card">
     <h2>Node Actions</h2>
     <div class="button-group">
-        <a href="/admin/server/nodes/settings" class="btn btn-secondary">Node Settings</a>
-        <a href="/admin/server/nodes/remove" class="btn btn-warning">Leave Cluster</a>
+        <a href="{{.AdminPath}}/server/nodes/settings" class="btn btn-secondary">Node Settings</a>
+        <a href="{{.AdminPath}}/server/nodes/remove" class="btn btn-warning">Leave Cluster</a>
     </div>
 </div>
 {{end}}

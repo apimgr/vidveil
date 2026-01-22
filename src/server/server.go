@@ -35,17 +35,19 @@ func GetTemplatesFS() embed.FS {
 
 // Server represents the HTTP server
 type Server struct {
-	appConfig    *config.AppConfig
-	configDir    string
-	dataDir      string
-	engineMgr    *engine.EngineManager
-	adminSvc     *admin.AdminService
-	migrationMgr MigrationManager
-	scheduler    *scheduler.Scheduler
-	logger       *logging.AppLogger
-	router       *chi.Mux
-	srv          *http.Server
-	rateLimiter  *ratelimit.RateLimiter
+	appConfig     *config.AppConfig
+	configDir     string
+	dataDir       string
+	engineMgr     *engine.EngineManager
+	adminSvc      *admin.AdminService
+	migrationMgr  MigrationManager
+	scheduler     *scheduler.Scheduler
+	logger        *logging.AppLogger
+	router        *chi.Mux
+	srv           *http.Server
+	rateLimiter   *ratelimit.RateLimiter
+	searchHandler *handler.SearchHandler
+	adminHandler  *handler.AdminHandler
 }
 
 // MigrationManager interface for database migrations
@@ -87,6 +89,16 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 	s.setupRoutes()
 
 	return s
+}
+
+// SetTorService sets the Tor service for handlers that need it
+func (s *Server) SetTorService(t handler.TorService) {
+	if s.adminHandler != nil {
+		s.adminHandler.SetTorService(t)
+	}
+	if s.searchHandler != nil {
+		s.searchHandler.SetTorEnabled(t != nil)
+	}
 }
 
 // setupMiddleware configures middleware
@@ -204,6 +216,9 @@ func extensionStripMiddleware(next http.Handler) http.Handler {
 func (s *Server) setupRoutes() {
 	h := handler.NewSearchHandler(s.appConfig, s.engineMgr)
 	admin := handler.NewAdminHandler(s.appConfig, s.configDir, s.dataDir, s.engineMgr, s.adminSvc, s.migrationMgr)
+	// Store handler references for later service injection
+	s.searchHandler = h
+	s.adminHandler = admin
 	// Set scheduler for admin panel management per AI.md PART 19
 	admin.SetScheduler(s.scheduler)
 	// Set logger for audit and security event logging per AI.md PART 11

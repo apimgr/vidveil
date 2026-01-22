@@ -45,6 +45,7 @@ type SearchHandler struct {
 	engineMgr   *engine.EngineManager
 	searchCache *cache.SearchCache
 	metrics     *ServerMetrics
+	torEnabled  bool
 }
 
 // NewSearchHandler creates a new handler instance
@@ -67,6 +68,11 @@ func NewSearchHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManag
 // SetMetrics sets the metrics collector for statistics display
 func (h *SearchHandler) SetMetrics(m *ServerMetrics) {
 	h.metrics = m
+}
+
+// SetTorEnabled sets the Tor service status for healthz display
+func (h *SearchHandler) SetTorEnabled(enabled bool) {
+	h.torEnabled = enabled
 }
 
 // getSearchCount returns total searches from metrics
@@ -345,7 +351,12 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 	// Perform parallel search across engines
 	results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames)
-	
+
+	// Increment search count
+	if h.metrics != nil {
+		h.metrics.IncrementSearches()
+	}
+
 	format := detectResponseFormat(r)
 	
 	switch format {
@@ -910,7 +921,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 
 	// Features
 	if h.appConfig != nil {
-		data.Features.TorEnabled = false
+		data.Features.TorEnabled = h.torEnabled
 		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
 		data.Features.Metrics = h.appConfig.Server.Metrics.Enabled
 	}
@@ -1163,6 +1174,10 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		results.Data.Cached = false
 		// Cache the results
 		h.searchCache.Set(cacheKey, results)
+		// Increment search count for non-cached searches
+		if h.metrics != nil {
+			h.metrics.IncrementSearches()
+		}
 	}
 
 	// Add bang info to response
@@ -1209,6 +1224,11 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	if !ok {
 		h.jsonError(w, "Streaming not supported", "STREAMING_ERROR", http.StatusInternalServerError)
 		return
+	}
+
+	// Increment search count for SSE searches
+	if h.metrics != nil {
+		h.metrics.IncrementSearches()
 	}
 
 	// Stream results

@@ -551,6 +551,9 @@ func main() {
 	// Create server with admin service, migration manager, scheduler, and logger per AI.md PART 11
 	srv := server.NewServer(appConfig, configDir, dataDir, engineMgr, adminSvc, migrationMgr, sched, logger)
 
+	// Set Tor service for handlers per AI.md PART 32
+	srv.SetTorService(torSvc)
+
 	// Start live config watcher per AI.md PART 1 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, appConfig)
 	configWatcher.OnReload(func(newCfg *config.AppConfig) {

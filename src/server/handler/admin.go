@@ -365,49 +365,39 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 	h.renderSetupWizardPage(w, data)
 }
 
-// renderSetupTokenPage renders the setup token entry form
+// renderSetupTokenPage renders the setup token entry form using common.css per AI.md PART 16
 func (h *AdminHandler) renderSetupTokenPage(w http.ResponseWriter, errorMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="theme-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Setup - %s</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-    <style>
-        .setup-container { max-width: 400px; margin: 100px auto; padding: 20px; }
-        .setup-box { background: #1a1a2e; border-radius: 8px; padding: 30px; }
-        .setup-title { text-align: center; margin-bottom: 20px; }
-        .error { color: #e74c3c; margin-bottom: 15px; text-align: center; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; }
-        .form-group input { width: 100%%; padding: 10px; border-radius: 4px; border: 1px solid #333; background: #0f0f1a; color: #fff; }
-        .btn-primary { width: 100%%; padding: 12px; background: #6c5ce7; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-        .btn-primary:hover { background: #5b4bc7; }
-        .info { text-align: center; margin-top: 20px; color: #888; font-size: 0.9em; }
-    </style>
+    <link rel="stylesheet" href="/static/css/common.css">
 </head>
-<body>
+<body class="centered-page-body">
     <div class="setup-container">
-        <div class="setup-box">
-            <h1 class="setup-title">Admin Setup</h1>
-            <p style="text-align: center; margin-bottom: 20px;">Enter the setup token displayed in the server console.</p>
+        <div class="setup-card">
+            <div class="setup-header">
+                <h1>Admin Setup</h1>
+                <p>Enter the setup token displayed in the server console</p>
+            </div>
             %s
-            <form method="POST">
+            <form method="POST" id="token-form">
                 <div class="form-group">
                     <label for="token">Setup Token</label>
                     <input type="text" id="token" name="token" required autofocus placeholder="Enter setup token">
+                    <p class="help-text">The setup token was shown once when the server first started</p>
                 </div>
-                <button type="submit" class="btn-primary">Continue</button>
+                <button type="submit" class="btn btn-primary" style="width: 100%%;">Continue</button>
             </form>
-            <p class="info">The setup token was shown once when the server first started.</p>
         </div>
     </div>
 </body>
 </html>`, h.appConfig.Server.Title, func() string {
 		if errorMsg != "" {
-			return fmt.Sprintf(`<div class="error">%s</div>`, errorMsg)
+			return fmt.Sprintf(`<div class="alert alert-error">%s</div>`, errorMsg)
 		}
 		return ""
 	}())

@@ -20,13 +20,7 @@
             <div class="alert alert-error">{{.Error}}</div>
             {{end}}
 
-            <form method="POST" action="/admin/setup" id="setup-form">
-                <div class="form-group">
-                    <label for="token">Setup Token</label>
-                    <input type="text" id="token" name="token" required placeholder="Enter the token from console" value="{{.Token}}">
-                    <p class="help-text">Check the server console for your setup token</p>
-                </div>
-
+            <form method="POST" action="/admin/server/setup" id="setup-form">
                 <div class="form-group">
                     <label for="username">Username</label>
                     <input type="text" id="username" name="username" required minlength="3" maxlength="32" pattern="[a-zA-Z0-9_]+" placeholder="admin">

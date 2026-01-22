@@ -285,12 +285,12 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 	h.render2FAPage(w, errorMsg)
 }
 
-// render2FAPage renders the 2FA verification form per AI.md PART 17
+// render2FAPage renders the 2FA verification form using common.css per AI.md PART 16
 func (h *AuthHandler) render2FAPage(w http.ResponseWriter, errorMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	errorHtml := ""
 	if errorMsg != "" {
-		errorHtml = fmt.Sprintf(`<div class="error">%s</div>`, errorMsg)
+		errorHtml = fmt.Sprintf(`<div class="alert alert-error">%s</div>`, errorMsg)
 	}
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en" class="theme-dark">
@@ -299,41 +299,26 @@ func (h *AuthHandler) render2FAPage(w http.ResponseWriter, errorMsg string) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Two-Factor Authentication - %s</title>
     <link rel="stylesheet" href="/static/css/common.css">
-    <style>
-        .login-container { max-width: 400px; margin: 100px auto; padding: 20px; }
-        .login-box { background: var(--color-bg-secondary); border-radius: 8px; padding: 30px; border: 1px solid var(--color-border); }
-        .login-title { text-align: center; margin-bottom: 10px; color: var(--color-text); }
-        .login-subtitle { text-align: center; margin-bottom: 20px; color: var(--color-muted); font-size: 0.9rem; }
-        .error { color: var(--color-error); margin-bottom: 15px; text-align: center; padding: 10px; background: var(--color-error-bg); border-radius: 4px; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; color: var(--color-text); }
-        .form-group input { width: 100%%; padding: 12px; border-radius: 4px; border: 2px solid var(--color-border); background: var(--color-bg-tertiary); color: var(--color-text); font-size: 1.2rem; text-align: center; letter-spacing: 0.5em; }
-        .form-group input:focus { border-color: var(--color-primary); outline: none; }
-        .btn-primary { width: 100%%; padding: 12px; background: var(--color-primary); color: var(--color-bg); border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
-        .btn-primary:hover { opacity: 0.9; }
-        .back-link { text-align: center; margin-top: 20px; }
-        .back-link a { color: var(--color-muted); text-decoration: none; }
-        .back-link a:hover { color: var(--color-primary); }
-        .help-text { font-size: 0.85rem; color: var(--color-muted); margin-top: 10px; text-align: center; }
-    </style>
 </head>
-<body style="background: var(--color-bg); min-height: 100vh;">
-    <div class="login-container">
-        <div class="login-box">
-            <h1 class="login-title">Two-Factor Authentication</h1>
-            <p class="login-subtitle">Enter the 6-digit code from your authenticator app</p>
+<body class="centered-page-body">
+    <div class="setup-container">
+        <div class="setup-card">
+            <div class="setup-header">
+                <h1>Two-Factor Authentication</h1>
+                <p>Enter the 6-digit code from your authenticator app</p>
+            </div>
             %s
-            <form method="POST">
+            <form method="POST" id="2fa-form">
                 <div class="form-group">
                     <label for="code">Verification Code</label>
-                    <input type="text" id="code" name="code" maxlength="8" pattern="[0-9A-Za-z-]+" required autofocus autocomplete="one-time-code" placeholder="000000">
+                    <input type="text" id="code" name="code" maxlength="8" pattern="[0-9A-Za-z-]+" required autofocus autocomplete="one-time-code" placeholder="000000" class="text-center" style="letter-spacing: 0.5em; font-size: 1.2rem;">
                 </div>
-                <button type="submit" class="btn-primary">Verify</button>
+                <button type="submit" class="btn btn-primary" style="width: 100%%;">Verify</button>
             </form>
-            <p class="help-text">Or enter a backup code if you don't have access to your authenticator</p>
-            <div class="back-link">
+            <p class="help-text text-center mt-md">Or enter a backup code if you don't have access to your authenticator</p>
+            <p class="help-text text-center mt-lg">
                 <a href="/auth/login">← Back to Login</a>
-            </div>
+            </p>
         </div>
     </div>
 </body>
@@ -341,54 +326,43 @@ func (h *AuthHandler) render2FAPage(w http.ResponseWriter, errorMsg string) {
 	w.Write([]byte(html))
 }
 
-// renderLoginPage renders the login form
+// renderLoginPage renders the login form using common.css styles per AI.md PART 16
 func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	errorHtml := ""
 	if errorMsg != "" {
-		errorHtml = fmt.Sprintf(`<div class="error">%s</div>`, errorMsg)
+		errorHtml = fmt.Sprintf(`<div class="alert alert-error">%s</div>`, errorMsg)
 	}
 	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="theme-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - %s</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-    <style>
-        .login-container { max-width: 400px; margin: 100px auto; padding: 20px; }
-        .login-box { background: #1a1a2e; border-radius: 8px; padding: 30px; }
-        .login-title { text-align: center; margin-bottom: 20px; }
-        .error { color: #e74c3c; margin-bottom: 15px; text-align: center; padding: 10px; background: rgba(231,76,60,0.1); border-radius: 4px; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; }
-        .form-group input { width: 100%%; padding: 10px; border-radius: 4px; border: 1px solid #333; background: #0f0f1a; color: #fff; }
-        .btn-primary { width: 100%%; padding: 12px; background: #6c5ce7; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-        .btn-primary:hover { background: #5b4bc7; }
-        .back-link { text-align: center; margin-top: 20px; }
-        .back-link a { color: #888; text-decoration: none; }
-        .back-link a:hover { color: #6c5ce7; }
-    </style>
+    <link rel="stylesheet" href="/static/css/common.css">
 </head>
-<body>
-    <div class="login-container">
-        <div class="login-box">
-            <h1 class="login-title">Login</h1>
+<body class="centered-page-body">
+    <div class="setup-container">
+        <div class="setup-card">
+            <div class="setup-header">
+                <h1>Login</h1>
+                <p>Sign in to your account</p>
+            </div>
             %s
-            <form method="POST">
+            <form method="POST" id="login-form">
                 <div class="form-group">
                     <label for="username">Username</label>
-                    <input type="text" id="username" name="username" required autofocus>
+                    <input type="text" id="username" name="username" required autofocus placeholder="Enter your username">
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required>
+                    <input type="password" id="password" name="password" required placeholder="Enter your password">
                 </div>
-                <button type="submit" class="btn-primary">Login</button>
+                <button type="submit" class="btn btn-primary" style="width: 100%%;">Login</button>
             </form>
-            <div class="back-link">
+            <p class="help-text text-center mt-lg">
                 <a href="/">← Back to Search</a>
-            </div>
+            </p>
         </div>
     </div>
 </body>
@@ -415,40 +389,89 @@ func (h *AuthHandler) RegisterPage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// PasswordForgotPage renders password forgot form
+// PasswordForgotPage renders password forgot form using common.css per AI.md PART 16
 func (h *AuthHandler) PasswordForgotPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html><head><title>Password Reset</title></head>
-<body>
-<h1>Password Reset</h1>
-<p>Password reset functionality is managed through the admin panel.</p>
-<a href="/">Back to Home</a>
-</body></html>`))
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Reset - %s</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+</head>
+<body class="centered-page-body">
+    <div class="setup-container">
+        <div class="setup-card">
+            <div class="setup-header">
+                <h1>Password Reset</h1>
+                <p>Password reset functionality is managed through the admin panel</p>
+            </div>
+            <p class="help-text text-center mt-lg">
+                <a href="/">← Back to Home</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>`, h.appConfig.Server.Title)
+	w.Write([]byte(html))
 }
 
-// PasswordResetPage handles password reset with token
+// PasswordResetPage handles password reset with token using common.css per AI.md PART 16
 func (h *AuthHandler) PasswordResetPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html><head><title>Password Reset</title></head>
-<body>
-<h1>Password Reset</h1>
-<p>Invalid or expired reset token.</p>
-<a href="/">Back to Home</a>
-</body></html>`))
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Reset - %s</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+</head>
+<body class="centered-page-body">
+    <div class="setup-container">
+        <div class="setup-card">
+            <div class="setup-header">
+                <h1>Password Reset</h1>
+                <p>Invalid or expired reset token</p>
+            </div>
+            <div class="alert alert-error">The reset token is invalid or has expired</div>
+            <p class="help-text text-center mt-lg">
+                <a href="/">← Back to Home</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>`, h.appConfig.Server.Title)
+	w.Write([]byte(html))
 }
 
-// VerifyPage handles email verification
+// VerifyPage handles email verification using common.css per AI.md PART 16
 func (h *AuthHandler) VerifyPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html><head><title>Email Verification</title></head>
-<body>
-<h1>Email Verification</h1>
-<p>Email verification is not required for this application.</p>
-<a href="/">Back to Home</a>
-</body></html>`))
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - %s</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+</head>
+<body class="centered-page-body">
+    <div class="setup-container">
+        <div class="setup-card">
+            <div class="setup-header">
+                <h1>Email Verification</h1>
+                <p>Email verification is not required for this application</p>
+            </div>
+            <p class="help-text text-center mt-lg">
+                <a href="/">← Back to Home</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>`, h.appConfig.Server.Title)
+	w.Write([]byte(html))
 }
 
 // API Routes per AI.md PART 31

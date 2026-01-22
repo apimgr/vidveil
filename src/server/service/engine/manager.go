@@ -155,10 +155,11 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 		close(resultsChan)
 	}()
 
-	// Collect results
+	// Collect results with deduplication
 	var allResults []model.VideoResult
 	var enginesUsed []string
 	var enginesFailed []string
+	seen := make(map[string]bool) // Track seen URLs for deduplication
 
 	minDuration := m.appConfig.Search.MinDurationSeconds
 
@@ -167,12 +168,17 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 			enginesFailed = append(enginesFailed, result.engine)
 		} else {
 			enginesUsed = append(enginesUsed, result.engine)
-			// Filter results by minimum duration
+			// Filter results by minimum duration and deduplicate
 			for _, r := range result.results {
 				// Skip if duration is known and below minimum
 				if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
 					continue
 				}
+				// Deduplicate by URL - skip if we've seen this URL before
+				if seen[r.URL] {
+					continue
+				}
+				seen[r.URL] = true
 				allResults = append(allResults, r)
 			}
 		}
@@ -378,6 +384,7 @@ type StreamResult struct {
 }
 
 // SearchStream performs a search across enabled engines and streams results via channel
+// Results are deduplicated by URL across all engines
 func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
@@ -390,6 +397,10 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 
 		var wg sync.WaitGroup
 		minDuration := m.appConfig.Search.MinDurationSeconds
+
+		// Shared deduplication map with mutex for concurrent access
+		var seenMu sync.Mutex
+		seen := make(map[string]bool)
 
 		for _, engine := range enginesToUse {
 			wg.Add(1)
@@ -405,12 +416,21 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 					return
 				}
 
-				// Stream each result individually
+				// Stream each result individually with deduplication
 				for _, r := range results {
 					// Skip if duration is known and below minimum
 					if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
 						continue
 					}
+
+					// Deduplicate by URL
+					seenMu.Lock()
+					if seen[r.URL] {
+						seenMu.Unlock()
+						continue
+					}
+					seen[r.URL] = true
+					seenMu.Unlock()
 
 					select {
 					case resultsChan <- StreamResult{Result: r, Engine: e.Name()}:

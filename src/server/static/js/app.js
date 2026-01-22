@@ -988,6 +988,7 @@ if (document.readyState === 'loading') {
     var homeHistoryDiv = null;
     var homeSelectedIndex = -1;
     var homeSuggestions = [];
+    var homeSuggestionType = 'search';
     var homeDebounceTimer;
 
     function initHomePage() {
@@ -1075,10 +1076,19 @@ if (document.readyState === 'loading') {
         }
         var html = homeSuggestions.map(function(s, i) {
             var cls = 'autocomplete-item' + (i === homeSelectedIndex ? ' selected' : '');
-            return '<div class="' + cls + '" data-index="' + i + '" role="option">' +
-                   '<span class="bang-code">' + escapeHtmlUtil(s.short_code) + '</span>' +
-                   '<span class="bang-name">' + escapeHtmlUtil(s.display_name) + '</span>' +
-                   '</div>';
+            if (homeSuggestionType === 'bang' || homeSuggestionType === 'bang_start') {
+                // Bang suggestions have short_code and display_name
+                return '<div class="' + cls + '" data-index="' + i + '" role="option">' +
+                       '<span class="bang-code">' + escapeHtmlUtil(s.short_code || s.Bang || '') + '</span>' +
+                       '<span class="bang-name">' + escapeHtmlUtil(s.display_name || s.EngineName || '') + '</span>' +
+                       '</div>';
+            } else {
+                // Search term suggestions have term field
+                var term = s.term || s.Term || s;
+                return '<div class="' + cls + '" data-index="' + i + '" role="option">' +
+                       '<span class="search-term">' + escapeHtmlUtil(term) + '</span>' +
+                       '</div>';
+            }
         }).join('');
         homeDropdown.innerHTML = html;
         showHomeDropdown();
@@ -1090,20 +1100,35 @@ if (document.readyState === 'loading') {
         var val = homeInput.value;
         var words = val.split(/\s+/);
 
-        // Find and replace the bang being typed
-        for (var i = words.length - 1; i >= 0; i--) {
-            if (words[i].startsWith('!')) {
-                words[i] = s.short_code;
-                break;
+        if (homeSuggestionType === 'bang' || homeSuggestionType === 'bang_start') {
+            // Bang suggestion - replace the bang being typed
+            var bangCode = s.short_code || s.Bang || '';
+            for (var i = words.length - 1; i >= 0; i--) {
+                if (words[i].startsWith('!')) {
+                    words[i] = bangCode;
+                    break;
+                }
+            }
+
+            // If no bang found at end, check if whole query is a bang
+            if (val.trim().startsWith('!') && words.length === 1) {
+                words[0] = bangCode + ' ';
+            }
+
+            homeInput.value = words.join(' ');
+        } else {
+            // Search term suggestion - replace entire query or last word
+            var term = s.term || s.Term || s;
+            if (words.length <= 1) {
+                // Single word or empty - replace entirely
+                homeInput.value = term;
+            } else {
+                // Multiple words - replace last word
+                words[words.length - 1] = term;
+                homeInput.value = words.join(' ');
             }
         }
 
-        // If no bang found at end, check if whole query is a bang
-        if (val.trim().startsWith('!') && words.length === 1) {
-            words[0] = s.short_code + ' ';
-        }
-
-        homeInput.value = words.join(' ');
         hideHomeDropdown();
         homeInput.focus();
     }
@@ -1111,7 +1136,7 @@ if (document.readyState === 'loading') {
     function fetchHomeAutocomplete() {
         if (!homeInput) return;
         var q = homeInput.value;
-        if (!q || !q.includes('!')) {
+        if (!q || q.length < 2) {
             hideHomeDropdown();
             return;
         }
@@ -1119,8 +1144,9 @@ if (document.readyState === 'loading') {
         fetch('/api/v1/bangs/autocomplete?q=' + encodeURIComponent(q))
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                if (data.success && data.suggestions && data.suggestions.length > 0) {
+                if (data.ok && data.suggestions && data.suggestions.length > 0) {
                     homeSuggestions = data.suggestions;
+                    homeSuggestionType = data.type || 'search';
                     homeSelectedIndex = -1;
                     renderHomeSuggestions();
                 } else {

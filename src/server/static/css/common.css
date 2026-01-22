@@ -1942,6 +1942,11 @@ a:focus-visible {
     font-size: 0.875rem;
 }
 
+.autocomplete-item .search-term {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
 /* Bang hint below search box */
 .bang-hint {
     font-size: 0.8rem;

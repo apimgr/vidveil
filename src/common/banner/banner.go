@@ -1,229 +1,142 @@
 // SPDX-License-Identifier: MIT
 // Package banner provides startup banner printing
-// See AI.md PART 7 and PART 17 for specification
+// Per AI.md PART 7 lines 8081-8115 and PART 17 lines 17284-17373
 package banner
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/apimgr/vidveil/src/common/terminal"
 )
 
 // BannerConfig holds banner configuration
-// Per AI.md PART 1: Type names MUST be specific, not generic "Config"
+// Per AI.md PART 7 lines 8092-8100
 type BannerConfig struct {
 	AppName    string
 	Version    string
-	Mode       string   // production/development
+	AppMode    string // production/development
 	Debug      bool
 	URLs       []string
-	AdminPath  string   // admin panel path (default: "admin")
-	ShowSetup  bool     // Show setup token (server only, first run)
+	ShowSetup  bool // Show setup token (server only, first run)
 	SetupToken string
-	TorEnabled bool     // Tor hidden service enabled
-	TorAddress string   // .onion address if Tor enabled
-	SMTPStatus string   // SMTP status message (e.g., "Auto-detected (localhost:25)")
 }
 
-// BoxWidth is the standard width for the boxed banner
-const BoxWidth = 72
-
 // PrintStartupBanner prints the startup banner based on terminal size
-// Per AI.md PART 17: Uses boxed format with Unicode box drawing characters
-func PrintStartupBanner(config BannerConfig) {
+// Per AI.md PART 7 lines 8102-8115
+func PrintStartupBanner(cfg BannerConfig) {
 	size := terminal.GetTerminalSize()
 
 	switch {
 	case size.Mode >= terminal.SizeModeStandard:
-		printFullBoxedBanner(config)
+		printStartupBannerFull(cfg)
 	case size.Mode >= terminal.SizeModeCompact:
-		printCompactBanner(config)
+		printStartupBannerCompact(cfg)
 	case size.Mode >= terminal.SizeModeMinimal:
-		printMinimalBanner(config)
+		printStartupBannerMinimal(cfg)
 	default:
-		printMicroBanner(config)
+		printStartupBannerMicro(cfg)
 	}
 }
 
-// printFullBoxedBanner prints the full boxed banner per AI.md PART 17 lines 22712-22739
-func printFullBoxedBanner(config BannerConfig) {
-	// Box drawing characters
-	topLeft := "╔"
-	topRight := "╗"
-	bottomLeft := "╚"
-	bottomRight := "╝"
-	horizontal := "═"
-	vertical := "║"
-	midLeft := "╠"
-	midRight := "╣"
-
-	// Build top border
-	topBorder := topLeft + strings.Repeat(horizontal, BoxWidth) + topRight
-	bottomBorder := bottomLeft + strings.Repeat(horizontal, BoxWidth) + bottomRight
-	midBorder := midLeft + strings.Repeat(horizontal, BoxWidth) + midRight
-
-	// Helper to print a line in the box
-	printLine := func(content string) {
-		// Calculate padding needed (accounting for emoji width)
-		contentLen := displayWidth(content)
-		padding := BoxWidth - contentLen - 2 // -2 for spaces around content
-		if padding < 0 {
-			padding = 0
-		}
-		fmt.Printf("%s  %s%s  %s\n", vertical, content, strings.Repeat(" ", padding), vertical)
+// printStartupBannerFull prints full banner with ASCII art
+// Per AI.md PART 17 lines 17323-17333
+func printStartupBannerFull(cfg BannerConfig) {
+	// Full ASCII art logo
+	fmt.Println(getASCIIArt(cfg.AppName))
+	fmt.Println()
+	fmt.Printf("🚀 %s v%s\n", cfg.AppName, cfg.Version)
+	printStartupBannerAppModeLine(cfg.AppMode, cfg.Debug, true)
+	fmt.Println()
+	for _, url := range cfg.URLs {
+		fmt.Printf("  🌐 %s\n", url)
 	}
-
-	// Empty line in box
-	printEmpty := func() {
-		fmt.Printf("%s%s%s\n", vertical, strings.Repeat(" ", BoxWidth), vertical)
+	// Setup token for first run
+	if cfg.ShowSetup && cfg.SetupToken != "" {
+		fmt.Println()
+		fmt.Printf("  🔑 Setup Token: %s\n", cfg.SetupToken)
+		fmt.Println("  ⚠️  Save the setup token! It will not be shown again.")
 	}
-
-	// Print header section
-	fmt.Println(topBorder)
-	printEmpty()
-
-	// App name and version
-	appTitle := fmt.Sprintf("%s %s", strings.ToUpper(config.AppName), config.Version)
-	printLine(appTitle)
-	printEmpty()
-
-	// Status line
-	statusText := "Running"
-	if config.ShowSetup {
-		statusText = "Running (first run - setup available)"
-	}
-	modeIcon := "🔒"
-	if config.Mode == "development" {
-		modeIcon = "🔧"
-	}
-	if config.Debug {
-		modeIcon = "🐛"
-	}
-	printLine(fmt.Sprintf("Status: %s %s %s", statusText, modeIcon, config.Mode))
-	printEmpty()
-
-	// Separator
-	fmt.Println(midBorder)
-	printEmpty()
-
-	// Web Interface URLs
-	if len(config.URLs) > 0 {
-		printLine("🌐 Web Interface:")
-		for _, url := range config.URLs {
-			printLine(fmt.Sprintf("   %s", url))
-		}
-		printEmpty()
-	}
-
-	// Admin Panel
-	if config.AdminPath != "" {
-		printLine("🔧 Admin Panel:")
-		// Use first URL as base
-		if len(config.URLs) > 0 {
-			baseURL := config.URLs[0]
-			// Remove trailing slash if present
-			baseURL = strings.TrimSuffix(baseURL, "/")
-			printLine(fmt.Sprintf("   %s/%s", baseURL, config.AdminPath))
-		}
-		printEmpty()
-	}
-
-	// Setup Token (first run only)
-	if config.ShowSetup && config.SetupToken != "" {
-		printLine(fmt.Sprintf("🔑 Setup Token (use at /%s):", config.AdminPath))
-		printLine(fmt.Sprintf("   %s", config.SetupToken))
-		printEmpty()
-	}
-
-	// Tor hidden service
-	if config.TorEnabled && config.TorAddress != "" {
-		printLine("🧅 Tor Hidden Service:")
-		printLine(fmt.Sprintf("   http://%s", config.TorAddress))
-		printEmpty()
-	}
-
-	// SMTP status
-	if config.SMTPStatus != "" {
-		printLine(fmt.Sprintf("📧 SMTP: %s", config.SMTPStatus))
-		printEmpty()
-	}
-
-	// Warning for first run
-	if config.ShowSetup && config.SetupToken != "" {
-		printLine("⚠️  Save the setup token! It will not be shown again.")
-		printEmpty()
-	}
-
-	// Print bottom border
-	fmt.Println(bottomBorder)
 	fmt.Println()
 }
 
-// displayWidth calculates the display width of a string, accounting for emoji
-// Emoji typically take 2 columns in most terminals
-func displayWidth(s string) int {
-	width := 0
-	for _, r := range s {
-		if r > 0x1F000 || (r >= 0x2600 && r <= 0x27BF) || (r >= 0x1F300 && r <= 0x1F9FF) {
-			// Emoji - count as 2
-			width += 2
-		} else if r > 127 {
-			// Other Unicode - varies, estimate as 1
-			width += 1
-		} else {
-			width += 1
+// printStartupBannerCompact prints compact banner without ASCII art
+// Per AI.md PART 17 lines 17336-17343
+func printStartupBannerCompact(cfg BannerConfig) {
+	fmt.Printf("🚀 %s v%s\n", cfg.AppName, cfg.Version)
+	printStartupBannerAppModeLine(cfg.AppMode, cfg.Debug, true)
+	for _, url := range cfg.URLs {
+		fmt.Printf("🌐 %s\n", url)
+	}
+	if cfg.ShowSetup && cfg.SetupToken != "" {
+		fmt.Printf("🔑 Setup: %s\n", cfg.SetupToken)
+	}
+}
+
+// printStartupBannerMinimal prints minimal banner without icons
+// Per AI.md PART 17 lines 17345-17351
+func printStartupBannerMinimal(cfg BannerConfig) {
+	fmt.Printf("%s %s\n", cfg.AppName, cfg.Version)
+	for _, url := range cfg.URLs {
+		fmt.Println(extractHostPort(url))
+	}
+}
+
+// printStartupBannerMicro prints single line for very narrow terminals
+// Per AI.md PART 17 lines 17354-17360
+func printStartupBannerMicro(cfg BannerConfig) {
+	if len(cfg.URLs) > 0 {
+		fmt.Printf("%s %s\n", cfg.AppName, extractHostPort(cfg.URLs[0]))
+	} else {
+		fmt.Println(cfg.AppName)
+	}
+}
+
+// printStartupBannerAppModeLine prints the mode line with optional icons
+// Per AI.md PART 17 lines 17363-17373
+func printStartupBannerAppModeLine(appMode string, debug bool, useIcons bool) {
+	if useIcons {
+		icon := "🔒"
+		if appMode == "development" {
+			icon = "🔧"
 		}
+		if debug {
+			icon = "🐛"
+		}
+		fmt.Printf("%s Running in mode: %s\n", icon, appMode)
+	} else {
+		fmt.Printf("Mode: %s\n", appMode)
 	}
-	return width
 }
 
-// printCompactBanner prints a compact banner without box drawing
-func printCompactBanner(config BannerConfig) {
-	symbols := terminal.GetTerminalSymbols()
-
-	modeSymbol := symbols.Checkmark
-	if config.Debug {
-		modeSymbol = "D"
+// getASCIIArt returns ASCII art for the app name
+// Per AI.md PART 17 line 17325
+func getASCIIArt(appName string) string {
+	// VidVeil ASCII art
+	if strings.ToLower(appName) == "vidveil" {
+		return `
+ __      ___     ___      __    _ _
+ \ \    / (_)   | \ \    / /   (_) |
+  \ \  / / _  __| |\ \  / /__  _| |
+   \ \/ / | |/ _` + "`" + ` | \ \/ / _ \| | |
+    \  /  | | (_| |  \  /  __/| | |
+     \/   |_|\__,_|   \/ \___||_|_|`
 	}
-
-	fmt.Printf("🚀 %s %s [%s %s]\n", config.AppName, config.Version, modeSymbol, config.Mode)
-
-	if len(config.URLs) > 0 {
-		fmt.Printf("🌐 %s\n", strings.Join(config.URLs, ", "))
-	}
-
-	if config.TorEnabled && config.TorAddress != "" {
-		fmt.Printf("🧅 %s\n", config.TorAddress)
-	}
-
-	if config.ShowSetup && config.SetupToken != "" {
-		fmt.Printf("🔑 Setup: %s\n", config.SetupToken)
-	}
-
-	fmt.Println()
+	// Generic fallback
+	return fmt.Sprintf("=== %s ===", strings.ToUpper(appName))
 }
 
-// printMinimalBanner prints a minimal one-line banner
-func printMinimalBanner(config BannerConfig) {
-	url := ""
-	if len(config.URLs) > 0 {
-		url = " " + config.URLs[0]
+// extractHostPort extracts host:port from a URL
+// Per AI.md PART 17 line 17350
+func extractHostPort(url string) string {
+	// Remove protocol
+	s := url
+	if idx := strings.Index(s, "://"); idx >= 0 {
+		s = s[idx+3:]
 	}
-	fmt.Printf("%s %s%s\n", config.AppName, config.Version, url)
-}
-
-// printMicroBanner prints the most minimal banner for very small terminals
-func printMicroBanner(config BannerConfig) {
-	fmt.Printf("%s %s\n", config.AppName, config.Version)
-}
-
-// PrintStartupBannerToWriter prints the banner to a specific writer
-func PrintStartupBannerToWriter(w *os.File, config BannerConfig) {
-	// Redirect stdout temporarily
-	oldStdout := os.Stdout
-	os.Stdout = w
-	PrintStartupBanner(config)
-	os.Stdout = oldStdout
+	// Remove path
+	if idx := strings.Index(s, "/"); idx >= 0 {
+		s = s[:idx]
+	}
+	return s
 }

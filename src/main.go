@@ -573,7 +573,6 @@ func main() {
 		isFirstRun := adminSvc.IsFirstRun()
 
 		// Check SMTP status per AI.md PART 18 lines 23679-23691
-		smtpStatus := "Disabled"
 		smtpInfo := ""
 		if appConfig.Server.Email.Enabled {
 			smtpHost := appConfig.Server.Email.Host
@@ -582,11 +581,7 @@ func main() {
 			if smtpHost != "" && smtpPort > 0 {
 				// Per PART 18: Test configured SMTP on every startup
 				if err := email.TestSMTPConfig(smtpHost, smtpPort); err == nil {
-					smtpStatus = fmt.Sprintf("Connected (%s:%d)", smtpHost, smtpPort)
 					smtpInfo = fmt.Sprintf("%s:%d", smtpHost, smtpPort)
-				} else {
-					// Connection failed - disable email, log warning per PART 18
-					smtpStatus = fmt.Sprintf("Failed (%s:%d) - email disabled", smtpHost, smtpPort)
 				}
 			} else {
 				// Per PART 18: Auto-detect on first run if no host configured
@@ -595,11 +590,7 @@ func main() {
 					appConfig.Server.Email.AutodetectPort,
 				)
 				if detectedHost != "" && detectedPort > 0 {
-					smtpStatus = fmt.Sprintf("Auto-detected (%s:%d)", detectedHost, detectedPort)
 					smtpInfo = fmt.Sprintf("%s:%d (auto)", detectedHost, detectedPort)
-					// Note: Per PART 18, should save to config - but for now just report
-				} else {
-					smtpStatus = "Not found (email disabled)"
 				}
 			}
 		}
@@ -616,34 +607,21 @@ func main() {
 			displayURL = "https://" + config.GetDisplayHost(appConfig)
 		}
 
-		// Get Tor address if running
-		var torAddress string
-		if torSvc != nil && torSvc.IsRunning() {
-			info := torSvc.GetInfo()
-			if onion, ok := info["onion_address"].(string); ok && onion != "" {
-				torAddress = onion
-			}
-		}
-
 		// Get setup token for first run
 		var setupToken string
 		if isFirstRun {
 			setupToken = adminSvc.GetSetupToken()
 		}
 
-		// Print responsive startup banner per AI.md PART 17 lines 17284-17360
+		// Print responsive startup banner per AI.md PART 7 lines 8102-8115
 		banner.PrintStartupBanner(banner.BannerConfig{
 			AppName:    "VidVeil",
 			Version:    version.GetVersion(),
-			Mode:       appConfig.Server.Mode,
+			AppMode:    appConfig.Server.Mode,
 			Debug:      mode.IsDebugEnabled(),
 			URLs:       []string{displayURL},
-			AdminPath:  appConfig.Server.Admin.Path,
 			ShowSetup:  isFirstRun,
 			SetupToken: setupToken,
-			TorEnabled: torSvc != nil && torSvc.IsRunning(),
-			TorAddress: torAddress,
-			SMTPStatus: smtpStatus,
 		})
 
 		// Log INFO lines per AI.md lines 22737-22739

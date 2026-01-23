@@ -79,21 +79,18 @@
 
         <!-- Features per AI.md PART 13 (VidVeil: stateless per IDEA.md) -->
         <section class="card">
-            <h2>Features</h2>
-            <div class="feature-grid">
-                <div class="feature-item {{if .Features.TorEnabled}}feature-enabled{{else}}feature-disabled{{end}}">
-                    <span class="feature-icon">{{if .Features.TorEnabled}}{{else}}{{end}}</span>
-                    <span class="feature-name">Tor Hidden Service</span>
-                </div>
-                <div class="feature-item {{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">
-                    <span class="feature-icon">{{if .Features.GeoIP}}{{else}}{{end}}</span>
-                    <span class="feature-name">GeoIP</span>
-                </div>
-                <div class="feature-item {{if .Features.Metrics}}feature-enabled{{else}}feature-disabled{{end}}">
-                    <span class="feature-icon">{{if .Features.Metrics}}{{else}}{{end}}</span>
-                    <span class="feature-name">Metrics</span>
-                </div>
-            </div>
+            <h2>🎛️ Features</h2>
+            <ul class="feature-list">
+                <li class="{{if .Features.TorEnabled}}feature-enabled{{else}}feature-disabled{{end}}">
+                    🧅 Tor: {{if .Features.TorEnabled}}<span class="status-ok">✅ {{.Features.TorStatus}}</span> <code>{{.Features.TorOnionAddr}}</code>{{else}}<span class="status-disabled">Disabled</span>{{end}}
+                </li>
+                <li class="{{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">
+                    🌍 GeoIP{{if .Features.GeoIP}}: <span class="status-ok">✅ Enabled</span>{{else}}: <span class="status-disabled">Disabled</span>{{end}}
+                </li>
+                <li class="{{if .Features.Metrics}}feature-enabled{{else}}feature-disabled{{end}}">
+                    📊 Metrics{{if .Features.Metrics}}: <span class="status-ok">✅ Enabled</span>{{else}}: <span class="status-disabled">Disabled</span>{{end}}
+                </li>
+            </ul>
         </section>
 
         <!-- Component Checks per AI.md PART 13 -->
@@ -127,17 +124,11 @@
 
         <!-- Statistics (VidVeil-specific per IDEA.md) -->
         <section class="card">
-            <h2>Statistics</h2>
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <span class="stat-value">{{.Stats.Searches}}</span>
-                    <span class="stat-label">Total Searches</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value">{{.Stats.EnginesEnabled}} / {{.Stats.EnginesTotal}}</span>
-                    <span class="stat-label">Engines Enabled</span>
-                </div>
-            </div>
+            <h2>📈 Statistics</h2>
+            <dl class="info-grid stats-grid">
+                <dt>🔍 Total Searches</dt><dd>{{.Stats.Searches}}</dd>
+                <dt>🔌 Engines Enabled</dt><dd>{{.Stats.EnginesEnabled}} / {{.Stats.EnginesTotal}}</dd>
+            </dl>
         </section>
 
         <!-- Last Updated per AI.md PART 13 -->

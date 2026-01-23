@@ -39,13 +39,19 @@ const (
 	ageVerifyCookieDays = 30
 )
 
+// TorStatusChecker is a minimal interface for checking Tor status
+type TorStatusChecker interface {
+	IsRunning() bool
+	GetInfo() map[string]interface{}
+}
+
 // SearchHandler holds dependencies for HTTP handlers
 type SearchHandler struct {
 	appConfig   *config.AppConfig
 	engineMgr   *engine.EngineManager
 	searchCache *cache.SearchCache
 	metrics     *ServerMetrics
-	torEnabled  bool
+	torSvc      TorStatusChecker
 }
 
 // NewSearchHandler creates a new handler instance
@@ -70,9 +76,9 @@ func (h *SearchHandler) SetMetrics(m *ServerMetrics) {
 	h.metrics = m
 }
 
-// SetTorEnabled sets the Tor service status for healthz display
-func (h *SearchHandler) SetTorEnabled(enabled bool) {
-	h.torEnabled = enabled
+// SetTorService sets the Tor service for healthz display
+func (h *SearchHandler) SetTorService(t TorStatusChecker) {
+	h.torSvc = t
 }
 
 // getSearchCount returns total searches from metrics
@@ -825,9 +831,11 @@ type ClusterNodeData struct {
 
 // FeaturesData - VidVeil is stateless, no multi-user/orgs per IDEA.md
 type FeaturesData struct {
-	TorEnabled bool
-	GeoIP      bool
-	Metrics    bool
+	TorEnabled     bool
+	TorStatus      string // "healthy", "unhealthy", or empty
+	TorOnionAddr   string // .onion address
+	GeoIP          bool
+	Metrics        bool
 }
 
 type ChecksData struct {
@@ -921,7 +929,19 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 
 	// Features
 	if h.appConfig != nil {
-		data.Features.TorEnabled = h.torEnabled
+		// Tor status per AI.md PART 13
+		if h.torSvc != nil {
+			data.Features.TorEnabled = h.torSvc.IsRunning()
+			if data.Features.TorEnabled {
+				data.Features.TorStatus = "healthy"
+				info := h.torSvc.GetInfo()
+				if addr, ok := info["onion_address"].(string); ok {
+					data.Features.TorOnionAddr = addr
+				}
+			} else {
+				data.Features.TorStatus = "unhealthy"
+			}
+		}
 		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
 		data.Features.Metrics = h.appConfig.Server.Metrics.Enabled
 	}

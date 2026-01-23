@@ -97,7 +97,7 @@ func (s *Server) SetTorService(t handler.TorService) {
 		s.adminHandler.SetTorService(t)
 	}
 	if s.searchHandler != nil {
-		s.searchHandler.SetTorEnabled(t != nil)
+		s.searchHandler.SetTorService(t)
 	}
 }
 

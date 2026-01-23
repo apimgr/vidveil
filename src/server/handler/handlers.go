@@ -41,6 +41,7 @@ const (
 
 // TorStatusChecker is a minimal interface for checking Tor status
 type TorStatusChecker interface {
+	IsEnabled() bool
 	IsRunning() bool
 	GetInfo() map[string]interface{}
 }
@@ -85,6 +86,56 @@ func (h *SearchHandler) SetTorService(t TorStatusChecker) {
 func (h *SearchHandler) getSearchCount() uint64 {
 	if h.metrics != nil {
 		return h.metrics.GetSearchesTotal()
+	}
+	return 0
+}
+
+// getTorStatus returns Tor status string per PART 13
+func (h *SearchHandler) getTorStatus() string {
+	if h.torSvc == nil {
+		return "disabled"
+	}
+	info := h.torSvc.GetInfo()
+	if status, ok := info["status"].(string); ok {
+		return status
+	}
+	if h.torSvc.IsRunning() {
+		return "healthy"
+	}
+	return "disabled"
+}
+
+// getTorHostname returns Tor .onion address per PART 13
+func (h *SearchHandler) getTorHostname() string {
+	if h.torSvc == nil {
+		return ""
+	}
+	info := h.torSvc.GetInfo()
+	if hostname, ok := info["hostname"].(string); ok {
+		return hostname
+	}
+	return ""
+}
+
+// getRequestsTotal returns total HTTP requests from metrics
+func (h *SearchHandler) getRequestsTotal() uint64 {
+	if h.metrics != nil {
+		return h.metrics.GetRequestsTotal()
+	}
+	return 0
+}
+
+// getRequests24h returns HTTP requests in last 24 hours
+// TODO: Implement 24h window tracking in metrics
+func (h *SearchHandler) getRequests24h() uint64 {
+	// For now return 0 - would need time-windowed counter
+	return 0
+}
+
+// getActiveConnections returns current active connections
+func (h *SearchHandler) getActiveConnections() int64 {
+	if h.metrics != nil {
+		return h.metrics.GetActiveConnections()
 	}
 	return 0
 }
@@ -680,6 +731,15 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Add scheduler check
 	checks["scheduler"] = "ok"
 
+	// Add Tor check if enabled per PART 13
+	if h.torSvc != nil && h.torSvc.IsEnabled() {
+		if h.torSvc.IsRunning() {
+			checks["tor"] = "ok"
+		} else {
+			checks["tor"] = "error"
+		}
+	}
+
 	// Overall status - per AI.md PART 13: derive from checks
 	status := "healthy"
 	httpStatus := http.StatusOK
@@ -725,15 +785,20 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				"nodes":   []string{},
 			},
 			"features": map[string]interface{}{
-				"tor":     h.appConfig != nil && false,
-				"geoip":   h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
-				"metrics": h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
+				"tor": map[string]interface{}{
+					"enabled":  h.torSvc != nil && h.torSvc.IsEnabled(),
+					"running":  h.torSvc != nil && h.torSvc.IsRunning(),
+					"status":   h.getTorStatus(),
+					"hostname": h.getTorHostname(),
+				},
+				"geoip": h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 			},
 			"checks": checks,
 			"stats": map[string]interface{}{
-				"requests_total":     0,
-				"requests_24h":       0,
-				"active_connections": 0,
+				"requests_total":     h.getRequestsTotal(),
+				"requests_24h":       h.getRequests24h(),
+				"active_connections": h.getActiveConnections(),
+				"searches_total":     h.getSearchCount(),
 			},
 		}
 

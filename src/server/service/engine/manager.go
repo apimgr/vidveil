@@ -81,20 +81,14 @@ func (m *EngineManager) InitializeEngines() {
 	m.engines["vjav"] = NewVJAVEngine(m.appConfig)
 	m.engines["flyflv"] = NewFlyflvEngine(m.appConfig)
 	m.engines["tube8"] = NewTube8Engine(m.appConfig)
-	m.engines["xtube"] = NewXtubeEngine(m.appConfig)
 
 	// Tier 5 - New engines
 	m.engines["anyporn"] = NewAnyPornEngine(m.appConfig)
-	m.engines["superporn"] = NewSuperPornEngine(m.appConfig)
 	m.engines["tubegalore"] = NewTubeGaloreEngine(m.appConfig)
 	m.engines["motherless"] = NewMotherlessEngine(m.appConfig)
 
 	// Tier 6 - Additional engines
-	m.engines["keezmovies"] = NewKeezMoviesEngine(m.appConfig)
-	m.engines["spankwire"] = NewSpankWireEngine(m.appConfig)
-	m.engines["extremetube"] = NewExtremeTubeEngine(m.appConfig)
 	m.engines["3movs"] = NewThreeMovsEngine(m.appConfig)
-	m.engines["sleazyneasy"] = NewSleazyNeasyEngine(m.appConfig)
 
 	// Apply configuration
 	m.applyConfig()
@@ -168,8 +162,12 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 			enginesFailed = append(enginesFailed, result.engine)
 		} else {
 			enginesUsed = append(enginesUsed, result.engine)
-			// Filter results by minimum duration and deduplicate
+			// Filter results by thumbnail validity, minimum duration, and deduplicate
 			for _, r := range result.results {
+				// Skip results with empty/invalid thumbnails
+				if !isValidThumbnail(r.Thumbnail) {
+					continue
+				}
 				// Skip if duration is known and below minimum
 				if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
 					continue
@@ -375,6 +373,29 @@ type engineResult struct {
 	err     error
 }
 
+// isValidThumbnail checks if a thumbnail URL is valid and usable
+// Discards empty, placeholder, or invalid thumbnails per IDEA.md
+func isValidThumbnail(thumbnail string) bool {
+	if thumbnail == "" {
+		return false
+	}
+	// Check for common placeholder patterns
+	lower := strings.ToLower(thumbnail)
+	if strings.Contains(lower, "placeholder") ||
+		strings.Contains(lower, "no-image") ||
+		strings.Contains(lower, "noimage") ||
+		strings.Contains(lower, "default_thumb") ||
+		strings.Contains(lower, "blank.") ||
+		strings.Contains(lower, "missing") {
+		return false
+	}
+	// Must be a valid URL
+	if !strings.HasPrefix(thumbnail, "http://") && !strings.HasPrefix(thumbnail, "https://") {
+		return false
+	}
+	return true
+}
+
 // StreamResult represents a single result sent via SSE
 type StreamResult struct {
 	Result model.VideoResult `json:"result,omitempty"`
@@ -416,8 +437,12 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 					return
 				}
 
-				// Stream each result individually with deduplication
+				// Stream each result individually with thumbnail validation and deduplication
 				for _, r := range results {
+					// Skip results with empty/invalid thumbnails
+					if !isValidThumbnail(r.Thumbnail) {
+						continue
+					}
 					// Skip if duration is known and below minimum
 					if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
 						continue

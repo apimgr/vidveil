@@ -10,7 +10,7 @@ Target Users:
 
 Unique Value:
 - No tracking, logging, or analytics - complete privacy
-- 50 engines with bang shortcuts for targeted searches
+- 44 engines with bang shortcuts for targeted searches
 - SSE streaming for real-time results as engines respond
 - Thumbnail proxy prevents engine tracking of users
 - Single static binary with all assets embedded
@@ -448,7 +448,7 @@ search:
 
 ## Engine Registry
 
-### All Registered Engines (50 total)
+### All Registered Engines (44 total)
 
 Complete list of engines with source URLs, API types, and capabilities.
 
@@ -507,47 +507,43 @@ Complete list of engines with source URLs, API types, and capabilities.
 | vjav | https://www.vjav.com | html | Duration, Views |
 | flyflv | https://www.flyflv.com | html | Duration, Views |
 | tube8 | https://www.tube8.com | html | Duration, Views |
-| xtube | https://www.xtube.com | html | Duration, Views |
 
-**Tier 5 - New Engines** (4 engines)
+**Tier 5 - New Engines** (3 engines)
 | Engine | Source URL | API Type | Capabilities |
 |--------|------------|----------|--------------|
 | anyporn | https://www.anyporn.com | html | Duration, Views |
-| superporn | https://www.superporn.com | html | Duration, Views |
 | tubegalore | https://www.tubegalore.com | html | Duration, Views |
 | motherless | https://www.motherless.com | html | Duration, Views |
 
-**Tier 6 - Additional Engines** (5 engines)
+**Tier 6 - Additional Engines** (1 engine)
 | Engine | Source URL | API Type | Capabilities |
 |--------|------------|----------|--------------|
-| keezmovies | https://www.keezmovies.com | html | Duration, Views |
-| spankwire | https://www.spankwire.com | html | Duration, Views |
-| extremetube | https://www.extremetube.com | html | Duration, Views |
 | 3movs | https://www.3movs.com | html | Duration, Views |
-| sleazyneasy | https://www.sleazyneasy.com | html | Duration, Views |
 
 ### Engine Configuration
 
 **Default Enabled:**
-- Tier 1: All 5 engines (pornhub, xvideos, xnxx, redtube, xhamster)
-- Tier 2: All 3 engines (eporner, youporn, pornmd)
-- Total: 8 engines enabled by default
+- All 44 engines enabled by default
+- Empty `default_engines: []` = all engines active
+- SSE streaming returns results as each engine responds
+- Tier 1 engines (faster, with previews) naturally appear first
+- Slower engines fill in below as they respond
 
-**Enable Additional Engines:**
+**SSE Streaming Behavior:**
+- Results stream in real-time as each engine responds
+- Tier 1 engines (PornHub, XVideos, RedTube) are faster APIs, appear first
+- Tier 2-6 engines (HTML parsing) take longer, fill in below
+- Results with empty/invalid thumbnails are discarded
+- Infinite scroll loads more pages as user scrolls
+
+**Disable Specific Engines:**
 ```yaml
 search:
   default_engines:
+    # List only engines you want enabled
+    # Empty list = all 44 engines enabled (default)
     - pornhub
     - xvideos
-    - xnxx
-    - redtube
-    - xhamster
-    - eporner
-    - youporn
-    - pornmd
-    # Add more engines as needed
-    - 4tube
-    - txxx
     # etc...
 ```
 

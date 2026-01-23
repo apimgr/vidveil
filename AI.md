@@ -1,7 +1,6 @@
-# VidVeil Specification
+# {PROJECTNAME} Specification
 
-**Name**: vidveil
-**Organization**: apimgr
+**Name**: {projectname}
 
 ---
 
@@ -1059,20 +1058,69 @@ This distinction exists for clarity. When referring to OS-level resources that b
 | **Remote** | Context-dependent - generally means "not local" |
 | **~~Host~~** | **DO NOT USE** - ambiguous term, use FQDN, Hostname, or Machine instead |
 
+## Monitoring Endpoints
+
+**Two separate purposes. Do NOT confuse them.**
+
+| Purpose | Endpoints | Access | Format |
+|---------|-----------|--------|--------|
+| **Public server status/info** | `/healthz`, `/api/{api_version}/healthz` | **PUBLIC** | HTML/JSON/text |
+| **Prometheus metrics** | `/metrics` | **INTERNAL** | Prometheus text exposition (everything) |
+
+**Endpoints:**
+
+| Endpoint | Description |
+|----------|-------------|
+| `/healthz` | Frontend route - content negotiation (HTML for browsers, JSON for API clients, text for CLI) |
+| `/api/{api_version}/healthz` | API route - always JSON |
+| `/metrics` | Prometheus - all metrics, internal only |
+
+**Key differences:**
+
+| Aspect | Public Status (PART 13) | Prometheus Metrics (PART 21) |
+|--------|-------------------------|------------------------------|
+| **Endpoints** | `/healthz`, `/api/{api_version}/healthz` | `/metrics` |
+| **Visibility** | Public internet | Internal network only |
+| **Authentication** | None | Optional bearer token |
+| **Data** | Public-safe status/info only | Everything (all telemetry) |
+| **Format** | HTML, JSON, text | Prometheus text exposition |
+| **Use case** | "Is the server running? What version?" | "How is it performing? Alert on this." |
+
+**What goes where:**
+
+| Data Type | Public Status | Prometheus | Why |
+|-----------|:-------------:|:----------:|-----|
+| Status (healthy/unhealthy) | ✓ | ✗ | Public info |
+| Version, uptime, build info | ✓ | ✓ | Safe to expose |
+| Cluster nodes, Tor address | ✓ | ✗ | Public feature info |
+| Request counts (total) | ✓ | ✓ | Aggregate is safe |
+| Request counts (by path/status) | ✗ | ✓ | Internal detail, high cardinality |
+| Request latency histograms | ✗ | ✓ | Performance telemetry |
+| Database connections | ✗ | ✓ | Internal infrastructure |
+| Cache hit/miss rates | ✗ | ✓ | Internal performance |
+| CPU/memory/disk usage | ✗ | ✓ | System telemetry |
+| Goroutines, GC stats | ✗ | ✓ | Runtime internals |
+
+**NEVER:**
+- Expose `/metrics` publicly (firewall it, or use token auth)
+- Include metrics status in public healthz response
+- Use healthz stats for alerting (use Prometheus for that)
+- Duplicate detailed metrics in healthz (keep it simple)
+
 ---
 
 ## How to Read This Large File
 
-**AI.md is ~1.9MB and ~50,697 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1.9MB and ~52,200 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
 | File size | ~1.9MB |
-| Line count | ~50,697 lines |
+| Line count | ~52,200 lines |
 | Read limit | ~500 lines per read |
-| Full reads needed | ~100 reads (impractical) |
+| Full reads needed | ~105 reads (impractical) |
 
 **Use the PART index to find relevant sections, then read each section COMPLETELY.**
 
@@ -1082,45 +1130,45 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 | PART | Line | Topic | When to Read |
 |------|------|-------|--------------|
-| 0 | ~1216 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
-| 1 | ~2808 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | ~3663 | License & Attribution | License requirements |
-| 3 | ~3997 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | ~4865 | OS-Specific Paths | Path handling |
-| 5 | ~5050 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
-| 6 | ~6958 | Application Modes | Mode handling, debug endpoints |
-| 7 | ~7566 | Binary Requirements | Binary building, **Display detection** |
-| 8 | ~8149 | Server Binary CLI | CLI flags/commands |
-| 9 | ~11124 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~11501 | Database & Cluster | Database work |
-| 11 | ~11916 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
-| 12 | ~13799 | Server Configuration | Server settings |
-| 13 | ~14859 | Health & Versioning | Health endpoints |
-| 14 | ~15363 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~16955 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~17808 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~22230 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
-| 18 | ~24270 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | ~25590 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | ~26075 | GeoIP | GeoIP features |
-| 21 | ~26148 | Metrics | Metrics/monitoring |
-| 22 | ~27169 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | ~27898 | Update Command | Update feature |
-| 24 | ~28377 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~29275 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~29459 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 27 | ~30214 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~31582 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~34436 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
-| 30 | ~36255 | ReadTheDocs Documentation | Documentation |
-| 31 | ~36968 | I18N & A11Y | Internationalization |
-| 32 | ~37389 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~39168 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~43562 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~47206 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~47847 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~48870 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~49124 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+| 0 | ~1265 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
+| 1 | ~2857 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | ~3712 | License & Attribution | License requirements |
+| 3 | ~4046 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | ~4996 | OS-Specific Paths | Path handling |
+| 5 | ~5181 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
+| 6 | ~7089 | Application Modes | Mode handling, debug endpoints |
+| 7 | ~7697 | Binary Requirements | Binary building, **Display detection** |
+| 8 | ~8280 | Server Binary CLI | CLI flags/commands |
+| 9 | ~11320 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~11697 | Database & Cluster | Database work |
+| 11 | ~12112 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | ~13995 | Server Configuration | Server settings |
+| 13 | ~15055 | Health & Versioning | Health endpoints |
+| 14 | ~15806 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~17398 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~18251 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~23297 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | ~25337 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | ~26657 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | ~27142 | GeoIP | GeoIP features |
+| 21 | ~27215 | Metrics | Prometheus metrics, **INTERNAL only** |
+| 22 | ~28660 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | ~29389 | Update Command | Update feature |
+| 24 | ~29868 | Privilege Escalation & Service | Service/privilege work |
+| 25 | ~30766 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~30950 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 27 | ~31705 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~33073 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~35927 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 30 | ~37746 | ReadTheDocs Documentation | Documentation |
+| 31 | ~38459 | I18N & A11Y | Internationalization |
+| 32 | ~38880 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~40659 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~45053 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~48705 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~49346 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~50369 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~50623 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -4567,12 +4615,13 @@ require (
 | Database | Library | Driver Name | Config Aliases | Notes |
 |----------|---------|-------------|----------------|-------|
 | **SQLite** | `modernc.org/sqlite` | `sqlite` | `sqlite2`, `sqlite3` | Pure Go, NO CGO |
-| **PostgreSQL** | `github.com/jackc/pgx/v5/stdlib` | `pgx` | `postgres` | Pure Go, best performance |
+| **libSQL** | `github.com/tursodatabase/libsql-client-go` | `libsql` | `turso` | Pure Go, remote only (Turso/sqld) |
+| **PostgreSQL** | `github.com/jackc/pgx/v5/stdlib` | `pgx` | `postgres`, `pgsql`, `postgresql` | Pure Go, best performance |
 | **MySQL/MariaDB** | `github.com/go-sql-driver/mysql` | `mysql` | `mariadb` | Pure Go |
 | **MSSQL** | `github.com/microsoft/go-mssqldb` | `sqlserver` | `mssql` | Pure Go |
-| **MongoDB** | `go.mongodb.org/mongo-driver/mongo` | (native) | `mongodb` | Pure Go, not database/sql |
+| **MongoDB** | `go.mongodb.org/mongo-driver/mongo` | (native) | `mongodb`, `mongo` | Pure Go, not database/sql |
 
-**Driver Name vs Config Aliases:** The "Driver Name" column shows what Go's `sql.Open()` expects. The "Config Aliases" column shows what users can put in config files - these get normalized to the actual driver name internally. Users should use the friendly aliases (`postgres`, `mysql`, `mssql`, `sqlite`) in configs.
+**Driver Name vs Config Aliases:** The "Driver Name" column shows what Go's `sql.Open()` expects. The "Config Aliases" column shows what users can put in config files - these get normalized to the actual driver name internally. Users should use the friendly aliases (`postgres`, `mysql`, `mssql`, `sqlite`, `libsql`) in configs.
 
 ### Cache/Cluster
 
@@ -4662,12 +4711,16 @@ func normalizeDriver(driver string) string {
     switch strings.ToLower(driver) {
     case "sqlite", "sqlite2", "sqlite3":
         return "sqlite"     // All map to modernc.org/sqlite
-    case "postgres":
+    case "libsql", "turso":
+        return "libsql"     // Turso/libSQL remote database
+    case "postgres", "pgsql", "postgresql":
         return "pgx"        // pgx is the actual driver name
     case "mysql", "mariadb":
         return "mysql"      // MariaDB uses same driver as MySQL
     case "mssql":
         return "sqlserver"  // Microsoft driver uses "sqlserver"
+    case "mongodb", "mongo":
+        return "mongodb"    // MongoDB native driver
     default:
         return driver
     }
@@ -4693,6 +4746,82 @@ func openDB(path string) (*sql.DB, error) {
 require modernc.org/sqlite v1.29.1
 ```
 
+### libSQL Driver
+
+**Use `github.com/tursodatabase/libsql-client-go` for libSQL/Turso. This is a REMOTE-ONLY driver.**
+
+| Mode | Description |
+|------|-------------|
+| **Turso Cloud** | Managed service at turso.tech |
+| **Self-hosted sqld** | Run your own libSQL server |
+
+**libSQL requires a server URL - it does NOT support embedded/local mode with CGO_ENABLED=0.**
+
+**URL Formats (both supported):**
+
+| Format | Example |
+|--------|---------|
+| `libsql://` scheme | `libsql://your-db.turso.io?authToken=xxx` |
+| `https://` with token | `https://your-db.turso.io` + separate `token` field |
+
+**Configuration:**
+```yaml
+server:
+  database:
+    driver: libsql  # or "turso" (alias)
+
+    # Option 1: URL with embedded token
+    url: libsql://your-db-name.turso.io?authToken=${TURSO_AUTH_TOKEN}
+
+    # Option 2: Separate URL and token
+    url: https://your-db-name.turso.io
+    token: ${TURSO_AUTH_TOKEN}
+```
+
+**Validation:**
+```go
+func validateLibSQL(cfg *DatabaseConfig) error {
+    if cfg.URL == "" {
+        return fmt.Errorf("libsql driver requires url: use libsql://host?authToken=xxx or https://host with token field")
+    }
+    return nil
+}
+```
+
+**Usage:**
+```go
+import (
+    "database/sql"
+    _ "github.com/tursodatabase/libsql-client-go/libsql"
+)
+
+func openLibSQL(url, token string) (*sql.DB, error) {
+    // If token provided separately, append to URL
+    if token != "" && !strings.Contains(url, "authToken=") {
+        sep := "?"
+        if strings.Contains(url, "?") {
+            sep = "&"
+        }
+        url = url + sep + "authToken=" + token
+    }
+    return sql.Open("libsql", url)
+}
+```
+
+**go.mod:**
+```
+require github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d
+```
+
+**When to use libSQL vs SQLite:**
+
+| Use Case | Driver |
+|----------|--------|
+| Single server, local data | `sqlite` (modernc.org/sqlite) |
+| Edge/distributed, Turso cloud | `libsql` |
+| Self-hosted libSQL server | `libsql` |
+| Embedded, no network | `sqlite` |
+
 ### Forbidden Libraries
 
 | Library | Reason | Alternative |
@@ -4717,6 +4846,7 @@ go 1.xx  // Use current latest stable version
 require (
 	// Database drivers
 	modernc.org/sqlite v1.34.5                      // SQLite (pure Go)
+	github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d  // libSQL/Turso (remote)
 	github.com/jackc/pgx/v5 v5.7.2                  // PostgreSQL
 	github.com/go-sql-driver/mysql v1.8.1           // MySQL/MariaDB
 	github.com/microsoft/go-mssqldb v1.8.0          // MSSQL
@@ -6037,7 +6167,7 @@ func (req *CreateUserRequest) Parse() (*User, error) {
 |----------|-------------|
 | `DOMAIN` | FQDN override (highest priority for hostname resolution) |
 | `MODE` | `production` (default) or `development` |
-| `DATABASE_DRIVER` | `file`, `sqlite` (+ `sqlite2`, `sqlite3`), `postgres`, `mysql` (+ `mariadb`), `mssql`, `mongodb` |
+| `DATABASE_DRIVER` | `file`, `sqlite` (+ `sqlite2`, `sqlite3`), `libsql` (+ `turso`), `postgres` (+ `pgsql`, `postgresql`), `mysql` (+ `mariadb`), `mssql`, `mongodb` (+ `mongo`) |
 | `DATABASE_URL` | Database connection string |
 | `SMTP_HOST` | SMTP server hostname (if set, skips autodetect) |
 | `SMTP_PORT` | SMTP server port (default: 587) |
@@ -10293,38 +10423,103 @@ func adminStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 **Health Check Endpoint (`/healthz`):**
 
-```go
-// GET /healthz - used by load balancers, orchestrators, monitoring
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
+**See PART 13 for full /healthz response format. Handler must return all dynamic data.**
 
-    status := struct {
-        Status         string   `json:"status"`
-        PendingRestart bool     `json:"pending_restart,omitempty"`
-        RestartReason  []string `json:"restart_reason,omitempty"`
-    }{
-        Status: "ok",
-    }
+```go
+// GET /healthz - full health response (see PART 13 for JSON structure)
+// GET /api/{api_version}/healthz - same response, always JSON
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+    // Content negotiation handled by middleware (PART 14)
+    // This returns the data; middleware formats as HTML/JSON/text
+
+    response := buildHealthResponse()
 
     // Check shutdown state
     if isShuttingDown() {
-        status.Status = "shutting_down"
+        response.Status = "shutting_down"
         w.WriteHeader(http.StatusServiceUnavailable)
-        json.NewEncoder(w).Encode(status)
-        return
+    } else if configManager.PendingRestart() {
+        response.Status = "restart_required"
+        response.PendingRestart = true
+        response.RestartReason = configManager.RestartSettings()
+        w.WriteHeader(http.StatusOK) // Still healthy, just needs restart
+    } else {
+        w.WriteHeader(http.StatusOK)
     }
 
-    // Check pending restart (config changed, needs restart)
-    if configManager.PendingRestart() {
-        status.Status = "restart_required"
-        status.PendingRestart = true
-        status.RestartReason = configManager.RestartSettings()
-        // Still return 200 - service is running, just needs restart
-        // Orchestrators can watch pending_restart field
-    }
+    respondWithFormat(w, r, response) // PART 14 content negotiation
+}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(status)
+// buildHealthResponse collects ALL dynamic data for /healthz
+// This is the COMPLETE global structure - extend with app-specific data
+// ALL fields MUST be public-safe (no secrets, no internal IPs, no paths)
+// Frontend displays everything returned here (see PART 13)
+func buildHealthResponse() *HealthResponse {
+    return &HealthResponse{
+        // Project info (from branding config)
+        Project: ProjectInfo{
+            Name:        cfg.Branding.Name,
+            Description: cfg.Branding.Description,
+        },
+
+        // Basic status
+        Status:    getOverallStatus(), // "healthy", "unhealthy", "degraded"
+        Version:   version.Version,
+        Mode:      cfg.Server.Mode, // "production" or "development"
+        Uptime:    formatUptime(startTime),
+        Timestamp: time.Now().UTC(),
+        GoVersion: runtime.Version(),
+
+        // Build info
+        Build: BuildInfo{
+            Commit: version.Commit,
+            Date:   version.Date,
+        },
+
+        // Cluster (dynamic - from cluster manager)
+        Cluster: ClusterInfo{
+            Enabled: cfg.Cluster.Enabled,
+            Status:  clusterManager.Status(),    // "connected", "disconnected"
+            Primary: clusterManager.PrimaryURL(),
+            Nodes:   clusterManager.NodeURLs(),
+            Role:    clusterManager.Role(),      // "primary", "member"
+        },
+
+        // Features (PUBLIC only - do NOT include /metrics)
+        Features: FeaturesInfo{
+            MultiUser:     cfg.Features.MultiUser,
+            Organizations: cfg.Features.Organizations,
+            GeoIP:         cfg.Features.GeoIP.Enabled,
+            Tor: TorInfo{
+                Enabled:  cfg.Features.Tor.Enabled,
+                Running:  torManager.IsRunning(),
+                Status:   torManager.Status(),   // "healthy", "error:..."
+                Hostname: torManager.Hostname(), // "abc123.onion"
+            },
+            // NOTE: Do NOT include Metrics here - internal endpoint
+        },
+
+        // Component checks (ok/error only - no details)
+        Checks: ChecksInfo{
+            Database:  checkDatabase(),  // "ok" or "error"
+            Cache:     checkCache(),
+            Disk:      checkDisk(),
+            Scheduler: checkScheduler(),
+            Cluster:   checkCluster(),
+        },
+
+        // Stats (public-safe aggregates only)
+        Stats: StatsInfo{
+            RequestsTotal: statsCollector.TotalRequests(),
+            Requests24h:   statsCollector.Requests24h(),
+            ActiveConns:   statsCollector.ActiveConnections(),
+            // APP-SPECIFIC: Add your app's stats here
+            // Example: PastesTotal, LinksCreated, MessagesTotal, etc.
+        },
+
+        // APP-SPECIFIC: Add your app's custom fields here
+        // Example: AppSpecific: AppSpecificInfo{ ... }
+    }
 }
 
 // ConfigManager helper methods
@@ -14869,6 +15064,226 @@ All settings above MUST be configurable via admin panel:
 
 **NO sub-routes** - just `/healthz`, not `/healthz/db` or `/healthz/**`
 
+### Global vs App-Specific
+
+**This template defines the COMPLETE global structure. Projects extend with app-specific data. ALL fields MUST be public-safe.**
+
+| Type | Description | Defined Where |
+|------|-------------|---------------|
+| **Global (this template)** | Complete structure: project, status, version, build, runtime, cluster, features, checks, stats | Below (comprehensive) |
+| **App-specific (extend)** | Additional features, stats, checks relevant to your app | IDEA.md |
+
+**How to extend:**
+
+| What to Add | Where to Add | Example |
+|-------------|--------------|---------|
+| App features | `features.*` | `features.syntax_highlighting: true` |
+| App stats | `stats.*` | `stats.pastes_total: 12345` |
+| App checks | `checks.*` | `checks.storage: "ok"` |
+| Custom section | New top-level field | `app_data: { ... }` |
+
+**Examples by app type:**
+
+| App Type | Extends Features | Extends Stats | Extends Checks |
+|----------|------------------|---------------|----------------|
+| **Paste service** | `syntax_highlighting` | `pastes_total`, `pastes_24h` | `storage` |
+| **URL shortener** | `custom_slugs`, `analytics` | `links_total`, `redirects_24h` | - |
+| **API gateway** | `rate_limiting` | `rate_limited_24h` | `upstream` |
+| **Chat app** | `e2e_encryption` | `messages_24h`, `active_users` | `websocket` |
+
+**Rules:**
+1. Global structure is comprehensive - don't reinvent, just extend
+2. All data MUST be public-safe (see Security section below)
+3. Frontend displays ALL backend fields - keep in sync
+4. App-specific fields follow same patterns (same HTML elements, same order within sections)
+
+### Field Order & Structure
+
+**Backend and frontend MUST use this exact order. Consistency across all projects.**
+
+#### Backend Structure (Go)
+
+**Based on template PARTS: branding (PART 16), modes (PART 6), cluster (PART 10), features (PARTS 20, 32, 34, 35), scheduler (PART 19).**
+
+```go
+// HealthResponse - canonical field order for /healthz
+// All fields required unless marked (omitempty)
+// See individual PARTS for field sources
+type HealthResponse struct {
+    // 1. Project identification (PART 16: branding config)
+    Project ProjectInfo `json:"project"`
+
+    // 2. Overall status
+    Status         string   `json:"status"`                      // "healthy", "unhealthy", "degraded"
+    PendingRestart bool     `json:"pending_restart,omitempty"`   // true if restart needed
+    RestartReason  []string `json:"restart_reason,omitempty"`    // settings that changed
+
+    // 3. Version & build info (PART 7: binary requirements)
+    Version   string    `json:"version"`      // SemVer "1.0.0"
+    GoVersion string    `json:"go_version"`   // "go1.23.0"
+    Build     BuildInfo `json:"build"`
+
+    // 4. Runtime info (PART 6: application modes)
+    Uptime    string    `json:"uptime"`       // human readable "2d 5h 30m"
+    Mode      string    `json:"mode"`         // "production" or "development"
+    Timestamp time.Time `json:"timestamp"`    // current UTC time
+
+    // 5. Cluster info (PART 10: database & cluster)
+    Cluster ClusterInfo `json:"cluster"`
+
+    // 6. Features - PUBLIC only (PARTS 20, 32, 34, 35)
+    Features FeaturesInfo `json:"features"`
+
+    // 7. Component health checks
+    Checks ChecksInfo `json:"checks"`
+
+    // 8. Statistics (public-safe aggregates)
+    Stats StatsInfo `json:"stats"`
+
+    // 9. APP-SPECIFIC: Add custom fields here
+    // AppData AppSpecificInfo `json:"app_data,omitempty"`
+}
+
+// ProjectInfo - from branding config (PART 16)
+type ProjectInfo struct {
+    Name        string `json:"name"`        // branding.title
+    Tagline     string `json:"tagline"`     // branding.tagline (short slogan)
+    Description string `json:"description"` // branding.description (longer)
+}
+
+// BuildInfo - from build-time variables (PART 7)
+type BuildInfo struct {
+    Commit string `json:"commit"` // git short hash (7 chars)
+    Date   string `json:"date"`   // ISO 8601 build timestamp
+}
+
+// ClusterInfo - from cluster manager (PART 10)
+type ClusterInfo struct {
+    Enabled   bool     `json:"enabled"`
+    Status    string   `json:"status,omitempty"`    // "connected", "disconnected"
+    Primary   string   `json:"primary,omitempty"`   // primary node public URL
+    Nodes     []string `json:"nodes,omitempty"`     // all node public URLs
+    NodeCount int      `json:"node_count,omitempty"` // total nodes (healthy + degraded + offline)
+    Role      string   `json:"role,omitempty"`      // "primary" or "member"
+}
+
+// FeaturesInfo - PUBLIC features only (no /metrics - PART 21 is internal)
+// Only shows NON-NEGOTIABLE features.
+// If project uses optional features (PARTS 34, 35, 36), they become
+// non-negotiable FOR THAT PROJECT and show actual enabled/disabled status.
+type FeaturesInfo struct {
+    // PART 32: Tor Hidden Service
+    Tor TorInfo `json:"tor"`
+
+    // PART 20: GeoIP
+    GeoIP bool `json:"geoip"`  // true = enabled, false = disabled
+
+    // --- PROJECT-SPECIFIC: Add when optional features are used ---
+    // When used, show actual status (admin can enable/disable):
+    //
+    // PART 34: MultiUser bool `json:"multi_user"`           // true/false
+    // PART 35: Organizations bool `json:"organizations"`     // true/false
+    // PART 36: CustomDomains bool `json:"custom_domains"`   // true/false
+    //
+    // APP-SPECIFIC: Add your app's features with enabled/disabled status
+}
+
+// TorInfo - from Tor manager (PART 32)
+type TorInfo struct {
+    Enabled  bool   `json:"enabled"`  // Tor binary found and running
+    Running  bool   `json:"running"`  // Hidden service active
+    Status   string `json:"status"`   // "healthy", "starting", "error"
+    Hostname string `json:"hostname"` // "abc123...xyz.onion" (56 chars, v3)
+}
+
+// ChecksInfo - component health (ok/error only - no details)
+type ChecksInfo struct {
+    Database  string `json:"database"`            // PART 10: "ok" or "error"
+    Cache     string `json:"cache"`               // PART 10: "ok" or "error"
+    Disk      string `json:"disk"`                // Disk space check
+    Scheduler string `json:"scheduler"`           // PART 19: "ok" or "error"
+    Cluster   string `json:"cluster,omitempty"`   // PART 10: "ok" or "error" (if enabled)
+    Tor       string `json:"tor,omitempty"`       // PART 32: "ok" or "error" (if enabled)
+    // APP-SPECIFIC: Add your checks here
+    // Example: Storage string `json:"storage"`
+}
+
+// StatsInfo - public-safe aggregate statistics
+type StatsInfo struct {
+    RequestsTotal int64 `json:"requests_total"`      // Total HTTP requests (lifetime)
+    Requests24h   int64 `json:"requests_24h"`        // Requests in last 24 hours
+    ActiveConns   int   `json:"active_connections"`  // Current active connections
+    // APP-SPECIFIC: Add your stats here
+    // Example: PastesTotal int64 `json:"pastes_total"`
+}
+```
+
+**Data Sources:**
+
+| Field | Source | PART |
+|-------|--------|------|
+| `project.name` | `cfg.Branding.Title` | 16 |
+| `project.tagline` | `cfg.Branding.Tagline` | 16 |
+| `project.description` | `cfg.Branding.Description` | 16 |
+| `status` | `getOverallStatus()` | - |
+| `version` | `version.Version` (build var) | 7 |
+| `go_version` | `runtime.Version()` | 7 |
+| `build.commit` | `version.Commit` (build var) | 7 |
+| `build.date` | `version.Date` (build var) | 7 |
+| `uptime` | `formatUptime(startTime)` | - |
+| `mode` | `cfg.Server.Mode` | 6 |
+| `cluster.*` | `clusterManager.*` | 10 |
+| `features.tor.*` | `torManager.*` | 32 |
+| `features.geoip` | `cfg.GeoIP.Enabled` (true/false) | 20 |
+| `features.*` (project-specific) | Show actual status when optional PARTS used | 34, 35, 36 |
+| `checks.database` | `checkDatabase()` | 10 |
+| `checks.cache` | `checkCache()` | 10 |
+| `checks.scheduler` | `checkScheduler()` | 19 |
+| `checks.cluster` | `checkCluster()` | 10 |
+| `checks.tor` | `checkTor()` | 32 |
+| `stats.*` | `statsCollector.*` | - |
+
+#### Frontend Display Order
+
+**Frontend displays sections in same order as backend. Uses PART 16 patterns.**
+
+| Order | Section | Backend Field | HTML Pattern | Display |
+|-------|---------|---------------|--------------|---------|
+| 1 | **Project** | `project.*` | `<header>` + `<h1>` + `<p>` | Name as `<h1>`, tagline as subtitle, description as `<p>` |
+| 2 | **Status** | `status` | `.status-banner.status-ok/error/warning` | Large centered banner with icon |
+| 3 | **Version & Build** | `version`, `go_version`, `build.*` | `.section-card` + `.info-list` | Key-value pairs, version/commit in `<code>` |
+| 4 | **Runtime** | `uptime`, `mode`, `timestamp` | `.section-card` + `.info-list` | Uptime as text, mode as `.badge` |
+| 5 | **Cluster** | `cluster.*` | `.section-card` + `.info-list` + `.node-list` | Status badge, node_count, URLs with copy buttons |
+| 6 | **Features** | `features.*` | `.section-card` + `.feature-list` | Icons per feature, Tor address (56 chars) with copy button |
+| 7 | **Checks** | `checks.*` | `.section-card` + `.table-wrapper` + `.data-table` | Table with `.status-ok`/`.status-error` badges |
+| 8 | **Stats** | `stats.*` | `.section-card` + `.info-list` | Key-value with formatted numbers (commas) |
+
+#### Field Display Rules
+
+| Field Type | HTML Element | Copy Button? | Example |
+|------------|--------------|--------------|---------|
+| Project name | `<h1>` | No | `<h1>📦 My App</h1>` |
+| Project tagline | `<p class="tagline">` | No | `<p class="tagline">The best app ever</p>` |
+| Project description | `<p>` | No | `<p>A brief description</p>` |
+| Status | `.status-banner` | No | `<div class="status-banner status-ok">✅ Healthy</div>` |
+| Version | `<code>` | No | `<code>1.0.0</code>` |
+| Go version | `<code>` | No | `<code>go1.23.0</code>` |
+| Build commit | `<code>` | Optional | `<code>abc1234</code>` |
+| Build date | `<time>` | No | `<time datetime="2024-01-10">Jan 10, 2024</time>` |
+| Uptime | plain text | No | `2d 5h 30m` |
+| Mode | `.badge` | No | `<span class="badge badge-production">Production</span>` |
+| Timestamp | `<time>` | No | `<time datetime="...">Jan 15, 2024 10:30 AM</time>` |
+| Cluster status | `.status` | No | `<span class="status status-ok">✅ Connected</span>` |
+| Cluster node_count | plain text | No | `3 nodes` |
+| Node URLs | `.code-block` | **Yes** | With copy button, horizontal scroll (56 char onion) |
+| Primary URL | `.code-block` | **Yes** | With copy button, horizontal scroll |
+| Tor address | `.code-block` | **Yes** | 56-char v3 onion, copy button, horizontal scroll |
+| Feature enabled | `.feature-enabled` | No | `<li class="feature-enabled">🌍 GeoIP</li>` |
+| Feature disabled | `.feature-disabled` | No | Muted, strikethrough |
+| Check ok | `.status.status-ok` | No | `<span class="status status-ok">✅ OK</span>` |
+| Check error | `.status.status-error` | No | `<span class="status status-error">❌ Error</span>` |
+| Stat number | large text | No | Formatted with commas: `1,234,567` |
+
 ### Security: Public Info Only 
 
 **Healthz is PUBLIC. NEVER expose sensitive data.**
@@ -14896,124 +15311,165 @@ All settings above MUST be configurable via admin panel:
 
 #### HTML (browsers)
 
-**Full HTML page following frontend rules (PART 16).**
+**Follows PART 16 frontend rules. Displays fields in order defined above (see "Field Order & Structure").**
 
-**Required Elements:**
-- Full HTML document with `<head>` and `<body>`
-- Proper page title: "{projectname} - Health Status"
-- Uses site theme (light/dark mode support)
-- Responsive layout
-- Header with navigation (if logged in) or minimal header (if public)
-- Footer with standard links
-
-**Health Information Display:**
-
-**Frontend MUST display ALL data returned by backend, formatted properly.**
-
-| Section | Content | Backend Field |
-|---------|---------|---------------|
-| **Project Info** | 📦 Name, description (from branding config) | `project.name`, `project.description` |
-| **Status Banner** | Large status indicator (✅ Healthy / 🔴 Unhealthy / ⚠️ Degraded) with color | `status` |
-| **Version Info** | ℹ️ Version, 🐹 Go version, 🔨 build commit, ⏱️ uptime | `version`, `go_version`, `build.*`, `uptime` |
-| **Mode** | 🚀 Production/Development | `mode` |
-| **Cluster** | 🔗 Status, 👑 primary, 🖥️ nodes list, 🎭 role | `cluster.*` |
-| **Features** | 🎛️ Enabled features with icons (👥 👤 🏢 🧅 🌍 📊) | `features.*` |
-| **Component Checks** | 🔧 🗄️ Database, 💾 Cache, 💿 Disk, ⏰ Scheduler, 🔗 Cluster | `checks.*` |
-| **Statistics** | 📈 📥 Total requests, 📅 24h requests, 🔌 active connections | `stats.*` |
-| **Last Updated** | 🕐 Timestamp of health check | `timestamp` |
+| Requirement | Details |
+|-------------|---------|
+| Page title | `{projectname} - Health Status` |
+| Layout | Standard public layout (header, main.container, footer) |
+| CSS patterns | PART 16 global classes |
+| Field order | Same as backend struct (1-8) |
+| Copy buttons | Required for node URLs, Tor address |
 
 **HTML Structure:**
+
 ```html
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="theme-dark">
 <head>
   <title>{projectname} - Health Status</title>
   <!-- Standard meta, CSS, theme support -->
 </head>
 <body>
   <header><!-- Standard header --></header>
-  <main class="health-status">
-    <!-- Project Info -->
+  <main class="container">
+    <!-- 1. Project Info -->
     <header class="health-header">
       <h1>📦 {project.name}</h1>
-      <p class="project-description">{project.description}</p>
+      <p class="tagline">{project.tagline}</p>
+      <p>{project.description}</p>
     </header>
 
-    <h2>🏥 System Health</h2>
-
     <!-- Status Banner -->
-    <div class="status-banner status-healthy">
+    <div class="status-banner status-ok">
       <span class="status-icon">✅</span>
       <span class="status-text">All Systems Operational</span>
     </div>
-    <!-- Use 🔴 for unhealthy, ⚠️ for degraded -->
+    <!-- Use .status-ok (healthy), .status-error (unhealthy), .status-warning (degraded) -->
 
     <!-- Version & Build Info -->
-    <section class="health-section">
+    <section class="section-card">
       <h2>ℹ️ Version</h2>
-      <dl class="info-grid">
-        <dt>🏷️ Version</dt><dd>1.0.0</dd>
-        <dt>🐹 Go Version</dt><dd>1.23.0</dd>
-        <dt>🔨 Build</dt><dd>abc1234 (2024-01-10)</dd>
-        <dt>⏱️ Uptime</dt><dd>2d 5h 30m</dd>
-        <dt>🚀 Mode</dt><dd><span class="badge badge-production">Production</span></dd>
+      <dl class="info-list">
+        <dt>🏷️ Version</dt>
+        <dd><code>1.0.0</code></dd>
+
+        <dt>🐹 Go Version</dt>
+        <dd><code>1.23.0</code></dd>
+
+        <dt>🔨 Build</dt>
+        <dd><code>abc1234</code> (2024-01-10)</dd>
+
+        <dt>⏱️ Uptime</dt>
+        <dd>2d 5h 30m</dd>
+
+        <dt>🚀 Mode</dt>
+        <dd><span class="badge badge-production">Production</span></dd>
       </dl>
     </section>
 
     <!-- Cluster Info (if enabled) -->
-    <section class="health-section">
+    <section class="section-card">
       <h2>🔗 Cluster</h2>
-      <dl class="info-grid">
-        <dt>Status</dt><dd><span class="status-ok">✅ Connected</span></dd>
-        <dt>👑 Primary</dt><dd><code>https://node1.example.com</code></dd>
-        <dt>🎭 Role</dt><dd>Member</dd>
+      <dl class="info-list">
+        <dt>Status</dt>
+        <dd><span class="status status-ok">✅ Connected</span></dd>
+
+        <dt>👑 Primary</dt>
+        <dd>
+          <div class="code-block">
+            <code class="code-content">https://node1.example.com</code>
+            <button class="copy-btn" data-copy="https://node1.example.com">
+              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
+            </button>
+          </div>
+        </dd>
+
+        <dt>🎭 Role</dt>
+        <dd>Member</dd>
       </dl>
+
       <h3>🖥️ Nodes</h3>
       <ul class="node-list">
-        <li><code>https://node1.example.com</code> <span class="badge badge-primary">👑 Primary</span></li>
-        <li><code>https://node2.example.com</code> ✅</li>
-        <li><code>https://node3.example.com</code> ✅</li>
+        <li>
+          <div class="code-block">
+            <code class="code-content">https://node1.example.com</code>
+            <button class="copy-btn" data-copy="https://node1.example.com">
+              <span class="copy-icon">📋</span>
+            </button>
+          </div>
+          <span class="badge badge-primary">👑 Primary</span>
+        </li>
+        <li>
+          <div class="code-block">
+            <code class="code-content">https://node2.example.com</code>
+            <button class="copy-btn" data-copy="https://node2.example.com">
+              <span class="copy-icon">📋</span>
+            </button>
+          </div>
+          <span class="status status-ok">✅</span>
+        </li>
       </ul>
     </section>
 
-    <!-- Features -->
-    <section class="health-section">
+    <!-- 6. Features (NON-NEGOTIABLE only, show actual status) -->
+    <section class="section-card">
       <h2>🎛️ Features</h2>
+      <!-- Only NON-NEGOTIABLE features. Show actual enabled/disabled status. -->
       <ul class="feature-list">
-        <li class="feature-enabled">👥 Multi-User</li>
-        <li class="feature-enabled">🏢 Organizations</li>
-        <li class="feature-enabled">🧅 Tor: <span class="status-ok">✅ healthy</span> <code>abc123xyz456.onion</code></li>
+        <li class="feature-enabled">
+          🧅 Tor: <span class="status status-ok">✅ healthy</span>
+          <div class="code-block">
+            <code class="code-content">abc123xyz456abcdef789xyz456abcdef789xyz456abcdef789xyz.onion</code>
+            <button class="copy-btn" data-copy="abc123xyz456abcdef789xyz456abcdef789xyz456abcdef789xyz.onion">
+              <span class="copy-icon">📋</span><span class="copy-text">Copy</span>
+            </button>
+          </div>
+        </li>
         <li class="feature-enabled">🌍 GeoIP</li>
-        <li class="feature-enabled">📊 Metrics</li>
+        <!-- PROJECT-SPECIFIC: If using optional PARTS, show actual status -->
+        <!-- <li class="feature-enabled">👥 Multi-User</li> -->           <!-- if enabled -->
+        <!-- <li class="feature-disabled">👥 Multi-User</li> -->          <!-- if disabled by admin -->
+        <!-- <li class="feature-enabled">🏢 Organizations</li> -->
+        <!-- <li class="feature-disabled">🏢 Organizations</li> -->       <!-- if disabled by admin -->
       </ul>
     </section>
 
     <!-- Component Checks -->
-    <section class="health-section">
+    <section class="section-card">
       <h2>🔧 Component Status</h2>
-      <table class="checks-table">
-        <thead><tr><th>Component</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>🗄️ Database</td><td class="status-ok">✅ OK</td></tr>
-          <tr><td>💾 Cache</td><td class="status-ok">✅ OK</td></tr>
-          <tr><td>💿 Disk</td><td class="status-ok">✅ OK</td></tr>
-          <tr><td>⏰ Scheduler</td><td class="status-ok">✅ OK</td></tr>
-          <tr><td>🔗 Cluster</td><td class="status-ok">✅ OK</td></tr>
-        </tbody>
-      </table>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>Component</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>🗄️ Database</td><td><span class="status status-ok">✅ OK</span></td></tr>
+            <tr><td>💾 Cache</td><td><span class="status status-ok">✅ OK</span></td></tr>
+            <tr><td>💿 Disk</td><td><span class="status status-ok">✅ OK</span></td></tr>
+            <tr><td>⏰ Scheduler</td><td><span class="status status-ok">✅ OK</span></td></tr>
+            <tr><td>🔗 Cluster</td><td><span class="status status-ok">✅ OK</span></td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
-    <!-- Statistics -->
-    <section class="health-section">
-      <h2>📈 Statistics</h2>
-      <dl class="info-grid stats-grid">
-        <dt>📥 Total Requests</dt><dd>1,234,567</dd>
-        <dt>📅 Requests (24h)</dt><dd>45,678</dd>
-        <dt>🔌 Active Connections</dt><dd>42</dd>
+    <!-- Statistics (Public-safe aggregate stats) -->
+    <section class="section-card">
+      <h2>📈 Server Statistics</h2>
+      <!-- NOTE: Public-safe aggregate stats only.
+           /metrics endpoint (PART 21) is internal/authenticated, not shown here. -->
+      <dl class="info-list stats-grid">
+        <dt>📥 Total Requests</dt>
+        <dd>1,234,567</dd>
+
+        <dt>📅 Requests (24h)</dt>
+        <dd>45,678</dd>
+
+        <dt>🔌 Active Connections</dt>
+        <dd>42</dd>
       </dl>
     </section>
 
-    <!-- Footer -->
+    <!-- Last Updated -->
     <footer class="health-footer">
       <p>Last checked: <time datetime="2024-01-15T10:30:00Z">Jan 15, 2024 10:30 AM</time></p>
       <p class="auto-refresh">Auto-refreshing in <span id="countdown">30</span>s</p>
@@ -15024,99 +15480,44 @@ All settings above MUST be configurable via admin panel:
 </html>
 ```
 
-**Status Styling:**
+**Healthz-specific styles (extends PART 16):**
+
 ```css
-/* Status Banner */
+/* Status Banner (health page specific) */
 .status-banner {
-  padding: 1.5rem;
+  padding: 1rem;
   border-radius: 8px;
   text-align: center;
-  font-size: 1.5rem;
-  margin-bottom: 2rem;
-}
-.status-healthy { background: var(--color-success-bg); color: var(--color-success); }
-.status-unhealthy { background: var(--color-error-bg); color: var(--color-error); }
-.status-degraded { background: var(--color-warning-bg); color: var(--color-warning); }
-
-/* Status Indicators */
-.status-ok { color: var(--color-success); }
-.status-error { color: var(--color-error); }
-.status-warning { color: var(--color-warning); }
-
-/* Sections */
-.health-section {
-  margin-bottom: 2rem;
-  padding: 1rem;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-}
-.health-section h2 {
-  margin-top: 0;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 0.5rem;
-}
-
-/* Info Grid (dl/dt/dd) */
-.info-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.5rem 1rem;
-}
-.info-grid dt { font-weight: 600; }
-.info-grid dd { margin: 0; }
-
-/* Feature List */
-.feature-list {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.feature-enabled { color: var(--color-success); }
-.feature-disabled { color: var(--color-muted); }
-
-/* Node List */
-.node-list {
-  list-style: none;
-  padding: 0;
-}
-.node-list li {
-  padding: 0.25rem 0;
-  font-family: monospace;
-}
-
-/* Checks Table */
-.checks-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.checks-table th, .checks-table td {
-  padding: 0.5rem;
-  border-bottom: 1px solid var(--color-border);
-  text-align: left;
-}
-
-/* Badges */
-.badge {
-  padding: 0.125rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.875rem;
-}
-.badge-production { background: var(--color-success-bg); color: var(--color-success); }
-.badge-development { background: var(--color-warning-bg); color: var(--color-warning); }
-.badge-primary { background: var(--color-primary-bg); color: var(--color-primary); }
-
-/* Stats */
-.stats-grid dd {
   font-size: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+/* Uses same modifier classes as inline .status: .status-ok, .status-error, .status-warning */
+.status-banner.status-ok { background: var(--color-success-bg); color: var(--color-success); }
+.status-banner.status-error { background: var(--color-error-bg); color: var(--color-error); }
+.status-banner.status-warning { background: var(--color-warning-bg); color: var(--color-warning); }
+
+/* Stats with larger values */
+.stats-grid dd {
+  font-size: 1.1rem;
   font-weight: 600;
 }
 
-/* Auto-refresh */
+/* Auto-refresh indicator */
 .auto-refresh {
   color: var(--color-muted);
   font-size: 0.875rem;
+}
+
+@media (min-width: 768px) {
+  .status-banner {
+    padding: 1.5rem;
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .stats-grid dd {
+    font-size: 1.25rem;
+  }
 }
 ```
 
@@ -15127,18 +15528,27 @@ All settings above MUST be configurable via admin panel:
 
 #### JSON (Accept: application/json)
 
+**Fields in canonical order (see "Field Order & Structure" above). References template PARTS.**
+
+**Note:** Only non-negotiable features shown with actual status (true/false, enabled/disabled). If project uses optional PARTS (34, 35, 36), those become non-negotiable for that project and show their actual enabled/disabled status.
+
 ```json
 {
+  "project": {
+    "name": "My Application",
+    "tagline": "The best app ever",
+    "description": "A brief description of what this application does"
+  },
   "status": "healthy",
   "version": "1.0.0",
-  "mode": "production",
-  "uptime": "2d 5h 30m",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "go_version": "1.23.0",
+  "go_version": "go1.23.0",
   "build": {
     "commit": "abc1234",
     "date": "2024-01-10T10:00:00Z"
   },
+  "uptime": "2d 5h 30m",
+  "mode": "production",
+  "timestamp": "2024-01-15T10:30:00Z",
   "cluster": {
     "enabled": true,
     "status": "connected",
@@ -15148,26 +15558,25 @@ All settings above MUST be configurable via admin panel:
       "https://node2.example.com",
       "https://node3.example.com"
     ],
+    "node_count": 3,
     "role": "member"
   },
   "features": {
-    "multi_user": true,
-    "organizations": true,
     "tor": {
       "enabled": true,
       "running": true,
       "status": "healthy",
-      "hostname": "abc123xyz456.onion"
+      "hostname": "abc123xyz456abcdef789xyz456abcdef789xyz456abcdef789xyz.onion"
     },
-    "geoip": true,
-    "metrics": true
+    "geoip": true
   },
   "checks": {
     "database": "ok",
     "cache": "ok",
     "disk": "ok",
     "scheduler": "ok",
-    "cluster": "ok"
+    "cluster": "ok",
+    "tor": "ok"
   },
   "stats": {
     "requests_total": 1234567,
@@ -15191,6 +15600,7 @@ All settings above MUST be configurable via admin panel:
 | **Email** | SMTP host, admin emails | Phishing/spam target |
 | **Secrets** | Encryption keys, session secrets | Cryptographic breach |
 | **Debug** | Stack traces, detailed errors | Exploitation info |
+| **Internal endpoints** | /metrics status, internal service endpoints | Internal infrastructure info |
 
 **Safe to include:**
 
@@ -15198,7 +15608,7 @@ All settings above MUST be configurable via admin panel:
 |----------|---------------|---------|
 | **Version** | App version, Go version, build info | `1.0.0`, `go1.23.0` |
 | **Status** | Health status, uptime | `healthy`, `2d 5h` |
-| **Features** | Enabled features (bool only) | `multi_user: true` |
+| **Features** | Enabled PUBLIC features only (not /metrics) | `multi_user: true` |
 | **Checks** | Service status (ok/error only) | `database: ok` |
 | **Cluster** | Public node URLs | `https://node1.example.com` |
 | **Stats** | Aggregate counts only | `requests_total: 12345` |
@@ -15208,25 +15618,58 @@ All settings above MUST be configurable via admin panel:
 
 #### Plain Text (Accept: text/plain)
 
+**Fields in canonical order, flattened with dot notation. References template PARTS.**
+
 ```
+# 1. Project (PART 16: branding)
+project.name: My Application
+project.tagline: The best app ever
+project.description: A brief description
+
+# 2. Status
 status: healthy
+
+# 3. Version & Build (PART 7)
 version: 1.0.0
-mode: production
-uptime: 2d 5h 30m
-go_version: 1.23.0
+go_version: go1.23.0
 build.commit: abc1234
-database: ok
-cache: ok
-disk: ok
-scheduler: ok
-cluster: ok
+build.date: 2024-01-10T10:00:00Z
+
+# 4. Runtime (PART 6)
+uptime: 2d 5h 30m
+mode: production
+timestamp: 2024-01-15T10:30:00Z
+
+# 5. Cluster (PART 10)
+cluster.enabled: true
+cluster.status: connected
 cluster.primary: https://node1.example.com
 cluster.nodes: https://node1.example.com, https://node2.example.com, https://node3.example.com
-features: multi_user, organizations, tor, geoip, metrics
+cluster.node_count: 3
+cluster.role: member
+
+# 6. Features - NON-NEGOTIABLE only (show actual status)
 features.tor.enabled: true
 features.tor.running: true
 features.tor.status: healthy
-features.tor.hostname: abc123xyz456.onion
+features.tor.hostname: abc123xyz456abcdef789xyz456abcdef789xyz456abcdef789xyz.onion
+features.geoip: true
+# PROJECT-SPECIFIC: If using optional PARTS, show actual status
+# features.multi_user: true       (or false if admin disabled)
+# features.organizations: false   (disabled by admin)
+
+# 7. Checks
+checks.database: ok
+checks.cache: ok
+checks.disk: ok
+checks.scheduler: ok
+checks.cluster: ok
+checks.tor: ok
+
+# 8. Stats
+stats.requests_total: 1234567
+stats.requests_24h: 45678
+stats.active_connections: 42
 ```
 
 ### /api/{api_version}/healthz (JSON only)
@@ -15267,8 +15710,7 @@ When not in cluster mode:
       "status": "",
       "hostname": ""
     },
-    "geoip": true,
-    "metrics": true
+    "geoip": true
   },
   "checks": {
     "database": "ok",
@@ -18207,50 +18649,83 @@ if echo "$CONTENT_TYPE" | grep -q "text/html"; then
 fi
 ```
 
-## Responsive Layout 
+## Mobile-First Responsive Design
 
-**Content width adapts based on screen size:**
+**ALL frontend CSS MUST be mobile-first: base styles for mobile, media queries for larger screens.**
 
-| Screen Width | Content Width | Margins | Device Category |
-|--------------|---------------|---------|-----------------|
-| ≥720px | 90% | 5% left, 5% right | Desktop/Tablet |
-| <720px | 98% | 1% left, 1% right | Mobile |
+### Core Principle
 
 ```css
-/* Responsive container */
-.container {
-  width: 98%;
-  margin: 0 auto;
-  max-width: 1400px;
+/* CORRECT: Mobile-first */
+.element {
+  /* Base styles = mobile */
+  padding: 0.75rem;
+  font-size: 1rem;
+}
+@media (min-width: 768px) {
+  .element {
+    /* Enhanced for tablet+ */
+    padding: 1.5rem;
+  }
 }
 
-@media (min-width: 720px) {
+/* WRONG: Desktop-first (do NOT do this) */
+.element {
+  padding: 1.5rem;
+}
+@media (max-width: 767px) {
+  .element { padding: 0.75rem; }
+}
+```
+
+### Breakpoints
+
+| Breakpoint | Target | CSS |
+|------------|--------|-----|
+| Base (no query) | Mobile phones (<768px) | Default styles |
+| `min-width: 768px` | Tablets and up | `@media (min-width: 768px)` |
+| `min-width: 1024px` | Desktops and up | `@media (min-width: 1024px)` |
+| `min-width: 1280px` | Large desktops (optional) | `@media (min-width: 1280px)` |
+
+### Container
+
+```css
+/* Mobile-first container */
+.container {
+  width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
   .container {
     width: 90%;
+    padding-left: 0;
+    padding-right: 0;
+    max-width: 1400px;
   }
 }
 ```
 
-**Responsive Behavior by Element:**
+### Responsive Behavior by Element
 
-| Element | <720px (Mobile) | ≥720px (Desktop) |
-|---------|-----------------|------------------|
-| **Admin Sidebar** | Hidden, hamburger menu toggle | Visible, collapsible |
-| **Public Nav** | Hamburger menu | Horizontal links |
-| **Tables** | Horizontal scroll or card layout | Full table |
-| **Modals** | Full-width (98%) | Centered, max-width 600px |
-| **Forms** | Single column, full-width inputs | Multi-column where appropriate |
-| **Touch Targets** | Minimum 44x44px | Standard sizing |
-| **Font Size** | Base 16px minimum | Base 16px |
+| Element | Mobile (base) | Tablet+ (768px) | Desktop+ (1024px) |
+|---------|---------------|-----------------|-------------------|
+| **Container** | 100% width, 1rem padding | 90% width, centered | max-width: 1400px |
+| **Admin Sidebar** | Hidden, hamburger toggle | Visible, collapsible | Expanded by default |
+| **Public Nav** | Hamburger menu | Horizontal links | Horizontal links |
+| **Tables** | Horizontal scroll | Full table | Full table |
+| **Modals** | Full-width (100% - 1rem) | Centered, max-width 600px | Same |
+| **Forms** | Single column, full-width | Multi-column where appropriate | Same |
+| **Grid layouts** | 1 column | 2 columns | 3-4 columns |
+| **Touch Targets** | Minimum 44x44px | Standard sizing | Standard sizing |
+| **Font Size** | Base 16px minimum | Base 16px | Base 16px |
 
-**Footer Behavior:**
-- Footer is ALWAYS at the bottom of the page content
-- Footer scrolls with content (NOT fixed/sticky)
-- Uses flexbox or grid to push footer down on short pages
-- ALWAYS horizontally centered
+### Footer (Mobile-First)
 
 ```css
-/* Footer always at bottom */
+/* Footer always at bottom - mobile-first */
 body {
   display: flex;
   flex-direction: column;
@@ -18263,8 +18738,599 @@ main {
 
 footer {
   text-align: center;
+  padding: 1rem;
+  font-size: 0.875rem;
+}
+
+@media (min-width: 768px) {
+  footer {
+    padding: 1.5rem;
+  }
 }
 ```
+
+---
+
+## Semantic HTML Elements
+
+**Use correct HTML elements for content type. This ensures accessibility, SEO, and proper styling.**
+
+### When to Use Each Element
+
+| Element | Use For | Example |
+|---------|---------|---------|
+| `<code>` | Inline code, values, identifiers | Usernames, versions, short values |
+| `<pre><code>` | Multi-line code blocks | Configuration, scripts |
+| `<kbd>` | Keyboard input | `Ctrl+C`, `Enter` |
+| `<samp>` | Sample output | Command output, logs |
+| `<var>` | Variables, placeholders | `{username}`, `$PATH` |
+| `<span>` | Inline styling hook | Status badges, icons |
+| `<div>` | Block-level container | Sections, wrappers |
+| `<time>` | Dates and times | Timestamps, durations |
+| `<mark>` | Highlighted text | Search matches |
+| `<abbr>` | Abbreviations | `<abbr title="Application Programming Interface">API</abbr>` |
+
+### Code Elements
+
+#### Inline Code (`<code>`)
+
+**Use for short, inline technical values:**
+
+| Use For | Example HTML | Renders As |
+|---------|--------------|------------|
+| Version numbers | `<code>v1.2.3</code>` | `v1.2.3` |
+| Usernames | `<code>@johndoe</code>` | `@johndoe` |
+| Short commands | `<code>git status</code>` | `git status` |
+| Config values | `<code>true</code>` | `true` |
+| File names | `<code>config.yml</code>` | `config.yml` |
+| Environment vars | `<code>$HOME</code>` | `$HOME` |
+
+```css
+/* Inline code styling */
+code {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.875em;
+  padding: 0.125rem 0.375rem;
+  background: var(--color-code-bg);
+  border-radius: 4px;
+  word-break: break-word;
+}
+```
+
+#### Code Blocks with Copy Button
+
+**For values users need to copy (URLs, tokens, addresses, etc.):**
+
+```html
+<div class="code-block">
+  <code class="code-content">abc123xyz789.onion</code>
+  <button type="button" class="copy-btn" data-copy="abc123xyz789.onion" aria-label="Copy to clipboard">
+    <span class="copy-icon">📋</span>
+    <span class="copy-text">Copy</span>
+  </button>
+</div>
+```
+
+**CSS (Mobile-First):**
+
+```css
+/* Code block with copy button - mobile-first */
+.code-block {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  margin: 0.25rem 0;
+}
+
+.code-content {
+  display: block;
+  flex: 1;
+  min-width: 0; /* Allow shrinking */
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-code-bg);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.875rem;
+  -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.copy-btn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+}
+
+.copy-btn:active,
+.copy-btn.copied {
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
+}
+
+/* Hide "Copy" text on mobile, show only icon */
+.copy-text {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .copy-text {
+    display: inline;
+  }
+}
+```
+
+**JavaScript:**
+
+```javascript
+// Copy button handler
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.copy-btn');
+  if (!btn) return;
+
+  const text = btn.dataset.copy || btn.previousElementSibling?.textContent;
+  if (!text) return;
+
+  navigator.clipboard.writeText(text).then(() => {
+    // Visual feedback
+    const icon = btn.querySelector('.copy-icon');
+    const originalIcon = icon.textContent;
+    icon.textContent = '✓';
+    btn.classList.add('copied');
+
+    setTimeout(() => {
+      icon.textContent = originalIcon;
+      btn.classList.remove('copied');
+    }, 2000);
+  });
+});
+```
+
+#### When to Use Copy Buttons
+
+| Content Type | Copy Button? | Reason |
+|--------------|--------------|--------|
+| Tor .onion addresses | **Yes** | Long, complex, users need to copy |
+| API tokens | **Yes** | Users need to paste elsewhere |
+| Node URLs | **Yes** | Users may need to copy for config |
+| Git clone URLs | **Yes** | Users copy to terminal |
+| Build commit hash | Optional | May be useful for bug reports |
+| Version numbers | No | Short, rarely copied |
+| Usernames | No | Short, rarely copied |
+| Boolean values | No | Not useful to copy |
+
+#### Multi-line Code Blocks (`<pre><code>`)
+
+**For configuration, scripts, or multi-line output:**
+
+```html
+<div class="code-block-multi">
+  <div class="code-header">
+    <span class="code-lang">yaml</span>
+    <button type="button" class="copy-btn" data-copy-target="config-example">📋 Copy</button>
+  </div>
+  <pre><code id="config-example">server:
+  host: 0.0.0.0
+  port: 8080</code></pre>
+</div>
+```
+
+```css
+/* Multi-line code block - mobile-first */
+.code-block-multi {
+  margin: 1rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.75rem;
+}
+
+.code-lang {
+  color: var(--color-muted);
+  text-transform: uppercase;
+}
+
+.code-block-multi pre {
+  margin: 0;
+  padding: 0.75rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.code-block-multi code {
+  display: block;
+  padding: 0;
+  background: none;
+  white-space: pre;
+}
+
+@media (min-width: 768px) {
+  .code-header {
+    padding: 0.5rem 1rem;
+  }
+  .code-block-multi pre {
+    padding: 1rem;
+  }
+}
+```
+
+### Status & Badge Elements
+
+**Use `<span>` with semantic classes for status indicators:**
+
+```html
+<!-- Status badges -->
+<span class="status status-ok">✅ Healthy</span>
+<span class="status status-error">❌ Error</span>
+<span class="status status-warning">⚠️ Degraded</span>
+
+<!-- Feature badges -->
+<span class="badge badge-enabled">Enabled</span>
+<span class="badge badge-disabled">Disabled</span>
+
+<!-- Role badges -->
+<span class="badge badge-primary">Primary</span>
+<span class="badge badge-member">Member</span>
+```
+
+```css
+/* Status indicators - mobile-first */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-ok { background: var(--color-success-bg); color: var(--color-success); }
+.status-error { background: var(--color-error-bg); color: var(--color-error); }
+.status-warning { background: var(--color-warning-bg); color: var(--color-warning); }
+
+.badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .badge {
+    font-size: 0.875rem;
+  }
+}
+```
+
+### Data Display Patterns
+
+#### Key-Value Lists (Definition Lists)
+
+**Use `<dl>` for labeled data:**
+
+```html
+<dl class="info-list">
+  <dt>🏷️ Version</dt>
+  <dd><code>1.2.3</code></dd>
+
+  <dt>⏱️ Uptime</dt>
+  <dd>2d 5h 30m</dd>
+
+  <dt>🧅 Tor Address</dt>
+  <dd>
+    <div class="code-block">
+      <code class="code-content">abc123xyz789.onion</code>
+      <button class="copy-btn" data-copy="abc123xyz789.onion">📋</button>
+    </div>
+  </dd>
+</dl>
+```
+
+```css
+/* Info list - mobile-first (stacked) */
+.info-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.25rem;
+  margin: 0;
+}
+
+.info-list dt {
+  font-weight: 600;
+  margin-top: 0.75rem;
+}
+
+.info-list dt:first-child {
+  margin-top: 0;
+}
+
+.info-list dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+/* Tablet+: side-by-side */
+@media (min-width: 768px) {
+  .info-list {
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 1rem;
+  }
+
+  .info-list dt {
+    margin-top: 0;
+  }
+}
+```
+
+#### Tables (Mobile-First)
+
+**Tables get horizontal scroll on mobile:**
+
+```html
+<div class="table-wrapper">
+  <table class="data-table">
+    <thead>
+      <tr><th>Component</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Database</td><td class="status-ok">✅ OK</td></tr>
+    </tbody>
+  </table>
+</div>
+```
+
+```css
+/* Table wrapper for horizontal scroll - mobile-first */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1rem 0;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 400px; /* Force scroll on narrow screens */
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .data-table {
+    min-width: 0; /* Allow natural width */
+    font-size: 1rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.75rem;
+    white-space: normal;
+  }
+}
+```
+
+#### Cards/Sections
+
+```css
+/* Section cards - mobile-first */
+.section-card {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-card);
+}
+
+.section-card h2,
+.section-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 1rem;
+}
+
+@media (min-width: 768px) {
+  .section-card {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+  }
+
+  .section-card h2,
+  .section-card h3 {
+    font-size: 1.25rem;
+  }
+}
+```
+
+### Feature Lists
+
+**For listing features/capabilities:**
+
+```html
+<ul class="feature-list">
+  <li class="feature-enabled">👥 Multi-User</li>
+  <li class="feature-enabled">🏢 Organizations</li>
+  <li class="feature-enabled">
+    🧅 Tor:
+    <span class="status status-ok">✅ healthy</span>
+    <div class="code-block">
+      <code class="code-content">abc123xyz789.onion</code>
+      <button class="copy-btn" data-copy="abc123xyz789.onion">📋</button>
+    </div>
+  </li>
+  <li class="feature-disabled">📊 GeoIP</li>
+</ul>
+```
+
+```css
+/* Feature list - mobile-first (stacked) */
+.feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.feature-enabled {
+  color: var(--color-text);
+}
+
+.feature-disabled {
+  color: var(--color-muted);
+  text-decoration: line-through;
+}
+
+/* Tablet+: horizontal wrap */
+@media (min-width: 768px) {
+  .feature-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+  }
+
+  /* Unless feature has sub-content (like Tor address) */
+  .feature-list li:has(.code-block) {
+    flex-basis: 100%;
+  }
+}
+```
+
+### Node/URL Lists
+
+**For cluster nodes, endpoints, etc.:**
+
+```html
+<ul class="node-list">
+  <li>
+    <div class="code-block">
+      <code class="code-content">https://node1.example.com</code>
+      <button class="copy-btn" data-copy="https://node1.example.com">📋</button>
+    </div>
+    <span class="badge badge-primary">👑 Primary</span>
+  </li>
+  <li>
+    <div class="code-block">
+      <code class="code-content">https://node2.example.com</code>
+      <button class="copy-btn" data-copy="https://node2.example.com">📋</button>
+    </div>
+    <span class="status status-ok">✅</span>
+  </li>
+</ul>
+```
+
+```css
+/* Node list - mobile-first */
+.node-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.node-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.node-list .code-block {
+  flex: 1;
+  min-width: 0;
+}
+```
+
+---
+
+## CSS Variable Reference
+
+**All components use these CSS variables for consistent theming:**
+
+```css
+:root {
+  /* Backgrounds */
+  --color-bg: #1a1a2e;
+  --color-bg-secondary: #16213e;
+  --color-bg-card: #1e1e3f;
+  --color-bg-hover: #2a2a4e;
+  --color-bg-active: #3a3a5e;
+  --color-code-bg: rgba(255, 255, 255, 0.1);
+
+  /* Text */
+  --color-text: #eaeaea;
+  --color-muted: #888;
+
+  /* Borders */
+  --color-border: #333;
+  --color-border-hover: #555;
+
+  /* Status colors */
+  --color-success: #4ade80;
+  --color-success-bg: rgba(74, 222, 128, 0.15);
+  --color-error: #f87171;
+  --color-error-bg: rgba(248, 113, 113, 0.15);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(251, 191, 36, 0.15);
+  --color-primary: #60a5fa;
+  --color-primary-bg: rgba(96, 165, 250, 0.15);
+}
+
+/* Light theme overrides */
+html.theme-light {
+  --color-bg: #ffffff;
+  --color-bg-secondary: #f8f9fa;
+  --color-bg-card: #ffffff;
+  --color-bg-hover: #e9ecef;
+  --color-bg-active: #dee2e6;
+  --color-code-bg: rgba(0, 0, 0, 0.05);
+  --color-text: #212529;
+  --color-muted: #6c757d;
+  --color-border: #dee2e6;
+  --color-border-hover: #adb5bd;
+}
+```
+
+---
 
 ## Technology Stack 
 
@@ -24302,13 +25368,13 @@ Email templates allow Server Admins to customize ALL notification messages, incl
 
 | Priority | Host | Description | Ports |
 |----------|------|-------------|-------|
-| 1 | `127.0.0.1` | Loopback (same machine) | 25, 587, 465 |
-| 2 | `172.17.0.1` | Docker bridge gateway | 25, 587, 465 |
-| 3 | `{gateway_ip}` | Default gateway IP | 25, 587, 465 |
-| 4 | `{fqdn}` | Detected FQDN (from GetFQDN) | 25, 587, 465 |
-| 5 | `{global_ipv4}` | Global IPv4 (if available) | 25, 587, 465 |
-| 6 | `mail.{fqdn}` | Common mail subdomain | 25, 587, 465 |
-| 7 | `smtp.{fqdn}` | Common SMTP subdomain | 25, 587, 465 |
+| 1 | `127.0.0.1` | Loopback (same machine) | 25, 465, 587 |
+| 2 | `172.17.0.1` | Docker bridge gateway | 25, 465, 587 |
+| 3 | `{gateway_ip}` | Default gateway IP | 25, 465, 587 |
+| 4 | `{fqdn}` | Detected FQDN (from GetFQDN) | 25, 465, 587 |
+| 5 | `{global_ipv4}` | Global IPv4 (if available) | 25, 465, 587 |
+| 6 | `mail.{fqdn}` | Common mail subdomain | 25, 465, 587 |
+| 7 | `smtp.{fqdn}` | Common SMTP subdomain | 25, 465, 587 |
 
 **Auto-Detection Process:**
 1. Try each host/port combination in priority order
@@ -26159,6 +27225,39 @@ All databases from [sapics/ip-location-db](https://github.com/sapics/ip-location
 | Authentication | Optional bearer token |
 | Library | `github.com/prometheus/client_golang` |
 
+## Access Control
+
+**`/metrics` is INTERNAL ONLY. See TERMINOLOGY > Monitoring Endpoints for /healthz vs /metrics distinction.**
+
+| Deployment | Access Method | Recommendation |
+|------------|---------------|----------------|
+| **Single server** | Firewall rules | Block external access to `/metrics` port/path |
+| **Behind reverse proxy** | Proxy config | Do NOT proxy `/metrics` to public |
+| **Kubernetes** | NetworkPolicy | Restrict to monitoring namespace |
+| **Cloud** | Security groups | Allow only from Prometheus IP |
+
+**Authentication options:**
+
+| Method | Config | Use When |
+|--------|--------|----------|
+| **None** | `token: ""` | Firewalled, internal network only |
+| **Bearer token** | `token: "secret123"` | Additional layer, or when firewall not possible |
+
+**Token authentication header:**
+```
+Authorization: Bearer <token>
+```
+
+**Prometheus scrape config with token:**
+```yaml
+scrape_configs:
+  - job_name: '{projectname}'
+    static_configs:
+      - targets: ['app.internal:8080']
+    authorization:
+      credentials: 'your-metrics-token-here'
+```
+
 ## Configuration
 
 ```yaml
@@ -26193,6 +27292,397 @@ server:
 | **Scheduler** | Tasks run, duration, failures | Background task health |
 | **System** | CPU, memory, disk, goroutines | System resources |
 | **Business** | Users, sessions, API calls | Application-specific |
+
+## Metric Naming Conventions
+
+**All metrics MUST follow Prometheus naming conventions.**
+
+| Rule | Format | Example |
+|------|--------|---------|
+| **Prefix** | `{projectname}_` | `jokes_http_requests_total` |
+| **Snake case** | `word_word_word` | `http_request_duration_seconds` |
+| **Unit suffix** | `_seconds`, `_bytes`, `_total` | `request_duration_seconds` |
+| **Total suffix** | Counters end with `_total` | `http_requests_total` |
+| **Base units** | Seconds (not ms), bytes (not KB) | `duration_seconds`, `size_bytes` |
+
+**Metric types:**
+
+| Type | Use For | Example |
+|------|---------|---------|
+| **Counter** | Cumulative values that only increase | `requests_total`, `errors_total` |
+| **Gauge** | Values that can go up or down | `active_connections`, `temperature` |
+| **Histogram** | Observations bucketed by value | `request_duration_seconds` |
+| **Summary** | Observations with quantiles | `request_duration_quantiles` |
+
+**Label naming:**
+
+| Rule | Good | Bad |
+|------|------|-----|
+| Snake case | `status_code` | `statusCode` |
+| Lowercase | `method` | `Method` |
+| No units in labels | `path` | `path_string` |
+| Low cardinality | `method`, `status` | `user_id`, `request_id` |
+
+**Cardinality warning:** Labels with high cardinality (user IDs, request IDs, timestamps) cause memory bloat. Use path normalization (replace UUIDs/IDs with `:id`).
+
+## Required Metrics
+
+**Every project MUST expose these core metrics at minimum.**
+
+### Required: Application Info
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `{projectname}_app_info` | Gauge | `version`, `commit`, `build_date`, `go_version` | Always 1, labels carry info |
+| `{projectname}_app_uptime_seconds` | Gauge | - | Seconds since start |
+| `{projectname}_app_start_timestamp` | Gauge | - | Unix timestamp of start |
+
+### Required: HTTP Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `{projectname}_http_requests_total` | Counter | `method`, `path`, `status` | Total HTTP requests |
+| `{projectname}_http_request_duration_seconds` | Histogram | `method`, `path` | Request latency |
+| `{projectname}_http_request_size_bytes` | Histogram | `method`, `path` | Request body size |
+| `{projectname}_http_response_size_bytes` | Histogram | `method`, `path` | Response body size |
+| `{projectname}_http_active_requests` | Gauge | - | In-flight requests |
+
+### Required: Database Metrics (if using database)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `{projectname}_db_queries_total` | Counter | `operation`, `table` | Total queries |
+| `{projectname}_db_query_duration_seconds` | Histogram | `operation`, `table` | Query latency |
+| `{projectname}_db_connections_open` | Gauge | - | Open connections |
+| `{projectname}_db_connections_in_use` | Gauge | - | Active connections |
+| `{projectname}_db_errors_total` | Counter | `operation`, `error_type` | Database errors |
+
+### Required: Authentication Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `{projectname}_auth_attempts_total` | Counter | `method`, `status` | Auth attempts |
+| `{projectname}_auth_sessions_active` | Gauge | - | Active sessions |
+
+### Optional: Extended Metrics
+
+| Category | When to Include |
+|----------|-----------------|
+| **Cache metrics** | If using cache (Redis, in-memory) |
+| **Scheduler metrics** | If using background scheduler (PART 19) |
+| **System metrics** | If `include_system: true` in config |
+| **Runtime metrics** | If `include_runtime: true` in config |
+| **Business metrics** | App-specific (users, sessions, etc.) |
+
+## Complete Metrics Reference
+
+**Every metric exported by `/metrics`. All prefixed with `{projectname}_`.**
+
+### Application Metrics (REQUIRED)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `app_info` | Gauge | `version`, `commit`, `build_date`, `go_version` | Always 1, labels carry build info |
+| `app_uptime_seconds` | Gauge | - | Seconds since application start |
+| `app_start_timestamp` | Gauge | - | Unix timestamp when application started |
+
+### HTTP Metrics (REQUIRED)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `http_requests_total` | Counter | `method`, `path`, `status` | Total HTTP requests processed |
+| `http_request_duration_seconds` | Histogram | `method`, `path` | Request latency distribution |
+| `http_request_size_bytes` | Histogram | `method`, `path` | Request body size distribution |
+| `http_response_size_bytes` | Histogram | `method`, `path` | Response body size distribution |
+| `http_active_requests` | Gauge | - | Number of requests currently being processed |
+
+**HTTP label values:**
+
+| Label | Values | Notes |
+|-------|--------|-------|
+| `method` | `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`, `HEAD` | HTTP method |
+| `path` | Normalized path | UUIDs/IDs replaced with `:id` |
+| `status` | `200`, `201`, `400`, `401`, `404`, `500`, etc. | HTTP status code |
+
+**Histogram buckets:**
+
+| Metric | Buckets |
+|--------|---------|
+| `http_request_duration_seconds` | 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10 |
+| `http_request_size_bytes` | 100, 1K, 10K, 100K, 1M, 10M |
+| `http_response_size_bytes` | 100, 1K, 10K, 100K, 1M, 10M |
+
+### Database Metrics (REQUIRED if using database)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `db_queries_total` | Counter | `operation`, `table` | Total database queries |
+| `db_query_duration_seconds` | Histogram | `operation`, `table` | Query latency distribution |
+| `db_connections_open` | Gauge | - | Number of open connections in pool |
+| `db_connections_in_use` | Gauge | - | Number of connections actively in use |
+| `db_errors_total` | Counter | `operation`, `error_type` | Total database errors |
+
+**Database label values:**
+
+| Label | Values | Notes |
+|-------|--------|-------|
+| `operation` | `select`, `insert`, `update`, `delete` | SQL operation type |
+| `table` | Table name (lowercase) | Target table |
+| `error_type` | `connection`, `timeout`, `constraint`, `duplicate`, `other` | Error classification |
+
+**Histogram buckets:**
+
+| Metric | Buckets |
+|--------|---------|
+| `db_query_duration_seconds` | 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1 |
+
+### Cache Metrics (if using cache)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `cache_hits_total` | Counter | `cache` | Total cache hits |
+| `cache_misses_total` | Counter | `cache` | Total cache misses |
+| `cache_evictions_total` | Counter | `cache` | Total cache evictions |
+| `cache_size` | Gauge | `cache` | Current number of items in cache |
+| `cache_bytes` | Gauge | `cache` | Current cache size in bytes |
+
+**Cache label values:**
+
+| Label | Values | Notes |
+|-------|--------|-------|
+| `cache` | `sessions`, `users`, `config`, `tokens`, etc. | Cache name/purpose |
+
+### Scheduler Metrics (if using PART 19 scheduler)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `scheduler_tasks_total` | Counter | `task`, `status` | Total scheduled task executions |
+| `scheduler_task_duration_seconds` | Histogram | `task` | Task execution duration |
+| `scheduler_tasks_running` | Gauge | `task` | Currently running task instances |
+| `scheduler_last_run_timestamp` | Gauge | `task` | Unix timestamp of last task execution |
+
+**Scheduler label values:**
+
+| Label | Values | Notes |
+|-------|--------|-------|
+| `task` | `cleanup`, `backup`, `sync`, `geoip_update`, etc. | Task name |
+| `status` | `success`, `error` | Execution result |
+
+**Histogram buckets:**
+
+| Metric | Buckets |
+|--------|---------|
+| `scheduler_task_duration_seconds` | 0.1, 0.5, 1, 5, 10, 30, 60, 300, 600 |
+
+### Authentication Metrics (REQUIRED)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `auth_attempts_total` | Counter | `method`, `status` | Total authentication attempts |
+| `auth_sessions_active` | Gauge | - | Number of active sessions |
+
+**Authentication label values:**
+
+| Label | Values | Notes |
+|-------|--------|-------|
+| `method` | `password`, `api_token`, `oidc`, `ldap`, `2fa` | Auth method used |
+| `status` | `success`, `failed`, `blocked` | Attempt result |
+
+### Business Metrics (if using PART 34 multi-user)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `users_total` | Gauge | - | Total registered users |
+| `users_active` | Gauge | - | Users active in last 24 hours |
+| `api_tokens_active` | Gauge | - | Active API tokens |
+
+### System Metrics (if `include_system: true`)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `system_cpu_usage_percent` | Gauge | - | Current CPU usage percentage (0-100) |
+| `system_memory_usage_percent` | Gauge | - | Current memory usage percentage (0-100) |
+| `system_memory_used_bytes` | Gauge | - | Memory currently in use |
+| `system_memory_total_bytes` | Gauge | - | Total system memory |
+| `system_disk_usage_percent` | Gauge | `path` | Disk usage percentage for data directory |
+| `system_disk_used_bytes` | Gauge | `path` | Disk space used |
+| `system_disk_total_bytes` | Gauge | `path` | Total disk space |
+
+### Go Runtime Metrics (if `include_runtime: true`)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `go_goroutines` | Gauge | - | Current number of goroutines |
+| `go_mem_alloc_bytes` | Gauge | - | Bytes allocated and in use (heap) |
+| `go_mem_sys_bytes` | Gauge | - | Total bytes obtained from system |
+| `go_gc_runs_total` | Counter | - | Total garbage collection runs |
+| `go_gc_pause_total_seconds` | Counter | - | Total time spent in GC pauses |
+
+### Cluster Metrics (if using PART 10 clustering)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `cluster_nodes_total` | Gauge | - | Total nodes in cluster |
+| `cluster_nodes_healthy` | Gauge | - | Healthy nodes in cluster |
+| `cluster_is_primary` | Gauge | - | 1 if this node is primary, 0 otherwise |
+| `cluster_sync_lag_seconds` | Gauge | - | Replication lag from primary |
+| `cluster_elections_total` | Counter | - | Total leader elections |
+
+### Tor Metrics (if using PART 32 Tor)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `tor_enabled` | Gauge | - | 1 if Tor is enabled, 0 otherwise |
+| `tor_running` | Gauge | - | 1 if Tor process is running, 0 otherwise |
+| `tor_circuit_established` | Gauge | - | 1 if circuit established, 0 otherwise |
+| `tor_requests_total` | Counter | - | Total requests via Tor hidden service |
+
+### Rate Limiting Metrics (if rate limiting enabled)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `ratelimit_requests_total` | Counter | `limit`, `status` | Total rate-limited requests |
+| `ratelimit_blocked_total` | Counter | `limit` | Requests blocked by rate limiter |
+
+**Rate limiting label values:**
+
+| Label | Values | Notes |
+|-------|--------|-------|
+| `limit` | `global`, `per_ip`, `per_user`, `per_endpoint` | Rate limit type |
+| `status` | `allowed`, `limited` | Request outcome |
+
+## Metrics Output Example
+
+**Sample `/metrics` output (Prometheus text format):**
+
+```
+# HELP {projectname}_app_info Application information
+# TYPE {projectname}_app_info gauge
+{projectname}_app_info{version="1.2.3",commit="abc1234",build_date="2025-01-15",go_version="go1.23"} 1
+
+# HELP {projectname}_app_uptime_seconds Application uptime in seconds
+# TYPE {projectname}_app_uptime_seconds gauge
+{projectname}_app_uptime_seconds 86423.5
+
+# HELP {projectname}_app_start_timestamp Application start timestamp
+# TYPE {projectname}_app_start_timestamp gauge
+{projectname}_app_start_timestamp 1.705312200e+09
+
+# HELP {projectname}_http_requests_total Total number of HTTP requests
+# TYPE {projectname}_http_requests_total counter
+{projectname}_http_requests_total{method="GET",path="/api/v1/users",status="200"} 1523
+{projectname}_http_requests_total{method="GET",path="/api/v1/users/:id",status="200"} 892
+{projectname}_http_requests_total{method="GET",path="/api/v1/users/:id",status="404"} 23
+{projectname}_http_requests_total{method="POST",path="/api/v1/users",status="201"} 42
+{projectname}_http_requests_total{method="GET",path="/healthz",status="200"} 8640
+
+# HELP {projectname}_http_request_duration_seconds HTTP request duration in seconds
+# TYPE {projectname}_http_request_duration_seconds histogram
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.001"} 120
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.005"} 890
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.01"} 1400
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.025"} 1500
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.05"} 1510
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="0.1"} 1520
+{projectname}_http_request_duration_seconds_bucket{method="GET",path="/api/v1/users",le="+Inf"} 1523
+{projectname}_http_request_duration_seconds_sum{method="GET",path="/api/v1/users"} 12.456
+{projectname}_http_request_duration_seconds_count{method="GET",path="/api/v1/users"} 1523
+
+# HELP {projectname}_http_active_requests Number of active HTTP requests
+# TYPE {projectname}_http_active_requests gauge
+{projectname}_http_active_requests 3
+
+# HELP {projectname}_db_connections_open Number of open database connections
+# TYPE {projectname}_db_connections_open gauge
+{projectname}_db_connections_open 10
+
+# HELP {projectname}_db_connections_in_use Number of database connections in use
+# TYPE {projectname}_db_connections_in_use gauge
+{projectname}_db_connections_in_use 2
+
+# HELP {projectname}_cache_hits_total Total number of cache hits
+# TYPE {projectname}_cache_hits_total counter
+{projectname}_cache_hits_total{cache="sessions"} 8234
+{projectname}_cache_hits_total{cache="users"} 1523
+
+# HELP {projectname}_cache_misses_total Total number of cache misses
+# TYPE {projectname}_cache_misses_total counter
+{projectname}_cache_misses_total{cache="sessions"} 156
+{projectname}_cache_misses_total{cache="users"} 42
+
+# HELP {projectname}_auth_attempts_total Total authentication attempts
+# TYPE {projectname}_auth_attempts_total counter
+{projectname}_auth_attempts_total{method="password",status="success"} 523
+{projectname}_auth_attempts_total{method="password",status="failed"} 12
+{projectname}_auth_attempts_total{method="api_token",status="success"} 8923
+
+# HELP {projectname}_auth_sessions_active Number of active sessions
+# TYPE {projectname}_auth_sessions_active gauge
+{projectname}_auth_sessions_active 42
+
+# HELP {projectname}_scheduler_tasks_total Total number of scheduled tasks executed
+# TYPE {projectname}_scheduler_tasks_total counter
+{projectname}_scheduler_tasks_total{task="cleanup",status="success"} 288
+{projectname}_scheduler_tasks_total{task="backup",status="success"} 24
+{projectname}_scheduler_tasks_total{task="geoip_update",status="success"} 1
+
+# HELP {projectname}_scheduler_last_run_timestamp Timestamp of last task run
+# TYPE {projectname}_scheduler_last_run_timestamp gauge
+{projectname}_scheduler_last_run_timestamp{task="cleanup"} 1.705398600e+09
+{projectname}_scheduler_last_run_timestamp{task="backup"} 1.705395000e+09
+
+# HELP {projectname}_system_cpu_usage_percent Current CPU usage percentage
+# TYPE {projectname}_system_cpu_usage_percent gauge
+{projectname}_system_cpu_usage_percent 12.5
+
+# HELP {projectname}_system_memory_usage_percent Current memory usage percentage
+# TYPE {projectname}_system_memory_usage_percent gauge
+{projectname}_system_memory_usage_percent 45.2
+
+# HELP {projectname}_system_memory_used_bytes Memory used in bytes
+# TYPE {projectname}_system_memory_used_bytes gauge
+{projectname}_system_memory_used_bytes 3.865470976e+09
+
+# HELP {projectname}_system_memory_total_bytes Total memory in bytes
+# TYPE {projectname}_system_memory_total_bytes gauge
+{projectname}_system_memory_total_bytes 8.589934592e+09
+
+# HELP {projectname}_system_disk_usage_percent Disk usage percentage
+# TYPE {projectname}_system_disk_usage_percent gauge
+{projectname}_system_disk_usage_percent{path="/var/lib/myorg/myapp"} 62.3
+
+# HELP {projectname}_go_goroutines Number of goroutines
+# TYPE {projectname}_go_goroutines gauge
+{projectname}_go_goroutines 47
+
+# HELP {projectname}_go_mem_alloc_bytes Bytes allocated and in use
+# TYPE {projectname}_go_mem_alloc_bytes gauge
+{projectname}_go_mem_alloc_bytes 2.4576e+07
+
+# HELP {projectname}_go_gc_runs_total Total number of GC runs
+# TYPE {projectname}_go_gc_runs_total counter
+{projectname}_go_gc_runs_total 1523
+
+# HELP {projectname}_cluster_nodes_total Total nodes in cluster
+# TYPE {projectname}_cluster_nodes_total gauge
+{projectname}_cluster_nodes_total 3
+
+# HELP {projectname}_cluster_nodes_healthy Healthy nodes in cluster
+# TYPE {projectname}_cluster_nodes_healthy gauge
+{projectname}_cluster_nodes_healthy 3
+
+# HELP {projectname}_cluster_is_primary 1 if this node is primary
+# TYPE {projectname}_cluster_is_primary gauge
+{projectname}_cluster_is_primary 1
+
+# HELP {projectname}_tor_enabled 1 if Tor is enabled
+# TYPE {projectname}_tor_enabled gauge
+{projectname}_tor_enabled 1
+
+# HELP {projectname}_tor_running 1 if Tor process is running
+# TYPE {projectname}_tor_running gauge
+{projectname}_tor_running 1
+```
 
 ## Metrics Implementation
 
@@ -45513,11 +47003,15 @@ curl "/api/{api_version}/search/hello"                # Path-based search (also 
   "retry_delay": 1,
   "config": {
     "database": {
-      "drivers": ["file", "sqlite", "postgres", "mysql", "mssql", "mongodb"],
+      "drivers": ["file", "sqlite", "libsql", "postgres", "mysql", "mssql", "mongodb"],
       "aliases": {
         "sqlite2": "sqlite",
         "sqlite3": "sqlite",
-        "mariadb": "mysql"
+        "turso": "libsql",
+        "pgsql": "postgres",
+        "postgresql": "postgres",
+        "mariadb": "mysql",
+        "mongo": "mongodb"
       },
       "ssl_modes": ["disable", "require", "verify-full"]
     },
@@ -45594,11 +47088,15 @@ func AutodiscoverHandler(w http.ResponseWriter, r *http.Request) {
         "retry_delay": cfg.Server.RetryDelay,
         "config": map[string]interface{}{
             "database": map[string]interface{}{
-                "drivers": []string{"file", "sqlite", "postgres", "mysql", "mssql", "mongodb"},
+                "drivers": []string{"file", "sqlite", "libsql", "postgres", "mysql", "mssql", "mongodb"},
                 "aliases": map[string]string{
-                    "sqlite2": "sqlite",
-                    "sqlite3": "sqlite",
-                    "mariadb": "mysql",
+                    "sqlite2":    "sqlite",
+                    "sqlite3":    "sqlite",
+                    "turso":      "libsql",
+                    "pgsql":      "postgres",
+                    "postgresql": "postgres",
+                    "mariadb":    "mysql",
+                    "mongo":      "mongodb",
                 },
                 "ssl_modes": []string{"disable", "require", "verify-full"},
             },

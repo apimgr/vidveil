@@ -96,30 +96,18 @@ var BangMapping = map[string]string{
 	"flyflv":    "flyflv",
 	"t8":        "tube8",
 	"tube8":     "tube8",
-	"xt":        "xtube",
-	"xtube":     "xtube",
 
 	// Tier 5 - New engines
 	"any":       "anyporn",
 	"anyporn":   "anyporn",
-	"super":     "superporn",
-	"superporn": "superporn",
 	"tg":        "tubegalore",
 	"tubegalore": "tubegalore",
 	"ml":        "motherless",
 	"motherless": "motherless",
 
 	// Tier 6 - Additional engines
-	"km":          "keezmovies",
-	"keezmovies":  "keezmovies",
-	"sw":          "spankwire",
-	"spankwire":   "spankwire",
-	"et":          "extremetube",
-	"extremetube": "extremetube",
 	"3m":          "3movs",
 	"3movs":       "3movs",
-	"sn":          "sleazyneasy",
-	"sleazyneasy": "sleazyneasy",
 }
 
 // ParsedQuery represents a query after bang parsing
@@ -251,16 +239,10 @@ var EngineDisplayNames = map[string]string{
 	"vjav":        "VJAV",
 	"flyflv":      "FlyFLV",
 	"tube8":       "Tube8",
-	"xtube":       "XTube",
 	"anyporn":     "AnyPorn",
-	"superporn":   "SuperPorn",
 	"tubegalore":  "TubeGalore",
 	"motherless":  "Motherless",
-	"keezmovies":  "KeezMovies",
-	"spankwire":   "SpankWire",
-	"extremetube": "ExtremeTube",
 	"3movs":       "3Movs",
-	"sleazyneasy": "SleazyNeasy",
 }
 
 // ListBangs returns a sorted list of all available bangs

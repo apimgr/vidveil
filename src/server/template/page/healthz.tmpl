@@ -103,18 +103,19 @@
             </table>
         </section>
 
-        <!-- Statistics per AI.md PART 13 (VidVeil-specific per IDEA.md) -->
+        <!-- Statistics per AI.md PART 13 -->
         <section class="health-section">
             <h2>📈 Statistics</h2>
             <dl class="info-grid stats-grid">
-                <dt>🔍 Total Searches</dt><dd>{{.Stats.Searches}}</dd>
-                <dt>🔌 Engines Enabled</dt><dd>{{.Stats.EnginesEnabled}} / {{.Stats.EnginesTotal}}</dd>
+                <dt>📥 Total Requests</dt><dd>{{.Stats.RequestsTotal}}</dd>
+                <dt>📅 Requests (24h)</dt><dd>{{.Stats.Requests24h}}</dd>
+                <dt>🔌 Active Connections</dt><dd>{{.Stats.ActiveConnections}}</dd>
             </dl>
         </section>
 
         <!-- Last Updated per AI.md PART 13 -->
         <footer class="health-footer">
-            <p>🕐 Last checked: <time datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
+            <p>Last checked: <time datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
             <p class="auto-refresh">Auto-refreshing in <span id="countdown">30</span>s</p>
         </footer>
     </main>

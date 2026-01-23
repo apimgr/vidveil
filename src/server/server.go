@@ -226,6 +226,9 @@ func (s *Server) setupRoutes() {
 	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
 	h.SetMetrics(metrics)
 
+	// Metrics middleware per AI.md PART 13 - tracks requests and active connections
+	s.router.Use(metrics.MetricsMiddleware)
+
 	// Maintenance mode middleware (applied globally, but allows admin access)
 	s.router.Use(h.MaintenanceModeMiddleware)
 

@@ -846,11 +846,11 @@ type ChecksData struct {
 	Cluster   string
 }
 
-// StatsData holds statistics for healthz display (VidVeil-specific per IDEA.md)
+// StatsData holds statistics for healthz display per AI.md PART 13
 type StatsData struct {
-	Searches       uint64
-	EnginesEnabled int
-	EnginesTotal   int
+	RequestsTotal     uint64
+	Requests24h       uint64
+	ActiveConnections int64
 }
 
 // renderHealthzHTML renders the healthz HTML template per AI.md PART 13
@@ -889,11 +889,11 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			Cluster:   checks["cluster"],
 		},
 
-		// Stats (VidVeil-specific per IDEA.md)
+		// Stats per AI.md PART 13
 		Stats: StatsData{
-			Searches:       h.getSearchCount(),
-			EnginesEnabled: func() int { if h.engineMgr != nil { return h.engineMgr.EnabledCount() }; return 0 }(),
-			EnginesTotal:   func() int { if h.engineMgr != nil { return len(h.engineMgr.ListEngines()) }; return 0 }(),
+			RequestsTotal:     func() uint64 { if h.metrics != nil { return h.metrics.GetRequestsTotal() }; return 0 }(),
+			Requests24h:       0, // TODO: Implement 24h sliding window tracking
+			ActiveConnections: func() int64 { if h.metrics != nil { return h.metrics.GetActiveConnections() }; return 0 }(),
 		},
 
 		// Timestamp

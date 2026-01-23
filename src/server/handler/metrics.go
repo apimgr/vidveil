@@ -13,17 +13,18 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/engine"
 )
 
-// ServerMetrics holds application metrics
+// ServerMetrics holds application metrics per AI.md PART 13
 type ServerMetrics struct {
 	appConfig *config.AppConfig
 	engineMgr *engine.EngineManager
 	startTime time.Time
 
-	// Counters
-	requestsTotal    uint64
-	searchesTotal    uint64
-	searchErrors     uint64
-	apiRequestsTotal uint64
+	// Counters per AI.md PART 13
+	requestsTotal     uint64
+	searchesTotal     uint64
+	searchErrors      uint64
+	apiRequestsTotal  uint64
+	activeConnections int64 // Current active connections
 }
 
 // NewMetrics creates a new metrics collector
@@ -73,6 +74,21 @@ func (m *ServerMetrics) GetSearchErrors() uint64 {
 // GetAPIRequestsTotal returns total API request count
 func (m *ServerMetrics) GetAPIRequestsTotal() uint64 {
 	return atomic.LoadUint64(&m.apiRequestsTotal)
+}
+
+// IncrementActiveConnections increments active connections counter
+func (m *ServerMetrics) IncrementActiveConnections() {
+	atomic.AddInt64(&m.activeConnections, 1)
+}
+
+// DecrementActiveConnections decrements active connections counter
+func (m *ServerMetrics) DecrementActiveConnections() {
+	atomic.AddInt64(&m.activeConnections, -1)
+}
+
+// GetActiveConnections returns current active connections count
+func (m *ServerMetrics) GetActiveConnections() int64 {
+	return atomic.LoadInt64(&m.activeConnections)
 }
 
 // Handler returns the Prometheus metrics handler
@@ -200,10 +216,12 @@ func (m *ServerMetrics) Handler() http.HandlerFunc {
 	}
 }
 
-// MetricsMiddleware creates middleware that tracks request metrics
+// MetricsMiddleware creates middleware that tracks request metrics per AI.md PART 13
 func (m *ServerMetrics) MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.IncrementRequests()
+		m.IncrementActiveConnections()
+		defer m.DecrementActiveConnections()
 		next.ServeHTTP(w, r)
 	})
 }

@@ -8,69 +8,47 @@
     <a href="#main-content" class="skip-link">Skip to main content</a>
     {{template "public/header" .}}
     {{template "public/nav" .}}
-    <main id="main-content" role="main" class="content-area">
+    <main id="main-content" role="main" class="content-area health-status">
         <!-- Project Info per AI.md PART 13 -->
-        <header class="page-header">
-            <h1>{{.ProjectName}}</h1>
-            <p class="page-subtitle">{{.ProjectDescription}}</p>
+        <header class="health-header">
+            <h1>📦 {{.ProjectName}}</h1>
+            <p class="project-description">{{.ProjectDescription}}</p>
         </header>
 
+        <h2>🏥 System Health</h2>
+
         <!-- Status Banner per AI.md PART 13 -->
-        <div class="card status-card status-{{.StatusClass}}">
+        <div class="status-banner status-{{.StatusClass}}">
             <span class="status-icon">{{.StatusIcon}}</span>
             <span class="status-text">{{.StatusText}}</span>
         </div>
 
         <!-- Version & Build Info per AI.md PART 13 -->
-        <section class="card">
-            <h2>Version</h2>
-            <div class="info-grid">
-                <div class="info-row">
-                    <span class="info-label">Version</span>
-                    <span class="info-value"><code>{{.Version}}</code></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Go Version</span>
-                    <span class="info-value"><code>{{.GoVersion}}</code></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Build</span>
-                    <span class="info-value"><code>{{.BuildCommit}}</code> ({{.BuildDate}})</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Uptime</span>
-                    <span class="info-value">{{.Uptime}}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Mode</span>
-                    <span class="info-value"><span class="badge badge-{{.Mode}}">{{.ModeDisplay}}</span></span>
-                </div>
-            </div>
+        <section class="health-section">
+            <h2>ℹ️ Version</h2>
+            <dl class="info-grid">
+                <dt>🏷️ Version</dt><dd><code>{{.Version}}</code></dd>
+                <dt>🐹 Go Version</dt><dd><code>{{.GoVersion}}</code></dd>
+                <dt>🔨 Build</dt><dd><code>{{.BuildCommit}}</code> ({{.BuildDate}})</dd>
+                <dt>⏱️ Uptime</dt><dd>{{.Uptime}}</dd>
+                <dt>🚀 Mode</dt><dd><span class="badge badge-{{.Mode}}">{{.ModeDisplay}}</span></dd>
+            </dl>
         </section>
 
         {{if .ClusterEnabled}}
         <!-- Cluster Info per AI.md PART 13 -->
-        <section class="card">
-            <h2>Cluster</h2>
-            <div class="info-grid">
-                <div class="info-row">
-                    <span class="info-label">Status</span>
-                    <span class="info-value status-{{.ClusterStatusClass}}">{{.ClusterStatusIcon}} {{.ClusterStatus}}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Primary</span>
-                    <span class="info-value"><code>{{.ClusterPrimary}}</code></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Role</span>
-                    <span class="info-value">{{.ClusterRole}}</span>
-                </div>
-            </div>
+        <section class="health-section">
+            <h2>🔗 Cluster</h2>
+            <dl class="info-grid">
+                <dt>Status</dt><dd><span class="status-{{.ClusterStatusClass}}">{{.ClusterStatusIcon}} {{.ClusterStatus}}</span></dd>
+                <dt>👑 Primary</dt><dd><code>{{.ClusterPrimary}}</code></dd>
+                <dt>🎭 Role</dt><dd>{{.ClusterRole}}</dd>
+            </dl>
             {{if .ClusterNodes}}
-            <h3>Nodes</h3>
-            <ul class="list-plain">
+            <h3>🖥️ Nodes</h3>
+            <ul class="node-list">
                 {{range .ClusterNodes}}
-                <li><code>{{.URL}}</code>{{if .IsPrimary}} <span class="badge badge-primary">Primary</span>{{end}}</li>
+                <li><code>{{.URL}}</code>{{if .IsPrimary}} <span class="badge badge-primary">👑 Primary</span>{{end}}</li>
                 {{end}}
             </ul>
             {{end}}
@@ -78,52 +56,55 @@
         {{end}}
 
         <!-- Features per AI.md PART 13 (VidVeil: stateless per IDEA.md) -->
-        <section class="card">
+        <section class="health-section">
             <h2>🎛️ Features</h2>
             <ul class="feature-list">
                 <li class="{{if .Features.TorEnabled}}feature-enabled{{else}}feature-disabled{{end}}">
                     🧅 Tor: {{if .Features.TorEnabled}}<span class="status-ok">✅ {{.Features.TorStatus}}</span> <code>{{.Features.TorOnionAddr}}</code>{{else}}<span class="status-disabled">Disabled</span>{{end}}
                 </li>
                 <li class="{{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">
-                    🌍 GeoIP{{if .Features.GeoIP}}: <span class="status-ok">✅ Enabled</span>{{else}}: <span class="status-disabled">Disabled</span>{{end}}
+                    🌍 GeoIP: {{if .Features.GeoIP}}<span class="status-ok">✅ Enabled</span>{{else}}<span class="status-disabled">Disabled</span>{{end}}
                 </li>
                 <li class="{{if .Features.Metrics}}feature-enabled{{else}}feature-disabled{{end}}">
-                    📊 Metrics{{if .Features.Metrics}}: <span class="status-ok">✅ Enabled</span>{{else}}: <span class="status-disabled">Disabled</span>{{end}}
+                    📊 Metrics: {{if .Features.Metrics}}<span class="status-ok">✅ Enabled</span>{{else}}<span class="status-disabled">Disabled</span>{{end}}
                 </li>
             </ul>
         </section>
 
         <!-- Component Checks per AI.md PART 13 -->
-        <section class="card">
-            <h2>Component Status</h2>
-            <div class="checks-grid">
-                <div class="check-item">
-                    <span class="check-name">Database</span>
-                    <span class="check-status status-{{if eq .Checks.Database "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Database "ok"}}OK{{else}}Error{{end}}</span>
-                </div>
-                <div class="check-item">
-                    <span class="check-name">Cache</span>
-                    <span class="check-status status-{{if eq .Checks.Cache "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cache "ok"}}OK{{else}}Error{{end}}</span>
-                </div>
-                <div class="check-item">
-                    <span class="check-name">Disk</span>
-                    <span class="check-status status-{{if eq .Checks.Disk "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Disk "ok"}}OK{{else}}Error{{end}}</span>
-                </div>
-                <div class="check-item">
-                    <span class="check-name">Scheduler</span>
-                    <span class="check-status status-{{if eq .Checks.Scheduler "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Scheduler "ok"}}OK{{else}}Error{{end}}</span>
-                </div>
-                {{if .ClusterEnabled}}
-                <div class="check-item">
-                    <span class="check-name">Cluster</span>
-                    <span class="check-status status-{{if eq .Checks.Cluster "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cluster "ok"}}OK{{else}}Error{{end}}</span>
-                </div>
-                {{end}}
-            </div>
+        <section class="health-section">
+            <h2>🔧 Component Status</h2>
+            <table class="checks-table">
+                <thead><tr><th>Component</th><th>Status</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>🗄️ Database</td>
+                        <td class="status-{{if eq .Checks.Database "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Database "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
+                    </tr>
+                    <tr>
+                        <td>💾 Cache</td>
+                        <td class="status-{{if eq .Checks.Cache "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cache "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
+                    </tr>
+                    <tr>
+                        <td>💿 Disk</td>
+                        <td class="status-{{if eq .Checks.Disk "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Disk "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
+                    </tr>
+                    <tr>
+                        <td>⏰ Scheduler</td>
+                        <td class="status-{{if eq .Checks.Scheduler "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Scheduler "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
+                    </tr>
+                    {{if .ClusterEnabled}}
+                    <tr>
+                        <td>🔗 Cluster</td>
+                        <td class="status-{{if eq .Checks.Cluster "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cluster "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
         </section>
 
-        <!-- Statistics (VidVeil-specific per IDEA.md) -->
-        <section class="card">
+        <!-- Statistics per AI.md PART 13 (VidVeil-specific per IDEA.md) -->
+        <section class="health-section">
             <h2>📈 Statistics</h2>
             <dl class="info-grid stats-grid">
                 <dt>🔍 Total Searches</dt><dd>{{.Stats.Searches}}</dd>
@@ -132,10 +113,10 @@
         </section>
 
         <!-- Last Updated per AI.md PART 13 -->
-        <div class="health-meta">
-            <p>Last checked: <time datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
+        <footer class="health-footer">
+            <p>🕐 Last checked: <time datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
             <p class="auto-refresh">Auto-refreshing in <span id="countdown">30</span>s</p>
-        </div>
+        </footer>
     </main>
     {{template "public/footer" .}}
     {{template "public/scripts" .}}

@@ -11,7 +11,7 @@
     {{end}}
 
     <form id="add-node-form" method="POST" action="{{.AdminPath}}/server/nodes/add">
-        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="_csrf_token" value="{{.CSRFToken}}">
 
         <div class="form-group">
             <label for="node-address">Node Address</label>

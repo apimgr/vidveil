@@ -122,15 +122,14 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 						CreatedAt:  time.Now(),
 					})
 
-					// Set pending auth cookie (short-lived)
-					http.SetCookie(w, &http.Cookie{
-						Name:     "vidveil_pending_2fa",
-						Value:    pendingToken,
-						Path:     "/auth",
-						MaxAge:   300, // 5 minutes
-						HttpOnly: true,
-						SameSite: http.SameSiteStrictMode,
-					})
+					// Set pending auth cookie (short-lived) per AI.md PART 11
+					http.SetCookie(w, NewSecureCookieStrict(
+						"vidveil_pending_2fa",
+						pendingToken,
+						"/auth",
+						300, // 5 minutes
+						h.appConfig.Server.SSL.Enabled,
+					))
 
 					http.Redirect(w, r, "/auth/2fa", http.StatusFound)
 					return
@@ -138,14 +137,13 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 
 				// No 2FA, complete login
 				sessionID := h.adminHdl.CreateSessionForAdmin(adminUser)
-				http.SetCookie(w, &http.Cookie{
-					Name:     "vidveil_admin_session",
-					Value:    sessionID,
-					Path:     "/admin",
-					MaxAge:   int(24 * time.Hour / time.Second),
-					HttpOnly: true,
-					SameSite: http.SameSiteLaxMode,
-				})
+				http.SetCookie(w, NewSecureCookie(
+					"vidveil_admin_session",
+					sessionID,
+					"/admin",
+					int(24*time.Hour/time.Second),
+					h.appConfig.Server.SSL.Enabled,
+				))
 
 				// Log successful login
 				if h.adminHdl.logger != nil {
@@ -200,27 +198,21 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 				// Remove pending auth
 				h.getPendingAuth(cookie.Value)
 
-				// Clear pending cookie
-				http.SetCookie(w, &http.Cookie{
-					Name:   "vidveil_pending_2fa",
-					Value:  "",
-					Path:   "/auth",
-					MaxAge: -1,
-				})
+				// Clear pending cookie per AI.md PART 11
+				http.SetCookie(w, DeleteCookie("vidveil_pending_2fa", "/auth"))
 
 				// Get admin info for session
 				adminUser, _ := h.adminHdl.adminSvc.GetAdmin(pending.AdminID)
 				if adminUser != nil {
-					// Create session
+					// Create session per AI.md PART 11
 					sessionID := h.adminHdl.CreateSessionForAdmin(adminUser)
-					http.SetCookie(w, &http.Cookie{
-						Name:     "vidveil_admin_session",
-						Value:    sessionID,
-						Path:     "/admin",
-						MaxAge:   int(24 * time.Hour / time.Second),
-						HttpOnly: true,
-						SameSite: http.SameSiteLaxMode,
-					})
+					http.SetCookie(w, NewSecureCookie(
+						"vidveil_admin_session",
+						sessionID,
+						"/admin",
+						int(24*time.Hour/time.Second),
+						h.appConfig.Server.SSL.Enabled,
+					))
 
 					// Log successful login with MFA
 					if h.adminHdl.logger != nil {
@@ -241,27 +233,21 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 					// Remove pending auth
 					h.getPendingAuth(cookie.Value)
 
-					// Clear pending cookie
-					http.SetCookie(w, &http.Cookie{
-						Name:   "vidveil_pending_2fa",
-						Value:  "",
-						Path:   "/auth",
-						MaxAge: -1,
-					})
+					// Clear pending cookie per AI.md PART 11
+					http.SetCookie(w, DeleteCookie("vidveil_pending_2fa", "/auth"))
 
 					// Get admin info for session
 					adminUser, _ := h.adminHdl.adminSvc.GetAdmin(pending.AdminID)
 					if adminUser != nil {
-						// Create session
+						// Create session per AI.md PART 11
 						sessionID := h.adminHdl.CreateSessionForAdmin(adminUser)
-						http.SetCookie(w, &http.Cookie{
-							Name:     "vidveil_admin_session",
-							Value:    sessionID,
-							Path:     "/admin",
-							MaxAge:   int(24 * time.Hour / time.Second),
-							HttpOnly: true,
-							SameSite: http.SameSiteLaxMode,
-						})
+						http.SetCookie(w, NewSecureCookie(
+							"vidveil_admin_session",
+							sessionID,
+							"/admin",
+							int(24*time.Hour/time.Second),
+							h.appConfig.Server.SSL.Enabled,
+						))
 
 						// Log successful login with backup code
 						if h.adminHdl.logger != nil {
@@ -372,14 +358,8 @@ func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
 
 // LogoutPage handles logout (web route)
 func (h *AuthHandler) LogoutPage(w http.ResponseWriter, r *http.Request) {
-	// Clear any user session cookies
-	http.SetCookie(w, &http.Cookie{
-		Name:     "user_session",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-	})
+	// Clear any user session cookies per AI.md PART 11
+	http.SetCookie(w, DeleteCookie("user_session", "/"))
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 

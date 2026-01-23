@@ -33,7 +33,7 @@
     {{end}}
 
     <form id="remove-form" onsubmit="removeNode(event)">
-        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="_csrf_token" value="{{.CSRFToken}}">
 
         <div class="form-group mt-md">
             <label for="confirm-text">Type "REMOVE" to confirm</label>

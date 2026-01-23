@@ -58,6 +58,7 @@ type MigrationManager interface {
 // TorService interface for Tor hidden service management
 // Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
 type TorService interface {
+	IsEnabled() bool
 	IsRunning() bool
 	GenerateVanityAddress(prefix string) error
 	GetVanityStatus() *tor.VanityStatus
@@ -81,9 +82,9 @@ type AdminHandler struct {
 	scheduler    *scheduler.Scheduler
 	logger       *logging.AppLogger
 	sessions     map[string]adminSession
-	// csrfTokens maps sessionID to csrfToken
-	csrfTokens   map[string]string
 	startTime    time.Time
+	// Note: CSRF tokens now use Double Submit Cookie pattern per AI.md PART 22
+	// No server-side storage needed - token is stored in cookie
 }
 
 type adminSession struct {
@@ -103,7 +104,6 @@ func NewAdminHandler(appConfig *config.AppConfig, configDir, dataDir string, eng
 		adminSvc:     adminSvc,
 		migrationMgr: migrationMgr,
 		sessions:     make(map[string]adminSession),
-		csrfTokens:   make(map[string]string),
 		startTime:    time.Now(),
 	}
 }
@@ -242,13 +242,8 @@ func (h *AdminHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     adminSessionCookieName,
-		Value:    "",
-		Path:     "/admin",
-		MaxAge:   -1,
-		HttpOnly: true,
-	})
+	// Clear session cookie per AI.md PART 11
+	http.SetCookie(w, DeleteCookie(adminSessionCookieName, "/admin"))
 
 	// Redirect to /auth/login per AI.md PART 31
 	http.Redirect(w, r, "/auth/login", http.StatusFound)
@@ -270,16 +265,15 @@ func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
 
 		// Validate the setup token
 		if h.adminSvc.ValidateSetupToken(token) {
-			// Store validated token in cookie for wizard step
-			// 1 hour to complete setup
-			http.SetCookie(w, &http.Cookie{
-				Name:     "vidveil_setup_token",
-				Value:    token,
-				Path:     "/admin",
-				MaxAge:   3600,
-				HttpOnly: true,
-				SameSite: http.SameSiteStrictMode,
-			})
+			// Store validated token in cookie for wizard step per AI.md PART 11
+			// 1 hour to complete setup, SameSite=Strict for security
+			http.SetCookie(w, NewSecureCookieStrict(
+				"vidveil_setup_token",
+				token,
+				"/admin",
+				3600,
+				h.appConfig.Server.SSL.Enabled,
+			))
 			http.Redirect(w, r, "/admin/server/setup", http.StatusFound)
 			return
 		}
@@ -340,24 +334,18 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		// Clear setup token cookie
-		http.SetCookie(w, &http.Cookie{
-			Name:   "vidveil_setup_token",
-			Value:  "",
-			Path:   "/admin",
-			MaxAge: -1,
-		})
+		// Clear setup token cookie per AI.md PART 11
+		http.SetCookie(w, DeleteCookie("vidveil_setup_token", "/admin"))
 
-		// Create session for the new admin
+		// Create session for the new admin per AI.md PART 11
 		sessionID := h.createSessionWithID(adminUser.Username, adminUser.ID)
-		http.SetCookie(w, &http.Cookie{
-			Name:     adminSessionCookieName,
-			Value:    sessionID,
-			Path:     "/admin",
-			MaxAge:   int(adminSessionDuration.Seconds()),
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
+		http.SetCookie(w, NewSecureCookie(
+			adminSessionCookieName,
+			sessionID,
+			"/admin",
+			int(adminSessionDuration.Seconds()),
+			h.appConfig.Server.SSL.Enabled,
+		))
 
 		http.Redirect(w, r, "/admin/dashboard", http.StatusFound)
 		return
@@ -2662,64 +2650,83 @@ func (h *AdminHandler) getSession(r *http.Request) *adminSession {
 	return &session
 }
 
-// === CSRF Protection per AI.md PART 12 ===
+// === CSRF Protection per AI.md PART 22 (Double Submit Cookie) ===
 
-// generateCSRFToken creates a new CSRF token for a session
-func (h *AdminHandler) generateCSRFToken(sessionID string) string {
+// generateCSRFToken creates a new CSRF token and sets the cookie per AI.md PART 22
+// Uses Double Submit Cookie pattern: token in cookie must match form/header value
+func (h *AdminHandler) generateCSRFToken(w http.ResponseWriter) string {
 	b := make([]byte, 32)
 	rand.Read(b)
 	token := hex.EncodeToString(b)
-	h.csrfTokens[sessionID] = token
+
+	// Set CSRF token cookie per AI.md PART 11 and PART 22
+	// Cookie is HttpOnly=false so JavaScript can read it for AJAX requests
+	cookie := &http.Cookie{
+		Name:     csrfTokenCookieName,
+		Value:    token,
+		Path:     "/admin",
+		MaxAge:   int(adminSessionDuration.Seconds()),
+		HttpOnly: false, // JS needs to read for AJAX X-CSRF-Token header
+		SameSite: http.SameSiteStrictMode,
+		Secure:   h.appConfig.Server.SSL.Enabled,
+	}
+	http.SetCookie(w, cookie)
+
 	return token
 }
 
-// getCSRFToken retrieves or generates a CSRF token for the session
-func (h *AdminHandler) getCSRFToken(r *http.Request) string {
-	cookie, err := r.Cookie(adminSessionCookieName)
-	if err != nil {
-		return ""
+// getCSRFToken retrieves the CSRF token from cookie or generates a new one
+// Per AI.md PART 22: Token stored in cookie and must match form/header value
+func (h *AdminHandler) getCSRFToken(w http.ResponseWriter, r *http.Request) string {
+	// Check for existing CSRF cookie
+	if cookie, err := r.Cookie(csrfTokenCookieName); err == nil && cookie.Value != "" {
+		return cookie.Value
 	}
 
-	sessionID := cookie.Value
-	if token, ok := h.csrfTokens[sessionID]; ok {
-		return token
-	}
-
-	return h.generateCSRFToken(sessionID)
+	// Generate new token and set cookie
+	return h.generateCSRFToken(w)
 }
 
-// validateCSRFToken validates the CSRF token from a request
+// validateCSRFToken validates the CSRF token using Double Submit Cookie pattern
+// Per AI.md PART 22: Token from cookie must match token from form/header
 func (h *AdminHandler) validateCSRFToken(r *http.Request) bool {
-	// Get session ID from cookie
-	cookie, err := r.Cookie(adminSessionCookieName)
-	if err != nil {
+	// Get expected token from cookie
+	cookie, err := r.Cookie(csrfTokenCookieName)
+	if err != nil || cookie.Value == "" {
 		return false
 	}
+	expectedToken := cookie.Value
 
-	sessionID := cookie.Value
-	expectedToken, ok := h.csrfTokens[sessionID]
-	if !ok {
-		return false
-	}
-
-	// Check for token in form field
+	// Check for submitted token in form field
 	submittedToken := r.FormValue("_csrf_token")
 	if submittedToken == "" {
-		// Also check header for AJAX requests
+		// Also check header for AJAX requests per AI.md PART 22
 		submittedToken = r.Header.Get("X-CSRF-Token")
+	}
+
+	if submittedToken == "" {
+		return false
 	}
 
 	// Constant-time comparison to prevent timing attacks
 	return subtle.ConstantTimeCompare([]byte(expectedToken), []byte(submittedToken)) == 1
 }
 
-// CSRFMiddleware validates CSRF tokens on POST/PUT/DELETE requests
+// CSRFMiddleware validates CSRF tokens on POST/PUT/DELETE requests per AI.md PART 22
 func (h *AdminHandler) CSRFMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Only validate for state-changing methods
 		if r.Method == http.MethodPost || r.Method == http.MethodPut ||
 			r.Method == http.MethodPatch || r.Method == http.MethodDelete {
 			if !h.validateCSRFToken(r) {
+				// Log CSRF failure per AI.md PART 11
+				if h.logger != nil {
+					h.logger.Audit("security.csrf_failure", "", "security", map[string]interface{}{
+						"ip":       r.RemoteAddr,
+						"endpoint": r.URL.Path,
+						"method":   r.Method,
+					})
+				}
 				http.Error(w, "Invalid or missing CSRF token", http.StatusForbidden)
 				return
 			}
@@ -2730,8 +2737,8 @@ func (h *AdminHandler) CSRFMiddleware(next http.Handler) http.Handler {
 }
 
 // csrfFormField returns the hidden input field HTML for CSRF token
-func (h *AdminHandler) csrfFormField(r *http.Request) string {
-	token := h.getCSRFToken(r)
+func (h *AdminHandler) csrfFormField(w http.ResponseWriter, r *http.Request) string {
+	token := h.getCSRFToken(w, r)
 	return `<input type="hidden" name="_csrf_token" value="` + token + `">`
 }
 
@@ -3444,6 +3451,9 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	data["OnlineCount"] = h.getOnlineCount()
+
+	// Add CSRF token for forms per AI.md PART 22
+	data["CSRFToken"] = h.getCSRFToken(w, r)
 
 	// Set page title based on template name if not already set
 	if _, ok := data["Title"]; !ok {

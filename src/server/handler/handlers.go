@@ -299,19 +299,16 @@ func (h *SearchHandler) AgeVerifySubmit(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, redirect, http.StatusFound)
 }
 
-// setAgeVerifyCookie sets/renews the age verification cookie
+// setAgeVerifyCookie sets/renews the age verification cookie per AI.md PART 11
 func (h *SearchHandler) setAgeVerifyCookie(w http.ResponseWriter) {
-	// 30 days in seconds, Secure should be true if using HTTPS
-	http.SetCookie(w, &http.Cookie{
-		Name:     ageVerifyCookieName,
-		Value:    "1",
-		Path:     "/",
-		MaxAge:   ageVerifyCookieDays * 24 * 60 * 60,
-		Expires:  time.Now().Add(ageVerifyCookieDays * 24 * time.Hour),
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   false,
-	})
+	// 30 days, with Secure flag per AI.md PART 11
+	http.SetCookie(w, NewSecureCookie(
+		ageVerifyCookieName,
+		"1",
+		"/",
+		ageVerifyCookieDays*24*60*60,
+		h.appConfig.Server.SSL.Enabled,
+	))
 }
 
 // BuildDateTime returns the build time formatted per AI.md PART 16
@@ -1608,7 +1605,6 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Format detection: .txt extension > Accept header > client type > default JSON
 
 	// Build health response per AI.md PART 13
-	hostname, _ := os.Hostname()
 	uptime := getUptime()
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 
@@ -1617,9 +1613,6 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	if h.appConfig != nil && h.appConfig.IsDevelopmentMode() {
 		appMode = "development"
 	}
-
-	// Node ID (standalone or cluster)
-	nodeID := "standalone"
 
 	// Cluster status
 	clusterEnabled := false

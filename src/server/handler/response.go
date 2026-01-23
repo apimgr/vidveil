@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 9: Error Handling & Response Format
+// AI.md PART 11: Security - Secure Cookie Handling
 
 package handler
 
@@ -7,6 +8,46 @@ import (
 	"encoding/json"
 	"net/http"
 )
+
+// NewSecureCookie creates a cookie with proper security flags per AI.md PART 11
+// The Secure flag is set when sslEnabled is true
+func NewSecureCookie(name, value, path string, maxAge int, sslEnabled bool) *http.Cookie {
+	cookie := &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     path,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   sslEnabled, // Per AI.md PART 11: Secure flag when SSL enabled
+	}
+	return cookie
+}
+
+// NewSecureCookieStrict creates a cookie with SameSite=Strict per AI.md PART 11
+// Use for sensitive operations like pending 2FA tokens
+func NewSecureCookieStrict(name, value, path string, maxAge int, sslEnabled bool) *http.Cookie {
+	cookie := &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     path,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   sslEnabled,
+	}
+	return cookie
+}
+
+// DeleteCookie creates a cookie that deletes an existing cookie
+func DeleteCookie(name, path string) *http.Cookie {
+	return &http.Cookie{
+		Name:   name,
+		Value:  "",
+		Path:   path,
+		MaxAge: -1,
+	}
+}
 
 // APIResponse is the unified response structure per AI.md PART 9
 type APIResponse struct {

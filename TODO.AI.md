@@ -84,3 +84,17 @@
   - Nav bar search has autocomplete dropdown support
   - Mobile responsive: hamburger in header, nav links hidden
   - CSS updated with `.header-action`, `.home-hero`, `.home-filters` styles
+- [x] **Cookie security compliance** - Per AI.md PART 11
+  - Added `NewSecureCookie()` helper with Secure flag when SSL enabled
+  - Added `NewSecureCookieStrict()` helper with SameSite=Strict
+  - Added `DeleteCookie()` helper for clearing cookies
+  - All cookies now use secure helpers: auth.go, handlers.go, admin.go
+  - Session cookies use SameSite=Lax, sensitive ops use SameSite=Strict
+- [x] **CSRF Double Submit Cookie pattern** - Per AI.md PART 22
+  - Changed from server-side storage to Double Submit Cookie pattern
+  - Token stored in `vidveil_csrf_token` cookie with SameSite=Strict
+  - Validation compares cookie token to form/header token
+  - Cookie is non-HttpOnly so JS can read it for AJAX X-CSRF-Token header
+  - Removed in-memory csrfTokens map (no longer needed)
+  - CSRF token auto-injected in all admin templates via CSRFToken variable
+  - Updated templates to use `_csrf_token` form field name

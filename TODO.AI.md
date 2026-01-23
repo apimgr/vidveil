@@ -1,80 +1,86 @@
-# VidVeil CLI Client Implementation
+# VidVeil TODO
+
+## Pending
+
+(No pending tasks)
 
 ## Completed
 
-- [x] **Setup Wizard** - First-run wizard when no server configured
-  - TUI wizard using bubbletea
-  - Prompts for server URL and optional token
-  - Tests connection before saving
-  - Saves to cli.yml and token file
-
-- [x] **Engines Command** - List available engines from server
-  - `vidveil-cli engines` - list all engines
-  - `vidveil-cli engines --enabled` - list enabled only
-  - `vidveil-cli engines --disabled` - list disabled only
-  - `vidveil-cli engines --all` - show all details
-  - Output in table/json/plain formats
-
-- [x] **Bangs Command** - List bang shortcuts
-  - `vidveil-cli bangs` - list all bangs
-  - `vidveil-cli bangs --search <term>` - filter bangs
-  - Output in table/json/plain formats
-
-- [x] **Open URL in Browser** - TUI feature to open selected result
-  - Press `Enter` or `o` to open in browser
-  - Cross-platform: xdg-open (Linux), open (macOS), start (Windows)
-  - Fallback displays URL if browser unavailable
-
-- [x] **Connection Health Check** - Verify server on startup
-  - Checks /healthz endpoint before commands
-  - Shows warning if server unreachable
-  - Non-blocking (commands still run)
-
-## SSE Status
-
-- [x] **Server SSE** - Complete (`src/server/handler/handlers.go:handleSearchSSE`)
-- [x] **Web Frontend SSE** - Complete (`src/server/static/js/app.js:streamResults`)
-- [x] **CLI Search** - Uses JSON API (works well, all results returned at once)
-
-**Note:** CLI SSE streaming is optional. JSON API is preferred for CLI since:
-- Results are aggregated server-side before returning
-- Simpler output formatting for terminal
-- No need for progressive display in non-interactive mode
-
-## CLI Structure
-
-```
-vidveil-cli [command] [flags]
-vidveil-cli <query>              (shortcut for search)
-
-Commands:
-  search <query>    Search for videos
-  engines           List available search engines
-  bangs             List bang shortcuts
-  probe             Test engine availability
-  login             Save API token to config
-  shell             Shell completion commands
-
-Flags:
-  --config          Config file path
-  --server          Server address
-  --token           API token
-  --output          Output format (json, table, plain)
-  --no-color        Disable colored output
-  --timeout         Request timeout in seconds
-  --debug           Enable debug output
-  -h, --help        Show help
-  -v, --version     Show version
-```
-
-## TUI Keybindings
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Search (no results) / Open in browser (with results) |
-| `o` | Open selected result in browser |
-| `/` | New search (clear results) |
-| `j` / `Down` | Move selection down |
-| `k` / `Up` | Move selection up |
-| `Esc` | Clear search and results |
-| `q` / `Ctrl+C` | Quit |
+- [x] **OfficialSite build variable** - Per AI.md PART 7
+  - Added `OfficialSite` to `src/common/version/version.go`
+  - Added `OfficialSite` to `src/main.go` with sync to version package
+  - Updated `docker/Dockerfile` LDFLAGS
+  - Updated `Makefile` LDFLAGS
+- [x] **GeoIP URL fixed** - Per AI.md PART 20
+  - City database URL: `dbip-city.mmdb` → `dbip-city-ipv4.mmdb`
+- [x] **Metrics compliance** - Per AI.md PART 21
+  - Fixed app metric names: `vidveil_info` → `vidveil_app_info`
+  - Fixed uptime metric: `vidveil_uptime_seconds` → `vidveil_app_uptime_seconds`
+  - Added `vidveil_app_start_timestamp` metric
+  - Added `vidveil_db_connections_in_use` metric
+  - Added `vidveil_db_errors_total` metric
+  - Added `vidveil_auth_attempts_total` metric
+  - Added `vidveil_auth_sessions_active` metric
+- [x] **Healthz canonical compliance** - Per AI.md PART 13
+  - Removed non-standard "node" field
+  - Added project.tagline from Web.Branding config
+  - Fixed features.tor to be TorInfo object (enabled/running/status/hostname)
+  - Removed features.metrics (internal per PART 21)
+  - Added cluster.node_count and cluster.role fields
+  - Added checks.tor health check
+- [x] **Argon2id parameters fixed** - Per AI.md PART 11
+  - Changed parallelism from 4 to 2 (OWASP 2023)
+- [x] **Scheduler DB Persistence** - Per AI.md PART 19
+  - Added NewSchedulerWithDB constructor with database support
+  - Task state persisted to `scheduled_tasks` table
+  - Task history persisted to `task_history` table
+  - run_count, fail_count, last_run survive restarts
+  - Proper catch-up logic for missed runs
+- [x] **All 44 engines enabled by default**
+- [x] **Thumbnail validation** - Discard empty/invalid thumbnails
+- [x] **Dead engines removed** - xtube, spankwire, keezmovies, extremetube, sleazyneasy, superporn
+- [x] **Scheduler intervals fixed** - session.cleanup and token.cleanup now 15 minutes
+- [x] **CLI client complete** - setup wizard, search, engines, bangs, TUI
+- [x] **CLI documentation added** - Per AI.md PART 33
+  - Created `docs/cli.md` with full CLI reference
+  - Updated `mkdocs.yml` navigation to include CLI Reference
+- [x] **Service --disable command added** - Per AI.md PART 8
+  - Added `Disable()` method to service manager
+  - Added `--service --disable` handler in main.go
+  - Supports systemd, runit, launchd, BSD rc.d, Windows Service Manager
+- [x] **Docker compose files fixed** - Per AI.md PART 14
+  - docker-compose.yml: service vidveil, container_name vidveil
+  - docker-compose.dev.yml: name vidveil-dev, image not build
+  - docker-compose.test.yml: name vidveil-test, image not build
+  - All healthchecks use `--status` instead of curl
+- [x] **Backup/restore password support** - Per AI.md PART 22
+  - CLI: Added `--password` flag for `--maintenance backup/restore`
+  - API: `POST /api/v1/admin/backup` accepts JSON body with `password`
+  - API: `POST /api/v1/admin/server/backup/restore` accepts JSON body with `password`
+- [x] **Auto theme mode added** - Per AI.md PART 16
+  - Added `theme-auto` CSS class with `prefers-color-scheme` media query
+  - Updated `setTheme()` JS to handle 'auto', 'light', 'dark' modes
+  - Added `getEffectiveTheme()` to resolve 'auto' to actual theme
+  - Added system preference change listener for live theme switching
+  - Updated all preference templates (page, nojs, admin) with Auto option
+  - Default theme changed from 'dark' to 'auto' (respects system preference)
+- [x] **GraphQL handler location fixed** - Per AI.md PART 14
+  - Moved from `src/server/handler/graphql.go` to `src/graphql/graphql.go`
+  - Updated package name to `graphql`
+  - Updated imports in `src/server/server.go`
+- [x] **OpenAPI handler location fixed** - Per AI.md PART 14
+  - Deleted duplicate `src/server/handler/openapi.go`
+  - Now uses `src/swagger/swagger.go` (swagger.Handler, swagger.SpecHandler)
+  - Updated imports in `src/server/server.go`
+- [x] **Rate limit header accuracy fixed** - Per AI.md PART 12
+  - X-RateLimit-Remaining now accurate (off-by-one fix)
+  - Call Allow() BEFORE setting headers so count includes current request
+  - Headers reflect remaining requests AFTER current request counted
+- [x] **Frontend layout unified** - Per AI.md PART 16
+  - Home page now includes header with hamburger menu
+  - Hamburger moved from nav bar to header, right of preferences icon
+  - Added collapsible filters (duration, quality) to home page
+  - Search forms use consistent `.search-form--large` and `--compact` variants
+  - Nav bar search has autocomplete dropdown support
+  - Mobile responsive: hamburger in header, nav links hidden
+  - CSS updated with `.header-action`, `.home-hero`, `.home-filters` styles

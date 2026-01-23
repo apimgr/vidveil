@@ -8,7 +8,9 @@ import "github.com/apimgr/vidveil/src/server/service/scheduler"
 // Re-export main types and functions from server/service/scheduler
 type Scheduler = scheduler.Scheduler
 type ScheduledTask = scheduler.ScheduledTask
+type BuiltinTaskFuncs = scheduler.BuiltinTaskFuncs
 
 var (
-	NewScheduler = scheduler.NewScheduler
+	NewScheduler       = scheduler.NewScheduler
+	NewSchedulerWithDB = scheduler.NewSchedulerWithDB
 )

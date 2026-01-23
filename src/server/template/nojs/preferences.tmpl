@@ -16,6 +16,7 @@
                 <div class="form-group">
                     <label for="theme">Theme:</label>
                     <select id="theme" name="theme">
+                        <option value="auto" {{if eq .Theme "auto"}}selected{{end}}>Auto (System)</option>
                         <option value="dark" {{if eq .Theme "dark"}}selected{{end}}>Dark (Dracula)</option>
                         <option value="light" {{if eq .Theme "light"}}selected{{end}}>Light</option>
                     </select>

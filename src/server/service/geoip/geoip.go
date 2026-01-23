@@ -17,11 +17,11 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// Database URLs per AI.md PART 10
+// Database URLs per AI.md PART 20
 const (
 	ASNURL     = "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb"
 	CountryURL = "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"
-	CityURL    = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city.mmdb"
+	CityURL    = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb"
 )
 
 // GeoIPResult holds GeoIP lookup results

@@ -14,6 +14,7 @@
                 <div class="form-group">
                     <label for="theme">Theme:</label>
                     <select id="theme" name="theme">
+                        <option value="auto">Auto (System)</option>
                         <option value="dark">Dark (Dracula)</option>
                         <option value="light">Light</option>
                     </select>
@@ -100,7 +101,7 @@
 
         // Default preferences
         const defaults = {
-            theme: 'dark',
+            theme: 'auto',  // Per AI.md PART 16: default to system preference
             resultsPerPage: '50',
             minDuration: '0',
             openNewTab: true,
@@ -116,7 +117,7 @@
 
             // Set theme - use class instead of data-theme per AI.md PART 16
             document.getElementById('theme').value = prefs.theme;
-            document.documentElement.classList.remove('theme-dark', 'theme-light');
+            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
 
             // Set results per page
@@ -161,7 +162,7 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 
             // Apply theme immediately - use class instead of data-theme per AI.md PART 16
-            document.documentElement.classList.remove('theme-dark', 'theme-light');
+            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
 
             showToast('Preferences saved!', 'success');
@@ -205,7 +206,7 @@
 
         // Theme change preview - use class instead of data-theme per AI.md PART 16
         document.getElementById('theme').addEventListener('change', function() {
-            document.documentElement.classList.remove('theme-dark', 'theme-light');
+            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + this.value);
         });
 

@@ -88,6 +88,33 @@ func (sm *ServiceManager) Reload() error {
 	return sm.runServiceCommand("reload")
 }
 
+// Disable disables the service from starting at boot per AI.md PART 8
+func (sm *ServiceManager) Disable() error {
+	switch runtime.GOOS {
+	case "linux":
+		if sm.hasSystemd() {
+			return exec.Command("systemctl", "disable", sm.appName).Run()
+		}
+		if sm.hasRunit() {
+			// Runit: remove symlink from /var/service
+			return os.Remove(fmt.Sprintf("/var/service/%s", sm.appName))
+		}
+		return fmt.Errorf("no supported init system found")
+	case "darwin":
+		// macOS: unload the plist (stops and prevents autostart)
+		plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
+		return exec.Command("launchctl", "unload", "-w", plistPath).Run()
+	case "freebsd", "openbsd", "netbsd":
+		// BSD: set enable=NO in rc.conf
+		return exec.Command("sysrc", fmt.Sprintf("%s_enable=NO", sm.appName)).Run()
+	case "windows":
+		// Windows: set service start type to disabled
+		return exec.Command("sc", "config", sm.appName, "start=", "disabled").Run()
+	default:
+		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+	}
+}
+
 // GetServiceStatus returns the service status
 func (sm *ServiceManager) GetServiceStatus() (string, error) {
 	switch runtime.GOOS {

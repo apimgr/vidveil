@@ -21,19 +21,23 @@ VERSION ?= $(shell cat release.txt 2>/dev/null || echo "0.1.0")
 # Format: "Thu Dec 17, 2025 at 18:19:24 EST"
 BUILD_DATE := $(shell date +"%a %b %d, %Y at %H:%M:%S %Z")
 COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+# Official site URL for CLI client (empty = users must use --server flag)
+OFFICIAL_SITE ?=
 
-# Linker flags to embed build info (server)
+# Linker flags to embed build info (server) per AI.md PART 7
 LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
-	-X 'main.BuildDate=$(BUILD_DATE)'
+	-X 'main.BuildDate=$(BUILD_DATE)' \
+	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
 
-# Linker flags for CLI client (AI.md PART 36)
+# Linker flags for CLI client (AI.md PART 33)
 CLI_LDFLAGS := -s -w \
 	-X 'main.ProjectName=$(PROJECT)' \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
-	-X 'main.BuildDate=$(BUILD_DATE)'
+	-X 'main.BuildDate=$(BUILD_DATE)' \
+	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
 
 # Directories
 BINDIR := ./binaries

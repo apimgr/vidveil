@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 19: Scheduler
+// AI.md PART 19: Scheduler with Database Persistence
 package scheduler
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"strings"
@@ -48,7 +49,8 @@ type TaskHistory struct {
 	Error     string        `json:"error,omitempty"`
 }
 
-// Scheduler manages scheduled tasks per AI.md PART 9
+// Scheduler manages scheduled tasks per AI.md PART 19
+// Supports optional database persistence for task state survival across restarts
 type Scheduler struct {
 	tasks    map[string]*ScheduledTask
 	history  []TaskHistory
@@ -57,21 +59,176 @@ type Scheduler struct {
 	cancel   context.CancelFunc
 	running  bool
 	maxHist  int
+	db       *sql.DB // Optional database for persistence per AI.md PART 19
 }
 
-// NewScheduler creates a new scheduler
+// NewScheduler creates a new scheduler without database persistence
 func NewScheduler() *Scheduler {
 	return &Scheduler{
 		tasks:   make(map[string]*ScheduledTask),
 		history: make([]TaskHistory, 0),
-		// Keep last 100 history entries
+		// Keep last 100 history entries in memory
 		maxHist: 100,
 	}
 }
 
+// NewSchedulerWithDB creates a new scheduler with database persistence per AI.md PART 19
+// Task state survives restarts when db is provided
+func NewSchedulerWithDB(db *sql.DB) *Scheduler {
+	return &Scheduler{
+		tasks:   make(map[string]*ScheduledTask),
+		history: make([]TaskHistory, 0),
+		maxHist: 100,
+		db:      db,
+	}
+}
+
+// SetDB sets the database connection for persistence
+// Can be called after NewScheduler() to enable persistence
+func (s *Scheduler) SetDB(db *sql.DB) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db = db
+}
+
+// loadTaskStateFromDB loads persisted task state from database
+// Called during RegisterTask to restore run_count, fail_count, last_run, etc.
+func (s *Scheduler) loadTaskStateFromDB(taskID string) (*ScheduledTask, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+
+	row := s.db.QueryRow(`
+		SELECT id, name, schedule, enabled, last_run, next_run,
+		       last_result, last_error, run_count, fail_count
+		FROM scheduled_tasks WHERE id = ?`, taskID)
+
+	var task ScheduledTask
+	var lastRun, nextRun sql.NullTime
+	var lastResult, lastError sql.NullString
+
+	err := row.Scan(
+		&task.ID, &task.Name, &task.Schedule, &task.Enabled,
+		&lastRun, &nextRun, &lastResult, &lastError,
+		&task.RunCount, &task.FailCount,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to load task state: %w", err)
+	}
+
+	if lastRun.Valid {
+		task.LastRun = lastRun.Time
+	}
+	if nextRun.Valid {
+		task.NextRun = nextRun.Time
+	}
+	if lastResult.Valid {
+		task.LastResult = lastResult.String
+	}
+	if lastError.Valid {
+		task.LastError = lastError.String
+	}
+
+	return &task, nil
+}
+
+// saveTaskStateToDB persists task state to database
+func (s *Scheduler) saveTaskStateToDB(task *ScheduledTask) error {
+	if s.db == nil {
+		return nil
+	}
+
+	_, err := s.db.Exec(`
+		INSERT INTO scheduled_tasks (id, name, schedule, enabled, last_run, next_run,
+		                             last_result, last_error, run_count, fail_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			name = excluded.name,
+			schedule = excluded.schedule,
+			enabled = excluded.enabled,
+			last_run = excluded.last_run,
+			next_run = excluded.next_run,
+			last_result = excluded.last_result,
+			last_error = excluded.last_error,
+			run_count = excluded.run_count,
+			fail_count = excluded.fail_count`,
+		task.ID, task.Name, task.Schedule, task.Enabled,
+		task.LastRun, task.NextRun, task.LastResult, task.LastError,
+		task.RunCount, task.FailCount,
+	)
+	return err
+}
+
+// saveHistoryToDB persists task history entry to database
+func (s *Scheduler) saveHistoryToDB(hist TaskHistory) error {
+	if s.db == nil {
+		return nil
+	}
+
+	_, err := s.db.Exec(`
+		INSERT INTO task_history (task_id, start_time, end_time, duration_ms, result, error)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		hist.TaskID, hist.StartTime, hist.EndTime,
+		hist.Duration.Milliseconds(), hist.Result, hist.Error,
+	)
+	return err
+}
+
+// LoadHistoryFromDB loads recent task history from database
+func (s *Scheduler) LoadHistoryFromDB(limit int) error {
+	if s.db == nil {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rows, err := s.db.Query(`
+		SELECT task_id, start_time, end_time, duration_ms, result, error
+		FROM task_history
+		ORDER BY start_time DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return fmt.Errorf("failed to load history: %w", err)
+	}
+	defer rows.Close()
+
+	var history []TaskHistory
+	for rows.Next() {
+		var h TaskHistory
+		var durationMs int64
+		var errStr sql.NullString
+
+		if err := rows.Scan(&h.TaskID, &h.StartTime, &h.EndTime, &durationMs, &h.Result, &errStr); err != nil {
+			return fmt.Errorf("failed to scan history row: %w", err)
+		}
+
+		h.Duration = time.Duration(durationMs) * time.Millisecond
+		if errStr.Valid {
+			h.Error = errStr.String
+		}
+		history = append(history, h)
+	}
+
+	// Reverse to get chronological order (oldest first)
+	for i, j := 0, len(history)-1; i < j; i, j = i+1, j-1 {
+		history[i], history[j] = history[j], history[i]
+	}
+
+	s.history = history
+	return nil
+}
+
 // RegisterTask registers a new scheduled task
-// Per AI.md PART 22: Supports cron expressions (e.g., "0 2 * * *") or simple intervals
+// Per AI.md PART 19/22: Supports cron expressions or simple intervals
+// Persisted state (run_count, fail_count, last_run) is restored from database
 func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn TaskFunc) error {
+	// Load existing state from DB before acquiring lock (db operations are thread-safe)
+	existingState, _ := s.loadTaskStateFromDB(id)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -99,7 +256,45 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 		task.NextRun = time.Now().Add(interval)
 	}
 
+	// Merge persisted state from database per AI.md PART 19
+	// This ensures run_count, fail_count, last_run survive restarts
+	if existingState != nil {
+		task.RunCount = existingState.RunCount
+		task.FailCount = existingState.FailCount
+		task.LastRun = existingState.LastRun
+		task.LastResult = existingState.LastResult
+		task.LastError = existingState.LastError
+		// Use persisted enabled state only if task has been run before
+		if existingState.RunCount > 0 {
+			task.Enabled = existingState.Enabled
+		}
+		// Calculate proper next run based on last run if available
+		if !existingState.LastRun.IsZero() {
+			if task.cronSched != nil {
+				nextFromLast := task.cronSched.Next(existingState.LastRun)
+				// If next run from last run is in the past, calculate from now
+				if nextFromLast.Before(time.Now()) {
+					task.NextRun = task.cronSched.Next(time.Now())
+				} else {
+					task.NextRun = nextFromLast
+				}
+			} else {
+				nextFromLast := existingState.LastRun.Add(task.Interval)
+				// If next run from last run is in the past, calculate from now
+				if nextFromLast.Before(time.Now()) {
+					task.NextRun = time.Now().Add(task.Interval)
+				} else {
+					task.NextRun = nextFromLast
+				}
+			}
+		}
+	}
+
 	s.tasks[id] = task
+
+	// Persist initial state to database
+	s.saveTaskStateToDB(task)
+
 	return nil
 }
 
@@ -199,6 +394,7 @@ func (s *Scheduler) checkAndRunTasks() {
 }
 
 // runTask executes a single task
+// Per AI.md PART 19: Task state is persisted to database after each run
 func (s *Scheduler) runTask(task *ScheduledTask) {
 	s.mu.Lock()
 	task.LastResult = "running"
@@ -212,8 +408,6 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	err := task.fn(ctx)
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	endTime := time.Now()
 	duration := endTime.Sub(startTime)
 
@@ -245,12 +439,21 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 		hist.Result = "success"
 	}
 
-	// Add to history
+	// Add to in-memory history
 	s.history = append(s.history, hist)
-	// Trim history if needed
+	// Trim in-memory history if needed
 	if len(s.history) > s.maxHist {
 		s.history = s.history[len(s.history)-s.maxHist:]
 	}
+
+	// Make a copy of task for DB operations outside lock
+	taskCopy := *task
+	s.mu.Unlock()
+
+	// Persist state to database per AI.md PART 19
+	// Done outside lock to avoid blocking other operations
+	s.saveTaskStateToDB(&taskCopy)
+	s.saveHistoryToDB(hist)
 }
 
 // RunTaskNow manually triggers a task
@@ -268,12 +471,12 @@ func (s *Scheduler) RunTaskNow(taskID string) error {
 }
 
 // EnableTask enables a task
+// Per AI.md PART 19: Enabled state is persisted to database
 func (s *Scheduler) EnableTask(taskID string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	task, ok := s.tasks[taskID]
 	if !ok {
+		s.mu.Unlock()
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
@@ -286,31 +489,40 @@ func (s *Scheduler) EnableTask(taskID string) error {
 			task.NextRun = time.Now().Add(task.Interval)
 		}
 	}
+	taskCopy := *task
+	s.mu.Unlock()
+
+	// Persist to database
+	s.saveTaskStateToDB(&taskCopy)
 	return nil
 }
 
 // DisableTask disables a task
+// Per AI.md PART 19: Enabled state is persisted to database
 func (s *Scheduler) DisableTask(taskID string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	task, ok := s.tasks[taskID]
 	if !ok {
+		s.mu.Unlock()
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
 	task.Enabled = false
+	taskCopy := *task
+	s.mu.Unlock()
+
+	// Persist to database
+	s.saveTaskStateToDB(&taskCopy)
 	return nil
 }
 
 // SetSchedule updates a task's schedule
-// Per AI.md PART 22: Supports cron expressions or simple intervals
+// Per AI.md PART 19/22: Schedule changes are persisted to database
 func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	task, ok := s.tasks[taskID]
 	if !ok {
+		s.mu.Unlock()
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
@@ -323,6 +535,7 @@ func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 		// Fall back to simple interval
 		interval, err := parseInterval(schedule)
 		if err != nil {
+			s.mu.Unlock()
 			return fmt.Errorf("invalid schedule '%s': %w", schedule, err)
 		}
 		task.cronSched = nil
@@ -331,6 +544,11 @@ func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 	}
 
 	task.Schedule = schedule
+	taskCopy := *task
+	s.mu.Unlock()
+
+	// Persist to database
+	s.saveTaskStateToDB(&taskCopy)
 	return nil
 }
 
@@ -432,9 +650,9 @@ type BuiltinTaskFuncs struct {
 	BlocklistUpdate TaskFunc
 	// cve.update - Daily, update CVE/security databases
 	CVEUpdate TaskFunc
-	// session.cleanup - Hourly, remove expired sessions
+	// session.cleanup - Every 15 minutes, remove expired sessions
 	SessionCleanup TaskFunc
-	// token.cleanup - Daily, remove expired tokens
+	// token.cleanup - Every 15 minutes, remove expired tokens
 	TokenCleanup TaskFunc
 	// log.rotation - Daily, rotate and compress logs
 	LogRotation TaskFunc
@@ -478,18 +696,18 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 			"daily", funcs.CVEUpdate)
 	}
 
-	// session.cleanup - Hourly
+	// session.cleanup - Every 15 minutes per AI.md PART 19
 	if funcs.SessionCleanup != nil {
 		s.RegisterTask("session.cleanup", "Session Cleanup",
 			"Remove expired user and admin sessions",
-			"hourly", funcs.SessionCleanup)
+			"15m", funcs.SessionCleanup)
 	}
 
-	// token.cleanup - Daily
+	// token.cleanup - Every 15 minutes per AI.md PART 19
 	if funcs.TokenCleanup != nil {
 		s.RegisterTask("token.cleanup", "Token Cleanup",
 			"Remove expired API tokens and reset tokens",
-			"daily", funcs.TokenCleanup)
+			"15m", funcs.TokenCleanup)
 	}
 
 	// log.rotation - Daily

@@ -1,7 +1,7 @@
 # vidveil - Test compose (DEBUG=true enabled)
-# nginx proxy address - http://172.17.0.1:64893
+# Per AI.md PART 14: Uses temp directory workflow - MUST use image, not build
 
-name: vidveil
+name: vidveil-test
 
 x-logging: &default-logging
   options:
@@ -10,34 +10,33 @@ x-logging: &default-logging
   driver: json-file
 
 services:
-  server:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    container_name: vidveil-server
+  vidveil:
+    image: ghcr.io/apimgr/vidveil:latest
+    container_name: vidveil-test
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
-    restart: unless-stopped
+    restart: "no"
     logging: *default-logging
     environment:
       - MODE=development
-      - PORT=80
       - DEBUG=true
       - TZ=${TZ:-America/New_York}
     volumes:
-      - './rootfs/config:/config:z'
-      - './rootfs/data:/data:z'
+      # TEMP DIR WORKFLOW: ./rootfs/ resolves to $TEMP_DIR/rootfs/
+      # NEVER run from project directory - always use temp dir workflow
+      - ./rootfs/config:/config
+      - ./rootfs/data:/data
     ports:
-      - '172.17.0.1:64893:80'
+      - '64581:80'
     healthcheck:
-      test: curl -sf http://localhost:80/healthz || exit 1
+      test: /usr/local/bin/vidveil --status || exit 1
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 90s
     networks:
-      - vidveil
+      - vidveil-test
 
 networks:
-  vidveil:
-    name: vidveil
+  vidveil-test:
+    name: vidveil-test
     external: false

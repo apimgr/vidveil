@@ -40,9 +40,10 @@ import (
 
 // Build info - set via -ldflags at build time per PART 7
 var (
-	Version   = "dev"
-	CommitID  = "unknown"
-	BuildDate = "unknown"
+	Version      = "dev"
+	CommitID     = "unknown"
+	BuildDate    = "unknown"
+	OfficialSite = "" // Empty = users must use --server flag for CLI client
 )
 
 func init() {
@@ -50,6 +51,7 @@ func init() {
 	version.Version = Version
 	version.CommitID = CommitID
 	version.BuildTime = BuildDate
+	version.OfficialSite = OfficialSite
 }
 
 func main() {
@@ -57,22 +59,23 @@ func main() {
 
 	// Parse arguments manually per AI.md spec
 	var (
-		configDir   string
-		dataDir     string
-		cacheDir    string
-		logDir      string
-		backupDir   string
-		pidFile     string
-		address     string
-		port        string
-		modeStr     string
-		debug       bool
-		daemon      bool
-		serviceCmd  string
-		maintCmd    string
-		maintArg    string
-		updateCmd   string
-		updateArg   string
+		configDir    string
+		dataDir      string
+		cacheDir     string
+		logDir       string
+		backupDir    string
+		pidFile      string
+		address      string
+		port         string
+		modeStr      string
+		debug        bool
+		daemon       bool
+		serviceCmd   string
+		maintCmd     string
+		maintArg     string
+		maintPassword string // Per AI.md PART 22: encryption password for backup/restore
+		updateCmd    string
+		updateArg    string
 	)
 
 	i := 0
@@ -191,9 +194,19 @@ func main() {
 			if i+1 < len(args) {
 				i++
 				maintCmd = args[i]
-				if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-					i++
-					maintArg = args[i]
+				// Parse remaining args for maintenance command
+				for i+1 < len(args) {
+					nextArg := args[i+1]
+					if nextArg == "--password" && i+2 < len(args) {
+						// Per AI.md PART 22: --password for backup/restore encryption
+						i += 2
+						maintPassword = args[i]
+					} else if !strings.HasPrefix(nextArg, "--") && maintArg == "" {
+						i++
+						maintArg = args[i]
+					} else {
+						break
+					}
 				}
 			}
 
@@ -241,7 +254,7 @@ func main() {
 			handleUpdateCommand("yes", "")
 			return
 		}
-		handleMaintenanceCommand(maintCmd, maintArg)
+		handleMaintenanceCommand(maintCmd, maintArg, maintPassword)
 		return
 	}
 
@@ -441,8 +454,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "⚠️  CVE service initialization failed: %v\n", err)
 	}
 
-	// Initialize scheduler per AI.md PART 19
-	sched := scheduler.NewScheduler()
+	// Initialize scheduler with database persistence per AI.md PART 19
+	// Task state (run_count, fail_count, last_run) survives restarts
+	sched := scheduler.NewSchedulerWithDB(migrationMgr.GetDB())
 
 	// Register all built-in tasks per AI.md PART 19
 	sched.RegisterBuiltinTasks(scheduler.BuiltinTaskFuncs{
@@ -543,6 +557,11 @@ func main() {
 		}
 	}()
 	defer torSvc.Stop()
+
+	// Load scheduler history from database per AI.md PART 19
+	if err := sched.LoadHistoryFromDB(100); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Failed to load scheduler history: %v\n", err)
+	}
 
 	// Start scheduler
 	sched.Start(context.Background())
@@ -1022,7 +1041,17 @@ func handleServiceCommand(cmd string) {
 		}
 		fmt.Println("✅ Service uninstalled")
 
+	case "--disable":
+		// Per AI.md PART 8: Disable service from starting at boot
+		fmt.Println("Disabling Vidveil service from starting at boot...")
+		if err := svc.Disable(); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Failed to disable: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("✅ Service disabled (will not start at boot)")
+
 	case "--help":
+		// Per AI.md PART 8: Service command help
 		fmt.Println(`Service Management Commands:
 
   vidveil --service start         Start the service
@@ -1032,6 +1061,7 @@ func handleServiceCommand(cmd string) {
   vidveil --service status        Show service status
   vidveil --service --install     Install as system service
   vidveil --service --uninstall   Uninstall system service
+  vidveil --service --disable     Disable service from starting at boot
 
 Supported service managers:
   - systemd (Linux)
@@ -1153,15 +1183,29 @@ Run 'vidveil --update --help' for detailed help.`)
 	}
 }
 
-func handleMaintenanceCommand(cmd, arg string) {
+func handleMaintenanceCommand(cmd, arg, password string) {
 	maint := maintenance.NewMaintenanceManager("", "", version.GetVersion())
 
 	switch cmd {
 	case "backup":
-		fmt.Println("Creating backup...")
-		if err := maint.Backup(arg); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Backup failed: %v\n", err)
-			os.Exit(1)
+		// Per AI.md PART 22: Support --password for encrypted backups
+		if password != "" {
+			fmt.Println("Creating encrypted backup...")
+			if err := maint.BackupWithOptions(maintenance.BackupOptions{
+				Filename:    arg,
+				Password:    password,
+				IncludeData: true,
+				MaxBackups:  1,
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "❌ Backup failed: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Println("Creating backup...")
+			if err := maint.Backup(arg); err != nil {
+				fmt.Fprintf(os.Stderr, "❌ Backup failed: %v\n", err)
+				os.Exit(1)
+			}
 		}
 
 	case "restore":
@@ -1170,7 +1214,8 @@ func handleMaintenanceCommand(cmd, arg string) {
 		} else {
 			fmt.Printf("Restoring from %s...\n", arg)
 		}
-		if err := maint.Restore(arg); err != nil {
+		// Per AI.md PART 22: Support --password for encrypted backups
+		if err := maint.RestoreWithPassword(arg, password); err != nil {
 			fmt.Fprintf(os.Stderr, "❌ Restore failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -1231,17 +1276,22 @@ func handleMaintenanceCommand(cmd, arg string) {
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
 		fmt.Println(`Maintenance Commands:
-  vidveil --maintenance backup [file]     Create backup (optional custom filename)
-  vidveil --maintenance restore [file]    Restore from backup (latest if no file)
-  vidveil --maintenance update            Check and apply updates (alias for --update)
-  vidveil --maintenance mode <on|off>     Enable/disable maintenance mode
-  vidveil --maintenance setup             Reset admin credentials (recovery)
+  vidveil --maintenance backup [file] [--password <pwd>]   Create backup
+  vidveil --maintenance restore [file] [--password <pwd>]  Restore from backup
+  vidveil --maintenance update                              Check and apply updates
+  vidveil --maintenance mode <on|off>                       Enable/disable maintenance mode
+  vidveil --maintenance setup                               Reset admin credentials (recovery)
+
+Options:
+  --password <password>    Encryption password for backup/restore (per AI.md PART 22)
 
 Examples:
-  vidveil --maintenance backup                    # Backup to default location
-  vidveil --maintenance backup /tmp/backup.tar   # Backup to specific file
-  vidveil --maintenance restore                   # Restore from most recent
-  vidveil --maintenance mode on                   # Enable maintenance mode`)
+  vidveil --maintenance backup                              # Backup to default location
+  vidveil --maintenance backup --password "secret"          # Encrypted backup
+  vidveil --maintenance backup /tmp/backup.tar              # Backup to specific file
+  vidveil --maintenance restore                             # Restore from most recent
+  vidveil --maintenance restore backup.tar.gz.enc --password "secret"  # Restore encrypted
+  vidveil --maintenance mode on                             # Enable maintenance mode`)
 		os.Exit(0)
 
 	default:

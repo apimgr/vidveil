@@ -1695,6 +1695,7 @@ func (h *AdminHandler) APIEngines(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIBackup triggers a backup
+// Per AI.md PART 22: Accepts JSON body with optional password for encryption
 func (h *AdminHandler) APIBackup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1702,16 +1703,44 @@ func (h *AdminHandler) APIBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	maint := maintenance.NewMaintenanceManager("", "", "")
-	backupFile := r.URL.Query().Get("file")
 
-	if err := maint.Backup(backupFile); err != nil {
-		h.jsonError(w, "Backup failed", "ERR_BACKUP_FAILED", http.StatusInternalServerError)
+	// Per AI.md PART 22: Parse JSON body for password
+	var req struct {
+		Filename string `json:"filename"`
+		Password string `json:"password"`
+	}
+	// Try to parse JSON body, but don't fail if empty (for backwards compatibility)
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			// Fall back to query params if JSON parsing fails
+			req.Filename = r.URL.Query().Get("file")
+		}
+	} else {
+		req.Filename = r.URL.Query().Get("file")
+	}
+
+	// Create backup with or without encryption
+	var err error
+	if req.Password != "" {
+		err = maint.BackupWithOptions(maintenance.BackupOptions{
+			Filename:    req.Filename,
+			Password:    req.Password,
+			IncludeData: true,
+			MaxBackups:  1,
+		})
+	} else {
+		err = maint.Backup(req.Filename)
+	}
+
+	if err != nil {
+		h.jsonError(w, "Backup failed: "+err.Error(), "ERR_BACKUP_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
-		"message": "Backup created successfully",
+		"ok":        true,
+		"message":   "Backup created successfully",
+		"encrypted": req.Password != "",
 	})
 }
 
@@ -2105,19 +2134,34 @@ func (h *AdminHandler) APILogsAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIRestore restores from backup
+// Per AI.md PART 22: Accepts JSON body with backup_file and optional password
 func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
-			"ok": false,
-			"error":   "Method not allowed",
+			"ok":    false,
+			"error": "Method not allowed",
 		})
 		return
 	}
 
 	maint := maintenance.NewMaintenanceManager("", "", "")
-	backupFile := r.URL.Query().Get("file")
 
-	if err := maint.Restore(backupFile); err != nil {
+	// Per AI.md PART 22: Parse JSON body for backup_file and password
+	var req struct {
+		BackupFile string `json:"backup_file"`
+		Password   string `json:"password"`
+	}
+	// Try to parse JSON body, but fall back to query params for backwards compatibility
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			req.BackupFile = r.URL.Query().Get("file")
+		}
+	} else {
+		req.BackupFile = r.URL.Query().Get("file")
+	}
+
+	// Restore with or without password
+	if err := maint.RestoreWithPassword(req.BackupFile, req.Password); err != nil {
 		// Per AI.md PART 9: Never expose error details in responses
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"ok":      false,
@@ -2128,7 +2172,7 @@ func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
+		"ok":      true,
 		"message": "Restore completed successfully",
 	})
 }

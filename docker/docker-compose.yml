@@ -1,5 +1,5 @@
 # vidveil - Privacy-respecting meta search engine for adult video content
-# nginx proxy address - http://172.17.0.1:64893
+# Per AI.md PART 14: Production compose (NO debug options)
 
 name: vidveil
 
@@ -10,25 +10,23 @@ x-logging: &default-logging
   driver: json-file
 
 services:
-  server:
+  vidveil:
     image: ghcr.io/apimgr/vidveil:latest
-    container_name: vidveil-server
+    container_name: vidveil
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
     pull_policy: always
     logging: *default-logging
     environment:
       - MODE=production
-      - PORT=80
-      - DEBUG=false
       - TZ=${TZ:-America/New_York}
     volumes:
       - './rootfs/config:/config:z'
       - './rootfs/data:/data:z'
     ports:
-      - '172.17.0.1:64893:80'
+      - '64893:80'
     healthcheck:
-      test: curl -sf http://localhost:80/healthz || exit 1
+      test: /usr/local/bin/vidveil --status || exit 1
       interval: 10s
       timeout: 5s
       retries: 3

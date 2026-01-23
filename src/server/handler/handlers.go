@@ -1663,47 +1663,70 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// JSON response (default) - per AI.md PART 13
+	// JSON response (default) - per AI.md PART 13 canonical field order
+	// Tor status for features and checks
+	torEnabled := h.torSvc != nil && h.torSvc.IsEnabled()
+	torRunning := h.torSvc != nil && h.torSvc.IsRunning()
+	torCheck := "ok"
+	if torEnabled && !torRunning {
+		torCheck = "error"
+	}
+
 	response := map[string]interface{}{
+		// 1. Project identification (PART 16)
 		"project": map[string]interface{}{
 			"name":        h.appConfig.Server.Title,
+			"tagline":     h.appConfig.Web.Branding.Tagline,
 			"description": "Privacy-respecting adult video meta search",
 		},
-		"status":     status,
+		// 2. Overall status
+		"status": status,
+		// 3. Version & build info (PART 7)
 		"version":    version.GetVersion(),
 		"go_version": version.GoVersion,
-		"mode":       appMode,
-		"uptime":     uptime,
-		"timestamp":  timestamp,
+		// 4. Runtime info (PART 6)
+		"mode":      appMode,
+		"uptime":    uptime,
+		"timestamp": timestamp,
+		// 5. Build info (PART 7)
 		"build": map[string]interface{}{
 			"commit": version.CommitID,
 			"date":   version.BuildTime,
 		},
-		"node": map[string]interface{}{
-			"id":       nodeID,
-			"hostname": hostname,
-		},
+		// 6. Cluster info (PART 10)
 		"cluster": map[string]interface{}{
-			"enabled": clusterEnabled,
-			"primary": "",
-			"nodes":   []string{},
+			"enabled":    clusterEnabled,
+			"primary":    "",
+			"nodes":      []string{},
+			"node_count": 1,
+			"role":       "primary",
 		},
+		// 7. Features - PUBLIC only, NO metrics (PART 21 is internal)
 		"features": map[string]interface{}{
-			"tor":     h.appConfig != nil && false,
-			"geoip":   h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
-			"metrics": h.appConfig != nil && h.appConfig.Server.Metrics.Enabled,
+			// PART 32: Tor as TorInfo object
+			"tor": map[string]interface{}{
+				"enabled":  torEnabled,
+				"running":  torRunning,
+				"status":   h.getTorStatus(),
+				"hostname": h.getTorHostname(),
+			},
+			// PART 20: GeoIP
+			"geoip": h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 		},
+		// 8. Component health checks
 		"checks": map[string]string{
 			"database":  checks["database"],
 			"cache":     checks["cache"],
 			"disk":      checks["disk"],
 			"scheduler": "ok",
 			"cluster":   "ok",
+			"tor":       torCheck,
 		},
+		// 9. Statistics (public-safe aggregates)
 		"stats": map[string]interface{}{
-			"requests_total":     0, // Use /metrics endpoint for detailed stats
-			"requests_24h":       0,
-			"active_connections": 0,
+			"requests_total":     h.getRequestsTotal(),
+			"requests_24h":       h.getRequests24h(),
+			"active_connections": h.getActiveConnections(),
 		},
 	}
 

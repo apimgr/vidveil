@@ -10,6 +10,7 @@ ARG TARGETARCH
 ARG VERSION=dev
 ARG BUILD_DATE
 ARG COMMIT_ID
+ARG OFFICIAL_SITE
 
 WORKDIR /build
 
@@ -17,10 +18,10 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source and build
+# Copy source and build per AI.md PART 7
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
-    -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'" \
+    -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIAL_SITE}'" \
     -o /build/binary/vidveil ./src
 
 # =============================================================================
@@ -92,9 +93,9 @@ EXPOSE 80
 STOPSIGNAL SIGRTMIN+3
 
 # Health check (long start period for services that need initialization)
-# Note: Use curl instead of --status since --status reads config file port, not actual running port
+# Per AI.md PART 14: Use binary --status command
 HEALTHCHECK --start-period=10m --interval=5m --timeout=15s --retries=3 \
-    CMD curl -sf http://localhost:80/healthz || exit 1
+    CMD /usr/local/bin/vidveil --status || exit 1
 
 # Use tini as init with signal propagation
 # -p SIGTERM: propagate SIGTERM to child processes

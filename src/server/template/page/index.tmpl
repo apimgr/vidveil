@@ -6,20 +6,71 @@
 </head>
 <body>
     <a href="#main-content" class="skip-link">Skip to main content</a>
+    {{template "public/header" .}}
     <main class="home" id="main-content" role="main">
-        <h1>Vidveil</h1>
-        <p>{{.Description}}</p>
-        <form action="/search" method="get" class="search-form" role="search" aria-label="Video search" onsubmit="return handleSearchSubmit(this)">
-            <label for="search-input" class="visually-hidden">Search query</label>
-            <div class="search-wrapper">
-                <input type="text" id="search-input" name="q" placeholder="Search videos... (try !ph or !rt)" autofocus required aria-required="true" aria-label="Enter search terms" autocomplete="off">
-                <div id="autocomplete-dropdown" class="autocomplete-dropdown" role="listbox" aria-label="Bang suggestions"></div>
-            </div>
-            <button type="submit" aria-label="Submit search">Search</button>
-        </form>
-        <p class="bang-hint">Use bangs to search specific sites: <code>!ph</code> PornHub, <code>!rt</code> RedTube, <code>!xv</code> XVideos, <code>!xh</code> xHamster</p>
+        <div class="home-hero">
+            <h1>Vidveil</h1>
+            <p class="tagline">{{.Description}}</p>
+
+            {{/* Large search form - consistent with nav search styling */}}
+            <form action="/search" method="get" class="search-form search-form--large" role="search" aria-label="Video search">
+                <label for="search-input" class="visually-hidden">Search query</label>
+                <div class="search-wrapper">
+                    <input type="text"
+                           id="search-input"
+                           name="q"
+                           placeholder="Search videos... (try !ph or !xv)"
+                           autofocus
+                           required
+                           aria-required="true"
+                           autocomplete="off"
+                           aria-label="Enter search terms"
+                           aria-autocomplete="list"
+                           aria-controls="autocomplete-dropdown">
+                    <div id="autocomplete-dropdown"
+                         class="autocomplete-dropdown"
+                         role="listbox"
+                         aria-label="Bang suggestions"
+                         hidden></div>
+                </div>
+                <button type="submit" aria-label="Search" class="search-btn">Search</button>
+            </form>
+
+            <p class="bang-hint">Use bangs: <code>!ph</code> PornHub, <code>!xv</code> XVideos, <code>!xh</code> xHamster, <code>!rt</code> RedTube</p>
+
+            {{/* Basic filters - collapsible on home page */}}
+            <details class="home-filters" id="home-filters">
+                <summary class="filters-toggle" aria-expanded="false">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                    </svg>
+                    Filters
+                </summary>
+                <div class="filters-content" role="group" aria-label="Search filters">
+                    <div class="filter-group">
+                        <label for="home-filter-duration">Duration</label>
+                        <select id="home-filter-duration" name="duration">
+                            <option value="">Any</option>
+                            <option value="short">Under 10 min</option>
+                            <option value="medium">10-30 min</option>
+                            <option value="long">Over 30 min</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="home-filter-quality">Quality</label>
+                        <select id="home-filter-quality" name="quality">
+                            <option value="">Any</option>
+                            <option value="4k">4K</option>
+                            <option value="1080">1080p HD</option>
+                            <option value="720">720p</option>
+                        </select>
+                    </div>
+                </div>
+            </details>
+        </div>
+
         <div id="search-history" class="search-history" role="region" aria-label="Recent searches"></div>
-        {{template "public/scripts" .}}
+
         <div class="engine-stats" role="contentinfo" aria-label="Service statistics">
             <span class="stat"><strong>{{.EngineCount}}</strong> engines</span>
             <span class="divider" aria-hidden="true">|</span>
@@ -29,6 +80,7 @@
         </div>
     </main>
     {{template "public/footer" .}}
+    {{template "public/scripts" .}}
 </body>
 </html>
 {{end}}

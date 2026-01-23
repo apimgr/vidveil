@@ -3,13 +3,36 @@
 package metrics
 
 import (
-"github.com/prometheus/client_golang/prometheus"
-"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var (
-// HTTP metrics per AI.md PART 21
-HTTPRequestsTotal = promauto.NewCounterVec(
+	// Application metrics per AI.md PART 21
+	AppInfo = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "vidveil_app_info",
+			Help: "Application info (always 1, labels carry data)",
+		},
+		[]string{"version", "commit", "build_date", "go_version"},
+	)
+
+	AppUptimeSeconds = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_app_uptime_seconds",
+			Help: "Seconds since application start",
+		},
+	)
+
+	AppStartTimestamp = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_app_start_timestamp",
+			Help: "Unix timestamp of application start",
+		},
+	)
+
+	// HTTP metrics per AI.md PART 21
+	HTTPRequestsTotal = promauto.NewCounterVec(
 prometheus.CounterOpts{
 Name: "vidveil_http_requests_total",
 Help: "Total number of HTTP requests",
@@ -70,13 +93,44 @@ Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1},
 )
 
 DBConnectionsOpen = promauto.NewGauge(
-prometheus.GaugeOpts{
-Name: "vidveil_db_connections_open",
-Help: "Number of open database connections",
-},
-)
+		prometheus.GaugeOpts{
+			Name: "vidveil_db_connections_open",
+			Help: "Number of open database connections",
+		},
+	)
 
-// Cache metrics per AI.md PART 21
+	DBConnectionsInUse = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_db_connections_in_use",
+			Help: "Number of database connections currently in use",
+		},
+	)
+
+	DBErrorsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vidveil_db_errors_total",
+			Help: "Total number of database errors",
+		},
+		[]string{"operation", "error_type"},
+	)
+
+	// Authentication metrics per AI.md PART 21
+	AuthAttemptsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vidveil_auth_attempts_total",
+			Help: "Total number of authentication attempts",
+		},
+		[]string{"method", "status"},
+	)
+
+	AuthSessionsActive = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_auth_sessions_active",
+			Help: "Number of active authentication sessions",
+		},
+	)
+
+	// Cache metrics per AI.md PART 21
 CacheHitsTotal = promauto.NewCounter(
 prometheus.CounterOpts{
 Name: "vidveil_cache_hits_total",

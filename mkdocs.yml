@@ -108,6 +108,7 @@ nav:
     - Search: user-guide/search.md
     - Preferences: user-guide/preferences.md
     - Bang Syntax: user-guide/bangs.md
+    - CLI Reference: cli.md
   - API Reference:
     - REST API: api/rest.md
     - GraphQL: api/graphql.md

@@ -305,12 +305,16 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Set rate limit headers per PART 1
+		// Per AI.md PART 12: Call Allow() FIRST, then set headers with accurate remaining count
+		// This ensures X-RateLimit-Remaining reflects the count AFTER this request
+		allowed := l.Allow(ip)
+
+		// Set rate limit headers per PART 12 (after Allow() for accurate remaining count)
 		w.Header().Set("X-RateLimit-Limit", itoa(l.requests))
 		w.Header().Set("X-RateLimit-Remaining", itoa(l.Remaining(ip)))
 		w.Header().Set("X-RateLimit-Reset", itoa(int(l.Reset(ip).Unix())))
 
-		if !l.Allow(ip) {
+		if !allowed {
 			// Log security event per AI.md PART 11
 			if l.logger != nil {
 				l.logger.Security("rate_limit_exceeded", ip, map[string]interface{}{

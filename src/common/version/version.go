@@ -21,6 +21,10 @@ var (
 	// BuildTime is the build timestamp
 	BuildTime = "unknown"
 
+	// OfficialSite is the official server URL per AI.md PART 7
+	// Empty = users must use --server flag for CLI client
+	OfficialSite = ""
+
 	// GoVersion is the Go version used to build
 	GoVersion = runtime.Version()
 

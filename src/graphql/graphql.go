@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-package handler
+// Per AI.md PART 14: GraphQL handler MUST be in src/graphql/graphql.go
+package graphql
 
 import (
 	"encoding/json"
@@ -11,43 +12,43 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/engine"
 )
 
-// GraphQLHandler handles GraphQL requests
-type GraphQLHandler struct {
+// Handler handles GraphQL requests
+type Handler struct {
 	appConfig *config.AppConfig
 	engineMgr *engine.EngineManager
 }
 
-// NewGraphQLHandler creates a new GraphQL handler
-func NewGraphQLHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *GraphQLHandler {
-	return &GraphQLHandler{
+// NewHandler creates a new GraphQL handler
+func NewHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *Handler {
+	return &Handler{
 		appConfig: appConfig,
 		engineMgr: engineMgr,
 	}
 }
 
-// GraphQLRequest represents a GraphQL request
-type GraphQLRequest struct {
+// Request represents a GraphQL request
+type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
 }
 
-// GraphQLResponse represents a GraphQL response
-type GraphQLResponse struct {
+// Response represents a GraphQL response
+type Response struct {
 	Data   interface{} `json:"data,omitempty"`
-	Errors []GQLError  `json:"errors,omitempty"`
+	Errors []Error     `json:"errors,omitempty"`
 }
 
-// GQLError represents a GraphQL error
-type GQLError struct {
+// Error represents a GraphQL error
+type Error struct {
 	Message string `json:"message"`
 }
 
 // Handle processes GraphQL requests
-func (h *GraphQLHandler) Handle(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var req GraphQLRequest
+	var req Request
 
 	if r.Method == http.MethodGet {
 		req.Query = r.URL.Query().Get("query")
@@ -57,25 +58,25 @@ func (h *GraphQLHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if r.Method == http.MethodPost {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			WriteJSON(w, http.StatusBadRequest, GraphQLResponse{
-				Errors: []GQLError{{Message: "Invalid request body"}},
+			writeJSON(w, http.StatusBadRequest, Response{
+				Errors: []Error{{Message: "Invalid request body"}},
 			})
 			return
 		}
 	} else {
-		WriteJSON(w, http.StatusMethodNotAllowed, GraphQLResponse{
-			Errors: []GQLError{{Message: "Method not allowed"}},
+		writeJSON(w, http.StatusMethodNotAllowed, Response{
+			Errors: []Error{{Message: "Method not allowed"}},
 		})
 		return
 	}
 
 	// Simple query parser (for common operations)
 	result := h.executeQuery(req)
-	WriteJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, result)
 }
 
 // GraphiQL serves the GraphiQL interface
-func (h *GraphQLHandler) GraphiQL(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(`<!DOCTYPE html>
 <html>
@@ -109,7 +110,7 @@ func (h *GraphQLHandler) GraphiQL(w http.ResponseWriter, r *http.Request) {
 }
 
 // executeQuery executes a GraphQL query
-func (h *GraphQLHandler) executeQuery(req GraphQLRequest) GraphQLResponse {
+func (h *Handler) executeQuery(req Request) Response {
 	query := strings.TrimSpace(req.Query)
 
 	// Handle introspection
@@ -138,12 +139,12 @@ func (h *GraphQLHandler) executeQuery(req GraphQLRequest) GraphQLResponse {
 		return h.handleEngines()
 	}
 
-	return GraphQLResponse{
-		Errors: []GQLError{{Message: "Unknown query"}},
+	return Response{
+		Errors: []Error{{Message: "Unknown query"}},
 	}
 }
 
-func (h *GraphQLHandler) handleSearch(req GraphQLRequest) GraphQLResponse {
+func (h *Handler) handleSearch(req Request) Response {
 	// Extract query parameter
 	q := ""
 	page := 1
@@ -156,8 +157,8 @@ func (h *GraphQLHandler) handleSearch(req GraphQLRequest) GraphQLResponse {
 	}
 
 	if q == "" {
-		return GraphQLResponse{
-			Errors: []GQLError{{Message: "Missing search query"}},
+		return Response{
+			Errors: []Error{{Message: "Missing search query"}},
 		}
 	}
 
@@ -167,21 +168,21 @@ func (h *GraphQLHandler) handleSearch(req GraphQLRequest) GraphQLResponse {
 	gqlResults := make([]map[string]interface{}, len(results.Data.Results))
 	for i, r := range results.Data.Results {
 		gqlResults[i] = map[string]interface{}{
-			"id":              r.ID,
-			"title":           r.Title,
-			"url":             r.URL,
-			"thumbnail":       r.Thumbnail,
-			"duration":        r.DurationSeconds,
-			"durationStr":     r.Duration,
-			"views":           r.ViewsCount,
-			"viewsStr":        r.Views,
-			"source":          r.Source,
-			"sourceDisplay":   r.SourceDisplay,
-			"description":     r.Description,
+			"id":            r.ID,
+			"title":         r.Title,
+			"url":           r.URL,
+			"thumbnail":     r.Thumbnail,
+			"duration":      r.DurationSeconds,
+			"durationStr":   r.Duration,
+			"views":         r.ViewsCount,
+			"viewsStr":      r.Views,
+			"source":        r.Source,
+			"sourceDisplay": r.SourceDisplay,
+			"description":   r.Description,
 		}
 	}
 
-	return GraphQLResponse{
+	return Response{
 		Data: map[string]interface{}{
 			"search": map[string]interface{}{
 				"query":         results.Data.Query,
@@ -200,7 +201,7 @@ func (h *GraphQLHandler) handleSearch(req GraphQLRequest) GraphQLResponse {
 	}
 }
 
-func (h *GraphQLHandler) handleEngines() GraphQLResponse {
+func (h *Handler) handleEngines() Response {
 	engines := h.engineMgr.ListEngines()
 
 	gqlEngines := make([]map[string]interface{}, len(engines))
@@ -215,15 +216,15 @@ func (h *GraphQLHandler) handleEngines() GraphQLResponse {
 		}
 	}
 
-	return GraphQLResponse{
+	return Response{
 		Data: map[string]interface{}{
 			"engines": gqlEngines,
 		},
 	}
 }
 
-func (h *GraphQLHandler) handleHealth() GraphQLResponse {
-	return GraphQLResponse{
+func (h *Handler) handleHealth() Response {
+	return Response{
 		Data: map[string]interface{}{
 			"health": map[string]interface{}{
 				"status":         "ok",
@@ -233,7 +234,7 @@ func (h *GraphQLHandler) handleHealth() GraphQLResponse {
 	}
 }
 
-func (h *GraphQLHandler) handleBangs() GraphQLResponse {
+func (h *Handler) handleBangs() Response {
 	bangs := engine.ListBangs()
 
 	gqlBangs := make([]map[string]interface{}, len(bangs))
@@ -246,21 +247,21 @@ func (h *GraphQLHandler) handleBangs() GraphQLResponse {
 		}
 	}
 
-	return GraphQLResponse{
+	return Response{
 		Data: map[string]interface{}{
 			"bangs": gqlBangs,
 		},
 	}
 }
 
-func (h *GraphQLHandler) handleAutocomplete(req GraphQLRequest) GraphQLResponse {
+func (h *Handler) handleAutocomplete(req Request) Response {
 	prefix := ""
 	if v, ok := req.Variables["prefix"].(string); ok {
 		prefix = v
 	}
 
 	if prefix == "" {
-		return GraphQLResponse{
+		return Response{
 			Data: map[string]interface{}{
 				"autocomplete": []interface{}{},
 			},
@@ -279,32 +280,32 @@ func (h *GraphQLHandler) handleAutocomplete(req GraphQLRequest) GraphQLResponse 
 		}
 	}
 
-	return GraphQLResponse{
+	return Response{
 		Data: map[string]interface{}{
 			"autocomplete": gqlSuggestions,
 		},
 	}
 }
 
-func (h *GraphQLHandler) handleIntrospection(query string) GraphQLResponse {
+func (h *Handler) handleIntrospection(query string) Response {
 	schema := h.getSchema()
 
 	if strings.Contains(query, "__schema") {
-		return GraphQLResponse{
+		return Response{
 			Data: map[string]interface{}{
 				"__schema": schema,
 			},
 		}
 	}
 
-	return GraphQLResponse{
+	return Response{
 		Data: map[string]interface{}{
 			"__type": nil,
 		},
 	}
 }
 
-func (h *GraphQLHandler) getSchema() map[string]interface{} {
+func (h *Handler) getSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"queryType": map[string]interface{}{
 			"name": "Query",
@@ -424,8 +425,8 @@ func (h *GraphQLHandler) getSchema() map[string]interface{} {
 	}
 }
 
-// GraphQLSchema returns the GraphQL schema definition
-func (h *GraphQLHandler) GraphQLSchema(w http.ResponseWriter, r *http.Request) {
+// Schema returns the GraphQL schema definition
+func (h *Handler) Schema(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Write([]byte(`type Query {
   search(query: String!, page: Int, engines: String): SearchResult
@@ -486,6 +487,12 @@ type Health {
   enginesEnabled: Int!
 }
 `))
+}
+
+// writeJSON writes a JSON response
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
 }
 
 // Unused import guard

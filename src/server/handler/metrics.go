@@ -112,16 +112,23 @@ func (m *ServerMetrics) Handler() http.HandlerFunc {
 		var memStats runtime.MemStats
 		runtime.ReadMemStats(&memStats)
 
-		// Write metrics in Prometheus format
-		fmt.Fprintf(w, "# HELP vidveil_info Application information\n")
-		fmt.Fprintf(w, "# TYPE vidveil_info gauge\n")
-		fmt.Fprintf(w, "vidveil_info{version=\"%s\",go_version=\"%s\"} 1\n", version.GetVersion(), runtime.Version())
+		// Write metrics in Prometheus format per AI.md PART 21
+
+		// Application metrics per AI.md PART 21
+		fmt.Fprintf(w, "# HELP vidveil_app_info Application information (always 1, labels carry data)\n")
+		fmt.Fprintf(w, "# TYPE vidveil_app_info gauge\n")
+		fmt.Fprintf(w, "vidveil_app_info{version=\"%s\",commit=\"%s\",build_date=\"%s\",go_version=\"%s\"} 1\n",
+			version.GetVersion(), version.CommitID, version.BuildTime, runtime.Version())
 		fmt.Fprintf(w, "\n")
 
-		// Uptime
-		fmt.Fprintf(w, "# HELP vidveil_uptime_seconds Time since application start\n")
-		fmt.Fprintf(w, "# TYPE vidveil_uptime_seconds counter\n")
-		fmt.Fprintf(w, "vidveil_uptime_seconds %.2f\n", time.Since(m.startTime).Seconds())
+		fmt.Fprintf(w, "# HELP vidveil_app_uptime_seconds Seconds since application start\n")
+		fmt.Fprintf(w, "# TYPE vidveil_app_uptime_seconds gauge\n")
+		fmt.Fprintf(w, "vidveil_app_uptime_seconds %.2f\n", time.Since(m.startTime).Seconds())
+		fmt.Fprintf(w, "\n")
+
+		fmt.Fprintf(w, "# HELP vidveil_app_start_timestamp Unix timestamp of application start\n")
+		fmt.Fprintf(w, "# TYPE vidveil_app_start_timestamp gauge\n")
+		fmt.Fprintf(w, "vidveil_app_start_timestamp %d\n", m.startTime.Unix())
 		fmt.Fprintf(w, "\n")
 
 		// Request counters

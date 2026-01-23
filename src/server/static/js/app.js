@@ -2,18 +2,77 @@
 // AI.md PART 16: Single app.js file for all frontend functionality
 
 // ============================================================================
-// Theme Management
+// Theme Management - AI.md PART 16: Supports dark, light, auto modes
 // ============================================================================
 function setTheme(theme) {
     // Per AI.md PART 16: Use class instead of data-theme attribute
-    document.documentElement.classList.remove('theme-dark', 'theme-light');
+    // Supports: 'dark', 'light', 'auto' (auto uses prefers-color-scheme)
+    document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
     document.documentElement.classList.add('theme-' + theme);
     localStorage.setItem('vidveil-theme', theme);
+
+    // Update meta theme-color for mobile browsers
+    updateMetaThemeColor(theme);
 }
 
 function getTheme() {
-    return localStorage.getItem('vidveil-theme') || 'dark';
+    // Default to 'auto' to respect system preference per AI.md PART 16
+    return localStorage.getItem('vidveil-theme') || 'auto';
 }
+
+// Get the effective theme (resolves 'auto' to actual light/dark)
+function getEffectiveTheme() {
+    var theme = getTheme();
+    if (theme === 'auto') {
+        return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    return theme;
+}
+
+// Update meta theme-color based on current theme
+function updateMetaThemeColor(theme) {
+    var metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (!metaTheme) {
+        metaTheme = document.createElement('meta');
+        metaTheme.name = 'theme-color';
+        document.head.appendChild(metaTheme);
+    }
+
+    var effectiveTheme = theme;
+    if (theme === 'auto') {
+        effectiveTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+
+    // Set appropriate theme-color for mobile browser chrome
+    metaTheme.content = effectiveTheme === 'light' ? '#f5f5f5' : '#282a36';
+}
+
+// Listen for system preference changes when in auto mode
+function setupThemeMediaListener() {
+    var mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+
+    function handleChange() {
+        // Only react if we're in auto mode
+        if (getTheme() === 'auto') {
+            updateMetaThemeColor('auto');
+            // Dispatch custom event for any components that need to know
+            window.dispatchEvent(new CustomEvent('themechange', {
+                detail: { theme: 'auto', effective: getEffectiveTheme() }
+            }));
+        }
+    }
+
+    // Modern browsers
+    if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', handleChange);
+    } else if (mediaQuery.addListener) {
+        // Older Safari
+        mediaQuery.addListener(handleChange);
+    }
+}
+
+// Initialize theme listener on load
+setupThemeMediaListener();
 
 // ============================================================================
 // Screen Reader Announcements (AI.md PART 31: A11Y)
@@ -53,7 +112,7 @@ if (document.readyState === 'loading') {
 // Preferences Management
 // ============================================================================
 const defaultPrefs = {
-    theme: 'dark',
+    theme: 'auto',  // Per AI.md PART 16: 'auto' uses system preference
     resultsPerPage: 50,
     openInNewTab: true,
     useTor: false,
@@ -1917,6 +1976,7 @@ window.Vidveil = window.Vidveil || {};
 Object.assign(window.Vidveil, {
     setTheme: setTheme,
     getTheme: getTheme,
+    getEffectiveTheme: getEffectiveTheme,
     getPreferences: getPreferences,
     savePreferences: savePreferences,
     resetPreferences: resetPreferences,

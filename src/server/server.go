@@ -15,8 +15,10 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/graphql"
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/admin"
+	"github.com/apimgr/vidveil/src/swagger"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
@@ -257,16 +259,17 @@ func (s *Server) setupRoutes() {
 	s.registerDebugRoutes(s.router)
 
 	// OpenAPI/Swagger documentation (AI.md PART 14: JSON only, no YAML)
-	s.router.Get("/openapi", handler.SwaggerUI(s.appConfig))
-	s.router.Get("/openapi.json", handler.OpenAPISpec(s.appConfig))
-	s.router.Get("/swagger", handler.SwaggerUI(s.appConfig))
-	s.router.Get("/api-docs", handler.SwaggerUI(s.appConfig))
+	// Per AI.md PART 14: Swagger handlers in src/swagger/
+	s.router.Get("/openapi", swagger.Handler(s.appConfig))
+	s.router.Get("/openapi.json", swagger.SpecHandler(s.appConfig))
+	s.router.Get("/swagger", swagger.Handler(s.appConfig))
+	s.router.Get("/api-docs", swagger.Handler(s.appConfig))
 
-	// GraphQL endpoint
-	gql := handler.NewGraphQLHandler(s.appConfig, s.engineMgr)
+	// GraphQL endpoint (AI.md PART 14: GraphQL handler in src/graphql/)
+	gql := graphql.NewHandler(s.appConfig, s.engineMgr)
 	s.router.HandleFunc("/graphql", gql.Handle)
 	s.router.Get("/graphiql", gql.GraphiQL)
-	s.router.Get("/graphql/schema", gql.GraphQLSchema)
+	s.router.Get("/graphql/schema", gql.Schema)
 
 	// Prometheus metrics
 	if s.appConfig.Server.Metrics.Enabled {

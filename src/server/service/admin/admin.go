@@ -521,14 +521,14 @@ func hashToken(token string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// Argon2id parameters per AI.md PART 2 (OWASP 2023 recommendations)
+// Argon2id parameters per AI.md PART 11 (OWASP 2023 recommendations)
 const (
 	// iterations
 	argonTime = 3
 	// 64 MB memory
 	argonMemory = 64 * 1024
-	// parallelism
-	argonThreads = 4
+	// parallelism - MUST be 2 per AI.md PART 11
+	argonThreads = 2
 	// output length in bytes
 	argonKeyLen = 32
 	// salt length in bytes

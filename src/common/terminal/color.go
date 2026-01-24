@@ -79,7 +79,6 @@ func ColorEnabled() bool {
 	case ColorModeNever:
 		return false
 	default:
-		// Auto-detect
 		return colorAutoDetect()
 	}
 }
@@ -87,7 +86,7 @@ func ColorEnabled() bool {
 // colorAutoDetect performs automatic color detection
 // Per AI.md PART 8
 func colorAutoDetect() bool {
-	// Per AI.md PART 8: NO_COLOR env var (non-empty = disable)
+	// Per AI.md PART 8: NO_COLOR env var (non-empty = disable colors)
 	if os.Getenv("NO_COLOR") != "" {
 		return false
 	}
@@ -102,6 +101,39 @@ func colorAutoDetect() bool {
 		return false
 	}
 
+	return true
+}
+
+// StyleEnabled checks if text styling (bold/underline/italic) should be used
+// Per AI.md PART 8: NO_COLOR does NOT affect bold/underline/italic text styling
+// Only TERM=dumb disables ALL ANSI escapes (including styling)
+func StyleEnabled() bool {
+	colorConfig.mu.RLock()
+	mode := colorConfig.mode
+	colorConfig.mu.RUnlock()
+
+	// --color=never disables everything including styling
+	if mode == ColorModeNever {
+		return false
+	}
+
+	// --color=always enables everything including styling
+	if mode == ColorModeAlways {
+		return true
+	}
+
+	// Auto-detect: Check if stdout is a terminal
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		return false
+	}
+
+	// Per AI.md PART 8: TERM=dumb disables ALL ANSI escapes
+	if os.Getenv("TERM") == "dumb" {
+		return false
+	}
+
+	// Per AI.md PART 8: NO_COLOR does NOT disable styling
+	// So we return true even if NO_COLOR is set
 	return true
 }
 
@@ -138,7 +170,7 @@ func EmojiEnabled() bool {
 	return true
 }
 
-// ANSI color codes
+// ANSI escape codes
 // Per AI.md PART 8: Standard ANSI escape sequences
 const (
 	ANSIReset     = "\033[0m"
@@ -147,7 +179,7 @@ const (
 	ANSIItalic    = "\033[3m"
 	ANSIUnderline = "\033[4m"
 
-	// Foreground colors
+	// Foreground colors (affected by NO_COLOR)
 	ANSIBlack   = "\033[30m"
 	ANSIRed     = "\033[31m"
 	ANSIGreen   = "\033[32m"
@@ -157,7 +189,7 @@ const (
 	ANSICyan    = "\033[36m"
 	ANSIWhite   = "\033[37m"
 
-	// Bright foreground colors
+	// Bright foreground colors (affected by NO_COLOR)
 	ANSIBrightBlack   = "\033[90m"
 	ANSIBrightRed     = "\033[91m"
 	ANSIBrightGreen   = "\033[92m"
@@ -167,7 +199,7 @@ const (
 	ANSIBrightCyan    = "\033[96m"
 	ANSIBrightWhite   = "\033[97m"
 
-	// Background colors
+	// Background colors (affected by NO_COLOR)
 	ANSIBgBlack   = "\033[40m"
 	ANSIBgRed     = "\033[41m"
 	ANSIBgGreen   = "\033[42m"
@@ -179,7 +211,7 @@ const (
 )
 
 // Color applies color code if colors are enabled
-// Returns the string wrapped with ANSI codes, or plain string if colors disabled
+// Per AI.md PART 8: Returns plain string if colors disabled (NO_COLOR set)
 func Color(text, colorCode string) string {
 	if !ColorEnabled() {
 		return text
@@ -187,39 +219,68 @@ func Color(text, colorCode string) string {
 	return colorCode + text + ANSIReset
 }
 
-// Bold returns bold text if colors enabled
+// Style applies styling code if styling is enabled
+// Per AI.md PART 8: NO_COLOR does NOT affect bold/underline/italic
+// Only TERM=dumb disables styling
+func Style(text, styleCode string) string {
+	if !StyleEnabled() {
+		return text
+	}
+	return styleCode + text + ANSIReset
+}
+
+// Bold returns bold text
+// Per AI.md PART 8: NOT affected by NO_COLOR (only by TERM=dumb)
 func Bold(text string) string {
-	return Color(text, ANSIBold)
+	return Style(text, ANSIBold)
+}
+
+// Dim returns dim text
+// Per AI.md PART 8: NOT affected by NO_COLOR (only by TERM=dumb)
+func Dim(text string) string {
+	return Style(text, ANSIDim)
+}
+
+// Italic returns italic text
+// Per AI.md PART 8: NOT affected by NO_COLOR (only by TERM=dumb)
+func Italic(text string) string {
+	return Style(text, ANSIItalic)
+}
+
+// Underline returns underlined text
+// Per AI.md PART 8: NOT affected by NO_COLOR (only by TERM=dumb)
+func Underline(text string) string {
+	return Style(text, ANSIUnderline)
 }
 
 // Red returns red text if colors enabled
+// Per AI.md PART 8: Affected by NO_COLOR
 func Red(text string) string {
 	return Color(text, ANSIRed)
 }
 
 // Green returns green text if colors enabled
+// Per AI.md PART 8: Affected by NO_COLOR
 func Green(text string) string {
 	return Color(text, ANSIGreen)
 }
 
 // Yellow returns yellow text if colors enabled
+// Per AI.md PART 8: Affected by NO_COLOR
 func Yellow(text string) string {
 	return Color(text, ANSIYellow)
 }
 
 // Blue returns blue text if colors enabled
+// Per AI.md PART 8: Affected by NO_COLOR
 func Blue(text string) string {
 	return Color(text, ANSIBlue)
 }
 
 // Cyan returns cyan text if colors enabled
+// Per AI.md PART 8: Affected by NO_COLOR
 func Cyan(text string) string {
 	return Color(text, ANSICyan)
-}
-
-// Dim returns dim text if colors enabled
-func Dim(text string) string {
-	return Color(text, ANSIDim)
 }
 
 // Emoji returns the emoji if enabled, otherwise returns the fallback text

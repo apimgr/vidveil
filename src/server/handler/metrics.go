@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -12,6 +13,71 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 )
+
+// slidingWindowCounter tracks counts in a 24-hour sliding window using hourly buckets.
+// Each bucket represents one hour of counts. The ring rotates hourly.
+type slidingWindowCounter struct {
+	mu          sync.RWMutex
+	buckets     [24]uint64    // 24 hourly buckets
+	currentHour int           // Current bucket index (0-23)
+	lastRotate  time.Time     // Last rotation timestamp
+}
+
+// newSlidingWindowCounter creates a new 24h sliding window counter
+func newSlidingWindowCounter() *slidingWindowCounter {
+	return &slidingWindowCounter{
+		lastRotate: time.Now().Truncate(time.Hour),
+	}
+}
+
+// increment adds one to the current bucket, rotating if needed
+func (s *slidingWindowCounter) increment() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rotateLocked()
+	s.buckets[s.currentHour]++
+}
+
+// rotateLocked rotates buckets if an hour has passed. Must be called with lock held.
+func (s *slidingWindowCounter) rotateLocked() {
+	now := time.Now().Truncate(time.Hour)
+	hoursPassed := int(now.Sub(s.lastRotate).Hours())
+
+	if hoursPassed <= 0 {
+		return
+	}
+
+	// Clear buckets that have expired (up to 24 hours worth)
+	if hoursPassed >= 24 {
+		// All buckets are stale, clear everything
+		for i := range s.buckets {
+			s.buckets[i] = 0
+		}
+		s.currentHour = int(now.Hour()) % 24
+	} else {
+		// Rotate through the buckets, clearing expired ones
+		for i := 0; i < hoursPassed; i++ {
+			s.currentHour = (s.currentHour + 1) % 24
+			s.buckets[s.currentHour] = 0
+		}
+	}
+	s.lastRotate = now
+}
+
+// count returns the total count across all 24 buckets
+func (s *slidingWindowCounter) count() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Rotate to ensure stale buckets are cleared before counting
+	s.rotateLocked()
+
+	var total uint64
+	for _, b := range s.buckets {
+		total += b
+	}
+	return total
+}
 
 // ServerMetrics holds application metrics per AI.md PART 13
 type ServerMetrics struct {
@@ -26,20 +92,27 @@ type ServerMetrics struct {
 	apiRequestsTotal  uint64
 	// activeConnections tracks current active connections
 	activeConnections int64
+
+	// 24h sliding window counter per AI.md PART 13 (stats.requests_24h)
+	requests24h *slidingWindowCounter
 }
 
 // NewMetrics creates a new metrics collector
 func NewMetrics(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *ServerMetrics {
 	return &ServerMetrics{
-		appConfig: appConfig,
-		engineMgr: engineMgr,
-		startTime: time.Now(),
+		appConfig:   appConfig,
+		engineMgr:   engineMgr,
+		startTime:   time.Now(),
+		requests24h: newSlidingWindowCounter(),
 	}
 }
 
-// IncrementRequests increments the total request counter
+// IncrementRequests increments the total request counter and 24h window counter
 func (m *ServerMetrics) IncrementRequests() {
 	atomic.AddUint64(&m.requestsTotal, 1)
+	if m.requests24h != nil {
+		m.requests24h.increment()
+	}
 }
 
 // IncrementSearches increments the search counter
@@ -75,6 +148,14 @@ func (m *ServerMetrics) GetSearchErrors() uint64 {
 // GetAPIRequestsTotal returns total API request count
 func (m *ServerMetrics) GetAPIRequestsTotal() uint64 {
 	return atomic.LoadUint64(&m.apiRequestsTotal)
+}
+
+// GetRequests24h returns request count in the last 24 hours per AI.md PART 13
+func (m *ServerMetrics) GetRequests24h() uint64 {
+	if m.requests24h != nil {
+		return m.requests24h.count()
+	}
+	return 0
 }
 
 // IncrementActiveConnections increments active connections counter

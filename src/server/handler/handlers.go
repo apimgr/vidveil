@@ -125,10 +125,11 @@ func (h *SearchHandler) getRequestsTotal() uint64 {
 	return 0
 }
 
-// getRequests24h returns HTTP requests in last 24 hours
-// TODO: Implement 24h window tracking in metrics
+// getRequests24h returns HTTP requests in last 24 hours per AI.md PART 13
 func (h *SearchHandler) getRequests24h() uint64 {
-	// For now return 0 - would need time-windowed counter
+	if h.metrics != nil {
+		return h.metrics.GetRequests24h()
+	}
 	return 0
 }
 
@@ -972,8 +973,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		// Stats per AI.md PART 13
 		Stats: StatsData{
 			RequestsTotal:     func() uint64 { if h.metrics != nil { return h.metrics.GetRequestsTotal() }; return 0 }(),
-			// TODO: Implement 24h sliding window tracking
-			Requests24h: 0,
+			Requests24h:       func() uint64 { if h.metrics != nil { return h.metrics.GetRequests24h() }; return 0 }(),
 			ActiveConnections: func() int64 { if h.metrics != nil { return h.metrics.GetActiveConnections() }; return 0 }(),
 		},
 

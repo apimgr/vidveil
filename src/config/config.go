@@ -586,6 +586,9 @@ type SearchConfig struct {
 	MaxPages           int      `yaml:"max_pages"`
 	// Minimum video duration in seconds (default 600 = 10 minutes)
 	MinDurationSeconds int `yaml:"min_duration_seconds"`
+	// Minimum relevance score for results (default 10.0 = at least one word match)
+	// Results below this score are filtered out. Set to 0 to disable filtering.
+	MinRelevanceScore float64 `yaml:"min_relevance_score"`
 	// Filter out premium/gold content
 	FilterPremium bool `yaml:"filter_premium"`
 	// Use spoofed TLS fingerprint (Chrome) to bypass Cloudflare
@@ -975,7 +978,9 @@ func DefaultAppConfig() *AppConfig {
 			MaxPages:           10,
 			// Default minimum duration: 10 minutes (600 seconds)
 			MinDurationSeconds: 600,
-			FilterPremium:      true,
+			// Default minimum relevance: 10.0 ensures at least one query word matches
+			MinRelevanceScore: 10.0,
+			FilterPremium:     true,
 			// Disabled by default - can cause issues with some engines
 			// Enable only for Cloudflare-protected sites
 			SpoofTLS: false,

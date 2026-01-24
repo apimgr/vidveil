@@ -183,8 +183,10 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 		}
 	}
 
-	// Sort results by relevance to query
-	sortByRelevance(allResults, query)
+	// Sort results by relevance and filter by minimum score
+	// Default minimum score of 10.0 ensures at least one query word matches
+	minScore := m.appConfig.Search.MinRelevanceScore
+	allResults = sortAndFilterByRelevance(allResults, query, minScore)
 
 	// Build response
 	elapsed := time.Since(startTime)
@@ -207,23 +209,44 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 	}
 }
 
-// sortByRelevance sorts results by relevance score
-func sortByRelevance(results []model.VideoResult, query string) {
+// scoredResult holds a result with its relevance score for sorting
+type scoredResult struct {
+	result model.VideoResult
+	score  float64
+}
+
+// sortAndFilterByRelevance sorts results by relevance score and filters by minimum score
+// Returns filtered results that meet the minimum relevance threshold
+func sortAndFilterByRelevance(results []model.VideoResult, query string, minScore float64) []model.VideoResult {
 	queryLower := strings.ToLower(query)
 	queryWords := strings.Fields(queryLower)
 	if len(queryWords) == 0 {
-		return
+		return results
 	}
 
-	// Pre-calculate scores for all results
-	scores := make([]float64, len(results))
+	// Calculate scores and create scored results
+	scored := make([]scoredResult, len(results))
 	for i, r := range results {
-		scores[i] = calculateRelevanceScore(r, queryLower, queryWords)
+		scored[i] = scoredResult{
+			result: r,
+			score:  calculateRelevanceScore(r, queryLower, queryWords),
+		}
 	}
 
-	sort.SliceStable(results, func(i, j int) bool {
-		return scores[i] > scores[j]
+	// Sort by score descending
+	sort.SliceStable(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
 	})
+
+	// Filter by minimum score and extract results
+	filtered := make([]model.VideoResult, 0, len(scored))
+	for _, sr := range scored {
+		if minScore <= 0 || sr.score >= minScore {
+			filtered = append(filtered, sr.result)
+		}
+	}
+
+	return filtered
 }
 
 // calculateRelevanceScore computes a relevance score for a result

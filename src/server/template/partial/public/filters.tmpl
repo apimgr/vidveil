@@ -1,0 +1,64 @@
+{{define "public/filters"}}
+{{/* Unified filter panel for home and search pages
+     Set .ShowEngines=true on home page to show engine selector
+     Set .Compact=true for inline search bar header style */}}
+<div class="filters-panel{{if .Compact}} filters-panel--compact{{end}}" id="filters-panel">
+    <button type="button" class="filters-toggle" id="filters-toggle" onclick="toggleFilters()" aria-expanded="false" aria-controls="filters-content">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+        </svg>
+        <span class="filters-toggle-text">Filters</span>
+        <span class="filter-count hidden" id="filter-count" aria-live="polite">0</span>
+    </button>
+    <div class="filters-content" id="filters-content" role="group" aria-label="Search filters">
+        <div class="filters-grid">
+            <div class="filter-group">
+                <label for="filter-duration" class="filter-label">Duration</label>
+                <select id="filter-duration" name="duration" onchange="handleFilterChange()" class="filter-select">
+                    <option value="">Any</option>
+                    <option value="short">Under 10 min</option>
+                    <option value="medium">10-30 min</option>
+                    <option value="long">Over 30 min</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-quality" class="filter-label">Quality</label>
+                <select id="filter-quality" name="quality" onchange="handleFilterChange()" class="filter-select">
+                    <option value="">Any</option>
+                    <option value="4k">4K</option>
+                    <option value="1080">1080p HD</option>
+                    <option value="720">720p</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-sort" class="filter-label">Sort</label>
+                <select id="filter-sort" name="sort" onchange="handleFilterChange()" class="filter-select">
+                    <option value="">Relevance</option>
+                    <option value="duration-desc">Longest</option>
+                    <option value="duration-asc">Shortest</option>
+                    <option value="views">Most Viewed</option>
+                    <option value="quality">Best Quality</option>
+                </select>
+            </div>
+            {{if .ShowEngines}}
+            <div class="filter-group">
+                <label for="filter-engines" class="filter-label">Engines</label>
+                <select id="filter-engines" name="engines" onchange="handleFilterChange()" class="filter-select">
+                    <option value="">All Engines</option>
+                    <option value="tier1">Tier 1 Only</option>
+                    <option value="tier12">Tier 1-2</option>
+                </select>
+            </div>
+            {{else}}
+            <div class="filter-group">
+                <label for="filter-source" class="filter-label">Source</label>
+                <select id="filter-source" name="source" onchange="handleFilterChange()" class="filter-select">
+                    <option value="">All Sources</option>
+                    {{/* Source options populated dynamically by JS */}}
+                </select>
+            </div>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{end}}

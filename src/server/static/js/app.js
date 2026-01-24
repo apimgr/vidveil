@@ -194,6 +194,80 @@ function filterBySource(source) {
     });
 }
 
+// ============================================================================
+// Unified Filter Panel - Toggle and Count
+// ============================================================================
+function toggleFilters() {
+    var toggle = document.getElementById('filters-toggle');
+    var content = document.getElementById('filters-content');
+    if (!toggle || !content) return;
+
+    var isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-expanded', !isExpanded);
+    content.classList.toggle('expanded', !isExpanded);
+}
+
+// Update filter count badge
+function updateFilterCount() {
+    var countEl = document.getElementById('filter-count');
+    if (!countEl) return;
+
+    var count = 0;
+    var selects = document.querySelectorAll('.filters-content select');
+    selects.forEach(function(select) {
+        if (select.value && select.value !== '') {
+            count++;
+        }
+    });
+
+    if (count > 0) {
+        countEl.textContent = count;
+        countEl.classList.remove('hidden');
+    } else {
+        countEl.classList.add('hidden');
+    }
+}
+
+// Handle filter changes - updates count and applies filters
+function handleFilterChange() {
+    updateFilterCount();
+
+    // Apply filters to search results (if on search page)
+    var duration = document.getElementById('filter-duration');
+    var quality = document.getElementById('filter-quality');
+    var source = document.getElementById('filter-source');
+    var sort = document.getElementById('filter-sort');
+
+    if (duration) filterByDuration(duration.value);
+    if (quality) filterByQuality(quality.value);
+    if (source) filterBySource(source.value);
+    if (sort) sortResults(sort.value);
+}
+
+// Close filters when clicking outside (for compact mode)
+document.addEventListener('click', function(e) {
+    var panel = document.getElementById('filters-panel');
+    var toggle = document.getElementById('filters-toggle');
+    if (!panel || !toggle) return;
+
+    // Check if panel is in compact mode
+    if (!panel.classList.contains('filters-panel--compact')) return;
+
+    // If click is outside the panel, close it
+    if (!panel.contains(e.target)) {
+        var content = document.getElementById('filters-content');
+        if (content && content.classList.contains('expanded')) {
+            toggle.setAttribute('aria-expanded', 'false');
+            content.classList.remove('expanded');
+        }
+    }
+});
+
+// Export functions globally
+window.toggleFilters = toggleFilters;
+window.updateFilterCount = updateFilterCount;
+window.handleFilterChange = handleFilterChange;
+
 function filterByDuration(duration) {
     const cards = document.querySelectorAll('.video-card');
     cards.forEach(card => {

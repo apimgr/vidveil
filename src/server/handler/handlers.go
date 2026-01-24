@@ -1887,8 +1887,23 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		data["Version"] = version.GetVersion()
 	}
 
-	// Create base template with partials
-	tmpl := template.New(templateName)
+	// Create base template with FuncMap
+	tmpl := template.New(templateName).Funcs(template.FuncMap{
+		// dict creates a map from key-value pairs for passing to templates
+		"dict": func(values ...interface{}) map[string]interface{} {
+			dict := make(map[string]interface{})
+			for i := 0; i < len(values); i += 2 {
+				if i+1 < len(values) {
+					key, ok := values[i].(string)
+					if ok {
+						dict[key] = values[i+1]
+					}
+				}
+			}
+			return dict
+		},
+		"eq": func(a, b interface{}) bool { return a == b },
+	})
 
 	// Load all partials first (public and admin)
 	partialFiles := []string{
@@ -1896,6 +1911,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		"template/partial/public/header.tmpl",
 		"template/partial/public/nav.tmpl",
 		"template/partial/public/footer.tmpl",
+		"template/partial/public/filters.tmpl",
 		"template/partial/public/scripts.tmpl",
 		"template/partial/admin/head.tmpl",
 		"template/partial/admin/sidebar.tmpl",

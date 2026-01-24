@@ -8,39 +8,33 @@
     <a href="#main-content" class="skip-link">Skip to main content</a>
     {{template "public/header" .}}
     <main class="results" id="main-content" role="main" aria-label="Search results">
+        {{/* Search header with inline search and collapsible filters */}}
+        <div class="search-header" id="search-header">
+            <form action="/search" method="get" class="search-form search-form--inline" role="search" aria-label="Refine search">
+                <div class="search-wrapper search-wrapper--compact">
+                    <input type="text"
+                           name="q"
+                           value="{{.Query}}"
+                           placeholder="Refine search..."
+                           autocomplete="off"
+                           class="search-input--compact"
+                           aria-label="Search query">
+                    <button type="submit" class="search-btn--compact" aria-label="Search">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+            {{template "public/filters" (dict "ShowEngines" false "Compact" true)}}
+        </div>
+
         <div class="initial-loading" id="initial-loading" role="status" aria-live="polite">
             <div class="spinner large" aria-hidden="true"></div>
             <p id="loading-text">Connecting to engines...</p>
         </div>
         <p class="meta hidden" id="search-meta" data-query="{{.Query}}" aria-live="polite"><span id="result-count">0</span> results <span id="search-time-container">(streaming...)</span></p>
-        <div class="filters hidden" id="filters" role="group" aria-label="Filter and sort options">
-            <label for="filter-duration" class="visually-hidden">Filter by duration</label>
-            <select id="filter-duration" onchange="filterByDuration(this.value)" aria-label="Filter by video duration">
-                <option value="">Duration: Any</option>
-                <option value="short">Under 10 min</option>
-                <option value="medium">10-30 min</option>
-                <option value="long">Over 30 min</option>
-            </select>
-            <label for="filter-quality" class="visually-hidden">Filter by quality</label>
-            <select id="filter-quality" onchange="filterByQuality(this.value)" aria-label="Filter by video quality">
-                <option value="">Quality: Any</option>
-                <option value="4k">4K</option>
-                <option value="1080">1080p HD</option>
-                <option value="720">720p</option>
-            </select>
-            <label for="filter-source" class="visually-hidden">Filter by source</label>
-            <select id="filter-source" onchange="filterBySource(this.value)" aria-label="Filter by video source">
-                <option value="">Source: All</option>
-            </select>
-            <label for="sort-by" class="visually-hidden">Sort results</label>
-            <select id="sort-by" onchange="sortResults(this.value)" aria-label="Sort results by">
-                <option value="">Sort: Relevance</option>
-                <option value="duration-desc">Longest</option>
-                <option value="duration-asc">Shortest</option>
-                <option value="views">Most Viewed</option>
-                <option value="quality">Best Quality</option>
-            </select>
-        </div>
         <div class="video-grid" id="video-grid" role="list" aria-label="Video results"></div>
         <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>Loading more...</span></div>
     </main>

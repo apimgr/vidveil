@@ -38,35 +38,8 @@
 
             <p class="bang-hint">Use bangs: <code>!ph</code> PornHub, <code>!xv</code> XVideos, <code>!xh</code> xHamster, <code>!rt</code> RedTube</p>
 
-            {{/* Basic filters - collapsible on home page */}}
-            <details class="home-filters" id="home-filters">
-                <summary class="filters-toggle" aria-expanded="false">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                    </svg>
-                    Filters
-                </summary>
-                <div class="filters-content" role="group" aria-label="Search filters">
-                    <div class="filter-group">
-                        <label for="home-filter-duration">Duration</label>
-                        <select id="home-filter-duration" name="duration">
-                            <option value="">Any</option>
-                            <option value="short">Under 10 min</option>
-                            <option value="medium">10-30 min</option>
-                            <option value="long">Over 30 min</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label for="home-filter-quality">Quality</label>
-                        <select id="home-filter-quality" name="quality">
-                            <option value="">Any</option>
-                            <option value="4k">4K</option>
-                            <option value="1080">1080p HD</option>
-                            <option value="720">720p</option>
-                        </select>
-                    </div>
-                </div>
-            </details>
+            {{/* Unified filters - collapsible on all screen sizes */}}
+            {{template "public/filters" (dict "ShowEngines" true "Compact" false)}}
         </div>
 
         <div id="search-history" class="search-history" role="region" aria-label="Recent searches"></div>

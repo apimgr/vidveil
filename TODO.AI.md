@@ -10,4 +10,4 @@
 
 ## Completed
 
-(All tasks completed - see git history for details)
+- AI.md updated from TEMPLATE.md with vidveil/apimgr values

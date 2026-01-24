@@ -152,7 +152,8 @@ func SpecHandler(appConfig *config.AppConfig) http.HandlerFunc {
 }
 
 func generateSwaggerUI(appConfig *config.AppConfig, theme string) string {
-	bgColor := "#282a36" // dark theme default
+	// Dark theme default
+	bgColor := "#282a36"
 	if theme == "light" {
 		bgColor = "#ffffff"
 	}

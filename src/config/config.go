@@ -423,9 +423,10 @@ type BlocklistsConfig struct {
 
 // BlocklistSource represents a blocklist source per PART 22
 type BlocklistSource struct {
-	Name    string `yaml:"name"`
-	URL     string `yaml:"url"`
-	Type    string `yaml:"type"`    // "ip" or "domain"
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
+	// Type is "ip" or "domain"
+	Type    string `yaml:"type"`
 	Enabled bool   `yaml:"enabled"`
 }
 
@@ -658,7 +659,8 @@ func (ua UserAgentConfig) SecChUa() string {
 
 	switch ua.Browser {
 	case "firefox":
-		return "" // Firefox doesn't send Sec-Ch-Ua
+		// Firefox doesn't send Sec-Ch-Ua
+		return ""
 	case "edge":
 		return `"Microsoft Edge";v="` + browserVersion + `", "Chromium";v="` + browserVersion + `", "Not_A Brand";v="24"`
 	case "chrome":
@@ -919,15 +921,17 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			// Backup settings per AI.md PART 22
+			// Default per PART 22: 1 daily backup, weekly/monthly/yearly disabled
 			Backup: BackupConfig{
 				Retention: BackupRetentionConfig{
-					MaxBackups:  1, // Default per PART 22: 1 daily backup
-					KeepWeekly:  0, // Disabled by default
-					KeepMonthly: 0, // Disabled by default
-					KeepYearly:  0, // Disabled by default
+					MaxBackups:  1,
+					KeepWeekly:  0,
+					KeepMonthly: 0,
+					KeepYearly:  0,
 				},
 				Encryption: BackupEncryptionConfig{
-					Enabled: false, // Not encrypted by default
+					// Not encrypted by default
+					Enabled: false,
 				},
 			},
 		},

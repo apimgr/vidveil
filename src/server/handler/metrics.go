@@ -24,7 +24,8 @@ type ServerMetrics struct {
 	searchesTotal     uint64
 	searchErrors      uint64
 	apiRequestsTotal  uint64
-	activeConnections int64 // Current active connections
+	// activeConnections tracks current active connections
+	activeConnections int64
 }
 
 // NewMetrics creates a new metrics collector

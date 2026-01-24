@@ -19,7 +19,8 @@ import (
 func DropPrivileges(username string) error {
 	// Only drop if we're root
 	if os.Getuid() != 0 {
-		return nil // Already non-root, nothing to do
+		// Already non-root, nothing to do
+		return nil
 	}
 
 	// If no username specified, use the app name

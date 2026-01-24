@@ -22,7 +22,8 @@ type CVEService struct {
 	appConfig *config.AppConfig
 	dataDir   string
 	mu        sync.RWMutex
-	cveData   map[string]CVEItem // CVE-ID -> CVE details
+	// cveData maps CVE-ID to CVE details
+	cveData map[string]CVEItem
 }
 
 // CVEItem represents a CVE entry
@@ -33,8 +34,9 @@ type CVEItem struct {
 	Modified    time.Time `json:"modified"`
 	CVSS        float64   `json:"cvss"`
 	Severity    string    `json:"severity"`
-	References  []string  `json:"references"`
-	CPEs        []string  `json:"cpes"` // Common Platform Enumeration
+	References []string `json:"references"`
+	// CPEs is Common Platform Enumeration identifiers
+	CPEs []string `json:"cpes"`
 }
 
 // NVDResponse represents the NVD JSON feed structure
@@ -114,9 +116,9 @@ func (s *CVEService) Update(ctx context.Context) error {
 
 // downloadCVEFeed downloads and parses CVE data from NVD
 func (s *CVEService) downloadCVEFeed(ctx context.Context, source string) error {
-	// Create HTTP client with timeout
+	// Create HTTP client with timeout (CVE feeds can be large)
 	client := &http.Client{
-		Timeout: 120 * time.Second, // CVE feeds can be large
+		Timeout: 120 * time.Second,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", source, nil)

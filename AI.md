@@ -1111,14 +1111,14 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 ## How to Read This Large File
 
-**AI.md is ~1.9MB and ~52,200 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~1.9MB and ~52,400 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
 | File size | ~1.9MB |
-| Line count | ~52,200 lines |
+| Line count | ~52,400 lines |
 | Read limit | ~500 lines per read |
 | Full reads needed | ~105 reads (impractical) |
 
@@ -1136,39 +1136,39 @@ This distinction exists for clarity. When referring to OS-level resources that b
 | 3 | ~4046 | Project Structure | Setting up new project, **CI/CD badge detection** |
 | 4 | ~4996 | OS-Specific Paths | Path handling |
 | 5 | ~5181 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
-| 6 | ~7089 | Application Modes | Mode handling, debug endpoints |
-| 7 | ~7697 | Binary Requirements | Binary building, **Display detection** |
-| 8 | ~8280 | Server Binary CLI | CLI flags/commands |
-| 9 | ~11320 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~11697 | Database & Cluster | Database work |
-| 11 | ~12112 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
-| 12 | ~13995 | Server Configuration | Server settings |
-| 13 | ~15055 | Health & Versioning | Health endpoints |
-| 14 | ~15806 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~17398 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~18251 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~23297 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
-| 18 | ~25337 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | ~26657 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | ~27142 | GeoIP | GeoIP features |
-| 21 | ~27215 | Metrics | Prometheus metrics, **INTERNAL only** |
-| 22 | ~28660 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | ~29389 | Update Command | Update feature |
-| 24 | ~29868 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~30766 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~30950 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 27 | ~31705 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~33073 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~35927 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
-| 30 | ~37746 | ReadTheDocs Documentation | Documentation |
-| 31 | ~38459 | I18N & A11Y | Internationalization |
-| 32 | ~38880 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~40659 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~45053 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~48705 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~49346 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~50369 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~50623 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+| 6 | ~7091 | Application Modes | Mode handling, debug endpoints |
+| 7 | ~7699 | Binary Requirements | Binary building, **Display detection**, **TERM=dumb**, **NO_COLOR** |
+| 8 | ~8362 | Server Binary CLI | CLI flags/commands, **NO_COLOR Support**, **--color flag** |
+| 9 | ~11515 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~11892 | Database & Cluster | Database work |
+| 11 | ~12307 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | ~14199 | Server Configuration | Server settings |
+| 13 | ~15259 | Health & Versioning | Health endpoints |
+| 14 | ~16010 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~17602 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~18475 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~23521 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | ~25561 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | ~26881 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | ~27366 | GeoIP | GeoIP features |
+| 21 | ~27439 | Metrics | Prometheus metrics, **INTERNAL only** |
+| 22 | ~28884 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | ~29613 | Update Command | Update feature |
+| 24 | ~30092 | Privilege Escalation & Service | Service/privilege work |
+| 25 | ~30990 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~31174 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 27 | ~31929 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~33297 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~36151 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 30 | ~37970 | ReadTheDocs Documentation | Documentation |
+| 31 | ~38683 | I18N & A11Y | Internationalization |
+| 32 | ~39104 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~40883 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~45292 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~48944 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~49585 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~50608 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~50862 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -1200,7 +1200,7 @@ When reading a PART and you encounter a reference like "See PART X" or "Read PAR
 2. Jump to the referenced PART and read it
 3. **Return to your original location** and continue reading
 
-Example: If you're reading PART 5 at line 5017 and it says "See PART 10", read PART 10, then **return to PART 5 line 5017** and continue.
+Example: If you're reading PART 5 at line 5181 and it says "See PART 10", read PART 10, then **return to PART 5 line 5181** and continue.
 
 **Never abandon your current PART after following a reference.**
 
@@ -4043,27 +4043,44 @@ package main
 
 ---
 
-# PART 3: PROJECT STRUCTURE 
+# PART 3: PROJECT STRUCTURE
 
 ## Project Information
 
 | Field | Value |
 |-------|-------|
-| **Name** | {projectname} |
-| **Organization** | {projectorg} |
-| **Official Site** | https://{projectname}.{projectorg}.us |
-| **Repository** | {PLATFORM_REPO_URL} |
+| **Name** | vidveil |
+| **Organization** | apimgr |
+| **Official Site** | https://vidveil.apimgr.us |
+| **Repository** | https://github.com/apimgr/vidveil |
 | **README** | README.md |
 | **License** | MIT > LICENSE.md |
 | **Embedded Licenses** | Added to bottom of LICENSE.md |
 
 ## Project Description
 
-{Brief description of what this project does}
+VidVeil is a privacy-respecting meta search engine for adult video content. It aggregates results from 50+ video sites without tracking, logging, or analytics. Features SSE streaming for real-time results, thumbnail proxy to prevent engine tracking, and built-in Tor hidden service support. Single static binary with embedded assets.
 
 ## Project-Specific Features
 
-{List features unique to this project}
+- **Meta Search Engine**: Aggregates results from 50+ adult video sites
+- **Privacy First**: No tracking, logging, or analytics
+- **Bang Search**: `!xx query` syntax for direct site searches (e.g., `!ph amateur`)
+- **Multiple Bangs**: Support for `!ph !rt query` to search multiple sites
+- **SSE Streaming**: Real-time search results via Server-Sent Events
+- **Thumbnail Proxy**: All thumbnails proxied to prevent engine tracking users
+- **Engine Tiers**: API (Tier 1), JSON (Tier 2), HTML parsing (Tier 3+)
+- **Autocomplete**: Bang and search term suggestions
+- **Tor Support**: Built-in Tor hidden service with vanity address generation
+- **Stateless Design**: No user accounts (VidVeil is a search engine, not a platform)
+
+## VidVeil-Specific Notes
+
+- **No PART 34 (Multi-User)**: VidVeil is stateless - no user accounts
+- **No PART 35 (Organizations)**: Not applicable for stateless search engine
+- **No PART 36 (Custom Domains)**: Not applicable
+- **PART 32 (Tor)**: Implemented - privacy-focused service benefits from Tor
+- **PART 33 (Client)**: CLI client implemented with setup wizard, search, TUI
 
 ---
 
@@ -6165,6 +6182,8 @@ func (req *CreateUserRequest) Parse() (*User, error) {
 
 | Variable | Description |
 |----------|-------------|
+| `NO_COLOR` | Disable ANSI color output when set and non-empty (see PART 8) |
+| `TERM` | Terminal type; `TERM=dumb` disables ALL ANSI escapes and forces CLI mode (see PART 7) |
 | `DOMAIN` | FQDN override (highest priority for hostname resolution) |
 | `MODE` | `production` (default) or `development` |
 | `DATABASE_DRIVER` | `file`, `sqlite` (+ `sqlite2`, `sqlite3`), `libsql` (+ `turso`), `postgres` (+ `pgsql`, `postgresql`), `mysql` (+ `mariadb`), `mssql`, `mongodb` (+ `mongo`) |
@@ -7941,6 +7960,10 @@ func (e *DisplayEnv) autoDetectDisplayMode() DisplayMode {
     if !e.IsTerminal && !e.HasDisplay {
         return DisplayModeHeadless
     }
+    // TERM=dumb: force CLI mode (no TUI, no ANSI escapes)
+    if e.TerminalType == "dumb" {
+        return DisplayModeCLI
+    }
     if e.HasDisplay && !e.IsSSH && !e.IsMosh {
         return DisplayModeGUI
     }
@@ -7950,11 +7973,87 @@ func (e *DisplayEnv) autoDetectDisplayMode() DisplayMode {
     return DisplayModeCLI
 }
 
+// IsDumbTerminal - check if running in dumb terminal (no ANSI support)
+func (e *DisplayEnv) IsDumbTerminal() bool {
+    return e.TerminalType == "dumb"
+}
+
 // Helper methods with clear names
 func (e DisplayEnv) IsAutoDetectDisplayModeGUI() bool      { return e.Mode == DisplayModeGUI }
 func (e DisplayEnv) IsAutoDetectDisplayModeTUI() bool      { return e.Mode == DisplayModeTUI }
 func (e DisplayEnv) IsAutoDetectDisplayModeCLI() bool      { return e.Mode == DisplayModeCLI }
 func (e DisplayEnv) IsAutoDetectDisplayModeHeadless() bool { return e.Mode == DisplayModeHeadless }
+```
+
+### TERM=dumb Handling
+
+**When `TERM=dumb`, the terminal has NO special capabilities. ALL binaries MUST handle this.**
+
+| Feature | Normal Terminal | TERM=dumb |
+|---------|-----------------|-----------|
+| ANSI colors | ✅ Yes | ❌ No |
+| Emojis | ✅ Yes | ❌ No |
+| Cursor movement | ✅ Yes | ❌ No |
+| Clear screen | ✅ Yes | ❌ No |
+| Bold/underline | ✅ Yes | ❌ No |
+| TUI mode | ✅ Yes | ❌ No (force CLI) |
+| Spinners/progress | ✅ Yes | ❌ No (use text) |
+| Box drawing (Unicode) | ✅ Yes | ⚠️ Maybe (ASCII fallback) |
+
+**Behaviors when `TERM=dumb`:**
+
+1. **Force CLI mode** - Never launch TUI, even if interactive
+2. **No ANSI escapes** - No colors, no cursor control, no clearing
+3. **No emojis** - Use text equivalents (`[OK]`, `[ERROR]`, `[WARN]`)
+4. **Simple output** - Plain text, line-by-line
+5. **No spinners** - Use `Processing...` / `Done.` instead
+6. **No progress bars** - Use `50% complete` text instead
+7. **ASCII tables** - Use `+--+` instead of `┌──┐` box drawing
+
+**Implementation:**
+
+```go
+// Check before using any ANSI features (cursor movement, clear screen, etc.)
+// Note: NO_COLOR users typically want plain output, so we respect it here too
+func CanUseANSI(env *DisplayEnv) bool {
+    if env.IsDumbTerminal() {
+        return false
+    }
+    if os.Getenv("NO_COLOR") != "" {
+        return false  // Plain output requested
+    }
+    return env.IsTerminal
+}
+
+// Spinner that falls back gracefully
+func NewSpinner(env *DisplayEnv, message string) Spinner {
+    if env.IsDumbTerminal() {
+        return &TextSpinner{message: message}  // Just prints "Processing..."
+    }
+    return &ANSISpinner{message: message}      // Animated spinner
+}
+
+// Progress that falls back gracefully
+func ShowProgress(env *DisplayEnv, percent int) {
+    if env.IsDumbTerminal() {
+        fmt.Printf("%d%% complete\n", percent)
+        return
+    }
+    // ANSI progress bar with cursor control
+    fmt.Printf("\r[%-50s] %d%%", strings.Repeat("=", percent/2), percent)
+}
+```
+
+**Testing:**
+
+```bash
+# Test dumb terminal behavior
+TERM=dumb {projectname} --status
+TERM=dumb {projectname}-cli list
+TERM=dumb {projectname}-agent status
+
+# Should produce plain text output with no escape codes
+TERM=dumb {projectname} --status | cat -v   # No ^[ sequences
 ```
 
 ### Platform-Specific Display Detection
@@ -8289,7 +8388,7 @@ func PrintStartupBanner(cfg BannerConfig) {
 | **Agent** | `{projectname}-agent` | Reports to server | `--server`, `--token`, `--config` |
 | **Client** | `{projectname}-cli` | User interface to server | `--server`, `--token`, `--output` |
 
-**Shared flags (ALL binaries):** `--help`, `--version`, `--shell`, `--debug`
+**Shared flags (ALL binaries):** `--help`, `--version`, `--shell`, `--debug`, `--color`
 
 **Binary naming rules (ALL binaries: server, agent, client):**
 
@@ -8330,6 +8429,117 @@ Default config: /etc/apimgr/jokes/  # Hardcoded project name
 
 **For client and agent flags, see PART 33.**
 
+## NO_COLOR Support (ALL Binaries)
+
+**All binaries (server, client, agent) MUST respect the [NO_COLOR](https://no-color.org/) standard.**
+
+When the `NO_COLOR` environment variable is set and not empty (value doesn't matter), disable ANSI color codes and emojis in terminal output.
+
+| Condition | Colors | Emojis |
+|-----------|--------|--------|
+| `NO_COLOR` unset | Enabled | Enabled |
+| `NO_COLOR=""` (empty) | Enabled | Enabled |
+| `NO_COLOR=1` | **Disabled** | **Disabled** |
+| `NO_COLOR=anything` | **Disabled** | **Disabled** |
+
+**Priority order (highest to lowest):**
+
+| Priority | Source | Example |
+|----------|--------|---------|
+| 1 | CLI flag | `--color=always`, `--color=never` |
+| 2 | Config file | `output.color: false` |
+| 3 | `NO_COLOR` env var | `NO_COLOR=1` |
+| 4 | Auto-detect | TTY check, `TERM` variable |
+
+**Implementation (ALL binaries):**
+
+```go
+// ColorEnabled checks if color output should be used
+func ColorEnabled(forceColor *bool) bool {
+    // 1. CLI flag overrides everything
+    if forceColor != nil {
+        return *forceColor
+    }
+
+    // 2. Config file (if applicable)
+    if cfg := GetConfig(); cfg != nil && cfg.Output.ColorSet {
+        return cfg.Output.Color
+    }
+
+    // 3. NO_COLOR env var (non-empty = disable)
+    if os.Getenv("NO_COLOR") != "" {
+        return false
+    }
+
+    // 4. Auto-detect: TTY + TERM support
+    if !term.IsTerminal(int(os.Stdout.Fd())) {
+        return false
+    }
+    if os.Getenv("TERM") == "dumb" {
+        return false
+    }
+
+    return true
+}
+
+// EmojiEnabled checks if emoji output should be used
+func EmojiEnabled() bool {
+    // 1. Config override (force emojis on)
+    if cfg := GetConfig(); cfg != nil && cfg.Output.EmojiSet && cfg.Output.Emoji {
+        return true
+    }
+
+    // 2. NO_COLOR disables emojis (practical plain output)
+    if os.Getenv("NO_COLOR") != "" {
+        return false
+    }
+
+    // 3. TERM=dumb disables emojis
+    if os.Getenv("TERM") == "dumb" {
+        return false
+    }
+
+    // 4. Default: enabled
+    return true
+}
+```
+
+**Scope:** NO_COLOR disables:
+- ANSI color codes
+- Emojis in terminal output (practical: users wanting plain output)
+
+**NO_COLOR does NOT affect:**
+- Bold/underline/italic text styling
+- Unicode box drawing characters (tables)
+- Output structure or formatting
+
+**Config override:** To keep emojis enabled even when NO_COLOR is set:
+```yaml
+output:
+  emoji: true  # Force emojis on (overrides NO_COLOR for emojis only)
+```
+
+**Note:** For disabling ALL ANSI escapes (not just colors), use `TERM=dumb`. See PART 7 "TERM=dumb Handling".
+
+**Testing:**
+```bash
+# Colors and emojis enabled (default)
+{projectname} --status
+
+# Colors and emojis disabled via NO_COLOR
+NO_COLOR=1 {projectname} --status
+
+# Colors forced on (overrides NO_COLOR for colors only)
+NO_COLOR=1 {projectname} --status --color=always
+
+# Colors forced off (explicit)
+{projectname} --status --color=never
+
+# Verify no escape codes or emojis in output
+NO_COLOR=1 {projectname} --status | cat -v   # No ^[ sequences
+NO_COLOR=1 {projectname} --status | grep -E '✅|❌|⚠️|🚀'  # Should find nothing
+```
+
 **THESE SERVER COMMANDS CANNOT BE CHANGED. This is the complete command set.**
 
 ## Server Binary Commands
@@ -8352,6 +8562,7 @@ Default config: /etc/apimgr/jokes/  # Hardcoded project name
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
 --daemon                     # Daemonize (detach from terminal)
 --debug                      # Enable debug mode (verbose logging, debug endpoints)
+--color {always|never|auto}  # Color output (default: auto, respects NO_COLOR)
 --maintenance {backup,restore,update,mode,setup,--help} [optional-file-or-setting]
 --update [check|yes|branch {stable|beta|daily}|--help]  # Check/perform updates
 --shell {completions,init,--help} [SHELL]  # Shell integration
@@ -8388,6 +8599,7 @@ Server Configuration:
       --port PORT                   Listen port (default: random 64xxx, 80 in container)
       --daemon                      Run as daemon (detach from terminal)
       --debug                       Enable debug mode
+      --color {always|never|auto}   Color output (default: auto)
 
 Service Management:
       --service CMD                 Service management (--service --help for details)
@@ -12795,13 +13007,22 @@ server:
 - Machine-parseable format
 
 **Console output (stdout/stderr) CAN be pretty:**
-- Emojis allowed (e.g., `✅ Server started`, `❌ Error`, `⚠️ Warning`)
-- ANSI colors allowed
+- Emojis allowed (e.g., `✅ Server started`, `❌ Error`, `⚠️ Warning`) - respects `NO_COLOR`
+- ANSI colors allowed - respects `NO_COLOR` env var (see PART 8)
 - Pretty formatting allowed
 - Used for start/stop/restart/status messages
 - User-facing CLI output can be visually appealing
 
-**Rule:** Log files = raw/plain text. Console = pretty is OK.
+**Emoji fallbacks (when `NO_COLOR` set or `TERM=dumb`):**
+
+| With Emojis | Plain Text Fallback |
+|-------------|---------------------|
+| `✅ Server started` | `[OK] Server started` |
+| `❌ Error occurred` | `[ERROR] Error occurred` |
+| `⚠️ Warning: ...` | `[WARN] Warning: ...` |
+| `ℹ️ Info: ...` | `[INFO] Info: ...` |
+
+**Rule:** Log files = raw/plain text. Console = pretty is OK (respecting `NO_COLOR`, `TERM=dumb`, and `--color` flag).
 
 ### Log Rotation
 
@@ -17754,6 +17975,7 @@ func isDevTLD(host, projectName string) bool {
 
 | Terminal Size | Banner Style | Example |
 |---------------|--------------|---------|
+| **NO_COLOR / TERM=dumb** | Plain text only, no emojis | `AppName v1.0.0` |
 | **≥80 cols** | Full ASCII art + icons + URLs | Full branded banner |
 | **60-79 cols** | Icons + text only, no ASCII art | `🚀 AppName v1.0.0` |
 | **40-59 cols** | Minimal text, abbreviated | `AppName 1.0.0 :8080` |
@@ -17775,6 +17997,15 @@ func PrintServerStartupBanner(appName, version, appMode string, urls []string) {
         width = 80 // Default
     }
 
+    // Check for plain output mode (NO_COLOR or TERM=dumb)
+    plainMode := os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb"
+
+    if plainMode {
+        // Plain text banner (no emojis, no ASCII art)
+        printServerBannerPlain(appName, version, appMode, urls)
+        return
+    }
+
     switch {
     case width >= 80:
         printServerBannerFull(appName, version, appMode, urls)
@@ -17785,6 +18016,16 @@ func PrintServerStartupBanner(appName, version, appMode string, urls []string) {
     default:
         printServerBannerMicro(appName, urls)
     }
+}
+
+func printServerBannerPlain(appName, version, appMode string, urls []string) {
+    // Plain text - no emojis, no ASCII art
+    fmt.Printf("%s v%s\n", appName, version)
+    fmt.Printf("Mode: %s\n", appMode)
+    for _, url := range urls {
+        fmt.Printf("  %s\n", url)
+    }
+    fmt.Println()
 }
 
 func printServerBannerFull(appName, version, appMode string, urls []string) {
@@ -29871,7 +30112,7 @@ func verifyChecksum(filePath, expectedHash string) error {
 
 Application user creation **REQUIRES** privilege escalation. If the user cannot escalate privileges, the application runs as the current user with user-level directories.
 
-**IMPORTANT: See PART 5 "Smart Escalation Logic" (lines ~6059-6094) for the complete escalation flow:**
+**IMPORTANT: See PART 5 "Smart Escalation Logic" (lines ~6493-6528) for the complete escalation flow:**
 - Binary first checks if already root/admin → skips escalation prompt entirely
 - Only prompts if user CAN actually escalate (is in sudoers/wheel/admin group)
 - Never prompts if user cannot escalate → shows informative error instead
@@ -42813,12 +43054,13 @@ Enter choice [1-4]:
 
 ## Standard Flags 
 
-### Universal Flags (ALL CLIs)
+### Universal Flags (ALL Binaries)
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--help` | `-h` | Show help |
 | `--version` | `-v` | Show version |
+| `--color {always\|never\|auto}` | — | Color output (default: auto, respects `NO_COLOR`) |
 
 **Only `-h` and `-v` have short forms. Everything else is long-form only.**
 
@@ -42871,10 +43113,11 @@ server:
 
 **Examples:**
 ```bash
---public=yes   OR  --public yes
---expire=24h   OR  --expire 24h
---limit=10     OR  --limit 10
---output=json  OR  --output json
+--public=yes    OR  --public yes
+--expire=24h    OR  --expire 24h
+--limit=10      OR  --limit 10
+--output=json   OR  --output json
+--color=always  OR  --color always
 ```
 
 ### Project-Specific Flags (by service type)
@@ -43107,6 +43350,7 @@ Flags:
       --user NAME                   Target user or org (auto-detect, @user, +org)
       --config NAME                 Config profile name (default: cli.yml)
       --debug                       Debug output
+      --color {always|never|auto}   Color output (default: auto)
 
 Administration (requires admin token):
       --admin CMD                   Admin operations (--admin --help for details)
@@ -44375,6 +44619,16 @@ web-server-01 → monitor.example.com
 Connected
 ```
 
+**Plain banner (NO_COLOR / TERM=dumb):**
+```
+monitor-agent v1.0.0
+Mode: production
+Server: https://monitor.example.com
+Hostname: web-server-01
+Tags: production, web-tier
+[OK] Connected to server
+```
+
 ### Agent Flags 
 
 **Same flag style as server binary, EXCEPT no `--port` or `--address` (agents don't serve web).**
@@ -44409,6 +44663,7 @@ Connected
 # Runtime
 --mode {production|development}  # Force mode (auto-detected by default)
 --debug                       # Enable debug logging (implies development features)
+--color {always|never|auto}   # Color output (default: auto, respects NO_COLOR)
 
 # Commands (subcommands like server)
 status                        # Show agent status
@@ -44452,6 +44707,7 @@ Flags:
 
       --mode {production|development}  Application mode
       --debug                       Enable debug mode
+      --color {always|never|auto}   Color output (default: auto)
       --status                      Show agent health
 
       --service CMD                 Service management (install|uninstall|start|stop|restart)

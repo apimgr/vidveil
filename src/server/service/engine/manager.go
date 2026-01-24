@@ -153,7 +153,8 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 	var allResults []model.VideoResult
 	var enginesUsed []string
 	var enginesFailed []string
-	seen := make(map[string]bool) // Track seen URLs for deduplication
+	// Track seen URLs for deduplication
+	seen := make(map[string]bool)
 
 	minDuration := m.appConfig.Search.MinDurationSeconds
 

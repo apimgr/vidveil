@@ -118,7 +118,8 @@ func IsRetryable(err error) bool {
 		return true
 	}
 	if errors.Is(err, context.Canceled) {
-		return false // Don't retry if context was canceled
+		// Don't retry if context was canceled
+		return false
 	}
 
 	// Network errors

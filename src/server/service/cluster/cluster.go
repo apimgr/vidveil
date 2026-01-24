@@ -36,18 +36,25 @@ type DistributedLock struct {
 }
 
 // Node state constants per AI.md PART 10
+// NodeStateHealthy: Heartbeat received within 30 seconds
+// NodeStateDegraded: Heartbeat missed (30-90 seconds)
+// NodeStateOffline: No heartbeat for 5+ minutes
+// NodeStateRemoved: Manually removed by admin
 const (
-	NodeStateHealthy  = "healthy"  // Heartbeat received within 30 seconds
-	NodeStateDegraded = "degraded" // Heartbeat missed (30-90 seconds)
-	NodeStateOffline  = "offline"  // No heartbeat for 5+ minutes
-	NodeStateRemoved  = "removed"  // Manually removed by admin
+	NodeStateHealthy  = "healthy"
+	NodeStateDegraded = "degraded"
+	NodeStateOffline  = "offline"
+	NodeStateRemoved  = "removed"
 )
 
 // Timing constants per AI.md PART 10
+// HeartbeatInterval: How often nodes send heartbeats
+// DegradedThreshold: 3 missed heartbeats = degraded
+// OfflineThreshold: No heartbeat for 5 min = offline
 const (
-	HeartbeatInterval   = 30 * time.Second // How often nodes send heartbeats
-	DegradedThreshold   = 90 * time.Second // 3 missed heartbeats = degraded
-	OfflineThreshold    = 5 * time.Minute  // No heartbeat for 5 min = offline
+	HeartbeatInterval = 30 * time.Second
+	DegradedThreshold = 90 * time.Second
+	OfflineThreshold  = 5 * time.Minute
 )
 
 // ClusterManager handles cluster operations per AI.md PART 10
@@ -71,12 +78,13 @@ func NewClusterManager(db *sql.DB) (*ClusterManager, error) {
 		return nil, fmt.Errorf("failed to generate node ID: %w", err)
 	}
 
+	// Timing values per PART 10: 30s heartbeat, 90s degraded, 5min offline
 	return &ClusterManager{
 		nodeID:       nodeID,
 		db:           db,
-		heartbeatInt: HeartbeatInterval, // 30 seconds per PART 10
-		degradedTime: DegradedThreshold, // 90 seconds per PART 10
-		offlineTime:  OfflineThreshold,  // 5 minutes per PART 10
+		heartbeatInt: HeartbeatInterval,
+		degradedTime: DegradedThreshold,
+		offlineTime:  OfflineThreshold,
 	}, nil
 }
 

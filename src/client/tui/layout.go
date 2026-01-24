@@ -6,13 +6,20 @@ package tui
 type LayoutMode int
 
 const (
-	LayoutMicro     LayoutMode = iota // <40 cols
-	LayoutMinimal                     // 40-59 cols
-	LayoutCompact                     // 60-79 cols
-	LayoutStandard                    // 80-119 cols
-	LayoutWide                        // 120-199 cols
-	LayoutUltrawide                   // 200-399 cols
-	LayoutMassive                     // 400+ cols
+	// LayoutMicro is micro layout (<40 cols)
+	LayoutMicro LayoutMode = iota
+	// LayoutMinimal is minimal layout (40-59 cols)
+	LayoutMinimal
+	// LayoutCompact is compact layout (60-79 cols)
+	LayoutCompact
+	// LayoutStandard is standard layout (80-119 cols)
+	LayoutStandard
+	// LayoutWide is wide layout (120-199 cols)
+	LayoutWide
+	// LayoutUltrawide is ultrawide layout (200-399 cols)
+	LayoutUltrawide
+	// LayoutMassive is massive layout (400+ cols)
+	LayoutMassive
 )
 
 // String returns the string representation of the layout mode
@@ -144,11 +151,16 @@ func (m LayoutMode) Config() LayoutConfig {
 
 // Spacing constants per AI.md PART 33
 const (
-	SpaceXS = 1 // Micro spacing
-	SpaceS  = 2 // Small spacing
-	SpaceM  = 4 // Medium spacing
-	SpaceL  = 6 // Large spacing
-	SpaceXL = 8 // Extra large spacing
+	// SpaceXS is micro spacing
+	SpaceXS = 1
+	// SpaceS is small spacing
+	SpaceS = 2
+	// SpaceM is medium spacing
+	SpaceM = 4
+	// SpaceL is large spacing
+	SpaceL = 6
+	// SpaceXL is extra large spacing
+	SpaceXL = 8
 )
 
 // Spacing returns appropriate spacing for layout mode

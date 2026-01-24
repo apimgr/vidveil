@@ -18,7 +18,8 @@ func (e *DisplayEnv) detectDisplay() {
 func (e *DisplayEnv) detectWindowsDisplay() {
 	// Windows: check for console vs GUI session
 	e.DisplayType = "windows"
-	e.HasDisplay = true // Windows desktop always available unless service
+	// Windows desktop always available unless service
+	e.HasDisplay = true
 
 	// Detect Windows service mode (no display)
 	if os.Getenv("USERPROFILE") == "" {

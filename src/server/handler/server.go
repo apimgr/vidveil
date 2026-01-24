@@ -88,15 +88,17 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName
 	// Build common template data per AI.md PART 16
 	versionInfo := version.GetVersionInfo()
 	appName := h.appConfig.Server.Title
+	// Required fields by head.tmpl: Title
+	// Required fields by nav.tmpl: ActiveNav, Query
 	data := map[string]interface{}{
-		"Title":          appName,                     // Required by head.tmpl
+		"Title":          appName,
 		"AppName":        appName,
 		"AppDescription": h.appConfig.Server.Description,
 		"Version":        versionInfo["version"],
 		"BuildDateTime":  versionInfo["build_time"],
 		"Theme":          "dark",
-		"ActiveNav":      templateName,                // Required by nav.tmpl
-		"Query":          "",                          // Required by nav.tmpl
+		"ActiveNav":      templateName,
+		"Query":          "",
 	}
 
 	// Merge extra data
@@ -136,9 +138,9 @@ func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Show contact form
+	// Show contact form - contact form always available
 	h.renderServerTemplate(w, "server-contact", map[string]interface{}{
-		"ContactEnabled": true, // Contact form always available
+		"ContactEnabled": true,
 	})
 }
 

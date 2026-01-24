@@ -616,10 +616,12 @@ func IsRunningInContainer() bool {
 
 	// Environment variable detection per AI.md PART 8 7743-7748
 	if os.Getenv("container") != "" {
-		return true // Generic (systemd-nspawn, lxc, etc.)
+		// Generic (systemd-nspawn, lxc, etc.)
+		return true
 	}
 	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
-		return true // Kubernetes
+		// Kubernetes
+		return true
 	}
 
 	// Check parent process name for container init systems per AI.md PART 8 7752-7758

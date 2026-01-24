@@ -23,9 +23,12 @@ type BlocklistService struct {
 	appConfig *config.AppConfig
 	dataDir   string
 	mu        sync.RWMutex
-	ipBlocks  map[string]bool // IP addresses to block
-	subnets   []*net.IPNet    // CIDR blocks to check
-	domains   map[string]bool // Domains to block
+	// ipBlocks contains IP addresses to block
+	ipBlocks map[string]bool
+	// subnets contains CIDR blocks to check
+	subnets []*net.IPNet
+	// domains contains domains to block
+	domains map[string]bool
 }
 
 // NewBlocklistService creates a new blocklist service

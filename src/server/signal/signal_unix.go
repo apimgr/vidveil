@@ -102,7 +102,8 @@ func WaitForShutdown(ctx context.Context) os.Signal {
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
 	)
-	signal.Notify(quit, syscall.Signal(37)) // SIGRTMIN+3
+	// SIGRTMIN+3 for systemd socket activation
+	signal.Notify(quit, syscall.Signal(37))
 
 	// Ignore SIGHUP per PART 8
 	signal.Ignore(syscall.SIGHUP)

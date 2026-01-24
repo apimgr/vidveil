@@ -118,7 +118,7 @@ _%s_completions() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     commands="search login shell help version"
-    opts="--server --token --token-file --config --output --no-color --timeout --debug -h --help -v --version"
+    opts="--server --token --token-file --config --output --color --timeout --debug -h --help -v --version"
 
     case "${prev}" in
         --server|--token|--token-file|--config)
@@ -126,6 +126,10 @@ _%s_completions() {
             ;;
         --output)
             COMPREPLY=( $(compgen -W "json table plain" -- "${cur}") )
+            return 0
+            ;;
+        --color)
+            COMPREPLY=( $(compgen -W "always never auto" -- "${cur}") )
             return 0
             ;;
         --timeout)
@@ -178,7 +182,7 @@ __%s() {
         '--token-file[Token file]:file:_files'
         '--config[Config file]:file:_files'
         '--output[Output format]:format:(json table plain)'
-        '--no-color[Disable colored output]'
+        '--color[Color output]:color:(always never auto)'
         '--timeout[Request timeout in seconds]:seconds:'
         '--debug[Enable debug output]'
         '-h[Show help]'
@@ -238,7 +242,7 @@ complete -c %s -l token -d "API token" -r
 complete -c %s -l token-file -d "Token file" -r -F
 complete -c %s -l config -d "Config file" -r -F
 complete -c %s -l output -d "Output format" -r -a "json table plain"
-complete -c %s -l no-color -d "Disable colored output"
+complete -c %s -l color -d "Color output" -r -a "always never auto"
 complete -c %s -l timeout -d "Request timeout" -r
 complete -c %s -l debug -d "Enable debug output"
 complete -c %s -s h -l help -d "Show help"
@@ -279,7 +283,7 @@ Register-ArgumentCompleter -Native -CommandName %s -ScriptBlock {
         [CompletionResult]::new('--token-file', '--token-file', 'ParameterName', 'Token file')
         [CompletionResult]::new('--config', '--config', 'ParameterName', 'Config file')
         [CompletionResult]::new('--output', '--output', 'ParameterName', 'Output format')
-        [CompletionResult]::new('--no-color', '--no-color', 'ParameterName', 'Disable colors')
+        [CompletionResult]::new('--color', '--color', 'ParameterName', 'Color output (always/never/auto)')
         [CompletionResult]::new('--timeout', '--timeout', 'ParameterName', 'Timeout')
         [CompletionResult]::new('--debug', '--debug', 'ParameterName', 'Debug mode')
         [CompletionResult]::new('-h', '-h', 'ParameterName', 'Help')

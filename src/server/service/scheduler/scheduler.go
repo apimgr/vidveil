@@ -59,7 +59,8 @@ type Scheduler struct {
 	cancel   context.CancelFunc
 	running  bool
 	maxHist  int
-	db       *sql.DB // Optional database for persistence per AI.md PART 19
+	// Optional database for persistence per AI.md PART 19
+	db *sql.DB
 }
 
 // NewScheduler creates a new scheduler without database persistence
@@ -719,9 +720,10 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 
 	// backup.auto - Per AI.md PART 22: Daily at 02:00, disabled by default
 	if funcs.BackupAuto != nil {
+		// Cron: 02:00 daily per AI.md PART 22
 		s.RegisterTask("backup.auto", "Automatic Backup",
 			"Create automatic backups of configuration and databases",
-			"0 2 * * *", funcs.BackupAuto) // Cron: 02:00 daily per AI.md PART 22
+			"0 2 * * *", funcs.BackupAuto)
 		// Disable by default per AI.md PART 26
 		s.DisableTask("backup.auto")
 	}

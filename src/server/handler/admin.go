@@ -2666,7 +2666,8 @@ func (h *AdminHandler) generateCSRFToken(w http.ResponseWriter) string {
 		Value:    token,
 		Path:     "/admin",
 		MaxAge:   int(adminSessionDuration.Seconds()),
-		HttpOnly: false, // JS needs to read for AJAX X-CSRF-Token header
+		// JS needs to read for AJAX X-CSRF-Token header
+		HttpOnly: false,
 		SameSite: http.SameSiteStrictMode,
 		Secure:   h.appConfig.Server.SSL.Enabled,
 	}
@@ -4017,7 +4018,8 @@ func (h *AdminHandler) readLogEntries(logType string, limit int, search string) 
 	file, err := os.Open(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []LogEntry{}, nil // Empty log is not an error
+			// Empty log is not an error
+			return []LogEntry{}, nil
 		}
 		return nil, err
 	}

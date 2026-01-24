@@ -16,8 +16,8 @@ function setTheme(theme) {
 }
 
 function getTheme() {
-    // Default to 'auto' to respect system preference per AI.md PART 16
-    return localStorage.getItem('vidveil-theme') || 'auto';
+    // Default to 'dark' per AI.md PART 16: Dark theme is DEFAULT
+    return localStorage.getItem('vidveil-theme') || 'dark';
 }
 
 // Get the effective theme (resolves 'auto' to actual light/dark)

@@ -29,7 +29,8 @@ type AuthHandler struct {
 	appConfig   *config.AppConfig
 	adminHdl    *AdminHandler
 	totpSvc     *totp.TOTPService
-	pendingAuth map[string]*PendingAuth // pending 2FA tokens
+	// pendingAuth stores pending 2FA authentication tokens
+	pendingAuth map[string]*PendingAuth
 	mu          sync.RWMutex
 }
 
@@ -127,7 +128,8 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 						"vidveil_pending_2fa",
 						pendingToken,
 						"/auth",
-						300, // 5 minutes
+						// 5 minutes
+					300,
 						h.appConfig.Server.SSL.Enabled,
 					))
 

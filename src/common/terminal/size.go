@@ -13,13 +13,20 @@ import (
 type SizeMode int
 
 const (
-	SizeModeMicro     SizeMode = iota // <40 cols or <10 rows
-	SizeModeMinimal                   // 40-59 cols or 10-15 rows
-	SizeModeCompact                   // 60-79 cols or 16-23 rows
-	SizeModeStandard                  // 80-119 cols and 24-39 rows
-	SizeModeWide                      // 120-199 cols and 40-59 rows
-	SizeModeUltrawide                 // 200-399 cols and 60-79 rows
-	SizeModeMassive                   // 400+ cols and 80+ rows
+	// SizeModeMicro: <40 cols or <10 rows
+	SizeModeMicro SizeMode = iota
+	// SizeModeMinimal: 40-59 cols or 10-15 rows
+	SizeModeMinimal
+	// SizeModeCompact: 60-79 cols or 16-23 rows
+	SizeModeCompact
+	// SizeModeStandard: 80-119 cols and 24-39 rows
+	SizeModeStandard
+	// SizeModeWide: 120-199 cols and 40-59 rows
+	SizeModeWide
+	// SizeModeUltrawide: 200-399 cols and 60-79 rows
+	SizeModeUltrawide
+	// SizeModeMassive: 400+ cols and 80+ rows
+	SizeModeMassive
 )
 
 // TerminalSize holds terminal dimensions and size mode

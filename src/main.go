@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/paths"
@@ -39,11 +40,12 @@ import (
 )
 
 // Build info - set via -ldflags at build time per PART 7
+// OfficialSite: Empty = users must use --server flag for CLI client
 var (
 	Version      = "dev"
 	CommitID     = "unknown"
 	BuildDate    = "unknown"
-	OfficialSite = "" // Empty = users must use --server flag for CLI client
+	OfficialSite = ""
 )
 
 func init() {
@@ -70,11 +72,14 @@ func main() {
 		modeStr      string
 		debug        bool
 		daemon       bool
+		// Per AI.md PART 8: --color flag (always, never, auto)
+		colorFlag    string
 		serviceCmd   string
 		maintCmd     string
-		maintArg     string
-		maintPassword string // Per AI.md PART 22: encryption password for backup/restore
-		updateCmd    string
+		maintArg string
+		// Per AI.md PART 22: encryption password for backup/restore
+		maintPassword string
+		updateCmd     string
 		updateArg    string
 	)
 
@@ -171,6 +176,13 @@ func main() {
 		case "--debug":
 			debug = true
 
+		case "--color":
+			// Per AI.md PART 8: --color {always|never|auto}
+			if i+1 < len(args) {
+				i++
+				colorFlag = args[i]
+			}
+
 		case "--service":
 			if i+1 < len(args) {
 				i++
@@ -230,9 +242,17 @@ func main() {
 				port = strings.TrimPrefix(arg, "--port=")
 			} else if strings.HasPrefix(arg, "--mode=") {
 				modeStr = strings.TrimPrefix(arg, "--mode=")
+			} else if strings.HasPrefix(arg, "--color=") {
+				colorFlag = strings.TrimPrefix(arg, "--color=")
 			}
 		}
 		i++
+	}
+
+	// Per AI.md PART 8: Initialize color mode early (before any output)
+	// Priority: CLI flag > config > NO_COLOR env > auto-detect
+	if colorFlag != "" {
+		terminal.SetColorMode(terminal.ParseColorFlag(colorFlag))
 	}
 
 	// Handle service command
@@ -525,7 +545,8 @@ func main() {
 			// Heartbeat runs automatically via cluster manager's heartbeatLoop()
 			// This task just verifies cluster is healthy
 			if clusterMgr == nil || !clusterMgr.IsEnabled() {
-				return nil // Single instance mode - no clustering
+				// Single instance mode - no clustering
+				return nil
 			}
 			// Cluster manager handles heartbeats automatically
 			// Just verify we're still registered
@@ -700,7 +721,7 @@ func main() {
 	// Handles: SIGTERM(15), SIGINT(2), SIGQUIT(3), SIGRTMIN+3(37)
 	// Ignores: SIGHUP(1) - config auto-reloads via file watcher
 	sig := signalpkg.WaitForShutdown(context.Background())
-	fmt.Printf("\n🛑 Received %v, shutting down gracefully...\n", sig)
+	fmt.Printf("\n%s Received %v, shutting down gracefully...\n", terminal.StopIcon(), sig)
 
 	// Graceful shutdown with timeout (30 seconds per AI.md PART 8)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -711,7 +732,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("✅ Server stopped")
+	fmt.Printf("%s Server stopped\n", terminal.StatusIcon(true))
 }
 
 func printHelp() {
@@ -744,6 +765,7 @@ Server Configuration:
       --port PORT                   Listen port (default: random 64xxx, 80 in container)
       --daemon                      Run as daemon (detach from terminal)
       --debug                       Enable debug mode
+      --color {always|never|auto}   Color output (default: auto, respects NO_COLOR)
 
 Service Management:
       --service CMD                 Service management (--service --help for details)
@@ -891,7 +913,7 @@ func printInit(shell, binaryName string) {
 func printBashCompletions(binaryName string) {
 	fmt.Printf(`_%s_completions() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
-    local opts="--help --version --shell --config --data --cache --log --backup --pid --address --port --mode --status --daemon --debug --service --maintenance --update"
+    local opts="--help --version --shell --config --data --cache --log --backup --pid --address --port --mode --status --daemon --debug --color --service --maintenance --update"
     COMPREPLY=($(compgen -W "$opts" -- "$cur"))
 }
 complete -F _%s_completions %s
@@ -917,6 +939,7 @@ _arguments \
     '--status[Show status]' \
     '--daemon[Run as daemon]' \
     '--debug[Enable debug mode]' \
+    '--color[Color output]:color:(always never auto)' \
     '--service[Service command]:command:(start stop restart reload status install uninstall)' \
     '--maintenance[Maintenance command]:command:(backup restore update mode setup)' \
     '--update[Update command]:command:(check yes)'
@@ -939,10 +962,11 @@ complete -c %s -l mode -d 'Application mode' -xa 'production development'
 complete -c %s -l status -d 'Show status'
 complete -c %s -l daemon -d 'Run as daemon'
 complete -c %s -l debug -d 'Enable debug mode'
+complete -c %s -l color -d 'Color output' -xa 'always never auto'
 complete -c %s -l service -d 'Service command' -xa 'start stop restart reload status install uninstall'
 complete -c %s -l maintenance -d 'Maintenance command' -xa 'backup restore update mode setup'
 complete -c %s -l update -d 'Update command' -xa 'check yes'
-`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
+`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 }
 
 func printPowerShellCompletions(binaryName string) {
@@ -951,7 +975,7 @@ func printPowerShellCompletions(binaryName string) {
     $completions = @(
         '--help', '--version', '--shell', '--config', '--data', '--cache',
         '--log', '--backup', '--pid', '--address', '--port', '--mode',
-        '--status', '--daemon', '--debug', '--service', '--maintenance', '--update'
+        '--status', '--daemon', '--debug', '--color', '--service', '--maintenance', '--update'
     )
     $completions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)

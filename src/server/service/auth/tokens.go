@@ -15,21 +15,30 @@ import (
 
 // TokenPrefix types per PART 11
 const (
-	PrefixAdmin    = "adm_"     // Admin primary token (all projects)
-	PrefixUser     = "usr_"     // User primary token (multi-user)
-	PrefixOrg      = "org_"     // Organization token (orgs)
-	PrefixAdminAgt = "adm_agt_" // Admin agent token
-	PrefixUserAgt  = "usr_agt_" // User agent token
-	PrefixOrgAgt   = "org_agt_" // Org agent token
+	// PrefixAdmin is admin primary token (all projects)
+	PrefixAdmin = "adm_"
+	// PrefixUser is user primary token (multi-user)
+	PrefixUser = "usr_"
+	// PrefixOrg is organization token (orgs)
+	PrefixOrg = "org_"
+	// PrefixAdminAgt is admin agent token
+	PrefixAdminAgt = "adm_agt_"
+	// PrefixUserAgt is user agent token
+	PrefixUserAgt = "usr_agt_"
+	// PrefixOrgAgt is org agent token
+	PrefixOrgAgt = "org_agt_"
 )
 
 // TokenScope defines access level per PART 11
 type TokenScope string
 
 const (
-	ScopeGlobal    TokenScope = "global"     // All permissions owner has access to
-	ScopeReadWrite TokenScope = "read-write" // Read and write (no delete, no admin)
-	ScopeRead      TokenScope = "read"       // Read-only operations
+	// ScopeGlobal grants all permissions owner has access to
+	ScopeGlobal TokenScope = "global"
+	// ScopeReadWrite grants read and write (no delete, no admin)
+	ScopeReadWrite TokenScope = "read-write"
+	// ScopeRead grants read-only operations
+	ScopeRead TokenScope = "read"
 )
 
 // ExpirationOptions per AI.md PART 11
@@ -43,11 +52,16 @@ var ExpirationOptions = map[string]time.Duration{
 
 // TokenInfo holds validated token information
 type TokenInfo struct {
-	OwnerType string     // 'admin', 'user', 'org'
-	OwnerID   int64      // admin.id, user.id, or org.id
-	Name      string     // User-provided label
-	Scope     TokenScope // 'global', 'read-write', 'read'
-	IsAgent   bool       // Whether this is an agent token
+	// OwnerType is 'admin', 'user', or 'org'
+	OwnerType string
+	// OwnerID is admin.id, user.id, or org.id
+	OwnerID int64
+	// Name is user-provided label
+	Name string
+	// Scope is 'global', 'read-write', or 'read'
+	Scope TokenScope
+	// IsAgent indicates whether this is an agent token
+	IsAgent bool
 }
 
 // GenerateToken creates a secure token with prefix per PART 11

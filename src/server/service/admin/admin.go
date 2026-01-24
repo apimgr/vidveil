@@ -877,7 +877,8 @@ func (s *AdminService) UseBackupCode(adminID int64, code string) (bool, error) {
 		normalized := strings.ToUpper(strings.ReplaceAll(c, "-", ""))
 		if normalized == code {
 			found = true
-			continue // Skip this code (remove it)
+			// Skip this code (remove it)
+			continue
 		}
 		newCodes = append(newCodes, c)
 	}

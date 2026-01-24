@@ -19,7 +19,8 @@ func NewSecureCookie(name, value, path string, maxAge int, sslEnabled bool) *htt
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   sslEnabled, // Per AI.md PART 11: Secure flag when SSL enabled
+		// Per AI.md PART 11: Secure flag when SSL enabled
+		Secure: sslEnabled,
 	}
 	return cookie
 }
@@ -204,7 +205,8 @@ func isTextBrowser(r *http.Request) bool {
 	for i := 0; i < len(ua) && i < 8; i++ {
 		c := ua[i]
 		if c >= 'A' && c <= 'Z' {
-			c = c + 32 // to lowercase
+			// to lowercase
+			c = c + 32
 		}
 		ual += string(c)
 	}
@@ -218,7 +220,8 @@ func isTextBrowser(r *http.Request) bool {
 func isHttpTool(r *http.Request) bool {
 	ua := r.Header.Get("User-Agent")
 	if ua == "" {
-		return true // Empty UA = likely HTTP tool
+		// Empty UA = likely HTTP tool
+		return true
 	}
 	if len(ua) < 4 {
 		return false

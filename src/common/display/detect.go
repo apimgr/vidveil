@@ -12,16 +12,26 @@ import (
 
 // DisplayEnv holds information about the current display environment
 type DisplayEnv struct {
-	Mode         DisplayMode // Current display mode
-	HasDisplay   bool        // X11, Wayland, Windows, macOS display
-	DisplayType  string      // "x11", "wayland", "windows", "macos", "none"
-	IsTerminal   bool        // stdout is a TTY
-	IsSSH        bool        // Running over SSH
-	IsMosh       bool        // Running over mosh
-	IsScreen     bool        // Running in screen/tmux
-	TerminalType string      // TERM value
-	Cols         int         // Terminal columns (0 if no terminal)
-	Rows         int         // Terminal rows (0 if no terminal)
+	// Mode is the current display mode
+	Mode DisplayMode
+	// HasDisplay indicates X11, Wayland, Windows, or macOS display
+	HasDisplay bool
+	// DisplayType is "x11", "wayland", "windows", "macos", or "none"
+	DisplayType string
+	// IsTerminal indicates stdout is a TTY
+	IsTerminal bool
+	// IsSSH indicates running over SSH
+	IsSSH bool
+	// IsMosh indicates running over mosh
+	IsMosh bool
+	// IsScreen indicates running in screen/tmux
+	IsScreen bool
+	// TerminalType is the TERM environment value
+	TerminalType string
+	// Cols is terminal columns (0 if no terminal)
+	Cols int
+	// Rows is terminal rows (0 if no terminal)
+	Rows int
 }
 
 // DetectDisplayEnv detects the current display environment

@@ -22,15 +22,22 @@ func IsTextBrowser(r *http.Request) bool {
 	ua := strings.ToLower(r.Header.Get("User-Agent"))
 
 	// Text browsers - INTERACTIVE, NO JavaScript support
+	// lynx: Lynx - classic text browser
+	// w3m: w3m - text browser with table support
+	// links: Links - text browser (note: space after for matching)
+	// elinks: ELinks - enhanced links
+	// browsh: Browsh - modern text browser
+	// carbonyl: Carbonyl - Chromium in terminal
+	// netsurf: NetSurf - lightweight browser (limited JS)
 	textBrowsers := []string{
-		"lynx/",      // Lynx - classic text browser
-		"w3m/",       // w3m - text browser with table support
-		"links ",     // Links - text browser (note: space after)
-		"links/",     // Links alternative format
-		"elinks/",    // ELinks - enhanced links
-		"browsh/",    // Browsh - modern text browser
-		"carbonyl/",  // Carbonyl - Chromium in terminal
-		"netsurf",    // NetSurf - lightweight browser (limited JS)
+		"lynx/",
+		"w3m/",
+		"links ",
+		"links/",
+		"elinks/",
+		"browsh/",
+		"carbonyl/",
+		"netsurf",
 	}
 	for _, browser := range textBrowsers {
 		if strings.Contains(ua, browser) {

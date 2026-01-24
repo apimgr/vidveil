@@ -77,7 +77,8 @@ func NewAppDatabase(cfg DatabaseConfig) (*AppDatabase, error) {
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
-	db.SetConnMaxIdleTime(1 * time.Minute) // Per PART 10 requirement
+	// Per PART 10 requirement
+	db.SetConnMaxIdleTime(1 * time.Minute)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -325,13 +326,20 @@ func (d *AppDatabase) Version() (string, error) {
 
 // Query timeout constants per AI.md PART 10
 const (
-	TimeoutSimpleSelect  = 5 * time.Second  // Simple SELECT queries
-	TimeoutComplexSelect = 15 * time.Second // Complex SELECT with JOINs
-	TimeoutWrite         = 10 * time.Second // INSERT/UPDATE/DELETE
-	TimeoutBulk          = 60 * time.Second // Bulk operations
-	TimeoutMigration     = 5 * time.Minute  // Schema changes
-	TimeoutReport        = 2 * time.Minute  // Aggregation reports
-	TimeoutTransaction   = 30 * time.Second // Default transaction timeout
+	// TimeoutSimpleSelect for simple SELECT queries
+	TimeoutSimpleSelect = 5 * time.Second
+	// TimeoutComplexSelect for complex SELECT with JOINs
+	TimeoutComplexSelect = 15 * time.Second
+	// TimeoutWrite for INSERT/UPDATE/DELETE
+	TimeoutWrite = 10 * time.Second
+	// TimeoutBulk for bulk operations
+	TimeoutBulk = 60 * time.Second
+	// TimeoutMigration for schema changes
+	TimeoutMigration = 5 * time.Minute
+	// TimeoutReport for aggregation reports
+	TimeoutReport = 2 * time.Minute
+	// TimeoutTransaction is default transaction timeout
+	TimeoutTransaction = 30 * time.Second
 )
 
 // WithTimeout creates a context with the specified timeout

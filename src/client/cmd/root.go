@@ -10,6 +10,7 @@ import (
 	"github.com/apimgr/vidveil/src/client/api"
 	"github.com/apimgr/vidveil/src/client/paths"
 	"github.com/apimgr/vidveil/src/common/display"
+	"github.com/apimgr/vidveil/src/common/terminal"
 	"gopkg.in/yaml.v3"
 )
 
@@ -49,7 +50,8 @@ var (
 	apiTokenFlag          string
 	tokenFilePath         string
 	outputFormatFlag      string
-	colorDisabled         bool
+	// Per AI.md PART 8: --color flag (always, never, auto)
+	colorFlag             string
 	requestTimeoutSeconds int
 	debugModeEnabled      bool
 )
@@ -198,8 +200,17 @@ func ParseCLIGlobalFlags(args []string) []string {
 			} else {
 				i++
 			}
+		case "--color":
+			// Per AI.md PART 8: --color {always|never|auto}
+			if i+1 < len(args) {
+				colorFlag = args[i+1]
+				i += 2
+			} else {
+				i++
+			}
 		case "--no-color":
-			colorDisabled = true
+			// Legacy flag - equivalent to --color never
+			colorFlag = "never"
 			i++
 		case "--timeout":
 			if i+1 < len(args) {
@@ -305,9 +316,14 @@ func LoadCLIConfigFromFile() {
 	if requestTimeoutSeconds > 0 {
 		cliConfig.Server.Timeout = requestTimeoutSeconds
 	}
-	if colorDisabled {
-		cliConfig.Output.Color = "never"
+	// Per AI.md PART 8: --color flag overrides config
+	if colorFlag != "" {
+		cliConfig.Output.Color = colorFlag
 	}
+
+	// Per AI.md PART 8: Initialize color mode
+	// Priority: CLI flag > config > NO_COLOR env > auto-detect
+	terminal.SetColorMode(terminal.ParseColorFlag(cliConfig.Output.Color))
 }
 
 // InitAPIClient initializes the API client
@@ -330,13 +346,10 @@ func CheckServerConnection() (bool, error) {
 
 // PrintConnectionWarning prints a warning if server is unreachable
 // Per AI.md PART 1: Function names MUST reveal intent
+// Per AI.md PART 8: Respects NO_COLOR
 func PrintConnectionWarning(err error) {
-	if colorDisabled {
-		fmt.Fprintf(os.Stderr, "Warning: Cannot reach server at %s\n", cliConfig.Server.Address)
-	} else {
-		// Yellow warning
-		fmt.Fprintf(os.Stderr, "\033[33mWarning: Cannot reach server at %s\033[0m\n", cliConfig.Server.Address)
-	}
+	fmt.Fprintf(os.Stderr, "%s Cannot reach server at %s\n",
+		terminal.WarningIcon(), cliConfig.Server.Address)
 	if err != nil && debugModeEnabled {
 		fmt.Fprintf(os.Stderr, "  Error: %v\n", err)
 	}
@@ -365,7 +378,7 @@ Flags:
       --token string       API token for authentication
       --token-file string  Read token from file
       --output string      Output format: json, table, plain (default: table)
-      --no-color           Disable colored output
+      --color string       Color output: always, never, auto (default: auto, respects NO_COLOR)
       --timeout int        Request timeout in seconds (default: 30)
       --debug              Enable debug output
   -h, --help               Show help

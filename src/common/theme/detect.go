@@ -20,7 +20,8 @@ func DetectSystemDark() bool {
 	case "windows":
 		return detectWindowsDark()
 	default:
-		return true // Default to dark
+		// Default to dark
+		return true
 	}
 }
 
@@ -73,7 +74,8 @@ func detectWindowsDark() bool {
 		"/v", "AppsUseLightTheme")
 	output, err := cmd.Output()
 	if err != nil {
-		return true // Default to dark
+		// Default to dark
+		return true
 	}
 
 	// Parse output - looking for "0x0" which means dark mode

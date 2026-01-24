@@ -4,97 +4,10 @@
 
 (No pending tasks)
 
+## In Progress
+
+(No tasks in progress)
+
 ## Completed
 
-- [x] **OfficialSite build variable** - Per AI.md PART 7
-  - Added `OfficialSite` to `src/common/version/version.go`
-  - Added `OfficialSite` to `src/main.go` with sync to version package
-  - Updated `docker/Dockerfile` LDFLAGS
-  - Updated `Makefile` LDFLAGS
-- [x] **GeoIP URL fixed** - Per AI.md PART 20
-  - City database URL: `dbip-city.mmdb` → `dbip-city-ipv4.mmdb`
-- [x] **Metrics compliance** - Per AI.md PART 21
-  - Fixed app metric names: `vidveil_info` → `vidveil_app_info`
-  - Fixed uptime metric: `vidveil_uptime_seconds` → `vidveil_app_uptime_seconds`
-  - Added `vidveil_app_start_timestamp` metric
-  - Added `vidveil_db_connections_in_use` metric
-  - Added `vidveil_db_errors_total` metric
-  - Added `vidveil_auth_attempts_total` metric
-  - Added `vidveil_auth_sessions_active` metric
-- [x] **Healthz canonical compliance** - Per AI.md PART 13
-  - Removed non-standard "node" field
-  - Added project.tagline from Web.Branding config
-  - Fixed features.tor to be TorInfo object (enabled/running/status/hostname)
-  - Removed features.metrics (internal per PART 21)
-  - Added cluster.node_count and cluster.role fields
-  - Added checks.tor health check
-- [x] **Argon2id parameters fixed** - Per AI.md PART 11
-  - Changed parallelism from 4 to 2 (OWASP 2023)
-- [x] **Scheduler DB Persistence** - Per AI.md PART 19
-  - Added NewSchedulerWithDB constructor with database support
-  - Task state persisted to `scheduled_tasks` table
-  - Task history persisted to `task_history` table
-  - run_count, fail_count, last_run survive restarts
-  - Proper catch-up logic for missed runs
-- [x] **All 44 engines enabled by default**
-- [x] **Thumbnail validation** - Discard empty/invalid thumbnails
-- [x] **Dead engines removed** - xtube, spankwire, keezmovies, extremetube, sleazyneasy, superporn
-- [x] **Scheduler intervals fixed** - session.cleanup and token.cleanup now 15 minutes
-- [x] **CLI client complete** - setup wizard, search, engines, bangs, TUI
-- [x] **CLI documentation added** - Per AI.md PART 33
-  - Created `docs/cli.md` with full CLI reference
-  - Updated `mkdocs.yml` navigation to include CLI Reference
-- [x] **Service --disable command added** - Per AI.md PART 8
-  - Added `Disable()` method to service manager
-  - Added `--service --disable` handler in main.go
-  - Supports systemd, runit, launchd, BSD rc.d, Windows Service Manager
-- [x] **Docker compose files fixed** - Per AI.md PART 14
-  - docker-compose.yml: service vidveil, container_name vidveil
-  - docker-compose.dev.yml: name vidveil-dev, image not build
-  - docker-compose.test.yml: name vidveil-test, image not build
-  - All healthchecks use `--status` instead of curl
-- [x] **Backup/restore password support** - Per AI.md PART 22
-  - CLI: Added `--password` flag for `--maintenance backup/restore`
-  - API: `POST /api/v1/admin/backup` accepts JSON body with `password`
-  - API: `POST /api/v1/admin/server/backup/restore` accepts JSON body with `password`
-- [x] **Auto theme mode added** - Per AI.md PART 16
-  - Added `theme-auto` CSS class with `prefers-color-scheme` media query
-  - Updated `setTheme()` JS to handle 'auto', 'light', 'dark' modes
-  - Added `getEffectiveTheme()` to resolve 'auto' to actual theme
-  - Added system preference change listener for live theme switching
-  - Updated all preference templates (page, nojs, admin) with Auto option
-  - Default theme changed from 'dark' to 'auto' (respects system preference)
-- [x] **GraphQL handler location fixed** - Per AI.md PART 14
-  - Moved from `src/server/handler/graphql.go` to `src/graphql/graphql.go`
-  - Updated package name to `graphql`
-  - Updated imports in `src/server/server.go`
-- [x] **OpenAPI handler location fixed** - Per AI.md PART 14
-  - Deleted duplicate `src/server/handler/openapi.go`
-  - Now uses `src/swagger/swagger.go` (swagger.Handler, swagger.SpecHandler)
-  - Updated imports in `src/server/server.go`
-- [x] **Rate limit header accuracy fixed** - Per AI.md PART 12
-  - X-RateLimit-Remaining now accurate (off-by-one fix)
-  - Call Allow() BEFORE setting headers so count includes current request
-  - Headers reflect remaining requests AFTER current request counted
-- [x] **Frontend layout unified** - Per AI.md PART 16
-  - Home page now includes header with hamburger menu
-  - Hamburger moved from nav bar to header, right of preferences icon
-  - Added collapsible filters (duration, quality) to home page
-  - Search forms use consistent `.search-form--large` and `--compact` variants
-  - Nav bar search has autocomplete dropdown support
-  - Mobile responsive: hamburger in header, nav links hidden
-  - CSS updated with `.header-action`, `.home-hero`, `.home-filters` styles
-- [x] **Cookie security compliance** - Per AI.md PART 11
-  - Added `NewSecureCookie()` helper with Secure flag when SSL enabled
-  - Added `NewSecureCookieStrict()` helper with SameSite=Strict
-  - Added `DeleteCookie()` helper for clearing cookies
-  - All cookies now use secure helpers: auth.go, handlers.go, admin.go
-  - Session cookies use SameSite=Lax, sensitive ops use SameSite=Strict
-- [x] **CSRF Double Submit Cookie pattern** - Per AI.md PART 22
-  - Changed from server-side storage to Double Submit Cookie pattern
-  - Token stored in `vidveil_csrf_token` cookie with SameSite=Strict
-  - Validation compares cookie token to form/header token
-  - Cookie is non-HttpOnly so JS can read it for AJAX X-CSRF-Token header
-  - Removed in-memory csrfTokens map (no longer needed)
-  - CSRF token auto-injected in all admin templates via CSRFToken variable
-  - Updated templates to use `_csrf_token` form field name
+(All tasks completed - see git history for details)

@@ -11,11 +11,16 @@ import (
 type ContentType string
 
 const (
-	ContentStatic   ContentType = "static"   // JS/CSS/images - 1 year immutable
-	ContentHTML     ContentType = "html"     // Always fetch fresh
-	ContentAPI      ContentType = "api"      // Public API - 60s cache
-	ContentPrivate  ContentType = "private"  // Authenticated - no cache
-	ContentError    ContentType = "error"    // Error pages - no cache
+	// ContentStatic for JS/CSS/images - 1 year immutable
+	ContentStatic ContentType = "static"
+	// ContentHTML always fetch fresh
+	ContentHTML ContentType = "html"
+	// ContentAPI for public API - 60s cache
+	ContentAPI ContentType = "api"
+	// ContentPrivate for authenticated - no cache
+	ContentPrivate ContentType = "private"
+	// ContentError for error pages - no cache
+	ContentError ContentType = "error"
 )
 
 // SetCacheHeaders sets appropriate Cache-Control headers per AI.md PART 9

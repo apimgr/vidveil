@@ -8,10 +8,14 @@ package display
 type DisplayMode int
 
 const (
-	DisplayModeHeadless DisplayMode = iota // No display, no TTY (daemon, service, cron)
-	DisplayModeCLI                         // Command-line only (piped or command provided)
-	DisplayModeTUI                         // Terminal UI (interactive terminal)
-	DisplayModeGUI                         // Native graphical UI
+	// DisplayModeHeadless: No display, no TTY (daemon, service, cron)
+	DisplayModeHeadless DisplayMode = iota
+	// DisplayModeCLI: Command-line only (piped or command provided)
+	DisplayModeCLI
+	// DisplayModeTUI: Terminal UI (interactive terminal)
+	DisplayModeTUI
+	// DisplayModeGUI: Native graphical UI
+	DisplayModeGUI
 )
 
 // String returns the string representation of the display mode

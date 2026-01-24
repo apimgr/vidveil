@@ -702,11 +702,8 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	if h.appConfig != nil && h.appConfig.IsDevelopmentMode() {
 		appMode = "development"
 	}
-	
-	// Node ID (standalone or cluster)
-	nodeID := "standalone"
-	
-	// Cluster status
+
+	// Cluster status per PART 10
 	clusterEnabled := false
 	clusterStatus := ""
 	clusterNodes := 0
@@ -748,39 +745,54 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get project name safely
+	// Get project info from config per PART 16 branding
 	projectName := "VidVeil"
-	if h.appConfig != nil && h.appConfig.Server.Title != "" {
-		projectName = h.appConfig.Server.Title
+	projectTagline := "Privacy-first video search"
+	projectDescription := "Privacy-respecting adult video meta search"
+	if h.appConfig != nil {
+		if h.appConfig.Server.Title != "" {
+			projectName = h.appConfig.Server.Title
+		}
+		if h.appConfig.Web.Branding.Tagline != "" {
+			projectTagline = h.appConfig.Web.Branding.Tagline
+		}
 	}
 
 	switch format {
 	case "application/json":
-		// JSON format per AI.md PART 13
+		// JSON format per AI.md PART 13 - exact field order from spec
+		// 1. project, 2. status, 3. version/go_version/build, 4. uptime/mode/timestamp
+		// 5. cluster, 6. features, 7. checks, 8. stats
 		response := map[string]interface{}{
+			// 1. Project identification (PART 16: branding config)
 			"project": map[string]interface{}{
 				"name":        projectName,
-				"description": "Privacy-respecting adult video meta search",
+				"tagline":     projectTagline,
+				"description": projectDescription,
 			},
-			"status":     status,
+			// 2. Overall status
+			"status": status,
+			// 3. Version & build info (PART 7)
 			"version":    version.GetVersion(),
-			"mode":       appMode,
-			"uptime":     uptime,
-			"timestamp":  timestamp,
 			"go_version": runtime.Version(),
 			"build": map[string]interface{}{
 				"commit": version.CommitID,
 				"date":   version.BuildTime,
 			},
-			"node": map[string]interface{}{
-				"id":       nodeID,
-				"hostname": hostname,
-			},
+			// 4. Runtime info (PART 6)
+			"uptime":    uptime,
+			"mode":      appMode,
+			"timestamp": timestamp,
+			// 5. Cluster info (PART 10)
 			"cluster": map[string]interface{}{
-				"enabled": clusterEnabled,
-				"primary": "",
-				"nodes":   []string{},
+				"enabled":    clusterEnabled,
+				"status":     "",
+				"primary":    "",
+				"nodes":      []string{},
+				"node_count": 0,
+				"role":       "",
 			},
+			// 6. Features (PARTS 20, 32)
 			"features": map[string]interface{}{
 				"tor": map[string]interface{}{
 					"enabled":  h.torSvc != nil && h.torSvc.IsEnabled(),
@@ -790,7 +802,9 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				},
 				"geoip": h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 			},
+			// 7. Component health checks
 			"checks": checks,
+			// 8. Statistics (public-safe aggregates + app-specific)
 			"stats": map[string]interface{}{
 				"requests_total":     h.getRequestsTotal(),
 				"requests_24h":       h.getRequests24h(),
@@ -799,13 +813,15 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		// Add cluster details if enabled
+		// Add cluster details if enabled per PART 10
 		if clusterEnabled {
 			response["cluster"] = map[string]interface{}{
-				"enabled": true,
-				"status":  clusterStatus,
-				"nodes":   clusterNodes,
-				"role":    clusterRole,
+				"enabled":    true,
+				"status":     clusterStatus,
+				"primary":    "",
+				"nodes":      []string{},
+				"node_count": clusterNodes,
+				"role":       clusterRole,
 			}
 		}
 
@@ -894,8 +910,10 @@ type ClusterNodeData struct {
 // FeaturesData - VidVeil is stateless, no multi-user/orgs per IDEA.md
 type FeaturesData struct {
 	TorEnabled     bool
-	TorStatus      string // "healthy", "unhealthy", or empty
-	TorOnionAddr   string // .onion address
+	// TorStatus is "healthy", "unhealthy", or empty
+	TorStatus string
+	// TorOnionAddr is the .onion address
+	TorOnionAddr string
 	GeoIP          bool
 	Metrics        bool
 }
@@ -954,7 +972,8 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		// Stats per AI.md PART 13
 		Stats: StatsData{
 			RequestsTotal:     func() uint64 { if h.metrics != nil { return h.metrics.GetRequestsTotal() }; return 0 }(),
-			Requests24h:       0, // TODO: Implement 24h sliding window tracking
+			// TODO: Implement 24h sliding window tracking
+			Requests24h: 0,
 			ActiveConnections: func() int64 { if h.metrics != nil { return h.metrics.GetActiveConnections() }; return 0 }(),
 		},
 
@@ -1936,7 +1955,8 @@ func (h *SearchHandler) DebugEngine(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	query := r.URL.Query().Get("q")
 	if query == "" {
-		query = "test" // Default test query
+		// Default test query
+		query = "test"
 	}
 
 	eng, ok := h.engineMgr.GetEngine(name)
@@ -2116,7 +2136,8 @@ return
 // Copy content type
 contentType := resp.Header.Get("Content-Type")
 if contentType == "" {
-contentType = "image/jpeg" // Default
+// Default content type
+contentType = "image/jpeg"
 }
 w.Header().Set("Content-Type", contentType)
 
@@ -2135,10 +2156,14 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"primary":     h.appConfig.GetPublicURL(),
 		"cluster":     h.appConfig.GetClusterNodes(),
-		"api_version": "v1", // Per AI.md PART 14: versioned API
-		"timeout":     30,   // Default timeout in seconds
-		"retry":       3,    // Default retry attempts
-		"retry_delay": 1,    // Default seconds between retries
+		// Per AI.md PART 14: versioned API
+		"api_version": "v1",
+		// Default timeout in seconds
+		"timeout": 30,
+		// Default retry attempts
+		"retry": 3,
+		// Default seconds between retries
+		"retry_delay": 1,
 	}
 
 	// NEVER include admin_path - security by obscurity per AI.md PART 37

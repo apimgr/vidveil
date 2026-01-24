@@ -349,7 +349,8 @@ func (s *TorService) monitorProcess() {
 						s.logger.Info("Tor restarted successfully", nil)
 					}
 				}()
-				return // Exit this monitor, new one will be started
+				// Exit this monitor, new one will be started
+				return
 			}
 		}
 	}

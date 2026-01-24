@@ -34,14 +34,22 @@ type MaintenanceManager struct {
 
 // BackupOptions configures backup behavior per AI.md PART 22
 type BackupOptions struct {
-	Filename    string // Output filename (auto-generated if empty)
-	Password    string // Encryption password (empty = no encryption)
-	IncludeSSL  bool   // Include SSL certificates
-	IncludeData bool   // Include data directory
-	MaxBackups  int    // Maximum daily backups to keep (0 = use default 1)
-	KeepWeekly  int    // Weekly backups (Sunday) to keep (0 = disabled)
-	KeepMonthly int    // Monthly backups (1st) to keep (0 = disabled)
-	KeepYearly  int    // Yearly backups (Jan 1st) to keep (0 = disabled)
+	// Filename is output filename (auto-generated if empty)
+	Filename string
+	// Password is encryption password (empty = no encryption)
+	Password string
+	// IncludeSSL determines if SSL certificates are included
+	IncludeSSL bool
+	// IncludeData determines if data directory is included
+	IncludeData bool
+	// MaxBackups is maximum daily backups to keep (0 = use default 1)
+	MaxBackups int
+	// KeepWeekly is weekly backups (Sunday) to keep (0 = disabled)
+	KeepWeekly int
+	// KeepMonthly is monthly backups (1st) to keep (0 = disabled)
+	KeepMonthly int
+	// KeepYearly is yearly backups (Jan 1st) to keep (0 = disabled)
+	KeepYearly int
 }
 
 // BackupManifest contains backup metadata per AI.md PART 22
@@ -66,10 +74,11 @@ func NewMaintenanceManager(configDir, dataDir, version string) *MaintenanceManag
 
 // Backup creates a backup of configuration and data (simple version)
 func (m *MaintenanceManager) Backup(backupFile string) error {
+	// Default per AI.md PART 22: MaxBackups=1
 	return m.BackupWithOptions(BackupOptions{
 		Filename:    backupFile,
 		IncludeData: true,
-		MaxBackups:  1, // Default per AI.md PART 22
+		MaxBackups:  1,
 	})
 }
 
@@ -182,7 +191,8 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 
 	// Verify backup integrity
 	if err := m.verifyBackup(backupFile, checksumStr, opts.Password); err != nil {
-		os.Remove(backupFile) // Remove failed backup
+		// Remove failed backup
+		os.Remove(backupFile)
 		return fmt.Errorf("backup verification failed: %w", err)
 	}
 
@@ -332,7 +342,8 @@ func (m *MaintenanceManager) applyRetention(maxBackups int) error {
 // Priority order: yearly > monthly > weekly > daily
 func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, keepMonthly, keepYearly int) error {
 	if maxBackups <= 0 {
-		maxBackups = 1 // Default per PART 22
+		// Default per PART 22
+		maxBackups = 1
 	}
 
 	backups, err := m.ListBackups()
@@ -345,8 +356,8 @@ func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, k
 		return backups[i].Modified.After(backups[j].Modified)
 	})
 
-	// Track which backups to keep (by index)
-	keep := make(map[int]string) // index -> reason
+	// Track which backups to keep (index -> reason)
+	keep := make(map[int]string)
 
 	// Count trackers
 	yearlyKept := 0
@@ -367,8 +378,9 @@ func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, k
 
 	// Pass 2: Mark monthly backups (1st of month)
 	for i, b := range backups {
+		// Already kept
 		if _, ok := keep[i]; ok {
-			continue // Already kept
+			continue
 		}
 		if keepMonthly > 0 && monthlyKept < keepMonthly {
 			// Check if this is a 1st of month backup
@@ -381,8 +393,9 @@ func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, k
 
 	// Pass 3: Mark weekly backups (Sunday)
 	for i, b := range backups {
+		// Already kept
 		if _, ok := keep[i]; ok {
-			continue // Already kept
+			continue
 		}
 		if keepWeekly > 0 && weeklyKept < keepWeekly {
 			// Check if this is a Sunday backup
@@ -395,8 +408,9 @@ func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, k
 
 	// Pass 4: Mark daily backups (max_backups) - lowest priority
 	for i := range backups {
+		// Already kept
 		if _, ok := keep[i]; ok {
-			continue // Already kept
+			continue
 		}
 		if dailyKept < maxBackups {
 			keep[i] = "daily"

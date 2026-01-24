@@ -611,7 +611,8 @@ func (l *AppLogger) Reopen() {
 		if rf, ok := w.(*RotatingFile); ok {
 			rf.Reopen()
 		}
-		_ = name // Used for future logging
+		// Suppress unused variable (used for future logging)
+		_ = name
 	}
 }
 

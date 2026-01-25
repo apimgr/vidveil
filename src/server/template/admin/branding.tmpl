@@ -107,9 +107,70 @@ async function saveSEO(e) {
     } catch (e) { showError('Error: ' + e.message); }
 }
 
-function uploadLogo(e) {
+// Logo/Favicon upload per AI.md PART 17
+async function uploadLogo(e) {
     e.preventDefault();
-    showWarning('Logo upload not implemented yet');
+
+    const logoFile = document.getElementById('logo-file').files[0];
+    const faviconFile = document.getElementById('favicon-file').files[0];
+
+    if (!logoFile && !faviconFile) {
+        showWarning('Please select a file to upload');
+        return;
+    }
+
+    // Upload logo if selected
+    if (logoFile) {
+        const logoForm = new FormData();
+        logoForm.append('type', 'logo');
+        logoForm.append('file', logoFile);
+
+        try {
+            const resp = await fetch(window.API_BASE + '/server/branding/upload', {
+                method: 'POST',
+                body: logoForm
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showSuccess('Logo uploaded successfully');
+            } else {
+                showError(data.error || 'Failed to upload logo');
+                return;
+            }
+        } catch (err) {
+            showError('Error: ' + err.message);
+            return;
+        }
+    }
+
+    // Upload favicon if selected
+    if (faviconFile) {
+        const faviconForm = new FormData();
+        faviconForm.append('type', 'favicon');
+        faviconForm.append('file', faviconFile);
+
+        try {
+            const resp = await fetch(window.API_BASE + '/server/branding/upload', {
+                method: 'POST',
+                body: faviconForm
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showSuccess('Favicon uploaded successfully');
+            } else {
+                showError(data.error || 'Failed to upload favicon');
+                return;
+            }
+        } catch (err) {
+            showError('Error: ' + err.message);
+            return;
+        }
+    }
+
+    // Reload page to show new images
+    if (logoFile || faviconFile) {
+        location.reload();
+    }
 }
 </script>
 {{end}}

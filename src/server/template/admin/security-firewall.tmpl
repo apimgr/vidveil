@@ -77,8 +77,75 @@
 
 {{define "scripts"}}
 <script>
-function saveAllowlist(e) { e.preventDefault(); showSuccess('Allowlist saved!'); }
-function saveBlocklist(e) { e.preventDefault(); showSuccess('Blocklist saved!'); }
-function saveAutoBlock(e) { e.preventDefault(); showSuccess('Auto-block settings saved!'); }
+// Save IP allowlist per AI.md PART 22
+async function saveAllowlist(e) {
+    e.preventDefault();
+    try {
+        const ips = document.getElementById('allowlist').value
+            .split('\n').map(ip => ip.trim()).filter(ip => ip);
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    firewall: {
+                        allowlist: ips
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) { showSuccess('Allowlist saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (err) { showError('Error: ' + err.message); }
+}
+
+// Save IP blocklist per AI.md PART 22
+async function saveBlocklist(e) {
+    e.preventDefault();
+    try {
+        const ips = document.getElementById('blocklist').value
+            .split('\n').map(ip => ip.trim()).filter(ip => ip);
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    firewall: {
+                        blocklist: ips
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) { showSuccess('Blocklist saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (err) { showError('Error: ' + err.message); }
+}
+
+// Save auto-block settings per AI.md PART 22
+async function saveAutoBlock(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    firewall: {
+                        autoblock: {
+                            enabled: document.getElementById('autoblock-enabled').checked,
+                            threshold: parseInt(document.getElementById('autoblock-threshold').value),
+                            duration_hours: parseInt(document.getElementById('autoblock-duration').value)
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) { showSuccess('Auto-block settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (err) { showError('Error: ' + err.message); }
+}
 </script>
 {{end}}

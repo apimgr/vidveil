@@ -72,10 +72,105 @@
 
 {{define "scripts"}}
 <script>
-function saveMaintenanceMode(e) { e.preventDefault(); showSuccess('Maintenance settings saved!'); }
-function scheduleMaintenance(e) { e.preventDefault(); showSuccess('Maintenance scheduled!'); }
-function clearCache(type) { showSuccess('Cache cleared: ' + type); }
-function optimizeDatabase() { showWarning('Database optimization not implemented yet'); }
-function vacuumDatabase() { showWarning('Database vacuum not implemented yet'); }
+// Save maintenance mode settings per AI.md PART 17
+async function saveMaintenanceMode(e) {
+    e.preventDefault();
+    try {
+        const bypassIPs = document.getElementById('maintenance-bypass').value
+            .split('\n').map(ip => ip.trim()).filter(ip => ip);
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    maintenance: {
+                        enabled: document.getElementById('maintenance-enabled').checked,
+                        message: document.getElementById('maintenance-message').value,
+                        bypass_ips: bypassIPs
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) { showSuccess('Maintenance settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (err) { showError('Error: ' + err.message); }
+}
+
+// Schedule maintenance window per AI.md PART 17
+async function scheduleMaintenance(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    maintenance: {
+                        scheduled: {
+                            start: document.getElementById('schedule-start').value,
+                            end: document.getElementById('schedule-end').value,
+                            show_countdown: document.getElementById('schedule-notify').checked
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) { showSuccess('Maintenance scheduled!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (err) { showError('Error: ' + err.message); }
+}
+
+// Clear cache per AI.md PART 9
+async function clearCache(type) {
+    try {
+        const resp = await fetch(window.API_BASE + '/cache/clear?type=' + encodeURIComponent(type), {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            showSuccess(data.message || 'Cache cleared: ' + type);
+        } else {
+            showError(data.error || 'Failed to clear cache');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+// Database optimization - runs ANALYZE per AI.md PART 10
+async function optimizeDatabase() {
+    try {
+        const resp = await fetch(window.API_BASE + '/database/analyze', {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            showSuccess('Database optimization completed');
+        } else {
+            showError(data.error || 'Failed to optimize database');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+// Database vacuum - runs VACUUM per AI.md PART 10
+async function vacuumDatabase() {
+    try {
+        const resp = await fetch(window.API_BASE + '/database/vacuum', {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            showSuccess('Database vacuum completed');
+        } else {
+            showError(data.error || 'Failed to vacuum database');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
 </script>
 {{end}}

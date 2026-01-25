@@ -225,6 +225,8 @@ func (s *Server) setupRoutes() {
 	admin.SetScheduler(s.scheduler)
 	// Set logger for audit and security event logging per AI.md PART 11
 	admin.SetLogger(s.logger)
+	// Set search cache for cache management per AI.md PART 9
+	admin.SetSearchCache(h.GetSearchCache())
 	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
 	h.SetMetrics(metrics)
 
@@ -517,6 +519,7 @@ func (s *Server) setupRoutes() {
 			r.Use(admin.SessionOrTokenMiddleware)
 			r.Post("/password", admin.APIProfilePassword)
 			r.Post("/token", admin.APIProfileToken)
+			r.Delete("/sessions", admin.APIRevokeSessions)
 			r.Get("/recovery-keys", admin.APIRecoveryKeysStatus)
 			r.Post("/recovery-keys/generate", admin.APIRecoveryKeysGenerate)
 		})
@@ -539,11 +542,18 @@ func (s *Server) setupRoutes() {
 				r.Get("/health", admin.APIHealth)
 				r.Post("/restart", admin.APIMaintenanceMode)
 
+				// Branding per PART 17
+				r.Route("/branding", func(r chi.Router) {
+					r.Patch("/", admin.APIBranding)
+					r.Post("/upload", admin.APIBrandingUpload)
+				})
+
 				// SSL per PART 15
 				r.Route("/ssl", func(r chi.Router) {
 					r.Get("/", admin.APIConfig)
 					r.Patch("/", admin.APIConfig)
 					r.Post("/renew", admin.APIConfig)
+					r.Post("/upload", admin.APISSLUpload)
 				})
 
 				// Tor per PART 32
@@ -615,6 +625,11 @@ func (s *Server) setupRoutes() {
 					r.Post("/analyze", admin.APIDatabaseAnalyze)
 					r.Post("/test", admin.APIDatabaseTest)
 					r.Put("/backend", admin.APIDatabaseBackend)
+				})
+
+				// Cache management per PART 9
+				r.Route("/cache", func(r chi.Router) {
+					r.Post("/clear", admin.APICacheClear)
 				})
 
 				// Nodes per PART 10

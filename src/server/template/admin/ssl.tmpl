@@ -101,9 +101,36 @@ async function renewCert() {
     } catch (e) { showError('Error: ' + e.message); }
 }
 
-function uploadCert(e) {
+// SSL certificate upload per AI.md PART 15
+async function uploadCert(e) {
     e.preventDefault();
-    showWarning('Certificate upload not implemented yet');
+
+    const certFile = document.getElementById('cert-file').files[0];
+    const keyFile = document.getElementById('key-file').files[0];
+
+    if (!certFile || !keyFile) {
+        showWarning('Both certificate and key files are required');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('cert', certFile);
+    formData.append('key', keyFile);
+
+    try {
+        const resp = await fetch(window.API_BASE + '/server/ssl/upload', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess(data.message || 'Certificate uploaded successfully');
+        } else {
+            showError(data.error || 'Failed to upload certificate');
+        }
+    } catch (err) {
+        showError('Error: ' + err.message);
+    }
 }
 </script>
 {{end}}

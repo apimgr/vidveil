@@ -24,10 +24,18 @@
 <div class="card">
     <h2>Two-Factor Authentication</h2>
     <table class="info-table">
+        {{if .Admin.TOTPEnabled}}
+        <tr><td>Status</td><td><span class="badge badge-success">Enabled</span></td></tr>
+        {{else}}
         <tr><td>Status</td><td><span class="badge badge-warning">Not Configured</span></td></tr>
+        {{end}}
     </table>
     <div class="button-group">
+        {{if .Admin.TOTPEnabled}}
+        <button onclick="disable2FA()" class="btn btn-danger">Disable 2FA</button>
+        {{else}}
         <button onclick="setup2FA()" class="btn btn-secondary">Enable 2FA</button>
+        {{end}}
     </div>
 </div>
 
@@ -99,8 +107,70 @@ async function changePassword(e) {
     } catch (e) { showError('Error: ' + e.message); }
 }
 
-function setup2FA() { showWarning('2FA setup not implemented yet'); }
-function saveSessionSettings(e) { e.preventDefault(); showSuccess('Session settings saved!'); }
-function revokeAllSessions() { showWarning('Session revocation not implemented yet'); }
+// 2FA Setup - redirect to setup flow per AI.md PART 17
+function setup2FA() {
+    window.location.href = '{{.AdminPath}}/profile?action=enable2fa';
+}
+
+// 2FA Disable - call API endpoint per AI.md PART 17
+function disable2FA() {
+    showConfirm('Are you sure you want to disable two-factor authentication?', async function() {
+        try {
+            const resp = await fetch(window.API_BASE + '/profile/2fa', {
+                method: 'DELETE'
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showSuccess('Two-factor authentication disabled');
+                location.reload();
+            } else {
+                showError(data.error || 'Failed to disable 2FA');
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
+        }
+    });
+}
+
+// Save session settings per AI.md PART 11
+async function saveSessionSettings(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    admin: {
+                        session_duration: parseInt(document.getElementById('session-duration').value),
+                        allow_remember_me: document.getElementById('session-remember').checked
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) { showSuccess('Session settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (err) { showError('Error: ' + err.message); }
+}
+
+// Revoke all other sessions per AI.md PART 11
+function revokeAllSessions() {
+    showConfirm('This will log out all other admin sessions. Continue?', async function() {
+        try {
+            const resp = await fetch(window.API_BASE + '/profile/sessions', {
+                method: 'DELETE'
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showSuccess('All other sessions have been revoked');
+            } else {
+                showError(data.error || 'Failed to revoke sessions');
+            }
+        } catch (e) {
+            showError('Error: ' + e.message);
+        }
+    });
+}
 </script>
 {{end}}

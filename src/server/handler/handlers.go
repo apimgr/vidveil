@@ -82,6 +82,11 @@ func (h *SearchHandler) SetTorService(t TorStatusChecker) {
 	h.torSvc = t
 }
 
+// GetSearchCache returns the search cache for sharing with admin handler
+func (h *SearchHandler) GetSearchCache() *cache.SearchCache {
+	return h.searchCache
+}
+
 // getSearchCount returns total searches from metrics
 func (h *SearchHandler) getSearchCount() uint64 {
 	if h.metrics != nil {

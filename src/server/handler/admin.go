@@ -14,16 +14,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/admin"
+	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/cluster"
 	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/engine"
@@ -81,6 +84,7 @@ type AdminHandler struct {
 	torSvc       TorService
 	scheduler    *scheduler.Scheduler
 	logger       *logging.AppLogger
+	searchCache  cache.SearchResultCache
 	sessions     map[string]adminSession
 	startTime    time.Time
 	// Note: CSRF tokens now use Double Submit Cookie pattern per AI.md PART 22
@@ -121,6 +125,11 @@ func (h *AdminHandler) SetTorService(t TorService) {
 // SetLogger sets the logger for audit and security event logging per AI.md PART 11
 func (h *AdminHandler) SetLogger(l *logging.AppLogger) {
 	h.logger = l
+}
+
+// SetSearchCache sets the search cache reference for cache management
+func (h *AdminHandler) SetSearchCache(c cache.SearchResultCache) {
+	h.searchCache = c
 }
 
 // IsFirstRun checks if this is the first run (no admin exists)
@@ -1277,6 +1286,47 @@ func (h *AdminHandler) APIProfileToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// APIRevokeSessions revokes all other admin sessions per AI.md PART 11
+func (h *AdminHandler) APIRevokeSessions(w http.ResponseWriter, r *http.Request) {
+	// Get current session ID
+	currentCookie, err := r.Cookie(adminSessionCookieName)
+	if err != nil {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	currentSessionID := currentCookie.Value
+	currentSession, ok := h.sessions[currentSessionID]
+	if !ok {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	// Revoke all sessions except current one
+	revokedCount := 0
+	for sessionID, session := range h.sessions {
+		if sessionID != currentSessionID && session.adminID == currentSession.adminID {
+			delete(h.sessions, sessionID)
+			revokedCount++
+		}
+	}
+
+	// Log the action per AI.md PART 11
+	if h.logger != nil {
+		h.logger.Audit("admin.session_revoked", currentSession.username, "auth", map[string]interface{}{
+			"revoked_count": revokedCount,
+			"ip":            r.RemoteAddr,
+		})
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"revoked_count": revokedCount,
+		},
+	})
+}
+
 // getSessionAdminID returns the admin ID from the current session
 func (h *AdminHandler) getSessionAdminID(r *http.Request) int64 {
 	cookie, err := r.Cookie(adminSessionCookieName)
@@ -1788,6 +1838,49 @@ func (h *AdminHandler) APIDatabaseAnalyze(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// APICacheClear clears the search result cache
+// POST /api/v1/admin/server/cache/clear
+func (h *AdminHandler) APICacheClear(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Get cache type from query param or body
+	cacheType := r.URL.Query().Get("type")
+	if cacheType == "" {
+		cacheType = "all"
+	}
+
+	cleared := 0
+
+	switch cacheType {
+	case "search":
+		if h.searchCache != nil {
+			cleared = h.searchCache.Size()
+			h.searchCache.Clear()
+		}
+	case "templates":
+		// Template cache is handled by Go's template engine - no manual clear needed
+		// Templates are recompiled on server restart
+		cleared = 0
+	case "all":
+		if h.searchCache != nil {
+			cleared = h.searchCache.Size()
+			h.searchCache.Clear()
+		}
+	default:
+		h.jsonError(w, "Unknown cache type", "ERR_UNKNOWN_CACHE", http.StatusBadRequest)
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
+		"message": fmt.Sprintf("Cache cleared: %s (%d entries)", cacheType, cleared),
+		"data": map[string]interface{}{
+			"type":    cacheType,
+			"cleared": cleared,
+		},
+	})
+}
+
 // APIDatabaseMigrations returns migration status
 func (h *AdminHandler) APIDatabaseMigrations(w http.ResponseWriter, r *http.Request) {
 	if h.migrationMgr == nil {
@@ -2029,6 +2122,274 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 			"error":   "Method not allowed",
 		})
 	}
+}
+
+// APIBranding handles PATCH for /api/v1/admin/server/branding per AI.md PART 17
+func (h *AdminHandler) APIBranding(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPatch {
+		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var updates struct {
+		Title       string `json:"title"`
+		Tagline     string `json:"tagline"`
+		Description string `json:"description"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		h.jsonError(w, "Invalid request body", "ERR_VALIDATION", http.StatusBadRequest)
+		return
+	}
+
+	updated := false
+	if updates.Title != "" {
+		h.appConfig.Server.Title = updates.Title
+		updated = true
+	}
+	if updates.Tagline != "" {
+		h.appConfig.Web.Branding.Tagline = updates.Tagline
+		updated = true
+	}
+	if updates.Description != "" {
+		h.appConfig.Server.Description = updates.Description
+		updated = true
+	}
+
+	if updated {
+		paths := config.GetAppPaths("", "")
+		configPath := filepath.Join(paths.Config, "server.yml")
+		if err := config.SaveAppConfig(h.appConfig, configPath); err != nil {
+			h.jsonError(w, "Failed to save configuration", "ERR_INTERNAL", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Branding updated",
+	})
+}
+
+// APIBrandingUpload handles POST for /api/v1/admin/server/branding/upload per AI.md PART 17
+func (h *AdminHandler) APIBrandingUpload(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse multipart form with 512KB max file size per spec
+	if err := r.ParseMultipartForm(512 * 1024); err != nil {
+		h.jsonError(w, "File too large or invalid form", "ERR_VALIDATION", http.StatusBadRequest)
+		return
+	}
+
+	uploadType := r.FormValue("type") // "logo" or "favicon"
+	if uploadType != "logo" && uploadType != "favicon" {
+		h.jsonError(w, "Invalid upload type", "ERR_VALIDATION", http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		h.jsonError(w, "No file provided", "ERR_VALIDATION", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Validate file type per AI.md
+	contentType := header.Header.Get("Content-Type")
+	allowedTypes := map[string]bool{
+		"image/svg+xml": true,
+		"image/png":     true,
+		"image/jpeg":    true,
+		"image/x-icon":  true,
+		"image/vnd.microsoft.icon": true,
+	}
+	if !allowedTypes[contentType] {
+		h.jsonError(w, "Invalid file type", "ERR_VALIDATION", http.StatusBadRequest)
+		return
+	}
+
+	// Determine file extension
+	ext := filepath.Ext(header.Filename)
+	if ext == "" {
+		switch contentType {
+		case "image/svg+xml":
+			ext = ".svg"
+		case "image/png":
+			ext = ".png"
+		case "image/jpeg":
+			ext = ".jpg"
+		case "image/x-icon", "image/vnd.microsoft.icon":
+			ext = ".ico"
+		}
+	}
+
+	// Save to data directory
+	paths := config.GetAppPaths("", "")
+	uploadDir := filepath.Join(paths.Data, "branding")
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		h.jsonError(w, "Failed to create upload directory", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+
+	filename := uploadType + ext
+	destPath := filepath.Join(uploadDir, filename)
+	dest, err := os.Create(destPath)
+	if err != nil {
+		h.jsonError(w, "Failed to save file", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+	defer dest.Close()
+
+	if _, err := io.Copy(dest, file); err != nil {
+		h.jsonError(w, "Failed to save file", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+
+	// Update config with new path
+	if uploadType == "logo" {
+		h.appConfig.Web.UI.Logo = destPath
+	} else {
+		h.appConfig.Web.UI.Favicon = destPath
+	}
+
+	configPath := filepath.Join(paths.Config, "server.yml")
+	if err := config.SaveAppConfig(h.appConfig, configPath); err != nil {
+		h.jsonError(w, "Failed to save configuration", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+
+	// Log the upload per AI.md PART 11
+	if h.logger != nil {
+		session := h.getSession(r)
+		username := "unknown"
+		if session != nil {
+			username = session.username
+		}
+		h.logger.Audit("branding.uploaded", username, "settings", map[string]interface{}{
+			"type":     uploadType,
+			"filename": header.Filename,
+			"size":     header.Size,
+		})
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("%s uploaded successfully", strings.Title(uploadType)),
+		"path":    "/" + uploadType + ext,
+	})
+}
+
+// APISSLUpload handles POST for /api/v1/admin/server/ssl/upload per AI.md PART 15
+func (h *AdminHandler) APISSLUpload(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse multipart form with 1MB max
+	if err := r.ParseMultipartForm(1 * 1024 * 1024); err != nil {
+		h.jsonError(w, "File too large or invalid form", "ERR_VALIDATION", http.StatusBadRequest)
+		return
+	}
+
+	certFile, certHeader, certErr := r.FormFile("cert")
+	keyFile, keyHeader, keyErr := r.FormFile("key")
+
+	if certErr != nil || keyErr != nil {
+		h.jsonError(w, "Both certificate and key files are required", "ERR_VALIDATION", http.StatusBadRequest)
+		return
+	}
+	defer certFile.Close()
+	defer keyFile.Close()
+
+	// Validate file types
+	certExt := filepath.Ext(certHeader.Filename)
+	keyExt := filepath.Ext(keyHeader.Filename)
+
+	allowedCertExts := map[string]bool{".crt": true, ".pem": true, ".cer": true}
+	allowedKeyExts := map[string]bool{".key": true, ".pem": true}
+
+	if !allowedCertExts[certExt] {
+		h.jsonError(w, "Invalid certificate file type", "ERR_VALIDATION", http.StatusBadRequest)
+		return
+	}
+	if !allowedKeyExts[keyExt] {
+		h.jsonError(w, "Invalid key file type", "ERR_VALIDATION", http.StatusBadRequest)
+		return
+	}
+
+	// Save to ssl directory
+	paths := config.GetAppPaths("", "")
+	sslDir := filepath.Join(paths.Config, "ssl", "custom")
+	if err := os.MkdirAll(sslDir, 0700); err != nil {
+		h.jsonError(w, "Failed to create SSL directory", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+
+	// Save certificate
+	certPath := filepath.Join(sslDir, "cert.pem")
+	certDest, err := os.OpenFile(certPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		h.jsonError(w, "Failed to save certificate", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+	if _, err := io.Copy(certDest, certFile); err != nil {
+		certDest.Close()
+		h.jsonError(w, "Failed to save certificate", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+	certDest.Close()
+
+	// Save key
+	keyPath := filepath.Join(sslDir, "key.pem")
+	keyDest, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		h.jsonError(w, "Failed to save key", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+	if _, err := io.Copy(keyDest, keyFile); err != nil {
+		keyDest.Close()
+		h.jsonError(w, "Failed to save key", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+	keyDest.Close()
+
+	// Update config to use custom certs directory
+	h.appConfig.Server.SSL.CertPath = sslDir
+	h.appConfig.Server.SSL.Enabled = true
+
+	configPath := filepath.Join(paths.Config, "server.yml")
+	if err := config.SaveAppConfig(h.appConfig, configPath); err != nil {
+		h.jsonError(w, "Failed to save configuration", "ERR_INTERNAL", http.StatusInternalServerError)
+		return
+	}
+
+	// Log the upload per AI.md PART 11
+	if h.logger != nil {
+		session := h.getSession(r)
+		username := "unknown"
+		if session != nil {
+			username = session.username
+		}
+		h.logger.Audit("ssl.certificate_uploaded", username, "security", map[string]interface{}{
+			"cert_size": certHeader.Size,
+			"key_size":  keyHeader.Size,
+		})
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "SSL certificate uploaded. Restart required to apply.",
+	})
 }
 
 // jsonError sends a standardized error response per AI.md PART 14

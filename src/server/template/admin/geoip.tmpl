@@ -64,8 +64,65 @@
 
 {{define "scripts"}}
 <script>
-function updateGeoIP() { showWarning('GeoIP database update not implemented yet'); }
-function saveGeoIP(e) { e.preventDefault(); showSuccess('GeoIP settings saved!'); }
-function saveCountries(e) { e.preventDefault(); showSuccess('Country list saved!'); }
+// GeoIP database update - triggers scheduler task per AI.md PART 19
+async function updateGeoIP() {
+    try {
+        const resp = await fetch(window.API_BASE + '/scheduler/geoip.update/run', {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('GeoIP database update triggered');
+        } else {
+            showError(data.error || 'Failed to trigger update');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+// Save GeoIP settings per AI.md PART 20
+async function saveGeoIP(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    geoip: {
+                        enabled: document.getElementById('geoip-enabled').checked,
+                        mode: document.getElementById('geoip-mode').value
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) { showSuccess('GeoIP settings saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (err) { showError('Error: ' + err.message); }
+}
+
+// Save country list per AI.md PART 20
+async function saveCountries(e) {
+    e.preventDefault();
+    try {
+        const countries = document.getElementById('countries').value
+            .split('\n').map(c => c.trim().toUpperCase()).filter(c => c && c.length === 2);
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    geoip: {
+                        deny_countries: countries
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) { showSuccess('Country list saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (err) { showError('Error: ' + err.message); }
+}
 </script>
 {{end}}

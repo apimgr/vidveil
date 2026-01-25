@@ -99,8 +99,11 @@ function viewChangelog() {
     window.open('https://github.com/apimgr/vidveil/releases', '_blank');
 }
 
+// Start update per AI.md PART 23 - opens releases page for manual download
 function startUpdate() {
-    showWarning('Auto-update not implemented yet. Please update manually.');
+    showConfirm('This will open the releases page. Download the new binary and replace the existing one, then restart the service.', function() {
+        window.open('https://github.com/apimgr/vidveil/releases/latest', '_blank');
+    });
 }
 
 function saveAutoUpdate(e) {

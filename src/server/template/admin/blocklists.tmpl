@@ -80,8 +80,78 @@
 {{define "scripts"}}
 <script>
 function showAddBlocklist() { document.getElementById('add-blocklist-form').scrollIntoView(); }
-function addBlocklist(e) { e.preventDefault(); showSuccess('Blocklist added!'); }
-function updateAllBlocklists() { showWarning('Blocklist update not implemented yet'); }
-function saveSchedule(e) { e.preventDefault(); showSuccess('Schedule saved!'); }
+
+// Add blocklist source per AI.md PART 22
+async function addBlocklist(e) {
+    e.preventDefault();
+    try {
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    security: {
+                        blocklists: {
+                            add_source: {
+                                name: document.getElementById('blocklist-name').value,
+                                url: document.getElementById('blocklist-url').value,
+                                format: document.getElementById('blocklist-format').value,
+                                enabled: document.getElementById('blocklist-enabled').checked
+                            }
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            showSuccess('Blocklist added!');
+            document.getElementById('add-blocklist-form').reset();
+        } else {
+            showError('Error: ' + data.error);
+        }
+    } catch (err) { showError('Error: ' + err.message); }
+}
+
+// Blocklist update - triggers scheduler task per AI.md PART 19
+async function updateAllBlocklists() {
+    try {
+        const resp = await fetch(window.API_BASE + '/scheduler/blocklist.update/run', {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess('Blocklist update triggered');
+        } else {
+            showError(data.error || 'Failed to trigger update');
+        }
+    } catch (e) {
+        showError('Error: ' + e.message);
+    }
+}
+
+// Save blocklist update schedule per AI.md PART 22
+async function saveSchedule(e) {
+    e.preventDefault();
+    try {
+        const interval = parseInt(document.getElementById('update-interval').value);
+        const resp = await fetch(window.API_BASE + '/server/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                server: {
+                    security: {
+                        blocklists: {
+                            update_interval_hours: interval
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) { showSuccess('Schedule saved!'); }
+        else { showError('Error: ' + data.error); }
+    } catch (err) { showError('Error: ' + err.message); }
+}
 </script>
 {{end}}

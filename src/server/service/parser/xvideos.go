@@ -107,5 +107,11 @@ func (p *XVideosParser) Parse(s *goquery.Selection) *VideoItem {
 	// Check for premium
 	item.IsPremium = IsPremiumContent(s, item.URL)
 
+	// Extract tags (if available in search results)
+	item.Tags = ExtractTags(s, ".video-metadata a", ".tags a", "a[href*='/tags/']", "a[href*='/c/']")
+
+	// Extract uploader/performer
+	item.Uploader = ExtractUploader(s, ".uploader-tag a", ".uploader a", "a[href*='/models/']", "a[href*='/pornstar/']", "a[href*='/channels/']")
+
 	return item
 }

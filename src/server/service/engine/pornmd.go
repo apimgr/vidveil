@@ -89,6 +89,8 @@ func (e *PornMDEngine) convertToResult(item *parser.VideoItem) model.VideoResult
 		Description:     desc,
 		Source:          e.Name(),
 		SourceDisplay:   e.DisplayName(),
+		Tags:            item.Tags,
+		Performer:       item.Uploader,
 	}
 }
 

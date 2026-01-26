@@ -81,5 +81,11 @@ func (p *PornHubParser) Parse(s *goquery.Selection) *VideoItem {
 	// Check for premium
 	item.IsPremium = IsPremiumContent(s, item.URL)
 
+	// Extract tags (if available in search results)
+	item.Tags = ExtractTags(s, ".tags a", ".video-tag", ".category a", "a[href*='/categories/']", "a[href*='/tags/']")
+
+	// Extract uploader/performer
+	item.Uploader = ExtractUploader(s, ".usernameWrap a", ".uploader a", ".channel a", ".pornstar a", "a[href*='/model/']", "a[href*='/pornstar/']")
+
 	return item
 }

@@ -305,3 +305,89 @@ func GetPopularSearches(count int) []string {
 	}
 	return popular[:count]
 }
+
+// GetRelatedSearches returns search terms related to the given query
+// Finds suggestions that share words with or are conceptually related to the query
+func GetRelatedSearches(query string, maxResults int) []string {
+	if query == "" || maxResults <= 0 {
+		return nil
+	}
+
+	query = strings.ToLower(strings.TrimSpace(query))
+	queryWords := strings.Fields(query)
+	if len(queryWords) == 0 {
+		return nil
+	}
+
+	allTerms := getAllSuggestions()
+	type scoredTerm struct {
+		term  string
+		score int
+	}
+
+	var related []scoredTerm
+	seenTerms := make(map[string]bool)
+
+	for _, term := range allTerms {
+		termLower := strings.ToLower(term)
+
+		// Skip if exact match with query
+		if termLower == query {
+			continue
+		}
+
+		// Skip if we've seen this term
+		if seenTerms[termLower] {
+			continue
+		}
+
+		score := 0
+		termWords := strings.Fields(termLower)
+
+		// Score based on shared words
+		for _, qw := range queryWords {
+			if len(qw) < 3 {
+				continue
+			}
+			for _, tw := range termWords {
+				if tw == qw {
+					// Exact word match
+					score += 20
+				} else if strings.HasPrefix(tw, qw) || strings.HasPrefix(qw, tw) {
+					// Prefix match
+					score += 10
+				} else if strings.Contains(tw, qw) || strings.Contains(qw, tw) {
+					// Contains match
+					score += 5
+				}
+			}
+		}
+
+		// Also check if query is a substring or vice versa
+		if strings.Contains(termLower, query) || strings.Contains(query, termLower) {
+			score += 15
+		}
+
+		if score > 0 {
+			seenTerms[termLower] = true
+			related = append(related, scoredTerm{term: term, score: score})
+		}
+	}
+
+	// Sort by score descending
+	sort.Slice(related, func(i, j int) bool {
+		return related[i].score > related[j].score
+	})
+
+	// Limit and extract terms
+	if len(related) > maxResults {
+		related = related[:maxResults]
+	}
+
+	result := make([]string, len(related))
+	for i, r := range related {
+		result[i] = r.term
+	}
+
+	return result
+}

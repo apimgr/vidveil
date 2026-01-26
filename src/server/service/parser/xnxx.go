@@ -99,5 +99,11 @@ func (p *XNXXParser) Parse(s *goquery.Selection) *VideoItem {
 		return nil
 	}
 
+	// Extract tags (if available in search results)
+	item.Tags = ExtractTags(s, ".video-metadata a", ".tags a", "a[href*='/tags/']", "a[href*='/c/']")
+
+	// Extract uploader/performer
+	item.Uploader = ExtractUploader(s, ".uploader a", "a[href*='/model/']", "a[href*='/pornstar/']", "a[href*='/channel/']")
+
 	return item
 }

@@ -63,5 +63,11 @@ func (p *EpornerParser) Parse(s *goquery.Selection) *VideoItem {
 	// Check for premium
 	item.IsPremium = IsPremiumContent(s, item.URL)
 
+	// Extract tags (if available in search results)
+	item.Tags = ExtractTags(s, ".mbcat a", ".tags a", "a[href*='/cat/']", "a[href*='/tag/']")
+
+	// Extract uploader/performer
+	item.Uploader = ExtractUploader(s, ".mbmod a", ".uploader a", "a[href*='/model/']", "a[href*='/channel/']")
+
 	return item
 }

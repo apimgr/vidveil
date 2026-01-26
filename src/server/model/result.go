@@ -24,6 +24,8 @@ type VideoResult struct {
 	SourceDisplay   string    `json:"source_display"`
 	Published       time.Time `json:"published,omitempty"`
 	Description     string    `json:"description,omitempty"`
+	Tags            []string  `json:"tags,omitempty"`
+	Performer       string    `json:"performer,omitempty"`
 }
 
 // SearchResponse represents the API response for a search
@@ -36,21 +38,30 @@ type SearchResponse struct {
 	Message    string           `json:"message,omitempty"` // Human-readable message
 }
 
+// EngineStatInfo holds per-engine statistics from a search
+type EngineStatInfo struct {
+	ResponseTimeMS int64  `json:"response_time_ms"`
+	ResultCount    int    `json:"result_count"`
+	Error          string `json:"error,omitempty"`
+}
+
 // SearchData holds the search results and metadata
 // SearchQuery is the query after bang parsing
 // HasBang indicates whether bangs were used
 // BangEngines contains engines from bang parsing
 // Cached indicates whether results came from cache
 type SearchData struct {
-	Query         string   `json:"query"`
-	SearchQuery   string   `json:"search_query,omitempty"`
-	Results       []VideoResult `json:"results"`
-	EnginesUsed   []string `json:"engines_used"`
-	EnginesFailed []string `json:"engines_failed"`
-	SearchTimeMS  int64    `json:"search_time_ms"`
-	HasBang       bool     `json:"has_bang,omitempty"`
-	BangEngines   []string `json:"bang_engines,omitempty"`
-	Cached        bool     `json:"cached,omitempty"`
+	Query           string                    `json:"query"`
+	SearchQuery     string                    `json:"search_query,omitempty"`
+	Results         []VideoResult             `json:"results"`
+	EnginesUsed     []string                  `json:"engines_used"`
+	EnginesFailed   []string                  `json:"engines_failed"`
+	SearchTimeMS    int64                     `json:"search_time_ms"`
+	HasBang         bool                      `json:"has_bang,omitempty"`
+	BangEngines     []string                  `json:"bang_engines,omitempty"`
+	Cached          bool                      `json:"cached,omitempty"`
+	EngineStats     map[string]EngineStatInfo `json:"engine_stats,omitempty"`
+	RelatedSearches []string                  `json:"related_searches,omitempty"`
 }
 
 // PaginationData holds pagination information

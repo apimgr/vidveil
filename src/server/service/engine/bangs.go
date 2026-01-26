@@ -112,7 +112,7 @@ var BangMapping = map[string]string{
 
 // ParsedQuery represents a query after bang parsing
 type ParsedQuery struct {
-	// The search query without bangs
+	// The search query without bangs, quotes, exclusions, and performers
 	Query string
 	// Engine names to search (empty = all)
 	Engines []string
@@ -120,6 +120,14 @@ type ParsedQuery struct {
 	HasBang bool
 	// If a bang was not recognized
 	InvalidBang string
+	// Exact phrases to require (from "quoted text")
+	ExactPhrases []string
+	// Words to exclude from results (from -word)
+	Exclusions []string
+	// Performer names to filter by (from @performer)
+	Performers []string
+	// Whether performer filter was specified
+	HasPerformer bool
 }
 
 // ParseBangs extracts bang commands from a query
@@ -128,21 +136,50 @@ type ParsedQuery struct {
 //   - !rt !ph query -> search redtube and pornhub for "query"
 //   - query !ph -> search pornhub for "query"
 //   - !pornhub query -> search pornhub for "query"
+//   - "exact phrase" -> require exact phrase match
+//   - -word -> exclude results containing word
+//   - @performer -> filter by performer name
 func ParseBangs(query string) ParsedQuery {
 	result := ParsedQuery{
-		Query:   query,
-		Engines: []string{},
-		HasBang: false,
+		Query:        query,
+		Engines:      []string{},
+		HasBang:      false,
+		ExactPhrases: []string{},
+		Exclusions:   []string{},
+		Performers:   []string{},
+		HasPerformer: false,
 	}
 
 	if query == "" {
 		return result
 	}
 
-	words := strings.Fields(query)
+	// First, extract quoted phrases
+	remaining := query
+	for {
+		start := strings.Index(remaining, "\"")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(remaining[start+1:], "\"")
+		if end == -1 {
+			break
+		}
+		// Extract the phrase (without quotes)
+		phrase := strings.TrimSpace(remaining[start+1 : start+1+end])
+		if phrase != "" {
+			result.ExactPhrases = append(result.ExactPhrases, phrase)
+		}
+		// Remove the quoted phrase from the query
+		remaining = remaining[:start] + remaining[start+1+end+1:]
+	}
+
+	words := strings.Fields(remaining)
 	var queryWords []string
 	// Deduplicate engines
 	engineSet := make(map[string]bool)
+	// Deduplicate performers
+	performerSet := make(map[string]bool)
 
 	for _, word := range words {
 		if strings.HasPrefix(word, "!") && len(word) > 1 {
@@ -158,6 +195,18 @@ func ParseBangs(query string) ParsedQuery {
 				result.InvalidBang = word
 				queryWords = append(queryWords, word)
 			}
+		} else if strings.HasPrefix(word, "@") && len(word) > 1 {
+			// Performer filter
+			performer := strings.ToLower(word[1:])
+			if !performerSet[performer] {
+				performerSet[performer] = true
+				result.Performers = append(result.Performers, performer)
+				result.HasPerformer = true
+			}
+		} else if strings.HasPrefix(word, "-") && len(word) > 1 {
+			// Exclusion term
+			exclusion := strings.ToLower(word[1:])
+			result.Exclusions = append(result.Exclusions, exclusion)
 		} else {
 			queryWords = append(queryWords, word)
 		}

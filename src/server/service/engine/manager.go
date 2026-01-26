@@ -134,11 +134,13 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 		wg.Add(1)
 		go func(e SearchEngine) {
 			defer wg.Done()
+			engineStart := time.Now()
 			results, err := e.Search(ctx, query, page)
 			resultsChan <- engineResult{
-				engine:  e.Name(),
-				results: results,
-				err:     err,
+				engine:         e.Name(),
+				results:        results,
+				err:            err,
+				responseTimeMS: time.Since(engineStart).Milliseconds(),
 			}
 		}(engine)
 	}
@@ -155,14 +157,22 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 	var enginesFailed []string
 	// Track seen URLs for deduplication
 	seen := make(map[string]bool)
+	// Track per-engine stats
+	engineStats := make(map[string]model.EngineStatInfo)
 
 	minDuration := m.appConfig.Search.MinDurationSeconds
 
 	for result := range resultsChan {
 		if result.err != nil {
 			enginesFailed = append(enginesFailed, result.engine)
+			engineStats[result.engine] = model.EngineStatInfo{
+				ResponseTimeMS: result.responseTimeMS,
+				ResultCount:    0,
+				Error:          result.err.Error(),
+			}
 		} else {
 			enginesUsed = append(enginesUsed, result.engine)
+			resultCount := 0
 			// Filter results by thumbnail validity, minimum duration, and deduplicate
 			for _, r := range result.results {
 				// Skip results with empty/invalid thumbnails
@@ -179,6 +189,11 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 				}
 				seen[r.URL] = true
 				allResults = append(allResults, r)
+				resultCount++
+			}
+			engineStats[result.engine] = model.EngineStatInfo{
+				ResponseTimeMS: result.responseTimeMS,
+				ResultCount:    resultCount,
 			}
 		}
 	}
@@ -199,6 +214,7 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 			EnginesUsed:   enginesUsed,
 			EnginesFailed: enginesFailed,
 			SearchTimeMS:  elapsed.Milliseconds(),
+			EngineStats:   engineStats,
 		},
 		Pagination: model.PaginationData{
 			Page:  page,
@@ -218,8 +234,68 @@ type scoredResult struct {
 // sortAndFilterByRelevance sorts results by relevance score and filters by minimum score
 // Returns filtered results that meet the minimum relevance threshold
 func sortAndFilterByRelevance(results []model.VideoResult, query string, minScore float64) []model.VideoResult {
+	return sortAndFilterByRelevanceWithOperators(results, query, minScore, nil, nil, nil)
+}
+
+// sortAndFilterByRelevanceWithOperators sorts results by relevance and applies search operators
+// exactPhrases requires results to contain all specified phrases
+// exclusions removes results containing any excluded word
+// performers filters by performer name (OR match)
+func sortAndFilterByRelevanceWithOperators(results []model.VideoResult, query string, minScore float64, exactPhrases []string, exclusions []string, performers []string) []model.VideoResult {
 	queryLower := strings.ToLower(query)
 	queryWords := strings.Fields(queryLower)
+
+	// First, apply search operators (exclusions, exact phrases, performers)
+	if len(exactPhrases) > 0 || len(exclusions) > 0 || len(performers) > 0 {
+		var operatorFiltered []model.VideoResult
+		for _, r := range results {
+			titleLower := strings.ToLower(r.Title)
+
+			// Check exclusions - skip if any excluded word is found
+			excluded := false
+			for _, ex := range exclusions {
+				if strings.Contains(titleLower, ex) {
+					excluded = true
+					break
+				}
+			}
+			if excluded {
+				continue
+			}
+
+			// Check exact phrases - require all phrases to be present
+			hasAllPhrases := true
+			for _, phrase := range exactPhrases {
+				if !strings.Contains(titleLower, strings.ToLower(phrase)) {
+					hasAllPhrases = false
+					break
+				}
+			}
+			if !hasAllPhrases {
+				continue
+			}
+
+			// Check performer filter - at least one performer must match (OR)
+			if len(performers) > 0 {
+				performerLower := strings.ToLower(r.Performer)
+				matchesPerformer := false
+				for _, p := range performers {
+					if strings.Contains(performerLower, p) {
+						matchesPerformer = true
+						break
+					}
+				}
+				if !matchesPerformer {
+					continue
+				}
+			}
+
+			operatorFiltered = append(operatorFiltered, r)
+		}
+		results = operatorFiltered
+	}
+
+	// If no query words, return operator-filtered results without scoring
 	if len(queryWords) == 0 {
 		return results
 	}
@@ -392,9 +468,10 @@ func (m *EngineManager) EnabledCount() int {
 
 // engineResult holds the result from a single engine search
 type engineResult struct {
-	engine  string
-	results []model.VideoResult
-	err     error
+	engine         string
+	results        []model.VideoResult
+	err            error
+	responseTimeMS int64
 }
 
 // isValidThumbnail checks if a thumbnail URL is valid and usable
@@ -431,6 +508,14 @@ type StreamResult struct {
 // SearchStream performs a search across enabled engines and streams results via channel
 // Results are deduplicated by URL across all engines
 func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
+	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil)
+}
+
+// SearchStreamWithOperators performs a streaming search with optional search operators
+// exactPhrases requires results to contain all specified phrases
+// exclusions removes results containing any excluded word
+// performers filters by performer name (OR match)
+func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
 	go func() {
@@ -470,6 +555,48 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 					// Skip if duration is known and below minimum
 					if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
 						continue
+					}
+
+					// Apply search operators
+					titleLower := strings.ToLower(r.Title)
+
+					// Check exclusions - skip if any excluded word is found
+					excluded := false
+					for _, ex := range exclusions {
+						if strings.Contains(titleLower, ex) {
+							excluded = true
+							break
+						}
+					}
+					if excluded {
+						continue
+					}
+
+					// Check exact phrases - require all phrases to be present
+					hasAllPhrases := true
+					for _, phrase := range exactPhrases {
+						if !strings.Contains(titleLower, strings.ToLower(phrase)) {
+							hasAllPhrases = false
+							break
+						}
+					}
+					if !hasAllPhrases {
+						continue
+					}
+
+					// Check performer filter - at least one performer must match (OR)
+					if len(performers) > 0 {
+						performerLower := strings.ToLower(r.Performer)
+						matchesPerformer := false
+						for _, p := range performers {
+							if strings.Contains(performerLower, p) {
+								matchesPerformer = true
+								break
+							}
+						}
+						if !matchesPerformer {
+							continue
+						}
 					}
 
 					// Deduplicate by URL

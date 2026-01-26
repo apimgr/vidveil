@@ -91,6 +91,8 @@ func (e *RedTubeEngine) convertToResult(item *parser.VideoItem) model.VideoResul
 		Quality:         item.Quality,
 		Source:          e.Name(),
 		SourceDisplay:   e.DisplayName(),
+		Tags:            item.Tags,
+		Performer:       item.Uploader,
 	}
 
 	// Parse rating if available

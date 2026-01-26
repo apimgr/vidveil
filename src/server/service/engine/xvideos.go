@@ -87,6 +87,8 @@ func (e *XVideosEngine) convertToResult(item *parser.VideoItem) model.VideoResul
 		Description:     item.Quality,
 		Source:          e.Name(),
 		SourceDisplay:   e.DisplayName(),
+		Tags:            item.Tags,
+		Performer:       item.Uploader,
 	}
 }
 

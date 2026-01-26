@@ -68,6 +68,7 @@ type VideoItem struct {
 	Uploader        string
 	Rating          string
 	IsPremium       bool
+	Tags            []string
 }
 
 // CleanText removes extra whitespace and trims text
@@ -294,4 +295,48 @@ func ParseRating(ratingText string) (string, float64) {
 	}
 
 	return ratingText, 0
+}
+
+// ExtractTags extracts unique tags from a goquery selection using multiple CSS selectors
+// Deduplicates and returns cleaned tag strings
+func ExtractTags(s *goquery.Selection, selectors ...string) []string {
+	seen := make(map[string]bool)
+	var tags []string
+
+	for _, sel := range selectors {
+		s.Find(sel).Each(func(_ int, el *goquery.Selection) {
+			tag := CleanText(el.Text())
+			// Skip empty or too short tags
+			if tag == "" || len(tag) < 2 {
+				return
+			}
+			// Skip if already seen (case-insensitive)
+			key := strings.ToLower(tag)
+			if seen[key] {
+				return
+			}
+			seen[key] = true
+			tags = append(tags, tag)
+		})
+	}
+
+	// Limit to reasonable number of tags
+	if len(tags) > 10 {
+		tags = tags[:10]
+	}
+
+	return tags
+}
+
+// ExtractUploader extracts the uploader/performer name from a goquery selection
+func ExtractUploader(s *goquery.Selection, selectors ...string) string {
+	for _, sel := range selectors {
+		if el := s.Find(sel).First(); el.Length() > 0 {
+			uploader := CleanText(el.Text())
+			if uploader != "" {
+				return uploader
+			}
+		}
+	}
+	return ""
 }

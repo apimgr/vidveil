@@ -92,6 +92,8 @@ func (e *XNXXEngine) convertToResult(item *parser.VideoItem) model.VideoResult {
 		Description:     item.Quality,
 		Source:          e.Name(),
 		SourceDisplay:   e.DisplayName(),
+		Tags:            item.Tags,
+		Performer:       item.Uploader,
 	}
 }
 

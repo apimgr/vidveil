@@ -1394,6 +1394,41 @@ if (document.readyState === 'loading') {
 
     window.showSearchSpinner = showSearchSpinner;
 
+    // Export history to JSON file
+    function exportHistory() {
+        var data = JSON.stringify(getHomeSearchHistory(), null, 2);
+        var blob = new Blob([data], {type: 'application/json'});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'vidveil-history.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showSuccess('History exported');
+    }
+
+    // Import history from JSON file
+    function importHistory(file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                var imported = JSON.parse(e.target.result);
+                if (Array.isArray(imported)) {
+                    localStorage.setItem('vidveil_history', JSON.stringify(imported));
+                    showSuccess('History imported (' + imported.length + ' items)');
+                    renderHomeSearchHistory();
+                } else {
+                    showError('Invalid file format');
+                }
+            } catch (err) {
+                showError('Failed to parse file');
+            }
+        };
+        reader.readAsText(file);
+    }
+
     // Export home functions
     window.initHomePage = initHomePage;
     window.handleSearchSubmit = handleSearchSubmit;
@@ -1401,7 +1436,10 @@ if (document.readyState === 'loading') {
     window.Vidveil.Home = {
         clearHistory: clearHomeSearchHistory,
         removeFromHistory: removeFromHomeHistory,
-        saveToHistory: saveHomeSearchToHistory
+        saveToHistory: saveHomeSearchToHistory,
+        getHistory: getHomeSearchHistory,
+        exportHistory: exportHistory,
+        importHistory: importHistory
     };
     window.clearSearchHistory = clearHomeSearchHistory;
     window.removeFromHistory = removeFromHomeHistory;
@@ -1484,6 +1522,8 @@ if (document.readyState === 'loading') {
                     setupInfiniteScroll();
                     // A11Y: Announce result count to screen readers
                     announce(allResults.length + ' results found');
+                    // Fetch and display related searches
+                    fetchRelatedSearches(searchQuery);
                 }
                 return;
             }
@@ -1889,6 +1929,42 @@ if (document.readyState === 'loading') {
             if (statusText) statusText.textContent = msg;
             if (engineStatus) engineStatus.textContent = enginesWithResults.size + ' engines';
         }
+    }
+
+    // Fetch and display related searches
+    function fetchRelatedSearches(query) {
+        if (!query) return;
+
+        // Fetch from API (JSON format includes related_searches)
+        fetch('/api/v1/search?q=' + encodeURIComponent(query) + '&nocache=1', {
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.ok && data.data && data.data.related_searches && data.data.related_searches.length > 0) {
+                displayRelatedSearches(data.data.related_searches);
+            }
+        })
+        .catch(function(err) {
+            // Silently fail - related searches are not critical
+        });
+    }
+
+    function displayRelatedSearches(searches) {
+        var container = document.getElementById('related-searches');
+        var tagsContainer = document.getElementById('related-tags');
+        if (!container || !tagsContainer) return;
+
+        tagsContainer.innerHTML = '';
+        for (var i = 0; i < searches.length && i < 8; i++) {
+            var tag = document.createElement('a');
+            tag.className = 'related-tag';
+            tag.href = '/search?q=' + encodeURIComponent(searches[i]);
+            tag.textContent = searches[i];
+            tagsContainer.appendChild(tag);
+        }
+
+        container.classList.remove('hidden');
     }
 
     // Infinite scroll - loads more pages as user scrolls

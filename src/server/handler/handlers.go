@@ -1258,7 +1258,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 
 	// SSE streaming mode - stream results as they arrive from engines
 	if format == "text/event-stream" {
-		h.handleSearchSSE(w, r, searchQuery, page, engineNames)
+		h.handleSearchSSE(w, r, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.Performers)
 		return
 	}
 
@@ -1293,6 +1293,9 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	results.Data.HasBang = parsed.HasBang
 	results.Data.BangEngines = parsed.Engines
 
+	// Add related searches
+	results.Data.RelatedSearches = engine.GetRelatedSearches(searchQuery, 8)
+
 	// Plain text format for .txt extension or Accept: text/plain
 	if format == "text/plain" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -1319,7 +1322,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSearchSSE handles SSE streaming for search results
-func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string) {
+func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string) {
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -1337,9 +1340,9 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 		h.metrics.IncrementSearches()
 	}
 
-	// Stream results
+	// Stream results with search operators
 	ctx := r.Context()
-	resultsChan := h.engineMgr.SearchStream(ctx, searchQuery, page, engineNames)
+	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers)
 
 	for result := range resultsChan {
 		data, err := json.Marshal(result)

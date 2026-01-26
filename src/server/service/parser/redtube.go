@@ -90,5 +90,11 @@ func (p *RedTubeParser) Parse(s *goquery.Selection) *VideoItem {
 	// Check for premium
 	item.IsPremium = IsPremiumContent(s, item.URL)
 
+	// Extract tags (if available in search results)
+	item.Tags = ExtractTags(s, ".tags a", ".video-tag", "a[href*='/categories/']", "a[href*='/tags/']")
+
+	// Extract uploader/performer
+	item.Uploader = ExtractUploader(s, ".uploader a", ".video-uploader a", "a[href*='/pornstar/']", "a[href*='/channels/']")
+
 	return item
 }

@@ -10,7 +10,7 @@
     <main class="results" id="main-content" role="main" aria-label="Search results">
         {{/* Search header with inline search and collapsible filters */}}
         <div class="search-header" id="search-header">
-            <form action="/search" method="get" class="search-form search-form--inline" role="search" aria-label="Refine search">
+            <form action="/search" method="get" class="search-form search-form--inline" role="search" aria-label="Refine search" onsubmit="return handleSearchSubmit(this)">
                 <div class="search-wrapper search-wrapper--compact">
                     <input type="text"
                            name="q"

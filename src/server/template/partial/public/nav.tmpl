@@ -11,7 +11,7 @@
     </div>
 
     {{/* Compact search form - matches search-form partial styling */}}
-    <form action="/search" method="get" class="search-form search-form--compact" role="search" aria-label="Quick search">
+    <form action="/search" method="get" class="search-form search-form--compact" role="search" aria-label="Quick search" onsubmit="return handleSearchSubmit(this)">
         <label for="nav-search-input" class="visually-hidden">Search query</label>
         <div class="search-wrapper">
             <input type="text"

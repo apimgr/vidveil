@@ -1143,6 +1143,81 @@ header .search-form {
     color: var(--bg-primary);
 }
 
+/* Card menu (three-dot menu on video cards) */
+.video-card {
+    position: relative;
+}
+
+.card-menu-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.2s, background 0.2s;
+}
+
+.video-card:hover .card-menu-btn,
+.card-menu-btn:focus,
+.card-menu.visible + .card-menu-btn,
+.video-card:has(.card-menu.visible) .card-menu-btn {
+    opacity: 1;
+}
+
+.card-menu-btn:hover {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.card-menu {
+    display: none;
+    position: absolute;
+    top: 40px;
+    right: 8px;
+    min-width: 160px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--shadow);
+    z-index: 20;
+    overflow: hidden;
+}
+
+.card-menu.visible {
+    display: block;
+}
+
+.card-menu-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+}
+
+.card-menu-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.card-menu-item + .card-menu-item {
+    border-top: 1px solid var(--border);
+}
+
 /* Infinite scroll sentinel */
 .infinite-scroll-sentinel {
     height: 1px;
@@ -1824,6 +1899,30 @@ header .search-form {
     animation: spin 0.6s linear infinite;
     vertical-align: middle;
     margin-right: 6px;
+}
+
+/* Loading state for icon-only buttons */
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.btn-loading svg {
+    opacity: 0.3;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
 }
 
 .initial-loading {
@@ -3669,6 +3768,101 @@ a:focus-visible {
 .filter-select:not([value=""]):not(:first-child) {
     border-color: var(--accent);
     background-color: var(--color-primary-bg);
+}
+
+/* Source filter multi-select dropdown */
+.filter-group--sources {
+    position: relative;
+}
+
+.source-filter-wrapper {
+    position: relative;
+}
+
+.source-filter-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    text-align: left;
+}
+
+.source-filter-toggle:hover {
+    border-color: var(--text-secondary);
+}
+
+.source-filter-toggle[aria-expanded="true"] {
+    border-color: var(--accent);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.source-filter-toggle svg {
+    flex-shrink: 0;
+    transition: transform 0.2s;
+}
+
+.source-filter-toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+}
+
+.source-filter-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--accent);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    z-index: 100;
+}
+
+.source-filter-dropdown.visible {
+    display: block;
+}
+
+.source-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.1s;
+}
+
+.source-option:hover {
+    background: var(--bg-secondary);
+}
+
+.source-option input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.source-option span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.source-options {
+    border-top: 1px solid var(--border);
 }
 
 /* Search header for results page */

@@ -50,12 +50,23 @@
                 </select>
             </div>
             {{else}}
-            <div class="filter-group">
-                <label for="filter-source" class="filter-label">Source</label>
-                <select id="filter-source" name="source" onchange="handleFilterChange()" class="filter-select">
-                    <option value="">All Sources</option>
-                    {{/* Source options populated dynamically by JS */}}
-                </select>
+            <div class="filter-group filter-group--sources">
+                <label class="filter-label">Sources</label>
+                <div class="source-filter-wrapper">
+                    <button type="button" class="source-filter-toggle" id="source-filter-toggle" onclick="toggleSourceFilter()" aria-expanded="false" aria-controls="source-filter-list">
+                        <span id="source-filter-label">All Sources</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="source-filter-dropdown" id="source-filter-list" role="group" aria-label="Source filter options">
+                        <label class="source-option">
+                            <input type="checkbox" id="source-all" checked onchange="toggleAllSources(this.checked)">
+                            <span>All Sources</span>
+                        </label>
+                        <div class="source-options" id="source-options">
+                            {{/* Source checkboxes populated dynamically by JS */}}
+                        </div>
+                    </div>
+                </div>
             </div>
             {{end}}
         </div>

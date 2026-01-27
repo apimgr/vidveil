@@ -302,6 +302,8 @@ func (s *Server) setupRoutes() {
 	auth := handler.NewAuthHandler(s.appConfig)
 	// Link admin handler for authentication
 	auth.SetAdminHandler(admin)
+	// Admin auth routes per AI.md PART 17
+	// VidVeil is stateless - no PART 34 (Multi-User), only Server Admin auth
 	s.router.Route("/auth", func(r chi.Router) {
 		r.Get("/login", auth.LoginPage)
 		r.Post("/login", auth.LoginPage)
@@ -309,24 +311,10 @@ func (s *Server) setupRoutes() {
 		// Per AI.md PART 17: 2FA verification step (after password, before session)
 		r.Get("/2fa", auth.TwoFactorPage)
 		r.Post("/2fa", auth.TwoFactorPage)
-		r.Get("/register", auth.RegisterPage)
-		r.Post("/register", auth.RegisterPage)
 		r.Get("/password/forgot", auth.PasswordForgotPage)
 		r.Post("/password/forgot", auth.PasswordForgotPage)
 		r.Get("/password/reset/{token}", auth.PasswordResetPage)
 		r.Post("/password/reset", auth.PasswordResetPage)
-		r.Get("/verify/{token}", auth.VerifyPage)
-	})
-
-	// User routes per AI.md PART 14 (Route Scopes - plural)
-	user := handler.NewUserHandler(s.appConfig)
-	s.router.Route("/users", func(r chi.Router) {
-		r.Get("/profile", user.ProfilePage)
-		r.Get("/settings", user.SettingsPage)
-		r.Get("/tokens", user.TokensPage)
-		r.Get("/security", user.SecurityPage)
-		r.Get("/security/sessions", user.SecurityPage)
-		r.Get("/security/2fa", user.SecurityPage)
 	})
 
 	// Admin panel routes - PART 14 (routes), PART 17 (admin panel)
@@ -488,30 +476,8 @@ func (s *Server) setupRoutes() {
 			r.Get("/help", server.APIHelp)
 		})
 
-		// Auth API per AI.md PART 14
-		r.Route("/auth", func(r chi.Router) {
-			r.Post("/register", auth.APIRegister)
-			r.Post("/login", auth.APILogin)
-			r.Post("/logout", auth.APILogout)
-			r.Post("/password/forgot", auth.APIPasswordForgot)
-			r.Post("/password/reset", auth.APIPasswordReset)
-			r.Post("/verify", auth.APIVerify)
-			r.Post("/refresh", auth.APIRefresh)
-		})
-
 		// Proxy endpoints (plural per PART 14)
 		r.Get("/proxy/thumbnails", h.ProxyThumbnail)
-
-		// User API per AI.md PART 14 (plural)
-		r.Route("/users", func(r chi.Router) {
-			r.Get("/profile", user.APIProfile)
-			r.Patch("/profile", user.APIProfile)
-			r.Post("/password", user.APIPassword)
-			r.Get("/tokens", user.APITokens)
-			r.Post("/tokens", user.APITokens)
-			r.Get("/sessions", user.APISessions)
-			r.Get("/2fa", user.API2FA)
-		})
 
 		// Admin Profile API (session or token) - PART 17
 		// Uses configurable admin path

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 31: Username and Email Validation
+// AI.md PART 17: Server Admin username and password validation
+// VidVeil is stateless - no PART 34 (Multi-User), only Server Admin validation
 package validation
 
 import (
@@ -8,93 +9,7 @@ import (
 	"strings"
 )
 
-// UsernameBlocklist per AI.md PART 31
-// Server admin account is exempt from this blocklist
-var UsernameBlocklist = []string{
-	// System & Administrative
-	"admin", "administrator", "root", "system", "sysadmin", "superuser",
-	"master", "owner", "operator", "manager", "moderator", "mod",
-	"staff", "support", "helpdesk", "help", "service", "daemon",
-
-	// Server & Technical
-	"server", "host", "node", "cluster", "api", "www", "web", "mail",
-	"email", "smtp", "ftp", "ssh", "dns", "proxy", "gateway", "router",
-	"firewall", "localhost", "local", "internal", "external", "public",
-	"private", "network", "database", "db", "cache", "redis", "mysql",
-	"postgres", "mongodb", "elastic", "nginx", "apache", "docker",
-
-	// Application & Service Names
-	"app", "application", "bot", "robot", "crawler", "spider", "scraper",
-	"webhook", "callback", "cron", "scheduler", "worker", "queue", "job",
-	"task", "process", "microservice", "lambda", "function",
-
-	// Authentication & Security
-	"auth", "authentication", "login", "logout", "signin", "signout",
-	"signup", "register", "password", "passwd", "token", "oauth", "sso",
-	"saml", "ldap", "kerberos", "security", "secure", "ssl", "tls",
-	"certificate", "cert", "key", "secret", "credential", "session",
-
-	// Roles & Permissions
-	"guest", "anonymous", "anon", "user", "users", "member", "members",
-	"subscriber", "editor", "author", "contributor", "reviewer", "auditor",
-	"analyst", "developer", "dev", "devops", "engineer", "architect",
-	"designer", "tester", "qa", "billing", "finance", "legal", "hr",
-	"sales", "marketing", "ceo", "cto", "cfo", "coo", "founder", "cofounder",
-
-	// Common Reserved
-	"account", "accounts", "profile", "profiles", "settings", "config",
-	"configuration", "dashboard", "panel", "console", "portal", "home",
-	"index", "main", "default", "null", "nil", "undefined", "void",
-	"true", "false", "test", "testing", "debug", "demo", "example",
-	"sample", "temp", "temporary", "tmp", "backup", "archive", "log",
-	"logs", "audit", "report", "reports", "analytics", "stats", "status",
-
-	// API & Endpoints
-	"rest", "graphql", "grpc", "websocket", "ws", "wss", "http",
-	"https", "endpoint", "endpoints", "route", "routes", "path", "url",
-	"uri", "hook", "hooks", "event", "events", "stream",
-
-	// Content & Media
-	"blog", "news", "article", "articles", "post", "posts", "page", "pages",
-	"feed", "rss", "atom", "sitemap", "robots", "favicon", "static",
-	"assets", "images", "image", "img", "media", "upload", "uploads",
-	"download", "downloads", "file", "files", "document", "documents",
-
-	// Communication
-	"contact", "message", "messages", "chat", "notification", "notifications",
-	"alert", "alerts", "inbox", "outbox", "sent", "draft", "drafts",
-	"spam", "abuse", "flag", "block", "mute", "ban",
-
-	// Commerce & Billing
-	"shop", "store", "cart", "checkout", "order", "orders", "invoice",
-	"invoices", "payment", "payments", "subscription", "subscriptions",
-	"plan", "plans", "pricing", "refund", "coupon", "discount",
-
-	// Social Features
-	"follow", "follower", "followers", "following", "friend", "friends",
-	"like", "likes", "share", "shares", "comment", "comments", "reply",
-	"mention", "mentions", "tag", "tags", "group", "groups", "team", "teams",
-	"community", "communities", "forum", "forums", "channel", "channels",
-
-	// Brand & Legal
-	"official", "verified", "trusted", "partner", "affiliate", "sponsor",
-	"brand", "trademark", "copyright", "terms", "privacy",
-	"policy", "policies", "tos", "eula", "gdpr", "dmca",
-
-	// Common Spam Patterns
-	"info", "noreply", "no-reply", "donotreply", "mailer", "postmaster",
-	"webmaster", "hostmaster", "junk", "trash",
-
-	// Project-specific
-	"vidveil",
-}
-
-// CriticalTerms are checked as substrings (more strict)
-var criticalTerms = []string{
-	"admin", "root", "system", "mod", "official", "verified",
-}
-
-// Username validation regex per PART 31
+// Username validation regex per AI.md PART 31
 // Allowed: a-z, 0-9, _, - (lowercase only)
 // Must start with letter
 // Cannot end with _ or -
@@ -111,8 +26,8 @@ func (e *UsernameError) Error() string {
 	return e.Message
 }
 
-// ValidateUsername validates a username per AI.md PART 31
-// Set isAdmin=true to exempt from blocklist (for server admin accounts)
+// ValidateUsername validates a Server Admin username per AI.md PART 17
+// VidVeil only has Server Admins, no regular users - blocklist not applicable
 func ValidateUsername(username string, isAdmin bool) error {
 	// Convert to lowercase for validation
 	username = strings.ToLower(username)
@@ -161,72 +76,12 @@ func ValidateUsername(username string, isAdmin bool) error {
 		}
 	}
 
-	// Skip blocklist check for admin accounts
-	if isAdmin {
-		return nil
-	}
-
-	// Check blocklist (exact match)
-	for _, blocked := range UsernameBlocklist {
-		if username == blocked {
-			return &UsernameError{
-				Field:   "username",
-				Message: "Username contains blocked word: " + blocked,
-			}
-		}
-	}
-
-	// Check critical terms as substrings
-	for _, term := range criticalTerms {
-		if strings.Contains(username, term) {
-			return &UsernameError{
-				Field:   "username",
-				Message: "Username contains blocked word: " + term,
-			}
-		}
-	}
-
 	return nil
 }
 
-// ValidateEmail validates an email address
-func ValidateEmail(email string) error {
-	email = strings.ToLower(strings.TrimSpace(email))
-
-	if email == "" {
-		return &UsernameError{
-			Field:   "email",
-			Message: "Email address is required",
-		}
-	}
-
-	// Basic email regex
-	emailRegex := regexp.MustCompile(`^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$`)
-	if !emailRegex.MatchString(email) {
-		return &UsernameError{
-			Field:   "email",
-			Message: "Please enter a valid email address",
-		}
-	}
-
-	return nil
-}
-
-// ValidatePassword validates password strength per AI.md PART 22
-// Minimum requirements: 8 chars, 1 upper, 1 lower, 1 number, 1 special
-func ValidatePassword(password string) error {
-	return ValidatePasswordWithPolicy(password, false)
-}
-
-// ValidateAdminPassword validates admin password with stricter requirements
-// Minimum 12 characters for admin accounts
+// ValidateAdminPassword validates Server Admin password with stricter requirements
+// Minimum 12 characters for admin accounts per AI.md PART 17
 func ValidateAdminPassword(password string) error {
-	return ValidatePasswordWithPolicy(password, true)
-}
-
-// ValidatePasswordWithPolicy validates password with configurable admin flag
-// Per AI.md PART 1: Passwords must not have leading/trailing whitespace
-func ValidatePasswordWithPolicy(password string, isAdmin bool) error {
 	// Per AI.md PART 1: Reject passwords with leading/trailing whitespace
 	if password != strings.TrimSpace(password) {
 		return &UsernameError{
@@ -235,10 +90,7 @@ func ValidatePasswordWithPolicy(password string, isAdmin bool) error {
 		}
 	}
 
-	minLen := 8
-	if isAdmin {
-		minLen = 12
-	}
+	minLen := 12
 
 	if len(password) < minLen {
 		return &UsernameError{

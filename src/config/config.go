@@ -103,9 +103,6 @@ type ServerConfig struct {
 	// GeoIP
 	GeoIP GeoIPConfig `yaml:"geoip"`
 
-	// Users (PART 31)
-	Users UsersConfig `yaml:"users"`
-
 	// Security (PART 22) - Blocklists, CVE, etc
 	Security SecurityConfig `yaml:"security"`
 
@@ -215,92 +212,6 @@ type GeoIPDatabasesConfig struct {
 	ASN     bool `yaml:"asn"`
 	Country bool `yaml:"country"`
 	City    bool `yaml:"city"`
-}
-
-// UsersConfig holds user management settings per AI.md PART 34
-type UsersConfig struct {
-	// Enable multi-user mode (default: false = admin-only)
-	Enabled bool `yaml:"enabled"`
-	// Registration settings
-	Registration RegistrationConfig `yaml:"registration"`
-	// Role configuration
-	Roles RolesConfig `yaml:"roles"`
-	// API token settings
-	Tokens TokensConfig `yaml:"tokens"`
-	// Profile settings
-	Profile ProfileConfig `yaml:"profile"`
-	// Authentication settings
-	Auth UserAuthConfig `yaml:"auth"`
-	// Per-user rate limits
-	Limits UserLimitsConfig `yaml:"limits"`
-}
-
-// RegistrationConfig holds user registration settings
-type RegistrationConfig struct {
-	// Allow public registration
-	Enabled bool `yaml:"enabled"`
-	// Require email verification
-	RequireEmailVerification bool `yaml:"require_email_verification"`
-	// Admin must approve new users
-	RequireApproval bool `yaml:"require_approval"`
-	// Allowed email domains (empty = all)
-	AllowedDomains []string `yaml:"allowed_domains"`
-	// Blocked email domains
-	BlockedDomains []string `yaml:"blocked_domains"`
-}
-
-// RolesConfig holds role configuration
-type RolesConfig struct {
-	// Available roles
-	Available []string `yaml:"available"`
-	// Default role for new users
-	Default string `yaml:"default"`
-}
-
-// TokensConfig holds API token settings
-type TokensConfig struct {
-	// Allow users to generate API tokens
-	Enabled bool `yaml:"enabled"`
-	// Maximum tokens per user
-	MaxPerUser int `yaml:"max_per_user"`
-	// Token expiration (0 = never)
-	ExpirationDays int `yaml:"expiration_days"`
-}
-
-// ProfileConfig holds user profile settings
-type ProfileConfig struct {
-	// Allow users to upload avatars
-	AllowAvatar bool `yaml:"allow_avatar"`
-	// Allow users to set display name
-	AllowDisplayName bool `yaml:"allow_display_name"`
-	// Allow users to set bio
-	AllowBio bool `yaml:"allow_bio"`
-}
-
-// UserAuthConfig holds user authentication settings
-type UserAuthConfig struct {
-	// Session duration (e.g., "30d")
-	SessionDuration string `yaml:"session_duration"`
-	// Require 2FA for all users
-	Require2FA bool `yaml:"require_2fa"`
-	// Allow 2FA (user choice)
-	Allow2FA bool `yaml:"allow_2fa"`
-	// Minimum password length
-	PasswordMinLength int `yaml:"password_min_length"`
-	// Require uppercase
-	PasswordRequireUppercase bool `yaml:"password_require_uppercase"`
-	// Require number
-	PasswordRequireNumber bool `yaml:"password_require_number"`
-	// Require special character
-	PasswordRequireSpecial bool `yaml:"password_require_special"`
-}
-
-// UserLimitsConfig holds per-user rate limit settings
-type UserLimitsConfig struct {
-	// Rate limit per minute (0 = use global)
-	RequestsPerMinute int `yaml:"requests_per_minute"`
-	// Rate limit per day (0 = use global)
-	RequestsPerDay int `yaml:"requests_per_day"`
 }
 
 // LogsConfig holds logging settings per AI.md PART 11
@@ -881,46 +792,6 @@ func DefaultAppConfig() *AppConfig {
 					ASN:     true,
 					Country: true,
 					City:    false,
-				},
-			},
-			// Admin-only mode by default per AI.md
-			Users: UsersConfig{
-				Enabled: false,
-				Registration: RegistrationConfig{
-					Enabled:                  false,
-					RequireEmailVerification: true,
-					RequireApproval:          false,
-					AllowedDomains:           []string{},
-					BlockedDomains:           []string{},
-				},
-				Roles: RolesConfig{
-					Available: []string{"admin", "user"},
-					Default:   "user",
-				},
-				Tokens: TokensConfig{
-					Enabled:    true,
-					MaxPerUser: 5,
-					// Never expire
-					ExpirationDays: 0,
-				},
-				Profile: ProfileConfig{
-					AllowAvatar:      true,
-					AllowDisplayName: true,
-					AllowBio:         true,
-				},
-				Auth: UserAuthConfig{
-					SessionDuration:          "30d",
-					Require2FA:               false,
-					Allow2FA:                 true,
-					PasswordMinLength:        8,
-					PasswordRequireUppercase: false,
-					PasswordRequireNumber:    false,
-					PasswordRequireSpecial:   false,
-				},
-				// Use global rate limits
-				Limits: UserLimitsConfig{
-					RequestsPerMinute: 0,
-					RequestsPerDay:    0,
 				},
 			},
 			// Backup settings per AI.md PART 22

@@ -658,7 +658,6 @@ func (h *AdminHandler) EmailPage(w http.ResponseWriter, r *http.Request) {
 		{"Name": "scheduler_error", "Description": "Scheduled task failure", "Status": "Active"},
 		{"Name": "test", "Description": "Test email template", "Status": "Active"},
 		{"Name": "account_locked", "Description": "Account locked notification", "Status": "Active"},
-		{"Name": "email_verification", "Description": "Email verification request", "Status": "Active"},
 		{"Name": "maintenance_scheduled", "Description": "Scheduled maintenance notice", "Status": "Active"},
 		{"Name": "password_changed", "Description": "Password changed confirmation", "Status": "Active"},
 	}

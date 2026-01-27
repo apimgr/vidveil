@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 31: Route Standards - /auth/ and /user/ scopes
-// AI.md PART 17: TOTP Two-Factor Authentication login flow
+// AI.md PART 17: Admin authentication and TOTP Two-Factor Authentication
+// VidVeil is stateless - no PART 34 (Multi-User), only Server Admin auth
 package handler
 
 import (
@@ -24,7 +24,7 @@ type PendingAuth struct {
 	CreatedAt  time.Time
 }
 
-// AuthHandler handles authentication routes per AI.md PART 31
+// AuthHandler handles admin authentication routes per AI.md PART 17
 type AuthHandler struct {
 	appConfig   *config.AppConfig
 	adminHdl    *AdminHandler
@@ -85,7 +85,7 @@ func (h *AuthHandler) cleanupPendingAuth() {
 	}
 }
 
-// LoginPage renders the login form and handles authentication per AI.md PART 31
+// LoginPage renders the admin login form and handles authentication per AI.md PART 17
 // Per AI.md PART 17: If 2FA enabled, show 2FA prompt after password validation
 func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	// Clean up expired pending auths
@@ -314,7 +314,7 @@ func (h *AuthHandler) render2FAPage(w http.ResponseWriter, errorMsg string) {
 	w.Write([]byte(html))
 }
 
-// renderLoginPage renders the login form using common.css styles per AI.md PART 16
+// renderLoginPage renders the admin login form using common.css styles per AI.md PART 16
 func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	errorHtml := ""
@@ -326,15 +326,15 @@ func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - %s</title>
+    <title>Admin Login - %s</title>
     <link rel="stylesheet" href="/static/css/common.css">
 </head>
 <body class="centered-page-body">
     <div class="setup-container">
         <div class="setup-card">
             <div class="setup-header">
-                <h1>Login</h1>
-                <p>Sign in to your account</p>
+                <h1>Admin Login</h1>
+                <p>Sign in to the admin panel</p>
             </div>
             %s
             <form method="POST" id="login-form">
@@ -358,16 +358,10 @@ func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
 	w.Write([]byte(html))
 }
 
-// LogoutPage handles logout (web route)
+// LogoutPage handles admin logout (web route)
 func (h *AuthHandler) LogoutPage(w http.ResponseWriter, r *http.Request) {
-	// Clear any user session cookies per AI.md PART 11
-	http.SetCookie(w, DeleteCookie("user_session", "/"))
-	http.Redirect(w, r, "/", http.StatusFound)
-}
-
-// RegisterPage renders registration form
-func (h *AuthHandler) RegisterPage(w http.ResponseWriter, r *http.Request) {
-	// Registration not implemented for this project - redirect to home
+	// Clear admin session cookie per AI.md PART 11
+	http.SetCookie(w, DeleteCookie("vidveil_admin_session", "/admin"))
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -387,10 +381,10 @@ func (h *AuthHandler) PasswordForgotPage(w http.ResponseWriter, r *http.Request)
         <div class="setup-card">
             <div class="setup-header">
                 <h1>Password Reset</h1>
-                <p>Password reset functionality is managed through the admin panel</p>
+                <p>Admin password reset is managed through the server CLI</p>
             </div>
             <p class="help-text text-center mt-lg">
-                <a href="/">← Back to Home</a>
+                <a href="/auth/login">← Back to Login</a>
             </p>
         </div>
     </div>
@@ -419,217 +413,11 @@ func (h *AuthHandler) PasswordResetPage(w http.ResponseWriter, r *http.Request) 
             </div>
             <div class="alert alert-error">The reset token is invalid or has expired</div>
             <p class="help-text text-center mt-lg">
-                <a href="/">← Back to Home</a>
+                <a href="/auth/login">← Back to Login</a>
             </p>
         </div>
     </div>
 </body>
 </html>`, h.appConfig.Server.Title)
 	w.Write([]byte(html))
-}
-
-// VerifyPage handles email verification using common.css per AI.md PART 16
-func (h *AuthHandler) VerifyPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en" class="theme-dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Verification - %s</title>
-    <link rel="stylesheet" href="/static/css/common.css">
-</head>
-<body class="centered-page-body">
-    <div class="setup-container">
-        <div class="setup-card">
-            <div class="setup-header">
-                <h1>Email Verification</h1>
-                <p>Email verification is not required for this application</p>
-            </div>
-            <p class="help-text text-center mt-lg">
-                <a href="/">← Back to Home</a>
-            </p>
-        </div>
-    </div>
-</body>
-</html>`, h.appConfig.Server.Title)
-	w.Write([]byte(html))
-}
-
-// API Routes per AI.md PART 31
-
-// APILogin handles POST /api/v1/auth/login
-func (h *AuthHandler) APILogin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	// This project uses admin panel authentication, not user auth
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": false,
-		"error":   "User authentication is handled through the admin panel",
-		"code":    "NOT_IMPLEMENTED",
-	})
-}
-
-// APILogout handles POST /api/v1/auth/logout
-func (h *AuthHandler) APILogout(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
-		"message": "Logged out successfully",
-	})
-}
-
-// APIRegister handles POST /api/v1/auth/register
-func (h *AuthHandler) APIRegister(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": false,
-		"error":   "Registration is not available for this application",
-		"code":    "NOT_IMPLEMENTED",
-	})
-}
-
-// APIPasswordForgot handles POST /api/v1/auth/password/forgot
-func (h *AuthHandler) APIPasswordForgot(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": false,
-		"error":   "Password reset is managed through the admin panel",
-		"code":    "NOT_IMPLEMENTED",
-	})
-}
-
-// APIPasswordReset handles POST /api/v1/auth/password/reset
-func (h *AuthHandler) APIPasswordReset(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": false,
-		"error":   "Password reset is managed through the admin panel",
-		"code":    "NOT_IMPLEMENTED",
-	})
-}
-
-// APIVerify handles POST /api/v1/auth/verify
-func (h *AuthHandler) APIVerify(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": false,
-		"error":   "Email verification is not required",
-		"code":    "NOT_IMPLEMENTED",
-	})
-}
-
-// APIRefresh handles POST /api/v1/auth/refresh
-func (h *AuthHandler) APIRefresh(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": false,
-		"error":   "Token refresh is managed through the admin panel",
-		"code":    "NOT_IMPLEMENTED",
-	})
-}
-
-// UserHandler handles /user/ routes per AI.md PART 31
-type UserHandler struct {
-	appConfig *config.AppConfig
-}
-
-// NewUserHandler creates a new user handler
-func NewUserHandler(appConfig *config.AppConfig) *UserHandler {
-	return &UserHandler{
-		appConfig: appConfig,
-	}
-}
-
-// ProfilePage renders user profile (web route)
-func (h *UserHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
-	// Redirect to preferences page for this project
-	http.Redirect(w, r, "/preferences", http.StatusFound)
-}
-
-// SettingsPage renders user settings (web route)
-func (h *UserHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/preferences", http.StatusFound)
-}
-
-// TokensPage renders API tokens management
-func (h *UserHandler) TokensPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html><head><title>API Tokens</title></head>
-<body>
-<h1>API Tokens</h1>
-<p>API token management is available in the admin panel.</p>
-<a href="/admin">Go to Admin Panel</a>
-</body></html>`))
-}
-
-// SecurityPage renders security settings
-func (h *UserHandler) SecurityPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html><head><title>Security Settings</title></head>
-<body>
-<h1>Security Settings</h1>
-<p>Security settings are managed through the admin panel.</p>
-<a href="/admin">Go to Admin Panel</a>
-</body></html>`))
-}
-
-// API Routes per AI.md PART 31
-
-// APIProfile handles GET/PATCH /api/v1/user/profile
-func (h *UserHandler) APIProfile(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == http.MethodGet {
-		// Return basic profile (no user system in this project)
-		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"ok": true,
-			"data": map[string]interface{}{
-				"theme":      h.appConfig.Web.UI.Theme,
-				"created_at": time.Now().Format(time.RFC3339),
-			},
-		})
-		return
-	}
-
-	// PATCH
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": false,
-		"error":   "Profile updates not supported",
-		"code":    "NOT_IMPLEMENTED",
-	})
-}
-
-// APIPassword handles POST /api/v1/user/password
-func (h *UserHandler) APIPassword(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": false,
-		"error":   "Password changes are managed through the admin panel",
-		"code":    "NOT_IMPLEMENTED",
-	})
-}
-
-// APITokens handles GET/POST /api/v1/user/tokens
-func (h *UserHandler) APITokens(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
-		"data":    []interface{}{},
-		"message": "API tokens are managed through the admin panel",
-	})
-}
-
-// APISessions handles GET /api/v1/user/sessions
-func (h *UserHandler) APISessions(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
-		"data":    []interface{}{},
-		"message": "Sessions are managed through the admin panel",
-	})
-}
-
-// API2FA handles GET /api/v1/user/2fa
-func (h *UserHandler) API2FA(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
-		"data": map[string]interface{}{
-			"enabled": false,
-		},
-		"message": "2FA is managed through the admin panel",
-	})
 }

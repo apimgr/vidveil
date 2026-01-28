@@ -58,6 +58,10 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                     <div class="source-filter-dropdown" id="source-filter-list" role="group" aria-label="Source filter options">
+                        <label class="source-option source-option--special">
+                            <input type="checkbox" id="filter-preview-only" onchange="updatePreviewFilter(this.checked)">
+                            <span>With Preview Only</span>
+                        </label>
                         <label class="source-option">
                             <input type="checkbox" id="source-all" checked onchange="toggleAllSources(this.checked)">
                             <span>All Sources</span>

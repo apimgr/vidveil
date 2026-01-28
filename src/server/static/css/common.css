@@ -3861,6 +3861,16 @@ a:focus-visible {
     white-space: nowrap;
 }
 
+.source-option--special {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.source-option--special span {
+    font-weight: 500;
+    color: var(--accent);
+}
+
 .source-options {
     border-top: 1px solid var(--border);
 }

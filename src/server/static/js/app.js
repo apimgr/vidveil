@@ -1477,6 +1477,7 @@ if (document.readyState === 'loading') {
     var searchCurrentQualityFilter = '';
     var searchCurrentSourceFilters = new Set(); // Multiple sources allowed
     var searchCurrentSort = '';
+    var searchPreviewOnly = false;
     var startTime = Date.now();
     var isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     var currentPage = 1;
@@ -1704,6 +1705,7 @@ if (document.readyState === 'loading') {
 
         var previewUrl = r.preview_url || '';
         var hasPreview = previewUrl && previewUrl.length > 0;
+        card.dataset.hasPreview = hasPreview ? '1' : '';
         var downloadUrl = r.download_url || '';
         var hasDownload = downloadUrl && downloadUrl.length > 0;
 
@@ -1942,6 +1944,12 @@ if (document.readyState === 'loading') {
         updateFilterCount();
     }
 
+    function updatePreviewFilter(checked) {
+        searchPreviewOnly = checked;
+        applySearchFiltersAndSort();
+        updateFilterCount();
+    }
+
     function searchSortResults(value) {
         searchCurrentSort = value;
         applySearchFiltersAndSort();
@@ -1968,6 +1976,9 @@ if (document.readyState === 'loading') {
 
             // Source filter (multiple selection)
             if (searchCurrentSourceFilters.size > 0 && !searchCurrentSourceFilters.has(source)) show = false;
+
+            // Preview filter
+            if (searchPreviewOnly && !card.dataset.hasPreview) show = false;
 
             if (show) {
                 card.classList.remove('hidden');
@@ -2213,7 +2224,8 @@ if (document.readyState === 'loading') {
         sortResults: searchSortResults,
         toggleSourceFilter: toggleSourceFilter,
         toggleAllSources: toggleAllSources,
-        updateSourceFilter: updateSourceFilter
+        updateSourceFilter: updateSourceFilter,
+        updatePreviewFilter: updatePreviewFilter
     };
     window.filterByDuration = searchFilterByDuration;
     window.filterByQuality = searchFilterByQuality;
@@ -2222,6 +2234,7 @@ if (document.readyState === 'loading') {
     window.toggleSourceFilter = toggleSourceFilter;
     window.toggleAllSources = toggleAllSources;
     window.updateSourceFilter = updateSourceFilter;
+    window.updatePreviewFilter = updatePreviewFilter;
 
     // Close source filter dropdown when clicking outside
     document.addEventListener('click', function(e) {

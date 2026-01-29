@@ -1568,6 +1568,8 @@ if (document.readyState === 'loading') {
                 } else {
                     // Setup infinite scroll after initial results load
                     setupInfiniteScroll();
+                    // Apply default filters from preferences
+                    applySearchFiltersAndSort();
                     // A11Y: Announce result count to screen readers
                     announce(allResults.length + ' results found');
                     // Fetch and display related searches
@@ -1699,6 +1701,8 @@ if (document.readyState === 'loading') {
             if (countEl) countEl.textContent = allResults.length;
 
             setupInfiniteScroll();
+            // Apply default filters from preferences
+            applySearchFiltersAndSort();
             announce(allResults.length + ' results found');
             updateSearchStatus();
         })

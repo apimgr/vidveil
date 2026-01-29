@@ -302,6 +302,24 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 		html += "<h1>Age Verification</h1>"
 		html += "<p>You must be 18 or older to use this service.</p>"
 		html += "<p>By continuing, you confirm you are of legal age.</p>"
+	case "content-restricted":
+		html += "<h1>Content Notice</h1>"
+		if msg, ok := data["Message"].(string); ok {
+			html += "<p>" + htmlEscape(msg) + "</p>"
+		}
+		if region, ok := data["Region"].(string); ok && region != "" {
+			html += "<p>Your detected location: " + htmlEscape(region) + "</p>"
+		}
+		html += "<p>By continuing, you acknowledge you understand the legal implications.</p>"
+	case "content-blocked":
+		html += "<h1>Access Restricted</h1>"
+		if msg, ok := data["Message"].(string); ok {
+			html += "<p>" + htmlEscape(msg) + "</p>"
+		}
+		if region, ok := data["Region"].(string); ok && region != "" {
+			html += "<p>Your detected location: " + htmlEscape(region) + "</p>"
+		}
+		html += "<p>Access to this service is not available in your region.</p>"
 	}
 
 	html += "</body></html>"

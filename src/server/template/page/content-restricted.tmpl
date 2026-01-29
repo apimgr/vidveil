@@ -1,0 +1,42 @@
+{{define "content-restricted"}}
+<!DOCTYPE html>
+<html lang="en" class="theme-{{.Theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128269;</text></svg>">
+</head>
+<body>
+    <div class="age-gate">
+        <div class="age-gate-box">
+            <div class="warning-icon">&#127760;</div>
+            <h1>Content Notice</h1>
+            {{if .Region}}
+            <p class="region-notice">Detected location: <strong>{{.Region}}</strong></p>
+            {{end}}
+            <p>{{.Message}}</p>
+            <p>Some jurisdictions have laws that may restrict or require age verification for adult content. By proceeding, you acknowledge:</p>
+            <ul class="legal-list">
+                <li>You are aware of and comply with the laws in your jurisdiction</li>
+                <li>You are of legal age to view adult content</li>
+                <li>You accept responsibility for accessing this content</li>
+            </ul>
+            <div class="age-buttons">
+                <form method="POST" action="/content-restricted" class="d-inline">
+                    <input type="hidden" name="redirect" value="{{.Redirect}}">
+                    <button type="submit" class="btn-yes">I Understand &amp; Proceed</button>
+                </form>
+                <button class="btn-no" onclick="window.location.href='https://www.google.com'">Exit</button>
+            </div>
+            <p class="legal">
+                This notice is provided for informational purposes. VidVeil does not provide legal advice.
+                Please consult local laws regarding adult content access in your region.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+{{end}}

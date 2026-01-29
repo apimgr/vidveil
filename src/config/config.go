@@ -108,6 +108,75 @@ type ServerConfig struct {
 
 	// Backup (PART 22) - Backup & Restore settings
 	Backup BackupConfig `yaml:"backup"`
+
+	// Tor (PART 32) - Hidden service and outbound network settings
+	Tor TorConfig `yaml:"tor"`
+}
+
+// TorConfig holds Tor-related configuration per AI.md PART 32
+type TorConfig struct {
+	// Binary path (empty = auto-detect from PATH)
+	Binary string `yaml:"binary"`
+
+	// --- Outbound Network Settings ---
+	// Use Tor network for outbound connections (engine queries)
+	// Per PART 32: Particularly relevant for VidVeil to anonymize search queries
+	UseNetwork bool `yaml:"use_network"`
+
+	// Allow users to opt-in to forwarding their IP address to video sites
+	// When enabled, users can set a preference (via cookie) to include their IP
+	// in X-Forwarded-For header - useful for geo-targeted content
+	// Default: true (feature available), but user preference defaults to disabled
+	AllowUserIPForward bool `yaml:"allow_user_ip_forward"`
+
+	// --- Performance Settings ---
+	// Maximum circuits to keep open (1-128, default 32)
+	MaxCircuits int `yaml:"max_circuits"`
+
+	// Circuit timeout in seconds (10-300, default 60)
+	CircuitTimeout int `yaml:"circuit_timeout"`
+
+	// Bootstrap timeout in seconds (30-600, default 180)
+	BootstrapTimeout int `yaml:"bootstrap_timeout"`
+
+	// --- Security Settings ---
+	// Scrub sensitive info from Tor logs (default true)
+	SafeLogging bool `yaml:"safe_logging"`
+
+	// Maximum concurrent streams per circuit (10-500, default 100)
+	MaxStreamsPerCircuit int `yaml:"max_streams_per_circuit"`
+
+	// --- Bandwidth Settings ---
+	// Maximum bandwidth rate per second (e.g., "1 MB", "500 KB")
+	BandwidthRate string `yaml:"bandwidth_rate"`
+
+	// Maximum bandwidth burst per second (e.g., "2 MB", "1 MB")
+	BandwidthBurst string `yaml:"bandwidth_burst"`
+
+	// --- Hidden Service Settings ---
+	// Number of introduction points (3-10, default 3)
+	NumIntroPoints int `yaml:"num_intro_points"`
+
+	// Virtual port for hidden service (1-65535, default 80)
+	VirtualPort int `yaml:"virtual_port"`
+}
+
+// DefaultTorConfig returns the default Tor configuration per PART 32
+func DefaultTorConfig() TorConfig {
+	return TorConfig{
+		Binary:               "",    // auto-detect
+		UseNetwork:           false, // disabled by default, user can enable for privacy
+		AllowUserIPForward:   true,  // feature available, but user must opt-in via preferences
+		MaxCircuits:          32,
+		CircuitTimeout:       60,
+		BootstrapTimeout:     180,
+		SafeLogging:          true,
+		MaxStreamsPerCircuit: 100,
+		BandwidthRate:        "1 MB",
+		BandwidthBurst:       "2 MB",
+		NumIntroPoints:       3,
+		VirtualPort:          80,
+	}
 }
 
 // AdminConfig holds admin panel settings
@@ -200,11 +269,13 @@ type MetricsConfig struct {
 
 // GeoIPConfig holds GeoIP settings per AI.md PART 20
 type GeoIPConfig struct {
-	Enabled       bool              `yaml:"enabled"`
-	Dir           string            `yaml:"dir"`
-	Update        string            `yaml:"update"`
-	DenyCountries []string          `yaml:"deny_countries"`
+	Enabled       bool                 `yaml:"enabled"`
+	Dir           string               `yaml:"dir"`
+	Update        string               `yaml:"update"`
+	DenyCountries []string             `yaml:"deny_countries"`
 	Databases     GeoIPDatabasesConfig `yaml:"databases"`
+	// Content restriction for adult content laws
+	ContentRestriction ContentRestrictionConfig `yaml:"content_restriction"`
 }
 
 // GeoIPDatabasesConfig holds which GeoIP databases to use
@@ -212,6 +283,26 @@ type GeoIPDatabasesConfig struct {
 	ASN     bool `yaml:"asn"`
 	Country bool `yaml:"country"`
 	City    bool `yaml:"city"`
+}
+
+// ContentRestrictionConfig holds settings for geographic content restrictions
+// Some jurisdictions have laws restricting adult content access
+type ContentRestrictionConfig struct {
+	// Mode: "off", "warn", "soft_block", "hard_block" (default: "warn")
+	// - off: no restriction checks
+	// - warn: show dismissable warning banner
+	// - soft_block: interstitial page requiring acknowledgment
+	// - hard_block: completely block access
+	Mode string `yaml:"mode"`
+	// RestrictedCountries is a list of ISO country codes (e.g., ["IN", "PK"])
+	RestrictedCountries []string `yaml:"restricted_countries"`
+	// RestrictedRegions is a list of "COUNTRY:REGION" codes (e.g., ["US:TX", "US:UT"])
+	// Region names should match GeoIP subdivision names
+	RestrictedRegions []string `yaml:"restricted_regions"`
+	// BypassTor allows Tor users to bypass restriction checks (default: true)
+	BypassTor bool `yaml:"bypass_tor"`
+	// WarningMessage is the message shown for warn/soft_block modes
+	WarningMessage string `yaml:"warning_message"`
 }
 
 // LogsConfig holds logging settings per AI.md PART 11
@@ -488,7 +579,7 @@ type CookieConsentConfig struct {
 }
 
 // SearchConfig holds search-specific settings (project-specific)
-// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
+// Per PART 32: Tor supports hidden service and optional outbound network routing
 type SearchConfig struct {
 	DefaultEngines     []string `yaml:"default_engines"`
 	ConcurrentRequests int      `yaml:"concurrent_requests"`
@@ -791,7 +882,20 @@ func DefaultAppConfig() *AppConfig {
 				Databases: GeoIPDatabasesConfig{
 					ASN:     true,
 					Country: true,
-					City:    false,
+					City:    true, // Need city for region-level restriction
+				},
+				ContentRestriction: ContentRestrictionConfig{
+					Mode:      "warn",
+					BypassTor: true,
+					// Default restricted regions based on adult content laws
+					// US states with age verification laws
+					RestrictedRegions: []string{
+						"US:Texas", "US:Utah", "US:Louisiana", "US:Arkansas",
+						"US:Montana", "US:Mississippi", "US:Virginia", "US:North Carolina",
+					},
+					// Countries with strict adult content bans
+					RestrictedCountries: []string{},
+					WarningMessage:      "Adult content may be restricted or require age verification in your region.",
 				},
 			},
 			// Backup settings per AI.md PART 22
@@ -808,6 +912,10 @@ func DefaultAppConfig() *AppConfig {
 					Enabled: false,
 				},
 			},
+			// Tor settings per AI.md PART 32
+			// Hidden service auto-enabled if tor binary found
+			// Outbound network disabled by default - can be enabled for privacy
+			Tor: DefaultTorConfig(),
 		},
 		Web: WebConfig{
 			UI: UIConfig{

@@ -103,6 +103,13 @@ func (s *Server) SetTorService(t handler.TorService) {
 	}
 }
 
+// SetGeoIPService sets the GeoIP service for content restriction checks
+func (s *Server) SetGeoIPService(g handler.GeoIPChecker) {
+	if s.searchHandler != nil {
+		s.searchHandler.SetGeoIPService(g)
+	}
+}
+
 // setupMiddleware configures middleware
 func (s *Server) setupMiddleware() {
 	// Request ID
@@ -244,6 +251,10 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/age-verify", h.AgeVerifyPage)
 	s.router.Post("/age-verify", h.AgeVerifySubmit)
 
+	// Content restriction endpoints (before middleware)
+	s.router.Get("/content-restricted", h.ContentRestrictedPage)
+	s.router.Post("/content-restricted", h.ContentRestrictedSubmit)
+
 	// Health, robots, security.txt, and sitemap (no age verification)
 	// Per AI.md PART 13: /healthz with extension support
 	s.router.Get("/healthz", h.HealthCheck)
@@ -280,6 +291,9 @@ func (s *Server) setupRoutes() {
 
 	// Routes that require age verification (project-specific per PART 14)
 	s.router.Group(func(r chi.Router) {
+		// Content restriction check comes first (geographic restrictions)
+		r.Use(h.ContentRestrictionMiddleware)
+		// Age verification check comes second
 		r.Use(h.AgeVerifyMiddleware)
 
 		r.Get("/", h.HomePage)

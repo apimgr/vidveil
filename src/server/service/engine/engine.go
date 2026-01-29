@@ -48,6 +48,47 @@ type Capabilities struct {
 	APIType       string `json:"api_type"`        // "api", "html", "json_extraction"
 }
 
+// TorClientProvider provides HTTP clients that can route through Tor
+// Per PART 32: Used when UseNetwork is enabled to anonymize engine queries
+type TorClientProvider interface {
+	// GetHTTPClient returns an HTTP client, optionally routed through Tor
+	// useTor: true = route through Tor, false = direct connection
+	GetHTTPClient(useTor bool) *http.Client
+	// OutboundEnabled returns true if Tor outbound is available
+	OutboundEnabled() bool
+	// UseNetworkEnabled returns true if Tor network routing is configured
+	UseNetworkEnabled() bool
+	// AllowUserIPForward returns true if admin allows users to forward their IP
+	AllowUserIPForward() bool
+}
+
+// Context keys for user IP forwarding
+type contextKey string
+
+const (
+	// UserIPContextKey is used to pass user's IP through context for optional forwarding
+	UserIPContextKey contextKey = "user_ip"
+	// ForwardIPContextKey indicates user has opted-in to IP forwarding (via cookie/preference)
+	ForwardIPContextKey contextKey = "forward_ip"
+)
+
+// WithUserIP adds user IP to context for potential forwarding to video sites
+func WithUserIP(ctx context.Context, ip string, forwardEnabled bool) context.Context {
+	ctx = context.WithValue(ctx, UserIPContextKey, ip)
+	ctx = context.WithValue(ctx, ForwardIPContextKey, forwardEnabled)
+	return ctx
+}
+
+// GetUserIPFromContext retrieves user IP from context if forwarding is enabled
+func GetUserIPFromContext(ctx context.Context) (string, bool) {
+	forwardEnabled, ok := ctx.Value(ForwardIPContextKey).(bool)
+	if !ok || !forwardEnabled {
+		return "", false
+	}
+	ip, ok := ctx.Value(UserIPContextKey).(string)
+	return ip, ok && ip != ""
+}
+
 // SearchEngine interface defines what a search engine must implement
 type SearchEngine interface {
 	Name() string
@@ -65,8 +106,14 @@ type ConfigurableSearchEngine interface {
 	SetEnabled(enabled bool)
 }
 
+// TorConfigurableEngine interface for engines that support Tor outbound
+// Per PART 32: Engines implementing this can route queries through Tor
+type TorConfigurableEngine interface {
+	SetTorProvider(provider TorClientProvider)
+}
+
 // BaseEngine provides common functionality for all engines
-// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
+// Per PART 32: Supports Tor outbound network for anonymized queries
 type BaseEngine struct {
 	name           string
 	displayName    string
@@ -78,6 +125,7 @@ type BaseEngine struct {
 	appConfig      *config.AppConfig
 	httpClient     *http.Client
 	spoofedClient  *http.Client
+	torProvider    TorClientProvider // Per PART 32: Provides Tor-routed HTTP clients
 	circuitBreaker *retry.CircuitBreaker
 	retryConfig    *retry.RetryConfig
 	capabilities   Capabilities
@@ -171,9 +219,22 @@ func (e *BaseEngine) BaseURL() string {
 	return e.baseURL
 }
 
+// SetTorProvider sets the Tor client provider for outbound connections
+// Per PART 32: When set and UseNetwork is enabled, engine queries are anonymized
+func (e *BaseEngine) SetTorProvider(provider TorClientProvider) {
+	e.torProvider = provider
+}
+
 // GetClient returns the appropriate HTTP client
-// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
+// Per PART 32: Uses Tor-routed client when UseNetwork is enabled
 func (e *BaseEngine) GetClient() *http.Client {
+	// Check if Tor outbound is enabled and available
+	if e.torProvider != nil && e.torProvider.UseNetworkEnabled() && e.torProvider.OutboundEnabled() {
+		// Route through Tor for privacy
+		return e.torProvider.GetHTTPClient(true)
+	}
+
+	// Standard behavior: use spoofed TLS if enabled, otherwise regular client
 	if e.useSpoofedTLS && e.spoofedClient != nil {
 		return e.spoofedClient
 	}
@@ -226,6 +287,14 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 			req.Header.Set("Sec-Ch-Ua", `"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"`)
 			req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
 			req.Header.Set("Sec-Ch-Ua-Platform", `"Windows"`)
+		}
+
+		// Add X-Forwarded-For if user opted in and admin allows it
+		// This allows users to get geo-targeted content while server remains anonymous
+		if e.torProvider != nil && e.torProvider.AllowUserIPForward() {
+			if userIP, ok := GetUserIPFromContext(ctx); ok {
+				req.Header.Set("X-Forwarded-For", userIP)
+			}
 		}
 
 		// Apply custom modifier if provided

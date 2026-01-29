@@ -22,6 +22,7 @@ Privacy-respecting meta search engine for adult video content that aggregates re
 - **Client-Side Preferences**: All settings stored in localStorage, no server storage
 - **Favorites & History**: Local-only bookmarks and search history with export/import
 - **Tor Support**: Built-in Tor hidden service support for maximum anonymity
+- **Geographic Content Restriction**: Admin-configurable warnings/blocks for regions with adult content laws
 - **Static Binary**: Single static binary with all assets embedded
 
 ---
@@ -137,6 +138,15 @@ type AutocompleteSuggestion struct {
 - Page must be >= 1 (default: 1)
 - Bang shortcuts must exist in bangs list
 - Engine names must be valid registered engines
+
+**Geographic Content Restriction:**
+- Admin-configurable restriction modes: off, warn, soft_block, hard_block
+- Default mode: warn (shows dismissable banner)
+- Restricted regions configurable by country code or region (e.g., "US:Texas")
+- Tor users bypass restriction checks by default (configurable)
+- Non-geolocatable IPs (VPN/Tor) are not restricted
+- Acknowledgment cookie (30 days) for soft_block mode
+- Default restricted US states: Texas, Utah, Louisiana, Arkansas, Montana, Mississippi, Virginia, North Carolina
 
 **Client-Side Filtering (applied after results load):**
 - Duration: Any, Under 10min, 10-30min, Over 30min
@@ -330,6 +340,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 **Privacy:**
 - Use Tor for all searches (toggle) - default: No
 - Proxy thumbnails through server (toggle) - default: Yes
+- Forward IP for geo-targeted results (toggle) - default: No (admin must enable)
 
 **Search Engines:**
 - Tier-based toggle switches (all tiers enabled by default)
@@ -465,6 +476,8 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 | `/` | Home page with search |
 | `/search?q={query}` | Search results page |
 | `/preferences` | User preferences |
+| `/age-verify` | Age verification gate |
+| `/content-restricted` | Geographic content restriction acknowledgment |
 | `/server/about` | About page |
 | `/server/privacy` | Privacy policy |
 | `/server/contact` | Contact page |
@@ -472,7 +485,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 
 **Admin Routes:**
 - Admin panel follows PART 17: ADMIN PANEL hierarchy
-- VidVeil admin manages: engines, rate limiting, Tor settings, GeoIP, backups
+- VidVeil admin manages: engines, rate limiting, Tor settings, GeoIP, content restriction, backups
 - No user management (VidVeil is stateless)
 
 ### Data Sources

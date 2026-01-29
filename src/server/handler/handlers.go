@@ -23,6 +23,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
+	"github.com/apimgr/vidveil/src/server/service/geoip"
 	"github.com/apimgr/vidveil/src/common/version"
 )
 
@@ -44,6 +45,128 @@ type TorStatusChecker interface {
 	IsEnabled() bool
 	IsRunning() bool
 	GetInfo() map[string]interface{}
+	AllowUserIPForward() bool // Per PART 32: Admin setting for IP forwarding
+}
+
+// GeoIPChecker is a minimal interface for GeoIP content restriction checks
+type GeoIPChecker interface {
+	CheckContentRestriction(ipStr string, isTorUser bool) *geoip.RestrictionResult
+	GetRestrictionMode() string
+	IsEnabled() bool
+}
+
+// Cookie name for content restriction acknowledgment
+const ContentRestrictionAckCookieName = "content_ack"
+
+// Cookie name for user IP forwarding preference
+const IPForwardCookieName = "forward_ip"
+
+// getUserIPForwardPreference checks if user has opted-in to IP forwarding via cookie
+// Returns (user wants forwarding, user's IP)
+func (h *SearchHandler) getUserIPForwardPreference(r *http.Request) (bool, string) {
+	// Check if admin allows this feature
+	if h.torSvc == nil || !h.torSvc.AllowUserIPForward() {
+		return false, ""
+	}
+
+	// Check user's preference cookie (defaults to disabled)
+	cookie, err := r.Cookie(IPForwardCookieName)
+	if err != nil || cookie.Value != "1" {
+		return false, "" // User hasn't opted in
+	}
+
+	// Get user's real IP
+	userIP := getClientIP(r)
+	return true, userIP
+}
+
+// checkContentRestriction checks if user is from a restricted region
+// Returns restriction result or nil if no restriction
+func (h *SearchHandler) checkContentRestriction(r *http.Request) *geoip.RestrictionResult {
+	if h.geoipSvc == nil || !h.geoipSvc.IsEnabled() {
+		return nil
+	}
+
+	mode := h.geoipSvc.GetRestrictionMode()
+	if mode == "off" || mode == "" {
+		return nil
+	}
+
+	// Check if user is accessing via Tor hidden service
+	isTorUser := h.isTorRequest(r)
+
+	// Get client IP
+	clientIP := getClientIP(r)
+
+	// Perform restriction check
+	result := h.geoipSvc.CheckContentRestriction(clientIP, isTorUser)
+	if result == nil || !result.Restricted {
+		return nil
+	}
+
+	return result
+}
+
+// isTorRequest checks if the request is coming via Tor hidden service
+func (h *SearchHandler) isTorRequest(r *http.Request) bool {
+	// Check if request came through .onion address
+	host := r.Host
+	if strings.HasSuffix(host, ".onion") {
+		return true
+	}
+
+	// Check X-Tor-Hidden-Service header (set by reverse proxies)
+	if r.Header.Get("X-Tor-Hidden-Service") == "1" {
+		return true
+	}
+
+	return false
+}
+
+// hasContentRestrictionAck checks if user has acknowledged content restriction warning
+func (h *SearchHandler) hasContentRestrictionAck(r *http.Request) bool {
+	cookie, err := r.Cookie(ContentRestrictionAckCookieName)
+	if err != nil {
+		return false
+	}
+	return cookie.Value == "1"
+}
+
+// setContentRestrictionAckCookie sets the acknowledgment cookie (30 days)
+func (h *SearchHandler) setContentRestrictionAckCookie(w http.ResponseWriter) {
+	http.SetCookie(w, NewSecureCookie(
+		ContentRestrictionAckCookieName,
+		"1",
+		"/",
+		30*24*60*60, // 30 days
+		h.appConfig.Server.SSL.Enabled,
+	))
+}
+
+// getClientIP extracts the client's real IP address
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header first (for proxied requests)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take the first IP in the chain (original client)
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+
+	// Check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Fall back to RemoteAddr
+	ip := r.RemoteAddr
+	if idx := strings.LastIndex(ip, ":"); idx != -1 {
+		ip = ip[:idx]
+	}
+	// Remove brackets from IPv6
+	ip = strings.Trim(ip, "[]")
+	return ip
 }
 
 // SearchHandler holds dependencies for HTTP handlers
@@ -53,6 +176,7 @@ type SearchHandler struct {
 	searchCache *cache.SearchCache
 	metrics     *ServerMetrics
 	torSvc      TorStatusChecker
+	geoipSvc    GeoIPChecker
 }
 
 // NewSearchHandler creates a new handler instance
@@ -80,6 +204,11 @@ func (h *SearchHandler) SetMetrics(m *ServerMetrics) {
 // SetTorService sets the Tor service for healthz display
 func (h *SearchHandler) SetTorService(t TorStatusChecker) {
 	h.torSvc = t
+}
+
+// SetGeoIPService sets the GeoIP service for content restriction checks
+func (h *SearchHandler) SetGeoIPService(g GeoIPChecker) {
+	h.geoipSvc = g
 }
 
 // GetSearchCache returns the search cache for sharing with admin handler
@@ -315,6 +444,129 @@ func (h *SearchHandler) setAgeVerifyCookie(w http.ResponseWriter) {
 		ageVerifyCookieDays*24*60*60,
 		h.appConfig.Server.SSL.Enabled,
 	))
+}
+
+// ContentRestrictionMiddleware checks for geographic content restrictions
+// Behavior depends on mode: warn, soft_block, or hard_block
+func (h *SearchHandler) ContentRestrictionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip restriction check for static files, health checks, API, and restriction pages
+		path := r.URL.Path
+		if strings.HasPrefix(path, "/static/") ||
+			strings.HasPrefix(path, "/api/") ||
+			path == "/healthz" ||
+			path == "/robots.txt" ||
+			path == "/age-verify" ||
+			path == "/content-restricted" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Check if user is from a restricted region
+		restriction := h.checkContentRestriction(r)
+		if restriction == nil {
+			// Not restricted, proceed
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Handle based on restriction mode
+		switch restriction.Mode {
+		case "hard_block":
+			// Completely block access - show error page
+			h.renderContentBlockedPage(w, r, restriction)
+			return
+
+		case "soft_block":
+			// Require acknowledgment before proceeding
+			if !h.hasContentRestrictionAck(r) {
+				redirect := r.URL.Path
+				if r.URL.RawQuery != "" {
+					redirect += "?" + r.URL.RawQuery
+				}
+				http.Redirect(w, r, "/content-restricted?redirect="+redirect, http.StatusFound)
+				return
+			}
+			// Has acknowledgment, proceed
+			next.ServeHTTP(w, r)
+
+		case "warn":
+			// Set warning header for frontend to display dismissable banner
+			w.Header().Set("X-Content-Warning", restriction.Message)
+			w.Header().Set("X-Content-Warning-Region", restriction.Reason)
+			next.ServeHTTP(w, r)
+
+		default:
+			// Unknown mode, proceed without restriction
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+// renderContentBlockedPage renders the hard block page (no way to bypass)
+func (h *SearchHandler) renderContentBlockedPage(w http.ResponseWriter, r *http.Request, restriction *geoip.RestrictionResult) {
+	w.WriteHeader(http.StatusForbidden)
+	h.renderResponse(w, r, "content-blocked", map[string]interface{}{
+		"Title":   "Access Restricted - " + h.appConfig.Server.Title,
+		"Theme":   h.appConfig.Web.UI.Theme,
+		"Message": restriction.Message,
+		"Region":  restriction.Reason,
+	})
+}
+
+// ContentRestrictedPage shows the soft block acknowledgment page
+func (h *SearchHandler) ContentRestrictedPage(w http.ResponseWriter, r *http.Request) {
+	// If already acknowledged, redirect to home or specified redirect
+	if h.hasContentRestrictionAck(r) {
+		redirect := r.URL.Query().Get("redirect")
+		if redirect == "" || !strings.HasPrefix(redirect, "/") {
+			redirect = "/"
+		}
+		http.Redirect(w, r, redirect, http.StatusFound)
+		return
+	}
+
+	// Get redirect destination
+	redirect := r.URL.Query().Get("redirect")
+	if redirect == "" || !strings.HasPrefix(redirect, "/") {
+		redirect = "/"
+	}
+
+	// Get restriction info for display
+	restriction := h.checkContentRestriction(r)
+	message := "Adult content may be restricted in your region."
+	region := ""
+	if restriction != nil {
+		message = restriction.Message
+		region = restriction.Reason
+	}
+
+	h.renderResponse(w, r, "content-restricted", map[string]interface{}{
+		"Title":    "Content Notice - " + h.appConfig.Server.Title,
+		"Theme":    h.appConfig.Web.UI.Theme,
+		"Redirect": redirect,
+		"Message":  message,
+		"Region":   region,
+	})
+}
+
+// ContentRestrictedSubmit handles the acknowledgment form submission
+func (h *SearchHandler) ContentRestrictedSubmit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/content-restricted", http.StatusFound)
+		return
+	}
+
+	// Set the acknowledgment cookie
+	h.setContentRestrictionAckCookie(w)
+
+	// Redirect to the original destination
+	redirect := r.FormValue("redirect")
+	if redirect == "" || !strings.HasPrefix(redirect, "/") {
+		redirect = "/"
+	}
+
+	http.Redirect(w, r, redirect, http.StatusFound)
 }
 
 // BuildDateTime returns the build time formatted per AI.md PART 16
@@ -1276,7 +1528,12 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 
 	// If not cached, perform search
 	if results == nil {
-		results = h.engineMgr.Search(r.Context(), searchQuery, page, engineNames)
+		ctx := r.Context()
+		// Add user IP to context if user has opted-in for geo-targeted content
+		if forwardIP, userIP := h.getUserIPForwardPreference(r); forwardIP {
+			ctx = engine.WithUserIP(ctx, userIP, true)
+		}
+		results = h.engineMgr.Search(ctx, searchQuery, page, engineNames)
 		results.Data.Cached = false
 		// Cache the results
 		h.searchCache.Set(cacheKey, results)
@@ -1342,6 +1599,13 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 
 	// Stream results with search operators
 	ctx := r.Context()
+
+	// Add user IP to context if user has opted-in for geo-targeted content
+	// Per PART 32: This allows video sites to see user's IP for geo content
+	if forwardIP, userIP := h.getUserIPForwardPreference(r); forwardIP {
+		ctx = engine.WithUserIP(ctx, userIP, true)
+	}
+
 	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers)
 
 	for result := range resultsChan {
@@ -1863,6 +2127,12 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 	case "age-verify":
 		templateFile = "template/page/age-verify.tmpl"
 		templateName = "age-verify"
+	case "content-restricted":
+		templateFile = "template/page/content-restricted.tmpl"
+		templateName = "content-restricted"
+	case "content-blocked":
+		templateFile = "template/page/content-blocked.tmpl"
+		templateName = "content-blocked"
 	case "privacy":
 		templateFile = "template/page/privacy.tmpl"
 		templateName = "privacy"

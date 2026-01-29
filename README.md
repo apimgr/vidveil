@@ -29,6 +29,7 @@ https://x.scour.li
 | **Thumbnail Proxy** | All thumbnails proxied to prevent engine tracking |
 | **Autocomplete** | Bang shortcuts autocomplete as you type |
 | **Tor Support** | Built-in Tor hidden service support |
+| **Content Restriction** | Geographic warnings/blocks for regions with adult content laws |
 | **Admin Panel** | Full web-based administration |
 | **Single Binary** | No external dependencies, embedded assets |
 | **Docker Ready** | Alpine-based container with tini |
@@ -257,7 +258,7 @@ Access at `/admin` (setup token shown on first run).
 | `/admin/server/logs` | Logs | Access and error logs |
 | `/admin/server/database` | Database | SQLite management |
 | `/admin/server/security/*` | Security | Auth, tokens, rate limiting, firewall |
-| `/admin/server/network/*` | Network | Tor, GeoIP, blocklists |
+| `/admin/server/network/*` | Network | Tor, GeoIP, content restriction, blocklists |
 | `/admin/server/system/*` | System | Backup, maintenance, updates |
 | `/admin/server/users/*` | Users | Admin management |
 | `/admin/server/engines` | Engines | Search engine configuration |

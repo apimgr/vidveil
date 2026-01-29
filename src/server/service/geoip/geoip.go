@@ -311,6 +311,99 @@ func (s *GeoIPService) IsBlocked(ipStr string) bool {
 	return false
 }
 
+// RestrictionResult holds the result of a content restriction check
+type RestrictionResult struct {
+	// Restricted indicates if the user is from a restricted region
+	Restricted bool
+	// Mode is the restriction mode: "off", "warn", "soft_block", "hard_block"
+	Mode string
+	// Reason describes why access is restricted (country or region name)
+	Reason string
+	// Message is the warning/block message to display
+	Message string
+	// GeoIP holds the full GeoIP lookup result
+	GeoIP *GeoIPResult
+}
+
+// CheckContentRestriction checks if an IP is from a content-restricted region
+// Returns restriction result with mode and message
+// If bypassTor is true and IP cannot be geolocated, restriction is bypassed
+func (s *GeoIPService) CheckContentRestriction(ipStr string, isTorUser bool) *RestrictionResult {
+	cfg := s.appConfig.Server.GeoIP.ContentRestriction
+
+	// Default result - not restricted
+	result := &RestrictionResult{
+		Restricted: false,
+		Mode:       cfg.Mode,
+		Message:    cfg.WarningMessage,
+	}
+
+	// Mode "off" means no restriction checking
+	if cfg.Mode == "off" || cfg.Mode == "" {
+		return result
+	}
+
+	// Bypass for Tor users if configured
+	if isTorUser && cfg.BypassTor {
+		return result
+	}
+
+	// GeoIP must be enabled
+	if !s.appConfig.Server.GeoIP.Enabled {
+		return result
+	}
+
+	// No restrictions configured
+	if len(cfg.RestrictedCountries) == 0 && len(cfg.RestrictedRegions) == 0 {
+		return result
+	}
+
+	// Perform GeoIP lookup
+	geoResult := s.Lookup(ipStr)
+	result.GeoIP = geoResult
+
+	// Cannot geolocate - bypass (likely VPN/Tor)
+	if geoResult.CountryCode == "" {
+		return result
+	}
+
+	// Check country restrictions
+	for _, country := range cfg.RestrictedCountries {
+		if country == geoResult.CountryCode {
+			result.Restricted = true
+			result.Reason = geoResult.Country
+			if result.Reason == "" {
+				result.Reason = geoResult.CountryCode
+			}
+			return result
+		}
+	}
+
+	// Check region restrictions (format: "COUNTRY:Region Name")
+	if geoResult.Region != "" {
+		regionKey := geoResult.CountryCode + ":" + geoResult.Region
+		for _, restricted := range cfg.RestrictedRegions {
+			if restricted == regionKey {
+				result.Restricted = true
+				result.Reason = geoResult.Region + ", " + geoResult.Country
+				return result
+			}
+		}
+	}
+
+	return result
+}
+
+// GetRestrictionMode returns the current content restriction mode
+func (s *GeoIPService) GetRestrictionMode() string {
+	return s.appConfig.Server.GeoIP.ContentRestriction.Mode
+}
+
+// GetRestrictionConfig returns the content restriction configuration
+func (s *GeoIPService) GetRestrictionConfig() config.ContentRestrictionConfig {
+	return s.appConfig.Server.GeoIP.ContentRestriction
+}
+
 // Update downloads fresh databases
 func (s *GeoIPService) Update() error {
 	if !s.appConfig.Server.GeoIP.Enabled {

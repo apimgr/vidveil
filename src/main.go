@@ -459,8 +459,10 @@ func main() {
 	defer logger.Close()
 
 	// Tor hidden service (PART 32) - auto-enabled if tor binary is found
+	// Per PART 32: Also supports outbound network routing for engine queries
 	torDataDir := filepath.Join(paths.Data, "tor")
 	torSvc := tor.NewTorService(torDataDir, logger)
+	torSvc.SetConfig(&appConfig.Server.Tor) // Pass Tor config for outbound network settings
 
 	// Blocklist service (PART 11)
 	blocklistSvc := blocklist.NewBlocklistService(appConfig)
@@ -530,7 +532,7 @@ func main() {
 		},
 		TorHealth: func(ctx context.Context) error {
 			// Tor health check per PART 32 - only if hidden service enabled
-			// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
+			// Per PART 32: Tor supports hidden service and optional outbound network routing
 			if torSvc == nil {
 				return nil
 			}
@@ -565,6 +567,10 @@ func main() {
 		}
 	}
 
+	// Set Tor provider for engine manager per PART 32
+	// This enables Tor outbound network for anonymized engine queries when UseNetwork is true
+	engineMgr.SetTorProvider(torSvc)
+
 	// Start Tor hidden service per PART 32 (in background to not block HTTP server)
 	// Auto-enabled if tor binary is installed - no enable flag needed
 	// Per PART 32: Uses Unix socket on Unix, high TCP port (63000+) on Windows
@@ -575,6 +581,8 @@ func main() {
 		if err := torSvc.Start(torCtx, 0); err != nil {
 			// PART 32: Tor errors are WARN level, server continues without Tor
 			fmt.Fprintf(os.Stderr, "⚠️  Tor hidden service: %v\n", err)
+		} else if torSvc.UseNetworkEnabled() && torSvc.OutboundEnabled() {
+			fmt.Println("[INFO] Tor outbound network enabled - engine queries are anonymized")
 		}
 	}()
 	defer torSvc.Stop()
@@ -593,6 +601,9 @@ func main() {
 
 	// Set Tor service for handlers per AI.md PART 32
 	srv.SetTorService(torSvc)
+
+	// Set GeoIP service for content restriction checks
+	srv.SetGeoIPService(geoipSvc)
 
 	// Start live config watcher per AI.md PART 1 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, appConfig)

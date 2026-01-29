@@ -13,11 +13,12 @@ import (
 )
 
 // EngineManager manages all search engines
-// Per PART 32: Tor is ONLY for hidden service, NOT for outbound proxy
+// Per PART 32: Supports Tor outbound network for anonymized engine queries
 type EngineManager struct {
-	engines   map[string]SearchEngine
-	appConfig *config.AppConfig
-	mu        sync.RWMutex
+	engines     map[string]SearchEngine
+	appConfig   *config.AppConfig
+	torProvider TorClientProvider // Per PART 32: Tor client provider for outbound
+	mu          sync.RWMutex
 }
 
 // NewEngineManager creates a new engine manager
@@ -25,6 +26,23 @@ func NewEngineManager(appConfig *config.AppConfig) *EngineManager {
 	return &EngineManager{
 		engines:   make(map[string]SearchEngine),
 		appConfig: appConfig,
+	}
+}
+
+// SetTorProvider sets the Tor client provider for all engines
+// Per PART 32: When set and UseNetwork is enabled, engine queries are anonymized through Tor
+func (m *EngineManager) SetTorProvider(provider TorClientProvider) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.torProvider = provider
+
+	// Update all existing engines with the Tor provider
+	for _, engine := range m.engines {
+		// Use the TorConfigurableEngine interface
+		if torEngine, ok := engine.(TorConfigurableEngine); ok {
+			torEngine.SetTorProvider(provider)
+		}
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/cretz/bine/tor"
 	bineed25519 "github.com/cretz/bine/torutil/ed25519"
@@ -27,10 +29,12 @@ import (
 
 // TorService represents the embedded Tor hidden service per AI.md PART 32
 // Uses github.com/cretz/bine for dedicated Tor process management
+// Supports both hidden service hosting AND outbound network routing
 type TorService struct {
-	cfg     *TorServiceConfig
-	dataDir string
-	logger  *logging.AppLogger
+	cfg       *TorServiceConfig
+	torConfig *config.TorConfig // Full config from server.yml
+	dataDir   string
+	logger    *logging.AppLogger
 
 	// bine Tor instance - manages dedicated Tor process
 	torInstance *tor.Tor
@@ -38,6 +42,10 @@ type TorService struct {
 	// OnionService listener - implements net.Listener
 	// Per AI.md PART 32: Unix socket on Unix, high TCP port on Windows
 	onionService *tor.OnionService
+
+	// Outbound Tor dialer per PART 32
+	// Used when UseNetwork is enabled to route engine queries through Tor
+	dialer *tor.Dialer
 
 	// Hidden service state
 	onionAddress string
@@ -102,6 +110,61 @@ func NewTorService(dataDir string, logger *logging.AppLogger) *TorService {
 		status:  TorServiceStatusDisabled,
 		logger:  logger,
 	}
+}
+
+// SetConfig sets the Tor configuration from server.yml
+// Must be called before Start() to enable outbound network routing
+func (s *TorService) SetConfig(cfg *config.TorConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.torConfig = cfg
+}
+
+// GetHTTPClient returns an HTTP client, optionally routed through Tor
+// Per PART 32: Use this for engine queries when UseNetwork is enabled
+// useTor: true = route through Tor SOCKS5 proxy, false = direct connection
+func (s *TorService) GetHTTPClient(useTor bool) *http.Client {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if !useTor || s.dialer == nil {
+		// Direct connection - standard HTTP client
+		return &http.Client{
+			Timeout: 30 * time.Second,
+		}
+	}
+
+	// Route through Tor network via SOCKS5 proxy
+	return &http.Client{
+		Timeout: 60 * time.Second, // Tor is slower, use longer timeout
+		Transport: &http.Transport{
+			DialContext: s.dialer.DialContext,
+		},
+	}
+}
+
+// OutboundEnabled returns true if Tor outbound connections are available
+// Per PART 32: This is true when UseNetwork is enabled and Tor is running
+func (s *TorService) OutboundEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.dialer != nil
+}
+
+// UseNetworkEnabled returns true if Tor network routing is configured
+func (s *TorService) UseNetworkEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.torConfig != nil && s.torConfig.UseNetwork
+}
+
+// AllowUserIPForward returns true if admin allows users to forward their IP
+// When true, users can opt-in (via cookie) to have their IP passed to video sites
+// in X-Forwarded-For header for geo-targeted content
+func (s *TorService) AllowUserIPForward() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.torConfig != nil && s.torConfig.AllowUserIPForward
 }
 
 // Start initializes the Tor hidden service using bine
@@ -300,6 +363,21 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 
 	s.status = TorServiceStatusConnected
 	s.logger.Info("Hidden service started", map[string]interface{}{"onion_address": s.onionAddress})
+
+	// Initialize outbound dialer if UseNetwork is enabled (per PART 32)
+	// This allows engine queries to be routed through Tor for privacy
+	if s.torConfig != nil && s.torConfig.UseNetwork {
+		dialer, err := t.Dialer(ctx, nil)
+		if err != nil {
+			s.logger.Warn("Failed to create Tor dialer for outbound connections", map[string]interface{}{
+				"error": err.Error(),
+			})
+			// Continue without outbound - hidden service still works
+		} else {
+			s.dialer = dialer
+			s.logger.Info("Tor outbound network enabled - engine queries will be anonymized", nil)
+		}
+	}
 
 	// Start process monitoring per PART 32
 	s.monitorCtx, s.monitorCancel = context.WithCancel(context.Background())
@@ -819,6 +897,19 @@ func (s *TorService) GetInfo() map[string]interface{} {
 			info["process_running"] = false
 			info["note"] = "Tor binary not found - key-only mode"
 		}
+	}
+
+	// Outbound network status per PART 32
+	outboundConfigured := s.torConfig != nil && s.torConfig.UseNetwork
+	outboundActive := s.dialer != nil
+	info["outbound"] = map[string]interface{}{
+		"configured": outboundConfigured,
+		"active":     outboundActive,
+	}
+	if outboundActive {
+		info["outbound"].(map[string]interface{})["note"] = "Engine queries are being anonymized through Tor"
+	} else if outboundConfigured {
+		info["outbound"].(map[string]interface{})["note"] = "Configured but not active (Tor not running)"
 	}
 
 	if s.vanityStatus != nil && s.vanityStatus.Active {

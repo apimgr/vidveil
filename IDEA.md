@@ -44,6 +44,8 @@ type VideoResult struct {
     Views        int64    `json:"views,omitempty"`         // View count (if available)
     UploadDate   string   `json:"upload_date,omitempty"`   // Upload date (if available)
     Quality      string   `json:"quality,omitempty"`       // Video quality (HD, 4K, etc.)
+    Tags         []string `json:"tags,omitempty"`          // Video tags/categories
+    Performer    string   `json:"performer,omitempty"`     // Performer/model name (if available)
 }
 
 // Engine represents a search engine
@@ -101,6 +103,29 @@ type AutocompleteSuggestion struct {
 - Page parameter supports infinite scroll
 - No user accounts - stateless, privacy-first design
 - Admin panel requires authentication (server-admin only)
+
+**Semantic Search & AND-Based Filtering (Server-Side):**
+- Server-side filtering before results are sent to client
+- Multi-term queries use AND logic (all terms must match)
+- Search term order doesn't matter ("teen blonde" = "blonde teen")
+- Filtering matches against title, tags, and performer fields
+- Term normalization expands synonyms automatically:
+  - "teen" matches: 18, 19, eighteen, nineteen, barely legal, young, 18yo, 19yo
+  - "pregnant" matches: preggo, preggy, expecting, knocked up
+  - "lesbian" matches: lesbo, girl on girl, girls, lez, lesbians
+  - "milf" matches: mom, mother, mommy, cougar, mature
+  - "bbw" matches: chubby, fat, plump, thick, curvy, plus size
+  - "asian" matches: oriental, japanese, chinese, korean, thai, filipina
+  - 35+ category mappings with synonyms
+- Quoted phrases preserved as single term ("big tits blonde")
+- Engines parse additional metadata: tags, categories, performer names
+
+**Smart Related Searches:**
+- Generated based on actual query terms (not random suggestions)
+- Combines query words with related terms from taxonomy
+- Includes quality modifiers (hd, 4k, amateur, homemade, pov)
+- Swaps synonyms to create variations
+- Sub-combinations for multi-word queries
 
 **Engine Tiers:**
 - Tier 1: PornHub, XVideos, XNXX, RedTube, xHamster - major sites
@@ -317,6 +342,14 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 - Select All / Select None buttons
 
 ### UI Components
+
+**HTML5/CSS-First Approach:**
+- Minimize JavaScript, prefer native browser features
+- Collapsible panels: HTML5 `<details>/<summary>` elements
+- Card menus: `<details>/<summary>` with CSS styling
+- Lazy loading: Native `loading="lazy"` attribute on images
+- Filter dropdowns: `<details>` with click-outside-to-close
+- No IntersectionObserver for images (native lazy loading)
 
 **Toggle Switches (per AI.md PART 16):**
 - CSS-only using hidden checkbox pattern

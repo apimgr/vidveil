@@ -168,12 +168,96 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 	// Check for quality
 	quality := parser.ExtractQuality(s)
 	if quality != "" {
-		r.Description = quality
+		r.Quality = quality
 	}
+
+	// Extract tags/categories - common patterns across sites
+	r.Tags = extractTags(s)
+
+	// Extract performer if available
+	r.Performer = extractPerformer(s)
 
 	r.Source = sourceName
 	r.SourceDisplay = sourceDisplay
 	r.ID = GenerateResultID(r.URL, sourceName)
 
 	return r
+}
+
+// extractTags extracts tags/categories from video card elements
+func extractTags(s *goquery.Selection) []string {
+	var tags []string
+	seen := make(map[string]bool)
+
+	addTag := func(tag string) {
+		tag = strings.TrimSpace(strings.ToLower(tag))
+		if tag != "" && len(tag) > 1 && len(tag) < 50 && !seen[tag] {
+			seen[tag] = true
+			tags = append(tags, tag)
+		}
+	}
+
+	// Common tag selectors
+	tagSelectors := []string{
+		".tags a", ".tag a", ".categories a", ".category a",
+		"a.tag", "a.category", ".video-tags a", ".video-categories a",
+		".thumb-tags a", ".card-tags a", "[data-tags]", ".keywords a",
+		".labels a", ".label", ".badge", ".chip",
+	}
+
+	for _, sel := range tagSelectors {
+		s.Find(sel).Each(func(i int, el *goquery.Selection) {
+			text := parser.CleanText(el.Text())
+			addTag(text)
+		})
+	}
+
+	// Check data attributes for tags
+	if dataTags, exists := s.Attr("data-tags"); exists {
+		for _, tag := range strings.Split(dataTags, ",") {
+			addTag(tag)
+		}
+	}
+
+	// Check for category data attribute
+	if dataCat, exists := s.Attr("data-category"); exists {
+		addTag(dataCat)
+	}
+	if dataCats, exists := s.Attr("data-categories"); exists {
+		for _, cat := range strings.Split(dataCats, ",") {
+			addTag(cat)
+		}
+	}
+
+	return tags
+}
+
+// extractPerformer extracts performer/model name from video card
+func extractPerformer(s *goquery.Selection) string {
+	// Common performer selectors
+	performerSelectors := []string{
+		".pornstar", ".model", ".performer", ".actor", ".actress",
+		".uploader", ".author", ".channel", ".studio",
+		"a.pornstar", "a.model", ".video-pornstar", ".video-model",
+		"[data-pornstar]", "[data-model]", "[data-performer]",
+	}
+
+	for _, sel := range performerSelectors {
+		if el := s.Find(sel).First(); el.Length() > 0 {
+			text := parser.CleanText(el.Text())
+			if text != "" {
+				return text
+			}
+		}
+	}
+
+	// Check data attributes
+	if performer, exists := s.Attr("data-pornstar"); exists && performer != "" {
+		return performer
+	}
+	if performer, exists := s.Attr("data-model"); exists && performer != "" {
+		return performer
+	}
+
+	return ""
 }

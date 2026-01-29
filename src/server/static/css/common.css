@@ -1179,15 +1179,19 @@ header .search-form {
     color: var(--bg-primary);
 }
 
-/* Card menu (three-dot menu on video cards) */
+/* Card menu (three-dot menu on video cards) - uses HTML5 details/summary */
 .video-card {
     position: relative;
 }
 
-.card-menu-btn {
+.card-menu-container {
     position: absolute;
     top: 8px;
     right: 8px;
+    z-index: 10;
+}
+
+.card-menu-container > summary {
     width: 28px;
     height: 28px;
     display: flex;
@@ -1198,38 +1202,35 @@ header .search-form {
     border-radius: 50%;
     color: white;
     cursor: pointer;
-    z-index: 10;
     opacity: 0;
     transition: opacity 0.2s, background 0.2s;
+    list-style: none;
 }
 
-.video-card:hover .card-menu-btn,
-.card-menu-btn:focus,
-.card-menu.visible + .card-menu-btn,
-.video-card:has(.card-menu.visible) .card-menu-btn {
+.card-menu-container > summary::-webkit-details-marker {
+    display: none;
+}
+
+.video-card:hover .card-menu-container > summary,
+.card-menu-container[open] > summary,
+.card-menu-container > summary:focus {
     opacity: 1;
 }
 
-.card-menu-btn:hover {
+.card-menu-container > summary:hover {
     background: rgba(0, 0, 0, 0.9);
 }
 
 .card-menu {
-    display: none;
     position: absolute;
-    top: 40px;
-    right: 8px;
+    top: 32px;
+    right: 0;
     min-width: 160px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 8px;
     box-shadow: 0 4px 12px var(--shadow);
-    z-index: 20;
     overflow: hidden;
-}
-
-.card-menu.visible {
-    display: block;
 }
 
 .card-menu-item {
@@ -3906,7 +3907,7 @@ a:focus-visible {
     margin: 0;
 }
 
-/* Filter toggle button */
+/* Filter toggle button - uses HTML5 summary element */
 .filters-toggle {
     display: flex;
     align-items: center;
@@ -3919,6 +3920,11 @@ a:focus-visible {
     font-size: 0.9rem;
     cursor: pointer;
     transition: all 0.2s;
+    list-style: none;
+}
+
+.filters-toggle::-webkit-details-marker {
+    display: none;
 }
 
 .filters-toggle:hover {
@@ -3926,7 +3932,7 @@ a:focus-visible {
     color: var(--text-primary);
 }
 
-.filters-toggle[aria-expanded="true"] {
+.filters-panel[open] > .filters-toggle {
     color: var(--accent);
     border-color: var(--accent);
 }
@@ -3954,18 +3960,13 @@ a:focus-visible {
     display: none;
 }
 
-/* Filter content container */
+/* Filter content container - shown via details[open] */
 .filters-content {
-    display: none;
     margin-top: 0.75rem;
     padding: 1rem;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 8px;
-}
-
-.filters-content.expanded {
-    display: block;
 }
 
 /* Filter grid - 2x2 on mobile, inline on desktop */
@@ -4017,6 +4018,7 @@ a:focus-visible {
     position: relative;
 }
 
+/* Source filter uses HTML5 details/summary */
 .source-filter-wrapper {
     position: relative;
 }
@@ -4035,13 +4037,18 @@ a:focus-visible {
     font-size: 0.875rem;
     cursor: pointer;
     text-align: left;
+    list-style: none;
+}
+
+.source-filter-toggle::-webkit-details-marker {
+    display: none;
 }
 
 .source-filter-toggle:hover {
     border-color: var(--text-secondary);
 }
 
-.source-filter-toggle[aria-expanded="true"] {
+.source-filter-wrapper[open] > .source-filter-toggle {
     border-color: var(--accent);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
@@ -4052,12 +4059,11 @@ a:focus-visible {
     transition: transform 0.2s;
 }
 
-.source-filter-toggle[aria-expanded="true"] svg {
+.source-filter-wrapper[open] > .source-filter-toggle svg {
     transform: rotate(180deg);
 }
 
 .source-filter-dropdown {
-    display: none;
     position: absolute;
     top: 100%;
     left: 0;
@@ -4069,10 +4075,6 @@ a:focus-visible {
     border-top: none;
     border-radius: 0 0 6px 6px;
     z-index: 100;
-}
-
-.source-filter-dropdown.visible {
-    display: block;
 }
 
 .source-option {

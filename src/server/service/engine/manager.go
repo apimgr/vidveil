@@ -172,7 +172,7 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 		} else {
 			enginesUsed = append(enginesUsed, result.engine)
 			resultCount := 0
-			// Filter results by thumbnail validity, minimum duration, and deduplicate
+			// Filter results by thumbnail validity, minimum duration, term matching, and deduplicate
 			for _, r := range result.results {
 				// Skip results with empty/invalid thumbnails
 				if !isValidThumbnail(r.Thumbnail) {
@@ -180,6 +180,10 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 				}
 				// Skip if duration is known and below minimum
 				if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
+					continue
+				}
+				// AND-based term filter: result must match ALL search terms (using synonyms)
+				if !resultMatchesAllTerms(r, query) {
 					continue
 				}
 				// Deduplicate by URL - skip if we've seen this URL before
@@ -496,6 +500,29 @@ func isValidThumbnail(thumbnail string) bool {
 	return true
 }
 
+// resultMatchesAllTerms checks if a video result matches ALL search terms using synonym expansion
+// This implements AND logic: "pregnant teen lesbian" only returns results containing ALL three terms
+// Each term can match via any of its synonyms (e.g., "teen" matches "18", "young", "barely legal", etc.)
+func resultMatchesAllTerms(r model.VideoResult, query string) bool {
+	// Expand query terms using taxonomy
+	expandedTerms := ExpandSearchTerms(query)
+	if len(expandedTerms) == 0 {
+		return true // No terms to match
+	}
+
+	// Build combined text from title, tags, and performer
+	combinedText := strings.ToLower(r.Title)
+	if len(r.Tags) > 0 {
+		combinedText += " " + strings.ToLower(strings.Join(r.Tags, " "))
+	}
+	if r.Performer != "" {
+		combinedText += " " + strings.ToLower(r.Performer)
+	}
+
+	// Use taxonomy's MatchesAllTerms to check AND logic with synonyms
+	return MatchesAllTerms(combinedText, expandedTerms)
+}
+
 // StreamResult represents a single result sent via SSE
 type StreamResult struct {
 	Result model.VideoResult `json:"result,omitempty"`
@@ -596,6 +623,11 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						if !matchesPerformer {
 							continue
 						}
+					}
+
+					// AND-based term filter: result must match ALL search terms (using synonyms)
+					if !resultMatchesAllTerms(r, query) {
+						continue
 					}
 
 					// Deduplicate by URL

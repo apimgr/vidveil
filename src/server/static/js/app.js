@@ -207,18 +207,8 @@ function filterBySource(source) {
 }
 
 // ============================================================================
-// Unified Filter Panel - Toggle and Count
+// Unified Filter Panel - Uses HTML5 details/summary for toggle
 // ============================================================================
-function toggleFilters() {
-    var toggle = document.getElementById('filters-toggle');
-    var content = document.getElementById('filters-content');
-    if (!toggle || !content) return;
-
-    var isExpanded = toggle.getAttribute('aria-expanded') === 'true';
-    toggle.setAttribute('aria-expanded', !isExpanded);
-    content.classList.toggle('expanded', !isExpanded);
-}
-
 // Update filter count badge
 function updateFilterCount() {
     var countEl = document.getElementById('filter-count');
@@ -402,27 +392,7 @@ function setupVideoPreview() {
     });
 }
 
-// ============================================================================
-// Lazy Loading Images
-// ============================================================================
-function setupLazyLoading() {
-    if ('IntersectionObserver' in window) {
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const img = entry.target;
-                    if (img.dataset.src) {
-                        img.src = img.dataset.src;
-                        img.removeAttribute('data-src');
-                    }
-                    observer.unobserve(img);
-                }
-            });
-        }, { rootMargin: '50px' });
-
-        document.querySelectorAll('img[data-src]').forEach(img => observer.observe(img));
-    }
-}
+// Lazy loading: Uses native loading="lazy" attribute on images - no JS needed
 
 // ============================================================================
 // Keyboard Shortcuts
@@ -611,8 +581,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
-    // Setup lazy loading
-    setupLazyLoading();
+    // Lazy loading uses native loading="lazy" attribute - no JS setup needed
 
     // Setup video preview on hover
     setupVideoPreview();
@@ -1402,6 +1371,9 @@ if (document.readyState === 'loading') {
     // Preferences loaded from storage
     var userPrefs = {};
 
+    // Note: AND-based term filtering with synonym expansion is handled server-side
+    // in manager.go using taxonomy.go. Client-side only handles duration/quality/source/preview filters.
+
     function initSearchPage() {
         var searchMeta = document.getElementById('search-meta');
         if (!searchMeta) return; // Not on search page
@@ -1660,6 +1632,9 @@ if (document.readyState === 'loading') {
         card.dataset.duration = r.duration_seconds || 0;
         card.dataset.views = r.views_count || 0;
         card.dataset.quality = r.quality || '';
+        card.dataset.title = (r.title || '').toLowerCase();
+        card.dataset.tags = (r.tags || []).join(',').toLowerCase();
+        card.dataset.performer = (r.performer || '').toLowerCase();
 
         var previewUrl = r.preview_url || '';
         var hasPreview = previewUrl && previewUrl.length > 0;
@@ -1686,18 +1661,17 @@ if (document.readyState === 'loading') {
         if (r.quality) html += '<span class="quality-badge">' + escapeHtmlUtil(r.quality) + '</span>';
         html += '</div></a>';
 
-        // Card menu button
-        html += '<button type="button" class="card-menu-btn" aria-label="Video options" onclick="toggleCardMenu(this)">';
-        html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
-        html += '</button>';
+        // Card menu using HTML5 details/summary (no JS toggle needed)
+        html += '<details class="card-menu-container">';
+        html += '<summary aria-label="Video options"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></summary>';
         html += '<div class="card-menu" role="menu">';
-        html += '<button type="button" class="card-menu-item" onclick="openInNewTab(\'' + escapeHtmlUtil(r.url).replace(/'/g, "\\'") + '\')"><span>Open in new tab</span></button>';
-        html += '<button type="button" class="card-menu-item" onclick="copyVideoLink(\'' + escapeHtmlUtil(r.url).replace(/'/g, "\\'") + '\')"><span>Copy link</span></button>';
-        html += '<button type="button" class="card-menu-item" onclick="toggleFavorite(this, ' + JSON.stringify({url: r.url, title: r.title || 'Untitled', thumbnail: r.thumbnail || '', source: r.source || ''}).replace(/"/g, '&quot;') + ')"><span>Add to favorites</span></button>';
+        html += '<button type="button" class="card-menu-item" data-action="newtab" data-url="' + escapeHtmlUtil(r.url) + '"><span>Open in new tab</span></button>';
+        html += '<button type="button" class="card-menu-item" data-action="copy" data-url="' + escapeHtmlUtil(r.url) + '"><span>Copy link</span></button>';
+        html += '<button type="button" class="card-menu-item" data-action="favorite" data-video=\'' + escapeHtmlUtil(JSON.stringify({url: r.url, title: r.title || 'Untitled', thumbnail: r.thumbnail || '', source: r.source || ''})) + '\'><span>Add to favorites</span></button>';
         if (hasDownload) {
-            html += '<button type="button" class="card-menu-item" onclick="openInNewTab(\'' + escapeHtmlUtil(downloadUrl).replace(/'/g, "\\'") + '\')"><span>Download</span></button>';
+            html += '<button type="button" class="card-menu-item" data-action="newtab" data-url="' + escapeHtmlUtil(downloadUrl) + '"><span>Download</span></button>';
         }
-        html += '</div>';
+        html += '</div></details>';
 
         html += '<div class="info">';
         html += '<h3><a href="' + escapeHtmlUtil(r.url) + '"' + targetAttr + ' rel="noopener noreferrer nofollow">' + escapeHtmlUtil(r.title || 'Untitled') + '</a></h3>';
@@ -1856,14 +1830,7 @@ if (document.readyState === 'loading') {
         sourceOptions.appendChild(label);
     }
 
-    function toggleSourceFilter() {
-        var dropdown = document.getElementById('source-filter-list');
-        var toggle = document.getElementById('source-filter-toggle');
-        if (!dropdown || !toggle) return;
-        var expanded = toggle.getAttribute('aria-expanded') === 'true';
-        toggle.setAttribute('aria-expanded', !expanded);
-        dropdown.classList.toggle('visible', !expanded);
-    }
+    // toggleSourceFilter removed - now uses HTML5 details/summary
 
     function toggleAllSources(checked) {
         var checkboxes = document.querySelectorAll('#source-options input[type="checkbox"]');
@@ -1927,6 +1894,9 @@ if (document.readyState === 'loading') {
             var source = card.dataset.source || '';
             var quality = (card.dataset.quality || '').toUpperCase();
             var show = true;
+
+            // Note: AND-based term filtering with synonyms is now handled server-side
+            // Client-side only handles duration/quality/source/preview filters
 
             // Duration filter
             if (searchCurrentDurationFilter === 'short' && duration >= 600) show = false;
@@ -2210,7 +2180,6 @@ if (document.readyState === 'loading') {
         filterByQuality: searchFilterByQuality,
         filterBySource: searchFilterBySource,
         sortResults: searchSortResults,
-        toggleSourceFilter: toggleSourceFilter,
         toggleAllSources: toggleAllSources,
         updateSourceFilter: updateSourceFilter,
         updatePreviewFilter: updatePreviewFilter
@@ -2219,19 +2188,15 @@ if (document.readyState === 'loading') {
     window.filterByQuality = searchFilterByQuality;
     window.filterBySource = searchFilterBySource;
     window.sortResults = searchSortResults;
-    window.toggleSourceFilter = toggleSourceFilter;
     window.toggleAllSources = toggleAllSources;
     window.updateSourceFilter = updateSourceFilter;
     window.updatePreviewFilter = updatePreviewFilter;
 
-    // Close source filter dropdown when clicking outside
+    // Close source filter dropdown when clicking outside (details element)
     document.addEventListener('click', function(e) {
-        var wrapper = document.querySelector('.source-filter-wrapper');
-        var dropdown = document.getElementById('source-filter-list');
-        var toggle = document.getElementById('source-filter-toggle');
-        if (wrapper && dropdown && toggle && !wrapper.contains(e.target)) {
-            toggle.setAttribute('aria-expanded', 'false');
-            dropdown.classList.remove('visible');
+        var wrapper = document.getElementById('source-filter-wrapper');
+        if (wrapper && wrapper.open && !wrapper.contains(e.target)) {
+            wrapper.removeAttribute('open');
         }
     });
 })();
@@ -2245,72 +2210,8 @@ function escapeHtmlUtil(str) {
 }
 
 // ============================================================================
-// Card Menu Functions
+// Card Menu Functions - uses HTML5 details/summary, minimal JS
 // ============================================================================
-function toggleCardMenu(btn) {
-    var card = btn.closest('.video-card');
-    var menu = card.querySelector('.card-menu');
-    if (!menu) return;
-
-    // Close all other open menus first
-    document.querySelectorAll('.card-menu.visible').forEach(function(m) {
-        if (m !== menu) m.classList.remove('visible');
-    });
-
-    menu.classList.toggle('visible');
-
-    // Update favorite button text based on current state
-    var favBtn = menu.querySelector('.card-menu-item:nth-child(3) span');
-    if (favBtn) {
-        var url = card.querySelector('.card-link').href;
-        var favorites = getFavorites();
-        var isFavorite = favorites.some(function(f) { return f.url === url; });
-        favBtn.textContent = isFavorite ? 'Remove from favorites' : 'Add to favorites';
-    }
-}
-
-function openInNewTab(url) {
-    window.open(url, '_blank', 'noopener,noreferrer');
-    closeAllCardMenus();
-}
-
-function copyVideoLink(url) {
-    navigator.clipboard.writeText(url).then(function() {
-        showNotification('Link copied to clipboard', 'success');
-    }).catch(function() {
-        // Fallback for older browsers
-        var input = document.createElement('input');
-        input.value = url;
-        document.body.appendChild(input);
-        input.select();
-        document.execCommand('copy');
-        document.body.removeChild(input);
-        showNotification('Link copied to clipboard', 'success');
-    });
-    closeAllCardMenus();
-}
-
-function toggleFavorite(btn, videoData) {
-    var favorites = getFavorites();
-    var index = favorites.findIndex(function(f) { return f.url === videoData.url; });
-
-    if (index >= 0) {
-        // Remove from favorites
-        favorites.splice(index, 1);
-        showNotification('Removed from favorites', 'info');
-        btn.querySelector('span').textContent = 'Add to favorites';
-    } else {
-        // Add to favorites
-        videoData.added_at = new Date().toISOString();
-        favorites.unshift(videoData);
-        showNotification('Added to favorites', 'success');
-        btn.querySelector('span').textContent = 'Remove from favorites';
-    }
-
-    saveFavorites(favorites);
-    closeAllCardMenus();
-}
-
 function getFavorites() {
     try {
         return JSON.parse(localStorage.getItem('vidveil_favorites') || '[]');
@@ -2323,18 +2224,83 @@ function saveFavorites(favorites) {
     localStorage.setItem('vidveil_favorites', JSON.stringify(favorites));
 }
 
+// Close all open card menus (details elements)
 function closeAllCardMenus() {
-    document.querySelectorAll('.card-menu.visible').forEach(function(m) {
-        m.classList.remove('visible');
+    document.querySelectorAll('.card-menu-container[open]').forEach(function(d) {
+        d.removeAttribute('open');
     });
 }
 
-// Close card menus when clicking outside
+// Delegated event handler for card menu actions
 document.addEventListener('click', function(e) {
-    if (!e.target.closest('.card-menu-btn') && !e.target.closest('.card-menu')) {
-        closeAllCardMenus();
+    var btn = e.target.closest('.card-menu-item');
+    if (!btn) {
+        // Click outside - close all menus
+        if (!e.target.closest('.card-menu-container')) {
+            closeAllCardMenus();
+        }
+        return;
     }
+
+    var action = btn.dataset.action;
+    var details = btn.closest('.card-menu-container');
+
+    if (action === 'newtab') {
+        window.open(btn.dataset.url, '_blank', 'noopener,noreferrer');
+    } else if (action === 'copy') {
+        var url = btn.dataset.url;
+        navigator.clipboard.writeText(url).then(function() {
+            showNotification('Link copied to clipboard', 'success');
+        }).catch(function() {
+            // Fallback for older browsers
+            var input = document.createElement('input');
+            input.value = url;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            showNotification('Link copied to clipboard', 'success');
+        });
+    } else if (action === 'favorite') {
+        var videoData = JSON.parse(btn.dataset.video);
+        var favorites = getFavorites();
+        var index = favorites.findIndex(function(f) { return f.url === videoData.url; });
+
+        if (index >= 0) {
+            favorites.splice(index, 1);
+            showNotification('Removed from favorites', 'info');
+            btn.querySelector('span').textContent = 'Add to favorites';
+        } else {
+            videoData.added_at = new Date().toISOString();
+            favorites.unshift(videoData);
+            showNotification('Added to favorites', 'success');
+            btn.querySelector('span').textContent = 'Remove from favorites';
+        }
+        saveFavorites(favorites);
+    }
+
+    // Close menu after action
+    if (details) details.removeAttribute('open');
 });
+
+// Update favorite button text when menu opens
+document.addEventListener('toggle', function(e) {
+    if (!e.target.matches('.card-menu-container') || !e.target.open) return;
+
+    // Close other open menus
+    document.querySelectorAll('.card-menu-container[open]').forEach(function(d) {
+        if (d !== e.target) d.removeAttribute('open');
+    });
+
+    // Update favorite button text
+    var favBtn = e.target.querySelector('[data-action="favorite"] span');
+    if (favBtn) {
+        var videoData = JSON.parse(e.target.querySelector('[data-action="favorite"]').dataset.video);
+        var favorites = getFavorites();
+        var isFavorite = favorites.some(function(f) { return f.url === videoData.url; });
+        favBtn.textContent = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+    }
+}, true);
 
 // ============================================================================
 // Export for global access

@@ -1,15 +1,16 @@
 {{define "public/filters"}}
 {{/* Unified filter panel for home and search pages
      Set .ShowEngines=true on home page to show engine selector
-     Set .Compact=true for inline search bar header style */}}
-<div class="filters-panel{{if .Compact}} filters-panel--compact{{end}}" id="filters-panel">
-    <button type="button" class="filters-toggle" id="filters-toggle" onclick="toggleFilters()" aria-expanded="false" aria-controls="filters-content">
+     Set .Compact=true for inline search bar header style
+     Uses HTML5 details/summary for native collapse/expand */}}
+<details class="filters-panel{{if .Compact}} filters-panel--compact{{end}}" id="filters-panel">
+    <summary class="filters-toggle" id="filters-toggle">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
         </svg>
         <span class="filters-toggle-text">Filters</span>
         <span class="filter-count hidden" id="filter-count" aria-live="polite">0</span>
-    </button>
+    </summary>
     <div class="filters-content" id="filters-content" role="group" aria-label="Search filters">
         <div class="filters-grid">
             <div class="filter-group">
@@ -52,11 +53,11 @@
             {{else}}
             <div class="filter-group filter-group--sources">
                 <label class="filter-label">Sources</label>
-                <div class="source-filter-wrapper">
-                    <button type="button" class="source-filter-toggle" id="source-filter-toggle" onclick="toggleSourceFilter()" aria-expanded="false" aria-controls="source-filter-list">
+                <details class="source-filter-wrapper" id="source-filter-wrapper">
+                    <summary class="source-filter-toggle" id="source-filter-toggle">
                         <span id="source-filter-label">All Sources</span>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-                    </button>
+                    </summary>
                     <div class="source-filter-dropdown" id="source-filter-list" role="group" aria-label="Source filter options">
                         <label class="source-option source-option--special">
                             <input type="checkbox" id="filter-preview-only" onchange="updatePreviewFilter(this.checked)">
@@ -70,10 +71,10 @@
                             {{/* Source checkboxes populated dynamically by JS */}}
                         </div>
                     </div>
-                </div>
+                </details>
             </div>
             {{end}}
         </div>
     </div>
-</div>
+</details>
 {{end}}

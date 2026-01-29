@@ -307,7 +307,7 @@ func GetPopularSearches(count int) []string {
 }
 
 // GetRelatedSearches returns search terms related to the given query
-// Finds suggestions that share words with or are conceptually related to the query
+// Uses smart generation based on taxonomy + word matching from suggestions
 func GetRelatedSearches(query string, maxResults int) []string {
 	if query == "" || maxResults <= 0 {
 		return nil
@@ -319,24 +319,29 @@ func GetRelatedSearches(query string, maxResults int) []string {
 		return nil
 	}
 
+	// First, get smart related terms from taxonomy
+	smartRelated := GenerateSmartRelated(query, maxResults/2)
+
+	// Then supplement with word-matching from suggestion list
 	allTerms := getAllSuggestions()
 	type scoredTerm struct {
 		term  string
 		score int
 	}
 
-	var related []scoredTerm
+	var wordMatched []scoredTerm
 	seenTerms := make(map[string]bool)
+
+	// Mark smart related as seen to avoid duplicates
+	for _, term := range smartRelated {
+		seenTerms[strings.ToLower(term)] = true
+	}
+	seenTerms[query] = true
 
 	for _, term := range allTerms {
 		termLower := strings.ToLower(term)
 
-		// Skip if exact match with query
-		if termLower == query {
-			continue
-		}
-
-		// Skip if we've seen this term
+		// Skip if already seen
 		if seenTerms[termLower] {
 			continue
 		}
@@ -351,42 +356,40 @@ func GetRelatedSearches(query string, maxResults int) []string {
 			}
 			for _, tw := range termWords {
 				if tw == qw {
-					// Exact word match
 					score += 20
 				} else if strings.HasPrefix(tw, qw) || strings.HasPrefix(qw, tw) {
-					// Prefix match
 					score += 10
 				} else if strings.Contains(tw, qw) || strings.Contains(qw, tw) {
-					// Contains match
 					score += 5
 				}
 			}
 		}
 
-		// Also check if query is a substring or vice versa
+		// Substring match bonus
 		if strings.Contains(termLower, query) || strings.Contains(query, termLower) {
 			score += 15
 		}
 
 		if score > 0 {
 			seenTerms[termLower] = true
-			related = append(related, scoredTerm{term: term, score: score})
+			wordMatched = append(wordMatched, scoredTerm{term: term, score: score})
 		}
 	}
 
-	// Sort by score descending
-	sort.Slice(related, func(i, j int) bool {
-		return related[i].score > related[j].score
+	// Sort word-matched by score
+	sort.Slice(wordMatched, func(i, j int) bool {
+		return wordMatched[i].score > wordMatched[j].score
 	})
 
-	// Limit and extract terms
-	if len(related) > maxResults {
-		related = related[:maxResults]
-	}
+	// Combine: smart related first, then word-matched
+	result := make([]string, 0, maxResults)
+	result = append(result, smartRelated...)
 
-	result := make([]string, len(related))
-	for i, r := range related {
-		result[i] = r.term
+	for _, st := range wordMatched {
+		if len(result) >= maxResults {
+			break
+		}
+		result = append(result, st.term)
 	}
 
 	return result

@@ -3162,6 +3162,72 @@ a:focus-visible {
 }
 
 /* ===========================================
+   TOGGLE SWITCHES per AI.md PART 16
+   CSS-only toggle using hidden checkbox
+   =========================================== */
+
+.toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle .slider {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+    background: var(--color-border);
+    border-radius: 26px;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+}
+
+.toggle .slider::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle input[type="checkbox"]:checked + .slider {
+    background: var(--color-primary);
+}
+
+.toggle input[type="checkbox"]:checked + .slider::before {
+    transform: translateX(22px);
+}
+
+.toggle input[type="checkbox"]:focus + .slider {
+    box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+.toggle input[type="checkbox"]:disabled + .slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toggle-label {
+    color: var(--color-text);
+    font-size: 0.9rem;
+}
+
+/* ===========================================
    EMPTY STATES per AI.md PART 16
    =========================================== */
 

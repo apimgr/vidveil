@@ -423,6 +423,74 @@ func calculateRelevanceScore(r model.VideoResult, queryLower string, queryWords 
 	return score
 }
 
+// QualityLevel represents video quality as a numeric value for comparison
+// Higher values = better quality
+const (
+	QualityUnknown = 0
+	Quality240p    = 240
+	Quality360p    = 360
+	Quality480p    = 480
+	Quality720p    = 720
+	Quality1080p   = 1080
+	Quality1440p   = 1440
+	Quality4K      = 2160
+)
+
+// ParseQualityLevel converts a quality string to a numeric level
+// Returns QualityUnknown (0) if quality cannot be determined
+func ParseQualityLevel(quality string) int {
+	if quality == "" {
+		return QualityUnknown
+	}
+
+	q := strings.ToUpper(quality)
+
+	// Check for explicit resolution numbers
+	if strings.Contains(q, "4K") || strings.Contains(q, "2160") || strings.Contains(q, "UHD") {
+		return Quality4K
+	}
+	if strings.Contains(q, "1440") || strings.Contains(q, "2K") || strings.Contains(q, "QHD") {
+		return Quality1440p
+	}
+	if strings.Contains(q, "1080") || strings.Contains(q, "FHD") {
+		return Quality1080p
+	}
+	if strings.Contains(q, "720") {
+		return Quality720p
+	}
+	if strings.Contains(q, "480") || strings.Contains(q, "SD") {
+		return Quality480p
+	}
+	if strings.Contains(q, "360") {
+		return Quality360p
+	}
+	if strings.Contains(q, "240") {
+		return Quality240p
+	}
+
+	// "HD" without specific resolution typically means 720p+
+	if strings.Contains(q, "HD") {
+		return Quality720p
+	}
+
+	return QualityUnknown
+}
+
+// meetsMinQuality checks if a result meets the minimum quality requirement
+// Unknown quality (0) passes the filter to avoid excluding videos without quality info
+func meetsMinQuality(resultQuality string, minQuality int) bool {
+	if minQuality <= 0 {
+		return true // No minimum set
+	}
+
+	level := ParseQualityLevel(resultQuality)
+	if level == QualityUnknown {
+		return true // Unknown quality passes (we don't want to filter videos without quality info)
+	}
+
+	return level >= minQuality
+}
+
 // getEnginesToUse returns the engines to use for search
 func (m *EngineManager) getEnginesToUse(engineNames []string) []SearchEngine {
 	var engines []SearchEngine
@@ -552,7 +620,7 @@ type StreamResult struct {
 // SearchStream performs a search across enabled engines and streams results via channel
 // Results are deduplicated by URL across all engines
 func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
-	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil)
+	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, 0)
 }
 
 // SearchStreamWithOperators performs a streaming search with optional search operators
@@ -560,7 +628,8 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 // exclusions removes results containing any excluded word
 // performers filters by performer name (OR match)
 // showAI overrides server AI filter setting (true = show AI content)
-func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool) <-chan StreamResult {
+// minQuality filters by minimum quality level (0 = no filter, 360 = 360p+, etc.)
+func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
 	go func() {
@@ -650,6 +719,12 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						if isAIGeneratedContent(titleLower, r.Tags, m.appConfig.Search.AIFilter.Keywords) {
 							continue
 						}
+					}
+
+					// Quality filter - skip if below minimum quality
+					// Unknown quality passes to avoid filtering videos without quality info
+					if !meetsMinQuality(r.Quality, minQuality) {
+						continue
 					}
 
 					// AND-based term filter: result must match ALL search terms (using synonyms)

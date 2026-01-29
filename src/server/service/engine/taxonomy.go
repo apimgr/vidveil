@@ -121,6 +121,11 @@ var Categories = map[string]*Category{
 		Synonyms: []string{"pregnant", "preggo", "preggy", "expecting", "knocked up", "with child"},
 		Related:  []string{"lactating", "breeding", "creampie"},
 	},
+	"lactating": {
+		Name:     "lactating",
+		Synonyms: []string{"lactating", "lactation", "breastfeeding", "breast milk", "milking", "milk", "milky", "nursing", "tits milk", "breast feeding"},
+		Related:  []string{"pregnant", "busty", "big tits", "natural tits"},
+	},
 	"hairy": {
 		Name:     "hairy",
 		Synonyms: []string{"hairy", "bush", "unshaved", "natural", "furry", "hairy pussy"},

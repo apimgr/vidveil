@@ -121,8 +121,9 @@ const defaultPrefs = {
     resultsPerPage: 0,  // 0 = infinite scroll (no pagination)
     openNewTab: true,
     defaultPreviewOnly: true,
+    showAIContent: false,  // AI content hidden by default
     defaultDuration: '',
-    defaultQuality: '',
+    minQuality: '360',  // Default to 360p+ quality
     defaultSort: '',
     minDuration: 600,  // 10 minutes in seconds
     maxHistory: 0,  // 0 = unlimited
@@ -1459,6 +1460,11 @@ if (document.readyState === 'loading') {
             searchUrl += '&show_ai=1';
         }
 
+        // Add min_quality parameter if user has set a minimum quality preference
+        if (userPrefs.minQuality && parseInt(userPrefs.minQuality) > 0) {
+            searchUrl += '&min_quality=' + userPrefs.minQuality;
+        }
+
         var eventSource = new EventSource(searchUrl);
         var firstResult = true;
 
@@ -2109,10 +2115,13 @@ if (document.readyState === 'loading') {
         var loadIndicator = document.getElementById('load-more-indicator');
         if (loadIndicator) loadIndicator.classList.remove('hidden');
 
-        // Stream next page of results (include AI preference)
+        // Stream next page of results (include AI and quality preferences)
         var pageUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage;
         if (userPrefs.showAIContent) {
             pageUrl += '&show_ai=1';
+        }
+        if (userPrefs.minQuality && parseInt(userPrefs.minQuality) > 0) {
+            pageUrl += '&min_quality=' + userPrefs.minQuality;
         }
         var eventSource = new EventSource(pageUrl);
         var gotResults = false;

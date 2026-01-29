@@ -1760,9 +1760,39 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 			})
 			return
 		}
+
+		// Check for @performer autocomplete (e.g., "teen @mia" or just "@mia")
+		if strings.HasPrefix(lastWord, "@") {
+			prefix := lastWord[1:] // Remove @ prefix
+			performerSuggestions := engine.AutocompletePerformers(prefix, 12)
+			// Convert to suggestions with @ prefix
+			var suggestions []map[string]string
+			for _, p := range performerSuggestions {
+				suggestions = append(suggestions, map[string]string{
+					"term": "@" + p.Name,
+					"type": "performer",
+				})
+			}
+			if format == "text/plain" {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprintf(w, "type: performer\nreplace: %s\nsuggestions: %d\n---\n", lastWord, len(suggestions))
+				for _, s := range suggestions {
+					fmt.Fprintf(w, "%s\n", s["term"])
+				}
+				return
+			}
+			h.jsonResponse(w, map[string]interface{}{
+				"ok":          true,
+				"suggestions": suggestions,
+				"type":        "performer",
+				"replace":     lastWord,
+			})
+			return
+		}
 	}
 
-	// No bang in query - return combined search term + performer suggestions
+	// No bang or @ in query - return combined search term + performer suggestions
 	// Get the last word as the prefix for suggestions
 	lastWord := ""
 	if len(words) > 0 {

@@ -204,11 +204,12 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 				if !resultMatchesAllTerms(r, query) {
 					continue
 				}
-				// Deduplicate by URL - skip if we've seen this URL before
-				if seen[r.URL] {
+				// Deduplicate by normalized URL (handles http/https, www, trailing slash)
+				normalizedURL := normalizeURL(r.URL)
+				if seen[normalizedURL] {
 					continue
 				}
-				seen[r.URL] = true
+				seen[normalizedURL] = true
 				allResults = append(allResults, r)
 				resultCount++
 			}
@@ -586,6 +587,43 @@ func isValidThumbnail(thumbnail string) bool {
 	return true
 }
 
+// normalizeURL normalizes a URL for deduplication purposes
+// Handles: http/https, www/non-www, trailing slashes, query params
+func normalizeURL(urlStr string) string {
+	if urlStr == "" {
+		return ""
+	}
+
+	// Lowercase the URL
+	normalized := strings.ToLower(urlStr)
+
+	// Remove protocol prefix for comparison
+	normalized = strings.TrimPrefix(normalized, "https://")
+	normalized = strings.TrimPrefix(normalized, "http://")
+
+	// Remove www. prefix
+	normalized = strings.TrimPrefix(normalized, "www.")
+
+	// Remove trailing slash
+	normalized = strings.TrimSuffix(normalized, "/")
+
+	// Remove common tracking parameters but keep essential ones
+	// Split at ? to handle query params
+	if idx := strings.Index(normalized, "?"); idx != -1 {
+		basePath := normalized[:idx]
+		// For video sites, the path usually contains the video ID
+		// Remove query params for deduplication
+		normalized = basePath
+	}
+
+	// Remove fragment
+	if idx := strings.Index(normalized, "#"); idx != -1 {
+		normalized = normalized[:idx]
+	}
+
+	return normalized
+}
+
 // resultMatchesAllTerms checks if a video result matches ALL search terms using synonym expansion
 // This implements AND logic: "pregnant teen lesbian" only returns results containing ALL three terms
 // Each term can match via any of its synonyms (e.g., "teen" matches "18", "young", "barely legal", etc.)
@@ -732,13 +770,14 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						continue
 					}
 
-					// Deduplicate by URL
+					// Deduplicate by normalized URL (handles http/https, www, trailing slash differences)
+					normalizedURL := normalizeURL(r.URL)
 					seenMu.Lock()
-					if seen[r.URL] {
+					if seen[normalizedURL] {
 						seenMu.Unlock()
 						continue
 					}
-					seen[r.URL] = true
+					seen[normalizedURL] = true
 					seenMu.Unlock()
 
 					select {

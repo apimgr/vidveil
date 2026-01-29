@@ -1554,10 +1554,14 @@ if (document.readyState === 'loading') {
             eventSource.close();
             // SSE failed - fallback to JSON API
             if (allResults.length === 0) {
+                // Show user-friendly error message
+                showToast('Connection interrupted. Retrying...', 'warning');
                 fallbackToJSONSearch(minDuration);
             } else {
+                // We have some results, just finish gracefully
                 isSearching = false;
                 updateSearchStatus();
+                showToast('Some engines failed to respond', 'warning');
             }
         };
 
@@ -1634,8 +1638,9 @@ if (document.readyState === 'loading') {
             isSearching = false;
             var loadingEl = document.getElementById('initial-loading');
             if (loadingEl) {
-                loadingEl.innerHTML = '<p>Search failed. Please try again.</p>';
+                loadingEl.innerHTML = '<p>Connection error. <button onclick="location.reload()" class="retry-btn">Retry</button></p>';
             }
+            showToast('Search failed - check your connection', 'error');
             updateSearchStatus();
         });
     }
@@ -2175,6 +2180,8 @@ if (document.readyState === 'loading') {
             eventSource.close();
             isLoadingMore = false;
             if (loadIndicator) loadIndicator.classList.add('hidden');
+            // Show subtle error - don't block the user
+            showToast('Failed to load more results', 'warning');
         };
     }
 

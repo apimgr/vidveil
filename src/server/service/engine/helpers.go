@@ -106,6 +106,53 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 		}
 	}
 
+	// Find preview URL - common data attributes for video preview/rollover
+	previewAttrs := []string{
+		"data-mediabook", "data-preview", "data-video-preview", "data-rollover",
+		"data-preview-url", "data-gif", "data-webm", "data-mp4",
+		"data-thumb-url", "data-trailer", "data-teaser",
+	}
+	// Check on the container element
+	for _, attr := range previewAttrs {
+		if preview := parser.ExtractAttr(s, attr); preview != "" {
+			if !strings.HasPrefix(preview, "http") {
+				if strings.HasPrefix(preview, "//") {
+					preview = "https:" + preview
+				}
+			}
+			r.PreviewURL = preview
+			break
+		}
+	}
+	// Check on the image element
+	if r.PreviewURL == "" {
+		for _, attr := range previewAttrs {
+			if preview := parser.ExtractAttr(img, attr); preview != "" {
+				if !strings.HasPrefix(preview, "http") {
+					if strings.HasPrefix(preview, "//") {
+						preview = "https:" + preview
+					}
+				}
+				r.PreviewURL = preview
+				break
+			}
+		}
+	}
+	// Check on the link element
+	if r.PreviewURL == "" {
+		for _, attr := range previewAttrs {
+			if preview := parser.ExtractAttr(link, attr); preview != "" {
+				if !strings.HasPrefix(preview, "http") {
+					if strings.HasPrefix(preview, "//") {
+						preview = "https:" + preview
+					}
+				}
+				r.PreviewURL = preview
+				break
+			}
+		}
+	}
+
 	// Find duration - try multiple selectors and also data attributes
 	durSelectors := []string{
 		".duration", ".dur", ".time", ".length", ".video-duration",

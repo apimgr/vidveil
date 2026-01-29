@@ -193,10 +193,10 @@
 
             <section>
                 <h2>Search Engines</h2>
-                <p class="section-description">Select which engines to use for searches:</p>
-                <div class="engine-tiers">
+                <p class="section-description">Toggle tiers on/off or select individual engines:</p>
+                <div class="engine-tiers" id="engine-tiers">
                     {{range .Engines}}
-                    <label class="engine-toggle">
+                    <label class="engine-toggle" data-tier="{{.Tier}}" data-engine="{{.Name}}" style="display:none">
                         <input type="checkbox" name="engines" value="{{.Name}}" {{if .Enabled}}checked{{end}}>
                         {{.DisplayName}}
                     </label>
@@ -352,9 +352,11 @@
         // Engine selection
         window.selectAllEngines = function() {
             document.querySelectorAll('input[name="engines"]').forEach(cb => cb.checked = true);
+            document.querySelectorAll('.tier-toggle input').forEach(cb => cb.checked = true);
         };
         window.selectNoneEngines = function() {
             document.querySelectorAll('input[name="engines"]').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.tier-toggle input').forEach(cb => cb.checked = false);
         };
 
         // History functions
@@ -450,6 +452,102 @@
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + this.value);
         });
+
+        // Tier grouping and toggle logic
+        function initEngineTiers() {
+            const container = document.getElementById('engine-tiers');
+            const engines = container.querySelectorAll('.engine-toggle[data-tier]');
+
+            // Group engines by tier
+            const tiers = {};
+            const tierNames = {
+                1: 'Tier 1 - Major Sites',
+                2: 'Tier 2 - Popular Sites',
+                3: 'Tier 3 - Additional Sites',
+                4: 'Tier 4 - More Sites',
+                5: 'Tier 5 - Extended Sites',
+                6: 'Tier 6 - Other Sites'
+            };
+
+            engines.forEach(eng => {
+                const tier = eng.dataset.tier;
+                if (!tiers[tier]) tiers[tier] = [];
+                tiers[tier].push(eng);
+            });
+
+            // Clear container and rebuild with tier groups
+            container.innerHTML = '';
+
+            // Sort tier numbers
+            const sortedTiers = Object.keys(tiers).sort((a, b) => parseInt(a) - parseInt(b));
+
+            sortedTiers.forEach(tier => {
+                const tierEngines = tiers[tier];
+                const tierName = tierNames[tier] || 'Tier ' + tier;
+
+                // Create tier group
+                const group = document.createElement('div');
+                group.className = 'tier-group';
+                group.dataset.tier = tier;
+
+                // Tier header with toggle
+                const header = document.createElement('div');
+                header.className = 'tier-header';
+                header.innerHTML = `
+                    <label class="toggle tier-toggle">
+                        <input type="checkbox" data-tier="${tier}" checked>
+                        <span class="slider"></span>
+                        <span class="toggle-label">${tierName} (${tierEngines.length} engines)</span>
+                    </label>
+                    <button type="button" class="tier-expand" aria-expanded="false" aria-label="Expand tier">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                `;
+                group.appendChild(header);
+
+                // Engine list (collapsed by default)
+                const list = document.createElement('div');
+                list.className = 'tier-engines collapsed';
+                tierEngines.forEach(eng => {
+                    eng.style.display = '';
+                    list.appendChild(eng);
+                });
+                group.appendChild(list);
+
+                container.appendChild(group);
+
+                // Tier toggle handler
+                const tierToggle = header.querySelector('input[data-tier]');
+                tierToggle.addEventListener('change', function() {
+                    const checked = this.checked;
+                    tierEngines.forEach(eng => {
+                        eng.querySelector('input').checked = checked;
+                    });
+                });
+
+                // Update tier toggle when individual engines change
+                tierEngines.forEach(eng => {
+                    eng.querySelector('input').addEventListener('change', function() {
+                        const allChecked = tierEngines.every(e => e.querySelector('input').checked);
+                        const someChecked = tierEngines.some(e => e.querySelector('input').checked);
+                        tierToggle.checked = allChecked;
+                        tierToggle.indeterminate = someChecked && !allChecked;
+                    });
+                });
+
+                // Expand/collapse handler
+                const expandBtn = header.querySelector('.tier-expand');
+                expandBtn.addEventListener('click', function() {
+                    const expanded = list.classList.toggle('collapsed');
+                    this.setAttribute('aria-expanded', !expanded);
+                });
+            });
+        }
+
+        // Initialize tier UI after DOM ready
+        initEngineTiers();
 
         form.addEventListener('submit', savePreferences);
         form.dataset.managed = 'true';  // Mark as handled by inline script

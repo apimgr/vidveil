@@ -307,7 +307,13 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 - Proxy thumbnails through server (toggle) - default: Yes
 
 **Search Engines:**
-- Checkbox list of all 43 engines
+- Tier-based toggle switches (all tiers enabled by default)
+  - Tier 1 - Major Sites (5 engines)
+  - Tier 2 - Popular Sites (3 engines)
+  - Tier 3-6 - Additional Sites (35 engines)
+- Expand/collapse each tier to see individual engines
+- Checkbox for each individual engine within tiers
+- Indeterminate state when some engines in tier are disabled
 - Select All / Select None buttons
 
 ### UI Components

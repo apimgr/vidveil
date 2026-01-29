@@ -1425,6 +1425,81 @@ header .search-form {
     border-color: var(--accent);
 }
 
+/* Tier groups with toggle switches */
+.tier-group {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.tier-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.tier-header .tier-toggle {
+    flex: 1;
+}
+
+.tier-header .toggle-label {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.tier-expand {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tier-expand:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.tier-expand svg {
+    transition: transform 0.2s;
+}
+
+.tier-expand[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+}
+
+.tier-engines {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.5rem;
+    padding: 1rem;
+    max-height: 500px;
+    overflow-y: auto;
+    transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+}
+
+.tier-engines.collapsed {
+    max-height: 0;
+    padding: 0 1rem;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.tier-engines .engine-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .form-actions {
     display: flex;
     gap: 1rem;

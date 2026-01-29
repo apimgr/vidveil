@@ -2386,6 +2386,20 @@ a:focus-visible {
     font-size: 0.9rem;
 }
 
+.autocomplete-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    opacity: 0.5;
+    color: var(--text-secondary);
+}
+
+.autocomplete-item:hover .autocomplete-icon,
+.autocomplete-item.selected .autocomplete-icon {
+    opacity: 0.8;
+    color: var(--color-primary);
+}
+
 /* Bang hint below search box */
 .bang-hint {
     font-size: 0.8rem;

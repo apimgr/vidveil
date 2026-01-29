@@ -632,6 +632,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Animation styles are now in common.css per AI.md PART 16
 
+    // Initialize autocomplete for nav search (present on all pages except home)
+    setupAutocomplete('nav-search-input', 'autocomplete-dropdown-nav');
+
     // Initialize home page features
     initHomePage();
 
@@ -1166,92 +1169,213 @@ if (document.readyState === 'loading') {
 }
 
 // ============================================================================
+// Autocomplete System - Reusable for all search inputs
+// ============================================================================
+(function() {
+    'use strict';
+
+    // Track all active autocomplete instances for global click handling
+    var autocompleteInstances = [];
+
+    // Create autocomplete for a search input
+    function setupAutocomplete(inputId, dropdownId) {
+        var input = document.getElementById(inputId);
+        var dropdown = document.getElementById(dropdownId);
+        if (!input || !dropdown) return null;
+
+        var state = {
+            input: input,
+            dropdown: dropdown,
+            selectedIndex: -1,
+            suggestions: [],
+            suggestionType: 'search',
+            debounceTimer: null
+        };
+
+        function show() {
+            dropdown.classList.add('visible');
+            dropdown.hidden = false;
+        }
+
+        function hide() {
+            dropdown.classList.remove('visible');
+            dropdown.hidden = true;
+            state.selectedIndex = -1;
+        }
+
+        function render() {
+            if (state.suggestions.length === 0) {
+                hide();
+                return;
+            }
+            var html = state.suggestions.map(function(s, i) {
+                var cls = 'autocomplete-item' + (i === state.selectedIndex ? ' selected' : '');
+                if (state.suggestionType === 'bang' || state.suggestionType === 'bang_start') {
+                    return '<div class="' + cls + '" data-index="' + i + '" role="option">' +
+                           '<svg class="autocomplete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
+                           '<span class="bang-code">' + escapeHtmlUtil(s.short_code || s.Bang || '') + '</span>' +
+                           '<span class="bang-name">' + escapeHtmlUtil(s.display_name || s.EngineName || '') + '</span>' +
+                           '</div>';
+                } else {
+                    var term = s.term || s.Term || s;
+                    return '<div class="' + cls + '" data-index="' + i + '" role="option">' +
+                           '<svg class="autocomplete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>' +
+                           '<span class="search-term">' + escapeHtmlUtil(term) + '</span>' +
+                           '</div>';
+                }
+            }).join('');
+            dropdown.innerHTML = html;
+            show();
+        }
+
+        function select(index) {
+            if (index < 0 || index >= state.suggestions.length) return;
+            var s = state.suggestions[index];
+            var val = input.value;
+            var words = val.split(/\s+/);
+
+            if (state.suggestionType === 'bang' || state.suggestionType === 'bang_start') {
+                var bangCode = s.short_code || s.Bang || '';
+                for (var i = words.length - 1; i >= 0; i--) {
+                    if (words[i].startsWith('!')) {
+                        words[i] = bangCode;
+                        break;
+                    }
+                }
+                if (val.trim().startsWith('!') && words.length === 1) {
+                    words[0] = bangCode + ' ';
+                }
+                input.value = words.join(' ');
+            } else {
+                var term = s.term || s.Term || s;
+                if (words.length <= 1) {
+                    input.value = term;
+                } else {
+                    words[words.length - 1] = term;
+                    input.value = words.join(' ');
+                }
+            }
+            hide();
+            input.focus();
+        }
+
+        function fetch_suggestions() {
+            var q = input.value;
+            if (!q || q.length < 2) {
+                hide();
+                return;
+            }
+
+            fetch('/api/v1/bangs/autocomplete?q=' + encodeURIComponent(q))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.ok && data.suggestions && data.suggestions.length > 0) {
+                        state.suggestions = data.suggestions;
+                        state.suggestionType = data.type || 'search';
+                        state.selectedIndex = -1;
+                        render();
+                    } else {
+                        hide();
+                    }
+                })
+                .catch(function() { hide(); });
+        }
+
+        // Event listeners
+        input.addEventListener('input', function() {
+            clearTimeout(state.debounceTimer);
+            state.debounceTimer = setTimeout(fetch_suggestions, 150);
+        });
+
+        input.addEventListener('keydown', function(e) {
+            if (!dropdown.classList.contains('visible')) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                state.selectedIndex = Math.min(state.selectedIndex + 1, state.suggestions.length - 1);
+                render();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                state.selectedIndex = Math.max(state.selectedIndex - 1, 0);
+                render();
+            } else if (e.key === 'Enter' && state.selectedIndex >= 0) {
+                e.preventDefault();
+                select(state.selectedIndex);
+            } else if (e.key === 'Escape') {
+                hide();
+            } else if (e.key === 'Tab' && state.selectedIndex >= 0) {
+                e.preventDefault();
+                select(state.selectedIndex);
+            }
+        });
+
+        input.addEventListener('focus', function() {
+            if (state.suggestions.length > 0) {
+                render();
+            }
+        });
+
+        dropdown.addEventListener('click', function(e) {
+            var item = e.target.closest('.autocomplete-item');
+            if (item) {
+                select(parseInt(item.dataset.index, 10));
+            }
+        });
+
+        autocompleteInstances.push({ hide: hide, input: input });
+        return { hide: hide, fetch: fetch_suggestions };
+    }
+
+    // Global click handler to hide all dropdowns
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.search-wrapper')) {
+            autocompleteInstances.forEach(function(inst) { inst.hide(); });
+        }
+    });
+
+    // Export for use by other modules
+    window.setupAutocomplete = setupAutocomplete;
+    window.hideAllAutocomplete = function() {
+        autocompleteInstances.forEach(function(inst) { inst.hide(); });
+    };
+})();
+
+// ============================================================================
 // Home Page Functions
 // ============================================================================
 (function() {
     'use strict';
 
-    var homeInput = null;
-    var homeDropdown = null;
     var homeHistoryDiv = null;
-    var homeSelectedIndex = -1;
-    var homeSuggestions = [];
-    var homeSuggestionType = 'search';
-    var homeDebounceTimer;
+    var homeAutocomplete = null;
 
     function initHomePage() {
-        homeInput = document.getElementById('search-input');
-        homeDropdown = document.getElementById('autocomplete-dropdown');
+        var homeInput = document.getElementById('search-input');
         homeHistoryDiv = document.getElementById('search-history');
 
         if (!homeInput) return; // Not on home page
 
-        // Setup event listeners
-        homeInput.addEventListener('input', function() {
-            clearTimeout(homeDebounceTimer);
-            homeDebounceTimer = setTimeout(fetchHomeAutocomplete, 150);
-        });
-
-        homeInput.addEventListener('keydown', function(e) {
-            if (!homeDropdown || !homeDropdown.classList.contains('visible')) return;
-
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                homeSelectedIndex = Math.min(homeSelectedIndex + 1, homeSuggestions.length - 1);
-                renderHomeSuggestions();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                homeSelectedIndex = Math.max(homeSelectedIndex - 1, 0);
-                renderHomeSuggestions();
-            } else if (e.key === 'Enter' && homeSelectedIndex >= 0) {
-                e.preventDefault();
-                selectHomeSuggestion(homeSelectedIndex);
-            } else if (e.key === 'Escape') {
-                hideHomeDropdown();
-            } else if (e.key === 'Tab' && homeSelectedIndex >= 0) {
-                e.preventDefault();
-                selectHomeSuggestion(homeSelectedIndex);
-            }
-        });
-
-        if (homeDropdown) {
-            homeDropdown.addEventListener('click', function(e) {
-                var item = e.target.closest('.autocomplete-item');
-                if (item) {
-                    selectHomeSuggestion(parseInt(item.dataset.index, 10));
-                }
-            });
-        }
-
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.search-wrapper')) {
-                hideHomeDropdown();
-            }
-        });
+        // Setup autocomplete for home search
+        homeAutocomplete = setupAutocomplete('search-input', 'autocomplete-dropdown');
 
         // Render history on page load
         renderHomeSearchHistory();
     }
 
     function handleSearchSubmit(form) {
-        // Find submit button (try type="submit" first, then any button)
         var btn = form.querySelector('button[type="submit"]') || form.querySelector('button');
-        if (!btn) return true; // No button found, allow form to submit
+        if (!btn) return true;
         if (btn.disabled) return false;
         btn.disabled = true;
 
-        // For icon-only buttons (compact/inline), add loading class
-        // For text buttons, replace with spinner text
         if (btn.classList.contains('search-btn--compact') || btn.querySelector('svg')) {
             btn.classList.add('btn-loading');
         } else {
             btn.innerHTML = '<span class="btn-spinner"></span> Searching...';
         }
 
-        // Hide dropdown if on home page
-        if (typeof hideHomeDropdown === 'function') {
-            hideHomeDropdown();
-        }
+        // Hide all autocomplete dropdowns
+        if (window.hideAllAutocomplete) window.hideAllAutocomplete();
 
         // Save to history
         var query = form.querySelector('input[name="q"]');
@@ -1260,103 +1384,6 @@ if (document.readyState === 'loading') {
         }
 
         return true;
-    }
-
-    function showHomeDropdown() {
-        if (homeDropdown) homeDropdown.classList.add('visible');
-    }
-
-    function hideHomeDropdown() {
-        if (homeDropdown) homeDropdown.classList.remove('visible');
-        homeSelectedIndex = -1;
-    }
-
-    function renderHomeSuggestions() {
-        if (!homeDropdown) return;
-        if (homeSuggestions.length === 0) {
-            hideHomeDropdown();
-            return;
-        }
-        var html = homeSuggestions.map(function(s, i) {
-            var cls = 'autocomplete-item' + (i === homeSelectedIndex ? ' selected' : '');
-            if (homeSuggestionType === 'bang' || homeSuggestionType === 'bang_start') {
-                // Bang suggestions have short_code and display_name
-                return '<div class="' + cls + '" data-index="' + i + '" role="option">' +
-                       '<span class="bang-code">' + escapeHtmlUtil(s.short_code || s.Bang || '') + '</span>' +
-                       '<span class="bang-name">' + escapeHtmlUtil(s.display_name || s.EngineName || '') + '</span>' +
-                       '</div>';
-            } else {
-                // Search term suggestions have term field
-                var term = s.term || s.Term || s;
-                return '<div class="' + cls + '" data-index="' + i + '" role="option">' +
-                       '<span class="search-term">' + escapeHtmlUtil(term) + '</span>' +
-                       '</div>';
-            }
-        }).join('');
-        homeDropdown.innerHTML = html;
-        showHomeDropdown();
-    }
-
-    function selectHomeSuggestion(index) {
-        if (index < 0 || index >= homeSuggestions.length) return;
-        var s = homeSuggestions[index];
-        var val = homeInput.value;
-        var words = val.split(/\s+/);
-
-        if (homeSuggestionType === 'bang' || homeSuggestionType === 'bang_start') {
-            // Bang suggestion - replace the bang being typed
-            var bangCode = s.short_code || s.Bang || '';
-            for (var i = words.length - 1; i >= 0; i--) {
-                if (words[i].startsWith('!')) {
-                    words[i] = bangCode;
-                    break;
-                }
-            }
-
-            // If no bang found at end, check if whole query is a bang
-            if (val.trim().startsWith('!') && words.length === 1) {
-                words[0] = bangCode + ' ';
-            }
-
-            homeInput.value = words.join(' ');
-        } else {
-            // Search term suggestion - replace entire query or last word
-            var term = s.term || s.Term || s;
-            if (words.length <= 1) {
-                // Single word or empty - replace entirely
-                homeInput.value = term;
-            } else {
-                // Multiple words - replace last word
-                words[words.length - 1] = term;
-                homeInput.value = words.join(' ');
-            }
-        }
-
-        hideHomeDropdown();
-        homeInput.focus();
-    }
-
-    function fetchHomeAutocomplete() {
-        if (!homeInput) return;
-        var q = homeInput.value;
-        if (!q || q.length < 2) {
-            hideHomeDropdown();
-            return;
-        }
-
-        fetch('/api/v1/bangs/autocomplete?q=' + encodeURIComponent(q))
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.ok && data.suggestions && data.suggestions.length > 0) {
-                    homeSuggestions = data.suggestions;
-                    homeSuggestionType = data.type || 'search';
-                    homeSelectedIndex = -1;
-                    renderHomeSuggestions();
-                } else {
-                    hideHomeDropdown();
-                }
-            })
-            .catch(function() { hideHomeDropdown(); });
     }
 
     function getHomeSearchHistory() {
@@ -1547,6 +1574,9 @@ if (document.readyState === 'loading') {
     function initSearchPage() {
         var searchMeta = document.getElementById('search-meta');
         if (!searchMeta) return; // Not on search page
+
+        // Initialize autocomplete for results page search
+        setupAutocomplete('results-search-input', 'autocomplete-dropdown-results');
 
         searchQuery = searchMeta.dataset.query || new URLSearchParams(window.location.search).get('q') || '';
 

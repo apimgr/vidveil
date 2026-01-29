@@ -13,12 +13,20 @@
             <form action="/search" method="get" class="search-form search-form--inline" role="search" aria-label="Refine search" onsubmit="return handleSearchSubmit(this)">
                 <div class="search-wrapper search-wrapper--compact">
                     <input type="text"
+                           id="results-search-input"
                            name="q"
                            value="{{.Query}}"
                            placeholder="Refine search..."
                            autocomplete="off"
                            class="search-input--compact"
-                           aria-label="Search query">
+                           aria-label="Search query"
+                           aria-autocomplete="list"
+                           aria-controls="autocomplete-dropdown-results">
+                    <div id="autocomplete-dropdown-results"
+                         class="autocomplete-dropdown"
+                         role="listbox"
+                         aria-label="Search suggestions"
+                         hidden></div>
                     <button type="submit" class="search-btn--compact" aria-label="Search">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <circle cx="11" cy="11" r="8"></circle>

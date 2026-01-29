@@ -295,15 +295,135 @@ func AutocompleteSuggestions(prefix string, maxResults int) []SearchSuggestion {
 // Used for initial suggestions before user types
 func GetPopularSearches(count int) []string {
 	popular := []string{
+		// Top searches based on industry trends
 		"teen", "milf", "lesbian", "anal", "amateur", "big tits",
 		"blonde", "asian", "threesome", "creampie", "blowjob", "latina",
 		"ebony", "hardcore", "mature", "stepmom", "japanese", "massage",
+		"pov", "big ass", "interracial", "hentai", "bbc", "step sister",
+		"squirt", "gangbang", "deepthroat", "rough", "pawg", "redhead",
+		"solo", "femdom", "indian", "double penetration", "homemade",
 	}
 
 	if count > len(popular) {
 		count = len(popular)
 	}
 	return popular[:count]
+}
+
+// SuggestionCategory represents a category of suggestions
+type SuggestionCategory struct {
+	Name        string   `json:"name"`
+	DisplayName string   `json:"display_name"`
+	Terms       []string `json:"terms"`
+}
+
+// GetCategorizedSuggestions returns suggestions organized by category
+func GetCategorizedSuggestions() []SuggestionCategory {
+	return []SuggestionCategory{
+		{
+			Name:        "popular",
+			DisplayName: "Popular",
+			Terms:       []string{"teen", "milf", "lesbian", "anal", "amateur", "big tits", "blonde", "asian"},
+		},
+		{
+			Name:        "acts",
+			DisplayName: "Acts",
+			Terms:       []string{"blowjob", "anal", "creampie", "threesome", "gangbang", "deepthroat", "squirt", "dp"},
+		},
+		{
+			Name:        "body",
+			DisplayName: "Body Type",
+			Terms:       []string{"big tits", "big ass", "petite", "bbw", "busty", "thick", "pawg", "curvy"},
+		},
+		{
+			Name:        "ethnicity",
+			DisplayName: "Ethnicity",
+			Terms:       []string{"asian", "latina", "ebony", "japanese", "indian", "russian", "brazilian", "arab"},
+		},
+		{
+			Name:        "age",
+			DisplayName: "Age",
+			Terms:       []string{"teen", "milf", "mature", "college", "granny", "young", "barely legal"},
+		},
+		{
+			Name:        "scenario",
+			DisplayName: "Scenario",
+			Terms:       []string{"stepmom", "step sister", "massage", "casting", "cheating", "public", "hotel", "office"},
+		},
+		{
+			Name:        "style",
+			DisplayName: "Style",
+			Terms:       []string{"amateur", "homemade", "pov", "hd", "4k", "vintage", "professional", "vr"},
+		},
+		{
+			Name:        "fetish",
+			DisplayName: "Fetish",
+			Terms:       []string{"bdsm", "feet", "bondage", "femdom", "latex", "cosplay", "stockings", "tattoo"},
+		},
+	}
+}
+
+// CombinedSuggestion represents a suggestion with its type for mixed results
+type CombinedSuggestion struct {
+	Term     string `json:"term"`
+	Type     string `json:"type"` // "search", "performer", "bang"
+	Category string `json:"category,omitempty"`
+	Score    int    `json:"-"`
+}
+
+// AutocompleteCombined returns mixed suggestions (terms + performers + bangs)
+func AutocompleteCombined(prefix string, maxResults int) []CombinedSuggestion {
+	if prefix == "" || maxResults <= 0 {
+		return nil
+	}
+
+	prefix = strings.ToLower(strings.TrimSpace(prefix))
+	if len(prefix) < 2 {
+		return nil
+	}
+
+	var suggestions []CombinedSuggestion
+
+	// Get search term suggestions
+	termSuggestions := AutocompleteSuggestions(prefix, maxResults)
+	for _, ts := range termSuggestions {
+		suggestions = append(suggestions, CombinedSuggestion{
+			Term:  ts.Term,
+			Type:  "search",
+			Score: ts.Score,
+		})
+	}
+
+	// Get performer suggestions (check if looks like a name - has capital or space)
+	performerSuggestions := AutocompletePerformers(prefix, maxResults/2)
+	for _, ps := range performerSuggestions {
+		suggestions = append(suggestions, CombinedSuggestion{
+			Term:  ps.Name,
+			Type:  "performer",
+			Score: ps.Score + 10, // Slight boost for performers
+		})
+	}
+
+	// Sort by score
+	sort.Slice(suggestions, func(i, j int) bool {
+		return suggestions[i].Score > suggestions[j].Score
+	})
+
+	// Limit and deduplicate
+	seen := make(map[string]bool)
+	var unique []CombinedSuggestion
+	for _, s := range suggestions {
+		key := strings.ToLower(s.Term)
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, s)
+			if len(unique) >= maxResults {
+				break
+			}
+		}
+	}
+
+	return unique
 }
 
 // GetRelatedSearches returns search terms related to the given query

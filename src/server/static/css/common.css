@@ -2476,6 +2476,32 @@ a:focus-visible {
     color: var(--color-primary);
 }
 
+/* Performer icon styling */
+.autocomplete-icon--performer {
+    color: var(--accent-alt, #ff69b4);
+}
+
+.autocomplete-item:hover .autocomplete-icon--performer,
+.autocomplete-item.selected .autocomplete-icon--performer {
+    color: var(--accent-alt, #ff69b4);
+}
+
+/* Suggestion type label (performer badge) */
+.suggestion-type {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    margin-left: auto;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+}
+
+.suggestion-type--performer {
+    background: rgba(255, 105, 180, 0.15);
+    color: var(--accent-alt, #ff69b4);
+}
+
 /* Bang hint below search box */
 .bang-hint {
     font-size: 0.8rem;

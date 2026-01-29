@@ -1011,16 +1011,33 @@ if (document.readyState === 'loading') {
             var html = state.suggestions.map(function(s, i) {
                 var cls = 'autocomplete-item' + (i === state.selectedIndex ? ' selected' : '');
                 if (state.suggestionType === 'bang' || state.suggestionType === 'bang_start') {
+                    // Bang suggestions (engine shortcuts)
                     return '<div class="' + cls + '" data-index="' + i + '" role="option">' +
                            '<svg class="autocomplete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' +
                            '<span class="bang-code">' + escapeHtmlUtil(s.short_code || s.Bang || '') + '</span>' +
                            '<span class="bang-name">' + escapeHtmlUtil(s.display_name || s.EngineName || '') + '</span>' +
                            '</div>';
                 } else {
+                    // Search or performer suggestions
                     var term = s.term || s.Term || s;
+                    var suggType = s.type || 'search';
+                    var icon = '';
+                    var typeLabel = '';
+
+                    if (suggType === 'performer') {
+                        // Performer icon (person silhouette)
+                        icon = '<svg class="autocomplete-icon autocomplete-icon--performer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+                        typeLabel = '<span class="suggestion-type suggestion-type--performer">performer</span>';
+                    } else {
+                        // Search icon (magnifying glass)
+                        icon = '<svg class="autocomplete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>';
+                        typeLabel = '';
+                    }
+
                     return '<div class="' + cls + '" data-index="' + i + '" role="option">' +
-                           '<svg class="autocomplete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>' +
+                           icon +
                            '<span class="search-term">' + escapeHtmlUtil(term) + '</span>' +
+                           typeLabel +
                            '</div>';
                 }
             }).join('');

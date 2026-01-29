@@ -19,6 +19,41 @@
                         <option value="light">Light</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label for="grid-density">Grid density:</label>
+                    <select id="grid-density" name="gridDensity">
+                        <option value="comfortable">Comfortable (larger cards)</option>
+                        <option value="default" selected>Default</option>
+                        <option value="compact">Compact (more cards)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="thumbnail-size">Thumbnail size:</label>
+                    <select id="thumbnail-size" name="thumbnailSize">
+                        <option value="small">Small</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="large">Large</option>
+                    </select>
+                </div>
+            </section>
+
+            <section>
+                <h2>Video Preview</h2>
+                <div class="form-group">
+                    <label for="autoplay-preview">
+                        <input type="checkbox" id="autoplay-preview" name="autoplayPreview" checked>
+                        Auto-play preview on hover (desktop)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="preview-delay">Preview delay:</label>
+                    <select id="preview-delay" name="previewDelay">
+                        <option value="0">Instant</option>
+                        <option value="200" selected>Short (200ms)</option>
+                        <option value="500">Medium (500ms)</option>
+                        <option value="1000">Long (1s)</option>
+                    </select>
+                </div>
             </section>
 
             <section>
@@ -31,7 +66,51 @@
                         <option value="100">100</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label for="open-new-tab">
+                        <input type="checkbox" id="open-new-tab" name="openNewTab" checked>
+                        Open links in new tab
+                    </label>
+                </div>
+            </section>
 
+            <section>
+                <h2>Default Filters</h2>
+                <p class="section-description">These filters will be applied automatically to new searches:</p>
+                <div class="form-group">
+                    <label for="default-preview-only">
+                        <input type="checkbox" id="default-preview-only" name="defaultPreviewOnly">
+                        Show only videos with preview
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="default-duration">Default duration filter:</label>
+                    <select id="default-duration" name="defaultDuration">
+                        <option value="" selected>Any</option>
+                        <option value="short">Under 10 min</option>
+                        <option value="medium">10-30 min</option>
+                        <option value="long">Over 30 min</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="default-quality">Default quality filter:</label>
+                    <select id="default-quality" name="defaultQuality">
+                        <option value="" selected>Any</option>
+                        <option value="4k">4K</option>
+                        <option value="1080">1080p HD</option>
+                        <option value="720">720p</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="default-sort">Default sort:</label>
+                    <select id="default-sort" name="defaultSort">
+                        <option value="" selected>Relevance</option>
+                        <option value="duration-desc">Longest</option>
+                        <option value="duration-asc">Shortest</option>
+                        <option value="views">Most Viewed</option>
+                        <option value="quality">Best Quality</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label for="min-duration">Minimum video duration:</label>
                     <select id="min-duration" name="minDuration">
@@ -44,12 +123,49 @@
                         <option value="1800">30 minutes</option>
                     </select>
                 </div>
+            </section>
 
+            <section>
+                <h2>History</h2>
                 <div class="form-group">
-                    <label for="open-new-tab">
-                        <input type="checkbox" id="open-new-tab" name="openNewTab" checked>
-                        Open links in new tab
+                    <label for="max-history">Maximum history items:</label>
+                    <select id="max-history" name="maxHistory">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="0">Unlimited</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="auto-clear-history">Auto-clear history:</label>
+                    <select id="auto-clear-history" name="autoClearHistory">
+                        <option value="0" selected>Never</option>
+                        <option value="1">After 1 day</option>
+                        <option value="7">After 7 days</option>
+                        <option value="30">After 30 days</option>
+                    </select>
+                </div>
+                <div class="form-group form-group--buttons">
+                    <button type="button" class="btn-secondary" onclick="exportHistory()">Export History</button>
+                    <label class="btn-secondary btn-file">
+                        Import History
+                        <input type="file" accept=".json" onchange="importHistory(this.files[0])" hidden>
                     </label>
+                    <button type="button" class="btn-danger" onclick="clearHistory()">Clear History</button>
+                </div>
+            </section>
+
+            <section>
+                <h2>Favorites</h2>
+                <p class="section-description">You have <span id="favorites-count">0</span> favorites saved.</p>
+                <div class="form-group form-group--buttons">
+                    <button type="button" class="btn-secondary" onclick="exportFavorites()">Export Favorites</button>
+                    <label class="btn-secondary btn-file">
+                        Import Favorites
+                        <input type="file" accept=".json" onchange="importFavorites(this.files[0])" hidden>
+                    </label>
+                    <button type="button" class="btn-danger" onclick="clearFavorites()">Clear Favorites</button>
                 </div>
             </section>
 
@@ -97,14 +213,26 @@
     <script>
     (function() {
         const STORAGE_KEY = 'vidveil_prefs';
+        const HISTORY_KEY = 'vidveil_history';
+        const FAVORITES_KEY = 'vidveil_favorites';
         const form = document.getElementById('preferences-form');
 
         // Default preferences
         const defaults = {
-            theme: 'auto',  // Per AI.md PART 16: default to system preference
+            theme: 'auto',
+            gridDensity: 'default',
+            thumbnailSize: 'medium',
+            autoplayPreview: true,
+            previewDelay: '200',
             resultsPerPage: '50',
-            minDuration: '0',
             openNewTab: true,
+            defaultPreviewOnly: false,
+            defaultDuration: '',
+            defaultQuality: '',
+            defaultSort: '',
+            minDuration: '0',
+            maxHistory: '50',
+            autoClearHistory: '0',
             useTor: false,
             proxyImages: false,
             engines: []
@@ -115,29 +243,45 @@
             const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
             const prefs = { ...defaults, ...saved };
 
-            // Set theme - use class instead of data-theme per AI.md PART 16
+            // Appearance
             document.getElementById('theme').value = prefs.theme;
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
+            document.getElementById('grid-density').value = prefs.gridDensity;
+            document.getElementById('thumbnail-size').value = prefs.thumbnailSize;
 
-            // Set results per page
+            // Video Preview
+            document.getElementById('autoplay-preview').checked = prefs.autoplayPreview;
+            document.getElementById('preview-delay').value = prefs.previewDelay;
+
+            // Search Settings
             document.getElementById('results-per-page').value = prefs.resultsPerPage;
+            document.getElementById('open-new-tab').checked = prefs.openNewTab;
 
-            // Set minimum duration
+            // Default Filters
+            document.getElementById('default-preview-only').checked = prefs.defaultPreviewOnly;
+            document.getElementById('default-duration').value = prefs.defaultDuration;
+            document.getElementById('default-quality').value = prefs.defaultQuality;
+            document.getElementById('default-sort').value = prefs.defaultSort;
             document.getElementById('min-duration').value = prefs.minDuration;
 
-            // Set checkboxes
-            document.getElementById('open-new-tab').checked = prefs.openNewTab;
+            // History
+            document.getElementById('max-history').value = prefs.maxHistory;
+            document.getElementById('auto-clear-history').value = prefs.autoClearHistory;
+
+            // Privacy
             document.getElementById('use-tor').checked = prefs.useTor;
             document.getElementById('proxy-images').checked = prefs.proxyImages;
 
-            // Set engines if saved
+            // Engines
             if (prefs.engines && prefs.engines.length > 0) {
-                const engineCheckboxes = document.querySelectorAll('input[name="engines"]');
-                engineCheckboxes.forEach(cb => {
+                document.querySelectorAll('input[name="engines"]').forEach(cb => {
                     cb.checked = prefs.engines.includes(cb.value);
                 });
             }
+
+            // Update counts
+            updateFavoritesCount();
         }
 
         // Save preferences to localStorage
@@ -151,9 +295,19 @@
 
             const prefs = {
                 theme: document.getElementById('theme').value,
+                gridDensity: document.getElementById('grid-density').value,
+                thumbnailSize: document.getElementById('thumbnail-size').value,
+                autoplayPreview: document.getElementById('autoplay-preview').checked,
+                previewDelay: document.getElementById('preview-delay').value,
                 resultsPerPage: document.getElementById('results-per-page').value,
-                minDuration: document.getElementById('min-duration').value,
                 openNewTab: document.getElementById('open-new-tab').checked,
+                defaultPreviewOnly: document.getElementById('default-preview-only').checked,
+                defaultDuration: document.getElementById('default-duration').value,
+                defaultQuality: document.getElementById('default-quality').value,
+                defaultSort: document.getElementById('default-sort').value,
+                minDuration: document.getElementById('min-duration').value,
+                maxHistory: document.getElementById('max-history').value,
+                autoClearHistory: document.getElementById('auto-clear-history').value,
                 useTor: document.getElementById('use-tor').checked,
                 proxyImages: document.getElementById('proxy-images').checked,
                 engines: engines
@@ -161,26 +315,25 @@
 
             localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 
-            // Apply theme immediately - use class instead of data-theme per AI.md PART 16
+            // Apply theme immediately
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
 
             showToast('Preferences saved!', 'success');
 
-            // Redirect to home after brief delay
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 1500);
+            setTimeout(() => { window.location.href = '/'; }, 1500);
         }
 
-        // Show toast notification
         function showToast(message, type) {
             const toast = document.getElementById('toast');
             toast.textContent = message;
             toast.className = 'toast ' + type + ' show';
-            setTimeout(() => {
-                toast.className = 'toast';
-            }, 3000);
+            setTimeout(() => { toast.className = 'toast'; }, 3000);
+        }
+
+        function updateFavoritesCount() {
+            const favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+            document.getElementById('favorites-count').textContent = favorites.length;
         }
 
         // Reset to defaults
@@ -190,30 +343,109 @@
             showToast('Preferences reset to defaults', 'info');
         };
 
-        // Select all engines
+        // Engine selection
         window.selectAllEngines = function() {
-            document.querySelectorAll('input[name="engines"]').forEach(cb => {
-                cb.checked = true;
-            });
+            document.querySelectorAll('input[name="engines"]').forEach(cb => cb.checked = true);
         };
-
-        // Select no engines
         window.selectNoneEngines = function() {
-            document.querySelectorAll('input[name="engines"]').forEach(cb => {
-                cb.checked = false;
-            });
+            document.querySelectorAll('input[name="engines"]').forEach(cb => cb.checked = false);
         };
 
-        // Theme change preview - use class instead of data-theme per AI.md PART 16
+        // History functions
+        window.exportHistory = function() {
+            const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            downloadJSON(history, 'vidveil-history.json');
+            showToast('History exported', 'success');
+        };
+
+        window.importHistory = function(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (Array.isArray(data)) {
+                        localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
+                        showToast('History imported (' + data.length + ' items)', 'success');
+                    } else {
+                        showToast('Invalid history file', 'error');
+                    }
+                } catch (err) {
+                    showToast('Failed to parse file', 'error');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        window.clearHistory = function() {
+            if (confirm('Clear all search history?')) {
+                localStorage.removeItem(HISTORY_KEY);
+                showToast('History cleared', 'info');
+            }
+        };
+
+        // Favorites functions
+        window.exportFavorites = function() {
+            const favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+            downloadJSON(favorites, 'vidveil-favorites.json');
+            showToast('Favorites exported', 'success');
+        };
+
+        window.importFavorites = function(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (Array.isArray(data)) {
+                        // Merge with existing favorites
+                        const existing = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+                        const merged = [...data];
+                        existing.forEach(fav => {
+                            if (!merged.some(f => f.url === fav.url)) {
+                                merged.push(fav);
+                            }
+                        });
+                        localStorage.setItem(FAVORITES_KEY, JSON.stringify(merged));
+                        updateFavoritesCount();
+                        showToast('Favorites imported (' + data.length + ' items)', 'success');
+                    } else {
+                        showToast('Invalid favorites file', 'error');
+                    }
+                } catch (err) {
+                    showToast('Failed to parse file', 'error');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        window.clearFavorites = function() {
+            if (confirm('Clear all favorites?')) {
+                localStorage.removeItem(FAVORITES_KEY);
+                updateFavoritesCount();
+                showToast('Favorites cleared', 'info');
+            }
+        };
+
+        function downloadJSON(data, filename) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Theme preview
         document.getElementById('theme').addEventListener('change', function() {
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + this.value);
         });
 
-        // Form submit handler
         form.addEventListener('submit', savePreferences);
-
-        // Load preferences on page load
         loadPreferences();
     })();
     </script>

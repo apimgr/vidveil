@@ -1485,6 +1485,9 @@ if (document.readyState === 'loading') {
     var hasMoreResults = true;
     var infiniteScrollObserver = null;
 
+    // Preferences loaded from storage
+    var userPrefs = {};
+
     function initSearchPage() {
         var searchMeta = document.getElementById('search-meta');
         if (!searchMeta) return; // Not on search page
@@ -1492,11 +1495,41 @@ if (document.readyState === 'loading') {
         searchQuery = searchMeta.dataset.query || new URLSearchParams(window.location.search).get('q') || '';
 
         // Load preferences from localStorage
-        var prefs = {};
         try {
-            prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}');
-        } catch (e) {}
-        var minDuration = parseInt(prefs.minDuration) || 0;
+            userPrefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}');
+        } catch (e) {
+            userPrefs = {};
+        }
+        var minDuration = parseInt(userPrefs.minDuration) || 0;
+
+        // Apply grid density and thumbnail size
+        var grid = document.getElementById('video-grid');
+        if (grid) {
+            if (userPrefs.gridDensity) grid.classList.add('grid-' + userPrefs.gridDensity);
+            if (userPrefs.thumbnailSize) grid.classList.add('thumbs-' + userPrefs.thumbnailSize);
+        }
+
+        // Apply default filters from preferences
+        if (userPrefs.defaultPreviewOnly) {
+            searchPreviewOnly = true;
+            var previewCheckbox = document.getElementById('filter-preview-only');
+            if (previewCheckbox) previewCheckbox.checked = true;
+        }
+        if (userPrefs.defaultDuration) {
+            searchCurrentDurationFilter = userPrefs.defaultDuration;
+            var durationSelect = document.getElementById('filter-duration');
+            if (durationSelect) durationSelect.value = userPrefs.defaultDuration;
+        }
+        if (userPrefs.defaultQuality) {
+            searchCurrentQualityFilter = userPrefs.defaultQuality;
+            var qualitySelect = document.getElementById('filter-quality');
+            if (qualitySelect) qualitySelect.value = userPrefs.defaultQuality;
+        }
+        if (userPrefs.defaultSort) {
+            searchCurrentSort = userPrefs.defaultSort;
+            var sortSelect = document.getElementById('filter-sort');
+            if (sortSelect) sortSelect.value = userPrefs.defaultSort;
+        }
 
         // Save to search history
         if (searchQuery) {
@@ -1762,20 +1795,24 @@ if (document.readyState === 'loading') {
         var swipeHint = container.querySelector('.swipe-hint');
         if (!video) return;
 
+        // Check autoplay preference (default true)
+        var autoplayEnabled = userPrefs.autoplayPreview !== false;
+        var previewDelay = parseInt(userPrefs.previewDelay) || 200;
+
         var isPlaying = false;
         var hoverTimeout;
         var touchStartX = 0;
         var touchStartY = 0;
 
-        if (!isTouchDevice) {
-            // Desktop: hover behavior
+        if (!isTouchDevice && autoplayEnabled) {
+            // Desktop: hover behavior (only if autoplay enabled)
             container.addEventListener('mouseenter', function() {
                 hoverTimeout = setTimeout(function() {
                     video.classList.add('preview-active');
                     staticImg.classList.add('preview-active');
                     video.play().catch(function() {});
                     isPlaying = true;
-                }, 200);
+                }, previewDelay);
             });
 
             container.addEventListener('mouseleave', function() {
@@ -1786,7 +1823,7 @@ if (document.readyState === 'loading') {
                 video.currentTime = 0;
                 isPlaying = false;
             });
-        } else {
+        } else if (isTouchDevice) {
             // Mobile: swipe right to preview
             var didSwipe = false;
 

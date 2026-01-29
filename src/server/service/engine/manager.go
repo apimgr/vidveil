@@ -559,7 +559,8 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 // exactPhrases requires results to contain all specified phrases
 // exclusions removes results containing any excluded word
 // performers filters by performer name (OR match)
-func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string) <-chan StreamResult {
+// showAI overrides server AI filter setting (true = show AI content)
+func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
 	go func() {
@@ -643,6 +644,14 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						}
 					}
 
+					// AI content filter - skip AI-generated/deepfake content unless user overrides
+					// showAI=true means user wants to see AI content (overrides server default)
+					if m.appConfig.Search.AIFilter.Enabled && !showAI {
+						if isAIGeneratedContent(titleLower, r.Tags, m.appConfig.Search.AIFilter.Keywords) {
+							continue
+						}
+					}
+
 					// AND-based term filter: result must match ALL search terms (using synonyms)
 					if !resultMatchesAllTerms(r, query) {
 						continue
@@ -694,4 +703,27 @@ func getFeatures(engine SearchEngine) []string {
 		features = append(features, "thumbnail_preview")
 	}
 	return features
+}
+
+// isAIGeneratedContent checks if a video result appears to be AI-generated content
+// by matching against keywords in title and tags
+func isAIGeneratedContent(titleLower string, tags []string, keywords []string) bool {
+	// Check title for AI keywords
+	for _, keyword := range keywords {
+		if strings.Contains(titleLower, strings.ToLower(keyword)) {
+			return true
+		}
+	}
+
+	// Check tags for AI keywords
+	for _, tag := range tags {
+		tagLower := strings.ToLower(tag)
+		for _, keyword := range keywords {
+			if strings.Contains(tagLower, strings.ToLower(keyword)) {
+				return true
+			}
+		}
+	}
+
+	return false
 }

@@ -1451,7 +1451,15 @@ if (document.readyState === 'loading') {
     function streamResults(minDuration) {
         if (!searchQuery) return;
 
-        var eventSource = new EventSource('/api/v1/search?q=' + encodeURIComponent(searchQuery));
+        // Build search URL with optional parameters
+        var searchUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery);
+
+        // Add show_ai parameter if user has enabled AI content in preferences
+        if (userPrefs.showAIContent) {
+            searchUrl += '&show_ai=1';
+        }
+
+        var eventSource = new EventSource(searchUrl);
         var firstResult = true;
 
         eventSource.onmessage = function(event) {
@@ -2101,8 +2109,12 @@ if (document.readyState === 'loading') {
         var loadIndicator = document.getElementById('load-more-indicator');
         if (loadIndicator) loadIndicator.classList.remove('hidden');
 
-        // Stream next page of results
-        var eventSource = new EventSource('/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage);
+        // Stream next page of results (include AI preference)
+        var pageUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage;
+        if (userPrefs.showAIContent) {
+            pageUrl += '&show_ai=1';
+        }
+        var eventSource = new EventSource(pageUrl);
         var gotResults = false;
 
         eventSource.onmessage = function(event) {

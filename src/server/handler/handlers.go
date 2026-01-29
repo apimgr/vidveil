@@ -1508,9 +1508,12 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Check if user wants to show AI content (overrides server default)
+	showAI := r.URL.Query().Get("show_ai") == "1"
+
 	// SSE streaming mode - stream results as they arrive from engines
 	if format == "text/event-stream" {
-		h.handleSearchSSE(w, r, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.Performers)
+		h.handleSearchSSE(w, r, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.Performers, showAI)
 		return
 	}
 
@@ -1579,7 +1582,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSearchSSE handles SSE streaming for search results
-func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string) {
+func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool) {
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -1606,7 +1609,7 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 		ctx = engine.WithUserIP(ctx, userIP, true)
 	}
 
-	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers)
+	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers, showAI)
 
 	for result := range resultsChan {
 		data, err := json.Marshal(result)

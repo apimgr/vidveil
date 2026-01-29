@@ -18,7 +18,7 @@ var Categories = map[string]*Category{
 	// Age-related
 	"teen": {
 		Name:     "teen",
-		Synonyms: []string{"teen", "18", "19", "eighteen", "nineteen", "barely legal", "young", "18yo", "19yo", "18 years old", "19 years old"},
+		Synonyms: []string{"teen", "18", "19", "eighteen", "nineteen", "barely legal", "young", "18yo", "19yo", "18 years old", "19 years old", "lolita", "young girl", "young woman"},
 		Related:  []string{"college", "student", "petite", "amateur"},
 	},
 	"milf": {

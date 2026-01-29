@@ -117,18 +117,18 @@ const defaultPrefs = {
     gridDensity: 'default',
     thumbnailSize: 'medium',
     autoplayPreview: true,
-    previewDelay: 200,
+    previewDelay: 0,  // Instant
     resultsPerPage: 0,  // 0 = infinite scroll (no pagination)
     openNewTab: true,
-    defaultPreviewOnly: false,
+    defaultPreviewOnly: true,
     defaultDuration: '',
     defaultQuality: '',
     defaultSort: '',
-    minDuration: 0,
-    maxHistory: 50,
+    minDuration: 600,  // 10 minutes in seconds
+    maxHistory: 0,  // 0 = unlimited
     autoClearHistory: 0,
     useTor: false,
-    proxyImages: false,
+    proxyImages: true,
     enabledEngines: [] // Empty means all enabled
 };
 
@@ -472,7 +472,7 @@ function setupPreferencesForm() {
     if (autoplayCheckbox) autoplayCheckbox.checked = prefs.autoplayPreview !== false;
 
     const previewDelaySelect = document.getElementById('preview-delay');
-    if (previewDelaySelect) previewDelaySelect.value = prefs.previewDelay || 200;
+    if (previewDelaySelect) previewDelaySelect.value = prefs.previewDelay ?? 0;
 
     const resultsSelect = document.getElementById('results-per-page');
     if (resultsSelect) resultsSelect.value = prefs.resultsPerPage || 0;
@@ -481,7 +481,7 @@ function setupPreferencesForm() {
     if (openNewTabCheckbox) openNewTabCheckbox.checked = prefs.openNewTab !== false;
 
     const defaultPreviewOnlyCheckbox = document.getElementById('default-preview-only');
-    if (defaultPreviewOnlyCheckbox) defaultPreviewOnlyCheckbox.checked = prefs.defaultPreviewOnly || false;
+    if (defaultPreviewOnlyCheckbox) defaultPreviewOnlyCheckbox.checked = prefs.defaultPreviewOnly !== false;
 
     const defaultDurationSelect = document.getElementById('default-duration');
     if (defaultDurationSelect) defaultDurationSelect.value = prefs.defaultDuration || '';
@@ -493,13 +493,13 @@ function setupPreferencesForm() {
     if (defaultSortSelect) defaultSortSelect.value = prefs.defaultSort || '';
 
     const minDurationSelect = document.getElementById('min-duration');
-    if (minDurationSelect) minDurationSelect.value = prefs.minDuration || 0;
+    if (minDurationSelect) minDurationSelect.value = prefs.minDuration ?? 600;
 
     const torCheckbox = document.getElementById('use-tor');
     if (torCheckbox) torCheckbox.checked = prefs.useTor || false;
 
     const proxyCheckbox = document.getElementById('proxy-images');
-    if (proxyCheckbox) proxyCheckbox.checked = prefs.proxyImages || false;
+    if (proxyCheckbox) proxyCheckbox.checked = prefs.proxyImages !== false;
 
     // Restore engine selections from localStorage
     if (prefs.enabledEngines && prefs.enabledEngines.length > 0) {
@@ -522,16 +522,16 @@ function setupPreferencesForm() {
             gridDensity: document.getElementById('grid-density')?.value || 'default',
             thumbnailSize: document.getElementById('thumbnail-size')?.value || 'medium',
             autoplayPreview: document.getElementById('autoplay-preview')?.checked ?? true,
-            previewDelay: parseInt(document.getElementById('preview-delay')?.value) || 200,
-            resultsPerPage: parseInt(document.getElementById('results-per-page')?.value) || 0,
+            previewDelay: parseInt(document.getElementById('preview-delay')?.value ?? 0),
+            resultsPerPage: parseInt(document.getElementById('results-per-page')?.value ?? 0),
             openNewTab: document.getElementById('open-new-tab')?.checked ?? true,
-            defaultPreviewOnly: document.getElementById('default-preview-only')?.checked || false,
+            defaultPreviewOnly: document.getElementById('default-preview-only')?.checked ?? true,
             defaultDuration: document.getElementById('default-duration')?.value || '',
             defaultQuality: document.getElementById('default-quality')?.value || '',
             defaultSort: document.getElementById('default-sort')?.value || '',
-            minDuration: parseInt(document.getElementById('min-duration')?.value) || 0,
+            minDuration: parseInt(document.getElementById('min-duration')?.value ?? 600),
             useTor: document.getElementById('use-tor')?.checked || false,
-            proxyImages: document.getElementById('proxy-images')?.checked || false,
+            proxyImages: document.getElementById('proxy-images')?.checked ?? true,
             enabledEngines: engines
         };
 

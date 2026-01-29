@@ -61,8 +61,9 @@
                 <div class="form-group">
                     <label for="results-per-page">Results per page:</label>
                     <select id="results-per-page" name="resultsPerPage">
+                        <option value="0" selected>Infinite scroll</option>
                         <option value="20">20</option>
-                        <option value="50" selected>50</option>
+                        <option value="50">50</option>
                         <option value="100">100</option>
                     </select>
                 </div>
@@ -224,7 +225,7 @@
             thumbnailSize: 'medium',
             autoplayPreview: true,
             previewDelay: '200',
-            resultsPerPage: '50',
+            resultsPerPage: '0',  // Infinite scroll
             openNewTab: true,
             defaultPreviewOnly: false,
             defaultDuration: '',
@@ -446,6 +447,7 @@
         });
 
         form.addEventListener('submit', savePreferences);
+        form.dataset.managed = 'true';  // Mark as handled by inline script
         loadPreferences();
     })();
     </script>

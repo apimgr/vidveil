@@ -111,10 +111,22 @@ if (document.readyState === 'loading') {
 // ============================================================================
 // Preferences Management
 // ============================================================================
+const PREFS_KEY = 'vidveil_prefs';
 const defaultPrefs = {
     theme: 'auto',  // Per AI.md PART 16: 'auto' uses system preference
-    resultsPerPage: 50,
-    openInNewTab: true,
+    gridDensity: 'default',
+    thumbnailSize: 'medium',
+    autoplayPreview: true,
+    previewDelay: 200,
+    resultsPerPage: 0,  // 0 = infinite scroll (no pagination)
+    openNewTab: true,
+    defaultPreviewOnly: false,
+    defaultDuration: '',
+    defaultQuality: '',
+    defaultSort: '',
+    minDuration: 0,
+    maxHistory: 50,
+    autoClearHistory: 0,
     useTor: false,
     proxyImages: false,
     enabledEngines: [] // Empty means all enabled
@@ -122,7 +134,7 @@ const defaultPrefs = {
 
 function getPreferences() {
     try {
-        const stored = localStorage.getItem('vidveil-prefs');
+        const stored = localStorage.getItem(PREFS_KEY);
         return stored ? { ...defaultPrefs, ...JSON.parse(stored) } : defaultPrefs;
     } catch {
         return defaultPrefs;
@@ -130,11 +142,11 @@ function getPreferences() {
 }
 
 function savePreferences(prefs) {
-    localStorage.setItem('vidveil-prefs', JSON.stringify(prefs));
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
 }
 
 function resetPreferences() {
-    localStorage.removeItem('vidveil-prefs');
+    localStorage.removeItem(PREFS_KEY);
     localStorage.removeItem('vidveil-theme');
     location.reload();
 }
@@ -441,47 +453,91 @@ function setupPreferencesForm() {
     const form = document.getElementById('preferences-form');
     if (!form) return;
 
+    // If preferences.tmpl already set up the form, don't interfere
+    if (form.dataset.managed === 'true') return;
+
     const prefs = getPreferences();
 
     // Set form values from preferences
     const themeSelect = document.getElementById('theme');
     if (themeSelect) themeSelect.value = prefs.theme;
 
+    const gridDensitySelect = document.getElementById('grid-density');
+    if (gridDensitySelect) gridDensitySelect.value = prefs.gridDensity || 'default';
+
+    const thumbnailSizeSelect = document.getElementById('thumbnail-size');
+    if (thumbnailSizeSelect) thumbnailSizeSelect.value = prefs.thumbnailSize || 'medium';
+
+    const autoplayCheckbox = document.getElementById('autoplay-preview');
+    if (autoplayCheckbox) autoplayCheckbox.checked = prefs.autoplayPreview !== false;
+
+    const previewDelaySelect = document.getElementById('preview-delay');
+    if (previewDelaySelect) previewDelaySelect.value = prefs.previewDelay || 200;
+
     const resultsSelect = document.getElementById('results-per-page');
-    if (resultsSelect) resultsSelect.value = prefs.resultsPerPage;
+    if (resultsSelect) resultsSelect.value = prefs.resultsPerPage || 0;
+
+    const openNewTabCheckbox = document.getElementById('open-new-tab');
+    if (openNewTabCheckbox) openNewTabCheckbox.checked = prefs.openNewTab !== false;
+
+    const defaultPreviewOnlyCheckbox = document.getElementById('default-preview-only');
+    if (defaultPreviewOnlyCheckbox) defaultPreviewOnlyCheckbox.checked = prefs.defaultPreviewOnly || false;
+
+    const defaultDurationSelect = document.getElementById('default-duration');
+    if (defaultDurationSelect) defaultDurationSelect.value = prefs.defaultDuration || '';
+
+    const defaultQualitySelect = document.getElementById('default-quality');
+    if (defaultQualitySelect) defaultQualitySelect.value = prefs.defaultQuality || '';
+
+    const defaultSortSelect = document.getElementById('default-sort');
+    if (defaultSortSelect) defaultSortSelect.value = prefs.defaultSort || '';
+
+    const minDurationSelect = document.getElementById('min-duration');
+    if (minDurationSelect) minDurationSelect.value = prefs.minDuration || 0;
 
     const torCheckbox = document.getElementById('use-tor');
-    if (torCheckbox) torCheckbox.checked = prefs.useTor;
+    if (torCheckbox) torCheckbox.checked = prefs.useTor || false;
 
     const proxyCheckbox = document.getElementById('proxy-images');
-    if (proxyCheckbox) proxyCheckbox.checked = prefs.proxyImages;
+    if (proxyCheckbox) proxyCheckbox.checked = prefs.proxyImages || false;
 
     // Restore engine selections from localStorage
     if (prefs.enabledEngines && prefs.enabledEngines.length > 0) {
-        // Uncheck all first, then check only saved ones
         document.querySelectorAll('input[name="engines"]').forEach(cb => {
             cb.checked = prefs.enabledEngines.includes(cb.value);
         });
     }
-    // If no saved engines, leave server defaults (all checked)
 
     // Handle form submission
     form.addEventListener('submit', (e) => {
         e.preventDefault();
 
+        const engines = [];
+        document.querySelectorAll('input[name="engines"]:checked').forEach(cb => {
+            engines.push(cb.value);
+        });
+
         const newPrefs = {
-            theme: document.getElementById('theme')?.value || 'dark',
-            resultsPerPage: parseInt(document.getElementById('results-per-page')?.value) || 50,
+            theme: document.getElementById('theme')?.value || 'auto',
+            gridDensity: document.getElementById('grid-density')?.value || 'default',
+            thumbnailSize: document.getElementById('thumbnail-size')?.value || 'medium',
+            autoplayPreview: document.getElementById('autoplay-preview')?.checked ?? true,
+            previewDelay: parseInt(document.getElementById('preview-delay')?.value) || 200,
+            resultsPerPage: parseInt(document.getElementById('results-per-page')?.value) || 0,
+            openNewTab: document.getElementById('open-new-tab')?.checked ?? true,
+            defaultPreviewOnly: document.getElementById('default-preview-only')?.checked || false,
+            defaultDuration: document.getElementById('default-duration')?.value || '',
+            defaultQuality: document.getElementById('default-quality')?.value || '',
+            defaultSort: document.getElementById('default-sort')?.value || '',
+            minDuration: parseInt(document.getElementById('min-duration')?.value) || 0,
             useTor: document.getElementById('use-tor')?.checked || false,
             proxyImages: document.getElementById('proxy-images')?.checked || false,
-            enabledEngines: Array.from(document.querySelectorAll('input[name="engines"]:checked'))
-                .map(cb => cb.value)
+            enabledEngines: engines
         };
 
         savePreferences(newPrefs);
         setTheme(newPrefs.theme);
 
-        // Show success message
         showNotification('Preferences saved!', 'success');
     });
 }
@@ -1502,11 +1558,15 @@ if (document.readyState === 'loading') {
         }
         var minDuration = parseInt(userPrefs.minDuration) || 0;
 
-        // Apply grid density and thumbnail size
+        // Apply grid density and thumbnail size (skip default values as they use base CSS)
         var grid = document.getElementById('video-grid');
         if (grid) {
-            if (userPrefs.gridDensity) grid.classList.add('grid-' + userPrefs.gridDensity);
-            if (userPrefs.thumbnailSize) grid.classList.add('thumbs-' + userPrefs.thumbnailSize);
+            if (userPrefs.gridDensity && userPrefs.gridDensity !== 'default') {
+                grid.classList.add('grid-' + userPrefs.gridDensity);
+            }
+            if (userPrefs.thumbnailSize && userPrefs.thumbnailSize !== 'medium') {
+                grid.classList.add('thumbs-' + userPrefs.thumbnailSize);
+            }
         }
 
         // Apply default filters from preferences
@@ -1746,7 +1806,9 @@ if (document.readyState === 'loading') {
         var downloadUrl = r.download_url || '';
         var hasDownload = downloadUrl && downloadUrl.length > 0;
 
-        var html = '<a href="' + escapeHtmlUtil(r.url) + '" target="_blank" rel="noopener noreferrer nofollow" class="card-link">';
+        // Check open in new tab preference (default true)
+        var targetAttr = userPrefs.openNewTab !== false ? ' target="_blank"' : '';
+        var html = '<a href="' + escapeHtmlUtil(r.url) + '"' + targetAttr + ' rel="noopener noreferrer nofollow" class="card-link">';
         html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtmlUtil(previewUrl) + '"' : '') + '>';
         html += '<img class="thumb-static" src="' + escapeHtmlUtil(r.thumbnail || '/static/images/placeholder.svg') + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" onerror="this.src=\'/static/images/placeholder.svg\'">';
 
@@ -1777,7 +1839,7 @@ if (document.readyState === 'loading') {
         html += '</div>';
 
         html += '<div class="info">';
-        html += '<h3><a href="' + escapeHtmlUtil(r.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + escapeHtmlUtil(r.title || 'Untitled') + '</a></h3>';
+        html += '<h3><a href="' + escapeHtmlUtil(r.url) + '"' + targetAttr + ' rel="noopener noreferrer nofollow">' + escapeHtmlUtil(r.title || 'Untitled') + '</a></h3>';
         html += '<div class="meta"><span class="source">' + escapeHtmlUtil(r.source_display || r.source || '') + '</span>';
         if (r.views) html += '<span>' + escapeHtmlUtil(r.views) + '</span>';
         html += '</div></div>';

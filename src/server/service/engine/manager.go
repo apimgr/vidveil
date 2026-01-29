@@ -59,7 +59,6 @@ func (m *EngineManager) InitializeEngines() {
 	m.engines["hellporno"] = NewHellPornoEngine(m.appConfig)
 	m.engines["alphaporno"] = NewAlphaPornoEngine(m.appConfig)
 	m.engines["pornflip"] = NewPornFlipEngine(m.appConfig)
-	m.engines["zenporn"] = NewZenPornEngine(m.appConfig)
 	m.engines["gotporn"] = NewGotPornEngine(m.appConfig)
 	m.engines["xxxymovies"] = NewXXXYMoviesEngine(m.appConfig)
 	m.engines["lovehomeporn"] = NewLoveHomePornEngine(m.appConfig)

@@ -2174,15 +2174,39 @@ if (document.readyState === 'loading') {
     function displayRelatedSearches(searches) {
         var container = document.getElementById('related-searches');
         var tagsContainer = document.getElementById('related-tags');
-        if (!container || !tagsContainer) return;
+        if (!container || !tagsContainer || !searches.length) return;
 
         tagsContainer.innerHTML = '';
-        for (var i = 0; i < searches.length && i < 8; i++) {
+        var maxVisible = 12;
+        var totalSearches = Math.min(searches.length, 20);
+
+        for (var i = 0; i < totalSearches; i++) {
             var tag = document.createElement('a');
-            tag.className = 'related-tag';
+            tag.className = 'related-tag' + (i >= maxVisible ? ' related-tag--hidden' : '');
             tag.href = '/search?q=' + encodeURIComponent(searches[i]);
-            tag.textContent = searches[i];
+            tag.innerHTML = '<svg class="related-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><span>' + escapeHtmlUtil(searches[i]) + '</span>';
+            tag.style.animationDelay = (i * 0.03) + 's';
             tagsContainer.appendChild(tag);
+        }
+
+        // Add "Show more" button if there are hidden tags
+        if (totalSearches > maxVisible) {
+            var showMoreBtn = document.createElement('button');
+            showMoreBtn.type = 'button';
+            showMoreBtn.className = 'related-show-more';
+            showMoreBtn.innerHTML = '<span>+' + (totalSearches - maxVisible) + ' more</span>';
+            showMoreBtn.onclick = function() {
+                tagsContainer.classList.toggle('related-tags--expanded');
+                var hiddenTags = tagsContainer.querySelectorAll('.related-tag--hidden');
+                if (tagsContainer.classList.contains('related-tags--expanded')) {
+                    showMoreBtn.innerHTML = '<span>Show less</span>';
+                    hiddenTags.forEach(function(t) { t.classList.add('related-tag--visible'); });
+                } else {
+                    showMoreBtn.innerHTML = '<span>+' + (totalSearches - maxVisible) + ' more</span>';
+                    hiddenTags.forEach(function(t) { t.classList.remove('related-tag--visible'); });
+                }
+            };
+            tagsContainer.appendChild(showMoreBtn);
         }
 
         container.classList.remove('hidden');

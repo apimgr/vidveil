@@ -265,7 +265,7 @@ document.addEventListener('click', function(e) {
 });
 
 // Export functions globally
-window.toggleFilters = toggleFilters;
+// Note: toggleFilters removed - using native HTML5 details/summary for toggle
 window.updateFilterCount = updateFilterCount;
 window.handleFilterChange = handleFilterChange;
 

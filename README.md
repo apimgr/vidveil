@@ -7,7 +7,7 @@
 
 ## About
 
-Privacy-respecting meta search for adult video content. No tracking, no logging, no analytics. Aggregates results from 51 video sites with bang shortcuts for targeted searches.
+Privacy-respecting meta search for adult video content. No tracking, no logging, no analytics. Aggregates results from 43 video sites with bang shortcuts for targeted searches.
 
 ## Official Site
 
@@ -22,7 +22,7 @@ https://x.scour.li
 | Feature | Description |
 |---------|-------------|
 | **Privacy First** | No tracking, no logging, no analytics |
-| **53+ Engines** | Aggregates results from 53+ adult video sites |
+| **43 Engines** | Aggregates results from 43 adult video sites |
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
 | **SSE Streaming** | Real-time result streaming as engines respond |
@@ -216,7 +216,7 @@ Use bang shortcuts to search specific engines:
 
 **Multiple bangs**: `!ph !rt amateur` searches both PornHub and RedTube.
 
-**Full list**: See `/api/v1/bangs` for all 53+ engine shortcuts.
+**Full list**: See `/api/v1/bangs` for all 43 engine shortcuts.
 
 ## Supported Engines
 
@@ -239,7 +239,7 @@ Use bang shortcuts to search specific engines:
 | PornMD | `!pmd` |
 | PornHat | `!phat` |
 
-### Tier 3+ - Additional Sites (38 engines)
+### Tier 3+ - Additional Sites (35 engines)
 
 4Tube, Fux, PornTube, YouJizz, SunPorno, TXXX, Nuvid, TNAFlix, DrTuber, EMPFlix, HellPorno, AlphaPorno, PornFlip, ZenPorn, GotPorn, HDZog, XXXYMovies, LoveHomePorn, PornerBros, NonkTube, NubilesPorn, PornBox, PornTop, Pornotube, PornHD, XBabe, PornOne, PornTrex, HQPorner, VJAV, FlyFLV, Tube8, XTube, AnyPorn, SuperPorn, TubeGalore, Motherless
 
@@ -296,7 +296,7 @@ Options:
 
 ```bash
 make dev            # Quick build to temp directory
-make host           # Build with version to binaries/
+make local          # Build with version to binaries/
 make build          # Full cross-platform build
 make test           # Run unit tests
 ```

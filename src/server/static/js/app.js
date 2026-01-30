@@ -560,9 +560,9 @@ async function fetchAPI(endpoint, options = {}) {
 async function getEngineCount() {
     try {
         const data = await fetchAPI('/engines');
-        return data.engines?.length || 45;
+        return data.engines?.length || 43;
     } catch {
-        return 45; // Default fallback
+        return 43; // Default fallback
     }
 }
 

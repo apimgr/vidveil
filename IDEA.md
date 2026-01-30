@@ -34,60 +34,87 @@ Privacy-respecting meta search engine for adult video content that aggregates re
 ```go
 // VideoResult represents a single video search result
 type VideoResult struct {
-    ID           string   `json:"id"`             // Video identifier (engine-specific)
-    Title        string   `json:"title"`          // Video title
-    Engine       string   `json:"engine"`         // Source engine name
-    URL          string   `json:"url"`            // URL to video page on source site
-    DownloadURL  string   `json:"download_url,omitempty"`  // Direct download URL (if available)
-    Thumbnail    string   `json:"thumbnail"`      // Proxied thumbnail URL (static image)
-    PreviewURL   string   `json:"preview_url,omitempty"`   // Preview video URL for hover/swipe
-    Duration     int      `json:"duration"`       // Video duration in seconds
-    Views        int64    `json:"views,omitempty"`         // View count (if available)
-    UploadDate   string   `json:"upload_date,omitempty"`   // Upload date (if available)
-    Quality      string   `json:"quality,omitempty"`       // Video quality (HD, 4K, etc.)
-    Tags         []string `json:"tags,omitempty"`          // Video tags/categories
-    Performer    string   `json:"performer,omitempty"`     // Performer/model name (if available)
+    ID              string    `json:"id"`                      // Video identifier (engine-specific)
+    Title           string    `json:"title"`                   // Video title
+    URL             string    `json:"url"`                     // URL to video page on source site
+    Thumbnail       string    `json:"thumbnail"`               // Proxied thumbnail URL (static image)
+    PreviewURL      string    `json:"preview_url,omitempty"`   // Preview video URL for hover/swipe
+    DownloadURL     string    `json:"download_url,omitempty"`  // Direct download URL (if available)
+    Duration        string    `json:"duration"`                // Formatted duration (e.g., "12:34")
+    DurationSeconds int       `json:"duration_seconds"`        // Duration in seconds for filtering
+    Views           string    `json:"views"`                   // Formatted view count (e.g., "1.2M")
+    ViewsCount      int64     `json:"views_count"`             // Raw view count for sorting
+    Rating          float64   `json:"rating,omitempty"`        // Rating percentage (0-100)
+    Quality         string    `json:"quality,omitempty"`       // Video quality (HD, 4K, etc.)
+    Source          string    `json:"source"`                  // Source engine name
+    SourceDisplay   string    `json:"source_display"`          // Source display name
+    Published       time.Time `json:"published,omitempty"`     // Publish date
+    Description     string    `json:"description,omitempty"`   // Video description
+    Tags            []string  `json:"tags,omitempty"`          // Video tags/categories
+    Performer       string    `json:"performer,omitempty"`     // Performer/model name (if available)
 }
 
-// Engine represents a search engine
-type Engine struct {
-    Name        string   `json:"name"`           // Internal engine name
-    DisplayName string   `json:"display_name"`   // Display name
-    Bang        string   `json:"bang"`           // Bang shortcut (e.g., "ph" for !ph)
-    Tier        int      `json:"tier"`           // Engine tier (1=API, 2=JSON, 3+=HTML)
-    Enabled     bool     `json:"enabled"`        // Whether engine is enabled
-    Method      string   `json:"method"`         // Search method (api, json, html)
-    HasPreview  bool     `json:"has_preview"`    // Supports preview URLs
-    HasDownload bool     `json:"has_download"`   // Supports download URLs
+// EngineInfo represents information about a search engine
+type EngineInfo struct {
+    Name         string              `json:"name"`           // Internal engine name
+    DisplayName  string              `json:"display_name"`   // Display name
+    Enabled      bool                `json:"enabled"`        // Whether engine is enabled
+    Available    bool                `json:"available"`      // Whether engine is available
+    Features     []string            `json:"features"`       // Supported features
+    Tier         int                 `json:"tier"`           // Engine tier (1=API, 2=JSON, 3+=HTML)
+    Capabilities *EngineCapabilities `json:"capabilities,omitempty"`
 }
 
-// SearchResponse represents search results
+// EngineCapabilities represents engine feature support
+type EngineCapabilities struct {
+    HasPreview  bool `json:"has_preview"`   // Supports preview URLs
+    HasDownload bool `json:"has_download"`  // Supports download URLs
+}
+
+// SearchResponse represents the API response for a search
 type SearchResponse struct {
-    Query        string        `json:"query"`           // Original query (with bangs)
-    SearchQuery  string        `json:"search_query"`    // Cleaned query (bangs removed)
-    HasBang      bool          `json:"has_bang"`        // Whether query contained bang(s)
-    BangEngines  []string      `json:"bang_engines,omitempty"`  // Engines targeted by bangs
-    Results      []VideoResult `json:"results"`         // Search results
-    EnginesUsed  []string      `json:"engines_used"`    // Engines used in search
-    SearchTimeMs int64         `json:"search_time_ms"`  // Search time in milliseconds
+    Ok         bool           `json:"ok"`
+    Data       SearchData     `json:"data"`
+    Pagination PaginationData `json:"pagination"`
+    Error      string         `json:"error,omitempty"`
+    Message    string         `json:"message,omitempty"`
 }
 
-// AutocompleteResponse for API endpoint
-type AutocompleteResponse struct {
-    Success     bool                     `json:"success"`
-    Type        string                   `json:"type"`         // "bang", "search", "popular"
-    Suggestions []AutocompleteSuggestion `json:"suggestions"`
+// SearchData holds the search results and metadata
+type SearchData struct {
+    Query           string                    `json:"query"`
+    SearchQuery     string                    `json:"search_query,omitempty"`
+    Results         []VideoResult             `json:"results"`
+    EnginesUsed     []string                  `json:"engines_used"`
+    EnginesFailed   []string                  `json:"engines_failed"`
+    SearchTimeMS    int64                     `json:"search_time_ms"`
+    HasBang         bool                      `json:"has_bang,omitempty"`
+    BangEngines     []string                  `json:"bang_engines,omitempty"`
+    Cached          bool                      `json:"cached,omitempty"`
+    EngineStats     map[string]EngineStatInfo `json:"engine_stats,omitempty"`
+    RelatedSearches []string                  `json:"related_searches,omitempty"`
 }
 
-// AutocompleteSuggestion unified structure
-type AutocompleteSuggestion struct {
-    Bang        string `json:"bang,omitempty"`          // "!ph" (for bangs)
-    EngineName  string `json:"engine_name,omitempty"`   // "pornhub" (for bangs)
-    DisplayName string `json:"display_name,omitempty"`  // "PornHub" (for bangs)
-    ShortCode   string `json:"short_code,omitempty"`    // "!ph" (for bangs)
-    Term        string `json:"term,omitempty"`          // "amateur" (for search terms)
-    Source      string `json:"source,omitempty"`        // "static", "history", "popular"
-    Frequency   int    `json:"frequency,omitempty"`     // For history sorting
+// AutocompleteResponse - actual API response format (map-based, varies by type)
+// Response fields:
+//   ok:          bool   - always true on success
+//   type:        string - "bang", "bang_start", "performer", "search", "popular"
+//   suggestions: array  - structure varies by type (see below)
+//   replace:     string - (optional) word to replace in query
+
+// Bang suggestions (type: "bang" or "bang_start"):
+type BangSuggestion struct {
+    Bang       string `json:"bang"`        // "!ph" (with ! prefix)
+    EngineName string `json:"engine_name"` // "pornhub"
+}
+
+// Performer suggestions (type: "performer"):
+// Returns []map[string]string with keys: "term" (e.g., "@mia khalifa"), "type" ("performer")
+
+// Search suggestions (type: "search"):
+type CombinedSuggestion struct {
+    Term string `json:"term"` // "amateur"
+    Type string `json:"type"` // "static", "performer", "popular"
 }
 ```
 
@@ -117,7 +144,7 @@ type AutocompleteSuggestion struct {
   - "milf" matches: mom, mother, mommy, cougar, mature
   - "bbw" matches: chubby, fat, plump, thick, curvy, plus size
   - "asian" matches: oriental, japanese, chinese, korean, thai, filipina
-  - 35+ category mappings with synonyms
+  - 27 category mappings with synonyms
 - Quoted phrases preserved as single term ("big tits blonde")
 - Engines parse additional metadata: tags, categories, performer names
 
@@ -232,7 +259,11 @@ type AutocompleteSuggestion struct {
 - **Bang Mode**: Triggered when typing `!` character
   - Shows engine bang suggestions with lightning icon
   - Activates immediately after `!` with 1+ characters
-- **Search Term Mode**: When no active `!` being typed
+- **Performer Mode**: Triggered when typing `@` character
+  - Shows performer/model name suggestions
+  - Activates immediately after `@` with 1+ characters
+  - 150+ common performer names in database
+- **Search Term Mode**: When no active `!` or `@` being typed
   - Shows search term suggestions with search icon
   - Requires 2+ characters minimum
 
@@ -325,6 +356,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 - Show only videos with preview (toggle) - default: Yes
 - Default duration filter: Any, Under 10min, 10-30min, Over 30min - default: Any
 - Default quality filter: Any, 4K, 1080p HD, 720p - default: Any
+- Minimum quality filter (server-side): Any, 240p+, 360p+, 480p+, 720p+, 1080p+, 4K only - default: 360p+
 - Default sort: Relevance, Longest, Shortest, Most Viewed, Best Quality - default: Relevance
 - Minimum video duration: 0, 1, 3, 5, 10, 20, 30 minutes - default: 10 minutes
 
@@ -523,7 +555,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 |--------|------|--------------|
 | eporner | !ep | Duration, Views, Rating |
 | youporn | !yp | Preview (data-mediabook), Duration, Views, Rating, Quality |
-| pornmd | !pm | Duration, Views |
+| pornmd | !pmd | Duration, Views |
 
 **Tier 3-6 - Additional Sites (35 engines):**
 4tube, fux, porntube, youjizz, sunporno, txxx, nuvid, tnaflix, drtuber, empflix, hellporno, alphaporno, pornflip, gotporn, xxxymovies, lovehomeporn, pornerbros, nonktube, nubilesporn, pornbox, porntop, pornotube, pornhd, xbabe, pornone, pornhat, porntrex, hqporner, vjav, flyflv, tube8, anyporn, tubegalore, motherless, 3movs
@@ -539,6 +571,14 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 - Invalid thumbnails auto-discarded
 
 ### Preview URL Sources
+
+**Generic Extraction (all engines):**
+Preview URLs are extracted from common data attributes on container, image, or link elements:
+- `data-mediabook`, `data-preview`, `data-video-preview`, `data-rollover`
+- `data-preview-url`, `data-gif`, `data-webm`, `data-mp4`
+- `data-thumb-url`, `data-trailer`, `data-teaser`
+
+**Engine-Specific Sources:**
 
 | Engine | Attribute | Content Type |
 |--------|-----------|--------------|

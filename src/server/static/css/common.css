@@ -3673,6 +3673,269 @@ a:focus-visible {
    Health Check Page (/healthz) - per AI.md PART 13
    ========================================================================== */
 
+/* Health status page container */
+.health-status {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+/* Health header - project info */
+.health-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.health-header h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.health-header .project-description {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+/* Status banner - overall health indicator */
+.status-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    margin-bottom: 2rem;
+    border-radius: 8px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    border: 1px solid var(--border);
+}
+
+.status-banner.status-healthy {
+    background: var(--color-success-bg);
+    border-color: var(--color-success);
+    color: var(--color-success);
+}
+
+.status-banner.status-unhealthy {
+    background: var(--color-error-bg);
+    border-color: var(--color-error);
+    color: var(--color-error);
+}
+
+.status-banner.status-degraded {
+    background: var(--color-warning-bg);
+    border-color: var(--color-warning);
+    color: var(--color-warning);
+}
+
+.status-banner .status-icon {
+    font-size: 1.5rem;
+}
+
+.status-banner .status-text {
+    font-weight: 600;
+}
+
+/* Health section - card-like container */
+.health-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.health-section h2 {
+    font-size: 1.25rem;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+
+.health-section h3 {
+    font-size: 1rem;
+    margin: 1.5rem 0 0.75rem 0;
+    color: var(--text-primary);
+}
+
+/* Info grid - definition list styling for healthz */
+.health-section .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 1rem;
+    margin: 0;
+}
+
+.health-section .info-grid dt {
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 0.5rem 0;
+}
+
+.health-section .info-grid dd {
+    margin: 0;
+    text-align: right;
+    padding: 0.5rem 0;
+    color: var(--text-primary);
+}
+
+.health-section .info-grid code {
+    background: var(--bg-tertiary);
+    padding: 0.125rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+/* Feature list */
+.feature-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.feature-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    border-left: 3px solid var(--color-muted);
+}
+
+.feature-list li.feature-enabled {
+    border-left-color: var(--color-success);
+}
+
+.feature-list li.feature-disabled {
+    opacity: 0.7;
+}
+
+/* Node list */
+.node-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.node-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+}
+
+.node-list li code {
+    background: var(--bg-primary);
+    padding: 0.125rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+/* Checks table */
+.checks-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.checks-table th,
+.checks-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.checks-table th {
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    background: var(--bg-tertiary);
+}
+
+.checks-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.checks-table tbody tr:hover {
+    background: var(--bg-tertiary);
+}
+
+/* Status colors */
+.status-ok {
+    color: var(--color-success);
+    font-weight: 600;
+}
+
+.status-error {
+    color: var(--color-error);
+    font-weight: 600;
+}
+
+.status-disabled {
+    color: var(--text-muted);
+}
+
+/* Health footer */
+.health-footer {
+    text-align: center;
+    padding: 1.5rem 0;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+}
+
+.health-footer .auto-refresh {
+    margin-top: 0.5rem;
+    opacity: 0.7;
+}
+
+/* Stats grid variant for healthz */
+.health-section .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* Responsive adjustments for health page */
+@media (max-width: 600px) {
+    .health-status {
+        padding: 1rem;
+    }
+
+    .health-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .status-banner {
+        font-size: 1.25rem;
+        padding: 1rem;
+    }
+
+    .health-section .info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .health-section .info-grid dd {
+        text-align: left;
+        padding-top: 0;
+    }
+
+    .health-section .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Page header */
 .page-header {
     text-align: center;

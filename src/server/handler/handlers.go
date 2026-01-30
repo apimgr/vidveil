@@ -1792,7 +1792,7 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// No bang or @ in query - return combined search term + performer suggestions
+	// No bang or @ in query - return search term suggestions only (no performers)
 	// Get the last word as the prefix for suggestions
 	lastWord := ""
 	if len(words) > 0 {
@@ -1801,21 +1801,21 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 		lastWord = strings.ToLower(q)
 	}
 
-	// Use combined suggestions that include both terms and performers
-	combinedSuggestions := engine.AutocompleteCombined(lastWord, 12)
+	// Use search suggestions only - performers require @ prefix
+	searchSuggestions := engine.AutocompleteSuggestions(lastWord, 12)
 
 	if format == "text/plain" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "type: search\nsuggestions: %d\n---\n", len(combinedSuggestions))
-		for _, s := range combinedSuggestions {
-			fmt.Fprintf(w, "%s [%s]\n", s.Term, s.Type)
+		fmt.Fprintf(w, "type: search\nsuggestions: %d\n---\n", len(searchSuggestions))
+		for _, s := range searchSuggestions {
+			fmt.Fprintf(w, "%s [search]\n", s.Term)
 		}
 		return
 	}
 	h.jsonResponse(w, map[string]interface{}{
 		"ok":          true,
-		"suggestions": combinedSuggestions,
+		"suggestions": searchSuggestions,
 		"type":        "search",
 	})
 }

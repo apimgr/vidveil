@@ -1675,18 +1675,20 @@ if (document.readyState === 'loading') {
         var previewUrl = r.preview_url || '';
         var hasPreview = previewUrl && previewUrl.length > 0;
         card.dataset.hasPreview = hasPreview ? '1' : '';
+        // Proxy preview URL to avoid CORS issues
+        var proxiedPreviewUrl = hasPreview ? '/proxy/videos?url=' + encodeURIComponent(previewUrl) : '';
         var downloadUrl = r.download_url || '';
         var hasDownload = downloadUrl && downloadUrl.length > 0;
 
         // Check open in new tab preference (default true)
         var targetAttr = userPrefs.openNewTab !== false ? ' target="_blank"' : '';
         var html = '<a href="' + escapeHtmlUtil(r.url) + '"' + targetAttr + ' rel="noopener noreferrer nofollow" class="card-link">';
-        html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtmlUtil(previewUrl) + '"' : '') + '>';
+        html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtmlUtil(proxiedPreviewUrl) + '"' : '') + '>';
         html += '<img class="thumb-static" src="' + escapeHtmlUtil(r.thumbnail || '/static/images/placeholder.svg') + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" onerror="this.src=\'/static/images/placeholder.svg\'">';
 
         if (hasPreview) {
             html += '<video class="thumb-preview" muted loop playsinline preload="none">';
-            html += '<source src="' + escapeHtmlUtil(previewUrl) + '" type="video/mp4">';
+            html += '<source src="' + escapeHtmlUtil(proxiedPreviewUrl) + '" type="video/mp4">';
             html += '</video>';
             if (isTouchDevice) {
                 html += '<div class="swipe-hint">Swipe to preview</div>';

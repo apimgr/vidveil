@@ -2484,6 +2484,89 @@ w.Header().Set("Cache-Control", "public, max-age=3600")
 io.Copy(w, resp.Body)
 }
 
+// ProxyVideo proxies external video previews to prevent tracking and avoid CORS
+// Per IDEA.md: Privacy proxy for video previews
+func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
+	// Get URL parameter
+	encodedURL := r.URL.Query().Get("url")
+	if encodedURL == "" {
+		http.Error(w, "Missing url parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Decode URL
+	videoURL, err := url.QueryUnescape(encodedURL)
+	if err != nil {
+		http.Error(w, "Invalid url parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Validate URL
+	parsedURL, err := url.Parse(videoURL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		http.Error(w, "Invalid video URL", http.StatusBadRequest)
+		return
+	}
+
+	// Create request with range support
+	req, err := http.NewRequest("GET", videoURL, nil)
+	if err != nil {
+		http.Error(w, "Failed to create request", http.StatusInternalServerError)
+		return
+	}
+
+	// Forward range header for video seeking
+	if rangeHeader := r.Header.Get("Range"); rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+
+	// Set user agent to avoid blocks
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	// Fetch video
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "Failed to fetch video", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		http.Error(w, "Video not found", resp.StatusCode)
+		return
+	}
+
+	// Copy response headers
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "video/mp4"
+	}
+	w.Header().Set("Content-Type", contentType)
+
+	if contentLength := resp.Header.Get("Content-Length"); contentLength != "" {
+		w.Header().Set("Content-Length", contentLength)
+	}
+	if contentRange := resp.Header.Get("Content-Range"); contentRange != "" {
+		w.Header().Set("Content-Range", contentRange)
+	}
+	if acceptRanges := resp.Header.Get("Accept-Ranges"); acceptRanges != "" {
+		w.Header().Set("Accept-Ranges", acceptRanges)
+	}
+
+	// Cache control: 1 hour
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+
+	// Set status code (206 for partial content)
+	w.WriteHeader(resp.StatusCode)
+
+	// Proxy the video
+	io.Copy(w, resp.Body)
+}
+
 // Autodiscover returns server connection settings for CLI/agent auto-configuration
 // Per AI.md PART 37: /api/autodiscover (NON-NEGOTIABLE)
 // This endpoint is NOT versioned because clients need it BEFORE they know the API version

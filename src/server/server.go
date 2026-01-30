@@ -492,6 +492,7 @@ func (s *Server) setupRoutes() {
 
 		// Proxy endpoints (plural per PART 14)
 		r.Get("/proxy/thumbnails", h.ProxyThumbnail)
+		r.Get("/proxy/videos", h.ProxyVideo)
 
 		// Admin Profile API (session or token) - PART 17
 		// Uses configurable admin path

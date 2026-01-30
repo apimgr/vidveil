@@ -602,11 +602,11 @@ func (s *TorService) GetUptime() string {
 }
 
 // IsEnabled returns whether Tor hidden service is active
-// Per PART 32: Tor auto-enables if binary found
+// Per PART 32: Tor auto-enables if binary found and connected
 func (s *TorService) IsEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.status == TorServiceStatusConnected || s.status == TorServiceStatusNoTorBinary
+	return s.status == TorServiceStatusConnected
 }
 
 // IsRunning returns whether Tor process is actually running

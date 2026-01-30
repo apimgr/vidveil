@@ -108,7 +108,7 @@ var BangMapping = map[string]string{
 
 // ParsedQuery represents a query after bang parsing
 type ParsedQuery struct {
-	// The search query without bangs, quotes, exclusions, and performers
+	// The search query without bangs, quotes, and exclusions
 	Query string
 	// Engine names to search (empty = all)
 	Engines []string
@@ -120,10 +120,6 @@ type ParsedQuery struct {
 	ExactPhrases []string
 	// Words to exclude from results (from -word)
 	Exclusions []string
-	// Performer names to filter by (from @performer)
-	Performers []string
-	// Whether performer filter was specified
-	HasPerformer bool
 }
 
 // ParseBangs extracts bang commands from a query
@@ -134,7 +130,7 @@ type ParsedQuery struct {
 //   - !pornhub query -> search pornhub for "query"
 //   - "exact phrase" -> require exact phrase match
 //   - -word -> exclude results containing word
-//   - @performer -> filter by performer name
+//   - @word -> strips @ prefix (used for autocomplete, word kept in query)
 func ParseBangs(query string) ParsedQuery {
 	result := ParsedQuery{
 		Query:        query,
@@ -142,8 +138,6 @@ func ParseBangs(query string) ParsedQuery {
 		HasBang:      false,
 		ExactPhrases: []string{},
 		Exclusions:   []string{},
-		Performers:   []string{},
-		HasPerformer: false,
 	}
 
 	if query == "" {
@@ -174,8 +168,6 @@ func ParseBangs(query string) ParsedQuery {
 	var queryWords []string
 	// Deduplicate engines
 	engineSet := make(map[string]bool)
-	// Deduplicate performers
-	performerSet := make(map[string]bool)
 
 	for _, word := range words {
 		if strings.HasPrefix(word, "!") && len(word) > 1 {
@@ -192,13 +184,9 @@ func ParseBangs(query string) ParsedQuery {
 				queryWords = append(queryWords, word)
 			}
 		} else if strings.HasPrefix(word, "@") && len(word) > 1 {
-			// Performer filter
-			performer := strings.ToLower(word[1:])
-			if !performerSet[performer] {
-				performerSet[performer] = true
-				result.Performers = append(result.Performers, performer)
-				result.HasPerformer = true
-			}
+			// @ prefix is for autocomplete only - strip it and keep word in query
+			// e.g., "@dakota skye" becomes "dakota skye" in search
+			queryWords = append(queryWords, word[1:])
 		} else if strings.HasPrefix(word, "-") && len(word) > 1 {
 			// Exclusion term
 			exclusion := strings.ToLower(word[1:])

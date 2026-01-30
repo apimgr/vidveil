@@ -1521,7 +1521,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 
 	// SSE streaming mode - stream results as they arrive from engines
 	if format == "text/event-stream" {
-		h.handleSearchSSE(w, r, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.Performers, showAI, minQuality)
+		h.handleSearchSSE(w, r, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, nil, showAI, minQuality)
 		return
 	}
 

@@ -24,15 +24,15 @@
     <form id="branding-form" onsubmit="saveBranding(event)">
         <div class="form-group">
             <label for="title">Site Title</label>
-            <input type="text" id="title" value="{{.Config.Server.Branding.Title}}" placeholder="Vidveil">
+            <input type="text" id="title" value="{{.Config.Server.Title}}" placeholder="Vidveil">
         </div>
         <div class="form-group">
             <label for="tagline">Tagline</label>
-            <input type="text" id="tagline" value="{{.Config.Server.Branding.Tagline}}" placeholder="">
+            <input type="text" id="tagline" value="{{.Config.Web.Branding.Tagline}}" placeholder="">
         </div>
         <div class="form-group">
             <label for="description">Description</label>
-            <textarea id="description" rows="3" placeholder="Site description for SEO">{{.Config.Server.Branding.Description}}</textarea>
+            <textarea id="description" rows="3" placeholder="Site description for SEO">{{.Config.Server.Description}}</textarea>
         </div>
         <div class="button-group">
             <button type="submit" class="btn btn-primary">Save Changes</button>

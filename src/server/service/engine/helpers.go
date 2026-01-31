@@ -36,15 +36,29 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 	}
 
 	var results []model.VideoResult
+	fieldStats := map[string]int{
+		"preview": 0,
+		"thumb":   0,
+		"quality": 0,
+	}
 	doc.Find(selector).Each(func(i int, s *goquery.Selection) {
 		r := parseGenericVideoItem(s, e.baseURL, e.Name(), e.DisplayName())
 		if r.Title != "" && r.URL != "" {
 			results = append(results, r)
+			if r.PreviewURL != "" {
+				fieldStats["preview"]++
+			}
+			if r.Thumbnail != "" {
+				fieldStats["thumb"]++
+			}
+			if r.Quality != "" {
+				fieldStats["quality"]++
+			}
 		}
 	})
 
 	// Log parse results when debug is enabled
-	DebugLogEngineParseResult(e.Name(), len(results), nil)
+	DebugLogEngineParseResult(e.Name(), len(results), fieldStats)
 
 	return results, nil
 }

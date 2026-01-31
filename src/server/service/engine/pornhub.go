@@ -59,13 +59,20 @@ func (e *PornHubEngine) Search(ctx context.Context, query string, page int) ([]m
 	}
 
 	var results []model.VideoResult
+	previewCount := 0
 
 	doc.Find(e.parser.ItemSelector()).Each(func(i int, s *goquery.Selection) {
 		item := e.parser.Parse(s)
 		if item != nil && item.Title != "" && item.URL != "" && !item.IsPremium {
 			results = append(results, e.convertToResult(item))
+			if item.PreviewURL != "" {
+				previewCount++
+			}
 		}
 	})
+
+	// Log preview extraction stats
+	DebugLogEngineParseResult(e.Name(), len(results), map[string]int{"preview": previewCount})
 
 	return results, nil
 }

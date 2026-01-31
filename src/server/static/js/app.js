@@ -1687,9 +1687,7 @@ if (document.readyState === 'loading') {
         html += '<img class="thumb-static" src="' + escapeHtmlUtil(r.thumbnail || '/static/images/placeholder.svg') + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" onerror="this.src=\'/static/images/placeholder.svg\'">';
 
         if (hasPreview) {
-            html += '<video class="thumb-preview" muted loop playsinline preload="none">';
-            html += '<source src="' + escapeHtmlUtil(proxiedPreviewUrl) + '" type="video/mp4">';
-            html += '</video>';
+            html += '<video class="thumb-preview" src="' + escapeHtmlUtil(proxiedPreviewUrl) + '" muted loop playsinline preload="none"></video>';
             if (isTouchDevice) {
                 html += '<div class="swipe-hint">Swipe to preview</div>';
             }
@@ -1739,17 +1737,34 @@ if (document.readyState === 'loading') {
         var previewDelay = parseInt(userPrefs.previewDelay) || 200;
 
         var isPlaying = false;
+        var videoFailed = false;
         var hoverTimeout;
         var touchStartX = 0;
         var touchStartY = 0;
 
+        // Handle video load errors - hide preview and remove indicator
+        video.addEventListener('error', function() {
+            videoFailed = true;
+            video.style.display = 'none';
+            container.removeAttribute('data-preview');
+            if (swipeHint) swipeHint.style.display = 'none';
+        });
+
         if (!isTouchDevice && autoplayEnabled) {
             // Desktop: hover behavior (only if autoplay enabled)
             container.addEventListener('mouseenter', function() {
+                if (videoFailed) return;
                 hoverTimeout = setTimeout(function() {
+                    if (videoFailed) return;
                     video.classList.add('preview-active');
                     staticImg.classList.add('preview-active');
-                    video.play().catch(function() {});
+                    video.play().catch(function() {
+                        videoFailed = true;
+                        video.classList.remove('preview-active');
+                        staticImg.classList.remove('preview-active');
+                        video.style.display = 'none';
+                        container.removeAttribute('data-preview');
+                    });
                     isPlaying = true;
                 }, previewDelay);
             });
@@ -1782,11 +1797,18 @@ if (document.readyState === 'loading') {
                 if (deltaX > 50 && deltaY < 50) {
                     didSwipe = true;
                     e.preventDefault();
-                    if (!isPlaying) {
+                    if (!isPlaying && !videoFailed) {
                         video.classList.add('preview-active');
                         staticImg.classList.add('preview-active');
                         if (swipeHint) swipeHint.classList.add('hidden');
-                        video.play().catch(function() {});
+                        video.play().catch(function() {
+                            videoFailed = true;
+                            video.classList.remove('preview-active');
+                            staticImg.classList.remove('preview-active');
+                            video.style.display = 'none';
+                            container.removeAttribute('data-preview');
+                            if (swipeHint) swipeHint.style.display = 'none';
+                        });
                         isPlaying = true;
 
                         // Auto-stop after 8 seconds

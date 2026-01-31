@@ -2454,13 +2454,21 @@ http.Error(w, "Invalid thumbnail URL", http.StatusBadRequest)
 return
 }
 
+// Create request with headers to avoid hotlink protection
+req, err := http.NewRequest("GET", thumbURL, nil)
+if err != nil {
+http.Error(w, "Failed to create request", http.StatusInternalServerError)
+return
+}
+req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
 
 // Fetch thumbnail
 client := &http.Client{
 Timeout: 10 * time.Second,
 }
 
-resp, err := client.Get(thumbURL)
+resp, err := client.Do(req)
 if err != nil {
 http.Error(w, "Failed to fetch thumbnail", http.StatusBadGateway)
 return
@@ -2525,6 +2533,9 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 
 	// Set user agent to avoid blocks
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	// Set referer to the video host to avoid hotlink protection
+	req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
 
 	// Fetch video
 	client := &http.Client{

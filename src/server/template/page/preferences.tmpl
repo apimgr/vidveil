@@ -340,9 +340,7 @@
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
 
-            showToast('Preferences saved!', 'success');
-
-            setTimeout(() => { window.location.href = '/'; }, 1500);
+            showToast('Preferences saved! Use the back button to return to your search.', 'success');
         }
 
         function showToast(message, type) {

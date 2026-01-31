@@ -322,7 +322,7 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance - ` + h.appConfig.Server.Title + `</title>
+    <title>Maintenance - ` + h.appConfig.Server.Branding.Title + `</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -409,7 +409,7 @@ func (h *SearchHandler) AgeVerifyPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderResponse(w, r, "age-verify", map[string]interface{}{
-		"Title":    "Age Verification - " + h.appConfig.Server.Title,
+		"Title":    "Age Verification - " + h.appConfig.Server.Branding.Title,
 		"Theme":    h.appConfig.Web.UI.Theme,
 		"Redirect": redirect,
 	})
@@ -507,7 +507,7 @@ func (h *SearchHandler) ContentRestrictionMiddleware(next http.Handler) http.Han
 func (h *SearchHandler) renderContentBlockedPage(w http.ResponseWriter, r *http.Request, restriction *geoip.RestrictionResult) {
 	w.WriteHeader(http.StatusForbidden)
 	h.renderResponse(w, r, "content-blocked", map[string]interface{}{
-		"Title":   "Access Restricted - " + h.appConfig.Server.Title,
+		"Title":   "Access Restricted - " + h.appConfig.Server.Branding.Title,
 		"Theme":   h.appConfig.Web.UI.Theme,
 		"Message": restriction.Message,
 		"Region":  restriction.Reason,
@@ -542,7 +542,7 @@ func (h *SearchHandler) ContentRestrictedPage(w http.ResponseWriter, r *http.Req
 	}
 
 	h.renderResponse(w, r, "content-restricted", map[string]interface{}{
-		"Title":    "Content Notice - " + h.appConfig.Server.Title,
+		"Title":    "Content Notice - " + h.appConfig.Server.Branding.Title,
 		"Theme":    h.appConfig.Web.UI.Theme,
 		"Redirect": redirect,
 		"Message":  message,
@@ -610,8 +610,8 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	case "application/json":
 		// JSON response for API clients
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"title":        h.appConfig.Server.Title,
-			"description":  h.appConfig.Server.Description,
+			"title":        h.appConfig.Server.Branding.Title,
+			"description":  h.appConfig.Server.Branding.Description,
 			"engine_count": engineCount,
 			"version":      version.GetVersion(),
 		})
@@ -619,16 +619,16 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Title)
-		fmt.Fprintf(w, "%s\n\n", h.appConfig.Server.Description)
+		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Branding.Title)
+		fmt.Fprintf(w, "%s\n\n", h.appConfig.Server.Branding.Description)
 		fmt.Fprintf(w, "Search Engines: %d enabled\n", engineCount)
 		fmt.Fprintf(w, "Version: %s\n", version.GetVersion())
 		
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "home", map[string]interface{}{
-			"Title":         h.appConfig.Server.Title,
-			"Description":   h.appConfig.Server.Description,
+			"Title":         h.appConfig.Server.Branding.Title,
+			"Description":   h.appConfig.Server.Branding.Description,
 			"Theme":         h.appConfig.Web.UI.Theme,
 			"BuildDateTime": BuildDateTime(),
 			"EngineCount":   engineCount,
@@ -708,7 +708,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 		// ResultsJSON is safe JSON for script template use
 		h.renderResponse(w, r, "search", map[string]interface{}{
-			"Title":         query + " - " + h.appConfig.Server.Title,
+			"Title":         query + " - " + h.appConfig.Server.Branding.Title,
 			"Query":         query,
 			"SearchQuery":   searchQuery,
 			"ResultsJSON":   template.JS(resultsJSON),
@@ -741,7 +741,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "Preferences - %s\n\n", h.appConfig.Server.Title)
+		fmt.Fprintf(w, "Preferences - %s\n\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "Theme: %s\n", h.appConfig.Web.UI.Theme)
 		fmt.Fprintf(w, "\nAvailable Engines:\n")
 		for _, eng := range engines {
@@ -755,7 +755,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "preferences", map[string]interface{}{
-			"Title":         "Preferences - " + h.appConfig.Server.Title,
+			"Title":         "Preferences - " + h.appConfig.Server.Branding.Title,
 			"Theme":         h.appConfig.Web.UI.Theme,
 			"Engines":       engines,
 			"BuildDateTime": BuildDateTime(),
@@ -773,24 +773,24 @@ func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	case "application/json":
 		// JSON response for API clients
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"title":         h.appConfig.Server.Title,
+			"title":         h.appConfig.Server.Branding.Title,
 			"version":       ver,
 			"build_date":    BuildDateTime(),
-			"description":   h.appConfig.Server.Description,
+			"description":   h.appConfig.Server.Branding.Description,
 		})
 
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Title)
+		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "Version: %s\n", ver)
 		fmt.Fprintf(w, "Build Date: %s\n", BuildDateTime())
-		fmt.Fprintf(w, "\n%s\n", h.appConfig.Server.Description)
+		fmt.Fprintf(w, "\n%s\n", h.appConfig.Server.Branding.Description)
 
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "about", map[string]interface{}{
-			"Title":         "About - " + h.appConfig.Server.Title,
+			"Title":         "About - " + h.appConfig.Server.Branding.Title,
 			"Theme":         h.appConfig.Web.UI.Theme,
 			"Version":       ver,
 			"BuildDateTime": BuildDateTime(),
@@ -815,7 +815,7 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "Privacy Policy - %s\n", h.appConfig.Server.Title)
+		fmt.Fprintf(w, "Privacy Policy - %s\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "Version: %s\n\n", ver)
 		fmt.Fprintf(w, "VidVeil is a privacy-respecting meta search engine.\n")
 		fmt.Fprintf(w, "We do not track, log, or collect any user data.\n")
@@ -823,7 +823,7 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "privacy", map[string]interface{}{
-			"Title":         "Privacy Policy - " + h.appConfig.Server.Title,
+			"Title":         "Privacy Policy - " + h.appConfig.Server.Branding.Title,
 			"Theme":         h.appConfig.Web.UI.Theme,
 			"Version":       ver,
 			"BuildDateTime": BuildDateTime(),
@@ -1008,11 +1008,14 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	projectTagline := "Privacy-first video search"
 	projectDescription := "Privacy-respecting adult video meta search"
 	if h.appConfig != nil {
-		if h.appConfig.Server.Title != "" {
-			projectName = h.appConfig.Server.Title
+		if h.appConfig.Server.Branding.Title != "" {
+			projectName = h.appConfig.Server.Branding.Title
 		}
-		if h.appConfig.Web.Branding.Tagline != "" {
-			projectTagline = h.appConfig.Web.Branding.Tagline
+		if h.appConfig.Server.Branding.Tagline != "" {
+			projectTagline = h.appConfig.Server.Branding.Tagline
+		}
+		if h.appConfig.Server.Branding.Description != "" {
+			projectDescription = h.appConfig.Server.Branding.Description
 		}
 	}
 
@@ -1375,7 +1378,7 @@ func (h *SearchHandler) HumansTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
 	// Get app info from config
-	appName := h.appConfig.Web.Branding.AppName
+	appName := h.appConfig.Server.Branding.Title
 	if appName == "" {
 		appName = "Vidveil"
 	}
@@ -2001,8 +2004,8 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		// 1. Project identification (PART 16)
 		"project": map[string]interface{}{
-			"name":        h.appConfig.Server.Title,
-			"tagline":     h.appConfig.Web.Branding.Tagline,
+			"name":        h.appConfig.Server.Branding.Title,
+			"tagline":     h.appConfig.Server.Branding.Tagline,
 			"description": "Privacy-respecting adult video meta search",
 		},
 		// 2. Overall status
@@ -2103,7 +2106,7 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, code int, title, 
 		"Code":      code,
 		"Title":     title,
 		"Message":   message,
-		"SiteTitle": h.appConfig.Web.Branding.AppName,
+		"SiteTitle": h.appConfig.Server.Branding.Title,
 		"Theme":     h.appConfig.Web.UI.Theme,
 	}
 

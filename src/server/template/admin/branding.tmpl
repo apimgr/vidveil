@@ -4,17 +4,17 @@
     <form id="branding-form" onsubmit="saveBranding(event)">
         <div class="form-group">
             <label for="site-title">Site Title</label>
-            <input type="text" id="site-title" value="{{.Config.Server.Title}}" placeholder="Vidveil" aria-describedby="site-title-help">
+            <input type="text" id="site-title" value="{{.Config.Server.Branding.Title}}" placeholder="Vidveil" aria-describedby="site-title-help">
             <p class="help-text" id="site-title-help">Displayed in browser tab and header</p>
         </div>
         <div class="form-group">
             <label for="site-tagline">Tagline</label>
-            <input type="text" id="site-tagline" value="{{.Config.Web.Branding.Tagline}}" placeholder="Privacy-First Video Search" aria-describedby="site-tagline-help">
+            <input type="text" id="site-tagline" value="{{.Config.Server.Branding.Tagline}}" placeholder="Privacy-First Video Search" aria-describedby="site-tagline-help">
             <p class="help-text" id="site-tagline-help">Short description shown below title</p>
         </div>
         <div class="form-group">
             <label for="site-description">Description</label>
-            <textarea id="site-description" rows="3" placeholder="Meta description for SEO" aria-describedby="site-description-help">{{.Config.Server.Description}}</textarea>
+            <textarea id="site-description" rows="3" placeholder="Meta description for SEO" aria-describedby="site-description-help">{{.Config.Server.Branding.Description}}</textarea>
             <p class="help-text" id="site-description-help">Used for SEO meta tags</p>
         </div>
         <div class="button-group">

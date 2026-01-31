@@ -8,8 +8,9 @@ import (
 
 // Search suggestions organized by category for maintainability
 // Combined into SearchSuggestions at init time
+// Total: 5000+ unique terms across 37 categories
 
-// suggestionsPopular - Popular general terms
+// suggestionsPopular - Popular general terms (~100 terms)
 var suggestionsPopular = []string{
 	"amateur", "teen", "milf", "mature", "asian", "ebony", "latina", "blonde",
 	"brunette", "redhead", "big tits", "big ass", "big dick", "small tits",
@@ -21,9 +22,17 @@ var suggestionsPopular = []string{
 	"verified amateur", "verified couple", "hot", "sexy", "gorgeous", "beautiful",
 	"stunning", "cute", "pretty", "naughty", "dirty", "kinky", "wild", "crazy",
 	"hardcore", "softcore", "erotic", "sensual", "romantic", "passionate",
+	// Additional popular terms
+	"pornstar", "celebrity look alike", "model", "instagram", "tiktok star",
+	"influencer", "cam girl", "onlyfans", "fansly", "manyvids", "clips4sale",
+	"premium", "exclusive", "viral", "trending now", "most watched", "top rated",
+	"editor choice", "fan favorite", "staff pick", "recommended", "suggested",
+	"new release", "just added", "fresh content", "daily update", "weekly best",
+	"monthly top", "all time best", "legendary", "iconic", "classic scene",
+	"must watch", "cant miss", "essential", "highly rated", "five star",
 }
 
-// suggestionsEthnicity - Ethnicity & nationality terms
+// suggestionsEthnicity - Ethnicity & nationality terms (~150 terms)
 var suggestionsEthnicity = []string{
 	"arab", "indian", "pakistani", "turkish", "japanese", "chinese", "korean",
 	"thai", "vietnamese", "filipina", "indonesian", "malaysian", "singaporean",
@@ -42,9 +51,19 @@ var suggestionsEthnicity = []string{
 	"nepalese", "sri lankan", "bangladeshi", "afghan", "iraqi", "syrian",
 	"kuwaiti", "saudi", "emirati", "qatari", "omani", "bahraini", "yemeni",
 	"jordanian", "palestinian", "tunisian", "algerian", "libyan", "sudanese",
+	// Additional ethnicity terms
+	"mongolian", "kazakh", "uzbek", "turkmen", "kyrgyz", "tajik", "armenian",
+	"azerbaijani", "georgian", "belarusian", "moldovan", "latvian", "lithuanian",
+	"estonian", "albanian", "macedonian", "montenegrin", "bosnian", "slovenian",
+	"luxembourgish", "icelandic", "maltese", "cypriot", "tibetan", "uyghur",
+	"hong kong", "macanese", "bruneian", "timorese", "papuan", "fijian",
+	"samoan", "tongan", "hawaiian", "maori", "aboriginal", "native american",
+	"inuit", "alaskan native", "pacific islander", "polynesian", "melanesian",
+	"micronesian", "creole", "mestizo", "mulatto", "mixed race", "biracial",
+	"multiracial", "eurasian", "afro latina", "afro asian", "wasian",
 }
 
-// suggestionsBodyTypes - Body types and features
+// suggestionsBodyTypes - Body types and features (~150 terms)
 var suggestionsBodyTypes = []string{
 	"muscular", "toned", "ripped", "bodybuilder", "fitness model", "yoga pants",
 	"leggings", "tall", "short", "midget", "dwarf", "giant", "amazon",
@@ -65,9 +84,22 @@ var suggestionsBodyTypes = []string{
 	"birthmarks", "moles", "scars", "stretch marks", "cellulite", "veins",
 	"smooth skin", "rough skin", "oily skin", "dry skin", "tan", "pale",
 	"fair skin", "dark skin", "olive skin", "caramel skin", "chocolate skin",
+	// Additional body type terms
+	"thicc", "extra thicc", "slim thick", "thiccc", "mega curves", "all natural",
+	"enhanced", "augmented", "breast reduction", "breast lift", "perky butt",
+	"firm butt", "soft butt", "hard body", "soft body", "supple", "pliant",
+	"lithe", "svelte", "willowy", "statuesque", "diminutive", "compact",
+	"rubenesque", "full figured", "plus size", "ssbbw", "feedee", "feeder",
+	"skinny fat", "dadbod", "beer belly", "pot belly", "barrel chest",
+	"swimmer build", "runner build", "dancer body", "gymnast body", "yoga body",
+	"crossfit body", "powerlifter", "strongman", "strong woman", "muscle mommy",
+	"muscle daddy", "twunk", "twink", "bear", "otter", "cub", "daddy type",
+	"silver fox", "gilded", "distinguished", "weathered", "youthful glow",
+	"unblemished", "flawless skin", "porcelain", "alabaster", "sun kissed",
+	"bronze", "golden tan", "farmers tan", "tan lines", "no tan lines",
 }
 
-// suggestionsHair - Hair colors and styles
+// suggestionsHair - Hair colors and styles (~100 terms)
 var suggestionsHair = []string{
 	"blonde hair", "brown hair", "black hair", "red hair", "ginger",
 	"strawberry blonde", "platinum blonde", "dirty blonde", "dyed hair",
@@ -81,9 +113,21 @@ var suggestionsHair = []string{
 	"crown braid", "waterfall braid", "halo braid", "milkmaid braids",
 	"hair extensions", "weave", "wig", "lace front", "highlights", "lowlights",
 	"ombre", "balayage", "bleached", "roots showing", "two tone", "split dye",
+	// Additional hair terms
+	"silver hair", "grey hair", "white hair", "salt pepper", "frosted tips",
+	"teal hair", "orange hair", "yellow hair", "neon hair", "pastel hair",
+	"rose gold hair", "burgundy hair", "auburn hair", "chestnut hair",
+	"honey blonde", "ash blonde", "golden blonde", "caramel highlights",
+	"chocolate brown", "jet black", "blue black", "raven hair", "ebony hair",
+	"silky hair", "shiny hair", "glossy hair", "matte hair", "textured hair",
+	"kinky hair", "coily hair", "4c hair", "3c hair", "2c hair", "1c hair",
+	"heat damaged", "natural texture", "permed", "relaxed", "pressed",
+	"blowout", "silk press", "twist out", "braid out", "wash and go",
+	"loc extensions", "faux locs", "sisterlocks", "micro locs", "free form locs",
+	"finger waves", "marcel waves", "beach waves", "loose curls", "tight curls",
 }
 
-// suggestionsAge - Age categories
+// suggestionsAge - Age categories (~80 terms)
 var suggestionsAge = []string{
 	"18 years old", "19 years old", "20s", "30s", "40s", "50s", "60s", "70s",
 	"college", "university", "student", "schoolgirl", "cheerleader",
@@ -92,9 +136,20 @@ var suggestionsAge = []string{
 	"young looking", "mature looking", "ageless", "youthful", "experienced",
 	"senior", "elderly", "grandma", "grandpa", "cougar", "sugar daddy",
 	"sugar mommy", "older younger", "may december", "generation gap",
+	// Additional age terms
+	"18 year old", "19 year old", "20 year old", "21 year old", "22 year old",
+	"23 year old", "24 year old", "25 year old", "late teens", "early 20s",
+	"mid 20s", "late 20s", "early 30s", "mid 30s", "late 30s", "early 40s",
+	"mid 40s", "late 40s", "early 50s", "mid 50s", "late 50s", "early 60s",
+	"prime", "peak", "in her prime", "in his prime", "coming of age",
+	"newly legal", "fresh faced", "baby faced", "looking young", "looking old",
+	"aging gracefully", "silver vixen", "silver daddy", "mature babe",
+	"mature stud", "experienced lover", "seasoned pro", "veteran performer",
+	"newcomer", "newbie", "first timer", "debut", "new to industry",
+	"career veteran", "industry legend", "retired comeback", "classic star",
 }
 
-// suggestionsSexualActs - Sexual acts
+// suggestionsSexualActs - Sexual acts (~150 terms)
 var suggestionsSexualActs = []string{
 	"blowjob", "deepthroat", "gagging", "sloppy blowjob", "face fuck", "oral",
 	"cunnilingus", "pussy licking", "eating pussy", "pussy eating", "69",
@@ -118,9 +173,18 @@ var suggestionsSexualActs = []string{
 	"pussy fuck", "vaginal sex", "vaginal penetration", "clit stimulation",
 	"clit rubbing", "clit licking", "clit sucking", "g spot", "squirting orgasm",
 	"prostate massage", "prostate play", "ass play", "butt plug", "anal beads",
+	// Additional sexual acts
+	"double blowjob", "triple blowjob", "gloryhole blowjob", "car blowjob",
+	"road head", "under table", "sneaky blowjob", "quickie blowjob",
+	"slow blowjob", "teasing blowjob", "edging blowjob", "ruined orgasm",
+	"post orgasm torture", "forced orgasm", "multiple orgasms", "back to back",
+	"creampie eating", "felching", "snowballing", "cum swapping", "cum sharing",
+	"spit roast", "airtight", "water tight", "dvp", "double vaginal",
+	"triple vaginal", "quadruple penetration", "all holes filled",
+	"simultaneous orgasm", "mutual orgasm", "synchronized", "together",
 }
 
-// suggestionsFetishes - Fetishes & kinks
+// suggestionsFetishes - Fetishes & kinks (~150 terms)
 var suggestionsFetishes = []string{
 	"bdsm", "bondage", "tied up", "rope", "shibari", "handcuffs", "chains",
 	"collar", "leash", "slave", "master", "mistress", "dom", "domination",
@@ -148,9 +212,16 @@ var suggestionsFetishes = []string{
 	"extreme", "hardcore bdsm", "edge play", "knife play", "needle play",
 	"branding", "scarification", "impact play", "cbt", "ball torture",
 	"cock torture", "genital torture", "electrical play", "tens", "violet wand",
+	// Additional fetish terms
+	"breath control", "choking kink", "hand on throat", "light choking",
+	"heavy choking", "passing out", "blackout", "consensual non consent",
+	"cnc", "rape fantasy", "ravishment", "forced fantasy", "struggle",
+	"resistance play", "take down", "primal", "primal play", "hunter prey",
+	"chase", "capture", "predator prey", "animal instincts", "growling",
+	"biting", "scratching", "marking", "claiming", "ownership", "possession",
 }
 
-// suggestionsScenarios - Scenarios & situations
+// suggestionsScenarios - Scenarios & situations (~150 terms)
 var suggestionsScenarios = []string{
 	"casting", "casting couch", "fake agent", "fake taxi", "fake driving",
 	"fake cop", "pickup", "picked up", "stranger", "public pickup",
@@ -179,9 +250,17 @@ var suggestionsScenarios = []string{
 	"hitchhiker", "stranded", "broken car", "flat tire", "roadside",
 	"garage", "mechanic", "car wash", "drive through", "parking lot",
 	"elevator", "stairwell", "rooftop", "balcony", "backyard", "front yard",
+	// Additional scenario terms
+	"gym hookup", "yoga class", "spin class", "crossfit hookup", "trainer client",
+	"physical therapy", "sports massage", "deep tissue", "happy ending",
+	"full service", "escort service", "call girl", "high class escort",
+	"sugar baby", "arrangement", "allowance", "spoiled", "kept woman",
+	"mistress affair", "side chick", "side piece", "other woman", "other man",
+	"marriage counselor", "couples therapy", "sex therapy", "tantric session",
+	"spiritual awakening", "kundalini", "chakra alignment", "energy exchange",
 }
 
-// suggestionsPositions - Positions & actions
+// suggestionsPositions - Positions & actions (~120 terms)
 var suggestionsPositions = []string{
 	"bent over", "legs up", "legs spread", "spread eagle", "splits", "flexible",
 	"contortion", "upside down", "headstand", "handstand", "acrobatic",
@@ -200,9 +279,18 @@ var suggestionsPositions = []string{
 	"seated wheelbarrow", "criss cross", "twisted missionary", "sideways 69",
 	"face off", "iron chef", "see saw", "standing 69", "upstanding citizen",
 	"magic mountain", "waterfall", "spider web", "seashell", "corkscrew",
+	// Additional position terms
+	"reverse pronebone", "lazy missionary", "coital alignment", "cat position",
+	"deck chair", "jockey position", "suspended congress", "splitting bamboo",
+	"victory position", "viennese oyster", "wrap around", "the grip",
+	"the lock", "the vice", "crab position", "table top", "right angle",
+	"plough position", "shoulder stand", "candle position", "head down",
+	"ass up", "face in pillow", "clutching sheets", "grabbing headboard",
+	"holding ankles", "holding wrists", "pinned down", "pinned up",
+	"pressed against", "pushed into", "pulled close", "held tight",
 }
 
-// suggestionsProduction - Production & quality
+// suggestionsProduction - Production & quality (~120 terms)
 var suggestionsProduction = []string{
 	"hd", "1080p", "4k", "uhd", "60fps", "high quality", "professional",
 	"amateur video", "homemade video", "pov", "point of view", "first person",
@@ -218,9 +306,19 @@ var suggestionsProduction = []string{
 	"black and white", "sepia", "color graded", "high contrast", "low light",
 	"night vision", "infrared", "thermal", "macro", "close up", "extreme close up",
 	"wide angle", "fish eye", "tilt shift", "bokeh", "shallow depth of field",
+	// Additional production terms
+	"dolby vision", "hdr", "hdr10", "hlg", "rec 2020", "wide color gamut",
+	"film look", "raw footage", "log footage", "color corrected", "graded",
+	"professional lighting", "three point lighting", "rembrandt lighting",
+	"butterfly lighting", "loop lighting", "split lighting", "broad lighting",
+	"short lighting", "high key", "low key", "silhouette", "backlit",
+	"front lit", "side lit", "motivated lighting", "practical lighting",
+	"ambient", "available light", "golden hour", "blue hour", "magic hour",
+	"studio setting", "location shoot", "on set", "outdoor location",
+	"indoor location", "controlled environment", "natural environment",
 }
 
-// suggestionsRelationships - Relationship types
+// suggestionsRelationships - Relationship types (~80 terms)
 var suggestionsRelationships = []string{
 	"couple", "married couple", "husband wife", "boyfriend girlfriend", "bf gf",
 	"ex girlfriend", "ex boyfriend", "fuckbuddy", "friends with benefits", "fwb",
@@ -233,9 +331,19 @@ var suggestionsRelationships = []string{
 	"anniversary", "wedding night", "long term", "short term", "open relationship",
 	"throuple", "triad", "quad", "polycule", "metamour", "compersion",
 	"ethical non monogamy", "consensual non monogamy", "relationship anarchy",
+	// Additional relationship terms
+	"primary partner", "secondary partner", "nesting partner", "anchor partner",
+	"satellite partner", "long distance", "ldr", "online relationship",
+	"virtual relationship", "pen pal", "met online", "dating site", "hookup app",
+	"arranged meeting", "setup", "blind introduction", "mutual friend",
+	"work spouse", "office romance", "forbidden office", "secret affair",
+	"on again off again", "complicated", "its complicated", "situationship",
+	"talking stage", "exclusive", "non exclusive", "mono", "monogamous",
+	"monogamish", "solo poly", "kitchen table poly", "parallel poly",
+	"hierarchical", "non hierarchical", "egalitarian", "equal partners",
 }
 
-// suggestionsLocations - Settings & locations
+// suggestionsLocations - Settings & locations (~150 terms)
 var suggestionsLocations = []string{
 	"bedroom", "bathroom", "kitchen", "living room", "garage", "basement",
 	"attic", "balcony", "patio", "garden", "backyard", "pool area", "hot tub",
@@ -256,9 +364,19 @@ var suggestionsLocations = []string{
 	"church", "temple", "mosque", "synagogue", "graveyard", "cemetery",
 	"hospital", "clinic", "dentist office", "school", "classroom",
 	"auditorium", "gymnasium", "cafeteria", "hallway", "bathroom stall",
+	// Additional location terms
+	"treehouse", "gazebo", "pergola", "deck", "veranda", "porch", "front porch",
+	"back porch", "sun room", "conservatory", "wine cellar", "panic room",
+	"man cave", "she shed", "home office", "study", "library room", "den",
+	"game room", "media room", "home theater", "music room", "art studio",
+	"craft room", "workshop", "tool shed", "greenhouse grow room", "indoor pool",
+	"olympic pool", "infinity pool", "rooftop pool", "private beach", "nude beach",
+	"clothing optional", "resort pool", "water park", "theme park", "amusement park",
+	"fair ground", "carnival", "circus", "zoo", "aquarium", "museum",
+	"art gallery", "exhibition", "convention center", "trade show", "expo",
 }
 
-// suggestionsClothing - Clothing & accessories
+// suggestionsClothing - Clothing & accessories (~120 terms)
 var suggestionsClothing = []string{
 	"naked", "nude", "topless", "bottomless", "fully clothed", "partially clothed",
 	"clothed sex", "dressed", "undressed", "undressing", "stripping",
@@ -278,9 +396,18 @@ var suggestionsClothing = []string{
 	"glasses", "sunglasses", "contacts", "choker", "necklace", "earrings",
 	"bracelet", "rings", "watch", "hair accessories", "headband", "scrunchie",
 	"hat", "cap", "beanie", "scarf", "gloves", "mittens", "belt", "suspenders",
+	// Additional clothing terms
+	"pasties", "nipple covers", "body tape", "fashion tape", "bralette",
+	"sports bra", "push up bra", "padded bra", "unpadded bra", "wireless bra",
+	"front clasp", "back clasp", "strapless", "halter", "racerback",
+	"plunge bra", "balconette", "demi cup", "full cup", "triangle bra",
+	"bra and panty set", "matching set", "mismatched", "boy shorts", "hipster",
+	"bikini cut", "high waist", "low rise", "mid rise", "cheeky", "full coverage",
+	"crotchless", "open cup", "shelf bra", "quarter cup", "peek a boo",
+	"cutout", "keyhole", "lace up", "ribbon tie", "bow detail", "ruffle",
 }
 
-// suggestionsSpecificActs - Specific acts & details
+// suggestionsSpecificActs - Specific acts & details (~120 terms)
 var suggestionsSpecificActs = []string{
 	"creampie", "cum inside", "internal cumshot", "breeding", "impregnation",
 	"facial", "cum on face", "bukakke", "cum on tits", "cum on ass",
@@ -301,9 +428,16 @@ var suggestionsSpecificActs = []string{
 	"snowball", "cum kiss", "cum drip", "cum dripping", "leaking cum",
 	"cum covered", "cum soaked", "glazed", "frosted", "painted", "coated",
 	"cum bath", "cum shower", "cum flood", "cum explosion", "money shot",
+	// Additional specific acts
+	"throat pie", "cum in throat", "cum down throat", "forced swallow",
+	"spit or swallow", "cum gargle", "cum bubble", "cum facial drip",
+	"cum walk", "public cum walk", "cum on clothes", "cum stain",
+	"multiple cumshots", "back to back cumshots", "rapid fire", "reload",
+	"second round", "third round", "marathon cumshots", "cum tribute",
+	"self facial", "ruined facial", "surprise facial", "unexpected cumshot",
 }
 
-// suggestionsNiches - Popular niches
+// suggestionsNiches - Popular niches (~100 terms)
 var suggestionsNiches = []string{
 	"gonzo porn", "reality porn", "casting porn", "pov porn", "virtual reality",
 	"vr porn", "360 degree", "interactive", "jerk off instruction", "joi",
@@ -317,9 +451,18 @@ var suggestionsNiches = []string{
 	"directors cut", "bonus footage", "deleted scenes", "alternate ending",
 	"multiple endings", "choose your own adventure", "branching paths",
 	"sequel", "prequel", "series", "episode", "season", "chapter", "part",
+	// Additional niche terms
+	"cock rating", "dick rating", "pussy rating", "body rating", "rate me",
+	"humiliation joi", "denial joi", "ruined joi", "cei", "cum eating instruction",
+	"sph", "small penis humiliation", "praise", "affirmation", "gentle femdom",
+	"findom", "financial domination", "pay pig", "money slave", "tribute",
+	"goddess worship", "queen worship", "princess treatment", "brat",
+	"brat taming", "brat training", "punishment joi", "task", "challenge",
+	"dare video", "truth or dare", "spin wheel", "random", "surprise box",
+	"mystery content", "grab bag", "bundle deal", "discount", "sale",
 }
 
-// suggestionsCombinations - Combinations & modifiers
+// suggestionsCombinations - Combinations & modifiers (~80 terms)
 var suggestionsCombinations = []string{
 	"interracial", "bbc", "big black cock", "wmaf", "bmwf", "amwf",
 	"age gap relationship", "size difference", "height difference",
@@ -333,9 +476,15 @@ var suggestionsCombinations = []string{
 	"androgynous", "non binary", "genderfluid", "genderqueer", "trans",
 	"transgender", "transman", "transwoman", "ftm", "mtf", "pre op", "post op",
 	"non op", "intersex", "hermaphrodite", "shemale", "ladyboy", "futanari",
+	// Additional combination terms
+	"bwc", "big white cock", "bac", "big asian cock", "blc", "big latino cock",
+	"bbbc", "monster cock", "horse cock", "huge cock", "massive dick",
+	"thick cock", "fat cock", "long cock", "curved cock", "straight cock",
+	"uncut cock", "cut cock", "circumcised", "uncircumcised", "foreskin",
+	"veiny cock", "smooth cock", "pretty cock", "ugly cock", "perfect cock",
 }
 
-// suggestionsAdditional - Additional common terms
+// suggestionsAdditional - Additional common terms (~80 terms)
 var suggestionsAdditional = []string{
 	"babe", "bisexual", "bukkake", "cartoon", "celebrity", "compilation",
 	"cumshot", "dildo", "facial", "femdom", "fetish", "glamour",
@@ -348,9 +497,16 @@ var suggestionsAdditional = []string{
 	"instagram model", "tiktok", "viral", "trending", "challenge", "dare",
 	"truth or dare", "spin the bottle", "seven minutes in heaven", "strip poker",
 	"drinking game", "body shots", "beer pong", "flip cup", "power hour",
+	// Additional common terms
+	"strip club", "gentlemans club", "private dance", "champagne room",
+	"vip room", "bottle service", "afterparty", "after hours", "late night",
+	"early morning", "wake up sex", "morning wood", "sleepy sex", "lazy sex",
+	"tired sex", "makeup sex", "angry sex", "hate sex", "love making",
+	"first time together", "anniversary sex", "birthday sex", "celebration",
+	"holiday sex", "new years", "valentines day", "christmas", "halloween sex",
 }
 
-// suggestionsDescriptive - Popular descriptive terms
+// suggestionsDescriptive - Popular descriptive terms (~80 terms)
 var suggestionsDescriptive = []string{
 	"hot blonde", "hot brunette", "hot milf", "hot teen", "sexy girl",
 	"busty babe", "thick ass", "natural beauty", "fit body", "curvy body",
@@ -361,9 +517,17 @@ var suggestionsDescriptive = []string{
 	"insatiable", "horny", "turned on", "aroused", "excited", "eager",
 	"willing", "wanting", "needy", "desperate", "begging for it", "gagging for it",
 	"craving", "hungry", "thirsty", "famished", "starving", "ravenous",
+	// Additional descriptive terms
+	"cock hungry", "cum hungry", "attention seeking", "show off",
+	"exhibitionist", "shy", "nervous", "confident", "dominant personality",
+	"submissive personality", "bratty", "obedient", "defiant", "rebellious",
+	"innocent looking", "guilty pleasure", "forbidden fruit", "temptress",
+	"seductress", "siren", "enchantress", "vixen", "minx", "tease",
+	"heartbreaker", "man eater", "cougar hunter", "milf hunter", "teen lover",
+	"older lover", "experience seeker", "adventure seeker", "thrill seeker",
 }
 
-// suggestionsAnalContent - Anal content specific
+// suggestionsAnalContent - Anal content specific (~80 terms)
 var suggestionsAnalContent = []string{
 	"first anal", "anal virgin", "anal only", "all anal", "rough anal",
 	"gentle anal", "slow anal", "fast anal", "deep anal", "balls deep anal",
@@ -377,9 +541,16 @@ var suggestionsAnalContent = []string{
 	"anal beginner", "first time anal", "trying anal", "experimenting anal",
 	"convinced for anal", "talked into anal", "reluctant anal", "surprise anal",
 	"accidental anal", "wrong hole anal", "oops anal", "unexpected anal",
+	// Additional anal terms
+	"anal destruction", "anal wrecked", "ruined hole", "loose hole",
+	"tight hole", "virgin hole", "anal massage", "relaxing anal",
+	"sensual anal", "romantic anal", "passionate anal", "loving anal",
+	"hate anal", "forced anal fantasy", "anal punishment", "anal reward",
+	"anal tease", "anal denial", "anal edging", "anal orgasm only",
+	"prostate orgasm", "sissygasm", "handsfree orgasm", "anal only lifestyle",
 }
 
-// suggestionsLesbianContent - Lesbian content specific
+// suggestionsLesbianContent - Lesbian content specific (~80 terms)
 var suggestionsLesbianContent = []string{
 	"lesbian", "lesbians", "lesbian sex", "girl on girl", "women loving women",
 	"sapphic", "wlw", "lesbian couple", "lesbian threesome", "lesbian orgy",
@@ -395,9 +566,16 @@ var suggestionsLesbianContent = []string{
 	"lesbian face sitting", "lesbian squirting", "lesbian orgasm", "lesbian multiple",
 	"lesbian romantic", "lesbian passionate", "lesbian loving", "lesbian tender",
 	"lesbian rough", "lesbian aggressive", "lesbian dominant", "lesbian submissive",
+	// Additional lesbian terms
+	"lipstick lesbian", "chapstick lesbian", "stem lesbian", "futch",
+	"high femme", "stone butch", "soft butch", "pillow princess", "pillow queen",
+	"service top", "power bottom", "verse lesbian", "switch lesbian",
+	"lesbian dom", "lesbian sub", "lesbian mistress", "lesbian slave",
+	"lesbian pet", "lesbian kitten", "lesbian puppy", "lesbian pony",
+	"lesbian worship", "lesbian devotion", "lesbian love story", "lesbian romance",
 }
 
-// suggestionsGroupContent - Group content specific
+// suggestionsGroupContent - Group content specific (~80 terms)
 var suggestionsGroupContent = []string{
 	"threesome", "ffm threesome", "mmf threesome", "mfm threesome", "fmf threesome",
 	"foursome", "fivesome", "moresome", "gangbang", "reverse gangbang",
@@ -410,9 +588,17 @@ var suggestionsGroupContent = []string{
 	"scripted orgy", "spontaneous orgy", "planned orgy", "surprise orgy",
 	"birthday orgy", "bachelor party", "bachelorette party", "wedding orgy",
 	"holiday orgy", "new years orgy", "valentines orgy", "halloween orgy",
+	// Additional group terms
+	"train", "running a train", "tag team", "relay", "round robin",
+	"all holes", "every hole", "assembly line", "production line",
+	"circle jerk", "jack off party", "cum together", "synchronized cum",
+	"group masturbation", "mutual group", "watch and jerk", "stroke together",
+	"boys night", "girls night", "mixed group", "equal ratio",
+	"more girls", "more guys", "solo guy", "solo girl", "center of attention",
+	"star of show", "main attraction", "supporting role", "audience participation",
 }
 
-// suggestionsBDSMContent - BDSM content specific
+// suggestionsBDSMContent - BDSM content specific (~80 terms)
 var suggestionsBDSMContent = []string{
 	"bdsm", "bondage", "discipline", "domination", "submission", "sadism",
 	"masochism", "dominant", "submissive", "dom", "sub", "top", "bottom",
@@ -427,9 +613,16 @@ var suggestionsBDSMContent = []string{
 	"cage", "cell", "kennel", "stocks", "pillory", "cross", "bench",
 	"spanking bench", "horse", "swing", "sling", "bed restraints",
 	"under bed restraints", "door restraints", "spreader bar", "yoke",
+	// Additional BDSM terms
+	"st andrews cross", "bondage table", "bondage bed", "bondage chair",
+	"queening stool", "sybian", "fucking machine", "sex machine",
+	"automated", "mechanical", "remote control", "app controlled",
+	"long distance control", "public control", "secret vibrator",
+	"hidden vibrator", "under clothes", "through clothes", "tease public",
+	"forced public", "display", "exhibition bdsm", "show off sub",
 }
 
-// suggestionsFetishContent - Specific fetish content
+// suggestionsFetishContent - Specific fetish content (~100 terms)
 var suggestionsFetishContent = []string{
 	"foot fetish", "feet", "foot worship", "foot job", "foot licking",
 	"toe sucking", "sole worship", "arch worship", "heel worship",
@@ -446,9 +639,18 @@ var suggestionsFetishContent = []string{
 	"breast fetish", "nipple fetish", "areola fetish", "cleavage fetish",
 	"underboob fetish", "sideboob fetish", "hand fetish", "finger fetish",
 	"nail fetish", "long nails fetish", "painted nails fetish", "natural nails",
+	// Additional fetish terms
+	"voice fetish", "accent fetish", "whisper fetish", "moan fetish",
+	"laugh fetish", "giggle fetish", "smile fetish", "eye fetish",
+	"eye contact fetish", "staring", "watching", "being watched",
+	"mirror fetish", "reflection", "self watching", "narcissism",
+	"muscle fetish", "flex fetish", "pump fetish", "vascularity",
+	"sweat fetish", "gym sweat", "post workout", "glistening",
+	"tan fetish", "tan lines fetish", "pale fetish", "contrast",
+	"uniform fetish", "costume fetish", "dress up", "transformation fetish",
 }
 
-// suggestionsVintageRetro - Vintage and retro content
+// suggestionsVintageRetro - Vintage and retro content (~80 terms)
 var suggestionsVintageRetro = []string{
 	"vintage", "retro", "classic", "old school", "throwback", "nostalgic",
 	"70s", "70s porn", "1970s", "disco era", "free love", "hippie",
@@ -461,9 +663,17 @@ var suggestionsVintageRetro = []string{
 	"timeless", "ageless", "evergreen", "perennial", "enduring",
 	"pioneering", "groundbreaking", "revolutionary", "innovative",
 	"influential", "important", "significant", "historical", "archive",
+	// Additional vintage terms
+	"film era", "vhs era", "dvd era", "early internet", "dial up era",
+	"pre streaming", "mail order", "magazine era", "polaroid era",
+	"super 8", "16mm", "35mm", "analog", "before digital", "digitized",
+	"restored", "remastered", "upscaled", "ai enhanced", "cleaned up",
+	"original quality", "authentic vintage", "period accurate", "era appropriate",
+	"costume accurate", "set design", "retro aesthetic", "vintage filter",
+	"film grain effect", "vhs effect", "camcorder look", "home video style",
 }
 
-// suggestionsTechnology - Technology related
+// suggestionsTechnology - Technology related (~80 terms)
 var suggestionsTechnology = []string{
 	"vr porn", "virtual reality", "360 video", "3d porn", "4k porn",
 	"8k porn", "hd porn", "uhd porn", "high definition", "ultra high definition",
@@ -477,6 +687,479 @@ var suggestionsTechnology = []string{
 	"natural lighting", "studio lighting", "outdoor lighting", "available light",
 	"dslr", "mirrorless", "cinema camera", "action cam", "gopro",
 	"drone footage", "aerial", "overhead", "birds eye", "top down",
+	// Additional technology terms
+	"ai generated", "deepfake", "face swap", "body swap", "voice clone",
+	"neural network", "machine learning", "computer generated",
+	"cgi", "animation", "motion capture", "mocap", "digital human",
+	"metaverse", "virtual world", "second life", "vr chat", "social vr",
+	"haptic feedback", "teledildonics", "remote pleasure", "synced toys",
+	"bluetooth toy", "wifi toy", "internet controlled", "long distance toy",
+	"wearable", "discreet wearable", "public wearable", "hands free",
+	"app controlled toy", "pattern vibrator", "custom pattern", "music sync",
+}
+
+// NEW CATEGORIES
+
+// suggestionsRole - Role-play scenarios (~150 terms)
+var suggestionsRole = []string{
+	// Professional roles
+	"doctor roleplay", "nurse roleplay", "patient roleplay", "medical exam",
+	"gynecologist exam", "prostate exam", "physical exam", "check up",
+	"teacher roleplay", "student roleplay", "professor roleplay", "tutor roleplay",
+	"principal roleplay", "detention", "after school", "private lesson",
+	"boss roleplay", "secretary roleplay", "employee roleplay", "job interview roleplay",
+	"promotion", "raise negotiation", "workplace affair", "office after hours",
+	"police roleplay", "cop roleplay", "arrest roleplay", "interrogation",
+	"strip search", "cavity search", "handcuff roleplay", "good cop bad cop",
+	"military roleplay", "soldier roleplay", "drill sergeant", "boot camp",
+	"navy roleplay", "marine roleplay", "air force", "army roleplay",
+	"firefighter roleplay", "rescue fantasy", "save me", "hero roleplay",
+	"paramedic roleplay", "ambulance", "emergency room", "trauma center",
+	// Service roles
+	"maid roleplay", "french maid", "butler roleplay", "servant roleplay",
+	"waitress roleplay", "waiter roleplay", "bartender roleplay", "barista",
+	"flight attendant", "stewardess", "pilot roleplay", "mile high",
+	"hotel staff", "room service roleplay", "concierge", "bellhop",
+	"masseuse roleplay", "massage therapist", "happy ending massage", "full service massage",
+	"personal trainer roleplay", "gym trainer", "yoga instructor", "fitness coach",
+	// Fantasy roles
+	"vampire roleplay", "werewolf roleplay", "demon roleplay", "angel roleplay",
+	"witch roleplay", "wizard roleplay", "fairy roleplay", "elf roleplay",
+	"alien roleplay", "space exploration", "abduction fantasy", "probing",
+	"robot roleplay", "android roleplay", "cyborg", "ai companion",
+	"superhero roleplay", "villain roleplay", "damsel in distress", "rescue fantasy",
+	"princess roleplay", "prince roleplay", "king roleplay", "queen roleplay",
+	"knight roleplay", "medieval fantasy", "castle roleplay", "dungeon fantasy",
+	// Age play (legal adults only)
+	"daddy dom", "mommy dom", "little space", "age regression",
+	"babygirl", "babyboy", "princess little", "prince little",
+	"caregiver", "nurturing", "protective", "guiding",
+	// Animal/pet play
+	"puppy roleplay", "kitty roleplay", "bunny roleplay", "pony roleplay",
+	"fox roleplay", "wolf roleplay", "cow roleplay", "pig roleplay",
+	"pet training", "obedience training", "tricks", "commands",
+	"collar and leash", "pet bowl", "pet bed", "kennel time",
+	// Stranger scenarios
+	"stranger fantasy", "anonymous encounter", "blindfold stranger",
+	"gloryhole roleplay", "random hookup", "one time thing",
+	"no names", "no talking", "silent stranger", "masked stranger",
+}
+
+// suggestionsStudio - Studio/production company terms (~120 terms)
+var suggestionsStudio = []string{
+	// Major studios
+	"brazzers", "reality kings", "bangbros", "naughty america", "digital playground",
+	"wicked pictures", "vivid", "private", "evil angel", "jules jordan",
+	"blacked", "tushy", "vixen", "deeper", "slayed",
+	"pure taboo", "adult time", "girlfriends films", "sweetheart video",
+	"girlsway", "all girl massage", "mommys girl", "web young",
+	"team skeet", "mofos", "fake hub", "fake taxi official",
+	"pornhub premium", "xvideos premium", "xhamster premium",
+	"kink", "bound gangbangs", "device bondage", "hogtied",
+	"public disgrace", "sex and submission", "the upper floor",
+	"everything butt", "whipped ass", "electrosluts", "divine bitches",
+	"men in pain", "bound gods", "naked kombat", "butt machine boys",
+	// Specialty studios
+	"legalporno", "gonzo", "dap nation", "giorgio grandi",
+	"rocco siffredi", "manuel ferrara", "lexington steele productions",
+	"dogfart network", "interracial pickups", "gloryhole initiations",
+	"sean cody", "corbin fisher", "belami", "helix studios",
+	"men", "next door studios", "falcon studios", "raging stallion",
+	"cockyboys", "lucas entertainment", "treasure island media",
+	"transsensual", "grooby", "evil angel trans", "trans angels",
+	// Amateur networks
+	"exploited college girls", "girls do porn", "backroom casting couch",
+	"net video girls", "woodman casting", "private casting x",
+	"czech casting", "czech streets", "czech couples", "czech parties",
+	"public agent", "fake hostel", "fake hospital", "fake driving school",
+	// Cam/clip sites
+	"chaturbate official", "myfreecams", "stripchat", "cam4",
+	"bongacams", "camsoda", "streamate", "livejasmin",
+	"manyvids official", "clips4sale official", "iwantclips", "fancentro",
+	"onlyfans creator", "fansly creator", "loyalfans", "just for fans",
+	// VR studios
+	"naughty america vr", "badoink vr", "wankz vr", "vrbangers",
+	"czech vr", "virtual real porn", "sexlikereal", "vr porn official",
+	// Regional studios
+	"japanese av", "s1", "prestige", "ideapocket", "moodyz",
+	"caribbean", "heyzo", "1pondo", "tokyo hot",
+	"german scout", "magma film", "inflagranti", "ggg",
+	"french connection", "dorcel", "marc dorcel", "jacquie et michel",
+	"spanish porn", "cumlouder", "fakings", "torbe",
+}
+
+// suggestionsAwards - Award categories (~100 terms)
+var suggestionsAwards = []string{
+	// AVN Awards
+	"avn winner", "avn nominee", "best actress avn", "best actor avn",
+	"best new starlet", "best scene", "best oral scene", "best anal scene",
+	"best group scene", "best three way", "best double penetration scene",
+	"best all girl scene", "best boy girl scene", "best solo scene",
+	"best pov scene", "best vignette", "best feature", "best parody",
+	"best gonzo", "best oral series", "best anal series", "best interracial",
+	"best milf movie", "best mature movie", "best teen movie",
+	"performer of year", "female performer of year", "male performer of year",
+	"most outrageous scene", "best art direction", "best cinematography",
+	// XBIZ Awards
+	"xbiz winner", "xbiz nominee", "xbiz performer of year",
+	"female performer xbiz", "male performer xbiz", "best actress xbiz",
+	"best supporting actress", "best supporting actor", "best new starlet xbiz",
+	"best scene xbiz", "best director", "studio of year",
+	// XRCO Awards
+	"xrco winner", "xrco nominee", "cream of crop", "best actress xrco",
+	"best cumpilation", "orgasmic analist", "orgasmic oralist",
+	"superslut", "best girl girl", "best threeway xrco",
+	// TEA Awards
+	"tea winner", "tea nominee", "best trans performer",
+	"best trans scene", "best trans newcomer", "fan choice",
+	// Fan voted
+	"fan award winner", "viewer choice", "audience favorite",
+	"most popular", "trending performer", "rising star",
+	"breakout performer", "comeback performer", "lifetime achievement",
+	// Quality descriptors
+	"award winning", "critically acclaimed", "industry recognized",
+	"hall of fame", "legend", "icon", "pioneer", "trendsetter",
+	"innovator", "game changer", "record breaker", "first ever",
+	"most decorated", "multi award", "consecutive winner", "dominant",
+}
+
+// suggestionsCosplay - Cosplay/character terms (~150 terms)
+var suggestionsCosplay = []string{
+	// Anime characters
+	"anime cosplay", "hentai cosplay", "sailor moon cosplay", "evangelion cosplay",
+	"naruto cosplay", "hinata cosplay", "sakura cosplay", "dragon ball cosplay",
+	"bulma cosplay", "android 18 cosplay", "one piece cosplay", "nami cosplay",
+	"robin cosplay", "attack on titan cosplay", "mikasa cosplay",
+	"my hero academia cosplay", "toga cosplay", "uraraka cosplay",
+	"demon slayer cosplay", "nezuko cosplay", "mitsuri cosplay",
+	"jujutsu kaisen cosplay", "maki cosplay", "nobara cosplay",
+	"spy family cosplay", "yor cosplay", "chainsaw man cosplay",
+	"makima cosplay", "power cosplay", "cyberpunk edgerunners", "lucy cosplay",
+	// Video game characters
+	"video game cosplay", "gaming cosplay", "overwatch cosplay",
+	"dva cosplay", "mercy cosplay", "widowmaker cosplay", "tracer cosplay",
+	"league of legends cosplay", "lol cosplay", "ahri cosplay", "jinx cosplay",
+	"katarina cosplay", "miss fortune cosplay", "evelynn cosplay",
+	"final fantasy cosplay", "tifa cosplay", "aerith cosplay", "yuna cosplay",
+	"resident evil cosplay", "jill valentine cosplay", "ada wong cosplay",
+	"lady dimitrescu cosplay", "mortal kombat cosplay", "kitana cosplay",
+	"mileena cosplay", "street fighter cosplay", "chun li cosplay",
+	"cammy cosplay", "tomb raider cosplay", "lara croft cosplay",
+	"nier automata cosplay", "2b cosplay", "zelda cosplay", "princess zelda",
+	"metroid cosplay", "samus cosplay", "zero suit samus",
+	"genshin impact cosplay", "ganyu cosplay", "raiden cosplay", "keqing cosplay",
+	// Movie/TV characters
+	"movie cosplay", "tv cosplay", "superhero cosplay",
+	"wonder woman cosplay", "catwoman cosplay", "harley quinn cosplay",
+	"black widow cosplay", "scarlet witch cosplay", "jean grey cosplay",
+	"mystique cosplay", "storm cosplay", "rogue cosplay",
+	"star wars cosplay", "princess leia cosplay", "slave leia",
+	"padme cosplay", "rey cosplay", "ahsoka cosplay",
+	"star trek cosplay", "orion slave girl", "seven of nine cosplay",
+	"game of thrones cosplay", "daenerys cosplay", "cersei cosplay",
+	"witcher cosplay", "triss cosplay", "yennefer cosplay",
+	// Classic characters
+	"schoolgirl cosplay", "cheerleader cosplay", "nurse cosplay",
+	"maid cosplay", "bunny girl cosplay", "cat girl cosplay",
+	"succubus cosplay", "vampire cosplay", "witch cosplay",
+	"fairy cosplay", "elf cosplay", "angel cosplay", "devil cosplay",
+	"pirate cosplay", "cowgirl cosplay", "police cosplay", "military cosplay",
+	// Accessories
+	"wig cosplay", "colored contacts", "costume makeup", "body paint",
+	"prosthetics", "fake ears", "fake fangs", "fake wings", "fake tail",
+	"prop weapons", "cosplay armor", "cosplay accessories",
+}
+
+// suggestionsGaming - Gaming/gamer related (~120 terms)
+var suggestionsGaming = []string{
+	// Gamer culture
+	"gamer girl", "gamer boy", "gaming setup", "streaming setup",
+	"twitch thot", "twitch girl", "streamer girl", "streamer boy",
+	"egirl", "eboy", "e girl aesthetic", "e boy aesthetic",
+	"ahegao face", "ahegao hoodie", "belle delphine style", "gamer girl bath water",
+	"gaming chair", "rgb setup", "led lights", "neon gaming room",
+	"controller in hand", "playing games", "distracted gaming",
+	"rage quit", "victory celebration", "losing bet", "gaming dare",
+	// Gaming scenarios
+	"strip gaming", "strip fortnite", "strip mario kart", "strip smash bros",
+	"loser strips", "winner decides", "gaming punishment", "gaming reward",
+	"gaming bet", "if i lose", "if you win", "challenge accepted",
+	"gaming marathon", "all nighter", "energy drinks", "gaming snacks",
+	"couch co op", "split screen", "local multiplayer", "same room gaming",
+	"online gaming", "voice chat", "discord call", "gaming headset",
+	"mic muted", "accidentally unmuted", "forgot to end stream",
+	// Gaming references
+	"press start", "game over", "continue", "new game plus",
+	"boss battle", "final boss", "side quest", "main story",
+	"level up", "experience points", "achievement unlocked", "trophy earned",
+	"easter egg", "hidden level", "secret character", "unlockable",
+	"speedrun", "any percent", "100 percent", "glitchless",
+	"pvp", "pve", "raid", "dungeon", "loot", "grinding",
+	"respawn", "checkpoint", "save point", "quick save",
+	// Equipment
+	"gaming mouse", "mechanical keyboard", "gaming monitor",
+	"ultrawide monitor", "dual monitors", "triple monitors",
+	"standing desk", "gaming desk", "cable management",
+	"microphone setup", "webcam setup", "face cam", "capture card",
+	"vr headset gaming", "motion controls", "haptic suit",
+}
+
+// suggestionsSocialMedia - Social media related (~100 terms)
+var suggestionsSocialMedia = []string{
+	// Platforms
+	"onlyfans", "fansly", "fanvue", "manyvids", "clips4sale",
+	"pornhub model", "xvideos model", "xhamster model",
+	"instagram model", "ig model", "instagram baddie", "ig baddie",
+	"tiktok star", "tiktok famous", "tiktok dancer", "tiktok thot",
+	"twitter porn", "x rated twitter", "nsfw twitter",
+	"reddit model", "reddit amateur", "reddit verified",
+	"tumblr porn", "tumblr aesthetic", "snapchat premium",
+	"youtube model", "youtube vlogger", "youtube fitness",
+	// Content types
+	"social media star", "influencer porn", "influencer leaked",
+	"content creator", "independent creator", "self produced",
+	"fan funded", "tip menu", "custom content", "personalized content",
+	"ppv content", "pay per view", "mass dm", "direct message",
+	"live stream", "going live", "live show", "live performance",
+	"story content", "disappearing content", "24 hour", "limited time",
+	"pinned post", "featured content", "highlights", "best of profile",
+	// Engagement
+	"subscriber special", "fan appreciation", "loyalty reward",
+	"milestone celebration", "follower goal", "sub count",
+	"tip goal", "spin wheel", "random content", "mystery box",
+	"collab", "collaboration", "crossover", "guest appearance",
+	"duo content", "duo show", "couple content", "partner content",
+	"featuring", "ft", "with", "and", "versus", "vs",
+	// Aesthetics
+	"aesthetic", "vibe", "mood", "theme", "feed goals",
+	"cohesive feed", "grid layout", "color scheme", "filter style",
+	"ring light glow", "natural light aesthetic", "golden hour content",
+	"bedroom content", "bathroom content", "outdoor content",
+	"public content", "risky content", "almost caught",
+}
+
+// suggestionsAnime - Anime/hentai specific (~150 terms)
+var suggestionsAnime = []string{
+	// General anime/hentai
+	"hentai", "anime porn", "animated porn", "cartoon porn",
+	"doujinshi", "doujin", "manga porn", "ecchi", "eroge",
+	"visual novel", "h game", "nukige", "erotic game",
+	"japanese animation", "jav anime", "2d", "3d hentai",
+	// Art styles
+	"anime style", "manga style", "chibi", "moe", "kawaii",
+	"realistic anime", "semi realistic", "stylized", "exaggerated",
+	"big eyes", "small mouth", "pointy chin", "heart shaped face",
+	"colorful hair", "unnatural hair", "gravity defying hair",
+	// Character types
+	"waifu", "husbando", "best girl", "best boy",
+	"tsundere", "yandere", "kuudere", "dandere", "deredere",
+	"imouto", "onee san", "onii chan", "senpai", "kouhai",
+	"ojou sama", "gyaru", "gal", "kogal", "ganguro",
+	"meganekko", "glasses girl", "megane", "four eyes",
+	"nekomimi", "cat ears", "inumimi", "dog ears",
+	"usagimimi", "bunny ears", "kemonomimi", "animal ears",
+	"shrine maiden", "miko", "priestess", "nun anime",
+	// Hentai specific
+	"tentacle", "tentacle hentai", "tentacle monster", "plant tentacle",
+	"monster hentai", "orc hentai", "goblin hentai", "slime hentai",
+	"demon hentai", "angel hentai", "succubus hentai", "incubus",
+	"futanari", "futa", "futa on female", "futa on male", "futa on futa",
+	"trap hentai", "otokonoko", "femboy anime", "crossdress anime",
+	"yaoi", "boys love", "bl", "shounen ai", "bara",
+	"yuri", "girls love", "gl", "shoujo ai", "lily",
+	"netorare", "ntr", "cheating hentai", "cuckolding hentai",
+	"netori", "stealing", "mindbreak", "corruption hentai",
+	"hypnosis hentai", "mind control hentai", "brainwash",
+	"vanilla hentai", "wholesome hentai", "loving hentai", "romantic hentai",
+	// Formats
+	"uncensored hentai", "censored hentai", "mosaic", "no mosaic",
+	"subbed hentai", "dubbed hentai", "raw hentai", "translated",
+	"full color", "black and white", "one shot", "series",
+	"ova", "ona", "anime episode", "special episode",
+}
+
+// suggestionsCountry - Country-specific terms (~150 terms)
+var suggestionsCountry = []string{
+	// Japanese content
+	"jav", "japanese av", "japanese adult video", "japan porn",
+	"tokyo porn", "osaka porn", "japanese amateur", "japanese professional",
+	"uncensored jav", "censored jav", "jav idol", "av idol",
+	"gravure idol", "junior idol", "photobook", "image video",
+	"japanese schoolgirl", "jk", "japanese office lady", "ol",
+	"japanese housewife", "japanese milf", "japanese mature",
+	// European content
+	"european porn", "euro porn", "prague porn", "budapest porn",
+	"berlin porn", "paris porn", "london porn", "amsterdam porn",
+	"czech porn", "hungarian porn", "german porn", "french porn",
+	"british porn", "uk porn", "spanish porn", "italian porn",
+	"russian porn", "ukrainian porn", "polish porn", "romanian porn",
+	"nordic porn", "swedish porn", "danish porn", "norwegian porn",
+	"eastern european", "western european", "mediterranean",
+	// North American content
+	"american porn", "usa porn", "california porn", "florida porn",
+	"las vegas porn", "miami porn", "los angeles porn", "la porn",
+	"canadian porn", "montreal porn", "toronto porn", "vancouver porn",
+	"mexican porn", "mexico city porn", "tijuana porn",
+	// South American content
+	"brazilian porn", "brazil porn", "rio porn", "sao paulo porn",
+	"colombian porn", "medellin porn", "bogota porn",
+	"venezuelan porn", "argentinian porn", "buenos aires porn",
+	"peruvian porn", "chilean porn", "latin american",
+	// Asian content
+	"asian porn", "southeast asian", "east asian", "south asian",
+	"korean porn", "k porn", "seoul porn", "thai porn", "bangkok porn",
+	"filipino porn", "manila porn", "vietnamese porn", "hanoi porn",
+	"chinese porn", "hong kong porn", "taiwanese porn", "singaporean porn",
+	"indian porn", "desi porn", "bollywood style", "mumbai porn",
+	// Middle Eastern content
+	"arab porn", "middle eastern", "persian porn", "iranian porn",
+	"turkish porn", "istanbul porn", "lebanese porn", "egyptian porn",
+	// African content
+	"african porn", "south african porn", "nigerian porn", "kenyan porn",
+	"ethiopian porn", "north african", "sub saharan",
+	// Australian/Oceanian content
+	"australian porn", "aussie porn", "sydney porn", "melbourne porn",
+	"new zealand porn", "kiwi porn", "pacific islander porn",
+}
+
+// suggestionsPhysical - Physical attributes (~150 terms)
+var suggestionsPhysical = []string{
+	// Height
+	"tall woman", "tall girl", "amazon woman", "statuesque",
+	"short woman", "short girl", "petite woman", "fun sized",
+	"average height", "model height", "basketball player", "volleyball player",
+	"tall man", "short man", "average height man", "giant man",
+	// Weight
+	"skinny woman", "thin woman", "slender", "willowy",
+	"average weight", "healthy weight", "normal body", "regular body",
+	"thick woman", "thicc woman", "curvy woman", "voluptuous woman",
+	"chubby woman", "plump woman", "bbw woman", "ssbbw woman",
+	"feedee woman", "gaining woman", "weight gain", "getting bigger",
+	// Specific measurements
+	"32a", "32b", "32c", "32d", "34a", "34b", "34c", "34d",
+	"36c", "36d", "36dd", "38d", "38dd", "huge naturals",
+	"a cup", "b cup", "c cup", "d cup", "dd cup", "e cup", "f cup",
+	"flat chest", "small chest", "medium chest", "large chest", "huge chest",
+	"small waist", "tiny waist", "narrow waist", "wide waist",
+	"small hips", "medium hips", "wide hips", "child bearing hips",
+	"small ass", "medium ass", "big ass", "huge ass", "massive ass",
+	// Skin
+	"pale skin", "fair skin", "light skin", "medium skin", "olive skin",
+	"tan skin", "brown skin", "dark skin", "ebony skin", "chocolate skin",
+	"caramel skin", "honey skin", "golden skin", "bronze skin",
+	"freckled skin", "spotted", "birthmarked", "beauty marks",
+	"clear skin", "acne", "scars", "stretch marks", "cellulite",
+	"smooth skin", "silky skin", "soft skin", "rough skin",
+	"oily skin", "dry skin", "combination skin", "normal skin",
+	// Eyes
+	"blue eyes", "green eyes", "brown eyes", "hazel eyes", "grey eyes",
+	"amber eyes", "violet eyes", "heterochromia", "two different eyes",
+	"big eyes", "small eyes", "almond eyes", "round eyes", "hooded eyes",
+	"monolid", "double eyelid", "cat eyes", "doe eyes", "bedroom eyes",
+	// Lips
+	"full lips", "thin lips", "medium lips", "pouty lips", "bee stung lips",
+	"natural lips", "lip filler", "enhanced lips", "plump lips",
+	// Other
+	"long neck", "short neck", "slender neck", "thick neck",
+	"strong jaw", "weak jaw", "square jaw", "pointed chin", "round chin",
+	"high cheekbones", "hollow cheeks", "chubby cheeks", "dimpled cheeks",
+}
+
+// suggestionsEmotional - Emotional/mood descriptors (~100 terms)
+var suggestionsEmotional = []string{
+	// Positive emotions
+	"happy", "joyful", "ecstatic", "blissful", "euphoric",
+	"excited", "enthusiastic", "eager", "willing", "ready",
+	"loving", "affectionate", "tender", "caring", "nurturing",
+	"passionate", "intense", "fervent", "ardent", "burning",
+	"playful", "teasing", "flirty", "coy", "mischievous",
+	"confident", "bold", "assertive", "commanding", "powerful",
+	"relaxed", "calm", "serene", "peaceful", "tranquil",
+	// Arousal states
+	"horny", "turned on", "aroused", "stimulated", "excited sexually",
+	"wet", "dripping", "soaking", "throbbing", "aching",
+	"needy", "desperate", "craving", "hungry for", "starving for",
+	"insatiable", "unquenchable", "relentless", "tireless", "endless",
+	// Submission/dominance emotions
+	"submissive mood", "obedient", "compliant", "yielding", "surrendering",
+	"dominant mood", "controlling", "commanding", "authoritative", "powerful",
+	"bratty", "defiant", "resistant", "challenging", "testing",
+	// Vulnerability
+	"shy", "nervous", "anxious", "hesitant", "uncertain",
+	"vulnerable", "exposed", "open", "trusting", "giving",
+	"embarrassed", "blushing", "flustered", "overwhelmed", "overstimulated",
+	// Intensity
+	"intense", "extreme", "overwhelming", "mind blowing", "earth shattering",
+	"gentle", "soft", "tender", "delicate", "careful",
+	"rough mood", "aggressive", "primal", "animalistic", "savage",
+	// Connection
+	"intimate", "connected", "bonded", "united", "one",
+	"romantic", "loving connection", "deep connection", "soul connection",
+	"casual", "no strings", "just physical", "purely sexual",
+}
+
+// suggestionsTime - Time/duration related (~80 terms)
+var suggestionsTime = []string{
+	// Duration
+	"quickie", "quick fuck", "fast sex", "5 minute", "10 minute",
+	"15 minute", "20 minute", "30 minute", "45 minute", "1 hour",
+	"hour long", "extended", "marathon", "all night", "all day",
+	"multiple rounds", "round two", "round three", "encore",
+	"short clip", "medium length", "long video", "full length",
+	"compilation long", "supercut", "mega compilation",
+	// Time of day
+	"morning sex", "morning wood", "wake up sex", "breakfast in bed",
+	"afternoon delight", "lunch break", "midday", "siesta sex",
+	"evening sex", "after work", "dinner date", "nightcap",
+	"late night", "midnight", "after midnight", "early morning",
+	"sunrise", "sunset", "golden hour", "blue hour",
+	// Frequency
+	"daily", "weekly", "monthly", "regular", "frequent",
+	"occasional", "rare", "special occasion", "anniversary",
+	"first time", "second time", "hundredth time", "lost count",
+	"once a day", "twice a day", "multiple times", "cant stop",
+	// Timing
+	"premature", "quick finish", "fast cummer", "one minute man",
+	"edging", "delayed", "prolonged", "extended foreplay",
+	"simultaneous", "together", "at same time", "synchronized",
+	"sequential", "one after another", "back to back", "non stop",
+	// Era
+	"modern", "contemporary", "current", "recent", "new",
+	"classic era", "golden era", "vintage era", "retro era",
+}
+
+// suggestionsTrending - Trending/viral terms (~100 terms)
+var suggestionsTrending = []string{
+	// Current trends
+	"trending", "viral", "going viral", "blowing up", "everywhere",
+	"popular right now", "hot right now", "current favorite", "todays best",
+	"weekly top", "monthly best", "yearly favorite", "all time best",
+	"most watched", "most liked", "most shared", "most commented",
+	"highest rated", "five stars", "perfect score", "top rated",
+	// Social trends
+	"challenge", "viral challenge", "tiktok challenge", "trend challenge",
+	"trying trend", "following trend", "joining trend", "participating",
+	"hashtag", "trending hashtag", "viral hashtag", "popular hashtag",
+	"meme", "viral meme", "current meme", "trending meme",
+	// Content trends
+	"reaction", "reaction video", "try not to", "challenge video",
+	"pov trend", "asmr trend", "roleplay trend", "cosplay trend",
+	"outfit trend", "makeup trend", "hair trend", "aesthetic trend",
+	"minimalist trend", "maximalist trend", "cottagecore", "dark academia",
+	// Performance trends
+	"new position", "trending position", "popular position", "viral position",
+	"new technique", "trending technique", "popular technique",
+	"new style", "trending style", "popular style", "current style",
+	// Discovery
+	"new find", "hidden gem", "underrated", "slept on",
+	"up and coming", "rising star", "breakout", "newcomer",
+	"discovery", "found", "stumbled upon", "accidentally found",
+	"recommended", "algorithm", "for you", "suggested",
+	"similar to", "if you liked", "fans also watched", "related",
+	// Engagement
+	"must watch", "cant miss", "essential viewing", "required",
+	"bookmark", "save for later", "add to playlist", "favorite",
+	"share worthy", "send to friend", "screenshot", "screen record",
 }
 
 // SearchSuggestions contains comprehensive adult content search terms (5000+ terms)
@@ -484,8 +1167,9 @@ var suggestionsTechnology = []string{
 // Organized by category for easier maintenance
 var SearchSuggestions = func() []string {
 	// Pre-allocate with estimated capacity
-	all := make([]string, 0, 6000)
+	all := make([]string, 0, 8000)
 
+	// Original categories
 	all = append(all, suggestionsPopular...)
 	all = append(all, suggestionsEthnicity...)
 	all = append(all, suggestionsBodyTypes...)
@@ -511,6 +1195,20 @@ var SearchSuggestions = func() []string {
 	all = append(all, suggestionsFetishContent...)
 	all = append(all, suggestionsVintageRetro...)
 	all = append(all, suggestionsTechnology...)
+
+	// New categories
+	all = append(all, suggestionsRole...)
+	all = append(all, suggestionsStudio...)
+	all = append(all, suggestionsAwards...)
+	all = append(all, suggestionsCosplay...)
+	all = append(all, suggestionsGaming...)
+	all = append(all, suggestionsSocialMedia...)
+	all = append(all, suggestionsAnime...)
+	all = append(all, suggestionsCountry...)
+	all = append(all, suggestionsPhysical...)
+	all = append(all, suggestionsEmotional...)
+	all = append(all, suggestionsTime...)
+	all = append(all, suggestionsTrending...)
 
 	// Deduplicate
 	seen := make(map[string]bool, len(all))
@@ -672,6 +1370,26 @@ func GetCategorizedSuggestions() []SuggestionCategory {
 			Name:        "fetish",
 			DisplayName: "Fetish",
 			Terms:       []string{"bdsm", "feet", "bondage", "femdom", "latex", "cosplay", "stockings", "tattoo"},
+		},
+		{
+			Name:        "roleplay",
+			DisplayName: "Role Play",
+			Terms:       []string{"nurse", "teacher", "maid", "police", "doctor", "secretary", "cheerleader", "schoolgirl"},
+		},
+		{
+			Name:        "anime",
+			DisplayName: "Anime/Hentai",
+			Terms:       []string{"hentai", "anime", "cosplay", "ahegao", "tentacle", "futanari", "yuri", "yaoi"},
+		},
+		{
+			Name:        "production",
+			DisplayName: "Production",
+			Terms:       []string{"brazzers", "reality kings", "bangbros", "blacked", "tushy", "vixen", "kink", "evil angel"},
+		},
+		{
+			Name:        "trending",
+			DisplayName: "Trending",
+			Terms:       []string{"viral", "trending", "popular", "top rated", "most watched", "new", "onlyfans", "tiktok"},
 		},
 	}
 }

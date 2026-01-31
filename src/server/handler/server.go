@@ -87,13 +87,13 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName
 
 	// Build common template data per AI.md PART 16
 	versionInfo := version.GetVersionInfo()
-	appName := h.appConfig.Server.Title
+	appName := h.appConfig.Server.Branding.Title
 	// Required fields by head.tmpl: Title
 	// Required fields by nav.tmpl: ActiveNav, Query
 	data := map[string]interface{}{
 		"Title":          appName,
 		"AppName":        appName,
-		"AppDescription": h.appConfig.Server.Description,
+		"AppDescription": h.appConfig.Server.Branding.Description,
 		"Version":        versionInfo["version"],
 		"BuildDateTime":  versionInfo["build_time"],
 		"Theme":          "dark",
@@ -166,8 +166,8 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
-			"name":        h.appConfig.Server.Title,
-			"description": h.appConfig.Server.Description,
+			"name":        h.appConfig.Server.Branding.Title,
+			"description": h.appConfig.Server.Branding.Description,
 			"version":     version.GetVersion(),
 			"features": []string{
 				"Privacy-focused video meta-search",

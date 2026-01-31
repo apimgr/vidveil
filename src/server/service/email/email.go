@@ -270,7 +270,7 @@ func (s *EmailService) applyVars(text string, vars map[string]string) string {
 // getGlobalVars returns global template variables
 func (s *EmailService) getGlobalVars() map[string]string {
 	return map[string]string{
-		"app_name":    s.appConfig.Server.Title,
+		"app_name":    s.appConfig.Server.Branding.Title,
 		"app_url":     fmt.Sprintf("http://%s:%s", s.appConfig.Server.FQDN, s.appConfig.Server.Port),
 		"admin_email": s.appConfig.Server.Admin.Email,
 		"timestamp":   time.Now().Format(time.RFC3339),

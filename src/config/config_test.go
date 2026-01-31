@@ -19,8 +19,8 @@ func TestDefaultAppConfig(t *testing.T) {
 		t.Errorf("Expected mode 'production', got '%s'", cfg.Server.Mode)
 	}
 
-	if cfg.Server.Title != "Vidveil" {
-		t.Errorf("Expected title 'Vidveil', got '%s'", cfg.Server.Title)
+	if cfg.Server.Branding.Title != "Vidveil" {
+		t.Errorf("Expected title 'Vidveil', got '%s'", cfg.Server.Branding.Title)
 	}
 
 	if cfg.Server.Address != "[::]" {
@@ -186,7 +186,7 @@ func TestLoadAndSave(t *testing.T) {
 	}
 
 	// Modify and save
-	cfg.Server.Title = "Test Title"
+	cfg.Server.Branding.Title = "Test Title"
 	if err := SaveAppConfig(cfg, configPath); err != nil {
 		t.Fatalf("SaveAppConfig() error: %v", err)
 	}
@@ -197,8 +197,8 @@ func TestLoadAndSave(t *testing.T) {
 		t.Fatalf("LoadAppConfig() after save error: %v", err)
 	}
 
-	if cfg2.Server.Title != "Test Title" {
-		t.Errorf("Expected title 'Test Title', got '%s'", cfg2.Server.Title)
+	if cfg2.Server.Branding.Title != "Test Title" {
+		t.Errorf("Expected title 'Test Title', got '%s'", cfg2.Server.Branding.Title)
 	}
 }
 

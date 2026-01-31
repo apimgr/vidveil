@@ -16,11 +16,13 @@ import (
 func createTestConfig() *config.AppConfig {
 	return &config.AppConfig{
 		Server: config.ServerConfig{
-			Title:       "Test Vidveil",
-			Description: "Test Description",
-			FQDN:        "test.example.com",
-			Port:        "8080",
-			Mode:        "development",
+			Branding: config.ServerBrandingConfig{
+				Title:       "Test Vidveil",
+				Description: "Test Description",
+			},
+			FQDN: "test.example.com",
+			Port: "8080",
+			Mode: "development",
 			Database: config.DatabaseConfig{
 				Driver: "none",
 			},

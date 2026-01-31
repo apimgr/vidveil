@@ -38,7 +38,7 @@ type AuthHandler struct {
 func NewAuthHandler(appConfig *config.AppConfig) *AuthHandler {
 	return &AuthHandler{
 		appConfig:   appConfig,
-		totpSvc:     totp.NewTOTPService(appConfig.Server.Title),
+		totpSvc:     totp.NewTOTPService(appConfig.Server.Branding.Title),
 		pendingAuth: make(map[string]*PendingAuth),
 	}
 }
@@ -310,7 +310,7 @@ func (h *AuthHandler) render2FAPage(w http.ResponseWriter, errorMsg string) {
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Title, errorHtml)
+</html>`, h.appConfig.Server.Branding.Title, errorHtml)
 	w.Write([]byte(html))
 }
 
@@ -354,7 +354,7 @@ func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Title, errorHtml)
+</html>`, h.appConfig.Server.Branding.Title, errorHtml)
 	w.Write([]byte(html))
 }
 
@@ -389,7 +389,7 @@ func (h *AuthHandler) PasswordForgotPage(w http.ResponseWriter, r *http.Request)
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Title)
+</html>`, h.appConfig.Server.Branding.Title)
 	w.Write([]byte(html))
 }
 
@@ -418,6 +418,6 @@ func (h *AuthHandler) PasswordResetPage(w http.ResponseWriter, r *http.Request) 
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Title)
+</html>`, h.appConfig.Server.Branding.Title)
 	w.Write([]byte(html))
 }

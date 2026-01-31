@@ -33,6 +33,13 @@ type EnginesConfig struct {
 	UserAgent UserAgentConfig `yaml:"useragent"`
 }
 
+// ServerBrandingConfig holds branding settings per AI.md PART 16
+type ServerBrandingConfig struct {
+	Title       string `yaml:"title"`
+	Tagline     string `yaml:"tagline"`
+	Description string `yaml:"description"`
+}
+
 // ServerConfig holds server-related settings per AI.md
 type ServerConfig struct {
 	// Port: single (HTTP) or dual (HTTP,HTTPS) e.g., "8090" or "8090,64453"
@@ -44,9 +51,8 @@ type ServerConfig struct {
 	// Can be overridden by MODE env var or --mode CLI flag
 	Mode string `yaml:"mode"`
 
-	// Application branding
-	Title       string `yaml:"title"`
-	Description string `yaml:"description"`
+	// Application branding per AI.md PART 16
+	Branding ServerBrandingConfig `yaml:"branding"`
 
 	// System user/group
 	User  string `yaml:"user"`
@@ -512,21 +518,15 @@ type SQLiteConfig struct {
 }
 
 // WebConfig holds frontend settings per AI.md
+// Note: Branding is under server.branding per AI.md PART 5/16, not here
 type WebConfig struct {
 	UI            UIConfig            `yaml:"ui"`
-	Branding      BrandingConfig      `yaml:"branding"`
 	Announcements AnnouncementsConfig `yaml:"announcements"`
 	Robots        RobotsConfig        `yaml:"robots"`
 	Security      WebSecurityConfig   `yaml:"security"`
 	CORS          string              `yaml:"cors"`
 	CSRF          CSRFConfig          `yaml:"csrf"`
 	Footer        FooterConfig        `yaml:"footer"`
-}
-
-// BrandingConfig holds branding settings
-type BrandingConfig struct {
-	AppName string `yaml:"app_name"`
-	Tagline string `yaml:"tagline"`
 }
 
 // UIConfig holds UI settings
@@ -726,15 +726,18 @@ func DefaultAppConfig() *AppConfig {
 
 	return &AppConfig{
 		Server: ServerConfig{
-			Port:        defaultPort,
-			FQDN:        fqdn,
-			Address:     "[::]",
-			Mode:        "production",
-			Title:       "Vidveil",
-			Description: "Privacy-respecting adult video search",
-			User:        "",
-			Group:       "",
-			PIDFile:     true,
+			Port:    defaultPort,
+			FQDN:    fqdn,
+			Address: "[::]",
+			Mode:    "production",
+			Branding: ServerBrandingConfig{
+				Title:       "Vidveil",
+				Tagline:     "Privacy-first video search",
+				Description: "Privacy-respecting adult video search",
+			},
+			User:    "",
+			Group:   "",
+			PIDFile: true,
 			Admin: AdminConfig{
 				Path:     "admin",
 				Email:    "admin@" + fqdn,
@@ -1389,8 +1392,7 @@ func (w *ConfigWatcher) reload() {
 	}
 
 	// Update the shared config (settings that can live-reload)
-	w.appConfig.Server.Title = newCfg.Server.Title
-	w.appConfig.Server.Description = newCfg.Server.Description
+	w.appConfig.Server.Branding = newCfg.Server.Branding
 	w.appConfig.Server.RateLimit = newCfg.Server.RateLimit
 	w.appConfig.Server.Email = newCfg.Server.Email
 	w.appConfig.Server.Notifications = newCfg.Server.Notifications

@@ -309,7 +309,7 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"SiteTitle": h.appConfig.Server.Title,
+		"SiteTitle": h.appConfig.Server.Branding.Title,
 		"Error":     "",
 		"Theme":     h.appConfig.Web.UI.Theme,
 		"AdminPath": "/" + h.appConfig.Server.Admin.Path,
@@ -394,7 +394,7 @@ func (h *AdminHandler) renderSetupTokenPage(w http.ResponseWriter, errorMsg stri
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Title, func() string {
+</html>`, h.appConfig.Server.Branding.Title, func() string {
 		if errorMsg != "" {
 			return fmt.Sprintf(`<div class="alert alert-error">%s</div>`, errorMsg)
 		}
@@ -1465,7 +1465,7 @@ func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"SiteTitle": h.appConfig.Server.Title,
+		"SiteTitle": h.appConfig.Server.Branding.Title,
 		"Token":     token,
 		"Valid":     false,
 		"Theme":     h.appConfig.Web.UI.Theme,
@@ -2040,8 +2040,8 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 				"address":     h.appConfig.Server.Address,
 				"fqdn":        h.appConfig.Server.FQDN,
 				"mode":        h.appConfig.Server.Mode,
-				"title":       h.appConfig.Server.Title,
-				"description": h.appConfig.Server.Description,
+				"title":       h.appConfig.Server.Branding.Title,
+				"description": h.appConfig.Server.Branding.Description,
 			},
 			"web": map[string]interface{}{
 				"theme": h.appConfig.Web.UI.Theme,
@@ -2069,11 +2069,11 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 		updated := false
 		if serverCfg, ok := updates["server"].(map[string]interface{}); ok {
 			if title, ok := serverCfg["title"].(string); ok {
-				h.appConfig.Server.Title = title
+				h.appConfig.Server.Branding.Title = title
 				updated = true
 			}
 			if desc, ok := serverCfg["description"].(string); ok {
-				h.appConfig.Server.Description = desc
+				h.appConfig.Server.Branding.Description = desc
 				updated = true
 			}
 			if mode, ok := serverCfg["mode"].(string); ok {
@@ -2146,15 +2146,15 @@ func (h *AdminHandler) APIBranding(w http.ResponseWriter, r *http.Request) {
 
 	updated := false
 	if updates.Title != "" {
-		h.appConfig.Server.Title = updates.Title
+		h.appConfig.Server.Branding.Title = updates.Title
 		updated = true
 	}
 	if updates.Tagline != "" {
-		h.appConfig.Web.Branding.Tagline = updates.Tagline
+		h.appConfig.Server.Branding.Tagline = updates.Tagline
 		updated = true
 	}
 	if updates.Description != "" {
-		h.appConfig.Server.Description = updates.Description
+		h.appConfig.Server.Branding.Description = updates.Description
 		updated = true
 	}
 
@@ -3118,7 +3118,7 @@ func (h *AdminHandler) renderDashboard() string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - ` + h.appConfig.Server.Title + `</title>
+    <title>Admin Dashboard - ` + h.appConfig.Server.Branding.Title + `</title>
     ` + adminStyles() + `
 </head>
 <body>
@@ -3245,7 +3245,7 @@ func (h *AdminHandler) renderEnginesPage() string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Engines - Admin - ` + h.appConfig.Server.Title + `</title>
+    <title>Engines - Admin - ` + h.appConfig.Server.Branding.Title + `</title>
     ` + adminStyles() + `
 </head>
 <body>
@@ -3279,7 +3279,7 @@ func (h *AdminHandler) renderSettingsPage() string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - Admin - ` + h.appConfig.Server.Title + `</title>
+    <title>Settings - Admin - ` + h.appConfig.Server.Branding.Title + `</title>
     ` + adminStyles() + `
 </head>
 <body>
@@ -3372,7 +3372,7 @@ func (h *AdminHandler) renderServerSettingsPage() string {
                 <tr><td>Address</td><td>`+h.appConfig.Server.Address+`</td></tr>
                 <tr><td>FQDN</td><td>`+h.appConfig.Server.FQDN+`</td></tr>
                 <tr><td>Mode</td><td>`+h.appConfig.Server.Mode+`</td></tr>
-                <tr><td>Title</td><td>`+h.appConfig.Server.Title+`</td></tr>
+                <tr><td>Title</td><td>`+h.appConfig.Server.Branding.Title+`</td></tr>
             </table>
         </div>
         <div class="card">
@@ -3798,7 +3798,7 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	}
 	data["Config"] = h.appConfig
 	data["ActiveNav"] = templateName
-	data["SiteTitle"] = h.appConfig.Server.Title
+	data["SiteTitle"] = h.appConfig.Server.Branding.Title
 	// Per AI.md PART 17: AdminPath available in all templates
 	data["AdminPath"] = "/" + h.appConfig.Server.Admin.Path
 	// Inject version for cache busting in all admin templates
@@ -3907,7 +3907,7 @@ func (h *AdminHandler) renderAdminPage(active, title, content string) string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>` + title + ` - Admin - ` + h.appConfig.Server.Title + `</title>
+    <title>` + title + ` - Admin - ` + h.appConfig.Server.Branding.Title + `</title>
     ` + adminStyles() + `
 </head>
 <body>

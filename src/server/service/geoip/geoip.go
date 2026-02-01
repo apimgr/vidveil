@@ -17,11 +17,12 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// Database URLs per AI.md PART 20
+// Database URLs per AI.md PART 20 - using ip-location-db via jsDelivr
+// Note: geolite2-city used instead of dbip-city (dbip-city returns 403 on jsDelivr)
 const (
 	ASNURL     = "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb"
 	CountryURL = "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"
-	CityURL    = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb"
+	CityURL    = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv4.mmdb"
 )
 
 // GeoIPResult holds GeoIP lookup results
@@ -157,8 +158,16 @@ func (s *GeoIPService) downloadIfMissing() error {
 }
 
 // downloadFile downloads a file from URL to path
+// Uses User-Agent header as jsDelivr requires it for some files
 func (s *GeoIPService) downloadFile(url, path string) error {
-	resp, err := http.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

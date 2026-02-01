@@ -73,46 +73,46 @@
 /* Auto theme mode - uses system preference via prefers-color-scheme */
 @media (prefers-color-scheme: light) {
     html.theme-auto {
-        /* Colors - Light theme (same as theme-light) */
-        --primary-color: #7c3aed;
-        --success-color: #22c55e;
-        --warning-color: #f59e0b;
-        --danger-color: #ef4444;
-        --bg-color: #f5f5f5;
-        --text-color: #282a36;
-        --border-color: #d1d5db;
+        /* Colors - Light theme per AI.md PART 16 ThemePaletteLight */
+        --primary-color: #2e7de9;
+        --success-color: #587539;
+        --warning-color: #8c6c3e;
+        --danger-color: #c64343;
+        --bg-color: #ffffff;
+        --text-color: #1a1b26;
+        --border-color: #c0caf5;
 
-        /* AI.md PART 16: Component CSS variables */
-        --color-primary: #7c3aed;
-        --color-primary-bg: rgba(124, 58, 237, 0.1);
-        --color-success: #22c55e;
-        --color-success-bg: rgba(34, 197, 94, 0.1);
-        --color-warning: #f59e0b;
-        --color-warning-bg: rgba(245, 158, 11, 0.1);
-        --color-error: #ef4444;
-        --color-error-bg: rgba(239, 68, 68, 0.1);
-        --color-danger: #ef4444;
-        --color-info: #0891b2;
-        --color-info-bg: rgba(8, 145, 178, 0.1);
-        --color-bg: #f5f5f5;
-        --color-bg-secondary: #ffffff;
-        --color-bg-tertiary: #e8e8e8;
-        --color-text: #282a36;
-        --color-text-secondary: #7585b8;
-        --color-muted: #6b7280;
-        --color-border: #d1d5db;
-        --color-hover: #e5e7eb;
+        /* AI.md PART 16: Component CSS variables - ThemePaletteLight */
+        --color-primary: #2e7de9;
+        --color-primary-bg: rgba(46, 125, 233, 0.1);
+        --color-success: #587539;
+        --color-success-bg: rgba(88, 117, 57, 0.1);
+        --color-warning: #8c6c3e;
+        --color-warning-bg: rgba(140, 108, 62, 0.1);
+        --color-error: #c64343;
+        --color-error-bg: rgba(198, 67, 67, 0.1);
+        --color-danger: #c64343;
+        --color-info: #007197;
+        --color-info-bg: rgba(0, 113, 151, 0.1);
+        --color-bg: #ffffff;
+        --color-bg-secondary: #f5f5f5;
+        --color-bg-tertiary: #e9e9ec;
+        --color-text: #1a1b26;
+        --color-text-secondary: #6172b0;
+        --color-muted: #6172b0;
+        --color-border: #c0caf5;
+        --color-hover: #e9e9ec;
 
         /* Legacy aliases */
         --bg-primary: var(--color-bg);
         --bg-secondary: var(--color-bg-secondary);
         --bg-tertiary: var(--color-bg-tertiary);
-        --bg-card: #ffffff;
+        --bg-card: #f5f5f5;
         --text-primary: var(--color-text);
         --text-secondary: var(--color-text-secondary);
         --text-muted: var(--color-muted);
         --accent: var(--color-primary);
-        --accent-hover: #5b21b6;
+        --accent-hover: #7847bd;
         --accent-alt: var(--color-info);
         --success: var(--color-success);
         --warning: var(--color-warning);
@@ -123,46 +123,46 @@
 }
 
 html.theme-light {
-    /* Colors - Light theme */
-    --primary-color: #7c3aed;
-    --success-color: #22c55e;
-    --warning-color: #f59e0b;
-    --danger-color: #ef4444;
-    --bg-color: #f5f5f5;
-    --text-color: #282a36;
-    --border-color: #d1d5db;
+    /* Colors - Light theme per AI.md PART 16 ThemePaletteLight */
+    --primary-color: #2e7de9;
+    --success-color: #587539;
+    --warning-color: #8c6c3e;
+    --danger-color: #c64343;
+    --bg-color: #ffffff;
+    --text-color: #1a1b26;
+    --border-color: #c0caf5;
 
-    /* AI.md PART 16: Component CSS variables */
-    --color-primary: #7c3aed;
-    --color-primary-bg: rgba(124, 58, 237, 0.1);
-    --color-success: #22c55e;
-    --color-success-bg: rgba(34, 197, 94, 0.1);
-    --color-warning: #f59e0b;
-    --color-warning-bg: rgba(245, 158, 11, 0.1);
-    --color-error: #ef4444;
-    --color-error-bg: rgba(239, 68, 68, 0.1);
-    --color-danger: #ef4444;
-    --color-info: #0891b2;
-    --color-info-bg: rgba(8, 145, 178, 0.1);
-    --color-bg: #f5f5f5;
-    --color-bg-secondary: #ffffff;
-    --color-bg-tertiary: #e8e8e8;
-    --color-text: #282a36;
-    --color-text-secondary: #7585b8;
-    --color-muted: #6b7280;
-    --color-border: #d1d5db;
-    --color-hover: #e5e7eb;
+    /* AI.md PART 16: Component CSS variables - ThemePaletteLight */
+    --color-primary: #2e7de9;
+    --color-primary-bg: rgba(46, 125, 233, 0.1);
+    --color-success: #587539;
+    --color-success-bg: rgba(88, 117, 57, 0.1);
+    --color-warning: #8c6c3e;
+    --color-warning-bg: rgba(140, 108, 62, 0.1);
+    --color-error: #c64343;
+    --color-error-bg: rgba(198, 67, 67, 0.1);
+    --color-danger: #c64343;
+    --color-info: #007197;
+    --color-info-bg: rgba(0, 113, 151, 0.1);
+    --color-bg: #ffffff;
+    --color-bg-secondary: #f5f5f5;
+    --color-bg-tertiary: #e9e9ec;
+    --color-text: #1a1b26;
+    --color-text-secondary: #6172b0;
+    --color-muted: #6172b0;
+    --color-border: #c0caf5;
+    --color-hover: #e9e9ec;
 
     /* Legacy aliases */
     --bg-primary: var(--color-bg);
     --bg-secondary: var(--color-bg-secondary);
     --bg-tertiary: var(--color-bg-tertiary);
-    --bg-card: #ffffff;
+    --bg-card: #f5f5f5;
     --text-primary: var(--color-text);
     --text-secondary: var(--color-text-secondary);
     --text-muted: var(--color-muted);
     --accent: var(--color-primary);
-    --accent-hover: #5b21b6;
+    --accent-hover: #7847bd;
     --accent-alt: var(--color-info);
     --success: var(--color-success);
     --warning: var(--color-warning);

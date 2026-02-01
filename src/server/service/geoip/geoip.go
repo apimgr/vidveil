@@ -18,11 +18,12 @@ import (
 )
 
 // Database URLs per AI.md PART 20 - using ip-location-db via jsDelivr
-// Note: geolite2-city used instead of dbip-city (dbip-city returns 403 on jsDelivr)
 const (
 	ASNURL     = "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb"
 	CountryURL = "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"
-	CityURL    = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv4.mmdb"
+	// Per spec: dbip-city-mmdb, with geolite2-city-mmdb as fallback (dbip returns 403 on jsDelivr)
+	CityURL         = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb"
+	CityURLFallback = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv4.mmdb"
 )
 
 // GeoIPResult holds GeoIP lookup results
@@ -148,8 +149,11 @@ func (s *GeoIPService) downloadIfMissing() error {
 	if dbs.City {
 		cityPath := filepath.Join(s.dataDir, "city.mmdb")
 		if _, err := os.Stat(cityPath); os.IsNotExist(err) {
+			// Try spec URL first, fall back to alternative if it fails
 			if err := s.downloadFile(CityURL, cityPath); err != nil {
-				return fmt.Errorf("failed to download city database: %w", err)
+				if err := s.downloadFile(CityURLFallback, cityPath); err != nil {
+					return fmt.Errorf("failed to download city database: %w", err)
+				}
 			}
 		}
 	}
@@ -440,8 +444,11 @@ func (s *GeoIPService) Update() error {
 
 	if dbs.City {
 		cityPath := filepath.Join(s.dataDir, "city.mmdb")
+		// Try spec URL first, fall back to alternative if it fails
 		if err := s.downloadFile(CityURL, cityPath); err != nil {
-			return fmt.Errorf("failed to update city database: %w", err)
+			if err := s.downloadFile(CityURLFallback, cityPath); err != nil {
+				return fmt.Errorf("failed to update city database: %w", err)
+			}
 		}
 	}
 

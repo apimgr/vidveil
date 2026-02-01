@@ -1387,7 +1387,7 @@ if (document.readyState === 'loading') {
     var searchCurrentQualityFilter = '';
     var searchCurrentSourceFilters = new Set(); // Multiple sources allowed
     var searchCurrentSort = '';
-    var searchPreviewOnly = false;
+    var searchPreviewFirst = false; // Sort priority, not exclusive filter
     var startTime = Date.now();
     var isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     var currentPage = 1;
@@ -1395,8 +1395,66 @@ if (document.readyState === 'loading') {
     var hasMoreResults = true;
     var infiniteScrollObserver = null;
 
+    // Deduplication: track seen URLs and normalized titles
+    var seenUrls = new Set();
+    var seenTitles = new Set();
+
     // Preferences loaded from storage
     var userPrefs = {};
+
+    // Normalize URL for deduplication (extract video ID pattern)
+    function normalizeUrl(url) {
+        if (!url) return '';
+        try {
+            var u = new URL(url);
+            // Remove tracking params and normalize
+            u.search = '';
+            u.hash = '';
+            var path = u.pathname.replace(/\/+$/, ''); // Remove trailing slashes
+            return u.hostname + path;
+        } catch (e) {
+            return url.toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '');
+        }
+    }
+
+    // Normalize title for fuzzy matching
+    function normalizeTitle(title) {
+        if (!title) return '';
+        return title
+            .toLowerCase()
+            .replace(/[^\w\s]/g, '') // Remove special characters
+            .replace(/\s+/g, ' ')    // Normalize whitespace
+            .trim()
+            .split(' ')
+            .filter(function(w) { return w.length > 2; }) // Keep words > 2 chars
+            .sort()
+            .join(' ');
+    }
+
+    // Check if a result is a duplicate
+    function isDuplicateResult(r) {
+        if (!r || !r.url) return true;
+
+        // Check exact URL
+        if (seenUrls.has(r.url)) return true;
+
+        // Check normalized URL
+        var normUrl = normalizeUrl(r.url);
+        if (seenUrls.has(normUrl)) return true;
+
+        // Check normalized title (catches cross-engine duplicates)
+        var normTitle = normalizeTitle(r.title);
+        if (normTitle && normTitle.length > 20 && seenTitles.has(normTitle)) return true;
+
+        // Not a duplicate - add to seen sets
+        seenUrls.add(r.url);
+        seenUrls.add(normUrl);
+        if (normTitle && normTitle.length > 20) {
+            seenTitles.add(normTitle);
+        }
+
+        return false;
+    }
 
     // Note: AND-based term filtering with synonym expansion is handled server-side
     // in manager.go using taxonomy.go. Client-side only handles duration/quality/source/preview filters.
@@ -1431,8 +1489,8 @@ if (document.readyState === 'loading') {
 
         // Apply default filters from preferences
         if (userPrefs.defaultPreviewOnly) {
-            searchPreviewOnly = true;
-            var previewCheckbox = document.getElementById('filter-preview-only');
+            searchPreviewFirst = true;
+            var previewCheckbox = document.getElementById('filter-preview-first');
             if (previewCheckbox) previewCheckbox.checked = true;
         }
         if (userPrefs.defaultDuration) {
@@ -1460,6 +1518,10 @@ if (document.readyState === 'loading') {
 
     function streamResults(minDuration) {
         if (!searchQuery) return;
+
+        // Reset deduplication sets for new search
+        seenUrls.clear();
+        seenTitles.clear();
 
         // Build search URL with optional parameters
         var searchUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery);
@@ -1531,6 +1593,11 @@ if (document.readyState === 'loading') {
 
                 // Apply min duration filter
                 if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
+                    return;
+                }
+
+                // Check for duplicates (by URL and normalized title)
+                if (isDuplicateResult(r)) {
                     return;
                 }
 
@@ -1621,6 +1688,10 @@ if (document.readyState === 'loading') {
                 var r = results[i];
                 // Apply min duration filter
                 if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
+                    continue;
+                }
+                // Check for duplicates
+                if (isDuplicateResult(r)) {
                     continue;
                 }
                 allResults.push(r);
@@ -1944,8 +2015,8 @@ if (document.readyState === 'loading') {
         updateFilterCount();
     }
 
-    function updatePreviewFilter(checked) {
-        searchPreviewOnly = checked;
+    function updatePreviewFirst(checked) {
+        searchPreviewFirst = checked;
         applySearchFiltersAndSort();
         updateFilterCount();
     }
@@ -1965,7 +2036,7 @@ if (document.readyState === 'loading') {
             var show = true;
 
             // Note: AND-based term filtering with synonyms is now handled server-side
-            // Client-side only handles duration/quality/source/preview filters
+            // Client-side only handles duration/quality/source filters (preview is sort priority, not filter)
 
             // Duration filter
             if (searchCurrentDurationFilter === 'short' && duration >= 600) show = false;
@@ -1980,8 +2051,7 @@ if (document.readyState === 'loading') {
             // Source filter (multiple selection)
             if (searchCurrentSourceFilters.size > 0 && !searchCurrentSourceFilters.has(source)) show = false;
 
-            // Preview filter
-            if (searchPreviewOnly && !card.dataset.hasPreview) show = false;
+            // Note: Preview is NOT a filter - it's a sort priority (show first, not only)
 
             if (show) {
                 card.classList.remove('hidden');
@@ -1990,37 +2060,45 @@ if (document.readyState === 'loading') {
             }
         });
 
-        // Sorting
-        if (searchCurrentSort) {
-            var grid = document.getElementById('video-grid');
-            var cardArray = Array.from(grid.querySelectorAll('.video-card'));
+        // Sorting - always apply (preview first is a sort, plus user's sort preference)
+        var grid = document.getElementById('video-grid');
+        var cardArray = Array.from(grid.querySelectorAll('.video-card'));
 
-            cardArray.sort(function(a, b) {
-                var aDur = parseInt(a.dataset.duration) || 0;
-                var bDur = parseInt(b.dataset.duration) || 0;
-                var aViews = parseInt(a.dataset.views) || 0;
-                var bViews = parseInt(b.dataset.views) || 0;
-                var aQuality = (a.dataset.quality || '').toUpperCase();
-                var bQuality = (b.dataset.quality || '').toUpperCase();
-
-                if (searchCurrentSort === 'duration-desc') return bDur - aDur;
-                if (searchCurrentSort === 'duration-asc') return aDur - bDur;
-                if (searchCurrentSort === 'views') return bViews - aViews;
-                if (searchCurrentSort === 'quality') {
-                    var getQualityScore = function(q) {
-                        if (q.includes('4K') || q.includes('2160')) return 4;
-                        if (q.includes('1080')) return 3;
-                        if (q.includes('720')) return 2;
-                        if (q.includes('480')) return 1;
-                        return 0;
-                    };
-                    return getQualityScore(bQuality) - getQualityScore(aQuality);
+        cardArray.sort(function(a, b) {
+            // Preview first: prioritize videos with preview capability
+            if (searchPreviewFirst) {
+                var aHasPreview = a.dataset.hasPreview ? 1 : 0;
+                var bHasPreview = b.dataset.hasPreview ? 1 : 0;
+                if (aHasPreview !== bHasPreview) {
+                    return bHasPreview - aHasPreview; // Preview videos first
                 }
-                return 0;
-            });
+            }
 
-            cardArray.forEach(function(card) { grid.appendChild(card); });
-        }
+            // Then apply user's sort preference within each group
+            var aDur = parseInt(a.dataset.duration) || 0;
+            var bDur = parseInt(b.dataset.duration) || 0;
+            var aViews = parseInt(a.dataset.views) || 0;
+            var bViews = parseInt(b.dataset.views) || 0;
+            var aQuality = (a.dataset.quality || '').toUpperCase();
+            var bQuality = (b.dataset.quality || '').toUpperCase();
+
+            if (searchCurrentSort === 'duration-desc') return bDur - aDur;
+            if (searchCurrentSort === 'duration-asc') return aDur - bDur;
+            if (searchCurrentSort === 'views') return bViews - aViews;
+            if (searchCurrentSort === 'quality') {
+                var getQualityScore = function(q) {
+                    if (q.includes('4K') || q.includes('2160')) return 4;
+                    if (q.includes('1080')) return 3;
+                    if (q.includes('720')) return 2;
+                    if (q.includes('480')) return 1;
+                    return 0;
+                };
+                return getQualityScore(bQuality) - getQualityScore(aQuality);
+            }
+            return 0;
+        });
+
+        cardArray.forEach(function(card) { grid.appendChild(card); });
 
         // Update visible count
         var visibleCards = document.querySelectorAll('.video-card:not(.hidden)');
@@ -2194,12 +2272,8 @@ if (document.readyState === 'loading') {
                 gotResults = true;
                 var r = data.result;
 
-                // Check for duplicates by URL
-                var isDupe = allResults.some(function(existing) {
-                    return existing.url === r.url;
-                });
-
-                if (!isDupe) {
+                // Check for duplicates (by URL and normalized title)
+                if (!isDuplicateResult(r)) {
                     allResults.push(r);
                     addResultCard(r);
 
@@ -2260,7 +2334,7 @@ if (document.readyState === 'loading') {
         sortResults: searchSortResults,
         toggleAllSources: toggleAllSources,
         updateSourceFilter: updateSourceFilter,
-        updatePreviewFilter: updatePreviewFilter
+        updatePreviewFirst: updatePreviewFirst
     };
     window.filterByDuration = searchFilterByDuration;
     window.filterByQuality = searchFilterByQuality;
@@ -2268,7 +2342,7 @@ if (document.readyState === 'loading') {
     window.sortResults = searchSortResults;
     window.toggleAllSources = toggleAllSources;
     window.updateSourceFilter = updateSourceFilter;
-    window.updatePreviewFilter = updatePreviewFilter;
+    window.updatePreviewFirst = updatePreviewFirst;
 
     // Close source filter dropdown when clicking outside (details element)
     document.addEventListener('click', function(e) {

@@ -40,12 +40,16 @@ const (
 	ageVerifyCookieDays = 30
 )
 
-// TorStatusChecker is a minimal interface for checking Tor status
+// TorStatusChecker is the interface for Tor service in handlers
+// Per PART 32: Supports both status checking and outbound network routing
 type TorStatusChecker interface {
 	IsEnabled() bool
 	IsRunning() bool
 	GetInfo() map[string]interface{}
-	AllowUserIPForward() bool // Per PART 32: Admin setting for IP forwarding
+	AllowUserIPForward() bool    // Per PART 32: Admin setting for IP forwarding
+	GetHTTPClient(useTor bool) *http.Client // Per PART 32: Get Tor-routed or direct client
+	UseNetworkEnabled() bool     // Per PART 32: Is use_network configured?
+	OutboundEnabled() bool       // Per PART 32: Is Tor SOCKS available?
 }
 
 // GeoIPChecker is a minimal interface for GeoIP content restriction checks
@@ -209,6 +213,22 @@ func (h *SearchHandler) SetTorService(t TorStatusChecker) {
 // SetGeoIPService sets the GeoIP service for content restriction checks
 func (h *SearchHandler) SetGeoIPService(g GeoIPChecker) {
 	h.geoipSvc = g
+}
+
+// getProxyClient returns an HTTP client for proxy requests
+// Per PART 32: Routes through Tor when use_network is enabled
+func (h *SearchHandler) getProxyClient(timeout time.Duration) *http.Client {
+	if h.torSvc != nil && h.torSvc.UseNetworkEnabled() && h.torSvc.OutboundEnabled() {
+		// Use Tor-routed client
+		client := h.torSvc.GetHTTPClient(true)
+		// Override timeout if needed (Tor client has 60s default)
+		if timeout > 0 && timeout != 60*time.Second {
+			client.Timeout = timeout
+		}
+		return client
+	}
+	// Direct connection
+	return &http.Client{Timeout: timeout}
 }
 
 // GetSearchCache returns the search cache for sharing with admin handler
@@ -2463,10 +2483,8 @@ return
 req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
 
-// Fetch thumbnail
-client := &http.Client{
-Timeout: 10 * time.Second,
-}
+// Fetch thumbnail - Per PART 32: Route through Tor when use_network is enabled
+client := h.getProxyClient(10 * time.Second)
 
 resp, err := client.Do(req)
 if err != nil {
@@ -2537,10 +2555,8 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 	// Set referer to the video host to avoid hotlink protection
 	req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
 
-	// Fetch video
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	// Fetch video - Per PART 32: Route through Tor when use_network is enabled
+	client := h.getProxyClient(30 * time.Second)
 
 	resp, err := client.Do(req)
 	if err != nil {

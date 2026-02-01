@@ -1324,9 +1324,31 @@ header .search-form {
     padding: 1.5rem;
 }
 
-.preferences h1 {
+.preferences-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 2rem;
+}
+
+.preferences h1 {
+    margin: 0;
     font-size: 2rem;
+}
+
+.preferences-close {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.preferences-close:hover {
+    color: var(--text-primary);
 }
 
 .preferences section {
@@ -1905,6 +1927,22 @@ header .search-form {
     gap: 0.5rem;
     max-height: calc(100vh - 2rem);
     overflow: hidden;
+}
+
+/* Standalone toast element (used in preferences, etc.) */
+#toast {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10000;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+#toast.show {
+    opacity: 1;
+    transform: translateX(0);
 }
 
 /* Toast Notifications per AI.md PART 16 */

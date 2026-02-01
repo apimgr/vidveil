@@ -71,7 +71,10 @@ type TorService interface {
 	ImportKeys(secretKey []byte) error
 	GetInfo() map[string]interface{}
 	TestConnection() *tor.TestConnectionResult
-	AllowUserIPForward() bool // Per PART 32: Admin setting for user IP forwarding
+	AllowUserIPForward() bool                 // Per PART 32: Admin setting for user IP forwarding
+	GetHTTPClient(useTor bool) *http.Client   // Per PART 32: Get Tor-routed or direct client
+	UseNetworkEnabled() bool                  // Per PART 32: Is use_network configured?
+	OutboundEnabled() bool                    // Per PART 32: Is Tor SOCKS available?
 }
 
 // AdminHandler handles admin panel routes per AI.md PART 17

@@ -7,7 +7,10 @@
 <body>
     {{template "public/header" .}}
     <main class="preferences">
-        <h1>Preferences</h1>
+        <div class="preferences-header">
+            <h1>Preferences</h1>
+            <button type="button" class="preferences-close" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'" aria-label="Close">&times;</button>
+        </div>
         <form id="preferences-form">
             <section>
                 <h2>Appearance</h2>
@@ -340,7 +343,15 @@
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
 
-            showToast('Preferences saved! Use the back button to return to your search.', 'success');
+            showToast('Preferences saved!', 'success');
+            // Auto-close after saving
+            setTimeout(function() {
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.href = '/';
+                }
+            }, 800);
         }
 
         function showToast(message, type) {

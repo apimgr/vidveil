@@ -16,8 +16,17 @@ function setTheme(theme) {
 }
 
 function getTheme() {
-    // Default to 'dark' per AI.md PART 16: Dark theme is DEFAULT
-    return localStorage.getItem('vidveil-theme') || 'dark';
+    // Check vidveil_prefs first (newer, more reliable source)
+    try {
+        var prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}');
+        if (prefs.theme) {
+            // Sync standalone key with prefs
+            localStorage.setItem('vidveil-theme', prefs.theme);
+            return prefs.theme;
+        }
+    } catch (e) {}
+    // Fall back to standalone key, default to 'auto' per AI.md PART 16
+    return localStorage.getItem('vidveil-theme') || 'auto';
 }
 
 // Get the effective theme (resolves 'auto' to actual light/dark)
@@ -1676,7 +1685,7 @@ if (document.readyState === 'loading') {
         var hasPreview = previewUrl && previewUrl.length > 0;
         card.dataset.hasPreview = hasPreview ? '1' : '';
         // Proxy preview URL to avoid CORS issues
-        var proxiedPreviewUrl = hasPreview ? '/proxy/videos?url=' + encodeURIComponent(previewUrl) : '';
+        var proxiedPreviewUrl = hasPreview ? '/api/v1/proxy/videos?url=' + encodeURIComponent(previewUrl) : '';
         var downloadUrl = r.download_url || '';
         var hasDownload = downloadUrl && downloadUrl.length > 0;
 

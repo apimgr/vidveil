@@ -172,8 +172,9 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 	var allResults []model.VideoResult
 	var enginesUsed []string
 	var enginesFailed []string
-	// Track seen URLs for deduplication
-	seen := make(map[string]bool)
+	// Track seen URLs and titles for deduplication
+	seenURLs := make(map[string]bool)
+	seenTitles := make(map[string]bool)
 	// Track per-engine stats
 	engineStats := make(map[string]model.EngineStatInfo)
 
@@ -204,12 +205,22 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 				if !resultMatchesAllTerms(r, query) {
 					continue
 				}
-				// Deduplicate by normalized URL (handles http/https, www, trailing slash)
+				// Deduplicate by normalized URL and title
 				normalizedURL := normalizeURL(r.URL)
-				if seen[normalizedURL] {
+				normalizedTitle := normalizeTitle(r.Title)
+				// Check URL first
+				if seenURLs[normalizedURL] {
 					continue
 				}
-				seen[normalizedURL] = true
+				// Check normalized title (for cross-engine duplicates)
+				if normalizedTitle != "" && seenTitles[normalizedTitle] {
+					continue
+				}
+				// Mark as seen
+				seenURLs[normalizedURL] = true
+				if normalizedTitle != "" {
+					seenTitles[normalizedTitle] = true
+				}
 				allResults = append(allResults, r)
 				resultCount++
 			}
@@ -624,6 +635,46 @@ func normalizeURL(urlStr string) string {
 	return normalized
 }
 
+// normalizeTitle normalizes a title for fuzzy deduplication
+// Removes special characters, normalizes whitespace, sorts words alphabetically
+// This catches cross-engine duplicates with identical or near-identical titles
+func normalizeTitle(title string) string {
+	if title == "" {
+		return ""
+	}
+
+	// Lowercase
+	normalized := strings.ToLower(title)
+
+	// Remove special characters (keep only alphanumeric and spaces)
+	var result strings.Builder
+	for _, r := range normalized {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == ' ' {
+			result.WriteRune(r)
+		}
+	}
+	normalized = result.String()
+
+	// Split into words and filter out short words (likely noise)
+	words := strings.Fields(normalized)
+	var significantWords []string
+	for _, w := range words {
+		if len(w) > 2 { // Keep words with > 2 chars
+			significantWords = append(significantWords, w)
+		}
+	}
+
+	// Title too short after filtering - return empty to skip title dedup
+	if len(significantWords) < 3 {
+		return ""
+	}
+
+	// Sort words for position-independent matching
+	sort.Strings(significantWords)
+
+	return strings.Join(significantWords, " ")
+}
+
 // resultMatchesAllTerms checks if a video result matches ALL search terms using synonym expansion
 // This implements AND logic: "pregnant teen lesbian" only returns results containing ALL three terms
 // Each term can match via any of its synonyms (e.g., "teen" matches "18", "young", "barely legal", etc.)
@@ -680,9 +731,11 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 		var wg sync.WaitGroup
 		minDuration := m.appConfig.Search.MinDurationSeconds
 
-		// Shared deduplication map with mutex for concurrent access
+		// Shared deduplication maps with mutex for concurrent access
+		// Check both URL and normalized title to catch cross-engine duplicates
 		var seenMu sync.Mutex
-		seen := make(map[string]bool)
+		seenURLs := make(map[string]bool)
+		seenTitles := make(map[string]bool)
 
 		for _, engine := range enginesToUse {
 			wg.Add(1)
@@ -770,14 +823,28 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						continue
 					}
 
-					// Deduplicate by normalized URL (handles http/https, www, trailing slash differences)
+					// Deduplicate by normalized URL and title
+					// URL handles: http/https, www, trailing slash differences
+					// Title handles: cross-engine duplicates with matching content
 					normalizedURL := normalizeURL(r.URL)
+					normalizedTitle := normalizeTitle(r.Title)
+
 					seenMu.Lock()
-					if seen[normalizedURL] {
+					// Check URL first
+					if seenURLs[normalizedURL] {
 						seenMu.Unlock()
 						continue
 					}
-					seen[normalizedURL] = true
+					// Check normalized title (for cross-engine duplicates)
+					if normalizedTitle != "" && seenTitles[normalizedTitle] {
+						seenMu.Unlock()
+						continue
+					}
+					// Mark as seen
+					seenURLs[normalizedURL] = true
+					if normalizedTitle != "" {
+						seenTitles[normalizedTitle] = true
+					}
 					seenMu.Unlock()
 
 					select {

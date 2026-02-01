@@ -1395,68 +1395,11 @@ if (document.readyState === 'loading') {
     var hasMoreResults = true;
     var infiniteScrollObserver = null;
 
-    // Deduplication: track seen URLs and normalized titles
-    var seenUrls = new Set();
-    var seenTitles = new Set();
-
     // Preferences loaded from storage
     var userPrefs = {};
 
-    // Normalize URL for deduplication (extract video ID pattern)
-    function normalizeUrl(url) {
-        if (!url) return '';
-        try {
-            var u = new URL(url);
-            // Remove tracking params and normalize
-            u.search = '';
-            u.hash = '';
-            var path = u.pathname.replace(/\/+$/, ''); // Remove trailing slashes
-            return u.hostname + path;
-        } catch (e) {
-            return url.toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '');
-        }
-    }
-
-    // Normalize title for fuzzy matching
-    function normalizeTitle(title) {
-        if (!title) return '';
-        return title
-            .toLowerCase()
-            .replace(/[^\w\s]/g, '') // Remove special characters
-            .replace(/\s+/g, ' ')    // Normalize whitespace
-            .trim()
-            .split(' ')
-            .filter(function(w) { return w.length > 2; }) // Keep words > 2 chars
-            .sort()
-            .join(' ');
-    }
-
-    // Check if a result is a duplicate
-    function isDuplicateResult(r) {
-        if (!r || !r.url) return true;
-
-        // Check exact URL
-        if (seenUrls.has(r.url)) return true;
-
-        // Check normalized URL
-        var normUrl = normalizeUrl(r.url);
-        if (seenUrls.has(normUrl)) return true;
-
-        // Check normalized title (catches cross-engine duplicates)
-        var normTitle = normalizeTitle(r.title);
-        if (normTitle && normTitle.length > 20 && seenTitles.has(normTitle)) return true;
-
-        // Not a duplicate - add to seen sets
-        seenUrls.add(r.url);
-        seenUrls.add(normUrl);
-        if (normTitle && normTitle.length > 20) {
-            seenTitles.add(normTitle);
-        }
-
-        return false;
-    }
-
-    // Note: AND-based term filtering with synonym expansion is handled server-side
+    // Note: Deduplication is handled server-side in manager.go
+    // AND-based term filtering with synonym expansion is also handled server-side
     // in manager.go using taxonomy.go. Client-side only handles duration/quality/source/preview filters.
 
     function initSearchPage() {
@@ -1518,10 +1461,6 @@ if (document.readyState === 'loading') {
 
     function streamResults(minDuration) {
         if (!searchQuery) return;
-
-        // Reset deduplication sets for new search
-        seenUrls.clear();
-        seenTitles.clear();
 
         // Build search URL with optional parameters
         var searchUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery);
@@ -1587,17 +1526,12 @@ if (document.readyState === 'loading') {
                 return;
             }
 
-            // Got a result
+            // Got a result (already deduplicated server-side)
             if (data.result && data.result.title) {
                 var r = data.result;
 
-                // Apply min duration filter
+                // Apply min duration filter (client-side additional filter)
                 if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
-                    return;
-                }
-
-                // Check for duplicates (by URL and normalized title)
-                if (isDuplicateResult(r)) {
                     return;
                 }
 
@@ -1683,15 +1617,12 @@ if (document.readyState === 'loading') {
             showSearchElement('search-meta');
             showSearchElement('filters');
 
+            // Results already deduplicated server-side
             var results = data.data.results;
             for (var i = 0; i < results.length; i++) {
                 var r = results[i];
-                // Apply min duration filter
+                // Apply min duration filter (client-side additional filter)
                 if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
-                    continue;
-                }
-                // Check for duplicates
-                if (isDuplicateResult(r)) {
                     continue;
                 }
                 allResults.push(r);
@@ -2267,19 +2198,16 @@ if (document.readyState === 'loading') {
             // Skip done/error from individual engines
             if (data.done || data.error) return;
 
-            // Got a result
+            // Got a result (already deduplicated server-side)
             if (data.result && data.result.title) {
                 gotResults = true;
                 var r = data.result;
 
-                // Check for duplicates (by URL and normalized title)
-                if (!isDuplicateResult(r)) {
-                    allResults.push(r);
-                    addResultCard(r);
+                allResults.push(r);
+                addResultCard(r);
 
-                    var countEl = document.getElementById('result-count');
-                    if (countEl) countEl.textContent = allResults.length;
-                }
+                var countEl = document.getElementById('result-count');
+                if (countEl) countEl.textContent = allResults.length;
             }
         };
 

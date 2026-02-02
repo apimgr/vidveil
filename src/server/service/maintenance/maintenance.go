@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -535,29 +536,38 @@ func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) er
 }
 
 // CheckUpdate checks for available updates from GitHub releases
+// Per AI.md PART 23: Respects update branch setting (stable, beta, daily)
 func (m *MaintenanceManager) CheckUpdate() (*UpdateInfo, error) {
-	// Fetch latest release from GitHub API
-	resp, err := http.Get("https://api.github.com/repos/apimgr/vidveil/releases/latest")
+	branch := m.GetUpdateBranch()
+	currentVersion := strings.TrimPrefix(m.version, "v")
+
+	var release *GitHubRelease
+	var err error
+
+	switch branch {
+	case "stable":
+		// Stable: fetch latest release (non-prerelease)
+		release, err = m.fetchLatestRelease()
+	case "beta":
+		// Beta: fetch latest release containing "-beta" in tag
+		release, err = m.fetchLatestBetaRelease()
+	case "daily":
+		// Daily: fetch latest release matching YYYYMMDDHHMM format
+		release, err = m.fetchLatestDailyRelease()
+	default:
+		// Default to stable
+		release, err = m.fetchLatestRelease()
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to check updates: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
-	}
-
-	var release GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, fmt.Errorf("failed to parse release info: %w", err)
+		return nil, err
 	}
 
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
-	currentVersion := strings.TrimPrefix(m.version, "v")
 
 	info := &UpdateInfo{
-		CurrentVersion: currentVersion,
-		LatestVersion:  latestVersion,
+		CurrentVersion:  currentVersion,
+		LatestVersion:   latestVersion,
 		UpdateAvailable: latestVersion != currentVersion && compareVersions(latestVersion, currentVersion) > 0,
 		ReleaseURL:      release.HTMLURL,
 		ReleaseNotes:    release.Body,
@@ -574,6 +584,81 @@ func (m *MaintenanceManager) CheckUpdate() (*UpdateInfo, error) {
 	}
 
 	return info, nil
+}
+
+// fetchLatestRelease fetches the latest stable release
+func (m *MaintenanceManager) fetchLatestRelease() (*GitHubRelease, error) {
+	resp, err := http.Get("https://api.github.com/repos/apimgr/vidveil/releases/latest")
+	if err != nil {
+		return nil, fmt.Errorf("failed to check updates: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, fmt.Errorf("failed to parse release info: %w", err)
+	}
+
+	return &release, nil
+}
+
+// fetchLatestBetaRelease fetches the latest beta release (tag contains "-beta")
+func (m *MaintenanceManager) fetchLatestBetaRelease() (*GitHubRelease, error) {
+	releases, err := m.fetchAllReleases()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, release := range releases {
+		if strings.Contains(strings.ToLower(release.TagName), "-beta") {
+			return &release, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no beta releases found")
+}
+
+// fetchLatestDailyRelease fetches the latest daily release (tag matches YYYYMMDDHHMM)
+func (m *MaintenanceManager) fetchLatestDailyRelease() (*GitHubRelease, error) {
+	releases, err := m.fetchAllReleases()
+	if err != nil {
+		return nil, err
+	}
+
+	// Daily builds have tags like "202602011200" (12 digits)
+	dailyPattern := regexp.MustCompile(`^\d{12}$`)
+
+	for _, release := range releases {
+		if dailyPattern.MatchString(release.TagName) {
+			return &release, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no daily releases found")
+}
+
+// fetchAllReleases fetches all releases (sorted by date, newest first)
+func (m *MaintenanceManager) fetchAllReleases() ([]GitHubRelease, error) {
+	resp, err := http.Get("https://api.github.com/repos/apimgr/vidveil/releases?per_page=50")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch releases: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	var releases []GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return nil, fmt.Errorf("failed to parse releases: %w", err)
+	}
+
+	return releases, nil
 }
 
 // ApplyUpdate downloads and applies an update

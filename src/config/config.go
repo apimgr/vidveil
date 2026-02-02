@@ -240,9 +240,11 @@ type NotificationTypesConfig struct {
 	CertExpiry bool `yaml:"cert_expiry"`
 }
 
-// ScheduleConfig holds scheduler settings
+// ScheduleConfig holds scheduler settings per AI.md PART 19
 type ScheduleConfig struct {
 	Enabled       bool   `yaml:"enabled"`
+	Timezone      string `yaml:"timezone"`
+	CatchUpWindow string `yaml:"catch_up_window"`
 	CertRenewal   string `yaml:"cert_renewal"`
 	Notifications string `yaml:"notifications"`
 	Cleanup       string `yaml:"cleanup"`
@@ -773,6 +775,8 @@ func DefaultAppConfig() *AppConfig {
 			},
 			Schedule: ScheduleConfig{
 				Enabled:       true,
+				Timezone:      "America/New_York",
+				CatchUpWindow: "1h",
 				CertRenewal:   "daily",
 				Notifications: "hourly",
 				Cleanup:       "weekly",

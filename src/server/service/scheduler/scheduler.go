@@ -61,6 +61,8 @@ type Scheduler struct {
 	maxHist  int
 	// Optional database for persistence per AI.md PART 19
 	db *sql.DB
+	// Catch-up window per AI.md PART 19: run missed tasks if within this duration
+	catchUpWindow time.Duration
 }
 
 // NewScheduler creates a new scheduler without database persistence
@@ -90,6 +92,14 @@ func (s *Scheduler) SetDB(db *sql.DB) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db = db
+}
+
+// SetCatchUpWindow sets the catch-up window per AI.md PART 19
+// Missed tasks within this window will run on startup
+func (s *Scheduler) SetCatchUpWindow(window time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.catchUpWindow = window
 }
 
 // loadTaskStateFromDB loads persisted task state from database
@@ -338,6 +348,7 @@ func parseInterval(schedule string) (time.Duration, error) {
 }
 
 // Start starts the scheduler
+// Per AI.md PART 19: Checks for missed tasks within catch-up window and runs them
 func (s *Scheduler) Start(ctx context.Context) {
 	s.mu.Lock()
 	if s.running {
@@ -346,9 +357,46 @@ func (s *Scheduler) Start(ctx context.Context) {
 	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.running = true
+	catchUpWindow := s.catchUpWindow
 	s.mu.Unlock()
 
+	// Check for missed tasks within catch-up window per AI.md PART 19
+	if catchUpWindow > 0 {
+		s.runMissedTasks(catchUpWindow)
+	}
+
 	go s.run()
+}
+
+// runMissedTasks runs tasks that were missed while the server was down
+// Per AI.md PART 19: Only runs if missed within catch_up_window
+func (s *Scheduler) runMissedTasks(window time.Duration) {
+	s.mu.RLock()
+	tasks := make([]*ScheduledTask, 0, len(s.tasks))
+	for _, task := range s.tasks {
+		tasks = append(tasks, task)
+	}
+	s.mu.RUnlock()
+
+	now := time.Now()
+	cutoff := now.Add(-window)
+
+	// Sort tasks by NextRun (oldest first) for proper ordering
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].NextRun.Before(tasks[j].NextRun)
+	})
+
+	for _, task := range tasks {
+		// Skip if not enabled or not missed
+		if !task.Enabled {
+			continue
+		}
+		// Task is missed if NextRun is in the past but after cutoff
+		if task.NextRun.Before(now) && task.NextRun.After(cutoff) {
+			fmt.Printf("Running missed task: %s (was due at %s)\n", task.Name, task.NextRun.Format(time.RFC3339))
+			go s.runTask(task)
+		}
+	}
 }
 
 // Stop stops the scheduler

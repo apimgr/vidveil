@@ -480,6 +480,14 @@ func main() {
 	// Task state (run_count, fail_count, last_run) survives restarts
 	sched := scheduler.NewSchedulerWithDB(migrationMgr.GetDB())
 
+	// Set catch-up window per AI.md PART 19
+	// Missed tasks within this window will run on startup
+	if appConfig.Server.Schedule.CatchUpWindow != "" {
+		if catchUpDuration, err := time.ParseDuration(appConfig.Server.Schedule.CatchUpWindow); err == nil {
+			sched.SetCatchUpWindow(catchUpDuration)
+		}
+	}
+
 	// Register all built-in tasks per AI.md PART 19
 	sched.RegisterBuiltinTasks(scheduler.BuiltinTaskFuncs{
 		SSLRenewal: func(ctx context.Context) error {
@@ -1062,6 +1070,11 @@ func handleServiceCommand(cmd string) {
 		}
 
 	case "--install":
+		// Per AI.md PART 24: Check escalation before service install
+		if err := system.HandleEscalation("Service installation"); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Println("Installing Vidveil as system service...")
 		if err := svc.Install(); err != nil {
 			fmt.Fprintf(os.Stderr, "❌ Failed to install: %v\n", err)
@@ -1069,6 +1082,29 @@ func handleServiceCommand(cmd string) {
 		}
 
 	case "--uninstall":
+		// Per AI.md PART 24: Confirmation required before destructive action
+		fmt.Println("⚠️  WARNING: This will:")
+		fmt.Println("   • Stop the service (if running)")
+		fmt.Println("   • Remove service configuration")
+		fmt.Println("   • Delete data, configs, and logs")
+		fmt.Println("   • Remove system user (if created)")
+		fmt.Println()
+		fmt.Print("This will delete ALL data, configs, and the system user. Continue? [y/N] ")
+
+		var response string
+		fmt.Scanln(&response)
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response != "y" && response != "yes" {
+			fmt.Println("Cancelled.")
+			os.Exit(0)
+		}
+
+		// Per AI.md PART 24: Check escalation before service uninstall
+		if err := system.HandleEscalation("Service uninstallation"); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+			os.Exit(1)
+		}
+
 		fmt.Println("Uninstalling Vidveil system service...")
 		if err := svc.Uninstall(); err != nil {
 			fmt.Fprintf(os.Stderr, "❌ Failed to uninstall: %v\n", err)

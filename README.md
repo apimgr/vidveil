@@ -256,7 +256,7 @@ Access at `/admin` (setup token shown on first run).
 | `/admin/server/email` | Email | SMTP configuration |
 | `/admin/server/scheduler` | Scheduler | Scheduled tasks |
 | `/admin/server/logs` | Logs | Access and error logs |
-| `/admin/server/database` | Database | SQLite management |
+| `/admin/server/database` | Database | Database management (SQLite/PostgreSQL/MySQL/MSSQL) |
 | `/admin/server/security/*` | Security | Auth, tokens, rate limiting, firewall |
 | `/admin/server/network/*` | Network | Tor, GeoIP, content restriction, blocklists |
 | `/admin/server/system/*` | System | Backup, maintenance, updates |

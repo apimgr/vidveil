@@ -9,10 +9,11 @@ import (
 	"sync"
 	"time"
 
-	// Database drivers - imported for side effects
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "github.com/microsoft/go-mssqldb"
+	// Database drivers - imported for side effects per AI.md PART 10
+	_ "github.com/go-sql-driver/mysql"    // MySQL/MariaDB
+	_ "github.com/jackc/pgx/v5/stdlib"    // PostgreSQL
+	_ "github.com/microsoft/go-mssqldb"   // Microsoft SQL Server
+	_ "modernc.org/sqlite"                // SQLite (pure Go)
 )
 
 // Driver represents a database driver type

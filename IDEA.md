@@ -599,6 +599,20 @@ Preview URLs are extracted from common data attributes on container, image, or l
 
 ---
 
+### Database Configuration
+
+**Supported Backends:**
+- SQLite (default) - embedded, zero-config
+- PostgreSQL - for cluster mode or high-concurrency
+- MySQL/MariaDB - for cluster mode or high-concurrency
+- Microsoft SQL Server - enterprise deployments
+
+**Default:** SQLite with WAL mode, 5s busy timeout
+
+**Cluster Mode:** When using PostgreSQL/MySQL/MSSQL, multiple VidVeil instances can share the same database for horizontal scaling.
+
+---
+
 ## Notes
 
 - VidVeil has NO user accounts - privacy-first, stateless design

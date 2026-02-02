@@ -10,7 +10,7 @@
 
 ## Completed
 
-- AI.md updated from TEMPLATE.md with vidveil/apimgr values
+- AI.md refreshed from TEMPLATE.md with vidveil/apimgr values (2026-02-01)
 - Fixed Tor health check returning 503 when binary unavailable
 - Added @performer autocomplete support (triggered by @ prefix)
 - Fixed URL deduplication with normalization

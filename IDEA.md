@@ -128,6 +128,7 @@ type CombinedSuggestion struct {
 - All thumbnails proxied through server to prevent tracking
 - Autocomplete suggests bang shortcuts as user types `!`
 - Results are merged from all queried engines
+- URL deduplication with normalization (removes duplicates across engines)
 - Page parameter supports infinite scroll
 - No user accounts - stateless, privacy-first design
 - Admin panel requires authentication (server-admin only)
@@ -175,6 +176,13 @@ type CombinedSuggestion struct {
 - Acknowledgment cookie (30 days) for soft_block mode
 - Default restricted US states: Texas, Utah, Louisiana, Arkansas, Montana, Mississippi, Virginia, North Carolina
 
+**AI Content Filter (Server-Side):**
+- Filters out AI-generated/deepfake content by default
+- Server-wide default: enabled (AI content blocked)
+- Users can override via preference to show AI content
+- Keyword-based detection in titles and tags
+- Configurable keyword list in admin panel
+
 **Client-Side Filtering (applied after results load):**
 - Duration: Any, Under 10min, 10-30min, Over 30min
 - Quality: Any, 4K (2160p), 1080p HD, 720p
@@ -183,6 +191,7 @@ type CombinedSuggestion struct {
 - Minimum duration: 0, 1, 3, 5, 10, 20, 30 minutes
 
 **Client-Side Sorting:**
+- Preview First (toggle): Videos with preview capability sorted to top
 - Relevance (original order from engines)
 - Duration descending (longest first)
 - Duration ascending (shortest first)
@@ -353,7 +362,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 - Open links in new tab (toggle) - default: Yes
 
 **Default Filters (auto-applied to new searches):**
-- Show only videos with preview (toggle) - default: Yes
+- Show videos with preview first (toggle) - default: Yes (sort priority, not exclusive filter)
 - Default duration filter: Any, Under 10min, 10-30min, Over 30min - default: Any
 - Default quality filter: Any, 4K, 1080p HD, 720p - default: Any
 - Minimum quality filter (server-side): Any, 240p+, 360p+, 480p+, 720p+, 1080p+, 4K only - default: 360p+
@@ -373,6 +382,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 - Use Tor for all searches (toggle) - default: No
 - Proxy thumbnails through server (toggle) - default: Yes
 - Forward IP for geo-targeted results (toggle) - default: No (admin must enable)
+- Show AI-generated content (toggle) - default: No (AI content filtered out)
 
 **Search Engines:**
 - Tier-based toggle switches (all tiers enabled by default)

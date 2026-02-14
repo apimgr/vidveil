@@ -524,9 +524,8 @@ func main() {
 			return adminSvc.CleanupExpiredTokens()
 		},
 		LogRotation: func(ctx context.Context) error {
-			// Log rotation per PART 11
-			// Logging service handles rotation automatically via RotatingFile
-			// This task is a placeholder for manual rotation trigger if needed
+			// Log rotation per AI.md PART 19: trigger log file reopen/rotation
+			logger.Reopen()
 			return nil
 		},
 		BackupAuto: func(ctx context.Context) error {

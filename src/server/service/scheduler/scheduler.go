@@ -102,6 +102,25 @@ func (s *Scheduler) SetCatchUpWindow(window time.Duration) {
 	s.catchUpWindow = window
 }
 
+// Query timeout helpers per AI.md PART 10: All queries MUST have timeouts
+func (s *Scheduler) execCtx(query string, args ...interface{}) (sql.Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return s.db.ExecContext(ctx, query, args...)
+}
+
+func (s *Scheduler) queryCtx(query string, args ...interface{}) (*sql.Rows, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return s.db.QueryContext(ctx, query, args...)
+}
+
+func (s *Scheduler) queryRowCtx(query string, args ...interface{}) *sql.Row {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return s.db.QueryRowContext(ctx, query, args...)
+}
+
 // loadTaskStateFromDB loads persisted task state from database
 // Called during RegisterTask to restore run_count, fail_count, last_run, etc.
 func (s *Scheduler) loadTaskStateFromDB(taskID string) (*ScheduledTask, error) {
@@ -109,7 +128,7 @@ func (s *Scheduler) loadTaskStateFromDB(taskID string) (*ScheduledTask, error) {
 		return nil, nil
 	}
 
-	row := s.db.QueryRow(`
+	row := s.queryRowCtx(`
 		SELECT id, name, schedule, enabled, last_run, next_run,
 		       last_result, last_error, run_count, fail_count
 		FROM scheduled_tasks WHERE id = ?`, taskID)
@@ -152,7 +171,7 @@ func (s *Scheduler) saveTaskStateToDB(task *ScheduledTask) error {
 		return nil
 	}
 
-	_, err := s.db.Exec(`
+	_, err := s.execCtx(`
 		INSERT INTO scheduled_tasks (id, name, schedule, enabled, last_run, next_run,
 		                             last_result, last_error, run_count, fail_count)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -179,7 +198,7 @@ func (s *Scheduler) saveHistoryToDB(hist TaskHistory) error {
 		return nil
 	}
 
-	_, err := s.db.Exec(`
+	_, err := s.execCtx(`
 		INSERT INTO task_history (task_id, start_time, end_time, duration_ms, result, error)
 		VALUES (?, ?, ?, ?, ?, ?)`,
 		hist.TaskID, hist.StartTime, hist.EndTime,
@@ -197,7 +216,7 @@ func (s *Scheduler) LoadHistoryFromDB(limit int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rows, err := s.db.Query(`
+	rows, err := s.queryCtx(`
 		SELECT task_id, start_time, end_time, duration_ms, result, error
 		FROM task_history
 		ORDER BY start_time DESC

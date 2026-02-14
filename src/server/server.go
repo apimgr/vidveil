@@ -475,7 +475,7 @@ func (s *Server) setupRoutes() {
 		// Debug endpoints (development only per IDEA.md)
 		r.Route("/debug", func(r chi.Router) {
 			r.Get("/engines", h.DebugEnginesList)
-			r.Get("/engine/{name}", h.DebugEngine)
+			r.Get("/engines/{name}", h.DebugEngine)
 		})
 
 		// Health and version (public)

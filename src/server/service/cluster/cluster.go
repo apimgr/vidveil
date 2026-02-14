@@ -98,6 +98,25 @@ func generateNodeID() (string, error) {
 	return fmt.Sprintf("%s-%s", hostname, hex.EncodeToString(b)), nil
 }
 
+// Query timeout helpers per AI.md PART 10: All queries MUST have timeouts
+func (m *ClusterManager) execCtx(query string, args ...interface{}) (sql.Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return m.db.ExecContext(ctx, query, args...)
+}
+
+func (m *ClusterManager) queryCtx(query string, args ...interface{}) (*sql.Rows, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return m.db.QueryContext(ctx, query, args...)
+}
+
+func (m *ClusterManager) queryRowCtx(query string, args ...interface{}) *sql.Row {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return m.db.QueryRowContext(ctx, query, args...)
+}
+
 // Start starts the cluster manager
 func (m *ClusterManager) Start(ctx context.Context) error {
 	m.mu.Lock()
@@ -134,7 +153,7 @@ func (m *ClusterManager) Stop() {
 
 	// Mark node as offline per AI.md PART 10
 	if m.db != nil {
-		m.db.Exec("UPDATE cluster_nodes SET status = ? WHERE id = ?", NodeStateOffline, m.nodeID)
+		m.execCtx("UPDATE cluster_nodes SET status = ? WHERE id = ?", NodeStateOffline, m.nodeID)
 	}
 }
 
@@ -147,7 +166,7 @@ func (m *ClusterManager) registerNode() error {
 	port := 0
 
 	// Use 'healthy' state per AI.md PART 10
-	_, err := m.db.Exec(`
+	_, err := m.execCtx(`
 		INSERT OR REPLACE INTO cluster_nodes (id, hostname, address, port, last_heartbeat, status)
 		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
 	`, m.nodeID, hostname, address, port, NodeStateHealthy)
@@ -165,7 +184,7 @@ func (m *ClusterManager) heartbeatLoop() {
 		case <-m.ctx.Done():
 			return
 		case <-ticker.C:
-			m.db.Exec("UPDATE cluster_nodes SET last_heartbeat = CURRENT_TIMESTAMP WHERE id = ?", m.nodeID)
+			m.execCtx("UPDATE cluster_nodes SET last_heartbeat = CURRENT_TIMESTAMP WHERE id = ?", m.nodeID)
 		}
 	}
 }
@@ -199,7 +218,7 @@ func (m *ClusterManager) electPrimary() {
 
 	// Mark nodes as offline (5+ minutes without heartbeat)
 	offlineThreshold := now.Add(-m.offlineTime)
-	m.db.Exec(`
+	m.execCtx(`
 		UPDATE cluster_nodes
 		SET status = ?, is_primary = 0
 		WHERE last_heartbeat < ? AND status != ? AND status != ?
@@ -207,7 +226,7 @@ func (m *ClusterManager) electPrimary() {
 
 	// Mark nodes as degraded (90 seconds - 5 minutes without heartbeat)
 	degradedThreshold := now.Add(-m.degradedTime)
-	m.db.Exec(`
+	m.execCtx(`
 		UPDATE cluster_nodes
 		SET status = ?
 		WHERE last_heartbeat < ? AND last_heartbeat >= ? AND status = ?
@@ -215,7 +234,7 @@ func (m *ClusterManager) electPrimary() {
 
 	// Mark nodes as healthy (heartbeat within 30 seconds)
 	healthyThreshold := now.Add(-m.heartbeatInt)
-	m.db.Exec(`
+	m.execCtx(`
 		UPDATE cluster_nodes
 		SET status = ?
 		WHERE last_heartbeat >= ? AND status != ?
@@ -223,7 +242,7 @@ func (m *ClusterManager) electPrimary() {
 
 	// Check if there's a current primary among healthy nodes
 	var primaryID string
-	err := m.db.QueryRow(`
+	err := m.queryRowCtx(`
 		SELECT id FROM cluster_nodes
 		WHERE is_primary = 1 AND status = ?
 		LIMIT 1
@@ -232,7 +251,7 @@ func (m *ClusterManager) electPrimary() {
 	if err == sql.ErrNoRows {
 		// No healthy primary - elect one (node with lowest ID per PART 10)
 		var electID string
-		err := m.db.QueryRow(`
+		err := m.queryRowCtx(`
 			SELECT id FROM cluster_nodes
 			WHERE status = ?
 			ORDER BY id ASC
@@ -240,8 +259,8 @@ func (m *ClusterManager) electPrimary() {
 		`, NodeStateHealthy).Scan(&electID)
 
 		if err == nil && electID != "" {
-			m.db.Exec("UPDATE cluster_nodes SET is_primary = 0")
-			m.db.Exec("UPDATE cluster_nodes SET is_primary = 1 WHERE id = ?", electID)
+			m.execCtx("UPDATE cluster_nodes SET is_primary = 0")
+			m.execCtx("UPDATE cluster_nodes SET is_primary = 1 WHERE id = ?", electID)
 
 			if electID == m.nodeID {
 				wasPrimary := m.isPrimary
@@ -249,7 +268,7 @@ func (m *ClusterManager) electPrimary() {
 				// Only print message in true cluster mode (multiple nodes)
 				// and only when becoming primary (not on initial startup)
 				var nodeCount int
-				m.db.QueryRow("SELECT COUNT(*) FROM cluster_nodes WHERE status = ?", NodeStateHealthy).Scan(&nodeCount)
+				m.queryRowCtx("SELECT COUNT(*) FROM cluster_nodes WHERE status = ?", NodeStateHealthy).Scan(&nodeCount)
 				if nodeCount > 1 && !wasPrimary {
 					fmt.Println("[CLUSTER] This node is now the primary")
 				}
@@ -272,7 +291,7 @@ func (m *ClusterManager) lockCleanupLoop() {
 		case <-m.ctx.Done():
 			return
 		case <-ticker.C:
-			m.db.Exec("DELETE FROM distributed_locks WHERE expires_at < CURRENT_TIMESTAMP")
+			m.execCtx("DELETE FROM distributed_locks WHERE expires_at < CURRENT_TIMESTAMP")
 		}
 	}
 }
@@ -298,7 +317,7 @@ func (m *ClusterManager) GetNodeID() string {
 
 // GetNodes returns all cluster nodes
 func (m *ClusterManager) GetNodes() ([]ClusterNode, error) {
-	rows, err := m.db.Query(`
+	rows, err := m.queryCtx(`
 		SELECT id, hostname, address, port, is_primary, last_heartbeat, joined_at, status
 		FROM cluster_nodes
 		ORDER BY joined_at ASC
@@ -328,7 +347,7 @@ func (m *ClusterManager) AcquireLock(name string, ttl time.Duration) (bool, erro
 	expiresAt := time.Now().Add(ttl)
 
 	// Try to insert the lock
-	result, err := m.db.Exec(`
+	result, err := m.execCtx(`
 		INSERT INTO distributed_locks (name, holder_id, expires_at)
 		SELECT ?, ?, ?
 		WHERE NOT EXISTS (
@@ -348,10 +367,10 @@ func (m *ClusterManager) AcquireLock(name string, ttl time.Duration) (bool, erro
 
 	// Check if we already hold the lock
 	var holderID string
-	err = m.db.QueryRow("SELECT holder_id FROM distributed_locks WHERE name = ?", name).Scan(&holderID)
+	err = m.queryRowCtx("SELECT holder_id FROM distributed_locks WHERE name = ?", name).Scan(&holderID)
 	if err == nil && holderID == m.nodeID {
 		// We hold it, refresh the TTL
-		m.db.Exec("UPDATE distributed_locks SET expires_at = ? WHERE name = ? AND holder_id = ?",
+		m.execCtx("UPDATE distributed_locks SET expires_at = ? WHERE name = ? AND holder_id = ?",
 			expiresAt, name, m.nodeID)
 		return true, nil
 	}
@@ -361,14 +380,14 @@ func (m *ClusterManager) AcquireLock(name string, ttl time.Duration) (bool, erro
 
 // ReleaseLock releases a distributed lock
 func (m *ClusterManager) ReleaseLock(name string) error {
-	_, err := m.db.Exec("DELETE FROM distributed_locks WHERE name = ? AND holder_id = ?", name, m.nodeID)
+	_, err := m.execCtx("DELETE FROM distributed_locks WHERE name = ? AND holder_id = ?", name, m.nodeID)
 	return err
 }
 
 // GetLock returns information about a lock
 func (m *ClusterManager) GetLock(name string) (*DistributedLock, error) {
 	var lock DistributedLock
-	err := m.db.QueryRow(`
+	err := m.queryRowCtx(`
 		SELECT name, holder_id, acquired_at, expires_at, COALESCE(metadata, '')
 		FROM distributed_locks
 		WHERE name = ?
@@ -386,7 +405,7 @@ func (m *ClusterManager) GetLock(name string) (*DistributedLock, error) {
 
 // ListLocks returns all current locks
 func (m *ClusterManager) ListLocks() ([]DistributedLock, error) {
-	rows, err := m.db.Query(`
+	rows, err := m.queryCtx(`
 		SELECT name, holder_id, acquired_at, expires_at, COALESCE(metadata, '')
 		FROM distributed_locks
 		WHERE expires_at > CURRENT_TIMESTAMP
@@ -436,15 +455,15 @@ func (m *ClusterManager) Stats() map[string]interface{} {
 
 	// Count nodes
 	var totalNodes, activeNodes int
-	m.db.QueryRow("SELECT COUNT(*) FROM cluster_nodes").Scan(&totalNodes)
-	m.db.QueryRow("SELECT COUNT(*) FROM cluster_nodes WHERE status = ?", NodeStateHealthy).Scan(&activeNodes)
+	m.queryRowCtx("SELECT COUNT(*) FROM cluster_nodes").Scan(&totalNodes)
+	m.queryRowCtx("SELECT COUNT(*) FROM cluster_nodes WHERE status = ?", NodeStateHealthy).Scan(&activeNodes)
 
 	stats["total_nodes"] = totalNodes
 	stats["active_nodes"] = activeNodes
 
 	// Count locks
 	var lockCount int
-	m.db.QueryRow("SELECT COUNT(*) FROM distributed_locks WHERE expires_at > CURRENT_TIMESTAMP").Scan(&lockCount)
+	m.queryRowCtx("SELECT COUNT(*) FROM distributed_locks WHERE expires_at > CURRENT_TIMESTAMP").Scan(&lockCount)
 	stats["active_locks"] = lockCount
 
 	return stats

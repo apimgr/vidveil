@@ -304,7 +304,7 @@ func (d *AppDatabase) TableExists(tableName string) (bool, error) {
 	}
 
 	var exists int
-	err := d.db.QueryRow(query, tableName).Scan(&exists)
+	err := d.QueryRow(query, tableName).Scan(&exists)
 	return exists > 0, err
 }
 
@@ -321,7 +321,7 @@ func (d *AppDatabase) Version() (string, error) {
 	}
 
 	var version string
-	err := d.db.QueryRow(query).Scan(&version)
+	err := d.QueryRow(query).Scan(&version)
 	return version, err
 }
 

@@ -4,8 +4,9 @@ package graphql
 
 import (
 	"encoding/json"
+	"fmt"
+	"html"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/apimgr/vidveil/src/config"
@@ -75,38 +76,72 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GraphiQL serves the GraphiQL interface
+// GraphiQL serves the GraphQL explorer interface
+// Per AI.md PART 16: Server-side rendered, no client-side frameworks
 func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
+	queryStr := ""
+	resultHTML := ""
+
+	if r.Method == http.MethodPost {
+		r.ParseForm()
+		queryStr = r.FormValue("query")
+		if queryStr != "" {
+			req := Request{Query: queryStr}
+			result := h.executeQuery(req)
+			jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+			resultHTML = `<div class="result"><h2>Result</h2><pre>` + html.EscapeString(string(jsonBytes)) + `</pre></div>`
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html>
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>GraphiQL - Vidveil</title>
+    <title>GraphQL Explorer - VidVeil</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { height: 100%; margin: 0; width: 100%; overflow: hidden; }
-        #graphiql { height: 100vh; }
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:20px}
+        .container{max-width:900px;margin:0 auto}
+        h1{margin-bottom:20px;color:#a78bfa;font-size:24px}
+        h2{font-size:16px;margin-bottom:8px;color:#c0c0c0}
+        .editor{display:flex;flex-direction:column;gap:12px}
+        label{font-weight:600;color:#c0c0c0}
+        textarea{width:100%%;min-height:180px;padding:12px;font-family:"Fira Code",Consolas,monospace;font-size:14px;background:#16213e;color:#e0e0e0;border:1px solid #333;border-radius:6px;resize:vertical;tab-size:2}
+        textarea:focus{outline:none;border-color:#a78bfa}
+        button{padding:10px 24px;background:#a78bfa;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;align-self:flex-start}
+        button:hover{background:#8b5cf6}
+        .result{margin-top:20px}
+        .result pre{background:#16213e;padding:16px;border-radius:6px;overflow-x:auto;white-space:pre-wrap;word-break:break-word;font-family:"Fira Code",Consolas,monospace;font-size:13px;border:1px solid #333;max-height:500px;overflow-y:auto}
+        .examples{margin-top:24px;padding-top:20px;border-top:1px solid #333}
+        .examples ul{list-style:none;margin-top:8px}
+        .examples li{margin-bottom:8px}
+        .examples code{background:#16213e;padding:4px 8px;border-radius:4px;font-size:13px;font-family:"Fira Code",Consolas,monospace;display:inline-block;word-break:break-word}
+        @media(max-width:600px){body{padding:10px}textarea{min-height:140px;font-size:13px}}
     </style>
-    <link rel="stylesheet" href="https://unpkg.com/graphiql/graphiql.min.css" />
 </head>
 <body>
-    <div id="graphiql">Loading...</div>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/graphiql/graphiql.min.js"></script>
-    <script>
-        const fetcher = GraphiQL.createFetcher({
-            url: '/graphql',
-        });
-        ReactDOM.render(
-            React.createElement(GraphiQL, {
-                fetcher,
-                defaultEditorToolsVisibility: true,
-            }),
-            document.getElementById('graphiql'),
-        );
-    </script>
+    <div class="container">
+        <h1>GraphQL Explorer</h1>
+        <form method="POST" class="editor">
+            <label for="query">Query</label>
+            <textarea id="query" name="query" placeholder="{ health { status enginesEnabled } }">%s</textarea>
+            <button type="submit">Execute</button>
+        </form>
+        %s
+        <div class="examples">
+            <h2>Example Queries</h2>
+            <ul>
+                <li><code>{ health { status enginesEnabled } }</code></li>
+                <li><code>{ engines { name displayName enabled available } }</code></li>
+                <li><code>{ bangs { bang engineName displayName shortCode } }</code></li>
+                <li><code>{ search(query: "test") { query results { title url source } searchTimeMs } }</code></li>
+                <li><code>{ autocomplete(prefix: "x") { bang displayName } }</code></li>
+            </ul>
+        </div>
+    </div>
 </body>
-</html>`))
+</html>`, html.EscapeString(queryStr), resultHTML)
 }
 
 // executeQuery executes a GraphQL query
@@ -494,6 +529,3 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
 }
-
-// Unused import guard
-var _ = strconv.Itoa

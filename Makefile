@@ -106,7 +106,7 @@ build:
 		for platform in $(PLATFORMS); do \
 			OS=$${platform%/*}; \
 			ARCH=$${platform#*/}; \
-			OUTPUT=$(BINDIR)/$(PROJECT)-$$OS-$$ARCH-cli; \
+			OUTPUT=$(BINDIR)/$(PROJECT)-cli-$$OS-$$ARCH; \
 			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 			echo "Building CLI $$OS/$$ARCH..."; \
 			$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \

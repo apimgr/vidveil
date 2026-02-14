@@ -203,7 +203,7 @@ IDEA.md is the project PLAN. AI.md (this file) is the SOURCE OF TRUTH.
 | **8 platforms required** | linux, darwin, windows, freebsd × amd64, arm64 |
 | **Binary naming** | `vidveil-{os}-{arch}` (windows adds `.exe`) |
 | **NEVER use -musl suffix** | Alpine builds are NOT musl-specific |
-| **Build source** | ALWAYS `src` directory |
+| **Build source** | ALWAYS `./src` directory |
 
 ## Container-Only Development
 
@@ -470,7 +470,7 @@ if cacheSize > 1024*1024*1024 {
 
 | Rule | Description |
 |------|-------------|
-| **SQLite default** | `/data/db/sqlite/server.db` and `/data/db/sqlite/users.db` |
+| **SQLite default** | `{db_dir}/server.db` and `{db_dir}/users.db` (see PART 4 for platform-specific paths) |
 | **Password hashing** | Argon2id - NEVER bcrypt |
 | **Valkey/Redis** | Every app supports it for caching/clustering |
 
@@ -486,6 +486,7 @@ if cacheSize > 1024*1024*1024 {
 --pid {pid_file}
 --address {listen}
 --port {port}
+--baseurl {path}             # URL path prefix (default: /)
 --debug                      # Enable debug mode
 --status                     # Show status and health (exit 0=healthy, 1=unhealthy)
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
@@ -609,12 +610,34 @@ src/
 
 ### When to Split Files
 
+**File length guidelines are CONTEXTUAL, not rigid rules.**
+
+| File Type | Guideline | Reason |
+|-----------|-----------|--------|
+| **Handlers** (`handler.go`) | ~300-500 lines | Should be thin - delegate to services |
+| **Services** (`service.go`) | ~500-800 lines | Business logic can be denser |
+| **Models** (`model.go`) | ~200-400 lines | Structs + validation, split by domain if larger |
+| **Store/DB** (`store.go`) | ~400-600 lines | CRUD operations, split by entity if larger |
+| **Middleware** | ~200-300 lines | Each middleware should be focused |
+| **Generated code** | No limit | Auto-generated files can be any size |
+| **Embedded assets** | No limit | Binary/text embeds are naturally large |
+| **Test files** | ~500-800 lines | Tests can be verbose, split by feature if unwieldy |
+
+**Split based on COHESION, not just line count:**
+
 | Split When | Into | Example |
 |------------|------|---------|
-| File > 500 lines | Feature-specific files | `user.go` → `user_model.go`, `user_service.go`, `user_handler.go` |
+| Multiple unrelated features | Feature-specific files | `user.go` → `user_model.go`, `user_service.go`, `user_handler.go` |
 | Multiple handlers | Handler per domain | `handler.go` → `handler/user.go`, `handler/admin.go` |
 | Multiple services | Service per domain | `service.go` → `service/user.go`, `service/email.go` |
-| Test file > 300 lines | Test per feature | `server_test.go` → `auth_test.go`, `user_test.go` |
+| Test file covers many features | Test per feature | `server_test.go` → `auth_test.go`, `user_test.go` |
+| File hard to navigate | Logical groupings | Split when you can't find things quickly |
+
+**Signs a file needs splitting:**
+- You scroll constantly to find related code
+- Multiple unrelated concerns in one file
+- Hard to name what the file "does" in one phrase
+- Merge conflicts frequent in that file
 
 ### Directory Purpose (Clear Naming)
 
@@ -755,6 +778,7 @@ Quick reference: Accept `yes/no`, `true/false`, `1/0`, `on/off`, `enable/disable
 | `go.mod` | ✓ | Go module |
 | `go.sum` | ✓ | Go dependencies |
 | `release.txt` | ✓ | Version source of truth |
+| `site.txt` | Optional | Official site URL (single line, never guess) |
 | `.gitignore` | ✓ | Git ignore rules |
 | `.dockerignore` | ✓ | Docker ignore rules |
 | `.gitattributes` | Optional | Git attributes |
@@ -838,6 +862,12 @@ paths:
 - ❌ Add features not in spec without asking
 - ❌ Use "I think" or "probably" - KNOW from spec or ASK
 - ❌ Ask multiple plain-text questions in separate messages - use AskUserQuestion wizard instead
+- ❌ Use generic placeholder content ("Your app name", "Feature 1")
+- ❌ Create /server/about or /server/help with placeholder text
+- ❌ Leave TODO comments in code - implement fully or don't implement
+- ❌ Create stub functions or "future" placeholders
+- ❌ Partial implementations - every feature must be 100% complete
+- ❌ "I'll come back to this later" - there is no later, do it NOW
 
 ## REQUIRED - ALWAYS DO
 - ✅ Read AI.md PART 0, 1 at start of EVERY conversation
@@ -848,6 +878,9 @@ paths:
 - ✅ Keep all docs in sync with code
 - ✅ When unsure, ASK - never guess or assume
 - ✅ Use AskUserQuestion wizard - one question at a time, options + custom input
+- ✅ Source /server/about and /server/help content from IDEA.md
+- ✅ Implement features 100% complete - no stubs, no TODOs, no "future"
+- ✅ ONE thing at a time - finish current task completely before starting another
 
 ## KEY DECISIONS (pre-answered)
 | Question | Answer | Reference |
@@ -895,6 +928,10 @@ Before completing ANY task:
 - ❌ Desktop-first CSS (use mobile-first)
 - ❌ Inline CSS or JavaScript
 - ❌ JavaScript alerts (use toast notifications)
+- ❌ Generic placeholder content in /server/about or /server/help pages
+- ❌ "Your application name here" or "Feature 1, Feature 2" text
+- ❌ Stub templates or "coming soon" pages
+- ❌ Empty handlers or placeholder routes
 
 ## REQUIRED - ALWAYS DO
 - ✅ Server-side rendering (Go templates)
@@ -904,6 +941,19 @@ Before completing ANY task:
 - ✅ Full admin panel with ALL settings
 - ✅ WCAG 2.1 AA accessibility
 - ✅ Touch targets minimum 44x44px
+- ✅ /server/about content from IDEA.md (name, tagline, description, features)
+- ✅ /server/help content from IDEA.md (real endpoints, real examples)
+- ✅ All pages fully functional - no "coming soon" or placeholder pages
+- ✅ All routes implemented - no 501 Not Implemented responses
+
+## PAGE CONTENT SOURCING
+| Page | Content Source |
+|------|----------------|
+| /server/about | IDEA.md → name, tagline, description, features, links |
+| /server/help | IDEA.md → real endpoints, real curl examples, real FAQ |
+| /server/privacy | Config → `server.privacy.*` settings |
+| /server/terms | Config → customizable, default template |
+| /server/contact | Config → `server.contact` settings |
 
 ## SERVER VS CLIENT
 | Task | Where | Why |
@@ -1468,8 +1518,7 @@ Instructions for how this agent should behave...
 | `CLAUDE.md` | ✓ | Claude Code project memory (primary location) | No |
 | `CLAUDE.local.md` | - | Personal Claude Code preferences | **Yes** |
 | `README.md` | ✓ | Project documentation | No |
-| `LICENSE` | ✓ | MIT license | No |
-| `LICENSE.md` | ✓ | Third-party license attributions | No |
+| `LICENSE.md` | ✓ | MIT license + embedded third-party licenses | No |
 | `go.mod` | ✓ | Go module definition | No |
 | `go.sum` | ✓ | Go module checksums | No |
 | `Makefile` | ✓ | Local development only | No |
@@ -1478,6 +1527,8 @@ Instructions for how this agent should behave...
 | `.dockerignore` | ✓ | Docker ignore patterns | No |
 | `.gitattributes` | ✓ | Git attributes | No |
 | `.editorconfig` | - | Editor configuration | No |
+| `release.txt` | ✓ | Version source of truth | No |
+| `site.txt` | - | Official site URL (optional, never guess) | No |
 
 **RULE: If a root file doesn't appear in this list, it MUST NOT exist - ask before creating.**
 
@@ -1521,6 +1572,7 @@ Instructions for how this agent should behave...
 | `VIDVEIL` | Uppercase project name (for constants, env vars) | `JOKES`, `ECHOIP` |
 | `{officialsite}` | Official project website | `https://jokes.example.com` |
 | `{fqdn}` | Fully qualified domain name | `api.example.com` |
+| `{baseurl}` | URL path prefix (auto-detected from reverse proxy) | `/`, `/myproject` |
 | `{admin_path}` | Admin panel URL path (configurable, default: `admin`) | `admin`, `manage`, `control` |
 | `{api_version}` | API version prefix (default: `v1`) | `v1`, `v2` |
 
@@ -1530,10 +1582,13 @@ Instructions for how this agent should behave...
 |-------------|-------------------|---------------|-----------------|
 | `{config_dir}` | `/etc/apimgr/vidveil` | `/Library/Application Support/apimgr/vidveil` | `%PROGRAMDATA%\apimgr\vidveil` |
 | `{data_dir}` | `/var/lib/apimgr/vidveil` | `/Library/Application Support/apimgr/vidveil` | `%PROGRAMDATA%\apimgr\vidveil` |
+| `{db_dir}` | `{data_dir}/db/` | `{data_dir}/db/` | `{data_dir}\db\` |
 | `{log_dir}` | `/var/log/apimgr/vidveil` | `/Library/Logs/apimgr/vidveil` | `%PROGRAMDATA%\apimgr\vidveil\logs` |
 | `{cache_dir}` | `/var/cache/apimgr/vidveil` | `/Library/Caches/apimgr/vidveil` | `%PROGRAMDATA%\apimgr\vidveil\cache` |
 | `{backup_dir}` | `/mnt/Backups/apimgr/vidveil` | `/Library/Application Support/apimgr/vidveil/backups` | `%PROGRAMDATA%\apimgr\vidveil\backups` |
 | `{pid_file}` | `/var/run/apimgr/vidveil.pid` | `/var/run/apimgr/vidveil.pid` | N/A (Windows uses SCM) |
+
+**Note:** In Docker containers, `{db_dir}` is `/data/db/sqlite` (see Docker paths section).
 
 ## Binary Terminology
 
@@ -1650,6 +1705,13 @@ This distinction exists for clarity. When referring to OS-level resources that b
 | **CLI Setup Wizard** | Built-in TUI/GUI wizard in CLI binary - prompts for server URL, tests connection, saves config (CLI is the ONLY binary with a built-in wizard) |
 | **Setup Token** | One-time 32-char hex token generated on server first-run, displayed in console, required to access server's web-based setup |
 
+**Setup Token Storage (file-based):**
+- File: `{config_dir}/setup_token.txt` (contains SHA-256 hash of token)
+- Generated on first-run if no admins exist in database
+- Plaintext token shown ONCE in console output, then only hash stored
+- Token invalidated (file deleted) after successful setup completion
+- File-based because database may not exist yet on first run
+
 **Key distinction:** Server serves web pages for setup (browser-based). CLI has a built-in interactive wizard (TUI/GUI). Agent has no wizard (uses connection string).
 
 ## Other Terms
@@ -1721,14 +1783,14 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 ## How to Read This Large File
 
-**AI.md is ~2.0MB and ~55,000 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~2.0MB and ~55,300 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
 | File size | ~2.0MB |
-| Line count | ~55,000 lines |
+| Line count | ~55,300 lines |
 | Read limit | ~500 lines per read |
 | Full reads needed | ~110 reads (impractical) |
 
@@ -1740,45 +1802,45 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 | PART | Line | Topic | When to Read |
 |------|------|-------|--------------|
-| 0 | ~1875 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
-| 1 | ~3574 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | ~4821 | License & Attribution | License requirements |
-| 3 | ~5155 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | ~6115 | OS-Specific Paths | Path handling |
-| 5 | ~6300 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
-| 6 | ~8210 | Application Modes | Mode handling, debug endpoints |
-| 7 | ~8818 | Binary Requirements | Binary building, **Display detection**, **TERM=dumb**, **NO_COLOR** |
-| 8 | ~9481 | Server Binary CLI | CLI flags/commands, **NO_COLOR Support**, **--color flag** |
-| 9 | ~12642 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~13019 | Database & Cluster | Database work |
-| 11 | ~13565 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
-| 12 | ~15457 | Server Configuration | Server settings |
-| 13 | ~16517 | Health & Versioning | Health endpoints |
-| 14 | ~17268 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~18901 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~19774 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~25755 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
-| 18 | ~27795 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | ~29115 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | ~29600 | GeoIP | GeoIP features |
-| 21 | ~29673 | Metrics | Prometheus metrics, **INTERNAL only** |
-| 22 | ~31118 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | ~31847 | Update Command | Update feature |
-| 24 | ~32326 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~33224 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~33408 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 27 | ~34163 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~35662 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~38516 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
-| 30 | ~40337 | ReadTheDocs Documentation | Documentation |
-| 31 | ~41067 | I18N & A11Y | Internationalization |
-| 32 | ~41488 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~43267 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~47682 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~51334 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~51975 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~52998 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~53252 | Compliance Checklist | Final verification, **AI Quick Reference Rules** |
+| 0 | ~1932 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
+| 1 | ~3677 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | ~4928 | License & Attribution | License requirements |
+| 3 | ~5262 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | ~6222 | OS-Specific Paths | Path handling |
+| 5 | ~6416 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
+| 6 | ~8327 | Application Modes | Mode handling, debug endpoints |
+| 7 | ~8935 | Binary Requirements | Binary building, **Display detection**, **TERM=dumb**, **NO_COLOR** |
+| 8 | ~9598 | Server Binary CLI | CLI flags/commands, **NO_COLOR Support**, **--color flag** |
+| 9 | ~12767 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~13144 | Database & Cluster | Database work |
+| 11 | ~13690 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | ~15582 | Server Configuration | Server settings |
+| 13 | ~16644 | Health & Versioning | Health endpoints |
+| 14 | ~17395 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~19028 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~19999 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~26168 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | ~28205 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | ~29528 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | ~30013 | GeoIP | GeoIP features |
+| 21 | ~30086 | Metrics | Prometheus metrics, **INTERNAL only** |
+| 22 | ~31531 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | ~32260 | Update Command | Update feature |
+| 24 | ~32739 | Privilege Escalation & Service | Service/privilege work |
+| 25 | ~33637 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~33821 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 27 | ~34576 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~36075 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~38929 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 30 | ~40750 | ReadTheDocs Documentation | Documentation |
+| 31 | ~41482 | I18N & A11Y | Internationalization |
+| 32 | ~41903 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~43682 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~48097 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~51749 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~52390 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~53413 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~53667 | Compliance Checklist | Final verification, **AI Quick Reference Rules**, **Console/Banner Checklist** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -3779,14 +3841,18 @@ db.Query("SELECT * FROM users WHERE email = '" + email + "'")
 
 ### Rate Limiting Defaults
 
-| Endpoint Type | Limit | Window | Response |
-|---------------|-------|--------|----------|
+**These are sensible defaults - all limits are configurable via admin panel and config file.**
+
+| Endpoint Type | Default Limit | Default Window | Response |
+|---------------|---------------|----------------|----------|
 | **Login attempts** | 5 | 15 minutes | 429 + lockout |
 | **Password reset** | 3 | 1 hour | 429 + silent (no email hint) |
-| **API (authenticated)** | 100 | 1 minute | 429 + Retry-After header |
-| **API (unauthenticated)** | 20 | 1 minute | 429 + Retry-After header |
+| **API (authenticated)** | Configurable | 1 minute | 429 + Retry-After header |
+| **API (unauthenticated)** | Configurable | 1 minute | 429 + Retry-After header |
 | **Registration** | 5 | 1 hour | 429 |
 | **File upload** | 10 | 1 hour | 429 |
+
+**Project-specific defaults:** Each project defines its own default rate limits based on expected usage patterns. High-traffic APIs may need higher limits; sensitive operations may need lower limits. Define project-appropriate defaults in IDEA.md.
 
 ### Error Message Rules
 
@@ -4556,7 +4622,7 @@ vidveil-cli [command] --help
 
 ## Configuration
 
-Configuration is auto-generated on first run. Edit via admin panel at `http://{fqdn}:{port}/{admin_path}` (admin_path defaults to "admin").
+Configuration is auto-generated on first run. Edit via admin panel at `{proto}://{fqdn}/{admin_path}` (admin_path defaults to "admin").
 
 Key settings:
 - `server.port` - Listen port (default: random 64xxx)
@@ -5064,7 +5130,7 @@ jobs:
   check-licenses:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
@@ -5092,7 +5158,7 @@ jobs:
 #!/bin/bash
 # scripts/verify-licenses.sh
 
-set -e
+set -euo pipefail
 
 echo "Checking for incompatible licenses..."
 
@@ -5431,7 +5497,8 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 ├── TODO.AI.md              # Task tracking for 3+ tasks
 ├── PLAN.AI.md                 # Implementation plan (optional)
 ├── Jenkinsfile             # Jenkins pipeline
-└── release.txt             # Version tracking
+├── release.txt             # Version tracking
+└── site.txt                # Official site URL (optional)
 ```
 
 **Gitignored directories:**
@@ -6317,6 +6384,8 @@ Before proceeding, confirm you understand:
 
 ## Docker/Container
 
+**⚠️ DOCKER-ONLY PATHS: `/data/**` and `/config/**` are ONLY used inside Docker containers. On native Linux/macOS/Windows/FreeBSD, use the platform-specific paths above.**
+
 | Type | Path |
 |------|------|
 | Binary | `/usr/local/bin/vidveil` |
@@ -6330,6 +6399,13 @@ Before proceeding, confirm you understand:
 | SQLite DB | `/data/db/sqlite/` (server.db, users.db) |
 | Backup | `/data/backups/vidveil/` |
 | Internal Port | `80` |
+
+**Docker volume mounts map host paths to container paths:**
+```yaml
+volumes:
+  - './rootfs/config:/config:z'   # Host ./rootfs/config → Container /config
+  - './rootfs/data:/data:z'       # Host ./rootfs/data → Container /data
+```
 
 ---
 
@@ -7096,7 +7172,7 @@ _cache:
 | `ssl.enabled` | `true` | 2025-01-15 09:00:00 |
 | `ssl.letsencrypt.enabled` | `true` | 2025-01-15 09:00:00 |
 | `rate_limit.enabled` | `true` | 2025-01-14 15:00:00 |
-| `rate_limit.requests` | `120` | 2025-01-14 15:00:00 |
+| `rate_limit.requests` | `0` | 2025-01-14 15:00:00 |
 
 **Cluster State Table:**
 
@@ -7348,6 +7424,7 @@ func (req *CreateUserRequest) Parse() (*User, error) {
 - `{fqdn}`: Reverse Proxy Headers → `DOMAIN` → `os.Hostname()` → `$HOSTNAME` → Global IP → `localhost`
 - `{proto}`: `X-Forwarded-Proto` → `X-Forwarded-Ssl` → TLS detection → `http`
 - `{port}`: `X-Forwarded-Port` → Host header → Server port → Proto default
+- `{baseurl}`: `X-Forwarded-Prefix` → `X-Forwarded-Path` → `X-Script-Name` → `server.baseurl` → `/`
 
 **Note:** Loopback addresses avoided; global IPs preferred. See PART 5 for full details.
 
@@ -7779,7 +7856,7 @@ Binary checks:
    "Setup already completed. To reconfigure:
     1. Use existing admin credentials via WebUI
     2. Run as root: sudo vidveil --maintenance setup
-    3. Use setup token from server logs (if available)"
+    3. Use setup token shown at first-run (if you saved it)"
 ```
 
 **Restore authorization flow:**
@@ -8222,7 +8299,8 @@ server:
 
   rate_limit:
     enabled: true
-    requests: 120
+    # Project-specific default (define in IDEA.md based on expected usage)
+    requests: 0  # 0 = use project default
     window: 60
 
   # Database
@@ -9706,6 +9784,7 @@ NO_COLOR=1 vidveil --status | grep -E '✅|❌|⚠️|🚀'  # Should find nothi
 --pid {pid_file}              # Set PID file path
 --address {listen}           # Set listen address
 --port {port}                # Set the port
+--baseurl {path}             # Set URL path prefix (default: /)
 --status                     # Show status and health (exit 0=healthy, 1=unhealthy)
 --service {start,restart,stop,reload,--install,--uninstall,--disable,--help}
 --daemon                     # Daemonize (detach from terminal)
@@ -9745,6 +9824,7 @@ Server Configuration:
       --pid FILE                    PID file path
       --address ADDR                Listen address (default: 0.0.0.0)
       --port PORT                   Listen port (default: random 64xxx, 80 in container)
+      --baseurl PATH                URL path prefix (default: /)
       --daemon                      Run as daemon (detach from terminal)
       --debug                       Enable debug mode
       --color {always|never|auto}   Color output (default: auto)
@@ -11648,7 +11728,7 @@ INSERT INTO config (key, value, type) VALUES
     ('ssl.key', '""', 'string'),                     -- Empty = auto-detect
     ('ssl.min_version', '"TLS1.2"', 'string'),
     ('cors.allowed_origins', '["https://example.com","https://api.example.com"]', 'array'),
-    ('ratelimit.requests_per_minute', '60', 'number'),
+    ('ratelimit.requests_per_minute', '0', 'number'),  -- 0 = use project default from IDEA.md
     ('branding.site_name', '"My App"', 'string');
 ```
 
@@ -12189,7 +12269,16 @@ All templates, Swagger/OpenAPI, GraphQL, email links, etc. MUST use these resolv
 |----------|-------------|---------|
 | `{proto}` | Protocol (http/https) | `https` |
 | `{fqdn}` | Fully qualified domain name | `api.example.com` |
+| `{baseurl}` | URL path prefix (auto-detected) | `/` or `/myproject` |
 | `{port}` | Port number (ALWAYS stripped if 80/443) | `8080` or empty |
+| `{address}` | Listen IP address | `203.0.113.50` |
+| `{app_mode}` | Application mode | `production` or `development` |
+| `{onion_address}` | Tor .onion address (if enabled) | `abc...xyz.onion` |
+| `{i2p_address}` | I2P address (if enabled) | `abc...xyz.b32.i2p` |
+| `{smtp_address}` | SMTP server address (if configured) | `172.17.0.1` |
+| `{smtp_port}` | SMTP server port | `25` |
+| `{startup_datetime}` | Server start timestamp | `Wed Jan 15, 2025 at 09:00:00 EST` |
+| `{setup_token}` | First-run setup token (shown ONCE) | `a1b2c3d4e5f67890abcdef1234567890` |
 
 **URL Format:** `{proto}://{fqdn}/path` or `{proto}://{fqdn}:{port}/path`
 
@@ -12278,10 +12367,13 @@ DOMAIN=myapp.com
 | `X-Forwarded-Host` | `{fqdn}` |
 | `X-Forwarded-Proto` | `{proto}` |
 | `X-Forwarded-Port` | `{port}` |
+| `X-Forwarded-Prefix` | `{baseurl}` |
 | `X-Forwarded-Ssl` | `{proto}` (on=https) |
 | `X-Real-Host` | `{fqdn}` (fallback) |
 | `X-Original-Host` | `{fqdn}` (fallback) |
 | `X-Url-Scheme` | `{proto}` (fallback) |
+| `X-Forwarded-Path` | `{baseurl}` (fallback) |
+| `X-Script-Name` | `{baseurl}` (fallback) |
 | `X-Forwarded-For` | Request IP (for logging) |
 | `X-Real-IP` | Request IP (fallback) |
 
@@ -15531,6 +15623,71 @@ func validateConfig(cfg *Config) {
 | **Warn, don't error** | Log warning, don't fail startup |
 | **Never crash on config** | Server must start with sane defaults |
 
+## Base URL
+
+```yaml
+server:
+  baseurl: /              # Default: serve from root (auto-detects from reverse proxy)
+  # baseurl: /myproject   # Serve from /myproject/*
+  # baseurl: /api/v2      # Serve from /api/v2/*
+```
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `baseurl` | URL path prefix for all routes | `/` (auto-detect) |
+
+**Use cases:**
+- `/` - Standard deployment (default)
+- `/myproject` - Multiple apps on same domain
+- `/api/v2` - API versioning at URL level
+
+**Resolution (Reverse Proxy Preferred):**
+
+| Priority | Source | Description |
+|----------|--------|-------------|
+| 1 | `X-Forwarded-Prefix` | Standard prefix header from reverse proxy |
+| 2 | `X-Forwarded-Path` | Alternative prefix header |
+| 3 | `X-Script-Name` | WSGI/Python style (Flask, Django) |
+| 4 | **Config/CLI** | Explicit `server.baseurl` or `--baseurl` |
+| 5 | **Default** | `/` |
+
+**Reverse Proxy Configuration Examples:**
+
+```nginx
+# Nginx
+location /myproject/ {
+    proxy_pass http://backend/;
+    proxy_set_header X-Forwarded-Prefix /myproject;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+```apache
+# Apache (mod_proxy)
+<Location /myproject>
+    ProxyPass http://backend/
+    ProxyPassReverse http://backend/
+    RequestHeader set X-Forwarded-Prefix "/myproject"
+</Location>
+```
+
+```yaml
+# Traefik
+labels:
+  - "traefik.http.middlewares.myproject-prefix.headers.customrequestheaders.X-Forwarded-Prefix=/myproject"
+```
+
+**Behavior:**
+- All routes prefixed with baseurl (e.g., `/myproject/healthz`, `/myproject/api/v1/...`)
+- Static assets served from `{baseurl}/static/`
+- Admin panel at `{baseurl}/{admin_path}/`
+- Generated URLs (redirects, links) use detected baseurl
+- Trailing slash normalized (both `/myproject` and `/myproject/` work)
+- Empty string treated as `/`
+
+**CLI flag:** `--baseurl /myproject`
+
 ## Request Limits
 
 ```yaml
@@ -15612,11 +15769,13 @@ server:
 server:
   rate_limit:
     enabled: true
-    # Requests allowed per window
-    requests: 120
+    # Requests allowed per window (0 = use project default from IDEA.md)
+    requests: 0
     # Window size in seconds
     window: 60
 ```
+
+**Note:** Each project defines its own default rate limit in IDEA.md based on expected usage patterns.
 
 ## Internationalization (i18n)
 
@@ -19319,26 +19478,28 @@ import (
     "golang.org/x/term"
 )
 
-func PrintServerStartupBanner(appName, version, appMode string, urls []string) {
+func PrintServerStartupBanner(appName, version, appMode string, urls []string, forceColor *bool) {
     width, _, _ := term.GetSize(int(os.Stdout.Fd()))
     if width == 0 {
         width = 80 // Default
     }
 
-    // Check for plain output mode (NO_COLOR or TERM=dumb)
-    plainMode := os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb"
+    // Use shared color/emoji detection (respects --color flag, config, NO_COLOR, TERM)
+    // See PART 8 for ColorEnabled() and EmojiEnabled() priority order
+    useEmojis := output.EmojiEnabled()
+    useColors := output.ColorEnabled(forceColor)
 
-    if plainMode {
-        // Plain text banner (no emojis, no ASCII art)
+    // Plain mode: no emojis (NO_COLOR, TERM=dumb, or --color=never)
+    if !useEmojis {
         printServerBannerPlain(appName, version, appMode, urls)
         return
     }
 
     switch {
     case width >= 80:
-        printServerBannerFull(appName, version, appMode, urls)
+        printServerBannerFull(appName, version, appMode, urls, useColors)
     case width >= 60:
-        printServerBannerCompact(appName, version, appMode, urls)
+        printServerBannerCompact(appName, version, appMode, urls, useColors)
     case width >= 40:
         printServerBannerMinimal(appName, version, urls)
     default:
@@ -19573,10 +19734,10 @@ formatURL(host, 8443, true)
 
 | Clearnet Config | Tor URL | I2P URL |
 |-----------------|---------|---------|
-| `--port 8080` | `http://{onion}.onion` | `http://{i2p}.b32.i2p` |
-| `--port 443` | `https://{onion}.onion` | `https://{i2p}.b32.i2p` |
-| `--port 80,443` | `http://{onion}.onion` | `http://{i2p}.b32.i2p` |
-| `--port 8080,8443` | `http://{onion}.onion` | `http://{i2p}.b32.i2p` |
+| `--port 8080` | `http://{onion_address}` | `http://{i2p_address}` |
+| `--port 443` | `https://{onion_address}` | `https://{i2p_address}` |
+| `--port 80,443` | `http://{onion_address}` | `http://{i2p_address}` |
+| `--port 8080,8443` | `http://{onion_address}` | `http://{i2p_address}` |
 
 **Why HTTP for overlays in dual mode?**
 - Tor/I2P provide end-to-end encryption at the network layer
@@ -19587,131 +19748,227 @@ formatURL(host, 8443, true)
 
 **"Last update" MUST use build date, NEVER hardcoded.** Use `{builddatetime}` template variable which comes from `BUILD_DATE` at compile time. This ensures the footer always shows when the binary was built, not a static date in the source code.
 
+**⚠️ DYNAMIC WIDTH: Banner width adapts to terminal size at runtime. Examples below show ≥80 col format. See "Responsive Startup Banner" section for all size variants (<40, 40-59, 60-79, ≥80 cols).**
+
 **Example (Production with SSL + Tor on 443):**
 ```
-╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 {projectversion}                      │
-├─────────────────────────────────────────────────────────────┤
-│  🔒 Running in mode: production                             │
-├─────────────────────────────────────────────────────────────┤
-│  🧅 Tor    http://abc123def456ghi789jklmnop.onion           │
-│  🔐 HTTPS  https://api.example.com                          │
-├─────────────────────────────────────────────────────────────┤
-│  📡 Listening on https://203.0.113.50                       │
-│  ✅ Server started on Wed Jan 15, 2025 at 09:00:00 EST      │
-╰─────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────╮
+│  🚀 VIDVEIL · 📦 {projectversion}                   │
+├───────────────────────────────────────────────────────────┤
+│  🔒 Running in mode: production                           │
+├───────────────────────────────────────────────────────────┤
+│  🧅 Tor:   http://{onion_address}                         │
+│  🔐 HTTPS: {proto}://{fqdn}                               │
+├───────────────────────────────────────────────────────────┤
+│  📡 Listening on {proto}://{address}                      │
+│  ✅ Server started on {startup_datetime}                  │
+╰───────────────────────────────────────────────────────────╯
 ```
 
-**Example (Production with Tor + I2P on 443):**
+**Example (Full Banner with Tor + I2P + SMTP):**
 ```
-╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 {projectversion}                      │
-├─────────────────────────────────────────────────────────────┤
-│  🔒 Running in mode: production                             │
-├─────────────────────────────────────────────────────────────┤
-│  🧅 Tor    http://abc123def456ghi789jklmnop.onion           │
-│  🔗 I2P    http://xyz789abc123def456uvwxyz.b32.i2p          │
-│  🔐 HTTPS  https://api.example.com                          │
-├─────────────────────────────────────────────────────────────┤
-│  📡 Listening on https://203.0.113.50                       │
-│  ✅ Server started on Wed Jan 15, 2025 at 09:00:00 EST      │
-╰─────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────╮
+│  🚀 VIDVEIL · 📦 {projectversion}                   │
+├───────────────────────────────────────────────────────────┤
+│  🔒 Running in mode: {app_mode}                           │
+├───────────────────────────────────────────────────────────┤
+│  🧅 Tor:   http://{onion_address}                         │
+│  🔗 I2P:   http://{i2p_address}                           │
+│  📧 SMTP:  {smtp_address}:{smtp_port}                     │
+├───────────────────────────────────────────────────────────┤
+│  📡 Listening on {proto}://{address}                      │
+├───────────────────────────────────────────────────────────┤
+│  🔐 Website: {proto}://{fqdn}                             │
+├───────────────────────────────────────────────────────────┤
+│  ✅ Server started on {startup_datetime}                  │
+╰───────────────────────────────────────────────────────────╯
 ```
 
 **Example (Production on port 8080):**
 ```
-╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 {projectversion}                      │
-├─────────────────────────────────────────────────────────────┤
-│  🔒 Running in mode: production                             │
-├─────────────────────────────────────────────────────────────┤
-│  🌐 HTTP   http://api.example.com:8080                      │
-├─────────────────────────────────────────────────────────────┤
-│  📡 Listening on http://203.0.113.50:8080                   │
-│  ✅ Server started on Wed Jan 15, 2025 at 09:00:00 EST      │
-╰─────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────╮
+│  🚀 VIDVEIL · 📦 {projectversion}                   │
+├───────────────────────────────────────────────────────────┤
+│  🔒 Running in mode: production                           │
+├───────────────────────────────────────────────────────────┤
+│  🌐 HTTP:  {proto}://{fqdn}:{port}                        │
+├───────────────────────────────────────────────────────────┤
+│  📡 Listening on {proto}://{address}:{port}               │
+│  ✅ Server started on {startup_datetime}                  │
+╰───────────────────────────────────────────────────────────╯
 ```
 
 **Example (Development on port 8080):**
 ```
-╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 {projectversion}                      │
-├─────────────────────────────────────────────────────────────┤
-│  🔧 Running in mode: development                            │
-├─────────────────────────────────────────────────────────────┤
-│  🌐 HTTP   http://192.168.1.100:8080                        │
-├─────────────────────────────────────────────────────────────┤
-│  📡 Listening on http://192.168.1.100:8080                  │
-│  ✅ Server started on Wed Jan 15, 2025 at 09:00:00 EST      │
-╰─────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────╮
+│  🚀 VIDVEIL · 📦 {projectversion}                   │
+├───────────────────────────────────────────────────────────┤
+│  🔧 Running in mode: development                          │
+├───────────────────────────────────────────────────────────┤
+│  🌐 HTTP:  {proto}://{address}:{port}                     │
+├───────────────────────────────────────────────────────────┤
+│  📡 Listening on {proto}://{address}:{port}               │
+│  ✅ Server started on {startup_datetime}                  │
+╰───────────────────────────────────────────────────────────╯
 ```
 
 **Example (Development IPv6 on port 8080):**
 ```
-╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 {projectversion}                      │
-├─────────────────────────────────────────────────────────────┤
-│  🔧 Running in mode: development                            │
-├─────────────────────────────────────────────────────────────┤
-│  🌍 IPv6   http://[2001:db8::1]:8080                        │
-├─────────────────────────────────────────────────────────────┤
-│  📡 Listening on http://[2001:db8::1]:8080                  │
-│  ✅ Server started on Wed Jan 15, 2025 at 09:00:00 EST      │
-╰─────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────╮
+│  🚀 VIDVEIL · 📦 {projectversion}                   │
+├───────────────────────────────────────────────────────────┤
+│  🔧 Running in mode: development                          │
+├───────────────────────────────────────────────────────────┤
+│  🌍 IPv6:  {proto}://[{address}]:{port}                   │
+├───────────────────────────────────────────────────────────┤
+│  📡 Listening on {proto}://[{address}]:{port}             │
+│  ✅ Server started on {startup_datetime}                  │
+╰───────────────────────────────────────────────────────────╯
 ```
 
 **Example (Production on port 80):**
 ```
-╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 {projectversion}                      │
-├─────────────────────────────────────────────────────────────┤
-│  🔒 Running in mode: production                             │
-├─────────────────────────────────────────────────────────────┤
-│  🌐 HTTP   http://api.example.com                           │
-├─────────────────────────────────────────────────────────────┤
-│  📡 Listening on http://203.0.113.50                        │
-│  ✅ Server started on Wed Jan 15, 2025 at 09:00:00 EST      │
-╰─────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────╮
+│  🚀 VIDVEIL · 📦 {projectversion}                   │
+├───────────────────────────────────────────────────────────┤
+│  🔒 Running in mode: production                           │
+├───────────────────────────────────────────────────────────┤
+│  🌐 HTTP:  {proto}://{fqdn}                               │
+├───────────────────────────────────────────────────────────┤
+│  📡 Listening on {proto}://{address}                      │
+│  ✅ Server started on {startup_datetime}                  │
+╰───────────────────────────────────────────────────────────╯
 ```
 
 **Example (Production with debugging enabled):**
 ```
-╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 {projectversion}                      │
-├─────────────────────────────────────────────────────────────┤
-│  🔒 Running in mode: production [debugging]                 │
-├─────────────────────────────────────────────────────────────┤
-│  🌐 HTTP   http://api.example.com                           │
-├─────────────────────────────────────────────────────────────┤
-│  📡 Listening on http://203.0.113.50                        │
-│  ✅ Server started on Wed Jan 15, 2025 at 09:00:00 EST      │
-╰─────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────╮
+│  🚀 VIDVEIL · 📦 {projectversion}                   │
+├───────────────────────────────────────────────────────────┤
+│  🔒 Running in mode: {app_mode} [debugging]               │
+├───────────────────────────────────────────────────────────┤
+│  🌐 HTTP:  {proto}://{fqdn}                               │
+├───────────────────────────────────────────────────────────┤
+│  📡 Listening on {proto}://{address}                      │
+│  ✅ Server started on {startup_datetime}                  │
+╰───────────────────────────────────────────────────────────╯
 ```
 
 **Example (First Run - Setup Required):**
 ```
-╭─────────────────────────────────────────────────────────────╮
-│  🚀 VIDVEIL · 📦 {projectversion}                      │
-├─────────────────────────────────────────────────────────────┤
-│  🔧 Running in mode: development                            │
-├─────────────────────────────────────────────────────────────┤
-│  🌐 HTTP   http://192.168.1.100:8080                        │
-├─────────────────────────────────────────────────────────────┤
-│  📡 Listening on http://192.168.1.100:8080                  │
-│  ✅ Server started on Wed Jan 15, 2025 at 09:00:00 EST      │
-╰─────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────╮
+│  🚀 VIDVEIL · 📦 {projectversion}                   │
+├───────────────────────────────────────────────────────────┤
+│  🔧 Running in mode: {app_mode}                           │
+├───────────────────────────────────────────────────────────┤
+│  🌐 HTTP:  {proto}://{address}:{port}                     │
+├───────────────────────────────────────────────────────────┤
+│  📡 Listening on {proto}://{address}:{port}               │
+│  ✅ Server started on {startup_datetime}                  │
+╰───────────────────────────────────────────────────────────╯
 
-┌─────────────────────────────────────────────────────────────┐
-│  🔑 SETUP REQUIRED                                          │
-├─────────────────────────────────────────────────────────────┤
-│  Setup Token: a1b2c3d4e5f67890abcdef1234567890              │
-│                                                             │
-│  Go to /admin and enter this token to complete setup.       │
-│  This token will only be shown ONCE.                        │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│  🔑 SETUP REQUIRED                                        │
+├───────────────────────────────────────────────────────────┤
+│  Setup Token: {setup_token}                               │
+│                                                           │
+│  Go to {proto}://{fqdn}/{admin_path}/server/setup         │
+│  and enter this token to complete setup.                  │
+│                                                           │
+│  This token will only be shown ONCE.                      │
+└───────────────────────────────────────────────────────────┘
 ```
 
 **Note:** Setup token is displayed ONCE on first run. After setup wizard is completed, this section never appears again.
+
+---
+
+### Banner Size Variants
+
+**All banners adapt to terminal width at runtime. Examples below show each size variant.**
+
+**60-79 cols (Compact - no ASCII art, icons + text):**
+```
+🚀 VIDVEIL v{projectversion}
+🔒 Mode: {app_mode}
+🌐 {proto}://{fqdn}
+📡 Listening: {proto}://{address}:{port}
+✅ Started: {startup_datetime}
+```
+
+**60-79 cols (Compact - First Run):**
+```
+🚀 VIDVEIL v{projectversion}
+🔧 Mode: {app_mode}
+🌐 {proto}://{address}:{port}
+📡 Listening: {proto}://{address}:{port}
+✅ Started: {startup_datetime}
+
+🔑 SETUP REQUIRED
+Token: {setup_token}
+Go to: {proto}://{fqdn}/{admin_path}/server/setup
+(Token shown ONCE)
+```
+
+**40-59 cols (Minimal - abbreviated, no icons):**
+```
+VIDVEIL {projectversion}
+{app_mode}
+{fqdn}:{port}
+```
+
+**40-59 cols (Minimal - First Run):**
+```
+VIDVEIL {projectversion}
+{app_mode}
+{address}:{port}
+SETUP: {setup_token}
+```
+
+**<40 cols (Micro - single line):**
+```
+VIDVEIL :{port}
+```
+
+**<40 cols (Micro - First Run):**
+```
+VIDVEIL :{port} [SETUP]
+```
+
+**NO_COLOR / TERM=dumb (Plain text - no emojis, no box drawing, no colors):**
+```
+VIDVEIL v{projectversion}
+Mode: {app_mode}
+URL: {proto}://{fqdn}
+Listening: {proto}://{address}:{port}
+Started: {startup_datetime}
+```
+
+**NO_COLOR / TERM=dumb (Plain - First Run):**
+```
+VIDVEIL v{projectversion}
+Mode: {app_mode}
+URL: {proto}://{address}:{port}
+Listening: {proto}://{address}:{port}
+Started: {startup_datetime}
+
+SETUP REQUIRED
+Token: {setup_token}
+Setup URL: {proto}://{fqdn}/{admin_path}/server/setup
+This token will only be shown ONCE.
+```
+
+**--color flag overrides (applies to all sizes):**
+```bash
+# Force colors on (overrides NO_COLOR)
+vidveil --color=always
+
+# Force colors off
+vidveil --color=never
+
+# Auto-detect (default) - respects NO_COLOR, TERM, TTY
+vidveil --color=auto
+```
 
 ### Console vs Logs 
 
@@ -23028,7 +23285,7 @@ src/server/template/
 ├── page/
 │   ├── index.tmpl          # Home page
 │   ├── healthz.tmpl        # Health check page
-│   └── error.tmpl          # Error pages (404, 500, etc.)
+│   └── error.tmpl          # Error pages (404, 500, 502, 503, etc.) - MUST use site theme
 ├── auth/
 │   ├── login.tmpl          # Login page
 │   ├── register.tmpl       # Registration page
@@ -23041,6 +23298,41 @@ src/server/template/
     ├── modal.tmpl          # Reusable modal component
     ├── toast.tmpl          # Toast notifications
     └── ...
+```
+
+## Error Pages (MUST Match Theme)
+
+**ALL error pages MUST use the site theme system. No plain/unstyled error pages.**
+
+| Status | Page | Theme Required |
+|--------|------|----------------|
+| 400 | Bad Request | ✅ Yes |
+| 401 | Unauthorized | ✅ Yes |
+| 403 | Forbidden | ✅ Yes |
+| 404 | Not Found | ✅ Yes |
+| 500 | Internal Server Error | ✅ Yes |
+| 502 | Bad Gateway | ✅ Yes |
+| 503 | Service Unavailable | ✅ Yes |
+
+**Error page requirements:**
+- Use `error.tmpl` template (extends `public.tmpl` layout)
+- Respect user's theme preference (dark/light/auto)
+- Include navigation (user can navigate away)
+- Show appropriate error message (not stack traces in production)
+- Provide helpful action (go home, go back, contact support)
+- NO generic browser error pages - always render themed template
+
+**Error page structure:**
+```html
+{{template "public.tmpl" .}}
+{{define "content"}}
+<div class="error-page">
+  <h1>{{.StatusCode}}</h1>
+  <h2>{{.StatusText}}</h2>
+  <p>{{.Message}}</p>
+  <a href="/" class="btn">Go Home</a>
+</div>
+{{end}}
 ```
 
 ## Layout Separation 
@@ -24753,6 +25045,13 @@ When admin edits `custom_html`, show:
     <a href="/server/help">Help</a>
   </p>
 
+  <!-- Tor Support (only shown if Tor is enabled and running) -->
+  {{ if and .TorEnabled .TorRunning }}
+  <p>
+    <a href="/server/help#tor-access">Tor Support</a>
+  </p>
+  {{ end }}
+
   <br />
 
   <!-- Application branding -->
@@ -25303,7 +25602,7 @@ func trackingScript(r *http.Request) template.HTML {
 
 ### /server/about
 
-**About the application - what it does, version info, and optionally Tor access.**
+**About the application - what it does and version info.**
 
 | Section | Description |
 |---------|-------------|
@@ -25311,23 +25610,66 @@ func trackingScript(r *http.Request) template.HTML {
 | Version | Current version |
 | Description | From branding config or project-specific |
 | Features | Key features list (project-specific) |
-| Tor access | If Tor installed, show .onion address with copy button |
 | Links | GitHub, documentation, etc. |
 
-**Tor Section (shown only if `tor` binary is installed - auto-detected):**
+**⚠️ CRITICAL: Content MUST come from IDEA.md - NEVER use generic placeholders.**
 
+| Field | Source | Example |
+|-------|--------|---------|
+| Application name | `IDEA.md` → Project Name | "JokeAPI" |
+| Tagline | `IDEA.md` → Tagline | "A free API for random jokes" |
+| Description | `IDEA.md` → Description section | Actual project description |
+| Features | `IDEA.md` → Features section | List actual features from IDEA.md |
+| Links | `IDEA.md` → Links/URLs or infer from projectorg/projectname | GitHub, docs URLs |
+
+**DO NOT use:**
+- "Your application name here"
+- "Description of your application"
+- "Feature 1, Feature 2, Feature 3"
+- Any placeholder text
+
+**Example About Page (for a jokes API):**
 ```html
-<!-- Example Tor section -->
-<div class="tor-access">
-  <h3>Tor Hidden Service</h3>
-  <p>This application is also available via Tor for enhanced privacy.</p>
-  <div class="onion-address">
-    <code>{onion_address}</code>
-    <button onclick="copyToClipboard()">[Copy]</button>
-  </div>
-  <p class="note">Requires Tor Browser or Tor-enabled browser.</p>
-</div>
+<article class="about-page">
+  <h1>JokeAPI</h1>
+  <p class="tagline">A free API for random jokes</p>
+
+  <section class="description">
+    <h2>About</h2>
+    <p>JokeAPI is a free, open-source REST API that serves random jokes.
+    It supports multiple categories, formats, and languages.</p>
+  </section>
+
+  <section class="features">
+    <h2>Features</h2>
+    <ul>
+      <li>Multiple joke categories (programming, misc, dark, pun)</li>
+      <li>Safe mode filtering</li>
+      <li>Multiple response formats (JSON, XML, YAML, plain text)</li>
+      <li>GraphQL support</li>
+      <li>No authentication required</li>
+    </ul>
+  </section>
+
+  <section class="version">
+    <h2>Version</h2>
+    <p>{{ .Version }} ({{ .BuildDate }})</p>
+  </section>
+
+  <section class="links">
+    <h2>Links</h2>
+    <ul>
+      <li><a href="https://github.com/example/jokeapi">GitHub</a></li>
+      <li><a href="https://jokeapi.readthedocs.io">Documentation</a></li>
+    </ul>
+  </section>
+</article>
 ```
+
+**Note:** Tor address is NOT shown here. Tor access is available via:
+- **Footer**: "Tor Support" link → `/server/help#tor-access` (shown when Tor is enabled)
+- **`/server/help`**: Tor Access section with .onion address, copy button, and setup instructions
+- **`/healthz`**: Tor status and .onion address (technical/status view)
 
 ### /server/privacy
 
@@ -25667,8 +26009,86 @@ func trackingScript(r *http.Request) template.HTML {
 | Getting started | Quick start guide |
 | Features | How to use key features |
 | API Documentation | Links to Swagger (/openapi) and GraphQL (/graphql) - both in sync |
+| Tor Access | How to access via Tor (only shown if Tor enabled) |
 | FAQ | Frequently asked questions |
 | Troubleshooting | Common issues and solutions |
+
+**⚠️ CRITICAL: Content MUST reflect the ACTUAL project - NEVER use generic placeholders.**
+
+| Section | Source | What to include |
+|---------|--------|-----------------|
+| Getting started | `IDEA.md` + actual endpoints | Real curl examples using actual API endpoints |
+| Features | `IDEA.md` → Features | How to USE each feature (not just list them) |
+| FAQ | Common questions for THIS project type | Real questions users would ask |
+| Troubleshooting | Actual error scenarios | Real errors and solutions |
+
+**DO NOT use:**
+- "curl https://api.example.com/endpoint"
+- "Replace YOUR_API_KEY with your actual key"
+- "This is how you use feature X"
+- Generic placeholder examples
+
+**Example Help Page (for a jokes API):**
+```html
+<article class="help-page">
+  <h1>Help</h1>
+
+  <section id="getting-started">
+    <h2>Getting Started</h2>
+    <p>Get a random joke with a single request:</p>
+    <pre><code>curl https://jokes.example.com/api/v1/joke</code></pre>
+
+    <p>Response:</p>
+    <pre><code>{
+  "id": "abc123",
+  "category": "programming",
+  "setup": "Why do programmers prefer dark mode?",
+  "punchline": "Because light attracts bugs."
+}</code></pre>
+  </section>
+
+  <section id="features">
+    <h2>Features</h2>
+
+    <h3>Categories</h3>
+    <p>Filter jokes by category:</p>
+    <pre><code>curl https://jokes.example.com/api/v1/joke?category=programming</code></pre>
+    <p>Available categories: <code>programming</code>, <code>misc</code>, <code>dark</code>, <code>pun</code></p>
+
+    <h3>Safe Mode</h3>
+    <p>Filter out NSFW content:</p>
+    <pre><code>curl https://jokes.example.com/api/v1/joke?safe=true</code></pre>
+
+    <h3>Response Formats</h3>
+    <p>Get jokes in different formats:</p>
+    <pre><code>curl -H "Accept: text/plain" https://jokes.example.com/api/v1/joke
+curl -H "Accept: application/xml" https://jokes.example.com/api/v1/joke</code></pre>
+  </section>
+
+  <section id="faq">
+    <h2>FAQ</h2>
+
+    <h3>Do I need an API key?</h3>
+    <p>No, the API is completely free and requires no authentication.</p>
+
+    <h3>Is there a rate limit?</h3>
+    <p>Yes, 100 requests per minute per IP address.</p>
+
+    <h3>Can I submit jokes?</h3>
+    <p>Yes, use the <code>POST /api/v1/joke/submit</code> endpoint.</p>
+  </section>
+
+  <section id="troubleshooting">
+    <h2>Troubleshooting</h2>
+
+    <h3>429 Too Many Requests</h3>
+    <p>You've exceeded the rate limit. Wait 60 seconds before retrying.</p>
+
+    <h3>No jokes in category</h3>
+    <p>Some category/filter combinations may have no results. Try removing filters.</p>
+  </section>
+</article>
+```
 
 **API Documentation section (always shown):**
 ```html
@@ -25682,7 +26102,35 @@ func trackingScript(r *http.Request) template.HTML {
 </div>
 ```
 
-**Content is project-specific. Markdown supported.**
+**Tor Access section (only shown if Tor is enabled and running):**
+```html
+{{ if and .TorEnabled .TorRunning }}
+<section id="tor-access" class="tor-access">
+  <h3>Tor Access</h3>
+  <p>This application is available as a Tor hidden service for enhanced privacy.</p>
+
+  <h4>Onion Address</h4>
+  <div class="code-block">
+    <code class="code-content">{{ .TorAddress }}</code>
+    <button type="button" class="copy-btn" data-copy="{{ .TorAddress }}" aria-label="Copy to clipboard">
+      <span class="copy-icon">📋</span>
+      <span class="copy-text">Copy</span>
+    </button>
+  </div>
+
+  <h4>How to Connect</h4>
+  <ol>
+    <li>Download <a href="https://www.torproject.org/download/" target="_blank" rel="noopener">Tor Browser</a></li>
+    <li>Open Tor Browser and wait for it to connect</li>
+    <li>Copy the onion address above and paste it into the Tor Browser address bar</li>
+  </ol>
+
+  <p class="note">Using Tor provides additional privacy by hiding your IP address and encrypting your connection through the Tor network.</p>
+</section>
+{{ end }}
+```
+
+**⚠️ REMINDER: All content sections MUST be populated from IDEA.md - see sourcing rules above.**
 
 ### /server/terms
 
@@ -25713,8 +26161,6 @@ server:
     about:
       # Additional content for about page (markdown supported)
       content: ""
-      # Show Tor section (auto-detected from tor.enabled, but can override)
-      show_tor: auto
 
     privacy:
       # Privacy policy content (markdown supported)
@@ -25748,7 +26194,6 @@ server:
 |---------|------|-------------|
 | **About Page** | | |
 | Content | Markdown editor | Additional about page content |
-| Show Tor section | Toggle | Show .onion address (auto/yes/no) |
 | Preview | Button | Preview about page |
 | **Privacy Policy** | | |
 | Content | Markdown editor | Privacy policy content |
@@ -26305,33 +26750,30 @@ func RegisterAdminRoutes(r *mux.Router) {
 **Console Output (First Run):**
 
 ```
-╔══════════════════════════════════════════════════════════════════════╗
-║                                                                      ║
-║   VIDVEIL {projectversion}                                     ║
-║                                                                      ║
-║   Status: Running (first run - setup available)                      ║
-║                                                                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║                                                                      ║
-║   🌐 Web Interface:                                                   ║
-║      http://myserver.example.com:64580                               ║
-║      http://192.168.1.100:64580                                      ║
-║                                                                      ║
-║   🔧 Admin Panel:                                                     ║
-║      http://myserver.example.com:64580/{admin_path}                  ║
-║                                                                      ║
-║   🔑 Setup Token (use at /{admin_path}):                              ║
-║      a1b2c3d4e5f67890abcdef1234567890                                ║
-║                                                                      ║
-║   📧 SMTP: 172.17.0.1:25                                                ║
-║                                                                      ║
-║   ⚠️  Save the setup token! It will not be shown again.               ║
-║                                                                      ║
-╚══════════════════════════════════════════════════════════════════════╝
+╭───────────────────────────────────────────────────────────╮
+│  🚀 VIDVEIL · 📦 {projectversion}                   │
+├───────────────────────────────────────────────────────────┤
+│  🔧 Running in mode: {app_mode}                           │
+├───────────────────────────────────────────────────────────┤
+│  🌐 HTTP:  {proto}://{fqdn}:{port}                        │
+├───────────────────────────────────────────────────────────┤
+│  📡 Listening on {proto}://{address}:{port}               │
+│  ✅ Server started on {startup_datetime}                  │
+╰───────────────────────────────────────────────────────────╯
+
+┌───────────────────────────────────────────────────────────┐
+│  🔑 SETUP REQUIRED                                        │
+├───────────────────────────────────────────────────────────┤
+│  Setup Token: {setup_token}                               │
+│                                                           │
+│  Go to {proto}://{fqdn}/{admin_path}/server/setup         │
+│  and enter this token to complete setup.                  │
+│                                                           │
+│  This token will only be shown ONCE.                      │
+└───────────────────────────────────────────────────────────┘
 
 [INFO] Server started successfully
 [INFO] Listening on {address}:{port}
-[INFO] SMTP: 172.17.0.1:25
 ```
 
 ### App Usability Before Setup
@@ -27028,7 +27470,7 @@ Admin Panel Header:
 |---------|---------|---------|---------|-------------|
 | `admin_path` | Text | `admin` | Reload | Custom admin panel path (see PART 17) |
 | `rate_limit.enabled` | Toggle | On | No | Enable rate limiting |
-| `rate_limit.requests` | Number | `120` | No | Requests per window |
+| `rate_limit.requests` | Number | `0` | No | Requests per window (0 = project default) |
 | `rate_limit.window` | Duration | `1 minute` | No | Rate limit window |
 | `cors.enabled` | Toggle | On | No | Enable CORS |
 | `cors.origins` | Tags | `*` | No | Allowed origins |
@@ -28090,7 +28532,10 @@ Time: {timestamp}
 | `{app_name}` | Application name/title |
 | `{app_url}` | Application URL (full FQDN, e.g., `https://api.example.com`) |
 | `{fqdn}` | Server FQDN only (e.g., `api.example.com`) |
-| `{onion_url}` | Tor .onion URL (if enabled) |
+| `{onion_url}` | Tor .onion full URL (e.g., `http://abc...xyz.onion`) |
+| `{onion_address}` | Tor .onion address only (e.g., `abc...xyz.onion`) |
+| `{i2p_url}` | I2P full URL (e.g., `http://abc...xyz.b32.i2p`) |
+| `{i2p_address}` | I2P address only (e.g., `abc...xyz.b32.i2p`) |
 | `{admin_email}` | Admin email address |
 | `{recipient_email}` | Email address this message is being sent to |
 | `{recipient_username}` | Username of the account (if applicable) |
@@ -31732,16 +32177,17 @@ POST /api/{api_version}/{admin_path}/server/restore
 **When restoring a backup to a NEW server, the Primary Admin must re-authenticate:**
 
 ```
-Restore completed. Primary admin re-authentication required.
-
-A new setup token has been generated:
-
-  Setup Token: a1b2c3d4e5f67890abcdef1234567890
-
-Go to: https://{fqdn}:{port}/{admin_path}
-
-Enter the setup token to verify you are the server administrator.
-Your existing password and settings will be preserved.
+┌─────────────────────────────────────────────────────────────┐
+│  🔑 RESTORE COMPLETE - RE-AUTHENTICATION REQUIRED           │
+├─────────────────────────────────────────────────────────────┤
+│  Setup Token: a1b2c3d4e5f67890abcdef1234567890              │
+│                                                             │
+│  Go to {proto}://{fqdn}/{admin_path} and enter this token   │
+│  to verify you are the server administrator.                │
+│                                                             │
+│  Your existing password and settings will be preserved.     │
+│  This token will only be shown ONCE.                        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 **Why Re-Authentication?**
@@ -31817,21 +32263,20 @@ vidveil --service stop
 vidveil --maintenance setup
 
 # Output:
-# ╔══════════════════════════════════════════════════════════════════╗
-# ║                     ADMIN CREDENTIALS RESET                      ║
-# ╠══════════════════════════════════════════════════════════════════╣
-# ║  Admin password and API token have been cleared.                 ║
-# ║                                                                  ║
-# ║  NEW SETUP TOKEN (copy this now, shown ONCE):                    ║
-# ║  ┌────────────────────────────────────────────────────────────┐  ║
-# ║  │  a1b2c3d4e5f67890abcdef1234567890                          │  ║
-# ║  └────────────────────────────────────────────────────────────┘  ║
-# ║                                                                  ║
-# ║  1. Start the service: vidveil --service start             ║
-# ║  2. Go to: http://{fqdn}:{port}/{admin_path}                     ║
-# ║  3. Enter the setup token above                                  ║
-# ║  4. Create new admin account via setup wizard                    ║
-# ╚══════════════════════════════════════════════════════════════════╝
+# ┌─────────────────────────────────────────────────────────────┐
+# │  🔑 ADMIN CREDENTIALS RESET                                 │
+# ├─────────────────────────────────────────────────────────────┤
+# │  Admin password and API token have been cleared.            │
+# │                                                             │
+# │  Setup Token: a1b2c3d4e5f67890abcdef1234567890              │
+# │                                                             │
+# │  1. Start the service: vidveil --service start        │
+# │  2. Go to: {proto}://{fqdn}/{admin_path}                    │
+# │  3. Enter the setup token above                             │
+# │  4. Create new admin account via setup wizard               │
+# │                                                             │
+# │  This token will only be shown ONCE.                        │
+# └─────────────────────────────────────────────────────────────┘
 
 # Start the service
 vidveil --service start
@@ -32375,7 +32820,7 @@ func verifyChecksum(filePath, expectedHash string) error {
 
 Application user creation **REQUIRES** privilege escalation. If the user cannot escalate privileges, the application runs as the current user with user-level directories.
 
-**IMPORTANT: See PART 5 "Smart Escalation Logic" (lines ~6668-6703) for the complete escalation flow:**
+**IMPORTANT: See PART 5 "Smart Escalation Logic" (lines ~7728-7763) for the complete escalation flow:**
 - Binary first checks if already root/admin → skips escalation prompt entirely
 - Only prompts if user CAN actually escalate (is in sudoers/wheel/admin group)
 - Never prompts if user cannot escalate → shows informative error instead
@@ -33475,6 +33920,24 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, s c
 - Source of truth for stable version (see PART 13)
 - Semantic versioning: `MAJOR.MINOR.PATCH` (e.g., `1.2.3`)
 
+### Official Site File: `site.txt` (Optional)
+
+- **OPTIONAL** - only create if project has an official hosted instance
+- Single line containing the official site URL (e.g., `https://api.example.com`)
+- **NEVER guess or assume** - must be explicitly created by user
+- Used to embed default `--server` URL in CLI/Agent binaries
+- If not present, CLI/Agent users must always specify `--server` flag
+- Sources checked in order:
+  1. Environment variable: `OFFICIALSITE=https://example.com`
+  2. File: `site.txt` in project root
+  3. CI/CD secrets (repository secrets)
+  4. Empty (self-hosted projects)
+
+**Example:**
+```
+https://api.example.com
+```
+
 ### Version Tag `v` Prefix Rules 
 
 **CRITICAL: Only add `v` prefix to NUMERIC semantic versions, NEVER to text versions.**
@@ -33627,9 +34090,13 @@ BUILD_DATE := $(shell date +"%%B %%-d, %%Y at %%H:%%M:%%S")
 COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 # COMMIT_ID used directly - no VCS_REF alias
 
-# Official site (empty if none - users must use --server flag)
-# Set in AI.md or README.md, or leave empty for self-hosted projects
-OFFICIALSITE ?=
+# Official site URL (OPTIONAL - never guess or assume)
+# Sources (in order of precedence):
+#   1. Environment variable: OFFICIALSITE=https://example.com
+#   2. File: site.txt in project root (single line, URL only)
+#   3. Empty (self-hosted projects - users must use --server flag)
+# NEVER infer from project name, domain, or any other source
+OFFICIALSITE ?= $(shell [ -f site.txt ] && cat site.txt || echo "")
 
 # Linker flags to embed build info
 LDFLAGS := -s -w \
@@ -34786,6 +35253,7 @@ services:
 
   vidveil-db:
     image: postgres:alpine
+    pull_policy: always
     container_name: vidveil-db
     restart: always
     logging: *default-logging
@@ -34806,6 +35274,7 @@ services:
 
   vidveil-cache:
     image: valkey/valkey:alpine
+    pull_policy: always
     container_name: vidveil-cache
     restart: always
     logging: *default-logging
@@ -34885,7 +35354,7 @@ x-logging: &default-logging
 
 services:
   vidveil:
-    image: ghcr.io/apimgr/vidveil-aio:latest
+    image: ghcr.io/apimgr/vidveil:latest-aio
     container_name: vidveil-app
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
@@ -34944,7 +35413,7 @@ networks:
 # All-in-One Dockerfile - includes app + postgresql + valkey + tor
 # Build: golang:alpine (static binary, CGO_ENABLED=0)
 # Runtime: debian:latest (stable, broad compatibility)
-# Image name: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil-aio:latest
+# Image name: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest-aio
 # PORTS: Only 80 exposed (db/cache are internal-only)
 
 # =============================================================================
@@ -35205,7 +35674,7 @@ exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 | Image | Dockerfile | Description |
 |-------|------------|-------------|
 | `{name}:latest` | `Dockerfile` | Standard image (app only, alpine) |
-| `{name}-aio:latest` | `Dockerfile.aio` | All-in-one (app + postgresql + valkey + tor, debian) |
+| `{name}:latest-aio` | `Dockerfile.aio` | All-in-one (app + postgresql + valkey + tor, debian) |
 
 **AIO Environment Variables:**
 
@@ -35237,7 +35706,7 @@ valkeyURL := "unix:///run/valkey/valkey.sock"
 docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest -f docker/Dockerfile .
 
 # All-in-one image (context is project root)
-docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil-aio:latest -f docker/Dockerfile.aio .
+docker build -t {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest-aio -f docker/Dockerfile.aio .
 ```
 
 **When to use All-in-One:**
@@ -35415,8 +35884,9 @@ name: vidveil-dev
 services:
   vidveil:
     image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+    pull_policy: always
     container_name: vidveil-dev
-    restart: unless-stopped
+    restart: always
     environment:
       # Development: relaxed security, verbose logging, no caching
       # Does NOT enable debug endpoints - uncomment DEBUG=true for that
@@ -35464,8 +35934,9 @@ name: vidveil
 services:
   vidveil:
     image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+    pull_policy: always
     container_name: vidveil-app
-    restart: unless-stopped
+    restart: always
     environment:
       # Production: strict security, minimal logging, caching enabled
       # NO debug options - debug must be explicitly set via CLI if needed
@@ -35518,6 +35989,7 @@ name: vidveil-test
 services:
   vidveil:
     image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+    pull_policy: always
     container_name: vidveil-test
     restart: "no"
     environment:
@@ -35561,8 +36033,9 @@ name: vidveil
 services:
   vidveil:
     image: {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+    pull_policy: always
     container_name: vidveil-app
-    restart: unless-stopped
+    restart: always
     depends_on:
       vidveil-db:
         condition: service_healthy
@@ -35577,7 +36050,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=vidveil
       - DB_USER=vidveil
-      - DB_PASS=${DB_PASSWORD:-vidveil}
+      - DB_PASSWORD=${DB_PASSWORD:-vidveil}
     ports:
       # Production: bound to Docker bridge only (reverse proxy handles external)
       - "172.17.0.1:64580:80"
@@ -35589,8 +36062,9 @@ services:
 
   vidveil-db:
     image: postgres:alpine
+    pull_policy: always
     container_name: vidveil-db
-    restart: unless-stopped
+    restart: always
     environment:
       - POSTGRES_DB=vidveil
       - POSTGRES_USER=vidveil
@@ -35780,6 +36254,9 @@ on:
       - 'v*'
       - '[0-9]*.[0-9]*.[0-9]*'
 
+permissions:
+  contents: write
+
 env:
   PROJECTNAME: vidveil
 
@@ -35809,7 +36286,7 @@ jobs:
             goarch: arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -35821,8 +36298,13 @@ jobs:
           echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
-          # OFFICIALSITE: Set in repository secrets or leave empty for self-hosted
-          echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
+          # OFFICIALSITE (optional): Set in repository secrets, or site.txt file, or leave empty
+          # Never guess or assume - must be explicitly defined by user
+          if [ -f site.txt ]; then
+            echo "OFFICIALSITE=$(cat site.txt)" >> $GITHUB_ENV
+          else
+            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
+          fi
 
       - name: Build server
         env:
@@ -35842,20 +36324,20 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }} ./src/client
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
+          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       # Agent build - only if src/agent/ directory exists
       - name: Build Agent
@@ -35866,14 +36348,14 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }} ./src/agent
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/agent
 
       - name: Upload Agent artifact
         if: hashFiles('src/agent/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }}
+          name: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
   release:
     needs: build
@@ -35882,10 +36364,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: binaries
           merge-multiple: true
@@ -35934,6 +36416,9 @@ on:
     branches:
       - beta
 
+permissions:
+  contents: write
+
 env:
   PROJECTNAME: vidveil
 
@@ -35947,9 +36432,23 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            ext: .exe
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
+            goarch: arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -35961,6 +36460,13 @@ jobs:
           echo "VERSION=$(date -u +"%Y%m%d%H%M%S")-beta" >> $GITHUB_ENV
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
+          # OFFICIALSITE (optional): Set in repository secrets, or site.txt file, or leave empty
+          # Never guess or assume - must be explicitly defined by user
+          if [ -f site.txt ]; then
+            echo "OFFICIALSITE=$(cat site.txt)" >> $GITHUB_ENV
+          else
+            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
+          fi
 
       - name: Build server
         env:
@@ -35969,7 +36475,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }} ./src
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -35980,20 +36486,20 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli ./src/client
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
+          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       # Agent build - only if src/agent/ directory exists
       - name: Build Agent
@@ -36004,14 +36510,14 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent ./src/agent
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/agent
 
       - name: Upload Agent artifact
         if: hashFiles('src/agent/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
+          name: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
   release:
     needs: build
@@ -36020,10 +36526,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: binaries
           merge-multiple: true
@@ -36059,6 +36565,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   PROJECTNAME: vidveil
 
@@ -36088,7 +36597,7 @@ jobs:
             goarch: arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -36100,6 +36609,13 @@ jobs:
           echo "VERSION=$(date -u +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
+          # OFFICIALSITE (optional): Set in repository secrets, or site.txt file, or leave empty
+          # Never guess or assume - must be explicitly defined by user
+          if [ -f site.txt ]; then
+            echo "OFFICIALSITE=$(cat site.txt)" >> $GITHUB_ENV
+          else
+            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
+          fi
 
       - name: Build server
         env:
@@ -36119,20 +36635,20 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }} ./src/client
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
+          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       # Agent build - only if src/agent/ directory exists
       - name: Build Agent
@@ -36143,14 +36659,14 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }} ./src/agent
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/agent
 
       - name: Upload Agent artifact
         if: hashFiles('src/agent/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }}
+          name: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
   release:
     needs: build
@@ -36159,10 +36675,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: binaries
           merge-multiple: true
@@ -36205,14 +36721,14 @@ jobs:
 |---------|---------------|-----------------|
 | **Any push** (all branches) | `devel`, `{COMMIT_ID}` | `devel-aio`, `{COMMIT_ID}-aio` |
 | Push to beta branch | `devel`, `beta`, `{COMMIT_ID}` | `devel-aio`, `beta-aio`, `{COMMIT_ID}-aio` |
-| Version tag (`v*`, `*.*.*`) | `{version}`, `latest`, `YYMM` | `{version}-aio`, `aio`, `YYMM-aio` |
+| Version tag (`v*`, `*.*.*`) | `{version}`, `latest`, `YYMM` | `{version}-aio`, `latest-aio`, `YYMM-aio` |
 
 **Notes:**
 - `{COMMIT_ID}` = short SHA (7 characters) from `git rev-parse --short HEAD`
 - `YYMM` = year/month (e.g., `2512`)
 - Built for `linux/amd64` and `linux/arm64` using `docker buildx`
 - Registry: `ghcr.io`
-- Standard uses `latest`, All-in-One uses `aio` as the "latest" equivalent
+- Standard uses `latest`, All-in-One uses `latest-aio`
 
 **File:** `.github/workflows/docker.yml`
 
@@ -36240,7 +36756,7 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -36288,7 +36804,7 @@ jobs:
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
       - name: Build and push (standard)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
@@ -36333,7 +36849,7 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -36365,25 +36881,25 @@ jobs:
       - name: Determine tags (all-in-one)
         id: tags
         run: |
-          # AIO uses separate image name: {repo}-aio:{tag}
-          AIO_IMAGE="${{ env.IMAGE_NAME }}-aio"
-          TAGS="${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.COMMIT_ID }}"
+          # AIO uses same repo with -aio tag suffix: {repo}:{tag}-aio
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          TAGS="${IMAGE}:${{ env.COMMIT_ID }}-aio"
 
           if [[ "${{ env.IS_TAG }}" == "true" ]]; then
-            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.VERSION }}"
-            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:latest"
-            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.YYMM }}"
+            TAGS="$TAGS,${IMAGE}:${{ env.VERSION }}-aio"
+            TAGS="$TAGS,${IMAGE}:latest-aio"
+            TAGS="$TAGS,${IMAGE}:${{ env.YYMM }}-aio"
           else
-            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:devel"
+            TAGS="$TAGS,${IMAGE}:devel-aio"
             if [[ "${{ github.ref }}" == refs/heads/beta ]]; then
-              TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:beta"
+              TAGS="$TAGS,${IMAGE}:beta-aio"
             fi
           fi
 
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
       - name: Build and push (all-in-one)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile.aio
@@ -36424,11 +36940,11 @@ jobs:
 
 | Use Case | Standard Image | All-in-One Image |
 |----------|----------------|------------------|
-| Latest stable | `{name}:latest` | `{name}-aio:latest` |
-| Specific version | `{name}:1.2.3` | `{name}-aio:1.2.3` |
-| Development | `{name}:devel` | `{name}-aio:devel` |
-| Beta | `{name}:beta` | `{name}-aio:beta` |
-| Commit | `{name}:abc1234` | `{name}-aio:abc1234` |
+| Latest stable | `{name}:latest` | `{name}:latest-aio` |
+| Specific version | `{name}:1.2.3` | `{name}:1.2.3-aio` |
+| Development | `{name}:devel` | `{name}:devel-aio` |
+| Beta | `{name}:beta` | `{name}:beta-aio` |
+| Commit | `{name}:abc1234` | `{name}:abc1234-aio` |
 
 ---
 
@@ -36497,6 +37013,9 @@ on:
       - 'v*'
       - '[0-9]*.[0-9]*.[0-9]*'
 
+permissions:
+  contents: write
+
 env:
   PROJECTNAME: vidveil
 
@@ -36526,7 +37045,7 @@ jobs:
             goarch: arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -36538,6 +37057,13 @@ jobs:
           echo "VERSION=${GITEA_REF_NAME#v}" >> $GITEA_ENV
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITEA_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITEA_ENV
+          # OFFICIALSITE (optional): Set in repository secrets, or site.txt file, or leave empty
+          # Never guess or assume - must be explicitly defined by user
+          if [ -f site.txt ]; then
+            echo "OFFICIALSITE=$(cat site.txt)" >> $GITEA_ENV
+          else
+            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITEA_ENV
+          fi
 
       - name: Build server
         env:
@@ -36557,20 +37083,20 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }} ./src/client
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
+          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       # Agent build - only if src/agent/ directory exists
       - name: Build Agent
@@ -36581,14 +37107,14 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }} ./src/agent
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/agent
 
       - name: Upload Agent artifact
         if: hashFiles('src/agent/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }}
+          name: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
   release:
     needs: build
@@ -36597,10 +37123,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: binaries
           merge-multiple: true
@@ -36649,6 +37175,9 @@ on:
     branches:
       - beta
 
+permissions:
+  contents: write
+
 env:
   PROJECTNAME: vidveil
 
@@ -36664,7 +37193,7 @@ jobs:
             goarch: arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -36676,6 +37205,13 @@ jobs:
           echo "VERSION=$(date -u +"%Y%m%d%H%M%S")-beta" >> $GITEA_ENV
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITEA_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITEA_ENV
+          # OFFICIALSITE (optional): Set in repository secrets, or site.txt file, or leave empty
+          # Never guess or assume - must be explicitly defined by user
+          if [ -f site.txt ]; then
+            echo "OFFICIALSITE=$(cat site.txt)" >> $GITEA_ENV
+          else
+            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITEA_ENV
+          fi
 
       - name: Build server
         env:
@@ -36684,7 +37220,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }} ./src
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
       # CLI build - only if src/client/ directory exists
       - name: Build CLI
@@ -36695,20 +37231,20 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli ./src/client
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
+          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       # Agent build - only if src/agent/ directory exists
       - name: Build Agent
@@ -36719,14 +37255,14 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent ./src/agent
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/agent
 
       - name: Upload Agent artifact
         if: hashFiles('src/agent/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
+          name: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
   release:
     needs: build
@@ -36735,10 +37271,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: binaries
           merge-multiple: true
@@ -36774,6 +37310,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   PROJECTNAME: vidveil
 
@@ -36803,7 +37342,7 @@ jobs:
             goarch: arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -36815,6 +37354,13 @@ jobs:
           echo "VERSION=$(date -u +"%Y%m%d%H%M%S")" >> $GITEA_ENV
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITEA_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITEA_ENV
+          # OFFICIALSITE (optional): Set in repository secrets, or site.txt file, or leave empty
+          # Never guess or assume - must be explicitly defined by user
+          if [ -f site.txt ]; then
+            echo "OFFICIALSITE=$(cat site.txt)" >> $GITEA_ENV
+          else
+            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITEA_ENV
+          fi
 
       - name: Build server
         env:
@@ -36834,20 +37380,20 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }} ./src/client
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-cli${{ matrix.ext }}
+          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       # Agent build - only if src/agent/ directory exists
       - name: Build Agent
@@ -36858,14 +37404,14 @@ jobs:
           CGO_ENABLED: 0
         run: |
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
-          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }} ./src/agent
+          go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/agent
 
       - name: Upload Agent artifact
         if: hashFiles('src/agent/') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}-agent${{ matrix.ext }}
+          name: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.PROJECTNAME }}-agent-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
   release:
     needs: build
@@ -36874,10 +37420,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: binaries
           merge-multiple: true
@@ -36935,7 +37481,7 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -36997,7 +37543,7 @@ jobs:
           echo "tags=$TAGS" >> $GITEA_OUTPUT
 
       - name: Build and push (standard)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
@@ -37042,7 +37588,7 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -37081,25 +37627,25 @@ jobs:
       - name: Determine tags (all-in-one)
         id: tags
         run: |
-          # AIO uses separate image name: {repo}-aio:{tag}
-          AIO_IMAGE="${{ env.IMAGE_NAME }}-aio"
-          TAGS="${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.COMMIT_ID }}"
+          # AIO uses same repo with -aio tag suffix: {repo}:{tag}-aio
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          TAGS="${IMAGE}:${{ env.COMMIT_ID }}-aio"
 
           if [[ "${{ env.IS_TAG }}" == "true" ]]; then
-            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.VERSION }}"
-            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:latest"
-            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:${{ env.YYMM }}"
+            TAGS="$TAGS,${IMAGE}:${{ env.VERSION }}-aio"
+            TAGS="$TAGS,${IMAGE}:latest-aio"
+            TAGS="$TAGS,${IMAGE}:${{ env.YYMM }}-aio"
           else
-            TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:devel"
+            TAGS="$TAGS,${IMAGE}:devel-aio"
             if [[ "${{ gitea.ref }}" == refs/heads/beta ]]; then
-              TAGS="$TAGS,${{ env.REGISTRY }}/${AIO_IMAGE}:beta"
+              TAGS="$TAGS,${IMAGE}:beta-aio"
             fi
           fi
 
           echo "tags=$TAGS" >> $GITEA_OUTPUT
 
       - name: Build and push (all-in-one)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile.aio
@@ -37224,8 +37770,14 @@ stages:
     - export VERSION="${CI_COMMIT_TAG#v}"
     - export COMMIT_ID="${CI_COMMIT_SHORT_SHA}"
     - export BUILD_DATE="$(date +"%a %b %d, %Y at %H:%M:%S %Z")"
-    # OFFICIALSITE: Set in GitLab CI/CD Variables or leave empty for self-hosted
-    - export OFFICIALSITE="${OFFICIALSITE:-}"
+    # OFFICIALSITE (optional): Set in CI/CD Variables, or site.txt file, or leave empty
+    # Never guess or assume - must be explicitly defined by user
+    - |
+      if [ -f site.txt ]; then
+        export OFFICIALSITE="$(cat site.txt)"
+      else
+        export OFFICIALSITE="${OFFICIALSITE:-}"
+      fi
     - export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
 
 # =============================================================================
@@ -37613,18 +38165,18 @@ docker:build-aio:
     - docker buildx create --name multiarch-builder --use 2>/dev/null || docker buildx use multiarch-builder
   script:
     - |
-      # AIO uses separate image name: {repo}-aio:{tag}
-      AIO_IMAGE="${CI_REGISTRY_IMAGE}-aio"
+      # AIO uses same repo with -aio tag suffix: {repo}:{tag}-aio
+      IMAGE="${CI_REGISTRY_IMAGE}"
       if [ -n "$CI_COMMIT_TAG" ]; then
         VERSION="${CI_COMMIT_TAG#v}"
         YYMM=$(date +%y%m)
-        TAGS="-t ${AIO_IMAGE}:${VERSION} -t ${AIO_IMAGE}:latest -t ${AIO_IMAGE}:${YYMM} -t ${AIO_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+        TAGS="-t ${IMAGE}:${VERSION}-aio -t ${IMAGE}:latest-aio -t ${IMAGE}:${YYMM}-aio -t ${IMAGE}:${CI_COMMIT_SHORT_SHA}-aio"
       elif [ "$CI_COMMIT_BRANCH" = "beta" ]; then
         VERSION="beta-$CI_COMMIT_SHORT_SHA"
-        TAGS="-t ${AIO_IMAGE}:beta -t ${AIO_IMAGE}:devel -t ${AIO_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+        TAGS="-t ${IMAGE}:beta-aio -t ${IMAGE}:devel-aio -t ${IMAGE}:${CI_COMMIT_SHORT_SHA}-aio"
       else
         VERSION="devel-$CI_COMMIT_SHORT_SHA"
-        TAGS="-t ${AIO_IMAGE}:devel -t ${AIO_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+        TAGS="-t ${IMAGE}:devel-aio -t ${IMAGE}:${CI_COMMIT_SHORT_SHA}-aio"
       fi
       BUILD_DATE="$(date -Iseconds)"
     - |
@@ -37807,6 +38359,9 @@ pipeline {
                     }
                     env.COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     env.BUILD_DATE = sh(script: 'date +"%a %b %d, %Y at %H:%M:%S %Z"', returnStdout: true).trim()
+                    // OFFICIALSITE (optional): Set in Jenkins credentials, or site.txt file, or leave empty
+                    // Never guess or assume - must be explicitly defined by user
+                    env.OFFICIALSITE = sh(script: '[ -f site.txt ] && cat site.txt || echo "${OFFICIALSITE:-}"', returnStdout: true).trim()
                     env.LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}' -X 'main.OfficialSite=${env.OFFICIALSITE}'"
                     env.HAS_CLI = sh(script: '[ -d src/client ] && echo true || echo false', returnStdout: true).trim()
                     env.HAS_AGENT = sh(script: '[ -d src/agent ] && echo true || echo false', returnStdout: true).trim()
@@ -38398,27 +38953,26 @@ pipeline {
         }
 
         // Docker All-in-One - matches docker.yml build-aio (ALL branches and tags)
-        // AIO uses separate image name: {repo}-aio:{tag}
+        // AIO uses same repo with -aio tag suffix: {repo}:{tag}-aio
         stage('Docker AIO') {
             agent { label 'amd64' }
             steps {
                 script {
-                    def aioRegistry = "${REGISTRY}-aio"
-                    def tags = "-t ${aioRegistry}:${COMMIT_ID}"
+                    def tags = "-t ${REGISTRY}:${COMMIT_ID}-aio"
 
                     if (env.BUILD_TYPE == 'release') {
                         // Release tag - version, latest, YYMM
                         def yymm = new Date().format('yyMM')
-                        tags += " -t ${aioRegistry}:${VERSION}"
-                        tags += " -t ${aioRegistry}:latest"
-                        tags += " -t ${aioRegistry}:${yymm}"
+                        tags += " -t ${REGISTRY}:${VERSION}-aio"
+                        tags += " -t ${REGISTRY}:latest-aio"
+                        tags += " -t ${REGISTRY}:${yymm}-aio"
                     } else if (env.BUILD_TYPE == 'beta') {
                         // Beta branch - beta, devel
-                        tags += " -t ${aioRegistry}:beta"
-                        tags += " -t ${aioRegistry}:devel"
+                        tags += " -t ${REGISTRY}:beta-aio"
+                        tags += " -t ${REGISTRY}:devel-aio"
                     } else {
                         // All other branches - devel only
-                        tags += " -t ${aioRegistry}:devel"
+                        tags += " -t ${REGISTRY}:devel-aio"
                     }
 
                     // Login to container registry
@@ -39092,7 +39646,7 @@ make test
 test:
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Run tests with coverage
       run: |
@@ -40961,7 +41515,7 @@ See [Configuration](configuration.md) for all options.
 
 ## Config File
 
-Default location: `/etc/apimgr/vidveil/server.yml`
+Default location: `{config_dir}/server.yml` (see PART 4 for platform-specific paths)
 
 ```yaml
 server:
@@ -40970,7 +41524,9 @@ server:
 
 database:
   type: sqlite
-  path: /data/db/server.db
+  # Path auto-detected based on platform (see PART 4)
+  # Docker: /data/db/sqlite/server.db
+  # Native: {db_dir}/server.db
 
 # ... (all configuration options)
 ```
@@ -47564,7 +48120,7 @@ The Agent is essentially the Server's "little sibling" - same professional struc
 |--------|--------|-------|
 | **Listens for connections** | ✅ Yes (`--port`, `--address`) | ❌ No |
 | **Connects to parent server** | ❌ No (IS the server) | ✅ Yes (`--server`, `--token`) |
-| **Setup** | ✅ Web-based (`--setup-token` for access) | ❌ No (registers with server via connection string) |
+| **Setup** | ✅ Web-based (token entered at `/{admin_path}/server/setup`) | ❌ No (registers with server via connection string) |
 | **Admin operations** | N/A (IS the server) | ❌ No (Client's job) |
 | **WebUI** | ✅ Yes | ❌ No (headless) |
 | **Database** | ✅ `server.db` | ✅ `agent.db` (if needed) |
@@ -49209,7 +49765,7 @@ GET /api/{api_version}/users
     "location": "San Francisco, CA",
     "website": "https://johndoe.dev",
     "visibility": "public",
-    "timezone": "America/Los_Angeles",
+    "timezone": "America/New_York",
     "language": "en",
     "verified": true,
     "created_at": "2024-01-15T10:30:00Z"
@@ -49280,7 +49836,7 @@ Account Settings (/users/settings)
 │  ─────────────────────────────────────────────────────────  │
 │                                                             │
 │  Timezone                                                   │
-│  [America/Los_Angeles (UTC-8)            ▼]                │
+│  [America/New_York (UTC-5)               ▼]                │
 │                                                             │
 │  Language                                                   │
 │  [English                                ▼]                │
@@ -49466,7 +50022,7 @@ GET /api/{api_version}/users/settings
         "bio": "Software developer",
         "location": "San Francisco, CA",
         "website": "https://johndoe.dev",
-        "timezone": "America/Los_Angeles",
+        "timezone": "America/New_York",
         "language": "en",
         "date_format": "MM/DD/YYYY",
         "time_format": "24h"
@@ -53534,7 +54090,8 @@ make docker # Build Docker image
 - [ ] `--pid {path}` - PID file path
 - [ ] `--address {addr}` - Listen address
 - [ ] `--port {port}` - Listen port
-- [ ] `--mode {mode}` - Application mode
+- [ ] `--baseurl {path}` - URL path prefix (default: /)
+- [ ] `--mode {production|development}` - Application mode
 - [ ] `--status` - Show running status
 - [ ] `--daemon` - Daemonize (detach)
 - [ ] `--debug` - Enable debug mode
@@ -53921,12 +54478,12 @@ make docker # Build Docker image
 
 ### Security Headers
 
-- [ ] Content-Security-Policy
-- [ ] X-Frame-Options: DENY
+- [ ] Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'
+- [ ] X-Frame-Options: SAMEORIGIN
 - [ ] X-Content-Type-Options: nosniff
 - [ ] X-XSS-Protection: 1; mode=block
 - [ ] Referrer-Policy: strict-origin-when-cross-origin
-- [ ] Permissions-Policy (as appropriate)
+- [ ] Permissions-Policy: geolocation=(), microphone=(), camera=()
 
 ### Data Protection
 
@@ -54275,6 +54832,7 @@ make docker # Build Docker image
 
 - [ ] Web frontend uses theme
 - [ ] Admin panel uses theme
+- [ ] Error pages use theme (404, 500, 502, 503, etc.)
 - [ ] Swagger UI uses theme
 - [ ] GraphQL Playground uses theme
 - [ ] ReadTheDocs uses theme
@@ -54304,6 +54862,99 @@ make docker # Build Docker image
 - [ ] Works on all screen sizes
 - [ ] Touch-friendly controls
 - [ ] No horizontal scroll on mobile
+
+---
+
+## CONSOLE/BANNER CHECKLIST
+
+### Responsive Startup Banner (Server, Client, Agent)
+
+- [ ] Banner adapts to terminal width at runtime
+- [ ] ≥80 cols: Full banner with box drawing + icons + all info
+- [ ] 60-79 cols: Compact banner with icons, no box drawing
+- [ ] 40-59 cols: Minimal text, abbreviated, no icons
+- [ ] <40 cols: Single line only (app name + port)
+- [ ] Width detected via `term.GetSize()`, default 80 if detection fails
+- [ ] Banner never wider than terminal (no horizontal scroll)
+
+### NO_COLOR / --color Compliance (ALL Binaries)
+
+- [ ] `NO_COLOR` env var respected (any non-empty value disables colors AND emojis)
+- [ ] `TERM=dumb` disables colors, emojis, and ANSI escape sequences
+- [ ] `--color=always` forces colors ON (overrides NO_COLOR)
+- [ ] `--color=never` forces colors OFF
+- [ ] `--color=auto` (default) uses priority detection
+- [ ] Priority order: CLI flag > config file > NO_COLOR env > auto-detect
+- [ ] Uses shared `ColorEnabled()` and `EmojiEnabled()` functions (PART 8)
+- [ ] Plain mode: no emojis, no box drawing (╭╮╰╯│─), no ANSI colors
+
+### Setup Token (First Run)
+
+- [ ] Generated on first run if no admins exist
+- [ ] 32-character hex string (no dashes)
+- [ ] Stored as SHA-256 hash in `{config_dir}/setup_token.txt`
+- [ ] Plaintext token shown ONCE in console banner
+- [ ] File deleted after successful setup completion
+- [ ] Setup URL displayed: `{proto}://{fqdn}/{admin_path}/server/setup`
+- [ ] Token section only appears on first run (never again after setup)
+
+### CLI Flag Syntax (ALL Binaries)
+
+- [ ] Both `--flag=value` and `--flag value` syntax accepted
+- [ ] `-h` (help) and `-v` (version) are the ONLY short flags
+- [ ] All other flags are long-form only (`--config`, `--port`, etc.)
+- [ ] `--color {always|never|auto}` available on all binaries
+- [ ] `--debug` available on all binaries
+- [ ] Flag parsing consistent across server, client, agent
+
+### Error Pages (Web Frontend)
+
+- [ ] All HTTP error pages use site theme (dark/light/auto)
+- [ ] 400 Bad Request - themed
+- [ ] 401 Unauthorized - themed
+- [ ] 403 Forbidden - themed
+- [ ] 404 Not Found - themed
+- [ ] 500 Internal Server Error - themed
+- [ ] 502 Bad Gateway - themed
+- [ ] 503 Service Unavailable - themed
+- [ ] Error pages extend `public.tmpl` layout
+- [ ] Error pages include navigation (user can navigate away)
+- [ ] No stack traces in production mode
+- [ ] No generic browser error pages - always render themed template
+
+### Banner Placeholders (Must Be Defined)
+
+- [ ] `{proto}` - Protocol (http/https)
+- [ ] `{fqdn}` - Fully qualified domain name
+- [ ] `{baseurl}` - URL path prefix (auto-detected from reverse proxy)
+- [ ] `{port}` - Port number (stripped if 80/443)
+- [ ] `{address}` - Listen IP address
+- [ ] `{app_mode}` - Application mode (production/development)
+- [ ] `{onion_address}` - Tor .onion address (if enabled)
+- [ ] `{i2p_address}` - I2P address (if enabled)
+- [ ] `{smtp_address}` - SMTP server address (if configured)
+- [ ] `{smtp_port}` - SMTP server port
+- [ ] `{startup_datetime}` - Server start timestamp
+- [ ] `{setup_token}` - First-run setup token (shown ONCE)
+- [ ] `VIDVEIL` - Project name (uppercase for display)
+- [ ] `{projectversion}` - Current version
+
+### Client TUI/GUI Dynamic Sizing
+
+- [ ] TUI adapts to terminal size (same breakpoints as server banner)
+- [ ] GUI uses native window sizing
+- [ ] Layout recalculates on terminal resize
+- [ ] Minimum usable width enforced (shows error if too narrow)
+- [ ] Mouse support respects terminal capabilities
+- [ ] Unicode box drawing respects `TERM` and `NO_COLOR`
+
+### Console Output Rules
+
+- [ ] Startup banner: Pretty (icons, colors, box drawing) - respects NO_COLOR
+- [ ] Log output: ALWAYS plain text (no icons, no colors, no box drawing)
+- [ ] `--status` output: Pretty to console, exit code for scripts (0=healthy, 1=unhealthy)
+- [ ] `--help` output: Plain text, no colors (works in all terminals)
+- [ ] `--version` output: Plain text, single line
 
 ---
 

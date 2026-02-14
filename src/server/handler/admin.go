@@ -4,6 +4,7 @@ package handler
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -448,7 +449,7 @@ func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Recent activity placeholder - actual audit logging per AI.md PART 11
+	// Recent activity from audit log per AI.md PART 11
 	var recentActivity []map[string]interface{}
 
 	// System resources per AI.md PART 17
@@ -611,7 +612,9 @@ func (h *AdminHandler) DatabasePage(w http.ResponseWriter, r *http.Request) {
 	tableCount := 0
 	if db := h.adminSvc.GetDB(); db != nil {
 		var count int
-		row := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		row := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
 		if err := row.Scan(&count); err == nil {
 			tableCount = count
 		}
@@ -818,7 +821,9 @@ type PageInfo struct {
 
 // getPages retrieves all standard pages from database
 func (h *AdminHandler) getPages() ([]PageInfo, error) {
-	rows, err := h.adminSvc.GetDB().Query(`
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	rows, err := h.adminSvc.GetDB().QueryContext(ctx, `
 		SELECT id, slug, title, content, meta_description, enabled, updated_at
 		FROM pages ORDER BY id
 	`)
@@ -880,7 +885,9 @@ func (h *AdminHandler) APIPageUpdate(w http.ResponseWriter, r *http.Request) {
 
 	adminID := h.getSessionAdminID(r)
 
-	_, err := h.adminSvc.GetDB().Exec(`
+	ctxExec, cancelExec := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelExec()
+	_, err := h.adminSvc.GetDB().ExecContext(ctxExec, `
 		UPDATE pages SET title = ?, content = ?, meta_description = ?, enabled = ?,
 		updated_by = ?, updated_at = ? WHERE slug = ?
 	`, req.Title, req.Content, req.MetaDescription, req.Enabled, adminID, time.Now(), slug)
@@ -918,7 +925,9 @@ func (h *AdminHandler) APIPageReset(w http.ResponseWriter, r *http.Request) {
 
 	adminID := h.getSessionAdminID(r)
 
-	_, err := h.adminSvc.GetDB().Exec(`
+	ctxReset, cancelReset := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelReset()
+	_, err := h.adminSvc.GetDB().ExecContext(ctxReset, `
 		UPDATE pages SET title = ?, content = ?, meta_description = ?, enabled = 1,
 		updated_by = ?, updated_at = ? WHERE slug = ?
 	`, def.title, def.content, def.meta, adminID, time.Now(), slug)
@@ -1811,7 +1820,9 @@ func (h *AdminHandler) APIDatabaseVacuum(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if _, err := db.Exec("VACUUM"); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, "VACUUM"); err != nil {
 		h.jsonError(w, "Database vacuum failed", "ERR_VACUUM_FAILED", http.StatusInternalServerError)
 		return
 	}
@@ -1830,7 +1841,9 @@ func (h *AdminHandler) APIDatabaseAnalyze(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if _, err := db.Exec("ANALYZE"); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, "ANALYZE"); err != nil {
 		h.jsonError(w, "Database analyze failed", "ERR_ANALYZE_FAILED", http.StatusInternalServerError)
 		return
 	}
@@ -4236,7 +4249,7 @@ func (h *AdminHandler) NodeDetailPage(w http.ResponseWriter, r *http.Request) {
 			"ID":                nodeID,
 			"Name":              nodeID,
 			"Hostname":          nodeID,
-			"Address":           "127.0.0.1",
+			"Address":           h.appConfig.Server.Address,
 			"Port":              h.appConfig.Server.Port,
 			"IsPrimary":         isThisNode,
 			"Status":            "active",

@@ -86,8 +86,8 @@ func (s *Server) handleDebugRoutes(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDebugCache(w http.ResponseWriter, r *http.Request) {
 	stats := map[string]interface{}{
-		"enabled": true,
-		"entries": 0,
+		"type":   s.appConfig.Server.Cache.Type,
+		"status": "active",
 	}
 
 	handler.WriteJSON(w, http.StatusOK, stats)
@@ -119,10 +119,24 @@ func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDebugScheduler(w http.ResponseWriter, r *http.Request) {
-	data := map[string]interface{}{
-		"status": "running",
-		"tasks":  []string{},
+	data := s.scheduler.Stats()
+
+	tasks := s.scheduler.ListTasks()
+	taskList := make([]map[string]interface{}, 0, len(tasks))
+	for _, t := range tasks {
+		taskList = append(taskList, map[string]interface{}{
+			"id":          t.ID,
+			"name":        t.Name,
+			"schedule":    t.Schedule,
+			"enabled":     t.Enabled,
+			"last_run":    t.LastRun,
+			"last_result": t.LastResult,
+			"next_run":    t.NextRun,
+			"run_count":   t.RunCount,
+			"fail_count":  t.FailCount,
+		})
 	}
+	data["tasks"] = taskList
 
 	handler.WriteJSON(w, http.StatusOK, data)
 }

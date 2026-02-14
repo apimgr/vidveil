@@ -5,6 +5,7 @@
 package admin
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -52,6 +53,25 @@ func (s *AdminService) GetDB() *sql.DB {
 	return s.db
 }
 
+// Query timeout helpers per AI.md PART 10: All queries MUST have timeouts
+func (s *AdminService) execCtx(query string, args ...interface{}) (sql.Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return s.db.ExecContext(ctx, query, args...)
+}
+
+func (s *AdminService) queryCtx(query string, args ...interface{}) (*sql.Rows, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return s.db.QueryContext(ctx, query, args...)
+}
+
+func (s *AdminService) queryRowCtx(query string, args ...interface{}) *sql.Row {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return s.db.QueryRowContext(ctx, query, args...)
+}
+
 // Initialize checks for first run and generates setup token if needed
 // Per AI.md PART 31: App is FULLY FUNCTIONAL before setup
 func (s *AdminService) Initialize() error {
@@ -60,7 +80,7 @@ func (s *AdminService) Initialize() error {
 
 	// Check if any admins exist
 	var count int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM admin_credentials").Scan(&count)
+	err := s.queryRowCtx("SELECT COUNT(*) FROM admin_credentials").Scan(&count)
 	if err != nil {
 		return fmt.Errorf("failed to check admin count: %w", err)
 	}
@@ -78,7 +98,7 @@ func (s *AdminService) Initialize() error {
 		s.tokenExpires = time.Now().Add(24 * time.Hour)
 
 		// Store setup token in database
-		_, err = s.db.Exec(`
+		_, err = s.execCtx(`
 			INSERT INTO setup_tokens (token, purpose, expires_at)
 			VALUES (?, 'initial_setup', ?)
 		`, hashToken(token), s.tokenExpires)
@@ -111,7 +131,7 @@ func (s *AdminService) ValidateSetupToken(token string) bool {
 	var usedAt sql.NullTime
 	var expires time.Time
 
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT expires_at, used_at FROM setup_tokens
 		WHERE token = ? AND purpose = 'initial_setup'
 	`, hashToken(token)).Scan(&expires, &usedAt)
@@ -156,7 +176,7 @@ func (s *AdminService) CreateAdmin(username, password string, isPrimary bool) (*
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	result, err := s.db.Exec(`
+	result, err := s.execCtx(`
 		INSERT INTO admin_credentials (username, password_hash, is_primary)
 		VALUES (?, ?, ?)
 	`, username, hash, isPrimary)
@@ -182,7 +202,7 @@ func (s *AdminService) CreateAdminWithSetupToken(token, username, password strin
 	}
 
 	// Mark token as used
-	_, err := s.db.Exec(`
+	_, err := s.execCtx(`
 		UPDATE setup_tokens SET used_at = ?, used_by = ?
 		WHERE token = ? AND purpose = 'initial_setup'
 	`, time.Now(), username, hashToken(token))
@@ -199,7 +219,7 @@ func (s *AdminService) Authenticate(username, password string) (*AdminUser, erro
 	var admin AdminUser
 	var passwordHash string
 
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT id, username, password_hash, totp_enabled, created_at, last_login, login_count, is_primary
 		FROM admin_credentials WHERE username = ?
 	`, username).Scan(&admin.ID, &admin.Username, &passwordHash, &admin.TOTPEnabled,
@@ -223,7 +243,7 @@ func (s *AdminService) Authenticate(username, password string) (*AdminUser, erro
 	admin.LastLogin = &now
 	admin.LoginCount++
 
-	_, _ = s.db.Exec(`
+	_, _ = s.execCtx(`
 		UPDATE admin_credentials SET last_login = ?, login_count = login_count + 1
 		WHERE id = ?
 	`, now, admin.ID)
@@ -235,7 +255,7 @@ func (s *AdminService) Authenticate(username, password string) (*AdminUser, erro
 // Uses Argon2id for password hashing per AI.md PART 2
 func (s *AdminService) ChangePassword(adminID int64, currentPassword, newPassword string) error {
 	var passwordHash string
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT password_hash FROM admin_credentials WHERE id = ?
 	`, adminID).Scan(&passwordHash)
 	if err != nil {
@@ -254,7 +274,7 @@ func (s *AdminService) ChangePassword(adminID int64, currentPassword, newPasswor
 		return fmt.Errorf("failed to hash new password: %w", err)
 	}
 
-	_, err = s.db.Exec(`
+	_, err = s.execCtx(`
 		UPDATE admin_credentials SET password_hash = ?, updated_at = ?
 		WHERE id = ?
 	`, newHash, time.Now(), adminID)
@@ -272,7 +292,7 @@ func (s *AdminService) GenerateInviteToken(invitedBy int64) (string, error) {
 	// Token valid for 7 days
 	expires := time.Now().Add(7 * 24 * time.Hour)
 
-	_, err = s.db.Exec(`
+	_, err = s.execCtx(`
 		INSERT INTO setup_tokens (token, purpose, expires_at)
 		VALUES (?, 'admin_invite', ?)
 	`, hashToken(token), expires)
@@ -293,7 +313,7 @@ func (s *AdminService) CreateAPIToken(adminID int64, name string, permissions st
 	prefix := token[:8]
 	hash := hashToken(token)
 
-	_, err = s.db.Exec(`
+	_, err = s.execCtx(`
 		INSERT INTO api_tokens (admin_id, name, token_hash, token_prefix, permissions)
 		VALUES (?, ?, ?, ?, ?)
 	`, adminID, name, hash, prefix, permissions)
@@ -309,7 +329,7 @@ func (s *AdminService) ValidateAPIToken(token string) (int64, error) {
 	var adminID int64
 	var expires sql.NullTime
 
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT admin_id, expires_at FROM api_tokens
 		WHERE token_hash = ?
 	`, hashToken(token)).Scan(&adminID, &expires)
@@ -326,7 +346,7 @@ func (s *AdminService) ValidateAPIToken(token string) (int64, error) {
 	}
 
 	// Update last used
-	_, _ = s.db.Exec(`
+	_, _ = s.execCtx(`
 		UPDATE api_tokens SET last_used = ?, use_count = use_count + 1
 		WHERE token_hash = ?
 	`, time.Now(), hashToken(token))
@@ -337,7 +357,7 @@ func (s *AdminService) ValidateAPIToken(token string) (int64, error) {
 // GetAdminCount returns the number of admin accounts
 func (s *AdminService) GetAdminCount() (int, error) {
 	var count int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM admin_credentials").Scan(&count)
+	err := s.queryRowCtx("SELECT COUNT(*) FROM admin_credentials").Scan(&count)
 	return count, err
 }
 
@@ -357,7 +377,7 @@ func (s *AdminService) CreateAdminInvite(createdBy int64, username string, expir
 
 	// Check if username already exists
 	var exists int
-	s.db.QueryRow("SELECT COUNT(*) FROM admin_credentials WHERE username = ?", username).Scan(&exists)
+	s.queryRowCtx("SELECT COUNT(*) FROM admin_credentials WHERE username = ?", username).Scan(&exists)
 	if exists > 0 {
 		return "", fmt.Errorf("username already exists")
 	}
@@ -369,7 +389,7 @@ func (s *AdminService) CreateAdminInvite(createdBy int64, username string, expir
 
 	expires := time.Now().Add(expiresIn)
 
-	_, err = s.db.Exec(`
+	_, err = s.execCtx(`
 		INSERT INTO setup_tokens (token, purpose, username, expires_at, created_by)
 		VALUES (?, 'admin_invite', ?, ?, ?)
 	`, hashToken(token), username, expires, createdBy)
@@ -386,7 +406,7 @@ func (s *AdminService) ValidateInviteToken(token string) (*AdminInvite, error) {
 	var usedAt sql.NullTime
 	var createdBy sql.NullInt64
 
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT username, expires_at, used_at, created_by FROM setup_tokens
 		WHERE token = ? AND purpose = 'admin_invite'
 	`, hashToken(token)).Scan(&invite.Username, &invite.ExpiresAt, &usedAt, &createdBy)
@@ -429,7 +449,7 @@ func (s *AdminService) CreateAdminWithInvite(token, username, password string) (
 	}
 
 	// Mark token as used
-	_, err = s.db.Exec(`
+	_, err = s.execCtx(`
 		UPDATE setup_tokens SET used_at = ?, used_by = ?
 		WHERE token = ? AND purpose = 'admin_invite'
 	`, time.Now(), username, hashToken(token))
@@ -452,7 +472,7 @@ type PendingInvite struct {
 
 // ListPendingInvites returns all pending (unused, unexpired) admin invites
 func (s *AdminService) ListPendingInvites() ([]PendingInvite, error) {
-	rows, err := s.db.Query(`
+	rows, err := s.queryCtx(`
 		SELECT st.id, st.username, st.expires_at, st.created_at, COALESCE(ac.username, 'System') as created_by
 		FROM setup_tokens st
 		LEFT JOIN admin_credentials ac ON st.created_by = ac.id
@@ -479,7 +499,7 @@ func (s *AdminService) ListPendingInvites() ([]PendingInvite, error) {
 
 // RevokeInvite revokes a pending admin invite
 func (s *AdminService) RevokeInvite(inviteID int64) error {
-	result, err := s.db.Exec(`
+	result, err := s.execCtx(`
 		DELETE FROM setup_tokens
 		WHERE id = ? AND purpose = 'admin_invite' AND used_at IS NULL
 	`, inviteID)
@@ -496,7 +516,7 @@ func (s *AdminService) RevokeInvite(inviteID int64) error {
 
 // CleanupExpiredInvites removes expired invites (called by scheduler)
 func (s *AdminService) CleanupExpiredInvites() (int64, error) {
-	result, err := s.db.Exec(`
+	result, err := s.execCtx(`
 		DELETE FROM setup_tokens
 		WHERE purpose = 'admin_invite' AND expires_at < ?
 	`, time.Now())
@@ -560,7 +580,7 @@ func (s *AdminService) GetAdmin(adminID int64) (*AdminUser, error) {
 	var admin AdminUser
 	var lastLogin sql.NullTime
 
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT id, username, totp_enabled, created_at, last_login, login_count, is_primary
 		FROM admin_credentials WHERE id = ?
 	`, adminID).Scan(&admin.ID, &admin.Username, &admin.TOTPEnabled,
@@ -584,7 +604,7 @@ func (s *AdminService) GetAdmin(adminID int64) (*AdminUser, error) {
 func (s *AdminService) GetAPITokenInfo(adminID int64) (prefix string, lastUsed *time.Time, useCount int, err error) {
 	var lu sql.NullTime
 
-	err = s.db.QueryRow(`
+	err = s.queryRowCtx(`
 		SELECT token_prefix, last_used, use_count FROM api_tokens
 		WHERE admin_id = ? ORDER BY created_at DESC LIMIT 1
 	`, adminID).Scan(&prefix, &lu, &useCount)
@@ -605,7 +625,7 @@ func (s *AdminService) GetAPITokenInfo(adminID int64) (prefix string, lastUsed *
 // RegenerateAPIToken creates a new API token, replacing any existing one
 func (s *AdminService) RegenerateAPIToken(adminID int64) (string, error) {
 	// Delete existing tokens for this admin
-	_, err := s.db.Exec("DELETE FROM api_tokens WHERE admin_id = ?", adminID)
+	_, err := s.execCtx("DELETE FROM api_tokens WHERE admin_id = ?", adminID)
 	if err != nil {
 		return "", fmt.Errorf("failed to remove old tokens: %w", err)
 	}
@@ -619,7 +639,7 @@ func (s *AdminService) RegenerateAPIToken(adminID int64) (string, error) {
 	prefix := token[:8]
 	hash := hashToken(token)
 
-	_, err = s.db.Exec(`
+	_, err = s.execCtx(`
 		INSERT INTO api_tokens (admin_id, name, token_hash, token_prefix, permissions, created_at)
 		VALUES (?, 'Primary API Token', ?, ?, 'admin', ?)
 	`, adminID, hash, prefix, time.Now())
@@ -686,7 +706,7 @@ func (s *AdminService) GenerateRecoveryKeys(adminID int64) ([]string, error) {
 	defer s.mu.Unlock()
 
 	// Delete any existing recovery keys for this admin
-	_, err := s.db.Exec("DELETE FROM recovery_keys WHERE admin_id = ?", adminID)
+	_, err := s.execCtx("DELETE FROM recovery_keys WHERE admin_id = ?", adminID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clear old recovery keys: %w", err)
 	}
@@ -706,7 +726,7 @@ func (s *AdminService) GenerateRecoveryKeys(adminID int64) ([]string, error) {
 
 		// Store hash in database
 		keyHash := hashToken(strings.ReplaceAll(keys[i], "-", ""))
-		_, err := s.db.Exec(`
+		_, err := s.execCtx(`
 			INSERT INTO recovery_keys (admin_id, key_hash)
 			VALUES (?, ?)
 		`, adminID, keyHash)
@@ -730,7 +750,7 @@ func (s *AdminService) ValidateRecoveryKey(adminID int64, key string) (bool, err
 
 	// Look for unused key matching this hash
 	var keyID int64
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT id FROM recovery_keys
 		WHERE admin_id = ? AND key_hash = ? AND used_at IS NULL
 	`, adminID, keyHash).Scan(&keyID)
@@ -744,7 +764,7 @@ func (s *AdminService) ValidateRecoveryKey(adminID int64, key string) (bool, err
 	}
 
 	// Mark key as used
-	_, err = s.db.Exec(`
+	_, err = s.execCtx(`
 		UPDATE recovery_keys SET used_at = ? WHERE id = ?
 	`, time.Now(), keyID)
 	if err != nil {
@@ -760,14 +780,14 @@ func (s *AdminService) GetRecoveryKeysStatus(adminID int64) (*RecoveryKeyInfo, e
 	defer s.mu.RUnlock()
 
 	var total, used int
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT COUNT(*) FROM recovery_keys WHERE admin_id = ?
 	`, adminID).Scan(&total)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count recovery keys: %w", err)
 	}
 
-	err = s.db.QueryRow(`
+	err = s.queryRowCtx(`
 		SELECT COUNT(*) FROM recovery_keys WHERE admin_id = ? AND used_at IS NOT NULL
 	`, adminID).Scan(&used)
 	if err != nil {
@@ -784,7 +804,7 @@ func (s *AdminService) GetRecoveryKeysStatus(adminID int64) (*RecoveryKeyInfo, e
 // CleanupExpiredSessions removes expired admin sessions (called by scheduler)
 // Per AI.md PART 26: session.cleanup runs hourly
 func (s *AdminService) CleanupExpiredSessions() error {
-	_, err := s.db.Exec(`
+	_, err := s.execCtx(`
 		DELETE FROM admin_sessions WHERE expires_at < ?
 	`, time.Now())
 	if err != nil {
@@ -797,7 +817,7 @@ func (s *AdminService) CleanupExpiredSessions() error {
 // Per AI.md PART 26: token.cleanup runs daily
 func (s *AdminService) CleanupExpiredTokens() error {
 	// Clean up expired setup tokens (password reset, invites, etc.)
-	_, err := s.db.Exec(`
+	_, err := s.execCtx(`
 		DELETE FROM setup_tokens WHERE expires_at < ?
 	`, time.Now())
 	if err != nil {
@@ -805,7 +825,7 @@ func (s *AdminService) CleanupExpiredTokens() error {
 	}
 
 	// Clean up expired API tokens
-	_, err = s.db.Exec(`
+	_, err = s.execCtx(`
 		DELETE FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at < ?
 	`, time.Now())
 	if err != nil {
@@ -819,7 +839,7 @@ func (s *AdminService) CleanupExpiredTokens() error {
 // Per AI.md PART 17: TOTP Two-Factor Authentication
 func (s *AdminService) GetTOTPSecret(adminID int64) (string, error) {
 	var secret sql.NullString
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT totp_secret FROM admin_credentials WHERE id = ?
 	`, adminID).Scan(&secret)
 
@@ -841,7 +861,7 @@ func (s *AdminService) GetTOTPSecret(adminID int64) (string, error) {
 // Per AI.md PART 17: 10 one-time recovery codes
 func (s *AdminService) GetTOTPBackupCodes(adminID int64) ([]string, error) {
 	var codesJSON sql.NullString
-	err := s.db.QueryRow(`
+	err := s.queryRowCtx(`
 		SELECT totp_backup_codes FROM admin_credentials WHERE id = ?
 	`, adminID).Scan(&codesJSON)
 
@@ -889,7 +909,7 @@ func (s *AdminService) UseBackupCode(adminID int64, code string) (bool, error) {
 
 	// Update backup codes
 	codesStr := strings.Join(newCodes, ",")
-	_, err = s.db.Exec(`
+	_, err = s.execCtx(`
 		UPDATE admin_credentials SET totp_backup_codes = ? WHERE id = ?
 	`, codesStr, adminID)
 
@@ -900,7 +920,7 @@ func (s *AdminService) UseBackupCode(adminID int64, code string) (bool, error) {
 // Per AI.md PART 17: QR code + manual entry key at /admin/profile/security
 func (s *AdminService) EnableTOTP(adminID int64, secret string, backupCodes []string) error {
 	codesStr := strings.Join(backupCodes, ",")
-	_, err := s.db.Exec(`
+	_, err := s.execCtx(`
 		UPDATE admin_credentials
 		SET totp_enabled = TRUE, totp_secret = ?, totp_backup_codes = ?, updated_at = ?
 		WHERE id = ?
@@ -911,7 +931,7 @@ func (s *AdminService) EnableTOTP(adminID int64, secret string, backupCodes []st
 // DisableTOTP disables 2FA for an admin account
 // Per AI.md PART 17: Requires current TOTP code or recovery key to disable
 func (s *AdminService) DisableTOTP(adminID int64) error {
-	_, err := s.db.Exec(`
+	_, err := s.execCtx(`
 		UPDATE admin_credentials
 		SET totp_enabled = FALSE, totp_secret = NULL, totp_backup_codes = NULL, updated_at = ?
 		WHERE id = ?

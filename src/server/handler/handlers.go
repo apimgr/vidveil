@@ -2308,7 +2308,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 }
 
 // DebugEngine probes a specific engine and returns detailed results
-// GET /api/v1/debug/engine/{name}?q={query}
+// GET /api/v1/debug/engines/{name}?q={query}
 // Returns: engine info, capabilities, sample results with all fields
 func (h *SearchHandler) DebugEngine(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")

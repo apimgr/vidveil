@@ -4,7 +4,10 @@ package swagger
 
 import (
 	"encoding/json"
+	"fmt"
+	"html"
 	"net/http"
+	"strings"
 
 	"github.com/apimgr/vidveil/src/config"
 )
@@ -48,7 +51,7 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 			},
 		},
 		"paths": map[string]interface{}{
-			"/api/search": map[string]interface{}{
+			"/api/v1/search": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "Search videos",
 					"description": "Search across multiple adult video engines",
@@ -80,7 +83,7 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 					},
 				},
 			},
-			"/api/engines": map[string]interface{}{
+			"/api/v1/engines": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "List engines",
 					"description": "Get all search engines with status",
@@ -96,10 +99,10 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 					},
 				},
 			},
-			"/api/health": map[string]interface{}{
+			"/api/v1/healthz": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "Health check",
-					"description": "Get API health status",
+					"description": "Get API health status (per PART 13)",
 					"responses": map[string]interface{}{
 						"200": map[string]interface{}{
 							"description": "Healthy",
@@ -151,42 +154,105 @@ func SpecHandler(appConfig *config.AppConfig) http.HandlerFunc {
 	}
 }
 
+// generateSwaggerUI generates server-side rendered API documentation
+// Per AI.md PART 7: All assets embedded (no CDN). PART 16: Server-side rendered.
 func generateSwaggerUI(appConfig *config.AppConfig, theme string) string {
-	// Dark theme default
-	bgColor := "#282a36"
-	if theme == "light" {
-		bgColor = "#ffffff"
+	spec := GenerateSpec(appConfig)
+
+	// Parse spec to extract paths for rendering
+	var specData map[string]interface{}
+	json.Unmarshal([]byte(spec), &specData)
+
+	// Build endpoint rows
+	endpointRows := ""
+	if paths, ok := specData["paths"].(map[string]interface{}); ok {
+		for path, methods := range paths {
+			if methodMap, ok := methods.(map[string]interface{}); ok {
+				for method, details := range methodMap {
+					summary := ""
+					description := ""
+					if detailMap, ok := details.(map[string]interface{}); ok {
+						if s, ok := detailMap["summary"].(string); ok {
+							summary = s
+						}
+						if d, ok := detailMap["description"].(string); ok {
+							description = d
+						}
+					}
+					endpointRows += fmt.Sprintf(
+						`<tr><td><span class="method method-%s">%s</span></td><td><code>%s</code></td><td>%s</td><td>%s</td></tr>`,
+						html.EscapeString(method),
+						html.EscapeString(strings.ToUpper(method)),
+						html.EscapeString(path),
+						html.EscapeString(summary),
+						html.EscapeString(description),
+					)
+				}
+			}
+		}
 	}
 
-	return `<!DOCTYPE html>
+	// Theme colors
+	bg := "#1a1a2e"
+	cardBg := "#16213e"
+	text := "#e0e0e0"
+	accent := "#a78bfa"
+	border := "#333"
+	if theme == "light" {
+		bg = "#f5f5f5"
+		cardBg = "#ffffff"
+		text = "#333"
+		accent = "#6d28d9"
+		border = "#ddd"
+	}
+
+	return fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Vidveil API Documentation</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>API Documentation - VidVeil</title>
     <style>
-        body { margin: 0; background: ` + bgColor + `; }
-        .swagger-ui { max-width: 1200px; margin: 0 auto; }
-        .swagger-ui .topbar { display: none; }
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:%s;color:%s;padding:20px}
+        .container{max-width:960px;margin:0 auto}
+        h1{margin-bottom:8px;color:%s;font-size:24px}
+        .subtitle{color:%s;opacity:0.7;margin-bottom:24px;font-size:14px}
+        .card{background:%s;border:1px solid %s;border-radius:8px;padding:20px;margin-bottom:20px}
+        h2{font-size:18px;margin-bottom:12px;color:%s}
+        table{width:100%%;border-collapse:collapse}
+        th,td{text-align:left;padding:10px 12px;border-bottom:1px solid %s;font-size:14px}
+        th{font-weight:600;color:%s;opacity:0.8;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+        code{font-family:"Fira Code",Consolas,monospace;font-size:13px}
+        .method{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;font-family:monospace}
+        .method-get{background:#22c55e22;color:#22c55e}
+        .method-post{background:#3b82f622;color:#3b82f6}
+        .method-put{background:#f59e0b22;color:#f59e0b}
+        .method-delete{background:#ef444422;color:#ef4444}
+        .spec-link{margin-top:16px;font-size:13px}
+        .spec-link a{color:%s;text-decoration:none}
+        .spec-link a:hover{text-decoration:underline}
+        @media(max-width:600px){body{padding:10px}th,td{padding:8px 6px;font-size:13px}}
     </style>
 </head>
 <body>
-    <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-    <script>
-        window.onload = function() {
-            SwaggerUIBundle({
-                url: "/openapi.json",
-                dom_id: '#swagger-ui',
-                presets: [
-                    SwaggerUIBundle.presets.apis,
-                    SwaggerUIBundle.SwaggerUIStandalonePreset
-                ],
-                layout: "BaseLayout",
-                deepLinking: true
-            });
-        };
-    </script>
+    <div class="container">
+        <h1>VidVeil API Documentation</h1>
+        <p class="subtitle">OpenAPI 3.0 - Privacy-respecting meta search API</p>
+        <div class="card">
+            <h2>Endpoints</h2>
+            <table>
+                <thead><tr><th>Method</th><th>Path</th><th>Summary</th><th>Description</th></tr></thead>
+                <tbody>%s</tbody>
+            </table>
+            <div class="spec-link">
+                <a href="/openapi.json">View raw OpenAPI specification (JSON)</a>
+            </div>
+        </div>
+    </div>
 </body>
-</html>`
+</html>`,
+		bg, text, accent, text, cardBg, border, accent, border, text, accent,
+		endpointRows,
+	)
 }

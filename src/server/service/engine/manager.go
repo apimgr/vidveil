@@ -174,7 +174,7 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 	var enginesFailed []string
 	// Track seen URLs and titles for deduplication
 	seenURLs := make(map[string]bool)
-	seenTitles := make(map[string]bool)
+	seenTitlesNorm := make([]string, 0, 64) // for fuzzy Jaro-Winkler dedup
 	// Track per-engine stats
 	engineStats := make(map[string]model.EngineStatInfo)
 
@@ -212,14 +212,23 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 				if seenURLs[normalizedURL] {
 					continue
 				}
-				// Check normalized title (for cross-engine duplicates)
-				if normalizedTitle != "" && seenTitles[normalizedTitle] {
+				// Fuzzy title dedup: check against all previously seen titles
+				isDupTitle := false
+				if normalizedTitle != "" {
+					for _, seen := range seenTitlesNorm {
+						if titlesAreFuzzyDuplicates(normalizedTitle, seen) {
+							isDupTitle = true
+							break
+						}
+					}
+				}
+				if isDupTitle {
 					continue
 				}
 				// Mark as seen
 				seenURLs[normalizedURL] = true
 				if normalizedTitle != "" {
-					seenTitles[normalizedTitle] = true
+					seenTitlesNorm = append(seenTitlesNorm, normalizedTitle)
 				}
 				allResults = append(allResults, r)
 				resultCount++
@@ -553,6 +562,36 @@ func (m *EngineManager) ListEngines() []model.EngineInfo {
 	return infos
 }
 
+// ListEnginesWithHealth returns engine info combined with runtime health stats
+func (m *EngineManager) ListEnginesWithHealth() []model.EngineHealthInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	infos := make([]model.EngineHealthInfo, 0, len(m.engines))
+	for _, eng := range m.engines {
+		caps := eng.Capabilities()
+		info := model.EngineHealthInfo{
+			EngineInfo: model.EngineInfo{
+				Name:        eng.Name(),
+				DisplayName: eng.DisplayName(),
+				Enabled:     eng.IsAvailable(),
+				Available:   eng.IsAvailable(),
+				Tier:        eng.Tier(),
+				Features:    getFeatures(eng),
+				Capabilities: &model.EngineCapabilities{
+					HasPreview:  caps.HasPreview,
+					HasDownload: caps.HasDownload,
+				},
+			},
+		}
+		if ht, ok := eng.(HealthTracker); ok {
+			info.Health = ht.GetStats()
+		}
+		infos = append(infos, info)
+	}
+	return infos
+}
+
 // EnabledCount returns the number of enabled engines
 func (m *EngineManager) EnabledCount() int {
 	m.mu.RLock()
@@ -855,6 +894,88 @@ func normalizeTitle(title string) string {
 	return strings.Join(significantWords, " ")
 }
 
+// jaroSimilarity computes the Jaro string similarity between two strings.
+// Returns a value in [0, 1], where 1 = identical.
+func jaroSimilarity(s1, s2 string) float64 {
+	if s1 == s2 {
+		return 1.0
+	}
+	if len(s1) == 0 || len(s2) == 0 {
+		return 0.0
+	}
+
+	matchDist := max(len(s1), len(s2))/2 - 1
+	if matchDist < 0 {
+		matchDist = 0
+	}
+
+	s1Matches := make([]bool, len(s1))
+	s2Matches := make([]bool, len(s2))
+
+	var matches, transpositions int
+	for i, c1 := range s1 {
+		lo := max(0, i-matchDist)
+		hi := min(len(s2)-1, i+matchDist)
+		for j := lo; j <= hi; j++ {
+			if s2Matches[j] || rune(s2[j]) != c1 {
+				continue
+			}
+			s1Matches[i] = true
+			s2Matches[j] = true
+			matches++
+			break
+		}
+	}
+	if matches == 0 {
+		return 0.0
+	}
+
+	k := 0
+	for i := 0; i < len(s1); i++ {
+		if !s1Matches[i] {
+			continue
+		}
+		for k < len(s2) && !s2Matches[k] {
+			k++
+		}
+		if k < len(s2) && s1[i] != s2[k] {
+			transpositions++
+		}
+		k++
+	}
+
+	m := float64(matches)
+	return (m/float64(len(s1)) + m/float64(len(s2)) + (m-float64(transpositions)/2)/m) / 3.0
+}
+
+// jaroWinklerSimilarity extends Jaro with a prefix bonus for titles that share a common prefix.
+// p is the scaling factor (standard = 0.1, max 0.25). Returns [0, 1].
+func jaroWinklerSimilarity(s1, s2 string) float64 {
+	jaro := jaroSimilarity(s1, s2)
+	if jaro < 0.7 {
+		return jaro
+	}
+
+	prefixLen := 0
+	for i := 0; i < min(4, min(len(s1), len(s2))); i++ {
+		if s1[i] != s2[i] {
+			break
+		}
+		prefixLen++
+	}
+
+	return jaro + float64(prefixLen)*0.1*(1-jaro)
+}
+
+// titlesAreFuzzyDuplicates returns true when two normalized titles are nearly identical
+// using Jaro-Winkler similarity with a threshold of 0.92.
+func titlesAreFuzzyDuplicates(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return jaroWinklerSimilarity(a, b) >= 0.92
+}
+
 // resultMatchesAllTerms checks if a video result matches ALL search terms using synonym expansion
 // This implements AND logic: "pregnant teen lesbian" only returns results containing ALL three terms
 // Each term can match via any of its synonyms (e.g., "teen" matches "18", "young", "barely legal", etc.)
@@ -915,7 +1036,7 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 		// Check both URL and normalized title to catch cross-engine duplicates
 		var seenMu sync.Mutex
 		seenURLs := make(map[string]bool)
-		seenTitles := make(map[string]bool)
+		seenTitlesNorm := make([]string, 0, 64) // for fuzzy Jaro-Winkler dedup
 
 		for _, engine := range enginesToUse {
 			wg.Add(1)
@@ -1015,15 +1136,24 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						seenMu.Unlock()
 						continue
 					}
-					// Check normalized title (for cross-engine duplicates)
-					if normalizedTitle != "" && seenTitles[normalizedTitle] {
+					// Fuzzy title dedup: check against all previously seen titles
+					isDupTitle := false
+					if normalizedTitle != "" {
+						for _, seen := range seenTitlesNorm {
+							if titlesAreFuzzyDuplicates(normalizedTitle, seen) {
+								isDupTitle = true
+								break
+							}
+						}
+					}
+					if isDupTitle {
 						seenMu.Unlock()
 						continue
 					}
 					// Mark as seen
 					seenURLs[normalizedURL] = true
 					if normalizedTitle != "" {
-						seenTitles[normalizedTitle] = true
+						seenTitlesNorm = append(seenTitlesNorm, normalizedTitle)
 					}
 					seenMu.Unlock()
 

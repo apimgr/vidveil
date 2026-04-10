@@ -1744,6 +1744,17 @@ func (h *AdminHandler) APIEngines(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// APIEngineHealth returns engine health statistics including circuit breaker state,
+// average latency, uptime percentage, and success/failure counters.
+func (h *AdminHandler) APIEngineHealth(w http.ResponseWriter, r *http.Request) {
+	engines := h.engineMgr.ListEnginesWithHealth()
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":   true,
+		"data": engines,
+	})
+}
+
 // APIBackup triggers a backup
 // Per AI.md PART 22: Accepts JSON body with optional password for encryption
 func (h *AdminHandler) APIBackup(w http.ResponseWriter, r *http.Request) {
@@ -3240,7 +3251,7 @@ func (h *AdminHandler) renderDashboard() string {
 }
 
 func (h *AdminHandler) renderEnginesPage() string {
-	engines := h.engineMgr.ListEngines()
+	engines := h.engineMgr.ListEnginesWithHealth()
 
 	engineRows := ""
 	for _, eng := range engines {
@@ -3248,11 +3259,40 @@ func (h *AdminHandler) renderEnginesPage() string {
 		if !eng.Enabled {
 			status = `<span class="badge badge-error">Disabled</span>`
 		}
+
+		circuitBadge := `<span class="badge badge-success">Closed</span>`
+		switch eng.Health.CircuitState {
+		case "open":
+			circuitBadge = `<span class="badge badge-error">Open</span>`
+		case "half-open":
+			circuitBadge = `<span class="badge badge-warning">Half-Open</span>`
+		}
+
+		latency := "-"
+		if eng.Health.AvgLatencyMs > 0 {
+			latency = strconv.FormatInt(eng.Health.AvgLatencyMs, 10) + "ms"
+		}
+
+		uptime := "-"
+		if eng.Health.TotalSuccesses+eng.Health.TotalFailures > 0 {
+			uptime = strconv.FormatFloat(eng.Health.UptimePct, 'f', 1, 64) + "%"
+		}
+
+		lastFail := "-"
+		if !eng.Health.LastFailureAt.IsZero() {
+			lastFail = eng.Health.LastFailureAt.UTC().Format("01-02 15:04")
+		}
+
 		engineRows += `<tr>
             <td>` + eng.Name + `</td>
             <td>` + eng.DisplayName + `</td>
             <td>Tier ` + strconv.Itoa(eng.Tier) + `</td>
             <td>` + status + `</td>
+            <td>` + circuitBadge + `</td>
+            <td>` + latency + `</td>
+            <td>` + uptime + `</td>
+            <td>` + strconv.FormatUint(eng.Health.TotalSuccesses, 10) + ` / ` + strconv.FormatUint(eng.Health.TotalFailures, 10) + `</td>
+            <td>` + lastFail + `</td>
         </tr>`
 	}
 
@@ -3277,6 +3317,11 @@ func (h *AdminHandler) renderEnginesPage() string {
                         <th>Name</th>
                         <th>Tier</th>
                         <th>Status</th>
+                        <th>Circuit</th>
+                        <th>Avg Latency</th>
+                        <th>Uptime</th>
+                        <th>OK / Fail</th>
+                        <th>Last Failure</th>
                     </tr>
                 </thead>
                 <tbody>

@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
@@ -106,6 +107,11 @@ type ConfigurableSearchEngine interface {
 	SetEnabled(enabled bool)
 }
 
+// HealthTracker interface for engines that expose runtime health stats
+type HealthTracker interface {
+	GetStats() model.EngineHealthStats
+}
+
 // TorConfigurableEngine interface for engines that support Tor outbound
 // Per PART 32: Engines implementing this can route queries through Tor
 type TorConfigurableEngine interface {
@@ -129,11 +135,26 @@ type BaseEngine struct {
 	circuitBreaker *retry.CircuitBreaker
 	retryConfig    *retry.RetryConfig
 	capabilities   Capabilities
+
+	// Runtime health stats (protected by statsMu)
+	statsMu        sync.Mutex
+	totalSuccesses uint64
+	totalFailures  uint64
+	lastSuccessAt  time.Time
+	// Rolling average latency in ms (exponential moving average, alpha=0.2)
+	avgLatencyMs float64
 }
 
 // NewBaseEngine creates a new base engine
 func NewBaseEngine(name, displayName, baseURL string, tier int, appConfig *config.AppConfig) *BaseEngine {
-	timeout := time.Duration(appConfig.Search.EngineTimeout) * time.Second
+	timeoutSecs := appConfig.Search.EngineTimeout
+	// Apply per-engine timeout override if configured
+	if appConfig.Search.EngineTimeouts != nil {
+		if override, ok := appConfig.Search.EngineTimeouts[name]; ok && override > 0 {
+			timeoutSecs = override
+		}
+	}
+	timeout := time.Duration(timeoutSecs) * time.Second
 
 	// Create circuit breaker for this engine
 	cbConfig := retry.DefaultCircuitBreakerConfig(name)
@@ -167,7 +188,7 @@ func NewBaseEngine(name, displayName, baseURL string, tier int, appConfig *confi
 		timeout:        timeout,
 		useSpoofedTLS:  appConfig.Search.SpoofTLS,
 		appConfig:      appConfig,
-		httpClient:     createHTTPClient(appConfig.Search.EngineTimeout),
+		httpClient:     createHTTPClient(timeoutSecs),
 		spoofedClient:  utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
 		circuitBreaker: retry.NewCircuitBreaker(cbConfig),
 		retryConfig:    retryConfig,
@@ -259,6 +280,7 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 
 	var resp *http.Response
 	var lastErr error
+	start := time.Now()
 
 	// Execute with retry logic
 	err := retry.ExecuteWithRetry(ctx, e.retryConfig, func() error {
@@ -329,6 +351,7 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 
 	if err != nil {
 		e.circuitBreaker.RecordFailure()
+		e.recordFailureStat()
 		if lastErr != nil {
 			return nil, lastErr
 		}
@@ -336,7 +359,60 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 	}
 
 	e.circuitBreaker.RecordSuccess()
+	e.recordSuccessStat(time.Since(start).Milliseconds())
 	return resp, nil
+}
+
+// recordSuccessStat updates runtime health stats on a successful request
+func (e *BaseEngine) recordSuccessStat(latencyMs int64) {
+	e.statsMu.Lock()
+	defer e.statsMu.Unlock()
+	e.totalSuccesses++
+	e.lastSuccessAt = time.Now()
+	// Exponential moving average (alpha = 0.2)
+	if e.avgLatencyMs == 0 {
+		e.avgLatencyMs = float64(latencyMs)
+	} else {
+		e.avgLatencyMs = 0.8*e.avgLatencyMs + 0.2*float64(latencyMs)
+	}
+}
+
+// recordFailureStat updates runtime health stats on a failed request
+func (e *BaseEngine) recordFailureStat() {
+	e.statsMu.Lock()
+	defer e.statsMu.Unlock()
+	e.totalFailures++
+}
+
+// GetStats returns runtime health statistics for this engine
+func (e *BaseEngine) GetStats() model.EngineHealthStats {
+	e.statsMu.Lock()
+	successes := e.totalSuccesses
+	failures := e.totalFailures
+	lastSuccess := e.lastSuccessAt
+	avgLatency := e.avgLatencyMs
+	e.statsMu.Unlock()
+
+	cbState := e.circuitBreaker.GetState()
+	cbFailures := e.circuitBreaker.FailureCount()
+	lastFailure := e.circuitBreaker.LastFailureTime()
+
+	var uptimePct float64
+	total := successes + uint64(failures)
+	if total > 0 {
+		uptimePct = float64(successes) / float64(total) * 100
+	}
+
+	return model.EngineHealthStats{
+		CircuitState:    cbState.String(),
+		CircuitFailures: cbFailures,
+		LastFailureAt:   lastFailure,
+		TotalSuccesses:  successes,
+		TotalFailures:   failures,
+		LastSuccessAt:   lastSuccess,
+		AvgLatencyMs:    int64(avgLatency),
+		UptimePct:       uptimePct,
+	}
 }
 
 // classifyHTTPError converts an HTTP error to a retryable error type

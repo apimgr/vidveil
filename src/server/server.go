@@ -192,7 +192,7 @@ func (s *Server) setupMiddleware() {
 // Uses string type for cross-package compatibility
 const OriginalPathKey = "vidveil.originalPath"
 
-// extensionStripMiddleware strips .txt and .json extensions from paths
+// extensionStripMiddleware strips .txt, .json, .rss, and .atom extensions from paths
 // Per AI.md PART 14: Content Negotiation - .txt and .json extensions should work on all API routes
 func extensionStripMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -208,13 +208,18 @@ func extensionStripMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), OriginalPathKey, path)
 		r = r.WithContext(ctx)
 
-		// Check for .txt or .json extension
-		if strings.HasSuffix(path, ".txt") {
-			// Strip .txt for routing
+		// Strip known format extensions for routing
+		switch {
+		case strings.HasSuffix(path, ".txt"):
 			r.URL.Path = strings.TrimSuffix(path, ".txt")
-		} else if strings.HasSuffix(path, ".json") {
-			// Strip .json for routing
+		case strings.HasSuffix(path, ".json"):
 			r.URL.Path = strings.TrimSuffix(path, ".json")
+		case strings.HasSuffix(path, ".rss"):
+			r.URL.Path = strings.TrimSuffix(path, ".rss")
+		case strings.HasSuffix(path, ".atom"):
+			r.URL.Path = strings.TrimSuffix(path, ".atom")
+		case strings.HasSuffix(path, ".csv"):
+			r.URL.Path = strings.TrimSuffix(path, ".csv")
 		}
 
 		next.ServeHTTP(w, r)
@@ -264,6 +269,7 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/sitemap.xml", h.SitemapXML)
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
 	s.router.Get("/.well-known/change-password", handler.ChangePasswordRedirect)
+	s.router.Get("/.well-known/vidveil.json", h.WellKnownVidVeil)
 	s.router.Get("/humans.txt", h.HumansTxt)
 	s.router.Get("/favicon.ico", h.Favicon)
 	s.router.Get("/apple-touch-icon.png", h.AppleTouchIcon)
@@ -298,6 +304,8 @@ func (s *Server) setupRoutes() {
 
 		r.Get("/", h.HomePage)
 		r.Get("/search", h.SearchPage)
+		r.Get("/search.rss", h.SearchRSSFeed)
+		r.Get("/search.atom", h.SearchAtomFeed)
 		r.Get("/preferences", h.PreferencesPage)
 		// About/privacy are at /server/* per PART 14 Route Scopes
 	})
@@ -460,6 +468,7 @@ func (s *Server) setupRoutes() {
 		// Accept: text/event-stream - SSE streaming results as engines respond
 		// Accept: text/plain or .txt extension - plain text format
 		r.Get("/search", h.APISearch)
+		r.Post("/search/batch", h.BatchSearch)
 
 		// Bang endpoints (public) - per AI.md PART 37
 		r.Get("/bangs", h.APIBangs)
@@ -467,6 +476,7 @@ func (s *Server) setupRoutes() {
 
 		// Engine endpoints (public)
 		r.Get("/engines", h.APIEngines)
+		r.Get("/engines/health", h.APIEngineHealth)
 		r.Get("/engines/{name}", h.APIEngineDetails)
 
 		// Stats (public)

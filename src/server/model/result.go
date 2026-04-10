@@ -94,3 +94,21 @@ type EnginesResponse struct {
 	Ok      bool         `json:"ok"`
 	Data    []EngineInfo `json:"data"`
 }
+
+// EngineHealthStats holds runtime circuit-breaker and latency stats for one engine
+type EngineHealthStats struct {
+	CircuitState    string    `json:"circuit_state"`     // closed, open, half-open
+	CircuitFailures int       `json:"circuit_failures"`  // failures toward threshold
+	LastFailureAt   time.Time `json:"last_failure_at"`   // zero if never failed
+	TotalSuccesses  uint64    `json:"total_successes"`
+	TotalFailures   uint64    `json:"total_failures"`
+	LastSuccessAt   time.Time `json:"last_success_at"`   // zero if never succeeded
+	AvgLatencyMs    int64     `json:"avg_latency_ms"`
+	UptimePct       float64   `json:"uptime_pct"` // 0-100
+}
+
+// EngineHealthInfo combines EngineInfo with runtime health stats
+type EngineHealthInfo struct {
+	EngineInfo
+	Health EngineHealthStats `json:"health"`
+}

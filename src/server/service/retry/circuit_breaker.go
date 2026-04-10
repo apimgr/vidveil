@@ -212,6 +212,13 @@ func (cb *CircuitBreaker) FailureCount() int {
 	return cb.failureCount
 }
 
+// LastFailureTime returns the time of the most recent failure
+func (cb *CircuitBreaker) LastFailureTime() time.Time {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+	return cb.lastFailureTime
+}
+
 // Reset resets the circuit breaker to closed state
 func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()

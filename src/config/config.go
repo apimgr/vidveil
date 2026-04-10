@@ -602,6 +602,9 @@ type SearchConfig struct {
 	CustomTerms []string `yaml:"custom_terms"`
 	// AI content filter (deepfakes, AI-generated)
 	AIFilter AIFilterConfig `yaml:"ai_filter"`
+	// Per-engine timeout overrides in seconds (e.g., pornhub: 20)
+	// Engines not listed use the global engine_timeout
+	EngineTimeouts map[string]int `yaml:"engine_timeouts"`
 }
 
 // AIFilterConfig holds settings for filtering AI-generated content

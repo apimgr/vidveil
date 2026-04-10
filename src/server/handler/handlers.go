@@ -3,10 +3,17 @@ package handler
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"html/template"
+	"image"
+	_ "image/gif" // register GIF decoder
+	"image/jpeg"
+	_ "image/png" // register PNG decoder
 	"io"
 	"net/http"
 	"net/url"
@@ -867,13 +874,42 @@ func detectResponseFormat(r *http.Request) string {
 	if strings.HasSuffix(path, ".txt") {
 		return "text/plain"
 	}
-	
+	if strings.HasSuffix(path, ".rss") {
+		return "application/rss+xml"
+	}
+	if strings.HasSuffix(path, ".atom") {
+		return "application/atom+xml"
+	}
+	if strings.HasSuffix(path, ".csv") {
+		return "text/csv"
+	}
+
+	// 0b. Check ?format= query parameter
+	switch r.URL.Query().Get("format") {
+	case "rss":
+		return "application/rss+xml"
+	case "atom":
+		return "application/atom+xml"
+	case "csv":
+		return "text/csv"
+	case "json":
+		return "application/json"
+	case "text", "txt":
+		return "text/plain"
+	}
+
 	// 1. Check Accept header (explicit preference)
 	accept := r.Header.Get("Accept")
 
 	// SSE streaming takes priority for search endpoints
 	if strings.Contains(accept, "text/event-stream") {
 		return "text/event-stream"
+	}
+	if strings.Contains(accept, "application/rss+xml") {
+		return "application/rss+xml"
+	}
+	if strings.Contains(accept, "application/atom+xml") {
+		return "application/atom+xml"
 	}
 	if strings.Contains(accept, "text/html") {
 		return "text/html"
@@ -1587,6 +1623,35 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	// Add related searches
 	results.Data.RelatedSearches = engine.GetRelatedSearches(searchQuery, 8)
 
+	// ETag for cached searches: SHA-256 of cacheKey + result count
+	etag := `"` + func() string {
+		h256 := sha256.Sum256([]byte(cacheKey + strconv.Itoa(len(results.Data.Results))))
+		return hex.EncodeToString(h256[:16])
+	}() + `"`
+	w.Header().Set("ETag", etag)
+	if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	// RSS feed format
+	if format == "application/rss+xml" {
+		renderSearchRSS(w, r, results, h.appConfig)
+		return
+	}
+
+	// Atom feed format
+	if format == "application/atom+xml" {
+		renderSearchAtom(w, r, results, h.appConfig)
+		return
+	}
+
+	// CSV format
+	if format == "text/csv" {
+		renderSearchCSV(w, results)
+		return
+	}
+
 	// Plain text format for .txt extension or Accept: text/plain
 	if format == "text/plain" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -1911,6 +1976,15 @@ func (h *SearchHandler) APIEngineDetails(w http.ResponseWriter, r *http.Request)
 				HasDownload: caps.HasDownload,
 			},
 		},
+	})
+}
+
+// APIEngineHealth returns health stats for all engines (circuit breaker state, latency, uptime).
+func (h *SearchHandler) APIEngineHealth(w http.ResponseWriter, r *http.Request) {
+	engines := h.engineMgr.ListEnginesWithHealth()
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":   true,
+		"data": engines,
 	})
 }
 
@@ -2474,6 +2548,17 @@ http.Error(w, "Invalid thumbnail URL", http.StatusBadRequest)
 return
 }
 
+// Compute ETag from URL for conditional GET support
+h256 := sha256.Sum256([]byte(thumbURL))
+etag := `"` + hex.EncodeToString(h256[:16]) + `"`
+
+// Check If-None-Match for 304 Not Modified
+if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
+	w.Header().Set("ETag", etag)
+	w.WriteHeader(http.StatusNotModified)
+	return
+}
+
 // Create request with headers to avoid hotlink protection
 req, err := http.NewRequest("GET", thumbURL, nil)
 if err != nil {
@@ -2498,19 +2583,47 @@ http.Error(w, "Thumbnail not found", http.StatusNotFound)
 return
 }
 
-// Copy content type
+// Read full body
+body, err := io.ReadAll(resp.Body)
+if err != nil {
+	http.Error(w, "Failed to read thumbnail", http.StatusBadGateway)
+	return
+}
+
+// Re-encode JPEG/PNG as JPEG quality=75 for bandwidth savings (~30-40% reduction).
+// GIFs are passed through unchanged to preserve animated video previews.
+// Falls back to original bytes if the image cannot be decoded.
 contentType := resp.Header.Get("Content-Type")
 if contentType == "" {
-// Default content type
-contentType = "image/jpeg"
+	contentType = "image/jpeg"
 }
-w.Header().Set("Content-Type", contentType)
 
-// Cache control: 1 hour
-w.Header().Set("Cache-Control", "public, max-age=3600")
+var outputBuf bytes.Buffer
+reEncoded := false
+if strings.HasPrefix(contentType, "image/jpeg") ||
+	strings.HasPrefix(contentType, "image/png") {
+	img, _, decodeErr := image.Decode(bytes.NewReader(body))
+	if decodeErr == nil {
+		if encErr := jpeg.Encode(&outputBuf, img, &jpeg.Options{Quality: 75}); encErr == nil {
+			reEncoded = true
+		}
+	}
+}
 
-// Proxy the image
-io.Copy(w, resp.Body)
+w.Header().Set("ETag", etag)
+w.Header().Set("Cache-Control", "public, max-age=86400") // 24 hours
+
+if reEncoded {
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(outputBuf.Len()))
+	w.WriteHeader(http.StatusOK)
+	w.Write(outputBuf.Bytes())
+} else {
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
+}
 }
 
 // ProxyVideo proxies external video previews to prevent tracking and avoid CORS
@@ -2619,4 +2732,281 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 	// NEVER include secrets, internal IPs, or sensitive data
 
 	WriteJSON(w, http.StatusOK, response)
+}
+
+// ---- RSS / Atom / CSV helpers ----
+
+// rssChannel is the XML structure for an RSS 2.0 feed.
+type rssChannel struct {
+	XMLName xml.Name    `xml:"rss"`
+	Version string      `xml:"version,attr"`
+	Channel rssBody     `xml:"channel"`
+}
+
+type rssBody struct {
+	Title       string    `xml:"title"`
+	Link        string    `xml:"link"`
+	Description string    `xml:"description"`
+	PubDate     string    `xml:"pubDate"`
+	Items       []rssItem `xml:"item"`
+}
+
+type rssItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	Source      string `xml:"source,omitempty"`
+	Duration    string `xml:"itunes:duration,omitempty"`
+}
+
+// renderSearchRSS writes an RSS 2.0 feed for the given search results.
+func renderSearchRSS(w http.ResponseWriter, r *http.Request, results *model.SearchResponse, cfg *config.AppConfig) {
+	items := make([]rssItem, 0, len(results.Data.Results))
+	for _, res := range results.Data.Results {
+		desc := res.Description
+		if desc == "" && res.Thumbnail != "" {
+			desc = `<img src="` + res.Thumbnail + `" alt="thumbnail"/>`
+		}
+		items = append(items, rssItem{
+			Title:    res.Title,
+			Link:     res.URL,
+			Description: desc,
+			Source:   res.Source,
+			Duration: res.Duration,
+		})
+	}
+
+	feed := rssChannel{
+		Version: "2.0",
+		Channel: rssBody{
+			Title:       cfg.Server.Branding.Title + " – " + results.Data.Query,
+			Link:        cfg.GetPublicURL() + "/search?q=" + url.QueryEscape(results.Data.Query),
+			Description: "Search results for: " + results.Data.Query,
+			PubDate:     time.Now().UTC().Format(time.RFC1123Z),
+			Items:       items,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, xml.Header)
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	enc.Encode(feed) //nolint:errcheck
+}
+
+// atomFeed is the XML structure for an Atom 1.0 feed.
+type atomFeed struct {
+	XMLName xml.Name    `xml:"feed"`
+	XMLNS   string      `xml:"xmlns,attr"`
+	Title   string      `xml:"title"`
+	ID      string      `xml:"id"`
+	Updated string      `xml:"updated"`
+	Link    atomLink    `xml:"link"`
+	Entries []atomEntry `xml:"entry"`
+}
+
+type atomLink struct {
+	Href string `xml:"href,attr"`
+	Rel  string `xml:"rel,attr,omitempty"`
+}
+
+type atomEntry struct {
+	Title   string   `xml:"title"`
+	ID      string   `xml:"id"`
+	Updated string   `xml:"updated"`
+	Link    atomLink `xml:"link"`
+	Summary string   `xml:"summary,omitempty"`
+	Source  string   `xml:"source>title,omitempty"`
+}
+
+// renderSearchAtom writes an Atom 1.0 feed for the given search results.
+func renderSearchAtom(w http.ResponseWriter, r *http.Request, results *model.SearchResponse, cfg *config.AppConfig) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	entries := make([]atomEntry, 0, len(results.Data.Results))
+	for _, res := range results.Data.Results {
+		entries = append(entries, atomEntry{
+			Title:   res.Title,
+			ID:      res.URL,
+			Updated: now,
+			Link:    atomLink{Href: res.URL},
+			Summary: res.Description,
+			Source:  res.Source,
+		})
+	}
+
+	feed := atomFeed{
+		XMLNS:   "http://www.w3.org/2005/Atom",
+		Title:   cfg.Server.Branding.Title + " – " + results.Data.Query,
+		ID:      cfg.GetPublicURL() + "/search?q=" + url.QueryEscape(results.Data.Query),
+		Updated: now,
+		Link:    atomLink{Href: cfg.GetPublicURL() + "/search?q=" + url.QueryEscape(results.Data.Query)},
+		Entries: entries,
+	}
+
+	w.Header().Set("Content-Type", "application/atom+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, xml.Header)
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	enc.Encode(feed) //nolint:errcheck
+}
+
+// renderSearchCSV writes search results as CSV (RFC 4180).
+func renderSearchCSV(w http.ResponseWriter, results *model.SearchResponse) {
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="vidveil-results.csv"`)
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "title,url,source,duration,views,description")
+	for _, res := range results.Data.Results {
+		fmt.Fprintf(w, "%s,%s,%s,%s,%s,%s\n",
+			csvEscape(res.Title),
+			csvEscape(res.URL),
+			csvEscape(res.Source),
+			csvEscape(res.Duration),
+			csvEscape(res.Views),
+			csvEscape(res.Description),
+		)
+	}
+}
+
+// csvEscape wraps a field value in double quotes and escapes embedded quotes.
+func csvEscape(s string) string {
+	s = strings.ReplaceAll(s, `"`, `""`)
+	return `"` + s + `"`
+}
+
+// SearchRSSFeed serves a web RSS feed at /search.rss
+func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		http.Error(w, "Missing q parameter", http.StatusBadRequest)
+		return
+	}
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
+			page = pn
+		}
+	}
+	parsed := engine.ParseBangs(query)
+	results := h.engineMgr.Search(r.Context(), parsed.Query, page, parsed.Engines)
+	results.Data.Query = query
+	renderSearchRSS(w, r, results, h.appConfig)
+}
+
+// SearchAtomFeed serves a web Atom feed at /search.atom
+func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		http.Error(w, "Missing q parameter", http.StatusBadRequest)
+		return
+	}
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
+			page = pn
+		}
+	}
+	parsed := engine.ParseBangs(query)
+	results := h.engineMgr.Search(r.Context(), parsed.Query, page, parsed.Engines)
+	results.Data.Query = query
+	renderSearchAtom(w, r, results, h.appConfig)
+}
+
+// BatchSearchRequest is the JSON body for POST /api/v1/search/batch
+type BatchSearchRequest struct {
+	Queries []BatchQuery `json:"queries"`
+}
+
+// BatchQuery is a single query in a batch request
+type BatchQuery struct {
+	Q       string `json:"q"`
+	Page    int    `json:"page"`
+	Engines string `json:"engines,omitempty"`
+}
+
+// BatchSearch handles POST /api/v1/search/batch
+// Runs up to 5 queries concurrently and returns an array of SearchResponse objects.
+func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req BatchSearchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.jsonError(w, "Invalid JSON body", "ERR_INVALID_JSON", http.StatusBadRequest)
+		return
+	}
+
+	const maxBatch = 5
+	if len(req.Queries) == 0 {
+		h.jsonError(w, "queries array must not be empty", "ERR_EMPTY_BATCH", http.StatusBadRequest)
+		return
+	}
+	if len(req.Queries) > maxBatch {
+		h.jsonError(w, fmt.Sprintf("batch limit is %d queries", maxBatch), "ERR_BATCH_LIMIT", http.StatusBadRequest)
+		return
+	}
+
+	type batchResult struct {
+		idx  int
+		resp *model.SearchResponse
+	}
+	ch := make(chan batchResult, len(req.Queries))
+
+	for i, q := range req.Queries {
+		go func(idx int, bq BatchQuery) {
+			parsed := engine.ParseBangs(bq.Q)
+			page := bq.Page
+			if page < 1 {
+				page = 1
+			}
+			var engineNames []string
+			if bq.Engines != "" {
+				engineNames = strings.Split(bq.Engines, ",")
+			}
+			if len(engineNames) == 0 {
+				engineNames = parsed.Engines
+			}
+			res := h.engineMgr.Search(r.Context(), parsed.Query, page, engineNames)
+			res.Data.Query = bq.Q
+			ch <- batchResult{idx: idx, resp: res}
+		}(i, q)
+	}
+
+	responses := make([]*model.SearchResponse, len(req.Queries))
+	for range req.Queries {
+		br := <-ch
+		responses[br.idx] = br.resp
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":   true,
+		"data": responses,
+	})
+}
+
+// WellKnownVidVeil serves GET /.well-known/vidveil.json
+// Returns public instance metadata for discovery.
+func (h *SearchHandler) WellKnownVidVeil(w http.ResponseWriter, r *http.Request) {
+	engineCount := len(h.engineMgr.ListEngines())
+
+	torEnabled := false
+	if h.torSvc != nil {
+		torEnabled = h.torSvc.IsEnabled() && h.torSvc.IsRunning()
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"software":      "vidveil",
+		"version":       version.GetVersion(),
+		"title":         h.appConfig.Server.Branding.Title,
+		"tagline":       h.appConfig.Server.Branding.Tagline,
+		"url":           h.appConfig.GetPublicURL(),
+		"engines_count": engineCount,
+		"tor_enabled":   torEnabled,
+		"public":        true,
+		"api_version":   "v1",
+	})
 }

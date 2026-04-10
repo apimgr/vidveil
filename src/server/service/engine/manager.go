@@ -567,6 +567,186 @@ func (m *EngineManager) EnabledCount() int {
 	return count
 }
 
+// EngineDebugInfo contains detailed debug information for a single engine
+type EngineDebugInfo struct {
+	Name           string   `json:"name"`
+	DisplayName    string   `json:"display_name"`
+	Tier           int      `json:"tier"`
+	Enabled        bool     `json:"enabled"`
+	ResponseTimeMS int64    `json:"response_time_ms"`
+	Error          string   `json:"error,omitempty"`
+	RawResults     int      `json:"raw_results"`
+	AfterThumbnail int      `json:"after_thumbnail_filter"`
+	AfterDuration  int      `json:"after_duration_filter"`
+	AfterANDMatch  int      `json:"after_and_match_filter"`
+	FinalResults   int      `json:"final_results"`
+	SampleTitles   []string `json:"sample_titles,omitempty"`
+	SampleTags     []string `json:"sample_tags,omitempty"`
+}
+
+// DebugSearchResult contains comprehensive debug info for all engines
+type DebugSearchResult struct {
+	Query           string            `json:"query"`
+	MinDuration     int               `json:"min_duration_seconds"`
+	TotalEngines    int               `json:"total_engines"`
+	EnabledEngines  int               `json:"enabled_engines"`
+	SuccessEngines  int               `json:"success_engines"`
+	FailedEngines   int               `json:"failed_engines"`
+	TotalRaw        int               `json:"total_raw_results"`
+	TotalFinal      int               `json:"total_final_results"`
+	SearchTimeMS    int64             `json:"search_time_ms"`
+	Engines         []EngineDebugInfo `json:"engines"`
+}
+
+// DebugSearch performs a search across ALL engines (ignoring disabled state) and returns detailed debug info
+// This helps identify why results are low by showing filtering at each stage
+func (m *EngineManager) DebugSearch(ctx context.Context, query string, page int) *DebugSearchResult {
+	startTime := time.Now()
+
+	m.mu.RLock()
+	allEngines := make([]SearchEngine, 0, len(m.engines))
+	for _, e := range m.engines {
+		allEngines = append(allEngines, e)
+	}
+	m.mu.RUnlock()
+
+	// Count enabled
+	enabledCount := 0
+	for _, e := range allEngines {
+		if e.IsAvailable() {
+			enabledCount++
+		}
+	}
+
+	// Search all engines concurrently
+	type debugResult struct {
+		engine         SearchEngine
+		results        []model.VideoResult
+		err            error
+		responseTimeMS int64
+	}
+
+	resultsChan := make(chan debugResult, len(allEngines))
+	var wg sync.WaitGroup
+
+	for _, engine := range allEngines {
+		wg.Add(1)
+		go func(e SearchEngine) {
+			defer wg.Done()
+			engineStart := time.Now()
+			results, err := e.Search(ctx, query, page)
+			resultsChan <- debugResult{
+				engine:         e,
+				results:        results,
+				err:            err,
+				responseTimeMS: time.Since(engineStart).Milliseconds(),
+			}
+		}(engine)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
+
+	// Process results
+	minDuration := m.appConfig.Search.MinDurationSeconds
+	var engineInfos []EngineDebugInfo
+	successCount := 0
+	failedCount := 0
+	totalRaw := 0
+	totalFinal := 0
+
+	for result := range resultsChan {
+		info := EngineDebugInfo{
+			Name:           result.engine.Name(),
+			DisplayName:    result.engine.DisplayName(),
+			Tier:           result.engine.Tier(),
+			Enabled:        result.engine.IsAvailable(),
+			ResponseTimeMS: result.responseTimeMS,
+		}
+
+		if result.err != nil {
+			info.Error = result.err.Error()
+			failedCount++
+		} else {
+			successCount++
+			info.RawResults = len(result.results)
+			totalRaw += len(result.results)
+
+			// Apply filters step by step to see where results are lost
+			afterThumbnail := 0
+			afterDuration := 0
+			afterAND := 0
+			var sampleTitles []string
+			var sampleTags []string
+
+			for _, r := range result.results {
+				// Collect sample data (first 3)
+				if len(sampleTitles) < 3 {
+					sampleTitles = append(sampleTitles, r.Title)
+				}
+				if len(sampleTags) < 5 && len(r.Tags) > 0 {
+					for _, t := range r.Tags {
+						if len(sampleTags) < 5 {
+							sampleTags = append(sampleTags, t)
+						}
+					}
+				}
+
+				// Step 1: Thumbnail filter
+				if !isValidThumbnail(r.Thumbnail) {
+					continue
+				}
+				afterThumbnail++
+
+				// Step 2: Duration filter
+				if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
+					continue
+				}
+				afterDuration++
+
+				// Step 3: AND-match filter
+				if !resultMatchesAllTerms(r, query) {
+					continue
+				}
+				afterAND++
+			}
+
+			info.AfterThumbnail = afterThumbnail
+			info.AfterDuration = afterDuration
+			info.AfterANDMatch = afterAND
+			info.FinalResults = afterAND
+			info.SampleTitles = sampleTitles
+			info.SampleTags = sampleTags
+			totalFinal += afterAND
+		}
+
+		engineInfos = append(engineInfos, info)
+	}
+
+	// Sort by tier, then by name
+	sort.Slice(engineInfos, func(i, j int) bool {
+		if engineInfos[i].Tier != engineInfos[j].Tier {
+			return engineInfos[i].Tier < engineInfos[j].Tier
+		}
+		return engineInfos[i].Name < engineInfos[j].Name
+	})
+
+	return &DebugSearchResult{
+		Query:          query,
+		MinDuration:    minDuration,
+		TotalEngines:   len(allEngines),
+		EnabledEngines: enabledCount,
+		SuccessEngines: successCount,
+		FailedEngines:  failedCount,
+		TotalRaw:       totalRaw,
+		TotalFinal:     totalFinal,
+		SearchTimeMS:   time.Since(startTime).Milliseconds(),
+		Engines:        engineInfos,
+	}
+}
+
 // engineResult holds the result from a single engine search
 type engineResult struct {
 	engine         string

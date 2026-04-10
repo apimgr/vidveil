@@ -63,11 +63,16 @@ func (p *XVideosParser) Parse(s *goquery.Selection) *VideoItem {
 		return nil
 	}
 
-	// Get thumbnail
+	// Get thumbnail - XVideos uses data-mzl for lazy-loaded thumbnails
 	img := s.Find("img").First()
-	item.Thumbnail = ExtractAttr(img, "data-src", "src")
+	item.Thumbnail = ExtractAttr(img, "data-mzl", "data-src", "src")
 	if item.Thumbnail != "" {
-		item.Thumbnail = MakeAbsoluteURL(item.Thumbnail, "https:")
+		// Filter out blank placeholder GIFs
+		if strings.Contains(item.Thumbnail, "lightbox-blank.gif") {
+			item.Thumbnail = ""
+		} else {
+			item.Thumbnail = MakeAbsoluteURL(item.Thumbnail, "https:")
+		}
 	}
 
 	// Get preview video URL - XVideos uses data-pvv attribute on img element

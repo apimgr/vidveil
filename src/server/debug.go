@@ -43,6 +43,8 @@ func (s *Server) registerDebugRoutes(r chi.Router) {
 		r.Get("/scheduler", s.handleDebugScheduler)
 		r.Get("/memory", s.handleDebugMemory)
 		r.Get("/goroutines", s.handleDebugGoroutines)
+		r.Get("/engines", s.handleDebugEngines)
+		r.Get("/engine/{name}", s.handleDebugEngine)
 	})
 }
 
@@ -162,4 +164,53 @@ func (s *Server) handleDebugGoroutines(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handler.WriteJSON(w, http.StatusOK, data)
+}
+
+// handleDebugEngines tests all engines with a query and shows detailed filtering stats
+// Usage: /debug/engines?q=teen+lesbians (default query: "test")
+func (s *Server) handleDebugEngines(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		query = "test"
+	}
+
+	// Run debug search
+	result := s.engineMgr.DebugSearch(r.Context(), query, 1)
+
+	handler.WriteJSON(w, http.StatusOK, result)
+}
+
+// handleDebugEngine tests a single engine and returns raw results
+// Usage: /debug/engine/xvideos?q=test
+func (s *Server) handleDebugEngine(w http.ResponseWriter, r *http.Request) {
+	engineName := chi.URLParam(r, "name")
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		query = "test"
+	}
+
+	eng, ok := s.engineMgr.GetEngine(engineName)
+	if !ok {
+		handler.WriteJSON(w, http.StatusNotFound, map[string]interface{}{
+			"error": "engine not found",
+			"name":  engineName,
+		})
+		return
+	}
+
+	results, err := eng.Search(r.Context(), query, 1)
+	if err != nil {
+		handler.WriteJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"error":  err.Error(),
+			"engine": engineName,
+		})
+		return
+	}
+
+	handler.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"engine":  engineName,
+		"query":   query,
+		"count":   len(results),
+		"results": results,
+	})
 }

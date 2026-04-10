@@ -4,6 +4,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/apimgr/vidveil/src/config"
@@ -41,7 +42,8 @@ func NewXVideosEngine(appConfig *config.AppConfig) *XVideosEngine {
 // Search performs a search on XVideos
 func (e *XVideosEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	// XVideos uses 0-based pagination
-	searchURL := fmt.Sprintf("%s/?k=%s&p=%d", e.baseURL, query, page-1)
+	// URL-encode the query to handle spaces and special characters
+	searchURL := fmt.Sprintf("%s/?k=%s&p=%d", e.baseURL, url.QueryEscape(query), page-1)
 
 	resp, err := e.MakeRequest(ctx, searchURL)
 	if err != nil {

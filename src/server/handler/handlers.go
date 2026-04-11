@@ -11,9 +11,8 @@ import (
 	"fmt"
 	"html/template"
 	"image"
-	_ "image/gif" // register GIF decoder
 	"image/jpeg"
-	_ "image/png" // register PNG decoder
+	_ "image/png" // register PNG decoder for image.Decode
 	"io"
 	"net/http"
 	"net/url"

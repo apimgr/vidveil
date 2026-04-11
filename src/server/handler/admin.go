@@ -3284,8 +3284,8 @@ func (h *AdminHandler) renderEnginesPage() string {
 		}
 
 		engineRows += `<tr>
-            <td>` + eng.Name + `</td>
-            <td>` + eng.DisplayName + `</td>
+            <td style="word-break:break-all">` + eng.Name + `</td>
+            <td style="word-break:break-all">` + eng.DisplayName + `</td>
             <td>Tier ` + strconv.Itoa(eng.Tier) + `</td>
             <td>` + status + `</td>
             <td>` + circuitBadge + `</td>
@@ -3310,6 +3310,7 @@ func (h *AdminHandler) renderEnginesPage() string {
         <h1>Search Engines</h1>
 
         <div class="card">
+            <div style="overflow-x:auto">
             <table class="data-table">
                 <thead>
                     <tr>
@@ -3328,6 +3329,7 @@ func (h *AdminHandler) renderEnginesPage() string {
                     ` + engineRows + `
                 </tbody>
             </table>
+            </div>
         </div>
     </main>
 </body>

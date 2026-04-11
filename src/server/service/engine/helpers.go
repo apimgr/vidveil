@@ -125,6 +125,7 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 		"data-mediabook", "data-preview", "data-video-preview", "data-rollover",
 		"data-preview-url", "data-gif", "data-webm", "data-mp4",
 		"data-thumb-url", "data-trailer", "data-teaser",
+		"data-preview-custom", // PornHat
 	}
 	// Check on the container element
 	for _, attr := range previewAttrs {

@@ -13,13 +13,22 @@ type PornHDEngine struct{ *BaseEngine }
 
 // NewPornHDEngine creates a new PornHD engine
 func NewPornHDEngine(appConfig *config.AppConfig) *PornHDEngine {
-	return &PornHDEngine{NewBaseEngine("pornhd", "PornHD", "https://www.pornhd.com", 4, appConfig)}
+	e := &PornHDEngine{NewBaseEngine("pornhd", "PornHD", "https://www.pornhd.com", 4, appConfig)}
+	// PornHD runs on the same ttcache.com CDN platform as TubeGalore
+	e.SetCapabilities(Capabilities{
+		HasPreview:    true,
+		HasDuration:   true,
+		HasRating:     true,
+		PreviewSource: "ttcache-constructed",
+		APIType:       "html",
+	})
+	return e
 }
 
 // Search performs a search on PornHD
 func (e *PornHDEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search?search={query}&page={page}", query, page)
-	return genericSearch(ctx, e.BaseEngine, searchURL, "div.card.sub")
+	return searchTTCache(ctx, e.BaseEngine, searchURL)
 }
 
 // SupportsFeature returns whether the engine supports a feature

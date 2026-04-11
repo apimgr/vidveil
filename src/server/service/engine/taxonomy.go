@@ -283,55 +283,31 @@ func GenerateSmartRelated(query string, maxResults int) []string {
 		return nil
 	}
 
+	// Build a set of query words for fast lookup
+	queryWordSet := make(map[string]bool, len(words))
+	for _, w := range words {
+		queryWordSet[w] = true
+	}
+
 	var related []string
 	seen := make(map[string]bool)
-	seen[query] = true // Don't include original query
+	seen[query] = true // Never include the original query itself
 
-	// Helper to add unique terms
+	// Helper: only add multi-word terms or meaningful single terms not in query
 	addUnique := func(term string) {
 		term = strings.TrimSpace(term)
-		if term != "" && !seen[term] {
-			seen[term] = true
-			related = append(related, term)
+		if term == "" || seen[term] {
+			return
 		}
+		seen[term] = true
+		related = append(related, term)
 	}
 
-	// 1. Individual terms from query
-	for _, word := range words {
-		if len(word) >= 3 {
-			addUnique(word)
-		}
-	}
-
-	// 2. Get related terms for each word
-	for _, word := range words {
-		relatedTerms := GetRelatedTerms(word)
-		for _, rt := range relatedTerms {
-			addUnique(rt)
-			// Also combine with other query words
-			for _, other := range words {
-				if other != word {
-					addUnique(rt + " " + other)
-					addUnique(other + " " + rt)
-				}
-			}
-		}
-	}
-
-	// 3. Combinations with quality modifiers
-	qualityMods := []string{"hd", "4k", "amateur", "homemade", "pov"}
-	for _, mod := range qualityMods {
-		if !seen[mod] {
-			addUnique(query + " " + mod)
-		}
-	}
-
-	// 4. Swap synonyms in query
+	// 1. Swap synonyms — keeps the full query structure, just swaps one word
 	for i, word := range words {
 		synonyms := GetSynonyms(word)
 		for _, syn := range synonyms {
 			if syn != word {
-				// Replace word with synonym
 				newWords := make([]string, len(words))
 				copy(newWords, words)
 				newWords[i] = syn
@@ -340,9 +316,35 @@ func GenerateSmartRelated(query string, maxResults int) []string {
 		}
 	}
 
-	// 5. Sub-combinations (for queries with 3+ words)
+	// 2. Related terms combined with query words — always anchor to context
+	for _, word := range words {
+		relatedTerms := GetRelatedTerms(word)
+		for _, rt := range relatedTerms {
+			rtLower := strings.ToLower(rt)
+			// Combine with other query words to keep context
+			for _, other := range words {
+				if other != word {
+					addUnique(rtLower + " " + other)
+					addUnique(other + " " + rtLower)
+				}
+			}
+			// Single-word queries: the related term alone is acceptable
+			if len(words) == 1 {
+				addUnique(rtLower)
+			}
+		}
+	}
+
+	// 3. Quality/style modifiers appended to full query (skip if already present)
+	qualityMods := []string{"hd", "4k", "amateur", "homemade", "pov"}
+	for _, mod := range qualityMods {
+		if !queryWordSet[mod] {
+			addUnique(query + " " + mod)
+		}
+	}
+
+	// 4. Sub-combinations for 3+ word queries — word pairs (no singles)
 	if len(words) >= 3 {
-		// Pairs of words
 		for i := 0; i < len(words)-1; i++ {
 			for j := i + 1; j < len(words); j++ {
 				addUnique(words[i] + " " + words[j])
@@ -350,7 +352,6 @@ func GenerateSmartRelated(query string, maxResults int) []string {
 		}
 	}
 
-	// Limit results
 	if len(related) > maxResults {
 		related = related[:maxResults]
 	}

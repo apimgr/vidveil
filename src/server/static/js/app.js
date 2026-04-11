@@ -1506,8 +1506,8 @@ if (document.readyState === 'loading') {
                     applySearchFiltersAndSort();
                     // A11Y: Announce result count to screen readers
                     announce(allResults.length + ' results found');
-                    // Fetch and display related searches
-                    fetchRelatedSearches(searchQuery);
+                    // Related searches are server-rendered — just add show-more toggle
+                    initRelatedSearchesToggle();
                 }
                 return;
             }
@@ -2061,64 +2061,32 @@ if (document.readyState === 'loading') {
         }
     }
 
-    // Fetch and display related searches
-    function fetchRelatedSearches(query) {
-        if (!query) return;
-
-        // Fetch from API (JSON format includes related_searches)
-        fetch('/api/v1/search?q=' + encodeURIComponent(query) + '&nocache=1', {
-            headers: { 'Accept': 'application/json' }
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            if (data.ok && data.data && data.data.related_searches && data.data.related_searches.length > 0) {
-                displayRelatedSearches(data.data.related_searches);
-            }
-        })
-        .catch(function(err) {
-            // Silently fail - related searches are not critical
-        });
-    }
-
-    function displayRelatedSearches(searches) {
-        var container = document.getElementById('related-searches');
+    // Progressive enhancement for server-rendered related searches.
+    // The tags are already in the DOM from the server. This just adds a
+    // "Show more" toggle button if there are hidden items (class related-tag--hidden).
+    function initRelatedSearchesToggle() {
         var tagsContainer = document.getElementById('related-tags');
-        if (!container || !tagsContainer || !searches.length) return;
+        if (!tagsContainer) return;
 
-        tagsContainer.innerHTML = '';
-        var maxVisible = 12;
-        var totalSearches = Math.min(searches.length, 20);
+        var hiddenTags = tagsContainer.querySelectorAll('.related-tag--hidden');
+        if (hiddenTags.length === 0) return;
 
-        for (var i = 0; i < totalSearches; i++) {
-            var tag = document.createElement('a');
-            tag.className = 'related-tag' + (i >= maxVisible ? ' related-tag--hidden' : '');
-            tag.href = '/search?q=' + encodeURIComponent(searches[i]);
-            tag.innerHTML = '<svg class="related-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><span>' + escapeHtmlUtil(searches[i]) + '</span>';
-            tag.style.animationDelay = (i * 0.03) + 's';
-            tagsContainer.appendChild(tag);
-        }
-
-        // Add "Show more" button if there are hidden tags
-        if (totalSearches > maxVisible) {
-            var showMoreBtn = document.createElement('button');
-            showMoreBtn.type = 'button';
-            showMoreBtn.className = 'related-show-more';
-            showMoreBtn.innerHTML = '<span>+' + (totalSearches - maxVisible) + ' more</span>';
-            showMoreBtn.onclick = function() {
-                tagsContainer.classList.toggle('related-tags--expanded');
-                var hiddenTags = tagsContainer.querySelectorAll('.related-tag--hidden');
-                if (tagsContainer.classList.contains('related-tags--expanded')) {
-                    showMoreBtn.innerHTML = '<span>Show less</span>';
-                    hiddenTags.forEach(function(t) { t.classList.add('related-tag--visible'); });
-                } else {
-                    showMoreBtn.innerHTML = '<span>+' + (totalSearches - maxVisible) + ' more</span>';
-                    hiddenTags.forEach(function(t) { t.classList.remove('related-tag--visible'); });
-                }
-            };
-            tagsContainer.appendChild(showMoreBtn);
-        }
-
-        container.classList.remove('hidden');
+        var showMoreBtn = document.createElement('button');
+        showMoreBtn.type = 'button';
+        showMoreBtn.className = 'related-show-more';
+        showMoreBtn.innerHTML = '<span>+' + hiddenTags.length + ' more</span>';
+        showMoreBtn.onclick = function() {
+            tagsContainer.classList.toggle('related-tags--expanded');
+            var all = tagsContainer.querySelectorAll('.related-tag--hidden');
+            if (tagsContainer.classList.contains('related-tags--expanded')) {
+                showMoreBtn.innerHTML = '<span>Show less</span>';
+                all.forEach(function(t) { t.classList.add('related-tag--visible'); });
+            } else {
+                showMoreBtn.innerHTML = '<span>+' + all.length + ' more</span>';
+                all.forEach(function(t) { t.classList.remove('related-tag--visible'); });
+            }
+        };
+        tagsContainer.appendChild(showMoreBtn);
     }
 
     // Infinite scroll - loads more pages as user scrolls

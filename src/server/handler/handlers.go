@@ -738,19 +738,30 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		// Convert results to JSON for the JavaScript
 		resultsJSON, _ := json.Marshal(results.Data.Results)
 
+		// Compute related searches and spell suggestion server-side so they
+		// render immediately without a second JS API call.
+		relatedSearches := engine.GetRelatedSearches(searchQuery, 8)
+		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
+
+		// Preserve engines param for related search links (bang engines are in URL via query)
+		enginesParam := r.URL.Query().Get("engines")
+
 		// ResultsJSON is safe JSON for script template use
 		h.renderResponse(w, r, "search", map[string]interface{}{
-			"Title":         query + " - " + h.appConfig.Server.Branding.Title,
-			"Query":         query,
-			"SearchQuery":   searchQuery,
-			"ResultsJSON":   template.JS(resultsJSON),
-			"EnginesUsed":   results.Data.EnginesUsed,
-			"SearchTime":    results.Data.SearchTimeMS,
-			"Theme":         h.appConfig.Web.UI.Theme,
-			"HasBang":       parsed.HasBang,
-			"BangEngines":   parsed.Engines,
-			"Version":       version.GetVersion(),
-			"BuildDateTime": BuildDateTime(),
+			"Title":           query + " - " + h.appConfig.Server.Branding.Title,
+			"Query":           query,
+			"SearchQuery":     searchQuery,
+			"ResultsJSON":     template.JS(resultsJSON),
+			"EnginesUsed":     results.Data.EnginesUsed,
+			"SearchTime":      results.Data.SearchTimeMS,
+			"Theme":           h.appConfig.Web.UI.Theme,
+			"HasBang":         parsed.HasBang,
+			"BangEngines":     parsed.Engines,
+			"RelatedSearches": relatedSearches,
+			"SpellSuggestion": spellSuggestion,
+			"EnginesParam":    enginesParam,
+			"Version":         version.GetVersion(),
+			"BuildDateTime":   BuildDateTime(),
 		})
 	}
 }

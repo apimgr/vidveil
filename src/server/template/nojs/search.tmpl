@@ -9,7 +9,25 @@
     {{template "public/header" .}}
     <main class="results" id="main-content" role="main" aria-label="Search results">
         <p class="meta" aria-live="polite"><span>{{len .Results}}</span> results for "{{.Query}}"</p>
-        
+
+        {{if .SpellSuggestion}}
+        <p class="spell-suggestion">Did you mean: <a href="/search?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
+        {{end}}
+
+        {{if .RelatedSearches}}
+        <nav class="related-searches" role="navigation" aria-label="Related searches">
+            <span class="related-label">Related searches</span>
+            <div class="related-tags">
+                {{range $i, $term := .RelatedSearches}}
+                <a class="related-tag" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="Search for {{$term}}">
+                    <svg class="related-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <span>{{$term}}</span>
+                </a>
+                {{end}}
+            </div>
+        </nav>
+        {{end}}
+
         <div class="filters" role="group" aria-label="Filter and sort options">
             <form method="get" action="/search" class="filter-form">
                 <input type="hidden" name="q" value="{{.Query}}">

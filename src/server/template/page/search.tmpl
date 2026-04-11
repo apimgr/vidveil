@@ -43,10 +43,25 @@
             <p id="loading-text">Connecting to engines...</p>
         </div>
         <p class="meta hidden" id="search-meta" data-query="{{.Query}}" aria-live="polite"><span id="result-count">0</span> results <span id="search-time-container">(streaming...)</span></p>
-        <div class="related-searches hidden" id="related-searches" role="navigation" aria-label="Related searches">
+
+        {{if .SpellSuggestion}}
+        <p class="spell-suggestion" id="spell-suggestion">Did you mean: <a href="/search?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
+        {{end}}
+
+        {{if .RelatedSearches}}
+        <nav class="related-searches" id="related-searches" role="navigation" aria-label="Related searches">
             <span class="related-label">Related searches</span>
-            <div class="related-tags" id="related-tags"></div>
-        </div>
+            <div class="related-tags" id="related-tags">
+                {{range $i, $term := .RelatedSearches}}
+                <a class="related-tag{{if ge $i 6}} related-tag--hidden{{end}}" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="Search for {{$term}}">
+                    <svg class="related-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <span>{{$term}}</span>
+                </a>
+                {{end}}
+            </div>
+        </nav>
+        {{end}}
+
         <div class="video-grid" id="video-grid" role="list" aria-label="Video results"></div>
         <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>Loading more...</span></div>
     </main>

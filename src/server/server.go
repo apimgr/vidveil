@@ -50,6 +50,7 @@ type Server struct {
 	rateLimiter   *ratelimit.RateLimiter
 	searchHandler *handler.SearchHandler
 	adminHandler  *handler.AdminHandler
+	torSvc        handler.TorService // stored for Onion-Location middleware
 }
 
 // MigrationManager interface for database migrations
@@ -95,6 +96,7 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 
 // SetTorService sets the Tor service for handlers that need it
 func (s *Server) SetTorService(t handler.TorService) {
+	s.torSvc = t
 	if s.adminHandler != nil {
 		s.adminHandler.SetTorService(t)
 	}
@@ -183,6 +185,10 @@ func (s *Server) setupMiddleware() {
 	// Rate limiting (AI.md PART 12)
 	s.router.Use(s.rateLimiter.Middleware)
 
+	// Onion-Location header per Tor spec: when a hidden service is running,
+	// clearnet responses include the .onion address so Tor Browser auto-redirects.
+	s.router.Use(s.onionLocationMiddleware)
+
 	// Extension stripping middleware per AI.md PART 14
 	// Strips .txt and .json extensions from API paths for routing
 	s.router.Use(extensionStripMiddleware)
@@ -191,6 +197,28 @@ func (s *Server) setupMiddleware() {
 // OriginalPathKey is the context key for storing the original request path
 // Uses string type for cross-package compatibility
 const OriginalPathKey = "vidveil.originalPath"
+
+// onionLocationMiddleware adds the Onion-Location header on clearnet responses
+// when a Tor hidden service is running. This allows Tor Browser to auto-redirect
+// to the .onion address. Per Tor spec:
+// https://community.torproject.org/onion-services/advanced/onion-location/
+func (s *Server) onionLocationMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only set on clearnet requests (not already on .onion)
+		if s.torSvc != nil {
+			host := r.Host
+			if !strings.HasSuffix(host, ".onion") {
+				info := s.torSvc.GetInfo()
+				if addr, ok := info["onion_address"].(string); ok && addr != "" {
+					// Build full .onion URL preserving path and query
+					onionURL := "http://" + addr + r.URL.RequestURI()
+					w.Header().Set("Onion-Location", onionURL)
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 // extensionStripMiddleware strips .txt, .json, .rss, and .atom extensions from paths
 // Per AI.md PART 14: Content Negotiation - .txt and .json extensions should work on all API routes
@@ -239,8 +267,12 @@ func (s *Server) setupRoutes() {
 	admin.SetLogger(s.logger)
 	// Set search cache for cache management per AI.md PART 9
 	admin.SetSearchCache(h.GetSearchCache())
+	// Set data directory for thumbnail disk cache
+	h.SetDataDir(s.dataDir)
 	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
 	h.SetMetrics(metrics)
+	// Share metrics with admin handler for analytics dashboard
+	admin.SetMetrics(metrics)
 
 	// Metrics middleware per AI.md PART 13 - tracks requests and active connections
 	s.router.Use(metrics.MetricsMiddleware)
@@ -515,6 +547,13 @@ func (s *Server) setupRoutes() {
 			r.Post("/recovery-keys/generate", admin.APIRecoveryKeysGenerate)
 		})
 
+		// Engine management API (session or token — accessible from browser admin panel)
+		r.Route("/"+s.appConfig.Server.Admin.Path+"/engines", func(r chi.Router) {
+			r.Use(admin.SessionOrTokenMiddleware)
+			r.Patch("/{name}", admin.APIEnginePatch)
+			r.Post("/{name}/reset", admin.APIEngineReset)
+		})
+
 		// Admin API (token required) - PART 12, PART 17
 		r.Route("/"+s.appConfig.Server.Admin.Path, func(r chi.Router) {
 			r.Use(admin.APITokenMiddleware)
@@ -642,6 +681,9 @@ func (s *Server) setupRoutes() {
 					r.Get("/", admin.APIUpdatesStatus)
 					r.Post("/check", admin.APIUpdatesCheck)
 				})
+
+				// Analytics (privacy-safe aggregate counters)
+				r.Get("/analytics", admin.APIAnalytics)
 			})
 		})
 	})

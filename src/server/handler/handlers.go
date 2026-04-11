@@ -182,6 +182,7 @@ func getClientIP(r *http.Request) string {
 // SearchHandler holds dependencies for HTTP handlers
 type SearchHandler struct {
 	appConfig   *config.AppConfig
+	dataDir     string
 	engineMgr   *engine.EngineManager
 	searchCache *cache.SearchCache
 	metrics     *ServerMetrics
@@ -204,6 +205,11 @@ func NewSearchHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManag
 		engineMgr:   engineMgr,
 		searchCache: searchCache,
 	}
+}
+
+// SetDataDir sets the data directory (used for thumbnail disk cache)
+func (h *SearchHandler) SetDataDir(dir string) {
+	h.dataDir = dir
 }
 
 // SetMetrics sets the metrics collector for statistics display
@@ -1592,6 +1598,10 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		if cached, ok := h.searchCache.Get(cacheKey); ok {
 			results = cached
 			results.Data.Cached = true
+			// Track cache hits for analytics
+			if h.metrics != nil {
+				h.metrics.IncrementCacheHits()
+			}
 		}
 	}
 
@@ -1627,10 +1637,17 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		h256 := sha256.Sum256([]byte(cacheKey + strconv.Itoa(len(results.Data.Results))))
 		return hex.EncodeToString(h256[:16])
 	}() + `"`
+	// Vary: Accept tells caches that response varies by content negotiation
+	w.Header().Set("Vary", "Accept")
 	w.Header().Set("ETag", etag)
 	if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
+	}
+
+	// Spell suggestion: only for JSON and plain-text responses
+	if suggestion := h.engineMgr.SpellCorrect(searchQuery); suggestion != "" {
+		results.Data.SpellSuggestion = suggestion
 	}
 
 	// RSS feed format
@@ -1656,6 +1673,9 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "query: %s\n", results.Data.Query)
+		if results.Data.SpellSuggestion != "" {
+			fmt.Fprintf(w, "did_you_mean: %s\n", results.Data.SpellSuggestion)
+		}
 		fmt.Fprintf(w, "results: %d\n", len(results.Data.Results))
 		fmt.Fprintf(w, "---\n")
 		for i, r := range results.Data.Results {
@@ -2558,6 +2578,39 @@ if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
 	return
 }
 
+// Thumbnail disk cache: check if a cached file exists and is still fresh
+ttlMinutes := h.appConfig.Search.ThumbnailCacheTTL
+if ttlMinutes == 0 {
+	ttlMinutes = 1440 // 24 hours default
+}
+cacheEnabled := ttlMinutes > 0 && h.dataDir != ""
+cacheDir := filepath.Join(h.dataDir, "thumbnails")
+cacheFile := filepath.Join(cacheDir, hex.EncodeToString(h256[:]))
+
+if cacheEnabled {
+	if info, statErr := os.Stat(cacheFile); statErr == nil {
+		age := time.Since(info.ModTime())
+		if age < time.Duration(ttlMinutes)*time.Minute {
+			// Serve from disk cache
+			cachedBytes, readErr := os.ReadFile(cacheFile)
+			if readErr == nil {
+				ct := "image/jpeg"
+				// Detect GIF from magic bytes
+				if len(cachedBytes) >= 6 && string(cachedBytes[:6]) == "GIF89a" {
+					ct = "image/gif"
+				}
+				w.Header().Set("ETag", etag)
+				w.Header().Set("Cache-Control", "public, max-age=86400") // 24 hours
+				w.Header().Set("Content-Type", ct)
+				w.Header().Set("Content-Length", strconv.Itoa(len(cachedBytes)))
+				w.WriteHeader(http.StatusOK)
+				w.Write(cachedBytes) //nolint:errcheck
+				return
+			}
+		}
+	}
+}
+
 // Create request with headers to avoid hotlink protection
 req, err := http.NewRequest("GET", thumbURL, nil)
 if err != nil {
@@ -2609,20 +2662,30 @@ if strings.HasPrefix(contentType, "image/jpeg") ||
 	}
 }
 
+outputBytes := body
+outputContentType := contentType
+if reEncoded {
+	outputBytes = outputBuf.Bytes()
+	outputContentType = "image/jpeg"
+}
+
+// Write to disk cache for future requests
+if cacheEnabled {
+	if mkErr := os.MkdirAll(cacheDir, 0o750); mkErr == nil {
+		// Write to a temp file then rename to avoid partial reads
+		tmpFile := cacheFile + ".tmp"
+		if writeErr := os.WriteFile(tmpFile, outputBytes, 0o640); writeErr == nil {
+			os.Rename(tmpFile, cacheFile) //nolint:errcheck
+		}
+	}
+}
+
 w.Header().Set("ETag", etag)
 w.Header().Set("Cache-Control", "public, max-age=86400") // 24 hours
-
-if reEncoded {
-	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Content-Length", strconv.Itoa(outputBuf.Len()))
-	w.WriteHeader(http.StatusOK)
-	w.Write(outputBuf.Bytes())
-} else {
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-	w.WriteHeader(http.StatusOK)
-	w.Write(body)
-}
+w.Header().Set("Content-Type", outputContentType)
+w.Header().Set("Content-Length", strconv.Itoa(len(outputBytes)))
+w.WriteHeader(http.StatusOK)
+w.Write(outputBytes) //nolint:errcheck
 }
 
 // ProxyVideo proxies external video previews to prevent tracking and avoid CORS

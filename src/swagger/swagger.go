@@ -33,6 +33,10 @@ func DetectTheme(r *http.Request) string {
 
 // GenerateSpec generates the OpenAPI 3.0 specification
 func GenerateSpec(appConfig *config.AppConfig) string {
+	adminPath := "admin"
+	if appConfig != nil && appConfig.Server.Admin.Path != "" {
+		adminPath = appConfig.Server.Admin.Path
+	}
 	spec := map[string]interface{}{
 		"openapi": "3.0.0",
 		"info": map[string]interface{}{
@@ -73,7 +77,45 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 					},
 					"responses": map[string]interface{}{
 						"200": map[string]interface{}{
-							"description": "Search results",
+							"description": "Search results with optional spell suggestion",
+							"content": map[string]interface{}{
+								"application/json": map[string]interface{}{
+									"schema": map[string]string{"type": "object"},
+								},
+								"text/plain": map[string]interface{}{
+									"schema": map[string]string{"type": "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/api/v1/search/batch": map[string]interface{}{
+				"post": map[string]interface{}{
+					"summary":     "Batch search",
+					"description": "Search multiple queries in one request (max 5 queries)",
+					"requestBody": map[string]interface{}{
+						"required": true,
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"queries": map[string]interface{}{
+											"type":        "array",
+											"maxItems":    5,
+											"description": "List of search queries",
+											"items":       map[string]string{"type": "string"},
+										},
+									},
+									"required": []string{"queries"},
+								},
+							},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "Batch search results",
 							"content": map[string]interface{}{
 								"application/json": map[string]interface{}{
 									"schema": map[string]string{"type": "object"},
@@ -86,10 +128,26 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 			"/api/v1/engines": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "List engines",
-					"description": "Get all search engines with status",
+					"description": "Get all search engines with status and privacy scores",
 					"responses": map[string]interface{}{
 						"200": map[string]interface{}{
-							"description": "Engine list",
+							"description": "Engine list with privacy metadata",
+							"content": map[string]interface{}{
+								"application/json": map[string]interface{}{
+									"schema": map[string]string{"type": "array"},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/api/v1/engines/health": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary":     "Engine health",
+					"description": "Get health status including circuit breaker state for each engine",
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "Engine health data",
 							"content": map[string]interface{}{
 								"application/json": map[string]interface{}{
 									"schema": map[string]string{"type": "array"},
@@ -124,6 +182,159 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 							"description": "OK",
 						},
 					},
+				},
+			},
+			"/.well-known/vidveil.json": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary":     "Well-known metadata",
+					"description": "Machine-readable server metadata and capability discovery",
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "Server metadata",
+							"content": map[string]interface{}{
+								"application/json": map[string]interface{}{
+									"schema": map[string]string{"type": "object"},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/search.rss": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary":     "RSS feed",
+					"description": "Search results as RSS 2.0 feed",
+					"parameters": []map[string]interface{}{
+						{
+							"name":        "q",
+							"in":          "query",
+							"required":    true,
+							"description": "Search query",
+							"schema":      map[string]string{"type": "string"},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "RSS feed",
+							"content": map[string]interface{}{
+								"application/rss+xml": map[string]interface{}{
+									"schema": map[string]string{"type": "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/search.atom": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary":     "Atom feed",
+					"description": "Search results as Atom 1.0 feed",
+					"parameters": []map[string]interface{}{
+						{
+							"name":        "q",
+							"in":          "query",
+							"required":    true,
+							"description": "Search query",
+							"schema":      map[string]string{"type": "string"},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "Atom feed",
+							"content": map[string]interface{}{
+								"application/atom+xml": map[string]interface{}{
+									"schema": map[string]string{"type": "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/api/v1/" + adminPath + "/analytics": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary":     "Search analytics",
+					"description": "Aggregate search analytics — privacy-safe (no per-user data). Requires admin token.",
+					"security":    []map[string]interface{}{{"AdminToken": []string{}}},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "Analytics summary",
+							"content": map[string]interface{}{
+								"application/json": map[string]interface{}{
+									"schema": map[string]string{"type": "object"},
+								},
+							},
+						},
+						"401": map[string]interface{}{"description": "Unauthorized"},
+					},
+				},
+			},
+			"/api/v1/" + adminPath + "/engines/{name}": map[string]interface{}{
+				"patch": map[string]interface{}{
+					"summary":     "Toggle engine",
+					"description": "Enable or disable a search engine by name. Requires admin token.",
+					"security":    []map[string]interface{}{{"AdminToken": []string{}}},
+					"parameters": []map[string]interface{}{
+						{
+							"name":        "name",
+							"in":          "path",
+							"required":    true,
+							"description": "Engine name",
+							"schema":      map[string]string{"type": "string"},
+						},
+					},
+					"requestBody": map[string]interface{}{
+						"required": true,
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type":     "object",
+									"required": []string{"enabled"},
+									"properties": map[string]interface{}{
+										"enabled": map[string]interface{}{
+											"type":        "boolean",
+											"description": "Whether the engine should be enabled",
+										},
+									},
+								},
+							},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "Engine updated"},
+						"401": map[string]interface{}{"description": "Unauthorized"},
+						"404": map[string]interface{}{"description": "Engine not found"},
+					},
+				},
+			},
+			"/api/v1/" + adminPath + "/engines/{name}/reset": map[string]interface{}{
+				"post": map[string]interface{}{
+					"summary":     "Reset circuit breaker",
+					"description": "Manually reset the circuit breaker for a search engine. Requires admin token.",
+					"security":    []map[string]interface{}{{"AdminToken": []string{}}},
+					"parameters": []map[string]interface{}{
+						{
+							"name":        "name",
+							"in":          "path",
+							"required":    true,
+							"description": "Engine name",
+							"schema":      map[string]string{"type": "string"},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "Circuit breaker reset"},
+						"401": map[string]interface{}{"description": "Unauthorized"},
+						"404": map[string]interface{}{"description": "Engine not found"},
+					},
+				},
+			},
+		},
+		"components": map[string]interface{}{
+			"securitySchemes": map[string]interface{}{
+				"AdminToken": map[string]interface{}{
+					"type":        "apiKey",
+					"in":          "header",
+					"name":        "X-Admin-Token",
+					"description": "Admin API token (set in admin panel settings)",
 				},
 			},
 		},

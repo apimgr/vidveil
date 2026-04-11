@@ -605,6 +605,9 @@ type SearchConfig struct {
 	// Per-engine timeout overrides in seconds (e.g., pornhub: 20)
 	// Engines not listed use the global engine_timeout
 	EngineTimeouts map[string]int `yaml:"engine_timeouts"`
+	// ThumbnailCacheTTL is the time-to-live for the on-disk thumbnail cache in minutes.
+	// Default 1440 (24 hours). Set to 0 to disable disk caching.
+	ThumbnailCacheTTL int `yaml:"thumbnail_cache_ttl"`
 }
 
 // AIFilterConfig holds settings for filtering AI-generated content
@@ -1003,6 +1006,8 @@ func DefaultAppConfig() *AppConfig {
 					"fake celebrity", "celebrity deepfake",
 				},
 			},
+			// Thumbnail disk cache TTL: 24 hours by default
+			ThumbnailCacheTTL: 1440,
 		},
 		Engines: EnginesConfig{
 			UserAgent: UserAgentConfig{

@@ -62,6 +62,7 @@ type SearchData struct {
 	Cached          bool                      `json:"cached,omitempty"`
 	EngineStats     map[string]EngineStatInfo `json:"engine_stats,omitempty"`
 	RelatedSearches []string                  `json:"related_searches,omitempty"`
+	SpellSuggestion string                    `json:"spell_suggestion,omitempty"`
 }
 
 // PaginationData holds pagination information
@@ -72,15 +73,23 @@ type PaginationData struct {
 	Pages int `json:"pages"`
 }
 
+// EnginePrivacyScore holds static privacy metadata for an engine
+type EnginePrivacyScore struct {
+	RequiresJS  bool `json:"requires_js"`  // engine needs JS to return results
+	SetsCookies bool `json:"sets_cookies"` // engine sets tracking cookies
+	HasTracking bool `json:"has_tracking"` // engine embeds third-party trackers
+}
+
 // EngineInfo represents information about a search engine
 type EngineInfo struct {
-	Name        string            `json:"name"`
-	DisplayName string            `json:"display_name"`
-	Enabled     bool              `json:"enabled"`
-	Available   bool              `json:"available"`
-	Features    []string          `json:"features"`
-	Tier        int               `json:"tier"`
+	Name         string              `json:"name"`
+	DisplayName  string              `json:"display_name"`
+	Enabled      bool                `json:"enabled"`
+	Available    bool                `json:"available"`
+	Features     []string            `json:"features"`
+	Tier         int                 `json:"tier"`
 	Capabilities *EngineCapabilities `json:"capabilities,omitempty"`
+	Privacy      EnginePrivacyScore  `json:"privacy"`
 }
 
 // EngineCapabilities represents engine feature support

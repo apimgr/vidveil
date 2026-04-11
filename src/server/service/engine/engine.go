@@ -112,6 +112,11 @@ type HealthTracker interface {
 	GetStats() model.EngineHealthStats
 }
 
+// CircuitResetter is implemented by engines that support circuit breaker reset.
+type CircuitResetter interface {
+	ResetCircuitBreaker()
+}
+
 // TorConfigurableEngine interface for engines that support Tor outbound
 // Per PART 32: Engines implementing this can route queries through Tor
 type TorConfigurableEngine interface {

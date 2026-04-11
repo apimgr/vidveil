@@ -90,11 +90,15 @@ type ServerMetrics struct {
 	searchesTotal     uint64
 	searchErrors      uint64
 	apiRequestsTotal  uint64
+	// cacheHitsTotal tracks how many searches were served from cache
+	cacheHitsTotal    uint64
 	// activeConnections tracks current active connections
 	activeConnections int64
 
 	// 24h sliding window counter per AI.md PART 13 (stats.requests_24h)
 	requests24h *slidingWindowCounter
+	// searches24h tracks searches in the last 24 hours
+	searches24h *slidingWindowCounter
 }
 
 // NewMetrics creates a new metrics collector
@@ -104,6 +108,7 @@ func NewMetrics(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *S
 		engineMgr:   engineMgr,
 		startTime:   time.Now(),
 		requests24h: newSlidingWindowCounter(),
+		searches24h: newSlidingWindowCounter(),
 	}
 }
 
@@ -118,6 +123,14 @@ func (m *ServerMetrics) IncrementRequests() {
 // IncrementSearches increments the search counter
 func (m *ServerMetrics) IncrementSearches() {
 	atomic.AddUint64(&m.searchesTotal, 1)
+	if m.searches24h != nil {
+		m.searches24h.increment()
+	}
+}
+
+// IncrementCacheHits increments the cache hit counter
+func (m *ServerMetrics) IncrementCacheHits() {
+	atomic.AddUint64(&m.cacheHitsTotal, 1)
 }
 
 // IncrementSearchErrors increments the search error counter
@@ -156,6 +169,47 @@ func (m *ServerMetrics) GetRequests24h() uint64 {
 		return m.requests24h.count()
 	}
 	return 0
+}
+
+// GetCacheHitsTotal returns total cache hit count
+func (m *ServerMetrics) GetCacheHitsTotal() uint64 {
+	return atomic.LoadUint64(&m.cacheHitsTotal)
+}
+
+// GetSearches24h returns search count in the last 24 hours
+func (m *ServerMetrics) GetSearches24h() uint64 {
+	if m.searches24h != nil {
+		return m.searches24h.count()
+	}
+	return 0
+}
+
+// AnalyticsSummary holds aggregated analytics for the admin dashboard
+type AnalyticsSummary struct {
+	SearchesTotal  uint64  `json:"searches_total"`
+	Searches24h    uint64  `json:"searches_24h"`
+	Requests24h    uint64  `json:"requests_24h"`
+	CacheHitsTotal uint64  `json:"cache_hits_total"`
+	CacheHitPct    float64 `json:"cache_hit_pct"`
+	UptimeSeconds  float64 `json:"uptime_seconds"`
+}
+
+// GetAnalyticsSummary returns a privacy-safe analytics summary for the admin dashboard
+func (m *ServerMetrics) GetAnalyticsSummary() AnalyticsSummary {
+	total := atomic.LoadUint64(&m.searchesTotal)
+	hits := atomic.LoadUint64(&m.cacheHitsTotal)
+	hitPct := 0.0
+	if total > 0 {
+		hitPct = float64(hits) / float64(total) * 100
+	}
+	return AnalyticsSummary{
+		SearchesTotal:  total,
+		Searches24h:    m.GetSearches24h(),
+		Requests24h:    m.GetRequests24h(),
+		CacheHitsTotal: hits,
+		CacheHitPct:    hitPct,
+		UptimeSeconds:  time.Since(m.startTime).Seconds(),
+	}
 }
 
 // IncrementActiveConnections increments active connections counter

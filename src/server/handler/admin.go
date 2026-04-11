@@ -90,6 +90,7 @@ type AdminHandler struct {
 	scheduler    *scheduler.Scheduler
 	logger       *logging.AppLogger
 	searchCache  cache.SearchResultCache
+	metrics      *ServerMetrics
 	sessions     map[string]adminSession
 	startTime    time.Time
 	// Note: CSRF tokens now use Double Submit Cookie pattern per AI.md PART 22
@@ -135,6 +136,11 @@ func (h *AdminHandler) SetLogger(l *logging.AppLogger) {
 // SetSearchCache sets the search cache reference for cache management
 func (h *AdminHandler) SetSearchCache(c cache.SearchResultCache) {
 	h.searchCache = c
+}
+
+// SetMetrics sets the metrics reference for analytics display
+func (h *AdminHandler) SetMetrics(m *ServerMetrics) {
+	h.metrics = m
 }
 
 // IsFirstRun checks if this is the first run (no admin exists)
@@ -1755,6 +1761,68 @@ func (h *AdminHandler) APIEngineHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// APIEnginePatch enables or disables a named engine at runtime.
+// PATCH /api/v1/{adminPath}/engines/{name} — body: {"enabled": true|false}
+func (h *AdminHandler) APIEnginePatch(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		h.jsonError(w, "Engine name required", "ERR_MISSING_NAME", http.StatusBadRequest)
+		return
+	}
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.jsonError(w, "Invalid JSON body", "ERR_INVALID_BODY", http.StatusBadRequest)
+		return
+	}
+	if !h.engineMgr.SetEngineEnabled(name, body.Enabled) {
+		h.jsonError(w, "Engine not found: "+name, "ERR_NOT_FOUND", http.StatusNotFound)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
+		"engine":  name,
+		"enabled": body.Enabled,
+	})
+}
+
+// APIEngineReset resets the circuit breaker for a named engine.
+// POST /api/v1/{adminPath}/engines/{name}/reset
+func (h *AdminHandler) APIEngineReset(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		h.jsonError(w, "Engine name required", "ERR_MISSING_NAME", http.StatusBadRequest)
+		return
+	}
+	if !h.engineMgr.ResetEngine(name) {
+		h.jsonError(w, "Engine not found: "+name, "ERR_NOT_FOUND", http.StatusNotFound)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":     true,
+		"engine": name,
+		"action": "circuit_reset",
+	})
+}
+
+// APIAnalytics returns aggregate privacy-safe analytics for the admin dashboard.
+// GET /api/v1/{adminPath}/analytics
+func (h *AdminHandler) APIAnalytics(w http.ResponseWriter, r *http.Request) {
+	if h.metrics == nil {
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":   true,
+			"data": AnalyticsSummary{},
+		})
+		return
+	}
+	summary := h.metrics.GetAnalyticsSummary()
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":   true,
+		"data": summary,
+	})
+}
+
 // APIBackup triggers a backup
 // Per AI.md PART 22: Accepts JSON body with optional password for encryption
 func (h *AdminHandler) APIBackup(w http.ResponseWriter, r *http.Request) {
@@ -3140,6 +3208,20 @@ func (h *AdminHandler) renderDashboard() string {
 	engineCount := len(h.engineMgr.ListEngines())
 	enabledCount := h.engineMgr.EnabledCount()
 
+	// Analytics summary
+	var analytics AnalyticsSummary
+	if h.metrics != nil {
+		analytics = h.metrics.GetAnalyticsSummary()
+	}
+
+	cacheHitPctStr := "0.0%"
+	if analytics.CacheHitPct > 0 {
+		cacheHitPctStr = strconv.FormatFloat(analytics.CacheHitPct, 'f', 1, 64) + "%"
+	}
+
+	uptimeDur := time.Duration(analytics.UptimeSeconds * float64(time.Second))
+	uptimeStr := formatDuration(uptimeDur)
+
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3170,6 +3252,32 @@ func (h *AdminHandler) renderDashboard() string {
                 <div class="stat-value">` + strconv.Itoa(runtime.NumGoroutine()) + `</div>
                 <div class="stat-label">Goroutines</div>
             </div>
+        </div>
+
+        <div class="card">
+            <h2>Search Analytics</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">` + strconv.FormatUint(analytics.SearchesTotal, 10) + `</div>
+                    <div class="stat-label">Total Searches</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">` + strconv.FormatUint(analytics.Searches24h, 10) + `</div>
+                    <div class="stat-label">Searches (24h)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">` + strconv.FormatUint(analytics.Requests24h, 10) + `</div>
+                    <div class="stat-label">Requests (24h)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">` + cacheHitPctStr + `</div>
+                    <div class="stat-label">Cache Hit Rate</div>
+                </div>
+            </div>
+            <p class="text-muted" style="font-size:0.85em;margin-top:0.5rem">
+                Uptime: ` + uptimeStr + ` &nbsp;|&nbsp;
+                Cache hits: ` + strconv.FormatUint(analytics.CacheHitsTotal, 10) + ` of ` + strconv.FormatUint(analytics.SearchesTotal, 10) + ` searches
+            </p>
         </div>
 
         <div class="card">
@@ -3253,6 +3361,8 @@ func (h *AdminHandler) renderDashboard() string {
 func (h *AdminHandler) renderEnginesPage() string {
 	engines := h.engineMgr.ListEnginesWithHealth()
 
+	adminAPIBase := "/api/v1/" + h.appConfig.Server.Admin.Path + "/engines"
+
 	engineRows := ""
 	for _, eng := range engines {
 		status := `<span class="badge badge-success">Enabled</span>`
@@ -3283,6 +3393,28 @@ func (h *AdminHandler) renderEnginesPage() string {
 			lastFail = eng.Health.LastFailureAt.UTC().Format("01-02 15:04")
 		}
 
+		// Privacy score icons: ✓ = safe, ✗ = concern
+		jsIcon := "✓"
+		if eng.Privacy.RequiresJS {
+			jsIcon = "✗"
+		}
+		cookieIcon := "✓"
+		if eng.Privacy.SetsCookies {
+			cookieIcon = "✗"
+		}
+		trackIcon := "✓"
+		if eng.Privacy.HasTracking {
+			trackIcon = "✗"
+		}
+		privacyCells := `<td style="text-align:center">` + jsIcon + `</td>` +
+			`<td style="text-align:center">` + cookieIcon + `</td>` +
+			`<td style="text-align:center">` + trackIcon + `</td>`
+
+		toggleLabel := "Disable"
+		if !eng.Enabled {
+			toggleLabel = "Enable"
+		}
+
 		engineRows += `<tr>
             <td style="word-break:break-all">` + eng.Name + `</td>
             <td style="word-break:break-all">` + eng.DisplayName + `</td>
@@ -3293,6 +3425,11 @@ func (h *AdminHandler) renderEnginesPage() string {
             <td>` + uptime + `</td>
             <td>` + strconv.FormatUint(eng.Health.TotalSuccesses, 10) + ` / ` + strconv.FormatUint(eng.Health.TotalFailures, 10) + `</td>
             <td>` + lastFail + `</td>
+            ` + privacyCells + `
+            <td>
+                <button class="btn btn-sm" onclick="toggleEngine('` + eng.Name + `', ` + strconv.FormatBool(!eng.Enabled) + `)">` + toggleLabel + `</button>
+                <button class="btn btn-sm btn-danger" onclick="resetCircuit('` + eng.Name + `')">Reset CB</button>
+            </td>
         </tr>`
 	}
 
@@ -3323,6 +3460,10 @@ func (h *AdminHandler) renderEnginesPage() string {
                         <th>Uptime</th>
                         <th>OK / Fail</th>
                         <th>Last Failure</th>
+                        <th title="Requires JavaScript">JS</th>
+                        <th title="Sets Cookies">Cookies</th>
+                        <th title="Has Tracking">Tracking</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -3332,6 +3473,31 @@ func (h *AdminHandler) renderEnginesPage() string {
             </div>
         </div>
     </main>
+    <script>
+    const adminAPIBase = '` + adminAPIBase + `';
+    async function toggleEngine(name, enable) {
+        try {
+            const resp = await fetch(adminAPIBase + '/' + name, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: enable})
+            });
+            const data = await resp.json();
+            if (data.ok) location.reload();
+            else alert('Error: ' + (data.error || 'unknown'));
+        } catch(e) { alert('Error: ' + e.message); }
+    }
+    async function resetCircuit(name) {
+        try {
+            const resp = await fetch(adminAPIBase + '/' + name + '/reset', {
+                method: 'POST'
+            });
+            const data = await resp.json();
+            if (data.ok) location.reload();
+            else alert('Error: ' + (data.error || 'unknown'));
+        } catch(e) { alert('Error: ' + e.message); }
+    }
+    </script>
 </body>
 </html>`
 }
@@ -4036,6 +4202,20 @@ function showConfirm(message) {
 
 func adminStyles() string {
 	return `<link rel="stylesheet" href="/static/css/admin.css">`
+}
+
+// formatDuration formats a duration as a human-readable string like "2d 3h 15m"
+func formatDuration(d time.Duration) string {
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
 // =====================================================

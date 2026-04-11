@@ -557,6 +557,7 @@ func (m *EngineManager) ListEngines() []model.EngineInfo {
 			Available:   engine.IsAvailable(),
 			Tier:        engine.Tier(),
 			Features:    getFeatures(engine),
+			Privacy:     getEnginePrivacyScore(engine.Name()),
 		})
 	}
 	return infos
@@ -582,6 +583,7 @@ func (m *EngineManager) ListEnginesWithHealth() []model.EngineHealthInfo {
 					HasPreview:  caps.HasPreview,
 					HasDownload: caps.HasDownload,
 				},
+				Privacy: getEnginePrivacyScore(eng.Name()),
 			},
 		}
 		if ht, ok := eng.(HealthTracker); ok {
@@ -590,6 +592,38 @@ func (m *EngineManager) ListEnginesWithHealth() []model.EngineHealthInfo {
 		infos = append(infos, info)
 	}
 	return infos
+}
+
+// ResetEngine resets the circuit breaker for a named engine.
+// Returns true if the engine was found.
+func (m *EngineManager) ResetEngine(name string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, eng := range m.engines {
+		if eng.Name() == name {
+			if cr, ok := eng.(CircuitResetter); ok {
+				cr.ResetCircuitBreaker()
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// SetEngineEnabled enables or disables a named engine at runtime.
+// Returns true if the engine was found.
+func (m *EngineManager) SetEngineEnabled(name string, enabled bool) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, eng := range m.engines {
+		if eng.Name() == name {
+			if c, ok := eng.(ConfigurableSearchEngine); ok {
+				c.SetEnabled(enabled)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // EnabledCount returns the number of enabled engines
@@ -604,6 +638,106 @@ func (m *EngineManager) EnabledCount() int {
 		}
 	}
 	return count
+}
+
+// SpellCorrect returns a spelling suggestion for the query, or "" if none.
+// It uses Levenshtein distance against engine bang names and a small built-in
+// word list. A suggestion is only returned when edit distance is 1-2 AND the
+// suggestion differs from the input. Queries longer than 4 words are skipped.
+func (m *EngineManager) SpellCorrect(query string) string {
+	words := strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+	if len(words) == 0 || len(words) > 4 {
+		return ""
+	}
+
+	// Build word list from engine bang names + common search terms
+	candidates := m.spellWordList()
+
+	// Try to suggest correction for each word independently
+	suggested := make([]string, len(words))
+	anyChanged := false
+	for i, word := range words {
+		if len(word) <= 2 {
+			suggested[i] = word
+			continue
+		}
+		best := word
+		bestDist := 3 // threshold: only suggest if dist <= 2
+		for _, candidate := range candidates {
+			d := levenshtein(word, candidate)
+			if d > 0 && d < bestDist {
+				bestDist = d
+				best = candidate
+			}
+		}
+		suggested[i] = best
+		if best != word {
+			anyChanged = true
+		}
+	}
+
+	if !anyChanged {
+		return ""
+	}
+	return strings.Join(suggested, " ")
+}
+
+// spellWordList builds the spell correction vocabulary from engine names + builtins.
+func (m *EngineManager) spellWordList() []string {
+	m.mu.RLock()
+	names := make([]string, 0, len(m.engines)+50)
+	for _, eng := range m.engines {
+		names = append(names, strings.ToLower(eng.Name()))
+		names = append(names, strings.ToLower(eng.DisplayName()))
+	}
+	m.mu.RUnlock()
+
+	// Common adult video search terms
+	builtins := []string{
+		"amateur", "amateur", "blonde", "brunette", "redhead", "milf", "teen",
+		"lesbian", "threesome", "hardcore", "softcore", "solo", "couple",
+		"anal", "blowjob", "handjob", "creampie", "cumshot", "facial",
+		"interracial", "asian", "latina", "ebony", "european", "japanese",
+		"german", "french", "british", "russian", "casting", "audition",
+		"homemade", "pov", "hd", "4k", "compilation", "massage", "shower",
+		"outdoor", "public", "office", "college", "babysitter", "stepsister",
+		"stepbrother", "stepmother", "stepfather", "teacher", "doctor",
+		"nurse", "secretary", "maid", "cheerleader", "yoga", "gym",
+		"lingerie", "stockings", "heels", "tattoo", "piercing",
+		"big", "huge", "tiny", "natural", "fake", "real", "perfect",
+		"boobs", "tits", "ass", "butt", "booty", "legs",
+	}
+	return append(names, builtins...)
+}
+
+// levenshtein computes the Levenshtein edit distance between two strings.
+func levenshtein(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	la, lb := len(ra), len(rb)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+	// Use two rows to save memory
+	prev := make([]int, lb+1)
+	curr := make([]int, lb+1)
+	for j := 0; j <= lb; j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			curr[j] = min(min(prev[j]+1, curr[j-1]+1), prev[j-1]+cost)
+		}
+		prev, curr = curr, prev
+	}
+	return prev[lb]
 }
 
 // EngineDebugInfo contains detailed debug information for a single engine

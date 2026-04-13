@@ -3,6 +3,8 @@ package engine
 
 import (
 	"strings"
+
+	"github.com/apimgr/vidveil/src/server/model"
 )
 
 // Category represents a content category with synonyms and related terms
@@ -361,4 +363,103 @@ func GenerateSmartRelated(query string, maxResults int) []string {
 	}
 
 	return related
+}
+
+// QueryIntent holds the detected semantic intent of a search query.
+// Used to filter results that contradict the intended content type.
+type QueryIntent struct {
+	// IsFemaleOnly means the query implies female-only (lesbian/sapphic) content.
+	// Results featuring biological males should be rejected.
+	IsFemaleOnly bool
+	// HasAgeTypes lists age-type terms detected in the query (e.g. "teen", "milf").
+	HasAgeTypes []string
+}
+
+// femaleOnlyTerms trigger IsFemaleOnly when found in the query.
+var femaleOnlyTerms = []string{
+	"lesbian", "lesbians", "lesbo", "lesbos",
+	"girl on girl", "girls only", "female only",
+	"sapphic", "lez", "lezz", "lezzies",
+	"women only", "all female",
+}
+
+// malePresenceWords are tokens in a result title that strongly indicate
+// a biological male participant, contradicting female-only queries.
+// "strapon", "dildo", "strap-on" are intentionally excluded — they appear in
+// lesbian content and must NOT trigger this filter.
+var malePresenceWords = []string{
+	"cock", "cocks", "dick", "dicks", "penis",
+	"bbc",
+	"stepbro", "stepfather", "stepdad",
+	"blowbang", "facial", "cumshot", "cum shot",
+	"handjob", "hand job",
+	"he fucks", "guy fucks", "man fucks",
+	"boyfriend fucks", "hubby fucks",
+}
+
+// containsWholeWord reports whether s contains word as a standalone word token.
+func containsWholeWord(s, word string) bool {
+	wlen := len(word)
+	for i := 0; i <= len(s)-wlen; i++ {
+		if s[i:i+wlen] != word {
+			continue
+		}
+		before := i == 0 || !isWordChar(rune(s[i-1]))
+		after := i+wlen >= len(s) || !isWordChar(rune(s[i+wlen]))
+		if before && after {
+			return true
+		}
+	}
+	return false
+}
+
+func isWordChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+}
+
+// DetectQueryIntent analyses the search query and returns its semantic intent.
+func DetectQueryIntent(query string) QueryIntent {
+	lower := strings.ToLower(query)
+	intent := QueryIntent{}
+
+	for _, term := range femaleOnlyTerms {
+		if strings.Contains(lower, term) {
+			intent.IsFemaleOnly = true
+			break
+		}
+	}
+
+	ageGroups := map[string][]string{
+		"teen":   {"teen", "teens", "18yo", "19yo", "young girl", "young adult"},
+		"milf":   {"milf", "milfs", "cougar", "mommy", "mature woman"},
+		"mature": {"mature", "granny", "gilf", "older woman"},
+	}
+	for age, synonyms := range ageGroups {
+		for _, syn := range synonyms {
+			if strings.Contains(lower, syn) {
+				intent.HasAgeTypes = append(intent.HasAgeTypes, age)
+				break
+			}
+		}
+	}
+
+	return intent
+}
+
+// ResultMatchesIntent returns false if a result semantically contradicts the query intent.
+// Conservative: only rejects when there is clear, unambiguous evidence of contradiction.
+func ResultMatchesIntent(r model.VideoResult, intent QueryIntent) bool {
+	if !intent.IsFemaleOnly {
+		return true
+	}
+
+	titleLower := strings.ToLower(r.Title)
+
+	for _, word := range malePresenceWords {
+		if containsWholeWord(titleLower, word) {
+			return false
+		}
+	}
+
+	return true
 }

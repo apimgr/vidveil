@@ -181,6 +181,7 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 	engineStats := make(map[string]model.EngineStatInfo)
 
 	minDuration := m.appConfig.Search.MinDurationSeconds
+	queryIntent := DetectQueryIntent(query)
 
 	for result := range resultsChan {
 		if result.err != nil {
@@ -205,6 +206,11 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 				}
 				// AND-based term filter: result must match ALL search terms (using synonyms)
 				if !resultMatchesAllTerms(r, query) {
+					continue
+				}
+				// Semantic intent filter: reject results that contradict query intent
+				// (e.g. male-presence indicators in a lesbian/female-only query)
+				if !ResultMatchesIntent(r, queryIntent) {
 					continue
 				}
 				// Deduplicate by normalized URL and title

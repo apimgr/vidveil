@@ -297,10 +297,11 @@
             document.getElementById('use-tor').checked = prefs.useTor;
             document.getElementById('proxy-images').checked = prefs.proxyImages;
 
-            // Engines
-            if (prefs.engines && prefs.engines.length > 0) {
+            // Engines — support both 'enabledEngines' (app.js key) and legacy 'engines' key
+            const savedEngines = prefs.enabledEngines || prefs.engines || [];
+            if (savedEngines.length > 0) {
                 document.querySelectorAll('input[name="engines"]').forEach(cb => {
-                    cb.checked = prefs.engines.includes(cb.value);
+                    cb.checked = savedEngines.includes(cb.value);
                 });
             }
 
@@ -335,14 +336,17 @@
                 autoClearHistory: document.getElementById('auto-clear-history').value,
                 useTor: document.getElementById('use-tor').checked,
                 proxyImages: document.getElementById('proxy-images').checked,
-                engines: engines
+                enabledEngines: engines  // matches app.js key name
             };
 
             localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 
-            // Apply theme immediately
+            // Apply theme immediately and set cookie so server uses correct theme
+            // on next full page load (prevents flicker and corrects SSR class).
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
+            var maxAge = 365 * 24 * 3600;
+            document.cookie = 'vidveil-theme=' + encodeURIComponent(prefs.theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
 
             showToast('Preferences saved!', 'success');
             // Auto-close after saving

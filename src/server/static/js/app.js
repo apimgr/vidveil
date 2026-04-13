@@ -88,6 +88,14 @@ function setupThemeMediaListener() {
 // Initialize theme listener on load
 setupThemeMediaListener();
 
+// Re-apply theme when page is restored from bfcache (browser back/forward).
+// Without this, history.back() restores the old DOM class from the cached snapshot.
+window.addEventListener('pageshow', function(event) {
+    if (event.persisted) {
+        setTheme(getTheme());
+    }
+});
+
 // ============================================================================
 // Screen Reader Announcements (AI.md PART 31: A11Y)
 // ============================================================================
@@ -1443,12 +1451,9 @@ if (document.readyState === 'loading') {
 
         searchQuery = searchMeta.dataset.query || new URLSearchParams(window.location.search).get('q') || '';
 
-        // Load preferences from localStorage
-        try {
-            userPrefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}');
-        } catch (e) {
-            userPrefs = {};
-        }
+        // Load preferences merged with defaults so defaultPreviewOnly:true and
+        // other defaults take effect even when user has only partially saved prefs.
+        userPrefs = getPreferences();
         var minDuration = parseInt(userPrefs.minDuration) || 0;
 
         // Apply grid density and thumbnail size (skip default values as they use base CSS)

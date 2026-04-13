@@ -87,11 +87,16 @@ func createSystemUser(username string) error {
 	if _, err := exec.LookPath("groupadd"); err == nil {
 		exec.Command("groupadd", "-g", strconv.Itoa(uid), username).Run()
 		cmd := exec.Command("useradd",
-			"-r",                            // System account
-			"-u", strconv.Itoa(uid),         // UID
-			"-g", username,                  // Primary group
-			"-d", homeDir,                   // Home directory
-			"-s", "/sbin/nologin",           // No login shell
+			// System account
+			"-r",
+			// UID
+			"-u", strconv.Itoa(uid),
+			// Primary group
+			"-g", username,
+			// Home directory
+			"-d", homeDir,
+			// No login shell
+			"-s", "/sbin/nologin",
 			"-c", username+" service account",
 			username,
 		)
@@ -101,12 +106,18 @@ func createSystemUser(username string) error {
 	// Alpine Linux uses addgroup/adduser (busybox)
 	exec.Command("addgroup", "-g", strconv.Itoa(uid), "-S", username).Run()
 	return exec.Command("adduser",
-		"-D",                      // Don't assign password
-		"-S",                      // System user
-		"-H",                      // No home directory
-		"-u", strconv.Itoa(uid),   // UID
-		"-G", username,            // Primary group
-		"-s", "/sbin/nologin",     // No login shell
+		// Don't assign password
+		"-D",
+		// System user
+		"-S",
+		// No home directory
+		"-H",
+		// UID
+		"-u", strconv.Itoa(uid),
+		// Primary group
+		"-G", username,
+		// No login shell
+		"-s", "/sbin/nologin",
 		username,
 	).Run()
 }
@@ -137,7 +148,8 @@ func CanEscalate() bool {
 	// Check sudo -n (non-interactive) to see if user has passwordless sudo
 	cmd := exec.Command("sudo", "-n", "true")
 	if cmd.Run() == nil {
-		return true // Has passwordless sudo
+		// Has passwordless sudo
+		return true
 	}
 
 	// Check if user is in sudo/wheel/admin group (can sudo with password)
@@ -157,7 +169,8 @@ func CanEscalate() bool {
 			continue
 		}
 		if group.Name == "sudo" || group.Name == "wheel" || group.Name == "admin" {
-			return true // Can sudo with password
+			// Can sudo with password
+			return true
 		}
 	}
 
@@ -176,7 +189,8 @@ func CanEscalate() bool {
 // Returns error if user cannot escalate or declined
 func HandleEscalation(action string) error {
 	if IsElevated() {
-		return nil // Already elevated
+		// Already elevated
+		return nil
 	}
 
 	if !CanEscalate() {

@@ -17,7 +17,8 @@ import (
 type EngineManager struct {
 	engines     map[string]SearchEngine
 	appConfig   *config.AppConfig
-	torProvider TorClientProvider // Per PART 32: Tor client provider for outbound
+	// Per PART 32: Tor client provider for outbound
+	torProvider TorClientProvider
 	mu          sync.RWMutex
 }
 
@@ -174,7 +175,8 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 	var enginesFailed []string
 	// Track seen URLs and titles for deduplication
 	seenURLs := make(map[string]bool)
-	seenTitlesNorm := make([]string, 0, 64) // for fuzzy Jaro-Winkler dedup
+	// for fuzzy Jaro-Winkler dedup
+	seenTitlesNorm := make([]string, 0, 64)
 	// Track per-engine stats
 	engineStats := make(map[string]model.EngineStatInfo)
 
@@ -501,12 +503,14 @@ func ParseQualityLevel(quality string) int {
 // Unknown quality (0) passes the filter to avoid excluding videos without quality info
 func meetsMinQuality(resultQuality string, minQuality int) bool {
 	if minQuality <= 0 {
-		return true // No minimum set
+		// No minimum set
+		return true
 	}
 
 	level := ParseQualityLevel(resultQuality)
 	if level == QualityUnknown {
-		return true // Unknown quality passes (we don't want to filter videos without quality info)
+		// Unknown quality passes (we don't want to filter videos without quality info)
+		return true
 	}
 
 	return level >= minQuality
@@ -689,7 +693,8 @@ func (m *EngineManager) SpellCorrect(query string) string {
 			continue
 		}
 		best := word
-		bestDist := 3 // threshold: only suggest if dist <= 2
+		// threshold: only suggest if dist <= 2
+		bestDist := 3
 		for _, candidate := range candidates {
 			d := levenshtein(word, candidate)
 			if d > 0 && d < bestDist {
@@ -1039,7 +1044,8 @@ func normalizeTitle(title string) string {
 	words := strings.Fields(normalized)
 	var significantWords []string
 	for _, w := range words {
-		if len(w) > 2 { // Keep words with > 2 chars
+		// Keep words with > 2 chars
+		if len(w) > 2 {
 			significantWords = append(significantWords, w)
 		}
 	}
@@ -1144,7 +1150,8 @@ func resultMatchesAllTerms(r model.VideoResult, query string) bool {
 	// Expand query terms using taxonomy
 	expandedTerms := ExpandSearchTerms(query)
 	if len(expandedTerms) == 0 {
-		return true // No terms to match
+		// No terms to match
+		return true
 	}
 
 	// Build combined text from title, tags, and performer
@@ -1203,7 +1210,8 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 		// Check both URL and normalized title to catch cross-engine duplicates
 		var seenMu sync.Mutex
 		seenURLs := make(map[string]bool)
-		seenTitlesNorm := make([]string, 0, 64) // for fuzzy Jaro-Winkler dedup
+		// for fuzzy Jaro-Winkler dedup
+		seenTitlesNorm := make([]string, 0, 64)
 
 		for _, engine := range enginesToUse {
 			wg.Add(1)

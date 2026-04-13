@@ -55,11 +55,16 @@ func SetupSignalHandler(server *http.Server, pidFile string) {
 
 	// Register signals per PART 8
 	signal.Notify(sigChan,
-		syscall.SIGTERM,  // 15 - kill (default)
-		syscall.SIGINT,   // 2 - Ctrl+C
-		syscall.SIGQUIT,  // 3 - Ctrl+\
-		syscall.SIGUSR1,  // 10 - Reopen logs
-		syscall.SIGUSR2,  // 12 - Status dump
+		// 15 - kill (default)
+		syscall.SIGTERM,
+		// 2 - Ctrl+C
+		syscall.SIGINT,
+		// 3 - Ctrl+\
+		syscall.SIGQUIT,
+		// 10 - Reopen logs
+		syscall.SIGUSR1,
+		// 12 - Status dump
+		syscall.SIGUSR2,
 	)
 
 	// Handle SIGRTMIN+3 (37) - Docker STOPSIGNAL per PART 8

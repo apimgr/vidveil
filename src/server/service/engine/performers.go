@@ -1103,7 +1103,8 @@ func GetPopularPerformers(count int) []string {
 		count = len(Performers)
 	}
 	if count > 20 {
-		count = 20 // Cap at 20 for popular list
+		// Cap at 20 for popular list
+		count = 20
 	}
 	return Performers[:count]
 }

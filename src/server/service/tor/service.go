@@ -32,7 +32,8 @@ import (
 // Supports both hidden service hosting AND outbound network routing
 type TorService struct {
 	cfg       *TorServiceConfig
-	torConfig *config.TorConfig // Full config from server.yml
+	// Full config from server.yml
+	torConfig *config.TorConfig
 	dataDir   string
 	logger    *logging.AppLogger
 
@@ -136,7 +137,8 @@ func (s *TorService) GetHTTPClient(useTor bool) *http.Client {
 
 	// Route through Tor network via SOCKS5 proxy
 	return &http.Client{
-		Timeout: 60 * time.Second, // Tor is slower, use longer timeout
+		// Tor is slower, use longer timeout
+		Timeout: 60 * time.Second,
 		Transport: &http.Transport{
 			DialContext: s.dialer.DialContext,
 		},
@@ -337,10 +339,14 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 
 	// Create hidden service with our pre-created local listener
 	onionSvc, err := t.Listen(ctx, &tor.ListenConf{
-		LocalListener: localListener, // Our Unix socket or TCP listener
-		RemotePorts:   []int{80},     // .onion:80
-		Key:           bineKeyPair,   // Use our existing key
-		Version3:      true,          // Ed25519 v3 onion
+		// Our Unix socket or TCP listener
+		LocalListener: localListener,
+		// .onion:80
+		RemotePorts:   []int{80},
+		// Use our existing key
+		Key:           bineKeyPair,
+		// Ed25519 v3 onion
+		Version3:      true,
 	})
 	if err != nil {
 		localListener.Close()

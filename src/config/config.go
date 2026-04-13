@@ -170,9 +170,12 @@ type TorConfig struct {
 // DefaultTorConfig returns the default Tor configuration per PART 32
 func DefaultTorConfig() TorConfig {
 	return TorConfig{
-		Binary:               "",    // auto-detect
-		UseNetwork:           false, // disabled by default, user can enable for privacy
-		AllowUserIPForward:   true,  // feature available, but user must opt-in via preferences
+		// auto-detect
+		Binary:               "",
+		// disabled by default, user can enable for privacy
+		UseNetwork:           false,
+		// feature available, but user must opt-in via preferences
+		AllowUserIPForward:   true,
 		MaxCircuits:          32,
 		CircuitTimeout:       60,
 		BootstrapTimeout:     180,
@@ -908,7 +911,8 @@ func DefaultAppConfig() *AppConfig {
 				Databases: GeoIPDatabasesConfig{
 					ASN:     true,
 					Country: true,
-					City:    true, // Need city for region-level restriction
+					// Need city for region-level restriction
+					City:    true,
 				},
 				ContentRestriction: ContentRestrictionConfig{
 					Mode:      "warn",

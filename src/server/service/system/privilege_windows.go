@@ -95,7 +95,8 @@ func isInAdminGroup() bool {
 // HandleEscalation prompts user and re-executes with elevated privileges per AI.md PART 24
 func HandleEscalation(action string) error {
 	if IsElevated() {
-		return nil // Already elevated
+		// Already elevated
+		return nil
 	}
 
 	if !CanEscalate() {

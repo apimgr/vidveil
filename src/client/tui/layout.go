@@ -139,7 +139,8 @@ func (m LayoutMode) Config() LayoutConfig {
 			ShowSidebar:    true,
 			SidebarWidth:   50,
 			MaxColumns:     20,
-			TruncateAt:     0, // No truncation
+			// No truncation
+			TruncateAt:     0,
 			UseAbbrev:      false,
 			VerticalScroll: false,
 			MultiPane:      true,

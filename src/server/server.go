@@ -50,7 +50,8 @@ type Server struct {
 	rateLimiter   *ratelimit.RateLimiter
 	searchHandler *handler.SearchHandler
 	adminHandler  *handler.AdminHandler
-	torSvc        handler.TorService // stored for Onion-Location middleware
+	// stored for Onion-Location middleware
+	torSvc        handler.TorService
 }
 
 // MigrationManager interface for database migrations

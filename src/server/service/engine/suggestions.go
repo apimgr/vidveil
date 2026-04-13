@@ -1397,7 +1397,8 @@ func GetCategorizedSuggestions() []SuggestionCategory {
 // CombinedSuggestion represents a suggestion with its type for mixed results
 type CombinedSuggestion struct {
 	Term     string `json:"term"`
-	Type     string `json:"type"` // "search", "performer", "bang"
+	// "search", "performer", "bang"
+	Type     string `json:"type"`
 	Category string `json:"category,omitempty"`
 	Score    int    `json:"-"`
 }
@@ -1431,7 +1432,8 @@ func AutocompleteCombined(prefix string, maxResults int) []CombinedSuggestion {
 		suggestions = append(suggestions, CombinedSuggestion{
 			Term:  ps.Name,
 			Type:  "performer",
-			Score: ps.Score + 10, // Slight boost for performers
+			// Slight boost for performers
+			Score: ps.Score + 10,
 		})
 	}
 

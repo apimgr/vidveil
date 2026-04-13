@@ -12,7 +12,8 @@ import (
 	"html/template"
 	"image"
 	"image/jpeg"
-	_ "image/png" // register PNG decoder for image.Decode
+	// register PNG decoder for image.Decode
+	_ "image/png"
 	"io"
 	"net/http"
 	"net/url"
@@ -52,10 +53,14 @@ type TorStatusChecker interface {
 	IsEnabled() bool
 	IsRunning() bool
 	GetInfo() map[string]interface{}
-	AllowUserIPForward() bool    // Per PART 32: Admin setting for IP forwarding
-	GetHTTPClient(useTor bool) *http.Client // Per PART 32: Get Tor-routed or direct client
-	UseNetworkEnabled() bool     // Per PART 32: Is use_network configured?
-	OutboundEnabled() bool       // Per PART 32: Is Tor SOCKS available?
+	// Per PART 32: Admin setting for IP forwarding
+	AllowUserIPForward() bool
+	// Per PART 32: Get Tor-routed or direct client
+	GetHTTPClient(useTor bool) *http.Client
+	// Per PART 32: Is use_network configured?
+	UseNetworkEnabled() bool
+	// Per PART 32: Is Tor SOCKS available?
+	OutboundEnabled() bool
 }
 
 // GeoIPChecker is a minimal interface for GeoIP content restriction checks
@@ -82,7 +87,8 @@ func (h *SearchHandler) getUserIPForwardPreference(r *http.Request) (bool, strin
 	// Check user's preference cookie (defaults to disabled)
 	cookie, err := r.Cookie(IPForwardCookieName)
 	if err != nil || cookie.Value != "1" {
-		return false, "" // User hasn't opted in
+		// User hasn't opted in
+		return false, ""
 	}
 
 	// Get user's real IP
@@ -148,7 +154,8 @@ func (h *SearchHandler) setContentRestrictionAckCookie(w http.ResponseWriter) {
 		ContentRestrictionAckCookieName,
 		"1",
 		"/",
-		30*24*60*60, // 30 days
+		// 30 days
+		30*24*60*60,
 		h.appConfig.Server.SSL.Enabled,
 	))
 }
@@ -1892,7 +1899,8 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 
 		// Check for @performer autocomplete (e.g., "teen @mia" or just "@mia")
 		if strings.HasPrefix(lastWord, "@") {
-			prefix := lastWord[1:] // Remove @ prefix
+			// Remove @ prefix
+			prefix := lastWord[1:]
 			performerSuggestions := engine.AutocompletePerformers(prefix, 12)
 			// Convert to suggestions with @ prefix
 			var suggestions []map[string]string
@@ -2603,7 +2611,8 @@ if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
 // Thumbnail disk cache: check if a cached file exists and is still fresh
 ttlMinutes := h.appConfig.Search.ThumbnailCacheTTL
 if ttlMinutes == 0 {
-	ttlMinutes = 1440 // 24 hours default
+	// 24 hours default
+	ttlMinutes = 1440
 }
 cacheEnabled := ttlMinutes > 0 && h.dataDir != ""
 cacheDir := filepath.Join(h.dataDir, "thumbnails")
@@ -2622,11 +2631,13 @@ if cacheEnabled {
 					ct = "image/gif"
 				}
 				w.Header().Set("ETag", etag)
-				w.Header().Set("Cache-Control", "public, max-age=86400") // 24 hours
+				// 24 hours
+				w.Header().Set("Cache-Control", "public, max-age=86400")
 				w.Header().Set("Content-Type", ct)
 				w.Header().Set("Content-Length", strconv.Itoa(len(cachedBytes)))
 				w.WriteHeader(http.StatusOK)
-				w.Write(cachedBytes) //nolint:errcheck
+				//nolint:errcheck
+				w.Write(cachedBytes)
 				return
 			}
 		}
@@ -2697,17 +2708,20 @@ if cacheEnabled {
 		// Write to a temp file then rename to avoid partial reads
 		tmpFile := cacheFile + ".tmp"
 		if writeErr := os.WriteFile(tmpFile, outputBytes, 0o640); writeErr == nil {
-			os.Rename(tmpFile, cacheFile) //nolint:errcheck
+			//nolint:errcheck
+			os.Rename(tmpFile, cacheFile)
 		}
 	}
 }
 
 w.Header().Set("ETag", etag)
-w.Header().Set("Cache-Control", "public, max-age=86400") // 24 hours
+// 24 hours
+w.Header().Set("Cache-Control", "public, max-age=86400")
 w.Header().Set("Content-Type", outputContentType)
 w.Header().Set("Content-Length", strconv.Itoa(len(outputBytes)))
 w.WriteHeader(http.StatusOK)
-w.Write(outputBytes) //nolint:errcheck
+//nolint:errcheck
+w.Write(outputBytes)
 }
 
 // ProxyVideo proxies external video previews to prevent tracking and avoid CORS
@@ -2876,7 +2890,8 @@ func renderSearchRSS(w http.ResponseWriter, r *http.Request, results *model.Sear
 	fmt.Fprint(w, xml.Header)
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
-	enc.Encode(feed) //nolint:errcheck
+	//nolint:errcheck
+	enc.Encode(feed)
 }
 
 // atomFeed is the XML structure for an Atom 1.0 feed.
@@ -2933,7 +2948,8 @@ func renderSearchAtom(w http.ResponseWriter, r *http.Request, results *model.Sea
 	fmt.Fprint(w, xml.Header)
 	enc := xml.NewEncoder(w)
 	enc.Indent("", "  ")
-	enc.Encode(feed) //nolint:errcheck
+	//nolint:errcheck
+	enc.Encode(feed)
 }
 
 // renderSearchCSV writes search results as CSV (RFC 4180).

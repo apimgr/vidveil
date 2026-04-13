@@ -18,9 +18,12 @@ import (
 // Each bucket represents one hour of counts. The ring rotates hourly.
 type slidingWindowCounter struct {
 	mu          sync.RWMutex
-	buckets     [24]uint64    // 24 hourly buckets
-	currentHour int           // Current bucket index (0-23)
-	lastRotate  time.Time     // Last rotation timestamp
+	// 24 hourly buckets
+	buckets     [24]uint64
+	// Current bucket index (0-23)
+	currentHour int
+	// Last rotation timestamp
+	lastRotate  time.Time
 }
 
 // newSlidingWindowCounter creates a new 24h sliding window counter

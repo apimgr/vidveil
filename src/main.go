@@ -462,7 +462,8 @@ func main() {
 	// Per PART 32: Also supports outbound network routing for engine queries
 	torDataDir := filepath.Join(paths.Data, "tor")
 	torSvc := tor.NewTorService(torDataDir, logger)
-	torSvc.SetConfig(&appConfig.Server.Tor) // Pass Tor config for outbound network settings
+	// Pass Tor config for outbound network settings
+	torSvc.SetConfig(&appConfig.Server.Tor)
 
 	// Blocklist service (PART 11)
 	blocklistSvc := blocklist.NewBlocklistService(appConfig)

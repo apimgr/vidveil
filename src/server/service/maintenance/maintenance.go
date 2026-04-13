@@ -252,7 +252,8 @@ func (m *MaintenanceManager) encryptBackup(data []byte, password string) ([]byte
 
 // decryptBackup decrypts AES-256-GCM encrypted data
 func (m *MaintenanceManager) decryptBackup(data []byte, password string) ([]byte, error) {
-	if len(data) < 28 { // 16 salt + 12 nonce minimum
+	// 16 salt + 12 nonce minimum
+	if len(data) < 28 {
 		return nil, fmt.Errorf("invalid encrypted data")
 	}
 

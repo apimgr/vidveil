@@ -72,10 +72,14 @@ type TorService interface {
 	ImportKeys(secretKey []byte) error
 	GetInfo() map[string]interface{}
 	TestConnection() *tor.TestConnectionResult
-	AllowUserIPForward() bool                 // Per PART 32: Admin setting for user IP forwarding
-	GetHTTPClient(useTor bool) *http.Client   // Per PART 32: Get Tor-routed or direct client
-	UseNetworkEnabled() bool                  // Per PART 32: Is use_network configured?
-	OutboundEnabled() bool                    // Per PART 32: Is Tor SOCKS available?
+	// Per PART 32: Admin setting for user IP forwarding
+	AllowUserIPForward() bool
+	// Per PART 32: Get Tor-routed or direct client
+	GetHTTPClient(useTor bool) *http.Client
+	// Per PART 32: Is use_network configured?
+	UseNetworkEnabled() bool
+	// Per PART 32: Is Tor SOCKS available?
+	OutboundEnabled() bool
 }
 
 // AdminHandler handles admin panel routes per AI.md PART 17
@@ -2283,7 +2287,8 @@ func (h *AdminHandler) APIBrandingUpload(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	uploadType := r.FormValue("type") // "logo" or "favicon"
+	// "logo" or "favicon"
+	uploadType := r.FormValue("type")
 	if uploadType != "logo" && uploadType != "favicon" {
 		h.jsonError(w, "Invalid upload type", "ERR_VALIDATION", http.StatusBadRequest)
 		return

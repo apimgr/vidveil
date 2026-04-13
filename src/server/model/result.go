@@ -34,8 +34,10 @@ type SearchResponse struct {
 	Ok         bool             `json:"ok"`
 	Data       SearchData       `json:"data"`
 	Pagination PaginationData   `json:"pagination"`
-	Error      string           `json:"error,omitempty"`   // ERROR_CODE (machine-readable)
-	Message    string           `json:"message,omitempty"` // Human-readable message
+	// ERROR_CODE (machine-readable)
+	Error      string           `json:"error,omitempty"`
+	// Human-readable message
+	Message    string           `json:"message,omitempty"`
 }
 
 // EngineStatInfo holds per-engine statistics from a search
@@ -75,9 +77,12 @@ type PaginationData struct {
 
 // EnginePrivacyScore holds static privacy metadata for an engine
 type EnginePrivacyScore struct {
-	RequiresJS  bool `json:"requires_js"`  // engine needs JS to return results
-	SetsCookies bool `json:"sets_cookies"` // engine sets tracking cookies
-	HasTracking bool `json:"has_tracking"` // engine embeds third-party trackers
+	// engine needs JS to return results
+	RequiresJS  bool `json:"requires_js"`
+	// engine sets tracking cookies
+	SetsCookies bool `json:"sets_cookies"`
+	// engine embeds third-party trackers
+	HasTracking bool `json:"has_tracking"`
 }
 
 // EngineInfo represents information about a search engine
@@ -106,14 +111,19 @@ type EnginesResponse struct {
 
 // EngineHealthStats holds runtime circuit-breaker and latency stats for one engine
 type EngineHealthStats struct {
-	CircuitState    string    `json:"circuit_state"`     // closed, open, half-open
-	CircuitFailures int       `json:"circuit_failures"`  // failures toward threshold
-	LastFailureAt   time.Time `json:"last_failure_at"`   // zero if never failed
+	// closed, open, half-open
+	CircuitState    string    `json:"circuit_state"`
+	// failures toward threshold
+	CircuitFailures int       `json:"circuit_failures"`
+	// zero if never failed
+	LastFailureAt   time.Time `json:"last_failure_at"`
 	TotalSuccesses  uint64    `json:"total_successes"`
 	TotalFailures   uint64    `json:"total_failures"`
-	LastSuccessAt   time.Time `json:"last_success_at"`   // zero if never succeeded
+	// zero if never succeeded
+	LastSuccessAt   time.Time `json:"last_success_at"`
 	AvgLatencyMs    int64     `json:"avg_latency_ms"`
-	UptimePct       float64   `json:"uptime_pct"` // 0-100
+	// 0-100
+	UptimePct       float64   `json:"uptime_pct"`
 }
 
 // EngineHealthInfo combines EngineInfo with runtime health stats

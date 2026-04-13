@@ -25,7 +25,8 @@ func NewXNXXEngine(appConfig *config.AppConfig) *XNXXEngine {
 	}
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
-		HasPreview:    false, // XNXX doesn't have preview URLs in search results
+		// XNXX doesn't have preview URLs in search results
+		HasPreview:    false,
 		HasDownload:   true,
 		HasDuration:   true,
 		HasViews:      true,

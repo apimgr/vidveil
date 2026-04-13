@@ -38,15 +38,24 @@ const (
 // Capabilities describes what data an engine can provide
 // Per IDEA.md Engine Capability Declaration
 type Capabilities struct {
-	HasPreview    bool   `json:"has_preview"`     // Can provide PreviewURL
-	HasDownload   bool   `json:"has_download"`    // Can provide DownloadURL
-	HasDuration   bool   `json:"has_duration"`    // Can provide duration
-	HasViews      bool   `json:"has_views"`       // Can provide view count
-	HasRating     bool   `json:"has_rating"`      // Can provide rating
-	HasQuality    bool   `json:"has_quality"`     // Can provide quality badge
-	HasUploadDate bool   `json:"has_upload_date"` // Can provide upload date
-	PreviewSource string `json:"preview_source"`  // e.g., "data-preview", "data-mediabook", "api"
-	APIType       string `json:"api_type"`        // "api", "html", "json_extraction"
+	// Can provide PreviewURL
+	HasPreview    bool   `json:"has_preview"`
+	// Can provide DownloadURL
+	HasDownload   bool   `json:"has_download"`
+	// Can provide duration
+	HasDuration   bool   `json:"has_duration"`
+	// Can provide view count
+	HasViews      bool   `json:"has_views"`
+	// Can provide rating
+	HasRating     bool   `json:"has_rating"`
+	// Can provide quality badge
+	HasQuality    bool   `json:"has_quality"`
+	// Can provide upload date
+	HasUploadDate bool   `json:"has_upload_date"`
+	// e.g., "data-preview", "data-mediabook", "api"
+	PreviewSource string `json:"preview_source"`
+	// "api", "html", "json_extraction"
+	APIType       string `json:"api_type"`
 }
 
 // TorClientProvider provides HTTP clients that can route through Tor
@@ -136,7 +145,8 @@ type BaseEngine struct {
 	appConfig      *config.AppConfig
 	httpClient     *http.Client
 	spoofedClient  *http.Client
-	torProvider    TorClientProvider // Per PART 32: Provides Tor-routed HTTP clients
+	// Per PART 32: Provides Tor-routed HTTP clients
+	torProvider    TorClientProvider
 	circuitBreaker *retry.CircuitBreaker
 	retryConfig    *retry.RetryConfig
 	capabilities   Capabilities
@@ -494,11 +504,13 @@ func ParseDuration(duration string) int {
 	// Handle formats like "12:34" or "1:23:45"
 	parts := strings.Split(duration, ":")
 	switch len(parts) {
-	case 2: // mm:ss
+	// mm:ss
+	case 2:
 		m, _ := strconv.Atoi(parts[0])
 		s, _ := strconv.Atoi(parts[1])
 		return m*60 + s
-	case 3: // hh:mm:ss
+	// hh:mm:ss
+	case 3:
 		h, _ := strconv.Atoi(parts[0])
 		m, _ := strconv.Atoi(parts[1])
 		s, _ := strconv.Atoi(parts[2])

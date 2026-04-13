@@ -5313,19 +5313,29 @@ package main
 |-------|-------|
 | **Name** | vidveil |
 | **Organization** | apimgr |
-| **Official Site** | https://vidveil.apimgr.us |
-| **Repository** | {PLATFORM_REPO_URL} |
+| **Official Site** | https://x.scour.li |
+| **Repository** | https://github.com/apimgr/vidveil |
 | **README** | README.md |
 | **License** | MIT > LICENSE.md |
 | **Embedded Licenses** | Added to bottom of LICENSE.md |
 
 ## Project Description
 
-{Brief description of what this project does}
+VidVeil is a privacy-respecting adult video meta search engine that aggregates results from 43+ engines without storing user data, accounts, or tracking. It supports SSE streaming results, a thumbnail proxy, bang shortcuts, and a companion CLI/TUI/GUI client.
 
 ## Project-Specific Features
 
-{List features unique to this project}
+- 43+ search engine integrations with bang shortcuts (e.g. `!xv`, `!ph`)
+- SSE streaming search results for progressive rendering
+- Thumbnail proxy to anonymize image requests
+- No user accounts, no tracking, no server-side history (privacy-first)
+- Engine health monitoring with per-engine enable/disable
+- Related searches, suggestions, and taxonomy browsing
+- Performer search across engines
+- Tor hidden service auto-detection and support
+- Full admin panel with all settings configurable at runtime
+- Companion `vidveil-cli` binary with TUI, CLI, and GUI modes
+- Optional `vidveil-agent` for remote machine deployments
 
 ---
 

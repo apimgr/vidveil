@@ -7,9 +7,12 @@ import (
 
 // Category represents a content category with synonyms and related terms
 type Category struct {
-	Name     string   // Primary name
-	Synonyms []string // Terms that mean the same thing
-	Related  []string // Related but different terms
+	// Primary name
+	Name     string
+	// Terms that mean the same thing
+	Synonyms []string
+	// Related but different terms
+	Related  []string
 }
 
 // Categories defines the content taxonomy for search term normalization
@@ -291,7 +294,8 @@ func GenerateSmartRelated(query string, maxResults int) []string {
 
 	var related []string
 	seen := make(map[string]bool)
-	seen[query] = true // Never include the original query itself
+	// Never include the original query itself
+	seen[query] = true
 
 	// Helper: only add multi-word terms or meaningful single terms not in query
 	addUnique := func(term string) {

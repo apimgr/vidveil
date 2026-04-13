@@ -27,9 +27,12 @@ func NewPornMDEngine(appConfig *config.AppConfig) *PornMDEngine {
 		HasPreview:    false,
 		HasDownload:   true,
 		HasDuration:   true,
-		HasViews:      false, // PornMD doesn't show view counts on search results
-		HasRating:     true,  // PornMD shows rating percentage
-		HasQuality:    false, // Quality info not consistently available
+		// PornMD doesn't show view counts on search results
+		HasViews:      false,
+		// PornMD shows rating percentage
+		HasRating:     true,
+		// Quality info not consistently available
+		HasQuality:    false,
 		HasUploadDate: false,
 		PreviewSource: "",
 		APIType:       "html",

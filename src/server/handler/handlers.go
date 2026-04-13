@@ -1663,6 +1663,18 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		if forwardIP, userIP := h.getUserIPForwardPreference(r); forwardIP {
 			ctx = engine.WithUserIP(ctx, userIP, true)
 		}
+		// Add user's Tor network preference to context per PART 32
+		// Cookie "vidveil-use-tor": "1" = always use Tor, "0" = never use Tor, absent = inherit server
+		if cookie, err := r.Cookie("vidveil-use-tor"); err == nil {
+			switch cookie.Value {
+			case "1", "true":
+				useTor := true
+				ctx = engine.WithTorPref(ctx, &useTor)
+			case "0", "false":
+				useTor := false
+				ctx = engine.WithTorPref(ctx, &useTor)
+			}
+		}
 		results = h.engineMgr.Search(ctx, searchQuery, page, engineNames)
 		results.Data.Cached = false
 		// Cache the results
@@ -1776,6 +1788,18 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	// Per PART 32: This allows video sites to see user's IP for geo content
 	if forwardIP, userIP := h.getUserIPForwardPreference(r); forwardIP {
 		ctx = engine.WithUserIP(ctx, userIP, true)
+	}
+
+	// Add user's Tor network preference to context per PART 32
+	if cookie, err := r.Cookie("vidveil-use-tor"); err == nil {
+		switch cookie.Value {
+		case "1", "true":
+			useTor := true
+			ctx = engine.WithTorPref(ctx, &useTor)
+		case "0", "false":
+			useTor := false
+			ctx = engine.WithTorPref(ctx, &useTor)
+		}
 	}
 
 	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers, showAI, minQuality, previewFirst, userMinDuration)

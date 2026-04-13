@@ -464,6 +464,8 @@ func main() {
 	torSvc := tor.NewTorService(torDataDir, logger)
 	// Pass Tor config for outbound network settings
 	torSvc.SetConfig(&appConfig.Server.Tor)
+	// Pass config dir for torrc generation
+	torSvc.SetConfigDir(filepath.Join(paths.Config, "tor"))
 
 	// Blocklist service (PART 11)
 	blocklistSvc := blocklist.NewBlocklistService(appConfig)

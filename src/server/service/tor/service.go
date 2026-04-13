@@ -35,6 +35,7 @@ type TorService struct {
 	// Full config from server.yml
 	torConfig *config.TorConfig
 	dataDir   string
+	configDir string // {config_dir}/tor/ — for torrc file storage
 	logger    *logging.AppLogger
 
 	// bine Tor instance - manages dedicated Tor process
@@ -45,7 +46,7 @@ type TorService struct {
 	onionService *tor.OnionService
 
 	// Outbound Tor dialer per PART 32
-	// Used when UseNetwork is enabled to route engine queries through Tor
+	// Used when UseNetwork is enabled (or AllowUserPreference is true) to route engine queries through Tor
 	dialer *tor.Dialer
 
 	// Hidden service state
@@ -119,6 +120,47 @@ func (s *TorService) SetConfig(cfg *config.TorConfig) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.torConfig = cfg
+}
+
+// SetConfigDir sets the configuration directory for Tor (torrc storage)
+// Should be called with {config_dir}/tor before Start()
+func (s *TorService) SetConfigDir(dir string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.configDir = dir
+}
+
+// AllowUserPreference returns true if users are allowed to override the server's Tor outbound setting
+// Per PART 32: When true, users can set their own Tor preference via cookie
+func (s *TorService) AllowUserPreference() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.torConfig != nil && s.torConfig.AllowUserPreference
+}
+
+// ShouldUseTor determines if Tor network should be used for a given request
+// based on server config and optional user preference override per PART 32
+// userPref: nil = inherit server setting, true = always use Tor, false = never use Tor
+func (s *TorService) ShouldUseTor(userPref *bool) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.torConfig == nil {
+		return false
+	}
+
+	// If user preferences not allowed, always use server setting
+	if !s.torConfig.AllowUserPreference {
+		return s.torConfig.UseNetwork
+	}
+
+	// User has no preference set — inherit server default
+	if userPref == nil {
+		return s.torConfig.UseNetwork
+	}
+
+	// User preference overrides server setting
+	return *userPref
 }
 
 // GetHTTPClient returns an HTTP client, optionally routed through Tor
@@ -237,6 +279,20 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 	}
 	s.onionAddress = s.generateOnionAddress()
 
+	// Generate torrc from config and write to configDir (per PART 32)
+	// NEVER uses default ports 9050/9051 — SocksPort auto or 0; ControlSocket or ControlPort auto
+	var torrcFile string
+	if s.configDir != "" {
+		torrcPath := filepath.Join(s.configDir, "torrc")
+		torrcContent := buildTorrc(s.torConfig)
+		if err := ensureTorrc(torrcPath, torrcContent); err != nil {
+			s.logger.Warn("Failed to write torrc, using bine defaults", map[string]interface{}{"error": err.Error()})
+		} else {
+			torrcFile = torrcPath
+			s.logger.Info("Wrote torrc", map[string]interface{}{"path": torrcPath})
+		}
+	}
+
 	// Start dedicated Tor process using bine
 	// Per AI.md: Start OUR OWN Tor process - completely separate from system Tor
 	// Per AI.md PART 32: Tor startup/runtime errors = WARN (server continues without Tor)
@@ -245,8 +301,11 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 		// Our own data directory - isolated from system Tor
 		DataDir: torDataDir,
 
-		// Let bine pick available ports (avoids conflict with system Tor 9050/9051)
-		NoAutoSocksPort: false,
+		// Use custom torrc if we generated one (carries bandwidth/stream/accounting settings)
+		TorrcFile: torrcFile,
+
+		// When using custom torrc, disable bine's automatic SocksPort — torrc controls it
+		NoAutoSocksPort: torrcFile != "",
 
 		// Use found Tor binary
 		ExePath: torPath,
@@ -370,9 +429,9 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 	s.status = TorServiceStatusConnected
 	s.logger.Info("Hidden service started", map[string]interface{}{"onion_address": s.onionAddress})
 
-	// Initialize outbound dialer if UseNetwork is enabled (per PART 32)
-	// This allows engine queries to be routed through Tor for privacy
-	if s.torConfig != nil && s.torConfig.UseNetwork {
+	// Initialize outbound dialer if UseNetwork is enabled OR AllowUserPreference is true (per PART 32)
+	// Dialer is needed when either: server routes all outbound through Tor, OR users can opt-in
+	if s.torConfig != nil && (s.torConfig.UseNetwork || s.torConfig.AllowUserPreference) {
 		dialer, err := t.Dialer(ctx, nil)
 		if err != nil {
 			s.logger.Warn("Failed to create Tor dialer for outbound connections", map[string]interface{}{
@@ -381,7 +440,11 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 			// Continue without outbound - hidden service still works
 		} else {
 			s.dialer = dialer
-			s.logger.Info("Tor outbound network enabled - engine queries will be anonymized", nil)
+			if s.torConfig.UseNetwork {
+				s.logger.Info("Tor outbound network enabled - engine queries will be anonymized", nil)
+			} else {
+				s.logger.Info("Tor outbound dialer ready - users may enable per-request Tor routing", nil)
+			}
 		}
 	}
 
@@ -1021,4 +1084,108 @@ func copyFile(src, dst string) error {
 
 	_, err = io.Copy(destFile, sourceFile)
 	return err
+}
+
+// buildTorrc generates a torrc configuration file content from TorConfig settings
+// Per PART 32: NEVER uses default ports 9050/9051; uses Unix sockets or auto high ports
+// Hidden service itself is created via control.AddOnion (not torrc HiddenServiceDir)
+func buildTorrc(cfg *config.TorConfig) string {
+	if cfg == nil {
+		cfg = &config.TorConfig{}
+		*cfg = config.DefaultTorConfig()
+	}
+
+	// SocksPort: enabled when outbound routing is needed (server-wide or per-user)
+	var socksPort string
+	if cfg.UseNetwork || cfg.AllowUserPreference {
+		socksPort = "SocksPort auto"
+	} else {
+		socksPort = "SocksPort 0"
+	}
+
+	// SafeLogging
+	safeLogging := "1"
+	if !cfg.SafeLogging {
+		safeLogging = "0"
+	}
+
+	// CloseCircuitOnStreamLimit
+	closeOnLimit := "1"
+	if !cfg.CloseCircuitOnStreamLimit {
+		closeOnLimit = "0"
+	}
+
+	// Monthly bandwidth accounting
+	var accountingConfig string
+	if cfg.MaxMonthlyBandwidth != "" && cfg.MaxMonthlyBandwidth != "unlimited" {
+		accountingConfig = fmt.Sprintf("\n# Monthly bandwidth limit (resets on 1st of month)\nAccountingStart month 1 00:00\nAccountingMax %s", cfg.MaxMonthlyBandwidth)
+	}
+
+	return fmt.Sprintf(`# ============================================================
+# Tor Configuration - Generated by vidveil server binary
+# Per AI.md PART 32: NEVER uses default ports 9050/9051
+# Hidden service created via ADD_ONION (control protocol), not torrc
+# ============================================================
+
+# SOCKS port: 0 = hidden service only; auto = also enable outbound
+%s
+
+# Security
+SafeLogging %s
+
+# Circuit management
+MaxCircuitDirtiness 600
+MaxStreamsPerCircuit %d
+CircuitBuildTimeout %d
+CloseHSCircuitsOnExpiry %s
+
+# Bandwidth limits (per second)
+BandwidthRate %s
+BandwidthBurst %s
+%s
+
+# Not a relay or exit node
+ExitRelay 0
+ExitPolicy reject *:*
+ORPort 0
+DirPort 0
+
+# Faster directory fetching
+FetchDirInfoEarly 1
+FetchDirInfoExtraEarly 1
+
+# Security hardening
+DisableDebuggerAttachment 1
+`,
+		socksPort,
+		safeLogging,
+		cfg.MaxStreamsPerCircuit,
+		cfg.CircuitTimeout,
+		closeOnLimit,
+		cfg.BandwidthRate,
+		cfg.BandwidthBurst,
+		accountingConfig,
+	)
+}
+
+// ensureTorrc creates the torrc if it doesn't exist, or updates it when config changes
+// Returns true if the file was created/updated
+func ensureTorrc(torrcPath string, content string) error {
+	if err := os.MkdirAll(filepath.Dir(torrcPath), 0700); err != nil {
+		return fmt.Errorf("create torrc dir: %w", err)
+	}
+
+	// Write torrc (always overwrite to pick up config changes)
+	if err := os.WriteFile(torrcPath, []byte(content), 0600); err != nil {
+		return fmt.Errorf("write torrc: %w", err)
+	}
+
+	if runtime.GOOS != "windows" {
+		uid := os.Getuid()
+		gid := os.Getgid()
+		_ = os.Chown(torrcPath, uid, gid)
+		_ = os.Chmod(torrcPath, 0600)
+	}
+
+	return nil
 }

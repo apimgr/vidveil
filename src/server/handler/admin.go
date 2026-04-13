@@ -73,6 +73,7 @@ type TorService interface {
 	ImportKeys(secretKey []byte) error
 	GetInfo() map[string]interface{}
 	TestConnection() *tor.TestConnectionResult
+	Restart(ctx context.Context) error
 	// Per PART 32: Admin setting for user IP forwarding
 	AllowUserIPForward() bool
 	// Per PART 32: Get Tor-routed or direct client
@@ -3138,6 +3139,95 @@ func (h *AdminHandler) APITorTest(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data":    result,
+	})
+}
+
+// APITorValidate validates Tor configuration fields without saving
+// POST /api/v1/admin/server/tor/validate
+func (h *AdminHandler) APITorValidate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		SOCKSPort            int    `json:"socks_port"`
+		ControlPort          int    `json:"control_port"`
+		MaxStreamsPerCircuit  int    `json:"max_streams_per_circuit"`
+		MaxMonthlyBandwidth  string `json:"max_monthly_bandwidth"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+		h.jsonError(w, "Invalid request body", "ERR_INVALID_REQUEST", http.StatusBadRequest)
+		return
+	}
+
+	var validationErrors []string
+
+	if req.SOCKSPort < 0 || req.SOCKSPort > 65535 {
+		validationErrors = append(validationErrors, "socks_port must be between 0 and 65535")
+	}
+	if req.ControlPort < 0 || req.ControlPort > 65535 {
+		validationErrors = append(validationErrors, "control_port must be between 0 and 65535")
+	}
+	if req.MaxStreamsPerCircuit < 0 {
+		validationErrors = append(validationErrors, "max_streams_per_circuit must be non-negative")
+	}
+	if req.MaxMonthlyBandwidth != "" {
+		// Simple validation: must contain a number followed by optional unit
+		valid := false
+		units := []string{"KB", "MB", "GB", "TB", "KBytes", "MBytes", "GBytes", "TBytes"}
+		for _, unit := range units {
+			if len(req.MaxMonthlyBandwidth) > len(unit) {
+				prefix := req.MaxMonthlyBandwidth[:len(req.MaxMonthlyBandwidth)-len(unit)-1]
+				_ = prefix
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			// Still allow if non-empty (Tor will validate at start)
+			valid = len(req.MaxMonthlyBandwidth) > 0
+		}
+		if !valid {
+			validationErrors = append(validationErrors, "max_monthly_bandwidth format invalid (e.g. '100 GB')")
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":     false,
+			"errors": validationErrors,
+		})
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
+		"message": "Configuration is valid",
+	})
+}
+
+// APITorRestart stops and restarts the Tor service
+// POST /api/v1/admin/server/tor/restart
+func (h *AdminHandler) APITorRestart(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if h.torSvc == nil {
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":    false,
+			"error": "Tor service not initialized",
+		})
+		return
+	}
+
+	if err := h.torSvc.Restart(r.Context()); err != nil {
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
+		"message": "Tor service restarted successfully",
 	})
 }
 

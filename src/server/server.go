@@ -669,6 +669,8 @@ func (s *Server) setupRoutes() {
 					r.Patch("/", admin.APITorUpdate)
 					r.Post("/regenerate", admin.APITorRegenerate)
 					r.Post("/test", admin.APITorTest)
+					r.Post("/validate", admin.APITorValidate)
+					r.Post("/restart", admin.APITorRestart)
 					r.Get("/vanity", admin.APITorVanityStatus)
 					r.Post("/vanity", admin.APITorVanityStart)
 					r.Delete("/vanity", admin.APITorVanityCancel)

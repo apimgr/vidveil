@@ -129,6 +129,10 @@ type TorConfig struct {
 	// Per PART 32: Particularly relevant for VidVeil to anonymize search queries
 	UseNetwork bool `yaml:"use_network"`
 
+	// Allow users to set their own Tor network preference (override server default)
+	// Per PART 32: Users can set via cookie to always use Tor, never use Tor, or inherit server default
+	AllowUserPreference bool `yaml:"allow_user_preference"`
+
 	// Allow users to opt-in to forwarding their IP address to video sites
 	// When enabled, users can set a preference (via cookie) to include their IP
 	// in X-Forwarded-For header - useful for geo-targeted content
@@ -152,12 +156,19 @@ type TorConfig struct {
 	// Maximum concurrent streams per circuit (10-500, default 100)
 	MaxStreamsPerCircuit int `yaml:"max_streams_per_circuit"`
 
+	// Close circuit when max streams exceeded (default true)
+	CloseCircuitOnStreamLimit bool `yaml:"close_circuit_on_stream_limit"`
+
 	// --- Bandwidth Settings ---
 	// Maximum bandwidth rate per second (e.g., "1 MB", "500 KB")
 	BandwidthRate string `yaml:"bandwidth_rate"`
 
 	// Maximum bandwidth burst per second (e.g., "2 MB", "1 MB")
 	BandwidthBurst string `yaml:"bandwidth_burst"`
+
+	// Maximum monthly bandwidth (e.g., "100 GB", "50 TB", "unlimited")
+	// AccountingMax in torrc - resets on 1st of each month
+	MaxMonthlyBandwidth string `yaml:"max_monthly_bandwidth"`
 
 	// --- Hidden Service Settings ---
 	// Number of introduction points (3-10, default 3)
@@ -171,20 +182,24 @@ type TorConfig struct {
 func DefaultTorConfig() TorConfig {
 	return TorConfig{
 		// auto-detect
-		Binary:               "",
+		Binary:                    "",
 		// disabled by default, user can enable for privacy
-		UseNetwork:           false,
+		UseNetwork:                false,
+		// allow users to override outbound Tor routing per PART 32
+		AllowUserPreference:       true,
 		// feature available, but user must opt-in via preferences
-		AllowUserIPForward:   true,
-		MaxCircuits:          32,
-		CircuitTimeout:       60,
-		BootstrapTimeout:     180,
-		SafeLogging:          true,
-		MaxStreamsPerCircuit: 100,
-		BandwidthRate:        "1 MB",
-		BandwidthBurst:       "2 MB",
-		NumIntroPoints:       3,
-		VirtualPort:          80,
+		AllowUserIPForward:        true,
+		MaxCircuits:               32,
+		CircuitTimeout:            60,
+		BootstrapTimeout:          180,
+		SafeLogging:               true,
+		MaxStreamsPerCircuit:       100,
+		CloseCircuitOnStreamLimit: true,
+		BandwidthRate:             "1 MB",
+		BandwidthBurst:            "2 MB",
+		MaxMonthlyBandwidth:       "100 GB",
+		NumIntroPoints:            3,
+		VirtualPort:               80,
 	}
 }
 

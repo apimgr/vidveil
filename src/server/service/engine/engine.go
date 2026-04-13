@@ -66,13 +66,18 @@ type TorClientProvider interface {
 	GetHTTPClient(useTor bool) *http.Client
 	// OutboundEnabled returns true if Tor outbound is available
 	OutboundEnabled() bool
-	// UseNetworkEnabled returns true if Tor network routing is configured
+	// UseNetworkEnabled returns true if Tor network routing is configured server-wide
 	UseNetworkEnabled() bool
+	// AllowUserPreference returns true if users may override the server's Tor outbound setting
+	AllowUserPreference() bool
 	// AllowUserIPForward returns true if admin allows users to forward their IP
 	AllowUserIPForward() bool
+	// ShouldUseTor determines if Tor should be used given an optional user preference override
+	// userPref: nil = inherit server setting, true = force Tor, false = force direct
+	ShouldUseTor(userPref *bool) bool
 }
 
-// Context keys for user IP forwarding
+// Context keys for user IP forwarding and Tor preference
 type contextKey string
 
 const (
@@ -80,6 +85,9 @@ const (
 	UserIPContextKey contextKey = "user_ip"
 	// ForwardIPContextKey indicates user has opted-in to IP forwarding (via cookie/preference)
 	ForwardIPContextKey contextKey = "forward_ip"
+	// TorPrefContextKey carries the user's optional Tor network preference (*bool)
+	// nil = inherit server default, true = always use Tor, false = never use Tor
+	TorPrefContextKey contextKey = "tor_user_pref"
 )
 
 // WithUserIP adds user IP to context for potential forwarding to video sites
@@ -97,6 +105,19 @@ func GetUserIPFromContext(ctx context.Context) (string, bool) {
 	}
 	ip, ok := ctx.Value(UserIPContextKey).(string)
 	return ip, ok && ip != ""
+}
+
+// WithTorPref adds the user's Tor network preference to context
+// pref: nil = inherit server default, true = always use Tor, false = never use Tor
+func WithTorPref(ctx context.Context, pref *bool) context.Context {
+	return context.WithValue(ctx, TorPrefContextKey, pref)
+}
+
+// GetTorPrefFromContext retrieves the user's Tor network preference from context
+// Returns nil if no preference is set (meaning: inherit server default)
+func GetTorPrefFromContext(ctx context.Context) *bool {
+	pref, _ := ctx.Value(TorPrefContextKey).(*bool)
+	return pref
 }
 
 // SearchEngine interface defines what a search engine must implement
@@ -281,16 +302,32 @@ func (e *BaseEngine) SetTorProvider(provider TorClientProvider) {
 	e.torProvider = provider
 }
 
-// GetClient returns the appropriate HTTP client
-// Per PART 32: Uses Tor-routed client when UseNetwork is enabled
+// GetClient returns the appropriate HTTP client (context-unaware, server-wide settings only)
+// For context-aware routing (user Tor preference), use getClientForCtx instead
 func (e *BaseEngine) GetClient() *http.Client {
-	// Check if Tor outbound is enabled and available
+	// Check if Tor outbound is enabled server-wide
 	if e.torProvider != nil && e.torProvider.UseNetworkEnabled() && e.torProvider.OutboundEnabled() {
-		// Route through Tor for privacy
 		return e.torProvider.GetHTTPClient(true)
 	}
 
 	// Standard behavior: use spoofed TLS if enabled, otherwise regular client
+	if e.useSpoofedTLS && e.spoofedClient != nil {
+		return e.spoofedClient
+	}
+	return e.httpClient
+}
+
+// getClientForCtx returns the appropriate HTTP client considering user Tor preference from context
+// Per PART 32: user pref in context overrides server-wide UseNetwork when AllowUserPreference is true
+func (e *BaseEngine) getClientForCtx(ctx context.Context) *http.Client {
+	if e.torProvider != nil && e.torProvider.OutboundEnabled() {
+		userPref := GetTorPrefFromContext(ctx)
+		if e.torProvider.ShouldUseTor(userPref) {
+			return e.torProvider.GetHTTPClient(true)
+		}
+	}
+
+	// Fall back to standard client selection
 	if e.useSpoofedTLS && e.spoofedClient != nil {
 		return e.spoofedClient
 	}
@@ -377,7 +414,7 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 			mod(req)
 		}
 
-		client := e.GetClient()
+		client := e.getClientForCtx(ctx)
 		resp, lastErr = client.Do(req)
 		if lastErr != nil {
 			// Classify error for retry logic

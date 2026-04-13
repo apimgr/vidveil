@@ -1519,12 +1519,14 @@ if (document.readyState === 'loading') {
 
         var eventSource = new EventSource(searchUrl);
         var firstResult = true;
+        var streamDone = false;
 
         eventSource.onmessage = function(event) {
             var data = JSON.parse(event.data);
 
             // Final done message
             if (data.done && data.engine === 'all') {
+                streamDone = true;
                 eventSource.close();
                 isSearching = false;
                 var elapsed = Date.now() - startTime;
@@ -1603,6 +1605,11 @@ if (document.readyState === 'loading') {
         };
 
         eventSource.onerror = function(err) {
+            // EventSource fires onerror when server closes connection (normal after done)
+            if (streamDone) {
+                eventSource.close();
+                return;
+            }
             eventSource.close();
             // SSE failed - fallback to JSON API
             if (allResults.length === 0) {
@@ -1741,7 +1748,7 @@ if (document.readyState === 'loading') {
         var thumbSrc = '/static/images/placeholder.svg';
         if (r.thumbnail) {
             thumbSrc = userPrefs.proxyImages !== false
-                ? '/proxy/thumbnails?url=' + encodeURIComponent(r.thumbnail)
+                ? '/api/v1/proxy/thumbnails?url=' + encodeURIComponent(r.thumbnail)
                 : r.thumbnail;
         }
         html += '<img class="thumb-static" src="' + escapeHtmlUtil(thumbSrc) + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" onerror="this.src=\'/static/images/placeholder.svg\'">';
@@ -2198,12 +2205,14 @@ if (document.readyState === 'loading') {
         }
         var eventSource = new EventSource(pageUrl);
         var gotResults = false;
+        var streamDone = false;
 
         eventSource.onmessage = function(event) {
             var data = JSON.parse(event.data);
 
             // Final done message
             if (data.done && data.engine === 'all') {
+                streamDone = true;
                 eventSource.close();
                 isLoadingMore = false;
                 if (loadIndicator) loadIndicator.classList.add('hidden');
@@ -2238,6 +2247,11 @@ if (document.readyState === 'loading') {
         };
 
         eventSource.onerror = function() {
+            // EventSource fires onerror when server closes connection (normal after done)
+            if (streamDone) {
+                eventSource.close();
+                return;
+            }
             eventSource.close();
             isLoadingMore = false;
             if (loadIndicator) loadIndicator.classList.add('hidden');

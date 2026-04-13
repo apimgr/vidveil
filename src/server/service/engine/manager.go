@@ -3,6 +3,8 @@ package engine
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -152,6 +154,15 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 		wg.Add(1)
 		go func(e SearchEngine) {
 			defer wg.Done()
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("[engine] panic in %s.Search: %v", e.Name(), rec)
+					resultsChan <- engineResult{
+						engine: e.Name(),
+						err:    fmt.Errorf("engine panic: %v", rec),
+					}
+				}
+			}()
 			engineStart := time.Now()
 			results, err := e.Search(ctx, query, page)
 			resultsChan <- engineResult{
@@ -844,6 +855,15 @@ func (m *EngineManager) DebugSearch(ctx context.Context, query string, page int)
 		wg.Add(1)
 		go func(e SearchEngine) {
 			defer wg.Done()
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("[engine] panic in debug %s.Search: %v", e.Name(), rec)
+					resultsChan <- debugResult{
+						engine: e,
+						err:    fmt.Errorf("engine panic: %v", rec),
+					}
+				}
+			}()
 			engineStart := time.Now()
 			results, err := e.Search(ctx, query, page)
 			resultsChan <- debugResult{
@@ -1223,6 +1243,15 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 			wg.Add(1)
 			go func(e SearchEngine) {
 				defer wg.Done()
+				defer func() {
+					if rec := recover(); rec != nil {
+						log.Printf("[engine] panic in SSE %s.Search: %v", e.Name(), rec)
+						select {
+						case resultsChan <- StreamResult{Engine: e.Name(), Error: fmt.Sprintf("engine panic: %v", rec)}:
+						case <-ctx.Done():
+						}
+					}
+				}()
 
 				results, err := e.Search(ctx, query, page)
 				if err != nil {

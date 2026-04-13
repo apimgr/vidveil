@@ -717,21 +717,45 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Perform parallel search across engines
+	format := detectResponseFormat(r)
+
+	// For regular browsers: render the HTML shell immediately — JavaScript loads results
+	// via SSE (/api/v1/search). Do NOT block on a synchronous search here, as results
+	// are never rendered in search.tmpl — JS populates via EventSource.
+	if format == "text/html" {
+		relatedSearches := engine.GetRelatedSearches(searchQuery, 8)
+		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
+		enginesParam := r.URL.Query().Get("engines")
+
+		h.renderResponse(w, r, "search", map[string]interface{}{
+			"Title":           query + " - " + h.appConfig.Server.Branding.Title,
+			"Query":           query,
+			"SearchQuery":     searchQuery,
+			"ResultsJSON":     template.JS("[]"),
+			"EnginesUsed":     []string{},
+			"SearchTime":      time.Since(requestStart).Milliseconds(),
+			"Theme":           h.getRequestTheme(r),
+			"HasBang":         parsed.HasBang,
+			"BangEngines":     parsed.Engines,
+			"RelatedSearches": relatedSearches,
+			"SpellSuggestion": spellSuggestion,
+			"EnginesParam":    enginesParam,
+			"Version":         version.GetVersion(),
+			"BuildDateTime":   BuildDateTime(),
+		})
+		return
+	}
+
+	// Non-browser clients (CLI, curl, JSON API): perform synchronous search
 	results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames)
-	// Overwrite with total request-to-response time
 	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 
-	// Increment search count
 	if h.metrics != nil {
 		h.metrics.IncrementSearches()
 	}
 
-	format := detectResponseFormat(r)
-	
 	switch format {
 	case "application/json":
-		// JSON response for API clients per AI.md PART 17
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"query":        query,
 			"search_query": searchQuery,
@@ -740,9 +764,8 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"search_time":  results.Data.SearchTimeMS,
 			"has_bang":     parsed.HasBang,
 		})
-		
+
 	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "Search: %s\n", query)
 		fmt.Fprintf(w, "Results: %d found in %dms\n\n", len(results.Data.Results), results.Data.SearchTimeMS)
@@ -758,21 +781,14 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			}
 			fmt.Fprintf(w, "\n")
 		}
-		
-	default:
-		// HTML response for browsers (default)
-		// Convert results to JSON for the JavaScript
-		resultsJSON, _ := json.Marshal(results.Data.Results)
 
-		// Compute related searches and spell suggestion server-side so they
-		// render immediately without a second JS API call.
+	default:
+		// Fallback: embed results in HTML shell
+		resultsJSON, _ := json.Marshal(results.Data.Results)
 		relatedSearches := engine.GetRelatedSearches(searchQuery, 8)
 		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
-
-		// Preserve engines param for related search links (bang engines are in URL via query)
 		enginesParam := r.URL.Query().Get("engines")
 
-		// ResultsJSON is safe JSON for script template use
 		h.renderResponse(w, r, "search", map[string]interface{}{
 			"Title":           query + " - " + h.appConfig.Server.Branding.Title,
 			"Query":           query,

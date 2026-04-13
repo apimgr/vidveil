@@ -199,26 +199,99 @@ func (s *Server) setupMiddleware() {
 // Uses string type for cross-package compatibility
 const OriginalPathKey = "vidveil.originalPath"
 
-// onionLocationMiddleware adds the Onion-Location header on clearnet responses
+// onionLocationMiddleware adds the Onion-Location header on clearnet HTML responses
 // when a Tor hidden service is running. This allows Tor Browser to auto-redirect
-// to the .onion address. Per Tor spec:
+// to the .onion address. Per Tor Project spec:
 // https://community.torproject.org/onion-services/advanced/onion-location/
+//
+// ONLY set on HTML page responses — never on SSE streams, JSON API, static assets,
+// RSS/Atom feeds, or plain-text responses. Setting it on non-HTML responses causes
+// Tor Browser to abort live streams (EventSource) mid-flight.
 func (s *Server) onionLocationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only set on clearnet requests (not already on .onion)
-		if s.torSvc != nil {
-			host := r.Host
-			if !strings.HasSuffix(host, ".onion") {
-				info := s.torSvc.GetInfo()
-				if addr, ok := info["onion_address"].(string); ok && addr != "" {
-					// Build full .onion URL preserving path and query
-					onionURL := "http://" + addr + r.URL.RequestURI()
-					w.Header().Set("Onion-Location", onionURL)
-				}
-			}
+		// Skip entirely if Tor is not running or this is already an .onion request
+		if s.torSvc == nil || strings.HasSuffix(r.Host, ".onion") {
+			next.ServeHTTP(w, r)
+			return
 		}
-		next.ServeHTTP(w, r)
+
+		// Skip non-HTML paths upfront to avoid wrapping overhead
+		// API routes, static files, SSE streams, feeds — never get Onion-Location
+		path := r.URL.Path
+		if strings.HasPrefix(path, "/api/") ||
+			strings.HasPrefix(path, "/static/") ||
+			strings.HasPrefix(path, "/admin/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Also skip SSE requests (Accept: text/event-stream)
+		if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Skip non-HTML Accept headers (JSON, plain-text, RSS, Atom, CSV clients)
+		accept := r.Header.Get("Accept")
+		if accept != "" &&
+			!strings.Contains(accept, "text/html") &&
+			!strings.Contains(accept, "*/*") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		info := s.torSvc.GetInfo()
+		addr, ok := info["onion_address"].(string)
+		if !ok || addr == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Wrap ResponseWriter to intercept Content-Type and only set the header
+		// when the actual response is HTML (e.g. not a redirect to /static/).
+		onionURL := "http://" + addr + r.URL.RequestURI()
+		rw := &onionLocationWriter{ResponseWriter: w, onionURL: onionURL}
+		next.ServeHTTP(rw, r)
 	})
+}
+
+// onionLocationWriter wraps ResponseWriter to defer Onion-Location until WriteHeader,
+// at which point we know the Content-Type and can safely add the header.
+type onionLocationWriter struct {
+	http.ResponseWriter
+	onionURL    string
+	wroteHeader bool
+}
+
+func (o *onionLocationWriter) WriteHeader(code int) {
+	if !o.wroteHeader {
+		o.wroteHeader = true
+		ct := o.ResponseWriter.Header().Get("Content-Type")
+		if strings.HasPrefix(ct, "text/html") {
+			o.ResponseWriter.Header().Set("Onion-Location", o.onionURL)
+		}
+	}
+	o.ResponseWriter.WriteHeader(code)
+}
+
+func (o *onionLocationWriter) Write(b []byte) (int, error) {
+	if !o.wroteHeader {
+		// Implicit 200 — trigger our header check
+		o.WriteHeader(http.StatusOK)
+	}
+	return o.ResponseWriter.Write(b)
+}
+
+// Unwrap allows http.Flusher and other interfaces to be accessed through the wrapper
+func (o *onionLocationWriter) Unwrap() http.ResponseWriter {
+	return o.ResponseWriter
+}
+
+// Implement http.Flusher so SSE (which bypasses us via the path check above) still works
+func (o *onionLocationWriter) Flush() {
+	if f, ok := o.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // extensionStripMiddleware strips .txt, .json, .rss, and .atom extensions from paths

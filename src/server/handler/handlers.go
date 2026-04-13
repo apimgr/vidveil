@@ -692,6 +692,8 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 
 // SearchPage renders search results with content negotiation per AI.md PART 17
 func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
+	requestStart := time.Now()
+
 	// Strip leading/trailing whitespace from query per AI.md
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query == "" {
@@ -717,6 +719,8 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 	// Perform parallel search across engines
 	results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames)
+	// Overwrite with total request-to-response time
+	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 
 	// Increment search count
 	if h.metrics != nil {
@@ -1573,6 +1577,9 @@ func (h *SearchHandler) AppleTouchIcon(w http.ResponseWriter, r *http.Request) {
 // APISearch handles search API requests with content negotiation
 // Supports: JSON (default), SSE streaming (Accept: text/event-stream), plain text
 func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
+	// Start timer immediately when request is received — used in both SSE and JSON paths
+	requestStart := time.Now()
+
 	// Detect response format per AI.md PART 14
 	format := detectResponseFormat(r)
 
@@ -1629,7 +1636,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 
 	// SSE streaming mode - stream results as they arrive from engines
 	if format == "text/event-stream" {
-		h.handleSearchSSE(w, r, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, nil, showAI, minQuality, previewFirst, userMinDuration)
+		h.handleSearchSSE(w, r, requestStart, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, nil, showAI, minQuality, previewFirst, userMinDuration)
 		return
 	}
 
@@ -1737,11 +1744,14 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Overwrite SearchTimeMS with total request-to-response time (from first byte received)
+	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
+
 	h.jsonResponse(w, results)
 }
 
 // handleSearchSSE handles SSE streaming for search results
-func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int) {
+func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, requestStart time.Time, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int) {
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -1780,8 +1790,8 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 		flusher.Flush()
 	}
 
-	// Send final done message
-	fmt.Fprintf(w, "data: {\"done\":true,\"engine\":\"all\"}\n\n")
+	// Send final done message with total elapsed time since request was received
+	fmt.Fprintf(w, "data: {\"done\":true,\"engine\":\"all\",\"elapsed_ms\":%d}\n\n", time.Since(requestStart).Milliseconds())
 	flusher.Flush()
 }
 

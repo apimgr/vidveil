@@ -1420,7 +1420,7 @@ if (document.readyState === 'loading') {
     var searchCurrentSourceFilters = new Set(); // Multiple sources allowed
     var searchCurrentSort = '';
     var searchPreviewFirst = false; // Sort priority, not exclusive filter
-    var startTime = Date.now();
+    var startTime = 0; // Reset right before each search request for accuracy
     var isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     var currentPage = 1;
     var isLoadingMore = false;
@@ -1522,6 +1522,7 @@ if (document.readyState === 'loading') {
             searchUrl += '&min_duration=' + parseInt(userPrefs.minDuration);
         }
 
+        startTime = performance.now();
         var eventSource = new EventSource(searchUrl);
         var firstResult = true;
         var streamDone = false;
@@ -1534,7 +1535,7 @@ if (document.readyState === 'loading') {
                 streamDone = true;
                 eventSource.close();
                 isSearching = false;
-                var elapsed = Date.now() - startTime;
+                var elapsed = data.elapsed_ms != null ? data.elapsed_ms : Math.round(performance.now() - startTime);
                 var timeContainer = document.getElementById('search-time-container');
                 if (timeContainer) timeContainer.textContent = 'in ' + elapsed + 'ms';
                 updateSearchStatus();
@@ -1650,7 +1651,10 @@ if (document.readyState === 'loading') {
         })
         .then(function(data) {
             isSearching = false;
-            var elapsed = Date.now() - startTime;
+            // Prefer server-reported time; fall back to client measurement
+            var elapsed = (data.data && data.data.search_time_ms != null)
+                ? data.data.search_time_ms
+                : Math.round(performance.now() - startTime);
             var timeContainer = document.getElementById('search-time-container');
             if (timeContainer) timeContainer.textContent = 'in ' + elapsed + 'ms';
 
@@ -2225,10 +2229,15 @@ if (document.readyState === 'loading') {
                 // If no results on this page, stop infinite scroll
                 if (!gotResults) {
                     hasMoreResults = false;
-                    // Remove sentinel
+                    currentPage--; // revert so a retry would re-try same page
                     var sentinel = document.getElementById('scroll-sentinel');
-                    if (sentinel && infiniteScrollObserver) {
-                        infiniteScrollObserver.unobserve(sentinel);
+                    if (sentinel) {
+                        if (infiniteScrollObserver) infiniteScrollObserver.unobserve(sentinel);
+                        // Replace sentinel with end-of-results message
+                        var endMsg = document.createElement('p');
+                        endMsg.className = 'no-more-results';
+                        endMsg.textContent = 'No more results';
+                        sentinel.replaceWith(endMsg);
                     }
                 }
                 updateSearchStatus();

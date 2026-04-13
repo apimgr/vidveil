@@ -1275,6 +1275,15 @@ header .search-form {
     display: none;
 }
 
+.no-more-results {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    opacity: 0.7;
+}
+
 .no-results {
     grid-column: 1 / -1;
     text-align: center;

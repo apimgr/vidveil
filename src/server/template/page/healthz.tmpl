@@ -115,22 +115,75 @@
 
         <!-- Last Updated per AI.md PART 13 -->
         <footer class="health-footer">
-            <p>Last checked: <time datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
+            <p>Last checked: <time id="hz-timestamp" datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
             <p class="auto-refresh">Auto-refreshing in <span id="countdown">30</span>s</p>
         </footer>
     </main>
     {{template "public/footer" .}}
     {{template "public/scripts" .}}
     <script>
-        // Auto-refresh countdown per AI.md PART 13
+        // Auto-refresh: fetch JSON and update DOM — no page reload to avoid
+        // aborting SSE connections on other tabs (HTTP/2 GOAWAY side-effect).
         (function() {
             let seconds = 30;
             const countdown = document.getElementById('countdown');
+
+            function statusClass(val) {
+                return val === 'ok' ? 'status-ok' : 'status-error';
+            }
+            function statusLabel(val) {
+                return val === 'ok' ? '✅ OK' : '❌ Error';
+            }
+
+            function applyUpdate(d) {
+                // Status banner
+                const banner = document.querySelector('.status-banner');
+                if (banner) {
+                    banner.className = 'status-banner status-' + (d.status === 'healthy' ? 'healthy' : d.status === 'unhealthy' ? 'unhealthy' : 'degraded');
+                    const icon = banner.querySelector('.status-icon');
+                    const text = banner.querySelector('.status-text');
+                    if (icon) icon.textContent = d.status === 'healthy' ? '✅' : d.status === 'unhealthy' ? '🔴' : '⚠️';
+                    if (text) text.textContent = d.status === 'healthy' ? 'All Systems Operational' : d.status === 'unhealthy' ? 'System Unhealthy' : 'System Degraded';
+                }
+                // Checks table cells
+                const checks = d.checks || {};
+                const checkMap = {database: '🗄️ Database', cache: '💾 Cache', disk: '💿 Disk', scheduler: '⏰ Scheduler'};
+                document.querySelectorAll('.checks-table tbody tr').forEach(function(row) {
+                    const label = row.cells[0] && row.cells[0].textContent.trim();
+                    for (const [key, lbl] of Object.entries(checkMap)) {
+                        if (label === lbl && row.cells[1]) {
+                            row.cells[1].className = statusClass(checks[key]);
+                            row.cells[1].textContent = statusLabel(checks[key]);
+                        }
+                    }
+                });
+                // Stats
+                const stats = d.stats || {};
+                const statRows = document.querySelectorAll('.stats-grid dd');
+                if (statRows[0]) statRows[0].textContent = stats.requests_total || 0;
+                if (statRows[1]) statRows[1].textContent = stats.requests_24h || 0;
+                if (statRows[2]) statRows[2].textContent = stats.active_connections || 0;
+                // Timestamp
+                const ts = document.getElementById('hz-timestamp');
+                if (ts && d.timestamp) {
+                    const dt = new Date(d.timestamp);
+                    ts.setAttribute('datetime', d.timestamp);
+                    ts.textContent = dt.toLocaleString();
+                }
+            }
+
             setInterval(function() {
                 seconds--;
                 if (countdown) countdown.textContent = seconds;
                 if (seconds <= 0) {
-                    location.reload();
+                    seconds = 30;
+                    fetch('/healthz.json', {cache: 'no-store'})
+                        .then(function(r) { return r.json(); })
+                        .then(applyUpdate)
+                        .catch(function() {
+                            // Only fall back to full reload if the endpoint is unreachable
+                            location.reload();
+                        });
                 }
             }, 1000);
         })();

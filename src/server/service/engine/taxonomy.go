@@ -447,6 +447,14 @@ func DetectQueryIntent(query string) QueryIntent {
 }
 
 // ResultMatchesIntent returns false if a result semantically contradicts the query intent.
+// toyWords indicate a title is describing a sex toy rather than a biological male,
+// used to allow "bbc dildo", "artificial cock", etc. in female-only queries.
+var toyWords = []string{"dildo", "strapon", "strap-on", "vibrator", "toy", "artificial", "fake"}
+
+// ambiguousMaleWords are checked only when no toy word is present in the title.
+// e.g. "bbc dildo" or "strapon dick" refer to toys, not biological males.
+var ambiguousMaleWords = []string{"cock", "cocks", "dick", "dicks", "bbc"}
+
 // Conservative: only rejects when there is clear, unambiguous evidence of contradiction.
 func ResultMatchesIntent(r model.VideoResult, intent QueryIntent) bool {
 	if !intent.IsFemaleOnly {
@@ -455,7 +463,28 @@ func ResultMatchesIntent(r model.VideoResult, intent QueryIntent) bool {
 
 	titleLower := strings.ToLower(r.Title)
 
+	// If title mentions a sex toy, skip ambiguous words ("bbc dildo", "artificial cock")
+	hasToy := false
+	for _, tw := range toyWords {
+		if strings.Contains(titleLower, tw) {
+			hasToy = true
+			break
+		}
+	}
+
 	for _, word := range malePresenceWords {
+		if hasToy {
+			isAmbiguous := false
+			for _, aw := range ambiguousMaleWords {
+				if word == aw {
+					isAmbiguous = true
+					break
+				}
+			}
+			if isAmbiguous {
+				continue
+			}
+		}
 		if containsWholeWord(titleLower, word) {
 			return false
 		}

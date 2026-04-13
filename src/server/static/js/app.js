@@ -1210,12 +1210,35 @@ if (document.readyState === 'loading') {
             saveHomeSearchToHistory(query.value);
         }
 
+        // Include engine tier filter if set (filter bar is outside the form)
+        var engineFilter = document.getElementById('filter-engines');
+        if (engineFilter && engineFilter.value) {
+            var hidden = form.querySelector('input[name="engines"]') || document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'engines';
+            hidden.value = engineFilter.value;
+            form.appendChild(hidden);
+        }
+
         return true;
     }
 
     function getHomeSearchHistory() {
         try {
-            return JSON.parse(localStorage.getItem('vidveil_history') || '[]');
+            var history = JSON.parse(localStorage.getItem('vidveil_history') || '[]');
+            // Auto-clear old entries based on preference
+            var prefs = {};
+            try { prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}'); } catch(e) {}
+            var autoClear = parseInt(prefs.autoClearHistory) || 0;
+            if (autoClear > 0) {
+                var cutoff = Date.now() - (autoClear * 86400000);
+                var filtered = history.filter(function(h) { return h.timestamp >= cutoff; });
+                if (filtered.length !== history.length) {
+                    localStorage.setItem('vidveil_history', JSON.stringify(filtered));
+                }
+                return filtered;
+            }
+            return history;
         } catch (e) {
             return [];
         }
@@ -1233,8 +1256,12 @@ if (document.readyState === 'loading') {
         // Add to front
         history.unshift({ query: query, timestamp: Date.now() });
 
-        // Keep only last 20
-        if (history.length > 20) history = history.slice(0, 20);
+        // Respect maxHistory preference (0 = unlimited)
+        var prefs = {};
+        try { prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}'); } catch(e) {}
+        var maxHist = parseInt(prefs.maxHistory) || 0;
+        if (maxHist > 0 && history.length > maxHist) history = history.slice(0, maxHist);
+        else if (maxHist === 0 && history.length > 200) history = history.slice(0, 200); // hard cap
 
         try {
             localStorage.setItem('vidveil_history', JSON.stringify(history));
@@ -1475,6 +1502,21 @@ if (document.readyState === 'loading') {
             searchUrl += '&min_quality=' + userPrefs.minQuality;
         }
 
+        // Tell the server to sort each engine batch preview-first during streaming
+        if (searchPreviewFirst) {
+            searchUrl += '&preview_first=1';
+        }
+
+        // Apply enabled engines from preferences (bangs take priority server-side)
+        if (userPrefs.enabledEngines && userPrefs.enabledEngines.length > 0) {
+            searchUrl += '&engines=' + encodeURIComponent(userPrefs.enabledEngines.join(','));
+        }
+
+        // Send minimum duration preference to server for early filtering
+        if (userPrefs.minDuration && parseInt(userPrefs.minDuration) > 0) {
+            searchUrl += '&min_duration=' + parseInt(userPrefs.minDuration);
+        }
+
         var eventSource = new EventSource(searchUrl);
         var firstResult = true;
 
@@ -1695,7 +1737,14 @@ if (document.readyState === 'loading') {
         var targetAttr = userPrefs.openNewTab !== false ? ' target="_blank"' : '';
         var html = '<a href="' + escapeHtmlUtil(r.url) + '"' + targetAttr + ' rel="noopener noreferrer nofollow" class="card-link">';
         html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtmlUtil(proxiedPreviewUrl) + '"' : '') + '>';
-        html += '<img class="thumb-static" src="' + escapeHtmlUtil(r.thumbnail || '/static/images/placeholder.svg') + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" onerror="this.src=\'/static/images/placeholder.svg\'">';
+        // Proxy thumbnail based on proxyImages preference (default: true for privacy)
+        var thumbSrc = '/static/images/placeholder.svg';
+        if (r.thumbnail) {
+            thumbSrc = userPrefs.proxyImages !== false
+                ? '/proxy/thumbnails?url=' + encodeURIComponent(r.thumbnail)
+                : r.thumbnail;
+        }
+        html += '<img class="thumb-static" src="' + escapeHtmlUtil(thumbSrc) + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" onerror="this.src=\'/static/images/placeholder.svg\'">';
 
         if (hasPreview) {
             html += '<video class="thumb-preview" src="' + escapeHtmlUtil(proxiedPreviewUrl) + '" muted loop playsinline preload="none"></video>';
@@ -2130,13 +2179,22 @@ if (document.readyState === 'loading') {
         var loadIndicator = document.getElementById('load-more-indicator');
         if (loadIndicator) loadIndicator.classList.remove('hidden');
 
-        // Stream next page of results (include AI and quality preferences)
+        // Stream next page of results (include AI, quality, preview, and engine preferences)
         var pageUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage;
         if (userPrefs.showAIContent) {
             pageUrl += '&show_ai=1';
         }
         if (userPrefs.minQuality && parseInt(userPrefs.minQuality) > 0) {
             pageUrl += '&min_quality=' + userPrefs.minQuality;
+        }
+        if (searchPreviewFirst) {
+            pageUrl += '&preview_first=1';
+        }
+        if (userPrefs.enabledEngines && userPrefs.enabledEngines.length > 0) {
+            pageUrl += '&engines=' + encodeURIComponent(userPrefs.enabledEngines.join(','));
+        }
+        if (userPrefs.minDuration && parseInt(userPrefs.minDuration) > 0) {
+            pageUrl += '&min_duration=' + parseInt(userPrefs.minDuration);
         }
         var eventSource = new EventSource(pageUrl);
         var gotResults = false;

@@ -1586,6 +1586,9 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	// Check if user wants to show AI content (overrides server default)
 	showAI := r.URL.Query().Get("show_ai") == "1"
 
+	// Preview-first: sort each engine batch so preview-capable results stream first
+	previewFirst := r.URL.Query().Get("preview_first") == "1"
+
 	// Parse minimum quality filter (e.g., 360 = 360p+, 720 = 720p+)
 	minQuality := 0
 	if mq := r.URL.Query().Get("min_quality"); mq != "" {
@@ -1594,9 +1597,17 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse user's minimum duration preference (in seconds)
+	userMinDuration := 0
+	if md := r.URL.Query().Get("min_duration"); md != "" {
+		if mv, err := strconv.Atoi(md); err == nil && mv > 0 {
+			userMinDuration = mv
+		}
+	}
+
 	// SSE streaming mode - stream results as they arrive from engines
 	if format == "text/event-stream" {
-		h.handleSearchSSE(w, r, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, nil, showAI, minQuality)
+		h.handleSearchSSE(w, r, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, nil, showAI, minQuality, previewFirst, userMinDuration)
 		return
 	}
 
@@ -1708,7 +1719,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSearchSSE handles SSE streaming for search results
-func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int) {
+func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int) {
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -1735,7 +1746,7 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 		ctx = engine.WithUserIP(ctx, userIP, true)
 	}
 
-	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers, showAI, minQuality)
+	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers, showAI, minQuality, previewFirst, userMinDuration)
 
 	for result := range resultsChan {
 		data, err := json.Marshal(result)

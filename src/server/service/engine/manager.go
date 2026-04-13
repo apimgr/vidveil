@@ -523,12 +523,39 @@ func (m *EngineManager) getEnginesToUse(engineNames []string) []SearchEngine {
 				engines = append(engines, engine)
 			}
 		}
-	} else {
-		// Use specified engines
-		for _, name := range engineNames {
-			if engine, ok := m.engines[name]; ok && engine.IsAvailable() {
+		return engines
+	}
+
+	// Check for special tier-based filter values ("tier1", "tier12")
+	maxTier := 0
+	tierFilter := false
+	for _, name := range engineNames {
+		switch name {
+		case "tier1":
+			tierFilter = true
+			if maxTier == 0 || maxTier > 1 {
+				maxTier = 1
+			}
+		case "tier12":
+			tierFilter = true
+			if maxTier == 0 || maxTier > 2 {
+				maxTier = 2
+			}
+		}
+	}
+	if tierFilter {
+		for _, engine := range m.engines {
+			if engine.IsAvailable() && engine.Tier() <= maxTier {
 				engines = append(engines, engine)
 			}
+		}
+		return engines
+	}
+
+	// Use specified engines by name
+	for _, name := range engineNames {
+		if engine, ok := m.engines[name]; ok && engine.IsAvailable() {
+			engines = append(engines, engine)
 		}
 	}
 
@@ -1144,7 +1171,7 @@ type StreamResult struct {
 // SearchStream performs a search across enabled engines and streams results via channel
 // Results are deduplicated by URL across all engines
 func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
-	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, 0)
+	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, 0, false, 0)
 }
 
 // SearchStreamWithOperators performs a streaming search with optional search operators
@@ -1153,7 +1180,9 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 // performers filters by performer name (OR match)
 // showAI overrides server AI filter setting (true = show AI content)
 // minQuality filters by minimum quality level (0 = no filter, 360 = 360p+, etc.)
-func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int) <-chan StreamResult {
+// previewFirst sorts each engine's result batch so preview-capable results stream first
+// userMinDuration is the user's minimum duration preference in seconds (0 = use server config)
+func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
 	go func() {
@@ -1165,6 +1194,10 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 
 		var wg sync.WaitGroup
 		minDuration := m.appConfig.Search.MinDurationSeconds
+		// User's preference overrides config minimum duration
+		if userMinDuration > minDuration {
+			minDuration = userMinDuration
+		}
 
 		// Shared deduplication maps with mutex for concurrent access
 		// Check both URL and normalized title to catch cross-engine duplicates
@@ -1187,6 +1220,7 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 				}
 
 				// Stream each result individually with thumbnail validation and deduplication
+				accepted := make([]model.VideoResult, 0, len(results))
 				for _, r := range results {
 					// Skip results with empty/invalid thumbnails
 					if !isValidThumbnail(r.Thumbnail) {
@@ -1291,6 +1325,20 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 					}
 					seenMu.Unlock()
 
+					accepted = append(accepted, r)
+				}
+
+				// When preview-first is requested, sort this engine's batch so results with
+				// a preview URL stream before results without one.
+				if previewFirst {
+					sort.SliceStable(accepted, func(i, j int) bool {
+						iHas := accepted[i].PreviewURL != ""
+						jHas := accepted[j].PreviewURL != ""
+						return iHas && !jHas
+					})
+				}
+
+				for _, r := range accepted {
 					select {
 					case resultsChan <- StreamResult{Result: r, Engine: e.Name()}:
 					case <-ctx.Done():

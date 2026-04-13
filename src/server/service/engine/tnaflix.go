@@ -98,8 +98,8 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 			}
 		}
 
-		// Get duration
-		durationText := parser.CleanText(s.Find(".duration, .time, .length").First().Text())
+		// Get duration — TNAFlix uses class "thumb-icon video-duration"
+		durationText := parser.CleanText(s.Find(".thumb-icon.video-duration, .video-duration, .duration, .time, .length").First().Text())
 		duration, durationSeconds := parser.ParseDuration(durationText)
 
 		// Get views

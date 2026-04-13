@@ -3,6 +3,7 @@
 package parser
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -120,12 +121,23 @@ func ParseDuration(duration string) (string, int) {
 		}
 	}
 
-	// Try to parse "12 min" or "12min" format
-	minRe := regexp.MustCompile(`(\d+)\s*min`)
+	// Try to parse "12 min" or "12min" format — normalize to MM:SS display
+	minRe := regexp.MustCompile(`(\d+)\s*min(?:utes?)?`)
 	if matches := minRe.FindStringSubmatch(strings.ToLower(duration)); len(matches) > 1 {
 		m, _ := strconv.Atoi(matches[1])
 		secs := m * 60
-		return matches[0], secs
+		return fmt.Sprintf("%d:%02d", m, 0), secs
+	}
+
+	// Try plain seconds integer (e.g., "745")
+	if n, err := strconv.Atoi(strings.TrimSpace(duration)); err == nil && n > 0 {
+		h := n / 3600
+		m := (n % 3600) / 60
+		s := n % 60
+		if h > 0 {
+			return fmt.Sprintf("%d:%02d:%02d", h, m, s), n
+		}
+		return fmt.Sprintf("%d:%02d", m, s), n
 	}
 
 	return duration, 0

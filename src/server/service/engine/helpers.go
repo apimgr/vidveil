@@ -170,16 +170,28 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 
 	// Find duration - try multiple selectors and also data attributes
 	durSelectors := []string{
+		// Generic common patterns
 		".duration", ".dur", ".time", ".length", ".video-duration",
-		"var.duration", "span.duration", ".thumb-icon.video-duration",
-		"em.time_thumb em", ".time_thumb", ".video_duration", ".video__time",
+		"var.duration", "span.duration", ".video_duration", ".video__time",
 		".thumb__time", ".thumb-time", ".thumb-duration", ".video-time",
-		"time", "[data-duration]", ".meta-duration", ".card-duration",
+		"time", ".meta-duration", ".card-duration",
+		// TNAFlix: "thumb-icon video-duration"
+		".thumb-icon.video-duration",
+		// PornTrex / PornHat / similar platforms
+		".item-time", ".time-badge", ".card-time",
+		".video__duration", ".vid-duration", ".label-duration",
+		// 4tube / Fux / PornerBros (share a codebase)
+		"var.time", "var.thumb_time", "strong.time", ".thumb_time",
+		// AnyPorn / generic tube sites
+		".movie-duration", ".clip-time", ".playtime",
+		"span.time", "span.length", "div.time", "div.duration",
+		// data attribute as element
+		"[data-duration]", "[data-seconds]",
 	}
 	for _, sel := range durSelectors {
 		if d := s.Find(sel).First(); d.Length() > 0 {
-			// Try data-content attribute first (used by some sites)
-			durText := parser.ExtractAttr(d, "data-content", "data-duration")
+			// Try data attributes first (used by some sites)
+			durText := parser.ExtractAttr(d, "data-content", "data-duration", "data-seconds")
 			if durText == "" {
 				durText = parser.CleanText(d.Text())
 			}
@@ -189,10 +201,15 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 			}
 		}
 	}
-	// Also check data attributes on the element itself
+	// Also check data attributes on the container element itself
 	if r.DurationSeconds == 0 {
-		if dur := parser.ExtractAttr(s, "data-duration"); dur != "" {
-			r.Duration, r.DurationSeconds = parser.ParseDuration(dur)
+		for _, attr := range []string{"data-duration", "data-seconds", "data-length"} {
+			if dur := parser.ExtractAttr(s, attr); dur != "" {
+				r.Duration, r.DurationSeconds = parser.ParseDuration(dur)
+				if r.DurationSeconds > 0 {
+					break
+				}
+			}
 		}
 	}
 

@@ -101,8 +101,12 @@ func searchTTCache(ctx context.Context, e *BaseEngine, url string) ([]model.Vide
 		// Preview URL is constructed from the video ID using the ttcache CDN pattern
 		previewURL := fmt.Sprintf("https://c1.ttcache.com/thumbnail/%s/288x162/preview.mp4", videoID)
 
-		// Duration is text inside .item-meta-container or similar
-		durationText := parser.CleanText(s.Find(".item-duration, .duration, .time, .length").First().Text())
+		// Duration: check text selectors then fall back to data attributes on the container
+		durationText := parser.CleanText(s.Find(".item-duration, .video-duration, .duration, .time, .length, .thumb-icon.video-duration").First().Text())
+		if durationText == "" {
+			// Some ttcache sites put seconds in data-seconds or data-duration on the card
+			durationText = parser.ExtractAttr(s, "data-duration", "data-seconds", "data-length")
+		}
 		duration, durationSeconds := parser.ParseDuration(durationText)
 
 		// Rating badge (e.g. "51%") — Rating field is float64, skip for now

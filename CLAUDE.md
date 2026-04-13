@@ -86,4 +86,4 @@ On EVERY new conversation or after "context compacted" message:
 - Project: VidVeil - Privacy-respecting adult video meta search engine
 - 43 search engines with bang shortcuts
 - SSE streaming, thumbnail proxy, no user accounts
-- Last AI.md update: 2026-02-13
+- Last AI.md update: 2026-04-13

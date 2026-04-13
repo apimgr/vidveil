@@ -869,7 +869,7 @@ paths:
 - ❌ Partial implementations - every feature must be 100% complete
 - ❌ "I'll come back to this later" - there is no later, do it NOW
 
-## REQUIRED - ALWAYS DO
+## CRITICAL - ALWAYS DO
 - ✅ Read AI.md PART 0, 1 at start of EVERY conversation
 - ✅ Read relevant PART before implementing ANY feature
 - ✅ Search AI.md before asking questions (answer is likely there)
@@ -909,7 +909,7 @@ Before completing ANY task:
 - [ ] Docs updated if code changed
 
 ---
-**Full details: AI.md PART 0, PART 1**
+For complete details, see AI.md PART 0, 1
 ```
 
 **Example Rules File Content (frontend-rules.md):**
@@ -917,7 +917,7 @@ Before completing ANY task:
 ```markdown
 # Frontend Rules (PART 16, 17)
 
-⚠️ **Server does the work. Client displays the result.** ⚠️
+⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
 ## CRITICAL - NEVER DO
 - ❌ Client-side rendering (React, Vue, Angular, etc.)
@@ -933,7 +933,7 @@ Before completing ANY task:
 - ❌ Stub templates or "coming soon" pages
 - ❌ Empty handlers or placeholder routes
 
-## REQUIRED - ALWAYS DO
+## CRITICAL - ALWAYS DO
 - ✅ Server-side rendering (Go templates)
 - ✅ Progressive enhancement (works without JS)
 - ✅ Mobile-first responsive CSS
@@ -985,7 +985,7 @@ Apply to: IPv6, Tor .onion, API tokens, hashes, UUIDs, Base64
 | Desktop+ | `@media (min-width: 1024px)` |
 
 ---
-**Full details: AI.md PART 16, PART 17**
+For complete details, see AI.md PART 16, 17
 ```
 
 **Cursor Rules (.cursor/rules/):**
@@ -1186,10 +1186,12 @@ Each `.claude/rules/*.md` file should contain:
 ```markdown
 # {Topic} Rules (PART X, Y, Z)
 
+⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
+
 ## CRITICAL - NEVER DO
 - [List of prohibited actions from these PARTs]
 
-## REQUIRED - ALWAYS DO
+## CRITICAL - ALWAYS DO
 - [List of mandatory requirements from these PARTs]
 
 ## KEY DECISIONS (pre-answered)
@@ -1206,7 +1208,7 @@ Each `.claude/rules/*.md` file should contain:
 [Condensed rules table or checklist]
 
 ---
-**Full details: AI.md PART X, Y, Z**
+For complete details, see AI.md PART X, Y, Z
 ```
 
 **3. Context Compaction Survival:**
@@ -1783,14 +1785,14 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 ## How to Read This Large File
 
-**AI.md is ~2.0MB and ~55,300 lines. You CANNOT read it all at once. Follow these procedures.**
+**AI.md is ~2.0MB and ~55,580 lines. You CANNOT read it all at once. Follow these procedures.**
 
 ### File Size Reality
 
 | Constraint | Value |
 |------------|-------|
 | File size | ~2.0MB |
-| Line count | ~55,300 lines |
+| Line count | ~55,580 lines |
 | Read limit | ~500 lines per read |
 | Full reads needed | ~110 reads (impractical) |
 
@@ -1802,45 +1804,45 @@ This distinction exists for clarity. When referring to OS-level resources that b
 
 | PART | Line | Topic | When to Read |
 |------|------|-------|--------------|
-| 0 | ~1932 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
-| 1 | ~3677 | Critical Rules | **ALWAYS READ FIRST** |
-| 2 | ~4928 | License & Attribution | License requirements |
-| 3 | ~5262 | Project Structure | Setting up new project, **CI/CD badge detection** |
-| 4 | ~6222 | OS-Specific Paths | Path handling |
-| 5 | ~6416 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
-| 6 | ~8327 | Application Modes | Mode handling, debug endpoints |
-| 7 | ~8935 | Binary Requirements | Binary building, **Display detection**, **TERM=dumb**, **NO_COLOR** |
-| 8 | ~9598 | Server Binary CLI | CLI flags/commands, **NO_COLOR Support**, **--color flag** |
-| 9 | ~12767 | Error Handling & Caching | Error/cache patterns |
-| 10 | ~13144 | Database & Cluster | Database work |
-| 11 | ~13690 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
-| 12 | ~15582 | Server Configuration | Server settings |
-| 13 | ~16644 | Health & Versioning | Health endpoints |
-| 14 | ~17395 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
-| 15 | ~19028 | SSL/TLS & Let's Encrypt | SSL certificates |
-| 16 | ~19999 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
-| 17 | ~26168 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
-| 18 | ~28205 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
-| 19 | ~29528 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
-| 20 | ~30013 | GeoIP | GeoIP features |
-| 21 | ~30086 | Metrics | Prometheus metrics, **INTERNAL only** |
-| 22 | ~31531 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
-| 23 | ~32260 | Update Command | Update feature |
-| 24 | ~32739 | Privilege Escalation & Service | Service/privilege work |
-| 25 | ~33637 | Service Support | Systemd/runit/rc.d/launchd templates |
-| 26 | ~33821 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
-| 27 | ~34576 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
-| 28 | ~36075 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
-| 29 | ~38929 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
-| 30 | ~40750 | ReadTheDocs Documentation | Documentation |
-| 31 | ~41482 | I18N & A11Y | Internationalization |
-| 32 | ~41903 | Tor Hidden Service | Tor support, **binary controls Tor** |
-| 33 | ~43682 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
-| 34 | ~48097 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
-| 35 | ~51749 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
-| 36 | ~52390 | Custom Domains | **OPTIONAL** - user/org branded domains |
-| 37 | ~53413 | IDEA.md Reference | **Examples only** - NEVER modify |
-| FINAL | ~53667 | Compliance Checklist | Final verification, **AI Quick Reference Rules**, **Console/Banner Checklist** |
+| 0 | ~1939 | AI Assistant Rules | **ALWAYS READ FIRST**, **AI Behavior Rules** |
+| 1 | ~3723 | Critical Rules | **ALWAYS READ FIRST** |
+| 2 | ~4974 | License & Attribution | License requirements |
+| 3 | ~5308 | Project Structure | Setting up new project, **CI/CD badge detection** |
+| 4 | ~6269 | OS-Specific Paths | Path handling |
+| 5 | ~6463 | Configuration | Config file work, **Path Security**, **Privileged Ports**, **Escalation** |
+| 6 | ~8375 | Application Modes | Mode handling, debug endpoints |
+| 7 | ~8983 | Binary Requirements | Binary building, **Display detection**, **TERM=dumb**, **NO_COLOR** |
+| 8 | ~9646 | Server Binary CLI | CLI flags/commands, **NO_COLOR Support**, **--color flag** |
+| 9 | ~12821 | Error Handling & Caching | Error/cache patterns |
+| 10 | ~13198 | Database & Cluster | Database work |
+| 11 | ~13744 | Security & Logging | Security features, **Scoped Agent Tokens**, **Context Detection** |
+| 12 | ~15636 | Server Configuration | Server settings |
+| 13 | ~16763 | Health & Versioning | Health endpoints |
+| 14 | ~17514 | API Structure | REST/GraphQL/Route Compliance, **Non-Interactive Text Output** |
+| 15 | ~19147 | SSL/TLS & Let's Encrypt | SSL certificates |
+| 16 | ~20118 | Web Frontend | Frontend/UI, **Sitemap**, **Site Verification**, **Branding/SEO** |
+| 17 | ~26287 | Admin Panel | Admin UI, **Server Admin**, **Scoped Agents API** |
+| 18 | ~28324 | Email & Notifications | Email/SMTP, **SMTP Auto-Detection** |
+| 19 | ~29647 | Scheduler | Background tasks, **NO external schedulers**, **Backup tasks** |
+| 20 | ~30132 | GeoIP | GeoIP features |
+| 21 | ~30205 | Metrics | Prometheus metrics, **INTERNAL only** |
+| 22 | ~31650 | Backup & Restore | Backup features, **Compliance encryption**, **Cluster backups** |
+| 23 | ~32379 | Update Command | Update feature |
+| 24 | ~32858 | Privilege Escalation & Service | Service/privilege work |
+| 25 | ~33756 | Service Support | Systemd/runit/rc.d/launchd templates |
+| 26 | ~33940 | Makefile | Local dev/tests/debug only, **NOT used in CI/CD** |
+| 27 | ~34717 | Docker | Docker/containers, **NEVER copy/symlink binaries** |
+| 28 | ~36223 | CI/CD Workflows | GitHub/GitLab/Gitea Actions |
+| 29 | ~39157 | Testing & Development | Testing/dev workflow, **AI Docker Compose Rules**, **Content Negotiation Testing** |
+| 30 | ~40978 | ReadTheDocs Documentation | Documentation |
+| 31 | ~41710 | I18N & A11Y | Internationalization |
+| 32 | ~42131 | Tor Hidden Service | Tor support, **binary controls Tor** |
+| 33 | ~43910 | Client & Agent | Client **REQUIRED**, Agent optional - CLI/TUI/GUI, **Scoped Agent Tokens**, **Smart Context**, **First-Run Wizard** |
+| 34 | ~48325 | Multi-User | **OPTIONAL** - Regular User accounts/registration, vanity URLs |
+| 35 | ~51977 | Organizations | **OPTIONAL** - multi-user orgs, vanity URLs |
+| 36 | ~52618 | Custom Domains | **OPTIONAL** - user/org branded domains |
+| 37 | ~53641 | IDEA.md Reference | **Examples only** - NEVER modify |
+| FINAL | ~53895 | Compliance Checklist | Final verification, **AI Quick Reference Rules**, **Console/Banner Checklist** |
 
 **When Implementing OPTIONAL PARTs (34-36, Agent from 33):**
 1. Change PART title from `OPTIONAL` → `NON-NEGOTIABLE` in AI.md
@@ -1872,7 +1874,7 @@ When reading a PART and you encounter a reference like "See PART X" or "Read PAR
 2. Jump to the referenced PART and read it
 3. **Return to your original location** and continue reading
 
-Example: If you're reading PART 5 at line 5356 and it says "See PART 10", read PART 10, then **return to PART 5 line 5356** and continue.
+Example: If you're reading PART 5 at line 7000 and it says "See PART 10", read PART 10, then **return to PART 5 line 7000** and continue.
 
 **Never abandon your current PART after following a reference.**
 
@@ -2610,7 +2612,27 @@ Implemented core server functionality and admin panel.
 | **mkdocs.yml** | PART 30, docs/ structure | Nav matches actual doc files |
 | **.readthedocs.yaml** | PART 30 | Config correct for project |
 
-### Step 4: Documentation Sync
+### Step 4: AI Tool Configuration (Rule Files)
+**Do AI rule files exist and follow the required format?**
+
+| Check | Requirement | Verify |
+|-------|-------------|--------|
+| **All 14 rule files exist** | `.claude/rules/*.md` | ai-rules, project-rules, config-rules, binary-rules, backend-rules, api-rules, frontend-rules, features-rules, service-rules, makefile-rules, docker-rules, cicd-rules, testing-rules, optional-rules |
+| **Correct PART assignments** | Each file covers correct PARTs | See PART 0 table for file→PART mapping |
+| **Required format** | Each file has all required sections | See format requirements below |
+| **Not outdated** | Rule files newer than AI.md | Regenerate if AI.md modified |
+
+**Each rule file MUST contain (in order):**
+1. Header: `# {Topic} Rules (PART X, Y, Z)`
+2. Warning: `⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️`
+3. Section: `## CRITICAL - NEVER DO`
+4. Section: `## CRITICAL - ALWAYS DO`
+5. Key rules summary (tables, lists)
+6. Reference: `For complete details, see AI.md PART X, Y, Z`
+
+**If rule files missing or incorrect:** Regenerate from AI.md using the templates in PART 0.
+
+### Step 5: Documentation Sync
 **All documentation MUST match actual code/project state AND comply with spec PART:**
 
 | Documentation | Check Against | Spec Reference | Update If |
@@ -2622,10 +2644,10 @@ Implemented core server functionality and admin panel.
 | **IDEA.md** | Actual business logic | — | Features/data models changed |
 | **CLI --help** | Actual flags/commands | PART 8 | CLI changed |
 
-### Step 5: Check Against FINAL CHECKPOINT
+### Step 6: Check Against FINAL CHECKPOINT
 Read the FINAL CHECKPOINT section and verify ALL items.
 
-### Step 6: FIX Issues (Don't Document Them)
+### Step 7: FIX Issues (Don't Document Them)
 | If Found | Action |
 |----------|--------|
 | Code doesn't match spec | Fix the code |
@@ -2641,7 +2663,7 @@ Read the FINAL CHECKPOINT section and verify ALL items.
 | Docker files wrong | Update docker/* files |
 | Makefile targets broken | Fix Makefile |
 
-### Step 7: Track Issues in AUDIT.AI.md
+### Step 8: Track Issues in AUDIT.AI.md
 
 **Use AUDIT.AI.md for audit tracking, NOT TODO.AI.md.**
 
@@ -2686,7 +2708,7 @@ Spec version: {line count or hash}
 | **Completion** | Delete AUDIT.AI.md when all issues resolved |
 | **No partial** | Don't leave AUDIT.AI.md with unchecked items |
 
-### Step 8: Report to User
+### Step 9: Report to User
 ```
 ✓ Audit complete
 ✓ Code compliant with spec
@@ -2731,6 +2753,25 @@ Spec version: {line count or hash}
 | **Required** | Write `{project_dir}/.git/COMMIT_MESS` file with commit message instead |
 
 **Since AI cannot commit, it MUST write the commit message to `{project_dir}/.git/COMMIT_MESS` so the user can commit with:** `git commit -F .git/COMMIT_MESS`
+
+### Remote Image/Screenshot Handling
+
+**When an image or screenshot is from a URL (not a local file), AI MUST:**
+
+1. Download it first using curl:
+   ```bash
+   curl -q -LSsf -o {tmp_dir}/apimgr/vidveil/screenshot_XXXX.png {url}
+   ```
+2. Then view the downloaded local file using the Read tool
+
+| Step | Command |
+|------|---------|
+| Download | `curl -q -LSsf -o {tmp_dir}/apimgr/vidveil/screenshot_XXXX.png {url}` |
+| View | Use Read tool on the downloaded file |
+
+**Path format:** `{tmp_dir}/apimgr/vidveil/screenshot_XXXX` where `XXXX` is an incremental number (0001, 0002, etc.)
+
+**Why:** Remote URLs may require authentication, have rate limits, or change. Downloading first ensures the image is captured and can be re-examined without re-fetching.
 
 ## Prohibited Actions
 
@@ -5423,7 +5464,7 @@ PROJECTORG=$(git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(
 │       ├── backend-rules.md    # PART 9, 10, 11, 32: Error Handling & Caching, Database & Cluster, Security & Logging, Tor Hidden Service
 │       ├── api-rules.md        # PART 13, 14, 15: Health & Versioning, API Structure, SSL/TLS & Let's Encrypt
 │       ├── frontend-rules.md   # PART 16, 17: Web Frontend, Admin Panel
-│       ├── features-rules.md   # PART 18-23: Email, Scheduler, GeoIP, Metrics, Backup, Update
+│       ├── features-rules.md   # PART 18-23: Email & Notifications, Scheduler, GeoIP, Metrics, Backup & Restore, Update Command
 │       ├── service-rules.md    # PART 24, 25: Privilege Escalation & Service, Service Support
 │       ├── makefile-rules.md   # PART 26: Makefile (local dev only, NOT CI/CD)
 │       ├── docker-rules.md     # PART 27: Docker
@@ -41666,77 +41707,1261 @@ make test
 
 ---
 
-# PART 31: I18N & A11Y 
+# PART 31: I18N & A11Y
 
 ## Internationalization (i18n)
+
+### Scope
+
+**Every human-readable string in the entire application MUST be translatable.** This includes:
+
+| Layer | What Gets Translated |
+|-------|---------------------|
+| **Web Frontend** | All UI text: navigation, headings, labels, buttons, tooltips, placeholders, footers, legal pages |
+| **Admin Panel** | All admin UI: dashboard, settings forms, labels, tooltips, wizard steps, notifications |
+| **API Responses** | Error messages, validation messages, status descriptions |
+| **Swagger/OpenAPI** | Endpoint descriptions, parameter descriptions, schema descriptions, error examples |
+| **GraphQL** | Type descriptions, field descriptions, query/mutation descriptions |
+| **Email Templates** | Subject lines, body text, headings, CTAs, regulatory/compliance notices |
+| **CLI Output** | Help text, status messages, error messages, console banners |
+| **Health Page** | Status labels, section headings, field labels |
+| **Cookie Consent** | Banner text, category descriptions, button labels |
+| **Privacy/Terms** | Full legal page content |
+
+**Rule: If a human reads it, it gets translated. No exceptions.**
 
 ### Core Requirements
 
 | Requirement | Description |
 |-------------|-------------|
 | **Encoding** | UTF-8 everywhere - files, database, HTTP responses |
-| **Accept-Language** | Respect browser header for language selection |
 | **Default language** | English (en) when no preference detected |
-| **Fallback chain** | `user preference → Accept-Language → default (en)` |
+| **Fallback chain** | `?lang= query param (sets cookie) → lang cookie → Accept-Language header → default (en)` |
+| **100% coverage** | Every user-facing string uses a translation key - no hardcoded text |
+| **Missing key fallback** | If a key is missing in the active language, fall back to English (`en`) |
+| **Key validation** | Build-time check ensures all languages have the same keys as `en.json` |
+
+### Supported Languages
+
+| Code | Language | Direction | Plural Categories |
+|------|----------|-----------|-------------------|
+| `en` | English | `ltr` | one, other |
+| `es` | Spanish | `ltr` | one, other |
+| `zh` | Chinese (Mandarin) | `ltr` | other (no plural forms) |
+| `fr` | French | `ltr` | one, other (0 is "one") |
+| `ar` | Arabic | `rtl` | zero, one, two, few, many, other |
+| `de` | German | `ltr` | one, other |
+| `ja` | Japanese | `ltr` | other (no plural forms) |
+
+### Language Selection via Query Parameter
+
+**`?lang=` sets the language and persists it via cookie.** No URL path prefixes (avoids route conflicts).
+
+```
+GET /dashboard?lang=es
+  → Sets cookie: lang=es; Max-Age=31536000; Path=/; SameSite=Lax
+  → Renders page in Spanish
+  → All subsequent requests use Spanish (cookie persists)
+
+GET /dashboard
+  → Reads lang cookie → Spanish
+  → No cookie? → Accept-Language header
+  → No header? → English (default)
+```
+
+**Fallback chain (in order):**
+
+```
+1. ?lang= query parameter (if present → set cookie + use immediately)
+2. lang cookie (persistent, 1 year)
+3. Accept-Language HTTP header (browser preference)
+4. Default: en
+```
+
+**Implementation:**
+
+```go
+func LanguageMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        lang := ""
+
+        // 1. Query parameter (highest priority, also sets cookie)
+        if q := r.URL.Query().Get("lang"); q != "" && isSupported(q) {
+            lang = q
+            http.SetCookie(w, &http.Cookie{
+                Name:     "lang",
+                Value:    lang,
+                Path:     "/",
+                MaxAge:   365 * 24 * 60 * 60, // 1 year
+                SameSite: http.SameSiteLaxMode,
+                Secure:   r.TLS != nil,
+                HttpOnly: true,
+            })
+        }
+
+        // 2. Cookie
+        if lang == "" {
+            if c, err := r.Cookie("lang"); err == nil && isSupported(c.Value) {
+                lang = c.Value
+            }
+        }
+
+        // 3. Accept-Language header
+        if lang == "" {
+            lang = parseAcceptLanguage(r.Header.Get("Accept-Language"))
+        }
+
+        // 4. Default
+        if lang == "" {
+            lang = "en"
+        }
+
+        ctx := context.WithValue(r.Context(), langKey, lang)
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+```
+
+**Language selector UI (in header/footer):**
+
+```html
+<select onchange="window.location.search='?lang='+this.value" aria-label="{{t .Lang `common.select_language`}}">
+  {{range .AvailableLanguages}}
+    <option value="{{.Code}}" {{if eq .Code $.Lang}}selected{{end}}>{{.NativeName}}</option>
+  {{end}}
+</select>
+```
+
+**Shareable links:** Users can share `https://example.com/page?lang=fr` to force French for the recipient. After the first visit, the cookie persists and `?lang=` is no longer needed.
 
 ### Translation File Format
 
 **Location:** `locales/{lang}.json`
 
+**Every key in `en.json` MUST exist in all other language files.** Build-time validation enforces this.
+
 ```json
 {
   "meta": {
     "language": "es",
-    "name": "Español",
+    "name": "Spanish",
     "native_name": "Español",
     "direction": "ltr",
     "version": "1.0.0"
   },
+
   "common": {
+    "select_language": "Seleccionar idioma",
     "save": "Guardar",
+    "save_all": "Guardar todo",
     "cancel": "Cancelar",
     "delete": "Eliminar",
     "edit": "Editar",
+    "create": "Crear",
+    "update": "Actualizar",
+    "close": "Cerrar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "submit": "Enviar",
+    "confirm": "Confirmar",
+    "search": "Buscar",
+    "search_placeholder": "Buscar...",
+    "filter": "Filtrar",
+    "refresh": "Actualizar",
+    "download": "Descargar",
+    "upload": "Subir",
+    "copy": "Copiar",
+    "copy_to_clipboard": "Copiar al portapapeles",
+    "copied": "Copiado",
     "loading": "Cargando...",
     "error": "Error",
-    "success": "Éxito"
+    "success": "Éxito",
+    "warning": "Advertencia",
+    "info": "Información",
+    "yes": "Sí",
+    "no": "No",
+    "on": "Activado",
+    "off": "Desactivado",
+    "enabled": "Habilitado",
+    "disabled": "Deshabilitado",
+    "required": "Obligatorio",
+    "optional": "Opcional",
+    "none": "Ninguno",
+    "all": "Todos",
+    "actions": "Acciones",
+    "details": "Detalles",
+    "settings": "Configuración",
+    "preferences": "Preferencias",
+    "view": "Ver",
+    "expand": "Expandir",
+    "collapse": "Contraer",
+    "show": "Mostrar",
+    "hide": "Ocultar",
+    "more": "Más",
+    "less": "Menos",
+    "done": "Listo",
+    "unsaved_changes": "Cambios sin guardar",
+    "requires_restart": "Requiere reinicio",
+    "page_x_of_y": "Página {current} de {total}",
+    "showing_x_of_y": "Mostrando {count} de {total}",
+    "last_updated": "Última actualización: {datetime}",
+    "made_with": "Hecho con"
   },
+
+  "theme": {
+    "light": "Claro",
+    "dark": "Oscuro",
+    "auto": "Automático"
+  },
+
   "auth": {
     "login": "Iniciar sesión",
     "logout": "Cerrar sesión",
     "register": "Registrarse",
-    "forgot_password": "¿Olvidaste tu contraseña?"
+    "forgot_password": "¿Olvidaste tu contraseña?",
+    "reset_password": "Restablecer contraseña",
+    "remember_me": "Recordarme",
+    "username": "Nombre de usuario",
+    "password": "Contraseña",
+    "confirm_password": "Confirmar contraseña",
+    "email": "Correo electrónico",
+    "already_have_account": "¿Ya tienes una cuenta? Inicia sesión",
+    "no_account": "¿No tienes cuenta? Regístrate",
+    "show_password": "Mostrar contraseña",
+    "hide_password": "Ocultar contraseña",
+    "password_requirements": "Requisitos de contraseña",
+    "min_length": "Al menos {min} caracteres",
+    "require_uppercase": "Contiene mayúsculas y minúsculas",
+    "require_number": "Contiene un número",
+    "require_special": "Contiene un carácter especial",
+    "2fa_required": "Autenticación de dos factores requerida",
+    "2fa_code": "Código de verificación",
+    "2fa_enter_code": "Ingrese el código de su aplicación de autenticación",
+    "2fa_enable": "Habilitar autenticación de dos factores",
+    "2fa_disable": "Deshabilitar autenticación de dos factores",
+    "2fa_enabled": "Autenticación de dos factores habilitada",
+    "2fa_disabled": "Autenticación de dos factores deshabilitada",
+    "recovery_key": "Clave de recuperación",
+    "session_timeout": "Tiempo de espera de sesión",
+    "extend_on_activity": "Extender con actividad"
   },
+
+  "nav": {
+    "home": "Inicio",
+    "about": "Acerca de",
+    "contact": "Contacto",
+    "help": "Ayuda",
+    "privacy": "Privacidad",
+    "terms": "Términos de servicio",
+    "docs": "Documentación",
+    "api_docs": "Documentación de API",
+    "status": "Estado",
+    "skip_to_content": "Saltar al contenido principal",
+    "skip_to_navigation": "Saltar a la navegación",
+    "main_navigation": "Navegación principal"
+  },
+
+  "health": {
+    "title": "Estado del sistema",
+    "all_operational": "Todos los sistemas operativos",
+    "degraded": "Degradado",
+    "unhealthy": "No saludable",
+    "healthy": "Saludable",
+    "version": "Versión",
+    "go_version": "Versión de Go",
+    "build": "Compilación",
+    "uptime": "Tiempo de actividad",
+    "mode": "Modo",
+    "status": "Estado",
+    "primary": "Primario",
+    "role": "Rol",
+    "nodes": "Nodos",
+    "cluster": "Clúster",
+    "features": "Características",
+    "component_status": "Estado de componentes",
+    "server_statistics": "Estadísticas del servidor",
+    "total_requests": "Solicitudes totales",
+    "requests_24h": "Solicitudes (24h)",
+    "active_connections": "Conexiones activas",
+    "last_checked": "Última verificación:",
+    "auto_refresh": "Auto-actualización en {seconds}s",
+    "ok": "OK",
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "production": "Producción",
+    "development": "Desarrollo"
+  },
+
+  "status_values": {
+    "online": "En línea",
+    "offline": "Fuera de línea",
+    "maintenance": "Mantenimiento",
+    "starting": "Iniciando",
+    "stopping": "Deteniendo",
+    "error": "Error",
+    "good": "Bueno",
+    "warn": "Advertencia"
+  },
+
+  "contact": {
+    "title": "Contacto",
+    "name": "Nombre",
+    "email": "Correo electrónico",
+    "subject": "Asunto",
+    "message": "Mensaje",
+    "send": "Enviar mensaje",
+    "success": "Gracias por tu mensaje. Responderemos pronto."
+  },
+
+  "help": {
+    "title": "Ayuda",
+    "getting_started": "Primeros pasos",
+    "features": "Características",
+    "api_documentation": "Documentación de API",
+    "swagger_description": "Swagger UI - Explorador interactivo de API REST",
+    "graphql_description": "Explorador interactivo de GraphQL",
+    "tor_access": "Acceso Tor",
+    "onion_address": "Dirección Onion",
+    "how_to_connect": "Cómo conectarse",
+    "download_tor": "Descargar Tor Browser",
+    "open_tor": "Abra Tor Browser y espere a que se conecte",
+    "paste_onion": "Copie la dirección onion arriba y péguela en la barra de direcciones de Tor Browser",
+    "tor_privacy": "Usar Tor proporciona privacidad adicional...",
+    "faq": "Preguntas frecuentes",
+    "troubleshooting": "Solución de problemas"
+  },
+
+  "privacy": {
+    "title": "Política de privacidad",
+    "last_updated": "Última actualización:",
+    "summary": "Resumen",
+    "data_stored": "Sus datos se almacenan en nuestros servidores",
+    "never_sell": "Nunca vendemos sus datos",
+    "may_sell": "Sus datos pueden ser vendidos",
+    "you_control": "Usted controla sus datos",
+    "cookie_policy": "Política de cookies",
+    "essential_cookies": "Cookies esenciales",
+    "preference_cookies": "Cookies de preferencia",
+    "analytics_cookies": "Cookies de análisis",
+    "no_analytics": "No usamos seguimiento analítico en este sitio.",
+    "manage_cookies": "Gestionar preferencias de cookies",
+    "data_we_collect": "Datos que recopilamos",
+    "how_we_use": "Cómo usamos sus datos",
+    "data_security": "Seguridad de datos",
+    "data_storage": "Almacenamiento de datos y terceros",
+    "all_data_stored": "Todos sus datos se almacenan en nuestros servidores.",
+    "when_shared": "Cuándo se pueden compartir los datos",
+    "data_retention": "Retención de datos",
+    "your_rights": "Sus derechos",
+    "right_access": "Acceso",
+    "right_export": "Exportación",
+    "right_deletion": "Eliminación",
+    "right_correction": "Corrección",
+    "right_cookie_control": "Control de cookies",
+    "third_party_services": "Servicios de terceros",
+    "service": "Servicio",
+    "purpose": "Propósito",
+    "data_sent": "Datos enviados",
+    "no_third_party": "Actualmente no usamos servicios de terceros que reciban sus datos.",
+    "view_policy": "Ver política",
+    "contact_us": "Contáctenos",
+    "privacy_inquiries": "Para consultas relacionadas con la privacidad, contáctenos.",
+    "ccpa_title": "Derechos de privacidad de California (CCPA)",
+    "ccpa_do_not_sell": "No vender mi información personal",
+    "ccpa_opted_out": "Ha optado por no participar en la venta de datos.",
+    "ccpa_opt_back_in": "Optar por participar nuevamente"
+  },
+
+  "terms": {
+    "title": "Términos de servicio",
+    "acceptance": "Aceptación",
+    "account_terms": "Términos de la cuenta",
+    "acceptable_use": "Uso aceptable",
+    "content": "Contenido",
+    "termination": "Terminación",
+    "liability": "Responsabilidad",
+    "changes": "Cambios",
+    "governing_law": "Ley aplicable"
+  },
+
+  "cookie_consent": {
+    "message": "De acuerdo con la ley GDPR de la UE, se muestra este mensaje.",
+    "accept": "Acepto",
+    "decline": "Rechazar",
+    "manage_preferences": "Gestionar preferencias",
+    "blocked_content": "Contenido externo bloqueado debido a las preferencias de cookies.",
+    "essential_description": "Necesarias para el funcionamiento del sitio. No se pueden desactivar.",
+    "preference_description": "Recordar su configuración como tema (claro/oscuro), idioma y preferencias de interfaz. Desactivarlas restablecerá los valores predeterminados en cada visita.",
+    "analytics_description": "Nos ayudan a entender cómo se utiliza el sitio."
+  },
+
+  "about": {
+    "title": "Acerca de",
+    "features": "Características",
+    "version": "Versión",
+    "links": "Enlaces"
+  },
+
+  "announcements": {
+    "warning": "Advertencia",
+    "info": "Información",
+    "error": "Error",
+    "success": "Éxito",
+    "scheduled_maintenance": "Mantenimiento programado"
+  },
+
+  "pwa": {
+    "install": "Instalar aplicación",
+    "installed": "Aplicación instalada",
+    "offline_message": "No hay conexión a internet. Mostrando contenido almacenado."
+  },
+
   "errors": {
     "required": "Este campo es obligatorio",
     "invalid_email": "Correo electrónico inválido",
     "too_short": "Debe tener al menos {min} caracteres",
-    "too_long": "No puede exceder {max} caracteres"
+    "too_long": "No puede exceder {max} caracteres",
+    "passwords_dont_match": "Las contraseñas no coinciden",
+    "invalid_format": "Formato inválido",
+    "already_exists": "Ya existe",
+    "not_found": "No encontrado",
+    "bad_request": "Formato de solicitud inválido",
+    "validation_failed": "La validación falló: {details}",
+    "unauthorized": "Autenticación requerida",
+    "token_expired": "El token ha expirado",
+    "token_invalid": "Token inválido",
+    "2fa_required": "Autenticación de dos factores requerida",
+    "2fa_invalid": "Código 2FA inválido",
+    "forbidden": "Permiso denegado",
+    "account_locked": "Cuenta bloqueada",
+    "method_not_allowed": "Método no permitido",
+    "conflict": "El recurso ya existe",
+    "rate_limited": "Demasiadas solicitudes",
+    "server_error": "Error interno del servidor",
+    "maintenance_mode": "Servicio no disponible"
   },
+
   "plurals": {
     "items": {
       "zero": "Sin elementos",
       "one": "{count} elemento",
       "other": "{count} elementos"
+    },
+    "results": {
+      "zero": "Sin resultados",
+      "one": "{count} resultado",
+      "other": "{count} resultados"
+    },
+    "users": {
+      "zero": "Sin usuarios",
+      "one": "{count} usuario",
+      "other": "{count} usuarios"
+    },
+    "days": {
+      "one": "{count} día",
+      "other": "{count} días"
+    },
+    "hours": {
+      "one": "{count} hora",
+      "other": "{count} horas"
+    },
+    "minutes": {
+      "one": "{count} minuto",
+      "other": "{count} minutos"
     }
+  },
+
+  "admin": {
+    "panel_title": "Panel de administración de {app_name}",
+
+    "nav": {
+      "dashboard": "Panel de control",
+      "server": "Servidor",
+      "settings": "Configuración",
+      "branding": "Marca",
+      "ssl_tls": "SSL/TLS",
+      "scheduler": "Programador",
+      "email": "Correo electrónico",
+      "logs": "Registros",
+      "backup": "Respaldo",
+      "maintenance": "Mantenimiento",
+      "updates": "Actualizaciones",
+      "info": "Información",
+      "security": "Seguridad",
+      "authentication": "Autenticación",
+      "api_tokens": "Tokens de API",
+      "rate_limiting": "Límite de velocidad",
+      "firewall": "Cortafuegos",
+      "network": "Red",
+      "tor": "Tor",
+      "geoip": "GeoIP",
+      "blocklists": "Listas de bloqueo",
+      "users": "Usuarios",
+      "user_list": "Lista de usuarios",
+      "invites": "Invitaciones",
+      "roles": "Roles",
+      "cluster": "Clúster",
+      "add_node": "Agregar nodo",
+      "help": "Ayuda",
+      "documentation": "Documentación"
+    },
+
+    "header": {
+      "search_placeholder": "Buscar...",
+      "logout": "Cerrar sesión",
+      "admins_online": "Administradores en línea"
+    },
+
+    "dashboard": {
+      "title": "Panel de control",
+      "status": "ESTADO",
+      "uptime": "TIEMPO DE ACTIVIDAD",
+      "requests": "SOLICITUDES",
+      "errors": "ERRORES",
+      "period_24h": "(24h)",
+      "system_resources": "RECURSOS DEL SISTEMA",
+      "cpu": "CPU:",
+      "memory": "Memoria:",
+      "disk": "Disco:",
+      "quick_actions": "ACCIONES RÁPIDAS",
+      "restart_server": "Reiniciar servidor",
+      "clear_cache": "Limpiar caché",
+      "create_backup": "Crear respaldo",
+      "view_logs": "Ver registros",
+      "recent_activity": "ACTIVIDAD RECIENTE",
+      "config_updated": "Configuración actualizada",
+      "admin_login": "Inicio de sesión de administrador",
+      "backup_completed": "Respaldo completado",
+      "ssl_renewed": "SSL renovado",
+      "scheduled_tasks": "TAREAS PROGRAMADAS",
+      "in_x_days": "en {count} días",
+      "in_x_hours": "en {count} horas",
+      "in_x_minutes": "en {count} minutos",
+      "alerts_warnings": "ALERTAS / ADVERTENCIAS",
+      "ssl_expires_in": "El certificado SSL expira en {count} días",
+      "disk_usage_above": "Uso de disco por encima del umbral del {percent}%",
+      "update_available": "Actualización disponible: v{version}"
+    },
+
+    "settings": {
+      "title": "Configuración del servidor",
+      "general": "General",
+      "process": "Proceso",
+      "advanced": "Avanzado",
+      "port": "Puerto",
+      "mode": "Modo",
+      "fqdn": "FQDN",
+      "daemonize": "Demonizar",
+      "tooltip_port": "El puerto en el que escucha el servidor",
+      "tooltip_mode": "Producción aplica validación estricta de host",
+      "tooltip_fqdn": "Nombre de dominio completo (auto-detectado)",
+      "tooltip_daemonize": "Separar del terminal al iniciar (para inicio manual)"
+    },
+
+    "branding": {
+      "title": "Marca",
+      "site_title": "Título",
+      "tagline": "Eslogan",
+      "description": "Descripción",
+      "keywords": "Palabras clave",
+      "author": "Autor",
+      "og_image": "Imagen OG",
+      "twitter_handle": "Usuario de Twitter",
+      "favicon": "Favicon",
+      "logo": "Logo"
+    },
+
+    "security": {
+      "title": "Configuración de seguridad",
+      "rate_limiting": "Límite de velocidad",
+      "requests_per_window": "Solicitudes por ventana",
+      "window": "Ventana",
+      "cors": "CORS",
+      "origins": "Orígenes",
+      "methods": "Métodos",
+      "csp": "Política de seguridad de contenido",
+      "hsts": "HSTS",
+      "account_lockout": "Bloqueo de cuenta",
+      "soft_lock_attempts": "Intentos de bloqueo suave",
+      "soft_lock_duration": "Duración del bloqueo suave",
+      "hard_lock_attempts": "Intentos de bloqueo duro",
+      "ip_blocking": "Bloqueo de IP",
+      "enable_ip_blocking": "Habilitar bloqueo de IP",
+      "escalating_durations": "Duraciones de bloqueo escalonadas",
+      "first_block_duration": "Duración del primer bloqueo",
+      "min_password_length": "Longitud mínima de contraseña",
+      "require_uppercase": "Requerir mayúsculas",
+      "require_number": "Requerir número",
+      "require_special": "Requerir carácter especial",
+      "require_mfa": "Requerir MFA",
+      "allowed_mfa_methods": "Métodos MFA permitidos"
+    },
+
+    "ssl": {
+      "title": "Configuración SSL/TLS",
+      "enable_https": "Habilitar HTTPS",
+      "certificate": "Certificado",
+      "private_key": "Clave privada",
+      "min_tls_version": "Versión mínima de TLS",
+      "lets_encrypt": "Let's Encrypt",
+      "contact_email": "Correo de contacto",
+      "staging_server": "Servidor de pruebas",
+      "challenge_type": "Tipo de desafío"
+    },
+
+    "backup": {
+      "title": "Configuración de respaldo",
+      "enable_scheduled": "Habilitar respaldos programados",
+      "daily_schedule": "Horario diario",
+      "backups_to_keep": "Respaldos a conservar",
+      "weekly_backups": "Respaldos semanales",
+      "monthly_backups": "Respaldos mensuales",
+      "yearly_backups": "Respaldos anuales",
+      "encrypt_backups": "Cifrar respaldos",
+      "encryption_password": "Contraseña de cifrado"
+    },
+
+    "email_settings": {
+      "title": "Configuración de correo electrónico",
+      "smtp_server": "Servidor SMTP",
+      "smtp_port": "Puerto SMTP",
+      "smtp_username": "Usuario SMTP",
+      "smtp_password": "Contraseña SMTP",
+      "tls_mode": "Modo TLS",
+      "sender_name": "Nombre del remitente",
+      "sender_email": "Correo del remitente",
+      "test_connection": "Probar conexión"
+    },
+
+    "scheduler": {
+      "title": "Programador",
+      "task_name": "Nombre de tarea",
+      "schedule": "Horario",
+      "last_run": "Última ejecución",
+      "next_run": "Próxima ejecución",
+      "run_now": "Ejecutar ahora",
+      "hourly": "Cada hora",
+      "daily": "Diario",
+      "weekly": "Semanal",
+      "monthly": "Mensual",
+      "custom": "Personalizado"
+    },
+
+    "logs": {
+      "title": "Registros",
+      "access": "Acceso",
+      "error": "Error",
+      "audit": "Auditoría",
+      "security": "Seguridad",
+      "debug": "Depuración",
+      "last_100": "Últimos 100",
+      "auto_refresh_on": "Auto-actualización: ACTIVADA",
+      "auto_refresh_off": "Auto-actualización: DESACTIVADA",
+      "prev": "Anterior",
+      "next": "Siguiente",
+      "clear_logs": "Limpiar registros"
+    },
+
+    "setup": {
+      "title": "CONFIGURACIÓN REQUERIDA",
+      "token_label": "Token de configuración: {token}",
+      "go_to_url": "Vaya a {url} e ingrese este token para completar la configuración.",
+      "token_once": "Este token solo se mostrará UNA VEZ.",
+      "step_admin": "Crear cuenta de administrador",
+      "step_api_token": "Token de API",
+      "step_server": "Configuración del servidor",
+      "step_security": "Configuración de seguridad",
+      "step_optional": "Servicios opcionales",
+      "step_complete": "Completar",
+      "app_name": "Nombre de la aplicación",
+      "domain_fqdn": "Dominio/FQDN",
+      "timezone": "Zona horaria",
+      "save_configuration": "Guardar configuración",
+      "mark_complete": "Marcar configuración como completa"
+    },
+
+    "admins": {
+      "title": "Administradores del servidor",
+      "your_account": "Su cuenta:",
+      "total_admins": "Total de administradores:",
+      "currently_online": "Actualmente en línea:",
+      "invite_new": "Invitar nuevo administrador",
+      "invite_title": "Invitar nuevo administrador del servidor",
+      "invite_expires": "La invitación expira en:",
+      "generate_invite": "Generar invitación",
+      "invite_created": "Invitación de administrador creada",
+      "invite_url": "URL de invitación (compartir con el nuevo administrador):",
+      "copy_url": "Copiar URL",
+      "invite_once": "Este enlace solo funcionará UNA VEZ y expira en {duration}.",
+      "invite_password_note": "El nuevo administrador establecerá su propia contraseña en el primer uso.",
+      "privacy_note": "Por seguridad, no puede ver otras cuentas de administrador. Cada administrador gestiona sus propias credenciales de forma independiente.",
+      "1_hour": "1 hora",
+      "6_hours": "6 horas",
+      "24_hours": "24 horas",
+      "48_hours": "48 horas",
+      "7_days": "7 días"
+    },
+
+    "profile": {
+      "account_email": "Correo de la cuenta (notificaciones de seguridad):",
+      "notification_email": "Correo de notificaciones (notificaciones generales):",
+      "use_account_email": "Usar correo de la cuenta para todas las notificaciones",
+      "account_email_used_for": "Usado para: restablecimiento de contraseña, recuperación 2FA, alertas de seguridad",
+      "notification_email_used_for": "Usado para: actualizaciones del sistema, estado de respaldo, fallos de tareas",
+      "notification_preferences": "Preferencias de notificación",
+      "security_cannot_disable": "Seguridad (no se puede desactivar):",
+      "account_notifications": "Cuenta:",
+      "system_notifications": "Sistema:",
+      "delivery_email": "Entrega: Correo electrónico",
+      "save_preferences": "Guardar preferencias",
+      "appearance": "Configuración de apariencia",
+      "font_size": "Tamaño de fuente",
+      "font_small": "Pequeño",
+      "font_medium": "Mediano",
+      "font_large": "Grande",
+      "reduce_motion": "Reducir movimiento",
+      "reduce_motion_desc": "Minimizar animaciones y transiciones.",
+      "date_format": "Formato de fecha:",
+      "time_format": "Formato de hora:",
+      "save_changes": "Guardar cambios"
+    },
+
+    "agents": {
+      "title": "Agentes conectados",
+      "add_agent": "Agregar agente",
+      "name": "Nombre",
+      "connected": "Conectado",
+      "last_seen": "Última vez visto",
+      "summary": "Resumen: {online} en línea, {offline} fuera de línea",
+      "system_info": "Información del sistema",
+      "hostname": "Nombre de host:",
+      "os": "SO:",
+      "arch": "Arquitectura:",
+      "agent_version": "Versión del agente:",
+      "tags": "Etiquetas:",
+      "connection": "Conexión",
+      "last_report": "Último informe:",
+      "ip_address": "Dirección IP:",
+      "system_metrics": "Métricas del sistema",
+      "network": "Red:",
+      "load": "Carga:",
+      "refresh_now": "Actualizar ahora",
+      "edit_tags": "Editar etiquetas",
+      "regenerate_token": "Regenerar token",
+      "remove_agent": "Eliminar agente",
+      "requires_confirmation": "Requiere confirmación",
+      "back_to_list": "Volver a la lista",
+      "add_new": "Agregar nuevo agente",
+      "agent_name": "Nombre del agente (opcional):",
+      "name_hint": "Dejar en blanco para usar el nombre de host.",
+      "tags_optional": "Etiquetas (opcional):",
+      "tags_hint": "Separadas por comas. Usadas para filtrar y agrupar.",
+      "token_expiry": "Expiración del token:",
+      "1_hour": "1 hora",
+      "24_hours": "24 horas (recomendado)",
+      "7_days": "7 días",
+      "never_expires": "Nunca expira",
+      "generate_token": "Generar token de agente",
+      "token_generated": "Token de agente generado",
+      "run_command": "Ejecute este comando en la máquina de destino:",
+      "or_manually": "O manualmente:",
+      "token_expires_in": "El token expira en {duration} y solo se puede usar una vez.",
+      "agent_connected": "{name} se ha conectado. El agente ahora envía datos al servidor.",
+      "view_agent": "Ver agente",
+      "dismiss": "Descartar",
+      "remove_confirm": "¿Está seguro de que desea eliminar el agente '{name}'?",
+      "remove_warning": "Esto hará lo siguiente:",
+      "no_cancel": "No, cancelar",
+      "yes_remove": "Sí, eliminar agente"
+    },
+
+    "footer": {
+      "healthy": "Saludable",
+      "degraded": "Degradado",
+      "issues": "Problemas",
+      "tooltip_healthy": "Todos los sistemas operativos",
+      "tooltip_degraded": "Algunos problemas detectados",
+      "tooltip_issues": "Problemas del sistema"
+    }
+  },
+
+  "notifications": {
+    "title": "Notificaciones",
+    "mark_all_read": "Marcar todo como leído",
+    "clear_all": "Limpiar todo",
+    "ssl_expiring": "El certificado SSL expira en {count} días",
+    "backup_completed": "Respaldo completado",
+    "backup_failed": "Respaldo fallido",
+    "login_new_location": "Inicio de sesión desde nueva ubicación",
+    "update_available": "Actualización disponible",
+    "disk_space_low": "Espacio en disco bajo",
+    "task_failed": "Tarea fallida",
+    "task_triggered": "Tarea ejecutada manualmente",
+    "admin_logged_in": "Administrador ha iniciado sesión",
+    "admin_logged_out": "Administrador ha cerrado sesión",
+    "password_changed": "Contraseña cambiada",
+    "2fa_enabled": "2FA habilitado",
+    "2fa_disabled": "2FA deshabilitado",
+    "api_token_regenerated": "Token de API regenerado",
+    "ssl_renewed": "Certificado SSL renovado",
+    "preferences": {
+      "webui": "WebUI",
+      "email": "Correo electrónico",
+      "security_cannot_disable": "Seguridad (no se puede desactivar)",
+      "server": "Servidor",
+      "backup": "Respaldo",
+      "scheduler": "Programador",
+      "other_admins": "Otros administradores"
+    }
+  },
+
+  "email": {
+    "subjects": {
+      "welcome": "Bienvenido a {app_name}",
+      "admin_welcome": "Bienvenido a {app_name} - Configuración de administrador completada",
+      "password_reset": "Solicitud de restablecimiento de contraseña - {app_name}",
+      "verify_email": "Verifique su correo electrónico - {app_name}",
+      "new_login": "Nuevo inicio de sesión detectado - {app_name}",
+      "security_alert": "Alerta de seguridad - {app_name}",
+      "2fa_enabled": "Autenticación de dos factores habilitada - {app_name}",
+      "2fa_disabled": "Autenticación de dos factores deshabilitada - {app_name}",
+      "password_changed": "Su contraseña fue cambiada - {app_name}",
+      "backup_completed": "Respaldo completado - {app_name}",
+      "backup_failed": "Respaldo fallido - {app_name}",
+      "ssl_expiring": "Certificado SSL por expirar - {app_name}",
+      "ssl_renewed": "Certificado SSL renovado - {app_name}",
+      "task_failed": "Tarea programada fallida - {app_name}",
+      "security_notice": "Aviso de seguridad importante - {app_name}",
+      "security_breach": "[{severity}] Brecha de seguridad detectada - {app_name}",
+      "test_email": "Correo de prueba - {app_name}"
+    },
+    "body": {
+      "welcome_heading": "BIENVENIDO A {APP_NAME}",
+      "admin_setup_heading": "CONFIGURACIÓN DE ADMINISTRADOR COMPLETADA",
+      "password_reset_heading": "SOLICITUD DE RESTABLECIMIENTO DE CONTRASEÑA",
+      "email_verification_heading": "VERIFICACIÓN DE CORREO ELECTRÓNICO",
+      "new_login_heading": "NUEVO INICIO DE SESIÓN DETECTADO",
+      "security_alert_heading": "ALERTA DE SEGURIDAD",
+      "2fa_disabled_heading": "2FA DESHABILITADO",
+      "password_changed_heading": "CONTRASEÑA CAMBIADA",
+      "security_notice_heading": "AVISO DE SEGURIDAD IMPORTANTE",
+      "getting_started": "PRIMEROS PASOS",
+      "important_next_steps": "PRÓXIMOS PASOS IMPORTANTES",
+      "did_not_request": "¿NO SOLICITÓ ESTO?",
+      "not_you": "¿NO FUE USTED?",
+      "recommended_actions": "ACCIONES RECOMENDADAS",
+      "did_not_do_this": "¿NO HIZO ESTO?",
+      "did_not_change_password": "¿NO CAMBIÓ SU CONTRASEÑA?",
+      "what_happened": "QUÉ SUCEDIÓ",
+      "what_info_involved": "QUÉ INFORMACIÓN ESTUVO INVOLUCRADA",
+      "what_we_are_doing": "QUÉ ESTAMOS HACIENDO",
+      "what_you_should_do": "QUÉ DEBE HACER",
+      "contact_information": "INFORMACIÓN DE CONTACTO",
+      "sent_to": "Este correo fue enviado a: {recipient_email}",
+      "from": "De: {app_name} ({fqdn})",
+      "ignore_if_not_requested": "Si no solicitó esto, ignore este mensaje.",
+      "no_action_required": "No se requiere ninguna acción de su parte.",
+      "password_not_changed": "Su contraseña no será cambiada a menos que haga clic en el enlace anterior.",
+      "link_expires": "Este enlace expira en {expires}.",
+      "change_password_immediately": "Cambie su contraseña inmediatamente:",
+      "review_sessions": "Revise sus sesiones activas:",
+      "enable_2fa": "Habilite 2FA si aún no lo ha hecho:",
+      "re_enable_2fa": "Vuelva a habilitar 2FA:",
+      "contact_support": "Contacte al soporte:",
+      "complete_profile": "Complete su perfil",
+      "enable_2fa_security": "Habilite la autenticación de dos factores para mayor seguridad",
+      "explore_features": "Explore las funciones disponibles",
+      "keep_credentials_secure": "Mantenga sus credenciales de administrador seguras.",
+      "mfa_setup_now": "Configurar ahora",
+      "mfa_dont_remind": "No recordar"
+    },
+    "regulatory": {
+      "gdpr_notice": "Esta notificación se proporciona de acuerdo con el Artículo 34 del RGPD...",
+      "hipaa_notice": "Aviso de HIPAA",
+      "ccpa_notice": "Aviso de CCPA",
+      "lgpd_notice": "Aviso de LGPD",
+      "pipeda_notice": "Aviso de PIPEDA",
+      "appi_notice": "Aviso de APPI",
+      "pdpa_notice": "Aviso de PDPA"
+    }
+  },
+
+  "swagger": {
+    "title": "Documentación de API - {app_name}",
+    "description": "Explorador interactivo de API REST",
+    "try_it_out": "Probar",
+    "authorize": "Autorizar",
+    "no_description": "Sin descripción disponible",
+    "request_body": "Cuerpo de la solicitud",
+    "responses": "Respuestas",
+    "parameters": "Parámetros",
+    "example_value": "Valor de ejemplo",
+    "model": "Modelo",
+    "headers": "Encabezados",
+    "media_type": "Tipo de medio",
+    "endpoint_descriptions": {
+      "health_check": "Verificar el estado del servidor",
+      "get_version": "Obtener información de la versión",
+      "get_config": "Obtener configuración actual",
+      "update_config": "Actualizar configuración",
+      "list_items": "Listar elementos",
+      "get_item": "Obtener elemento por ID",
+      "create_item": "Crear nuevo elemento",
+      "update_item": "Actualizar elemento existente",
+      "delete_item": "Eliminar elemento"
+    },
+    "parameter_descriptions": {
+      "id": "Identificador único del recurso",
+      "page": "Número de página para paginación",
+      "per_page": "Elementos por página",
+      "sort": "Campo de ordenamiento",
+      "order": "Dirección de ordenamiento (asc/desc)",
+      "search": "Término de búsqueda",
+      "filter": "Expresión de filtro"
+    },
+    "error_descriptions": {
+      "400": "Solicitud incorrecta - La solicitud no se pudo procesar",
+      "401": "No autorizado - Se requiere autenticación",
+      "403": "Prohibido - Permisos insuficientes",
+      "404": "No encontrado - El recurso no existe",
+      "409": "Conflicto - El recurso ya existe",
+      "429": "Demasiadas solicitudes - Límite de velocidad excedido",
+      "500": "Error del servidor - Error interno"
+    }
+  },
+
+  "graphql": {
+    "title": "Explorador GraphQL - {app_name}",
+    "description": "Explorador interactivo de GraphQL",
+    "query": "Consulta",
+    "mutation": "Mutación",
+    "subscription": "Suscripción",
+    "variables": "Variables",
+    "docs": "Documentación",
+    "schema": "Esquema",
+    "type_descriptions": {
+      "query": "Consultas disponibles para obtener datos",
+      "mutation": "Mutaciones disponibles para modificar datos",
+      "subscription": "Suscripciones para datos en tiempo real"
+    }
+  },
+
+  "users": {
+    "registration": {
+      "title": "Registrarse",
+      "username": "Nombre de usuario",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "confirm_password": "Confirmar contraseña",
+      "register_button": "Registrarse",
+      "already_have_account": "¿Ya tiene una cuenta? Inicie sesión"
+    },
+    "profile": {
+      "title": "Perfil",
+      "name": "Nombre",
+      "avatar": "Avatar",
+      "bio": "Biografía",
+      "security": "Seguridad",
+      "sessions": "Sesiones",
+      "login_history": "Historial de inicio de sesión",
+      "api_usage": "Uso de API"
+    },
+    "tokens": {
+      "title": "Tokens de API",
+      "create_new": "Crear nuevo token",
+      "name": "Nombre",
+      "scopes": "Alcances",
+      "scope_read": "Lectura",
+      "scope_write": "Escritura",
+      "expiry": "Expiración",
+      "revoke": "Revocar",
+      "last_used": "Última vez: hace {duration}"
+    },
+    "moderation": {
+      "title": "Moderación de usuarios",
+      "delete_user": "Eliminar usuario",
+      "impersonate": "Suplantar",
+      "disable_user": "Deshabilitar usuario",
+      "enable_user": "Habilitar usuario",
+      "revoke_sessions": "Revocar sesiones",
+      "profile_tab": "Perfil",
+      "security_tab": "Seguridad",
+      "activity_tab": "Actividad",
+      "actions_tab": "Acciones"
+    },
+    "roles": {
+      "title": "Gestión de roles",
+      "public": "Público",
+      "private": "Privado",
+      "disabled": "Deshabilitado"
+    }
+  },
+
+  "cli": {
+    "description": "vidveil {projectversion} - {project_description}",
+    "usage": "Uso:",
+    "information": "Información:",
+    "shell_integration": "Integración de shell:",
+    "server_configuration": "Configuración del servidor:",
+    "service_management": "Gestión del servicio:",
+    "show_help": "Mostrar ayuda",
+    "show_version": "Mostrar versión",
+    "show_status": "Mostrar estado y salud del servidor",
+    "print_completions": "Imprimir completaciones de shell",
+    "print_init": "Imprimir comando de inicialización de shell",
+    "app_mode": "Modo de aplicación",
+    "config_dir": "Directorio de configuración",
+    "data_dir": "Directorio de datos",
+    "run_help": "Ejecute 'vidveil <command> --help' para ayuda detallada sobre cualquier comando.",
+    "running_pid": "vidveil está en ejecución (PID {pid})",
+    "daemon_started": "Demonio iniciado con PID {pid}",
+    "already_running": "Ya en ejecución (pid {pid})",
+    "running_in_mode": "Ejecutando en modo: {app_mode}",
+    "http_address": "HTTP: {proto}://{fqdn}:{port}",
+    "listening_on": "Escuchando en {proto}://{address}:{port}",
+    "server_started_on": "Servidor iniciado en {startup_datetime}",
+    "server_started_ok": "Servidor iniciado exitosamente",
+    "received_signal": "Recibida señal {signal}, iniciando apagado graceful...",
+    "received_sigusr1": "Recibida SIGUSR1, reabriendo registros...",
+    "received_sigusr2": "Recibida SIGUSR2, volcando estado...",
+    "graceful_shutdown": "Apagado graceful completado",
+    "shutdown_error": "Error de apagado del servidor HTTP: {error}",
+    "windows_daemon_warning": "Advertencia: --daemon no es compatible en Windows",
+    "windows_service_hint": "Use --service install && --service start para Servicio de Windows",
+    "error_create_dir": "Error al crear directorio {path}: {error}",
+    "error_not_writable": "El directorio {path} no es escribible: {error}",
+    "error_reserved_path": "'{path}' es una ruta reservada",
+    "error_route_conflict": "'{path}' entra en conflicto con la ruta existente: {route}",
+    "error_corrupt_pid": "Archivo PID corrupto"
+  },
+
+  "version": {
+    "name_version": "vidveil {projectversion}",
+    "built": "Compilado: {build_date}",
+    "go": "Go: {go_version}",
+    "os_arch": "SO/Arq: {goos}/{goarch}"
+  },
+
+  "confirm": {
+    "delete_title": "Confirmar eliminación",
+    "delete_message": "¿Está seguro de que desea eliminar este elemento?",
+    "action_irreversible": "Esta acción no se puede deshacer."
+  },
+
+  "form": {
+    "required_field": "(obligatorio)",
+    "optional_field": "(opcional)",
+    "hint_email": "Nunca compartiremos su correo electrónico.",
+    "errors_count": "El formulario tiene {count} errores"
+  },
+
+  "a11y": {
+    "skip_to_content": "Saltar al contenido principal",
+    "skip_to_navigation": "Saltar a la navegación",
+    "loading": "Cargando...",
+    "item_saved": "Elemento guardado exitosamente",
+    "search_results": "{count} resultados de búsqueda encontrados"
   }
 }
 ```
 
+### Translation Key Rules
+
+| Rule | Description |
+|------|-------------|
+| **No hardcoded strings** | Every user-facing string MUST use `t(key)` or `{{t .Lang key}}` |
+| **Key naming** | Use dot-separated lowercase: `admin.dashboard.title` |
+| **Interpolation** | Use `{variable}` syntax: `"Hello, {name}"` |
+| **Plurals** | Nested under key with `zero`, `one`, `two`, `few`, `many`, `other` |
+| **HTML content** | Store plain text in translations, apply HTML in templates |
+| **Context** | Same word with different meanings gets different keys (e.g., `common.close` vs `nav.close`) |
+
+### Template Usage
+
+**Go HTML templates:**
+
+```go
+// Template function
+funcMap := template.FuncMap{
+    "t": func(lang, key string) string {
+        return i18n.Translate(lang, key)
+    },
+    "tf": func(lang, key string, args ...interface{}) string {
+        return i18n.TranslateFormat(lang, key, args...)
+    },
+    "tp": func(lang, key string, count int) string {
+        return i18n.TranslatePlural(lang, key, count)
+    },
+}
+```
+
+```html
+<!-- Simple translation -->
+<h1>{{t .Lang "admin.dashboard.title"}}</h1>
+
+<!-- With interpolation -->
+<p>{{tf .Lang "admin.dashboard.ssl_expires_in" .Days}}</p>
+
+<!-- Plurals -->
+<span>{{tp .Lang "plurals.items" .Count}}</span>
+
+<!-- Attributes -->
+<input placeholder="{{t .Lang "common.search_placeholder"}}">
+<button aria-label="{{t .Lang "common.close"}}">X</button>
+```
+
+**JavaScript (for dynamic frontend strings):**
+
+```javascript
+// Load translations for current language
+const translations = await fetch(`/locales/${lang}.json`).then(r => r.json());
+
+function t(key) {
+    return key.split('.').reduce((obj, k) => obj?.[k], translations) || key;
+}
+
+function tf(key, vars) {
+    let str = t(key);
+    for (const [k, v] of Object.entries(vars)) {
+        str = str.replace(`{${k}}`, v);
+    }
+    return str;
+}
+
+// Usage
+announce(t('a11y.item_saved'));
+document.title = tf('admin.panel_title', { app_name: config.appName });
+```
+
+### API Response Translation
+
+**API error messages are translated based on the request language:**
+
+```go
+func handleError(w http.ResponseWriter, r *http.Request, code string) {
+    lang := r.Context().Value(langKey).(string)
+    msg := i18n.Translate(lang, "errors." + strings.ToLower(code))
+    writeJSON(w, ErrorResponse{Code: code, Message: msg})
+}
+```
+
+```json
+// GET /api/v1/items/999?lang=es
+// Response:
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "No encontrado"
+  }
+}
+```
+
+### Swagger/OpenAPI Translation
+
+**Swagger UI descriptions are served in the requested language:**
+
+```go
+func SwaggerHandler(w http.ResponseWriter, r *http.Request) {
+    lang := r.Context().Value(langKey).(string)
+    spec := generateSwaggerSpec(lang) // Translates descriptions
+    writeJSON(w, spec)
+}
+```
+
+The OpenAPI spec `description`, `summary`, and `x-description` fields are populated from `swagger.*` translation keys.
+
+### GraphQL Schema Translation
+
+**GraphQL type and field descriptions are translated:**
+
+```go
+func buildSchema(lang string) *graphql.Schema {
+    queryType := graphql.NewObject(graphql.ObjectConfig{
+        Name:        "Query",
+        Description: i18n.Translate(lang, "graphql.type_descriptions.query"),
+        Fields: graphql.Fields{
+            // ...
+        },
+    })
+    return graphql.MustNewSchema(graphql.SchemaConfig{Query: queryType})
+}
+```
+
+### Email Template Translation
+
+**All email templates use translation keys, not hardcoded strings:**
+
+```go
+func sendWelcomeEmail(user User, lang string) {
+    subject := i18n.TranslateFormat(lang, "email.subjects.welcome", map[string]string{
+        "app_name": config.AppName,
+    })
+    // Body uses translated section headings and content
+    body := renderEmailTemplate("welcome", lang, map[string]interface{}{
+        "heading":       i18n.Translate(lang, "email.body.welcome_heading"),
+        "getting_started": i18n.Translate(lang, "email.body.getting_started"),
+        // ...
+    })
+    send(user.Email, subject, body)
+}
+```
+
+### CLI Output Translation
+
+**CLI output respects the `LANG` / `LC_ALL` environment variable:**
+
+```go
+func getCLILanguage() string {
+    if lang := os.Getenv("LANG"); lang != "" {
+        // Parse "es_ES.UTF-8" → "es"
+        return strings.Split(lang, "_")[0]
+    }
+    return "en"
+}
+```
+
+```bash
+# CLI output in Spanish
+LANG=es_ES.UTF-8 myapp --help
+# Uso:
+#   myapp [opciones]
+# ...
+
+# CLI output in English (default)
+myapp --help
+# Usage:
+#   myapp [options]
+# ...
+```
+
 ### Adding New Languages
 
-1. Create `locales/{lang}.json` with all keys from `locales/en.json`
-2. Add language to `config.server.i18n.available_languages`
-3. Language automatically appears in language selector
+1. Copy `locales/en.json` to `locales/{lang}.json`
+2. Translate ALL keys (no key may be omitted)
+3. Add language code to `config.server.i18n.available_languages`
+4. Language automatically appears in the language selector
+5. Run `make i18n-validate` to verify all keys are present
+
+### Build-Time Validation
+
+```bash
+# Makefile target
+i18n-validate:
+	@echo "Validating translation files..."
+	@go run cmd/i18n-validate/main.go locales/
+
+# Validates:
+# - All language files have identical key sets to en.json
+# - No empty string values
+# - All interpolation variables ({var}) match across languages
+# - All plural categories required by the language are present
+# - No orphaned keys (keys in other languages not in en.json)
+```
 
 ### RTL (Right-to-Left) Support
 
-| Language | Code | Direction |
-|----------|------|-----------|
-| Arabic | `ar` | `rtl` |
-| Hebrew | `he` | `rtl` |
-| Persian | `fa` | `rtl` |
-| Urdu | `ur` | `rtl` |
+**Arabic (`ar`) requires RTL layout. The `dir` attribute is set from the translation file's `meta.direction`.**
 
 **HTML Implementation:**
 ```html
@@ -41762,13 +42987,13 @@ make test
 
 **Use Go's `golang.org/x/text` package for locale-aware formatting.**
 
-| Format Type | Example (en-US) | Example (de-DE) | Example (ar-SA) |
-|-------------|-----------------|-----------------|-----------------|
-| Date | 12/31/2024 | 31.12.2024 | ٣١/١٢/٢٠٢٤ |
-| Time | 2:30 PM | 14:30 | ٢:٣٠ م |
-| Number | 1,234.56 | 1.234,56 | ١٬٢٣٤٫٥٦ |
-| Currency | $1,234.56 | 1.234,56 € | ١٬٢٣٤٫٥٦ ر.س |
-| Percentage | 45.5% | 45,5 % | ٤٥٫٥٪ |
+| Format Type | Example (en-US) | Example (de-DE) | Example (ar-SA) | Example (ja-JP) |
+|-------------|-----------------|-----------------|-----------------|-----------------|
+| Date | 12/31/2024 | 31.12.2024 | ٣١/١٢/٢٠٢٤ | 2024/12/31 |
+| Time | 2:30 PM | 14:30 | ٢:٣٠ م | 14:30 |
+| Number | 1,234.56 | 1.234,56 | ١٬٢٣٤٫٥٦ | 1,234.56 |
+| Currency | $1,234.56 | 1.234,56 € | ١٬٢٣٤٫٥٦ ر.س | ¥1,235 |
+| Percentage | 45.5% | 45,5 % | ٤٥٫٥٪ | 45.5% |
 
 **Implementation:**
 ```go
@@ -41788,11 +43013,13 @@ func FormatNumber(n float64, lang string) string {
 
 | Language | Categories Used |
 |----------|-----------------|
-| English | one, other |
-| French | one, other (0 is "one") |
-| Russian | one, few, many, other |
-| Arabic | zero, one, two, few, many, other |
-| Japanese | other (no plural forms) |
+| English (en) | one, other |
+| Spanish (es) | one, other |
+| French (fr) | one, other (0 is "one") |
+| German (de) | one, other |
+| Arabic (ar) | zero, one, two, few, many, other |
+| Chinese (zh) | other (no plural forms) |
+| Japanese (ja) | other (no plural forms) |
 
 **Go Implementation:**
 ```go
@@ -41816,11 +43043,11 @@ server:
     available_languages:
       - en
       - es
-      - de
+      - zh
       - fr
       - ar
+      - de
       - ja
-      - zh
     fallback_language: en
     cookie_name: lang
     cookie_max_age: 365d  # 1 year
@@ -53869,6 +55096,17 @@ A weather aggregation API that fetches data from external providers, caches it, 
 - [ ] **NEVER allow outdated files** - README, docs, Swagger, GraphQL must match current state
 - [ ] Use TODO.AI.md for tasks when 3+ items
 - [ ] Use PLAN.AI.md for implementation planning
+
+### Rule Files (.claude/rules/)
+
+- [ ] **All 14 rule files exist** - ai-rules, project-rules, config-rules, binary-rules, backend-rules, api-rules, frontend-rules, features-rules, service-rules, makefile-rules, docker-rules, cicd-rules, testing-rules, optional-rules
+- [ ] **Correct PART assignments** - each file covers PARTs specified in PART 0 table
+- [ ] **Required header format** - `# {Topic} Rules (PART X, Y, Z)`
+- [ ] **Required warning line** - `⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️`
+- [ ] **CRITICAL - NEVER DO section** - lists prohibited actions from relevant PARTs
+- [ ] **CRITICAL - ALWAYS DO section** - lists mandatory requirements from relevant PARTs
+- [ ] **Reference line** - `For complete details, see AI.md PART X, Y, Z`
+- [ ] **Not outdated** - rule files regenerated when AI.md modified
 
 ### Behavior Rules
 

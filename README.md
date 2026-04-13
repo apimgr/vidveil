@@ -339,4 +339,13 @@ MIT License - see [LICENSE.md](LICENSE.md)
 
 ## Disclaimer
 
-This software is provided for legal use only. Users are responsible for ensuring compliance with applicable laws and regulations in their jurisdiction.
+This software is provided "as is" without warranty of any kind. Use at your own risk.
+
+- **No Warranty**: The authors are not responsible for any damages, data loss, or issues arising from use of this software
+- **Legal Compliance**: This software is a search aggregator. Users are responsible for ensuring compliance with applicable laws and regulations in their jurisdiction
+- **Third-Party Services**: This software connects to external adult video sites; their terms of service and content policies apply separately
+- **Content**: VidVeil does not host, store, or distribute any content — it only indexes metadata from third-party sites
+- **Security**: While we strive to follow security best practices, no software is guaranteed to be free of vulnerabilities
+- **Production Use**: Evaluate thoroughly before deploying in production environments
+
+By using this software, you acknowledge that you have read and understood this disclaimer.

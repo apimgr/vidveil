@@ -158,6 +158,14 @@ type BaseEngine struct {
 	lastSuccessAt  time.Time
 	// Rolling average latency in ms (exponential moving average, alpha=0.2)
 	avgLatencyMs float64
+	// rateLimitedUntil tracks when this engine may be queried again after a 429
+	rateLimitedUntil time.Time
+
+	// Per-engine outbound throttle: enforce a minimum interval between requests
+	// to avoid triggering engine-side rate limits.
+	throttleMu          sync.Mutex
+	lastRequestAt       time.Time
+	minRequestInterval  time.Duration
 }
 
 // NewBaseEngine creates a new base engine
@@ -194,19 +202,26 @@ func NewBaseEngine(name, displayName, baseURL string, tier int, appConfig *confi
 		},
 	}
 
+	// Determine per-engine throttle interval
+	minInterval := time.Duration(appConfig.Search.EngineRequestInterval) * time.Millisecond
+	if override, ok := appConfig.Search.EngineRequestIntervals[name]; ok {
+		minInterval = time.Duration(override) * time.Millisecond
+	}
+
 	return &BaseEngine{
-		name:           name,
-		displayName:    displayName,
-		baseURL:        baseURL,
-		tier:           tier,
-		enabled:        true,
-		timeout:        timeout,
-		useSpoofedTLS:  appConfig.Search.SpoofTLS,
-		appConfig:      appConfig,
-		httpClient:     createHTTPClient(timeoutSecs),
-		spoofedClient:  utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
-		circuitBreaker: retry.NewCircuitBreaker(cbConfig),
-		retryConfig:    retryConfig,
+		name:               name,
+		displayName:        displayName,
+		baseURL:            baseURL,
+		tier:               tier,
+		enabled:            true,
+		timeout:            timeout,
+		useSpoofedTLS:      appConfig.Search.SpoofTLS,
+		appConfig:          appConfig,
+		httpClient:         createHTTPClient(timeoutSecs),
+		spoofedClient:      utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
+		circuitBreaker:     retry.NewCircuitBreaker(cbConfig),
+		retryConfig:        retryConfig,
+		minRequestInterval: minInterval,
 	}
 }
 
@@ -225,9 +240,14 @@ func (e *BaseEngine) Tier() int {
 	return e.tier
 }
 
-// IsAvailable checks if the engine is currently working
+// IsAvailable checks if the engine is currently enabled and not rate-limited
 func (e *BaseEngine) IsAvailable() bool {
-	return e.enabled
+	if !e.enabled {
+		return false
+	}
+	e.statsMu.Lock()
+	defer e.statsMu.Unlock()
+	return time.Now().After(e.rateLimitedUntil)
 }
 
 // SetEnabled sets the enabled state
@@ -293,6 +313,24 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 		return nil, retry.ErrCircuitOpen
 	}
 
+	// Enforce per-engine minimum request interval (outbound throttle)
+	if e.minRequestInterval > 0 {
+		e.throttleMu.Lock()
+		if !e.lastRequestAt.IsZero() {
+			if wait := e.minRequestInterval - time.Since(e.lastRequestAt); wait > 0 {
+				e.throttleMu.Unlock()
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(wait):
+				}
+				e.throttleMu.Lock()
+			}
+		}
+		e.lastRequestAt = time.Now()
+		e.throttleMu.Unlock()
+	}
+
 	var resp *http.Response
 	var lastErr error
 	start := time.Now()
@@ -356,6 +394,16 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 
 		// Check for rate limiting
 		if resp.StatusCode == 429 {
+			// Respect Retry-After header if present; default to 60s cooldown
+			cooldown := 60 * time.Second
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				if secs, parseErr := strconv.Atoi(ra); parseErr == nil && secs > 0 {
+					cooldown = time.Duration(secs) * time.Second
+				}
+			}
+			e.statsMu.Lock()
+			e.rateLimitedUntil = time.Now().Add(cooldown)
+			e.statsMu.Unlock()
 			io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 			return retry.ErrRateLimit
@@ -406,6 +454,7 @@ func (e *BaseEngine) GetStats() model.EngineHealthStats {
 	failures := e.totalFailures
 	lastSuccess := e.lastSuccessAt
 	avgLatency := e.avgLatencyMs
+	rateLimitedUntil := e.rateLimitedUntil
 	e.statsMu.Unlock()
 
 	cbState := e.circuitBreaker.GetState()
@@ -418,15 +467,18 @@ func (e *BaseEngine) GetStats() model.EngineHealthStats {
 		uptimePct = float64(successes) / float64(total) * 100
 	}
 
+	now := time.Now()
 	return model.EngineHealthStats{
-		CircuitState:    cbState.String(),
-		CircuitFailures: cbFailures,
-		LastFailureAt:   lastFailure,
-		TotalSuccesses:  successes,
-		TotalFailures:   failures,
-		LastSuccessAt:   lastSuccess,
-		AvgLatencyMs:    int64(avgLatency),
-		UptimePct:       uptimePct,
+		CircuitState:     cbState.String(),
+		CircuitFailures:  cbFailures,
+		LastFailureAt:    lastFailure,
+		TotalSuccesses:   successes,
+		TotalFailures:    failures,
+		LastSuccessAt:    lastSuccess,
+		AvgLatencyMs:     int64(avgLatency),
+		UptimePct:        uptimePct,
+		RateLimitedUntil: rateLimitedUntil,
+		IsRateLimited:    now.Before(rateLimitedUntil),
 	}
 }
 

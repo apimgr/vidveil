@@ -120,10 +120,14 @@ type EngineHealthStats struct {
 	TotalSuccesses  uint64    `json:"total_successes"`
 	TotalFailures   uint64    `json:"total_failures"`
 	// zero if never succeeded
-	LastSuccessAt   time.Time `json:"last_success_at"`
-	AvgLatencyMs    int64     `json:"avg_latency_ms"`
+	LastSuccessAt      time.Time `json:"last_success_at"`
+	AvgLatencyMs       int64     `json:"avg_latency_ms"`
 	// 0-100
-	UptimePct       float64   `json:"uptime_pct"`
+	UptimePct          float64   `json:"uptime_pct"`
+	// zero value means not rate-limited
+	RateLimitedUntil   time.Time `json:"rate_limited_until"`
+	// true when engine is in rate limit cooldown
+	IsRateLimited      bool      `json:"is_rate_limited"`
 }
 
 // EngineHealthInfo combines EngineInfo with runtime health stats

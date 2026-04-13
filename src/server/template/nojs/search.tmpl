@@ -55,7 +55,7 @@
             {{range .Results}}
             <div class="video-card" role="listitem">
                 <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
-                    <img src="/thumbnail?url={{urlquery .Thumbnail}}" alt="Thumbnail for {{.Title}}" loading="lazy">
+                    <img src="/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="Thumbnail for {{.Title}}" loading="lazy">
                     <div class="video-info">
                         <h3 class="video-title">{{.Title}}</h3>
                         <p class="video-meta">

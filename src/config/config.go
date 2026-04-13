@@ -608,6 +608,13 @@ type SearchConfig struct {
 	// Per-engine timeout overrides in seconds (e.g., pornhub: 20)
 	// Engines not listed use the global engine_timeout
 	EngineTimeouts map[string]int `yaml:"engine_timeouts"`
+	// EngineRequestInterval is the minimum time in milliseconds between outbound
+	// requests to the same engine. Prevents triggering engine rate limits.
+	// Default 0 (no throttle). Recommended: 500-2000ms.
+	EngineRequestInterval int `yaml:"engine_request_interval"`
+	// Per-engine request interval overrides in milliseconds.
+	// Engines not listed use EngineRequestInterval.
+	EngineRequestIntervals map[string]int `yaml:"engine_request_intervals"`
 	// ThumbnailCacheTTL is the time-to-live for the on-disk thumbnail cache in minutes.
 	// Default 1440 (24 hours). Set to 0 to disable disk caching.
 	ThumbnailCacheTTL int `yaml:"thumbnail_cache_ttl"`

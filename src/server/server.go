@@ -546,6 +546,9 @@ func (s *Server) setupRoutes() {
 			r.Delete("/sessions", admin.APIRevokeSessions)
 			r.Get("/recovery-keys", admin.APIRecoveryKeysStatus)
 			r.Post("/recovery-keys/generate", admin.APIRecoveryKeysGenerate)
+			r.Post("/2fa/setup", admin.APIProfile2FASetup)
+			r.Post("/2fa/verify", admin.APIProfile2FAVerify)
+			r.Delete("/2fa", admin.APIProfile2FADisable)
 		})
 
 		// Engine management API (session or token — accessible from browser admin panel)

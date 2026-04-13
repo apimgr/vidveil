@@ -4,7 +4,7 @@
 # ============================================
 #
 # Vidveil Makefile
-# Per AI.md PART 26: 6 targets - build, release, docker, test, dev, clean
+# Per AI.md PART 26: 6 targets - build, release, docker, test, dev, local
 
 # Infer PROJECTNAME and PROJECTORG from git remote or directory path (NEVER hardcode)
 PROJECTNAME := $(shell git remote get-url origin 2>/dev/null | sed -E -e 's|.*[/:]||' -e 's|\.git$$||' || basename "$$(pwd)")
@@ -61,7 +61,7 @@ GO_DOCKER := docker run --rm \
 	-e CGO_ENABLED=0 \
 	golang:alpine
 
-.PHONY: build local release docker test dev clean
+.PHONY: build local release docker test dev
 
 # =============================================================================
 # BUILD - Build all platforms + host binary (via Docker with cached modules)
@@ -240,8 +240,3 @@ dev:
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
 		echo "Test:  docker run --rm -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
 
-# =============================================================================
-# CLEAN - Remove build artifacts
-# =============================================================================
-clean:
-	@rm -rf $(BINDIR) $(RELDIR)

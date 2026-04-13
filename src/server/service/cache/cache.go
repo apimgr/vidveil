@@ -4,10 +4,13 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/redis/go-redis/v9"
 )
 
 // CacheType represents the type of cache backend
@@ -238,20 +241,14 @@ func CacheKey(query string, page int, engines []string) string {
 
 // ValkeyCache provides distributed caching using Valkey/Redis
 type ValkeyCache struct {
-	addr     string
-	password string
-	db       int
-	prefix   string
-	ttl      time.Duration
-	mu       sync.RWMutex
-	closed   bool
-	// In production: would have actual redis client here
-	// client *redis.Client
-	// For now, fallback to in-memory cache
-	fallback *SearchCache
+	client *redis.Client
+	prefix string
+	ttl    time.Duration
+	mu     sync.RWMutex
+	closed bool
 }
 
-// NewValkeyCache creates a new Valkey/Redis cache
+// NewValkeyCache creates a new Valkey/Redis cache using go-redis
 func NewValkeyCache(addr, password string, db int, prefix string, ttl time.Duration) (*ValkeyCache, error) {
 	if addr == "" {
 		addr = "localhost:6379"
@@ -260,125 +257,130 @@ func NewValkeyCache(addr, password string, db int, prefix string, ttl time.Durat
 		prefix = "vidveil:"
 	}
 
-	// In production: would create actual redis client
-	// client := redis.NewClient(&redis.Options{
-	// 	Addr:     addr,
-	// 	Password: password,
-	// 	DB:       db,
-	// })
+	client := redis.NewClient(&redis.Options{
+		Addr:     addr,
+		Password: password,
+		DB:       db,
+	})
 
-	// For now, use in-memory fallback
-	fallback := NewSearchCache(ttl, 1000)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Ping(ctx).Err(); err != nil {
+		client.Close()
+		return nil, fmt.Errorf("valkey/redis connection failed: %w", err)
+	}
 
 	return &ValkeyCache{
-		addr:     addr,
-		password: password,
-		db:       db,
-		prefix:   prefix,
-		ttl:      ttl,
-		fallback: fallback,
+		client: client,
+		prefix: prefix,
+		ttl:    ttl,
 	}, nil
 }
 
 // Get retrieves a cached search response from Valkey/Redis
 func (v *ValkeyCache) Get(key string) (*model.SearchResponse, bool) {
 	v.mu.RLock()
-	if v.closed {
-		v.mu.RUnlock()
+	closed := v.closed
+	v.mu.RUnlock()
+	if closed {
 		return nil, false
 	}
-	v.mu.RUnlock()
 
-	// In production: would use redis client
-	// ctx := context.Background()
-	// data, err := v.client.Get(ctx, v.prefix+key).Bytes()
-	// if err != nil {
-	// 	return nil, false
-	// }
-	// var response model.SearchResponse
-	// if err := json.Unmarshal(data, &response); err != nil {
-	// 	return nil, false
-	// }
-	// return &response, true
+	ctx := context.Background()
+	data, err := v.client.Get(ctx, v.prefix+key).Bytes()
+	if err != nil {
+		return nil, false
+	}
 
-	// Fallback to in-memory
-	return v.fallback.Get(key)
+	var response model.SearchResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, false
+	}
+	return &response, true
 }
 
 // Set stores a search response in Valkey/Redis
 func (v *ValkeyCache) Set(key string, response *model.SearchResponse) {
 	v.mu.RLock()
-	if v.closed {
-		v.mu.RUnlock()
+	closed := v.closed
+	v.mu.RUnlock()
+	if closed {
 		return
 	}
-	v.mu.RUnlock()
 
-	// In production: would use redis client
-	// ctx := context.Background()
-	// data, err := json.Marshal(response)
-	// if err != nil {
-	// 	return
-	// }
-	// v.client.Set(ctx, v.prefix+key, data, v.ttl)
+	data, err := json.Marshal(response)
+	if err != nil {
+		return
+	}
 
-	// Fallback to in-memory
-	v.fallback.Set(key, response)
+	ctx := context.Background()
+	v.client.Set(ctx, v.prefix+key, data, v.ttl)
 }
 
 // Delete removes a specific key from Valkey/Redis
 func (v *ValkeyCache) Delete(key string) {
 	v.mu.RLock()
-	if v.closed {
-		v.mu.RUnlock()
+	closed := v.closed
+	v.mu.RUnlock()
+	if closed {
 		return
 	}
-	v.mu.RUnlock()
 
-	// In production: would use redis client
-	// ctx := context.Background()
-	// v.client.Del(ctx, v.prefix+key)
-
-	// Fallback to in-memory
-	v.fallback.Delete(key)
+	ctx := context.Background()
+	v.client.Del(ctx, v.prefix+key)
 }
 
 // Clear removes all entries with our prefix from Valkey/Redis
 func (v *ValkeyCache) Clear() {
 	v.mu.RLock()
-	if v.closed {
-		v.mu.RUnlock()
+	closed := v.closed
+	v.mu.RUnlock()
+	if closed {
 		return
 	}
-	v.mu.RUnlock()
 
-	// In production: would use redis client
-	// ctx := context.Background()
-	// keys, _ := v.client.Keys(ctx, v.prefix+"*").Result()
-	// if len(keys) > 0 {
-	// 	v.client.Del(ctx, keys...)
-	// }
-
-	// Fallback to in-memory
-	v.fallback.Clear()
+	ctx := context.Background()
+	var cursor uint64
+	for {
+		keys, nextCursor, err := v.client.Scan(ctx, cursor, v.prefix+"*", 100).Result()
+		if err != nil {
+			break
+		}
+		if len(keys) > 0 {
+			v.client.Del(ctx, keys...)
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
 }
 
 // Size returns the approximate number of cached entries
 func (v *ValkeyCache) Size() int {
 	v.mu.RLock()
-	if v.closed {
-		v.mu.RUnlock()
+	closed := v.closed
+	v.mu.RUnlock()
+	if closed {
 		return 0
 	}
-	v.mu.RUnlock()
 
-	// In production: would count keys
-	// ctx := context.Background()
-	// keys, _ := v.client.Keys(ctx, v.prefix+"*").Result()
-	// return len(keys)
-
-	// Fallback to in-memory
-	return v.fallback.Size()
+	ctx := context.Background()
+	var count int
+	var cursor uint64
+	for {
+		keys, nextCursor, err := v.client.Scan(ctx, cursor, v.prefix+"*", 100).Result()
+		if err != nil {
+			break
+		}
+		count += len(keys)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	return count
 }
 
 // Stats returns cache statistics
@@ -388,21 +390,20 @@ func (v *ValkeyCache) Stats() map[string]interface{} {
 
 	stats := map[string]interface{}{
 		"type":    "valkey",
-		"addr":    v.addr,
-		"db":      v.db,
 		"prefix":  v.prefix,
 		"ttl_sec": v.ttl.Seconds(),
 		"closed":  v.closed,
 	}
 
-	// In production: would get redis info
-	// ctx := context.Background()
-	// info, _ := v.client.Info(ctx, "memory").Result()
-	// stats["info"] = info
-
-	// Add fallback stats
-	if v.fallback != nil {
-		stats["fallback"] = v.fallback.Stats()
+	if !v.closed {
+		ctx := context.Background()
+		if info, err := v.client.Info(ctx, "memory", "stats").Result(); err == nil {
+			stats["info"] = info
+		}
+		if opts := v.client.Options(); opts != nil {
+			stats["addr"] = opts.Addr
+			stats["db"] = opts.DB
+		}
 	}
 
 	return stats
@@ -413,14 +414,7 @@ func (v *ValkeyCache) Close() error {
 	v.mu.Lock()
 	v.closed = true
 	v.mu.Unlock()
-
-	// In production: would close redis client
-	// return v.client.Close()
-
-	if v.fallback != nil {
-		return v.fallback.Close()
-	}
-	return nil
+	return v.client.Close()
 }
 
 // Compile-time interface check

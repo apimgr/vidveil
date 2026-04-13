@@ -35,6 +35,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 	"github.com/apimgr/vidveil/src/server/service/tor"
+	"github.com/apimgr/vidveil/src/server/service/totp"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -1407,6 +1408,117 @@ func (h *AdminHandler) APIRecoveryKeysGenerate(w http.ResponseWriter, r *http.Re
 			"keys":    keys,
 			"warning": "These keys will only be shown once. Save them securely.",
 		},
+	})
+}
+
+// APIProfile2FASetup generates a TOTP secret and QR code for 2FA setup per AI.md PART 17
+func (h *AdminHandler) APIProfile2FASetup(w http.ResponseWriter, r *http.Request) {
+	adminID := h.getSessionAdminID(r)
+	if adminID == 0 {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	adminUser, err := h.adminSvc.GetAdmin(adminID)
+	if err != nil {
+		h.jsonError(w, "Failed to load admin", "ERR_ADMIN_LOAD", http.StatusInternalServerError)
+		return
+	}
+
+	totpSvc := totp.NewTOTPService(h.appConfig.Server.Branding.Title)
+	setup, err := totpSvc.Setup(adminUser.Username)
+	if err != nil {
+		h.jsonError(w, "Failed to generate 2FA setup", "ERR_TOTP_SETUP", http.StatusInternalServerError)
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok": true,
+		"data": map[string]interface{}{
+			"secret":        setup.Secret,
+			"provision_uri": setup.ProvisionURI,
+			"backup_codes":  setup.BackupCodes,
+		},
+	})
+}
+
+// APIProfile2FAVerify verifies a TOTP code and enables 2FA per AI.md PART 17
+func (h *AdminHandler) APIProfile2FAVerify(w http.ResponseWriter, r *http.Request) {
+	adminID := h.getSessionAdminID(r)
+	if adminID == 0 {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Secret      string   `json:"secret"`
+		Code        string   `json:"code"`
+		BackupCodes []string `json:"backup_codes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.jsonError(w, "Invalid request body", "ERR_INVALID_INPUT", http.StatusBadRequest)
+		return
+	}
+	if req.Secret == "" || req.Code == "" {
+		h.jsonError(w, "Secret and code are required", "ERR_INVALID_INPUT", http.StatusBadRequest)
+		return
+	}
+
+	totpSvc := totp.NewTOTPService(h.appConfig.Server.Branding.Title)
+	if !totpSvc.ValidateCode(req.Secret, req.Code) {
+		h.jsonError(w, "Invalid verification code", "ERR_TOTP_INVALID", http.StatusUnprocessableEntity)
+		return
+	}
+
+	if err := h.adminSvc.EnableTOTP(adminID, req.Secret, req.BackupCodes); err != nil {
+		h.jsonError(w, "Failed to enable 2FA", "ERR_TOTP_ENABLE", http.StatusInternalServerError)
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
+		"message": "Two-factor authentication enabled",
+	})
+}
+
+// APIProfile2FADisable disables 2FA for the current admin per AI.md PART 17
+func (h *AdminHandler) APIProfile2FADisable(w http.ResponseWriter, r *http.Request) {
+	adminID := h.getSessionAdminID(r)
+	if adminID == 0 {
+		h.jsonError(w, "Unauthorized", "ERR_UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.jsonError(w, "Invalid request body", "ERR_INVALID_INPUT", http.StatusBadRequest)
+		return
+	}
+
+	// Verify current TOTP code before disabling per AI.md PART 17 security requirement
+	secret, err := h.adminSvc.GetTOTPSecret(adminID)
+	if err != nil {
+		h.jsonError(w, "Failed to retrieve 2FA secret", "ERR_TOTP_SECRET", http.StatusInternalServerError)
+		return
+	}
+	if secret != "" && req.Code != "" {
+		totpSvc := totp.NewTOTPService(h.appConfig.Server.Branding.Title)
+		if !totpSvc.ValidateCode(secret, req.Code) {
+			h.jsonError(w, "Invalid verification code", "ERR_TOTP_INVALID", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+
+	if err := h.adminSvc.DisableTOTP(adminID); err != nil {
+		h.jsonError(w, "Failed to disable 2FA", "ERR_TOTP_DISABLE", http.StatusInternalServerError)
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
+		"message": "Two-factor authentication disabled",
 	})
 }
 

@@ -320,9 +320,9 @@ type CombinedSuggestion struct {
 
 #### Related Searches
 
-- Fetched via API after search completes
-- Displays up to 20 suggestions
-- First 8 visible, "Show more" button for rest
+- Generated server-side and embedded in the search page HTML on render
+- Client adds a "Show more" toggle if hidden items exist (progressive enhancement)
+- Displays up to 20 suggestions; first 8 visible, rest behind "Show more"
 - Collapsible accordion pattern with animation
 - Each tag includes search icon
 - Animated staggered appearance (0.03s delay per item)
@@ -379,10 +379,10 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 - Count display
 
 **Privacy:**
-- Use Tor for all searches (toggle) - default: No
+- Use Tor for all searches (toggle) - default: No (stored in localStorage; Tor routing is server-side)
 - Proxy thumbnails through server (toggle) - default: Yes
-- Forward IP for geo-targeted results (toggle) - default: No (admin must enable)
 - Show AI-generated content (toggle) - default: No (AI content filtered out)
+- Forward IP for geo-targeted results - admin-controlled feature; when enabled by admin, users opt in via a server-side cookie (`forward_ip=1`); not a localStorage preference
 
 **Search Engines:**
 - Tier-based toggle switches (all tiers enabled by default)
@@ -555,7 +555,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 | Engine | Bang | Capabilities |
 |--------|------|--------------|
 | pornhub | !ph | Preview (data-mediabook), Duration, Views, Rating, Quality |
-| xvideos | !xv | Duration, Views, Quality |
+| xvideos | !xv | Preview (data-preview), Duration, Views, Quality |
 | xnxx | !xx | Duration, Views |
 | redtube | !rt | Preview (data-mediabook), Duration, Views, Rating, Quality |
 | xhamster | !xh | Duration, Views, Rating |
@@ -586,16 +586,20 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 Preview URLs are extracted from common data attributes on container, image, or link elements:
 - `data-mediabook`, `data-preview`, `data-video-preview`, `data-rollover`
 - `data-preview-url`, `data-gif`, `data-webm`, `data-mp4`
-- `data-thumb-url`, `data-trailer`, `data-teaser`
+- `data-thumb-url`, `data-trailer`, `data-teaser`, `data-preview-custom`
 
 **Engine-Specific Sources:**
 
-| Engine | Attribute | Content Type |
-|--------|-----------|--------------|
+| Engine | Attribute / Method | Content Type |
+|--------|-------------------|--------------|
 | PornHub | `data-mediabook` | Video preview |
 | XVideos | `data-preview` | Video preview |
 | RedTube | `data-mediabook` | Video preview |
 | YouPorn | `data-mediabook` | Video preview |
+| TNAFlix | `data-preview-url` | Video preview |
+| PornHat | `data-preview-custom` on `<a>` | MP4 video preview |
+| PornHD | ttcache.com CDN constructed from `data-public-id` | MP4 video preview |
+| TubeGalore | ttcache.com CDN constructed from `data-public-id` | MP4 video preview |
 
 ---
 

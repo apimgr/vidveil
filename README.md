@@ -26,8 +26,11 @@ https://x.scour.li
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
 | **SSE Streaming** | Real-time result streaming as engines respond |
+| **Video Previews** | Hover (desktop) and swipe (mobile) preview for 8+ engines |
 | **Thumbnail Proxy** | All thumbnails proxied to prevent engine tracking |
-| **Autocomplete** | Bang shortcuts autocomplete as you type |
+| **Autocomplete** | Bang shortcuts, performer names, and search terms autocomplete |
+| **Related Searches** | Server-generated related search suggestions |
+| **Semantic Search** | AND-based filtering with synonym expansion across 27 categories |
 | **Tor Support** | Built-in Tor hidden service support |
 | **Content Restriction** | Geographic warnings/blocks for regions with adult content laws |
 | **Admin Panel** | Full web-based administration |
@@ -52,7 +55,7 @@ docker run -d \
 ### Docker Compose
 
 ```bash
-curl -O https://raw.githubusercontent.com/apimgr/vidveil/main/docker/docker-compose.yml
+curl -q -LSsfO https://raw.githubusercontent.com/apimgr/vidveil/main/docker/docker-compose.yml
 docker compose up -d
 ```
 
@@ -62,7 +65,7 @@ Download the latest binary for your platform from [Releases](https://github.com/
 
 ```bash
 # Linux (amd64)
-curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
+curl -q -LSsfO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
 chmod +x vidveil-linux-amd64
 ./vidveil-linux-amd64
 ```
@@ -77,7 +80,7 @@ A companion CLI client (`vidveil-cli`) is available for interacting with the ser
 
 ```bash
 # Download latest release
-curl -LO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64-cli
+curl -q -LSsfO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64-cli
 chmod +x vidveil-linux-amd64-cli
 sudo mv vidveil-linux-amd64-cli /usr/local/bin/vidveil-cli
 ```
@@ -143,7 +146,11 @@ GET /api/v1/search?q={query}&page={page}&engines={engines}
 **Parameters:**
 - `q` - Search query (supports bangs like `!ph amateur`)
 - `page` - Page number (default: 1)
-- `engines` - Comma-separated engine names (optional)
+- `engines` - Comma-separated engine names, or `tier1` (top 5), `tier12` (top 8) (optional)
+- `show_ai` - `1` to include AI-generated results
+- `min_quality` - Minimum result quality score (integer)
+- `preview_first` - `1` to prioritise results with video preview URLs
+- `min_duration` - Minimum video duration in seconds
 
 **Response:**
 ```json
@@ -164,10 +171,11 @@ GET /api/v1/search?q={query}&page={page}&engines={engines}
 ### Search Stream (SSE)
 
 ```
-GET /api/v1/search/stream?q={query}
+GET /api/v1/search?q={query}
+Accept: text/event-stream
 ```
 
-Returns Server-Sent Events with results as each engine responds.
+Returns Server-Sent Events with results as each engine responds. The same `/api/v1/search` endpoint switches to SSE mode when the `Accept: text/event-stream` header is present.
 
 ### Bangs
 
@@ -222,26 +230,29 @@ Use bang shortcuts to search specific engines:
 
 ### Tier 1 - Major Sites (API-based)
 
-| Engine | Bang | Method |
-|--------|------|--------|
-| PornHub | `!ph` | Webmasters API |
-| RedTube | `!rt` | Public API |
-| Eporner | `!ep` | v2 JSON API |
-| XVideos | `!xv` | HTML parsing |
-| XNXX | `!xn` | HTML parsing |
-| xHamster | `!xh` | JSON extraction |
+| Engine | Bang | Method | Preview |
+|--------|------|--------|---------|
+| PornHub | `!ph` | Webmasters API | ✓ |
+| RedTube | `!rt` | Public API | ✓ |
+| Eporner | `!ep` | v2 JSON API | ✓ |
+| XVideos | `!xv` | HTML parsing | ✓ |
+| XNXX | `!xn` | HTML parsing | |
+| xHamster | `!xh` | JSON extraction | ✓ |
 
 ### Tier 2 - Popular Sites
 
-| Engine | Bang |
-|--------|------|
-| YouPorn | `!yp` |
-| PornMD | `!pmd` |
-| PornHat | `!phat` |
+| Engine | Bang | Preview |
+|--------|------|---------|
+| YouPorn | `!yp` | ✓ |
+| PornMD | `!pmd` | |
 
-### Tier 3+ - Additional Sites (35 engines)
+### Tier 3 - Additional Sites
 
-4Tube, Fux, PornTube, YouJizz, SunPorno, TXXX, Nuvid, TNAFlix, DrTuber, EMPFlix, HellPorno, AlphaPorno, PornFlip, ZenPorn, GotPorn, HDZog, XXXYMovies, LoveHomePorn, PornerBros, NonkTube, NubilesPorn, PornBox, PornTop, Pornotube, PornHD, XBabe, PornOne, PornTrex, HQPorner, VJAV, FlyFLV, Tube8, XTube, AnyPorn, SuperPorn, TubeGalore, Motherless
+3Movs (`!3m`), 4Tube (`!4t`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), EMPFlix (`!emp`), Fux (`!fux`), GotPorn (`!gp`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Motherless (`!ml`), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TubeGalore (`!tg`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
+
+### Tier 4 - Specialty Sites
+
+FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox (`!pbox`), PornerBros (`!pb`), PornHat (`!phat`), PornHD (`!phd`), PornOne (`!p1`), Pornotube (`!pnt`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), VJAV (`!vj`), XBabe (`!xb`)
 
 ## Admin Panel
 

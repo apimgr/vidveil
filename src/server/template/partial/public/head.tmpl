@@ -11,6 +11,19 @@
 <link rel="icon" href="/static/images/favicon.ico">
 <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 <script>
+  // Anti-FOUC: apply stored theme before CSS loads so the page never flickers.
+  // Runs synchronously in <head> — must stay tiny and side-effect-free.
+  (function() {
+    try {
+      var t = (JSON.parse(localStorage.getItem('vidveil_prefs') || '{}')).theme
+              || localStorage.getItem('vidveil-theme') || 'auto';
+      var h = document.documentElement;
+      h.classList.remove('theme-dark', 'theme-light', 'theme-auto');
+      h.classList.add('theme-' + t);
+    } catch (e) {}
+  })();
+</script>
+<script>
   // Register service worker for PWA (AI.md PART 16)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

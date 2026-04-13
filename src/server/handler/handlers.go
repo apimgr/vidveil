@@ -76,6 +76,21 @@ const ContentRestrictionAckCookieName = "content_ack"
 // Cookie name for user IP forwarding preference
 const IPForwardCookieName = "forward_ip"
 
+// getRequestTheme returns the user's theme preference from their cookie, falling
+// back to the server-configured default. Valid values: "dark", "light", "auto".
+func (h *SearchHandler) getRequestTheme(r *http.Request) string {
+	if c, err := r.Cookie("vidveil-theme"); err == nil {
+		switch c.Value {
+		case "dark", "light", "auto":
+			return c.Value
+		}
+	}
+	if h.appConfig != nil {
+		return h.appConfig.Web.UI.Theme
+	}
+	return "dark"
+}
+
 // getUserIPForwardPreference checks if user has opted-in to IP forwarding via cookie
 // Returns (user wants forwarding, user's IP)
 func (h *SearchHandler) getUserIPForwardPreference(r *http.Request) (bool, string) {
@@ -449,7 +464,7 @@ func (h *SearchHandler) AgeVerifyPage(w http.ResponseWriter, r *http.Request) {
 
 	h.renderResponse(w, r, "age-verify", map[string]interface{}{
 		"Title":    "Age Verification - " + h.appConfig.Server.Branding.Title,
-		"Theme":    h.appConfig.Web.UI.Theme,
+		"Theme":    h.getRequestTheme(r),
 		"Redirect": redirect,
 	})
 }
@@ -547,7 +562,7 @@ func (h *SearchHandler) renderContentBlockedPage(w http.ResponseWriter, r *http.
 	w.WriteHeader(http.StatusForbidden)
 	h.renderResponse(w, r, "content-blocked", map[string]interface{}{
 		"Title":   "Access Restricted - " + h.appConfig.Server.Branding.Title,
-		"Theme":   h.appConfig.Web.UI.Theme,
+		"Theme":   h.getRequestTheme(r),
 		"Message": restriction.Message,
 		"Region":  restriction.Reason,
 	})
@@ -582,7 +597,7 @@ func (h *SearchHandler) ContentRestrictedPage(w http.ResponseWriter, r *http.Req
 
 	h.renderResponse(w, r, "content-restricted", map[string]interface{}{
 		"Title":    "Content Notice - " + h.appConfig.Server.Branding.Title,
-		"Theme":    h.appConfig.Web.UI.Theme,
+		"Theme":    h.getRequestTheme(r),
 		"Redirect": redirect,
 		"Message":  message,
 		"Region":   region,
@@ -668,7 +683,7 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 		h.renderResponse(w, r, "home", map[string]interface{}{
 			"Title":         h.appConfig.Server.Branding.Title,
 			"Description":   h.appConfig.Server.Branding.Description,
-			"Theme":         h.appConfig.Web.UI.Theme,
+			"Theme":         h.getRequestTheme(r),
 			"BuildDateTime": BuildDateTime(),
 			"EngineCount":   engineCount,
 		})
@@ -761,7 +776,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"ResultsJSON":     template.JS(resultsJSON),
 			"EnginesUsed":     results.Data.EnginesUsed,
 			"SearchTime":      results.Data.SearchTimeMS,
-			"Theme":           h.appConfig.Web.UI.Theme,
+			"Theme":           h.getRequestTheme(r),
 			"HasBang":         parsed.HasBang,
 			"BangEngines":     parsed.Engines,
 			"RelatedSearches": relatedSearches,
@@ -785,14 +800,14 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"title":    "Preferences",
 			"engines":  engines,
-			"theme":    h.appConfig.Web.UI.Theme,
+			"theme":    h.getRequestTheme(r),
 		})
 		
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "Preferences - %s\n\n", h.appConfig.Server.Branding.Title)
-		fmt.Fprintf(w, "Theme: %s\n", h.appConfig.Web.UI.Theme)
+		fmt.Fprintf(w, "Theme: %s\n", h.getRequestTheme(r))
 		fmt.Fprintf(w, "\nAvailable Engines:\n")
 		for _, eng := range engines {
 			status := "disabled"
@@ -806,7 +821,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "preferences", map[string]interface{}{
 			"Title":         "Preferences - " + h.appConfig.Server.Branding.Title,
-			"Theme":         h.appConfig.Web.UI.Theme,
+			"Theme":         h.getRequestTheme(r),
 			"Engines":       engines,
 			"BuildDateTime": BuildDateTime(),
 		})
@@ -841,7 +856,7 @@ func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "about", map[string]interface{}{
 			"Title":         "About - " + h.appConfig.Server.Branding.Title,
-			"Theme":         h.appConfig.Web.UI.Theme,
+			"Theme":         h.getRequestTheme(r),
 			"Version":       ver,
 			"BuildDateTime": BuildDateTime(),
 		})
@@ -874,7 +889,7 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "privacy", map[string]interface{}{
 			"Title":         "Privacy Policy - " + h.appConfig.Server.Branding.Title,
-			"Theme":         h.appConfig.Web.UI.Theme,
+			"Theme":         h.getRequestTheme(r),
 			"Version":       ver,
 			"BuildDateTime": BuildDateTime(),
 		})
@@ -2244,13 +2259,13 @@ func (h *SearchHandler) jsonError(w http.ResponseWriter, message, code string, s
 }
 
 // RenderErrorPage renders a custom error page per AI.md PART 30
-func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, code int, title, message string) {
+func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, r *http.Request, code int, title, message string) {
 	data := map[string]interface{}{
 		"Code":      code,
 		"Title":     title,
 		"Message":   message,
 		"SiteTitle": h.appConfig.Server.Branding.Title,
-		"Theme":     h.appConfig.Web.UI.Theme,
+		"Theme":     h.getRequestTheme(r),
 	}
 
 	tmpl, err := template.ParseFS(templatesFS, "template/page/error.tmpl")
@@ -2277,13 +2292,13 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, code int, title, 
 
 // NotFoundHandler handles 404 errors per AI.md PART 30
 func (h *SearchHandler) NotFoundHandler(w http.ResponseWriter, r *http.Request) {
-	h.RenderErrorPage(w, http.StatusNotFound, "Page Not Found",
+	h.RenderErrorPage(w, r, http.StatusNotFound, "Page Not Found",
 		"The page you're looking for doesn't exist or has been moved.")
 }
 
 // InternalErrorHandler handles 500 errors per AI.md PART 30
 func (h *SearchHandler) InternalErrorHandler(w http.ResponseWriter, r *http.Request) {
-	h.RenderErrorPage(w, http.StatusInternalServerError, "Server Error",
+	h.RenderErrorPage(w, r, http.StatusInternalServerError, "Server Error",
 		"Something went wrong on our end. Please try again later.")
 }
 

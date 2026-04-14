@@ -65,6 +65,7 @@ type MigrationManager interface {
 type TorService interface {
 	IsEnabled() bool
 	IsRunning() bool
+	IsStarting() bool
 	GenerateVanityAddress(prefix string) error
 	GetVanityStatus() *tor.VanityStatus
 	CancelVanityGeneration()

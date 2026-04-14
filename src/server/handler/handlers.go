@@ -52,6 +52,7 @@ const (
 type TorStatusChecker interface {
 	IsEnabled() bool
 	IsRunning() bool
+	IsStarting() bool
 	GetInfo() map[string]interface{}
 	// Per PART 32: Admin setting for IP forwarding
 	AllowUserIPForward() bool
@@ -1284,13 +1285,13 @@ type ClusterNodeData struct {
 
 // FeaturesData - VidVeil is stateless, no multi-user/orgs per IDEA.md
 type FeaturesData struct {
-	TorEnabled     bool
-	// TorStatus is "healthy", "unhealthy", or empty
-	TorStatus string
-	// TorOnionAddr is the .onion address
+	TorEnabled  bool
+	TorStarting bool
+	// TorStatus is "healthy", "unhealthy", "starting", or empty
+	TorStatus    string
 	TorOnionAddr string
-	GeoIP          bool
-	Metrics        bool
+	GeoIP        bool
+	Metrics      bool
 }
 
 type ChecksData struct {
@@ -1386,13 +1387,17 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	if h.appConfig != nil {
 		// Tor status per AI.md PART 13
 		if h.torSvc != nil {
-			data.Features.TorEnabled = h.torSvc.IsRunning()
-			if data.Features.TorEnabled {
+			if h.torSvc.IsRunning() {
+				data.Features.TorEnabled = true
 				data.Features.TorStatus = "healthy"
 				info := h.torSvc.GetInfo()
 				if addr, ok := info["onion_address"].(string); ok {
 					data.Features.TorOnionAddr = addr
 				}
+			} else if h.torSvc.IsStarting() {
+				// Tor is still bootstrapping — show as "starting" not "disabled"
+				data.Features.TorStarting = true
+				data.Features.TorStatus = "starting"
 			} else {
 				data.Features.TorStatus = "unhealthy"
 			}

@@ -59,8 +59,8 @@
         <section class="health-section">
             <h2>🎛️ Features</h2>
             <ul class="feature-list">
-                <li class="{{if .Features.TorEnabled}}feature-enabled{{else}}feature-disabled{{end}}">
-                    🧅 Tor: {{if .Features.TorEnabled}}<span class="status-ok">✅ {{.Features.TorStatus}}</span> <code>{{.Features.TorOnionAddr}}</code>{{else}}<span class="status-disabled">Disabled</span>{{end}}
+                <li class="{{if .Features.TorEnabled}}feature-enabled{{else if .Features.TorStarting}}feature-starting{{else}}feature-disabled{{end}}">
+                    🧅 Tor: {{if .Features.TorEnabled}}<span class="status-ok">✅ {{.Features.TorStatus}}</span> <code>{{.Features.TorOnionAddr}}</code>{{else if .Features.TorStarting}}<span class="status-starting">⏳ Connecting...</span>{{else}}<span class="status-disabled">Disabled</span>{{end}}
                 </li>
                 <li class="{{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">
                     🌍 GeoIP: {{if .Features.GeoIP}}<span class="status-ok">✅ Enabled</span>{{else}}<span class="status-disabled">Disabled</span>{{end}}

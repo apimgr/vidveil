@@ -280,7 +280,7 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 	s.onionAddress = s.generateOnionAddress()
 
 	// Generate torrc from config and write to configDir (per PART 32)
-	// NEVER uses default ports 9050/9051 — SocksPort auto or 0; ControlSocket or ControlPort auto
+	// NEVER uses default ports 9050/9051 — SocksPort auto or 0; bine manages ControlPort via TCP auto
 	var torrcFile string
 	if s.configDir != "" {
 		torrcPath := filepath.Join(s.configDir, "torrc")
@@ -296,31 +296,25 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 	// Start dedicated Tor process using bine
 	// Per AI.md: Start OUR OWN Tor process - completely separate from system Tor
 	// Per AI.md PART 32: Tor startup/runtime errors = WARN (server continues without Tor)
-	// Suppress Tor's verbose output - only show errors when connection actually fails
 	startConf := &tor.StartConf{
 		// Our own data directory - isolated from system Tor
 		DataDir: torDataDir,
 
-		// Use custom torrc if we generated one (carries bandwidth/stream/accounting settings)
+		// Use custom torrc (controls SocksPort and other settings)
+		// bine manages ControlPort automatically via TCP auto (bine v0.2.0 limitation)
 		TorrcFile: torrcFile,
 
-		// When using custom torrc, disable bine's automatic SocksPort — torrc controls it
+		// torrc controls SocksPort — disable bine's automatic SocksPort
 		NoAutoSocksPort: torrcFile != "",
 
 		// Use found Tor binary
 		ExePath: torPath,
 
 		// NoHush=false means bine adds --hush flag to reduce Tor output
-		// This suppresses "You are running Tor as root" and bootstrap progress messages
 		NoHush: false,
 
-		// Redirect Tor debug output to discard (suppresses warnings like "Problem bootstrapping")
-		// If debug mode, could set to os.Stderr
+		// Discard Tor debug output during normal operation
 		DebugWriter: io.Discard,
-
-		// Extra args to further suppress warnings
-		// --quiet: Suppress non-error log messages
-		ExtraArgs: []string{"--quiet"},
 	}
 
 	s.logger.Info("Starting dedicated Tor process...", nil)
@@ -331,9 +325,13 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 	}
 	s.torInstance = t
 
-	// Wait for Tor to bootstrap (with timeout)
+	// Wait for Tor to bootstrap using configurable timeout (default 180s per PART 32)
 	s.logger.Info("Waiting for Tor to bootstrap...", nil)
-	dialCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	bootstrapTimeout := 180 * time.Second
+	if s.torConfig != nil && s.torConfig.BootstrapTimeout > 0 {
+		bootstrapTimeout = time.Duration(s.torConfig.BootstrapTimeout) * time.Second
+	}
+	dialCtx, cancel := context.WithTimeout(ctx, bootstrapTimeout)
 	defer cancel()
 
 	if err := t.EnableNetwork(dialCtx, true); err != nil {
@@ -683,6 +681,31 @@ func (s *TorService) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.torInstance != nil && s.status == TorServiceStatusConnected
+}
+
+// IsStarting returns whether Tor is still bootstrapping (not yet connected)
+func (s *TorService) IsStarting() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.status == TorServiceStatusStarting
+}
+
+// GetStatusString returns a human-readable status string for display
+func (s *TorService) GetStatusString() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	switch s.status {
+	case TorServiceStatusConnected:
+		return "connected"
+	case TorServiceStatusStarting:
+		return "starting"
+	case TorServiceStatusError:
+		return "error"
+	case TorServiceStatusNoTorBinary:
+		return "no-binary"
+	default:
+		return "disconnected"
+	}
 }
 
 // RegenerateAddress generates a new random .onion address
@@ -1089,6 +1112,7 @@ func copyFile(src, dst string) error {
 // buildTorrc generates a torrc configuration file content from TorConfig settings
 // Per PART 32: NEVER uses default ports 9050/9051; uses Unix sockets or auto high ports
 // Hidden service itself is created via control.AddOnion (not torrc HiddenServiceDir)
+// Note: bine v0.2.0 manages ControlPort via TCP auto — NOT specified in torrc
 func buildTorrc(cfg *config.TorConfig) string {
 	if cfg == nil {
 		cfg = &config.TorConfig{}
@@ -1096,11 +1120,12 @@ func buildTorrc(cfg *config.TorConfig) string {
 	}
 
 	// SocksPort: enabled when outbound routing is needed (server-wide or per-user)
-	var socksPort string
+	// "auto" = Tor picks available high port at runtime (never saved)
+	var socksConfig string
 	if cfg.UseNetwork || cfg.AllowUserPreference {
-		socksPort = "SocksPort auto"
+		socksConfig = "SocksPort auto"
 	} else {
-		socksPort = "SocksPort 0"
+		socksConfig = "SocksPort 0"
 	}
 
 	// SafeLogging
@@ -1109,25 +1134,24 @@ func buildTorrc(cfg *config.TorConfig) string {
 		safeLogging = "0"
 	}
 
-	// CloseCircuitOnStreamLimit
-	closeOnLimit := "1"
-	if !cfg.CloseCircuitOnStreamLimit {
-		closeOnLimit = "0"
-	}
-
 	// Monthly bandwidth accounting
 	var accountingConfig string
 	if cfg.MaxMonthlyBandwidth != "" && cfg.MaxMonthlyBandwidth != "unlimited" {
-		accountingConfig = fmt.Sprintf("\n# Monthly bandwidth limit (resets on 1st of month)\nAccountingStart month 1 00:00\nAccountingMax %s", cfg.MaxMonthlyBandwidth)
+		accountingConfig = fmt.Sprintf(`
+# Monthly bandwidth limit
+AccountingStart month 1 00:00
+AccountingMax %s`, cfg.MaxMonthlyBandwidth)
 	}
 
 	return fmt.Sprintf(`# ============================================================
 # Tor Configuration - Generated by vidveil server binary
 # Per AI.md PART 32: NEVER uses default ports 9050/9051
 # Hidden service created via ADD_ONION (control protocol), not torrc
+# bine manages ControlPort automatically (TCP auto on localhost)
 # ============================================================
 
 # SOCKS port: 0 = hidden service only; auto = also enable outbound
+# NEVER uses default port 9050 — runtime detection only
 %s
 
 # Security
@@ -1135,9 +1159,6 @@ SafeLogging %s
 
 # Circuit management
 MaxCircuitDirtiness 600
-MaxStreamsPerCircuit %d
-CircuitBuildTimeout %d
-CloseHSCircuitsOnExpiry %s
 
 # Bandwidth limits (per second)
 BandwidthRate %s
@@ -1150,18 +1171,18 @@ ExitPolicy reject *:*
 ORPort 0
 DirPort 0
 
-# Faster directory fetching
+# Hidden service optimizations (actual HS created via ADD_ONION)
+HiddenServiceSingleHopMode 0
+
+# Faster startup
 FetchDirInfoEarly 1
 FetchDirInfoExtraEarly 1
 
 # Security hardening
 DisableDebuggerAttachment 1
 `,
-		socksPort,
+		socksConfig,
 		safeLogging,
-		cfg.MaxStreamsPerCircuit,
-		cfg.CircuitTimeout,
-		closeOnLimit,
 		cfg.BandwidthRate,
 		cfg.BandwidthBurst,
 		accountingConfig,

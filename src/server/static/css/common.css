@@ -3866,8 +3866,18 @@ a:focus-visible {
     border-left-color: var(--color-success);
 }
 
+.feature-list li.feature-starting {
+    border-left-color: var(--color-warning, #f59e0b);
+    opacity: 0.85;
+}
+
 .feature-list li.feature-disabled {
     opacity: 0.7;
+}
+
+.status-starting {
+    color: var(--color-warning, #f59e0b);
+    font-weight: 600;
 }
 
 /* Node list */

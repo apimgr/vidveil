@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -583,12 +584,12 @@ func main() {
 
 	// Start Tor hidden service per PART 32 (in background to not block HTTP server)
 	// Auto-enabled if tor binary is installed - no enable flag needed
-	// Per PART 32: Uses Unix socket on Unix, high TCP port (63000+) on Windows
-	// Start Tor in background goroutine - HTTP server should be available immediately
+	// Per PART 32: ADD_ONION maps .onion:virtualPort → 127.0.0.1:serverPort (existing HTTP listener)
 	go func() {
 		torCtx := context.Background()
-		// localPort=0 means Tor uses Unix socket on Unix, or finds available port on Windows
-		if err := torSvc.Start(torCtx, 0); err != nil {
+		// Parse server port from config — Tor will forward .onion traffic to this existing HTTP port
+		serverPort, _ := strconv.Atoi(appConfig.Server.Port)
+		if err := torSvc.Start(torCtx, serverPort); err != nil {
 			// PART 32: Tor errors are WARN level, server continues without Tor
 			fmt.Fprintf(os.Stderr, "⚠️  Tor hidden service: %v\n", err)
 		} else if torSvc.UseNetworkEnabled() && torSvc.OutboundEnabled() {
@@ -699,29 +700,6 @@ func main() {
 		if err := srv.ListenAndServe(listenAddr); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "❌ Server error: %v\n", err)
 			os.Exit(1)
-		}
-	}()
-
-	// Start serving on Tor listener when available (per PART 32)
-	// This allows the same HTTP handler to serve both clearnet and .onion traffic
-	go func() {
-		// Wait a bit for Tor to initialize
-		time.Sleep(5 * time.Second)
-
-		// Check periodically if Tor listener is available
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			<-ticker.C
-			if torListener := torSvc.GetListener(); torListener != nil {
-				fmt.Println("[INFO] Serving HTTP on Tor hidden service")
-				if err := srv.Serve(torListener); err != nil && err != http.ErrServerClosed {
-					// Tor listener closed, this is normal during shutdown
-					fmt.Fprintf(os.Stderr, "⚠️  Tor HTTP server: %v\n", err)
-				}
-				return
-			}
 		}
 	}()
 

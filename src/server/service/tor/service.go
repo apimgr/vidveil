@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/logging"
+	"github.com/cretz/bine/control"
 	"github.com/cretz/bine/tor"
 	bineed25519 "github.com/cretz/bine/torutil/ed25519"
 	"golang.org/x/crypto/sha3"
@@ -41,10 +41,6 @@ type TorService struct {
 	// bine Tor instance - manages dedicated Tor process
 	torInstance *tor.Tor
 
-	// OnionService listener - implements net.Listener
-	// Per AI.md PART 32: Unix socket on Unix, high TCP port on Windows
-	onionService *tor.OnionService
-
 	// Outbound Tor dialer per PART 32
 	// Used when UseNetwork is enabled (or AllowUserPreference is true) to route engine queries through Tor
 	dialer *tor.Dialer
@@ -54,14 +50,13 @@ type TorService struct {
 	privateKey   ed25519.PrivateKey
 	publicKey    ed25519.PublicKey
 
+	// serverPort is the HTTP server's listening port; Tor forwards .onion traffic here via ADD_ONION
+	serverPort int
+
 	// Status tracking
 	status    TorServiceStatus
 	startTime time.Time
 	mu        sync.RWMutex
-
-	// Local port the hidden service forwards to (Windows only)
-	// On Unix, uses Unix socket instead
-	localPort int
 
 	// Vanity generation
 	vanityCtx    context.Context
@@ -214,13 +209,13 @@ func (s *TorService) AllowUserIPForward() bool {
 // Start initializes the Tor hidden service using bine
 // Per AI.md PART 32: Uses dedicated Tor process via bine library
 // Auto-enabled if tor binary is found - no enable flag needed
-func (s *TorService) Start(ctx context.Context, localPort int) error {
+func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.status = TorServiceStatusStarting
 	s.startTime = time.Now()
-	s.localPort = localPort
+	s.serverPort = serverPort
 
 	// Ensure data directories exist
 	torDataDir := filepath.Join(s.dataDir, "data")
@@ -285,11 +280,16 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 	if s.configDir != "" {
 		torrcPath := filepath.Join(s.configDir, "torrc")
 		torrcContent := buildTorrc(s.torConfig)
-		if err := ensureTorrc(torrcPath, torrcContent); err != nil {
+		created, err := ensureTorrc(torrcPath, torrcContent)
+		if err != nil {
 			s.logger.Warn("Failed to write torrc, using bine defaults", map[string]interface{}{"error": err.Error()})
 		} else {
 			torrcFile = torrcPath
-			s.logger.Info("Wrote torrc", map[string]interface{}{"path": torrcPath})
+			if created {
+				s.logger.Info("Created torrc", map[string]interface{}{"path": torrcPath})
+			} else {
+				s.logger.Info("Using existing torrc", map[string]interface{}{"path": torrcPath})
+			}
 		}
 	}
 
@@ -341,81 +341,42 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 		return fmt.Errorf("failed to enable tor network: %w", err)
 	}
 
-	// Create hidden service using tor.Listen() with proper local listener
-	// Per AI.md PART 32: Unix socket on Unix, high TCP port (63000+) on Windows
-	s.logger.Info("Creating hidden service", map[string]interface{}{
-		"remote_port": 80,
+	s.logger.Info("Creating hidden service via ADD_ONION", map[string]interface{}{
+		"server_port": serverPort,
 	})
 
-	// Create local listener based on platform
-	var localListener net.Listener
-	if runtime.GOOS == "windows" {
-		// Windows: Unix sockets not supported, use high TCP port (63000+ range)
-		// Find available port in 63000-63999 range
-		var listenErr error
-		for port := 63000; port < 64000; port++ {
-			localListener, listenErr = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-			if listenErr == nil {
-				s.localPort = port
-				s.logger.Info("Using TCP port for hidden service", map[string]interface{}{"port": port})
-				break
-			}
-		}
-		if localListener == nil {
-			t.Close()
-			s.torInstance = nil
-			s.status = TorServiceStatusError
-			return fmt.Errorf("failed to find available port in 63000-63999 range: %w", listenErr)
-		}
-	} else {
-		// Unix/macOS/BSD: Use Unix socket (more secure, no port conflicts)
-		socketPath := filepath.Join(s.dataDir, "service.sock")
-		// Remove existing socket file if it exists
-		os.Remove(socketPath)
-		var listenErr error
-		localListener, listenErr = net.Listen("unix", socketPath)
-		if listenErr != nil {
-			t.Close()
-			s.torInstance = nil
-			s.status = TorServiceStatusError
-			return fmt.Errorf("failed to create unix socket %s: %w", socketPath, listenErr)
-		}
-		// Set socket permissions to 0600 per PART 32
-		if err := os.Chmod(socketPath, 0600); err != nil {
-			localListener.Close()
-			t.Close()
-			s.torInstance = nil
-			s.status = TorServiceStatusError
-			return fmt.Errorf("failed to chmod socket: %w", err)
-		}
-		s.logger.Info("Using Unix socket for hidden service", map[string]interface{}{"socket": socketPath})
+	// Create hidden service via ADD_ONION (per PART 32 spec)
+	// Maps .onion:{virtualPort} → 127.0.0.1:{serverPort} (server's existing HTTP listener)
+	// No bridge listener needed — Tor handles the forwarding directly
+	virtualPort := 80
+	if s.torConfig != nil && s.torConfig.VirtualPort > 0 {
+		virtualPort = s.torConfig.VirtualPort
 	}
 
-	// Convert Go ed25519 key to bine's ed25519 KeyPair
+	// Convert Go ed25519 key to bine's control.ED25519Key for ADD_ONION
 	bineKeyPair := bineed25519.FromCryptoPrivateKey(s.privateKey)
+	addOnionKey := &control.ED25519Key{KeyPair: bineKeyPair}
 
-	// Create hidden service with our pre-created local listener
-	onionSvc, err := t.Listen(ctx, &tor.ListenConf{
-		// Our Unix socket or TCP listener
-		LocalListener: localListener,
-		// .onion:80
-		RemotePorts:   []int{80},
-		// Use our existing key
-		Key:           bineKeyPair,
-		// Ed25519 v3 onion
-		Version3:      true,
-	})
+	addOnionReq := &control.AddOnionRequest{
+		Key: addOnionKey,
+		Ports: []*control.KeyVal{
+			control.NewKeyVal(
+				fmt.Sprintf("%d", virtualPort),
+				fmt.Sprintf("127.0.0.1:%d", serverPort),
+			),
+		},
+	}
+
+	resp, err := t.Control.AddOnion(addOnionReq)
 	if err != nil {
-		localListener.Close()
 		t.Close()
 		s.torInstance = nil
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to create onion service: %w", err)
 	}
-	s.onionService = onionSvc
 
-	// Update onion address from the service (should match our calculated one)
-	actualAddress := onionSvc.ID + ".onion"
+	// Update onion address from the response (should match our calculated one)
+	actualAddress := resp.ServiceID + ".onion"
 	if actualAddress != s.onionAddress {
 		s.logger.Warn("Onion address mismatch", map[string]interface{}{
 			"expected": s.onionAddress,
@@ -425,7 +386,10 @@ func (s *TorService) Start(ctx context.Context, localPort int) error {
 	}
 
 	s.status = TorServiceStatusConnected
-	s.logger.Info("Hidden service started", map[string]interface{}{"onion_address": s.onionAddress})
+	s.logger.Info("Hidden service started", map[string]interface{}{
+		"onion_address": s.onionAddress,
+		"target":        fmt.Sprintf("127.0.0.1:%d", serverPort),
+	})
 
 	// Initialize outbound dialer if UseNetwork is enabled OR AllowUserPreference is true (per PART 32)
 	// Dialer is needed when either: server routes all outbound through Tor, OR users can opt-in
@@ -478,7 +442,7 @@ func (s *TorService) monitorProcess() {
 
 				// Attempt restart
 				s.mu.Lock()
-				localPort := s.localPort
+				serverPort := s.serverPort
 				s.mu.Unlock()
 
 				if err := s.Stop(); err != nil {
@@ -488,7 +452,7 @@ func (s *TorService) monitorProcess() {
 				// Restart in background to avoid blocking monitor
 				go func() {
 					ctx := context.Background()
-					if err := s.Start(ctx, localPort); err != nil {
+					if err := s.Start(ctx, serverPort); err != nil {
 						s.logger.Warn("Failed to restart Tor", map[string]interface{}{"error": err.Error()})
 					} else {
 						s.logger.Info("Tor restarted successfully", nil)
@@ -517,13 +481,7 @@ func (s *TorService) Stop() error {
 		s.vanityCancel()
 	}
 
-	// Close onion service listener
-	if s.onionService != nil {
-		s.onionService.Close()
-		s.onionService = nil
-	}
-
-	// Close dedicated Tor process
+	// Close dedicated Tor process (also tears down the hidden service)
 	if s.torInstance != nil {
 		s.logger.Info("Shutting down dedicated Tor process...", nil)
 		if err := s.torInstance.Close(); err != nil {
@@ -1023,25 +981,13 @@ func (s *TorService) GetPublicKeyHex() string {
 	return hex.EncodeToString(s.publicKey)
 }
 
-// GetListener returns the OnionService listener (implements net.Listener)
-// The HTTP server should call Serve() on this listener to handle Tor traffic
-// Returns nil if Tor is not running
-func (s *TorService) GetListener() net.Listener {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.onionService == nil {
-		return nil
-	}
-	return s.onionService
-}
-
 // Restart restarts the Tor service with new configuration
 func (s *TorService) Restart(ctx context.Context) error {
-	localPort := s.localPort
+	serverPort := s.serverPort
 	if err := s.Stop(); err != nil {
 		return err
 	}
-	return s.Start(ctx, localPort)
+	return s.Start(ctx, serverPort)
 }
 
 // TestConnectionResult holds the result of a Tor connection test
@@ -1073,14 +1019,9 @@ func (s *TorService) TestConnection() *TestConnectionResult {
 		return result
 	}
 
-	// Check if Tor instance and onion service are active
+	// Check if Tor instance is active
 	if s.torInstance == nil {
 		result.Message = "Tor process is not running"
-		return result
-	}
-
-	if s.onionService == nil {
-		result.Message = "Onion service listener is not active"
 		return result
 	}
 
@@ -1191,14 +1132,21 @@ DisableDebuggerAttachment 1
 
 // ensureTorrc creates the torrc if it doesn't exist, or updates it when config changes
 // Returns true if the file was created/updated
-func ensureTorrc(torrcPath string, content string) error {
+// ensureTorrc creates the torrc only if it doesn't exist (persistent per PART 32).
+// torrc is preserved across restarts — only the admin panel can update it.
+// Returns true if the file was newly created.
+func ensureTorrc(torrcPath string, content string) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(torrcPath), 0700); err != nil {
-		return fmt.Errorf("create torrc dir: %w", err)
+		return false, fmt.Errorf("create torrc dir: %w", err)
 	}
 
-	// Write torrc (always overwrite to pick up config changes)
+	// Only create if it doesn't already exist — preserve admin panel edits
+	if _, err := os.Stat(torrcPath); err == nil {
+		return false, nil
+	}
+
 	if err := os.WriteFile(torrcPath, []byte(content), 0600); err != nil {
-		return fmt.Errorf("write torrc: %w", err)
+		return false, fmt.Errorf("write torrc: %w", err)
 	}
 
 	if runtime.GOOS != "windows" {
@@ -1208,5 +1156,5 @@ func ensureTorrc(torrcPath string, content string) error {
 		_ = os.Chmod(torrcPath, 0600)
 	}
 
-	return nil
+	return true, nil
 }

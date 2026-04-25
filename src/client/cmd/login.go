@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/apimgr/vidveil/src/client/paths"
@@ -50,26 +49,16 @@ func RunLoginCommand(args []string) error {
 
 	// Save token to token file
 	tokenFileLocation := paths.TokenFile()
-	tokenDirPath := filepath.Dir(tokenFileLocation)
-
-	// Ensure directory exists with correct permissions (0700)
-	if err := os.MkdirAll(tokenDirPath, 0700); err != nil {
-		return fmt.Errorf("creating token directory: %w", err)
+	if err := WriteCLIDefaultTokenFile(apiTokenInput); err != nil {
+		return err
 	}
 
-	// Write token file with restricted permissions (0600)
-	if err := os.WriteFile(tokenFileLocation, []byte(apiTokenInput), 0600); err != nil {
-		return fmt.Errorf("writing token file: %w", err)
+	if err := ValidateCLIServerURL(serverURL); err != nil {
+		return fmt.Errorf("invalid server URL: %w", err)
 	}
 
 	// Also update config with server address
-	configFileLocation := paths.ConfigFile()
-	configDirPath := filepath.Dir(configFileLocation)
-
-	// Ensure config directory exists with correct permissions (0700)
-	if err := os.MkdirAll(configDirPath, 0700); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
-	}
+	configFileLocation := GetCLIConfigFilePath()
 
 	// Load or create config
 	// Ignore unmarshal errors - use defaults if config is invalid
@@ -90,16 +79,8 @@ func RunLoginCommand(args []string) error {
 		fileCLIConfig.Output.Color = "auto"
 	}
 
-	// Write config
-	data, err := yaml.Marshal(fileCLIConfig)
-	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
-	}
-
-	// Per AI.md PART 5: Comments go ABOVE the setting
-	content := "# VidVeil CLI Configuration\n# Edit this file or use --server/--token flags\n\n" + string(data)
-	if err := os.WriteFile(configFileLocation, []byte(content), 0600); err != nil {
-		return fmt.Errorf("writing config file: %w", err)
+	if err := WriteCLIConfigFile(fileCLIConfig, configFileLocation); err != nil {
+		return err
 	}
 
 	fmt.Printf("\nLogged in successfully!\n")
@@ -123,11 +104,13 @@ This command prompts for:
   - API Token
 
 The token is saved securely to %s
-The server URL is saved to %s
+The server URL is saved to the selected config file (default: %s)
 
 You can also use environment variables or flags:
-  VIDVEIL_SERVER    Server URL
-  VIDVEIL_TOKEN     API token (not recommended for scripts)
+  VIDVEIL_SERVER_PRIMARY Server URL (canonical)
+  VIDVEIL_SERVER    Server URL compatibility alias
+  VIDVEIL_TOKEN     API token (canonical)
+  VIDVEIL_CLI_TOKEN API token compatibility alias
   --token-file      Read token from a file
 `, BinaryName, paths.TokenFile(), paths.ConfigFile())
 }

@@ -16,12 +16,12 @@ import (
 // TUI display constants
 // Per AI.md PART 1: No magic numbers - use named constants
 const (
-	TUIDefaultMaxResults           = 10
-	TUIReservedSpaceForUI          = 10
-	TUIMinDisplayResults           = 3
-	TUITruncationPadding           = 10
-	TUIMinTruncationWidth          = 30
-	TUIDefaultTheme                = "dark"
+	TUIDefaultMaxResults  = 10
+	TUIReservedSpaceForUI = 10
+	TUIMinDisplayResults  = 3
+	TUITruncationPadding  = 10
+	TUIMinTruncationWidth = 30
+	TUIDefaultTheme       = "dark"
 )
 
 // TUIStyles holds lipgloss styles derived from theme.ColorPalette
@@ -160,12 +160,12 @@ func GetTUILayoutConfig(sizeMode terminal.SizeMode) TUILayoutConfig {
 			VerticalScroll: false,
 		},
 		terminal.SizeModeMassive: {
-			ShowBorders:    true,
-			ShowHeader:     true,
-			ShowFooter:     true,
-			ShowSidebar:    true,
-			SidebarWidth:   50,
-			MaxColumns:     20,
+			ShowBorders:  true,
+			ShowHeader:   true,
+			ShowFooter:   true,
+			ShowSidebar:  true,
+			SidebarWidth: 50,
+			MaxColumns:   20,
 			// No truncation
 			TruncateAt:     0,
 			UseAbbrev:      false,
@@ -185,19 +185,20 @@ var tuiStyles TUIStyles
 // TUIModel represents the TUI application state
 // Per AI.md PART 1: Type names MUST be specific - "model" is ambiguous
 type TUIModel struct {
-	searchQuery      string
-	cursorPosition   int
-	searchResults    []TUISearchResult
-	selectedIndex    int
-	lastError        error
-	isLoading        bool
-	terminalWidth    int
-	terminalHeight   int
-	isQuitting       bool
-	sizeMode         terminal.SizeMode
-	layoutConfig     TUILayoutConfig
-	statusMessage    string
-	openedURL        string
+	searchQuery       string
+	cursorPosition    int
+	searchResults     []TUISearchResult
+	selectedIndex     int
+	lastError         error
+	isLoading         bool
+	terminalWidth     int
+	terminalHeight    int
+	isQuitting        bool
+	sizeMode          terminal.SizeMode
+	layoutConfig      TUILayoutConfig
+	statusMessage     string
+	openedURL         string
+	showShortcutsHelp bool
 }
 
 // TUISearchResult represents a single search result in TUI
@@ -232,9 +233,9 @@ func CreateInitialTUIModel() TUIModel {
 	layoutConfig := GetTUILayoutConfig(termSize.Mode)
 
 	return TUIModel{
-		searchQuery:   "",
-		searchResults: nil,
-		terminalWidth: termSize.Cols,
+		searchQuery:    "",
+		searchResults:  nil,
+		terminalWidth:  termSize.Cols,
 		terminalHeight: termSize.Rows,
 		sizeMode:       termSize.Mode,
 		layoutConfig:   layoutConfig,
@@ -301,6 +302,10 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "esc":
+			if m.showShortcutsHelp {
+				m.showShortcutsHelp = false
+				return m, nil
+			}
 			m.searchQuery = ""
 			m.searchResults = nil
 			m.lastError = nil
@@ -313,6 +318,10 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedIndex = 0
 			m.statusMessage = ""
 			m.openedURL = ""
+			return m, nil
+
+		case "?":
+			m.showShortcutsHelp = !m.showShortcutsHelp
 			return m, nil
 
 		case "o":
@@ -381,6 +390,20 @@ func (m TUIModel) View() string {
 		viewBuilder.WriteString(tuiStyles.Error.Render("Error: "+m.lastError.Error()) + "\n\n")
 	} else if m.statusMessage != "" {
 		viewBuilder.WriteString(tuiStyles.Status.Render(m.statusMessage) + "\n\n")
+	}
+
+	if m.showShortcutsHelp {
+		helpLines := []string{
+			"Shortcuts:",
+			"  enter  search or open selected result",
+			"  /      start a new search",
+			"  j/k    navigate results",
+			"  o      open selected result in browser",
+			"  esc    close help or clear current search",
+			"  q      quit",
+			"  ?      toggle this help",
+		}
+		viewBuilder.WriteString(tuiStyles.Help.Render(strings.Join(helpLines, "\n")) + "\n\n")
 	}
 
 	// Results
@@ -457,7 +480,7 @@ func (m TUIModel) View() string {
 // Per AI.md PART 1: Function names MUST reveal intent - "doSearch" is ambiguous
 func ExecuteTUISearch(searchQuery string) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := apiClient.Search(searchQuery, 0, 20, nil, false)
+		resp, err := apiClient.Search(searchQuery, 0, 20, nil)
 		if err != nil {
 			return TUISearchDoneMsg{err: err}
 		}

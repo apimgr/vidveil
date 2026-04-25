@@ -8,8 +8,7 @@ releases/
 **/tor/data/
 **/tor/site/
 
-# AI Config (regenerated from AI.md)
-.claude/
+# AI Config
 .cursor/
 .aider/
 .ai/
@@ -153,4 +152,3 @@ $RECYCLE.BIN/
 # Dependency directories (remove the comment below to include it)
 # vendor/
 # Go workspace file
-

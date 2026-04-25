@@ -529,6 +529,11 @@ func (l *AppLogger) addFileOutput(name, path, rotate string, keep int) error {
 	rotCfg := parseRotationString(rotate)
 	rotCfg.Keep = keep
 
+	if !filepath.IsAbs(path) {
+		appPaths := config.GetAppPaths("", "")
+		path = filepath.Join(appPaths.Log, path)
+	}
+
 	// Create rotating file
 	rf, err := NewRotatingFile(path, rotCfg)
 	if err != nil {

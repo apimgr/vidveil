@@ -3234,8 +3234,7 @@ func (h *AdminHandler) APITorRestart(w http.ResponseWriter, r *http.Request) {
 
 // Helper to read log file lines
 func (h *AdminHandler) readLogLines(filename string, maxLines int) []string {
-	paths := config.GetAppPaths("", "")
-	logPath := filepath.Join(paths.Data, "logs", filename)
+	logPath := h.resolveLogPath(filename)
 
 	file, err := os.Open(logPath)
 	if err != nil {
@@ -3255,6 +3254,15 @@ func (h *AdminHandler) readLogLines(filename string, maxLines int) []string {
 	}
 
 	return lines
+}
+
+func (h *AdminHandler) resolveLogPath(filename string) string {
+	if filepath.IsAbs(filename) {
+		return filename
+	}
+
+	appPaths := config.GetAppPaths("", "")
+	return filepath.Join(appPaths.Log, filename)
 }
 
 // === Helper functions ===
@@ -4826,8 +4834,10 @@ func (h *AdminHandler) readLogEntries(logType string, limit int, search string) 
 		return nil, fmt.Errorf("log file not configured for type: %s", logType)
 	}
 	
+	logPath := h.resolveLogPath(filename)
+
 	// Open log file
-	file, err := os.Open(filename)
+	file, err := os.Open(logPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Empty log is not an error

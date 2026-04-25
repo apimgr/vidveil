@@ -3,7 +3,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -21,10 +20,9 @@ const (
 // Search command flags
 // Per AI.md PART 1: Variable names MUST reveal intent
 var (
-	searchResultLimit   int
-	searchPageNumber    int
-	searchEngineFilter  string
-	searchSafeModeEnabled bool
+	searchResultLimit  int
+	searchPageNumber   int
+	searchEngineFilter string
 )
 
 // RunSearchCommand runs the search command per AI.md PART 33
@@ -34,24 +32,27 @@ func RunSearchCommand(args []string) error {
 	// Parse search-specific flags
 	var queryParts []string
 	for i := 0; i < len(args); i++ {
-		switch args[i] {
+		flagName, _, _ := ParseCLILongFlagArgument(args[i])
+
+		switch flagName {
 		case "--limit":
-			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%d", &searchResultLimit)
-				i++
+			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			if hasFlagValue {
+				fmt.Sscanf(flagValue, "%d", &searchResultLimit)
+				i = nextIndex
 			}
 		case "--page":
-			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%d", &searchPageNumber)
-				i++
+			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			if hasFlagValue {
+				fmt.Sscanf(flagValue, "%d", &searchPageNumber)
+				i = nextIndex
 			}
 		case "--engines":
-			if i+1 < len(args) {
-				searchEngineFilter = args[i+1]
-				i++
+			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			if hasFlagValue {
+				searchEngineFilter = flagValue
+				i = nextIndex
 			}
-		case "--safe":
-			searchSafeModeEnabled = true
 		case "--help", "-h":
 			PrintSearchCommandHelp()
 			return nil
@@ -76,7 +77,7 @@ func RunSearchCommand(args []string) error {
 	}
 
 	// Perform search
-	searchResponse, err := apiClient.Search(searchQueryString, searchPageNumber, searchResultLimit, engineList, searchSafeModeEnabled)
+	searchResponse, err := apiClient.Search(searchQueryString, searchPageNumber, searchResultLimit, engineList)
 	if err != nil {
 		return err
 	}
@@ -89,6 +90,10 @@ func RunSearchCommand(args []string) error {
 	switch cliConfig.Output.Format {
 	case "json":
 		return OutputSearchResultsAsJSON(searchResponse)
+	case "yaml":
+		return OutputSearchResultsAsYAML(searchResponse)
+	case "csv":
+		return OutputSearchResultsAsCSV(searchResponse)
 	case "plain":
 		return OutputSearchResultsAsPlain(searchResponse)
 	default:
@@ -109,8 +114,7 @@ Flags:
       --limit int       Number of results (default: server default)
       --page int        Page number (default: 1)
       --engines string  Comma-separated list of engines
-      --safe            Enable safe search
-  -h, --help            Show help
+   -h, --help            Show help
 
 Examples:
   %s search "amateur"
@@ -123,9 +127,35 @@ Examples:
 // OutputSearchResultsAsJSON outputs search results as JSON
 // Per AI.md PART 1: Function names MUST reveal intent - "outputJSON" is ambiguous
 func OutputSearchResultsAsJSON(responseData interface{}) error {
-	jsonEncoder := json.NewEncoder(os.Stdout)
-	jsonEncoder.SetIndent("", "  ")
-	return jsonEncoder.Encode(responseData)
+	return OutputDataAsJSON(responseData)
+}
+
+// OutputSearchResultsAsYAML outputs search results as YAML
+// Per AI.md PART 1: Function names MUST reveal intent
+func OutputSearchResultsAsYAML(responseData interface{}) error {
+	return OutputDataAsYAML(responseData)
+}
+
+// OutputSearchResultsAsCSV outputs search results as CSV
+// Per AI.md PART 1: Function names MUST reveal intent
+func OutputSearchResultsAsCSV(searchResponse *api.SearchResponse) error {
+	csvRows := make([][]string, 0, len(searchResponse.Results))
+	for _, result := range searchResponse.Results {
+		csvRows = append(csvRows, []string{
+			result.Title,
+			result.URL,
+			result.Duration,
+			result.Views,
+			result.Engine,
+			result.Description,
+			strings.Join(result.Tags, ","),
+		})
+	}
+
+	return OutputDataAsCSV(
+		[]string{"title", "url", "duration", "views", "engine", "description", "tags"},
+		csvRows,
+	)
 }
 
 // OutputSearchResultsAsPlain outputs search results as plain text

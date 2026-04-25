@@ -21,8 +21,10 @@ VERSION ?= $(shell cat release.txt 2>/dev/null || echo "0.1.0")
 # Format: "Thu Dec 17, 2025 at 18:19:24 EST"
 BUILD_DATE := $(shell date +"%a %b %d, %Y at %H:%M:%S %Z")
 COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-# Official site URL for CLI client (empty = users must use --server flag)
-OFFICIAL_SITE ?=
+# Official site URL for server and client builds
+# Source priority per AI.md: OFFICIAL_SITE env/arg, OFFICIALSITE env, then site.txt
+OFFICIAL_SITE_FROM_FILE := $(shell head -n 1 site.txt 2>/dev/null)
+OFFICIAL_SITE ?= $(if $(OFFICIALSITE),$(OFFICIALSITE),$(OFFICIAL_SITE_FROM_FILE))
 
 # Linker flags to embed build info (server) per AI.md PART 7
 LDFLAGS := -s -w \
@@ -208,6 +210,7 @@ docker:
 		--build-arg VERSION="$(VERSION)" \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--build-arg COMMIT_ID="$(COMMIT_ID)" \
+		--build-arg OFFICIAL_SITE="$(OFFICIAL_SITE)" \
 		-t $(REGISTRY):$(VERSION) \
 		-t $(REGISTRY):latest \
 		--push \
@@ -239,4 +242,3 @@ dev:
 		$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
 		echo "Test:  docker run --rm -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
-

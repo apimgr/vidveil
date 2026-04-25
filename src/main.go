@@ -18,7 +18,6 @@ import (
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/mode"
-	"github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server"
 	daemonpkg "github.com/apimgr/vidveil/src/server/daemon"
 	"github.com/apimgr/vidveil/src/server/service/admin"
@@ -257,28 +256,6 @@ func main() {
 	}
 
 	// Handle service command
-	if serviceCmd != "" {
-		handleServiceCommand(serviceCmd)
-		return
-	}
-
-	// Handle update command (AI.md PART 23)
-	if updateCmd != "" {
-		handleUpdateCommand(updateCmd, updateArg)
-		return
-	}
-
-	// Handle maintenance command
-	if maintCmd != "" {
-		// --maintenance update is alias for --update yes per AI.md
-		if maintCmd == "update" {
-			handleUpdateCommand("yes", "")
-			return
-		}
-		handleMaintenanceCommand(maintCmd, maintArg, maintPassword)
-		return
-	}
-
 	// Check for environment variables (init only per AI.md)
 	if configDir == "" && os.Getenv("CONFIG_DIR") != "" {
 		configDir = os.Getenv("CONFIG_DIR")
@@ -303,12 +280,53 @@ func main() {
 	}
 	if address == "" && os.Getenv("LISTEN") != "" {
 		address = os.Getenv("LISTEN")
+	} else if address == "" && os.Getenv("ADDRESS") != "" {
+		address = os.Getenv("ADDRESS")
 	}
 
 	// MODE env var is runtime - always checked per AI.md
 	// Priority: CLI flag > env var > config file
 	if modeStr == "" && os.Getenv("MODE") != "" {
 		modeStr = os.Getenv("MODE")
+	}
+
+	setPathEnv := func(name, value string) {
+		if value == "" {
+			return
+		}
+
+		if err := os.Setenv(name, value); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Failed to set %s: %v\n", name, err)
+			os.Exit(1)
+		}
+	}
+
+	setPathEnv("CONFIG_DIR", configDir)
+	setPathEnv("DATA_DIR", dataDir)
+	setPathEnv("CACHE_DIR", cacheDir)
+	setPathEnv("LOG_DIR", logDir)
+	setPathEnv("BACKUP_DIR", backupDir)
+
+	if serviceCmd != "" {
+		handleServiceCommand(serviceCmd, configDir, dataDir)
+		return
+	}
+
+	// Handle update command (AI.md PART 23)
+	if updateCmd != "" {
+		handleUpdateCommand(updateCmd, updateArg)
+		return
+	}
+
+	// Handle maintenance command
+	if maintCmd != "" {
+		// --maintenance update is alias for --update yes per AI.md
+		if maintCmd == "update" {
+			handleUpdateCommand("yes", "")
+			return
+		}
+		handleMaintenanceCommand(maintCmd, maintArg, maintPassword, configDir, dataDir)
+		return
 	}
 
 	// Initialize mode and debug per AI.md PART 6
@@ -351,7 +369,7 @@ func main() {
 
 	// Create user and chown directories (only if running as root)
 	// Include db subdirectory for SQLite database
-	dbDir := filepath.Join(paths.Data, "db")
+	dbDir := config.GetDatabaseDir(paths.Data)
 	dirsToOwn := []string{paths.Config, paths.Data, dbDir, paths.Cache, paths.Log}
 	uid, gid, err := system.EnsureSystemUser(appName, dirsToOwn)
 	if err != nil {
@@ -983,7 +1001,7 @@ func printPowerShellCompletions(binaryName string) {
 `, binaryName)
 }
 
-func handleServiceCommand(cmd string) {
+func handleServiceCommand(cmd, configDir, dataDir string) {
 	// Per AI.md PART 24 and PART 25: Use system.NewServiceManager which creates system user
 	// Get binary path
 	binaryPath, err := os.Executable()
@@ -992,13 +1010,10 @@ func handleServiceCommand(cmd string) {
 		os.Exit(1)
 	}
 	
-	// Get default paths per AI.md PART 4
-	isRoot := os.Geteuid() == 0
-	configDir := paths.GetDefaultConfigDir(isRoot)
-	dataDir := paths.GetDefaultDataDir(isRoot)
-	
+	appPaths := config.GetAppPaths(configDir, dataDir)
+
 	// Use system.NewServiceManager which handles user creation per AI.md PART 4
-	svc := system.NewServiceManager("vidveil", binaryPath, configDir, dataDir)
+	svc := system.NewServiceManager("vidveil", binaryPath, appPaths.Config, appPaths.Data)
 
 	switch cmd {
 	case "start":
@@ -1234,8 +1249,8 @@ Run 'vidveil --update --help' for detailed help.`)
 	}
 }
 
-func handleMaintenanceCommand(cmd, arg, password string) {
-	maint := maintenance.NewMaintenanceManager("", "", version.GetVersion())
+func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
+	maint := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
 
 	switch cmd {
 	case "backup":

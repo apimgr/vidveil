@@ -5,7 +5,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/apimgr/vidveil/src/client/api"
@@ -18,7 +17,6 @@ import (
 // Setup wizard constants
 // Per AI.md PART 1: No magic numbers - use named constants
 const (
-	SetupMinURLLength              = 10
 	SetupTestConnectionTimeoutSecs = 10
 	SetupPasswordMaskChar          = '*'
 	SetupDefaultServerURLPrefix    = "https://"
@@ -53,7 +51,7 @@ type SetupWizardModel struct {
 	saveToConfig      bool
 	isQuitting        bool
 	// inputFocused: 0 = server URL, 1 = token
-	inputFocused      int
+	inputFocused int
 }
 
 // SetupConnectionTestMsg is sent when connection test completes
@@ -139,13 +137,8 @@ func (m SetupWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m SetupWizardModel) handleEnterKey() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case SetupStateServerURL:
-		// Validate URL
-		if !strings.HasPrefix(m.serverURL, "http://") && !strings.HasPrefix(m.serverURL, "https://") {
-			m.errorMessage = "URL must start with http:// or https://"
-			return m, nil
-		}
-		if len(m.serverURL) < SetupMinURLLength {
-			m.errorMessage = "Please enter a valid server URL"
+		if err := ValidateCLIServerURL(m.serverURL); err != nil {
+			m.errorMessage = fmt.Sprintf("Invalid server URL: %v", err)
 			return m, nil
 		}
 		m.errorMessage = ""
@@ -260,7 +253,7 @@ func (m SetupWizardModel) View() string {
 	case SetupStateComplete:
 		viewBuilder.WriteString(successStyle.Render("  Setup complete!\n\n"))
 		viewBuilder.WriteString(fmt.Sprintf("    Server: %s\n", m.serverURL))
-		viewBuilder.WriteString(fmt.Sprintf("    Config: %s\n", paths.ConfigFile()))
+		viewBuilder.WriteString(fmt.Sprintf("    Config: %s\n", GetCLIConfigFilePath()))
 		if m.apiToken != "" {
 			viewBuilder.WriteString(fmt.Sprintf("    Token:  %s\n", paths.TokenFile()))
 		}
@@ -294,7 +287,7 @@ func (m SetupWizardModel) View() string {
 func TestServerConnection(serverURL string) tea.Cmd {
 	return func() tea.Msg {
 		// Create temporary client for testing
-		testClient := api.NewAPIClient(serverURL, "", SetupTestConnectionTimeoutSecs)
+		testClient := api.NewAPIClient(serverURL, "", SetupTestConnectionTimeoutSecs, "v1")
 
 		// Check health endpoint
 		healthy, err := testClient.Health()
@@ -329,14 +322,7 @@ func SaveSetupWizardConfig(serverURL, token string, saveToFile bool) error {
 	}
 
 	// Save config file
-	configFilePath := paths.ConfigFile()
-	configDirPath := filepath.Dir(configFilePath)
-
-	if err := os.MkdirAll(configDirPath, 0700); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
-	}
-
-	// Load existing config or create new
+	configFilePath := GetCLIConfigFilePath()
 	var fileCLIConfig CLIConfig
 	if data, err := os.ReadFile(configFilePath); err == nil {
 		// Ignore unmarshal errors - start fresh if config is invalid
@@ -355,29 +341,14 @@ func SaveSetupWizardConfig(serverURL, token string, saveToFile bool) error {
 		fileCLIConfig.Output.Color = "auto"
 	}
 
-	// Write config
-	data, err := yaml.Marshal(fileCLIConfig)
-	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
-	}
-
-	// Per AI.md PART 5: Comments go ABOVE the setting
-	content := "# VidVeil CLI Configuration\n# See: vidveil-cli --help\n\n" + string(data)
-	if err := os.WriteFile(configFilePath, []byte(content), 0600); err != nil {
-		return fmt.Errorf("writing config file: %w", err)
+	if err := WriteCLIConfigFile(fileCLIConfig, configFilePath); err != nil {
+		return err
 	}
 
 	// Save token to separate file if provided
 	if token != "" {
-		tokenFilePath := paths.TokenFile()
-		tokenDirPath := filepath.Dir(tokenFilePath)
-
-		if err := os.MkdirAll(tokenDirPath, 0700); err != nil {
-			return fmt.Errorf("creating token directory: %w", err)
-		}
-
-		if err := os.WriteFile(tokenFilePath, []byte(token), 0600); err != nil {
-			return fmt.Errorf("writing token file: %w", err)
+		if err := WriteCLIDefaultTokenFile(token); err != nil {
+			return err
 		}
 	}
 
@@ -407,12 +378,12 @@ func RunSetupWizard() error {
 // Per AI.md PART 1: Function names MUST reveal intent
 func IsServerConfigured() bool {
 	// Check config file
-	if cliConfig != nil && cliConfig.Server.Address != "" {
+	if cliConfigHasSavedServerAddress {
 		return true
 	}
 
 	// Check environment variable
-	if os.Getenv("VIDVEIL_SERVER") != "" {
+	if GetCLIServerAddressFromEnv() != "" {
 		return true
 	}
 

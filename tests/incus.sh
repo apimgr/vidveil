@@ -59,7 +59,7 @@ docker run --rm \
     -w /build \
     -e CGO_ENABLED=0 \
     golang:alpine \
-    sh -c "go mod download && go build -ldflags '-s -w' -o /output/${PROJECT_NAME} ./src" 2>&1 | tail -5
+    sh -c "go mod tidy && go mod download && go build -ldflags '-s -w' -o /output/${PROJECT_NAME} ./src" 2>&1 | tail -5
 
 if [ ! -f "${TEMP_DIR}/${PROJECT_NAME}" ]; then
     echo -e "${RED}✗ Build failed${NC}"
@@ -133,20 +133,20 @@ info "Service running on port: ${SERVICE_PORT}"
 
 # Step 9: Test HTTP endpoints
 info "Testing API endpoints..."
-if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/healthz" | grep -q "status:\|healthy\|ok"; then
+if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/healthz" | grep -q "^200$"; then
     pass "Health endpoint responding"
 else
     fail "Health endpoint not responding"
 fi
 
 # Test vidveil-specific endpoints
-if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/api/v1/engines" | grep -qE "engines:|success"; then
+if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/api/v1/engines" | grep -q '"ok"'; then
     pass "Engines API responding"
 else
     fail "Engines API not responding"
 fi
 
-if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/api/v1/bangs" | grep -qE "bangs:|success"; then
+if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/api/v1/bangs" | grep -q '"ok"'; then
     pass "Bangs API responding"
 else
     fail "Bangs API not responding"
@@ -154,7 +154,7 @@ fi
 
 # Test SSE streaming (informational - may fail without configured engines)
 info "Testing SSE streaming..."
-SSE_OUTPUT=$(incus exec "${INSTANCE_NAME}" -- timeout 5 curl -s -N "http://localhost:${SERVICE_PORT}/api/v1/search/stream?q=test" 2>/dev/null || true)
+SSE_OUTPUT=$(incus exec "${INSTANCE_NAME}" -- timeout 5 curl -s -N -H "Accept: text/event-stream" "http://localhost:${SERVICE_PORT}/api/v1/search?q=test" 2>/dev/null || true)
 if echo "$SSE_OUTPUT" | grep -q "data:\|event:"; then
     pass "SSE streaming responding"
 else

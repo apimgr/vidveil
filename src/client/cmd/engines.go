@@ -59,7 +59,9 @@ func RunEnginesCommand(args []string) error {
 
 	// Parse engines-specific flags
 	for i := 0; i < len(args); i++ {
-		switch args[i] {
+		flagName, _, _ := ParseCLILongFlagArgument(args[i])
+
+		switch flagName {
 		case "--enabled":
 			enginesShowEnabledOnly = true
 		case "--disabled":
@@ -94,6 +96,10 @@ func RunEnginesCommand(args []string) error {
 	switch cliConfig.Output.Format {
 	case "json":
 		return OutputEnginesAsJSON(filteredEngines)
+	case "yaml":
+		return OutputEnginesAsYAML(filteredEngines)
+	case "csv":
+		return OutputEnginesAsCSV(filteredEngines)
 	case "plain":
 		return OutputEnginesAsPlain(filteredEngines)
 	default:
@@ -104,7 +110,7 @@ func RunEnginesCommand(args []string) error {
 // FetchEnginesList fetches the list of engines from the server
 // Per AI.md PART 1: Function names MUST reveal intent
 func FetchEnginesList() (*EnginesListResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/engines", apiClient.GetBaseURL())
+	url := fmt.Sprintf("%s/engines", apiClient.GetAPIBaseURL())
 	responseBytes, err := apiClient.FetchURLResponseBytes(url)
 	if err != nil {
 		return nil, err
@@ -146,9 +152,36 @@ Examples:
 // OutputEnginesAsJSON outputs engines as JSON
 // Per AI.md PART 1: Function names MUST reveal intent
 func OutputEnginesAsJSON(engines []EngineInfo) error {
-	jsonEncoder := json.NewEncoder(os.Stdout)
-	jsonEncoder.SetIndent("", "  ")
-	return jsonEncoder.Encode(engines)
+	return OutputDataAsJSON(engines)
+}
+
+// OutputEnginesAsYAML outputs engines as YAML
+// Per AI.md PART 1: Function names MUST reveal intent
+func OutputEnginesAsYAML(engines []EngineInfo) error {
+	return OutputDataAsYAML(engines)
+}
+
+// OutputEnginesAsCSV outputs engines as CSV
+// Per AI.md PART 1: Function names MUST reveal intent
+func OutputEnginesAsCSV(engines []EngineInfo) error {
+	csvRows := make([][]string, 0, len(engines))
+	for _, engine := range engines {
+		csvRows = append(csvRows, []string{
+			engine.Name,
+			engine.DisplayName,
+			engine.Bang,
+			fmt.Sprintf("%d", engine.Tier),
+			fmt.Sprintf("%t", engine.Enabled),
+			engine.Method,
+			fmt.Sprintf("%t", engine.HasPreview),
+			fmt.Sprintf("%t", engine.HasDownload),
+		})
+	}
+
+	return OutputDataAsCSV(
+		[]string{"name", "display_name", "bang", "tier", "enabled", "method", "has_preview", "has_download"},
+		csvRows,
+	)
 }
 
 // OutputEnginesAsPlain outputs engines as plain text
@@ -218,11 +251,14 @@ func RunBangsCommand(args []string) error {
 	// Parse bangs-specific flags
 	var searchFilter string
 	for i := 0; i < len(args); i++ {
-		switch args[i] {
+		flagName, _, _ := ParseCLILongFlagArgument(args[i])
+
+		switch flagName {
 		case "--search":
-			if i+1 < len(args) {
-				searchFilter = args[i+1]
-				i++
+			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			if hasFlagValue {
+				searchFilter = flagValue
+				i = nextIndex
 			}
 		case "--help", "-h":
 			PrintBangsCommandHelp()
@@ -262,6 +298,10 @@ func RunBangsCommand(args []string) error {
 	switch cliConfig.Output.Format {
 	case "json":
 		return OutputBangsAsJSON(bangs)
+	case "yaml":
+		return OutputBangsAsYAML(bangs)
+	case "csv":
+		return OutputBangsAsCSV(bangs)
 	case "plain":
 		return OutputBangsAsPlain(bangs)
 	default:
@@ -306,9 +346,31 @@ Examples:
 // OutputBangsAsJSON outputs bangs as JSON
 // Per AI.md PART 1: Function names MUST reveal intent
 func OutputBangsAsJSON(bangs []BangInfo) error {
-	jsonEncoder := json.NewEncoder(os.Stdout)
-	jsonEncoder.SetIndent("", "  ")
-	return jsonEncoder.Encode(bangs)
+	return OutputDataAsJSON(bangs)
+}
+
+// OutputBangsAsYAML outputs bangs as YAML
+// Per AI.md PART 1: Function names MUST reveal intent
+func OutputBangsAsYAML(bangs []BangInfo) error {
+	return OutputDataAsYAML(bangs)
+}
+
+// OutputBangsAsCSV outputs bangs as CSV
+// Per AI.md PART 1: Function names MUST reveal intent
+func OutputBangsAsCSV(bangs []BangInfo) error {
+	csvRows := make([][]string, 0, len(bangs))
+	for _, bang := range bangs {
+		csvRows = append(csvRows, []string{
+			bang.Bang,
+			bang.EngineName,
+			bang.DisplayName,
+		})
+	}
+
+	return OutputDataAsCSV(
+		[]string{"bang", "engine_name", "display_name"},
+		csvRows,
+	)
 }
 
 // OutputBangsAsPlain outputs bangs as plain text

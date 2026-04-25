@@ -8,19 +8,22 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
 // API client defaults
 // Per AI.md PART 1: No magic strings/numbers - use named constants
 const (
-	APIClientDefaultServerURL       = "https://x.scour.li"
-	APIClientDefaultTimeoutSeconds  = 30
+	APIClientDefaultServerURL      = ""
+	APIClientDefaultAPIVersion     = "v1"
+	APIClientDefaultTimeoutSeconds = 30
 )
 
 // APIClient is the API client for VidVeil
 type APIClient struct {
 	baseURL    string
+	apiVersion string
 	token      string
 	httpClient *http.Client
 	userAgent  string
@@ -40,11 +43,12 @@ type SearchResult struct {
 
 // SearchResponse is the API response for search
 type SearchResponse struct {
-	Ok      bool           `json:"ok"`
-	Query   string         `json:"query"`
-	Results []SearchResult `json:"results"`
-	Count   int            `json:"count"`
-	Error   string         `json:"error,omitempty"`
+	Ok           bool           `json:"ok"`
+	Query        string         `json:"query"`
+	Results      []SearchResult `json:"results"`
+	Count        int            `json:"count"`
+	SearchTimeMS int64          `json:"search_time"`
+	Error        string         `json:"error,omitempty"`
 }
 
 // VersionResponse is the API response for version
@@ -55,18 +59,33 @@ type VersionResponse struct {
 	Built   string `json:"built"`
 }
 
+// AutodiscoverResponse is the non-versioned client bootstrap response.
+type AutodiscoverResponse struct {
+	Primary    string   `json:"primary"`
+	Cluster    []string `json:"cluster"`
+	APIVersion string   `json:"api_version"`
+	Timeout    int      `json:"timeout"`
+	Retry      int      `json:"retry"`
+	RetryDelay int      `json:"retry_delay"`
+}
+
 // NewAPIClient creates a new API client
-func NewAPIClient(baseURL, token string, timeout int) *APIClient {
+func NewAPIClient(baseURL, token string, timeout int, apiVersion string) *APIClient {
 	if baseURL == "" {
 		baseURL = APIClientDefaultServerURL
+	}
+	apiVersion = strings.Trim(strings.TrimSpace(apiVersion), "/")
+	if apiVersion == "" {
+		apiVersion = APIClientDefaultAPIVersion
 	}
 	if timeout <= 0 {
 		timeout = APIClientDefaultTimeoutSeconds
 	}
 
 	return &APIClient{
-		baseURL: baseURL,
-		token:   token,
+		baseURL:    baseURL,
+		apiVersion: apiVersion,
+		token:      token,
 		httpClient: &http.Client{
 			Timeout: time.Duration(timeout) * time.Second,
 		},
@@ -81,7 +100,7 @@ func (c *APIClient) SetUserAgent(version string) {
 }
 
 // Search performs a video search
-func (c *APIClient) Search(query string, page, limit int, engines []string, safeSearch bool) (*SearchResponse, error) {
+func (c *APIClient) Search(query string, page, limit int, engines []string) (*SearchResponse, error) {
 	params := url.Values{}
 	params.Set("q", query)
 	if page > 0 {
@@ -95,11 +114,8 @@ func (c *APIClient) Search(query string, page, limit int, engines []string, safe
 			params.Add("engines", e)
 		}
 	}
-	if safeSearch {
-		params.Set("safe", "true")
-	}
 
-	url := fmt.Sprintf("%s/api/v1/search?%s", c.baseURL, params.Encode())
+	url := fmt.Sprintf("%s/search?%s", c.GetAPIBaseURL(), params.Encode())
 
 	var resp SearchResponse
 	if err := c.get(url, &resp); err != nil {
@@ -111,7 +127,7 @@ func (c *APIClient) Search(query string, page, limit int, engines []string, safe
 
 // GetVersion gets server version info
 func (c *APIClient) GetVersion() (*VersionResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/version", c.baseURL)
+	url := fmt.Sprintf("%s/version", c.GetAPIBaseURL())
 
 	var resp VersionResponse
 	if err := c.get(url, &resp); err != nil {
@@ -121,9 +137,21 @@ func (c *APIClient) GetVersion() (*VersionResponse, error) {
 	return &resp, nil
 }
 
+// Autodiscover gets server connection defaults from the non-versioned autodiscover endpoint.
+func (c *APIClient) Autodiscover() (*AutodiscoverResponse, error) {
+	url := fmt.Sprintf("%s/api/autodiscover", c.baseURL)
+
+	var resp AutodiscoverResponse
+	if err := c.get(url, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
 // Health checks if the server is reachable
 func (c *APIClient) Health() (bool, error) {
-	url := fmt.Sprintf("%s/api/v1/healthz", c.baseURL)
+	url := fmt.Sprintf("%s/healthz", c.GetAPIBaseURL())
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -143,6 +171,11 @@ func (c *APIClient) Health() (bool, error) {
 // GetBaseURL returns the base URL of the server
 func (c *APIClient) GetBaseURL() string {
 	return c.baseURL
+}
+
+// GetAPIBaseURL returns the versioned API base URL.
+func (c *APIClient) GetAPIBaseURL() string {
+	return fmt.Sprintf("%s/api/%s", c.baseURL, c.apiVersion)
 }
 
 // FetchURLResponseBytes performs a GET request and returns response body as bytes

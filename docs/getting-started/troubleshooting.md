@@ -13,10 +13,10 @@ Common issues and their solutions.
 1. **Port already in use:**
    ```bash
    # Check if port is in use
-   lsof -i :8080
+   lsof -i :64893
 
    # Use a different port
-   vidveil --port 8081
+   vidveil --port 64894
    ```
 
 2. **Permission denied:**
@@ -30,11 +30,11 @@ Common issues and their solutions.
 
 3. **Missing configuration:**
    ```bash
-   # Check config path
-   vidveil --config /path/to/server.yml
+   # Check config directory
+   vidveil --config /path/to/config-dir
 
-   # Generate default config
-   vidveil --init
+   # First startup creates server.yml automatically inside that directory
+   vidveil --config /path/to/config-dir --port 64893
    ```
 
 ### Database errors
@@ -46,22 +46,23 @@ Common issues and their solutions.
 1. **Database locked:**
    ```bash
    # Another process may be using the database
-   lsof ~/.config/vidveil/server.db
+   lsof ~/.local/share/apimgr/vidveil/db/server.db
 
-   # Kill stale processes
-   pkill -f vidveil
+   # Stop the stale process by PID
+   kill <PID>
    ```
 
 2. **Corrupted database:**
    ```bash
    # Backup and recreate
-   mv ~/.config/vidveil/server.db server.db.bak
+   mv ~/.local/share/apimgr/vidveil/db/server.db server.db.bak
    vidveil  # Will create new database
    ```
 
 3. **Run migrations:**
    ```bash
-   vidveil --maintenance migrate
+   # Migrations run automatically on startup
+   systemctl restart vidveil
    ```
 
 ---
@@ -82,7 +83,7 @@ Common issues and their solutions.
 
 2. **Check setup token:**
    - On first run, check console for setup token
-   - Navigate to `/admin` and enter token
+   - Navigate to `https://your-domain.example/admin` and enter the token
 
 3. **Clear browser cache:**
    - Clear cookies for the site
@@ -113,7 +114,8 @@ vidveil --maintenance setup
 
 2. **Reset via command line:**
    ```bash
-   vidveil --maintenance reset-2fa --user admin
+   # If recovery keys are unavailable, reset admin credentials
+   vidveil --maintenance setup
    ```
 
 ---
@@ -134,7 +136,7 @@ vidveil --maintenance setup
 2. **Network issues:**
    ```bash
    # Test connectivity to engines
-   curl -I https://www.pornhub.com
+   curl -q -LSsfI https://www.pornhub.com
    ```
 
 3. **Rate limiting:**
@@ -181,7 +183,7 @@ vidveil --maintenance setup
 
 3. **View logs:**
    ```bash
-   tail -f ~/.config/vidveil/logs/error.log
+   tail -f ~/.local/log/apimgr/vidveil/error.log
    ```
 
 ---
@@ -196,8 +198,8 @@ vidveil --maintenance setup
 
 1. **Check certificate validity:**
    ```bash
-   openssl s_client -connect your-server.com:443 \
-     -servername your-server.com
+   openssl s_client -connect your-domain.example:443 \
+     -servername your-domain.example
    ```
 
 2. **Renew certificate:**
@@ -206,7 +208,7 @@ vidveil --maintenance setup
 
 3. **Check DNS:**
    ```bash
-   dig your-server.com
+   dig your-domain.example
    # Ensure A/AAAA records point to server
    ```
 
@@ -219,13 +221,13 @@ vidveil --maintenance setup
 1. **Port 80 accessible:**
    ```bash
    # HTTP-01 challenge requires port 80
-   curl http://your-server.com/.well-known/acme-challenge/test
+   curl -q -LSsf http://your-domain.example/.well-known/acme-challenge/test
    ```
 
 2. **DNS propagation:**
    ```bash
    # For DNS-01 challenge
-   dig _acme-challenge.your-server.com TXT
+   dig _acme-challenge.your-domain.example TXT
    ```
 
 3. **Rate limits:**
@@ -245,7 +247,7 @@ vidveil --maintenance setup
 1. **Check for runaway searches:**
    ```bash
    # View active goroutines
-   curl http://localhost:8080/debug/pprof/goroutine?debug=2
+   curl -q -LSsf http://127.0.0.1:64893/debug/pprof/goroutine?debug=2
    ```
 
 2. **Enable rate limiting:**
@@ -263,9 +265,8 @@ vidveil --maintenance setup
 **Solutions:**
 
 1. **Clear cache:**
-   ```bash
-   vidveil --maintenance cache-clear
-   ```
+   - Open Admin → Server → Maintenance
+   - Use **Clear Search Cache** or **Clear All Caches**
 
 2. **Reduce cache size:**
    - Admin → Server → Settings
@@ -284,16 +285,14 @@ vidveil --maintenance setup
 
 1. **Database size:**
    ```bash
-   ls -lh ~/.config/vidveil/server.db
-   # If large, run vacuum
-   vidveil --maintenance vacuum
+   ls -lh ~/.local/share/apimgr/vidveil/db/server.db
    ```
+   - If large, open Admin → Server → Database or Admin → Server → Maintenance
+   - Run **Vacuum Database**
 
 2. **Log rotation:**
-   ```bash
-   # Clear old logs
-   vidveil --maintenance logs-clean
-   ```
+   - Review `server.logs.*` rotation settings in `server.yml`
+   - Restart the service if you need log files reopened immediately
 
 ---
 
@@ -314,12 +313,12 @@ docker logs vidveil
 1. **Volume permissions:**
    ```bash
    # Fix ownership
-   sudo chown -R 1000:1000 ./data
+   sudo chown -R 1000:1000 ./rootfs
    ```
 
 2. **Port conflicts:**
    ```bash
-   docker run -p 8081:8080 vidveil
+   docker run -p 64581:80 ghcr.io/apimgr/vidveil:latest
    ```
 
 ### Data persistence
@@ -330,7 +329,12 @@ docker logs vidveil
 
 ```bash
 # Use volumes for persistence
-docker run -v vidveil-data:/data vidveil
+docker run -d \
+  --name vidveil \
+  -p 64580:80 \
+  -v ./rootfs/config:/config:z \
+  -v ./rootfs/data:/data:z \
+  ghcr.io/apimgr/vidveil:latest
 ```
 
 ---
@@ -354,13 +358,13 @@ docker run -v vidveil-data:/data vidveil
    ```
 
 2. **Forward headers:**
-   ```nginx
-   # nginx.conf
-   location / {
-       proxy_pass http://127.0.0.1:8080;
-       proxy_set_header X-Real-IP $remote_addr;
-       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-       proxy_set_header X-Forwarded-Proto $scheme;
+    ```nginx
+    # nginx.conf
+    location / {
+        proxy_pass http://127.0.0.1:64893;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
        proxy_set_header Host $host;
    }
    ```
@@ -387,7 +391,7 @@ server:
 ### Enable debug logging
 
 ```bash
-vidveil --log-level debug
+vidveil --debug
 ```
 
 Or in config:
@@ -396,38 +400,40 @@ Or in config:
 server:
   logs:
     level: debug
+    debug:
+      enabled: true
 ```
 
 ### View logs
 
 ```bash
 # All logs
-tail -f ~/.config/vidveil/logs/server.log
+tail -f ~/.local/log/apimgr/vidveil/server.log
 
 # Errors only
-tail -f ~/.config/vidveil/logs/error.log
+tail -f ~/.local/log/apimgr/vidveil/error.log
 
 # Access log
-tail -f ~/.config/vidveil/logs/access.log
+tail -f ~/.local/log/apimgr/vidveil/access.log
 
 # Audit log
-tail -f ~/.config/vidveil/logs/audit.log
+tail -f ~/.local/log/apimgr/vidveil/audit.log
 ```
 
 ### Debug endpoints
 
-Development mode only:
+Available only when the server is started with `--debug` (or `DEBUG=true` in containerized runs):
 
 ```bash
 # CPU profile
-curl http://localhost:8080/debug/pprof/profile > cpu.prof
+curl -q -LSsf http://127.0.0.1:64893/debug/pprof/profile > cpu.prof
 go tool pprof cpu.prof
 
 # Memory profile
-curl http://localhost:8080/debug/pprof/heap > heap.prof
+curl -q -LSsf http://127.0.0.1:64893/debug/pprof/heap > heap.prof
 
 # Goroutines
-curl http://localhost:8080/debug/pprof/goroutine?debug=2
+curl -q -LSsf http://127.0.0.1:64893/debug/pprof/goroutine?debug=2
 ```
 
 ---
@@ -448,7 +454,7 @@ If you can't resolve an issue:
    vidveil --status
 
    # Relevant logs
-   tail -100 ~/.config/vidveil/logs/error.log
+   tail -100 ~/.local/log/apimgr/vidveil/error.log
    ```
 
 3. **Open new issue:**

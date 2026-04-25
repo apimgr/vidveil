@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 const (
@@ -62,15 +63,65 @@ func ConfigFile() string {
 	return filepath.Join(ConfigDir(), "cli.yml")
 }
 
+// ResolveConfigFilePath resolves the CLI --config flag to a config file path.
+// Bare names resolve inside ConfigDir(), absolute paths are used as-is,
+// and missing yaml extensions default to .yml after checking existing files.
+func ResolveConfigFilePath(configFlag string) string {
+	if configFlag == "" {
+		return ConfigFile()
+	}
+
+	if strings.HasPrefix(configFlag, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil && home != "" {
+			configFlag = filepath.Join(home, configFlag[2:])
+		}
+	}
+
+	if filepath.IsAbs(configFlag) {
+		return resolveConfigYAMLExtension(configFlag)
+	}
+
+	return resolveConfigYAMLExtension(filepath.Join(ConfigDir(), configFlag))
+}
+
 // TokenFile returns the CLI token file path
 // Per AI.md PART 33: Token stored separately from config for security
 func TokenFile() string {
-	return filepath.Join(DataDir(), "token")
+	return filepath.Join(ConfigDir(), "token")
 }
 
 // LogFile returns the CLI log file path
 func LogFile() string {
 	return filepath.Join(LogDir(), "cli.log")
+}
+
+func resolveConfigYAMLExtension(path string) string {
+	extension := filepath.Ext(path)
+	if extension == ".yml" || extension == ".yaml" {
+		return path
+	}
+
+	if extension == "" {
+		if fileExists(path + ".yml") {
+			return path + ".yml"
+		}
+		if fileExists(path + ".yaml") {
+			return path + ".yaml"
+		}
+		return path + ".yml"
+	}
+
+	return path
+}
+
+func fileExists(path string) bool {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	return !fileInfo.IsDir()
 }
 
 // EnsureClientDirs creates all CLI directories with correct permissions.
@@ -89,6 +140,9 @@ func EnsureClientDirs() error {
 		}
 		// Ensure permissions even if dir existed
 		if err := os.Chmod(dir, 0700); err != nil {
+			return err
+		}
+		if err := EnsurePathOwnership(dir); err != nil {
 			return err
 		}
 	}

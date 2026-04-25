@@ -2,30 +2,41 @@
 
 ## Requirements
 
-- Go 1.21+
+- Docker
 - Make
+- Incus or Docker for test execution
+
+VidVeil uses containerized Go builds. Do **not** run `go build` directly on the host machine.
 
 ## Build Commands
 
 ```bash
-# Build for current platform
+# Quick host-platform build to a temporary directory
+make dev
+
+# Host-platform binaries in ./binaries/
+make local
+
+# Cross-platform binaries for all supported targets
 make build
 
-# Build for all platforms
-make build-all
-
-# Build Docker image
-make docker
-
-# Run tests
+# Run unit tests
 make test
 
-# Development mode
-make dev
+# Build and push the container image
+make docker
 ```
 
-## Build Flags
+## Test Commands
 
 ```bash
-CGO_ENABLED=0 go build -ldflags="-s -w" ./src
+./tests/run_tests.sh
+./tests/incus.sh
+./tests/docker.sh
 ```
+
+## Output Locations
+
+- `make dev` writes a temporary build under your OS temp directory
+- `make local` and `make build` write binaries to `./binaries/`
+- Docker assets live under `docker/`

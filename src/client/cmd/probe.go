@@ -32,15 +32,16 @@ var (
 
 // EngineProbeResult represents the result of probing an engine
 type EngineProbeResult struct {
-	Name         string                 `json:"name"`
-	DisplayName  string                 `json:"display_name"`
-	Tier         int                    `json:"tier"`
-	Available    bool                   `json:"available"`
-	Enabled      bool                   `json:"enabled"`
-	Error        string                 `json:"error,omitempty"`
-	ResultCount  int                    `json:"result_count"`
-	Capabilities map[string]interface{} `json:"capabilities,omitempty"`
-	FieldStats   map[string]int         `json:"field_stats,omitempty"`
+	Name           string                 `json:"name"`
+	DisplayName    string                 `json:"display_name"`
+	Tier           int                    `json:"tier"`
+	Available      bool                   `json:"available"`
+	Enabled        bool                   `json:"enabled"`
+	ResponseTimeMS int64                  `json:"response_time_ms"`
+	Error          string                 `json:"error,omitempty"`
+	ResultCount    int                    `json:"result_count"`
+	Capabilities   map[string]interface{} `json:"capabilities,omitempty"`
+	FieldStats     map[string]int         `json:"field_stats,omitempty"`
 }
 
 // RunProbeCommand runs the probe command per IDEA.md
@@ -50,23 +51,27 @@ func RunProbeCommand(args []string) error {
 	probeAllEngines = false
 	probeEngineFilter = ""
 	probeTestQuery = ProbeDefaultTestQuery
-	probeVerboseMode = false
+	probeVerboseMode = cliConfig != nil && cliConfig.Output.Verbose
 
 	// Parse probe-specific flags
 	// Per AI.md: Short flags only for -h (help) and -v (version)
 	for i := 0; i < len(args); i++ {
-		switch args[i] {
+		flagName, _, _ := ParseCLILongFlagArgument(args[i])
+
+		switch flagName {
 		case "--all":
 			probeAllEngines = true
 		case "--engines":
-			if i+1 < len(args) {
-				probeEngineFilter = args[i+1]
-				i++
+			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			if hasFlagValue {
+				probeEngineFilter = flagValue
+				i = nextIndex
 			}
 		case "--query":
-			if i+1 < len(args) {
-				probeTestQuery = args[i+1]
-				i++
+			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			if hasFlagValue {
+				probeTestQuery = flagValue
+				i = nextIndex
 			}
 		case "--verbose":
 			probeVerboseMode = true
@@ -109,6 +114,10 @@ func RunProbeCommand(args []string) error {
 	switch cliConfig.Output.Format {
 	case "json":
 		return OutputProbeResultsAsJSON(results)
+	case "yaml":
+		return OutputProbeResultsAsYAML(results)
+	case "csv":
+		return OutputProbeResultsAsCSV(results)
 	default:
 		return OutputProbeResultsAsTable(results)
 	}
@@ -116,7 +125,7 @@ func RunProbeCommand(args []string) error {
 
 // fetchEngineList gets list of available engines from server
 func fetchEngineList() ([]string, error) {
-	url := fmt.Sprintf("%s/api/v1/engines", apiClient.GetBaseURL())
+	url := fmt.Sprintf("%s/engines", apiClient.GetAPIBaseURL())
 	resp, err := apiClient.FetchURLResponseBytes(url)
 	if err != nil {
 		return nil, err
@@ -148,7 +157,7 @@ func probeEngineByName(name, query string) EngineProbeResult {
 	}
 
 	// Search with this engine only
-	searchResp, err := apiClient.Search(query, 1, 20, []string{name}, false)
+	searchResp, err := apiClient.Search(query, 1, 20, []string{name})
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -156,6 +165,7 @@ func probeEngineByName(name, query string) EngineProbeResult {
 
 	result.Available = searchResp.Ok
 	result.ResultCount = searchResp.Count
+	result.ResponseTimeMS = searchResp.SearchTimeMS
 
 	// Count field stats
 	// Per AI.md PART 1: No magic strings - use named constants
@@ -184,7 +194,7 @@ func probeEngineByName(name, query string) EngineProbeResult {
 	result.FieldStats = fieldStats
 
 	// Try to get engine info for capabilities
-	if infoURL := fmt.Sprintf("%s/api/v1/engines/%s", apiClient.GetBaseURL(), name); infoURL != "" {
+	if infoURL := fmt.Sprintf("%s/engines/%s", apiClient.GetAPIBaseURL(), name); infoURL != "" {
 		if resp, err := apiClient.FetchURLResponseBytes(infoURL); err == nil {
 			var info struct {
 				Ok   bool `json:"ok"`
@@ -215,7 +225,7 @@ func probeEngineByName(name, query string) EngineProbeResult {
 // Per AI.md PART 1: Function names MUST reveal intent
 // Per AI.md: Short flags only for -h (help)
 func PrintProbeCommandHelp() {
-	fmt.Printf(`Probe engine availability and capabilities
+	fmt.Printf(`Probe engine availability, capabilities, and response times
 
 Usage:
   %s probe [flags]
@@ -224,7 +234,7 @@ Flags:
       --all              Probe all available engines
       --engines string   Comma-separated list of engines to probe
       --query string     Test query to use (default: "test")
-      --verbose          Show detailed output
+      --verbose          Show capabilities and field statistics
   -h, --help             Show help
 
 Examples:
@@ -236,9 +246,50 @@ Examples:
 
 // OutputProbeResultsAsJSON outputs probe results as JSON
 func OutputProbeResultsAsJSON(results []EngineProbeResult) error {
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(results)
+	return OutputDataAsJSON(results)
+}
+
+// OutputProbeResultsAsYAML outputs probe results as YAML
+func OutputProbeResultsAsYAML(results []EngineProbeResult) error {
+	return OutputDataAsYAML(results)
+}
+
+// OutputProbeResultsAsCSV outputs probe results as CSV
+func OutputProbeResultsAsCSV(results []EngineProbeResult) error {
+	csvRows := make([][]string, 0, len(results))
+	for _, result := range results {
+		capabilitiesJSON := ""
+		if len(result.Capabilities) > 0 {
+			if data, err := json.Marshal(result.Capabilities); err == nil {
+				capabilitiesJSON = string(data)
+			}
+		}
+
+		fieldStatsJSON := ""
+		if len(result.FieldStats) > 0 {
+			if data, err := json.Marshal(result.FieldStats); err == nil {
+				fieldStatsJSON = string(data)
+			}
+		}
+
+		csvRows = append(csvRows, []string{
+			result.Name,
+			result.DisplayName,
+			fmt.Sprintf("%d", result.Tier),
+			fmt.Sprintf("%t", result.Available),
+			fmt.Sprintf("%t", result.Enabled),
+			fmt.Sprintf("%d", result.ResponseTimeMS),
+			fmt.Sprintf("%d", result.ResultCount),
+			result.Error,
+			capabilitiesJSON,
+			fieldStatsJSON,
+		})
+	}
+
+	return OutputDataAsCSV(
+		[]string{"name", "display_name", "tier", "available", "enabled", "response_time_ms", "result_count", "error", "capabilities", "field_stats"},
+		csvRows,
+	)
 }
 
 // OutputProbeResultsAsTable outputs probe results as a table
@@ -246,8 +297,8 @@ func OutputProbeResultsAsTable(results []EngineProbeResult) error {
 	tableWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
 	// Header
-	fmt.Fprintf(tableWriter, "ENGINE\tTIER\tSTATUS\tRESULTS\tPREVIEW\tDOWNLOAD\n")
-	fmt.Fprintf(tableWriter, "------\t----\t------\t-------\t-------\t--------\n")
+	fmt.Fprintf(tableWriter, "ENGINE\tTIER\tSTATUS\tRESULTS\tTIME\tPREVIEW\tDOWNLOAD\n")
+	fmt.Fprintf(tableWriter, "------\t----\t------\t-------\t----\t-------\t--------\n")
 
 	available := 0
 	for _, r := range results {
@@ -269,12 +320,40 @@ func OutputProbeResultsAsTable(results []EngineProbeResult) error {
 			}
 		}
 
-		fmt.Fprintf(tableWriter, "%s\t%d\t%s\t%d\t%s\t%s\n",
-			r.DisplayName, r.Tier, status, r.ResultCount, preview, download)
+		fmt.Fprintf(tableWriter, "%s\t%d\t%s\t%d\t%dms\t%s\t%s\n",
+			r.DisplayName, r.Tier, status, r.ResultCount, r.ResponseTimeMS, preview, download)
 	}
 
 	tableWriter.Flush()
 
 	fmt.Printf("\nProbed %d engines: %d available, %d failed\n", len(results), available, len(results)-available)
+	if probeVerboseMode {
+		outputVerboseProbeDetails(results)
+	}
 	return nil
+}
+
+func outputVerboseProbeDetails(results []EngineProbeResult) {
+	fmt.Println("\nVerbose details:")
+
+	for _, result := range results {
+		fmt.Printf("\n- %s (%s)\n", result.DisplayName, result.Name)
+		fmt.Printf("  Response time: %dms\n", result.ResponseTimeMS)
+
+		if result.Error != "" {
+			fmt.Printf("  Error: %s\n", result.Error)
+		}
+
+		if len(result.FieldStats) > 0 {
+			if fieldStatsJSON, err := json.Marshal(result.FieldStats); err == nil {
+				fmt.Printf("  Field stats: %s\n", fieldStatsJSON)
+			}
+		}
+
+		if len(result.Capabilities) > 0 {
+			if capabilitiesJSON, err := json.Marshal(result.Capabilities); err == nil {
+				fmt.Printf("  Capabilities: %s\n", capabilitiesJSON)
+			}
+		}
+	}
 }

@@ -1,86 +1,48 @@
 # Configuration
 
-Vidveil uses a YAML configuration file for all settings.
+Vidveil uses `server.yml` for runtime configuration.
 
-## Configuration File Location
+## Config File Locations
 
 | Platform | Path |
-|----------|------|
-| Linux | `~/.config/vidveil/server.yml` |
-| macOS | `~/Library/Application Support/vidveil/server.yml` |
-| Windows | `%APPDATA%\vidveil\server.yml` |
+|---|---|
+| Linux (root) | `/etc/apimgr/vidveil/server.yml` |
+| Linux (user) | `~/.config/apimgr/vidveil/server.yml` |
+| macOS (user) | `~/Library/Application Support/apimgr/vidveil/server.yml` |
+| Windows | `%AppData%\apimgr\vidveil\server.yml` |
+| Docker | `/config/vidveil/server.yml` |
 
-Override with `--config` flag or `CONFIG_DIR` environment variable.
+Override the detected config root with `--config`.
 
-## Server Settings
+## Minimal Example
+
+If `server.port` is omitted, Vidveil selects a random unused port in the `64xxx` range on first run and saves it to `server.yml`.
 
 ```yaml
 server:
-  # Listen address and port
   address: "0.0.0.0"
-  port: "8888"
-
-  # Application mode: production or development
-  mode: production
-
-  # Fully qualified domain name (for URLs)
-  fqdn: "vidveil.example.com"
+  port: "64893"
 ```
 
-## Search Settings
+## Runtime Data Paths
 
-```yaml
-search:
-  # Default search engines
-  default_engines:
-    - pornhub
-    - xvideos
-    - xnxx
-    - redtube
-    - youporn
-    - xhamster
-    - eporner
+- Docker config root: `/config/`
+- Docker data root: `/data/`
+- Docker logs: `/data/log/vidveil/server.log`
+- Vidveil config file in Docker: `/config/vidveil/server.yml`
+- Vidveil data root in Docker: `/data/vidveil/`
 
-  # Concurrent search requests
-  concurrent_requests: 10
+## Tor
 
-  # Timeout per engine (seconds)
-  engine_timeout: 10
-
-  # Results per page
-  results_per_page: 20
-```
-
-## Tor Hidden Service
-
-Tor hidden service is **auto-enabled** when the `tor` binary is installed. No configuration required.
-
-```bash
-# Install Tor to enable hidden service
-apt install tor    # Debian/Ubuntu
-apk add tor        # Alpine
-```
-
-The hidden service starts automatically and generates a `.onion` address.
-Data is stored in `{data_dir}/tor/`.
-
-## Rate Limiting
-
-```yaml
-server:
-  ratelimit:
-    enabled: true
-    requests: 120
-    window: 60
-```
+Vidveil auto-enables the built-in Tor hidden service when a compatible `tor` binary is available. The server manages its own Tor data under the Vidveil data directory.
 
 ## Environment Variables
 
 | Variable | Description |
-|----------|-------------|
-| `MODE` | Application mode (runtime) |
-| `CONFIG_DIR` | Configuration directory (init only) |
-| `DATA_DIR` | Data directory (init only) |
-| `LOG_DIR` | Log directory (init only) |
-| `PORT` | Server port (init only) |
-| `LISTEN` | Listen address (init only) |
+|---|---|
+| `MODE` | Application mode |
+| `CONFIG_DIR` | Override config root |
+| `DATA_DIR` | Override data root |
+| `LOG_DIR` | Override log root |
+| `LISTEN` | Override listen address |
+| `PORT` | Initial listen port (default: random `64xxx`, `80` in containers) |

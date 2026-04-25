@@ -1,6 +1,6 @@
 # Admin Dashboard
 
-Access at `/admin`
+Access at `https://x.scour.li/admin`
 
 ## Overview
 
@@ -13,12 +13,12 @@ The dashboard shows:
 
 ## Navigation
 
-Per AI.md PART 17, all server management is under `/admin/server/*`:
+Per AI.md PART 17, all server management is under `https://x.scour.li/admin/server/*`:
 
-- **Server** (`/admin/server/`): Settings, Branding, SSL, Scheduler, Email, Logs, Database
-- **Security** (`/admin/server/security/`): Authentication, API Tokens, Rate Limiting, Firewall
-- **Network** (`/admin/server/network/`): Tor, GeoIP, Blocklists
-- **System** (`/admin/server/system/`): Backup, Maintenance, Updates, System Info
-- **Users** (`/admin/server/users/`): Administrators
-- **Engines** (`/admin/server/engines`): Search engine management
-- **Help** (`/admin/server/help`): Documentation
+- **Server** (`https://x.scour.li/admin/server/`): Settings, Branding, SSL, Scheduler, Email, Logs, Database
+- **Security** (`https://x.scour.li/admin/server/security/`): Authentication, API Tokens, Rate Limiting, Firewall
+- **Network** (`https://x.scour.li/admin/server/network/`): Tor, GeoIP, Blocklists
+- **System** (`https://x.scour.li/admin/server/system/`): Backup, Maintenance, Updates, System Info
+- **Users** (`https://x.scour.li/admin/server/users/`): Administrators
+- **Engines** (`https://x.scour.li/admin/server/engines`): Search engine management
+- **Help** (`https://x.scour.li/admin/server/help`): Documentation

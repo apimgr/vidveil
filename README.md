@@ -1,9 +1,9 @@
 # Vidveil
 
-[![Build Status](https://github.com/apimgr/vidveil/actions/workflows/release.yml/badge.svg)](https://github.com/apimgr/vidveil/actions)
+[![Build Status](https://github.com/apimgr/vidveil/actions/workflows/release.yml/badge.svg)](https://github.com/apimgr/vidveil/actions/workflows/release.yml)
 [![GitHub release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
 [![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
-[![Documentation](https://readthedocs.org/projects/apimgr-vidveil/badge/?version=latest)](https://apimgr-vidveil.readthedocs.io/en/latest/)
+[![Documentation](https://readthedocs.org/projects/apimgr-vidveil/badge/?version=latest)](https://apimgr-vidveil.readthedocs.io)
 
 ## About
 
@@ -72,7 +72,7 @@ chmod +x vidveil-linux-amd64
 
 ---
 
-## CLI Client
+## Client
 
 A companion CLI client (`vidveil-cli`) is available for interacting with the server API from the terminal.
 
@@ -80,15 +80,15 @@ A companion CLI client (`vidveil-cli`) is available for interacting with the ser
 
 ```bash
 # Download latest release
-curl -q -LSsfO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64-cli
-chmod +x vidveil-linux-amd64-cli
-sudo mv vidveil-linux-amd64-cli /usr/local/bin/vidveil-cli
+curl -q -LSsfO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-cli-linux-amd64
+chmod +x vidveil-cli-linux-amd64
+sudo mv vidveil-cli-linux-amd64 /usr/local/bin/vidveil-cli
 ```
 
 ### Configure
 
 ```bash
-# Connect to server (creates ~/.config/apimgr/vidveil/cli.yml)
+# Connect to server (creates the default cli.yml)
 vidveil-cli --server https://x.scour.li --token YOUR_API_TOKEN
 ```
 
@@ -122,14 +122,15 @@ Configuration file location (created on first run):
 | Linux (user) | `~/.config/apimgr/vidveil/server.yml` |
 | macOS | `~/Library/Application Support/apimgr/vidveil/server.yml` |
 | Windows | `%AppData%\apimgr\vidveil\server.yml` |
-| Docker | `/config/server.yml` |
+| Docker | `/config/vidveil/server.yml` |
 
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MODE` | `production` or `development` | `production` |
-| `PORT` | Listen port | `80` |
+| `LISTEN` | Listen address | `0.0.0.0` |
+| `PORT` | Listen port | Random `64xxx` (`80` in containers) |
 | `CONFIG_DIR` | Config directory | Platform-specific |
 | `DATA_DIR` | Data directory | Platform-specific |
 
@@ -140,7 +141,7 @@ Configuration file location (created on first run):
 ### Search
 
 ```
-GET /api/v1/search?q={query}&page={page}&engines={engines}
+GET https://x.scour.li/api/v1/search?q={query}&page={page}&engines={engines}
 ```
 
 **Parameters:**
@@ -171,45 +172,47 @@ GET /api/v1/search?q={query}&page={page}&engines={engines}
 ### Search Stream (SSE)
 
 ```
-GET /api/v1/search?q={query}
+GET https://x.scour.li/api/v1/search?q={query}
 Accept: text/event-stream
 ```
 
-Returns Server-Sent Events with results as each engine responds. The same `/api/v1/search` endpoint switches to SSE mode when the `Accept: text/event-stream` header is present.
+Returns Server-Sent Events with results as each engine responds. The same `https://x.scour.li/api/v1/search` endpoint switches to SSE mode when the `Accept: text/event-stream` header is present.
 
 ### Bangs
 
 ```
-GET /api/v1/bangs
-GET /api/v1/bangs/autocomplete?q={partial}
+GET https://x.scour.li/api/v1/bangs
+GET https://x.scour.li/api/v1/bangs/autocomplete?q={partial}
 ```
 
 ### Engines
 
 ```
-GET /api/v1/engines
-GET /api/v1/engines/{name}
+GET https://x.scour.li/api/v1/engines
+GET https://x.scour.li/api/v1/engines/{name}
 ```
 
 ### Health
 
 ```
-GET /healthz
-GET /api/v1/healthz
+GET https://x.scour.li/healthz
+GET https://x.scour.li/api/v1/healthz
 ```
 
 ### Documentation
 
 | Endpoint | Description |
 |----------|-------------|
-| `/openapi` | Swagger UI |
-| `/openapi.json` | OpenAPI 3.0 spec (JSON) |
-| `/graphql` | GraphQL endpoint |
-| `/graphiql` | GraphQL playground |
+| `https://x.scour.li/openapi` | Swagger UI |
+| `https://x.scour.li/openapi.json` | OpenAPI 3.0 spec (JSON) |
+| `https://x.scour.li/graphql` | GraphQL endpoint |
+| `https://x.scour.li/graphiql` | GraphQL playground |
 
 ---
 
-## Bang Search
+## Other
+
+### Bang Search
 
 Use bang shortcuts to search specific engines:
 
@@ -224,11 +227,11 @@ Use bang shortcuts to search specific engines:
 
 **Multiple bangs**: `!ph !rt amateur` searches both PornHub and RedTube.
 
-**Full list**: See `/api/v1/bangs` for all 43 engine shortcuts.
+**Full list**: See `https://x.scour.li/api/v1/bangs` for all 43 engine shortcuts.
 
-## Supported Engines
+### Supported Engines
 
-### Tier 1 - Major Sites (API-based)
+#### Tier 1 - Major Sites (API-based)
 
 | Engine | Bang | Method | Preview |
 |--------|------|--------|---------|
@@ -239,42 +242,42 @@ Use bang shortcuts to search specific engines:
 | XNXX | `!xn` | HTML parsing | |
 | xHamster | `!xh` | JSON extraction | ✓ |
 
-### Tier 2 - Popular Sites
+#### Tier 2 - Popular Sites
 
 | Engine | Bang | Preview |
 |--------|------|---------|
 | YouPorn | `!yp` | ✓ |
 | PornMD | `!pmd` | |
 
-### Tier 3 - Additional Sites
+#### Tier 3 - Additional Sites
 
 3Movs (`!3m`), 4Tube (`!4t`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), EMPFlix (`!emp`), Fux (`!fux`), GotPorn (`!gp`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Motherless (`!ml`), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TubeGalore (`!tg`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
 
-### Tier 4 - Specialty Sites
+#### Tier 4 - Specialty Sites
 
 FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox (`!pbox`), PornerBros (`!pb`), PornHat (`!phat`), PornHD (`!phd`), PornOne (`!p1`), Pornotube (`!pnt`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), VJAV (`!vj`), XBabe (`!xb`)
 
-## Admin Panel
+### Admin Panel
 
-Access at `/admin` (setup token shown on first run).
+Access at `https://x.scour.li/admin` (setup token shown on first run).
 
 | Route | Section | Description |
 |-------|---------|-------------|
-| `/admin` | Dashboard | Overview and statistics |
-| `/admin/server/settings` | Settings | Server configuration |
-| `/admin/server/branding` | Branding | Logo, title, themes |
-| `/admin/server/ssl` | SSL/TLS | Let's Encrypt, certificates |
-| `/admin/server/email` | Email | SMTP configuration |
-| `/admin/server/scheduler` | Scheduler | Scheduled tasks |
-| `/admin/server/logs` | Logs | Access and error logs |
-| `/admin/server/database` | Database | Database management (SQLite/PostgreSQL/MySQL/MSSQL) |
-| `/admin/server/security/*` | Security | Auth, tokens, rate limiting, firewall |
-| `/admin/server/network/*` | Network | Tor, GeoIP, content restriction, blocklists |
-| `/admin/server/system/*` | System | Backup, maintenance, updates |
-| `/admin/server/users/*` | Users | Admin management |
-| `/admin/server/engines` | Engines | Search engine configuration |
+| `https://x.scour.li/admin` | Dashboard | Overview and statistics |
+| `https://x.scour.li/admin/server/settings` | Settings | Server configuration |
+| `https://x.scour.li/admin/server/branding` | Branding | Logo, title, themes |
+| `https://x.scour.li/admin/server/ssl` | SSL/TLS | Let's Encrypt, certificates |
+| `https://x.scour.li/admin/server/email` | Email | SMTP configuration |
+| `https://x.scour.li/admin/server/scheduler` | Scheduler | Scheduled tasks |
+| `https://x.scour.li/admin/server/logs` | Logs | Access and error logs |
+| `https://x.scour.li/admin/server/database` | Database | Database management (SQLite/PostgreSQL/MySQL/MSSQL) |
+| `https://x.scour.li/admin/server/security/*` | Security | Auth, tokens, rate limiting, firewall |
+| `https://x.scour.li/admin/server/network/*` | Network | Tor, GeoIP, content restriction, blocklists |
+| `https://x.scour.li/admin/server/system/*` | System | Backup, maintenance, updates |
+| `https://x.scour.li/admin/server/users/*` | Users | Admin management |
+| `https://x.scour.li/admin/server/engines` | Engines | Search engine configuration |
 
-## Server CLI
+### Server CLI
 
 ```bash
 vidveil [options]
@@ -331,12 +334,6 @@ make test           # Run unit tests
 
 ---
 
-## License
-
-MIT License - see [LICENSE.md](LICENSE.md)
-
----
-
 ## Disclaimer
 
 This software is provided "as is" without warranty of any kind. Use at your own risk.
@@ -349,3 +346,9 @@ This software is provided "as is" without warranty of any kind. Use at your own 
 - **Production Use**: Evaluate thoroughly before deploying in production environments
 
 By using this software, you acknowledge that you have read and understood this disclaimer.
+
+---
+
+## License
+
+MIT License - see [LICENSE.md](LICENSE.md)

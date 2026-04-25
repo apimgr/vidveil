@@ -133,7 +133,7 @@ func (sm *ServiceManager) GetServiceStatus() (string, error) {
 			return "stopped", nil
 		}
 	case "darwin":
-		out, err := exec.Command("launchctl", "list", sm.appName).CombinedOutput()
+		out, err := exec.Command("launchctl", "list", fmt.Sprintf("apimgr.%s", sm.appName)).CombinedOutput()
 		if err != nil {
 			return "stopped", nil
 		}
@@ -156,7 +156,7 @@ func (sm *ServiceManager) runServiceCommand(action string) error {
 		}
 		return exec.Command("service", sm.appName, action).Run()
 	case "darwin":
-		plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.appName)
+		plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
 		switch action {
 		case "start":
 			return exec.Command("launchctl", "load", plistPath).Run()

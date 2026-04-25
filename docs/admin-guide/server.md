@@ -2,11 +2,11 @@
 
 ## General Settings
 
-Configure server address, port, and mode at `/admin/server/settings`.
+Configure server address, port, and mode at `https://x.scour.li/admin/server/settings`.
 
 ## SSL/TLS
 
-Manage SSL certificates at `/admin/server/ssl`.
+Manage SSL certificates at `https://x.scour.li/admin/server/ssl`.
 
 - Automatic Let's Encrypt renewal
 - Custom certificate upload
@@ -14,7 +14,7 @@ Manage SSL certificates at `/admin/server/ssl`.
 
 ## Email
 
-Configure SMTP at `/admin/server/email`.
+Configure SMTP at `https://x.scour.li/admin/server/email`.
 
 - Auto-detection of common SMTP servers
 - Test email functionality
@@ -22,4 +22,4 @@ Configure SMTP at `/admin/server/email`.
 
 ## Scheduler
 
-Manage scheduled tasks at `/admin/server/scheduler`.
+Manage scheduled tasks at `https://x.scour.li/admin/server/scheduler`.

@@ -509,7 +509,7 @@ func (m *SystemServiceManager) darwinDisable() error {
 }
 
 func (m *SystemServiceManager) launchdLabel() string {
-	return "com.apimgr." + m.name
+	return "apimgr." + m.name
 }
 
 func (m *SystemServiceManager) launchdPlistPath() string {

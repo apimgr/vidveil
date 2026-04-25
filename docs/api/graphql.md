@@ -1,10 +1,10 @@
 # GraphQL API
 
-Endpoint: `/graphql`
+Endpoint: `https://x.scour.li/graphql`
 
-Interactive playground: `/graphiql`
+Interactive playground: `https://x.scour.li/graphiql`
 
-Schema definition: `/graphql/schema`
+Schema definition: `https://x.scour.li/graphql/schema`
 
 ## Schema
 
@@ -167,7 +167,7 @@ query {
 
 ## Using GraphiQL
 
-Navigate to `/graphiql` to access the interactive GraphQL playground with:
+Navigate to `https://x.scour.li/graphiql` to access the interactive GraphQL playground with:
 
 - Query editor with syntax highlighting
 - Automatic schema documentation

@@ -43,12 +43,13 @@ The CLI automatically selects the appropriate interface:
 
 | Flag | Description |
 |------|-------------|
-| `--config <path>` | Config file path (default: `~/.config/apimgr/vidveil/cli.yml`) |
-| `--server <url>` | Server address |
+| `--shell <command>` | Shell integration: `completions`, `init`, or `--help` |
+| `--config <file\|path>` | Config file name or path. Bare names resolve inside the platform config directory and default to `.yml`. |
+| `--server <url>` | Server address (default: `https://x.scour.li`) |
 | `--token <token>` | API token for authentication |
 | `--token-file <path>` | Read token from file |
-| `--output <format>` | Output format: `json`, `table`, `plain` (default: `table`) |
-| `--no-color` | Disable colored output |
+| `--output <format>` | Output format: `json`, `yaml`, `csv`, `table`, `plain` (default: `table`) |
+| `--color <mode>` | Color output: `always`, `never`, `auto` |
 | `--timeout <seconds>` | Request timeout (default: 30) |
 | `--debug` | Enable debug output |
 | `-h, --help` | Show help |
@@ -58,8 +59,14 @@ The CLI automatically selects the appropriate interface:
 
 | Variable | Description |
 |----------|-------------|
-| `VIDVEIL_SERVER` | Server address |
-| `VIDVEIL_TOKEN` | API token |
+| `VIDVEIL_SERVER_PRIMARY` | Server address (canonical) |
+| `VIDVEIL_SERVER` | Server address compatibility alias |
+| `VIDVEIL_SERVER_TIMEOUT` | Request timeout in seconds (canonical) |
+| `VIDVEIL_TOKEN` | API token (canonical) |
+| `VIDVEIL_CLI_TOKEN` | API token compatibility alias |
+| `VIDVEIL_OUTPUT_FORMAT` | Output format (canonical) |
+| `VIDVEIL_OUTPUT_COLOR` | Output color mode (canonical) |
+| `VIDVEIL_DEBUG` | Enable debug output |
 
 ## Commands
 
@@ -79,7 +86,6 @@ vidveil-cli <query>  # shortcut
 | `--limit <n>` | Number of results |
 | `--page <n>` | Page number (default: 1) |
 | `--engines <list>` | Comma-separated list of engines |
-| `--safe` | Enable safe search |
 
 **Examples:**
 
@@ -156,70 +162,140 @@ vidveil-cli bangs --search porn
 
 ### probe
 
-Test engine availability and response times.
+Test engine availability, capabilities, and response times.
 
 ```bash
 vidveil-cli probe [flags]
 ```
 
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Probe all available engines |
+| `--engines <list>` | Comma-separated list of engines to probe |
+| `--query <text>` | Test query to use (default: `test`) |
+| `--verbose` | Show capabilities and field statistics |
+
+**Examples:**
+
+```bash
+vidveil-cli probe --all
+vidveil-cli probe --engines pornhub
+vidveil-cli probe --engines pornhub,xvideos --query "amateur"
+```
+
 ### login
 
-Save API token to configuration file.
+Save the server address and API token for future CLI use.
 
 ```bash
 vidveil-cli login
 ```
 
-Prompts for server address and API token, then saves to config file.
+Prompts for server address and API token, then saves:
 
-### shell
+- server address to the selected config file (default: `cli.yml`)
+- API token to the default token file
 
-Generate shell completions.
+### shell integration
+
+Generate shell completions or shell init snippets.
 
 ```bash
-vidveil-cli shell completions <shell>
+vidveil-cli --shell completions [shell]
+vidveil-cli --shell init [shell]
 ```
 
-Supported shells: `bash`, `zsh`, `fish`, `powershell`
+If `shell` is omitted, the CLI auto-detects it from `$SHELL` and falls back to `bash`.
+
+Supported shells: `bash`, `zsh`, `fish`, `sh`, `dash`, `ksh`, `powershell`, `pwsh`
 
 **Examples:**
 
 ```bash
-# Bash completions
-vidveil-cli shell completions bash > /etc/bash_completion.d/vidveil-cli
+# Auto-detect the current shell
+vidveil-cli --shell init
 
-# Zsh completions
-vidveil-cli shell completions zsh > ~/.zsh/completions/_vidveil-cli
+# Bash completions
+vidveil-cli --shell completions bash > ~/.local/share/bash-completion/completions/vidveil-cli
+
+# Source directly in the current shell
+source <(vidveil-cli --shell completions bash)
+
+# Zsh init snippet
+vidveil-cli --shell init zsh
 ```
 
 ## Configuration File
 
-The CLI stores configuration in `~/.config/apimgr/vidveil/cli.yml`:
+The CLI stores configuration in a platform-specific `cli.yml` file:
+
+| Platform | Path |
+|----------|------|
+| Unix-like | `~/.config/apimgr/vidveil/cli.yml` |
+| Windows | `%APPDATA%\apimgr\vidveil\cli.yml` |
+
+The file is created automatically on first run with sane defaults.
+
+When `--config` is provided, the client resolves it like this:
+
+- `--config test` -> platform config dir + `test.yml`
+- `--config dev.yaml` -> platform config dir + `dev.yaml`
+- `--config ~/custom/cli.yml` -> explicit absolute path
 
 ```yaml
 server:
-  address: "https://your-server.example.com"
-  token: "your-api-token"
-  timeout: 30
+  primary: "https://x.scour.li"
+  cluster: []
+  api_version: v1
+  admin_path: admin
+  timeout: 30s
+  retry: 3
+  retry_delay: 1s
+
+auth:
+  token: ""
+  token_file: ""
 
 output:
-  format: table    # json, table, plain
+  format: table    # json, yaml, csv, table, plain
   color: auto      # auto, always, never
+  pager: auto      # auto, always, never
+  quiet: false
+  verbose: false
+
+logging:
+  level: warn
+  file: ""
+  max_size: 10MB
+  max_files: 5
+
+cache:
+  enabled: true
+  ttl: 5m
+  max_size: 100MB
 
 tui:
-  theme: default
-  show_hints: true
+  enabled: true
+  theme: dark
+  mouse: true
+  unicode: true
+
+debug: false
 ```
 
 ### Configuration Priority
 
-Settings are resolved in this order (highest to lowest):
+Settings are resolved with command-line flags taking precedence over saved values.
 
-1. Command-line flags (`--server`, `--token`, etc.)
-2. Environment variables (`VIDVEIL_SERVER`, `VIDVEIL_TOKEN`)
-3. Config file (`cli.yml`)
-4. Token file (`~/.config/apimgr/vidveil/token`)
-5. Built-in defaults
+In practice:
+
+1. `--server`, `--token`, `--token-file`, `--output`, `--timeout`, `--color`, and `--debug`
+2. Environment variables such as `VIDVEIL_SERVER_PRIMARY`, `VIDVEIL_SERVER_TIMEOUT`, `VIDVEIL_TOKEN`, `VIDVEIL_OUTPUT_FORMAT`, `VIDVEIL_OUTPUT_COLOR`, `VIDVEIL_DEBUG`, and compatibility aliases like `VIDVEIL_SERVER` and `VIDVEIL_CLI_TOKEN`
+3. Default `cli.yml` config file
+4. Default token file
+5. Built-in defaults such as `https://x.scour.li` and a 30 second timeout
 
 ## Token Storage
 
@@ -227,9 +303,9 @@ Tokens can be stored in multiple locations:
 
 | Location | Method |
 |----------|--------|
-| Config file | `server.token` in `cli.yml` |
-| Token file | `~/.config/apimgr/vidveil/token` |
-| Environment | `VIDVEIL_TOKEN` |
+| Config file | `auth.token` or `auth.token_file` in `cli.yml` |
+| Token file | Default CLI token file at `~/.config/apimgr/vidveil/token` on Unix-like systems |
+| Environment | `VIDVEIL_TOKEN` (canonical) or `VIDVEIL_CLI_TOKEN` (compatibility alias) |
 | Command flag | `--token` or `--token-file` |
 
 ## Output Formats
@@ -305,20 +381,21 @@ vidveil-cli search "!ph !xv !rt amateur"
 
 When launched without arguments in an interactive terminal, the CLI opens a full-screen TUI interface with:
 
-- Real-time search with SSE streaming results
-- Keyboard navigation
-- Engine filtering
-- Result preview
-- Bang autocomplete
+- Direct search execution
+- Result list navigation
+- Open-in-browser shortcuts
+- On-screen shortcuts help
 
 ### TUI Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
 | `Enter` | Execute search |
-| `Tab` | Cycle through panels |
 | `↑/↓` | Navigate results |
 | `Enter` (on result) | Open in browser |
+| `o` | Open selected result in browser |
+| `/` | Start a new search |
+| `Esc` | Close help or clear current search |
 | `q` or `Ctrl+C` | Quit |
 | `?` | Show help |
 
@@ -359,6 +436,6 @@ vidveil-cli --output plain "query" | head -20
 
 results=$(vidveil-cli --output json "query")
 echo "$results" | jq -r '.results[].thumbnail' | while read url; do
-    curl -sO "$url"
+    curl -q -LSsfO "$url"
 done
 ```

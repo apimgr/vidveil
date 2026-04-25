@@ -24,29 +24,38 @@ type AppPaths struct {
 	Backup string
 }
 
+func pathOverride(explicit, envName, fallback string) string {
+	if explicit != "" {
+		return explicit
+	}
+
+	if envValue := os.Getenv(envName); envValue != "" {
+		return envValue
+	}
+
+	return fallback
+}
+
 // GetAppPaths returns OS-appropriate paths per AI.md PART 3
 func GetAppPaths(configDir, dataDir string) *AppPaths {
 	isRoot := os.Geteuid() == 0
 
-	paths := &AppPaths{}
+	return &AppPaths{
+		Config: pathOverride(configDir, "CONFIG_DIR", GetDefaultConfigDir(isRoot)),
+		Data:   pathOverride(dataDir, "DATA_DIR", GetDefaultDataDir(isRoot)),
+		Cache:  pathOverride("", "CACHE_DIR", GetDefaultCacheDir(isRoot)),
+		Log:    pathOverride("", "LOG_DIR", GetDefaultLogDir(isRoot)),
+		Backup: pathOverride("", "BACKUP_DIR", GetDefaultBackupDir(isRoot)),
+	}
+}
 
-	if configDir != "" {
-		paths.Config = configDir
-	} else {
-		paths.Config = GetDefaultConfigDir(isRoot)
+// GetDatabaseDir returns the SQLite database directory.
+func GetDatabaseDir(dataDir string) string {
+	if envValue := os.Getenv("DATABASE_DIR"); envValue != "" {
+		return envValue
 	}
 
-	if dataDir != "" {
-		paths.Data = dataDir
-	} else {
-		paths.Data = GetDefaultDataDir(isRoot)
-	}
-
-	paths.Cache = GetDefaultCacheDir(isRoot)
-	paths.Log = GetDefaultLogDir(isRoot)
-	paths.Backup = GetDefaultBackupDir(isRoot)
-
-	return paths
+	return filepath.Join(dataDir, "db")
 }
 
 // GetDefaultConfigDir returns OS-appropriate config directory

@@ -10271,7 +10271,7 @@ PHASE 5: Server startup (actual server start)
     │   ├─ Set permissions: 0700 for dirs, 0600 for files
     │   ├─ Generate and write {config_dir}/tor/torrc
     │   ├─ Start dedicated tor process (TorrcFile + DataDir)
-    │   ├─ Control: Unix socket (Unix/macOS/BSD) or localhost TCP (Windows)
+    │   ├─ Control: localhost TCP via 127.0.0.1:auto
     │   ├─ Wait for bootstrap (up to 3 min)
     │   ├─ Create hidden service, log .onion address
     │   └─ Error → log WARN, continue without Tor (non-fatal)
@@ -41482,13 +41482,13 @@ pymdown-extensions>=10.0
 ```markdown
 # VIDVEIL
 
-{Brief project description}
+Privacy-respecting adult video meta search with bang shortcuts, SSE streaming, and a thumbnail proxy.
 
 ## Quick Start
 
 ```bash
 # Docker
-docker run -p 64580:80 {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
+docker run -p 64580:80 ghcr.io/apimgr/vidveil:latest
 
 # Binary
 ./vidveil-linux-amd64 --config server.yml
@@ -41496,9 +41496,9 @@ docker run -p 64580:80 {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
 
 ## Features
 
-- {Feature 1}
-- {Feature 2}
-- {Feature 3}
+- 43+ engine aggregation with bang shortcuts
+- SSE streaming search results
+- Thumbnail proxy and Tor hidden service support
 
 ## Documentation
 
@@ -41510,14 +41510,14 @@ docker run -p 64580:80 {PLATFORM_CONTAINER_REGISTRY}/apimgr/vidveil:latest
 
 ## Links
 
-- [Repository]({PLATFORM_REPO_URL})
-- [Live Demo](https://vidveil.apimgr.us) (if applicable)
-- [API Documentation](/openapi) (Swagger UI)
-- [GraphQL Playground](/graphql)
+- [Repository](https://github.com/apimgr/vidveil)
+- [Live Demo](https://x.scour.li) (if applicable)
+- [API Documentation](https://x.scour.li/openapi) (Swagger UI)
+- [GraphQL Playground](https://x.scour.li/graphql)
 
 ## License
 
-MIT - See [LICENSE.md]({PLATFORM_REPO_URL}/blob/main/LICENSE.md)
+MIT - See [LICENSE.md](https://github.com/apimgr/vidveil/blob/main/LICENSE.md)
 ```
 
 ### docs/installation.md
@@ -43345,7 +43345,7 @@ Tor integration uses **external Tor binary** via `github.com/cretz/bine`. This m
 - **Hidden service maps to server port** - `.onion:80` → `localhost:{server_port}`
 - **Server enforces permissions** - creates all dirs/files with correct owner/group/perms
 - **HiddenServiceVersion 3** - v3 onion addresses (56 characters, ed25519) via ADD_ONION
-- **Unix socket for control** - No TCP exposure for Tor control on Unix/macOS/BSD
+- **Localhost auto control port** - Tor control uses `127.0.0.1:auto` on all OSes
 - **SafeLogging enabled** - Scrubs sensitive info from Tor logs
 
 ## Configuration
@@ -43407,8 +43407,8 @@ server:
 
 **CRITICAL: Port Requirements**
 - **NEVER use default Tor ports** (9050, 9051, etc.)
-- **Unix sockets preferred** for all Tor communication (Unix/macOS/BSD)
-- **If TCP required (Windows):** Use ports 62000-65535 ONLY
+- **Use `ControlPort 127.0.0.1:auto` on all OSes** for the current bine-based integration
+- **Never hardcode a control port** - let Tor choose a free localhost port at runtime
 - Server's Tor instance is completely isolated from any system Tor
 
 **Notes:**
@@ -43581,22 +43581,18 @@ When `use_network` or `allow_user_preference` is enabled, the torrc includes `So
 
 ## Platform-Specific Requirements
 
-### Unix/macOS/BSD (Preferred)
-- **Control connection**: Unix socket (`control.sock`) - no network exposure
+### All Platforms
+- **Control connection**: TCP `127.0.0.1:auto`
 - **Hidden service target**: Server's HTTP port via localhost (bine handles via ADD_ONION)
-- **No TCP ports required** for Tor control communication
+- **No fixed control ports** - Tor picks a free localhost port at startup
 
-### Windows Limitations
+| Feature | All OSes |
+|---------|----------|
+| Control connection | TCP `127.0.0.1:auto` |
+| Hidden service target | `localhost:{server_port}` |
+| Security | Control bound to localhost only |
 
-**Windows CANNOT use Unix sockets for control connection.** Control uses TCP on localhost.
-
-| Feature | Unix/macOS/BSD | Windows |
-|---------|---------------|---------|
-| Control connection | Unix socket (`control.sock`) | TCP `127.0.0.1:auto` |
-| Hidden service target | `localhost:{server_port}` | `localhost:{server_port}` |
-| Security | No network exposure for control | Control on localhost only |
-
-**Note:** The hidden service forwards to the server's HTTP port on ALL platforms. Only the Tor control connection differs (Unix socket vs TCP).
+**Note:** The hidden service forwards to the server's HTTP port on ALL platforms, and the control connection uses the same localhost auto-port model on all platforms.
 
 ## Tor Process Management 
 
@@ -43627,7 +43623,7 @@ This prevents conflicts with any existing Tor installation on the system.
 4. Start DEDICATED Tor process:
    ├─ TorrcFile: `{config_dir}/tor/torrc`
    ├─ DataDir: `{data_dir}/tor/`
-   ├─ Control connection: Unix socket (Unix/macOS/BSD) or localhost TCP (Windows)
+   ├─ Control connection: localhost TCP via `127.0.0.1:auto`
    ├─ SocksPort: auto (if outbound enabled) or 0 (hidden service only)
    ├─ Completely isolated from system Tor
    ├─ Wait for bootstrap completion
@@ -43642,12 +43638,12 @@ This prevents conflicts with any existing Tor installation on the system.
 
 | Reason | Description |
 |--------|-------------|
-| **No conflicts** | System Tor uses 9050/9051, we use Unix socket (or localhost TCP on Windows) |
+| **No conflicts** | System Tor uses 9050/9051, we use a runtime-selected localhost control port |
 | **Isolation** | Our DataDir is separate from system Tor |
 | **Clean shutdown** | We control the process lifecycle |
 | **No permissions issues** | Don't need access to system Tor control |
 | **Predictable behavior** | Always same configuration |
-| **Security** | Unix socket is local-only; Windows uses 127.0.0.1 only |
+| **Security** | Control port binds to `127.0.0.1` only |
 
 ### Tor Logging Levels 
 
@@ -43718,7 +43714,7 @@ This prevents conflicts with any existing Tor installation on the system.
 
 **Why same user?**
 - Tor needs read/write access to `{data_dir}/tor/` (owned by server user)
-- Tor control socket must be accessible by server
+- Tor control connection must be reachable by server over localhost
 - Simplifies permissions - no cross-user access needed
 - Clean process tree - server owns Tor lifecycle
 
@@ -43737,7 +43733,6 @@ import (
     "net/http"
     "os"
     "path/filepath"
-    "runtime"
     "sync"
     "time"
 
@@ -43826,11 +43821,10 @@ func startDedicatedTor(ctx context.Context, serverPort int, cfg *TorConfig) (*To
     // Paths
     torrcPath := filepath.Join(configDir, "tor", "torrc")
     torDataDir := filepath.Join(dataDir, "tor")
-    controlSocket := filepath.Join(torDataDir, "control.sock")
     keyPath := filepath.Join(dataDir, "tor", "site", "hs_ed25519_secret_key")
 
     // Generate torrc content from config
-    torrcContent := getTorConfig(controlSocket, cfg)
+    torrcContent := getTorConfig(cfg)
 
     // Create torrc only if it doesn't exist (persistent)
     // torrc is preserved across restarts - only admin panel can update it
@@ -43862,15 +43856,6 @@ func startDedicatedTor(ctx context.Context, serverPort int, cfg *TorConfig) (*To
     // Use custom Tor binary path if specified in config
     if cfg.Binary != "" {
         conf.ExePath = cfg.Binary
-    }
-
-    // Platform-specific control connection
-    if runtime.GOOS == "windows" {
-        // Windows: Unix sockets NOT SUPPORTED, use localhost TCP
-        // bine auto-selects available port for ControlPort
-    } else {
-        // Unix/macOS/BSD: Use Unix socket (more secure, no network exposure)
-        conf.ControlSocket = controlSocket
     }
 
     // Start OUR OWN Tor process - completely separate from system Tor
@@ -44003,14 +43988,13 @@ func saveOnionKey(path string, key control.Key) error {
 }
 ```
 
-### Port/Socket Allocation
+### Port Allocation
 
-| Resource | System Tor | Our Tor (Unix) | Our Tor (Windows) |
-|----------|------------|----------------|-------------------|
-| SocksPort | 9050 | 0 (disabled) | 0 (disabled) |
-| ControlPort | 9051 | 0 (disabled) | 127.0.0.1:auto |
-| ControlSocket | N/A | `{data_dir}/tor/control.sock` | N/A (not supported) |
-| DataDir | `/var/lib/tor` | `{data_dir}/tor/` | `{data_dir}\tor\` |
+| Resource | System Tor | Our Tor |
+|----------|------------|---------|
+| SocksPort | 9050 | 0 (disabled) or `auto` |
+| ControlPort | 9051 | `127.0.0.1:auto` |
+| DataDir | `/var/lib/tor` | `{data_dir}/tor/` |
 
 **How Hidden Service Forwarding Works:**
 
@@ -44029,7 +44013,7 @@ func saveOnionKey(path string, key control.Key) error {
               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Server's Tor Process (owned by server binary)                      │
-│ Control: Unix socket (Unix) or 127.0.0.1:auto (Windows)            │
+│ Control: 127.0.0.1:auto                                             │
 └─────────────┬───────────────────────────────────────────────────────┘
               │ connects to
               ▼
@@ -44041,12 +44025,11 @@ func saveOnionKey(path string, key control.Key) error {
 
 - **bine uses `control.AddOnion()`** with port mapping: `80 → 127.0.0.1:{server_port}`
 - **Tor forwards to server's existing HTTP port** - no new listener created
-- **Same on ALL platforms** - only control connection differs (Unix socket vs TCP)
+- **Same on ALL platforms** - control uses the same localhost auto-port model
 - **Server port is NOT a Tor port** - it's the server's normal HTTP listener
 
-**Platform-specific control connection:**
-- **Unix/macOS/BSD**: Unix socket (`control.sock`) - no network exposure
-- **Windows**: TCP on `127.0.0.1:auto` - localhost only (Unix sockets not supported)
+**Control connection:**
+- **All OSes**: TCP on `127.0.0.1:auto` - localhost only
 
 **SocksPort configuration:**
 - `SocksPort 0` - hidden service only (no outbound)
@@ -44068,22 +44051,14 @@ func saveOnionKey(path string, key control.Key) error {
 //
 // PORT DETECTION: All ports use runtime detection via "auto" - never saved/hardcoded
 // - SocksPort auto: Tor picks available high port at startup
-// - ControlPort 127.0.0.1:auto: Tor picks available high port (Windows only)
+// - ControlPort 127.0.0.1:auto: Tor picks available high port on all OSes
 // - bine reads actual port from control connection after Tor starts
 //
-// NEVER uses default Tor ports (9050, 9051) - uses Unix sockets or auto high ports
-func getTorConfig(controlSocket string, cfg *TorConfig) string {
-    // Platform-specific control connection
-    // NEVER use default ports 9050/9051 - use runtime detection
-    var controlConfig string
-    if runtime.GOOS == "windows" {
-        // Windows: Unix sockets NOT SUPPORTED, use localhost TCP
-        // "auto" = Tor picks available high port at runtime (never saved)
-        controlConfig = "ControlPort 127.0.0.1:auto"
-    } else {
-        // Unix/macOS/BSD: Use Unix socket (no TCP port at all)
-        controlConfig = fmt.Sprintf("ControlPort 0\nControlSocket %s", controlSocket)
-    }
+// NEVER uses default Tor ports (9050, 9051) - uses localhost auto ports
+func getTorConfig(cfg *TorConfig) string {
+    // All OSes use the same localhost auto-port control connection.
+    // "auto" = Tor picks an available high port at runtime (never saved)
+    controlConfig := "ControlPort 127.0.0.1:auto"
 
     // SocksPort: enabled for outbound connections, disabled for hidden service only
     // "auto" = Tor picks available high port at runtime (never saved)
@@ -44123,8 +44098,8 @@ AccountingMax %s`, cfg.MaxMonthlyBandwidth)
 # NEVER uses default port 9050 - runtime detection only
 %s
 
-# Platform-specific control connection
-# NEVER uses default port 9051 - uses socket (Unix) or runtime port (Windows)
+# Control connection
+# NEVER uses default port 9051 - uses runtime localhost port on all OSes
 %s
 
 # Security Hardening
@@ -44160,8 +44135,7 @@ DisableDebuggerAttachment 1
 | Setting | Value | Reason |
 |---------|-------|--------|
 | `SocksPort` | `0` / `auto` | `0` = hidden service only; `auto` = runtime port for outbound |
-| `ControlPort` | `0` (Unix) / `auto` (Windows) | Unix uses socket; Windows uses runtime localhost TCP |
-| `ControlSocket` | `{data_dir}/tor/control.sock` | Unix only - secure, no network exposure |
+| `ControlPort` | `127.0.0.1:auto` | Runtime localhost TCP control port on all OSes |
 | `SafeLogging 1` | Enabled | Scrubs sensitive info from Tor logs |
 | `AccountingStart` | `month 1 00:00` | Reset bandwidth counter on 1st of each month |
 | `AccountingMax` | e.g., `100 GB` | Monthly bandwidth limit (from config) |
@@ -44174,8 +44148,7 @@ DisableDebuggerAttachment 1
 **Runtime Port Detection:**
 - Ports are NEVER hardcoded or saved - always detected at runtime
 - `SocksPort auto` → Tor picks available high port, bine reads it after startup
-- `ControlPort 127.0.0.1:auto` (Windows) → Tor picks available high port
-- Unix/macOS/BSD use Unix socket instead of TCP - no port needed
+- `ControlPort 127.0.0.1:auto` → Tor picks available high port on localhost
 
 **Hidden Service Settings (via `control.AddOnion()`, not torrc):**
 

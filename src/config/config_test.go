@@ -122,6 +122,45 @@ func TestGetAppPaths(t *testing.T) {
 	}
 }
 
+func TestGetAppPathsUsesEnvOverrides(t *testing.T) {
+	t.Setenv("CONFIG_DIR", "/tmp/env-config")
+	t.Setenv("DATA_DIR", "/tmp/env-data")
+	t.Setenv("CACHE_DIR", "/tmp/env-cache")
+	t.Setenv("LOG_DIR", "/tmp/env-log")
+	t.Setenv("BACKUP_DIR", "/tmp/env-backup")
+
+	paths := GetAppPaths("", "")
+
+	if paths.Config != "/tmp/env-config" {
+		t.Errorf("Expected config path from env, got %q", paths.Config)
+	}
+
+	if paths.Data != "/tmp/env-data" {
+		t.Errorf("Expected data path from env, got %q", paths.Data)
+	}
+
+	if paths.Cache != "/tmp/env-cache" {
+		t.Errorf("Expected cache path from env, got %q", paths.Cache)
+	}
+
+	if paths.Log != "/tmp/env-log" {
+		t.Errorf("Expected log path from env, got %q", paths.Log)
+	}
+
+	if paths.Backup != "/tmp/env-backup" {
+		t.Errorf("Expected backup path from env, got %q", paths.Backup)
+	}
+}
+
+func TestGetDatabaseDirUsesEnvOverride(t *testing.T) {
+	t.Setenv("DATABASE_DIR", "/tmp/env-sqlite")
+
+	dbDir := GetDatabaseDir("/tmp/env-data")
+	if dbDir != "/tmp/env-sqlite" {
+		t.Errorf("Expected database dir from env, got %q", dbDir)
+	}
+}
+
 func TestIsValidHost(t *testing.T) {
 	tests := []struct {
 		host     string

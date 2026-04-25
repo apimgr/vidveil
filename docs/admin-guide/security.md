@@ -2,7 +2,7 @@
 
 ## Authentication
 
-Configure at `/admin/server/security/auth`:
+Configure at `https://x.scour.li/admin/server/security/auth`:
 
 - Password requirements
 - Session duration (default: 30 days)
@@ -11,7 +11,7 @@ Configure at `/admin/server/security/auth`:
 
 ## API Tokens
 
-Manage at `/admin/server/security/tokens`:
+Manage at `https://x.scour.li/admin/server/security/tokens`:
 
 - Generate new API tokens
 - Revoke existing tokens
@@ -20,16 +20,16 @@ Manage at `/admin/server/security/tokens`:
 
 ## Rate Limiting
 
-Configure at `/admin/server/security/ratelimit`:
+Configure at `https://x.scour.li/admin/server/security/ratelimit`:
 
-- Requests per minute (default: 60)
+- Requests per minute (default: 120)
 - Burst allowance
 - Bypass for trusted IPs
 - Per-endpoint limits
 
 ## Firewall
 
-Configure at `/admin/server/security/firewall`:
+Configure at `https://x.scour.li/admin/server/security/firewall`:
 
 - IP whitelist/blacklist
 - Country blocking (requires GeoIP)
@@ -38,7 +38,7 @@ Configure at `/admin/server/security/firewall`:
 
 ## Content Restriction
 
-Configure at `/admin/server/network/geoip`:
+Configure at `https://x.scour.li/admin/server/network/geoip`:
 
 Some jurisdictions have laws restricting adult content access. VidVeil supports geographic content restriction with configurable behavior.
 

@@ -44,9 +44,10 @@ pipeline {
                     }
                     env.COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     env.BUILD_DATE = sh(script: 'date +"%a %b %d, %Y at %H:%M:%S %Z"', returnStdout: true).trim()
-                    // OFFICIALSITE from Jenkins credentials or environment
-                    env.OFFICIALSITE = env.OFFICIALSITE ?: ''
-                    env.LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}' -X 'main.OfficialSite=${env.OFFICIALSITE}'"
+                    // OFFICIALSITE from Jenkins environment or site.txt
+                    env.OFFICIALSITE = env.OFFICIALSITE ?: sh(script: '[ -f site.txt ] && cat site.txt || true', returnStdout: true).trim()
+                    env.SERVER_LDFLAGS = "-s -w -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}' -X 'main.OfficialSite=${env.OFFICIALSITE}'"
+                    env.CLI_LDFLAGS = "-s -w -X 'main.ProjectName=${env.PROJECTNAME}' -X 'main.Version=${env.VERSION}' -X 'main.CommitID=${env.COMMIT_ID}' -X 'main.BuildDate=${env.BUILD_DATE}'"
                     env.HAS_CLI = sh(script: '[ -d src/client ] && echo true || echo false', returnStdout: true).trim()
                 }
                 sh 'mkdir -p ${BINDIR} ${RELDIR}'
@@ -69,7 +70,7 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-amd64 ./src
+                                go build -ldflags "${SERVER_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-amd64 ./src
                         '''
                     }
                 }
@@ -86,7 +87,7 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-arm64 ./src
+                                go build -ldflags "${SERVER_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-arm64 ./src
                         '''
                     }
                 }
@@ -103,7 +104,7 @@ pipeline {
                                 -e GOOS=darwin \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-amd64 ./src
+                                go build -ldflags "${SERVER_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-amd64 ./src
                         '''
                     }
                 }
@@ -120,7 +121,7 @@ pipeline {
                                 -e GOOS=darwin \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-arm64 ./src
+                                go build -ldflags "${SERVER_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-darwin-arm64 ./src
                         '''
                     }
                 }
@@ -137,7 +138,7 @@ pipeline {
                                 -e GOOS=windows \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-amd64.exe ./src
+                                go build -ldflags "${SERVER_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-amd64.exe ./src
                         '''
                     }
                 }
@@ -154,7 +155,7 @@ pipeline {
                                 -e GOOS=windows \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-arm64.exe ./src
+                                go build -ldflags "${SERVER_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-windows-arm64.exe ./src
                         '''
                     }
                 }
@@ -171,7 +172,7 @@ pipeline {
                                 -e GOOS=freebsd \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-amd64 ./src
+                                go build -ldflags "${SERVER_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-amd64 ./src
                         '''
                     }
                 }
@@ -188,7 +189,7 @@ pipeline {
                                 -e GOOS=freebsd \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-arm64 ./src
+                                go build -ldflags "${SERVER_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-freebsd-arm64 ./src
                         '''
                     }
                 }
@@ -213,7 +214,7 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=amd64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-amd64-cli ./src/client
+                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-cli-linux-amd64 ./src/client
                         '''
                     }
                 }
@@ -230,7 +231,109 @@ pipeline {
                                 -e GOOS=linux \
                                 -e GOARCH=arm64 \
                                 golang:alpine \
-                                go build -ldflags "${LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-linux-arm64-cli ./src/client
+                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-cli-linux-arm64 ./src/client
+                        '''
+                    }
+                }
+                stage('CLI Darwin AMD64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=darwin \
+                                -e GOARCH=amd64 \
+                                golang:alpine \
+                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-cli-darwin-amd64 ./src/client
+                        '''
+                    }
+                }
+                stage('CLI Darwin ARM64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=darwin \
+                                -e GOARCH=arm64 \
+                                golang:alpine \
+                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-cli-darwin-arm64 ./src/client
+                        '''
+                    }
+                }
+                stage('CLI Windows AMD64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=windows \
+                                -e GOARCH=amd64 \
+                                golang:alpine \
+                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-cli-windows-amd64.exe ./src/client
+                        '''
+                    }
+                }
+                stage('CLI Windows ARM64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=windows \
+                                -e GOARCH=arm64 \
+                                golang:alpine \
+                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-cli-windows-arm64.exe ./src/client
+                        '''
+                    }
+                }
+                stage('CLI FreeBSD AMD64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=freebsd \
+                                -e GOARCH=amd64 \
+                                golang:alpine \
+                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-cli-freebsd-amd64 ./src/client
+                        '''
+                    }
+                }
+                stage('CLI FreeBSD ARM64') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/build \
+                                -v ${GOCACHE}:/root/.cache/go-build \
+                                -v ${GOMODCACHE}:/go/pkg/mod \
+                                -w /build \
+                                -e CGO_ENABLED=0 \
+                                -e GOOS=freebsd \
+                                -e GOARCH=arm64 \
+                                golang:alpine \
+                                go build -ldflags "${CLI_LDFLAGS}" -o ${BINDIR}/${PROJECTNAME}-cli-freebsd-arm64 ./src/client
                         '''
                     }
                 }
@@ -308,6 +411,7 @@ pipeline {
                             --build-arg VERSION="${VERSION}" \
                             --build-arg COMMIT_ID="${COMMIT_ID}" \
                             --build-arg BUILD_DATE="${BUILD_DATE}" \
+                            --build-arg OFFICIAL_SITE="${OFFICIALSITE}" \
                             ${tags} \
                             --push \
                             .

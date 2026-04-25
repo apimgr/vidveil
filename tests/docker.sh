@@ -70,7 +70,7 @@ test_endpoint() {
     fi
 }
 
-# Step 1: Build binary in Docker per PART 13
+# Step 1: Build binary in Docker per current container-only workflow
 info "Building binary with Docker (golang:alpine)..."
 docker run --rm \
     -v "${PROJECT_ROOT}":/build \
@@ -78,7 +78,7 @@ docker run --rm \
     -w /build \
     -e CGO_ENABLED=0 \
     golang:alpine \
-    sh -c "go mod download && go build -ldflags '-s -w' -o /output/${PROJECT_NAME} ./src" 2>&1 | tail -5
+    sh -c "go mod tidy && go mod download && go build -ldflags '-s -w' -o /output/${PROJECT_NAME} ./src" 2>&1 | tail -5
 
 if [ ! -f "${TEMP_DIR}/${PROJECT_NAME}" ]; then
     echo -e "${RED}✗ Build failed${NC}"

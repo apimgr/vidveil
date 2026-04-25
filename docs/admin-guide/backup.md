@@ -4,7 +4,7 @@
 
 ### Via Admin Panel
 
-1. Go to `/admin/server/system/backup`
+1. Go to `https://x.scour.li/admin/server/system/backup`
 2. Click "Create Backup"
 3. Optionally enable encryption (password required)
 
@@ -15,7 +15,8 @@
 vidveil --maintenance backup
 
 # Backup is saved to configured backup directory
-# Default: /var/lib/apimgr/vidveil/backups/ (root)
+# Default (Linux root): /mnt/Backups/apimgr/vidveil/
+# Default (BSD root): /var/backups/apimgr/vidveil/
 # Default: ~/.local/share/Backups/apimgr/vidveil/ (user)
 ```
 
@@ -23,7 +24,7 @@ vidveil --maintenance backup
 
 ### Via Admin Panel
 
-1. Go to `/admin/server/system/backup`
+1. Go to `https://x.scour.li/admin/server/system/backup`
 2. Select backup from list or upload file
 3. Click "Restore"
 
@@ -54,8 +55,8 @@ Backups support AES-256-GCM encryption with Argon2id key derivation:
 
 ## Retention
 
-Default: Keep last 4 backups. Configure via `backup.max_backups` setting.
+Default: Keep the last 1 daily backup. Configure via `backup.max_backups`, `backup.keep_weekly`, `backup.keep_monthly`, and `backup.keep_yearly`.
 
 ## Scheduled Backups
 
-Automatic backups run daily at 02:00. Configure at `/admin/server/scheduler`.
+Automatic backups are scheduled for 02:00 daily but disabled by default. Enable and configure them at `https://x.scour.li/admin/server/scheduler`.

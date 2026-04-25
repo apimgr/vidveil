@@ -1051,14 +1051,19 @@ func GetAppPaths(configDir, dataDir string) *AppPaths {
 	return paths.GetAppPaths(configDir, dataDir)
 }
 
+// GetDatabaseDir returns the SQLite database directory.
+func GetDatabaseDir(dataDir string) string {
+	return paths.GetDatabaseDir(dataDir)
+}
+
 // LoadAppConfig loads configuration from file or creates default
 func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	paths := GetAppPaths(configDir, dataDir)
+	dbDir := GetDatabaseDir(paths.Data)
 
 	// Ensure directories exist per AI.md PART 8 and PART 27
 	// Binary handles ALL directory creation with proper permissions
 	// Permissions: root=0755, user=0700 per AI.md PART 4
-	dbDir := filepath.Join(paths.Data, "db")
 	dirPerm := os.FileMode(0755)
 	if os.Getuid() != 0 {
 		dirPerm = 0700
@@ -1087,7 +1092,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 
 		// Set paths in config
 		cfg.Server.SSL.CertPath = filepath.Join(paths.Config, "ssl", "certs")
-		cfg.Server.Database.SQLite.Dir = filepath.Join(paths.Data, "db")
+		cfg.Server.Database.SQLite.Dir = dbDir
 
 		if err := SaveAppConfig(cfg, configPath); err != nil {
 			return nil, "", fmt.Errorf("failed to save default config: %w", err)
@@ -1112,6 +1117,10 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 
 	// Validate and fix invalid config values per AI.md PART 12
 	validateConfig(cfg)
+
+	if cfg.Server.Database.SQLite.Dir == "" || os.Getenv("DATABASE_DIR") != "" {
+		cfg.Server.Database.SQLite.Dir = dbDir
+	}
 
 	return cfg, configPath, nil
 }

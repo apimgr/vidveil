@@ -3,52 +3,34 @@
 ## Quick Start
 
 ```bash
-docker run -d -p 8888:80 ghcr.io/apimgr/vidveil:latest
+docker run -d \
+  --name vidveil \
+  -p 64580:80 \
+  -v ./rootfs/config:/config:z \
+  -v ./rootfs/data:/data:z \
+  ghcr.io/apimgr/vidveil:latest
 ```
 
 ## Docker Compose
 
-```yaml
-version: '3.8'
-
-services:
-  vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
-    container_name: vidveil
-    restart: unless-stopped
-    ports:
-      - "8888:80"
-    volumes:
-      - vidveil-data:/data
-      - vidveil-config:/config
-    environment:
-      - MODE=production
-
-volumes:
-  vidveil-data:
-  vidveil-config:
+```bash
+curl -q -LSsfO https://raw.githubusercontent.com/apimgr/vidveil/main/docker/docker-compose.yml
+docker compose up -d
 ```
 
-## Environment Variables
+## Runtime Volumes
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MODE` | production | Application mode |
-| `PORT` | 80 | Internal port (don't change) |
+Vidveil uses two runtime volume roots in compose-based deployments:
 
-## Volumes
+| Host Path | Container Path | Purpose |
+|---|---|---|
+| `./rootfs/config` | `/config` | Configuration root |
+| `./rootfs/data` | `/data` | Data and logs root |
 
-| Path | Description |
-|------|-------------|
-| `/config` | Configuration files |
-| `/data` | Database and data files |
-| `/logs` | Log files |
+The Vidveil config file inside the container is `/config/vidveil/server.yml`.
 
-## With Tor
+## Development and Test Compose Files
 
-The Docker image includes Tor. To enable:
-
-```yaml
-environment:
-  - TOR_ENABLED=true
-```
+- `docker/docker-compose.yml` - production-oriented compose
+- `docker/docker-compose.dev.yml` - development workflow
+- `docker/docker-compose.test.yml` - automated testing workflow

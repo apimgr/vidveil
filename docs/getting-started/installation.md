@@ -1,78 +1,72 @@
 # Installation
 
-## Requirements
+## Recommended Paths
 
-- Go 1.21+ (for building from source)
-- Docker (optional, for containerized deployment)
-
-## Download
-
-### Pre-built Binaries
-
-Download the latest release for your platform:
-
-| Platform | Architecture | Download |
-|----------|--------------|----------|
-| Linux | amd64 | [vidveil-linux-amd64](https://github.com/apimgr/vidveil/releases/latest) |
-| Linux | arm64 | [vidveil-linux-arm64](https://github.com/apimgr/vidveil/releases/latest) |
-| macOS | amd64 | [vidveil-darwin-amd64](https://github.com/apimgr/vidveil/releases/latest) |
-| macOS | arm64 | [vidveil-darwin-arm64](https://github.com/apimgr/vidveil/releases/latest) |
-| Windows | amd64 | [vidveil-windows-amd64.exe](https://github.com/apimgr/vidveil/releases/latest) |
-| Windows | arm64 | [vidveil-windows-arm64.exe](https://github.com/apimgr/vidveil/releases/latest) |
-| FreeBSD | amd64 | [vidveil-freebsd-amd64](https://github.com/apimgr/vidveil/releases/latest) |
-| FreeBSD | arm64 | [vidveil-freebsd-arm64](https://github.com/apimgr/vidveil/releases/latest) |
-
-### Docker
+### Docker Compose
 
 ```bash
-docker pull ghcr.io/apimgr/vidveil:latest
+curl -q -LSsfO https://raw.githubusercontent.com/apimgr/vidveil/main/docker/docker-compose.yml
+docker compose up -d
 ```
 
-## Building from Source
-
-```bash
-git clone https://github.com/apimgr/vidveil.git
-cd vidveil
-make build
-```
-
-The binary will be created in `bin/vidveil`.
-
-## Running
-
-### Direct Execution
-
-```bash
-./vidveil
-```
-
-### As a Service
-
-```bash
-# Install as system service
-sudo ./vidveil --service --install
-
-# Start the service
-sudo ./vidveil --service start
-```
-
-### Docker
+### Docker Run
 
 ```bash
 docker run -d \
   --name vidveil \
-  -p 8888:80 \
-  -v vidveil-data:/data \
-  -v vidveil-config:/config \
+  -p 64580:80 \
+  -v ./rootfs/config:/config:z \
+  -v ./rootfs/data:/data:z \
   ghcr.io/apimgr/vidveil:latest
+```
+
+### Binary Download
+
+```bash
+curl -q -LSsfO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
+chmod +x vidveil-linux-amd64
+./vidveil-linux-amd64
+```
+
+## Build From Source
+
+Local builds use the repository Makefile and Docker-backed Go toolchain:
+
+```bash
+git clone https://github.com/apimgr/vidveil.git
+cd vidveil
+make local
+```
+
+Built binaries are written to `binaries/`.
+
+## Service Installation
+
+### Linux (systemd)
+
+```bash
+sudo cp vidveil-linux-amd64 /usr/local/bin/vidveil
+sudo vidveil --service --install
+sudo systemctl enable --now vidveil
+```
+
+### macOS (launchd)
+
+```bash
+sudo cp vidveil-darwin-amd64 /usr/local/bin/vidveil
+sudo vidveil --service --install
+sudo launchctl load /Library/LaunchDaemons/apimgr.vidveil.plist
+```
+
+### BSD (rc.d)
+
+```bash
+sudo cp vidveil-freebsd-amd64 /usr/local/bin/vidveil
+sudo vidveil --service --install
+echo 'vidveil_enable="YES"' | sudo tee -a /etc/rc.conf
+sudo service vidveil start
 ```
 
 ## First Run
 
-On first run, Vidveil will:
-
-1. Create configuration directory
-2. Generate a setup token (displayed in console)
-3. Start the web server
-
-Navigate to `http://localhost:8888/admin` and enter the setup token to complete the initial configuration.
+On first run Vidveil creates its config/data paths, initializes the database, and prints the setup token or setup URL needed to complete admin setup.

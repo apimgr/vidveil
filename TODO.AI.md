@@ -5,11 +5,13 @@ This file was migrated from session-local SQL/checkpoint tracking so the ongoing
 ## Current Status
 
 - Repo-local migration is complete.
-- One verified follow-up item remains open after re-reading PART 33.
+- AI.md was refreshed from `~/Documents/templates/go/AI.md` on 2026-04-28 (≈5.6k insertions, ≈2.6k deletions vs prior copy). Project may need a fresh compliance sweep against the updated PART text.
+- Two verified follow-up items remain open: the previously tracked client elevated-user rule, and a fresh post-template-refresh audit.
 
 ## Active / Pending
 
 - [ ] client-elevated-user-rule — AI.md PART 33 says `vidveil-cli` always runs as a normal user and never as root/administrator, but the current client has no elevated-user startup guard yet. Do not implement this until the exact runtime behavior is pinned down against the existing cross-platform privilege helpers and the containerized validation flow.
+- [ ] post-template-refresh-audit — AI.md was refreshed on 2026-04-28 from the canonical Go template. Re-read the PARTs touched by the refresh (especially 0, 1, 2, 3, 4, 5, 12, 14, 16, 17, 33) and run a focused compliance sweep on areas where the new spec language differs from the prior copy. Fix only verified drift; do not invent unrequested changes.
 
 ## Completed Migrated Tasks
 

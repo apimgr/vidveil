@@ -5,9 +5,10 @@ This file was migrated from session-local SQL/checkpoint tracking so the ongoing
 ## Current Status
 
 - Repo-local migration is complete.
-- AI.md was re-copied from `~/Documents/templates/go/AI.md` on 2026-04-28; md5 matches the template on disk, so no new spec text vs the prior 2026-04-28 refresh. The post-template-refresh sweep below is still owed.
+- AI.md was re-copied from `~/Documents/templates/go/AI.md` on 2026-04-28; current md5 is `fb92c54ca8c80d10b36a9add99cf29fa` (template was updated mid-day after the earlier `3a3a0817650661ff1b953c8917790dfd` refresh). Line count and PART boundaries are unchanged; the only difference re-read confirmed is a clarification, repeated in four places (lines 152, 1926-1928, 2038, 3121), that the OPTIONAL→NON-NEGOTIABLE title-flip exception is title-only and now explicitly includes the Agent subsection of PART 33 in addition to PARTs 34-36. No-op for VidVeil (Agent / 34 / 35 / 36 not implemented). The post-template-refresh sweep below is still owed.
 - AI.md is currently UNTRACKED (`?? AI.md`); it was removed from git earlier and the repo intentionally does not track it.
-- `.claude/rules/` cheatsheets were regenerated (all 14 files) on 2026-04-28 from the current AI.md PART map.
+- `.claude/rules/` directory does NOT currently exist in the worktree (the prior 2026-04-28 regeneration was wiped); recreating the 14 cheatsheets is now its own pending task below.
+- `.gitignore` exists in the worktree; `CLAUDE.md` (project-root memory file required by AI.md PART 3) is still missing.
 - AUDIT.AI.md was opened on 2026-04-28 and remains in progress (pre-PART-0 findings logged; PARTs 0–37 still pending).
 
 ## Active / Pending
@@ -15,7 +16,8 @@ This file was migrated from session-local SQL/checkpoint tracking so the ongoing
 - [ ] client-elevated-user-rule — AI.md PART 33 says `vidveil-cli` always runs as a normal user and never as root/administrator, but the current client has no elevated-user startup guard yet. Do not implement this until the exact runtime behavior is pinned down against the existing cross-platform privilege helpers and the containerized validation flow.
 - [ ] post-template-refresh-audit — Re-read the PARTs the user flagged earlier (0, 1, 2, 3, 4, 5, 12, 14, 16, 17, 33) and run a focused compliance sweep on the worktree. Fix only verified drift; do not invent unrequested changes.
 - [ ] idea-md-layout-migration — IDEA.md still uses the older layout (`# VidVeil` title + `## Project Description` + `## Project-Specific Features` + `## Detailed Specification`). AI.md PART 0 → "IDEA.md Layout Migration" requires three exact top-level sections: `# Description`, `# Project variables`, `# Business Logic (The WHAT not HOW)`. Migration is mechanical (rename headers, move existing business content into the new sections, fill in the Variables table). Do NOT delete or rewrite business content during the migration.
-- [ ] missing-gitignore-and-claude-md — AI.md PART 3 lists `.gitignore` and `CLAUDE.md` (project root) as REQUIRED. Neither file exists in the worktree right now. Confirm with the user whether to add them (the gitignore template + the small CLAUDE.md project-memory file) before creating them.
+- [ ] missing-claude-md — AI.md PART 3 lists `CLAUDE.md` at the project root as REQUIRED. The file does not exist in the worktree right now (`.gitignore` is already present and tracked). Confirm with the user whether to add the small CLAUDE.md project-memory file before creating it.
+- [ ] recreate-claude-rules-cheatsheets — AI.md PART 0 → "Session Initialization" requires the 14 `.claude/rules/*.md` cheatsheets when the directory is missing. The directory was regenerated 2026-04-28 but is no longer in the worktree. Confirm with the user before recreating, since `.claude/` is gitignored per PART 3 (the regenerated files would be local only).
 - [ ] continue-audit — AUDIT.AI.md tracks the in-progress full-spec audit. Resume it section by section in spec order and delete AUDIT.AI.md when the last item is closed (per PART 0).
 
 ## Completed Migrated Tasks

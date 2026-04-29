@@ -5,13 +5,18 @@ This file was migrated from session-local SQL/checkpoint tracking so the ongoing
 ## Current Status
 
 - Repo-local migration is complete.
-- AI.md was refreshed from `~/Documents/templates/go/AI.md` on 2026-04-28 (≈5.6k insertions, ≈2.6k deletions vs prior copy). Project may need a fresh compliance sweep against the updated PART text.
-- Two verified follow-up items remain open: the previously tracked client elevated-user rule, and a fresh post-template-refresh audit.
+- AI.md was re-copied from `~/Documents/templates/go/AI.md` on 2026-04-28; md5 matches the template on disk, so no new spec text vs the prior 2026-04-28 refresh. The post-template-refresh sweep below is still owed.
+- AI.md is currently UNTRACKED (`?? AI.md`); it was removed from git earlier and the repo intentionally does not track it.
+- `.claude/rules/` cheatsheets were regenerated (all 14 files) on 2026-04-28 from the current AI.md PART map.
+- AUDIT.AI.md was opened on 2026-04-28 and remains in progress (pre-PART-0 findings logged; PARTs 0–37 still pending).
 
 ## Active / Pending
 
 - [ ] client-elevated-user-rule — AI.md PART 33 says `vidveil-cli` always runs as a normal user and never as root/administrator, but the current client has no elevated-user startup guard yet. Do not implement this until the exact runtime behavior is pinned down against the existing cross-platform privilege helpers and the containerized validation flow.
-- [ ] post-template-refresh-audit — AI.md was refreshed on 2026-04-28 from the canonical Go template. Re-read the PARTs touched by the refresh (especially 0, 1, 2, 3, 4, 5, 12, 14, 16, 17, 33) and run a focused compliance sweep on areas where the new spec language differs from the prior copy. Fix only verified drift; do not invent unrequested changes.
+- [ ] post-template-refresh-audit — Re-read the PARTs the user flagged earlier (0, 1, 2, 3, 4, 5, 12, 14, 16, 17, 33) and run a focused compliance sweep on the worktree. Fix only verified drift; do not invent unrequested changes.
+- [ ] idea-md-layout-migration — IDEA.md still uses the older layout (`# VidVeil` title + `## Project Description` + `## Project-Specific Features` + `## Detailed Specification`). AI.md PART 0 → "IDEA.md Layout Migration" requires three exact top-level sections: `# Description`, `# Project variables`, `# Business Logic (The WHAT not HOW)`. Migration is mechanical (rename headers, move existing business content into the new sections, fill in the Variables table). Do NOT delete or rewrite business content during the migration.
+- [ ] missing-gitignore-and-claude-md — AI.md PART 3 lists `.gitignore` and `CLAUDE.md` (project root) as REQUIRED. Neither file exists in the worktree right now. Confirm with the user whether to add them (the gitignore template + the small CLAUDE.md project-memory file) before creating them.
+- [ ] continue-audit — AUDIT.AI.md tracks the in-progress full-spec audit. Resume it section by section in spec order and delete AUDIT.AI.md when the last item is closed (per PART 0).
 
 ## Completed Migrated Tasks
 

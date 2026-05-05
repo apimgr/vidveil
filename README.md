@@ -47,8 +47,8 @@ https://x.scour.li
 docker run -d \
   --name vidveil \
   -p 64580:80 \
-  -v ./rootfs/config:/config:z \
-  -v ./rootfs/data:/data:z \
+  -v ./volumes/config:/config:z \
+  -v ./volumes/data:/data:z \
   ghcr.io/apimgr/vidveil:latest
 ```
 

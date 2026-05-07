@@ -21,10 +21,10 @@ services:
       - DEBUG=true
       - TZ=${TZ:-America/New_York}
     volumes:
-      # TEMP DIR WORKFLOW: ./rootfs/ resolves to $TEMP_DIR/rootfs/
+      # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
       # NEVER run from project directory - always use temp dir workflow
-      - ./rootfs/config:/config
-      - ./rootfs/data:/data
+      - ./volumes/config:/config
+      - ./volumes/data:/data
     ports:
       - '64581:80'
     healthcheck:

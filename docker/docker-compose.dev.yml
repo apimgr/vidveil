@@ -24,10 +24,10 @@ services:
       # DEBUG: Uncomment to enable pprof, expvar, detailed request logging
       # - DEBUG=true
     volumes:
-      # TEMP DIR WORKFLOW: ./rootfs/ resolves to $TEMP_DIR/rootfs/
+      # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
       # NEVER run from project directory - always use temp dir workflow
-      - ./rootfs/config:/config
-      - ./rootfs/data:/data
+      - ./volumes/config:/config
+      - ./volumes/data:/data
     ports:
       # Development: accessible from all interfaces
       - '64893:80'

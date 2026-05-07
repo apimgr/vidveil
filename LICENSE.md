@@ -28,7 +28,7 @@ This software uses the following open-source libraries. All dependencies use per
 
 ---
 
-### Go Dependencies (73 packages)
+### Go Dependencies (partial list, regenerated via `go-licenses` inside `golang:alpine`)
 
 - filippo.io/edwards25519 v1.1.0 - BSD-3-Clause - https://pkg.go.dev/filippo.io/edwards25519
 - github.com/PuerkitoBio/goquery v1.9.2 - BSD-3-Clause - https://github.com/PuerkitoBio/goquery
@@ -45,7 +45,6 @@ This software uses the following open-source libraries. All dependencies use per
 - github.com/go-sql-driver/mysql v1.9.3 - MPL-2.0 - https://github.com/go-sql-driver/mysql
 - github.com/google/uuid v1.6.0 - BSD-3-Clause - https://github.com/google/uuid
 - github.com/jackc/pgx/v5 v5.7.2 - MIT - https://github.com/jackc/pgx
-- github.com/lib/pq v1.10.9 - MIT - https://github.com/lib/pq
 - github.com/lucasb-eyer/go-colorful v1.2.0 - MIT - https://github.com/lucasb-eyer/go-colorful
 - github.com/mattn/go-isatty v0.0.20 - MIT - https://github.com/mattn/go-isatty
 - github.com/mattn/go-runewidth v0.0.16 - MIT - https://github.com/mattn/go-runewidth

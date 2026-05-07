@@ -366,11 +366,17 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/content-restricted", h.ContentRestrictedPage)
 	s.router.Post("/content-restricted", h.ContentRestrictedSubmit)
 
-	// Health, robots, security.txt, and sitemap (no age verification)
-	// Per AI.md PART 13: /healthz with extension support
-	s.router.Get("/healthz", h.HealthCheck)
-	s.router.Get("/healthz.json", h.HealthCheck)
-	s.router.Get("/healthz.txt", h.HealthCheck)
+	// Per AI.md PART 13/14: /server/healthz is the canonical frontend health route.
+	// /healthz is an optional root alias gated on server.healthz.root.enabled (default false).
+	// When enabled it MUST be a direct handler mapping to the same handler (NEVER redirect).
+	s.router.Get("/server/healthz", h.HealthCheck)
+	s.router.Get("/server/healthz.json", h.HealthCheck)
+	s.router.Get("/server/healthz.txt", h.HealthCheck)
+	if s.appConfig.Server.Healthz.Root.Enabled {
+		s.router.Get("/healthz", h.HealthCheck)
+		s.router.Get("/healthz.json", h.HealthCheck)
+		s.router.Get("/healthz.txt", h.HealthCheck)
+	}
 	s.router.Get("/robots.txt", h.RobotsTxt)
 	s.router.Get("/sitemap.xml", h.SitemapXML)
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
@@ -594,12 +600,14 @@ func (s *Server) setupRoutes() {
 			r.Get("/engines/{name}", h.DebugEngine)
 		})
 
-		// Health and version (public)
+		// Per AI.md PART 14: API health is canonical at /api/{api_version}/server/healthz.
+		// /api/{api_version}/healthz is kept as a backwards-compat alias and may be removed in a future major.
 		r.Get("/healthz", h.APIHealthCheck)
 		r.Get("/version", h.APIVersion)
 
 		// Server API per AI.md PART 14
 		r.Route("/server", func(r chi.Router) {
+			r.Get("/healthz", h.APIHealthCheck)
 			r.Get("/about", server.APIAbout)
 			r.Get("/privacy", server.APIPrivacy)
 			r.Post("/contact", server.APIContact)

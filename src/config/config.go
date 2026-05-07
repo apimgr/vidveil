@@ -117,6 +117,23 @@ type ServerConfig struct {
 
 	// Tor (PART 32) - Hidden service and outbound network settings
 	Tor TorConfig `yaml:"tor"`
+
+	// Healthz (PART 13) - Optional root-level alias for /server/healthz
+	// Canonical route is /server/healthz; root /healthz is opt-in
+	Healthz HealthzConfig `yaml:"healthz"`
+}
+
+// HealthzConfig holds health-check route configuration per AI.md PART 13
+type HealthzConfig struct {
+	// Optional root-level /healthz alias to the canonical /server/healthz handler
+	Root HealthzRootConfig `yaml:"root"`
+}
+
+// HealthzRootConfig gates the optional /healthz route per AI.md PART 5/13
+type HealthzRootConfig struct {
+	// When true, mount /healthz to the SAME handler as /server/healthz (NEVER redirect)
+	// Default: false. Spec: "Optional root health alias"
+	Enabled bool `yaml:"enabled"`
 }
 
 // TorConfig holds Tor-related configuration per AI.md PART 32

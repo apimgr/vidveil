@@ -4461,7 +4461,8 @@ func (h *AdminHandler) AddNodePage(w http.ResponseWriter, r *http.Request) {
 		address := r.FormValue("address")
 		portStr := r.FormValue("port")
 		token := r.FormValue("token")
-		verifySSL := r.FormValue("verify_ssl") == "on"
+		// Per AI.md PART 5 Boolean Handling: form input parsed via config.ParseBool
+		verifySSL := config.ParseBool(r.FormValue("verify_ssl"))
 
 		if address == "" || portStr == "" || token == "" {
 			data["Error"] = "All fields are required"

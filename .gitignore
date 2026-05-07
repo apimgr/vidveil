@@ -102,6 +102,11 @@ $RECYCLE.BIN/
 **/*.rewrite.sh
 **/*.refactor.sh
 
+# Per AI.md PART 3: build/runtime output directories (gitignored)
+binaries/
+releases/
+volumes/
+
 
 # Per AI.md PART 0: personal local Claude Code settings (auto-gitignored)
 .claude/settings.local.json

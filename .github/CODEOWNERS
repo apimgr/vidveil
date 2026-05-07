@@ -1,0 +1,34 @@
+# CODEOWNERS for apimgr/vidveil
+#
+# Per AI.md PART 28, public repos MUST define a catch-all owner plus explicit
+# owners for security-sensitive paths (workflows, Docker/release files, and
+# auth/crypto/update code).
+
+# Catch-all
+* @apimgr
+
+# CI/CD workflows
+/.github/workflows/  @apimgr
+/.gitea/workflows/   @apimgr
+/Jenkinsfile         @apimgr
+
+# Build / release / packaging
+/docker/             @apimgr
+/Makefile            @apimgr
+/release.txt         @apimgr
+/site.txt            @apimgr
+
+# Security-sensitive runtime code
+/src/server/service/ssl/         @apimgr
+/src/server/service/totp/        @apimgr
+/src/server/service/blocklist/   @apimgr
+/src/server/service/geoip/       @apimgr
+/src/server/service/cve/         @apimgr
+/src/server/service/ratelimit/   @apimgr
+/src/server/service/admin/       @apimgr
+
+# Spec / docs / governance
+/AI.md     @apimgr
+/IDEA.md   @apimgr
+/.github/  @apimgr
+/.gitea/   @apimgr

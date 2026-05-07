@@ -1,0 +1,46 @@
+version: 2
+
+# Per AI.md PART 28: Dependabot must cover every ecosystem actually used by
+# the repo. VidVeil uses Go modules, GitHub Actions, and Docker base images.
+updates:
+  # Go module dependencies
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - go
+    commit-message:
+      prefix: "deps(go)"
+
+  # GitHub Actions used in .github/workflows/
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "deps(actions)"
+
+  # Docker base images referenced by docker/Dockerfile
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker
+    commit-message:
+      prefix: "deps(docker)"

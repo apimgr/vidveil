@@ -116,8 +116,10 @@ nav:
   - Admin Guide:
     - Dashboard: admin-guide/dashboard.md
     - Server Settings: admin-guide/server.md
-    - Security: admin-guide/security.md
+    - Security (Operator): admin-guide/security.md
     - Backup & Restore: admin-guide/backup.md
+  - Security: security.md
+  - Integrations: integrations.md
   - Development:
     - Contributing: development/contributing.md
     - Building: development/building.md

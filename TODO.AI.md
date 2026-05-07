@@ -4,13 +4,13 @@ This file was migrated from session-local SQL/checkpoint tracking so the ongoing
 
 ## Current Status
 
-- AI.md was re-copied from `~/Templates/go/TEMPLATE.md` on 2026-05-06 and substituted with project-specific values (project_name=vidveil, project_org=apimgr, internal_name=vidveil, plist_name=io.github.apimgr.vidveil). 2412 placeholder replacements applied. Current md5 after substitution is `ab2546e6b41c6e844c3206c2cdbeb600`. AI.md is UNTRACKED in git intentionally.
-- IDEA.md migrated to the AI.md PART 0 three-section format on 2026-05-06: `## Project description`, `## Project variables`, `## Business logic` (with all six required subsections plus reference detail). Backup at `IDEA.md.preMigration.bak`. official_site sourced from `site.txt` (https://x.scour.li).
-- Repo-root AI loader memory file regenerated on 2026-05-06 from the AI.md PART 0 template, pointing into AI.md and the per-tool rules cheatsheets.
-- 14 per-tool rule cheatsheet files regenerated on 2026-05-06 in the per-tool rules dir (gitignored, local only): ai-rules, project-rules, config-rules, binary-rules, backend-rules, api-rules, frontend-rules, features-rules, service-rules, makefile-rules, docker-rules, cicd-rules, testing-rules, optional-rules.
-- AUDIT.AI.md deleted on 2026-05-06 as stale relative to the new template. A fresh post-template-refresh audit may be opened later as a separate AUDIT.AI.md when work resumes.
+- AI.md was re-copied from `~/Templates/go/TEMPLATE.md` on 2026-05-07. The new template treats `{project_name}` / `{project_org}` / `{internal_name}` / `{plist_name}` as REFERENCE TOKENS, not setup-time text replacements - they resolve from `IDEA.md ## Project variables` and AI.md stays read-only with placeholders intact. Current md5 (no substitution) is `201ca82ec5dfa9d7b10407fe19c63982`. AI.md is TRACKED in git per PART 0 "Allowed Root Files"; template refreshes are committed.
+- IDEA.md remains in the AI.md PART 0 three-section format from 2026-05-06: `## Project description`, `## Project variables`, `## Business logic` (with all six required subsections plus reference detail). Backup at `IDEA.md.preMigration.bak`. official_site sourced from `site.txt` (https://x.scour.li).
+- Repo-root AI loader (CLAUDE.md) refreshed 2026-05-07 to record the new md5 and the no-substitution architectural shift.
+- 14 per-tool rule cheatsheet files in `.claude/rules/` (gitignored, local only) verified against the new template on 2026-05-07: ai-rules, project-rules, config-rules, binary-rules, backend-rules, api-rules, frontend-rules, features-rules, service-rules, makefile-rules, docker-rules, cicd-rules, testing-rules, optional-rules. No regeneration needed - they already use generic placeholders compatible with the reference-token approach.
+- AUDIT.AI.md does not exist (deleted 2026-05-06 as stale; a fresh AUDIT.AI.md will be opened only when an explicit audit is run).
 - `PLAN.AI.md` is present and not modified this session.
-- COMMIT/NEVER/MUST rules saved to harness memory on 2026-05-06.
+- COMMIT/NEVER/MUST rules saved to harness memory; refreshed for the new template on 2026-05-07.
 
 ## Active / Pending
 
@@ -94,6 +94,8 @@ This file was migrated from session-local SQL/checkpoint tracking so the ongoing
 - [x] client-token-file-permissions - Normalize default token file at {config_dir}/token; share write helper for login/setup.
 - [x] repo-plan-todo-migration - Move plan and todo into repo as PLAN.AI.md and TODO.AI.md.
 - [x] template-refresh-2026-05-06 - Re-copy AI.md from ~/Templates/go/TEMPLATE.md on 2026-05-06; refresh TODO.AI.md against the new template; commit COMMIT/NEVER/MUST rules to memory.
+- [x] template-refresh-2026-05-07 - Re-copy AI.md from ~/Templates/go/TEMPLATE.md on 2026-05-07 (template now treats placeholders as reference tokens, not substitution targets); refresh CLAUDE.md md5 stamp + TODO.AI.md status section; verify .claude/rules/ stays valid; refresh memory.
+- [x] firsttime-placeholder-substitution-reverted - The 2412 substitutions applied 2026-05-06 are obsolete under the new template; no rewrite needed since AI.md was re-copied fresh.
 - [x] post-template-refresh-audit - Audit closed 2026-05-06: 13 findings logged in AUDIT.AI.md and fixed in place; AUDIT.AI.md deleted per PART 0 Step 8 when all open items closed.
 - [x] docker-overlay-rename - Renamed `docker/file_system/` -> `docker/rootfs/`, fixed Dockerfile COPY + comments to match (PART 3 + PART 27).
 - [x] compose-runtime-mounts - Switched the 3 docker-compose*.yml runtime mounts from `./rootfs/{config,data}` to `./volumes/{config,data}` (PART 27).

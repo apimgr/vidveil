@@ -97,7 +97,8 @@ WHEN IN DOUBT: READ THE SPEC. DO NOT GUESS.
 - Full spec: `AI.md` <- **SOURCE OF TRUTH**
 
 ## Current Project State
-- Last AI.md refresh: 2026-05-06 (md5 ab2546e6b41c6e844c3206c2cdbeb600 after substitution)
+- Last AI.md refresh: 2026-05-06 (md5 201ca82ec5dfa9d7b10407fe19c63982 - placeholders NOT substituted; resolved from IDEA.md per new template)
+- AI.md treats `{project_name}`/`{project_org}`/`{internal_name}`/`{plist_name}` as REFERENCE TOKENS, not text replacements
 - IDEA.md migrated to three-section format on 2026-05-06 (backup at IDEA.md.preMigration.bak)
 - AUDIT.AI.md: deleted as stale
 - TODO.AI.md: refreshed against new template

@@ -14,7 +14,6 @@ This file was migrated from session-local SQL/checkpoint tracking so the ongoing
 
 ## Active / Pending
 
-- [ ] client-elevated-user-rule - AI.md PART 33 says `vidveil-cli` always runs as a normal user and never as root/administrator, but the current client has no elevated-user startup guard yet. Do not implement this until the exact runtime behavior is pinned down against the existing cross-platform privilege helpers and the containerized validation flow.
 - [ ] license-md-full-regen - LICENSE.md was manually trimmed (removed lib/pq and rewrote the count line) but the listed Go dependencies are still incomplete vs go.mod. Full regeneration via `go-licenses` MUST run inside `golang:alpine` (NEVER on host); operator action required before next release.
 - [ ] historical-copilot-attribution - Multiple existing commit bodies contain `Co-authored-by: Copilot <...>`. AI.md PART 0 forbids AI attribution in commits. Cleaning historical commits requires a force-push to main (a destructive op) and is not actionable without explicit user authorization.
 
@@ -95,6 +94,7 @@ This file was migrated from session-local SQL/checkpoint tracking so the ongoing
 - [x] repo-plan-todo-migration - Move plan and todo into repo as PLAN.AI.md and TODO.AI.md.
 - [x] template-refresh-2026-05-06 - Re-copy AI.md from ~/Templates/go/TEMPLATE.md on 2026-05-06; refresh TODO.AI.md against the new template; commit COMMIT/NEVER/MUST rules to memory.
 - [x] template-refresh-2026-05-07 - Re-copy AI.md from ~/Templates/go/TEMPLATE.md on 2026-05-07 (template now treats placeholders as reference tokens, not substitution targets); refresh CLAUDE.md md5 stamp + TODO.AI.md status section; verify .claude/rules/ stays valid; refresh memory.
+- [x] client-elevated-user-rule-closed-2026-05-07 - Closed: the TODO description misread PART 33. The spec does NOT require vidveil-cli to refuse running as root. PART 33 lines 50151-50159 say the CLI MUST run "in the invoking user's context without privilege escalation" and "Uses user/home/profile directories exclusively, even if the invoking user happens to be root/Administrator". Verified `src/client/paths/paths.go` already uses `os.UserHomeDir()` regardless of euid, has no Geteuid/sudo/isElevated calls, and no system-path references - so the client already complies. Corrected the wording in `.claude/rules/binary-rules.md` (the `.claude/rules/*.md` files are tracked in this repo, not gitignored) to match the actual spec.
 - [x] firsttime-placeholder-substitution-reverted - The 2412 substitutions applied 2026-05-06 are obsolete under the new template; no rewrite needed since AI.md was re-copied fresh.
 - [x] post-template-refresh-audit - Audit closed 2026-05-06: 13 findings logged in AUDIT.AI.md and fixed in place; AUDIT.AI.md deleted per PART 0 Step 8 when all open items closed.
 - [x] docker-overlay-rename - Renamed `docker/file_system/` -> `docker/rootfs/`, fixed Dockerfile COPY + comments to match (PART 3 + PART 27).

@@ -18,7 +18,7 @@ Topics: Binary Requirements, Server Binary CLI, Client & Agent
 - Match exact CLI flags from PART 8 (--help, --version, --mode, --config, --data, --log, --pid, --address, --port, --baseurl, --debug, --status, --service, --daemon, --maintenance, --update)
 - Provide both server and client binaries (vidveil + vidveil-cli)
 - Detect TERM=dumb / NO_COLOR and disable ANSI accordingly
-- Run vidveil-cli as a normal user only - never as root/admin
+- Run vidveil-cli without privilege escalation; even when the invoking user IS root/Administrator, use user-scope paths (~/.config, %APPDATA%, ...) - never /etc, /var/lib, %ProgramData% - and never call sudo / UAC (PART 33: "Runs in the invoking user's context", "Uses user/home/profile directories exclusively, even if the invoking user happens to be root/Administrator")
 
 ---
 For complete details, see AI.md PART 7, 8, 33

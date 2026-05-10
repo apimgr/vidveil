@@ -69,11 +69,15 @@ func main() {
 		pidFile      string
 		address      string
 		port         string
+		// Per AI.md PART 8: --baseurl PATH (URL path prefix, default "/")
+		baseURL      string
 		modeStr      string
 		debug        bool
 		daemon       bool
 		// Per AI.md PART 8: --color flag (always, never, auto)
 		colorFlag    string
+		// Per AI.md PART 8: --lang CODE (output language, default "auto")
+		langFlag     string
 		serviceCmd   string
 		maintCmd     string
 		maintArg string
@@ -167,6 +171,20 @@ func main() {
 				port = args[i]
 			}
 
+		case "--baseurl":
+			// Per AI.md PART 8: URL path prefix, default "/"
+			if i+1 < len(args) {
+				i++
+				baseURL = args[i]
+			}
+
+		case "--lang":
+			// Per AI.md PART 8: language for output, default "auto" (from LANG env)
+			if i+1 < len(args) {
+				i++
+				langFlag = args[i]
+			}
+
 		case "--mode":
 			if i+1 < len(args) {
 				i++
@@ -240,10 +258,14 @@ func main() {
 				address = strings.TrimPrefix(arg, "--address=")
 			} else if strings.HasPrefix(arg, "--port=") {
 				port = strings.TrimPrefix(arg, "--port=")
+			} else if strings.HasPrefix(arg, "--baseurl=") {
+				baseURL = strings.TrimPrefix(arg, "--baseurl=")
 			} else if strings.HasPrefix(arg, "--mode=") {
 				modeStr = strings.TrimPrefix(arg, "--mode=")
 			} else if strings.HasPrefix(arg, "--color=") {
 				colorFlag = strings.TrimPrefix(arg, "--color=")
+			} else if strings.HasPrefix(arg, "--lang=") {
+				langFlag = strings.TrimPrefix(arg, "--lang=")
 			}
 		}
 		i++
@@ -284,6 +306,18 @@ func main() {
 		address = os.Getenv("ADDRESS")
 	}
 
+	// Per AI.md PART 8: --baseurl PATH (URL path prefix, default "/").
+	// Env var fallback: BASEURL.
+	if baseURL == "" && os.Getenv("BASEURL") != "" {
+		baseURL = os.Getenv("BASEURL")
+	}
+
+	// Per AI.md PART 8: --lang CODE (output language, default "auto").
+	// Env var fallback: LANG (POSIX standard, e.g. "en_US.UTF-8").
+	if langFlag == "" && os.Getenv("LANG") != "" {
+		langFlag = os.Getenv("LANG")
+	}
+
 	// MODE env var is runtime - always checked per AI.md
 	// Priority: CLI flag > env var > config file
 	if modeStr == "" && os.Getenv("MODE") != "" {
@@ -306,6 +340,11 @@ func main() {
 	setPathEnv("CACHE_DIR", cacheDir)
 	setPathEnv("LOG_DIR", logDir)
 	setPathEnv("BACKUP_DIR", backupDir)
+	// Propagate --baseurl / --lang via env so child code paths (config
+	// loader, server router, i18n) can read them without an extra
+	// plumbing parameter.
+	setPathEnv("BASEURL", baseURL)
+	setPathEnv("LANG", langFlag)
 
 	if serviceCmd != "" {
 		handleServiceCommand(serviceCmd, configDir, dataDir)
@@ -780,9 +819,11 @@ Server Configuration:
       --pid FILE                    PID file path
       --address ADDR                Listen address (default: 0.0.0.0)
       --port PORT                   Listen port (default: random 64xxx, 80 in container)
+      --baseurl PATH                URL path prefix (default: /)
       --daemon                      Run as daemon (detach from terminal)
       --debug                       Enable debug mode
       --color {always|never|auto}   Color output (default: auto, respects NO_COLOR)
+      --lang CODE                   Language for output (default: auto)
 
 Service Management:
       --service CMD                 Service management (--service --help for details)

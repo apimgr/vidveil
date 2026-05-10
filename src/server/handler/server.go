@@ -269,9 +269,10 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ChangePasswordRedirect handles /.well-known/change-password per RFC 8615
-// This redirects to the appropriate password change page
-func ChangePasswordRedirect(w http.ResponseWriter, r *http.Request) {
-	// Redirect to admin panel password change for this project
-	http.Redirect(w, r, "/admin/login", http.StatusFound)
+// ChangePasswordRedirect handles /.well-known/change-password per RFC 8615.
+// Redirects to the spec-canonical admin login (/server/{admin_path}/login).
+func ChangePasswordRedirect(appConfig *config.AppConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, appConfig.AdminURLPrefix()+"/login", http.StatusFound)
+	}
 }

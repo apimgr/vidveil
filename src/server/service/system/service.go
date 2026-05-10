@@ -194,16 +194,51 @@ func (sm *ServiceManager) hasRunit() bool {
 	return err == nil
 }
 
-// installLinux installs service on Linux per AI.md PART 5
+// hasOpenRC reports whether OpenRC is the active init system per AI.md PART 25.
+// OpenRC ships with /sbin/openrc-run and the rc-service / rc-update tools on
+// Alpine, Gentoo, and Devuan. The presence of openrc-run is the canonical
+// detection signal — /etc/init.d alone matches both OpenRC and SysVinit.
+func (sm *ServiceManager) hasOpenRC() bool {
+	if _, err := exec.LookPath("openrc-run"); err == nil {
+		return true
+	}
+	if _, err := os.Stat("/sbin/openrc-run"); err == nil {
+		return true
+	}
+	return false
+}
+
+// hasSysVInit reports whether the host is using SysVinit-style init.d scripts
+// per AI.md PART 25. Per spec: SysVinit is selected only when systemd is
+// absent, OpenRC is absent, and /etc/init.d exists with a working
+// update-rc.d or chkconfig.
+func (sm *ServiceManager) hasSysVInit() bool {
+	if sm.hasSystemd() || sm.hasOpenRC() {
+		return false
+	}
+	if _, err := os.Stat("/etc/init.d"); err != nil {
+		return false
+	}
+	if _, err := exec.LookPath("update-rc.d"); err == nil {
+		return true
+	}
+	if _, err := exec.LookPath("chkconfig"); err == nil {
+		return true
+	}
+	return false
+}
+
+// installLinux installs service on Linux per AI.md PART 25.
+// Detection order matches the spec: systemd → OpenRC → SysVinit → runit.
 func (sm *ServiceManager) installLinux() error {
 	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Starting Linux service installation\n")
-	
+
 	// Create system user per AI.md PART 4
 	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Calling createLinuxUser\n")
 	if err := sm.createLinuxUser(); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: User creation completed\n")
 
 	// Install based on init system
@@ -211,11 +246,19 @@ func (sm *ServiceManager) installLinux() error {
 		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing systemd service\n")
 		return sm.installSystemd()
 	}
+	if sm.hasOpenRC() {
+		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing OpenRC service\n")
+		return sm.installOpenRC()
+	}
+	if sm.hasSysVInit() {
+		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing SysVinit service\n")
+		return sm.installSysVInit()
+	}
 	if sm.hasRunit() {
 		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing runit service\n")
 		return sm.installRunit()
 	}
-	return fmt.Errorf("no supported init system found (systemd or runit)")
+	return fmt.Errorf("no supported init system found (systemd, OpenRC, SysVinit, or runit)")
 }
 
 // createLinuxUser creates system user per AI.md PART 4
@@ -371,6 +414,151 @@ exec svlogd -tt /var/log/apimgr/%s
 
 	fmt.Printf("Runit service installed: %s\n", serviceDir)
 	fmt.Printf("Start with: sv start %s\n", sm.appName)
+	return nil
+}
+
+// installOpenRC installs an OpenRC service script per AI.md PART 25.
+// The script lives at /etc/init.d/{appName} (executable). The binary
+// drops privileges itself after binding privileged ports, so command_user
+// is set to the dedicated service user.
+func (sm *ServiceManager) installOpenRC() error {
+	scriptPath := fmt.Sprintf("/etc/init.d/%s", sm.appName)
+
+	script := fmt.Sprintf(`#!/sbin/openrc-run
+# OpenRC service for %s per AI.md PART 25.
+# Service identity uses the internal name so config/data/log paths stay
+# stable across binary renames.
+
+name="%s"
+description="%s"
+command="/usr/local/bin/%s"
+command_args=""
+command_user="%s:%s"
+pidfile="/var/run/apimgr/%s.pid"
+command_background=true
+output_log="/var/log/apimgr/%s/server.log"
+error_log="/var/log/apimgr/%s/error.log"
+
+depend() {
+    need net
+    after firewall
+    use dns logger
+}
+
+start_pre() {
+    checkpath -d -m 0755 -o %s:%s /var/run/apimgr
+    checkpath -d -m 0755 -o %s:%s /var/log/apimgr/%s
+}
+`,
+		sm.appName,
+		sm.appName,
+		sm.description,
+		sm.appName,
+		sm.user, sm.group,
+		sm.appName,
+		sm.appName,
+		sm.appName,
+		sm.user, sm.group,
+		sm.user, sm.group, sm.appName,
+	)
+
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		return fmt.Errorf("failed to write OpenRC script: %w", err)
+	}
+
+	// Enable at default runlevel (idempotent — rc-update is fine on re-run).
+	exec.Command("rc-update", "add", sm.appName, "default").Run()
+
+	fmt.Printf("OpenRC service installed: %s\n", scriptPath)
+	fmt.Printf("Start with: rc-service %s start\n", sm.appName)
+	return nil
+}
+
+// installSysVInit installs a SysVinit-style init script per AI.md PART 25.
+// Same path as OpenRC (/etc/init.d/{appName}); detection picks one or the
+// other. Uses start-stop-daemon (Debian-style) so it works on legacy
+// Debian/Ubuntu and any distro that ships start-stop-daemon as part of
+// dpkg or sysvinit-utils.
+func (sm *ServiceManager) installSysVInit() error {
+	scriptPath := fmt.Sprintf("/etc/init.d/%s", sm.appName)
+
+	script := fmt.Sprintf(`#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          %s
+# Required-Start:    $network $remote_fs $syslog
+# Required-Stop:     $network $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: %s
+# Description:       %s daemon
+### END INIT INFO
+
+NAME=%s
+DAEMON=/usr/local/bin/%s
+DAEMON_USER=%s
+PIDFILE=/var/run/apimgr/%s.pid
+LOGFILE=/var/log/apimgr/%s/server.log
+
+case "$1" in
+    start)
+        echo "Starting $NAME..."
+        mkdir -p $(dirname $PIDFILE) $(dirname $LOGFILE)
+        chown -R $DAEMON_USER:$DAEMON_USER $(dirname $PIDFILE) $(dirname $LOGFILE)
+        start-stop-daemon --start --quiet --background --make-pidfile \
+            --pidfile $PIDFILE --chuid $DAEMON_USER --exec $DAEMON \
+            --no-close >> $LOGFILE 2>&1
+        ;;
+    stop)
+        echo "Stopping $NAME..."
+        start-stop-daemon --stop --quiet --pidfile $PIDFILE --retry 30
+        rm -f $PIDFILE
+        ;;
+    restart)
+        $0 stop
+        sleep 1
+        $0 start
+        ;;
+    status)
+        if [ -f $PIDFILE ] && kill -0 $(cat $PIDFILE) 2>/dev/null; then
+            echo "$NAME is running (pid $(cat $PIDFILE))"
+            exit 0
+        else
+            echo "$NAME is stopped"
+            exit 3
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+exit 0
+`,
+		sm.appName,
+		sm.description,
+		sm.description,
+		sm.appName,
+		sm.appName,
+		sm.user,
+		sm.appName,
+		sm.appName,
+	)
+
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		return fmt.Errorf("failed to write SysVinit script: %w", err)
+	}
+
+	// Register with the host's runlevel manager. Try Debian's update-rc.d
+	// first, fall back to RHEL's chkconfig if present.
+	if _, err := exec.LookPath("update-rc.d"); err == nil {
+		exec.Command("update-rc.d", sm.appName, "defaults").Run()
+	} else if _, err := exec.LookPath("chkconfig"); err == nil {
+		exec.Command("chkconfig", "--add", sm.appName).Run()
+		exec.Command("chkconfig", sm.appName, "on").Run()
+	}
+
+	fmt.Printf("SysVinit service installed: %s\n", scriptPath)
+	fmt.Printf("Start with: service %s start (or /etc/init.d/%s start)\n", sm.appName, sm.appName)
 	return nil
 }
 

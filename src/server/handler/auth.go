@@ -95,7 +95,7 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	if h.adminHdl != nil {
 		if cookie, err := r.Cookie("vidveil_admin_session"); err == nil {
 			if h.adminHdl.validateSession(cookie.Value) {
-				http.Redirect(w, r, "/admin", http.StatusFound)
+				http.Redirect(w, r, h.appConfig.AdminURLPrefix(), http.StatusFound)
 				return
 			}
 		}
@@ -142,7 +142,7 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 				http.SetCookie(w, NewSecureCookie(
 					"vidveil_admin_session",
 					sessionID,
-					"/admin",
+					h.appConfig.AdminURLPrefix(),
 					int(24*time.Hour/time.Second),
 					h.appConfig.Server.SSL.Enabled,
 				))
@@ -156,7 +156,7 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 					})
 				}
 
-				http.Redirect(w, r, "/admin", http.StatusFound)
+				http.Redirect(w, r, h.appConfig.AdminURLPrefix(), http.StatusFound)
 				return
 			}
 		}
@@ -211,7 +211,7 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 					http.SetCookie(w, NewSecureCookie(
 						"vidveil_admin_session",
 						sessionID,
-						"/admin",
+						h.appConfig.AdminURLPrefix(),
 						int(24*time.Hour/time.Second),
 						h.appConfig.Server.SSL.Enabled,
 					))
@@ -225,7 +225,7 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 						})
 					}
 
-					http.Redirect(w, r, "/admin", http.StatusFound)
+					http.Redirect(w, r, h.appConfig.AdminURLPrefix(), http.StatusFound)
 					return
 				}
 			} else {
@@ -246,7 +246,7 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 						http.SetCookie(w, NewSecureCookie(
 							"vidveil_admin_session",
 							sessionID,
-							"/admin",
+							h.appConfig.AdminURLPrefix(),
 							int(24*time.Hour/time.Second),
 							h.appConfig.Server.SSL.Enabled,
 						))
@@ -261,7 +261,7 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 							})
 						}
 
-						http.Redirect(w, r, "/admin", http.StatusFound)
+						http.Redirect(w, r, h.appConfig.AdminURLPrefix(), http.StatusFound)
 						return
 					}
 				}
@@ -361,7 +361,7 @@ func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
 // LogoutPage handles admin logout (web route)
 func (h *AuthHandler) LogoutPage(w http.ResponseWriter, r *http.Request) {
 	// Clear admin session cookie per AI.md PART 11
-	http.SetCookie(w, DeleteCookie("vidveil_admin_session", "/admin"))
+	http.SetCookie(w, DeleteCookie("vidveil_admin_session", h.appConfig.AdminURLPrefix()))
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 

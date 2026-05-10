@@ -996,7 +996,7 @@ func DefaultAppConfig() *AppConfig {
 			},
 			Robots: RobotsConfig{
 				Allow: []string{"/"},
-				Deny:  []string{"/admin", "/api/v1/admin"},
+				Deny:  []string{"/server/admin", "/api/v1/server/admin"},
 			},
 			Security: WebSecurityConfig{
 				Contact: "security@" + fqdn,
@@ -1604,6 +1604,26 @@ func getGlobalIPv4() string {
 		}
 	}
 	return ""
+}
+
+// AdminURLPrefix returns the spec-canonical admin route prefix per AI.md PART 14/17.
+// Form: "/server/{admin_path}". The legacy form (without "/server/") is no longer accepted.
+func (c *AppConfig) AdminURLPrefix() string {
+	adminPath := c.Server.Admin.Path
+	if adminPath == "" {
+		adminPath = "admin"
+	}
+	return "/server/" + adminPath
+}
+
+// AdminAPIPrefix returns the canonical admin API prefix without the "/api/{ver}" leader.
+// Used as a relative subpath under "/api/v1": result is "/server/{admin_path}".
+func (c *AppConfig) AdminAPIPrefix() string {
+	adminPath := c.Server.Admin.Path
+	if adminPath == "" {
+		adminPath = "admin"
+	}
+	return "/server/" + adminPath
 }
 
 // GetPublicURL returns the public-facing URL for this server

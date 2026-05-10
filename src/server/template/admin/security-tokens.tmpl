@@ -17,11 +17,11 @@
     <div class="code-block">
         <pre><code># Using curl
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost/api/v1/admin/status
+  http://localhost/api/v1{{.AdminPath}}/status
 
 # Or with X-API-Token header
 curl -H "X-API-Token: YOUR_TOKEN" \
-  http://localhost/api/v1/admin/status</code></pre>
+  http://localhost/api/v1{{.AdminPath}}/status</code></pre>
     </div>
 </div>
 
@@ -32,11 +32,11 @@ curl -H "X-API-Token: YOUR_TOKEN" \
             <tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>
         </thead>
         <tbody>
-            <tr><td><code>/api/v1/admin/status</code></td><td>GET</td><td>Server status</td></tr>
-            <tr><td><code>/api/v1/admin/health</code></td><td>GET</td><td>Detailed health check</td></tr>
-            <tr><td><code>/api/v1/admin/server/settings</code></td><td>GET/PATCH</td><td>Server settings</td></tr>
-            <tr><td><code>/api/v1/admin/server/tor</code></td><td>GET/PATCH</td><td>Tor settings</td></tr>
-            <tr><td><code>/api/v1/admin/server/backup</code></td><td>GET/POST</td><td>Backup management</td></tr>
+            <tr><td><code>/api/v1{{.AdminPath}}/status</code></td><td>GET</td><td>Server status</td></tr>
+            <tr><td><code>/api/v1{{.AdminPath}}/health</code></td><td>GET</td><td>Detailed health check</td></tr>
+            <tr><td><code>/api/v1{{.AdminPath}}/server/settings</code></td><td>GET/PATCH</td><td>Server settings</td></tr>
+            <tr><td><code>/api/v1{{.AdminPath}}/server/tor</code></td><td>GET/PATCH</td><td>Tor settings</td></tr>
+            <tr><td><code>/api/v1{{.AdminPath}}/server/backup</code></td><td>GET/POST</td><td>Backup management</td></tr>
         </tbody>
     </table>
 </div>

@@ -39,12 +39,12 @@
 
 <div class="card">
     <h2>API Access</h2>
-    <p>The admin API allows programmatic access to all settings. See the <a href="{{.AdminPath}}/server/security/tokens">API Tokens</a> page for authentication details.</p>
+    <p>The admin API allows programmatic access to all settings. See the <a href="{{.AdminPath}}/config/security/tokens">API Tokens</a> page for authentication details.</p>
 
     <h3>Example Request</h3>
     <div class="code-block">
         <pre><code>curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost/api/v1/admin/status</code></pre>
+  http://localhost/api/v1{{.AdminPath}}/status</code></pre>
     </div>
 
     <p>Full API documentation is available at <a href="/openapi" target="_blank">/openapi</a></p>

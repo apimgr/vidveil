@@ -73,8 +73,8 @@ func TestRobotsTxt(t *testing.T) {
 		t.Error("RobotsTxt should disallow /api/")
 	}
 
-	if !strings.Contains(body, "Disallow: /admin/") {
-		t.Error("RobotsTxt should disallow /admin/")
+	if !strings.Contains(body, "Disallow: /server/admin/") {
+		t.Error("RobotsTxt should disallow /server/admin/")
 	}
 
 	if !strings.Contains(body, "Sitemap:") {

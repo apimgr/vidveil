@@ -14,6 +14,16 @@ const (
 	projectName = "vidveil"
 )
 
+// GitHubOrg returns the GitHub organization that publishes the project releases.
+func GitHubOrg() string {
+	return projectOrg
+}
+
+// GitHubRepo returns the GitHub repository that publishes the project releases.
+func GitHubRepo() string {
+	return projectName
+}
+
 // ConfigDir returns the CLI config directory
 // Linux/macOS: ~/.config/apimgr/vidveil/
 // Windows: %APPDATA%\apimgr\vidveil\

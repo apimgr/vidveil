@@ -474,6 +474,25 @@ func ParseCLIGlobalFlags(args []string) []string {
 			debugModeEnabled = true
 			debugFlagProvided = true
 			i++
+		case "--update":
+			// Per AI.md PART 33: --update [check|yes|branch <name>|--help]
+			updateArgs := make([]string, 0, 2)
+			j := i + 1
+			for j < len(args) && !strings.HasPrefix(args[j], "-") {
+				updateArgs = append(updateArgs, args[j])
+				j++
+				if len(updateArgs) >= 2 {
+					break
+				}
+			}
+			if j < len(args) && (args[j] == "--help" || args[j] == "-h") {
+				updateArgs = append(updateArgs, args[j])
+			}
+			if err := RunCLIUpdateCommand(updateArgs); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			os.Exit(0)
 		case "-h", "--help":
 			if !commandSeen {
 				PrintCLIHelpMessage()
@@ -1044,6 +1063,7 @@ Flags:
       --timeout SECONDS             Request timeout in seconds (default: 30)
       --debug                       Debug output
       --color {always|never|auto}   Color output (default: auto)
+      --update [CMD]                Self-update (--update --help for details)
 
 Commands:
   search <query>                    Search for videos

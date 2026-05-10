@@ -355,11 +355,17 @@ func WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 // MaintenanceModeMiddleware checks if maintenance mode is enabled
 func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip maintenance check for health endpoints and admin
+		// Skip maintenance check for health endpoints and admin (any of the canonical/legacy prefixes)
 		path := r.URL.Path
+		adminPrefix := h.appConfig.AdminURLPrefix()
+		legacyAdminPrefix := "/" + h.appConfig.Server.Admin.Path
+		apiAdminPrefix := "/api/v1" + h.appConfig.AdminAPIPrefix()
+		legacyAPIAdminPrefix := "/api/v1/" + h.appConfig.Server.Admin.Path
 		if path == "/healthz" ||
-			strings.HasPrefix(path, "/admin") ||
-			strings.HasPrefix(path, "/api/v1/admin") {
+			strings.HasPrefix(path, adminPrefix) ||
+			strings.HasPrefix(path, legacyAdminPrefix+"/") || path == legacyAdminPrefix ||
+			strings.HasPrefix(path, apiAdminPrefix) ||
+			strings.HasPrefix(path, legacyAPIAdminPrefix) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -1461,7 +1467,7 @@ func (h *SearchHandler) RobotsTxt(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`User-agent: *
 Disallow: /search
 Disallow: /api/
-Disallow: /admin/
+Disallow: ` + h.appConfig.AdminURLPrefix() + `/
 Allow: /
 
 Sitemap: ` + baseURL + `/sitemap.xml

@@ -734,86 +734,131 @@ type BuiltinTaskFuncs struct {
 	ClusterHeartbeat TaskFunc
 }
 
-// RegisterBuiltinTasks registers all built-in scheduled tasks per AI.md PART 26
+// RegisterBuiltinTasks registers all built-in scheduled tasks per AI.md
+// PART 19. Task IDs use the spec-canonical underscore form (e.g.
+// "ssl_renewal"). Existing rows in scheduled_tasks / task_history that
+// were persisted under the legacy dot form ("ssl.renewal") are
+// renamed in-place by migrateLegacyTaskIDs() before registration so
+// run history and per-task config survive the rename.
 func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
-	// ssl.renewal - Daily (runs check, renews if within 7 days of expiry)
+	s.migrateLegacyTaskIDs()
+
+	// ssl_renewal - Daily (runs check, renews if within 7 days of expiry)
 	if funcs.SSLRenewal != nil {
-		s.RegisterTask("ssl.renewal", "SSL Certificate Renewal",
+		s.RegisterTask("ssl_renewal", "SSL Certificate Renewal",
 			"Check and renew SSL certificates if needed (7 days before expiry)",
 			"daily", funcs.SSLRenewal)
 	}
 
-	// geoip.update - Weekly
+	// geoip_update - Weekly
 	if funcs.GeoIPUpdate != nil {
-		s.RegisterTask("geoip.update", "GeoIP Database Update",
+		s.RegisterTask("geoip_update", "GeoIP Database Update",
 			"Download and update GeoIP databases from sapics/ip-location-db",
 			"weekly", funcs.GeoIPUpdate)
 	}
 
-	// blocklist.update - Daily
+	// blocklist_update - Daily
 	if funcs.BlocklistUpdate != nil {
-		s.RegisterTask("blocklist.update", "Blocklist Update",
+		s.RegisterTask("blocklist_update", "Blocklist Update",
 			"Download and update IP/domain blocklists",
 			"daily", funcs.BlocklistUpdate)
 	}
 
-	// cve.update - Daily
+	// cve_update - Daily
 	if funcs.CVEUpdate != nil {
-		s.RegisterTask("cve.update", "CVE Database Update",
+		s.RegisterTask("cve_update", "CVE Database Update",
 			"Download and update CVE/security vulnerability databases",
 			"daily", funcs.CVEUpdate)
 	}
 
-	// session.cleanup - Every 15 minutes per AI.md PART 19
+	// session_cleanup - Every 15 minutes per AI.md PART 19
 	if funcs.SessionCleanup != nil {
-		s.RegisterTask("session.cleanup", "Session Cleanup",
+		s.RegisterTask("session_cleanup", "Session Cleanup",
 			"Remove expired user and admin sessions",
 			"15m", funcs.SessionCleanup)
 	}
 
-	// token.cleanup - Every 15 minutes per AI.md PART 19
+	// token_cleanup - Every 15 minutes per AI.md PART 19
 	if funcs.TokenCleanup != nil {
-		s.RegisterTask("token.cleanup", "Token Cleanup",
+		s.RegisterTask("token_cleanup", "Token Cleanup",
 			"Remove expired API tokens and reset tokens",
 			"15m", funcs.TokenCleanup)
 	}
 
-	// log.rotation - Daily
+	// log_rotation - Daily
 	if funcs.LogRotation != nil {
-		s.RegisterTask("log.rotation", "Log Rotation",
+		s.RegisterTask("log_rotation", "Log Rotation",
 			"Rotate and compress old log files",
 			"daily", funcs.LogRotation)
 	}
 
-	// backup.auto - Per AI.md PART 22: Daily at 02:00, disabled by default
+	// backup_auto - Per AI.md PART 22: Daily at 02:00, disabled by default
 	if funcs.BackupAuto != nil {
 		// Cron: 02:00 daily per AI.md PART 22
-		s.RegisterTask("backup.auto", "Automatic Backup",
+		s.RegisterTask("backup_auto", "Automatic Backup",
 			"Create automatic backups of configuration and databases",
 			"0 2 * * *", funcs.BackupAuto)
-		// Disable by default per AI.md PART 26
-		s.DisableTask("backup.auto")
+		// Disable by default per AI.md PART 19
+		s.DisableTask("backup_auto")
 	}
 
-	// healthcheck.self - Every 5 minutes
+	// healthcheck_self - Every 5 minutes
 	if funcs.HealthcheckSelf != nil {
-		s.RegisterTask("healthcheck.self", "Self Health Check",
+		s.RegisterTask("healthcheck_self", "Self Health Check",
 			"Perform internal health verification",
 			"5m", funcs.HealthcheckSelf)
 	}
 
-	// tor.health - Every 10 minutes (only when Tor is installed/enabled)
+	// tor_health - Every 10 minutes (only when Tor is installed/enabled)
 	if funcs.TorHealth != nil {
-		s.RegisterTask("tor.health", "Tor Health Check",
+		s.RegisterTask("tor_health", "Tor Health Check",
 			"Check Tor connectivity and restart if needed",
 			"10m", funcs.TorHealth)
 	}
 
-	// cluster.heartbeat - Every 30 seconds (only in cluster mode)
+	// cluster_heartbeat - Every 30 seconds (only in cluster mode)
 	if funcs.ClusterHeartbeat != nil {
-		s.RegisterTask("cluster.heartbeat", "Cluster Heartbeat",
+		s.RegisterTask("cluster_heartbeat", "Cluster Heartbeat",
 			"Send heartbeat to cluster nodes",
 			"30s", funcs.ClusterHeartbeat)
+	}
+}
+
+// migrateLegacyTaskIDs renames built-in task IDs from the old "xxx.yyy"
+// form to the spec-canonical "xxx_yyy" form (PART 19) in the persisted
+// scheduled_tasks and task_history tables, so historical state and
+// admin-tweaked schedules survive the upgrade. Idempotent — re-running
+// it after migration is a no-op.
+func (s *Scheduler) migrateLegacyTaskIDs() {
+	if s.db == nil {
+		return
+	}
+	rename := map[string]string{
+		"ssl.renewal":       "ssl_renewal",
+		"geoip.update":      "geoip_update",
+		"blocklist.update":  "blocklist_update",
+		"cve.update":        "cve_update",
+		"session.cleanup":   "session_cleanup",
+		"token.cleanup":     "token_cleanup",
+		"log.rotation":      "log_rotation",
+		"backup.auto":       "backup_auto",
+		"healthcheck.self":  "healthcheck_self",
+		"tor.health":        "tor_health",
+		"cluster.heartbeat": "cluster_heartbeat",
+	}
+	for old, newID := range rename {
+		// Update scheduled_tasks (state). UPDATE OR IGNORE conflict if
+		// the new ID already has a row from a prior migration / a fresh
+		// install — keep the new row in that case.
+		_, _ = s.db.Exec(
+			`UPDATE scheduled_tasks SET id = ? WHERE id = ? `+
+				`AND NOT EXISTS (SELECT 1 FROM scheduled_tasks WHERE id = ?)`,
+			newID, old, newID,
+		)
+		_, _ = s.db.Exec(`DELETE FROM scheduled_tasks WHERE id = ?`, old)
+
+		// Update task_history (run records).
+		_, _ = s.db.Exec(`UPDATE task_history SET task_id = ? WHERE task_id = ?`, newID, old)
 	}
 }
 

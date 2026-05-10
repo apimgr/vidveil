@@ -270,15 +270,13 @@ func (h *AdminHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clear session cookie per AI.md PART 11
-	http.SetCookie(w, DeleteCookie(adminSessionCookieName, "/admin"))
+	http.SetCookie(w, DeleteCookie(adminSessionCookieName, h.appConfig.AdminURLPrefix()))
 
 	// Redirect to /auth/login per AI.md PART 31
 	http.Redirect(w, r, "/auth/login", http.StatusFound)
 }
 
-// SetupTokenPage handles setup token entry at /admin on first run per AI.md PART 31
-// Step 2-3: User navigates to /admin, enters setup token
-// Step 4: Redirect to /admin/server/setup
+// SetupTokenPage handles setup token entry at /server/{admin_path} on first run per AI.md PART 31
 func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
 	// Check if setup is still needed
 	if !h.adminSvc.IsFirstRun() {
@@ -290,18 +288,15 @@ func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		token := r.FormValue("token")
 
-		// Validate the setup token
 		if h.adminSvc.ValidateSetupToken(token) {
-			// Store validated token in cookie for wizard step per AI.md PART 11
-			// 1 hour to complete setup, SameSite=Strict for security
 			http.SetCookie(w, NewSecureCookieStrict(
 				"vidveil_setup_token",
 				token,
-				"/admin",
+				h.appConfig.AdminURLPrefix(),
 				3600,
 				h.appConfig.Server.SSL.Enabled,
 			))
-			http.Redirect(w, r, "/admin/server/setup", http.StatusFound)
+			http.Redirect(w, r, h.appConfig.AdminURLPrefix()+"/config/setup", http.StatusFound)
 			return
 		}
 		errorMsg = "Invalid or expired setup token"
@@ -310,18 +305,16 @@ func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
 	h.renderSetupTokenPage(w, errorMsg)
 }
 
-// SetupWizardPage renders the setup wizard at /admin/server/setup per AI.md PART 31
+// SetupWizardPage renders the setup wizard at /server/{admin_path}/config/setup per AI.md PART 31
 func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
-	// Check if setup is still needed
 	if !h.adminSvc.IsFirstRun() {
 		http.Redirect(w, r, "/auth/login", http.StatusFound)
 		return
 	}
 
-	// Verify setup token cookie exists (must come from token entry page)
 	tokenCookie, err := r.Cookie("vidveil_setup_token")
 	if err != nil || !h.adminSvc.ValidateSetupToken(tokenCookie.Value) {
-		http.Redirect(w, r, "/admin", http.StatusFound)
+		http.Redirect(w, r, h.appConfig.AdminURLPrefix(), http.StatusFound)
 		return
 	}
 
@@ -329,7 +322,7 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 		"SiteTitle": h.appConfig.Server.Branding.Title,
 		"Error":     "",
 		"Theme":     h.appConfig.Web.UI.Theme,
-		"AdminPath": "/" + h.appConfig.Server.Admin.Path,
+		"AdminPath": h.appConfig.AdminURLPrefix(),
 	}
 
 	if r.Method == http.MethodPost {
@@ -362,19 +355,19 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Clear setup token cookie per AI.md PART 11
-		http.SetCookie(w, DeleteCookie("vidveil_setup_token", "/admin"))
+		http.SetCookie(w, DeleteCookie("vidveil_setup_token", h.appConfig.AdminURLPrefix()))
 
 		// Create session for the new admin per AI.md PART 11
 		sessionID := h.createSessionWithID(adminUser.Username, adminUser.ID)
 		http.SetCookie(w, NewSecureCookie(
 			adminSessionCookieName,
 			sessionID,
-			"/admin",
+			h.appConfig.AdminURLPrefix(),
 			int(adminSessionDuration.Seconds()),
 			h.appConfig.Server.SSL.Enabled,
 		))
 
-		http.Redirect(w, r, "/admin/dashboard", http.StatusFound)
+		http.Redirect(w, r, h.appConfig.AdminURLPrefix()+"/dashboard", http.StatusFound)
 		return
 	}
 
@@ -1595,8 +1588,9 @@ func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 	if token == "" {
 		// Try to extract from path
 		path := r.URL.Path
-		if idx := len("/admin/invite/"); idx < len(path) {
-			token = path[idx:]
+		marker := "/invite/"
+		if idx := strings.Index(path, marker); idx >= 0 && idx+len(marker) < len(path) {
+			token = path[idx+len(marker):]
 		}
 	}
 
@@ -1715,7 +1709,7 @@ func (h *AdminHandler) APIUsersAdminsInvite(w http.ResponseWriter, r *http.Reque
 	if host == "" {
 		host = fmt.Sprintf("localhost:%s", h.appConfig.Server.Port)
 	}
-	inviteURL := fmt.Sprintf("%s://%s/admin/invite/%s", scheme, host, token)
+	inviteURL := fmt.Sprintf("%s://%s%s/invite/%s", scheme, host, h.appConfig.AdminURLPrefix(), token)
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
@@ -3336,7 +3330,7 @@ func (h *AdminHandler) generateCSRFToken(w http.ResponseWriter) string {
 	cookie := &http.Cookie{
 		Name:     csrfTokenCookieName,
 		Value:    token,
-		Path:     "/admin",
+		Path:     h.appConfig.AdminURLPrefix(),
 		MaxAge:   int(adminSessionDuration.Seconds()),
 		// JS needs to read for AJAX X-CSRF-Token header
 		HttpOnly: false,
@@ -3577,7 +3571,7 @@ func (h *AdminHandler) renderDashboard() string {
 func (h *AdminHandler) renderEnginesPage() string {
 	engines := h.engineMgr.ListEnginesWithHealth()
 
-	adminAPIBase := "/api/v1/" + h.appConfig.Server.Admin.Path + "/engines"
+	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/engines"
 
 	engineRows := ""
 	for _, eng := range engines {
@@ -3770,7 +3764,7 @@ func (h *AdminHandler) renderLogsPage() string {
 	return h.renderAdminPage("logs", "Logs", `
         <div class="card">
             <p>Please use the new log viewer interface.</p>
-            <p><a href="/admin/logs?type=access">View Access Logs</a></p>
+            <p><a href="`+h.appConfig.AdminURLPrefix()+`/config/logs?type=access">View Access Logs</a></p>
         </div>
     `)
 }
@@ -3783,25 +3777,26 @@ func (h *AdminHandler) renderAdminNav(active string) string {
 		return "nav-link"
 	}
 
-	// PART 12: Full navigation with all 11 sections + Tor (PART 32)
+	// PART 17: Full navigation, all server-management links under /config (AI.md line 28629)
+	base := h.appConfig.AdminURLPrefix()
 	return `<nav class="admin-nav">
         <div class="nav-brand">
-            <a href="/admin">🔍 Vidveil Admin</a>
+            <a href="` + base + `">🔍 Vidveil Admin</a>
         </div>
         <div class="nav-links">
-            <a href="/admin" class="` + navClass("dashboard") + `">Dashboard</a>
-            <a href="/admin/server" class="` + navClass("server") + `">Server</a>
-            <a href="/admin/web" class="` + navClass("web") + `">Web</a>
-            <a href="/admin/security" class="` + navClass("security") + `">Security</a>
-            <a href="/admin/database" class="` + navClass("database") + `">Database</a>
-            <a href="/admin/email" class="` + navClass("email") + `">Email</a>
-            <a href="/admin/ssl" class="` + navClass("ssl") + `">SSL/TLS</a>
-            <a href="/admin/scheduler" class="` + navClass("scheduler") + `">Scheduler</a>
-            <a href="/admin/tor" class="` + navClass("tor") + `">Tor</a>
-            <a href="/admin/logs" class="` + navClass("logs") + `">Logs</a>
-            <a href="/admin/backup" class="` + navClass("backup") + `">Backup</a>
-            <a href="/admin/system" class="` + navClass("system") + `">System</a>
-            <a href="/admin/logout" class="nav-link nav-logout">Logout</a>
+            <a href="` + base + `" class="` + navClass("dashboard") + `">Dashboard</a>
+            <a href="` + base + `/config/settings" class="` + navClass("server") + `">Server</a>
+            <a href="` + base + `/config/web" class="` + navClass("web") + `">Web</a>
+            <a href="` + base + `/config/security/auth" class="` + navClass("security") + `">Security</a>
+            <a href="` + base + `/config/database" class="` + navClass("database") + `">Database</a>
+            <a href="` + base + `/config/email" class="` + navClass("email") + `">Email</a>
+            <a href="` + base + `/config/ssl" class="` + navClass("ssl") + `">SSL/TLS</a>
+            <a href="` + base + `/config/scheduler" class="` + navClass("scheduler") + `">Scheduler</a>
+            <a href="` + base + `/config/network/tor" class="` + navClass("tor") + `">Tor</a>
+            <a href="` + base + `/config/logs" class="` + navClass("logs") + `">Logs</a>
+            <a href="` + base + `/config/backup" class="` + navClass("backup") + `">Backup</a>
+            <a href="` + base + `/config/info" class="` + navClass("system") + `">System</a>
+            <a href="` + base + `/logout" class="nav-link nav-logout">Logout</a>
         </div>
     </nav>`
 }
@@ -4244,8 +4239,8 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	data["Config"] = h.appConfig
 	data["ActiveNav"] = templateName
 	data["SiteTitle"] = h.appConfig.Server.Branding.Title
-	// Per AI.md PART 17: AdminPath available in all templates
-	data["AdminPath"] = "/" + h.appConfig.Server.Admin.Path
+	// Per AI.md PART 17: AdminPath = "/server/{admin_path}" available in all templates
+	data["AdminPath"] = h.appConfig.AdminURLPrefix()
 	// Inject version for cache busting in all admin templates
 	if data["Version"] == nil {
 		data["Version"] = version.GetVersion()

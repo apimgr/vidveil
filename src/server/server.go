@@ -219,8 +219,7 @@ func (s *Server) onionLocationMiddleware(next http.Handler) http.Handler {
 		// API routes, static files, SSE streams, feeds — never get Onion-Location
 		path := r.URL.Path
 		if strings.HasPrefix(path, "/api/") ||
-			strings.HasPrefix(path, "/static/") ||
-			strings.HasPrefix(path, "/admin/api/") {
+			strings.HasPrefix(path, "/static/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -380,7 +379,7 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/robots.txt", h.RobotsTxt)
 	s.router.Get("/sitemap.xml", h.SitemapXML)
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
-	s.router.Get("/.well-known/change-password", handler.ChangePasswordRedirect)
+	s.router.Get("/.well-known/change-password", handler.ChangePasswordRedirect(s.appConfig))
 	s.router.Get("/.well-known/vidveil.json", h.WellKnownVidVeil)
 	s.router.Get("/humans.txt", h.HumansTxt)
 	s.router.Get("/favicon.ico", h.Favicon)
@@ -452,9 +451,10 @@ func (s *Server) setupRoutes() {
 	})
 
 	// Admin panel routes - PART 14 (routes), PART 17 (admin panel)
+	// Spec-canonical mount: /server/{admin_path} (AI.md PART 17 line 28624)
 	// Path is configurable via server.admin.path (default: "admin")
-	adminPath := "/" + s.appConfig.Server.Admin.Path
-	s.router.Route(adminPath, func(r chi.Router) {
+	adminBasePath := s.appConfig.AdminURLPrefix()
+	s.router.Route(adminBasePath, func(r chi.Router) {
 		// Login page per AI.md PART 17
 		r.Get("/login", admin.LoginPage)
 		r.Post("/login", admin.LoginPage)
@@ -464,13 +464,11 @@ func (s *Server) setupRoutes() {
 		r.Post("/logout", admin.LogoutHandler)
 
 		// Root: Setup token entry (first run) or dashboard (authenticated)
-		// Per AI.md PART 17: User navigates to /admin, enters setup token
 		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
 			if admin.IsFirstRun() {
 				admin.SetupTokenPage(w, req)
 				return
 			}
-			// After setup, apply auth middleware and show dashboard
 			admin.AuthMiddleware(http.HandlerFunc(admin.DashboardPage)).ServeHTTP(w, req)
 		})
 		r.Post("/", func(w http.ResponseWriter, req *http.Request) {
@@ -482,29 +480,18 @@ func (s *Server) setupRoutes() {
 		})
 
 		// Protected admin routes per AI.md PART 17
-		// Valid root paths: /, /profile, /preferences, /notifications, /server/*
 		r.Group(func(r chi.Router) {
 			r.Use(admin.AuthMiddleware)
 			r.Use(admin.CSRFMiddleware)
 
-			// Dashboard (root)
 			r.Get("/dashboard", admin.DashboardPage)
-
-			// Admin's OWN profile per AI.md PART 17 (valid at root)
 			r.Get("/profile", admin.ProfilePage)
-
-			// Admin's OWN preferences per AI.md PART 17 (valid at root)
 			r.Get("/preferences", admin.PreferencesPage)
-
-			// Admin's OWN notifications per AI.md PART 17 (valid at root)
 			r.Get("/notifications", admin.AdminNotificationsPage)
-
-			// Logout (valid at root)
 			r.Get("/logout", admin.LogoutHandler)
 
-			// Server section - ALL server management per AI.md PART 17
-			r.Route("/server", func(r chi.Router) {
-				// Settings
+			// Spec-canonical: ALL server management goes under /config (AI.md PART 17 line 28629)
+			r.Route("/config", func(r chi.Router) {
 				r.Get("/", admin.ServerSettingsPage)
 				r.Get("/settings", admin.ServerSettingsPage)
 				r.Get("/branding", admin.BrandingPage)
@@ -524,7 +511,6 @@ func (s *Server) setupRoutes() {
 				r.Get("/nodes/settings", admin.NodeSettingsPage)
 				r.Get("/nodes/{node}", admin.NodeDetailPage)
 
-				// Security section per AI.md PART 17 - under /server/
 				r.Route("/security", func(r chi.Router) {
 					r.Get("/", admin.SecurityAuthPage)
 					r.Get("/auth", admin.SecurityAuthPage)
@@ -533,7 +519,6 @@ func (s *Server) setupRoutes() {
 					r.Get("/firewall", admin.SecurityFirewallPage)
 				})
 
-				// Network section per AI.md PART 17 - under /server/
 				r.Route("/network", func(r chi.Router) {
 					r.Get("/", admin.TorPage)
 					r.Get("/tor", admin.TorPage)
@@ -541,33 +526,59 @@ func (s *Server) setupRoutes() {
 					r.Get("/blocklists", admin.BlocklistsPage)
 				})
 
-				// System routes per AI.md PART 17 - directly under /server/
 				r.Get("/backup", admin.BackupPage)
 				r.Get("/maintenance", admin.MaintenancePage)
 				r.Get("/updates", admin.UpdatesPage)
 				r.Get("/info", admin.SystemInfoPage)
 
-				// Users section per AI.md PART 17 - under /server/
 				r.Route("/users", func(r chi.Router) {
 					r.Get("/admins", admin.UsersAdminsPage)
 				})
 
-				// Project-specific - under /server/
 				r.Get("/engines", admin.EnginesPage)
-
-				// Help - under /server/
 				r.Get("/help", admin.HelpPage)
 			})
 		})
 
-		// Setup wizard at /admin/server/setup (no auth, but requires valid token cookie)
-		r.Get("/server/setup", admin.SetupWizardPage)
-		r.Post("/server/setup", admin.SetupWizardPage)
+		// Setup wizard at /server/{admin_path}/config/setup (token-cookie gated)
+		r.Get("/config/setup", admin.SetupWizardPage)
+		r.Post("/config/setup", admin.SetupWizardPage)
 
 		// Admin invite page (public, token validated in handler)
 		r.Get("/invite/{token}", admin.AdminInvitePage)
 		r.Post("/invite/{token}", admin.AdminInvitePage)
 	})
+
+	// Legacy redirects: keep old /{admin_path}/... bookmarks alive per AUDIT plan.
+	legacyAdminPath := "/" + s.appConfig.Server.Admin.Path
+	legacyAdminPrefix := legacyAdminPath + "/"
+	canonicalAdminPrefix := adminBasePath + "/"
+	legacyRedirect := func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		var target string
+		switch {
+		case path == legacyAdminPath:
+			target = adminBasePath
+		case strings.HasPrefix(path, legacyAdminPrefix):
+			tail := strings.TrimPrefix(path, legacyAdminPrefix)
+			tail = strings.TrimPrefix(tail, "server/")
+			if tail != "" && !strings.HasPrefix(tail, "config/") &&
+				tail != "dashboard" && tail != "profile" && tail != "preferences" &&
+				tail != "notifications" && tail != "login" && tail != "logout" &&
+				!strings.HasPrefix(tail, "invite/") {
+				tail = "config/" + tail
+			}
+			target = canonicalAdminPrefix + tail
+		default:
+			target = adminBasePath
+		}
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, target, http.StatusPermanentRedirect)
+	}
+	s.router.Get(legacyAdminPath, legacyRedirect)
+	s.router.Get(legacyAdminPath+"/*", legacyRedirect)
 
 	// API autodiscover endpoint (non-versioned per AI.md PART 37)
 	// Clients need this BEFORE they know the API version
@@ -619,8 +630,8 @@ func (s *Server) setupRoutes() {
 		r.Get("/proxy/videos", h.ProxyVideo)
 
 		// Admin Profile API (session or token) - PART 17
-		// Uses configurable admin path
-		r.Route("/"+s.appConfig.Server.Admin.Path+"/profile", func(r chi.Router) {
+		// Spec-canonical: /api/{ver}/server/{admin_path}/profile (AI.md PART 14 line 4584)
+		r.Route(s.appConfig.AdminAPIPrefix()+"/profile", func(r chi.Router) {
 			r.Use(admin.SessionOrTokenMiddleware)
 			r.Post("/password", admin.APIProfilePassword)
 			r.Post("/token", admin.APIProfileToken)
@@ -633,23 +644,22 @@ func (s *Server) setupRoutes() {
 		})
 
 		// Engine management API (session or token — accessible from browser admin panel)
-		r.Route("/"+s.appConfig.Server.Admin.Path+"/engines", func(r chi.Router) {
+		r.Route(s.appConfig.AdminAPIPrefix()+"/engines", func(r chi.Router) {
 			r.Use(admin.SessionOrTokenMiddleware)
 			r.Patch("/{name}", admin.APIEnginePatch)
 			r.Post("/{name}/reset", admin.APIEngineReset)
 		})
 
 		// Admin API (token required) - PART 12, PART 17
-		r.Route("/"+s.appConfig.Server.Admin.Path, func(r chi.Router) {
+		r.Route(s.appConfig.AdminAPIPrefix(), func(r chi.Router) {
 			r.Use(admin.APITokenMiddleware)
 
-			// Users management per AI.md PART 17
-			r.Post("/users/admins/invite", admin.APIUsersAdminsInvite)
-			r.Get("/users/admins/invites", admin.APIUsersAdminsInvites)
-			r.Delete("/users/admins/invites/{id}", admin.APIUsersAdminsInviteRevoke)
-
-			// Server settings per AI.md PART 12
-			r.Route("/server", func(r chi.Router) {
+			// Spec-canonical: ALL admin API endpoints under /config (AI.md PART 14 line 4584)
+			r.Route("/config", func(r chi.Router) {
+				// Users management per AI.md PART 17
+				r.Post("/users/admins/invite", admin.APIUsersAdminsInvite)
+				r.Get("/users/admins/invites", admin.APIUsersAdminsInvites)
+				r.Delete("/users/admins/invites/{id}", admin.APIUsersAdminsInviteRevoke)
 				// Settings
 				r.Get("/settings", admin.APIConfig)
 				r.Patch("/settings", admin.APIConfig)

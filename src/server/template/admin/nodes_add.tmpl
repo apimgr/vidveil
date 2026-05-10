@@ -10,7 +10,7 @@
     <div class="alert alert-success">{{.Success}}</div>
     {{end}}
 
-    <form id="add-node-form" method="POST" action="{{.AdminPath}}/server/nodes/add">
+    <form id="add-node-form" method="POST" action="{{.AdminPath}}/config/nodes/add">
         <input type="hidden" name="_csrf_token" value="{{.CSRFToken}}">
 
         <div class="form-group">
@@ -42,7 +42,7 @@
         <div class="form-actions">
             <button type="button" onclick="testConnection()" class="btn btn-secondary">Test Connection</button>
             <button type="submit" class="btn btn-primary">Add Node</button>
-            <a href="{{.AdminPath}}/server/nodes" class="btn">Cancel</a>
+            <a href="{{.AdminPath}}/config/nodes" class="btn">Cancel</a>
         </div>
     </form>
 

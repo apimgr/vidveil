@@ -5,6 +5,7 @@ package handler
 import (
 	"bytes"
 	"html/template"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -65,22 +66,22 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName
 		if err != nil {
 			continue
 		}
-		_, err = tmpl.Parse(string(content))
-		if err != nil {
+		if _, err = tmpl.Parse(string(content)); err != nil {
+			log.Printf("server template: parse %s: %v", pf, err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	// Read and parse the main template
 	content, err := templatesFS.ReadFile(templateFile)
 	if err != nil {
+		log.Printf("server template: read %s: %v", templateFile, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	_, err = tmpl.Parse(string(content))
-	if err != nil {
+	if _, err = tmpl.Parse(string(content)); err != nil {
+		log.Printf("server template: parse %s: %v", templateFile, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -109,6 +110,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName
 	// Buffer template output
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, templateName, data); err != nil {
+		log.Printf("server template: execute %s: %v", templateName, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

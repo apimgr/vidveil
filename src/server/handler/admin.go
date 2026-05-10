@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -3431,6 +3432,7 @@ func (h *AdminHandler) renderDashboard() string {
 
 	uptimeDur := time.Duration(analytics.UptimeSeconds * float64(time.Second))
 	uptimeStr := formatDuration(uptimeDur)
+	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -3542,9 +3544,9 @@ func (h *AdminHandler) renderDashboard() string {
     async function backupNow() {
         showConfirm('Create a backup now?', async () => {
             try {
-                const resp = await fetch('/api/v1/admin/backup', { method: 'POST' });
+                const resp = await fetch('` + adminAPIBase + `/backup', { method: 'POST' });
                 const data = await resp.json();
-                showToast(data.success ? 'Backup created!' : 'Error: ' + data.error, data.success ? 'success' : 'error');
+                showToast(data.ok ? 'Backup created!' : 'Error: ' + (data.message || data.error || 'failed'), data.ok ? 'success' : 'error');
             } catch (e) {
                 showToast('Error: ' + e.message, 'error');
             }
@@ -3552,13 +3554,13 @@ func (h *AdminHandler) renderDashboard() string {
     }
     async function toggleMaintenance() {
         try {
-            const resp = await fetch('/api/v1/admin/maintenance', {
+            const resp = await fetch('` + adminAPIBase + `/restart', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: true })
             });
             const data = await resp.json();
-            showToast(data.success ? 'Maintenance mode toggled!' : 'Error: ' + data.error, data.success ? 'success' : 'error');
+            showToast(data.ok ? 'Maintenance mode toggled!' : 'Error: ' + (data.message || data.error || 'failed'), data.ok ? 'success' : 'error');
         } catch (e) {
             showToast('Error: ' + e.message, 'error');
         }
@@ -3934,6 +3936,7 @@ func (h *AdminHandler) renderDatabasePage() string {
 }
 
 func (h *AdminHandler) renderEmailPage() string {
+	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
 	return h.renderAdminPage("email", "Email & Notifications", `
         <div class="card">
             <h2>Email Configuration</h2>
@@ -3953,9 +3956,9 @@ func (h *AdminHandler) renderEmailPage() string {
         <script>
         async function testEmail() {
             try {
-                const resp = await fetch('/api/v1/admin/test/email', { method: 'POST' });
+                const resp = await fetch('`+adminAPIBase+`/email/test', { method: 'POST' });
                 const data = await resp.json();
-                if (data.success) { showSuccess('Test email sent!'); } else { showError('Error: ' + data.error); }
+                if (data.ok) { showSuccess('Test email sent!'); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
             } catch (e) {
                 showError('Error: ' + e.message);
             }
@@ -3992,6 +3995,7 @@ func (h *AdminHandler) renderSSLPage() string {
 }
 
 func (h *AdminHandler) renderSchedulerPage() string {
+	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
 	taskRows := ""
 	if h.scheduler != nil {
 		tasks := h.scheduler.ListTasks()
@@ -4041,9 +4045,9 @@ func (h *AdminHandler) renderSchedulerPage() string {
         <script>
         async function runTask(id) {
             try {
-                const resp = await fetch('/api/v1/admin/scheduler/run?id=' + id, { method: 'POST' });
+                const resp = await fetch('`+adminAPIBase+`/scheduler/' + encodeURIComponent(id) + '/run', { method: 'POST' });
                 const data = await resp.json();
-                if (data.success) { showSuccess('Task triggered!'); location.reload(); } else { showError('Error: ' + data.error); }
+                if (data.ok) { showSuccess('Task triggered!'); location.reload(); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
             } catch (e) {
                 showError('Error: ' + e.message);
             }
@@ -4052,6 +4056,7 @@ func (h *AdminHandler) renderSchedulerPage() string {
 }
 
 func (h *AdminHandler) renderBackupPage() string {
+	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
 	return h.renderAdminPage("backup", "Backup & Maintenance", `
         <div class="card">
             <h2>Backup</h2>
@@ -4078,9 +4083,9 @@ func (h *AdminHandler) renderBackupPage() string {
         <script>
         async function createBackup() {
             try {
-                const resp = await fetch('/api/v1/admin/backup', { method: 'POST' });
+                const resp = await fetch('`+adminAPIBase+`/backup', { method: 'POST' });
                 const data = await resp.json();
-                if (data.success) { showSuccess('Backup created!'); } else { showError('Error: ' + data.error); }
+                if (data.ok) { showSuccess('Backup created!'); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
             } catch (e) {
                 showError('Error: ' + e.message);
             }
@@ -4089,22 +4094,22 @@ func (h *AdminHandler) renderBackupPage() string {
             const confirmed = await showConfirm('Are you sure? This will overwrite current configuration.');
             if (!confirmed) return;
             try {
-                const resp = await fetch('/api/v1/admin/restore', { method: 'POST' });
+                const resp = await fetch('`+adminAPIBase+`/backup/restore', { method: 'POST' });
                 const data = await resp.json();
-                if (data.success) { showSuccess('Restore completed!'); } else { showError('Error: ' + data.error); }
+                if (data.ok) { showSuccess('Restore completed!'); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
             } catch (e) {
                 showError('Error: ' + e.message);
             }
         }
         async function toggleMaintenance(enable) {
             try {
-                const resp = await fetch('/api/v1/admin/maintenance', {
+                const resp = await fetch('`+adminAPIBase+`/restart', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ enabled: enable })
                 });
                 const data = await resp.json();
-                if (data.success) { showSuccess('Maintenance mode ' + (enable ? 'enabled' : 'disabled')); } else { showError('Error: ' + data.error); }
+                if (data.ok) { showSuccess('Maintenance mode ' + (enable ? 'enabled' : 'disabled')); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
             } catch (e) {
                 showError('Error: ' + e.message);
             }
@@ -4150,6 +4155,7 @@ func (h *AdminHandler) renderSystemInfoPage() string {
 // renderTorPage renders Tor hidden service admin page per AI.md PART 32
 // Per PART 32: Tor supports hidden service and optional outbound network routing
 func (h *AdminHandler) renderTorPage() string {
+	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
 	// Get hidden service info from TorService
 	statusStr := "Not available"
 	statusClass := "badge-error"
@@ -4200,25 +4206,29 @@ func (h *AdminHandler) renderTorPage() string {
             if (!prefix || prefix.length < 2) { showError('Prefix must be at least 2 characters'); return; }
             document.getElementById('vanity-status').textContent = 'Starting vanity generation for "' + prefix + '"...';
             try {
-                const resp = await fetch('/api/v1/admin/tor/vanity/start?prefix=' + prefix, { method: 'POST' });
+                const resp = await fetch('`+adminAPIBase+`/tor/vanity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prefix: prefix })
+                });
                 const data = await resp.json();
-                if (data.success) { showSuccess('Vanity generation started!'); pollVanityStatus(); }
-                else { showError('Error: ' + data.error); }
+                if (data.ok) { showSuccess('Vanity generation started!'); pollVanityStatus(); }
+                else { showError('Error: ' + (data.message || data.error || 'failed')); }
             } catch (e) { showError('Error: ' + e.message); }
         }
         async function stopVanity() {
             try {
-                const resp = await fetch('/api/v1/admin/tor/vanity/stop', { method: 'POST' });
+                const resp = await fetch('`+adminAPIBase+`/tor/vanity', { method: 'DELETE' });
                 const data = await resp.json();
-                if (data.success) { showSuccess('Vanity generation stopped'); }
+                if (data.ok) { showSuccess('Vanity generation stopped'); }
             } catch (e) { showError('Error: ' + e.message); }
         }
         function pollVanityStatus() {
             setInterval(async () => {
                 try {
-                    const resp = await fetch('/api/v1/admin/tor/vanity/status');
+                    const resp = await fetch('`+adminAPIBase+`/tor/vanity');
                     const data = await resp.json();
-                    if (data.success && data.data) {
+                    if (data.ok && data.data) {
                         const s = data.data;
                         document.getElementById('vanity-status').textContent =
                             s.active ? 'Searching for "' + s.prefix + '": ' + s.attempts + ' attempts (' + s.elapsed_time + ')' :
@@ -4304,38 +4314,44 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 		"eq": func(a, b interface{}) bool { return a == b },
 	})
 
-	// Load layout template
-	layoutContent, err := adminTemplatesFS.ReadFile("template/layout/admin.tmpl")
-	if err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+	// Load layout + admin partials (head/sidebar/footer/scripts) — the layout references them.
+	templateFiles := []string{
+		"template/layout/admin.tmpl",
+		"template/partial/admin/head.tmpl",
+		"template/partial/admin/sidebar.tmpl",
+		"template/partial/admin/footer.tmpl",
+		"template/partial/admin/scripts.tmpl",
 	}
-	tmpl, err = tmpl.Parse(string(layoutContent))
-	if err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+	for _, path := range templateFiles {
+		data, err := adminTemplatesFS.ReadFile(path)
+		if err != nil {
+			log.Printf("admin template: read %s: %v", path, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if _, err := tmpl.Parse(string(data)); err != nil {
+			log.Printf("admin template: parse %s: %v", path, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 	}
 
-	// Load the specific content template
 	contentFile := "template/admin/" + templateName + ".tmpl"
 	contentData, err := adminTemplatesFS.ReadFile(contentFile)
 	if err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
+		log.Printf("admin template: read %s: %v", contentFile, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	tmpl, err = tmpl.Parse(string(contentData))
-	if err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
+	if _, err := tmpl.Parse(string(contentData)); err != nil {
+		log.Printf("admin template: parse %s: %v", contentFile, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "admin", data); err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
+		log.Printf("admin template: execute %s: %v", templateName, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

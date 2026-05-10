@@ -42,7 +42,7 @@
 
         <div class="form-actions">
             <button type="submit" class="btn btn-error">Remove This Node</button>
-            <a href="{{.AdminPath}}/server/nodes" class="btn">Cancel</a>
+            <a href="{{.AdminPath}}/config/nodes" class="btn">Cancel</a>
         </div>
     </form>
     {{end}}
@@ -56,7 +56,7 @@
         operations to complete gracefully.
     </p>
     <div class="form-actions">
-        <a href="{{.AdminPath}}/server/maintenance" class="btn btn-secondary">Go to Maintenance</a>
+        <a href="{{.AdminPath}}/config/maintenance" class="btn btn-secondary">Go to Maintenance</a>
     </div>
 </div>
 {{end}}
@@ -82,7 +82,7 @@ function removeNode(e) {
             if (data.success) {
                 showSuccess('Node removed from cluster. Restarting in single-node mode...');
                 setTimeout(() => {
-                    window.location.href = '{{.AdminPath}}/server/nodes';
+                    window.location.href = '{{.AdminPath}}/config/nodes';
                 }, 3000);
             } else {
                 showError('Error: ' + data.error);

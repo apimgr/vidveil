@@ -31,11 +31,14 @@ func DetectTheme(r *http.Request) string {
 	return "auto"
 }
 
-// GenerateSpec generates the OpenAPI 3.0 specification
+// GenerateSpec generates the OpenAPI 3.0 specification.
+// adminAPIPath is the spec-canonical admin API prefix per AI.md PART 14
+// (e.g. "server/admin"). Per spec line 4584 the API mirrors the web
+// hierarchy /server/{admin_path}/.
 func GenerateSpec(appConfig *config.AppConfig) string {
-	adminPath := "admin"
-	if appConfig != nil && appConfig.Server.Admin.Path != "" {
-		adminPath = appConfig.Server.Admin.Path
+	adminAPIPath := "server/admin"
+	if appConfig != nil {
+		adminAPIPath = strings.TrimPrefix(appConfig.AdminAPIPrefix(), "/")
 	}
 	spec := map[string]interface{}{
 		"openapi": "3.0.0",
@@ -250,7 +253,7 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 					},
 				},
 			},
-			"/api/v1/" + adminPath + "/analytics": map[string]interface{}{
+			"/api/v1/" + adminAPIPath + "/analytics": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "Search analytics",
 					"description": "Aggregate search analytics — privacy-safe (no per-user data). Requires admin token.",
@@ -268,7 +271,7 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 					},
 				},
 			},
-			"/api/v1/" + adminPath + "/engines/{name}": map[string]interface{}{
+			"/api/v1/" + adminAPIPath + "/engines/{name}": map[string]interface{}{
 				"patch": map[string]interface{}{
 					"summary":     "Toggle engine",
 					"description": "Enable or disable a search engine by name. Requires admin token.",
@@ -306,7 +309,7 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 					},
 				},
 			},
-			"/api/v1/" + adminPath + "/engines/{name}/reset": map[string]interface{}{
+			"/api/v1/" + adminAPIPath + "/engines/{name}/reset": map[string]interface{}{
 				"post": map[string]interface{}{
 					"summary":     "Reset circuit breaker",
 					"description": "Manually reset the circuit breaker for a search engine. Requires admin token.",

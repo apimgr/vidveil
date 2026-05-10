@@ -15,6 +15,7 @@ import (
 	// register PNG decoder for image.Decode
 	_ "image/png"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -1435,7 +1436,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		"template/partial/public/scripts.tmpl",
 	)
 	if err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
+		log.Printf("healthz template parse: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -1443,7 +1444,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	// Buffer template output to prevent proxy truncation issues
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "healthz", data); err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
+		log.Printf("healthz template execute: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -2466,35 +2467,31 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 			// Skip missing partials - they may not all be needed
 			continue
 		}
-		_, err = tmpl.Parse(string(content))
-		if err != nil {
-			// Per AI.md PART 9: Never expose error details in responses
+		if _, err = tmpl.Parse(string(content)); err != nil {
+			log.Printf("page template: parse %s: %v", pf, err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	// Read and parse the main template
 	content, err := templatesFS.ReadFile(templateFile)
 	if err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
+		log.Printf("page template: read %s: %v", templateFile, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	_, err = tmpl.Parse(string(content))
-	if err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
+	if _, err = tmpl.Parse(string(content)); err != nil {
+		log.Printf("page template: parse %s: %v", templateFile, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// Buffer template output to prevent proxy truncation issues
-	// This ensures Content-Length is set and the response is written atomically,
-	// which avoids issues with nginx proxy_buffer_size limits (often 8KB)
+	// Buffer template output: ensures Content-Length is set and the response is written
+	// atomically (avoids nginx proxy_buffer_size truncation, typically 8KB).
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, templateName, data); err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
+		log.Printf("page template: execute %s: %v", templateName, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

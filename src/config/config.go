@@ -1647,9 +1647,9 @@ func (c *AppConfig) GetPublicURL() string {
 	return fmt.Sprintf("%s://%s:%s", scheme, host, port)
 }
 
-// GetClusterNodes returns the list of cluster node URLs
-// Used by /api/autodiscover endpoint per AI.md PART 37
+// GetClusterNodes returns the list of peer node URLs for /api/autodiscover (PART 37).
+// VidVeil ships in single-instance mode, so this is empty until cluster peers are
+// registered via the admin Nodes page (PART 10).
 func (c *AppConfig) GetClusterNodes() []string {
-	// Return empty array for now - cluster support is not yet implemented
 	return []string{}
 }

@@ -12,7 +12,7 @@
     
     <div class="card">
         <div class="log-controls">
-            <form method="get" action="{{.AdminPath}}/server/logs" class="log-filter-form">
+            <form method="get" action="{{.AdminPath}}/config/logs" class="log-filter-form">
                 <label for="type">Log Type:</label>
                 <select id="type" name="type" onchange="this.form.submit()">
                     <option value="access" {{if eq .LogType "access"}}selected{{end}}>Access</option>
@@ -34,7 +34,7 @@
                 <input type="text" id="search" name="search" value="{{.Search}}" placeholder="Filter logs...">
                 
                 <button type="submit">Refresh</button>
-                <a href="{{.AdminPath}}/server/logs?type={{.LogType}}&limit={{.Limit}}" class="button">Clear Search</a>
+                <a href="{{.AdminPath}}/config/logs?type={{.LogType}}&limit={{.Limit}}" class="button">Clear Search</a>
             </form>
         </div>
         

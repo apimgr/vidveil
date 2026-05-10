@@ -125,8 +125,10 @@ func searchTTCache(ctx context.Context, e *BaseEngine, url string) ([]model.Vide
 		})
 	})
 
+	// "preview" equals len(results) because every result gets a
+	// constructed preview; "thumb" matches for the same reason.
 	DebugLogEngineParseResult(e.Name(), len(results), map[string]int{
-		"preview": len(results), // every result gets a constructed preview
+		"preview": len(results),
 		"thumb":   len(results),
 	})
 

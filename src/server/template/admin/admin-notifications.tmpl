@@ -79,18 +79,20 @@ async function markAllRead() {
     }
 }
 
-async function clearAll() {
-    if (!confirm('Clear all notifications?')) return;
-    try {
-        const resp = await fetch(window.API_BASE + '/notifications/personal/clear', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-            showSuccess('All notifications cleared');
-            loadNotifications();
+function clearAll() {
+    // Per AI.md PART 16: use showConfirm modal, never window.confirm.
+    showConfirm('Clear all notifications?', async function () {
+        try {
+            const resp = await fetch(window.API_BASE + '/notifications/personal/clear', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                showSuccess('All notifications cleared');
+                loadNotifications();
+            }
+        } catch (e) {
+            showError('Failed to clear notifications');
         }
-    } catch (e) {
-        showError('Failed to clear notifications');
-    }
+    });
 }
 
 async function dismissNotification(id) {

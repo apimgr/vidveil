@@ -120,12 +120,13 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 		}
 	}
 
-	// Find preview URL - common data attributes for video preview/rollover
+	// Find preview URL - common data attributes for video preview/rollover.
+	// "data-preview-custom" is specifically used by PornHat.
 	previewAttrs := []string{
 		"data-mediabook", "data-preview", "data-video-preview", "data-rollover",
 		"data-preview-url", "data-gif", "data-webm", "data-mp4",
 		"data-thumb-url", "data-trailer", "data-teaser",
-		"data-preview-custom", // PornHat
+		"data-preview-custom",
 	}
 	// Check on the container element
 	for _, attr := range previewAttrs {

@@ -29,7 +29,7 @@
 <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
 
 {{/* Cookie Consent Banner per AI.md PART 12 - GDPR/CCPA compliance */}}
-<div id="cookie-consent" class="cookie-banner" data-sold="false" style="display: none;">
+<div id="cookie-consent" class="cookie-banner" data-sold="false" hidden>
     <div class="cookie-banner-content">
         <span class="cookie-message">
             We use cookies for essential site functionality and, with your consent, for preference-related features. Preference choices are kept in your browser using localStorage and a small theme cookie so pages can render correctly. This data is never sold.
@@ -47,7 +47,7 @@
     var stored = localStorage.getItem('cookieConsent');
     var banner = document.getElementById('cookie-consent');
     if (!stored && banner) {
-        banner.style.display = 'block';
+        banner.hidden = false;
     }
     if (stored) {
         try {
@@ -55,7 +55,7 @@
             applyConsent(consent);
         } catch (e) {
             localStorage.removeItem('cookieConsent');
-            if (banner) banner.style.display = 'block';
+            if (banner) banner.hidden = false;
         }
     }
 })();
@@ -73,7 +73,7 @@ function declineCookies() {
 function saveAndApplyConsent(consent) {
     localStorage.setItem('cookieConsent', JSON.stringify(consent));
     var banner = document.getElementById('cookie-consent');
-    if (banner) banner.style.display = 'none';
+    if (banner) banner.hidden = true;
     applyConsent(consent);
 }
 

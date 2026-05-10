@@ -9,11 +9,21 @@ import (
 	"sync"
 	"time"
 
-	// Database drivers - imported for side effects per AI.md PART 10
-	_ "github.com/go-sql-driver/mysql"    // MySQL/MariaDB
-	_ "github.com/jackc/pgx/v5/stdlib"    // PostgreSQL
-	_ "github.com/microsoft/go-mssqldb"   // Microsoft SQL Server
-	_ "modernc.org/sqlite"                // SQLite (pure Go)
+	// Database drivers - imported for side effects per AI.md PART 10.
+	// One blank import per supported engine; the per-import comments below
+	// are placed above each line per AI.md PART 0/5 (no inline comments).
+
+	// MySQL / MariaDB
+	_ "github.com/go-sql-driver/mysql"
+
+	// PostgreSQL
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	// Microsoft SQL Server
+	_ "github.com/microsoft/go-mssqldb"
+
+	// SQLite (pure Go)
+	_ "modernc.org/sqlite"
 )
 
 // Driver represents a database driver type

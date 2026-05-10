@@ -212,7 +212,7 @@
                 <p class="section-description">Toggle tiers on/off or select individual engines:</p>
                 <div class="engine-tiers" id="engine-tiers">
                     {{range .Engines}}
-                    <label class="engine-toggle" data-tier="{{.Tier}}" data-engine="{{.Name}}" style="display:none">
+                    <label class="engine-toggle" data-tier="{{.Tier}}" data-engine="{{.Name}}" hidden>
                         <input type="checkbox" name="engines" value="{{.Name}}" {{if .Enabled}}checked{{end}}>
                         {{.DisplayName}}
                     </label>
@@ -415,10 +415,11 @@
         };
 
         window.clearHistory = function() {
-            if (confirm('Clear all search history?')) {
+            // Per AI.md PART 16: use showConfirm modal, never window.confirm.
+            showConfirm('Clear all search history?', function () {
                 localStorage.removeItem(HISTORY_KEY);
                 showToast('History cleared', 'info');
-            }
+            });
         };
 
         // Favorites functions
@@ -457,11 +458,12 @@
         };
 
         window.clearFavorites = function() {
-            if (confirm('Clear all favorites?')) {
+            // Per AI.md PART 16: use showConfirm modal, never window.confirm.
+            showConfirm('Clear all favorites?', function () {
                 localStorage.removeItem(FAVORITES_KEY);
                 updateFavoritesCount();
                 showToast('Favorites cleared', 'info');
-            }
+            });
         };
 
         function downloadJSON(data, filename) {
@@ -540,7 +542,7 @@
                 const list = document.createElement('div');
                 list.className = 'tier-engines collapsed';
                 tierEngines.forEach(eng => {
-                    eng.style.display = '';
+                    eng.hidden = false;
                     list.appendChild(eng);
                 });
                 group.appendChild(list);

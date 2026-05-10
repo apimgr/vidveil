@@ -792,29 +792,35 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 		homeDir = dirs[0]
 	}
 
-	// Try standard Linux commands first (Debian, RHEL, etc.)
+	// Try standard Linux commands first (Debian, RHEL, etc.).
+	// useradd/adduser flag annotations live above the args (no inline
+	// comments per AI.md PART 0/5).
 	if _, err := exec.LookPath("groupadd"); err == nil {
 		exec.Command("groupadd", "-g", strconv.Itoa(id), appName).Run()
+		// useradd: -r system account, -u UID, -g primary group,
+		//          -d home dir, -s shell (nologin), -c GECOS comment.
 		cmd := exec.Command("useradd",
-			"-r",                              // System account
-			"-u", strconv.Itoa(id),            // UID
-			"-g", appName,                     // Primary group
-			"-d", homeDir,                     // Home directory
-			"-s", "/sbin/nologin",             // No login shell
-			"-c", appName+" service account",  // Comment
+			"-r",
+			"-u", strconv.Itoa(id),
+			"-g", appName,
+			"-d", homeDir,
+			"-s", "/sbin/nologin",
+			"-c", appName+" service account",
 			appName,
 		)
 		cmd.Run()
 	} else {
-		// Alpine Linux uses addgroup/adduser (busybox)
+		// Alpine Linux uses addgroup/adduser (busybox).
 		exec.Command("addgroup", "-g", strconv.Itoa(id), "-S", appName).Run()
+		// adduser (busybox): -D no password, -S system user, -H no home,
+		//                    -u UID, -G primary group, -s shell (nologin).
 		cmd := exec.Command("adduser",
-			"-D",                          // Don't assign password
-			"-S",                          // System user
-			"-H",                          // No home directory
-			"-u", strconv.Itoa(id),        // UID
-			"-G", appName,                 // Primary group
-			"-s", "/sbin/nologin",         // No login shell
+			"-D",
+			"-S",
+			"-H",
+			"-u", strconv.Itoa(id),
+			"-G", appName,
+			"-s", "/sbin/nologin",
 			appName,
 		)
 		cmd.Run()

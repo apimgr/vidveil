@@ -11,8 +11,8 @@ import (
 	"sync"
 )
 
-//go:embed translations/*.json
-var translationsFS embed.FS
+//go:embed locales/*.json
+var localesFS embed.FS
 
 // DefaultLocale is the default locale per AI.md
 const DefaultLocale = "en"
@@ -40,7 +40,7 @@ func NewTranslator() *Translator {
 
 // loadEmbeddedTranslations loads translations from embedded files
 func (t *Translator) loadEmbeddedTranslations() {
-	files, err := translationsFS.ReadDir("translations")
+	files, err := localesFS.ReadDir("locales")
 	if err != nil {
 		// No embedded translations, use defaults
 		t.loadDefaultTranslations()
@@ -53,7 +53,7 @@ func (t *Translator) loadEmbeddedTranslations() {
 		}
 
 		locale := strings.TrimSuffix(file.Name(), ".json")
-		data, err := translationsFS.ReadFile("translations/" + file.Name())
+		data, err := localesFS.ReadFile("locales/" + file.Name())
 		if err != nil {
 			continue
 		}

@@ -9,7 +9,7 @@ Topics: Email & Notifications, Scheduler, GeoIP, Metrics, Backup & Restore, Upda
 - Use external cron/Task Scheduler - internal scheduler only
 - Skip GeoIP/blocklist/CVE database refreshes - scheduler handles them
 - Expose Prometheus metrics publicly - internal-only with optional bearer token
-- Forget to retain `server.scheduler.tasks.backup.retention` (default 4)
+- Drop `backup.retention.max_backups` below 1 (PART 22 default is `1`; weekly/monthly/yearly default to `0` = disabled)
 
 ## CRITICAL - ALWAYS DO
 

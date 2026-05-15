@@ -27565,7 +27565,7 @@ message := cfg.Privacy.GetConsentMessage()  // Returns appropriate message based
 ```html
 <!-- Cookie Consent Banner - ALWAYS shown until user responds (we use cookies) -->
 <!-- {message} is dynamically selected based on server.privacy.data.sold -->
-<div id="cookie-consent" class="cookie-banner" data-sold="{data_sold}" style="display: none;">
+<div id="cookie-consent" class="cookie-banner cookie-banner--hidden" data-sold="{data_sold}">
   <div class="cookie-banner-content">
     <span class="cookie-message">
       {message} - <a href="{policy_url}" class="policy-link">{policy_text}</a>
@@ -27593,7 +27593,7 @@ const defaultConsent = {
 
   // No consent yet - show banner
   if (!stored && banner) {
-    banner.style.display = 'block';
+    banner.classList.remove('cookie-banner--hidden');
   }
 
   // Has consent - apply settings
@@ -27604,7 +27604,7 @@ const defaultConsent = {
     } catch (e) {
       // Legacy format or corrupted - show banner again
       localStorage.removeItem('cookieConsent');
-      if (banner) banner.style.display = 'block';
+      if (banner) banner.classList.remove('cookie-banner--hidden');
     }
   }
 })();
@@ -27650,7 +27650,7 @@ function savePreferences() {
 
 function saveAndApplyConsent(consent) {
   localStorage.setItem('cookieConsent', JSON.stringify(consent));
-  document.getElementById('cookie-consent').style.display = 'none';
+  document.getElementById('cookie-consent').classList.add('cookie-banner--hidden');
   applyConsent(consent);
 }
 
@@ -27718,6 +27718,10 @@ initCCPA();
 
 <style>
 /* Cookie Consent Banner - matches reference design */
+.cookie-banner--hidden {
+  display: none;
+}
+
 .cookie-banner {
   position: fixed;
   bottom: 0;
@@ -59316,7 +59320,7 @@ make docker # Build Docker image
 - [ ] API versioning in URL path
 - [ ] No breaking changes without major version bump
 
-### Phase 5: Auth & Security (PARTS 15-16)
+### Phase 5: SSL/TLS & Web Frontend (PARTS 15-16)
 
 **PART 15: SSL/TLS & Let's Encrypt**
 - [ ] Let's Encrypt HTTP-01 challenge

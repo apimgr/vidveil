@@ -11,6 +11,7 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -310,7 +311,7 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 	msg.WriteString("\r\n")
 	msg.WriteString(body)
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
 	// Determine auth
 	var auth smtp.Auth
@@ -426,7 +427,7 @@ func AutodetectSMTP(customHosts []string, customPorts []int) (string, int) {
 
 // testSMTPConnection tests an SMTP server with EHLO handshake per AI.md PART 18
 func testSMTPConnection(host string, port int) bool {
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
 	// Connect with timeout
 	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)

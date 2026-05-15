@@ -324,8 +324,6 @@ func ExecuteCLI() error {
 		}
 		return RunSearchCommand(args)
 	}
-
-	return nil
 }
 
 // ResolveCLILogFilePath returns the configured CLI log file path or the default path.

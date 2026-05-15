@@ -32,6 +32,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/version"
 )
 
@@ -1241,6 +1242,10 @@ type HealthzHTMLData struct {
 	Version            string
 	BuildDateTime      string
 
+	// AI.md PART 31: locale + direction for <html lang dir>
+	Lang               string
+	Dir                string
+
 	// Nav template compatibility
 	ActiveNav          string
 	Query              string
@@ -1322,11 +1327,16 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	ts, _ := time.Parse(time.RFC3339, timestamp)
 
 	// Build template data per AI.md PART 13
+	lang := resolveLocale(r)
 	data := HealthzHTMLData{
 		Title:              "Vidveil - Health Status",
 		Theme:              "dark",
 		Version:            version.GetVersion(),
 		BuildDateTime:      version.BuildTime,
+
+		// AI.md PART 31: lang/dir for <html>
+		Lang:               lang,
+		Dir:                i18n.Direction(lang),
 
 		// Nav template compatibility
 		ActiveNav:          "healthz",
@@ -2329,6 +2339,8 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, r *http.Request, 
 		"SiteTitle": h.appConfig.Server.Branding.Title,
 		"Theme":     h.getRequestTheme(r),
 	}
+	// AI.md PART 31: lang/dir for <html>
+	injectLocaleData(r, data)
 
 	tmpl, err := template.ParseFS(templatesFS, "template/page/error.tmpl")
 	if err != nil {

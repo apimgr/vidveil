@@ -325,6 +325,8 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 		"Theme":     h.appConfig.Web.UI.Theme,
 		"AdminPath": h.appConfig.AdminURLPrefix(),
 	}
+	// AI.md PART 31: lang/dir for <html>
+	injectLocaleData(r, data)
 
 	if r.Method == http.MethodPost {
 		username := r.FormValue("username")
@@ -1601,6 +1603,8 @@ func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 		"Valid":     false,
 		"Theme":     h.appConfig.Web.UI.Theme,
 	}
+	// AI.md PART 31: lang/dir for <html>
+	injectLocaleData(r, data)
 
 	// Validate invite token
 	invite, err := h.adminSvc.ValidateInviteToken(token)
@@ -4263,6 +4267,9 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	data["OnlineCount"] = h.getOnlineCount()
+
+	// AI.md PART 31: lang/dir for <html lang="" dir="">
+	injectLocaleData(r, data)
 
 	// Add CSRF token for forms per AI.md PART 22
 	data["CSRFToken"] = h.getCSRFToken(w, r)

@@ -17,6 +17,33 @@ var localesFS embed.FS
 // DefaultLocale is the default locale per AI.md
 const DefaultLocale = "en"
 
+// rtlLocales lists locale prefixes that render right-to-left per AI.md PART 31.
+var rtlLocales = map[string]bool{
+	"ar": true,
+	"fa": true,
+	"he": true,
+	"ur": true,
+	"ps": true,
+	"sd": true,
+	"yi": true,
+}
+
+// Direction returns "rtl" for right-to-left locales and "ltr" otherwise per
+// AI.md PART 31 (<html lang dir> A11Y requirement).
+func Direction(locale string) string {
+	if locale == "" {
+		return "ltr"
+	}
+	base := strings.ToLower(locale)
+	if idx := strings.IndexAny(base, "-_"); idx > 0 {
+		base = base[:idx]
+	}
+	if rtlLocales[base] {
+		return "rtl"
+	}
+	return "ltr"
+}
+
 // Translator handles translations per AI.md PART 25
 type Translator struct {
 	// translations: locale -> key -> translation

@@ -7,7 +7,49 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
+
+	"github.com/apimgr/vidveil/src/common/i18n"
 )
+
+// injectLocaleData populates Lang and Dir on template data per AI.md PART 31
+// (<html lang="{{.Lang}}" dir="{{.Dir}}">). Locale resolution: ?lang= query,
+// "locale" cookie, then the first acceptable Accept-Language tag, otherwise
+// the default locale.
+func injectLocaleData(r *http.Request, data map[string]interface{}) {
+	if data == nil || r == nil {
+		return
+	}
+	if _, ok := data["Lang"]; !ok {
+		data["Lang"] = resolveLocale(r)
+	}
+	if _, ok := data["Dir"]; !ok {
+		data["Dir"] = i18n.Direction(data["Lang"].(string))
+	}
+}
+
+// resolveLocale picks the request locale without requiring a Translator
+// instance (templates may render before i18n is wired into the handler).
+func resolveLocale(r *http.Request) string {
+	if v := strings.TrimSpace(r.URL.Query().Get("lang")); v != "" {
+		return strings.ToLower(v)
+	}
+	if c, err := r.Cookie("locale"); err == nil && c.Value != "" {
+		return strings.ToLower(c.Value)
+	}
+	if al := r.Header.Get("Accept-Language"); al != "" {
+		// Accept-Language: en-US,en;q=0.9 -> "en-us"
+		first := al
+		if idx := strings.IndexAny(first, ",;"); idx > 0 {
+			first = first[:idx]
+		}
+		first = strings.TrimSpace(first)
+		if first != "" {
+			return strings.ToLower(first)
+		}
+	}
+	return i18n.DefaultLocale
+}
 
 // NewSecureCookie creates a cookie with proper security flags per AI.md PART 11
 // The Secure flag is set when sslEnabled is true
@@ -162,6 +204,9 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 		WriteJSON(w, http.StatusOK, data)
 		return
 	}
+
+	// Inject locale and direction per AI.md PART 31 (<html lang="{{.Lang}}" dir="{{.Dir}}">)
+	injectLocaleData(r, data)
 
 	// 2. Text browsers (lynx, w3m, links) - INTERACTIVE, NO JavaScript
 	//    Receive server-rendered HTML that works without JS

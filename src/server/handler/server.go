@@ -31,7 +31,7 @@ func NewServerHandler(appConfig *config.AppConfig) *ServerHandler {
 }
 
 // renderServerTemplate renders a server page template with common data
-func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName string, extraData map[string]interface{}) {
+func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Request, templateName string, extraData map[string]interface{}) {
 	// Map template names to file paths
 	templateFile := ""
 	switch templateName {
@@ -107,6 +107,9 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName
 		data[k] = v
 	}
 
+	// Per AI.md PART 31 inject locale + direction for <html lang="" dir="">.
+	injectLocaleData(r, data)
+
 	// Buffer template output
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, templateName, data); err != nil {
@@ -124,12 +127,12 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, templateName
 
 // AboutPage renders /server/about web page
 func (h *ServerHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
-	h.renderServerTemplate(w, "server-about", nil)
+	h.renderServerTemplate(w, r, "server-about", nil)
 }
 
 // PrivacyPage renders /server/privacy web page
 func (h *ServerHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
-	h.renderServerTemplate(w, "server-privacy", nil)
+	h.renderServerTemplate(w, r, "server-privacy", nil)
 }
 
 // ContactPage renders /server/contact web page
@@ -141,7 +144,7 @@ func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Show contact form - contact form always available
-	h.renderServerTemplate(w, "server-contact", map[string]interface{}{
+	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 		"ContactEnabled": true,
 	})
 }
@@ -149,7 +152,7 @@ func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
 // handleContactSubmit handles contact form submission
 func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Request) {
 	// Parse form and show success message
-	h.renderServerTemplate(w, "server-contact", map[string]interface{}{
+	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 		"ContactEnabled": true,
 		"Message":        "Thank you for your message. We will get back to you if needed.",
 		"MessageType":    "success",
@@ -158,7 +161,7 @@ func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Reque
 
 // HelpPage renders /server/help web page
 func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
-	h.renderServerTemplate(w, "server-help", nil)
+	h.renderServerTemplate(w, r, "server-help", nil)
 }
 
 // API Routes per AI.md PART 31

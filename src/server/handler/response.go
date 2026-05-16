@@ -159,40 +159,40 @@ func ErrorCodeToHTTP(code string) int {
 
 // Standard error codes per AI.md PART 9
 const (
-	CodeBadRequest      = "BAD_REQUEST"
-	CodeValidation      = "VALIDATION_FAILED"
-	CodeUnauthorized    = "UNAUTHORIZED"
-	CodeTokenExpired    = "TOKEN_EXPIRED"
-	CodeTokenInvalid    = "TOKEN_INVALID"
-	Code2FARequired     = "2FA_REQUIRED"
-	Code2FAInvalid      = "2FA_INVALID"
-	CodeForbidden       = "FORBIDDEN"
-	CodeAccountLocked   = "ACCOUNT_LOCKED"
-	CodeNotFound        = "NOT_FOUND"
+	CodeBadRequest       = "BAD_REQUEST"
+	CodeValidation       = "VALIDATION_FAILED"
+	CodeUnauthorized     = "UNAUTHORIZED"
+	CodeTokenExpired     = "TOKEN_EXPIRED"
+	CodeTokenInvalid     = "TOKEN_INVALID"
+	Code2FARequired      = "2FA_REQUIRED"
+	Code2FAInvalid       = "2FA_INVALID"
+	CodeForbidden        = "FORBIDDEN"
+	CodeAccountLocked    = "ACCOUNT_LOCKED"
+	CodeNotFound         = "NOT_FOUND"
 	CodeMethodNotAllowed = "METHOD_NOT_ALLOWED"
-	CodeConflict        = "CONFLICT"
-	CodeRateLimited     = "RATE_LIMITED"
-	CodeServerError     = "SERVER_ERROR"
-	CodeMaintenance     = "MAINTENANCE"
+	CodeConflict         = "CONFLICT"
+	CodeRateLimited      = "RATE_LIMITED"
+	CodeServerError      = "SERVER_ERROR"
+	CodeMaintenance      = "MAINTENANCE"
 )
 
 // Standard error messages per AI.md PART 9
 const (
-	MsgBadRequest      = "Invalid request format"
-	MsgValidation      = "Validation failed"
-	MsgUnauthorized    = "Authentication required"
-	MsgTokenExpired    = "Token has expired"
-	MsgTokenInvalid    = "Invalid token"
-	Msg2FARequired     = "Two-factor authentication required"
-	Msg2FAInvalid      = "Invalid 2FA code"
-	MsgForbidden       = "Permission denied"
-	MsgAccountLocked   = "Account locked"
-	MsgNotFound        = "Resource not found"
+	MsgBadRequest       = "Invalid request format"
+	MsgValidation       = "Validation failed"
+	MsgUnauthorized     = "Authentication required"
+	MsgTokenExpired     = "Token has expired"
+	MsgTokenInvalid     = "Invalid token"
+	Msg2FARequired      = "Two-factor authentication required"
+	Msg2FAInvalid       = "Invalid 2FA code"
+	MsgForbidden        = "Permission denied"
+	MsgAccountLocked    = "Account locked"
+	MsgNotFound         = "Resource not found"
 	MsgMethodNotAllowed = "Method not allowed"
-	MsgConflict        = "Resource already exists"
-	MsgRateLimited     = "Too many requests"
-	MsgServerError     = "Internal server error"
-	MsgMaintenance     = "Service unavailable"
+	MsgConflict         = "Resource already exists"
+	MsgRateLimited      = "Too many requests"
+	MsgServerError      = "Internal server error"
+	MsgMaintenance      = "Service unavailable"
 )
 
 // renderResponse renders appropriate response based on client type
@@ -256,10 +256,10 @@ func isTextBrowser(r *http.Request) bool {
 		ual += string(c)
 	}
 	// Check for text browser signatures
-	return ual[:4] == "lynx" || 
-		   ual[:3] == "w3m" || 
-		   (len(ual) >= 5 && ual[:5] == "links") ||
-		   (len(ual) >= 6 && ual[:6] == "elinks")
+	return ual[:4] == "lynx" ||
+		ual[:3] == "w3m" ||
+		(len(ual) >= 5 && ual[:5] == "links") ||
+		(len(ual) >= 6 && ual[:6] == "elinks")
 }
 
 func isHttpTool(r *http.Request) bool {
@@ -280,14 +280,14 @@ func isHttpTool(r *http.Request) bool {
 		ual += string(c)
 	}
 	return (len(ual) >= 4 && ual[:4] == "curl") ||
-		   (len(ual) >= 4 && ual[:4] == "wget") ||
-		   (len(ual) >= 6 && ual[:6] == "httpie")
+		(len(ual) >= 4 && ual[:4] == "wget") ||
+		(len(ual) >= 6 && ual[:6] == "httpie")
 }
 
 // renderSimpleHTML creates basic HTML for HTTP tools (to be converted to text)
 func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{}) string {
 	html := "<html><body>"
-	
+
 	switch name {
 	case "home":
 		html += "<h1>VidVeil - Privacy-Respecting Video Search</h1>"
@@ -375,34 +375,34 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 func convertHTMLToText(html string, width int) string {
 	// Simple conversion for now
 	text := html
-	
+
 	// H1 with box drawing
 	text = replaceAll(text, "<h1>", "\n"+repeatStr("═", width)+"\n")
 	text = replaceAll(text, "</h1>", "\n"+repeatStr("═", width)+"\n\n")
-	
+
 	// H2 with line
 	text = replaceAll(text, "<h2>", "\n─── ")
 	text = replaceAll(text, "</h2>", " ───\n\n")
-	
+
 	// Paragraphs
 	text = replaceAll(text, "<p>", "")
 	text = replaceAll(text, "</p>", "\n\n")
-	
+
 	// Lists
 	text = replaceAll(text, "<ul>", "\n")
 	text = replaceAll(text, "</ul>", "\n")
 	text = replaceAll(text, "<li>", "  • ")
 	text = replaceAll(text, "</li>", "\n")
-	
+
 	// HR
 	text = replaceAll(text, "<hr>", "\n"+repeatStr("─", width)+"\n\n")
-	
+
 	// Strip remaining tags
 	text = replaceAll(text, "<html>", "")
 	text = replaceAll(text, "</html>", "")
 	text = replaceAll(text, "<body>", "")
 	text = replaceAll(text, "</body>", "")
-	
+
 	return text
 }
 

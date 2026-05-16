@@ -34,7 +34,7 @@ type CVEItem struct {
 	Modified    time.Time `json:"modified"`
 	CVSS        float64   `json:"cvss"`
 	Severity    string    `json:"severity"`
-	References []string `json:"references"`
+	References  []string  `json:"references"`
 	// CPEs is Common Platform Enumeration identifiers
 	CPEs []string `json:"cpes"`
 }
@@ -80,7 +80,7 @@ func NewCVEService(appConfig *config.AppConfig) *CVEService {
 	return &CVEService{
 		appConfig: appConfig,
 		dataDir:   dataDir,
-		cveData: make(map[string]CVEItem),
+		cveData:   make(map[string]CVEItem),
 	}
 }
 
@@ -175,7 +175,7 @@ func (s *CVEService) loadCVEData(filename string) error {
 	// Parse CVE items
 	for _, item := range nvdResp.CVEItems {
 		cveID := item.CVE.DataMeta.ID
-		
+
 		// Get description
 		description := ""
 		if len(item.CVE.Description.DescriptionData) > 0 {
@@ -276,9 +276,9 @@ func (s *CVEService) GetStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_cves": len(s.cveData),
+		"total_cves":  len(s.cveData),
 		"by_severity": severityCounts,
-		"data_dir":   s.dataDir,
+		"data_dir":    s.dataDir,
 	}
 }
 

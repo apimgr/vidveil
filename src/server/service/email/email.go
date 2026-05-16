@@ -442,7 +442,7 @@ func testSMTPConnection(host string, port int) bool {
 	// For port 465 (SMTPS), wrap in TLS first
 	if port == 465 {
 		tlsConn := tls.Client(conn, &tls.Config{
-			ServerName:         host,
+			ServerName: host,
 			// Allow self-signed for local servers
 			InsecureSkipVerify: true,
 		})

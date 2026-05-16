@@ -66,13 +66,13 @@ type xhamsterInitials struct {
 }
 
 type xhamsterVideo struct {
-	ID        int    `json:"id"`
-	Title     string `json:"title"`
-	Duration  int    `json:"duration"`
-	Views     int    `json:"views"`
-	PageURL   string `json:"pageURL"`
-	ThumbURL  string `json:"thumbURL"`
-	Created   int64  `json:"created"`
+	ID       int    `json:"id"`
+	Title    string `json:"title"`
+	Duration int    `json:"duration"`
+	Views    int    `json:"views"`
+	PageURL  string `json:"pageURL"`
+	ThumbURL string `json:"thumbURL"`
+	Created  int64  `json:"created"`
 }
 
 // NewXHamsterEngine creates a new xHamster engine

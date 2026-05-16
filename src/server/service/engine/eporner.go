@@ -18,7 +18,7 @@ type EpornerEngine struct {
 
 // epornerAPIResponse represents the API response
 type epornerAPIResponse struct {
-	Count      int            `json:"count"`
+	Count int `json:"count"`
 	// API returns string or number
 	TotalCount interface{}    `json:"total_count"`
 	Videos     []epornerVideo `json:"videos"`

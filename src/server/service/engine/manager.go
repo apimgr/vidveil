@@ -17,8 +17,8 @@ import (
 // EngineManager manages all search engines
 // Per PART 32: Supports Tor outbound network for anonymized engine queries
 type EngineManager struct {
-	engines     map[string]SearchEngine
-	appConfig   *config.AppConfig
+	engines   map[string]SearchEngine
+	appConfig *config.AppConfig
 	// Per PART 32: Tor client provider for outbound
 	torProvider TorClientProvider
 	mu          sync.RWMutex
@@ -808,16 +808,16 @@ type EngineDebugInfo struct {
 
 // DebugSearchResult contains comprehensive debug info for all engines
 type DebugSearchResult struct {
-	Query           string            `json:"query"`
-	MinDuration     int               `json:"min_duration_seconds"`
-	TotalEngines    int               `json:"total_engines"`
-	EnabledEngines  int               `json:"enabled_engines"`
-	SuccessEngines  int               `json:"success_engines"`
-	FailedEngines   int               `json:"failed_engines"`
-	TotalRaw        int               `json:"total_raw_results"`
-	TotalFinal      int               `json:"total_final_results"`
-	SearchTimeMS    int64             `json:"search_time_ms"`
-	Engines         []EngineDebugInfo `json:"engines"`
+	Query          string            `json:"query"`
+	MinDuration    int               `json:"min_duration_seconds"`
+	TotalEngines   int               `json:"total_engines"`
+	EnabledEngines int               `json:"enabled_engines"`
+	SuccessEngines int               `json:"success_engines"`
+	FailedEngines  int               `json:"failed_engines"`
+	TotalRaw       int               `json:"total_raw_results"`
+	TotalFinal     int               `json:"total_final_results"`
+	SearchTimeMS   int64             `json:"search_time_ms"`
+	Engines        []EngineDebugInfo `json:"engines"`
 }
 
 // DebugSearch performs a search across ALL engines (ignoring disabled state) and returns detailed debug info
@@ -1196,9 +1196,9 @@ func resultMatchesAllTerms(r model.VideoResult, query string) bool {
 // StreamResult represents a single result sent via SSE
 type StreamResult struct {
 	Result model.VideoResult `json:"result,omitempty"`
-	Engine string        `json:"engine"`
-	Done   bool          `json:"done"`
-	Error  string        `json:"error,omitempty"`
+	Engine string            `json:"engine"`
+	Done   bool              `json:"done"`
+	Error  string            `json:"error,omitempty"`
 }
 
 // SearchStream performs a search across enabled engines and streams results via channel

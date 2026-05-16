@@ -17,13 +17,13 @@ import (
 // slidingWindowCounter tracks counts in a 24-hour sliding window using hourly buckets.
 // Each bucket represents one hour of counts. The ring rotates hourly.
 type slidingWindowCounter struct {
-	mu          sync.RWMutex
+	mu sync.RWMutex
 	// 24 hourly buckets
-	buckets     [24]uint64
+	buckets [24]uint64
 	// Current bucket index (0-23)
 	currentHour int
 	// Last rotation timestamp
-	lastRotate  time.Time
+	lastRotate time.Time
 }
 
 // newSlidingWindowCounter creates a new 24h sliding window counter
@@ -89,12 +89,12 @@ type ServerMetrics struct {
 	startTime time.Time
 
 	// Counters per AI.md PART 13
-	requestsTotal     uint64
-	searchesTotal     uint64
-	searchErrors      uint64
-	apiRequestsTotal  uint64
+	requestsTotal    uint64
+	searchesTotal    uint64
+	searchErrors     uint64
+	apiRequestsTotal uint64
 	// cacheHitsTotal tracks how many searches were served from cache
-	cacheHitsTotal    uint64
+	cacheHitsTotal uint64
 	// activeConnections tracks current active connections
 	activeConnections int64
 

@@ -36,8 +36,8 @@ type MemoryLockStore struct {
 }
 
 type lockEntry struct {
-	owner    string
-	expires  time.Time
+	owner   string
+	expires time.Time
 }
 
 // NewMemoryLockStore creates a new in-memory lock store

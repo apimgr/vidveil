@@ -32,11 +32,11 @@ var CLIUpdateValidBranches = map[string]bool{
 
 // CLIGitHubRelease mirrors the fields from the GitHub releases API used for self-update.
 type CLIGitHubRelease struct {
-	TagName     string             `json:"tag_name"`
-	HTMLURL     string             `json:"html_url"`
-	Body        string             `json:"body"`
-	PublishedAt time.Time          `json:"published_at"`
-	Assets      []CLIGitHubAsset   `json:"assets"`
+	TagName     string           `json:"tag_name"`
+	HTMLURL     string           `json:"html_url"`
+	Body        string           `json:"body"`
+	PublishedAt time.Time        `json:"published_at"`
+	Assets      []CLIGitHubAsset `json:"assets"`
 }
 
 // CLIGitHubAsset is one downloadable artifact attached to a release.

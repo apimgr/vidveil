@@ -144,12 +144,12 @@ func IsRetryable(err error) bool {
 
 // Common pre-defined errors for convenience
 var (
-	ErrBadRequest      = NewAppError(CodeBadRequest, MsgBadRequest)
-	ErrUnauthorized    = NewAppError(CodeUnauthorized, MsgUnauthorized)
-	ErrForbidden       = NewAppError(CodeForbidden, MsgForbidden)
-	ErrNotFound        = NewAppError(CodeNotFound, MsgNotFound)
-	ErrConflict        = NewAppError(CodeConflict, MsgConflict)
-	ErrRateLimited     = NewAppError(CodeRateLimited, MsgRateLimited)
-	ErrServerError     = NewAppError(CodeServerError, MsgServerError)
-	ErrMaintenance     = NewAppError(CodeMaintenance, MsgMaintenance)
+	ErrBadRequest   = NewAppError(CodeBadRequest, MsgBadRequest)
+	ErrUnauthorized = NewAppError(CodeUnauthorized, MsgUnauthorized)
+	ErrForbidden    = NewAppError(CodeForbidden, MsgForbidden)
+	ErrNotFound     = NewAppError(CodeNotFound, MsgNotFound)
+	ErrConflict     = NewAppError(CodeConflict, MsgConflict)
+	ErrRateLimited  = NewAppError(CodeRateLimited, MsgRateLimited)
+	ErrServerError  = NewAppError(CodeServerError, MsgServerError)
+	ErrMaintenance  = NewAppError(CodeMaintenance, MsgMaintenance)
 )

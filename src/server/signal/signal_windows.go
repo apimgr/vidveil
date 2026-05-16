@@ -149,7 +149,7 @@ func isOurProcess(pid int, binaryName string) bool {
 		return false
 	}
 	defer syscall.CloseHandle(handle)
-	
+
 	// Process exists and we have access to it
 	// Full implementation would call QueryFullProcessImageNameW to get exe path
 	// and compare basename with binaryName

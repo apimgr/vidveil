@@ -23,9 +23,9 @@ type ScheduledTask struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	// Schedule format: hourly, daily, weekly, monthly, or cron expression (e.g., "0 2 * * *")
-	Schedule   string    `json:"schedule"`
-	Enabled    bool      `json:"enabled"`
-	LastRun    time.Time `json:"last_run"`
+	Schedule string    `json:"schedule"`
+	Enabled  bool      `json:"enabled"`
+	LastRun  time.Time `json:"last_run"`
 	// LastResult: success, failure, running, or pending
 	LastResult string    `json:"last_result"`
 	LastError  string    `json:"last_error,omitempty"`
@@ -52,13 +52,13 @@ type TaskHistory struct {
 // Scheduler manages scheduled tasks per AI.md PART 19
 // Supports optional database persistence for task state survival across restarts
 type Scheduler struct {
-	tasks    map[string]*ScheduledTask
-	history  []TaskHistory
-	mu       sync.RWMutex
-	ctx      context.Context
-	cancel   context.CancelFunc
-	running  bool
-	maxHist  int
+	tasks   map[string]*ScheduledTask
+	history []TaskHistory
+	mu      sync.RWMutex
+	ctx     context.Context
+	cancel  context.CancelFunc
+	running bool
+	maxHist int
 	// Optional database for persistence per AI.md PART 19
 	db *sql.DB
 	// Catch-up window per AI.md PART 19: run missed tasks if within this duration

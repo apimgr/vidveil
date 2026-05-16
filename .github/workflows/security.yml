@@ -22,24 +22,19 @@ permissions:
 
 jobs:
   secret-scan:
-    name: Secret scan (gitleaks)
+    name: Secret scanning (truffleHog)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout (with full history for diff scan)
-        # v6
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0
 
-      - name: Run gitleaks
-        # v2
-        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_COMMENTS: "false"
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
-          GITLEAKS_ENABLE_SUMMARY: "true"
+      - name: Run truffleHog
+        uses: trufflesecurity/trufflehog@37b77001d0174ebec2fcca2bd83ff83a6d45a3ab  # v3.95.3
 
   dependency-scan:
     name: Dependency vulnerability scan (govulncheck)
@@ -77,8 +72,10 @@ jobs:
           set -euo pipefail
           fail=0
 
-          # Block pull_request_target without explicit guard (none expected here)
-          if grep -RIn "pull_request_target" .github/workflows/ .gitea/workflows/ 2>/dev/null; then
+          # Block pull_request_target without explicit guard (none expected here).
+          # Exclude security.yml itself — it contains this very grep and would always self-match.
+          if grep -RIn -- "pull_request_target" .github/workflows/ .gitea/workflows/ 2>/dev/null \
+              | grep -v -- "/security.yml:"; then
             echo "ERROR: pull_request_target detected. Untrusted code execution paths are forbidden by AI.md PART 28."
             fail=1
           fi

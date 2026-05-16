@@ -264,7 +264,7 @@ func (sm *ServiceManager) installLinux() error {
 // createLinuxUser creates system user per AI.md PART 4
 func (sm *ServiceManager) createLinuxUser() error {
 	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Checking if user '%s' exists...\n", sm.user)
-	
+
 	// Check if user exists
 	_, err := exec.Command("id", sm.user).CombinedOutput()
 	// User already exists
@@ -272,7 +272,7 @@ func (sm *ServiceManager) createLinuxUser() error {
 		fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' already exists, skipping creation\n", sm.user)
 		return nil
 	}
-	
+
 	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' does not exist, creating...\n", sm.user)
 
 	// Find available UID in 200-899 range per AI.md PART 24
@@ -306,7 +306,7 @@ func (sm *ServiceManager) createLinuxUser() error {
 		fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: useradd failed: %v\n", err)
 		return fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' created successfully\n", sm.user)
 
 	// Create and set ownership of directories per PART 25

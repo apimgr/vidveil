@@ -16,7 +16,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/redis/go-redis/v9 v9.17.2
-	github.com/refraction-networking/utls v1.8.1
+	github.com/refraction-networking/utls v1.8.2
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.46.0
 	golang.org/x/net v0.47.0

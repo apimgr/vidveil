@@ -23,14 +23,14 @@ const (
 
 // SyncEvent represents a database change event for replication
 type SyncEvent struct {
-	ID        string        `json:"id"`
-	Type      SyncEventType `json:"type"`
-	Table     string        `json:"table"`
-	PrimaryKey interface{}  `json:"primary_key"`
-	Data      map[string]interface{} `json:"data,omitempty"`
-	Timestamp time.Time     `json:"timestamp"`
-	NodeID    string        `json:"node_id"`
-	Version   int64         `json:"version"`
+	ID         string                 `json:"id"`
+	Type       SyncEventType          `json:"type"`
+	Table      string                 `json:"table"`
+	PrimaryKey interface{}            `json:"primary_key"`
+	Data       map[string]interface{} `json:"data,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+	NodeID     string                 `json:"node_id"`
+	Version    int64                  `json:"version"`
 }
 
 // SyncChannel defines the interface for sync event transport
@@ -45,14 +45,14 @@ type SyncChannel interface {
 
 // SyncManager manages cross-database synchronization
 type SyncManager struct {
-	db        *AppDatabase
-	channel   SyncChannel
-	nodeID    string
-	mu        sync.RWMutex
-	ctx       context.Context
-	cancel    context.CancelFunc
-	enabled   bool
-	version   int64
+	db      *AppDatabase
+	channel SyncChannel
+	nodeID  string
+	mu      sync.RWMutex
+	ctx     context.Context
+	cancel  context.CancelFunc
+	enabled bool
+	version int64
 	// Tables to sync
 	tables map[string]bool
 	// Events pending sync

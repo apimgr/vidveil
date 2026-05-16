@@ -63,7 +63,7 @@ func (s *BlocklistService) Update(ctx context.Context) error {
 
 	sources := s.appConfig.Server.Security.Blocklists.Sources
 	var errors []string
-	
+
 	for _, source := range sources {
 		if !source.Enabled {
 			continue
@@ -137,7 +137,7 @@ func (s *BlocklistService) loadBlocklist(filename, blockType string) error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -185,7 +185,7 @@ func (s *BlocklistService) parseDomainLine(line string) {
 	// Remove protocol if present
 	line = strings.TrimPrefix(line, "http://")
 	line = strings.TrimPrefix(line, "https://")
-	
+
 	// Remove path if present
 	if idx := strings.Index(line, "/"); idx >= 0 {
 		line = line[:idx]

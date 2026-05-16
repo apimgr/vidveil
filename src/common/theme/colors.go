@@ -5,9 +5,9 @@ package theme
 
 // ColorPalette defines the color scheme for the application
 type ColorPalette struct {
-	Background, Foreground         string
-	Primary, Secondary, Accent     string
-	Success, Warning, Error, Info  string
+	Background, Foreground             string
+	Primary, Secondary, Accent         string
+	Success, Warning, Error, Info      string
 	Surface, SurfaceAlt, Border, Muted string
 }
 

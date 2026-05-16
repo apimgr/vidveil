@@ -27,13 +27,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
-	"github.com/apimgr/vidveil/src/common/i18n"
-	"github.com/apimgr/vidveil/src/common/version"
 )
 
 // templatesFS holds the embedded templates filesystem
@@ -338,7 +338,7 @@ func (h *SearchHandler) getActiveConnections() int64 {
 func WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	// Use MarshalIndent with 2-space indent (NON-NEGOTIABLE)
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
@@ -347,7 +347,7 @@ func WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 		w.Write([]byte(`{"error":"Failed to encode JSON"}`))
 		return
 	}
-	
+
 	// Write JSON data
 	w.Write(jsonData)
 	// Single trailing newline (NON-NEGOTIABLE)
@@ -666,9 +666,9 @@ func BuildDateTime() string {
 // HomePage renders the home page with content negotiation per AI.md PART 17
 func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
-	
+
 	engineCount := h.engineMgr.EnabledCount()
-	
+
 	switch format {
 	case "application/json":
 		// JSON response for API clients
@@ -678,7 +678,7 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 			"engine_count": engineCount,
 			"version":      version.GetVersion(),
 		})
-		
+
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -686,7 +686,7 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "%s\n\n", h.appConfig.Server.Branding.Description)
 		fmt.Fprintf(w, "Search Engines: %d enabled\n", engineCount)
 		fmt.Fprintf(w, "Version: %s\n", version.GetVersion())
-		
+
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "home", map[string]interface{}{
@@ -820,18 +820,18 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 // PreferencesPage renders user preferences with content negotiation per AI.md PART 17
 func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
-	
+
 	engines := h.engineMgr.ListEngines()
-	
+
 	switch format {
 	case "application/json":
 		// JSON response for API clients
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"title":    "Preferences",
-			"engines":  engines,
-			"theme":    h.getRequestTheme(r),
+			"title":   "Preferences",
+			"engines": engines,
+			"theme":   h.getRequestTheme(r),
 		})
-		
+
 	case "text/plain":
 		// Plain text response for curl/CLI per AI.md PART 17
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -845,7 +845,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 			}
 			fmt.Fprintf(w, "  %s (%s)\n", eng.DisplayName, status)
 		}
-		
+
 	default:
 		// HTML response for browsers (default)
 		h.renderResponse(w, r, "preferences", map[string]interface{}{
@@ -860,17 +860,17 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 // AboutPage renders the about page with content negotiation per AI.md PART 17
 func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
-	
+
 	ver := version.GetVersion()
 
 	switch format {
 	case "application/json":
 		// JSON response for API clients
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"title":         h.appConfig.Server.Branding.Title,
-			"version":       ver,
-			"build_date":    BuildDateTime(),
-			"description":   h.appConfig.Server.Branding.Description,
+			"title":       h.appConfig.Server.Branding.Title,
+			"version":     ver,
+			"build_date":  BuildDateTime(),
+			"description": h.appConfig.Server.Branding.Description,
 		})
 
 	case "text/plain":
@@ -895,7 +895,7 @@ func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 // PrivacyPage renders the privacy policy page with content negotiation per AI.md PART 17
 func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
-	
+
 	ver := version.GetVersion()
 
 	switch format {
@@ -1077,7 +1077,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	hostname, _ := os.Hostname()
 	uptime := getUptime()
 	timestamp := time.Now().UTC().Format(time.RFC3339)
-	
+
 	// Get mode from config
 	appMode := "production"
 	if h.appConfig != nil && h.appConfig.IsDevelopmentMode() {
@@ -1089,7 +1089,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	clusterStatus := ""
 	clusterNodes := 0
 	clusterRole := ""
-	
+
 	// Build checks object - MUST be simple "ok"/"error" strings
 	// Per AI.md PART 13
 	checks := map[string]string{
@@ -1097,7 +1097,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		"cache":    "ok",
 		"disk":     "ok",
 	}
-	
+
 	// Add cluster check if clustering enabled
 	if clusterEnabled {
 		checks["cluster"] = "ok"
@@ -1237,35 +1237,35 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 // HealthzHTMLData holds all data for healthz template per AI.md PART 13
 type HealthzHTMLData struct {
-	Title              string
-	Theme              string
-	Version            string
-	BuildDateTime      string
+	Title         string
+	Theme         string
+	Version       string
+	BuildDateTime string
 
 	// AI.md PART 31: locale + direction for <html lang dir>
-	Lang               string
-	Dir                string
+	Lang string
+	Dir  string
 
 	// Nav template compatibility
-	ActiveNav          string
-	Query              string
+	ActiveNav string
+	Query     string
 
 	// Project info
 	ProjectName        string
 	ProjectDescription string
 
 	// Status
-	StatusClass        string
-	StatusIcon         string
-	StatusText         string
+	StatusClass string
+	StatusIcon  string
+	StatusText  string
 
 	// Version info
-	GoVersion          string
-	BuildCommit        string
-	BuildDate          string
-	Uptime             string
-	Mode               string
-	ModeDisplay        string
+	GoVersion   string
+	BuildCommit string
+	BuildDate   string
+	Uptime      string
+	Mode        string
+	ModeDisplay string
 
 	// Cluster
 	ClusterEnabled     bool
@@ -1277,17 +1277,17 @@ type HealthzHTMLData struct {
 	ClusterNodes       []ClusterNodeData
 
 	// Features
-	Features           FeaturesData
+	Features FeaturesData
 
 	// Checks
-	Checks             ChecksData
+	Checks ChecksData
 
 	// Stats (VidVeil-specific per IDEA.md)
-	Stats              StatsData
+	Stats StatsData
 
 	// Timestamp
-	Timestamp          string
-	TimestampDisplay   string
+	Timestamp        string
+	TimestampDisplay string
 }
 
 type ClusterNodeData struct {
@@ -1329,29 +1329,29 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	// Build template data per AI.md PART 13
 	lang := resolveLocale(r)
 	data := HealthzHTMLData{
-		Title:              "Vidveil - Health Status",
-		Theme:              "dark",
-		Version:            version.GetVersion(),
-		BuildDateTime:      version.BuildTime,
+		Title:         "Vidveil - Health Status",
+		Theme:         "dark",
+		Version:       version.GetVersion(),
+		BuildDateTime: version.BuildTime,
 
 		// AI.md PART 31: lang/dir for <html>
-		Lang:               lang,
-		Dir:                i18n.Direction(lang),
+		Lang: lang,
+		Dir:  i18n.Direction(lang),
 
 		// Nav template compatibility
-		ActiveNav:          "healthz",
-		Query:              "",
+		ActiveNav: "healthz",
+		Query:     "",
 
 		// Project info
 		ProjectName:        "Vidveil",
 		ProjectDescription: "Privacy-respecting adult video meta search",
 
 		// Version info
-		GoVersion:          runtime.Version(),
-		BuildCommit:        version.CommitID,
-		BuildDate:          version.BuildTime,
-		Uptime:             uptime,
-		Mode:               appMode,
+		GoVersion:   runtime.Version(),
+		BuildCommit: version.CommitID,
+		BuildDate:   version.BuildTime,
+		Uptime:      uptime,
+		Mode:        appMode,
 
 		// Checks
 		Checks: ChecksData{
@@ -1364,9 +1364,24 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 
 		// Stats per AI.md PART 13
 		Stats: StatsData{
-			RequestsTotal:     func() uint64 { if h.metrics != nil { return h.metrics.GetRequestsTotal() }; return 0 }(),
-			Requests24h:       func() uint64 { if h.metrics != nil { return h.metrics.GetRequests24h() }; return 0 }(),
-			ActiveConnections: func() int64 { if h.metrics != nil { return h.metrics.GetActiveConnections() }; return 0 }(),
+			RequestsTotal: func() uint64 {
+				if h.metrics != nil {
+					return h.metrics.GetRequestsTotal()
+				}
+				return 0
+			}(),
+			Requests24h: func() uint64 {
+				if h.metrics != nil {
+					return h.metrics.GetRequests24h()
+				}
+				return 0
+			}(),
+			ActiveConnections: func() int64 {
+				if h.metrics != nil {
+					return h.metrics.GetActiveConnections()
+				}
+				return 0
+			}(),
 		},
 
 		// Timestamp
@@ -1374,7 +1389,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		TimestampDisplay: ts.Format("Jan 02, 2006 3:04 PM"),
 
 		// Cluster
-		ClusterEnabled:   clusterEnabled,
+		ClusterEnabled: clusterEnabled,
 	}
 
 	// Status display
@@ -1877,9 +1892,9 @@ func (h *SearchHandler) APIBangs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonResponse(w, map[string]interface{}{
-		"ok": true,
-		"data":    bangs,
-		"count":   len(bangs),
+		"ok":    true,
+		"data":  bangs,
+		"count": len(bangs),
 	})
 }
 
@@ -1902,7 +1917,7 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		h.jsonResponse(w, map[string]interface{}{
-			"ok":     true,
+			"ok":          true,
 			"suggestions": popular,
 			"type":        "popular",
 		})
@@ -1925,7 +1940,7 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		h.jsonResponse(w, map[string]interface{}{
-			"ok":     true,
+			"ok":          true,
 			"suggestions": suggestions,
 			"type":        "bang",
 		})
@@ -1950,7 +1965,7 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		h.jsonResponse(w, map[string]interface{}{
-			"ok":     true,
+			"ok":          true,
 			"suggestions": bangs,
 			"type":        "bang_start",
 		})
@@ -1976,7 +1991,7 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 			}
 			// replace indicates what to replace in query
 			h.jsonResponse(w, map[string]interface{}{
-				"ok":     true,
+				"ok":          true,
 				"suggestions": suggestions,
 				"type":        "bang",
 				"replace":     lastWord,
@@ -2652,7 +2667,7 @@ func (h *SearchHandler) DebugEnginesList(w http.ResponseWriter, r *http.Request)
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
+		"ok":      true,
 		"count":   len(list),
 		"engines": list,
 	})
@@ -2661,152 +2676,152 @@ func (h *SearchHandler) DebugEnginesList(w http.ResponseWriter, r *http.Request)
 // ProxyThumbnail proxies external thumbnails to prevent tracking
 // Per IDEA.md: Privacy proxy for thumbnails
 func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
-// Get URL parameter
-encodedURL := r.URL.Query().Get("url")
-if encodedURL == "" {
-http.Error(w, "Missing url parameter", http.StatusBadRequest)
-return
-}
+	// Get URL parameter
+	encodedURL := r.URL.Query().Get("url")
+	if encodedURL == "" {
+		http.Error(w, "Missing url parameter", http.StatusBadRequest)
+		return
+	}
 
-// Decode URL
-thumbURL, err := url.QueryUnescape(encodedURL)
-if err != nil {
-http.Error(w, "Invalid url parameter", http.StatusBadRequest)
-return
-}
+	// Decode URL
+	thumbURL, err := url.QueryUnescape(encodedURL)
+	if err != nil {
+		http.Error(w, "Invalid url parameter", http.StatusBadRequest)
+		return
+	}
 
-// Validate URL
-parsedURL, err := url.Parse(thumbURL)
-if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
-http.Error(w, "Invalid thumbnail URL", http.StatusBadRequest)
-return
-}
+	// Validate URL
+	parsedURL, err := url.Parse(thumbURL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		http.Error(w, "Invalid thumbnail URL", http.StatusBadRequest)
+		return
+	}
 
-// Compute ETag from URL for conditional GET support
-h256 := sha256.Sum256([]byte(thumbURL))
-etag := `"` + hex.EncodeToString(h256[:16]) + `"`
+	// Compute ETag from URL for conditional GET support
+	h256 := sha256.Sum256([]byte(thumbURL))
+	etag := `"` + hex.EncodeToString(h256[:16]) + `"`
 
-// Check If-None-Match for 304 Not Modified
-if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
-	w.Header().Set("ETag", etag)
-	w.WriteHeader(http.StatusNotModified)
-	return
-}
+	// Check If-None-Match for 304 Not Modified
+	if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
+		w.Header().Set("ETag", etag)
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
 
-// Thumbnail disk cache: check if a cached file exists and is still fresh
-ttlMinutes := h.appConfig.Search.ThumbnailCacheTTL
-if ttlMinutes == 0 {
-	// 24 hours default
-	ttlMinutes = 1440
-}
-cacheEnabled := ttlMinutes > 0 && h.dataDir != ""
-cacheDir := filepath.Join(h.dataDir, "thumbnails")
-cacheFile := filepath.Join(cacheDir, hex.EncodeToString(h256[:]))
+	// Thumbnail disk cache: check if a cached file exists and is still fresh
+	ttlMinutes := h.appConfig.Search.ThumbnailCacheTTL
+	if ttlMinutes == 0 {
+		// 24 hours default
+		ttlMinutes = 1440
+	}
+	cacheEnabled := ttlMinutes > 0 && h.dataDir != ""
+	cacheDir := filepath.Join(h.dataDir, "thumbnails")
+	cacheFile := filepath.Join(cacheDir, hex.EncodeToString(h256[:]))
 
-if cacheEnabled {
-	if info, statErr := os.Stat(cacheFile); statErr == nil {
-		age := time.Since(info.ModTime())
-		if age < time.Duration(ttlMinutes)*time.Minute {
-			// Serve from disk cache
-			cachedBytes, readErr := os.ReadFile(cacheFile)
-			if readErr == nil {
-				ct := "image/jpeg"
-				// Detect GIF from magic bytes
-				if len(cachedBytes) >= 6 && string(cachedBytes[:6]) == "GIF89a" {
-					ct = "image/gif"
+	if cacheEnabled {
+		if info, statErr := os.Stat(cacheFile); statErr == nil {
+			age := time.Since(info.ModTime())
+			if age < time.Duration(ttlMinutes)*time.Minute {
+				// Serve from disk cache
+				cachedBytes, readErr := os.ReadFile(cacheFile)
+				if readErr == nil {
+					ct := "image/jpeg"
+					// Detect GIF from magic bytes
+					if len(cachedBytes) >= 6 && string(cachedBytes[:6]) == "GIF89a" {
+						ct = "image/gif"
+					}
+					w.Header().Set("ETag", etag)
+					// 24 hours
+					w.Header().Set("Cache-Control", "public, max-age=86400")
+					w.Header().Set("Content-Type", ct)
+					w.Header().Set("Content-Length", strconv.Itoa(len(cachedBytes)))
+					w.WriteHeader(http.StatusOK)
+					//nolint:errcheck
+					w.Write(cachedBytes)
+					return
 				}
-				w.Header().Set("ETag", etag)
-				// 24 hours
-				w.Header().Set("Cache-Control", "public, max-age=86400")
-				w.Header().Set("Content-Type", ct)
-				w.Header().Set("Content-Length", strconv.Itoa(len(cachedBytes)))
-				w.WriteHeader(http.StatusOK)
-				//nolint:errcheck
-				w.Write(cachedBytes)
-				return
 			}
 		}
 	}
-}
 
-// Create request with headers to avoid hotlink protection
-req, err := http.NewRequest("GET", thumbURL, nil)
-if err != nil {
-http.Error(w, "Failed to create request", http.StatusInternalServerError)
-return
-}
-req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
+	// Create request with headers to avoid hotlink protection
+	req, err := http.NewRequest("GET", thumbURL, nil)
+	if err != nil {
+		http.Error(w, "Failed to create request", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
 
-// Fetch thumbnail - Per PART 32: Route through Tor when use_network is enabled
-client := h.getProxyClient(10 * time.Second)
+	// Fetch thumbnail - Per PART 32: Route through Tor when use_network is enabled
+	client := h.getProxyClient(10 * time.Second)
 
-resp, err := client.Do(req)
-if err != nil {
-http.Error(w, "Failed to fetch thumbnail", http.StatusBadGateway)
-return
-}
-defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "Failed to fetch thumbnail", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
 
-if resp.StatusCode != http.StatusOK {
-http.Error(w, "Thumbnail not found", http.StatusNotFound)
-return
-}
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "Thumbnail not found", http.StatusNotFound)
+		return
+	}
 
-// Read full body
-body, err := io.ReadAll(resp.Body)
-if err != nil {
-	http.Error(w, "Failed to read thumbnail", http.StatusBadGateway)
-	return
-}
+	// Read full body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Failed to read thumbnail", http.StatusBadGateway)
+		return
+	}
 
-// Re-encode JPEG/PNG as JPEG quality=75 for bandwidth savings (~30-40% reduction).
-// GIFs are passed through unchanged to preserve animated video previews.
-// Falls back to original bytes if the image cannot be decoded.
-contentType := resp.Header.Get("Content-Type")
-if contentType == "" {
-	contentType = "image/jpeg"
-}
+	// Re-encode JPEG/PNG as JPEG quality=75 for bandwidth savings (~30-40% reduction).
+	// GIFs are passed through unchanged to preserve animated video previews.
+	// Falls back to original bytes if the image cannot be decoded.
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
 
-var outputBuf bytes.Buffer
-reEncoded := false
-if strings.HasPrefix(contentType, "image/jpeg") ||
-	strings.HasPrefix(contentType, "image/png") {
-	img, _, decodeErr := image.Decode(bytes.NewReader(body))
-	if decodeErr == nil {
-		if encErr := jpeg.Encode(&outputBuf, img, &jpeg.Options{Quality: 75}); encErr == nil {
-			reEncoded = true
+	var outputBuf bytes.Buffer
+	reEncoded := false
+	if strings.HasPrefix(contentType, "image/jpeg") ||
+		strings.HasPrefix(contentType, "image/png") {
+		img, _, decodeErr := image.Decode(bytes.NewReader(body))
+		if decodeErr == nil {
+			if encErr := jpeg.Encode(&outputBuf, img, &jpeg.Options{Quality: 75}); encErr == nil {
+				reEncoded = true
+			}
 		}
 	}
-}
 
-outputBytes := body
-outputContentType := contentType
-if reEncoded {
-	outputBytes = outputBuf.Bytes()
-	outputContentType = "image/jpeg"
-}
+	outputBytes := body
+	outputContentType := contentType
+	if reEncoded {
+		outputBytes = outputBuf.Bytes()
+		outputContentType = "image/jpeg"
+	}
 
-// Write to disk cache for future requests
-if cacheEnabled {
-	if mkErr := os.MkdirAll(cacheDir, 0o750); mkErr == nil {
-		// Write to a temp file then rename to avoid partial reads
-		tmpFile := cacheFile + ".tmp"
-		if writeErr := os.WriteFile(tmpFile, outputBytes, 0o640); writeErr == nil {
-			//nolint:errcheck
-			os.Rename(tmpFile, cacheFile)
+	// Write to disk cache for future requests
+	if cacheEnabled {
+		if mkErr := os.MkdirAll(cacheDir, 0o750); mkErr == nil {
+			// Write to a temp file then rename to avoid partial reads
+			tmpFile := cacheFile + ".tmp"
+			if writeErr := os.WriteFile(tmpFile, outputBytes, 0o640); writeErr == nil {
+				//nolint:errcheck
+				os.Rename(tmpFile, cacheFile)
+			}
 		}
 	}
-}
 
-w.Header().Set("ETag", etag)
-// 24 hours
-w.Header().Set("Cache-Control", "public, max-age=86400")
-w.Header().Set("Content-Type", outputContentType)
-w.Header().Set("Content-Length", strconv.Itoa(len(outputBytes)))
-w.WriteHeader(http.StatusOK)
-//nolint:errcheck
-w.Write(outputBytes)
+	w.Header().Set("ETag", etag)
+	// 24 hours
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Content-Type", outputContentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(outputBytes)))
+	w.WriteHeader(http.StatusOK)
+	//nolint:errcheck
+	w.Write(outputBytes)
 }
 
 // ProxyVideo proxies external video previews to prevent tracking and avoid CORS
@@ -2899,8 +2914,8 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 	// Build response per AI.md PART 37
 	response := map[string]interface{}{
-		"primary":     h.appConfig.GetPublicURL(),
-		"cluster":     h.appConfig.GetClusterNodes(),
+		"primary": h.appConfig.GetPublicURL(),
+		"cluster": h.appConfig.GetClusterNodes(),
 		// Per AI.md PART 14: versioned API
 		"api_version": "v1",
 		// Default timeout in seconds
@@ -2921,9 +2936,9 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 
 // rssChannel is the XML structure for an RSS 2.0 feed.
 type rssChannel struct {
-	XMLName xml.Name    `xml:"rss"`
-	Version string      `xml:"version,attr"`
-	Channel rssBody     `xml:"channel"`
+	XMLName xml.Name `xml:"rss"`
+	Version string   `xml:"version,attr"`
+	Channel rssBody  `xml:"channel"`
 }
 
 type rssBody struct {
@@ -2951,11 +2966,11 @@ func renderSearchRSS(w http.ResponseWriter, r *http.Request, results *model.Sear
 			desc = `<img src="` + res.Thumbnail + `" alt="thumbnail"/>`
 		}
 		items = append(items, rssItem{
-			Title:    res.Title,
-			Link:     res.URL,
+			Title:       res.Title,
+			Link:        res.URL,
 			Description: desc,
-			Source:   res.Source,
-			Duration: res.Duration,
+			Source:      res.Source,
+			Duration:    res.Duration,
 		})
 	}
 

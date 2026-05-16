@@ -177,14 +177,14 @@ func (cliServerConfig *CLIServerConfig) UnmarshalYAML(node *yaml.Node) error {
 
 func (cliServerConfig CLIServerConfig) MarshalYAML() (interface{}, error) {
 	return struct {
-		Primary    string `yaml:"primary,omitempty"`
+		Primary    string   `yaml:"primary,omitempty"`
 		Cluster    []string `yaml:"cluster"`
-		APIVersion string `yaml:"api_version,omitempty"`
-		AdminPath  string `yaml:"admin_path,omitempty"`
-		Token      string `yaml:"token,omitempty"`
-		Timeout    string `yaml:"timeout,omitempty"`
-		Retry      int    `yaml:"retry,omitempty"`
-		RetryDelay string `yaml:"retry_delay,omitempty"`
+		APIVersion string   `yaml:"api_version,omitempty"`
+		AdminPath  string   `yaml:"admin_path,omitempty"`
+		Token      string   `yaml:"token,omitempty"`
+		Timeout    string   `yaml:"timeout,omitempty"`
+		Retry      int      `yaml:"retry,omitempty"`
+		RetryDelay string   `yaml:"retry_delay,omitempty"`
 	}{
 		Primary:    cliServerConfig.Address,
 		Cluster:    cliServerConfig.Cluster,
@@ -200,14 +200,14 @@ func (cliServerConfig CLIServerConfig) MarshalYAML() (interface{}, error) {
 // CLIConfig holds CLI configuration
 // Per AI.md PART 1: Type names MUST be specific - "Config" is ambiguous
 type CLIConfig struct {
-	Server CLIServerConfig `yaml:"server"`
-	Auth   CLIAuthConfig   `yaml:"auth"`
-	Token  string          `yaml:"token,omitempty"`
-	Output CLIOutputConfig `yaml:"output"`
+	Server  CLIServerConfig  `yaml:"server"`
+	Auth    CLIAuthConfig    `yaml:"auth"`
+	Token   string           `yaml:"token,omitempty"`
+	Output  CLIOutputConfig  `yaml:"output"`
 	Logging CLILoggingConfig `yaml:"logging"`
 	Cache   CLICacheConfig   `yaml:"cache"`
-	TUI    CLITUIConfig    `yaml:"tui"`
-	Debug  bool            `yaml:"debug"`
+	TUI     CLITUIConfig     `yaml:"tui"`
+	Debug   bool             `yaml:"debug"`
 }
 
 // Global flags per AI.md PART 33
@@ -622,7 +622,7 @@ func LoadCLIConfigFromFile() error {
 		if err := ValidateCLIServerURL(serverAddressFlag); err != nil {
 			return fmt.Errorf("invalid --server URL: %w", err)
 		}
-	if fileCLIConfig.Server.Address == "" {
+		if fileCLIConfig.Server.Address == "" {
 			fileCLIConfig.Server.Address = serverAddressFlag
 			if err := WriteCLIConfigFile(fileCLIConfig, cliConfigFilePath); err != nil {
 				return err

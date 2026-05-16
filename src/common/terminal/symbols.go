@@ -10,23 +10,23 @@ import (
 
 // TerminalSymbols provides Unicode and ASCII symbol sets
 type TerminalSymbols struct {
-	Checkmark    string
-	Cross        string
-	Arrow        string
-	Bullet       string
-	Ellipsis     string
-	Spinner      []string
-	BoxTopLeft   string
-	BoxTopRight  string
-	BoxBotLeft   string
-	BoxBotRight  string
-	BoxHoriz     string
-	BoxVert      string
-	BoxTeeLeft   string
-	BoxTeeRight  string
-	BoxTeeTop    string
-	BoxTeeBot    string
-	BoxCross     string
+	Checkmark   string
+	Cross       string
+	Arrow       string
+	Bullet      string
+	Ellipsis    string
+	Spinner     []string
+	BoxTopLeft  string
+	BoxTopRight string
+	BoxBotLeft  string
+	BoxBotRight string
+	BoxHoriz    string
+	BoxVert     string
+	BoxTeeLeft  string
+	BoxTeeRight string
+	BoxTeeTop   string
+	BoxTeeBot   string
+	BoxCross    string
 }
 
 // Unicode symbols (for terminals that support UTF-8)

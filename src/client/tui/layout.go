@@ -133,12 +133,12 @@ func (m LayoutMode) Config() LayoutConfig {
 			MultiPane:      true,
 		},
 		LayoutMassive: {
-			ShowBorders:    true,
-			ShowHeader:     true,
-			ShowFooter:     true,
-			ShowSidebar:    true,
-			SidebarWidth:   50,
-			MaxColumns:     20,
+			ShowBorders:  true,
+			ShowHeader:   true,
+			ShowFooter:   true,
+			ShowSidebar:  true,
+			SidebarWidth: 50,
+			MaxColumns:   20,
 			// No truncation
 			TruncateAt:     0,
 			UseAbbrev:      false,

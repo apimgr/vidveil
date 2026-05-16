@@ -755,7 +755,9 @@ func (rw *responseWriter) WriteHeader(code int) {
 
 // Ensure we implement http.Hijacker if the underlying ResponseWriter does
 func (rw *responseWriter) Hijack() (interface{}, interface{}, error) {
-	if h, ok := rw.ResponseWriter.(interface{ Hijack() (interface{}, interface{}, error) }); ok {
+	if h, ok := rw.ResponseWriter.(interface {
+		Hijack() (interface{}, interface{}, error)
+	}); ok {
 		return h.Hijack()
 	}
 	return nil, nil, fmt.Errorf("hijack not supported")

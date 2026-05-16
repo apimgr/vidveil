@@ -59,16 +59,16 @@ const (
 
 // ClusterManager handles cluster operations per AI.md PART 10
 type ClusterManager struct {
-	nodeID        string
-	db            *sql.DB
-	isPrimary     bool
-	enabled       bool
-	mu            sync.RWMutex
-	ctx           context.Context
-	cancel        context.CancelFunc
-	heartbeatInt  time.Duration
-	degradedTime  time.Duration
-	offlineTime   time.Duration
+	nodeID       string
+	db           *sql.DB
+	isPrimary    bool
+	enabled      bool
+	mu           sync.RWMutex
+	ctx          context.Context
+	cancel       context.CancelFunc
+	heartbeatInt time.Duration
+	degradedTime time.Duration
+	offlineTime  time.Duration
 }
 
 // NewClusterManager creates a new cluster manager
@@ -480,14 +480,18 @@ func NewSingleInstanceManager() *SingleInstanceManager {
 	return &SingleInstanceManager{nodeID: nodeID}
 }
 
-func (s *SingleInstanceManager) IsPrimary() bool     { return true }
-func (s *SingleInstanceManager) IsEnabled() bool     { return false }
-func (s *SingleInstanceManager) GetNodeID() string   { return s.nodeID }
+func (s *SingleInstanceManager) IsPrimary() bool                 { return true }
+func (s *SingleInstanceManager) IsEnabled() bool                 { return false }
+func (s *SingleInstanceManager) GetNodeID() string               { return s.nodeID }
 func (s *SingleInstanceManager) Start(ctx context.Context) error { return nil }
-func (s *SingleInstanceManager) Stop()               {}
-func (s *SingleInstanceManager) AcquireLock(name string, ttl time.Duration) (bool, error) { return true, nil }
+func (s *SingleInstanceManager) Stop()                           {}
+func (s *SingleInstanceManager) AcquireLock(name string, ttl time.Duration) (bool, error) {
+	return true, nil
+}
 func (s *SingleInstanceManager) ReleaseLock(name string) error { return nil }
-func (s *SingleInstanceManager) WithLock(name string, ttl time.Duration, fn func() error) error { return fn() }
+func (s *SingleInstanceManager) WithLock(name string, ttl time.Duration, fn func() error) error {
+	return fn()
+}
 
 // GenerateJoinToken generates a secure random join token for cluster
 func GenerateJoinToken() string {

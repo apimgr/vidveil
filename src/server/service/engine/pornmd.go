@@ -24,13 +24,13 @@ func NewPornMDEngine(appConfig *config.AppConfig) *PornMDEngine {
 	}
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{
-		HasPreview:    false,
-		HasDownload:   true,
-		HasDuration:   true,
+		HasPreview:  false,
+		HasDownload: true,
+		HasDuration: true,
 		// PornMD doesn't show view counts on search results
-		HasViews:      false,
+		HasViews: false,
 		// PornMD shows rating percentage
-		HasRating:     true,
+		HasRating: true,
 		// Quality info not consistently available
 		HasQuality:    false,
 		HasUploadDate: false,

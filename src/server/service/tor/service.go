@@ -31,7 +31,7 @@ import (
 // Uses github.com/cretz/bine for dedicated Tor process management
 // Supports both hidden service hosting AND outbound network routing
 type TorService struct {
-	cfg       *TorServiceConfig
+	cfg *TorServiceConfig
 	// Full config from server.yml
 	torConfig *config.TorConfig
 	dataDir   string

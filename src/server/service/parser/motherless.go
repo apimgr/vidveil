@@ -98,7 +98,7 @@ func (p *MotherlessParser) Parse(s *goquery.Selection) *VideoItem {
 			text := CleanText(el.Text())
 			textLower := strings.ToLower(text)
 			if strings.Contains(textLower, "view") ||
-			   (len(text) <= 10 && (strings.Contains(text, "K") || strings.Contains(text, "M"))) {
+				(len(text) <= 10 && (strings.Contains(text, "K") || strings.Contains(text, "M"))) {
 				views, count := ParseViews(text)
 				if count > 0 && item.ViewsCount == 0 {
 					item.Views = views

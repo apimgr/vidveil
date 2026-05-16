@@ -16,15 +16,15 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/graphql"
+	"github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/admin"
-	"github.com/apimgr/vidveil/src/swagger"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
-	"github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
+	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/swagger"
 )
 
 //go:embed static/css/* static/js/* static/images/* static/icons/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl template/component/*.tmpl template/nojs/*.tmpl
@@ -51,7 +51,7 @@ type Server struct {
 	searchHandler *handler.SearchHandler
 	adminHandler  *handler.AdminHandler
 	// stored for Onion-Location middleware
-	torSvc        handler.TorService
+	torSvc handler.TorService
 }
 
 // MigrationManager interface for database migrations

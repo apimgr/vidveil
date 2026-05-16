@@ -199,18 +199,18 @@ type TorConfig struct {
 func DefaultTorConfig() TorConfig {
 	return TorConfig{
 		// auto-detect
-		Binary:                    "",
+		Binary: "",
 		// disabled by default, user can enable for privacy
-		UseNetwork:                false,
+		UseNetwork: false,
 		// allow users to override outbound Tor routing per PART 32
-		AllowUserPreference:       true,
+		AllowUserPreference: true,
 		// feature available, but user must opt-in via preferences
 		AllowUserIPForward:        true,
 		MaxCircuits:               32,
 		CircuitTimeout:            60,
 		BootstrapTimeout:          180,
 		SafeLogging:               true,
-		MaxStreamsPerCircuit:       100,
+		MaxStreamsPerCircuit:      100,
 		CloseCircuitOnStreamLimit: true,
 		BandwidthRate:             "1 MB",
 		BandwidthBurst:            "2 MB",
@@ -223,12 +223,12 @@ func DefaultTorConfig() TorConfig {
 // AdminConfig holds admin panel settings
 type AdminConfig struct {
 	// Path is the admin panel URL path (default: "admin") per PART 17
-	Path        string          `yaml:"path"`
-	Email       string          `yaml:"email"`
-	Username    string          `yaml:"username"`
-	Password    string          `yaml:"password"`
-	Token       string          `yaml:"token"`
-	TwoFactor   TwoFactorConfig `yaml:"two_factor"`
+	Path      string          `yaml:"path"`
+	Email     string          `yaml:"email"`
+	Username  string          `yaml:"username"`
+	Password  string          `yaml:"password"`
+	Token     string          `yaml:"token"`
+	TwoFactor TwoFactorConfig `yaml:"two_factor"`
 }
 
 // TwoFactorConfig holds 2FA settings per AI.md PART 11
@@ -287,8 +287,8 @@ type ScheduleConfig struct {
 
 // SSLConfig holds SSL/TLS settings
 type SSLConfig struct {
-	Enabled     bool             `yaml:"enabled"`
-	CertPath    string           `yaml:"cert_path"`
+	Enabled     bool              `yaml:"enabled"`
+	CertPath    string            `yaml:"cert_path"`
 	LetsEncrypt LetsEncryptConfig `yaml:"letsencrypt"`
 }
 
@@ -350,8 +350,8 @@ type ContentRestrictionConfig struct {
 
 // LogsConfig holds logging settings per AI.md PART 11
 type LogsConfig struct {
-	Level  string         `yaml:"level"`
-	Debug  DebugLogConfig `yaml:"debug"`
+	Level  string          `yaml:"level"`
+	Debug  DebugLogConfig  `yaml:"debug"`
 	Access AccessLogConfig `yaml:"access"`
 	Server ServerLogConfig `yaml:"server"`
 	// AI.md PART 11: error.log
@@ -455,15 +455,15 @@ type SecurityHeadersConfig struct {
 
 // SecurityConfig holds security-related settings per PART 22
 type SecurityConfig struct {
-	Dir        string          `yaml:"dir"`
+	Dir        string           `yaml:"dir"`
 	Blocklists BlocklistsConfig `yaml:"blocklists"`
-	CVE        CVEConfig       `yaml:"cve"`
+	CVE        CVEConfig        `yaml:"cve"`
 }
 
 // BlocklistsConfig holds IP/domain blocklist settings per PART 22
 type BlocklistsConfig struct {
-	Enabled bool                `yaml:"enabled"`
-	Sources []BlocklistSource   `yaml:"sources"`
+	Enabled bool              `yaml:"enabled"`
+	Sources []BlocklistSource `yaml:"sources"`
 }
 
 // BlocklistSource represents a blocklist source per PART 22
@@ -477,9 +477,9 @@ type BlocklistSource struct {
 
 // CVEConfig holds CVE database settings per PART 22
 type CVEConfig struct {
-	Enabled      bool   `yaml:"enabled"`
-	Source       string `yaml:"source"`
-	FilterByCPE  bool   `yaml:"filter_by_cpe"`
+	Enabled     bool   `yaml:"enabled"`
+	Source      string `yaml:"source"`
+	FilterByCPE bool   `yaml:"filter_by_cpe"`
 }
 
 // BackupConfig holds backup settings per AI.md PART 22
@@ -951,7 +951,7 @@ func DefaultAppConfig() *AppConfig {
 					ASN:     true,
 					Country: true,
 					// Need city for region-level restriction
-					City:    true,
+					City: true,
 				},
 				ContentRestriction: ContentRestrictionConfig{
 					Mode:      "warn",
@@ -1280,10 +1280,6 @@ func generateToken(length int) string {
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
 }
-
-
-
-
 
 // IsRunningInContainer detects if running in a container (tini as PID 1)
 func IsRunningInContainer() bool {

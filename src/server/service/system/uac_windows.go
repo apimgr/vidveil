@@ -15,19 +15,19 @@ import (
 )
 
 var (
-	modShell32          = syscall.NewLazyDLL("shell32.dll")
-	modAdvapi32         = syscall.NewLazyDLL("advapi32.dll")
-	procShellExecuteW   = modShell32.NewProc("ShellExecuteW")
-	procGetTokenInfo    = modAdvapi32.NewProc("GetTokenInformation")
+	modShell32           = syscall.NewLazyDLL("shell32.dll")
+	modAdvapi32          = syscall.NewLazyDLL("advapi32.dll")
+	procShellExecuteW    = modShell32.NewProc("ShellExecuteW")
+	procGetTokenInfo     = modAdvapi32.NewProc("GetTokenInformation")
 	procOpenProcessToken = modAdvapi32.NewProc("OpenProcessToken")
 )
 
 const (
-	TOKEN_QUERY              = 0x0008
-	TokenElevation           = 20
-	TokenElevationType       = 18
+	TOKEN_QUERY               = 0x0008
+	TokenElevation            = 20
+	TokenElevationType        = 18
 	TokenElevationTypeDefault = 1
-	TokenElevationTypeFull   = 2
+	TokenElevationTypeFull    = 2
 	TokenElevationTypeLimited = 3
 )
 
@@ -106,7 +106,7 @@ func RequestElevation(args ...string) ElevationResult {
 	if err != nil {
 		// User likely canceled UAC
 		if strings.Contains(err.Error(), "cancelled") ||
-		   strings.Contains(err.Error(), "canceled") {
+			strings.Contains(err.Error(), "canceled") {
 			return ElevationCanceled
 		}
 		return ElevationFailed

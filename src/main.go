@@ -15,7 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/banner"
 	"github.com/apimgr/vidveil/src/common/terminal"
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server"
@@ -31,12 +33,10 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
-	signalpkg "github.com/apimgr/vidveil/src/server/signal"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
 	"github.com/apimgr/vidveil/src/server/service/system"
 	"github.com/apimgr/vidveil/src/server/service/tor"
-	"github.com/apimgr/vidveil/src/common/banner"
-	"github.com/apimgr/vidveil/src/common/version"
+	signalpkg "github.com/apimgr/vidveil/src/server/signal"
 )
 
 // Build info - set via -ldflags at build time per PART 7
@@ -61,30 +61,30 @@ func main() {
 
 	// Parse arguments manually per AI.md spec
 	var (
-		configDir    string
-		dataDir      string
-		cacheDir     string
-		logDir       string
-		backupDir    string
-		pidFile      string
-		address      string
-		port         string
+		configDir string
+		dataDir   string
+		cacheDir  string
+		logDir    string
+		backupDir string
+		pidFile   string
+		address   string
+		port      string
 		// Per AI.md PART 8: --baseurl PATH (URL path prefix, default "/")
-		baseURL      string
-		modeStr      string
-		debug        bool
-		daemon       bool
+		baseURL string
+		modeStr string
+		debug   bool
+		daemon  bool
 		// Per AI.md PART 8: --color flag (always, never, auto)
-		colorFlag    string
+		colorFlag string
 		// Per AI.md PART 8: --lang CODE (output language, default "auto")
-		langFlag     string
-		serviceCmd   string
-		maintCmd     string
-		maintArg string
+		langFlag   string
+		serviceCmd string
+		maintCmd   string
+		maintArg   string
 		// Per AI.md PART 22: encryption password for backup/restore
 		maintPassword string
 		updateCmd     string
-		updateArg    string
+		updateArg     string
 	)
 
 	i := 0
@@ -488,7 +488,7 @@ func main() {
 	// Initialize search engines
 	engineMgr := engine.NewEngineManager(appConfig)
 	engineMgr.InitializeEngines()
-	
+
 	// Set custom autocomplete terms from config (adds to built-in suggestions)
 	if len(appConfig.Search.CustomTerms) > 0 {
 		engine.SetCustomTerms(appConfig.Search.CustomTerms)
@@ -1050,7 +1050,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 		fmt.Fprintf(os.Stderr, "❌ Failed to get executable path: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	appPaths := config.GetAppPaths(configDir, dataDir)
 
 	// Use system.NewServiceManager which handles user creation per AI.md PART 4

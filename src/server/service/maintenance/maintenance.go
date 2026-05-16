@@ -886,11 +886,11 @@ type UpdateInfo struct {
 
 // GitHubRelease represents a GitHub release
 type GitHubRelease struct {
-	TagName     string          `json:"tag_name"`
-	HTMLURL     string          `json:"html_url"`
-	Body        string          `json:"body"`
-	PublishedAt time.Time       `json:"published_at"`
-	Assets      []GitHubAsset   `json:"assets"`
+	TagName     string        `json:"tag_name"`
+	HTMLURL     string        `json:"html_url"`
+	Body        string        `json:"body"`
+	PublishedAt time.Time     `json:"published_at"`
+	Assets      []GitHubAsset `json:"assets"`
 }
 
 // GitHubAsset represents a GitHub release asset
@@ -925,77 +925,77 @@ func compareVersions(a, b string) int {
 
 // BackupInfo contains information about a backup file
 type BackupInfo struct {
-Filename string
-Path     string
-Size     int64
-Modified time.Time
-SizeHuman string
+	Filename  string
+	Path      string
+	Size      int64
+	Modified  time.Time
+	SizeHuman string
 }
 
 // ListBackups lists all available backups in the backup directory
 func (m *MaintenanceManager) ListBackups() ([]BackupInfo, error) {
-backupDir := m.paths.Backup
+	backupDir := m.paths.Backup
 
-// Ensure backup directory exists
-if err := os.MkdirAll(backupDir, 0755); err != nil {
-return nil, fmt.Errorf("failed to create backup directory: %w", err)
-}
+	// Ensure backup directory exists
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create backup directory: %w", err)
+	}
 
-files, err := os.ReadDir(backupDir)
-if err != nil {
-return nil, fmt.Errorf("failed to read backup directory: %w", err)
-}
+	files, err := os.ReadDir(backupDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read backup directory: %w", err)
+	}
 
-var backups []BackupInfo
-for _, file := range files {
-if file.IsDir() {
-continue
-}
+	var backups []BackupInfo
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
 
-// Only include .tar.gz and .tar.gz.enc files per AI.md PART 22
-if !strings.HasSuffix(file.Name(), ".tar.gz") && !strings.HasSuffix(file.Name(), ".tar.gz.enc") {
-continue
-}
+		// Only include .tar.gz and .tar.gz.enc files per AI.md PART 22
+		if !strings.HasSuffix(file.Name(), ".tar.gz") && !strings.HasSuffix(file.Name(), ".tar.gz.enc") {
+			continue
+		}
 
-info, err := file.Info()
-if err != nil {
-continue
-}
+		info, err := file.Info()
+		if err != nil {
+			continue
+		}
 
-// Format size as human-readable
-sizeHuman := formatBytes(info.Size())
+		// Format size as human-readable
+		sizeHuman := formatBytes(info.Size())
 
-backups = append(backups, BackupInfo{
-Filename:  file.Name(),
-Path:      filepath.Join(backupDir, file.Name()),
-Size:      info.Size(),
-Modified:  info.ModTime(),
-SizeHuman: sizeHuman,
-})
-}
+		backups = append(backups, BackupInfo{
+			Filename:  file.Name(),
+			Path:      filepath.Join(backupDir, file.Name()),
+			Size:      info.Size(),
+			Modified:  info.ModTime(),
+			SizeHuman: sizeHuman,
+		})
+	}
 
-// Sort by modification time, newest first
-for i := 0; i < len(backups); i++ {
-for j := i + 1; j < len(backups); j++ {
-if backups[j].Modified.After(backups[i].Modified) {
-backups[i], backups[j] = backups[j], backups[i]
-}
-}
-}
+	// Sort by modification time, newest first
+	for i := 0; i < len(backups); i++ {
+		for j := i + 1; j < len(backups); j++ {
+			if backups[j].Modified.After(backups[i].Modified) {
+				backups[i], backups[j] = backups[j], backups[i]
+			}
+		}
+	}
 
-return backups, nil
+	return backups, nil
 }
 
 // formatBytes formats bytes as human-readable size
 func formatBytes(bytes int64) string {
-const unit = 1024
-if bytes < unit {
-return fmt.Sprintf("%d B", bytes)
-}
-div, exp := int64(unit), 0
-for n := bytes / unit; n >= unit; n /= unit {
-div *= unit
-exp++
-}
-return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

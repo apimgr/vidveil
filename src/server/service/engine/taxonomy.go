@@ -10,11 +10,11 @@ import (
 // Category represents a content category with synonyms and related terms
 type Category struct {
 	// Primary name
-	Name     string
+	Name string
 	// Terms that mean the same thing
 	Synonyms []string
 	// Related but different terms
-	Related  []string
+	Related []string
 }
 
 // Categories defines the content taxonomy for search term normalization

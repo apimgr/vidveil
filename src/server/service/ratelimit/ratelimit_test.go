@@ -311,7 +311,7 @@ func TestEndpointLimiterDefaults(t *testing.T) {
 	el := NewEndpointLimiters(true)
 
 	tests := []struct {
-		endpoint        string
+		endpoint         string
 		expectedRequests int
 		expectedWindow   time.Duration
 	}{

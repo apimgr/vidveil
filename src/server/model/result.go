@@ -31,13 +31,13 @@ type VideoResult struct {
 // SearchResponse represents the API response for a search
 // Per AI.md PART 14: Error response format uses error (code) + message (human-readable)
 type SearchResponse struct {
-	Ok         bool             `json:"ok"`
-	Data       SearchData       `json:"data"`
-	Pagination PaginationData   `json:"pagination"`
+	Ok         bool           `json:"ok"`
+	Data       SearchData     `json:"data"`
+	Pagination PaginationData `json:"pagination"`
 	// ERROR_CODE (machine-readable)
-	Error      string           `json:"error,omitempty"`
+	Error string `json:"error,omitempty"`
 	// Human-readable message
-	Message    string           `json:"message,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // EngineStatInfo holds per-engine statistics from a search
@@ -78,7 +78,7 @@ type PaginationData struct {
 // EnginePrivacyScore holds static privacy metadata for an engine
 type EnginePrivacyScore struct {
 	// engine needs JS to return results
-	RequiresJS  bool `json:"requires_js"`
+	RequiresJS bool `json:"requires_js"`
 	// engine sets tracking cookies
 	SetsCookies bool `json:"sets_cookies"`
 	// engine embeds third-party trackers
@@ -105,29 +105,29 @@ type EngineCapabilities struct {
 
 // EnginesResponse represents the API response for engines list
 type EnginesResponse struct {
-	Ok      bool         `json:"ok"`
-	Data    []EngineInfo `json:"data"`
+	Ok   bool         `json:"ok"`
+	Data []EngineInfo `json:"data"`
 }
 
 // EngineHealthStats holds runtime circuit-breaker and latency stats for one engine
 type EngineHealthStats struct {
 	// closed, open, half-open
-	CircuitState    string    `json:"circuit_state"`
+	CircuitState string `json:"circuit_state"`
 	// failures toward threshold
-	CircuitFailures int       `json:"circuit_failures"`
+	CircuitFailures int `json:"circuit_failures"`
 	// zero if never failed
-	LastFailureAt   time.Time `json:"last_failure_at"`
-	TotalSuccesses  uint64    `json:"total_successes"`
-	TotalFailures   uint64    `json:"total_failures"`
+	LastFailureAt  time.Time `json:"last_failure_at"`
+	TotalSuccesses uint64    `json:"total_successes"`
+	TotalFailures  uint64    `json:"total_failures"`
 	// zero if never succeeded
-	LastSuccessAt      time.Time `json:"last_success_at"`
-	AvgLatencyMs       int64     `json:"avg_latency_ms"`
+	LastSuccessAt time.Time `json:"last_success_at"`
+	AvgLatencyMs  int64     `json:"avg_latency_ms"`
 	// 0-100
-	UptimePct          float64   `json:"uptime_pct"`
+	UptimePct float64 `json:"uptime_pct"`
 	// zero value means not rate-limited
-	RateLimitedUntil   time.Time `json:"rate_limited_until"`
+	RateLimitedUntil time.Time `json:"rate_limited_until"`
 	// true when engine is in rate limit cooldown
-	IsRateLimited      bool      `json:"is_rate_limited"`
+	IsRateLimited bool `json:"is_rate_limited"`
 }
 
 // EngineHealthInfo combines EngineInfo with runtime health stats

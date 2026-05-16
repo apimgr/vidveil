@@ -137,16 +137,16 @@ func (t *Translator) loadDefaultTranslations() {
 		"age.remember": "Remember my choice for 30 days",
 
 		// Preferences
-		"prefs.title":          "Preferences",
-		"prefs.theme":          "Theme",
-		"prefs.theme.dark":     "Dark",
-		"prefs.theme.light":    "Light",
-		"prefs.theme.auto":     "Auto (System)",
-		"prefs.engines":        "Search Engines",
-		"prefs.results_page":   "Results per Page",
-		"prefs.save":           "Save Preferences",
-		"prefs.saved":          "Preferences saved!",
-		"prefs.reset":          "Reset to Defaults",
+		"prefs.title":        "Preferences",
+		"prefs.theme":        "Theme",
+		"prefs.theme.dark":   "Dark",
+		"prefs.theme.light":  "Light",
+		"prefs.theme.auto":   "Auto (System)",
+		"prefs.engines":      "Search Engines",
+		"prefs.results_page": "Results per Page",
+		"prefs.save":         "Save Preferences",
+		"prefs.saved":        "Preferences saved!",
+		"prefs.reset":        "Reset to Defaults",
 
 		// About
 		"about.title":       "About Vidveil",
@@ -190,16 +190,16 @@ func (t *Translator) loadDefaultTranslations() {
 		"action.copied":  "Copied!",
 
 		// Status
-		"status.enabled":  "Enabled",
-		"status.disabled": "Disabled",
-		"status.online":   "Online",
-		"status.offline":  "Offline",
-		"status.healthy":  "Healthy",
+		"status.enabled":   "Enabled",
+		"status.disabled":  "Disabled",
+		"status.online":    "Online",
+		"status.offline":   "Offline",
+		"status.healthy":   "Healthy",
 		"status.unhealthy": "Unhealthy",
-		"status.loading":  "Loading...",
-		"status.error":    "Error",
-		"status.success":  "Success",
-		"status.warning":  "Warning",
+		"status.loading":   "Loading...",
+		"status.error":     "Error",
+		"status.success":   "Success",
+		"status.warning":   "Warning",
 
 		// Errors
 		"error.generic":       "An error occurred",
@@ -211,12 +211,12 @@ func (t *Translator) loadDefaultTranslations() {
 		"error.invalid_input": "Invalid input",
 
 		// Time
-		"time.now":       "Just now",
-		"time.minutes":   "%d minutes ago",
-		"time.hours":     "%d hours ago",
-		"time.days":      "%d days ago",
-		"time.duration":  "Duration",
-		"time.views":     "views",
+		"time.now":      "Just now",
+		"time.minutes":  "%d minutes ago",
+		"time.hours":    "%d hours ago",
+		"time.days":     "%d days ago",
+		"time.duration": "Duration",
+		"time.views":    "views",
 
 		// Footer
 		"footer.copyright": "All rights reserved",

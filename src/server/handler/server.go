@@ -192,9 +192,9 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 			"policy_version": "1.0",
 			"last_updated":   time.Now().Format("2006-01-02"),
 			"data_collection": map[string]interface{}{
-				"search_queries":     false,
-				"ip_addresses":       false,
-				"tracking_cookies":   false,
+				"search_queries":      false,
+				"ip_addresses":        false,
+				"tracking_cookies":    false,
 				"third_party_sharing": false,
 			},
 			"cookies": []string{
@@ -211,9 +211,9 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
-			"ok": false,
-			"error":   "Method not allowed",
-			"code":    "METHOD_NOT_ALLOWED",
+			"ok":    false,
+			"error": "Method not allowed",
+			"code":  "METHOD_NOT_ALLOWED",
 		})
 		return
 	}
@@ -221,9 +221,9 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 	// Parse form data
 	if err := r.ParseForm(); err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"ok": false,
-			"error":   "Invalid form data",
-			"code":    "INVALID_REQUEST",
+			"ok":    false,
+			"error": "Invalid form data",
+			"code":  "INVALID_REQUEST",
 		})
 		return
 	}
@@ -234,16 +234,16 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 
 	if subject == "" || message == "" {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"ok": false,
-			"error":   "Subject and message are required",
-			"code":    "MISSING_FIELDS",
+			"ok":    false,
+			"error": "Subject and message are required",
+			"code":  "MISSING_FIELDS",
 		})
 		return
 	}
 
 	// In a real implementation, this would send an email or store the message
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
+		"ok":      true,
 		"message": "Message received successfully",
 	})
 }

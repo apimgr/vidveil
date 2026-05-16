@@ -32,13 +32,13 @@ type AdminService struct {
 
 // AdminUser represents an admin user
 type AdminUser struct {
-	ID           int64     `json:"id"`
-	Username     string    `json:"username"`
-	TOTPEnabled  bool      `json:"totp_enabled"`
-	CreatedAt    time.Time `json:"created_at"`
-	LastLogin    *time.Time `json:"last_login,omitempty"`
-	LoginCount   int       `json:"login_count"`
-	IsPrimary    bool      `json:"is_primary"`
+	ID          int64      `json:"id"`
+	Username    string     `json:"username"`
+	TOTPEnabled bool       `json:"totp_enabled"`
+	CreatedAt   time.Time  `json:"created_at"`
+	LastLogin   *time.Time `json:"last_login,omitempty"`
+	LoginCount  int        `json:"login_count"`
+	IsPrimary   bool       `json:"is_primary"`
 }
 
 // NewAdminService creates a new admin service

@@ -202,11 +202,11 @@ func Backoff(attempt int, cfg *RetryConfig) time.Duration {
 
 // Common retryable errors
 var (
-	ErrTemporary     = errors.New("temporary error")
-	ErrTimeout       = errors.New("timeout")
-	ErrRateLimit     = errors.New("rate limited")
-	ErrServerError   = errors.New("server error")
-	ErrNetworkError  = errors.New("network error")
+	ErrTemporary    = errors.New("temporary error")
+	ErrTimeout      = errors.New("timeout")
+	ErrRateLimit    = errors.New("rate limited")
+	ErrServerError  = errors.New("server error")
+	ErrNetworkError = errors.New("network error")
 )
 
 // IsTemporaryError checks if an error is temporary and should be retried

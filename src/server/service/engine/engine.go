@@ -39,23 +39,23 @@ const (
 // Per IDEA.md Engine Capability Declaration
 type Capabilities struct {
 	// Can provide PreviewURL
-	HasPreview    bool   `json:"has_preview"`
+	HasPreview bool `json:"has_preview"`
 	// Can provide DownloadURL
-	HasDownload   bool   `json:"has_download"`
+	HasDownload bool `json:"has_download"`
 	// Can provide duration
-	HasDuration   bool   `json:"has_duration"`
+	HasDuration bool `json:"has_duration"`
 	// Can provide view count
-	HasViews      bool   `json:"has_views"`
+	HasViews bool `json:"has_views"`
 	// Can provide rating
-	HasRating     bool   `json:"has_rating"`
+	HasRating bool `json:"has_rating"`
 	// Can provide quality badge
-	HasQuality    bool   `json:"has_quality"`
+	HasQuality bool `json:"has_quality"`
 	// Can provide upload date
-	HasUploadDate bool   `json:"has_upload_date"`
+	HasUploadDate bool `json:"has_upload_date"`
 	// e.g., "data-preview", "data-mediabook", "api"
 	PreviewSource string `json:"preview_source"`
 	// "api", "html", "json_extraction"
-	APIType       string `json:"api_type"`
+	APIType string `json:"api_type"`
 }
 
 // TorClientProvider provides HTTP clients that can route through Tor
@@ -156,16 +156,16 @@ type TorConfigurableEngine interface {
 // BaseEngine provides common functionality for all engines
 // Per PART 32: Supports Tor outbound network for anonymized queries
 type BaseEngine struct {
-	name           string
-	displayName    string
-	baseURL        string
-	tier           int
-	enabled        bool
-	timeout        time.Duration
-	useSpoofedTLS  bool
-	appConfig      *config.AppConfig
-	httpClient     *http.Client
-	spoofedClient  *http.Client
+	name          string
+	displayName   string
+	baseURL       string
+	tier          int
+	enabled       bool
+	timeout       time.Duration
+	useSpoofedTLS bool
+	appConfig     *config.AppConfig
+	httpClient    *http.Client
+	spoofedClient *http.Client
 	// Per PART 32: Provides Tor-routed HTTP clients
 	torProvider    TorClientProvider
 	circuitBreaker *retry.CircuitBreaker
@@ -184,9 +184,9 @@ type BaseEngine struct {
 
 	// Per-engine outbound throttle: enforce a minimum interval between requests
 	// to avoid triggering engine-side rate limits.
-	throttleMu          sync.Mutex
-	lastRequestAt       time.Time
-	minRequestInterval  time.Duration
+	throttleMu         sync.Mutex
+	lastRequestAt      time.Time
+	minRequestInterval time.Duration
 }
 
 // NewBaseEngine creates a new base engine

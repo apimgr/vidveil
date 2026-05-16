@@ -12,13 +12,13 @@ import (
 
 // Endpoint types for rate limiting per AI.md PART 1
 const (
-	EndpointLogin          = "login"
-	EndpointPasswordReset  = "password_reset"
-	EndpointAPIAuth        = "api_authenticated"
-	EndpointAPIUnauth      = "api_unauthenticated"
-	EndpointRegistration   = "registration"
-	EndpointFileUpload     = "file_upload"
-	EndpointDefault        = "default"
+	EndpointLogin         = "login"
+	EndpointPasswordReset = "password_reset"
+	EndpointAPIAuth       = "api_authenticated"
+	EndpointAPIUnauth     = "api_unauthenticated"
+	EndpointRegistration  = "registration"
+	EndpointFileUpload    = "file_upload"
+	EndpointDefault       = "default"
 )
 
 // Default rate limits per AI.md PART 1

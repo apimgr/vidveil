@@ -26,9 +26,9 @@ type PendingAuth struct {
 
 // AuthHandler handles admin authentication routes per AI.md PART 17
 type AuthHandler struct {
-	appConfig   *config.AppConfig
-	adminHdl    *AdminHandler
-	totpSvc     *totp.TOTPService
+	appConfig *config.AppConfig
+	adminHdl  *AdminHandler
+	totpSvc   *totp.TOTPService
 	// pendingAuth stores pending 2FA authentication tokens
 	pendingAuth map[string]*PendingAuth
 	mu          sync.RWMutex
@@ -129,7 +129,7 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 						pendingToken,
 						"/auth",
 						// 5 minutes
-					300,
+						300,
 						h.appConfig.Server.SSL.Enabled,
 					))
 
@@ -254,10 +254,10 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 						// Log successful login with backup code
 						if h.adminHdl.logger != nil {
 							h.adminHdl.logger.Audit("admin.login", pending.Username, "auth", map[string]interface{}{
-								"ip":           pending.RemoteAddr,
-								"user_agent":   pending.UserAgent,
-								"mfa_used":     true,
-								"backup_code":  true,
+								"ip":          pending.RemoteAddr,
+								"user_agent":  pending.UserAgent,
+								"mfa_used":    true,
+								"backup_code": true,
 							})
 						}
 

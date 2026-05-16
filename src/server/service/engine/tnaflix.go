@@ -4,7 +4,6 @@ package engine
 import (
 	"bytes"
 	"context"
-	"io"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -43,7 +42,7 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readEngineBody(resp)
 	if err != nil {
 		return nil, err
 	}

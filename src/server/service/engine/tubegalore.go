@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -51,7 +50,7 @@ func searchTTCache(ctx context.Context, e *BaseEngine, url string) ([]model.Vide
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readEngineBody(resp)
 	if err != nil {
 		return nil, err
 	}

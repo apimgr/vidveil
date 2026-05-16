@@ -5,12 +5,25 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/parser"
 )
+
+// MaxEngineResponseBytes caps the response body size read from any third-party
+// engine to prevent unbounded memory allocation from a malicious or
+// misbehaving upstream (32 MiB is well above any legitimate search HTML page).
+const MaxEngineResponseBytes int64 = 32 * 1024 * 1024
+
+// readEngineBody reads the response body from an engine endpoint with a hard
+// size cap. All engine response bodies MUST be read via this helper - never
+// io.ReadAll directly on resp.Body (PART 11 security: bound untrusted input).
+func readEngineBody(resp *http.Response) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(resp.Body, MaxEngineResponseBytes))
+}
 
 // genericSearch performs a generic search using common patterns
 func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]model.VideoResult, error) {
@@ -20,8 +33,8 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 	}
 	defer resp.Body.Close()
 
-	// Read body for debug logging
-	body, err := io.ReadAll(resp.Body)
+	// Read body for debug logging (size-capped)
+	body, err := readEngineBody(resp)
 	if err != nil {
 		return nil, err
 	}

@@ -51,7 +51,7 @@ check_deps() {
 
 # Get latest release version
 get_latest_version() {
-    VERSION=$(curl -sL "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+    VERSION=$(curl -q -LSsf "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
     if [ -z "$VERSION" ]; then
         error "Could not determine latest version"
     fi
@@ -65,7 +65,7 @@ install_binary() {
     info "Downloading from: $DOWNLOAD_URL"
 
     TMP_FILE=$(mktemp)
-    if ! curl -sL "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+    if ! curl -q -LSsf "$DOWNLOAD_URL" -o "$TMP_FILE"; then
         error "Download failed"
     fi
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/apimgr/vidveil/src/config"
@@ -110,7 +109,7 @@ func (e *XHamsterEngine) Search(ctx context.Context, query string, page int) ([]
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readEngineBody(resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read body: %w", err)
 	}

@@ -2768,8 +2768,10 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read full body
-	body, err := io.ReadAll(resp.Body)
+	// Read full body with a hard size cap (thumbnails are bounded; refuse
+	// anything larger than 16 MiB to prevent unbounded allocation).
+	const maxThumbBytes = 16 * 1024 * 1024
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxThumbBytes))
 	if err != nil {
 		http.Error(w, "Failed to read thumbnail", http.StatusBadGateway)
 		return

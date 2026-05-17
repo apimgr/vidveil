@@ -215,6 +215,16 @@ func (s *Server) setupMiddleware() {
 		})
 	})
 
+	// Request body size limiting per AI.md PART 12 (max_body_size default 10MB)
+	// Applied before handler so untrusted input is size-capped per memory safety rules
+	maxBodyBytes := parseBodySize(s.appConfig.Server.Limits.MaxBodySize, 10*1024*1024)
+	s.router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	// Rate limiting (AI.md PART 12)
 	s.router.Use(s.rateLimiter.Middleware)
 
@@ -898,6 +908,39 @@ func (s *Server) Serve(listener net.Listener) error {
 }
 
 // parseDuration parses a duration string, returning the default if parsing fails
+// parseBodySize parses size string like "10MB", "100KB" to bytes per AI.md PART 12
+func parseBodySize(s string, defaultVal int64) int64 {
+	if s == "" {
+		return defaultVal
+	}
+	s = strings.TrimSpace(strings.ToUpper(s))
+	var multiplier int64 = 1
+	switch {
+	case strings.HasSuffix(s, "GB"):
+		multiplier = 1024 * 1024 * 1024
+		s = strings.TrimSuffix(s, "GB")
+	case strings.HasSuffix(s, "MB"):
+		multiplier = 1024 * 1024
+		s = strings.TrimSuffix(s, "MB")
+	case strings.HasSuffix(s, "KB"):
+		multiplier = 1024
+		s = strings.TrimSuffix(s, "KB")
+	case strings.HasSuffix(s, "B"):
+		s = strings.TrimSuffix(s, "B")
+	}
+	val := int64(0)
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return defaultVal
+		}
+		val = val*10 + int64(c-'0')
+	}
+	if val == 0 {
+		return defaultVal
+	}
+	return val * multiplier
+}
+
 func parseDuration(s string, defaultVal time.Duration) time.Duration {
 	if s == "" {
 		return defaultVal

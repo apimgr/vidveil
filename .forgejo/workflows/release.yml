@@ -6,8 +6,12 @@ on:
       - 'v*'
       - '[0-9]*.[0-9]*.[0-9]*'
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 # Workflow-level default permissions: read-only / least privilege.
-# Per AI.md PART 28, the release job below upgrades explicitly when needed.
+# Per AI.md PART 28, the release job upgrades to `contents: write` explicitly.
 permissions:
   contents: read
 
@@ -17,6 +21,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: golang:alpine
     strategy:
       matrix:
         include:
@@ -40,22 +45,27 @@ jobs:
             goarch: arm64
 
     steps:
-      # v6
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Install build deps
+        run: apk add --no-cache git bash
 
-      - name: Set up Go
-        # v5
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
-        with:
-          go-version: 'stable'
+      - name: Checkout
+        # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Set build info
         run: |
-          echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+          if [ -f release.txt ]; then
+            echo "VERSION=$(cat release.txt)" >> $GITHUB_ENV
+          else
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+          fi
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
           if [ -f site.txt ]; then
-            echo "OFFICIALSITE=$(cat site.txt)" >> $GITHUB_ENV
+            echo "OFFICIALSITE=$(head -n 1 site.txt)" >> $GITHUB_ENV
           else
             echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
           fi
@@ -77,20 +87,20 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.ProjectName=${{ env.PROJECTNAME }}' -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.ProjectName=${{ env.PROJECTNAME }}' -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
-        # v4
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        # v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
           name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
           path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
       - name: Upload CLI artifact
         if: hashFiles('src/client/') != ''
-        # v4
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        # v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
           name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
           path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
@@ -106,8 +116,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Download all artifacts
-        # v4
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        # v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           path: binaries
           merge-multiple: true
@@ -134,6 +144,10 @@ jobs:
           tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
             --exclude='binaries' --exclude='releases' --exclude='*.tar.gz' \
             -czf binaries/${{ env.PROJECTNAME }}-${{ env.VERSION }}-source.tar.gz .
+
+      - name: Generate SHA-256 checksums
+        working-directory: binaries
+        run: sha256sum * > SHA256SUMS
 
       - name: Create Release
         # v2

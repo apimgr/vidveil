@@ -300,22 +300,40 @@ func (s *GeoIPService) Lookup(ipStr string) *GeoIPResult {
 	return result
 }
 
-// IsBlocked checks if an IP is from a blocked country
+// IsBlocked checks if an IP is from a blocked country.
+// AllowCountries takes precedence: if non-empty, only listed countries are
+// allowed and all others are blocked (allowlist mode). DenyCountries is only
+// consulted when AllowCountries is empty (denylist mode).
 func (s *GeoIPService) IsBlocked(ipStr string) bool {
 	if !s.appConfig.Server.GeoIP.Enabled {
 		return false
 	}
 
+	allowList := s.appConfig.Server.GeoIP.AllowCountries
 	denyList := s.appConfig.Server.GeoIP.DenyCountries
-	if len(denyList) == 0 {
+
+	// Nothing configured — nothing blocked
+	if len(allowList) == 0 && len(denyList) == 0 {
 		return false
 	}
 
 	result := s.Lookup(ipStr)
 	if result.CountryCode == "" {
-		return false
+		// Unknown country: block only when an allowlist is active
+		return len(allowList) > 0
 	}
 
+	// Allowlist mode: block any country NOT in the allowlist
+	if len(allowList) > 0 {
+		for _, code := range allowList {
+			if code == result.CountryCode {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Denylist mode: block countries explicitly listed
 	for _, code := range denyList {
 		if code == result.CountryCode {
 			return true

@@ -315,8 +315,9 @@ type GeoIPConfig struct {
 	Enabled       bool                 `yaml:"enabled"`
 	Dir           string               `yaml:"dir"`
 	Update        string               `yaml:"update"`
-	DenyCountries []string             `yaml:"deny_countries"`
-	Databases     GeoIPDatabasesConfig `yaml:"databases"`
+	DenyCountries  []string             `yaml:"deny_countries"`
+	AllowCountries []string             `yaml:"allow_countries"`
+	Databases      GeoIPDatabasesConfig `yaml:"databases"`
 	// Content restriction for adult content laws
 	ContentRestriction ContentRestrictionConfig `yaml:"content_restriction"`
 }
@@ -946,7 +947,8 @@ func DefaultAppConfig() *AppConfig {
 				Enabled:       true,
 				Dir:           "",
 				Update:        "weekly",
-				DenyCountries: []string{},
+				DenyCountries:  []string{},
+				AllowCountries: []string{},
 				Databases: GeoIPDatabasesConfig{
 					ASN:     true,
 					Country: true,

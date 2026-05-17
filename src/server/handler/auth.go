@@ -161,8 +161,7 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 
 				// Log successful login
 				if h.adminHdl.logger != nil {
-					h.adminHdl.logger.Audit("admin.login", adminUser.Username, "auth", map[string]interface{}{
-						"ip":         r.RemoteAddr,
+					h.adminHdl.logger.Audit("admin.login", adminUser.Username, "admin", r.RemoteAddr, "success", map[string]interface{}{
 						"user_agent": r.UserAgent(),
 						"mfa_used":   false,
 					})
@@ -237,8 +236,7 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 
 					// Log successful login with MFA
 					if h.adminHdl.logger != nil {
-						h.adminHdl.logger.Audit("admin.login", pending.Username, "auth", map[string]interface{}{
-							"ip":         pending.RemoteAddr,
+						h.adminHdl.logger.Audit("admin.login", pending.Username, "admin", pending.RemoteAddr, "success", map[string]interface{}{
 							"user_agent": pending.UserAgent,
 							"mfa_used":   true,
 						})
@@ -272,8 +270,7 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 
 						// Log successful login with backup code
 						if h.adminHdl.logger != nil {
-							h.adminHdl.logger.Audit("admin.login", pending.Username, "auth", map[string]interface{}{
-								"ip":          pending.RemoteAddr,
+							h.adminHdl.logger.Audit("admin.login", pending.Username, "admin", pending.RemoteAddr, "success", map[string]interface{}{
 								"user_agent":  pending.UserAgent,
 								"mfa_used":    true,
 								"backup_code": true,

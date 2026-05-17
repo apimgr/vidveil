@@ -206,9 +206,8 @@ func (h *AdminHandler) AuthenticateAdminWithContext(username, password, remoteAd
 	if err != nil {
 		// Log failed login attempt per AI.md PART 11
 		if h.logger != nil {
-			h.logger.Audit("admin.login_failed", username, "auth", map[string]interface{}{
+			h.logger.Audit("admin.login_failed", username, "admin", remoteAddr, "failure", map[string]interface{}{
 				"reason":     "authentication_error",
-				"ip":         remoteAddr,
 				"user_agent": userAgent,
 			})
 			h.logger.Security("admin.login_failed", remoteAddr, map[string]interface{}{
@@ -222,9 +221,8 @@ func (h *AdminHandler) AuthenticateAdminWithContext(username, password, remoteAd
 	if adminUser == nil {
 		// Log failed login attempt per AI.md PART 11
 		if h.logger != nil {
-			h.logger.Audit("admin.login_failed", username, "auth", map[string]interface{}{
+			h.logger.Audit("admin.login_failed", username, "admin", remoteAddr, "failure", map[string]interface{}{
 				"reason":     "invalid_credentials",
-				"ip":         remoteAddr,
 				"user_agent": userAgent,
 			})
 			h.logger.Security("admin.login_failed", remoteAddr, map[string]interface{}{
@@ -240,8 +238,7 @@ func (h *AdminHandler) AuthenticateAdminWithContext(username, password, remoteAd
 
 	// Log successful login per AI.md PART 11
 	if h.logger != nil {
-		h.logger.Audit("admin.login", adminUser.Username, "auth", map[string]interface{}{
-			"ip":         remoteAddr,
+		h.logger.Audit("admin.login", adminUser.Username, "admin", remoteAddr, "success", map[string]interface{}{
 			"user_agent": userAgent,
 			"mfa_used":   false,
 		})
@@ -265,7 +262,7 @@ func (h *AdminHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Log logout per AI.md PART 11
 	if h.logger != nil && username != "" {
-		h.logger.Audit("admin.logout", username, "auth", map[string]interface{}{
+		h.logger.Audit("admin.logout", username, "admin", r.RemoteAddr, "success", map[string]interface{}{
 			"session_duration_seconds": int64(sessionDuration.Seconds()),
 		})
 	}
@@ -351,9 +348,8 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 
 		// Log admin creation per AI.md PART 11
 		if h.logger != nil {
-			h.logger.Audit("admin.created", adminUser.Username, "admin", map[string]interface{}{
+			h.logger.Audit("admin.created", adminUser.Username, "admin", r.RemoteAddr, "success", map[string]interface{}{
 				"created_by": "setup_wizard",
-				"ip":         r.RemoteAddr,
 			})
 		}
 
@@ -1334,9 +1330,8 @@ func (h *AdminHandler) APIRevokeSessions(w http.ResponseWriter, r *http.Request)
 
 	// Log the action per AI.md PART 11
 	if h.logger != nil {
-		h.logger.Audit("admin.session_revoked", currentSession.username, "auth", map[string]interface{}{
+		h.logger.Audit("admin.session_revoked", currentSession.username, "admin", r.RemoteAddr, "success", map[string]interface{}{
 			"revoked_count": revokedCount,
-			"ip":            r.RemoteAddr,
 		})
 	}
 
@@ -1638,10 +1633,9 @@ func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 
 		// Log admin creation via invite per AI.md PART 11
 		if h.logger != nil {
-			h.logger.Audit("admin.created", invite.Username, "admin", map[string]interface{}{
+			h.logger.Audit("admin.created", invite.Username, "admin", r.RemoteAddr, "success", map[string]interface{}{
 				"created_by": "invite",
 				"invited_by": invite.CreatedBy,
-				"ip":         r.RemoteAddr,
 			})
 		}
 
@@ -2329,9 +2323,8 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 					actorUsername = session.username
 				}
 			}
-			h.logger.Audit("config.updated", actorUsername, "config", map[string]interface{}{
+			h.logger.Audit("config.updated", actorUsername, "admin", r.RemoteAddr, "success", map[string]interface{}{
 				"changes": updates,
-				"ip":      r.RemoteAddr,
 			})
 		}
 
@@ -2497,7 +2490,7 @@ func (h *AdminHandler) APIBrandingUpload(w http.ResponseWriter, r *http.Request)
 		if session != nil {
 			username = session.username
 		}
-		h.logger.Audit("branding.uploaded", username, "settings", map[string]interface{}{
+		h.logger.Audit("branding.uploaded", username, "admin", r.RemoteAddr, "success", map[string]interface{}{
 			"type":     uploadType,
 			"filename": header.Filename,
 			"size":     header.Size,
@@ -2605,7 +2598,7 @@ func (h *AdminHandler) APISSLUpload(w http.ResponseWriter, r *http.Request) {
 		if session != nil {
 			username = session.username
 		}
-		h.logger.Audit("ssl.certificate_uploaded", username, "security", map[string]interface{}{
+		h.logger.Audit("ssl.certificate_uploaded", username, "admin", r.RemoteAddr, "success", map[string]interface{}{
 			"cert_size": certHeader.Size,
 			"key_size":  keyHeader.Size,
 		})
@@ -3405,8 +3398,7 @@ func (h *AdminHandler) CSRFMiddleware(next http.Handler) http.Handler {
 			if !h.validateCSRFToken(r) {
 				// Log CSRF failure per AI.md PART 11
 				if h.logger != nil {
-					h.logger.Audit("security.csrf_failure", "", "security", map[string]interface{}{
-						"ip":       r.RemoteAddr,
+					h.logger.Audit("security.csrf_failure", "", "system", r.RemoteAddr, "failure", map[string]interface{}{
 						"endpoint": r.URL.Path,
 						"method":   r.Method,
 					})

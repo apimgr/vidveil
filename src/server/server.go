@@ -149,17 +149,49 @@ func (s *Server) setupMiddleware() {
 	// Security headers per AI.md PART 11 (NON-NEGOTIABLE)
 	s.router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Required security headers per PART 11
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 			w.Header().Set("X-XSS-Protection", "1; mode=block")
 			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; connect-src 'self'")
-			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
-			// HSTS header per AI.md PART 11 - only when SSL enabled
-			// max-age=31536000 (1 year), includeSubDomains, preload
+			w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
+			w.Header().Set("Origin-Agent-Cluster", "?1")
+			// Cross-Origin headers per PART 11 — defaults per "everyone" tier
+			w.Header().Set("Cross-Origin-Opener-Policy", "unsafe-none")
+			w.Header().Set("Cross-Origin-Embedder-Policy", "unsafe-none")
+			w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
+			// CSP per PART 11 default policy (all required directives)
+			w.Header().Set("Content-Security-Policy",
+				"default-src 'self'; "+
+					"script-src 'self' 'unsafe-inline'; "+
+					"style-src 'self' 'unsafe-inline'; "+
+					"img-src 'self' data: blob: https:; "+
+					"font-src 'self' https:; "+
+					"connect-src 'self'; "+
+					"media-src 'self' blob:; "+
+					"worker-src 'self' blob:; "+
+					"manifest-src 'self'; "+
+					"frame-src 'self'; "+
+					"frame-ancestors 'self'; "+
+					"base-uri 'self'; "+
+					"form-action 'self'; "+
+					"object-src 'none'; "+
+					"upgrade-insecure-requests",
+			)
+			// Permissions-Policy per PART 11 spec defaults
+			w.Header().Set("Permissions-Policy",
+				"accelerometer=(), ambient-light-sensor=(), battery=(), camera=(), "+
+					"display-capture=(), geolocation=(), gyroscope=(), hid=(), "+
+					"idle-detection=(), magnetometer=(), microphone=(), midi=(), "+
+					"screen-wake-lock=(), serial=(), usb=(), xr-spatial-tracking=(), "+
+					"attribution-reporting=(), browsing-topics=(), interest-cohort=(), "+
+					"autoplay=(self), encrypted-media=(self), fullscreen=(self), "+
+					"payment=(self), picture-in-picture=(self), "+
+					"publickey-credentials-get=(self), storage-access=(self), web-share=(self)",
+			)
+			// HSTS per PART 11 — max-age=63072000 (2 years), includeSubDomains, preload
 			if s.appConfig.Server.SSL.Enabled {
-				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+				w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 			}
 			// Add Request ID to response headers per AI.md PART 14
 			if reqID := middleware.GetReqID(r.Context()); reqID != "" {

@@ -4,6 +4,7 @@ package logging
 
 import (
 	"compress/gzip"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -443,6 +444,93 @@ type LogEntry struct {
 	Fields    map[string]interface{} `json:"fields,omitempty"`
 }
 
+// AuditActor represents who performed an action per AI.md PART 11 audit format
+type AuditActor struct {
+	Type      string `json:"type"`
+	ID        string `json:"id"`
+	IP        string `json:"ip,omitempty"`
+	UserAgent string `json:"user_agent,omitempty"`
+}
+
+// AuditTarget represents what was acted upon per AI.md PART 11 audit format
+type AuditTarget struct {
+	Type string `json:"type,omitempty"`
+	ID   string `json:"id,omitempty"`
+}
+
+// AuditEntry represents a PART 11-compliant audit log entry (JSON Lines)
+type AuditEntry struct {
+	ID       string                 `json:"id"`
+	Time     string                 `json:"time"`
+	Event    string                 `json:"event"`
+	Category string                 `json:"category"`
+	Severity string                 `json:"severity"`
+	Actor    AuditActor             `json:"actor"`
+	Target   *AuditTarget           `json:"target,omitempty"`
+	Details  map[string]interface{} `json:"details,omitempty"`
+	Result   string                 `json:"result"`
+	NodeID   string                 `json:"node_id,omitempty"`
+}
+
+// generateAuditID generates a unique audit entry ID using timestamp + random hex
+// Uses time-based ordering similar to ULID without an external dependency
+func generateAuditID() string {
+	b := make([]byte, 10)
+	rand.Read(b)
+	return fmt.Sprintf("audit_%d%x", time.Now().UnixMilli(), b)
+}
+
+// auditCategory maps event prefixes to category names per PART 11
+func auditCategory(event string) string {
+	prefix := strings.SplitN(event, ".", 2)[0]
+	switch prefix {
+	case "admin", "user":
+		return "authentication"
+	case "config", "branding", "ssl":
+		return "configuration"
+	case "security":
+		return "security"
+	case "token":
+		return "tokens"
+	case "backup":
+		return "backup"
+	case "server", "scheduler":
+		return "server"
+	case "cluster":
+		return "cluster"
+	case "oidc", "ldap":
+		return "authentication"
+	case "org":
+		return "organization"
+	default:
+		return "other"
+	}
+}
+
+// auditSeverity maps events to severity levels per PART 11
+func auditSeverity(event, result string) string {
+	if result == "failure" {
+		switch {
+		case strings.Contains(event, "brute_force") || strings.Contains(event, "suspicious"):
+			return "critical"
+		case strings.Contains(event, "login_failed") || strings.Contains(event, "csrf") ||
+			strings.Contains(event, "rate_limit") || strings.Contains(event, "invalid_token"):
+			return "warn"
+		default:
+			return "warn"
+		}
+	}
+	// Success events
+	switch {
+	case strings.Contains(event, "maintenance_entered") || strings.Contains(event, "brute_force"):
+		return "critical"
+	case strings.Contains(event, "ip_blocked") || strings.Contains(event, "country_blocked"):
+		return "warn"
+	default:
+		return "info"
+	}
+}
+
 // AppLogger handles structured logging
 type AppLogger struct {
 	mu        sync.Mutex
@@ -705,18 +793,44 @@ func (l *AppLogger) Access(method, path, remoteAddr, userAgent string, status in
 	})
 }
 
-// Audit logs an audit event with automatic PII masking per AI.md PART 11
-func (l *AppLogger) Audit(action, user, resource string, details map[string]interface{}) {
-	fields := map[string]interface{}{
-		"action":   action,
-		"user":     MaskUsername(user),
-		"resource": resource,
+// Audit logs an audit event in PART 11-compliant JSON Lines format.
+// Parameters:
+//   - event: event type e.g. "admin.login", "config.updated"
+//   - actorID: username or admin ID (will be masked if mask_usernames is true)
+//   - actorType: "admin", "user", "system"
+//   - actorIP: source IP address
+//   - result: "success" or "failure"
+//   - details: additional event-specific fields (sensitive values auto-redacted)
+func (l *AppLogger) Audit(event, actorID, actorType, actorIP, result string, details map[string]interface{}) {
+	w, ok := l.outputs["audit"]
+	if !ok {
+		return
 	}
-	for k, v := range details {
-		fields[k] = v
+
+	entry := AuditEntry{
+		ID:       generateAuditID(),
+		Time:     time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
+		Event:    event,
+		Category: auditCategory(event),
+		Severity: auditSeverity(event, result),
+		Actor: AuditActor{
+			Type: actorType,
+			ID:   MaskUsername(actorID),
+			IP:   actorIP,
+		},
+		Result:  result,
+		Details: SanitizeLogFields(details),
 	}
-	// Sanitize sensitive fields before logging
-	l.log(LevelInfo, "audit", "Audit event", SanitizeLogFields(fields))
+
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	w.Write(data)
+	w.Write([]byte("\n"))
 }
 
 // Security logs a security event with automatic PII masking per AI.md PART 11

@@ -630,8 +630,13 @@ func main() {
 	})
 
 	// Start cluster manager if initialized per PART 24
-	// Heartbeat loop runs automatically when cluster is started
+	// Heartbeat loop runs automatically when cluster is started.
+	// Register config saver so cluster manager can cache config to server.yml
+	// every 5 minutes per PART 5 ("periodically to catch any drift").
 	if clusterMgr != nil {
+		clusterMgr.SetConfigSaver(func() error {
+			return config.SaveAppConfig(appConfig, configPath)
+		})
 		ctx := context.Background()
 		if err := clusterMgr.Start(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "⚠️  Cluster manager start failed: %v\n", err)

@@ -55,6 +55,126 @@ If you did not request this, please ignore this email.
 {app_name}
 {app_url}`,
 
+	"email_verify": `Subject: Verify Your Email - {app_name}
+---
+Hello,
+
+Please verify your email address by clicking the link below:
+{verify_link}
+
+This link expires in 48 hours.
+
+If you did not sign up for {app_name}, please ignore this email.
+
+--
+{app_name}
+{app_url}`,
+
+	"mfa_reminder": `Subject: Secure Your Account - {app_name}
+---
+Hello,
+
+We noticed you haven't enabled Two-Factor Authentication (2FA) on your {app_name} account.
+
+Enabling 2FA significantly improves your account security. Set it up here:
+{mfa_setup_link}
+
+If you'd like to dismiss these reminders, you can do so in your account settings.
+
+--
+{app_name}
+{app_url}`,
+
+	"2fa_enabled": `Subject: Two-Factor Authentication Enabled - {app_name}
+---
+Hello,
+
+Two-Factor Authentication has been enabled on your {app_name} account.
+
+Time: {timestamp}
+IP Address: {ip}
+
+If you did not make this change, please contact your administrator immediately.
+
+--
+{app_name}
+{app_url}`,
+
+	"2fa_disabled": `Subject: Two-Factor Authentication Disabled - {app_name}
+---
+Hello,
+
+Two-Factor Authentication has been disabled on your {app_name} account.
+
+Time: {timestamp}
+IP Address: {ip}
+
+Warning: Your account is now less secure. Re-enable 2FA at:
+{mfa_setup_link}
+
+If you did not make this change, please contact your administrator immediately.
+
+--
+{app_name}
+{app_url}`,
+
+	"password_changed": `Subject: Your Password Was Changed - {app_name}
+---
+Hello,
+
+Your password for {app_name} was changed.
+
+Time: {timestamp}
+IP Address: {ip}
+
+If you did not make this change, please contact your administrator immediately.
+
+--
+{app_name}
+{app_url}`,
+
+	"breach_notification": `Subject: Important Security Notice - {app_name}
+---
+Hello,
+
+We are writing to inform you of a security incident that may affect your account.
+
+Incident Details:
+{breach_details}
+
+Recommended Actions:
+1. Change your password immediately
+2. Enable Two-Factor Authentication if not already enabled
+3. Review recent account activity
+4. Contact us if you notice suspicious activity
+
+We apologize for any inconvenience and are taking immediate steps to improve security.
+
+--
+{app_name}
+{app_url}`,
+
+	"breach_admin_alert": `Subject: [{severity}] Security Breach Detected - {app_name}
+---
+URGENT: Security breach detected.
+
+Detection Details:
+{breach_details}
+
+Severity: {severity}
+Detected at: {timestamp}
+Affected users: {affected_count}
+
+Immediate Action Required:
+1. Review audit logs
+2. Rotate all secrets and API keys
+3. Notify affected users
+4. Assess scope of breach
+
+--
+{app_name}
+{app_url}`,
+
 	"backup_complete": `Subject: Backup Complete - {app_name}
 ---
 Hello,
@@ -270,22 +390,86 @@ func (s *EmailService) applyVars(text string, vars map[string]string) string {
 
 // getGlobalVars returns global template variables
 func (s *EmailService) getGlobalVars() map[string]string {
+	// Build app_url respecting SSL config per AI.md PART 15/18
+	scheme := "http"
+	if s.appConfig.Server.SSL.Enabled || s.appConfig.Server.SSL.LetsEncrypt.Enabled {
+		scheme = "https"
+	}
+	port := s.appConfig.Server.Port
+	fqdn := s.appConfig.Server.FQDN
+	appURL := fmt.Sprintf("%s://%s", scheme, fqdn)
+	if port != "" && port != "80" && port != "443" {
+		appURL = fmt.Sprintf("%s://%s:%s", scheme, fqdn, port)
+	}
 	return map[string]string{
 		"app_name":    s.appConfig.Server.Branding.Title,
-		"app_url":     fmt.Sprintf("http://%s:%s", s.appConfig.Server.FQDN, s.appConfig.Server.Port),
+		"app_url":     appURL,
 		"admin_email": s.appConfig.Server.Admin.Email,
 		"timestamp":   time.Now().Format(time.RFC3339),
 		"year":        fmt.Sprintf("%d", time.Now().Year()),
 	}
 }
 
+// effectiveEmailConfig returns the email config with SMTP_* env var overrides
+// applied per AI.md PART 18: "SMTP_* env vars override config file settings."
+func (s *EmailService) effectiveEmailConfig() (host string, port int, username, password, fromAddr, fromName, tlsMode string) {
+	cfg := s.appConfig.Server.Email
+
+	host = cfg.Host
+	port = cfg.Port
+	username = cfg.Username
+	password = cfg.Password
+	tlsMode = cfg.TLS
+
+	// From address: prefer FromEmail, fall back to From (legacy), then default
+	fromAddr = cfg.FromEmail
+	if fromAddr == "" {
+		fromAddr = cfg.From
+	}
+	if fromAddr == "" {
+		fromAddr = "no-reply@" + s.appConfig.Server.FQDN
+	}
+
+	// From name: prefer FromName, fall back to app title
+	fromName = cfg.FromName
+	if fromName == "" {
+		fromName = s.appConfig.Server.Branding.Title
+	}
+
+	// SMTP_* env var overrides (PART 18)
+	if v := os.Getenv("SMTP_HOST"); v != "" {
+		host = v
+	}
+	if v := os.Getenv("SMTP_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			port = p
+		}
+	}
+	if v := os.Getenv("SMTP_USERNAME"); v != "" {
+		username = v
+	}
+	if v := os.Getenv("SMTP_PASSWORD"); v != "" {
+		password = v
+	}
+	if v := os.Getenv("SMTP_TLS"); v != "" {
+		tlsMode = v
+	}
+	if v := os.Getenv("SMTP_FROM_NAME"); v != "" {
+		fromName = v
+	}
+	if v := os.Getenv("SMTP_FROM_EMAIL"); v != "" {
+		fromAddr = v
+	}
+
+	return
+}
+
 // sendEmail sends the actual email via SMTP
 func (s *EmailService) sendEmail(to, subject, body string) error {
-	emailCfg := s.appConfig.Server.Email
+	host, port, username, password, fromAddr, fromName, tlsMode := s.effectiveEmailConfig()
 
-	// Try autodetect if enabled
-	host, port := emailCfg.Host, emailCfg.Port
-	if emailCfg.Autodetect && host == "" {
+	// Try autodetect if host is still empty and autodetect is enabled
+	if host == "" && s.appConfig.Server.Email.Autodetect {
 		h, p := s.autodetectSMTP()
 		if h != "" {
 			host, port = h, p
@@ -296,9 +480,10 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 		return fmt.Errorf("no SMTP server configured")
 	}
 
-	from := emailCfg.From
-	if from == "" {
-		from = "noreply@" + s.appConfig.Server.FQDN
+	// Build RFC 5321-compliant From header: "Name <email>" or just "email"
+	from := fromAddr
+	if fromName != "" {
+		from = fmt.Sprintf("%s <%s>", fromName, fromAddr)
 	}
 
 	// Build message
@@ -313,28 +498,27 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
-	// Determine auth
+	// Determine auth (uses env-var-resolved username/password)
 	var auth smtp.Auth
-	if emailCfg.Username != "" {
-		auth = smtp.PlainAuth("", emailCfg.Username, emailCfg.Password, host)
+	if username != "" {
+		auth = smtp.PlainAuth("", username, password, host)
 	}
 
-	// Handle TLS
-	tlsMode := emailCfg.TLS
+	// Resolve TLS mode per PART 18: auto, starttls, tls, none
 	if tlsMode == "" || tlsMode == "auto" {
 		if port == 465 {
-			tlsMode = "required"
+			tlsMode = "tls"
 		} else {
 			tlsMode = "starttls"
 		}
 	}
 
-	if tlsMode == "required" {
+	if tlsMode == "tls" {
 		// Implicit TLS (port 465)
 		return s.sendTLS(addr, host, auth, from, to, msg.Bytes())
 	}
 
-	// Standard SMTP with optional STARTTLS
+	// Standard SMTP with optional STARTTLS (tlsMode == "starttls" or "none")
 	return smtp.SendMail(addr, auth, from, []string{to}, msg.Bytes())
 }
 

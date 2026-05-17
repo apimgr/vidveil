@@ -8,10 +8,18 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 	"time"
 )
+
+// ConfigSaver is a callback invoked by the cluster manager to persist the
+// current in-memory config to server.yml (the local cache/backup per PART 5).
+// In single-instance mode the admin panel already writes on every change; the
+// periodic sync here catches any drift and satisfies the "every 5 minutes"
+// requirement for cluster mode.
+type ConfigSaver func() error
 
 // ClusterNode represents a cluster node
 type ClusterNode struct {
@@ -69,6 +77,8 @@ type ClusterManager struct {
 	heartbeatInt time.Duration
 	degradedTime time.Duration
 	offlineTime  time.Duration
+	// configSaver is called periodically to cache config to server.yml (PART 5)
+	configSaver ConfigSaver
 }
 
 // NewClusterManager creates a new cluster manager
@@ -117,6 +127,16 @@ func (m *ClusterManager) queryRowCtx(query string, args ...interface{}) *sql.Row
 	return m.db.QueryRowContext(ctx, query, args...)
 }
 
+// SetConfigSaver registers a callback that the cluster manager calls every
+// 5 minutes to sync the current in-memory config to server.yml (PART 5:
+// "Periodically (every 5 minutes) to catch any drift"). Call this before
+// Start() to enable periodic caching.
+func (m *ClusterManager) SetConfigSaver(fn ConfigSaver) {
+	m.mu.Lock()
+	m.configSaver = fn
+	m.mu.Unlock()
+}
+
 // Start starts the cluster manager
 func (m *ClusterManager) Start(ctx context.Context) error {
 	m.mu.Lock()
@@ -137,6 +157,9 @@ func (m *ClusterManager) Start(ctx context.Context) error {
 
 	// Start lock cleanup
 	go m.lockCleanupLoop()
+
+	// Start periodic config cache sync per PART 5
+	go m.configSyncLoop()
 
 	return nil
 }
@@ -278,6 +301,33 @@ func (m *ClusterManager) electPrimary() {
 		m.isPrimary = true
 	} else {
 		m.isPrimary = false
+	}
+}
+
+// configSyncLoop caches the in-memory config to server.yml every 5 minutes
+// per AI.md PART 5: "Periodically (every 5 minutes) to catch any drift".
+// This ensures server.yml is always an up-to-date backup so the server can
+// survive a DB outage in read-only mode.
+func (m *ClusterManager) configSyncLoop() {
+	const syncInterval = 5 * time.Minute
+	ticker := time.NewTicker(syncInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			m.mu.RLock()
+			saver := m.configSaver
+			m.mu.RUnlock()
+			if saver == nil {
+				continue
+			}
+			if err := saver(); err != nil {
+				log.Printf("[cluster] config sync to server.yml failed: %v", err)
+			}
+		}
 	}
 }
 

@@ -460,7 +460,7 @@ func generateSwaggerUI(appConfig *config.AppConfig, theme string) string {
                 <tbody>%s</tbody>
             </table>
             <div class="spec-link">
-                <a href="/openapi.json">View raw OpenAPI specification (JSON)</a>
+                <a href="/api/swagger">View raw OpenAPI specification (JSON)</a>
             </div>
         </div>
     </div>

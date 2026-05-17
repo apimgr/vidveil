@@ -243,7 +243,7 @@ type TwoFactorConfig struct {
 	RememberDeviceDays int `yaml:"remember_device_days"`
 }
 
-// EmailConfig holds SMTP settings
+// EmailConfig holds SMTP settings per AI.md PART 18
 type EmailConfig struct {
 	Enabled        bool     `yaml:"enabled"`
 	Autodetect     bool     `yaml:"autodetect"`
@@ -253,8 +253,12 @@ type EmailConfig struct {
 	Port           int      `yaml:"port"`
 	Username       string   `yaml:"username"`
 	Password       string   `yaml:"password"`
-	From           string   `yaml:"from"`
-	TLS            string   `yaml:"tls"`
+	// From is the legacy single-string sender address kept for backwards compat.
+	// New code should use FromName + FromEmail.
+	From      string `yaml:"from"`
+	FromName  string `yaml:"from_name"`
+	FromEmail string `yaml:"from_email"`
+	TLS       string `yaml:"tls"`
 }
 
 // NotificationsConfig holds notification settings

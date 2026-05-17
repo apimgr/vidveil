@@ -269,7 +269,7 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 				"method":      "GET",
 				"description": "Check server health status",
 			},
-			"documentation": "/openapi",
+			"documentation": "/server/docs/swagger",
 		},
 	})
 }

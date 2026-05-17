@@ -388,18 +388,27 @@ func (s *Server) setupRoutes() {
 	// Debug endpoints (PART 6: only when --debug flag or DEBUG=true)
 	s.registerDebugRoutes(s.router)
 
-	// OpenAPI/Swagger documentation (AI.md PART 14: JSON only, no YAML)
-	// Per AI.md PART 14: Swagger handlers in src/swagger/
-	s.router.Get("/openapi", swagger.Handler(s.appConfig))
-	s.router.Get("/openapi.json", swagger.SpecHandler(s.appConfig))
-	s.router.Get("/swagger", swagger.Handler(s.appConfig))
-	s.router.Get("/api-docs", swagger.Handler(s.appConfig))
-
-	// GraphQL endpoint (AI.md PART 14: GraphQL handler in src/graphql/)
+	// OpenAPI/Swagger and GraphQL — canonical routes per AI.md PART 14.
+	// Web UI pages: /server/docs/swagger  /server/docs/graphql
+	// Versioned API: /api/v1/server/swagger  /api/v1/server/graphql
+	// Unversioned aliases (same handler, no redirect): /api/swagger  /api/graphql
 	gql := graphql.NewHandler(s.appConfig, s.engineMgr)
-	s.router.HandleFunc("/graphql", gql.Handle)
-	s.router.Get("/graphiql", gql.GraphiQL)
-	s.router.Get("/graphql/schema", gql.Schema)
+
+	// Swagger UI (HTML)
+	s.router.Get("/server/docs/swagger", swagger.Handler(s.appConfig))
+	// GraphiQL UI (HTML)
+	s.router.Get("/server/docs/graphql", gql.GraphiQL)
+
+	// Versioned OpenAPI JSON spec
+	s.router.Get("/api/v1/server/swagger", swagger.SpecHandler(s.appConfig))
+	// Versioned GraphQL endpoint
+	s.router.HandleFunc("/api/v1/server/graphql", gql.Handle)
+
+	// Unversioned aliases — SAME handler, not redirects (PART 14)
+	s.router.Get("/api/swagger", swagger.SpecHandler(s.appConfig))
+	s.router.HandleFunc("/api/graphql", gql.Handle)
+	// /api/healthz is the unversioned direct JSON alias for /api/v1/server/healthz
+	s.router.Get("/api/healthz", h.APIHealthCheck)
 
 	// Prometheus metrics
 	if s.appConfig.Server.Metrics.Enabled {

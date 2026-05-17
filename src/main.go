@@ -680,8 +680,11 @@ func main() {
 	// Set Tor service for handlers per AI.md PART 32
 	srv.SetTorService(torSvc)
 
-	// Set GeoIP service for content restriction checks
+	// Set GeoIP service for content restriction checks and country blocking per AI.md PART 19
 	srv.SetGeoIPService(geoipSvc)
+
+	// Set blocklist service for IP/domain blocklist middleware per AI.md PART 11
+	srv.SetBlocklistService(blocklistSvc)
 
 	// Start live config watcher per AI.md PART 1 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, appConfig)

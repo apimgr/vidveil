@@ -461,9 +461,19 @@ type SecurityHeadersConfig struct {
 	CSP                 string `yaml:"csp"`
 }
 
+// AllowlistEntry represents a trusted IP/CIDR entry per AI.md PART 11
+type AllowlistEntry struct {
+	// CIDR is an IP or CIDR notation (e.g., "192.168.1.0/24", "2001:db8::1")
+	// Single IPs without a prefix are auto-expanded: /32 for IPv4, /128 for IPv6
+	CIDR string `yaml:"cidr" json:"cidr"`
+	// Description is a human-readable label (required for clarity)
+	Description string `yaml:"description" json:"description"`
+}
+
 // SecurityConfig holds security-related settings per PART 22
 type SecurityConfig struct {
 	Dir        string           `yaml:"dir"`
+	Allowlist  []AllowlistEntry `yaml:"allowlist"`
 	Blocklists BlocklistsConfig `yaml:"blocklists"`
 	CVE        CVEConfig        `yaml:"cve"`
 }

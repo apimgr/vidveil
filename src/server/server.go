@@ -35,6 +35,16 @@ func GetTemplatesFS() embed.FS {
 	return embeddedFS
 }
 
+// GeoIPBlocker is a minimal interface for country-based IP blocking per AI.md PART 19
+type GeoIPBlocker interface {
+	IsBlocked(ipStr string) bool
+}
+
+// IPBlocklistChecker is a minimal interface for IP/domain blocklist checks per AI.md PART 11
+type IPBlocklistChecker interface {
+	IsBlocked(ipOrDomain string) bool
+}
+
 // Server represents the HTTP server
 type Server struct {
 	appConfig     *config.AppConfig
@@ -52,6 +62,10 @@ type Server struct {
 	adminHandler  *handler.AdminHandler
 	// stored for Onion-Location middleware
 	torSvc handler.TorService
+	// geoip for country blocking middleware per AI.md PART 19
+	geoIPBlocker GeoIPBlocker
+	// blocklist for IP/domain blocklist middleware per AI.md PART 11
+	ipBlocklist IPBlocklistChecker
 }
 
 // MigrationManager interface for database migrations
@@ -106,11 +120,21 @@ func (s *Server) SetTorService(t handler.TorService) {
 	}
 }
 
-// SetGeoIPService sets the GeoIP service for content restriction checks
+// SetGeoIPService sets the GeoIP service for content restriction checks and country blocking
 func (s *Server) SetGeoIPService(g handler.GeoIPChecker) {
 	if s.searchHandler != nil {
 		s.searchHandler.SetGeoIPService(g)
 	}
+	// Also store as GeoIPBlocker for the country-blocking middleware per AI.md PART 19
+	if blocker, ok := g.(GeoIPBlocker); ok {
+		s.geoIPBlocker = blocker
+	}
+}
+
+// SetBlocklistService sets the IP/domain blocklist service for the blocklist middleware
+// per AI.md PART 11. Must be called after NewServer().
+func (s *Server) SetBlocklistService(b IPBlocklistChecker) {
+	s.ipBlocklist = b
 }
 
 // setupMiddleware configures middleware
@@ -215,6 +239,15 @@ func (s *Server) setupMiddleware() {
 		})
 	})
 
+	// Allowlist middleware per AI.md PART 11 — sets trusted-IP context flag so
+	// downstream blocklist / rate-limit / geoip middleware can skip enforcement.
+	// Auth middleware IGNORES this flag; authentication is always required.
+	s.router.Use(s.allowlistMiddleware)
+
+	// Blocklist middleware per AI.md PART 11 — checks IP against external
+	// IP/domain blocklists (e.g., abuse databases). Allowlisted IPs are exempt.
+	s.router.Use(s.blocklistMiddleware)
+
 	// Request body size limiting per AI.md PART 12 (max_body_size default 10MB)
 	// Applied before handler so untrusted input is size-capped per memory safety rules
 	maxBodyBytes := parseBodySize(s.appConfig.Server.Limits.MaxBodySize, 10*1024*1024)
@@ -225,8 +258,21 @@ func (s *Server) setupMiddleware() {
 		})
 	})
 
-	// Rate limiting (AI.md PART 12)
-	s.router.Use(s.rateLimiter.Middleware)
+	// Rate limiting per AI.md PART 12 — allowlisted IPs bypass rate limiting
+	s.router.Use(func(next http.Handler) http.Handler {
+		inner := s.rateLimiter.Middleware(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isAllowlisted(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			inner.ServeHTTP(w, r)
+		})
+	})
+
+	// GeoIP country blocking per AI.md PART 19 — enforces deny_countries /
+	// allow_countries config. Allowlisted IPs are exempt.
+	s.router.Use(s.geoIPMiddleware)
 
 	// Onion-Location header per Tor spec: when a hidden service is running,
 	// clearnet responses include the .onion address so Tor Browser auto-redirects.
@@ -990,4 +1036,117 @@ func URLNormalizeMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ctxKeyAllowlisted is the context key used to flag a request as allowlisted.
+type ctxKeyAllowlistType struct{}
+
+var ctxKeyAllowlisted = ctxKeyAllowlistType{}
+
+// isAllowlisted reports whether the request context carries the allowlisted flag.
+func isAllowlisted(r *http.Request) bool {
+	v, _ := r.Context().Value(ctxKeyAllowlisted).(bool)
+	return v
+}
+
+// allowlistMiddleware sets the allowlisted context flag when the client IP matches
+// a trusted CIDR in server.security.allowlist. Downstream middleware (blocklist,
+// rate limit, geoip) must check isAllowlisted() and skip enforcement for flagged
+// requests. Auth middleware IGNORES this flag — authentication is always required.
+// Spec: AI.md PART 11
+func (s *Server) allowlistMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entries := s.appConfig.Server.Security.Allowlist
+		if len(entries) > 0 {
+			ip := extractClientIP(r)
+			parsed := net.ParseIP(ip)
+			if parsed != nil {
+				for _, entry := range entries {
+					cidr := entry.CIDR
+					// Auto-expand bare IPs: IPv4 → /32, IPv6 → /128
+					if !strings.Contains(cidr, "/") {
+						if strings.Contains(cidr, ":") {
+							cidr += "/128"
+						} else {
+							cidr += "/32"
+						}
+					}
+					_, network, err := net.ParseCIDR(cidr)
+					if err == nil && network.Contains(parsed) {
+						ctx := r.Context()
+						ctx = context.WithValue(ctx, ctxKeyAllowlisted, true)
+						r = r.WithContext(ctx)
+						break
+					}
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// blocklistMiddleware checks the client IP against the configured IP/domain
+// blocklist. Allowlisted IPs are exempt. Blocked IPs receive 403 Forbidden.
+// Spec: AI.md PART 11
+func (s *Server) blocklistMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allowlisted IPs bypass blocklist per spec
+		if isAllowlisted(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		checker := s.ipBlocklist
+		if checker == nil || !s.appConfig.Server.Security.Blocklists.Enabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ip := extractClientIP(r)
+		if ip != "" && checker.IsBlocked(ip) {
+			http.Error(w, "Your IP address has been blocked.", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// geoIPMiddleware enforces country blocking per server.geoip.deny_countries /
+// server.geoip.allow_countries config. Allowlisted IPs are exempt. Private/
+// internal IPs are never blocked (handled by GeoIPService.IsBlocked).
+// Spec: AI.md PART 19
+func (s *Server) geoIPMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allowlisted IPs bypass country blocking per spec
+		if isAllowlisted(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		blocker := s.geoIPBlocker
+		if blocker == nil || !s.appConfig.Server.GeoIP.Enabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Only enforce when deny_countries or allow_countries is configured
+		if len(s.appConfig.Server.GeoIP.DenyCountries) == 0 &&
+			len(s.appConfig.Server.GeoIP.AllowCountries) == 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ip := extractClientIP(r)
+		if ip != "" && blocker.IsBlocked(ip) {
+			http.Error(w, "Access from your country is not permitted.", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// extractClientIP returns the best-effort client IP from a request.
+// chi's RealIP middleware has already normalized r.RemoteAddr to the real IP.
+func extractClientIP(r *http.Request) string {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// No port separator — RemoteAddr is already a bare IP
+		ip = r.RemoteAddr
+	}
+	return ip
 }

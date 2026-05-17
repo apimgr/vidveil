@@ -2,6 +2,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -1148,9 +1149,11 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 		return nil, "", fmt.Errorf("failed to read config: %w", err)
 	}
 
-	// Start with defaults
+	// Start with defaults; unknown YAML keys are errors per AI.md PART 5
 	cfg := DefaultAppConfig()
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(cfg); err != nil {
 		return nil, "", fmt.Errorf("failed to parse config: %w", err)
 	}
 
@@ -1467,8 +1470,11 @@ func (w *ConfigWatcher) reload() {
 		return
 	}
 
+	// Unknown YAML keys are errors per AI.md PART 5
 	newCfg := DefaultAppConfig()
-	if err := yaml.Unmarshal(data, newCfg); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(newCfg); err != nil {
 		fmt.Printf("⚠️  Failed to parse config for reload: %v\n", err)
 		return
 	}

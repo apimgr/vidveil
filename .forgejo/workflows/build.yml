@@ -1,16 +1,19 @@
-name: Beta Release
+name: Build
 
 on:
   push:
     branches:
-      - beta
+      - main
+      - master
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+  workflow_dispatch:
 
-concurrency:
-  group: beta-${{ github.ref }}
-  cancel-in-progress: true
-
-# Workflow-level default permissions: read-only / least privilege.
-# Per AI.md PART 28, the release job upgrades to `contents: write` explicitly.
+# Read-only by default. No job needs to write to the repo for build/test.
 permissions:
   contents: read
 
@@ -18,10 +21,11 @@ env:
   PROJECTNAME: vidveil
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     container: golang:alpine
     strategy:
+      fail-fast: false
       matrix:
         include:
           - goos: linux
@@ -56,17 +60,13 @@ jobs:
 
       - name: Set build info
         run: |
-          if [ -f release.txt ]; then
-            echo "VERSION=$(cat release.txt)-beta" >> $GITHUB_ENV
-          else
-            echo "VERSION=$(date -u +"%Y%m%d%H%M%S")-beta" >> $GITHUB_ENV
-          fi
+          echo "VERSION=$(cat release.txt 2>/dev/null || echo 0.0.0)" >> $GITHUB_ENV
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
           if [ -f site.txt ]; then
             echo "OFFICIALSITE=$(head -n 1 site.txt)" >> $GITHUB_ENV
           else
-            echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
+            echo "OFFICIALSITE=" >> $GITHUB_ENV
           fi
 
       - name: Build server
@@ -78,7 +78,6 @@ jobs:
           LDFLAGS="-s -w -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src
 
-      # CLI build - only if src/client/ directory exists
       - name: Build CLI
         if: hashFiles('src/client/') != ''
         env:
@@ -89,54 +88,56 @@ jobs:
           LDFLAGS="-s -w -X 'main.ProjectName=${{ env.PROJECTNAME }}' -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
-      - name: Upload server artifact
+      - name: Run unit tests (Linux only - no cross-compile execution)
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        env:
+          CGO_ENABLED: 0
+        run: |
+          go test -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         # v5
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
-          name: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
-          path: ${{ env.PROJECTNAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: coverage-report
+          path: coverage.out
+          retention-days: 7
 
-      - name: Upload CLI artifact
-        if: hashFiles('src/client/') != ''
-        # v5
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
-        with:
-          name: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
-          path: ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
-
-  release:
-    needs: build
+  validate:
+    name: Repo validation
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    container: golang:alpine
 
     steps:
-      # v6
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Install validation deps
+        run: apk add --no-cache git bash
 
-      - name: Download all artifacts
-        # v5
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-        with:
-          path: binaries
-          merge-multiple: true
+      - name: Checkout
+        # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Set version
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: gofmt check
         run: |
-          if [ -f release.txt ]; then
-            echo "VERSION=$(cat release.txt)-beta" >> $GITHUB_ENV
-          else
-            echo "VERSION=$(date -u +"%Y%m%d%H%M%S")-beta" >> $GITHUB_ENV
+          NON_FORMATTED=$(gofmt -l ./src 2>&1 || true)
+          if [ -n "$NON_FORMATTED" ]; then
+            echo "ERROR: the following files are not gofmt-clean:"
+            echo "$NON_FORMATTED"
+            exit 1
           fi
 
-      - name: Create version.txt
-        run: echo "${{ env.VERSION }}" > binaries/version.txt
+      - name: go vet
+        run: go vet ./...
 
-      - name: Create Release
-        # v2
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
-        with:
-          tag_name: ${{ env.VERSION }}
-          files: binaries/*
-          prerelease: true
-          generate_release_notes: true
+      - name: License compatibility (no GPL/AGPL/LGPL)
+        run: |
+          go install github.com/google/go-licenses@latest || true
+          if command -v go-licenses >/dev/null 2>&1; then
+            if go-licenses csv ./... 2>/dev/null | grep -iE 'GPL|AGPL|LGPL'; then
+              echo "ERROR: copyleft license detected"
+              exit 1
+            fi
+          fi

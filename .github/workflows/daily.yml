@@ -9,8 +9,12 @@ on:
       - master
   workflow_dispatch:
 
+concurrency:
+  group: daily-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/beta' }}
+
 # Workflow-level default permissions: read-only / least privilege.
-# Per AI.md PART 28, the release job below upgrades explicitly when needed.
+# Per AI.md PART 28, the release job upgrades to `contents: write` explicitly.
 permissions:
   contents: read
 
@@ -20,6 +24,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: golang:alpine
     strategy:
       matrix:
         include:
@@ -43,23 +48,27 @@ jobs:
             goarch: arm64
 
     steps:
-      # v6
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Install build deps
+        run: apk add --no-cache git bash
 
-      - name: Set up Go
-        # v5
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
-        with:
-          go-version: 'stable'
+      - name: Checkout
+        # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Set build info
         run: |
-          echo "VERSION=$(date -u +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+          if [ -f release.txt ]; then
+            echo "VERSION=$(cat release.txt)" >> $GITHUB_ENV
+          else
+            echo "VERSION=$(date -u +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+          fi
           echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $GITHUB_ENV
-          # OFFICIALSITE (optional): Set in repository secrets, or site.txt file, or leave empty
           if [ -f site.txt ]; then
-            echo "OFFICIALSITE=$(cat site.txt)" >> $GITHUB_ENV
+            echo "OFFICIALSITE=$(head -n 1 site.txt)" >> $GITHUB_ENV
           else
             echo "OFFICIALSITE=${{ secrets.OFFICIALSITE }}" >> $GITHUB_ENV
           fi
@@ -81,7 +90,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          LDFLAGS="-s -w -X 'main.ProjectName=${{ env.PROJECTNAME }}' -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}'"
+          LDFLAGS="-s -w -X 'main.ProjectName=${{ env.PROJECTNAME }}' -X 'main.Version=${{ env.VERSION }}' -X 'main.CommitID=${{ env.COMMIT_ID }}' -X 'main.BuildDate=${{ env.BUILD_DATE }}' -X 'main.OfficialSite=${{ env.OFFICIALSITE }}'"
           go build -ldflags "${LDFLAGS}" -o ${{ env.PROJECTNAME }}-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./src/client
 
       - name: Upload server artifact
@@ -117,7 +126,12 @@ jobs:
           merge-multiple: true
 
       - name: Set version
-        run: echo "VERSION=$(date -u +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+        run: |
+          if [ -f release.txt ]; then
+            echo "VERSION=$(cat release.txt)" >> $GITHUB_ENV
+          else
+            echo "VERSION=$(date -u +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+          fi
 
       - name: Create version.txt
         run: echo "${{ env.VERSION }}" > binaries/version.txt

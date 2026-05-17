@@ -110,3 +110,9 @@ volumes/
 
 # Per AI.md PART 0: personal local Claude Code settings (auto-gitignored)
 .claude/settings.local.json
+
+# Per AI.md PART 0: AI config directories are gitignored (regenerated from AI.md)
+.cursor/
+.aider/
+.ai/
+.windsurf/

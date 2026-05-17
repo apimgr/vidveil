@@ -44,6 +44,31 @@ func Direction(locale string) string {
 	return "ltr"
 }
 
+// DetectLocale picks the best locale from a request without requiring a loaded Translator.
+// It checks the "lang" query parameter, then the "locale" cookie, then the Accept-Language header.
+// Falls back to DefaultLocale ("en") if none match.
+func DetectLocale(r *http.Request) string {
+	if v := strings.TrimSpace(r.URL.Query().Get("lang")); v != "" {
+		return strings.ToLower(v)
+	}
+	for _, c := range r.Cookies() {
+		if c.Name == "locale" && c.Value != "" {
+			return strings.ToLower(c.Value)
+		}
+	}
+	if al := r.Header.Get("Accept-Language"); al != "" {
+		first := al
+		if idx := strings.IndexAny(first, ",;"); idx > 0 {
+			first = first[:idx]
+		}
+		first = strings.TrimSpace(first)
+		if first != "" {
+			return strings.ToLower(first)
+		}
+	}
+	return DefaultLocale
+}
+
 // Translator handles translations per AI.md PART 25
 type Translator struct {
 	// translations: locale -> key -> translation

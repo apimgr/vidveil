@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/admin"
@@ -300,7 +301,7 @@ func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
 		errorMsg = "Invalid or expired setup token"
 	}
 
-	h.renderSetupTokenPage(w, errorMsg)
+	h.renderSetupTokenPage(w, r, errorMsg)
 }
 
 // SetupWizardPage renders the setup wizard at /server/{admin_path}/config/setup per AI.md PART 31
@@ -374,10 +375,16 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // renderSetupTokenPage renders the setup token entry form using common.css per AI.md PART 16
-func (h *AdminHandler) renderSetupTokenPage(w http.ResponseWriter, errorMsg string) {
+func (h *AdminHandler) renderSetupTokenPage(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	lang := resolveLocale(r)
+	dir := i18n.Direction(lang)
+	errorHtml := ""
+	if errorMsg != "" {
+		errorHtml = fmt.Sprintf(`<div class="alert alert-error">%s</div>`, errorMsg)
+	}
 	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en" class="theme-dark">
+<html lang="%s" dir="%s" class="theme-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -398,17 +405,12 @@ func (h *AdminHandler) renderSetupTokenPage(w http.ResponseWriter, errorMsg stri
                     <input type="text" id="token" name="token" required autofocus placeholder="Enter setup token">
                     <p class="help-text">The setup token was shown once when the server first started</p>
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%%;">Continue</button>
+                <button type="submit" class="btn btn-primary btn-full">Continue</button>
             </form>
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Branding.Title, func() string {
-		if errorMsg != "" {
-			return fmt.Sprintf(`<div class="alert alert-error">%s</div>`, errorMsg)
-		}
-		return ""
-	}())
+</html>`, lang, dir, h.appConfig.Server.Branding.Title, errorHtml)
 	w.Write([]byte(html))
 }
 
@@ -517,13 +519,13 @@ func formatUptime(d time.Duration) string {
 // EnginesPage renders the engines management page
 func (h *AdminHandler) EnginesPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderEnginesPage()))
+	w.Write([]byte(h.renderEnginesPage(r)))
 }
 
 // SettingsPage renders the settings page
 func (h *AdminHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(h.renderSettingsPage()))
+	w.Write([]byte(h.renderSettingsPage(r)))
 }
 
 // LogsPage renders the logs viewer per AI.md PART 17
@@ -3418,167 +3420,9 @@ func (h *AdminHandler) csrfFormField(w http.ResponseWriter, r *http.Request) str
 	return `<input type="hidden" name="_csrf_token" value="` + token + `">`
 }
 
-// Template rendering functions
-
-func (h *AdminHandler) renderDashboard() string {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	engineCount := len(h.engineMgr.ListEngines())
-	enabledCount := h.engineMgr.EnabledCount()
-
-	// Analytics summary
-	var analytics AnalyticsSummary
-	if h.metrics != nil {
-		analytics = h.metrics.GetAnalyticsSummary()
-	}
-
-	cacheHitPctStr := "0.0%"
-	if analytics.CacheHitPct > 0 {
-		cacheHitPctStr = strconv.FormatFloat(analytics.CacheHitPct, 'f', 1, 64) + "%"
-	}
-
-	uptimeDur := time.Duration(analytics.UptimeSeconds * float64(time.Second))
-	uptimeStr := formatDuration(uptimeDur)
-	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
-
-	return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - ` + h.appConfig.Server.Branding.Title + `</title>
-    ` + adminStyles() + `
-</head>
-<body>
-    ` + h.renderAdminNav("dashboard") + `
-    <main class="admin-main">
-        <h1>Dashboard</h1>
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value">` + strconv.Itoa(enabledCount) + `</div>
-                <div class="stat-label">Engines Active</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">` + strconv.Itoa(engineCount) + `</div>
-                <div class="stat-label">Total Engines</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">` + strconv.FormatUint(m.Alloc/1024/1024, 10) + ` MB</div>
-                <div class="stat-label">Memory Usage</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">` + strconv.Itoa(runtime.NumGoroutine()) + `</div>
-                <div class="stat-label">Goroutines</div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Search Analytics</h2>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">` + strconv.FormatUint(analytics.SearchesTotal, 10) + `</div>
-                    <div class="stat-label">Total Searches</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">` + strconv.FormatUint(analytics.Searches24h, 10) + `</div>
-                    <div class="stat-label">Searches (24h)</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">` + strconv.FormatUint(analytics.Requests24h, 10) + `</div>
-                    <div class="stat-label">Requests (24h)</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">` + cacheHitPctStr + `</div>
-                    <div class="stat-label">Cache Hit Rate</div>
-                </div>
-            </div>
-            <p class="text-muted" style="font-size:0.85em;margin-top:0.5rem">
-                Uptime: ` + uptimeStr + ` &nbsp;|&nbsp;
-                Cache hits: ` + strconv.FormatUint(analytics.CacheHitsTotal, 10) + ` of ` + strconv.FormatUint(analytics.SearchesTotal, 10) + ` searches
-            </p>
-        </div>
-
-        <div class="card">
-            <h2>System Info</h2>
-            <table class="info-table">
-                <tr><td>Mode</td><td>` + h.appConfig.Server.Mode + `</td></tr>
-                <tr><td>Go Version</td><td>` + runtime.Version() + `</td></tr>
-                <tr><td>OS / Arch</td><td>` + runtime.GOOS + ` / ` + runtime.GOARCH + `</td></tr>
-                <tr><td>Server Port</td><td>` + h.appConfig.Server.Port + `</td></tr>
-                <tr><td>Tor Enabled</td><td>` + strconv.FormatBool(h.torSvc != nil) + `</td></tr>
-            </table>
-        </div>
-
-        <div class="card">
-            <h2>Quick Actions</h2>
-            <div class="button-group">
-                <button onclick="backupNow()" class="btn btn-primary">Create Backup</button>
-                <button onclick="toggleMaintenance()" class="btn btn-warning">Toggle Maintenance</button>
-            </div>
-        </div>
-    </main>
-
-    <div id="toast" class="admin-toast"></div>
-    <div id="confirm-modal" class="admin-modal hidden">
-        <div class="admin-modal-backdrop"></div>
-        <div class="admin-modal-content">
-            <p id="confirm-message">Are you sure?</p>
-            <div class="admin-modal-buttons">
-                <button onclick="confirmAction(true)" class="btn btn-primary">Yes</button>
-                <button onclick="confirmAction(false)" class="btn">Cancel</button>
-            </div>
-        </div>
-    </div>
-    <script>
-    let pendingAction = null;
-    function showToast(message, type) {
-        const toast = document.getElementById('toast');
-        toast.textContent = message;
-        toast.className = 'admin-toast ' + type + ' show';
-        setTimeout(() => { toast.className = 'admin-toast'; }, 3000);
-    }
-    function showConfirm(message, action) {
-        pendingAction = action;
-        document.getElementById('confirm-message').textContent = message;
-        document.getElementById('confirm-modal').classList.remove('hidden');
-    }
-    function confirmAction(confirmed) {
-        document.getElementById('confirm-modal').classList.add('hidden');
-        if (confirmed && pendingAction) pendingAction();
-        pendingAction = null;
-    }
-    async function backupNow() {
-        showConfirm('Create a backup now?', async () => {
-            try {
-                const resp = await fetch('` + adminAPIBase + `/backup', { method: 'POST' });
-                const data = await resp.json();
-                showToast(data.ok ? 'Backup created!' : 'Error: ' + (data.message || data.error || 'failed'), data.ok ? 'success' : 'error');
-            } catch (e) {
-                showToast('Error: ' + e.message, 'error');
-            }
-        });
-    }
-    async function toggleMaintenance() {
-        try {
-            const resp = await fetch('` + adminAPIBase + `/restart', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled: true })
-            });
-            const data = await resp.json();
-            showToast(data.ok ? 'Maintenance mode toggled!' : 'Error: ' + (data.message || data.error || 'failed'), data.ok ? 'success' : 'error');
-        } catch (e) {
-            showToast('Error: ' + e.message, 'error');
-        }
-    }
-    </script>
-</body>
-</html>`
-}
-
-func (h *AdminHandler) renderEnginesPage() string {
+func (h *AdminHandler) renderEnginesPage(r *http.Request) string {
+	lang := resolveLocale(r)
+	dir := i18n.Direction(lang)
 	engines := h.engineMgr.ListEnginesWithHealth()
 
 	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/engines"
@@ -3654,7 +3498,7 @@ func (h *AdminHandler) renderEnginesPage() string {
 	}
 
 	return `<!DOCTYPE html>
-<html lang="en">
+<html lang="` + lang + `" dir="` + dir + `">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3722,9 +3566,11 @@ func (h *AdminHandler) renderEnginesPage() string {
 </html>`
 }
 
-func (h *AdminHandler) renderSettingsPage() string {
+func (h *AdminHandler) renderSettingsPage(r *http.Request) string {
+	lang := resolveLocale(r)
+	dir := i18n.Direction(lang)
 	return `<!DOCTYPE html>
-<html lang="en">
+<html lang="` + lang + `" dir="` + dir + `">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3768,17 +3614,6 @@ func (h *AdminHandler) renderSettingsPage() string {
 </html>`
 }
 
-func (h *AdminHandler) renderLogsPage() string {
-	// This function is no longer used - logs are rendered via renderAdminTemplate
-	// Keeping for backwards compatibility
-	return h.renderAdminPage("logs", "Logs", `
-        <div class="card">
-            <p>Please use the new log viewer interface.</p>
-            <p><a href="`+h.appConfig.AdminURLPrefix()+`/config/logs?type=access">View Access Logs</a></p>
-        </div>
-    `)
-}
-
 func (h *AdminHandler) renderAdminNav(active string) string {
 	navClass := func(name string) string {
 		if name == active {
@@ -3809,443 +3644,6 @@ func (h *AdminHandler) renderAdminNav(active string) string {
             <a href="` + base + `/logout" class="nav-link nav-logout">Logout</a>
         </div>
     </nav>`
-}
-
-// === PART 12 Additional Page Render Functions ===
-
-func (h *AdminHandler) renderServerSettingsPage() string {
-	return h.renderAdminPage("server", "Server Settings", `
-        <div class="card">
-            <h2>Server Configuration</h2>
-            <table class="info-table">
-                <tr><td>Port</td><td>`+h.appConfig.Server.Port+`</td></tr>
-                <tr><td>Address</td><td>`+h.appConfig.Server.Address+`</td></tr>
-                <tr><td>FQDN</td><td>`+h.appConfig.Server.FQDN+`</td></tr>
-                <tr><td>Mode</td><td>`+h.appConfig.Server.Mode+`</td></tr>
-                <tr><td>Title</td><td>`+h.appConfig.Server.Branding.Title+`</td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h2>Admin Settings</h2>
-            <table class="info-table">
-                <tr><td>Username</td><td>`+h.appConfig.Server.Admin.Username+`</td></tr>
-                <tr><td>Email</td><td>`+h.appConfig.Server.Admin.Email+`</td></tr>
-            </table>
-        </div>`)
-}
-
-func (h *AdminHandler) renderWebSettingsPage() string {
-	return h.renderAdminPage("web", "Web Settings", `
-        <div class="card">
-            <h2>UI Configuration</h2>
-            <table class="info-table">
-                <tr><td>Theme</td><td>`+h.appConfig.Web.UI.Theme+`</td></tr>
-                <tr><td>CORS</td><td>`+h.appConfig.Web.CORS+`</td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h2>Search Settings</h2>
-            <table class="info-table">
-                <tr><td>Results Per Page</td><td>`+strconv.Itoa(h.appConfig.Search.ResultsPerPage)+`</td></tr>
-                <tr><td>Tor Enabled</td><td>`+strconv.FormatBool(h.torSvc != nil)+`</td></tr>
-            </table>
-        </div>`)
-}
-
-func (h *AdminHandler) renderSecuritySettingsPage() string {
-	return h.renderAdminPage("security", "Security Settings", `
-        <div class="card">
-            <h2>Security Headers</h2>
-            <table class="info-table">
-                <tr><td>Enabled</td><td>`+strconv.FormatBool(h.appConfig.Server.SecurityHeaders.Enabled)+`</td></tr>
-                <tr><td>HSTS</td><td>`+strconv.FormatBool(h.appConfig.Server.SecurityHeaders.HSTS)+`</td></tr>
-                <tr><td>X-Frame-Options</td><td>`+h.appConfig.Server.SecurityHeaders.XFrameOptions+`</td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h2>Rate Limiting</h2>
-            <table class="info-table">
-                <tr><td>Enabled</td><td>`+strconv.FormatBool(h.appConfig.Server.RateLimit.Enabled)+`</td></tr>
-                <tr><td>Requests</td><td>`+strconv.Itoa(h.appConfig.Server.RateLimit.Requests)+`</td></tr>
-                <tr><td>Window</td><td>`+strconv.Itoa(h.appConfig.Server.RateLimit.Window)+` seconds</td></tr>
-            </table>
-        </div>`)
-}
-
-func (h *AdminHandler) renderDatabasePage() string {
-	cacheType := h.appConfig.Server.Cache.Type
-	if cacheType == "" {
-		cacheType = "memory"
-	}
-	cacheTTL := h.appConfig.Server.Cache.TTL
-	journalMode := h.appConfig.Server.Database.SQLite.JournalMode
-	if journalMode == "" {
-		journalMode = "WAL"
-	}
-
-	// Helper for selected attribute
-	sel := func(current, value string) string {
-		if current == value {
-			return "selected"
-		}
-		return ""
-	}
-
-	return h.renderAdminPage("database", "Database & Cache", `
-        <div class="card">
-            <h2>Database Settings</h2>
-            <p class="help-text">Configure database driver and connection settings.</p>
-            <div class="form-group">
-                <label for="db_driver">Driver</label>
-                <select id="db_driver" name="driver" disabled aria-describedby="db_driver_help">
-                    <option value="sqlite" `+sel(h.appConfig.Server.Database.Driver, "sqlite")+`>SQLite (Default)</option>
-                </select>
-                <small id="db_driver_help" class="help-text">Database driver. SQLite is recommended for single-instance deployments.</small>
-            </div>
-            <div class="form-group">
-                <label>Database Directory</label>
-                <input type="text" value="`+h.appConfig.Server.Database.SQLite.Dir+`" readonly class="readonly-field">
-                <small class="help-text">Directory where database files are stored. Change via config file.</small>
-            </div>
-            <div class="form-group">
-                <label>Journal Mode</label>
-                <input type="text" value="`+journalMode+`" readonly class="readonly-field">
-                <small class="help-text">SQLite journal mode. WAL provides better concurrency.</small>
-            </div>
-            <table class="info-table">
-                <tr><td>Current Driver</td><td>`+h.appConfig.Server.Database.Driver+`</td></tr>
-                <tr><td>Status</td><td><span class="badge badge-success">Connected</span></td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h2>Cache Settings</h2>
-            <p class="help-text">Configure caching to improve performance.</p>
-            <div class="form-group">
-                <label for="cache_type">Cache Type</label>
-                <select id="cache_type" name="cache_type" disabled aria-describedby="cache_type_help">
-                    <option value="memory" `+sel(cacheType, "memory")+`>Memory (Default)</option>
-                    <option value="redis" `+sel(cacheType, "redis")+`>Redis</option>
-                    <option value="memcache" `+sel(cacheType, "memcache")+`>Memcached</option>
-                </select>
-                <small id="cache_type_help" class="help-text">Cache backend. Memory is suitable for single instances.</small>
-            </div>
-            <div class="form-group">
-                <label>Default TTL (seconds)</label>
-                <input type="number" value="`+strconv.Itoa(cacheTTL)+`" readonly class="readonly-field">
-                <small class="help-text">Default time-to-live for cached items. 0 = no expiration.</small>
-            </div>
-            <table class="info-table">
-                <tr><td>Current Type</td><td>`+cacheType+`</td></tr>
-                <tr><td>TTL</td><td>`+strconv.Itoa(cacheTTL)+` seconds</td></tr>
-                <tr><td>Status</td><td><span class="badge badge-success">Active</span></td></tr>
-            </table>
-            <p class="help-text"><strong>Note:</strong> Database and cache settings require server restart to change. Edit server.yml to modify.</p>
-        </div>`)
-}
-
-func (h *AdminHandler) renderEmailPage() string {
-	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
-	return h.renderAdminPage("email", "Email & Notifications", `
-        <div class="card">
-            <h2>Email Configuration</h2>
-            <table class="info-table">
-                <tr><td>Enabled</td><td>`+strconv.FormatBool(h.appConfig.Server.Email.Enabled)+`</td></tr>
-                <tr><td>SMTP Host</td><td>`+h.appConfig.Server.Email.Host+`</td></tr>
-                <tr><td>From</td><td>`+h.appConfig.Server.Email.From+`</td></tr>
-            </table>
-            <div class="button-group" style="margin-top: 1rem;">
-                <button onclick="testEmail()" class="btn btn-primary">Send Test Email</button>
-            </div>
-        </div>
-        <div class="card">
-            <h2>Notifications</h2>
-            <p class="text-muted">Notification settings are managed via server.yml</p>
-        </div>
-        <script>
-        async function testEmail() {
-            try {
-                const resp = await fetch('`+adminAPIBase+`/email/test', { method: 'POST' });
-                const data = await resp.json();
-                if (data.ok) { showSuccess('Test email sent!'); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
-            } catch (e) {
-                showError('Error: ' + e.message);
-            }
-        }
-        </script>`)
-}
-
-func (h *AdminHandler) renderSSLPage() string {
-	sslStatus := "Disabled"
-	if h.appConfig.Server.SSL.Enabled {
-		sslStatus = "Enabled"
-	}
-	leStatus := "Disabled"
-	if h.appConfig.Server.SSL.LetsEncrypt.Enabled {
-		leStatus = "Enabled"
-	}
-
-	return h.renderAdminPage("ssl", "SSL/TLS", `
-        <div class="card">
-            <h2>SSL/TLS Status</h2>
-            <table class="info-table">
-                <tr><td>SSL Enabled</td><td>`+sslStatus+`</td></tr>
-                <tr><td>Certificate Path</td><td>`+h.appConfig.Server.SSL.CertPath+`</td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h2>Let's Encrypt</h2>
-            <table class="info-table">
-                <tr><td>Enabled</td><td>`+leStatus+`</td></tr>
-                <tr><td>Email</td><td>`+h.appConfig.Server.SSL.LetsEncrypt.Email+`</td></tr>
-                <tr><td>Challenge Type</td><td>`+h.appConfig.Server.SSL.LetsEncrypt.Challenge+`</td></tr>
-            </table>
-        </div>`)
-}
-
-func (h *AdminHandler) renderSchedulerPage() string {
-	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
-	taskRows := ""
-	if h.scheduler != nil {
-		tasks := h.scheduler.ListTasks()
-		for _, task := range tasks {
-			statusBadge := `<span class="badge badge-success">` + task.LastResult + `</span>`
-			if task.LastResult == "failure" {
-				statusBadge = `<span class="badge badge-error">Failed</span>`
-			} else if task.LastResult == "running" {
-				statusBadge = `<span class="badge badge-warning">Running</span>`
-			}
-			enabledBadge := ""
-			if !task.Enabled {
-				enabledBadge = ` <span class="badge badge-error">Disabled</span>`
-			}
-			taskRows += `<tr>
-                <td>` + task.Name + enabledBadge + `</td>
-                <td>` + task.Schedule + `</td>
-                <td>` + task.NextRun.Format("2006-01-02 15:04") + `</td>
-                <td>` + statusBadge + `</td>
-                <td>
-                    <button onclick="runTask('` + task.ID + `')" class="btn btn-sm btn-primary">Run Now</button>
-                </td>
-            </tr>`
-		}
-	}
-
-	if taskRows == "" {
-		taskRows = `<tr><td colspan="5" class="text-muted">No scheduled tasks</td></tr>`
-	}
-
-	return h.renderAdminPage("scheduler", "Scheduler", `
-        <div class="card">
-            <h2>Scheduled Tasks</h2>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Task</th>
-                        <th>Schedule</th>
-                        <th>Next Run</th>
-                        <th>Last Result</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>`+taskRows+`</tbody>
-            </table>
-        </div>
-        <script>
-        async function runTask(id) {
-            try {
-                const resp = await fetch('`+adminAPIBase+`/scheduler/' + encodeURIComponent(id) + '/run', { method: 'POST' });
-                const data = await resp.json();
-                if (data.ok) { showSuccess('Task triggered!'); location.reload(); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
-            } catch (e) {
-                showError('Error: ' + e.message);
-            }
-        }
-        </script>`)
-}
-
-func (h *AdminHandler) renderBackupPage() string {
-	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
-	return h.renderAdminPage("backup", "Backup & Maintenance", `
-        <div class="card">
-            <h2>Backup</h2>
-            <p class="text-muted">Create a backup of configuration and data</p>
-            <div class="button-group" style="margin-top: 1rem;">
-                <button onclick="createBackup()" class="btn btn-primary">Create Backup Now</button>
-            </div>
-        </div>
-        <div class="card">
-            <h2>Restore</h2>
-            <p class="text-muted">Restore from a previous backup</p>
-            <div class="button-group" style="margin-top: 1rem;">
-                <button onclick="restoreBackup()" class="btn btn-warning">Restore from Backup</button>
-            </div>
-        </div>
-        <div class="card">
-            <h2>Maintenance Mode</h2>
-            <p class="text-muted">Enable maintenance mode to show 503 to all visitors</p>
-            <div class="button-group" style="margin-top: 1rem;">
-                <button onclick="toggleMaintenance(true)" class="btn btn-warning">Enable Maintenance</button>
-                <button onclick="toggleMaintenance(false)" class="btn">Disable Maintenance</button>
-            </div>
-        </div>
-        <script>
-        async function createBackup() {
-            try {
-                const resp = await fetch('`+adminAPIBase+`/backup', { method: 'POST' });
-                const data = await resp.json();
-                if (data.ok) { showSuccess('Backup created!'); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
-            } catch (e) {
-                showError('Error: ' + e.message);
-            }
-        }
-        async function restoreBackup() {
-            const confirmed = await showConfirm('Are you sure? This will overwrite current configuration.');
-            if (!confirmed) return;
-            try {
-                const resp = await fetch('`+adminAPIBase+`/backup/restore', { method: 'POST' });
-                const data = await resp.json();
-                if (data.ok) { showSuccess('Restore completed!'); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
-            } catch (e) {
-                showError('Error: ' + e.message);
-            }
-        }
-        async function toggleMaintenance(enable) {
-            try {
-                const resp = await fetch('`+adminAPIBase+`/restart', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: enable })
-                });
-                const data = await resp.json();
-                if (data.ok) { showSuccess('Maintenance mode ' + (enable ? 'enabled' : 'disabled')); } else { showError('Error: ' + (data.message || data.error || 'failed')); }
-            } catch (e) {
-                showError('Error: ' + e.message);
-            }
-        }
-        </script>`)
-}
-
-func (h *AdminHandler) renderSystemInfoPage() string {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	uptime := time.Since(h.startTime)
-
-	return h.renderAdminPage("system", "System Information", `
-        <div class="card">
-            <h2>Runtime</h2>
-            <table class="info-table">
-                <tr><td>Go Version</td><td>`+runtime.Version()+`</td></tr>
-                <tr><td>OS / Arch</td><td>`+runtime.GOOS+` / `+runtime.GOARCH+`</td></tr>
-                <tr><td>CPUs</td><td>`+strconv.Itoa(runtime.NumCPU())+`</td></tr>
-                <tr><td>Goroutines</td><td>`+strconv.Itoa(runtime.NumGoroutine())+`</td></tr>
-                <tr><td>Uptime</td><td>`+uptime.Round(time.Second).String()+`</td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h2>Memory</h2>
-            <table class="info-table">
-                <tr><td>Allocated</td><td>`+strconv.FormatUint(m.Alloc/1024/1024, 10)+` MB</td></tr>
-                <tr><td>Total Allocated</td><td>`+strconv.FormatUint(m.TotalAlloc/1024/1024, 10)+` MB</td></tr>
-                <tr><td>System Memory</td><td>`+strconv.FormatUint(m.Sys/1024/1024, 10)+` MB</td></tr>
-                <tr><td>GC Cycles</td><td>`+strconv.FormatUint(uint64(m.NumGC), 10)+`</td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h2>Engines</h2>
-            <table class="info-table">
-                <tr><td>Total</td><td>`+strconv.Itoa(len(h.engineMgr.ListEngines()))+`</td></tr>
-                <tr><td>Enabled</td><td>`+strconv.Itoa(h.engineMgr.EnabledCount())+`</td></tr>
-            </table>
-        </div>`)
-}
-
-// renderTorPage renders Tor hidden service admin page per AI.md PART 32
-// Per PART 32: Tor supports hidden service and optional outbound network routing
-func (h *AdminHandler) renderTorPage() string {
-	adminAPIBase := "/api/v1" + h.appConfig.AdminAPIPrefix() + "/config"
-	// Get hidden service info from TorService
-	statusStr := "Not available"
-	statusClass := "badge-error"
-	onionAddr := ""
-
-	if h.torSvc != nil {
-		info := h.torSvc.GetInfo()
-		if info != nil {
-			if status, ok := info["status"].(string); ok {
-				if status == "connected" {
-					statusStr = "Connected"
-					statusClass = "badge-success"
-				} else {
-					statusStr = status
-				}
-			}
-			if addr, ok := info["onion_address"].(string); ok {
-				onionAddr = addr
-			}
-		}
-	}
-
-	return h.renderAdminPage("tor", "Tor Hidden Service", `
-        <div class="card">
-            <h2>Hidden Service Status</h2>
-            <p class="text-muted">Per PART 32: Tor is auto-enabled when tor binary is installed. No configuration needed.</p>
-            <table class="info-table">
-                <tr><td>Status</td><td><span class="badge `+statusClass+`">`+statusStr+`</span></td></tr>
-                <tr><td>.onion Address</td><td><code>`+onionAddr+`</code></td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h2>Vanity Address</h2>
-            <p class="text-muted">Generate a custom .onion address with a specific prefix (e.g., "vidv")</p>
-            <div class="form-group">
-                <label for="vanity-prefix">Prefix (2-6 chars)</label>
-                <input type="text" id="vanity-prefix" placeholder="vidv" maxlength="6" pattern="[a-z2-7]{2,6}">
-            </div>
-            <div class="button-group">
-                <button onclick="startVanity()" class="btn btn-secondary">Start Generation</button>
-                <button onclick="stopVanity()" class="btn btn-warning">Stop</button>
-            </div>
-            <div id="vanity-status" class="text-muted" style="margin-top: 1rem;"></div>
-        </div>
-        <script>
-        async function startVanity() {
-            const prefix = document.getElementById('vanity-prefix').value;
-            if (!prefix || prefix.length < 2) { showError('Prefix must be at least 2 characters'); return; }
-            document.getElementById('vanity-status').textContent = 'Starting vanity generation for "' + prefix + '"...';
-            try {
-                const resp = await fetch('`+adminAPIBase+`/tor/vanity', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prefix: prefix })
-                });
-                const data = await resp.json();
-                if (data.ok) { showSuccess('Vanity generation started!'); pollVanityStatus(); }
-                else { showError('Error: ' + (data.message || data.error || 'failed')); }
-            } catch (e) { showError('Error: ' + e.message); }
-        }
-        async function stopVanity() {
-            try {
-                const resp = await fetch('`+adminAPIBase+`/tor/vanity', { method: 'DELETE' });
-                const data = await resp.json();
-                if (data.ok) { showSuccess('Vanity generation stopped'); }
-            } catch (e) { showError('Error: ' + e.message); }
-        }
-        function pollVanityStatus() {
-            setInterval(async () => {
-                try {
-                    const resp = await fetch('`+adminAPIBase+`/tor/vanity');
-                    const data = await resp.json();
-                    if (data.ok && data.data) {
-                        const s = data.data;
-                        document.getElementById('vanity-status').textContent =
-                            s.active ? 'Searching for "' + s.prefix + '": ' + s.attempts + ' attempts (' + s.elapsed_time + ')' :
-                            'Not running';
-                    }
-                } catch (e) {}
-            }, 2000);
-        }
-        </script>`)
 }
 
 // renderAdminTemplate renders admin pages using proper Go html/template per AI.md PART 13
@@ -4365,77 +3763,6 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 		log.Printf("admin template: execute %s: %v", templateName, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
-}
-
-// Helper to render admin pages with consistent layout (legacy - for inline HTML pages not yet converted)
-func (h *AdminHandler) renderAdminPage(active, title, content string) string {
-	return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>` + title + ` - Admin - ` + h.appConfig.Server.Branding.Title + `</title>
-    ` + adminStyles() + `
-</head>
-<body>
-    ` + h.renderAdminNav(active) + `
-    <main class="admin-main">
-        <h1>` + title + `</h1>
-        ` + content + `
-    </main>
-    <div id="toast-container" class="toast-container"></div>
-    ` + adminToastScript() + `
-</body>
-</html>`
-}
-
-// adminToastScript returns the toast notification JavaScript per PART 10/12 (no alerts)
-func adminToastScript() string {
-	return `<script>
-// Toast notification system (replaces alerts per AI.md PART 10)
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = 'toast toast-' + type;
-    toast.innerHTML = '<span class="toast-message">' + message + '</span><button class="toast-close" onclick="this.parentElement.remove()">&times;</button>';
-    container.appendChild(toast);
-    setTimeout(() => toast.classList.add('show'), 10);
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, 5000);
-}
-function showSuccess(msg) { showToast(msg, 'success'); }
-function showError(msg) { showToast(msg, 'error'); }
-function showWarning(msg) { showToast(msg, 'warning'); }
-
-// Custom confirm dialog (replaces confirm() per AI.md PART 10)
-function showConfirm(message) {
-    return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.innerHTML = '<div class="modal-dialog"><div class="modal-content"><p>' + message + '</p><div class="modal-actions"><button class="btn" onclick="this.closest(\'.modal-overlay\').remove(); window.__confirmResolve(false)">Cancel</button><button class="btn btn-primary" onclick="this.closest(\'.modal-overlay\').remove(); window.__confirmResolve(true)">Confirm</button></div></div></div>';
-        document.body.appendChild(overlay);
-        window.__confirmResolve = resolve;
-        setTimeout(() => overlay.classList.add('show'), 10);
-    });
-}
-</script>
-<style>
-.toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 10000; display: flex; flex-direction: column; gap: 0.5rem; }
-.toast { padding: 1rem 2rem 1rem 1rem; border-radius: 4px; color: #fff; display: flex; align-items: center; gap: 1rem; opacity: 0; transform: translateX(100%); transition: all 0.3s ease; max-width: 400px; }
-.toast.show { opacity: 1; transform: translateX(0); }
-.toast-success { background: #10b981; }
-.toast-error { background: #ef4444; }
-.toast-warning { background: #f59e0b; }
-.toast-info { background: #3b82f6; }
-.toast-close { background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); opacity: 0.7; }
-.toast-close:hover { opacity: 1; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10001; opacity: 0; transition: opacity 0.3s; }
-.modal-overlay.show { opacity: 1; }
-.modal-dialog { background: var(--card-bg, #282a36); border-radius: 8px; padding: 2rem; max-width: 400px; }
-.modal-actions { margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: flex-end; }
-</style>`
 }
 
 func adminStyles() string {

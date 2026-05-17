@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
 )
 
@@ -352,9 +353,11 @@ func Handler(appConfig *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Theme detection (light/dark/auto) - see theme.go
 		theme := DetectTheme(r)
+		lang := i18n.DetectLocale(r)
+		dir := i18n.Direction(lang)
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(generateSwaggerUI(appConfig, theme)))
+		w.Write([]byte(generateSwaggerUI(appConfig, theme, lang, dir)))
 	}
 }
 
@@ -370,7 +373,7 @@ func SpecHandler(appConfig *config.AppConfig) http.HandlerFunc {
 
 // generateSwaggerUI generates server-side rendered API documentation
 // Per AI.md PART 7: All assets embedded (no CDN). PART 16: Server-side rendered.
-func generateSwaggerUI(appConfig *config.AppConfig, theme string) string {
+func generateSwaggerUI(appConfig *config.AppConfig, theme, lang, dir string) string {
 	spec := GenerateSpec(appConfig)
 
 	// Parse spec to extract paths for rendering
@@ -421,7 +424,7 @@ func generateSwaggerUI(appConfig *config.AppConfig, theme string) string {
 	}
 
 	return fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en">
+<html lang="%s" dir="%s">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -466,6 +469,7 @@ func generateSwaggerUI(appConfig *config.AppConfig, theme string) string {
     </div>
 </body>
 </html>`,
+		lang, dir,
 		bg, text, accent, text, cardBg, border, accent, border, text, accent,
 		endpointRows,
 	)

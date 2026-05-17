@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"embed"
+	"html/template"
 	"io/fs"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/graphql"
 	"github.com/apimgr/vidveil/src/paths"
@@ -502,9 +504,19 @@ func (s *Server) setupRoutes() {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+		// Per AI.md PART 30: <html lang dir> must never be hardcoded — execute as template
+		tmpl, err := template.New("offline").Parse(string(data))
+		if err != nil {
+			http.Error(w, "template error", http.StatusInternalServerError)
+			return
+		}
+		lang := i18n.DetectLocale(r)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Write(data)
+		tmpl.Execute(w, map[string]string{
+			"Lang": lang,
+			"Dir":  i18n.Direction(lang),
+		})
 	})
 
 	// Debug endpoints (PART 6: only when --debug flag or DEBUG=true)
@@ -934,6 +946,29 @@ func (s *Server) ListenAndServe(addr string) error {
 		IdleTimeout:  idleTimeout,
 	}
 	return s.srv.ListenAndServe()
+}
+
+// Listen binds to the given address and returns the listener without accepting
+// connections. Call Serve(l) after privilege drop.
+// Per AI.md PART 24: bind privileged ports as root, then drop, then serve.
+func (s *Server) Listen(addr string) (net.Listener, error) {
+	return net.Listen("tcp", addr)
+}
+
+// ServeOn serves HTTP requests on the given pre-bound listener.
+// Per AI.md PART 24: called after privilege drop.
+func (s *Server) ServeOn(listener net.Listener) error {
+	readTimeout := parseDuration(s.appConfig.Server.Limits.ReadTimeout, 30*time.Second)
+	writeTimeout := parseDuration(s.appConfig.Server.Limits.WriteTimeout, 30*time.Second)
+	idleTimeout := parseDuration(s.appConfig.Server.Limits.IdleTimeout, 120*time.Second)
+
+	s.srv = &http.Server{
+		Handler:      s.router,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
+	}
+	return s.srv.Serve(listener)
 }
 
 // Serve serves on the given listener (for Tor hidden service)

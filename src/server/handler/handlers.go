@@ -381,12 +381,14 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 			w.Header().Set("Retry-After", "3600")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
+			lang := resolveLocale(r)
+			dir := i18n.Direction(lang)
+			w.Write([]byte(fmt.Sprintf(`<!DOCTYPE html>
+<html lang="%s" dir="%s">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance - ` + h.appConfig.Server.Branding.Title + `</title>
+    <title>Maintenance - `+h.appConfig.Server.Branding.Title+`</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -413,7 +415,7 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
         <p>Please check back shortly.</p>
     </div>
 </body>
-</html>`))
+</html>`, lang, dir)))
 			return
 		}
 

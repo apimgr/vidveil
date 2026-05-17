@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
 	"github.com/apimgr/vidveil/src/server/service/totp"
@@ -111,7 +112,7 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
 		if !h.epLimiters.AllowLogin(ip) {
 			w.Header().Set("Retry-After", "60")
-			h.renderLoginPageWithStatus(w, "Too many login attempts. Please try again later.", http.StatusTooManyRequests)
+			h.renderLoginPageWithStatus(w, r, "Too many login attempts. Please try again later.", http.StatusTooManyRequests)
 			return
 		}
 
@@ -174,7 +175,7 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 		errorMsg = "Invalid username or password"
 	}
 
-	h.renderLoginPage(w, errorMsg)
+	h.renderLoginPage(w, r, errorMsg)
 }
 
 // TwoFactorPage handles the 2FA verification step per AI.md PART 17
@@ -192,7 +193,7 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 		// Per AI.md PART 11: rate-limit 2FA attempts per IP
 		if !h.epLimiters.AllowLogin(r.RemoteAddr) {
 			w.Header().Set("Retry-After", "60")
-			h.renderTwoFactorPageWithStatus(w, "Too many attempts. Please try again later.", http.StatusTooManyRequests)
+			h.renderTwoFactorPageWithStatus(w, r, "Too many attempts. Please try again later.", http.StatusTooManyRequests)
 			return
 		}
 
@@ -286,30 +287,32 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.render2FAPage(w, errorMsg)
+	h.render2FAPage(w, r, errorMsg)
 }
 
 // renderTwoFactorPageWithStatus writes the given HTTP status then renders the 2FA page.
-func (h *AuthHandler) renderTwoFactorPageWithStatus(w http.ResponseWriter, errorMsg string, status int) {
+func (h *AuthHandler) renderTwoFactorPageWithStatus(w http.ResponseWriter, r *http.Request, errorMsg string, status int) {
 	w.WriteHeader(status)
-	h.render2FAPage(w, errorMsg)
+	h.render2FAPage(w, r, errorMsg)
 }
 
 // renderLoginPageWithStatus writes the given HTTP status then renders the login page.
-func (h *AuthHandler) renderLoginPageWithStatus(w http.ResponseWriter, errorMsg string, status int) {
+func (h *AuthHandler) renderLoginPageWithStatus(w http.ResponseWriter, r *http.Request, errorMsg string, status int) {
 	w.WriteHeader(status)
-	h.renderLoginPage(w, errorMsg)
+	h.renderLoginPage(w, r, errorMsg)
 }
 
 // render2FAPage renders the 2FA verification form using common.css per AI.md PART 16
-func (h *AuthHandler) render2FAPage(w http.ResponseWriter, errorMsg string) {
+func (h *AuthHandler) render2FAPage(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	lang := resolveLocale(r)
+	dir := i18n.Direction(lang)
 	errorHtml := ""
 	if errorMsg != "" {
 		errorHtml = fmt.Sprintf(`<div class="alert alert-error">%s</div>`, errorMsg)
 	}
 	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en" class="theme-dark">
+<html lang="%s" dir="%s" class="theme-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -327,9 +330,9 @@ func (h *AuthHandler) render2FAPage(w http.ResponseWriter, errorMsg string) {
             <form method="POST" id="2fa-form">
                 <div class="form-group">
                     <label for="code">Verification Code</label>
-                    <input type="text" id="code" name="code" maxlength="8" pattern="[0-9A-Za-z-]+" required autofocus autocomplete="one-time-code" placeholder="000000" class="text-center" style="letter-spacing: 0.5em; font-size: 1.2rem;">
+                    <input type="text" id="code" name="code" maxlength="8" pattern="[0-9A-Za-z-]+" required autofocus autocomplete="one-time-code" placeholder="000000" class="text-center code-input">
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%%;">Verify</button>
+                <button type="submit" class="btn btn-primary btn-full">Verify</button>
             </form>
             <p class="help-text text-center mt-md">Or enter a backup code if you don't have access to your authenticator</p>
             <p class="help-text text-center mt-lg">
@@ -338,19 +341,21 @@ func (h *AuthHandler) render2FAPage(w http.ResponseWriter, errorMsg string) {
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Branding.Title, errorHtml)
+</html>`, lang, dir, h.appConfig.Server.Branding.Title, errorHtml)
 	w.Write([]byte(html))
 }
 
 // renderLoginPage renders the admin login form using common.css styles per AI.md PART 16
-func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
+func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, r *http.Request, errorMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	lang := resolveLocale(r)
+	dir := i18n.Direction(lang)
 	errorHtml := ""
 	if errorMsg != "" {
 		errorHtml = fmt.Sprintf(`<div class="alert alert-error">%s</div>`, errorMsg)
 	}
 	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en" class="theme-dark">
+<html lang="%s" dir="%s" class="theme-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -374,7 +379,7 @@ func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
                     <label for="password">Password</label>
                     <input type="password" id="password" name="password" required placeholder="Enter your password">
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%%;">Login</button>
+                <button type="submit" class="btn btn-primary btn-full">Login</button>
             </form>
             <p class="help-text text-center mt-lg">
                 <a href="/">← Back to Search</a>
@@ -382,7 +387,7 @@ func (h *AuthHandler) renderLoginPage(w http.ResponseWriter, errorMsg string) {
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Branding.Title, errorHtml)
+</html>`, lang, dir, h.appConfig.Server.Branding.Title, errorHtml)
 	w.Write([]byte(html))
 }
 
@@ -396,8 +401,10 @@ func (h *AuthHandler) LogoutPage(w http.ResponseWriter, r *http.Request) {
 // PasswordForgotPage renders password forgot form using common.css per AI.md PART 16
 func (h *AuthHandler) PasswordForgotPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	lang := resolveLocale(r)
+	dir := i18n.Direction(lang)
 	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en" class="theme-dark">
+<html lang="%s" dir="%s" class="theme-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -417,15 +424,17 @@ func (h *AuthHandler) PasswordForgotPage(w http.ResponseWriter, r *http.Request)
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Branding.Title)
+</html>`, lang, dir, h.appConfig.Server.Branding.Title)
 	w.Write([]byte(html))
 }
 
 // PasswordResetPage handles password reset with token using common.css per AI.md PART 16
 func (h *AuthHandler) PasswordResetPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	lang := resolveLocale(r)
+	dir := i18n.Direction(lang)
 	html := fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en" class="theme-dark">
+<html lang="%s" dir="%s" class="theme-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -446,6 +455,6 @@ func (h *AuthHandler) PasswordResetPage(w http.ResponseWriter, r *http.Request) 
         </div>
     </div>
 </body>
-</html>`, h.appConfig.Server.Branding.Title)
+</html>`, lang, dir, h.appConfig.Server.Branding.Title)
 	w.Write([]byte(html))
 }

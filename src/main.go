@@ -695,10 +695,28 @@ func main() {
 	configWatcher.Start()
 	defer configWatcher.Stop()
 
-	// Start server in goroutine
+	// Per AI.md PART 24: bind privileged port as root BEFORE starting the goroutine
+	// so we can drop privileges while still in the main goroutine.
+	// This satisfies: "Bind privileged ports as root, then drop"
+	listenAddr := appConfig.Server.Address + ":" + appConfig.Server.Port
+	listener, err := srv.Listen(listenAddr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Failed to bind %s: %v\n", listenAddr, err)
+		os.Exit(1)
+	}
+
+	// Drop privileges to the vidveil system user after port is bound per AI.md PART 24.
+	// ShouldDropPrivileges() returns true only on Unix when current uid == 0.
+	if system.ShouldDropPrivileges() {
+		if err := system.DropPrivileges(appName); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ Failed to drop privileges: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("👤 Dropped privileges to %s\n", appName)
+	}
+
+	// Start server goroutine — serves on the pre-bound listener
 	go func() {
-		// Build listen address properly handling IPv6
-		listenAddr := appConfig.Server.Address + ":" + appConfig.Server.Port
 		// Per AI.md PART 13: Display Rules
 		// - Never show: 0.0.0.0, 127.0.0.1, localhost
 		// - Show only: One address, the most relevant
@@ -767,7 +785,8 @@ func main() {
 		}
 		fmt.Println()
 
-		if err := srv.ListenAndServe(listenAddr); err != nil && err != http.ErrServerClosed {
+		// Serve on the pre-bound listener (bound before privilege drop above)
+		if err := srv.ServeOn(listener); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "❌ Server error: %v\n", err)
 			os.Exit(1)
 		}

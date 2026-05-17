@@ -643,3 +643,131 @@ code {
 .mt-lg { margin-top: 1.5rem; }
 .mb-lg { margin-bottom: 1.5rem; }
 .text-sm { font-size: 0.875rem; }
+
+/* Dashboard — moved from inline per AI.md PART 16 (no inline CSS) */
+.status-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    font-size: 1.1rem;
+}
+.status-healthy { background: var(--color-success-bg, #d4edda); color: var(--color-success, #155724); }
+.status-degraded { background: var(--color-warning-bg, #fff3cd); color: var(--color-warning, #856404); }
+.status-unhealthy { background: var(--color-error-bg, #f8d7da); color: var(--color-error, #721c24); }
+.status-uptime { font-size: 0.9rem; opacity: 0.8; }
+
+.stat-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.resource-item { margin-bottom: 1rem; }
+.resource-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+.progress-bar {
+    height: 8px;
+    background: var(--bg-tertiary, #e9ecef);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    background: var(--accent, #007bff);
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+.quick-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--bg-tertiary, #f8f9fa);
+    border: 1px solid var(--border, #dee2e6);
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text, inherit);
+    transition: all 0.2s;
+}
+.quick-action-btn:hover {
+    background: var(--bg-hover, #e9ecef);
+    border-color: var(--accent, #007bff);
+}
+.quick-action-icon { font-size: 1.5rem; }
+.quick-action-label { font-size: 0.875rem; }
+
+.empty-state-mini {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-secondary, #6c757d);
+}
+
+/* Log viewer table — moved from inline per AI.md PART 16 (no inline CSS) */
+.log-filter-form {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.log-filter-form label { font-weight: 600; }
+.log-filter-form select,
+.log-filter-form input[type="text"] {
+    padding: 0.5rem;
+    border: 1px solid var(--border, #ddd);
+    border-radius: 4px;
+    background: var(--bg, #fff);
+    color: var(--text, inherit);
+}
+.log-filter-form input[type="text"] { min-width: 200px; }
+
+.log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+.log-table th {
+    background: var(--bg-secondary, #f5f5f5);
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border, #ddd);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.log-table td {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-subtle, #eee);
+}
+.log-entry:hover { background: var(--bg-hover, #f9f9f9); }
+.log-timestamp { white-space: nowrap; color: var(--text-secondary, #666); }
+.log-level { font-weight: 600; white-space: nowrap; }
+.log-level-DEBUG { color: #6c757d; }
+.log-level-INFO  { color: #17a2b8; }
+.log-level-WARN  { color: #ffc107; }
+.log-level-ERROR { color: #dc3545; }
+.log-message { word-break: break-all; }
+.log-info {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-secondary, #666);
+    border-top: 1px solid var(--border, #ddd);
+}

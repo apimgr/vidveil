@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 )
@@ -94,8 +95,10 @@ func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	lang := i18n.DetectLocale(r)
+	dir := i18n.Direction(lang)
 	fmt.Fprintf(w, `<!DOCTYPE html>
-<html lang="en">
+<html lang="%s" dir="%s">
 <head>
     <title>GraphQL Explorer - VidVeil</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -141,7 +144,7 @@ func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
         </div>
     </div>
 </body>
-</html>`, html.EscapeString(queryStr), resultHTML)
+</html>`, lang, dir, html.EscapeString(queryStr), resultHTML)
 }
 
 // executeQuery executes a GraphQL query

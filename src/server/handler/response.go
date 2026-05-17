@@ -243,23 +243,19 @@ func isOurCliClient(r *http.Request) bool {
 
 func isTextBrowser(r *http.Request) bool {
 	ua := r.Header.Get("User-Agent")
-	if len(ua) < 4 {
+	if len(ua) == 0 {
 		return false
 	}
-	ual := ""
-	for i := 0; i < len(ua) && i < 8; i++ {
-		c := ua[i]
-		if c >= 'A' && c <= 'Z' {
-			// to lowercase
-			c = c + 32
-		}
-		ual += string(c)
-	}
-	// Check for text browser signatures
-	return ual[:4] == "lynx" ||
-		ual[:3] == "w3m" ||
-		(len(ual) >= 5 && ual[:5] == "links") ||
-		(len(ual) >= 6 && ual[:6] == "elinks")
+	// Lowercase the UA for prefix matching (ASCII only — UA values are ASCII)
+	ual := strings.ToLower(ua)
+	// Check for all known text/terminal browser signatures
+	return strings.HasPrefix(ual, "lynx") ||
+		strings.HasPrefix(ual, "w3m") ||
+		strings.HasPrefix(ual, "links") ||
+		strings.HasPrefix(ual, "elinks") ||
+		strings.HasPrefix(ual, "browsh/") ||
+		strings.HasPrefix(ual, "carbonyl/") ||
+		strings.HasPrefix(ual, "netsurf")
 }
 
 func isHttpTool(r *http.Request) bool {

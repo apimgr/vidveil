@@ -611,9 +611,8 @@ func (s *Server) setupRoutes() {
 			r.Get("/engines/{name}", h.DebugEngine)
 		})
 
-		// Per AI.md PART 14: API health is canonical at /api/{api_version}/server/healthz.
-		// /api/{api_version}/healthz is kept as a backwards-compat alias and may be removed in a future major.
-		r.Get("/healthz", h.APIHealthCheck)
+		// Per AI.md PART 14: canonical health route is /api/{api_version}/server/healthz.
+		// Legacy /api/{api_version}/healthz alias removed — spec requires no shims.
 		r.Get("/version", h.APIVersion)
 
 		// Server API per AI.md PART 14

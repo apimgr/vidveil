@@ -3,8 +3,10 @@ package handler
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -230,11 +232,28 @@ func (m *ServerMetrics) GetActiveConnections() int64 {
 	return atomic.LoadInt64(&m.activeConnections)
 }
 
-// Handler returns the Prometheus metrics handler
+// isLoopbackRequest reports whether the request originates from localhost.
+// Used to enforce internal-only access when no bearer token is configured.
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(strings.TrimSpace(host))
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
+}
+
+// Handler returns the Prometheus metrics handler.
+// Per AI.md PART 14/21: metrics are internal-only.
+// When a token is configured, it is required for all requests.
+// When no token is configured, access is restricted to loopback (127.x/::1).
 func (m *ServerMetrics) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check for token if metrics require auth
 		if m.appConfig.Server.Metrics.Token != "" {
+			// Token configured: require it from all clients
 			token := r.Header.Get("Authorization")
 			if token != "Bearer "+m.appConfig.Server.Metrics.Token {
 				token = r.URL.Query().Get("token")
@@ -242,6 +261,12 @@ func (m *ServerMetrics) Handler() http.HandlerFunc {
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
+			}
+		} else {
+			// No token: restrict to loopback only (internal-only per PART 14)
+			if !isLoopbackRequest(r) {
+				http.Error(w, "Forbidden: metrics are internal-only", http.StatusForbidden)
+				return
 			}
 		}
 

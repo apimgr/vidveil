@@ -765,6 +765,46 @@ func main() {
 		}
 	}()
 
+	// DB health monitor — auto-enters/exits maintenance mode per AI.md PART 5/6.
+	// Maintenance mode triggers ONLY for DB connection failure or file-write failure.
+	// Self-heals continuously (retry every 30s) — no human intervention required.
+	maintMgr := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
+	go func() {
+		const healInterval = 30 * time.Second
+		inMaintenance := false
+		for {
+			// Test DB connectivity
+			dbErr := migrationMgr.GetDB().Ping()
+			// Test file-write ability (write to a probe file in the data dir)
+			probeFile := filepath.Join(dataDir, ".write_probe")
+			writeErr := os.WriteFile(probeFile, []byte("probe"), 0o600)
+			if writeErr == nil {
+				os.Remove(probeFile)
+			}
+			unhealthy := dbErr != nil || writeErr != nil
+
+			if unhealthy && !inMaintenance {
+				// Auto-enter maintenance mode
+				if enterErr := maintMgr.SetMaintenanceMode(true); enterErr == nil {
+					inMaintenance = true
+					if dbErr != nil {
+						fmt.Fprintf(os.Stderr, "[WARN] DB unavailable (%v) — entering maintenance mode; retrying every %s\n", dbErr, healInterval)
+					} else {
+						fmt.Fprintf(os.Stderr, "[WARN] File-write failure (%v) — entering maintenance mode; retrying every %s\n", writeErr, healInterval)
+					}
+				}
+			} else if !unhealthy && inMaintenance {
+				// Self-heal: condition cleared, exit maintenance mode
+				if exitErr := maintMgr.SetMaintenanceMode(false); exitErr == nil {
+					inMaintenance = false
+					fmt.Println("[INFO] Health restored — exiting maintenance mode")
+				}
+			}
+
+			time.Sleep(healInterval)
+		}
+	}()
+
 	// Configure signal handlers per AI.md PART 8
 	// SIGUSR1 (10) → Reopen logs (log rotation)
 	// SIGUSR2 (12) → Status dump

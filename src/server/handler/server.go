@@ -211,9 +211,9 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
-			"ok":    false,
-			"error": "Method not allowed",
-			"code":  "METHOD_NOT_ALLOWED",
+			"ok":      false,
+			"error":   "ERR_METHOD_NOT_ALLOWED",
+			"message": "Method not allowed",
 		})
 		return
 	}
@@ -221,9 +221,9 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 	// Parse form data
 	if err := r.ParseForm(); err != nil {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"ok":    false,
-			"error": "Invalid form data",
-			"code":  "INVALID_REQUEST",
+			"ok":      false,
+			"error":   "ERR_INVALID_REQUEST",
+			"message": "Invalid form data",
 		})
 		return
 	}
@@ -234,9 +234,9 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 
 	if subject == "" || message == "" {
 		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"ok":    false,
-			"error": "Subject and message are required",
-			"code":  "MISSING_FIELDS",
+			"ok":      false,
+			"error":   "ERR_MISSING_FIELDS",
+			"message": "Subject and message are required",
 		})
 		return
 	}

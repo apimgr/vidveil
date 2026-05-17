@@ -2321,6 +2321,18 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 				h.jsonError(w, "Failed to save configuration", "ERR_INTERNAL", http.StatusInternalServerError)
 				return
 			}
+
+			// Audit log per AI.md PART 11: every admin action and config change must be logged
+			actorUsername := ""
+			if cookie, cookieErr := r.Cookie(adminSessionCookieName); cookieErr == nil {
+				if session, ok := h.sessions[cookie.Value]; ok {
+					actorUsername = session.username
+				}
+			}
+			h.logger.Audit("config.updated", actorUsername, "config", map[string]interface{}{
+				"changes": updates,
+				"ip":      r.RemoteAddr,
+			})
 		}
 
 		WriteJSON(w, http.StatusOK, map[string]interface{}{

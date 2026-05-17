@@ -309,8 +309,7 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 		// This ensures X-RateLimit-Remaining reflects the count AFTER this request
 		allowed := l.Allow(ip)
 
-		// Set rate limit headers per PART 12 (after Allow() for accurate remaining count)
-		w.Header().Set("X-RateLimit-Limit", itoa(l.requests))
+		// Set rate limit headers — omit X-RateLimit-Limit (threshold disclosure, PART 11)
 		w.Header().Set("X-RateLimit-Remaining", itoa(l.Remaining(ip)))
 		w.Header().Set("X-RateLimit-Reset", itoa(int(l.Reset(ip).Unix())))
 
@@ -333,9 +332,10 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// SetHeaders sets rate limit response headers
+// SetHeaders sets rate limit response headers.
+// X-RateLimit-Limit is intentionally omitted — exposing the exact threshold
+// lets attackers tune request pace to stay under it (PART 11).
 func (l *RateLimiter) SetHeaders(w http.ResponseWriter, ip string) {
-	w.Header().Set("X-RateLimit-Limit", itoa(l.requests))
 	w.Header().Set("X-RateLimit-Remaining", itoa(l.Remaining(ip)))
 	w.Header().Set("X-RateLimit-Reset", itoa(int(l.Reset(ip).Unix())))
 }

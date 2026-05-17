@@ -460,6 +460,17 @@ func ParseCLIGlobalFlags(args []string) []string {
 			} else {
 				i++
 			}
+		case "--lang":
+			// Per AI.md PART 8: --lang {code} — set UI/output language
+			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			if hasFlagValue {
+				// Store in env for downstream use; i18n is handled server-side for
+				// web content, but the CLI uses this for Accept-Language headers.
+				os.Setenv("VIDVEIL_LANG", flagValue)
+				i = nextIndex + 1
+			} else {
+				i++
+			}
 		case "--timeout":
 			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
 			if hasFlagValue {
@@ -654,10 +665,23 @@ func LoadCLIConfigFromFile() error {
 	return nil
 }
 
-// EnsureCLIConfigFilePermissions normalizes the selected cli.yml file to user-only access.
+// EnsureCLIConfigFilePermissions checks that cli.yml is not group/world-readable.
+// Per AI.md PART 33: if the file is world/group-readable (mode & 0o077 != 0), write a
+// warning to stderr and return an error — never silently chmod it, as a compromised
+// file must be noticed, not silently "fixed". The user must run chmod 0600 manually.
 func EnsureCLIConfigFilePermissions(configFilePath string) error {
-	if err := os.Chmod(configFilePath, 0600); err != nil {
-		return fmt.Errorf("setting CLI config file permissions: %w", err)
+	info, err := os.Stat(configFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("stating CLI config file: %w", err)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		fmt.Fprintf(os.Stderr, "WARNING: config file %s has insecure permissions (%s). "+
+			"Run: chmod 0600 %s\n", configFilePath, info.Mode().Perm(), configFilePath)
+		return fmt.Errorf("config file %s has insecure permissions; run: chmod 0600 %s",
+			configFilePath, configFilePath)
 	}
 	if err := paths.EnsurePathOwnership(configFilePath); err != nil {
 		return fmt.Errorf("verifying CLI config file ownership: %w", err)
@@ -666,16 +690,22 @@ func EnsureCLIConfigFilePermissions(configFilePath string) error {
 	return nil
 }
 
-// EnsureCLIDefaultTokenFilePermissions normalizes the default token file to user-only access.
+// EnsureCLIDefaultTokenFilePermissions checks that the token file is not group/world-readable.
+// Per AI.md PART 33: if the file is world/group-readable (mode & 0o077 != 0), write a
+// warning to stderr and return an error — never silently chmod it.
 func EnsureCLIDefaultTokenFilePermissions(tokenFilePath string) error {
-	if _, err := os.Stat(tokenFilePath); err != nil {
+	info, err := os.Stat(tokenFilePath)
+	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 		return fmt.Errorf("stating CLI token file: %w", err)
 	}
-	if err := os.Chmod(tokenFilePath, 0600); err != nil {
-		return fmt.Errorf("setting CLI token file permissions: %w", err)
+	if info.Mode().Perm()&0o077 != 0 {
+		fmt.Fprintf(os.Stderr, "WARNING: token file %s has insecure permissions (%s). "+
+			"Run: chmod 0600 %s\n", tokenFilePath, info.Mode().Perm(), tokenFilePath)
+		return fmt.Errorf("token file %s has insecure permissions; run: chmod 0600 %s",
+			tokenFilePath, tokenFilePath)
 	}
 	if err := paths.EnsurePathOwnership(tokenFilePath); err != nil {
 		return fmt.Errorf("verifying CLI token file ownership: %w", err)

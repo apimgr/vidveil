@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/ratelimit"
 	"github.com/apimgr/vidveil/src/server/service/totp"
 )
 
@@ -26,9 +27,10 @@ type PendingAuth struct {
 
 // AuthHandler handles admin authentication routes per AI.md PART 17
 type AuthHandler struct {
-	appConfig *config.AppConfig
-	adminHdl  *AdminHandler
-	totpSvc   *totp.TOTPService
+	appConfig    *config.AppConfig
+	adminHdl     *AdminHandler
+	totpSvc      *totp.TOTPService
+	epLimiters   *ratelimit.EndpointLimiters
 	// pendingAuth stores pending 2FA authentication tokens
 	pendingAuth map[string]*PendingAuth
 	mu          sync.RWMutex
@@ -40,6 +42,8 @@ func NewAuthHandler(appConfig *config.AppConfig) *AuthHandler {
 		appConfig:   appConfig,
 		totpSvc:     totp.NewTOTPService(appConfig.Server.Branding.Title),
 		pendingAuth: make(map[string]*PendingAuth),
+		// Per AI.md PART 11: rate-limit auth endpoints (login, 2FA, password reset)
+		epLimiters: ratelimit.NewEndpointLimiters(appConfig.Server.RateLimit.Enabled),
 	}
 }
 
@@ -103,6 +107,14 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 
 	errorMsg := ""
 	if r.Method == http.MethodPost {
+		// Per AI.md PART 11: rate-limit login attempts per IP
+		ip := r.RemoteAddr
+		if !h.epLimiters.AllowLogin(ip) {
+			w.Header().Set("Retry-After", "60")
+			h.renderLoginPageWithStatus(w, "Too many login attempts. Please try again later.", http.StatusTooManyRequests)
+			return
+		}
+
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
@@ -178,6 +190,13 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 	errorMsg := ""
 
 	if r.Method == http.MethodPost {
+		// Per AI.md PART 11: rate-limit 2FA attempts per IP
+		if !h.epLimiters.AllowLogin(r.RemoteAddr) {
+			w.Header().Set("Retry-After", "60")
+			h.renderTwoFactorPageWithStatus(w, "Too many attempts. Please try again later.", http.StatusTooManyRequests)
+			return
+		}
+
 		code := r.FormValue("code")
 
 		// Get pending auth (without removing yet)
@@ -271,6 +290,18 @@ func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render2FAPage(w, errorMsg)
+}
+
+// renderTwoFactorPageWithStatus writes the given HTTP status then renders the 2FA page.
+func (h *AuthHandler) renderTwoFactorPageWithStatus(w http.ResponseWriter, errorMsg string, status int) {
+	w.WriteHeader(status)
+	h.render2FAPage(w, errorMsg)
+}
+
+// renderLoginPageWithStatus writes the given HTTP status then renders the login page.
+func (h *AuthHandler) renderLoginPageWithStatus(w http.ResponseWriter, errorMsg string, status int) {
+	w.WriteHeader(status)
+	h.renderLoginPage(w, errorMsg)
 }
 
 // render2FAPage renders the 2FA verification form using common.css per AI.md PART 16

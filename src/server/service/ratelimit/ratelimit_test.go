@@ -208,9 +208,10 @@ func TestRateLimitHeaders(t *testing.T) {
 
 	middleware.ServeHTTP(rr, req)
 
-	// Check rate limit headers
-	if rr.Header().Get("X-RateLimit-Limit") == "" {
-		t.Error("Missing X-RateLimit-Limit header")
+	// Check rate limit headers — X-RateLimit-Limit is intentionally absent
+	// (threshold disclosure, PART 11: must not reveal the exact threshold)
+	if rr.Header().Get("X-RateLimit-Limit") != "" {
+		t.Error("X-RateLimit-Limit must not be set (threshold disclosure risk per AI.md PART 11)")
 	}
 
 	if rr.Header().Get("X-RateLimit-Remaining") == "" {
@@ -264,8 +265,16 @@ func TestSetHeaders(t *testing.T) {
 	rr := httptest.NewRecorder()
 	limiter.SetHeaders(rr, "192.168.1.1")
 
-	if rr.Header().Get("X-RateLimit-Limit") != "10" {
-		t.Errorf("Expected X-RateLimit-Limit=10, got %s", rr.Header().Get("X-RateLimit-Limit"))
+	// X-RateLimit-Limit must not be set (threshold disclosure, AI.md PART 11)
+	if rr.Header().Get("X-RateLimit-Limit") != "" {
+		t.Errorf("X-RateLimit-Limit must not be set, got %s", rr.Header().Get("X-RateLimit-Limit"))
+	}
+	// Remaining and Reset must be present
+	if rr.Header().Get("X-RateLimit-Remaining") == "" {
+		t.Error("Missing X-RateLimit-Remaining header")
+	}
+	if rr.Header().Get("X-RateLimit-Reset") == "" {
+		t.Error("Missing X-RateLimit-Reset header")
 	}
 }
 

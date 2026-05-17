@@ -386,7 +386,10 @@ func TestLoadCLIConfigFromFilePreservesExistingServerPrimary(t *testing.T) {
 	}
 }
 
-func TestLoadCLIConfigFromFileNormalizesConfigPermissions(t *testing.T) {
+// TestLoadCLIConfigFromFileRejectsInsecureConfigPermissions verifies that when
+// cli.yml has world/group-readable permissions the CLI returns an error and writes
+// a warning to stderr — it must NOT silently chmod the file (AI.md PART 33).
+func TestLoadCLIConfigFromFileRejectsInsecureConfigPermissions(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("APPDATA", filepath.Join(homeDir, "AppData", "Roaming"))
@@ -413,23 +416,23 @@ func TestLoadCLIConfigFromFileNormalizesConfigPermissions(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(cliConfigFilePath), 0700); err != nil {
 		t.Fatalf("creating config dir: %v", err)
 	}
+	// Write with insecure (world-readable) permissions
 	if err := os.WriteFile(cliConfigFilePath, []byte("server:\n  primary: https://configured.example.com\n"), 0644); err != nil {
 		t.Fatalf("writing config file: %v", err)
 	}
 
-	if err := LoadCLIConfigFromFile(); err != nil {
-		t.Fatalf("loading config: %v", err)
+	// Per AI.md PART 33: must return an error, not silently fix the file
+	if err := LoadCLIConfigFromFile(); err == nil {
+		t.Fatal("expected LoadCLIConfigFromFile to return an error for insecure config permissions, got nil")
 	}
 
+	// File must still have the original insecure permissions — never silently fixed
 	fileInfo, err := os.Stat(cliConfigFilePath)
 	if err != nil {
 		t.Fatalf("stating config file: %v", err)
 	}
-	if fileInfo.Mode().Perm() != 0600 {
-		t.Fatalf("config file permissions = %v, want %v", fileInfo.Mode().Perm(), os.FileMode(0600))
-	}
-	if err := paths.EnsurePathOwnership(cliConfigFilePath); err != nil {
-		t.Fatalf("verifying config ownership: %v", err)
+	if fileInfo.Mode().Perm()&0o077 == 0 {
+		t.Fatal("EnsureCLIConfigFilePermissions must NOT silently chmod the file; permissions were changed")
 	}
 }
 
@@ -712,7 +715,10 @@ func TestLoadCLIConfigFromFileTokenFileFlagOverridesEnvironment(t *testing.T) {
 	}
 }
 
-func TestLoadCLIConfigFromFileNormalizesDefaultTokenFilePermissions(t *testing.T) {
+// TestLoadCLIConfigFromFileRejectsInsecureTokenFilePermissions verifies that when
+// the default token file has world/group-readable permissions the CLI returns an error
+// and must NOT silently chmod the file (AI.md PART 33).
+func TestLoadCLIConfigFromFileRejectsInsecureTokenFilePermissions(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("APPDATA", filepath.Join(homeDir, "AppData", "Roaming"))
@@ -740,27 +746,23 @@ func TestLoadCLIConfigFromFileNormalizesDefaultTokenFilePermissions(t *testing.T
 	if err := os.MkdirAll(filepath.Dir(defaultTokenFilePath), 0700); err != nil {
 		t.Fatalf("creating token dir: %v", err)
 	}
+	// Write with insecure (world-readable) permissions
 	if err := os.WriteFile(defaultTokenFilePath, []byte("default-token\n"), 0644); err != nil {
 		t.Fatalf("writing token file: %v", err)
 	}
 
-	if err := LoadCLIConfigFromFile(); err != nil {
-		t.Fatalf("loading config: %v", err)
+	// Per AI.md PART 33: must return an error, not silently fix the file
+	if err := LoadCLIConfigFromFile(); err == nil {
+		t.Fatal("expected LoadCLIConfigFromFile to return an error for insecure token permissions, got nil")
 	}
 
-	if cliConfig.Server.Token != "default-token" {
-		t.Fatalf("token = %q, want %q", cliConfig.Server.Token, "default-token")
-	}
-
+	// File must still have the original insecure permissions — never silently fixed
 	fileInfo, err := os.Stat(defaultTokenFilePath)
 	if err != nil {
 		t.Fatalf("stating token file: %v", err)
 	}
-	if fileInfo.Mode().Perm() != 0600 {
-		t.Fatalf("token file permissions = %v, want %v", fileInfo.Mode().Perm(), os.FileMode(0600))
-	}
-	if err := paths.EnsurePathOwnership(defaultTokenFilePath); err != nil {
-		t.Fatalf("verifying token ownership: %v", err)
+	if fileInfo.Mode().Perm()&0o077 == 0 {
+		t.Fatal("EnsureCLIDefaultTokenFilePermissions must NOT silently chmod the file; permissions were changed")
 	}
 }
 

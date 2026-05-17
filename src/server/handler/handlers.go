@@ -16,6 +16,7 @@ import (
 	_ "image/png"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -2673,6 +2674,42 @@ func (h *SearchHandler) DebugEnginesList(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// isPrivateHost resolves hostname and returns true if any resolved address
+// falls in a private, loopback, link-local, or unique-local range.
+// Used to block SSRF attacks on the proxy endpoints.
+func isPrivateHost(hostname string) bool {
+	addrs, err := net.LookupHost(hostname)
+	if err != nil {
+		// Unresolvable host — treat as private to be safe
+		return true
+	}
+	for _, addr := range addrs {
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			continue
+		}
+		// Check all private/reserved ranges
+		privateRanges := []string{
+			"10.0.0.0/8",
+			"172.16.0.0/12",
+			"192.168.0.0/16",
+			"127.0.0.0/8",
+			"169.254.0.0/16",
+			"100.64.0.0/10",
+			"::1/128",
+			"fc00::/7",
+			"fe80::/10",
+		}
+		for _, cidr := range privateRanges {
+			_, network, parseErr := net.ParseCIDR(cidr)
+			if parseErr == nil && network.Contains(ip) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ProxyThumbnail proxies external thumbnails to prevent tracking
 // Per IDEA.md: Privacy proxy for thumbnails
 func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
@@ -2693,6 +2730,12 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 	// Validate URL
 	parsedURL, err := url.Parse(thumbURL)
 	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		http.Error(w, "Invalid thumbnail URL", http.StatusBadRequest)
+		return
+	}
+
+	// SSRF guard: block requests targeting private/loopback/link-local addresses
+	if isPrivateHost(parsedURL.Hostname()) {
 		http.Error(w, "Invalid thumbnail URL", http.StatusBadRequest)
 		return
 	}
@@ -2846,6 +2889,12 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 	// Validate URL
 	parsedURL, err := url.Parse(videoURL)
 	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		http.Error(w, "Invalid video URL", http.StatusBadRequest)
+		return
+	}
+
+	// SSRF guard: block requests targeting private/loopback/link-local addresses
+	if isPrivateHost(parsedURL.Hostname()) {
 		http.Error(w, "Invalid video URL", http.StatusBadRequest)
 		return
 	}

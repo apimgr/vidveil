@@ -306,12 +306,15 @@ type LetsEncryptConfig struct {
 	DNSProviderKey  string `yaml:"dns_provider_key"`
 }
 
-// MetricsConfig holds Prometheus metrics settings
+// MetricsConfig holds Prometheus metrics settings per AI.md PART 21
 type MetricsConfig struct {
-	Enabled       bool   `yaml:"enabled"`
-	Endpoint      string `yaml:"endpoint"`
-	IncludeSystem bool   `yaml:"include_system"`
-	Token         string `yaml:"token"`
+	Enabled         bool      `yaml:"enabled"`
+	Endpoint        string    `yaml:"endpoint"`
+	IncludeSystem   bool      `yaml:"include_system"`
+	IncludeRuntime  bool      `yaml:"include_runtime"`
+	Token           string    `yaml:"token"`
+	DurationBuckets []float64 `yaml:"duration_buckets"`
+	SizeBuckets     []float64 `yaml:"size_buckets"`
 }
 
 // GeoIPConfig holds GeoIP settings per AI.md PART 20
@@ -843,9 +846,12 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			Metrics: MetricsConfig{
-				Enabled:       false,
-				Endpoint:      "/metrics",
-				IncludeSystem: true,
+				Enabled:        false,
+				Endpoint:       "/metrics",
+				IncludeSystem:  true,
+				IncludeRuntime: true,
+				DurationBuckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+				SizeBuckets:     []float64{100, 1000, 10000, 100000, 1000000, 10000000},
 			},
 			Logs: LogsConfig{
 				Level: "info",

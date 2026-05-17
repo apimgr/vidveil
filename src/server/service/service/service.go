@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/apimgr/vidveil/src/common/terminal"
 )
 
 // SystemServiceManager handles system service management
@@ -177,6 +179,28 @@ func (m *SystemServiceManager) linuxStatus() (string, error) {
 		}
 		return status, nil
 	}
+	if m.hasOpenRC() {
+		out, err := exec.Command("rc-service", m.name, "status").CombinedOutput()
+		if err != nil {
+			return "stopped", nil
+		}
+		if strings.Contains(string(out), "started") {
+			return "running", nil
+		}
+		return "stopped", nil
+	}
+	if m.hasSysVinit() {
+		initScript := filepath.Join("/etc/init.d", m.name)
+		out, err := exec.Command(initScript, "status").CombinedOutput()
+		if err != nil {
+			return "stopped", nil
+		}
+		outStr := strings.ToLower(string(out))
+		if strings.Contains(outStr, "running") {
+			return "running", nil
+		}
+		return "stopped", nil
+	}
 	if m.hasRunit() {
 		out, err := exec.Command("sv", "status", m.name).CombinedOutput()
 		if err != nil {
@@ -229,10 +253,16 @@ func (m *SystemServiceManager) bsdStatus() (string, error) {
 	return "stopped", nil
 }
 
-// Linux - systemd and runit support
+// Linux - systemd, OpenRC, SysVinit, and runit support
 func (m *SystemServiceManager) linuxStart() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "start", m.name)
+	}
+	if m.hasOpenRC() {
+		return runCmd("rc-service", m.name, "start")
+	}
+	if m.hasSysVinit() {
+		return runCmd(filepath.Join("/etc/init.d", m.name), "start")
 	}
 	if m.hasRunit() {
 		return runCmd("sv", "start", m.name)
@@ -244,6 +274,12 @@ func (m *SystemServiceManager) linuxStop() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "stop", m.name)
 	}
+	if m.hasOpenRC() {
+		return runCmd("rc-service", m.name, "stop")
+	}
+	if m.hasSysVinit() {
+		return runCmd(filepath.Join("/etc/init.d", m.name), "stop")
+	}
 	if m.hasRunit() {
 		return runCmd("sv", "stop", m.name)
 	}
@@ -253,6 +289,12 @@ func (m *SystemServiceManager) linuxStop() error {
 func (m *SystemServiceManager) linuxRestart() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "restart", m.name)
+	}
+	if m.hasOpenRC() {
+		return runCmd("rc-service", m.name, "restart")
+	}
+	if m.hasSysVinit() {
+		return runCmd(filepath.Join("/etc/init.d", m.name), "restart")
 	}
 	if m.hasRunit() {
 		return runCmd("sv", "restart", m.name)
@@ -264,6 +306,12 @@ func (m *SystemServiceManager) linuxReload() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "reload", m.name)
 	}
+	if m.hasOpenRC() {
+		return runCmd("rc-service", m.name, "reload")
+	}
+	if m.hasSysVinit() {
+		return runCmd(filepath.Join("/etc/init.d", m.name), "reload")
+	}
 	if m.hasRunit() {
 		return runCmd("sv", "hup", m.name)
 	}
@@ -274,15 +322,27 @@ func (m *SystemServiceManager) linuxInstall() error {
 	if m.hasSystemd() {
 		return m.installSystemd()
 	}
+	if m.hasOpenRC() {
+		return m.installOpenRC()
+	}
+	if m.hasSysVinit() {
+		return m.installSysVinit()
+	}
 	if m.hasRunit() {
 		return m.installRunit()
 	}
-	return fmt.Errorf("no supported service manager found (need systemd or runit)")
+	return fmt.Errorf("no supported service manager found (need systemd, OpenRC, SysVinit, or runit)")
 }
 
 func (m *SystemServiceManager) linuxUninstall() error {
 	if m.hasSystemd() {
 		return m.uninstallSystemd()
+	}
+	if m.hasOpenRC() {
+		return m.uninstallOpenRC()
+	}
+	if m.hasSysVinit() {
+		return m.uninstallSysVinit()
 	}
 	if m.hasRunit() {
 		return m.uninstallRunit()
@@ -294,6 +354,15 @@ func (m *SystemServiceManager) linuxDisable() error {
 	if m.hasSystemd() {
 		return runCmd("systemctl", "disable", m.name)
 	}
+	if m.hasOpenRC() {
+		return runCmd("rc-update", "del", m.name, "default")
+	}
+	if m.hasSysVinit() {
+		if _, err := exec.LookPath("update-rc.d"); err == nil {
+			return runCmd("update-rc.d", m.name, "remove")
+		}
+		return runCmd("chkconfig", "--del", m.name)
+	}
 	if m.hasRunit() {
 		runPath := filepath.Join("/etc/service", m.name)
 		return os.Remove(runPath)
@@ -304,6 +373,23 @@ func (m *SystemServiceManager) linuxDisable() error {
 func (m *SystemServiceManager) hasSystemd() bool {
 	_, err := exec.LookPath("systemctl")
 	return err == nil
+}
+
+func (m *SystemServiceManager) hasOpenRC() bool {
+	_, err := os.Stat("/sbin/openrc-run")
+	return err == nil
+}
+
+func (m *SystemServiceManager) hasSysVinit() bool {
+	if m.hasSystemd() || m.hasOpenRC() {
+		return false
+	}
+	if _, err := os.Stat("/etc/init.d"); err != nil {
+		return false
+	}
+	_, errUpd := exec.LookPath("update-rc.d")
+	_, errChk := exec.LookPath("chkconfig")
+	return errUpd == nil || errChk == nil
 }
 
 func (m *SystemServiceManager) hasRunit() bool {
@@ -355,7 +441,7 @@ WantedBy=multi-user.target
 		return fmt.Errorf("failed to enable service: %w", err)
 	}
 
-	fmt.Printf("✅ Installed systemd service: %s\n", unitPath)
+	fmt.Printf("%s Installed systemd service: %s\n", terminal.StatusIcon(true), unitPath)
 	return nil
 }
 
@@ -370,7 +456,171 @@ func (m *SystemServiceManager) uninstallSystemd() error {
 
 	_ = runCmd("systemctl", "daemon-reload")
 
-	fmt.Printf("✅ Uninstalled systemd service: %s\n", m.name)
+	fmt.Printf("%s Uninstalled systemd service: %s\n", terminal.StatusIcon(true), m.name)
+	return nil
+}
+
+func (m *SystemServiceManager) installOpenRC() error {
+	initPath := filepath.Join("/etc/init.d", m.name)
+
+	// Per AI.md PART 24: OpenRC init script
+	content := fmt.Sprintf(`#!/sbin/openrc-run
+# Service identity comes from the internal name so config/data paths stay
+# stable across binary renames.
+
+name="%s"
+description="%s"
+command="%s"
+command_args=""
+command_user="%s:%s"
+pidfile="/var/run/apimgr/%s.pid"
+command_background=true
+output_log="/var/log/apimgr/%s/server.log"
+error_log="/var/log/apimgr/%s/error.log"
+
+depend() {
+    need net
+    after firewall
+    use dns logger
+}
+
+start_pre() {
+    checkpath -d -m 0755 -o %s:%s /var/run/apimgr
+    checkpath -d -m 0755 -o %s:%s /var/log/apimgr/%s
+}
+`, m.name, m.description, m.execPath,
+		m.name, m.name,
+		m.name,
+		m.name,
+		m.name,
+		m.name, m.name,
+		m.name, m.name, m.name)
+
+	if err := os.WriteFile(initPath, []byte(content), 0755); err != nil {
+		return fmt.Errorf("failed to write OpenRC init script: %w", err)
+	}
+
+	if err := runCmd("rc-update", "add", m.name, "default"); err != nil {
+		return fmt.Errorf("failed to enable OpenRC service: %w", err)
+	}
+
+	fmt.Printf("%s Installed OpenRC service: %s\n", terminal.StatusIcon(true), initPath)
+	return nil
+}
+
+func (m *SystemServiceManager) uninstallOpenRC() error {
+	_ = runCmd("rc-service", m.name, "stop")
+	_ = runCmd("rc-update", "del", m.name, "default")
+
+	initPath := filepath.Join("/etc/init.d", m.name)
+	if err := os.Remove(initPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove OpenRC init script: %w", err)
+	}
+
+	fmt.Printf("%s Uninstalled OpenRC service: %s\n", terminal.StatusIcon(true), m.name)
+	return nil
+}
+
+func (m *SystemServiceManager) installSysVinit() error {
+	initPath := filepath.Join("/etc/init.d", m.name)
+
+	// Per AI.md PART 24: SysVinit init script
+	content := fmt.Sprintf(`#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          %s
+# Required-Start:    $network $remote_fs $syslog
+# Required-Stop:     $network $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: %s
+# Description:       %s daemon
+### END INIT INFO
+
+NAME=%s
+DAEMON=%s
+DAEMON_USER=%s
+PIDFILE=/var/run/apimgr/%s.pid
+LOGFILE=/var/log/apimgr/%s/server.log
+
+case "$1" in
+    start)
+        echo "Starting $NAME..."
+        mkdir -p $(dirname $PIDFILE) $(dirname $LOGFILE)
+        chown -R $DAEMON_USER:$DAEMON_USER $(dirname $PIDFILE) $(dirname $LOGFILE)
+        start-stop-daemon --start --quiet --background --make-pidfile \
+            --pidfile $PIDFILE --chuid $DAEMON_USER --exec $DAEMON \
+            --no-close >> $LOGFILE 2>&1
+        ;;
+    stop)
+        echo "Stopping $NAME..."
+        start-stop-daemon --stop --quiet --pidfile $PIDFILE --retry 30
+        rm -f $PIDFILE
+        ;;
+    restart)
+        $0 stop
+        sleep 1
+        $0 start
+        ;;
+    reload)
+        echo "Reloading $NAME..."
+        start-stop-daemon --stop --signal HUP --quiet --pidfile $PIDFILE
+        ;;
+    status)
+        if [ -f $PIDFILE ] && kill -0 $(cat $PIDFILE) 2>/dev/null; then
+            echo "$NAME is running (pid $(cat $PIDFILE))"
+            exit 0
+        else
+            echo "$NAME is stopped"
+            exit 3
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|reload|status}"
+        exit 1
+        ;;
+esac
+exit 0
+`, m.name, m.description, m.description,
+		m.name, m.execPath, m.name,
+		m.name, m.name)
+
+	if err := os.WriteFile(initPath, []byte(content), 0755); err != nil {
+		return fmt.Errorf("failed to write SysVinit script: %w", err)
+	}
+
+	if _, err := exec.LookPath("update-rc.d"); err == nil {
+		if err := runCmd("update-rc.d", m.name, "defaults"); err != nil {
+			return fmt.Errorf("failed to enable SysVinit service: %w", err)
+		}
+	} else {
+		if err := runCmd("chkconfig", "--add", m.name); err != nil {
+			return fmt.Errorf("failed to add SysVinit service: %w", err)
+		}
+		if err := runCmd("chkconfig", m.name, "on"); err != nil {
+			return fmt.Errorf("failed to enable SysVinit service: %w", err)
+		}
+	}
+
+	fmt.Printf("%s Installed SysVinit service: %s\n", terminal.StatusIcon(true), initPath)
+	return nil
+}
+
+func (m *SystemServiceManager) uninstallSysVinit() error {
+	initPath := filepath.Join("/etc/init.d", m.name)
+
+	_ = runCmd(initPath, "stop")
+
+	if _, err := exec.LookPath("update-rc.d"); err == nil {
+		_ = runCmd("update-rc.d", m.name, "remove")
+	} else {
+		_ = runCmd("chkconfig", "--del", m.name)
+	}
+
+	if err := os.Remove(initPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove SysVinit script: %w", err)
+	}
+
+	fmt.Printf("%s Uninstalled SysVinit service: %s\n", terminal.StatusIcon(true), m.name)
 	return nil
 }
 
@@ -411,7 +661,7 @@ exec svlogd -tt ./main
 		return fmt.Errorf("failed to enable service: %w", err)
 	}
 
-	fmt.Printf("✅ Installed runit service: %s\n", svcDir)
+	fmt.Printf("%s Installed runit service: %s\n", terminal.StatusIcon(true), svcDir)
 	return nil
 }
 
@@ -432,7 +682,7 @@ func (m *SystemServiceManager) uninstallRunit() error {
 		return fmt.Errorf("failed to remove service directory: %w", err)
 	}
 
-	fmt.Printf("✅ Uninstalled runit service: %s\n", m.name)
+	fmt.Printf("%s Uninstalled runit service: %s\n", terminal.StatusIcon(true), m.name)
 	return nil
 }
 
@@ -487,7 +737,7 @@ func (m *SystemServiceManager) darwinInstall() error {
 		return fmt.Errorf("failed to load service: %w", err)
 	}
 
-	fmt.Printf("✅ Installed launchd service: %s\n", plistPath)
+	fmt.Printf("%s Installed launchd service: %s\n", terminal.StatusIcon(true), plistPath)
 	return nil
 }
 
@@ -500,7 +750,7 @@ func (m *SystemServiceManager) darwinUninstall() error {
 		return fmt.Errorf("failed to remove plist: %w", err)
 	}
 
-	fmt.Printf("✅ Uninstalled launchd service: %s\n", m.name)
+	fmt.Printf("%s Uninstalled launchd service: %s\n", terminal.StatusIcon(true), m.name)
 	return nil
 }
 
@@ -544,7 +794,7 @@ func (m *SystemServiceManager) windowsInstall() error {
 	// Set description
 	_ = runCmd("sc", "description", m.name, m.description)
 
-	fmt.Printf("✅ Installed Windows service: %s\n", m.name)
+	fmt.Printf("%s Installed Windows service: %s\n", terminal.StatusIcon(true), m.name)
 	return nil
 }
 
@@ -555,7 +805,7 @@ func (m *SystemServiceManager) windowsUninstall() error {
 		return fmt.Errorf("failed to delete service: %w", err)
 	}
 
-	fmt.Printf("✅ Uninstalled Windows service: %s\n", m.name)
+	fmt.Printf("%s Uninstalled Windows service: %s\n", terminal.StatusIcon(true), m.name)
 	return nil
 }
 
@@ -619,7 +869,7 @@ run_rc_command "$1"
 		f.WriteString(enableLine + "\n")
 	}
 
-	fmt.Printf("✅ Installed BSD rc.d service: %s\n", rcPath)
+	fmt.Printf("%s Installed BSD rc.d service: %s\n", terminal.StatusIcon(true), rcPath)
 	return nil
 }
 
@@ -631,7 +881,7 @@ func (m *SystemServiceManager) bsdUninstall() error {
 		return fmt.Errorf("failed to remove rc script: %w", err)
 	}
 
-	fmt.Printf("✅ Uninstalled BSD rc.d service: %s\n", m.name)
+	fmt.Printf("%s Uninstalled BSD rc.d service: %s\n", terminal.StatusIcon(true), m.name)
 	return nil
 }
 

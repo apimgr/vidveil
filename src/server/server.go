@@ -385,6 +385,40 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/favicon.ico", h.Favicon)
 	s.router.Get("/apple-touch-icon.png", h.AppleTouchIcon)
 
+	// PWA assets at root per AI.md PART 16 — service worker must be at root scope
+	// sw.js served at /sw.js with Service-Worker-Allowed: / header so it controls the full app
+	s.router.Get("/sw.js", func(w http.ResponseWriter, r *http.Request) {
+		data, err := embeddedFS.ReadFile("static/js/sw.js")
+		if err != nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Header().Set("Service-Worker-Allowed", "/")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Write(data)
+	})
+	s.router.Get("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
+		data, err := embeddedFS.ReadFile("static/manifest.json")
+		if err != nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/manifest+json")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Write(data)
+	})
+	s.router.Get("/offline.html", func(w http.ResponseWriter, r *http.Request) {
+		data, err := embeddedFS.ReadFile("static/offline.html")
+		if err != nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Write(data)
+	})
+
 	// Debug endpoints (PART 6: only when --debug flag or DEBUG=true)
 	s.registerDebugRoutes(s.router)
 

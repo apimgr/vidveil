@@ -1155,7 +1155,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				"tagline":     projectTagline,
 				"description": projectDescription,
 			},
-			// 2. Overall status
+			// 2. Overall status (+pending_restart/restart_reason when set — omitempty)
 			"status": status,
 			// 3. Version & build info (PART 7)
 			"version":    version.GetVersion(),
@@ -1177,7 +1177,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				"node_count": 0,
 				"role":       "",
 			},
-			// 6. Features (PARTS 20, 32)
+			// 6. Features — public-safe only; /metrics is internal (PART 20, 32)
 			"features": map[string]interface{}{
 				"tor": map[string]interface{}{
 					"enabled":  h.torSvc != nil && h.torSvc.IsEnabled(),
@@ -1198,6 +1198,12 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
+		// pending_restart / restart_reason — omitempty: only include when set
+		if h.appConfig != nil && h.appConfig.PendingRestart {
+			response["pending_restart"] = true
+			response["restart_reason"] = h.appConfig.RestartReasons
+		}
+
 		// Add cluster details if enabled per PART 10
 		if clusterEnabled {
 			response["cluster"] = map[string]interface{}{
@@ -1213,22 +1219,62 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, httpStatus, response)
 
 	case "text/plain":
-		// Plain text format per AI.md PART 13
+		// Plain text format per AI.md PART 13 — canonical field order
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(httpStatus)
+		// 1. Project
+		fmt.Fprintf(w, "project.name: %s\n", projectName)
+		fmt.Fprintf(w, "project.tagline: %s\n", projectTagline)
+		fmt.Fprintf(w, "project.description: %s\n", projectDescription)
+		// 2. Status
 		fmt.Fprintf(w, "status: %s\n", status)
+		if h.appConfig != nil && h.appConfig.PendingRestart {
+			fmt.Fprintf(w, "pending_restart: true\n")
+			for _, r := range h.appConfig.RestartReasons {
+				fmt.Fprintf(w, "restart_reason: %s\n", r)
+			}
+		}
+		// 3. Version & build
 		fmt.Fprintf(w, "version: %s\n", version.GetVersion())
-		fmt.Fprintf(w, "mode: %s\n", appMode)
-		fmt.Fprintf(w, "uptime: %s\n", uptime)
 		fmt.Fprintf(w, "go_version: %s\n", runtime.Version())
 		fmt.Fprintf(w, "build.commit: %s\n", version.CommitID)
-		fmt.Fprintf(w, "database: %s\n", checks["database"])
-		fmt.Fprintf(w, "cache: %s\n", checks["cache"])
-		fmt.Fprintf(w, "disk: %s\n", checks["disk"])
-		fmt.Fprintf(w, "scheduler: %s\n", checks["scheduler"])
+		fmt.Fprintf(w, "build.date: %s\n", version.BuildTime)
+		// 4. Runtime
+		fmt.Fprintf(w, "uptime: %s\n", uptime)
+		fmt.Fprintf(w, "mode: %s\n", appMode)
+		fmt.Fprintf(w, "timestamp: %s\n", timestamp)
+		// 5. Cluster
+		fmt.Fprintf(w, "cluster.enabled: %v\n", clusterEnabled)
 		if clusterEnabled {
-			fmt.Fprintf(w, "cluster: %s (%d nodes)\n", checks["cluster"], clusterNodes)
+			fmt.Fprintf(w, "cluster.status: %s\n", clusterStatus)
+			fmt.Fprintf(w, "cluster.node_count: %d\n", clusterNodes)
+			fmt.Fprintf(w, "cluster.role: %s\n", clusterRole)
 		}
+		// 6. Features
+		torEnabled := h.torSvc != nil && h.torSvc.IsEnabled()
+		torRunning := h.torSvc != nil && h.torSvc.IsRunning()
+		fmt.Fprintf(w, "features.tor.enabled: %v\n", torEnabled)
+		fmt.Fprintf(w, "features.tor.running: %v\n", torRunning)
+		fmt.Fprintf(w, "features.tor.status: %s\n", h.getTorStatus())
+		if torRunning {
+			fmt.Fprintf(w, "features.tor.hostname: %s\n", h.getTorHostname())
+		}
+		fmt.Fprintf(w, "features.geoip: %v\n", h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled)
+		// 7. Checks
+		fmt.Fprintf(w, "checks.database: %s\n", checks["database"])
+		fmt.Fprintf(w, "checks.cache: %s\n", checks["cache"])
+		fmt.Fprintf(w, "checks.disk: %s\n", checks["disk"])
+		fmt.Fprintf(w, "checks.scheduler: %s\n", checks["scheduler"])
+		if clusterEnabled {
+			fmt.Fprintf(w, "checks.cluster: %s\n", checks["cluster"])
+		}
+		if _, ok := checks["tor"]; ok {
+			fmt.Fprintf(w, "checks.tor: %s\n", checks["tor"])
+		}
+		// 8. Stats
+		fmt.Fprintf(w, "stats.requests_total: %d\n", h.getRequestsTotal())
+		fmt.Fprintf(w, "stats.requests_24h: %d\n", h.getRequests24h())
+		fmt.Fprintf(w, "stats.active_connections: %d\n", h.getActiveConnections())
 
 	default:
 		// HTML format (default) per AI.md PART 13 with full template
@@ -1251,8 +1297,9 @@ type HealthzHTMLData struct {
 	ActiveNav string
 	Query     string
 
-	// Project info
+	// Project info (PART 16 branding)
 	ProjectName        string
+	ProjectTagline     string
 	ProjectDescription string
 
 	// Status
@@ -1296,7 +1343,8 @@ type ClusterNodeData struct {
 	IsPrimary bool
 }
 
-// FeaturesData - VidVeil is stateless, no multi-user/orgs per IDEA.md
+// FeaturesData holds public-safe feature flags per AI.md PART 13.
+// /metrics is internal-only (PART 20) and must NOT appear here.
 type FeaturesData struct {
 	TorEnabled  bool
 	TorStarting bool
@@ -1304,7 +1352,6 @@ type FeaturesData struct {
 	TorStatus    string
 	TorOnionAddr string
 	GeoIP        bool
-	Metrics      bool
 }
 
 type ChecksData struct {
@@ -1343,8 +1390,9 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		ActiveNav: "healthz",
 		Query:     "",
 
-		// Project info
+		// Project info (populated from branding config below)
 		ProjectName:        "Vidveil",
+		ProjectTagline:     "Privacy-first video search",
 		ProjectDescription: "Privacy-respecting adult video meta search",
 
 		// Version info
@@ -1416,7 +1464,20 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		data.ModeDisplay = "Development"
 	}
 
-	// Features
+	// Branding from config (override defaults set above)
+	if h.appConfig != nil {
+		if h.appConfig.Server.Branding.Title != "" {
+			data.ProjectName = h.appConfig.Server.Branding.Title
+		}
+		if h.appConfig.Server.Branding.Tagline != "" {
+			data.ProjectTagline = h.appConfig.Server.Branding.Tagline
+		}
+		if h.appConfig.Server.Branding.Description != "" {
+			data.ProjectDescription = h.appConfig.Server.Branding.Description
+		}
+	}
+
+	// Features — public-safe only; /metrics is internal (PART 20)
 	if h.appConfig != nil {
 		// Tor status per AI.md PART 13
 		if h.torSvc != nil {
@@ -1436,7 +1497,6 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			}
 		}
 		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
-		data.Features.Metrics = h.appConfig.Server.Metrics.Enabled
 	}
 
 	// Cluster info
@@ -2221,88 +2281,142 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := getAPIResponseFormat(r)
 
-	// Text output for CLI tools per AI.md PART 13
+	// Add scheduler check
+	checks["scheduler"] = "ok"
+
+	// Tor status for features and checks
+	torEnabled := h.torSvc != nil && h.torSvc.IsEnabled()
+	torRunning := h.torSvc != nil && h.torSvc.IsRunning()
+	if torEnabled {
+		if torRunning {
+			checks["tor"] = "ok"
+		} else {
+			checks["tor"] = "error"
+			status = "unhealthy"
+			httpStatus = http.StatusServiceUnavailable
+		}
+	}
+
+	// Project branding from config
+	apiProjectName := "VidVeil"
+	apiProjectTagline := "Privacy-first video search"
+	apiProjectDesc := "Privacy-respecting adult video meta search"
+	if h.appConfig != nil {
+		if h.appConfig.Server.Branding.Title != "" {
+			apiProjectName = h.appConfig.Server.Branding.Title
+		}
+		if h.appConfig.Server.Branding.Tagline != "" {
+			apiProjectTagline = h.appConfig.Server.Branding.Tagline
+		}
+		if h.appConfig.Server.Branding.Description != "" {
+			apiProjectDesc = h.appConfig.Server.Branding.Description
+		}
+	}
+
+	// Text output for CLI tools per AI.md PART 13 canonical field order
 	if format == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(httpStatus)
+		// 1. Project
+		fmt.Fprintf(w, "project.name: %s\n", apiProjectName)
+		fmt.Fprintf(w, "project.tagline: %s\n", apiProjectTagline)
+		fmt.Fprintf(w, "project.description: %s\n", apiProjectDesc)
+		// 2. Status
 		fmt.Fprintf(w, "status: %s\n", status)
+		if h.appConfig != nil && h.appConfig.PendingRestart {
+			fmt.Fprintf(w, "pending_restart: true\n")
+			for _, rr := range h.appConfig.RestartReasons {
+				fmt.Fprintf(w, "restart_reason: %s\n", rr)
+			}
+		}
+		// 3. Version & build
 		fmt.Fprintf(w, "version: %s\n", version.GetVersion())
-		fmt.Fprintf(w, "mode: %s\n", appMode)
-		fmt.Fprintf(w, "uptime: %s\n", uptime)
 		fmt.Fprintf(w, "go_version: %s\n", version.GoVersion)
 		fmt.Fprintf(w, "build.commit: %s\n", version.CommitID)
-		fmt.Fprintf(w, "database: %s\n", checks["database"])
-		fmt.Fprintf(w, "cache: %s\n", checks["cache"])
-		fmt.Fprintf(w, "disk: %s\n", checks["disk"])
-		fmt.Fprintf(w, "scheduler: ok\n")
+		fmt.Fprintf(w, "build.date: %s\n", version.BuildTime)
+		// 4. Runtime
+		fmt.Fprintf(w, "uptime: %s\n", uptime)
+		fmt.Fprintf(w, "mode: %s\n", appMode)
+		fmt.Fprintf(w, "timestamp: %s\n", timestamp)
+		// 5. Cluster
+		fmt.Fprintf(w, "cluster.enabled: %v\n", clusterEnabled)
+		// 6. Features
+		fmt.Fprintf(w, "features.tor.enabled: %v\n", torEnabled)
+		fmt.Fprintf(w, "features.tor.running: %v\n", torRunning)
+		fmt.Fprintf(w, "features.tor.status: %s\n", h.getTorStatus())
+		if torRunning {
+			fmt.Fprintf(w, "features.tor.hostname: %s\n", h.getTorHostname())
+		}
+		fmt.Fprintf(w, "features.geoip: %v\n", h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled)
+		// 7. Checks
+		for _, k := range []string{"database", "cache", "disk", "scheduler"} {
+			fmt.Fprintf(w, "checks.%s: %s\n", k, checks[k])
+		}
+		if _, ok := checks["tor"]; ok {
+			fmt.Fprintf(w, "checks.tor: %s\n", checks["tor"])
+		}
+		// 8. Stats
+		fmt.Fprintf(w, "stats.requests_total: %d\n", h.getRequestsTotal())
+		fmt.Fprintf(w, "stats.requests_24h: %d\n", h.getRequests24h())
+		fmt.Fprintf(w, "stats.active_connections: %d\n", h.getActiveConnections())
 		return
 	}
 
 	// JSON response (default) - per AI.md PART 13 canonical field order
-	// Tor status for features and checks
-	torEnabled := h.torSvc != nil && h.torSvc.IsEnabled()
-	torRunning := h.torSvc != nil && h.torSvc.IsRunning()
-	torCheck := "ok"
-	if torEnabled && !torRunning {
-		torCheck = "error"
-	}
-
 	response := map[string]interface{}{
 		// 1. Project identification (PART 16)
 		"project": map[string]interface{}{
-			"name":        h.appConfig.Server.Branding.Title,
-			"tagline":     h.appConfig.Server.Branding.Tagline,
-			"description": "Privacy-respecting adult video meta search",
+			"name":        apiProjectName,
+			"tagline":     apiProjectTagline,
+			"description": apiProjectDesc,
 		},
-		// 2. Overall status
+		// 2. Overall status (+pending_restart/restart_reason when set — omitempty)
 		"status": status,
 		// 3. Version & build info (PART 7)
 		"version":    version.GetVersion(),
 		"go_version": version.GoVersion,
-		// 4. Runtime info (PART 6)
-		"mode":      appMode,
-		"uptime":    uptime,
-		"timestamp": timestamp,
-		// 5. Build info (PART 7)
 		"build": map[string]interface{}{
 			"commit": version.CommitID,
 			"date":   version.BuildTime,
 		},
-		// 6. Cluster info (PART 10)
+		// 4. Runtime info (PART 6)
+		"uptime":    uptime,
+		"mode":      appMode,
+		"timestamp": timestamp,
+		// 5. Cluster info (PART 10)
 		"cluster": map[string]interface{}{
 			"enabled":    clusterEnabled,
+			"status":     "",
 			"primary":    "",
 			"nodes":      []string{},
-			"node_count": 1,
-			"role":       "primary",
+			"node_count": 0,
+			"role":       "",
 		},
-		// 7. Features - PUBLIC only, NO metrics (PART 21 is internal)
+		// 6. Features — public-safe only; /metrics is internal (PART 20)
 		"features": map[string]interface{}{
-			// PART 32: Tor as TorInfo object
 			"tor": map[string]interface{}{
 				"enabled":  torEnabled,
 				"running":  torRunning,
 				"status":   h.getTorStatus(),
 				"hostname": h.getTorHostname(),
 			},
-			// PART 20: GeoIP
 			"geoip": h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 		},
-		// 8. Component health checks
-		"checks": map[string]string{
-			"database":  checks["database"],
-			"cache":     checks["cache"],
-			"disk":      checks["disk"],
-			"scheduler": "ok",
-			"cluster":   "ok",
-			"tor":       torCheck,
-		},
-		// 9. Statistics (public-safe aggregates)
+		// 7. Component health checks
+		"checks": checks,
+		// 8. Statistics (public-safe aggregates + app-specific)
 		"stats": map[string]interface{}{
 			"requests_total":     h.getRequestsTotal(),
 			"requests_24h":       h.getRequests24h(),
 			"active_connections": h.getActiveConnections(),
+			"searches_total":     h.getSearchCount(),
 		},
+	}
+
+	// pending_restart / restart_reason — omitempty: only include when set
+	if h.appConfig != nil && h.appConfig.PendingRestart {
+		response["pending_restart"] = true
+		response["restart_reason"] = h.appConfig.RestartReasons
 	}
 
 	WriteJSON(w, httpStatus, response)

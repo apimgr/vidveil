@@ -12,6 +12,7 @@
         <!-- Project Info per AI.md PART 13 -->
         <header class="health-header">
             <h1>📦 {{.ProjectName}}</h1>
+            <p class="tagline">{{.ProjectTagline}}</p>
             <p class="project-description">{{.ProjectDescription}}</p>
         </header>
 
@@ -64,9 +65,6 @@
                 </li>
                 <li class="{{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">
                     🌍 GeoIP: {{if .Features.GeoIP}}<span class="status-ok">✅ Enabled</span>{{else}}<span class="status-disabled">Disabled</span>{{end}}
-                </li>
-                <li class="{{if .Features.Metrics}}feature-enabled{{else}}feature-disabled{{end}}">
-                    📊 Metrics: {{if .Features.Metrics}}<span class="status-ok">✅ Enabled</span>{{else}}<span class="status-disabled">Disabled</span>{{end}}
                 </li>
             </ul>
         </section>

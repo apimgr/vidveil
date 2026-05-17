@@ -27,6 +27,11 @@ type AppConfig struct {
 	Web     WebConfig     `yaml:"web"`
 	Search  SearchConfig  `yaml:"search"`
 	Engines EnginesConfig `yaml:"engines"`
+
+	// Runtime-only state (never serialised to YAML)
+	// Set by ConfigWatcher when port/address changes require a restart.
+	PendingRestart bool     `yaml:"-" json:"-"`
+	RestartReasons []string `yaml:"-" json:"-"`
 }
 
 // EnginesConfig holds engine-specific settings
@@ -1482,10 +1487,14 @@ func (w *ConfigWatcher) reload() {
 	// Update the shared config — all settings that can live-reload without restart.
 	// Port and Address changes are intentionally excluded: they require a listener
 	// rebind and must log a pending-restart notice instead.
-	pendingRestart := false
-	if newCfg.Server.Port != w.appConfig.Server.Port || newCfg.Server.Address != w.appConfig.Server.Address {
-		pendingRestart = true
+	var restartReasons []string
+	if newCfg.Server.Port != w.appConfig.Server.Port {
+		restartReasons = append(restartReasons, "server.port")
 	}
+	if newCfg.Server.Address != w.appConfig.Server.Address {
+		restartReasons = append(restartReasons, "server.address")
+	}
+	pendingRestart := len(restartReasons) > 0
 
 	w.appConfig.Server.Branding = newCfg.Server.Branding
 	w.appConfig.Server.RateLimit = newCfg.Server.RateLimit
@@ -1512,8 +1521,12 @@ func (w *ConfigWatcher) reload() {
 	w.appConfig.Web = newCfg.Web
 	w.appConfig.Search = newCfg.Search
 
+	w.appConfig.PendingRestart = pendingRestart
+	w.appConfig.RestartReasons = restartReasons
+
 	if pendingRestart {
-		fmt.Printf("⚠️  Port/address change detected — restart required for network changes to take effect\n")
+		fmt.Printf("⚠️  Port/address change detected (%s) — restart required for network changes to take effect\n",
+			strings.Join(restartReasons, ", "))
 	}
 	fmt.Printf("🔄 Configuration reloaded\n")
 

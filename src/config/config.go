@@ -319,9 +319,9 @@ type MetricsConfig struct {
 
 // GeoIPConfig holds GeoIP settings per AI.md PART 20
 type GeoIPConfig struct {
-	Enabled       bool                 `yaml:"enabled"`
-	Dir           string               `yaml:"dir"`
-	Update        string               `yaml:"update"`
+	Enabled        bool                 `yaml:"enabled"`
+	Dir            string               `yaml:"dir"`
+	Update         string               `yaml:"update"`
 	DenyCountries  []string             `yaml:"deny_countries"`
 	AllowCountries []string             `yaml:"allow_countries"`
 	Databases      GeoIPDatabasesConfig `yaml:"databases"`
@@ -856,10 +856,10 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			Metrics: MetricsConfig{
-				Enabled:        false,
-				Endpoint:       "/metrics",
-				IncludeSystem:  true,
-				IncludeRuntime: true,
+				Enabled:         false,
+				Endpoint:        "/metrics",
+				IncludeSystem:   true,
+				IncludeRuntime:  true,
 				DurationBuckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 				SizeBuckets:     []float64{100, 1000, 10000, 100000, 1000000, 10000000},
 			},
@@ -964,9 +964,9 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			GeoIP: GeoIPConfig{
-				Enabled:       true,
-				Dir:           "",
-				Update:        "weekly",
+				Enabled:        true,
+				Dir:            "",
+				Update:         "weekly",
 				DenyCountries:  []string{},
 				AllowCountries: []string{},
 				Databases: GeoIPDatabasesConfig{

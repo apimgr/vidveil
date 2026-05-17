@@ -27,10 +27,10 @@ type PendingAuth struct {
 
 // AuthHandler handles admin authentication routes per AI.md PART 17
 type AuthHandler struct {
-	appConfig    *config.AppConfig
-	adminHdl     *AdminHandler
-	totpSvc      *totp.TOTPService
-	epLimiters   *ratelimit.EndpointLimiters
+	appConfig  *config.AppConfig
+	adminHdl   *AdminHandler
+	totpSvc    *totp.TOTPService
+	epLimiters *ratelimit.EndpointLimiters
 	// pendingAuth stores pending 2FA authentication tokens
 	pendingAuth map[string]*PendingAuth
 	mu          sync.RWMutex

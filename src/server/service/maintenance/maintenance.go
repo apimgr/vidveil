@@ -83,6 +83,20 @@ func (m *MaintenanceManager) Backup(backupFile string) error {
 	})
 }
 
+// BackupIncremental creates an hourly incremental backup per AI.md PART 19.
+// Always writes to a fixed filename so only one file is kept (replaced each hour).
+func (m *MaintenanceManager) BackupIncremental(backupFile string) error {
+	if backupFile == "" {
+		// Fixed filename per PART 19: vidveil-hourly.tar.gz — always 1 file
+		backupFile = filepath.Join(m.paths.Backup, "vidveil-hourly.tar.gz")
+	}
+	return m.BackupWithOptions(BackupOptions{
+		Filename:    backupFile,
+		IncludeData: true,
+		MaxBackups:  1,
+	})
+}
+
 // BackupWithOptions creates a backup with full options per AI.md PART 22
 func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 	// Generate filename per PART 22: vidveil_backup_YYYY-MM-DD_HHMMSS.tar.gz

@@ -589,10 +589,15 @@ func main() {
 			logger.Reopen()
 			return nil
 		},
-		BackupAuto: func(ctx context.Context) error {
-			// Automatic backup per PART 22 (disabled by default)
+		BackupDaily: func(ctx context.Context) error {
+			// Daily backup per AI.md PART 19/22 (enabled by default, daily at 02:00)
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
 			return maint.Backup("")
+		},
+		BackupHourly: func(ctx context.Context) error {
+			// Hourly incremental backup per AI.md PART 19/22 (disabled by default)
+			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
+			return maint.BackupIncremental("")
 		},
 		HealthcheckSelf: func(ctx context.Context) error {
 			// Self health check per PART 13

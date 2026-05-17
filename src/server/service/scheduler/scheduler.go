@@ -724,8 +724,10 @@ type BuiltinTaskFuncs struct {
 	TokenCleanup TaskFunc
 	// log.rotation - Daily, rotate and compress logs
 	LogRotation TaskFunc
-	// backup.auto - Disabled by default, automatic backups
-	BackupAuto TaskFunc
+	// backup_daily - Daily at 02:00, full backup + daily incremental (enabled by default)
+	BackupDaily TaskFunc
+	// backup_hourly - Hourly incremental (disabled by default)
+	BackupHourly TaskFunc
 	// healthcheck.self - Every 5 minutes, self-health check
 	HealthcheckSelf TaskFunc
 	// tor.health - Every 10 minutes, check Tor connectivity
@@ -792,14 +794,21 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 			"daily", funcs.LogRotation)
 	}
 
-	// backup_auto - Per AI.md PART 22: Daily at 02:00, disabled by default
-	if funcs.BackupAuto != nil {
-		// Cron: 02:00 daily per AI.md PART 22
-		s.RegisterTask("backup_auto", "Automatic Backup",
-			"Create automatic backups of configuration and databases",
-			"0 2 * * *", funcs.BackupAuto)
-		// Disable by default per AI.md PART 19
-		s.DisableTask("backup_auto")
+	// backup_daily - Per AI.md PART 19: Daily at 02:00, enabled by default
+	if funcs.BackupDaily != nil {
+		s.RegisterTask("backup_daily", "Daily Backup",
+			"Create daily full backup of configuration and databases",
+			"0 2 * * *", funcs.BackupDaily)
+		// Enabled by default per AI.md PART 19 (Skippable: Yes = admin can disable)
+	}
+
+	// backup_hourly - Per AI.md PART 19: Hourly incremental, disabled by default
+	if funcs.BackupHourly != nil {
+		s.RegisterTask("backup_hourly", "Hourly Backup",
+			"Create hourly incremental backup (disabled by default)",
+			"@hourly", funcs.BackupHourly)
+		// Disabled by default per AI.md PART 19
+		s.DisableTask("backup_hourly")
 	}
 
 	// healthcheck_self - Every 5 minutes
@@ -841,7 +850,8 @@ func (s *Scheduler) migrateLegacyTaskIDs() {
 		"session.cleanup":   "session_cleanup",
 		"token.cleanup":     "token_cleanup",
 		"log.rotation":      "log_rotation",
-		"backup.auto":       "backup_auto",
+		"backup.auto":       "backup_daily",
+		"backup_auto":       "backup_daily",
 		"healthcheck.self":  "healthcheck_self",
 		"tor.health":        "tor_health",
 		"cluster.heartbeat": "cluster_heartbeat",

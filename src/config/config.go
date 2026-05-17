@@ -1453,19 +1453,42 @@ func (w *ConfigWatcher) reload() {
 		return
 	}
 
-	// Update the shared config (settings that can live-reload)
+	// Update the shared config — all settings that can live-reload without restart.
+	// Port and Address changes are intentionally excluded: they require a listener
+	// rebind and must log a pending-restart notice instead.
+	pendingRestart := false
+	if newCfg.Server.Port != w.appConfig.Server.Port || newCfg.Server.Address != w.appConfig.Server.Address {
+		pendingRestart = true
+	}
+
 	w.appConfig.Server.Branding = newCfg.Server.Branding
 	w.appConfig.Server.RateLimit = newCfg.Server.RateLimit
 	w.appConfig.Server.Email = newCfg.Server.Email
 	w.appConfig.Server.Notifications = newCfg.Server.Notifications
 	w.appConfig.Server.Schedule = newCfg.Server.Schedule
-	w.appConfig.Server.SSL.LetsEncrypt = newCfg.Server.SSL.LetsEncrypt
+	w.appConfig.Server.SSL = newCfg.Server.SSL
 	w.appConfig.Server.Metrics = newCfg.Server.Metrics
 	w.appConfig.Server.Logs = newCfg.Server.Logs
 	w.appConfig.Server.GeoIP = newCfg.Server.GeoIP
+	w.appConfig.Server.Admin = newCfg.Server.Admin
+	w.appConfig.Server.Session = newCfg.Server.Session
+	w.appConfig.Server.SecurityHeaders = newCfg.Server.SecurityHeaders
+	w.appConfig.Server.Compression = newCfg.Server.Compression
+	w.appConfig.Server.Limits = newCfg.Server.Limits
+	w.appConfig.Server.TrustedProxies = newCfg.Server.TrustedProxies
+	w.appConfig.Server.Cache = newCfg.Server.Cache
+	w.appConfig.Server.Security = newCfg.Server.Security
+	w.appConfig.Server.Backup = newCfg.Server.Backup
+	w.appConfig.Server.Tor = newCfg.Server.Tor
+	w.appConfig.Server.Healthz = newCfg.Server.Healthz
+	w.appConfig.Server.FQDN = newCfg.Server.FQDN
+	w.appConfig.Server.Mode = newCfg.Server.Mode
 	w.appConfig.Web = newCfg.Web
 	w.appConfig.Search = newCfg.Search
 
+	if pendingRestart {
+		fmt.Printf("⚠️  Port/address change detected — restart required for network changes to take effect\n")
+	}
 	fmt.Printf("🔄 Configuration reloaded\n")
 
 	// Notify callbacks

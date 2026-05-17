@@ -1,39 +1,41 @@
 {{define "content"}}
 <div class="card">
     <h2>Email Configuration</h2>
+    {{if eq .Config.Server.Email.Host ""}}
+    <div class="alert alert-warning">
+        SMTP not configured. Email features disabled.
+        <a href="#smtp-host">Configure SMTP below.</a>
+    </div>
+    {{end}}
     <form id="email-form" onsubmit="saveEmailSettings(event)">
         <div class="form-group">
-            <label class="toggle-label">
-                <input type="checkbox" id="email-enabled"{{if .Config.Server.Notifications.Email.Enabled}} checked{{end}}>
-                <span>Enable Email Notifications</span>
-            </label>
-        </div>
-        <div class="form-group">
             <label for="smtp-host">SMTP Host</label>
-            <input type="text" id="smtp-host" value="{{.Config.Server.Notifications.Email.SMTP.Host}}" placeholder="smtp.example.com">
+            <input type="text" id="smtp-host" value="{{.Config.Server.Email.Host}}" placeholder="smtp.example.com">
+            <small class="help-text">Leave blank to disable email. The server will auto-detect SMTP when a host is provided.</small>
         </div>
         <div class="form-group">
             <label for="smtp-port">SMTP Port</label>
-            <input type="number" id="smtp-port" value="{{.Config.Server.Notifications.Email.SMTP.Port}}" placeholder="587">
+            <input type="number" id="smtp-port" value="{{.Config.Server.Email.Port}}" placeholder="587">
         </div>
         <div class="form-group">
             <label for="smtp-username">Username</label>
-            <input type="text" id="smtp-username" value="{{.Config.Server.Notifications.Email.SMTP.Username}}" placeholder="">
+            <input type="text" id="smtp-username" value="{{.Config.Server.Email.Username}}" placeholder="">
         </div>
         <div class="form-group">
             <label for="smtp-password">Password</label>
-            <input type="password" id="smtp-password" placeholder="••••••••">
+            <input type="password" id="smtp-password" placeholder="&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;">
         </div>
         <div class="form-group">
             <label for="smtp-from">From Address</label>
-            <input type="email" id="smtp-from" value="{{.Config.Server.Notifications.Email.SMTP.From}}" placeholder="noreply@example.com">
+            <input type="email" id="smtp-from" value="{{.Config.Server.Email.From}}" placeholder="noreply@example.com">
         </div>
         <div class="form-group">
             <label for="smtp-tls">TLS Mode</label>
             <select id="smtp-tls">
-                <option value="auto"{{if eq .Config.Server.Notifications.Email.SMTP.TLS "auto"}} selected{{end}}>Auto</option>
-                <option value="required"{{if eq .Config.Server.Notifications.Email.SMTP.TLS "required"}} selected{{end}}>Required</option>
-                <option value="none"{{if eq .Config.Server.Notifications.Email.SMTP.TLS "none"}} selected{{end}}>None</option>
+                <option value="auto"{{if eq .Config.Server.Email.TLS "auto"}} selected{{end}}>Auto</option>
+                <option value="starttls"{{if eq .Config.Server.Email.TLS "starttls"}} selected{{end}}>STARTTLS</option>
+                <option value="tls"{{if eq .Config.Server.Email.TLS "tls"}} selected{{end}}>TLS (implicit)</option>
+                <option value="none"{{if eq .Config.Server.Email.TLS "none"}} selected{{end}}>None</option>
             </select>
         </div>
         <div class="button-group">
@@ -72,35 +74,30 @@ async function saveEmailSettings(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 server: {
-                    notifications: {
-                        email: {
-                            enabled: document.getElementById('email-enabled').checked,
-                            smtp: {
-                                host: document.getElementById('smtp-host').value,
-                                port: parseInt(document.getElementById('smtp-port').value),
-                                username: document.getElementById('smtp-username').value,
-                                password: document.getElementById('smtp-password').value,
-                                from: document.getElementById('smtp-from').value,
-                                tls: document.getElementById('smtp-tls').value
-                            }
-                        }
+                    email: {
+                        host:     document.getElementById('smtp-host').value,
+                        port:     parseInt(document.getElementById('smtp-port').value) || 587,
+                        username: document.getElementById('smtp-username').value,
+                        password: document.getElementById('smtp-password').value,
+                        from:     document.getElementById('smtp-from').value,
+                        tls:      document.getElementById('smtp-tls').value
                     }
                 }
             })
         });
         const data = await resp.json();
-        if (data.success) { showSuccess('Email settings saved!'); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+        if (data.ok) { showSuccess('Email settings saved!'); }
+        else { showError('Error: ' + (data.message || data.error)); }
+    } catch (err) { showError('Error: ' + err.message); }
 }
 
 async function testEmail() {
     try {
-        const resp = await fetch(window.API_BASE + '/server/email/test', { method: 'POST' });
+        const resp = await fetch(window.API_BASE + '/notifications/test', { method: 'POST' });
         const data = await resp.json();
-        if (data.success) { showSuccess('Test email sent!'); }
-        else { showError('Error: ' + data.error); }
-    } catch (e) { showError('Error: ' + e.message); }
+        if (data.ok) { showSuccess('Test email sent!'); }
+        else { showError('Error: ' + (data.message || data.error)); }
+    } catch (err) { showError('Error: ' + err.message); }
 }
 
 function editTemplate(name) {

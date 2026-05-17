@@ -9,6 +9,10 @@ on:
       - '*.*.*'
   workflow_dispatch:
 
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/beta' }}
+
 # Workflow-level default permissions: read-only / least privilege.
 # Per AI.md PART 28, the build-standard job upgrades to `packages: write`
 # explicitly for pushing to GHCR.

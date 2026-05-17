@@ -13,6 +13,10 @@ on:
       - develop
   workflow_dispatch:
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/beta' }}
+
 # Read-only by default. No job needs to write to the repo for build/test.
 permissions:
   contents: read

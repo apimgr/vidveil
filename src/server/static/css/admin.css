@@ -771,3 +771,35 @@ code {
     color: var(--text-secondary, #666);
     border-top: 1px solid var(--border, #ddd);
 }
+
+/* Generic table utilities */
+.td-center { text-align: center; }
+.td-break  { word-break: break-all; }
+.table-scroll { overflow-x: auto; }
+
+/* Dynamic progress bar width via CSS custom property */
+.progress-fill { width: var(--w, 0%); }
+
+/* Admin toast notifications (replaces alert() per PART 16) */
+.admin-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #fff;
+    background: var(--text-secondary, #555);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 9999;
+    max-width: 360px;
+    word-break: break-word;
+}
+.admin-toast-visible { opacity: 1; transform: translateY(0); }
+.admin-toast-error   { background: var(--error, #dc3545); }
+.admin-toast-success { background: var(--success, #28a745); }
+.admin-toast-info    { background: var(--accent, #007bff); }

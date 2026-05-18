@@ -1,0 +1,75 @@
+/* Swagger / API Documentation page — theme via CSS custom properties on <html> */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--sw-bg, #1a1a2e);
+    color: var(--sw-text, #e0e0e0);
+    padding: 20px;
+}
+
+.container { max-width: 960px; margin: 0 auto; }
+
+h1 { margin-bottom: 8px; color: var(--sw-accent, #a78bfa); font-size: 24px; }
+
+.subtitle {
+    color: var(--sw-text, #e0e0e0);
+    opacity: 0.7;
+    margin-bottom: 24px;
+    font-size: 14px;
+}
+
+.card {
+    background: var(--sw-card-bg, #16213e);
+    border: 1px solid var(--sw-border, #333);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+h2 { font-size: 18px; margin-bottom: 12px; color: var(--sw-accent, #a78bfa); }
+
+table { width: 100%; border-collapse: collapse; }
+
+th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--sw-border, #333);
+    font-size: 14px;
+}
+
+th {
+    font-weight: 600;
+    color: var(--sw-text, #e0e0e0);
+    opacity: 0.8;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+code { font-family: "Fira Code", Consolas, monospace; font-size: 13px; }
+
+.method {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-family: monospace;
+}
+
+.method-get    { background: #22c55e22; color: #22c55e; }
+.method-post   { background: #3b82f622; color: #3b82f6; }
+.method-put    { background: #f59e0b22; color: #f59e0b; }
+.method-delete { background: #ef444422; color: #ef4444; }
+
+.spec-link { margin-top: 16px; font-size: 13px; }
+
+.spec-link a { color: var(--sw-accent, #a78bfa); text-decoration: none; }
+.spec-link a:hover { text-decoration: underline; }
+
+@media (max-width: 600px) {
+    body { padding: 10px; }
+    th, td { padding: 8px 6px; font-size: 13px; }
+}

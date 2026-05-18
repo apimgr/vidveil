@@ -424,33 +424,12 @@ func generateSwaggerUI(appConfig *config.AppConfig, theme, lang, dir string) str
 	}
 
 	return fmt.Sprintf(`<!DOCTYPE html>
-<html lang="%s" dir="%s">
+<html lang="%s" dir="%s" style="--sw-bg:%s;--sw-text:%s;--sw-accent:%s;--sw-card-bg:%s;--sw-border:%s">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>API Documentation - VidVeil</title>
-    <style>
-        *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:%s;color:%s;padding:20px}
-        .container{max-width:960px;margin:0 auto}
-        h1{margin-bottom:8px;color:%s;font-size:24px}
-        .subtitle{color:%s;opacity:0.7;margin-bottom:24px;font-size:14px}
-        .card{background:%s;border:1px solid %s;border-radius:8px;padding:20px;margin-bottom:20px}
-        h2{font-size:18px;margin-bottom:12px;color:%s}
-        table{width:100%%;border-collapse:collapse}
-        th,td{text-align:left;padding:10px 12px;border-bottom:1px solid %s;font-size:14px}
-        th{font-weight:600;color:%s;opacity:0.8;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
-        code{font-family:"Fira Code",Consolas,monospace;font-size:13px}
-        .method{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;font-family:monospace}
-        .method-get{background:#22c55e22;color:#22c55e}
-        .method-post{background:#3b82f622;color:#3b82f6}
-        .method-put{background:#f59e0b22;color:#f59e0b}
-        .method-delete{background:#ef444422;color:#ef4444}
-        .spec-link{margin-top:16px;font-size:13px}
-        .spec-link a{color:%s;text-decoration:none}
-        .spec-link a:hover{text-decoration:underline}
-        @media(max-width:600px){body{padding:10px}th,td{padding:8px 6px;font-size:13px}}
-    </style>
+    <link rel="stylesheet" href="/static/css/swagger.css">
 </head>
 <body>
     <div class="container">
@@ -470,7 +449,7 @@ func generateSwaggerUI(appConfig *config.AppConfig, theme, lang, dir string) str
 </body>
 </html>`,
 		lang, dir,
-		bg, text, accent, text, cardBg, border, accent, border, text, accent,
+		bg, text, accent, cardBg, border,
 		endpointRows,
 	)
 }

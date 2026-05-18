@@ -389,26 +389,9 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maintenance - `+h.appConfig.Server.Branding.Title+`</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #282a36;
-            color: #f8f8f2;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .maintenance {
-            text-align: center;
-            padding: 2rem;
-        }
-        h1 { color: #ffb86c; margin-bottom: 1rem; }
-        p { color: #6272a4; }
-    </style>
+    <link rel="stylesheet" href="/static/css/common.css">
 </head>
-<body>
+<body class="maintenance-page">
     <div class="maintenance">
         <h1>🔧 Under Maintenance</h1>
         <p>We're performing scheduled maintenance.</p>

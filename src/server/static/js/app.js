@@ -2479,3 +2479,36 @@ window.showInfo = showInfo;
 window.showConfirm = showConfirm;
 window.handleDownloadClick = handleDownloadClick;
 window.announce = announce;
+
+// PWA Service Worker Registration (AI.md PART 16)
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .catch(function() {});
+}
+
+// Offline / online indicator (AI.md PART 16)
+window.addEventListener('online', function() {
+    var indicator = document.getElementById('offline-indicator');
+    if (indicator) { indicator.hidden = true; }
+});
+window.addEventListener('offline', function() {
+    var indicator = document.getElementById('offline-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'offline-indicator';
+        indicator.className = 'offline-banner';
+        indicator.textContent = 'You are offline. Some features may be unavailable.';
+        document.body.insertBefore(indicator, document.body.firstChild);
+    }
+    indicator.hidden = false;
+});
+
+// Admin globals — read from data attributes on <body> (set by admin layout template)
+(function() {
+    var body = document.body;
+    if (!body) { return; }
+    var apiBase = body.getAttribute('data-api-base');
+    var adminPath = body.getAttribute('data-admin-path');
+    if (apiBase)   { window.API_BASE   = apiBase; }
+    if (adminPath) { window.ADMIN_PATH = adminPath; }
+}());

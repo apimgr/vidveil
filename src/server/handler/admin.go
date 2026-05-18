@@ -3470,9 +3470,9 @@ func (h *AdminHandler) renderEnginesPage(r *http.Request) string {
 		if eng.Privacy.HasTracking {
 			trackIcon = "✗"
 		}
-		privacyCells := `<td style="text-align:center">` + jsIcon + `</td>` +
-			`<td style="text-align:center">` + cookieIcon + `</td>` +
-			`<td style="text-align:center">` + trackIcon + `</td>`
+		privacyCells := `<td class="td-center">` + jsIcon + `</td>` +
+			`<td class="td-center">` + cookieIcon + `</td>` +
+			`<td class="td-center">` + trackIcon + `</td>`
 
 		toggleLabel := "Disable"
 		if !eng.Enabled {
@@ -3480,8 +3480,8 @@ func (h *AdminHandler) renderEnginesPage(r *http.Request) string {
 		}
 
 		engineRows += `<tr>
-            <td style="word-break:break-all">` + eng.Name + `</td>
-            <td style="word-break:break-all">` + eng.DisplayName + `</td>
+            <td class="td-break">` + eng.Name + `</td>
+            <td class="td-break">` + eng.DisplayName + `</td>
             <td>Tier ` + strconv.Itoa(eng.Tier) + `</td>
             <td>` + status + `</td>
             <td>` + circuitBadge + `</td>
@@ -3511,7 +3511,7 @@ func (h *AdminHandler) renderEnginesPage(r *http.Request) string {
         <h1>Search Engines</h1>
 
         <div class="card">
-            <div style="overflow-x:auto">
+            <div class="table-scroll">
             <table class="data-table">
                 <thead>
                     <tr>
@@ -3537,31 +3537,7 @@ func (h *AdminHandler) renderEnginesPage(r *http.Request) string {
             </div>
         </div>
     </main>
-    <script>
-    const adminAPIBase = '` + adminAPIBase + `';
-    async function toggleEngine(name, enable) {
-        try {
-            const resp = await fetch(adminAPIBase + '/' + name, {
-                method: 'PATCH',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({enabled: enable})
-            });
-            const data = await resp.json();
-            if (data.ok) location.reload();
-            else alert('Error: ' + (data.error || 'unknown'));
-        } catch(e) { alert('Error: ' + e.message); }
-    }
-    async function resetCircuit(name) {
-        try {
-            const resp = await fetch(adminAPIBase + '/' + name + '/reset', {
-                method: 'POST'
-            });
-            const data = await resp.json();
-            if (data.ok) location.reload();
-            else alert('Error: ' + (data.error || 'unknown'));
-        } catch(e) { alert('Error: ' + e.message); }
-    }
-    </script>
+    <script src="/static/js/admin.js" data-api-base="` + adminAPIBase + `"></script>
 </body>
 </html>`
 }
@@ -3592,24 +3568,12 @@ func (h *AdminHandler) renderSettingsPage(r *http.Request) string {
             <h2>API Token</h2>
             <p class="text-muted">Use this token for API authentication</p>
             <div class="token-display">
-                <code id="api-token">••••••••••••••••</code>
-                <button onclick="toggleToken()" class="btn btn-sm">Show</button>
+                <code id="api-token" data-token="` + h.appConfig.Server.Admin.Token + `">••••••••••••••••</code>
+                <button onclick="toggleToken()" class="btn btn-sm toggle-token-btn">Show</button>
             </div>
         </div>
     </main>
-
-    <script>
-    let tokenVisible = false;
-    function toggleToken() {
-        const el = document.getElementById('api-token');
-        if (tokenVisible) {
-            el.textContent = '••••••••••••••••';
-        } else {
-            el.textContent = '` + h.appConfig.Server.Admin.Token + `';
-        }
-        tokenVisible = !tokenVisible;
-    }
-    </script>
+    <script src="/static/js/admin.js"></script>
 </body>
 </html>`
 }

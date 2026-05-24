@@ -15,13 +15,16 @@ const (
 	ProjectName = "vidveil"
 )
 
-// AppPaths holds OS-appropriate directory paths
+// AppPaths holds OS-appropriate directory paths per AI.md PART 4.
 type AppPaths struct {
-	Config string
-	Data   string
-	Cache  string
-	Log    string
-	Backup string
+	Config   string
+	Data     string
+	Cache    string
+	Log      string
+	Backup   string
+	PIDFile  string
+	SSL      string
+	Security string
 }
 
 func pathOverride(explicit, envName, fallback string) string {
@@ -36,16 +39,19 @@ func pathOverride(explicit, envName, fallback string) string {
 	return fallback
 }
 
-// GetAppPaths returns OS-appropriate paths per AI.md PART 3
+// GetAppPaths returns OS-appropriate paths per AI.md PART 4.
 func GetAppPaths(configDir, dataDir string) *AppPaths {
 	isRoot := os.Geteuid() == 0
 
 	return &AppPaths{
-		Config: pathOverride(configDir, "CONFIG_DIR", GetDefaultConfigDir(isRoot)),
-		Data:   pathOverride(dataDir, "DATA_DIR", GetDefaultDataDir(isRoot)),
-		Cache:  pathOverride("", "CACHE_DIR", GetDefaultCacheDir(isRoot)),
-		Log:    pathOverride("", "LOG_DIR", GetDefaultLogDir(isRoot)),
-		Backup: pathOverride("", "BACKUP_DIR", GetDefaultBackupDir(isRoot)),
+		Config:   pathOverride(configDir, "CONFIG_DIR", GetDefaultConfigDir(isRoot)),
+		Data:     pathOverride(dataDir, "DATA_DIR", GetDefaultDataDir(isRoot)),
+		Cache:    pathOverride("", "CACHE_DIR", GetDefaultCacheDir(isRoot)),
+		Log:      pathOverride("", "LOG_DIR", GetDefaultLogDir(isRoot)),
+		Backup:   pathOverride("", "BACKUP_DIR", GetDefaultBackupDir(isRoot)),
+		PIDFile:  pathOverride("", "PID_FILE", GetDefaultPIDFile(isRoot)),
+		SSL:      pathOverride("", "SSL_DIR", GetDefaultSSLDir(isRoot)),
+		Security: pathOverride("", "SECURITY_DIR", GetDefaultSecurityDir(isRoot)),
 	}
 }
 
@@ -118,7 +124,7 @@ func GetDefaultDataDir(isRoot bool) string {
 	}
 }
 
-// GetDefaultCacheDir returns OS-appropriate cache directory per AI.md PART 8
+// GetDefaultCacheDir returns OS-appropriate cache directory per AI.md PART 4
 func GetDefaultCacheDir(isRoot bool) string {
 	switch runtime.GOOS {
 	case "linux":
@@ -148,7 +154,7 @@ func GetDefaultCacheDir(isRoot bool) string {
 	}
 }
 
-// GetDefaultLogDir returns OS-appropriate log directory per AI.md PART 8
+// GetDefaultLogDir returns OS-appropriate log directory per AI.md PART 4
 func GetDefaultLogDir(isRoot bool) string {
 	switch runtime.GOOS {
 	case "linux":
@@ -179,7 +185,97 @@ func GetDefaultLogDir(isRoot bool) string {
 	}
 }
 
-// GetDefaultBackupDir returns OS-appropriate backup directory per AI.md PART 8
+// GetDefaultPIDFile returns the OS-appropriate PID file path per AI.md PART 4.
+func GetDefaultPIDFile(isRoot bool) string {
+	switch runtime.GOOS {
+	case "linux":
+		if isRoot {
+			return fmt.Sprintf("/var/run/%s/%s.pid", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, ProjectName+".pid")
+	case "darwin":
+		if isRoot {
+			return fmt.Sprintf("/var/run/%s/%s.pid", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, "Library", "Application Support", ProjectOrg, ProjectName, ProjectName+".pid")
+	case "windows":
+		// Windows uses the Service Manager; no PID file
+		return ""
+	default:
+		// BSD
+		if isRoot {
+			return fmt.Sprintf("/var/run/%s/%s.pid", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, ProjectName+".pid")
+	}
+}
+
+// GetDefaultSSLDir returns the OS-appropriate SSL directory per AI.md PART 4.
+// Sub-directories letsencrypt/ and local/ live inside this path.
+func GetDefaultSSLDir(isRoot bool) string {
+	switch runtime.GOOS {
+	case "linux":
+		if isRoot {
+			return fmt.Sprintf("/etc/%s/%s/ssl", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".config", ProjectOrg, ProjectName, "ssl")
+	case "darwin":
+		if isRoot {
+			return fmt.Sprintf("/Library/Application Support/%s/%s/ssl", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, "Library", "Application Support", ProjectOrg, ProjectName, "ssl")
+	case "windows":
+		if isRoot {
+			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName, "ssl")
+		}
+		return filepath.Join(os.Getenv("APPDATA"), ProjectOrg, ProjectName, "ssl")
+	default:
+		// BSD
+		if isRoot {
+			return fmt.Sprintf("/usr/local/etc/%s/%s/ssl", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".config", ProjectOrg, ProjectName, "ssl")
+	}
+}
+
+// GetDefaultSecurityDir returns the OS-appropriate security directory per AI.md PART 4.
+// Sub-directories geoip/, blocklists/, cve/, trivy/ live inside this path.
+func GetDefaultSecurityDir(isRoot bool) string {
+	switch runtime.GOOS {
+	case "linux":
+		if isRoot {
+			return fmt.Sprintf("/var/lib/%s/%s/security", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, "security")
+	case "darwin":
+		if isRoot {
+			return fmt.Sprintf("/Library/Application Support/%s/%s/data/security", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, "Library", "Application Support", ProjectOrg, ProjectName, "data", "security")
+	case "windows":
+		if isRoot {
+			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName, "data", "security")
+		}
+		return filepath.Join(os.Getenv("LocalAppData"), ProjectOrg, ProjectName, "security")
+	default:
+		// BSD
+		if isRoot {
+			return fmt.Sprintf("/var/db/%s/%s/security", ProjectOrg, ProjectName)
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, "security")
+	}
+}
+
+// GetDefaultBackupDir returns OS-appropriate backup directory per AI.md PART 4
 func GetDefaultBackupDir(isRoot bool) string {
 	switch runtime.GOOS {
 	case "linux":

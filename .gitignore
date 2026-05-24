@@ -2,9 +2,6 @@
 # Disable reminder in prompt
 ignoredirmessage
 
-# ignore .build_failed files
-**/.build_failed*
-
 # OS generated files
 ### Linux ###
 *~
@@ -102,17 +99,25 @@ $RECYCLE.BIN/
 **/*.rewrite.sh
 **/*.refactor.sh
 
-# Per AI.md PART 3: build/runtime output directories (gitignored)
+# Build output
 binaries/
 releases/
+
+# Runtime volume data (NEVER commit)
 volumes/
 
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
-# Per AI.md PART 0: personal local Claude Code settings (auto-gitignored)
-.claude/settings.local.json
-
-# Per AI.md PART 0: AI config directories are gitignored (regenerated from AI.md)
+# AI config directories (regenerated from AI.md rules, not committed)
 .cursor/
 .aider/
 .ai/
 .windsurf/
+
+# Claude Code personal files (always gitignored)
+CLAUDE.local.md
+.claude/settings.local.json

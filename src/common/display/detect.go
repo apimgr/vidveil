@@ -56,19 +56,25 @@ func DetectDisplayEnv() DisplayEnv {
 	env.IsScreen = os.Getenv("STY") != "" || os.Getenv("TMUX") != ""
 
 	// Detect display environment (platform-specific)
-	env.detectDisplay()
+	env.detectPlatformDisplay()
 
-	// Determine mode
-	env.Mode = env.determineMode()
+	// Auto-detect display mode
+	env.Mode = env.autoDetectDisplayMode()
 
 	return env
 }
 
-// determineMode determines the display mode based on environment
-func (e *DisplayEnv) determineMode() DisplayMode {
+// autoDetectDisplayMode determines the display mode from the detected environment.
+// Per AI.md PART 7: headless check runs first, then TERM=dumb, then GUI/TUI.
+func (e *DisplayEnv) autoDetectDisplayMode() DisplayMode {
 	// No TTY and no display = headless
 	if !e.IsTerminal && !e.HasDisplay {
 		return DisplayModeHeadless
+	}
+
+	// TERM=dumb: force CLI mode (no TUI, no ANSI escapes)
+	if e.TerminalType == "dumb" {
+		return DisplayModeCLI
 	}
 
 	// Has native display = GUI possible
@@ -84,6 +90,24 @@ func (e *DisplayEnv) determineMode() DisplayMode {
 	// Fallback to CLI
 	return DisplayModeCLI
 }
+
+// IsDumbTerminal returns true if running in a dumb terminal (no ANSI support).
+// Per AI.md PART 7: TERM=dumb forces CLI mode, no ANSI escapes, no emojis.
+func (e *DisplayEnv) IsDumbTerminal() bool {
+	return e.TerminalType == "dumb"
+}
+
+// IsAutoDetectDisplayModeGUI returns true if mode is GUI.
+func (e DisplayEnv) IsAutoDetectDisplayModeGUI() bool { return e.Mode == DisplayModeGUI }
+
+// IsAutoDetectDisplayModeTUI returns true if mode is TUI.
+func (e DisplayEnv) IsAutoDetectDisplayModeTUI() bool { return e.Mode == DisplayModeTUI }
+
+// IsAutoDetectDisplayModeCLI returns true if mode is CLI.
+func (e DisplayEnv) IsAutoDetectDisplayModeCLI() bool { return e.Mode == DisplayModeCLI }
+
+// IsAutoDetectDisplayModeHeadless returns true if mode is headless.
+func (e DisplayEnv) IsAutoDetectDisplayModeHeadless() bool { return e.Mode == DisplayModeHeadless }
 
 // String returns a string representation of the display environment
 func (e DisplayEnv) String() string {

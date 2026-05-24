@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"golang.org/x/term"
+
+	"github.com/apimgr/vidveil/src/common/display"
 )
 
 // ColorMode represents the color output mode
@@ -102,6 +104,22 @@ func colorAutoDetect() bool {
 	}
 
 	return true
+}
+
+// CanUseANSI checks if ANSI escape sequences (cursor movement, clear screen, etc.) should be used.
+// Per AI.md PART 7: TERM=dumb and NO_COLOR both disable ANSI output.
+// Takes the detected display environment for accurate dumb-terminal detection.
+func CanUseANSI(env *display.DisplayEnv) bool {
+	if env != nil && env.IsDumbTerminal() {
+		return false
+	}
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	if env != nil {
+		return env.IsTerminal
+	}
+	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 // StyleEnabled checks if text styling (bold/underline/italic) should be used

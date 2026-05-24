@@ -11,8 +11,8 @@ import (
 	"runtime"
 )
 
-// detectDisplay detects the display environment for Unix-like systems
-func (e *DisplayEnv) detectDisplay() {
+// detectPlatformDisplay detects the display environment for Unix-like systems
+func (e *DisplayEnv) detectPlatformDisplay() {
 	switch runtime.GOOS {
 	case "linux", "freebsd", "openbsd", "netbsd":
 		e.detectUnixDisplay()

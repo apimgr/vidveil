@@ -9,8 +9,8 @@ import (
 	"os"
 )
 
-// detectDisplay detects the display environment for Windows
-func (e *DisplayEnv) detectDisplay() {
+// detectPlatformDisplay detects the display environment for Windows
+func (e *DisplayEnv) detectPlatformDisplay() {
 	e.detectWindowsDisplay()
 }
 

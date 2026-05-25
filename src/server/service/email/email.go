@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 18: Email & Notifications
+// AI.md PART 17: Email & Notifications
 package email
 
 import (
@@ -21,157 +21,24 @@ import (
 //go:embed template/*.txt
 var embeddedTemplates embed.FS
 
-// Default templates per AI.md PART 16
+// Default templates per AI.md PART 17.
+// Only system/operator notification templates — no account-related emails.
+// VidVeil has no user accounts (PARTS 34-36 not implemented).
 var defaultTemplates = map[string]string{
-	"welcome": `Subject: Welcome to {app_name}
+	"security_alert": `Subject: Security Alert - {app_name}
 ---
-Hello,
+SECURITY ALERT
 
-Welcome to {app_name}!
-
-Your admin panel is available at: {admin_url}
-Username: {admin_username}
-
---
-{app_name}
-{app_url}`,
-
-	"password_reset": `Subject: Password Reset Request - {app_name}
----
-Hello,
-
-A password reset was requested for your account.
-
-Click the link below to reset your password:
-{reset_link}
-
-This link expires in 1 hour.
-
-Request IP: {ip}
-
-If you did not request this, please ignore this email.
-
---
-{app_name}
-{app_url}`,
-
-	"email_verify": `Subject: Verify Your Email - {app_name}
----
-Hello,
-
-Please verify your email address by clicking the link below:
-{verify_link}
-
-This link expires in 48 hours.
-
-If you did not sign up for {app_name}, please ignore this email.
-
---
-{app_name}
-{app_url}`,
-
-	"mfa_reminder": `Subject: Secure Your Account - {app_name}
----
-Hello,
-
-We noticed you haven't enabled Two-Factor Authentication (2FA) on your {app_name} account.
-
-Enabling 2FA significantly improves your account security. Set it up here:
-{mfa_setup_link}
-
-If you'd like to dismiss these reminders, you can do so in your account settings.
-
---
-{app_name}
-{app_url}`,
-
-	"2fa_enabled": `Subject: Two-Factor Authentication Enabled - {app_name}
----
-Hello,
-
-Two-Factor Authentication has been enabled on your {app_name} account.
-
+From: {app_name} ({fqdn})
 Time: {timestamp}
-IP Address: {ip}
 
-If you did not make this change, please contact your administrator immediately.
+{event}
 
---
-{app_name}
-{app_url}`,
+Details:
+  Source IP: {ip}
+  {details}
 
-	"2fa_disabled": `Subject: Two-Factor Authentication Disabled - {app_name}
----
-Hello,
-
-Two-Factor Authentication has been disabled on your {app_name} account.
-
-Time: {timestamp}
-IP Address: {ip}
-
-Warning: Your account is now less secure. Re-enable 2FA at:
-{mfa_setup_link}
-
-If you did not make this change, please contact your administrator immediately.
-
---
-{app_name}
-{app_url}`,
-
-	"password_changed": `Subject: Your Password Was Changed - {app_name}
----
-Hello,
-
-Your password for {app_name} was changed.
-
-Time: {timestamp}
-IP Address: {ip}
-
-If you did not make this change, please contact your administrator immediately.
-
---
-{app_name}
-{app_url}`,
-
-	"breach_notification": `Subject: Important Security Notice - {app_name}
----
-Hello,
-
-We are writing to inform you of a security incident that may affect your account.
-
-Incident Details:
-{breach_details}
-
-Recommended Actions:
-1. Change your password immediately
-2. Enable Two-Factor Authentication if not already enabled
-3. Review recent account activity
-4. Contact us if you notice suspicious activity
-
-We apologize for any inconvenience and are taking immediate steps to improve security.
-
---
-{app_name}
-{app_url}`,
-
-	"breach_admin_alert": `Subject: [{severity}] Security Breach Detected - {app_name}
----
-URGENT: Security breach detected.
-
-Detection Details:
-{breach_details}
-
-Severity: {severity}
-Detected at: {timestamp}
-Affected users: {affected_count}
-
-Immediate Action Required:
-1. Review audit logs
-2. Rotate all secrets and API keys
-3. Notify affected users
-4. Assess scope of breach
-
---
+────────────────────────────────────────────────────────────────────────
 {app_name}
 {app_url}`,
 
@@ -231,40 +98,6 @@ Valid until: {valid_until}
 {app_name}
 {app_url}`,
 
-	"login_alert": `Subject: New Login - {app_name}
----
-Hello,
-
-A new login to your {app_name} admin panel was detected.
-
-IP Address: {ip}
-Location: {location}
-Device: {device}
-Time: {time}
-
-If this wasn't you, please change your password immediately.
-
---
-{app_name}
-{app_url}`,
-
-	"security_alert": `Subject: Security Alert - {app_name}
----
-Hello,
-
-A security event was detected:
-
-Event: {event}
-Source IP: {ip}
-Details: {details}
-Time: {timestamp}
-
-Please review your security logs.
-
---
-{app_name}
-{app_url}`,
-
 	"scheduler_error": `Subject: Scheduled Task Failed - {app_name}
 ---
 Hello,
@@ -281,7 +114,7 @@ Please check your server logs.
 {app_name}
 {app_url}`,
 
-	"test": `Subject: Test Email from {app_name}
+	"test": `Subject: Test Email - {app_name}
 ---
 Hello,
 

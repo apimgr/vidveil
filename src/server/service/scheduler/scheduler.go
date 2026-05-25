@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 19: Scheduler with Database Persistence
+// AI.md PART 18: Scheduler with Database Persistence
 package scheduler
 
 import (
@@ -49,7 +49,7 @@ type TaskHistory struct {
 	Error     string        `json:"error,omitempty"`
 }
 
-// Scheduler manages scheduled tasks per AI.md PART 19
+// Scheduler manages scheduled tasks per AI.md PART 18
 // Supports optional database persistence for task state survival across restarts
 type Scheduler struct {
 	tasks   map[string]*ScheduledTask
@@ -59,9 +59,9 @@ type Scheduler struct {
 	cancel  context.CancelFunc
 	running bool
 	maxHist int
-	// Optional database for persistence per AI.md PART 19
+	// Optional database for persistence per AI.md PART 18
 	db *sql.DB
-	// Catch-up window per AI.md PART 19: run missed tasks if within this duration
+	// Catch-up window per AI.md PART 18: run missed tasks if within this duration
 	catchUpWindow time.Duration
 }
 
@@ -75,7 +75,7 @@ func NewScheduler() *Scheduler {
 	}
 }
 
-// NewSchedulerWithDB creates a new scheduler with database persistence per AI.md PART 19
+// NewSchedulerWithDB creates a new scheduler with database persistence per AI.md PART 18
 // Task state survives restarts when db is provided
 func NewSchedulerWithDB(db *sql.DB) *Scheduler {
 	return &Scheduler{
@@ -94,7 +94,7 @@ func (s *Scheduler) SetDB(db *sql.DB) {
 	s.db = db
 }
 
-// SetCatchUpWindow sets the catch-up window per AI.md PART 19
+// SetCatchUpWindow sets the catch-up window per AI.md PART 18
 // Missed tasks within this window will run on startup
 func (s *Scheduler) SetCatchUpWindow(window time.Duration) {
 	s.mu.Lock()
@@ -253,7 +253,7 @@ func (s *Scheduler) LoadHistoryFromDB(limit int) error {
 }
 
 // RegisterTask registers a new scheduled task
-// Per AI.md PART 19/22: Supports cron expressions or simple intervals
+// Per AI.md PART 18/22: Supports cron expressions or simple intervals
 // Persisted state (run_count, fail_count, last_run) is restored from database
 func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn TaskFunc) error {
 	// Load existing state from DB before acquiring lock (db operations are thread-safe)
@@ -286,7 +286,7 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 		task.NextRun = time.Now().Add(interval)
 	}
 
-	// Merge persisted state from database per AI.md PART 19
+	// Merge persisted state from database per AI.md PART 18
 	// This ensures run_count, fail_count, last_run survive restarts
 	if existingState != nil {
 		task.RunCount = existingState.RunCount
@@ -367,7 +367,7 @@ func parseInterval(schedule string) (time.Duration, error) {
 }
 
 // Start starts the scheduler
-// Per AI.md PART 19: Checks for missed tasks within catch-up window and runs them
+// Per AI.md PART 18: Checks for missed tasks within catch-up window and runs them
 func (s *Scheduler) Start(ctx context.Context) {
 	s.mu.Lock()
 	if s.running {
@@ -379,7 +379,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 	catchUpWindow := s.catchUpWindow
 	s.mu.Unlock()
 
-	// Check for missed tasks within catch-up window per AI.md PART 19
+	// Check for missed tasks within catch-up window per AI.md PART 18
 	if catchUpWindow > 0 {
 		s.runMissedTasks(catchUpWindow)
 	}
@@ -388,7 +388,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 }
 
 // runMissedTasks runs tasks that were missed while the server was down
-// Per AI.md PART 19: Only runs if missed within catch_up_window
+// Per AI.md PART 18: Only runs if missed within catch_up_window
 func (s *Scheduler) runMissedTasks(window time.Duration) {
 	s.mu.RLock()
 	tasks := make([]*ScheduledTask, 0, len(s.tasks))
@@ -462,7 +462,7 @@ func (s *Scheduler) checkAndRunTasks() {
 }
 
 // runTask executes a single task
-// Per AI.md PART 19: Task state is persisted to database after each run
+// Per AI.md PART 18: Task state is persisted to database after each run
 func (s *Scheduler) runTask(task *ScheduledTask) {
 	s.mu.Lock()
 	task.LastResult = "running"
@@ -518,7 +518,7 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	taskCopy := *task
 	s.mu.Unlock()
 
-	// Persist state to database per AI.md PART 19
+	// Persist state to database per AI.md PART 18
 	// Done outside lock to avoid blocking other operations
 	s.saveTaskStateToDB(&taskCopy)
 	s.saveHistoryToDB(hist)
@@ -539,7 +539,7 @@ func (s *Scheduler) RunTaskNow(taskID string) error {
 }
 
 // EnableTask enables a task
-// Per AI.md PART 19: Enabled state is persisted to database
+// Per AI.md PART 18: Enabled state is persisted to database
 func (s *Scheduler) EnableTask(taskID string) error {
 	s.mu.Lock()
 	task, ok := s.tasks[taskID]
@@ -566,7 +566,7 @@ func (s *Scheduler) EnableTask(taskID string) error {
 }
 
 // DisableTask disables a task
-// Per AI.md PART 19: Enabled state is persisted to database
+// Per AI.md PART 18: Enabled state is persisted to database
 func (s *Scheduler) DisableTask(taskID string) error {
 	s.mu.Lock()
 	task, ok := s.tasks[taskID]
@@ -585,7 +585,7 @@ func (s *Scheduler) DisableTask(taskID string) error {
 }
 
 // SetSchedule updates a task's schedule
-// Per AI.md PART 19/22: Schedule changes are persisted to database
+// Per AI.md PART 18/22: Schedule changes are persisted to database
 func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 	s.mu.Lock()
 	task, ok := s.tasks[taskID]
@@ -737,7 +737,7 @@ type BuiltinTaskFuncs struct {
 }
 
 // RegisterBuiltinTasks registers all built-in scheduled tasks per AI.md
-// PART 19. Task IDs use the spec-canonical underscore form (e.g.
+// PART 18. Task IDs use the spec-canonical underscore form (e.g.
 // "ssl_renewal"). Existing rows in scheduled_tasks / task_history that
 // were persisted under the legacy dot form ("ssl.renewal") are
 // renamed in-place by migrateLegacyTaskIDs() before registration so
@@ -773,14 +773,14 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 			"daily", funcs.CVEUpdate)
 	}
 
-	// session_cleanup - Every 15 minutes per AI.md PART 19
+	// session_cleanup - Every 15 minutes per AI.md PART 18
 	if funcs.SessionCleanup != nil {
 		s.RegisterTask("session_cleanup", "Session Cleanup",
 			"Remove expired user and admin sessions",
 			"15m", funcs.SessionCleanup)
 	}
 
-	// token_cleanup - Every 15 minutes per AI.md PART 19
+	// token_cleanup - Every 15 minutes per AI.md PART 18
 	if funcs.TokenCleanup != nil {
 		s.RegisterTask("token_cleanup", "Token Cleanup",
 			"Remove expired API tokens and reset tokens",
@@ -794,20 +794,20 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 			"daily", funcs.LogRotation)
 	}
 
-	// backup_daily - Per AI.md PART 19: Daily at 02:00, enabled by default
+	// backup_daily - Per AI.md PART 18: Daily at 02:00, enabled by default
 	if funcs.BackupDaily != nil {
 		s.RegisterTask("backup_daily", "Daily Backup",
 			"Create daily full backup of configuration and databases",
 			"0 2 * * *", funcs.BackupDaily)
-		// Enabled by default per AI.md PART 19 (Skippable: Yes = admin can disable)
+		// Enabled by default per AI.md PART 18 (Skippable: Yes = admin can disable)
 	}
 
-	// backup_hourly - Per AI.md PART 19: Hourly incremental, disabled by default
+	// backup_hourly - Per AI.md PART 18: Hourly incremental, disabled by default
 	if funcs.BackupHourly != nil {
 		s.RegisterTask("backup_hourly", "Hourly Backup",
 			"Create hourly incremental backup (disabled by default)",
 			"@hourly", funcs.BackupHourly)
-		// Disabled by default per AI.md PART 19
+		// Disabled by default per AI.md PART 18
 		s.DisableTask("backup_hourly")
 	}
 
@@ -834,7 +834,7 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 }
 
 // migrateLegacyTaskIDs renames built-in task IDs from the old "xxx.yyy"
-// form to the spec-canonical "xxx_yyy" form (PART 19) in the persisted
+// form to the spec-canonical "xxx_yyy" form (PART 18) in the persisted
 // scheduled_tasks and task_history tables, so historical state and
 // admin-tweaked schedules survive the upgrade. Idempotent — re-running
 // it after migration is a no-op.

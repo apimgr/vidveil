@@ -57,6 +57,7 @@ func init() {
 }
 
 func main() {
+	startTime := time.Now()
 	args := os.Args[1:]
 
 	// Parse arguments manually per AI.md spec
@@ -453,7 +454,8 @@ func main() {
 	}
 
 	// Initialize database per AI.md PART 10
-	// Two separate databases: server.db (admin/config) and users.db (user accounts)
+	// VidVeil is stateless/privacy-first: only server.db (admin/config/audit).
+	// No regular users, organizations, or custom domains (PARTS 34-36 NOT implemented).
 	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
 	migrationMgr, err := database.NewMigrationManager(serverDBPath)
 	if err != nil {
@@ -842,7 +844,7 @@ func main() {
 		// Dump status to stderr
 		fmt.Fprintf(os.Stderr, "[STATUS] Server running on %s:%s\n", appConfig.Server.Address, appConfig.Server.Port)
 		fmt.Fprintf(os.Stderr, "[STATUS] Mode: %s, Debug: %v\n", appConfig.Server.Mode, mode.IsDebugEnabled())
-		fmt.Fprintf(os.Stderr, "[STATUS] Uptime: %v\n", time.Since(time.Now()))
+		fmt.Fprintf(os.Stderr, "[STATUS] Uptime: %v\n", time.Since(startTime))
 	})
 
 	// Wait for shutdown signal per AI.md PART 8
@@ -1043,7 +1045,7 @@ func printInit(shell, binaryName string) {
 func printBashCompletions(binaryName string) {
 	fmt.Printf(`_%s_completions() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
-    local opts="--help --version --shell --config --data --cache --log --backup --pid --address --port --mode --status --daemon --debug --color --service --maintenance --update"
+    local opts="--help --version --shell --config --data --cache --log --backup --pid --address --port --baseurl --mode --status --daemon --debug --color --lang --service --maintenance --update"
     COMPREPLY=($(compgen -W "$opts" -- "$cur"))
 }
 complete -F _%s_completions %s
@@ -1065,11 +1067,13 @@ _arguments \
     '--pid[PID file]:file:_files' \
     '--address[Listen address]:address:' \
     '--port[Listen port]:port:' \
+    '--baseurl[URL path prefix]:path:' \
     '--mode[Application mode]:mode:(production development)' \
     '--status[Show status]' \
     '--daemon[Run as daemon]' \
     '--debug[Enable debug mode]' \
     '--color[Color output]:color:(always never auto)' \
+    '--lang[Output language]:code:' \
     '--service[Service command]:command:(start stop restart reload status install uninstall)' \
     '--maintenance[Maintenance command]:command:(backup restore update mode setup)' \
     '--update[Update command]:command:(check yes)'
@@ -1088,15 +1092,17 @@ complete -c %s -l backup -d 'Backup directory' -r
 complete -c %s -l pid -d 'PID file' -r
 complete -c %s -l address -d 'Listen address'
 complete -c %s -l port -d 'Listen port'
+complete -c %s -l baseurl -d 'URL path prefix'
 complete -c %s -l mode -d 'Application mode' -xa 'production development'
 complete -c %s -l status -d 'Show status'
 complete -c %s -l daemon -d 'Run as daemon'
 complete -c %s -l debug -d 'Enable debug mode'
 complete -c %s -l color -d 'Color output' -xa 'always never auto'
+complete -c %s -l lang -d 'Output language'
 complete -c %s -l service -d 'Service command' -xa 'start stop restart reload status install uninstall'
 complete -c %s -l maintenance -d 'Maintenance command' -xa 'backup restore update mode setup'
 complete -c %s -l update -d 'Update command' -xa 'check yes'
-`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
+`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 }
 
 func printPowerShellCompletions(binaryName string) {
@@ -1104,8 +1110,8 @@ func printPowerShellCompletions(binaryName string) {
     param($wordToComplete, $commandAst, $cursorPosition)
     $completions = @(
         '--help', '--version', '--shell', '--config', '--data', '--cache',
-        '--log', '--backup', '--pid', '--address', '--port', '--mode',
-        '--status', '--daemon', '--debug', '--color', '--service', '--maintenance', '--update'
+        '--log', '--backup', '--pid', '--address', '--port', '--baseurl', '--mode',
+        '--status', '--daemon', '--debug', '--color', '--lang', '--service', '--maintenance', '--update'
     )
     $completions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)

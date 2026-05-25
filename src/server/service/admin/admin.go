@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 17: Admin Panel - Admin Credentials Management
+// AI.md: Admin Panel - Admin Credentials Management
 // Admin credentials stored in database, NOT config file
-// Password hashing uses Argon2id per AI.md PART 2
+// Password hashing uses Argon2id per AI.md (Argon2id required)
 package admin
 
 import (
@@ -21,7 +21,7 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// AdminService manages admin credentials per AI.md PART 31
+// AdminService manages admin credentials per AI.md (admin setup/invite flow)
 type AdminService struct {
 	db           *sql.DB
 	mu           sync.RWMutex
@@ -106,7 +106,7 @@ func (s *AdminService) Initialize() error {
 			return fmt.Errorf("failed to store setup token: %w", err)
 		}
 
-		// Console output is handled in main.go per AI.md PART 31
+		// Console output is handled in main.go per AI.md (admin setup/invite flow)
 	}
 
 	return nil
@@ -154,7 +154,7 @@ func (s *AdminService) ValidateSetupToken(token string) bool {
 }
 
 // CreateAdmin creates a new admin account
-// Uses Argon2id for password hashing per AI.md PART 2
+// Uses Argon2id for password hashing per AI.md (Argon2id required)
 // Server admin accounts are exempt from username blocklist per PART 31
 func (s *AdminService) CreateAdmin(username, password string, isPrimary bool) (*AdminUser, error) {
 	s.mu.Lock()
@@ -214,7 +214,7 @@ func (s *AdminService) CreateAdminWithSetupToken(token, username, password strin
 }
 
 // Authenticate validates admin credentials
-// Uses Argon2id for password verification per AI.md PART 2
+// Uses Argon2id for password verification per AI.md (Argon2id required)
 func (s *AdminService) Authenticate(username, password string) (*AdminUser, error) {
 	var admin AdminUser
 	var passwordHash string
@@ -252,7 +252,7 @@ func (s *AdminService) Authenticate(username, password string) (*AdminUser, erro
 }
 
 // ChangePassword updates admin password
-// Uses Argon2id for password hashing per AI.md PART 2
+// Uses Argon2id for password hashing per AI.md (Argon2id required)
 func (s *AdminService) ChangePassword(adminID int64, currentPassword, newPassword string) error {
 	var passwordHash string
 	err := s.queryRowCtx(`
@@ -368,7 +368,7 @@ type AdminInvite struct {
 	CreatedBy int64
 }
 
-// CreateAdminInvite creates an invite for a new admin per AI.md PART 31
+// CreateAdminInvite creates an invite for a new admin per AI.md (admin setup/invite flow)
 func (s *AdminService) CreateAdminInvite(createdBy int64, username string, expiresIn time.Duration) (string, error) {
 	// Validate username
 	if err := validation.ValidateUsername(username, true); err != nil {
@@ -400,7 +400,7 @@ func (s *AdminService) CreateAdminInvite(createdBy int64, username string, expir
 	return token, nil
 }
 
-// ValidateInviteToken validates an admin invite token per AI.md PART 31
+// ValidateInviteToken validates an admin invite token per AI.md (admin setup/invite flow)
 func (s *AdminService) ValidateInviteToken(token string) (*AdminInvite, error) {
 	var invite AdminInvite
 	var usedAt sql.NullTime
@@ -435,7 +435,7 @@ func (s *AdminService) ValidateInviteToken(token string) (*AdminInvite, error) {
 	return &invite, nil
 }
 
-// CreateAdminWithInvite creates an admin account from an invite token per AI.md PART 31
+// CreateAdminWithInvite creates an admin account from an invite token per AI.md (admin setup/invite flow)
 func (s *AdminService) CreateAdminWithInvite(token, username, password string) (*AdminUser, error) {
 	// Validate the token
 	invite, err := s.ValidateInviteToken(token)
@@ -555,7 +555,7 @@ const (
 	argonSaltLen = 16
 )
 
-// hashPassword hashes a password using Argon2id per AI.md PART 2
+// hashPassword hashes a password using Argon2id per AI.md (Argon2id required)
 // Returns PHC string format: $argon2id$v=19$m=65536,t=3,p=4$<base64-salt>$<base64-hash>
 func hashPassword(password string) (string, error) {
 	// Generate random salt
@@ -802,7 +802,7 @@ func (s *AdminService) GetRecoveryKeysStatus(adminID int64) (*RecoveryKeyInfo, e
 }
 
 // CleanupExpiredSessions removes expired admin sessions (called by scheduler)
-// Per AI.md PART 26: session.cleanup runs hourly
+// Per AI.md (scheduler): session.cleanup runs hourly
 func (s *AdminService) CleanupExpiredSessions() error {
 	_, err := s.execCtx(`
 		DELETE FROM admin_sessions WHERE expires_at < ?
@@ -814,7 +814,7 @@ func (s *AdminService) CleanupExpiredSessions() error {
 }
 
 // CleanupExpiredTokens removes expired API tokens and reset tokens (called by scheduler)
-// Per AI.md PART 26: token.cleanup runs daily
+// Per AI.md (scheduler): token.cleanup runs daily
 func (s *AdminService) CleanupExpiredTokens() error {
 	// Clean up expired setup tokens (password reset, invites, etc.)
 	_, err := s.execCtx(`
@@ -836,7 +836,7 @@ func (s *AdminService) CleanupExpiredTokens() error {
 }
 
 // GetTOTPSecret returns the TOTP secret for an admin (for 2FA verification)
-// Per AI.md PART 17: TOTP Two-Factor Authentication
+// Per AI.md (admin panel / TOTP): TOTP Two-Factor Authentication
 func (s *AdminService) GetTOTPSecret(adminID int64) (string, error) {
 	var secret sql.NullString
 	err := s.queryRowCtx(`
@@ -858,7 +858,7 @@ func (s *AdminService) GetTOTPSecret(adminID int64) (string, error) {
 }
 
 // GetTOTPBackupCodes returns the backup codes for an admin
-// Per AI.md PART 17: 10 one-time recovery codes
+// Per AI.md (admin panel / TOTP): 10 one-time recovery codes
 func (s *AdminService) GetTOTPBackupCodes(adminID int64) ([]string, error) {
 	var codesJSON sql.NullString
 	err := s.queryRowCtx(`
@@ -917,7 +917,7 @@ func (s *AdminService) UseBackupCode(adminID int64, code string) (bool, error) {
 }
 
 // EnableTOTP enables 2FA for an admin account
-// Per AI.md PART 17: QR code + manual entry key at /admin/profile/security
+// Per AI.md (admin panel / TOTP): QR code + manual entry key at /admin/profile/security
 func (s *AdminService) EnableTOTP(adminID int64, secret string, backupCodes []string) error {
 	codesStr := strings.Join(backupCodes, ",")
 	_, err := s.execCtx(`
@@ -929,7 +929,7 @@ func (s *AdminService) EnableTOTP(adminID int64, secret string, backupCodes []st
 }
 
 // DisableTOTP disables 2FA for an admin account
-// Per AI.md PART 17: Requires current TOTP code or recovery key to disable
+// Per AI.md (admin panel / TOTP): Requires current TOTP code or recovery key to disable
 func (s *AdminService) DisableTOTP(adminID int64) error {
 	_, err := s.execCtx(`
 		UPDATE admin_credentials

@@ -16,7 +16,6 @@ const (
 	EndpointPasswordReset = "password_reset"
 	EndpointAPIAuth       = "api_authenticated"
 	EndpointAPIUnauth     = "api_unauthenticated"
-	EndpointRegistration  = "registration"
 	EndpointFileUpload    = "file_upload"
 	EndpointDefault       = "default"
 )
@@ -28,7 +27,6 @@ const (
 // | Password reset | 3 | 1 hour |
 // | API (authenticated) | 100 | 1 min |
 // | API (unauthenticated) | 20 | 1 min |
-// | Registration | 5 | 1 hour |
 // | File upload | 10 | 1 hour |
 var DefaultLimits = map[string]struct {
 	Requests int
@@ -38,7 +36,6 @@ var DefaultLimits = map[string]struct {
 	EndpointPasswordReset: {3, time.Hour},
 	EndpointAPIAuth:       {100, time.Minute},
 	EndpointAPIUnauth:     {20, time.Minute},
-	EndpointRegistration:  {5, time.Hour},
 	EndpointFileUpload:    {10, time.Hour},
 	EndpointDefault:       {100, time.Minute},
 }
@@ -101,11 +98,6 @@ func (el *EndpointLimiters) AllowAPIAuth(ip string) bool {
 // AllowAPIUnauth checks rate limit for unauthenticated API per AI.md PART 1 (20 per min)
 func (el *EndpointLimiters) AllowAPIUnauth(ip string) bool {
 	return el.Get(EndpointAPIUnauth).Allow(ip)
-}
-
-// AllowRegistration checks rate limit for registration per AI.md PART 1 (5 per hour)
-func (el *EndpointLimiters) AllowRegistration(ip string) bool {
-	return el.Get(EndpointRegistration).Allow(ip)
 }
 
 // AllowFileUpload checks rate limit for file uploads per AI.md PART 1 (10 per hour)

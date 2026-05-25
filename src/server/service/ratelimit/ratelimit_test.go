@@ -302,7 +302,6 @@ func TestEndpointLimiters(t *testing.T) {
 		EndpointPasswordReset,
 		EndpointAPIAuth,
 		EndpointAPIUnauth,
-		EndpointRegistration,
 		EndpointFileUpload,
 		EndpointDefault,
 	}
@@ -328,7 +327,6 @@ func TestEndpointLimiterDefaults(t *testing.T) {
 		{EndpointPasswordReset, 3, time.Hour},
 		{EndpointAPIAuth, 100, time.Minute},
 		{EndpointAPIUnauth, 20, time.Minute},
-		{EndpointRegistration, 5, time.Hour},
 		{EndpointFileUpload, 10, time.Hour},
 	}
 

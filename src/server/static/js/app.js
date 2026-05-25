@@ -2512,3 +2512,99 @@ window.addEventListener('offline', function() {
     if (apiBase)   { window.API_BASE   = apiBase; }
     if (adminPath) { window.ADMIN_PATH = adminPath; }
 }());
+
+// Copy button handler (AI.md PART 16: code-block copy button)
+// Handles .copy-btn elements with data-copy attribute or preceding .code-content sibling
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.copy-btn');
+    if (!btn) { return; }
+    var text = btn.dataset.copy;
+    if (!text) {
+        var prev = btn.previousElementSibling;
+        if (prev) { text = prev.textContent; }
+    }
+    if (!text) { return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+            var icon = btn.querySelector('.copy-icon');
+            if (icon) {
+                var orig = icon.textContent;
+                icon.textContent = '✓';
+                btn.classList.add('copied');
+                setTimeout(function() {
+                    icon.textContent = orig;
+                    btn.classList.remove('copied');
+                }, 2000);
+            } else {
+                btn.classList.add('copied');
+                setTimeout(function() { btn.classList.remove('copied'); }, 2000);
+            }
+        }).catch(function() {});
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch(ex) {}
+        document.body.removeChild(ta);
+        btn.classList.add('copied');
+        setTimeout(function() { btn.classList.remove('copied'); }, 2000);
+    }
+});
+
+// PWA install prompt (AI.md PART 16)
+var deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    var installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) { installBtn.hidden = false; }
+});
+window.addEventListener('appinstalled', function() {
+    deferredPrompt = null;
+    var installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) { installBtn.hidden = true; }
+});
+
+// App update notification (AI.md PART 16: service worker update flow)
+function showUpdateNotification() {
+    if (document.getElementById('update-banner')) { return; }
+    var banner = document.createElement('div');
+    banner.id = 'update-banner';
+    banner.className = 'update-banner';
+    banner.innerHTML = '<span>A new version is available</span>'
+        + '<button onclick="updateApp()" class="btn btn-primary btn-sm">Update Now</button>'
+        + '<button onclick="this.parentElement.remove()" class="btn btn-secondary btn-sm">Later</button>';
+    document.body.appendChild(banner);
+}
+
+function updateApp() {
+    navigator.serviceWorker.ready.then(function(reg) {
+        if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+    });
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+        window.location.reload();
+    });
+}
+
+// Check for SW updates and notify user (AI.md PART 16)
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then(function(reg) {
+        reg.addEventListener('updatefound', function() {
+            var newWorker = reg.installing;
+            if (!newWorker) { return; }
+            newWorker.addEventListener('statechange', function() {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    showUpdateNotification();
+                }
+            });
+        });
+    });
+}
+
+window.showUpdateNotification = showUpdateNotification;
+window.updateApp = updateApp;

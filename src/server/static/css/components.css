@@ -319,6 +319,161 @@ dialog::backdrop {
   color: var(--error);
 }
 
+/* Long strings (IPv6, Tor, tokens, hashes) per AI.md PART 16 */
+.long-string,
+.ip-address,
+.onion-address,
+.api-token,
+.hash,
+.uuid,
+.monospace-data {
+  word-break: break-all;
+  overflow-wrap: break-word;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.875rem;
+}
+
+/* Container - mobile-first per AI.md PART 16 */
+.container {
+  width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .container {
+    width: 90%;
+    padding-left: 0;
+    padding-right: 0;
+    max-width: 1400px;
+  }
+}
+
+/* Code block with copy button - mobile-first per AI.md PART 16 */
+.code-block {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  margin: 0.25rem 0;
+}
+
+.code-content {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-code-bg, rgba(255, 255, 255, 0.1));
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.875rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border, #44475a);
+  border-radius: 4px;
+  background: var(--bg-secondary, #44475a);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.2s, border-color 0.2s;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.copy-btn:hover {
+  background: var(--bg-tertiary, #1e1f29);
+  border-color: var(--accent, #bd93f9);
+}
+
+.copy-btn.copied {
+  background: var(--color-success-bg, rgba(80, 250, 123, 0.15));
+  border-color: var(--color-success, #50fa7b);
+}
+
+.copy-text {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .copy-text {
+    display: inline;
+  }
+}
+
+/* Multi-line code block - mobile-first per AI.md PART 16 */
+.code-block-multi {
+  margin: 1rem 0;
+  border: 1px solid var(--border, #44475a);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary, #44475a);
+  border-bottom: 1px solid var(--border, #44475a);
+  font-size: 0.75rem;
+}
+
+.code-lang {
+  color: var(--color-muted, #888);
+  text-transform: uppercase;
+}
+
+.code-block-multi pre {
+  margin: 0;
+  padding: 0.75rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.code-block-multi code {
+  display: block;
+  padding: 0;
+  background: none;
+  white-space: pre;
+}
+
+@media (min-width: 768px) {
+  .code-header {
+    padding: 0.5rem 1rem;
+  }
+  .code-block-multi pre {
+    padding: 1rem;
+  }
+}
+
+/* PWA update banner per AI.md PART 16 */
+.update-banner {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-secondary, #44475a);
+  border: 1px solid var(--accent, #bd93f9);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 9998;
+  font-size: 0.875rem;
+  max-width: calc(100vw - 2rem);
+}
+
 /* ARIA live region for announcements */
 .sr-only {
   position: absolute;

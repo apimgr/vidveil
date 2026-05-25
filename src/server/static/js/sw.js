@@ -67,6 +67,15 @@ self.addEventListener('fetch', event => {
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request)
+        .then(cached => cached || caches.match('/offline.html'))
+      )
   );
+});
+
+// Message event - handle SKIP_WAITING from app update per AI.md PART 16
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -910,4 +911,32 @@ func (sm *SchemaManager) tableExists(ctx context.Context, tableName string) (boo
 // Per AI.md PART 10: No migrations table, rollback not tracked
 func (sm *SchemaManager) RollbackMigration() error {
 	return fmt.Errorf("rollback not supported: per AI.md PART 10, use CREATE TABLE IF NOT EXISTS pattern")
+}
+
+// isColumnExistsError checks whether an error indicates a column already exists.
+// Per AI.md PART 10: Used with ALTER TABLE ADD COLUMN to make schema updates idempotent.
+// Covers SQLite ("duplicate column"), PostgreSQL ("already exists"), MySQL ("Duplicate column"),
+// and MSSQL ("Column names in each table must be unique").
+func isColumnExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "duplicate column") ||
+		strings.Contains(msg, "already exists") ||
+		strings.Contains(msg, "Duplicate column") ||
+		strings.Contains(msg, "Column names in each table must be unique")
+}
+
+// isSerializationError checks whether an error is a database serialization / lock conflict.
+// Per AI.md PART 10: Used with WithSerializableRetry to retry on transient lock failures.
+// Covers SQLite ("SQLITE_BUSY", "database is locked") and PostgreSQL ("could not serialize").
+func isSerializationError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "SQLITE_BUSY") ||
+		strings.Contains(msg, "database is locked") ||
+		strings.Contains(msg, "could not serialize")
 }

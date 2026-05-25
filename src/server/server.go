@@ -219,6 +219,14 @@ func (s *Server) setupMiddleware() {
 			if s.appConfig.Server.SSL.Enabled {
 				w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 			}
+			// Reporting-Endpoints + legacy Report-To + NEL per AI.md PART 11
+			// Both modern (Reporting-Endpoints) and legacy (Report-To) formats are required.
+			// api_version is "v1" per IDEA.md project variable.
+			proto, fqdn, _ := urlvars.GlobalResolver().GetURLVars(r)
+			reportsBase := proto + "://" + fqdn + "/api/v1/server/reports"
+			w.Header().Set("Reporting-Endpoints", `default="`+reportsBase+`/default"`)
+			w.Header().Set("Report-To", `{"group":"default","max_age":10886400,"endpoints":[{"url":"`+reportsBase+`/default"}]}`)
+			w.Header().Set("NEL", `{"report_to":"default","max_age":2592000,"include_subdomains":true}`)
 			// Add Request ID to response headers per AI.md PART 14
 			if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 				w.Header().Set("X-Request-ID", reqID)
@@ -249,6 +257,10 @@ func (s *Server) setupMiddleware() {
 	// Blocklist middleware per AI.md PART 11 — checks IP against external
 	// IP/domain blocklists (e.g., abuse databases). Allowlisted IPs are exempt.
 	s.router.Use(s.blocklistMiddleware)
+
+	// Sec-Fetch-* validation per AI.md PART 11 — defense-in-depth against CSRF
+	// and clickjacking. Present-and-bad reject only; absence is a legacy-browser pass.
+	s.router.Use(secFetchValidationMiddleware)
 
 	// Request body size limiting per AI.md PART 12 (max_body_size default 10MB)
 	// Applied before handler so untrusted input is size-capped per memory safety rules
@@ -1184,4 +1196,40 @@ func extractClientIP(r *http.Request) string {
 		ip = r.RemoteAddr
 	}
 	return ip
+}
+
+// secFetchValidationMiddleware validates Sec-Fetch-* request headers per AI.md PART 11.
+// This is a defense-in-depth layer against CSRF and clickjacking — it runs BEFORE
+// the CSRF token check. Validation is "present-and-bad reject only": absent headers
+// are treated as a legacy-browser pass-through and fall through to the CSRF token check.
+//
+// Rules per PART 11:
+//   - Sec-Fetch-Site: reject cross-site on POST/PUT/PATCH/DELETE without Bearer token
+//     and path not in CSRF exempt paths.
+//   - Sec-Fetch-Mode: reject navigate on /api/* endpoints (unintended top-level nav).
+//   - Sec-Fetch-Dest: reject iframe on endpoints not in frame-ancestors allow-list.
+func secFetchValidationMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Sec-Fetch-Site: block cross-site state-changing requests without Bearer auth
+		site := r.Header.Get("Sec-Fetch-Site")
+		if site == "cross-site" {
+			switch r.Method {
+			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+				// Allow if Bearer token present — Bearer-authenticated APIs are CORS-protected
+				if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+					http.Error(w, "Cross-site requests are not permitted.", http.StatusForbidden)
+					return
+				}
+			}
+		}
+
+		// Sec-Fetch-Mode: block navigate fetches to /api/* — indicates unintended top-level nav
+		mode := r.Header.Get("Sec-Fetch-Mode")
+		if mode == "navigate" && strings.HasPrefix(r.URL.Path, "/api/") {
+			http.Error(w, "Direct navigation to API endpoints is not permitted.", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

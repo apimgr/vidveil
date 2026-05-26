@@ -82,7 +82,7 @@ func main() {
 		serviceCmd string
 		maintCmd   string
 		maintArg   string
-		// Per AI.md PART 22: encryption password for backup/restore
+		// Per AI.md PART 21: encryption password for backup/restore
 		maintPassword string
 		updateCmd     string
 		updateArg     string
@@ -209,7 +209,7 @@ func main() {
 			}
 
 		case "--update":
-			// AI.md PART 23: --update [check|yes|branch {stable|beta|daily}]
+			// AI.md PART 22: --update [check|yes|branch {stable|beta|daily}]
 			// Default per spec
 			updateCmd = "yes"
 			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
@@ -229,7 +229,7 @@ func main() {
 				for i+1 < len(args) {
 					nextArg := args[i+1]
 					if nextArg == "--password" && i+2 < len(args) {
-						// Per AI.md PART 22: --password for backup/restore encryption
+						// Per AI.md PART 21: --password for backup/restore encryption
 						i += 2
 						maintPassword = args[i]
 					} else if !strings.HasPrefix(nextArg, "--") && maintArg == "" {
@@ -592,12 +592,12 @@ func main() {
 			return nil
 		},
 		BackupDaily: func(ctx context.Context) error {
-			// Daily backup per AI.md PART 19/22 (enabled by default, daily at 02:00)
+			// Daily backup per AI.md PART 18/21 (enabled by default, daily at 02:00)
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
 			return maint.Backup("")
 		},
 		BackupHourly: func(ctx context.Context) error {
-			// Hourly incremental backup per AI.md PART 19/22 (disabled by default)
+			// Hourly incremental backup per AI.md PART 18/21 (disabled by default)
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
 			return maint.BackupIncremental("")
 		},
@@ -1262,7 +1262,7 @@ Supported service managers:
 	}
 }
 
-// handleUpdateCommand implements AI.md PART 23 --update command
+// handleUpdateCommand implements AI.md PART 22 --update command
 func handleUpdateCommand(cmd, arg string) {
 	maint := maintenance.NewMaintenanceManager("", "", version.GetVersion())
 
@@ -1373,7 +1373,7 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
 
 	switch cmd {
 	case "backup":
-		// Per AI.md PART 22: Support --password for encrypted backups
+		// Per AI.md PART 21: Support --password for encrypted backups
 		if password != "" {
 			fmt.Println("Creating encrypted backup...")
 			if err := maint.BackupWithOptions(maintenance.BackupOptions{
@@ -1399,7 +1399,7 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
 		} else {
 			fmt.Printf("Restoring from %s...\n", arg)
 		}
-		// Per AI.md PART 22: Support --password for encrypted backups
+		// Per AI.md PART 21: Support --password for encrypted backups
 		if err := maint.RestoreWithPassword(arg, password); err != nil {
 			fmt.Fprintf(os.Stderr, "❌ Restore failed: %v\n", err)
 			os.Exit(1)
@@ -1468,7 +1468,7 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
   vidveil --maintenance setup                               Reset admin credentials (recovery)
 
 Options:
-  --password <password>    Encryption password for backup/restore (per AI.md PART 22)
+  --password <password>    Encryption password for backup/restore (per AI.md PART 21)
 
 Examples:
   vidveil --maintenance backup                              # Backup to default location

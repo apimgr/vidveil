@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 22: Backup & Restore
+// AI.md PART 21: Backup & Restore | PART 22: Update Command
 package maintenance
 
 import (
@@ -33,7 +33,7 @@ type MaintenanceManager struct {
 	version string
 }
 
-// BackupOptions configures backup behavior per AI.md PART 22
+// BackupOptions configures backup behavior per AI.md PART 21
 type BackupOptions struct {
 	// Filename is output filename (auto-generated if empty)
 	Filename string
@@ -53,7 +53,7 @@ type BackupOptions struct {
 	KeepYearly int
 }
 
-// BackupManifest contains backup metadata per AI.md PART 22
+// BackupManifest contains backup metadata per AI.md PART 21
 type BackupManifest struct {
 	Version          string   `json:"version"`
 	CreatedAt        string   `json:"created_at"`
@@ -75,7 +75,7 @@ func NewMaintenanceManager(configDir, dataDir, version string) *MaintenanceManag
 
 // Backup creates a backup of configuration and data (simple version)
 func (m *MaintenanceManager) Backup(backupFile string) error {
-	// Default per AI.md PART 22: MaxBackups=1
+	// Default per AI.md PART 21: MaxBackups=1
 	return m.BackupWithOptions(BackupOptions{
 		Filename:    backupFile,
 		IncludeData: true,
@@ -97,9 +97,9 @@ func (m *MaintenanceManager) BackupIncremental(backupFile string) error {
 	})
 }
 
-// BackupWithOptions creates a backup with full options per AI.md PART 22
+// BackupWithOptions creates a backup with full options per AI.md PART 21
 func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
-	// Generate filename per PART 22: vidveil_backup_YYYY-MM-DD_HHMMSS.tar.gz
+	// Generate filename per PART 21: vidveil_backup_YYYY-MM-DD_HHMMSS.tar.gz
 	backupFile := opts.Filename
 	if backupFile == "" {
 		timestamp := time.Now().Format("2006-01-02_150405")
@@ -211,7 +211,7 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 		return fmt.Errorf("backup verification failed: %w", err)
 	}
 
-	// Apply retention policy (default max 1 per AI.md PART 22)
+	// Apply retention policy (default max 1 per AI.md PART 21)
 	maxBackups := opts.MaxBackups
 	if maxBackups == 0 {
 		maxBackups = 1
@@ -354,11 +354,11 @@ func (m *MaintenanceManager) applyRetention(maxBackups int) error {
 	return m.applyRetentionWithOptions(maxBackups, 0, 0, 0)
 }
 
-// applyRetentionWithOptions removes old backups per AI.md PART 22 retention policy
+// applyRetentionWithOptions removes old backups per AI.md PART 21 retention policy
 // Priority order: yearly > monthly > weekly > daily
 func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, keepMonthly, keepYearly int) error {
 	if maxBackups <= 0 {
-		// Default per PART 22
+		// Default per PART 21
 		maxBackups = 1
 	}
 
@@ -966,7 +966,7 @@ func (m *MaintenanceManager) ListBackups() ([]BackupInfo, error) {
 			continue
 		}
 
-		// Only include .tar.gz and .tar.gz.enc files per AI.md PART 22
+		// Only include .tar.gz and .tar.gz.enc files per AI.md PART 21
 		if !strings.HasSuffix(file.Name(), ".tar.gz") && !strings.HasSuffix(file.Name(), ".tar.gz.enc") {
 			continue
 		}

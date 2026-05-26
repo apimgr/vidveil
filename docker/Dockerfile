@@ -33,27 +33,12 @@ FROM alpine:latest
 ARG VERSION=dev
 ARG BUILD_DATE
 ARG COMMIT_ID
-ARG LICENSE=MIT
 
-# Static Labels
-LABEL maintainer="apimgr <apimgr@users.noreply.github.com>" \
-      org.opencontainers.image.vendor="apimgr" \
-      org.opencontainers.image.authors="apimgr" \
-      org.opencontainers.image.title="vidveil" \
-      org.opencontainers.image.base.name="vidveil" \
-      org.opencontainers.image.description="Privacy-respecting adult video meta search engine with 43 search engines." \
-      org.opencontainers.image.url="https://github.com/apimgr/vidveil" \
-      org.opencontainers.image.source="https://github.com/apimgr/vidveil" \
-      org.opencontainers.image.documentation="https://github.com/apimgr/vidveil" \
-      org.opencontainers.image.vcs-type="Git" \
-      com.github.containers.toolbox="false"
-
-# Dynamic Labels (from ARGs)
-LABEL org.opencontainers.image.licenses="${LICENSE}" \
-      org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.schema-version="${VERSION}" \
-      org.opencontainers.image.revision="${COMMIT_ID}"
+# No LABEL blocks — all image metadata is applied as OCI annotations at build time.
+# Pass --annotation flags to docker buildx build (Makefile docker target handles this).
+# Annotations attach to the manifest index and are visible on multiarch pulls.
+# LABEL applies only to per-platform layers and is invisible on multiarch pulls.
+# See AI.md PART 26 → "Multi-Arch Image Annotations".
 
 # Install required packages
 # NOTE: Tor binary installed but NOT configured here - binary handles all Tor setup (see PART 32)

@@ -204,6 +204,7 @@ docker:
 		docker buildx use $(PROJECT)-builder
 
 	# Build and push multi-arch (multi-stage Dockerfile handles Go compilation)
+	# OCI annotations on manifest index (visible on multiarch pulls - no LABEL in Dockerfile)
 	@docker buildx build \
 		-f ./docker/Dockerfile \
 		--platform linux/amd64,linux/arm64 \
@@ -211,6 +212,19 @@ docker:
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--build-arg COMMIT_ID="$(COMMIT_ID)" \
 		--build-arg OFFICIAL_SITE="$(OFFICIAL_SITE)" \
+		--annotation "org.opencontainers.image.title=$(PROJECT)" \
+		--annotation "org.opencontainers.image.description=$(PROJECT) - standard image (alpine)" \
+		--annotation "org.opencontainers.image.vendor=$(ORG)" \
+		--annotation "org.opencontainers.image.authors=$(ORG)" \
+		--annotation "org.opencontainers.image.url=https://github.com/$(ORG)/$(PROJECT)" \
+		--annotation "org.opencontainers.image.source=https://github.com/$(ORG)/$(PROJECT)" \
+		--annotation "org.opencontainers.image.documentation=https://github.com/$(ORG)/$(PROJECT)" \
+		--annotation "org.opencontainers.image.licenses=MIT" \
+		--annotation "org.opencontainers.image.created=$(BUILD_DATE)" \
+		--annotation "org.opencontainers.image.version=$(VERSION)" \
+		--annotation "org.opencontainers.image.revision=$(COMMIT_ID)" \
+		--annotation "org.opencontainers.image.vcs-type=Git" \
+		--annotation "com.github.containers.toolbox=false" \
 		-t $(REGISTRY):$(VERSION) \
 		-t $(REGISTRY):latest \
 		--push \

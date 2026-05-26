@@ -45,14 +45,14 @@ func Direction(locale string) string {
 }
 
 // DetectLocale picks the best locale from a request without requiring a loaded Translator.
-// It checks the "lang" query parameter, then the "locale" cookie, then the Accept-Language header.
+// It checks the "lang" query parameter, then the "lang" cookie, then the Accept-Language header.
 // Falls back to DefaultLocale ("en") if none match.
 func DetectLocale(r *http.Request) string {
 	if v := strings.TrimSpace(r.URL.Query().Get("lang")); v != "" {
 		return strings.ToLower(v)
 	}
 	for _, c := range r.Cookies() {
-		if c.Name == "locale" && c.Value != "" {
+		if c.Name == "lang" && c.Value != "" {
 			return strings.ToLower(c.Value)
 		}
 	}
@@ -296,8 +296,8 @@ func (t *Translator) GetLocale(r *http.Request) string {
 		}
 	}
 
-	// Check cookie
-	if cookie, err := r.Cookie("locale"); err == nil && cookie.Value != "" {
+	// Check cookie (name: "lang" per AI.md PART 30)
+	if cookie, err := r.Cookie("lang"); err == nil && cookie.Value != "" {
 		if t.HasLocale(cookie.Value) {
 			return cookie.Value
 		}
@@ -402,11 +402,47 @@ func (t *Translator) GetAllTranslations(locale string) map[string]string {
 	return nil
 }
 
-// Middleware returns an HTTP middleware that adds the translator to context
+// Middleware returns an HTTP middleware that detects the request language, persists
+// it via cookie when ?lang= is provided, and adds the locale to the request context
+// per AI.md PART 30: ?lang= → lang cookie → Accept-Language → default (en).
 func (t *Translator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		locale := t.GetLocale(r)
-		// Add locale to request context - can be retrieved by handlers
+		locale := ""
+
+		// 1. ?lang= query parameter — highest priority; also sets the lang cookie
+		if q := strings.TrimSpace(r.URL.Query().Get("lang")); q != "" {
+			if t.HasLocale(q) {
+				locale = q
+				http.SetCookie(w, &http.Cookie{
+					Name:     "lang",
+					Value:    locale,
+					Path:     "/",
+					MaxAge:   365 * 24 * 60 * 60, // 1 year
+					SameSite: http.SameSiteLaxMode,
+					Secure:   r.TLS != nil,
+					HttpOnly: true,
+				})
+			}
+		}
+
+		// 2. lang cookie
+		if locale == "" {
+			if c, err := r.Cookie("lang"); err == nil && t.HasLocale(c.Value) {
+				locale = c.Value
+			}
+		}
+
+		// 3. Accept-Language header
+		if locale == "" {
+			locale = t.GetLocale(r)
+		}
+
+		// 4. Default
+		if locale == "" {
+			locale = t.fallback
+		}
+
+		// Surface to handlers via request header (context key would require a context package dep)
 		r.Header.Set("X-Locale", locale)
 		next.ServeHTTP(w, r)
 	})

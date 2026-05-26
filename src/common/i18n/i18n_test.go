@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
+// AI.md PART 30: I18N & A11Y - Internationalization Tests
 package i18n
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"testing"
 )
 
@@ -220,5 +223,64 @@ func TestGlobalTranslator(t *testing.T) {
 	result2 := TranslateFormat("en", "time.minutes", 5)
 	if result2 == "" || result2 == "time.minutes" {
 		t.Errorf("TranslateFormat() should return formatted translation, got '%s'", result2)
+	}
+}
+
+// TestLocaleKeyCompleteness is the build-time key validation required by AI.md PART 30.
+// Every key present in en.json MUST exist in all other locale files.
+// Missing keys cause the CI build to fail (test failure).
+func TestLocaleKeyCompleteness(t *testing.T) {
+	// Load all locale files from the embedded FS
+	entries, err := localesFS.ReadDir("locales")
+	if err != nil {
+		t.Fatalf("cannot read locales directory: %v", err)
+	}
+
+	locales := make(map[string]map[string]json.RawMessage)
+	for _, e := range entries {
+		if e.IsDir() || len(e.Name()) < 6 {
+			continue
+		}
+		name := e.Name()
+		if name[len(name)-5:] != ".json" {
+			continue
+		}
+		lang := name[:len(name)-5]
+
+		data, err := localesFS.ReadFile("locales/" + name)
+		if err != nil {
+			t.Errorf("cannot read locales/%s: %v", name, err)
+			continue
+		}
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Errorf("cannot parse locales/%s: %v", name, err)
+			continue
+		}
+		locales[lang] = m
+	}
+
+	enKeys, ok := locales["en"]
+	if !ok {
+		t.Fatal("en.json not found in embedded locales")
+	}
+
+	// Build sorted key list for deterministic output
+	keys := make([]string, 0, len(enKeys))
+	for k := range enKeys {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Verify all non-English locales contain every key from en.json
+	for lang, trans := range locales {
+		if lang == "en" {
+			continue
+		}
+		for _, key := range keys {
+			if _, exists := trans[key]; !exists {
+				t.Errorf("locale %s missing key %q (present in en.json)", lang, key)
+			}
+		}
 	}
 }

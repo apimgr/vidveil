@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 31: I18N & A11Y - Internationalization Support
+// AI.md PART 30: I18N & A11Y - Internationalization Support
 package i18n
 
 import (
@@ -17,7 +17,7 @@ var localesFS embed.FS
 // DefaultLocale is the default locale per AI.md
 const DefaultLocale = "en"
 
-// rtlLocales lists locale prefixes that render right-to-left per AI.md PART 31.
+// rtlLocales lists locale prefixes that render right-to-left per AI.md PART 30.
 var rtlLocales = map[string]bool{
 	"ar": true,
 	"fa": true,
@@ -29,7 +29,7 @@ var rtlLocales = map[string]bool{
 }
 
 // Direction returns "rtl" for right-to-left locales and "ltr" otherwise per
-// AI.md PART 31 (<html lang dir> A11Y requirement).
+// AI.md PART 30 (<html lang dir> A11Y requirement).
 func Direction(locale string) string {
 	if locale == "" {
 		return "ltr"
@@ -69,7 +69,7 @@ func DetectLocale(r *http.Request) string {
 	return DefaultLocale
 }
 
-// Translator handles translations per AI.md PART 25
+// Translator handles translations per AI.md PART 30
 type Translator struct {
 	// translations: locale -> key -> translation
 	translations map[string]map[string]string
@@ -303,7 +303,7 @@ func (t *Translator) GetLocale(r *http.Request) string {
 		}
 	}
 
-	// Parse Accept-Language header per AI.md PART 25
+	// Parse Accept-Language header per AI.md PART 30
 	acceptLang := r.Header.Get("Accept-Language")
 	if acceptLang != "" {
 		locales := parseAcceptLanguage(acceptLang)

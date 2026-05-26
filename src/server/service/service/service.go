@@ -422,12 +422,14 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+ReadWritePaths=/etc/apimgr/%s
 ReadWritePaths=/var/lib/apimgr/%s
+ReadWritePaths=/var/cache/apimgr/%s
 ReadWritePaths=/var/log/apimgr/%s
 
 [Install]
 WantedBy=multi-user.target
-`, m.description, m.name, m.name, m.name, m.execPath, m.name, m.name)
+`, m.description, m.name, m.name, m.name, m.execPath, m.name, m.name, m.name, m.name)
 
 	if err := os.WriteFile(unitPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write unit file: %w", err)
@@ -722,9 +724,9 @@ func (m *SystemServiceManager) darwinInstall() error {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/%s.log</string>
+    <string>/var/log/apimgr/%s/stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/%s.err</string>
+    <string>/var/log/apimgr/%s/stderr.log</string>
 </dict>
 </plist>
 `, m.launchdLabel(), m.execPath, m.name, m.name)
@@ -759,7 +761,8 @@ func (m *SystemServiceManager) darwinDisable() error {
 }
 
 func (m *SystemServiceManager) launchdLabel() string {
-	return "apimgr." + m.name
+	// Per AI.md PART 24: plist_name = io.github.apimgr.vidveil
+	return "io.github.apimgr." + m.name
 }
 
 func (m *SystemServiceManager) launchdPlistPath() string {
@@ -781,11 +784,15 @@ func (m *SystemServiceManager) windowsRestart() error {
 }
 
 func (m *SystemServiceManager) windowsInstall() error {
-	// Create service using sc command
+	// Create service using Virtual Service Account (NT SERVICE\{name}) per AI.md PART 24.
+	// VSA is a minimal-privilege isolated account auto-managed by Windows — no
+	// privilege dropping needed.
+	vsaName := `NT SERVICE\` + m.name
 	err := runCmd("sc", "create", m.name,
 		"binPath=", m.execPath,
 		"DisplayName=", m.displayName,
 		"start=", "auto",
+		"obj=", vsaName,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
@@ -794,7 +801,8 @@ func (m *SystemServiceManager) windowsInstall() error {
 	// Set description
 	_ = runCmd("sc", "description", m.name, m.description)
 
-	fmt.Printf("%s Installed Windows service: %s\n", terminal.StatusIcon(true), m.name)
+	fmt.Printf("%s Installed Windows service: %s (runs as %s)\n",
+		terminal.StatusIcon(true), m.name, vsaName)
 	return nil
 }
 

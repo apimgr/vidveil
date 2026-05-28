@@ -194,7 +194,7 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			metadata TEXT
 		)`,
 
-		// Admin credentials table per AI.md PART 31
+		// Admin credentials table per AI.md PART 11
 		`CREATE TABLE IF NOT EXISTS admin_credentials (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT UNIQUE NOT NULL,
@@ -213,7 +213,7 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			FOREIGN KEY (invited_by) REFERENCES admin_credentials(id)
 		)`,
 
-		// Setup tokens table per AI.md PART 31
+		// Setup tokens table per AI.md PART 12
 		`CREATE TABLE IF NOT EXISTS setup_tokens (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			token TEXT UNIQUE NOT NULL,
@@ -224,7 +224,7 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			used_by TEXT
 		)`,
 
-		// API tokens table per AI.md PART 31
+		// API tokens table per AI.md PART 11
 		`CREATE TABLE IF NOT EXISTS api_tokens (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			admin_id INTEGER NOT NULL,
@@ -239,7 +239,7 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			FOREIGN KEY (admin_id) REFERENCES admin_credentials(id)
 		)`,
 
-		// SMTP config table per AI.md PART 31
+		// SMTP config table per AI.md PART 17
 		`CREATE TABLE IF NOT EXISTS smtp_config (
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			host TEXT,

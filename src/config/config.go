@@ -1348,7 +1348,7 @@ func NormalizeMode(mode string) string {
 	}
 }
 
-// AI.md PART 13: URL/FQDN Detection
+// AI.md PART 8: URL/FQDN Detection
 
 // devOnlyTLDs are TLDs allowed only in development mode per AI.md
 var devOnlyTLDs = []string{
@@ -1357,7 +1357,7 @@ var devOnlyTLDs = []string{
 	".home.arpa", ".intranet", ".corp", ".private",
 }
 
-// IsValidHost validates a host per AI.md PART 13
+// IsValidHost validates a host per AI.md PART 8
 // In production mode, only valid FQDNs are allowed (no IPs, no localhost, no dev TLDs)
 // In development mode, localhost and dev TLDs are allowed (still no IPs)
 func IsValidHost(host string, devMode bool) bool {
@@ -1542,7 +1542,7 @@ func (w *ConfigWatcher) Reload() error {
 	return nil
 }
 
-// GetDisplayHost returns the appropriate host for display per AI.md PART 13
+// GetDisplayHost returns the appropriate host for display per AI.md PART 8
 // Never shows: 0.0.0.0, 127.0.0.1, localhost, [::]
 // Uses global IP if dev TLD or localhost detected
 func GetDisplayHost(_ *AppConfig) string {
@@ -1565,7 +1565,7 @@ func GetDisplayHost(_ *AppConfig) string {
 	return fqdn
 }
 
-// GetFQDN returns the FQDN per AI.md PART 13
+// GetFQDN returns the FQDN per AI.md PART 8
 func GetFQDN() string {
 	// 1. DOMAIN env var (explicit user override)
 	if domain := os.Getenv("DOMAIN"); domain != "" {
@@ -1600,7 +1600,7 @@ func GetFQDN() string {
 	return "localhost"
 }
 
-// isLoopback checks if host is a loopback address per AI.md PART 13
+// isLoopback checks if host is a loopback address per AI.md PART 8
 func isLoopback(host string) bool {
 	lower := strings.ToLower(host)
 	if lower == "localhost" {
@@ -1612,7 +1612,7 @@ func isLoopback(host string) bool {
 	return false
 }
 
-// isDevTLD checks if FQDN is a dev TLD per AI.md PART 13
+// isDevTLD checks if FQDN is a dev TLD per AI.md PART 8
 func isDevTLD(fqdn string) bool {
 	lower := strings.ToLower(fqdn)
 	if lower == "localhost" {
@@ -1634,7 +1634,7 @@ func isDevTLD(fqdn string) bool {
 	return false
 }
 
-// getGlobalIPv6 returns first global unicast IPv6 address per AI.md PART 13
+// getGlobalIPv6 returns first global unicast IPv6 address per AI.md PART 8
 func getGlobalIPv6() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -1650,7 +1650,7 @@ func getGlobalIPv6() string {
 	return ""
 }
 
-// getGlobalIPv4 returns first global unicast IPv4 address per AI.md PART 13
+// getGlobalIPv4 returns first global unicast IPv4 address per AI.md PART 8
 func getGlobalIPv4() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {

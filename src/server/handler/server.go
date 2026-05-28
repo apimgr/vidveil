@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 31: /server/ routes
+// AI.md PART 14: /server/ routes
 package handler
 
 import (
@@ -14,7 +14,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// ServerHandler handles /server/ routes per AI.md PART 31
+// ServerHandler handles /server/ routes per AI.md PART 14
 type ServerHandler struct {
 	appConfig *config.AppConfig
 }
@@ -164,7 +164,7 @@ func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-help", nil)
 }
 
-// API Routes per AI.md PART 31
+// API Routes per AI.md PART 14
 
 // APIAbout handles GET /api/v1/server/about
 func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {

@@ -471,14 +471,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize admin service per AI.md PART 17
+	// Initialize admin service per AI.md PART 11
 	adminSvc := admin.NewAdminService(migrationMgr.GetDB())
 	if err := adminSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Failed to initialize admin service: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Initialize cluster manager per PART 24
+	// Initialize cluster manager per PART 10
 	// Cluster mode auto-detected: SQLite = single instance, PostgreSQL/MySQL/MSSQL = cluster
 	// For now, we use SQLite so cluster is in single-instance mode
 	// In production with external DB, this would enable automatically
@@ -631,7 +631,7 @@ func main() {
 		},
 	})
 
-	// Start cluster manager if initialized per PART 24
+	// Start cluster manager if initialized per PART 10
 	// Heartbeat loop runs automatically when cluster is started.
 	// Register config saver so cluster manager can cache config to server.yml
 	// every 5 minutes per PART 5 ("periodically to catch any drift").
@@ -697,7 +697,7 @@ func main() {
 	configWatcher.Start()
 	defer configWatcher.Stop()
 
-	// Per AI.md PART 24: bind privileged port as root BEFORE starting the goroutine
+	// Per AI.md PART 23: bind privileged port as root BEFORE starting the goroutine
 	// so we can drop privileges while still in the main goroutine.
 	// This satisfies: "Bind privileged ports as root, then drop"
 	listenAddr := appConfig.Server.Address + ":" + appConfig.Server.Port
@@ -707,7 +707,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Drop privileges to the vidveil system user after port is bound per AI.md PART 24.
+	// Drop privileges to the vidveil system user after port is bound per AI.md PART 23.
 	// ShouldDropPrivileges() returns true only on Unix when current uid == 0.
 	if system.ShouldDropPrivileges() {
 		if err := system.DropPrivileges(appName); err != nil {
@@ -719,7 +719,7 @@ func main() {
 
 	// Start server goroutine — serves on the pre-bound listener
 	go func() {
-		// Per AI.md PART 13: Display Rules
+		// Per AI.md PART 8: Display Rules
 		// - Never show: 0.0.0.0, 127.0.0.1, localhost
 		// - Show only: One address, the most relevant
 		displayAddr := getDisplayAddress(appConfig)
@@ -750,7 +750,7 @@ func main() {
 			}
 		}
 
-		// Build URL per AI.md PART 13:
+		// Build URL per AI.md PART 8:
 		// - NEVER show localhost, 127.0.0.1, 0.0.0.0
 		// - Show only one address, the most relevant
 		// - Strip :80 and :443 from URLs
@@ -1121,7 +1121,7 @@ func printPowerShellCompletions(binaryName string) {
 }
 
 func handleServiceCommand(cmd, configDir, dataDir string) {
-	// Per AI.md PART 24 and PART 25: Use system.NewServiceManager which creates system user
+	// Per AI.md PART 23 and PART 24: Use system.NewServiceManager which creates system user
 	// Get binary path
 	binaryPath, err := os.Executable()
 	if err != nil {
@@ -1131,7 +1131,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 
 	appPaths := config.GetAppPaths(configDir, dataDir)
 
-	// Use system.NewServiceManager which handles user creation per AI.md PART 4
+	// Use system.NewServiceManager which handles user creation per AI.md PART 23
 	svc := system.NewServiceManager("vidveil", binaryPath, appPaths.Config, appPaths.Data)
 
 	switch cmd {
@@ -1168,7 +1168,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 		fmt.Println("✅ Configuration reloaded")
 
 	case "status":
-		// Per AI.md PART 25: Show service status
+		// Per AI.md PART 24: Show service status
 		status, err := svc.GetServiceStatus()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "❌ Failed to get status: %v\n", err)
@@ -1184,7 +1184,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 		}
 
 	case "--install":
-		// Per AI.md PART 24: Check escalation before service install
+		// Per AI.md PART 23: Check escalation before service install
 		if err := system.HandleEscalation("Service installation"); err != nil {
 			fmt.Fprintf(os.Stderr, "❌ %v\n", err)
 			os.Exit(1)
@@ -1196,7 +1196,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 		}
 
 	case "--uninstall":
-		// Per AI.md PART 24: Confirmation required before destructive action
+		// Per AI.md PART 23: Confirmation required before destructive action
 		fmt.Println("⚠️  WARNING: This will:")
 		fmt.Println("   • Stop the service (if running)")
 		fmt.Println("   • Remove service configuration")
@@ -1213,7 +1213,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 			os.Exit(0)
 		}
 
-		// Per AI.md PART 24: Check escalation before service uninstall
+		// Per AI.md PART 23: Check escalation before service uninstall
 		if err := system.HandleEscalation("Service uninstallation"); err != nil {
 			fmt.Fprintf(os.Stderr, "❌ %v\n", err)
 			os.Exit(1)
@@ -1490,6 +1490,6 @@ Run 'vidveil --maintenance --help' for detailed help.`)
 }
 
 func getDisplayAddress(serverConfig *config.AppConfig) string {
-	// Per AI.md PART 13: Never show 0.0.0.0, 127.0.0.1, localhost, etc.
+	// Per AI.md PART 8: Never show 0.0.0.0, 127.0.0.1, localhost, etc.
 	return net.JoinHostPort(config.GetDisplayHost(serverConfig), serverConfig.Server.Port)
 }

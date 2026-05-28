@@ -147,7 +147,7 @@ func (s *Server) setupMiddleware() {
 	// Real IP
 	s.router.Use(middleware.RealIP)
 
-	// URL Variables resolution per AI.md PART 13 (reverse proxy headers)
+	// URL Variables resolution per AI.md PART 8 (reverse proxy headers)
 	s.router.Use(urlvars.GlobalResolver().Middleware)
 
 	// URL Normalization per AI.md PART 16 - redirect /path/ to /path (MUST be early)
@@ -590,13 +590,13 @@ func (s *Server) setupRoutes() {
 	auth := handler.NewAuthHandler(s.appConfig)
 	// Link admin handler for authentication
 	auth.SetAdminHandler(admin)
-	// Admin auth routes per AI.md PART 17
+	// Admin auth routes per AI.md PART 11
 	// VidVeil is stateless - no PART 34 (Multi-User), only Server Admin auth
 	s.router.Route("/auth", func(r chi.Router) {
 		r.Get("/login", auth.LoginPage)
 		r.Post("/login", auth.LoginPage)
 		r.Get("/logout", auth.LogoutPage)
-		// Per AI.md PART 17: 2FA verification step (after password, before session)
+		// Per AI.md PART 11: 2FA verification step (after password, before session)
 		r.Get("/2fa", auth.TwoFactorPage)
 		r.Post("/2fa", auth.TwoFactorPage)
 		r.Get("/password/forgot", auth.PasswordForgotPage)
@@ -605,12 +605,12 @@ func (s *Server) setupRoutes() {
 		r.Post("/password/reset", auth.PasswordResetPage)
 	})
 
-	// Admin panel routes - PART 14 (routes), PART 17 (admin panel)
-	// Spec-canonical mount: /server/{admin_path} (AI.md PART 17 line 28624)
+	// Admin panel routes - PART 14 (routes), PART 16 (admin panel UI)
+	// Spec-canonical mount: /server/{admin_path} (AI.md PART 12 admin path config)
 	// Path is configurable via server.admin.path (default: "admin")
 	adminBasePath := s.appConfig.AdminURLPrefix()
 	s.router.Route(adminBasePath, func(r chi.Router) {
-		// Login page per AI.md PART 17
+		// Login page per AI.md PART 11
 		r.Get("/login", admin.LoginPage)
 		r.Post("/login", admin.LoginPage)
 
@@ -634,7 +634,7 @@ func (s *Server) setupRoutes() {
 			admin.AuthMiddleware(http.HandlerFunc(admin.DashboardPage)).ServeHTTP(w, req)
 		})
 
-		// Protected admin routes per AI.md PART 17
+		// Protected admin routes per AI.md PART 16
 		r.Group(func(r chi.Router) {
 			r.Use(admin.AuthMiddleware)
 			r.Use(admin.CSRFMiddleware)
@@ -645,7 +645,7 @@ func (s *Server) setupRoutes() {
 			r.Get("/notifications", admin.AdminNotificationsPage)
 			r.Get("/logout", admin.LogoutHandler)
 
-			// Spec-canonical: ALL server management goes under /config (AI.md PART 17 line 28629)
+			// Spec-canonical: ALL server management goes under /config (AI.md PART 14 route scopes)
 			r.Route("/config", func(r chi.Router) {
 				r.Get("/", admin.ServerSettingsPage)
 				r.Get("/settings", admin.ServerSettingsPage)
@@ -783,7 +783,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/proxy/thumbnails", h.ProxyThumbnail)
 		r.Get("/proxy/videos", h.ProxyVideo)
 
-		// Admin Profile API (session or token) - PART 17
+		// Admin Profile API (session or token) - PART 11
 		// Spec-canonical: /api/{ver}/server/{admin_path}/profile (AI.md PART 14 line 4584)
 		r.Route(s.appConfig.AdminAPIPrefix()+"/profile", func(r chi.Router) {
 			r.Use(admin.SessionOrTokenMiddleware)
@@ -804,13 +804,13 @@ func (s *Server) setupRoutes() {
 			r.Post("/{name}/reset", admin.APIEngineReset)
 		})
 
-		// Admin API (token required) - PART 12, PART 17
+		// Admin API (token required) - PART 12, PART 14
 		r.Route(s.appConfig.AdminAPIPrefix(), func(r chi.Router) {
 			r.Use(admin.APITokenMiddleware)
 
 			// Spec-canonical: ALL admin API endpoints under /config (AI.md PART 14 line 4584)
 			r.Route("/config", func(r chi.Router) {
-				// Users management per AI.md PART 17
+				// Users management per AI.md PART 11
 				r.Post("/users/admins/invite", admin.APIUsersAdminsInvite)
 				r.Get("/users/admins/invites", admin.APIUsersAdminsInvites)
 				r.Delete("/users/admins/invites/{id}", admin.APIUsersAdminsInviteRevoke)
@@ -821,7 +821,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/health", admin.APIHealth)
 				r.Post("/restart", admin.APIMaintenanceMode)
 
-				// Branding per PART 17
+				// Branding per PART 16
 				r.Route("/branding", func(r chi.Router) {
 					r.Patch("/", admin.APIBranding)
 					r.Post("/upload", admin.APIBrandingUpload)
@@ -884,7 +884,7 @@ func (s *Server) setupRoutes() {
 					r.Get("/{type}/download", admin.APILogsAccess)
 				})
 
-				// Pages per PART 17
+				// Pages per PART 16
 				r.Route("/pages", func(r chi.Router) {
 					r.Get("/", admin.APIPagesGet)
 					r.Put("/{slug}", admin.APIPageUpdate)
@@ -945,7 +945,7 @@ func (s *Server) setupRoutes() {
 
 // ListenAndServe starts the HTTP server
 func (s *Server) ListenAndServe(addr string) error {
-	// Parse timeouts from config per AI.md PART 13
+	// Parse timeouts from config per AI.md PART 12
 	readTimeout := parseDuration(s.appConfig.Server.Limits.ReadTimeout, 30*time.Second)
 	writeTimeout := parseDuration(s.appConfig.Server.Limits.WriteTimeout, 30*time.Second)
 	idleTimeout := parseDuration(s.appConfig.Server.Limits.IdleTimeout, 120*time.Second)
@@ -986,7 +986,7 @@ func (s *Server) ServeOn(listener net.Listener) error {
 // Serve serves on the given listener (for Tor hidden service)
 // Per AI.md PART 31: HTTP server serves on both TCP (clearnet) and Tor listener
 func (s *Server) Serve(listener net.Listener) error {
-	// Parse timeouts from config per AI.md PART 13
+	// Parse timeouts from config per AI.md PART 12
 	readTimeout := parseDuration(s.appConfig.Server.Limits.ReadTimeout, 30*time.Second)
 	writeTimeout := parseDuration(s.appConfig.Server.Limits.WriteTimeout, 30*time.Second)
 	idleTimeout := parseDuration(s.appConfig.Server.Limits.IdleTimeout, 120*time.Second)

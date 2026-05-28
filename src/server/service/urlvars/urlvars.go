@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 13: URL Variables & Reverse Proxy Headers
+// AI.md PART 8: URL Variables & Reverse Proxy Headers
 package urlvars
 
 import (
@@ -39,7 +39,7 @@ type domainObservation struct {
 	lastSeen  time.Time
 }
 
-// URLResolver handles URL variable resolution per AI.md PART 13
+// URLResolver handles URL variable resolution per AI.md PART 8
 type URLResolver struct {
 	mu           sync.RWMutex
 	config       URLVarsConfig

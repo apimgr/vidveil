@@ -297,7 +297,7 @@ func (h *SearchHandler) getTorStatus() string {
 	return "disabled"
 }
 
-// getTorHostname returns Tor .onion address per PART 13
+// getTorHostname returns Tor .onion address per PART 31
 func (h *SearchHandler) getTorHostname() string {
 	if h.torSvc == nil {
 		return ""
@@ -913,7 +913,7 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 
 // detectResponseFormat determines response format per AI.md PART 14 (Content Negotiation)
 func detectResponseFormat(r *http.Request) string {
-	// 0. Check URL path extension FIRST per AI.md PART 13
+	// 0. Check URL path extension FIRST per AI.md PART 14
 	// Use original path from context if available (set by extensionStripMiddleware)
 	path := r.URL.Path
 	if origPath, ok := r.Context().Value("vidveil.originalPath").(string); ok {
@@ -1090,7 +1090,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Add scheduler check
 	checks["scheduler"] = "ok"
 
-	// Add Tor check if enabled per PART 13
+	// Add Tor check if enabled per PART 31
 	if h.torSvc != nil && h.torSvc.IsEnabled() {
 		if h.torSvc.IsRunning() {
 			checks["tor"] = "ok"
@@ -1602,7 +1602,7 @@ Components: Go, SQLite, Valkey/Redis
 `, appName, appURL, time.Now().Format("2006-01-02"))))
 }
 
-// SitemapXML returns sitemap.xml per AI.md PART 13
+// SitemapXML returns sitemap.xml per AI.md PART 16
 func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 
@@ -1611,7 +1611,7 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 		baseURL = fmt.Sprintf("https://%s:%s", h.appConfig.Server.FQDN, h.appConfig.Server.Port)
 	}
 
-	// Build sitemap with static pages per AI.md PART 13
+	// Build sitemap with static pages per AI.md PART 16
 	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>

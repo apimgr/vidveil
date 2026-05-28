@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 17: Admin Panel
+// AI.md PART 16: Admin Panel
 package handler
 
 import (
@@ -87,7 +87,7 @@ type TorService interface {
 	OutboundEnabled() bool
 }
 
-// AdminHandler handles admin panel routes per AI.md PART 17
+// AdminHandler handles admin panel routes per AI.md PART 16
 type AdminHandler struct {
 	appConfig    *config.AppConfig
 	configDir    string
@@ -157,13 +157,13 @@ func (h *AdminHandler) IsFirstRun() bool {
 	return h.adminSvc.IsFirstRun()
 }
 
-// AuthMiddleware protects admin routes per AI.md PART 17
+// AuthMiddleware protects admin routes per AI.md PART 11
 func (h *AdminHandler) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check for session cookie
 		cookie, err := r.Cookie(adminSessionCookieName)
 		if err != nil || !h.validateSession(cookie.Value) {
-			// Redirect to /auth/login per AI.md PART 17
+			// Redirect to /auth/login per AI.md PART 11
 			http.Redirect(w, r, "/auth/login", http.StatusFound)
 			return
 		}
@@ -172,7 +172,7 @@ func (h *AdminHandler) AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// LoginPage redirects to /auth/login per AI.md PART 17
+// LoginPage redirects to /auth/login per AI.md PART 11
 // All logins (admin and user) go through /auth/login
 func (h *AdminHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/auth/login", http.StatusFound)
@@ -185,7 +185,7 @@ func (h *AdminHandler) AuthenticateAdmin(username, password string) (string, err
 }
 
 // CheckCredentials validates credentials and returns admin info (for 2FA flow)
-// Per AI.md PART 17: First step of 2FA login flow
+// Per AI.md PART 11: First step of 2FA login flow
 func (h *AdminHandler) CheckCredentials(username, password string) (*admin.AdminUser, error) {
 	adminUser, err := h.adminSvc.Authenticate(username, password)
 	if err != nil {
@@ -195,7 +195,7 @@ func (h *AdminHandler) CheckCredentials(username, password string) (*admin.Admin
 }
 
 // CreateSessionForAdmin creates a session for an already-authenticated admin
-// Per AI.md PART 17: Called after 2FA verification
+// Per AI.md PART 11: Called after 2FA verification
 func (h *AdminHandler) CreateSessionForAdmin(adminUser *admin.AdminUser) string {
 	return h.createSessionWithID(adminUser.Username, adminUser.ID)
 }
@@ -428,16 +428,16 @@ func (h *AdminHandler) renderSetupWizardPage(w http.ResponseWriter, data map[str
 	}
 }
 
-// DashboardPage renders the admin dashboard per AI.md PART 17
+// DashboardPage renders the admin dashboard per AI.md PART 16
 func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	// Calculate uptime per AI.md PART 17
+	// Calculate uptime per AI.md PART 13
 	uptime := time.Since(startTime)
 	uptimeStr := formatUptime(uptime)
 
-	// Status per AI.md PART 17 - Online/Maintenance/Error
+	// Status per AI.md PART 16 - Online/Maintenance/Error
 	status := "Online"
 	statusClass := "status-healthy"
 
@@ -459,7 +459,7 @@ func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	// Recent activity from audit log per AI.md PART 11
 	var recentActivity []map[string]interface{}
 
-	// System resources per AI.md PART 17
+	// System resources per AI.md PART 16
 	memTotal := m.Sys / 1024 / 1024
 	memUsed := m.Alloc / 1024 / 1024
 	memPercent := 0
@@ -468,7 +468,7 @@ func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderAdminTemplate(w, r, "dashboard", map[string]interface{}{
-		// Status widget per AI.md PART 17
+		// Status widget per AI.md PART 16
 		"Status":      status,
 		"StatusClass": statusClass,
 		"Uptime":      uptimeStr,
@@ -477,7 +477,7 @@ func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		"EngineCount":  len(h.engineMgr.ListEngines()),
 		"EnabledCount": h.engineMgr.EnabledCount(),
 
-		// System resources per AI.md PART 17
+		// System resources per AI.md PART 16
 		"MemoryUsed":    memUsed,
 		"MemoryTotal":   memTotal,
 		"MemoryPercent": memPercent,
@@ -491,10 +491,10 @@ func (h *AdminHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		"Port":       h.appConfig.Server.Port,
 		"TorEnabled": h.torSvc != nil,
 
-		// Scheduled tasks per AI.md PART 17
+		// Scheduled tasks per AI.md PART 18
 		"NextTasks": nextTasks,
 
-		// Recent activity per AI.md PART 17
+		// Recent activity per AI.md PART 11
 		"RecentActivity": recentActivity,
 	})
 }
@@ -528,7 +528,7 @@ func (h *AdminHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(h.renderSettingsPage(r)))
 }
 
-// LogsPage renders the logs viewer per AI.md PART 17
+// LogsPage renders the logs viewer per AI.md PART 11
 func (h *AdminHandler) LogsPage(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters for filtering
 	logType := r.URL.Query().Get("type")
@@ -563,7 +563,7 @@ func (h *AdminHandler) LogsPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// AuditLogsPage renders audit log viewer per PART 17
+// AuditLogsPage renders audit log viewer per PART 11
 func (h *AdminHandler) AuditLogsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "logs-audit", nil)
 }
@@ -1080,12 +1080,12 @@ func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// BrandingPage renders branding & SEO settings per PART 15
+// BrandingPage renders branding & SEO settings per PART 16
 func (h *AdminHandler) BrandingPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "branding", nil)
 }
 
-// SecurityAuthPage renders authentication settings per PART 15
+// SecurityAuthPage renders authentication settings per PART 11
 func (h *AdminHandler) SecurityAuthPage(w http.ResponseWriter, r *http.Request) {
 	clientIP := r.RemoteAddr
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
@@ -1096,7 +1096,7 @@ func (h *AdminHandler) SecurityAuthPage(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// SecurityTokensPage renders API token management per PART 15
+// SecurityTokensPage renders API token management per PART 11
 func (h *AdminHandler) SecurityTokensPage(w http.ResponseWriter, r *http.Request) {
 	tokenPrefix := ""
 	if len(h.appConfig.Server.Admin.Token) > 8 {
@@ -1107,32 +1107,32 @@ func (h *AdminHandler) SecurityTokensPage(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// SecurityRateLimitPage renders rate limiting settings per PART 15
+// SecurityRateLimitPage renders rate limiting settings per PART 12
 func (h *AdminHandler) SecurityRateLimitPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "security-ratelimit", nil)
 }
 
-// SecurityFirewallPage renders firewall/IP blocking per PART 15
+// SecurityFirewallPage renders firewall/IP blocking per PART 11
 func (h *AdminHandler) SecurityFirewallPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "security-firewall", nil)
 }
 
-// GeoIPPage renders GeoIP settings per PART 15
+// GeoIPPage renders GeoIP settings per PART 19
 func (h *AdminHandler) GeoIPPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "geoip", nil)
 }
 
-// BlocklistsPage renders blocklist management per PART 15
+// BlocklistsPage renders blocklist management per PART 11
 func (h *AdminHandler) BlocklistsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "blocklists", nil)
 }
 
-// MaintenancePage renders maintenance mode settings per PART 15
+// MaintenancePage renders maintenance mode settings per PART 21
 func (h *AdminHandler) MaintenancePage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "maintenance", nil)
 }
 
-// UpdatesPage renders update management per PART 15
+// UpdatesPage renders update management per PART 22
 func (h *AdminHandler) UpdatesPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "updates", map[string]interface{}{
 		"CurrentVersion":  version.GetVersion(),
@@ -1189,7 +1189,7 @@ func (h *AdminHandler) APIUpdatesCheck(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HelpPage renders help/documentation per PART 15
+// HelpPage renders help/documentation per PART 29
 func (h *AdminHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "help", nil)
 }
@@ -1229,14 +1229,14 @@ func (h *AdminHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PreferencesPage displays admin's personal preferences per AI.md PART 17
+// PreferencesPage displays admin's personal preferences per AI.md PART 16
 func (h *AdminHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "preferences", map[string]interface{}{
 		"Title": "Preferences",
 	})
 }
 
-// AdminNotificationsPage displays admin's personal notifications per AI.md PART 17
+// AdminNotificationsPage displays admin's personal notifications per AI.md PART 16
 func (h *AdminHandler) AdminNotificationsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "admin-notifications", map[string]interface{}{
 		"Title": "Notifications",
@@ -1406,7 +1406,7 @@ func (h *AdminHandler) APIRecoveryKeysGenerate(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// APIProfile2FASetup generates a TOTP secret and QR code for 2FA setup per AI.md PART 17
+// APIProfile2FASetup generates a TOTP secret and QR code for 2FA setup per AI.md PART 11
 func (h *AdminHandler) APIProfile2FASetup(w http.ResponseWriter, r *http.Request) {
 	adminID := h.getSessionAdminID(r)
 	if adminID == 0 {
@@ -1437,7 +1437,7 @@ func (h *AdminHandler) APIProfile2FASetup(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// APIProfile2FAVerify verifies a TOTP code and enables 2FA per AI.md PART 17
+// APIProfile2FAVerify verifies a TOTP code and enables 2FA per AI.md PART 11
 func (h *AdminHandler) APIProfile2FAVerify(w http.ResponseWriter, r *http.Request) {
 	adminID := h.getSessionAdminID(r)
 	if adminID == 0 {
@@ -1476,7 +1476,7 @@ func (h *AdminHandler) APIProfile2FAVerify(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// APIProfile2FADisable disables 2FA for the current admin per AI.md PART 17
+// APIProfile2FADisable disables 2FA for the current admin per AI.md PART 11
 func (h *AdminHandler) APIProfile2FADisable(w http.ResponseWriter, r *http.Request) {
 	adminID := h.getSessionAdminID(r)
 	if adminID == 0 {
@@ -1492,7 +1492,7 @@ func (h *AdminHandler) APIProfile2FADisable(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Verify current TOTP code before disabling per AI.md PART 17 security requirement
+	// Verify current TOTP code before disabling per AI.md PART 11 security requirement
 	secret, err := h.adminSvc.GetTOTPSecret(adminID)
 	if err != nil {
 		h.jsonError(w, "Failed to retrieve 2FA secret", "ERR_TOTP_SECRET", http.StatusInternalServerError)
@@ -2343,7 +2343,7 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// APIBranding handles PATCH for /api/v1/admin/server/branding per AI.md PART 17
+// APIBranding handles PATCH for /api/v1/admin/server/branding per AI.md PART 16
 func (h *AdminHandler) APIBranding(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -2392,7 +2392,7 @@ func (h *AdminHandler) APIBranding(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIBrandingUpload handles POST for /api/v1/admin/server/branding/upload per AI.md PART 17
+// APIBrandingUpload handles POST for /api/v1/admin/server/branding/upload per AI.md PART 16
 func (h *AdminHandler) APIBrandingUpload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -2689,7 +2689,7 @@ func (h *AdminHandler) APILogsError(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APILogsAudit returns audit logs per PART 17
+// APILogsAudit returns audit logs per PART 11
 func (h *AdminHandler) APILogsAudit(w http.ResponseWriter, r *http.Request) {
 	lines := h.readLogLines(h.appConfig.Server.Logs.Audit.Filename, 100)
 
@@ -3586,7 +3586,7 @@ func (h *AdminHandler) renderAdminNav(active string) string {
 		return "nav-link"
 	}
 
-	// PART 17: Full navigation, all server-management links under /config (AI.md line 28629)
+	// PART 16: Full navigation, all server-management links under /config
 	base := h.appConfig.AdminURLPrefix()
 	return `<nav class="admin-nav">
         <div class="nav-brand">
@@ -3610,7 +3610,7 @@ func (h *AdminHandler) renderAdminNav(active string) string {
     </nav>`
 }
 
-// renderAdminTemplate renders admin pages using proper Go html/template per AI.md PART 13
+// renderAdminTemplate renders admin pages using proper Go html/template per AI.md PART 16
 func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Request, templateName string, data map[string]interface{}) {
 	// Add common template data
 	if data == nil {
@@ -3619,7 +3619,7 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	data["Config"] = h.appConfig
 	data["ActiveNav"] = templateName
 	data["SiteTitle"] = h.appConfig.Server.Branding.Title
-	// Per AI.md PART 17: AdminPath = "/server/{admin_path}" available in all templates
+	// Per AI.md PART 12: AdminPath = "/server/{admin_path}" available in all templates
 	data["AdminPath"] = h.appConfig.AdminURLPrefix()
 	// Inject version for cache busting in all admin templates
 	if data["Version"] == nil {
@@ -4121,7 +4121,7 @@ type LogEntry struct {
 	Details   string
 }
 
-// readLogEntries reads and parses log file entries per AI.md PART 17
+// readLogEntries reads and parses log file entries per AI.md PART 11
 func (h *AdminHandler) readLogEntries(logType string, limit int, search string) ([]LogEntry, error) {
 	var filename string
 

@@ -91,7 +91,7 @@ type cityRecord struct {
 }
 
 // NewGeoIPService creates a new GeoIP service
-// Per AI.md PART 4: Security DBs go in {config}/security/geoip/
+// Per AI.md PART 19: Security DBs go in {config}/security/geoip/
 func NewGeoIPService(appConfig *config.AppConfig) *GeoIPService {
 	dataDir := appConfig.Server.GeoIP.Dir
 	if dataDir == "" {

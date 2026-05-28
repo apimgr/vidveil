@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 25: Windows Service stubs for non-Windows
+// AI.md PART 24: Windows Service stubs for non-Windows
 //go:build !windows
 
 package system

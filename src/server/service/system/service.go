@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 4 & 5: Service Management and User Creation
+// AI.md PART 23 & 24: Service Management and User Creation
 package system
 
 import (
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// ServiceManager handles system service installation per AI.md PART 5
+// ServiceManager handles system service installation per AI.md PART 23
 type ServiceManager struct {
 	appName     string
 	binaryPath  string
@@ -36,7 +36,7 @@ func NewServiceManager(appName, binaryPath, configDir, dataDir string) *ServiceM
 	}
 }
 
-// Install installs the service per AI.md PART 5
+// Install installs the service per AI.md PART 23
 func (sm *ServiceManager) Install() error {
 	switch runtime.GOOS {
 	case "linux":
@@ -88,7 +88,7 @@ func (sm *ServiceManager) Reload() error {
 	return sm.runServiceCommand("reload")
 }
 
-// Disable disables the service from starting at boot per AI.md PART 8
+// Disable disables the service from starting at boot per AI.md PART 23
 func (sm *ServiceManager) Disable() error {
 	switch runtime.GOOS {
 	case "linux":
@@ -194,7 +194,7 @@ func (sm *ServiceManager) hasRunit() bool {
 	return err == nil
 }
 
-// hasOpenRC reports whether OpenRC is the active init system per AI.md PART 25.
+// hasOpenRC reports whether OpenRC is the active init system per AI.md PART 24.
 // OpenRC ships with /sbin/openrc-run and the rc-service / rc-update tools on
 // Alpine, Gentoo, and Devuan. The presence of openrc-run is the canonical
 // detection signal — /etc/init.d alone matches both OpenRC and SysVinit.
@@ -209,7 +209,7 @@ func (sm *ServiceManager) hasOpenRC() bool {
 }
 
 // hasSysVInit reports whether the host is using SysVinit-style init.d scripts
-// per AI.md PART 25. Per spec: SysVinit is selected only when systemd is
+// per AI.md PART 24. Per spec: SysVinit is selected only when systemd is
 // absent, OpenRC is absent, and /etc/init.d exists with a working
 // update-rc.d or chkconfig.
 func (sm *ServiceManager) hasSysVInit() bool {
@@ -228,12 +228,12 @@ func (sm *ServiceManager) hasSysVInit() bool {
 	return false
 }
 
-// installLinux installs service on Linux per AI.md PART 25.
+// installLinux installs service on Linux per AI.md PART 24.
 // Detection order matches the spec: systemd → OpenRC → SysVinit → runit.
 func (sm *ServiceManager) installLinux() error {
 	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Starting Linux service installation\n")
 
-	// Create system user per AI.md PART 4
+	// Create system user per AI.md PART 23
 	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Calling createLinuxUser\n")
 	if err := sm.createLinuxUser(); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
@@ -261,7 +261,7 @@ func (sm *ServiceManager) installLinux() error {
 	return fmt.Errorf("no supported init system found (systemd, OpenRC, SysVinit, or runit)")
 }
 
-// createLinuxUser creates system user per AI.md PART 4
+// createLinuxUser creates system user per AI.md PART 23
 func (sm *ServiceManager) createLinuxUser() error {
 	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Checking if user '%s' exists...\n", sm.user)
 
@@ -309,7 +309,7 @@ func (sm *ServiceManager) createLinuxUser() error {
 
 	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' created successfully\n", sm.user)
 
-	// Create and set ownership of directories per PART 25
+	// Create and set ownership of directories per PART 24
 	// All directories must exist for systemd's ReadWritePaths to work
 	dirs := []string{
 		"/etc/apimgr/" + sm.appName,
@@ -336,12 +336,12 @@ func (sm *ServiceManager) findAvailableUID(min, max int) int {
 	return min
 }
 
-// installSystemd installs systemd service unit per AI.md PART 25
+// installSystemd installs systemd service unit per AI.md PART 24
 // Service starts as root, binary drops privileges after port binding
 func (sm *ServiceManager) installSystemd() error {
 	unitPath := fmt.Sprintf("/etc/systemd/system/%s.service", sm.appName)
 
-	// Per PART 25: NO User/Group - binary drops privileges after port binding
+	// Per PART 24: NO User/Group - binary drops privileges after port binding
 	unit := fmt.Sprintf(`[Unit]
 Description=%s service
 Documentation=https://x.scour.li
@@ -382,13 +382,13 @@ WantedBy=multi-user.target
 	return nil
 }
 
-// installRunit installs runit service per AI.md PART 25
+// installRunit installs runit service per AI.md PART 24
 // Binary drops privileges after port binding - no chpst needed
 func (sm *ServiceManager) installRunit() error {
 	serviceDir := fmt.Sprintf("/etc/sv/%s", sm.appName)
 	os.MkdirAll(serviceDir, 0755)
 
-	// Per PART 25: Simple run script, binary handles privilege dropping
+	// Per PART 24: Simple run script, binary handles privilege dropping
 	runScript := fmt.Sprintf(`#!/bin/sh
 exec /usr/local/bin/%s 2>&1
 `, sm.appName)
@@ -398,7 +398,7 @@ exec /usr/local/bin/%s 2>&1
 		return fmt.Errorf("failed to write run script: %w", err)
 	}
 
-	// Create log directory and script per PART 25
+	// Create log directory and script per PART 24
 	logDir := filepath.Join(serviceDir, "log")
 	os.MkdirAll(logDir, 0755)
 
@@ -417,7 +417,7 @@ exec svlogd -tt /var/log/apimgr/%s
 	return nil
 }
 
-// installOpenRC installs an OpenRC service script per AI.md PART 25.
+// installOpenRC installs an OpenRC service script per AI.md PART 24.
 // The script lives at /etc/init.d/{appName} (executable). The binary
 // drops privileges itself after binding privileged ports, so command_user
 // is set to the dedicated service user.
@@ -425,7 +425,7 @@ func (sm *ServiceManager) installOpenRC() error {
 	scriptPath := fmt.Sprintf("/etc/init.d/%s", sm.appName)
 
 	script := fmt.Sprintf(`#!/sbin/openrc-run
-# OpenRC service for %s per AI.md PART 25.
+# OpenRC service for %s per AI.md PART 24.
 # Service identity uses the internal name so config/data/log paths stay
 # stable across binary renames.
 
@@ -474,7 +474,7 @@ start_pre() {
 	return nil
 }
 
-// installSysVInit installs a SysVinit-style init script per AI.md PART 25.
+// installSysVInit installs a SysVinit-style init script per AI.md PART 24.
 // Same path as OpenRC (/etc/init.d/{appName}); detection picks one or the
 // other. Uses start-stop-daemon (Debian-style) so it works on legacy
 // Debian/Ubuntu and any distro that ships start-stop-daemon as part of
@@ -562,13 +562,13 @@ exit 0
 	return nil
 }
 
-// installDarwin installs launchd service on macOS per AI.md PART 25
+// installDarwin installs launchd service on macOS per AI.md PART 24
 // Binary drops privileges after port binding - no UserName/GroupName needed
 func (sm *ServiceManager) installDarwin() error {
-	// Per PART 25: Path is /Library/LaunchDaemons/apimgr.{appname}.plist
+	// Per PART 24: Path is /Library/LaunchDaemons/apimgr.{appname}.plist
 	plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
 
-	// Per PART 25: No UserName/GroupName - binary handles privilege dropping
+	// Per PART 24: No UserName/GroupName - binary handles privilege dropping
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -600,7 +600,7 @@ func (sm *ServiceManager) installDarwin() error {
 	return nil
 }
 
-// createDarwinUser creates system user on macOS using dscl per AI.md PART 4
+// createDarwinUser creates system user on macOS using dscl per AI.md PART 23
 func (sm *ServiceManager) createDarwinUser() error {
 	// Check if user exists
 	_, err := exec.Command("dscl", ".", "-read", fmt.Sprintf("/Users/%s", sm.user)).CombinedOutput()
@@ -631,12 +631,12 @@ func (sm *ServiceManager) createDarwinUser() error {
 	return nil
 }
 
-// installBSD installs rc.d service on BSD per AI.md PART 25
+// installBSD installs rc.d service on BSD per AI.md PART 24
 // Binary drops privileges after port binding
 func (sm *ServiceManager) installBSD() error {
 	rcPath := fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.appName)
 
-	// Per PART 25: Simple rc.d script, binary handles privilege dropping
+	// Per PART 24: Simple rc.d script, binary handles privilege dropping
 	rcScript := fmt.Sprintf(`#!/bin/sh
 
 # PROVIDE: %s
@@ -663,7 +663,7 @@ run_rc_command "$1"
 	return nil
 }
 
-// createBSDUser creates system user on BSD using pw per AI.md PART 4
+// createBSDUser creates system user on BSD using pw per AI.md PART 23
 func (sm *ServiceManager) createBSDUser() error {
 	// Check if user exists
 	_, err := exec.Command("pw", "usershow", sm.user).CombinedOutput()
@@ -687,9 +687,9 @@ func (sm *ServiceManager) createBSDUser() error {
 	).Run()
 }
 
-// installWindows installs Windows service per AI.md PART 5
+// installWindows installs Windows service per AI.md PART 23
 func (sm *ServiceManager) installWindows() error {
-	// Create Windows Virtual Service Account per AI.md PART 4
+	// Create Windows Virtual Service Account per AI.md PART 23
 	account := fmt.Sprintf("NT SERVICE\\%s", sm.appName)
 
 	// Install service using sc.exe
@@ -735,7 +735,7 @@ func (sm *ServiceManager) uninstallLinux() error {
 
 // uninstallDarwin removes macOS service
 func (sm *ServiceManager) uninstallDarwin() error {
-	// Per PART 25: Path is /Library/LaunchDaemons/apimgr.{appname}.plist
+	// Per PART 24: Path is /Library/LaunchDaemons/apimgr.{appname}.plist
 	plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
 	exec.Command("launchctl", "unload", plistPath).Run()
 	os.Remove(plistPath)
@@ -759,7 +759,7 @@ func (sm *ServiceManager) uninstallWindows() error {
 	return nil
 }
 
-// DetectEscalation detects available privilege escalation methods per AI.md PART 4
+// DetectEscalation detects available privilege escalation methods per AI.md PART 23
 func DetectEscalation() string {
 	switch runtime.GOOS {
 	case "linux", "darwin", "freebsd", "openbsd", "netbsd":
@@ -788,7 +788,7 @@ func IsRunningAsRoot() bool {
 	}
 }
 
-// IsRunningInContainer checks if running in a container environment per AI.md PART 8
+// IsRunningInContainer checks if running in a container environment per AI.md PART 23
 func IsRunningInContainer() bool {
 	// File-based detection per AI.md PART 8 7732-7740
 	containerFiles := []string{
@@ -853,7 +853,7 @@ func getParentProcessName() string {
 	return ""
 }
 
-// DetectServiceManager returns the active service manager per AI.md PART 8
+// DetectServiceManager returns the active service manager per AI.md PART 23
 func DetectServiceManager() string {
 	// Check for container environment first
 	if IsRunningInContainer() {

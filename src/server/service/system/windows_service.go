@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 25: Windows Service Integration
+// AI.md PART 24: Windows Service Integration
 //go:build windows
 
 package system
@@ -22,7 +22,7 @@ type windowsService struct {
 }
 
 // RunAsWindowsService runs the application as a Windows service
-// Per AI.md PART 25: Use golang.org/x/sys/windows/svc for Windows service integration
+// Per AI.md PART 24: Use golang.org/x/sys/windows/svc for Windows service integration
 func RunAsWindowsService(runFunc func() error) error {
 	ws := &windowsService{
 		stopChan: make(chan struct{}),
@@ -32,7 +32,7 @@ func RunAsWindowsService(runFunc func() error) error {
 }
 
 // Execute implements svc.Handler interface
-// Per AI.md PART 25 specification
+// Per AI.md PART 24 specification
 func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, s chan<- svc.Status) (bool, uint32) {
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 

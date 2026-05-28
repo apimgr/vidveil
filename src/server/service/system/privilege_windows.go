@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 25: Privilege Dropping (Windows)
+// AI.md PART 23: Privilege Dropping (Windows)
 //go:build windows
 
 package system
@@ -13,7 +13,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// DropPrivileges is a no-op on Windows per AI.md PART 25
+// DropPrivileges is a no-op on Windows per AI.md PART 23
 // Windows uses Virtual Service Account (NT SERVICE\vidveil) which is already minimal-privilege
 func DropPrivileges(username string) error {
 	// Windows: No privilege dropping needed

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 25: Privilege Dropping (Unix)
+// AI.md PART 23: Privilege Dropping (Unix)
 //go:build !windows
 
 package system
@@ -15,7 +15,7 @@ import (
 )
 
 // DropPrivileges drops from root to the specified user after port binding
-// Per AI.md PART 25: "Unix: Service starts as root, binary drops to user after port binding"
+// Per AI.md PART 23: "Unix: Service starts as root, binary drops to user after port binding"
 // This should be called AFTER binding to privileged ports but BEFORE serving requests
 func DropPrivileges(username string) error {
 	// Only drop if we're root

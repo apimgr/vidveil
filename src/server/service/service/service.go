@@ -147,7 +147,7 @@ func (m *SystemServiceManager) Disable() error {
 	}
 }
 
-// GetServiceStatus returns the current service status per AI.md PART 25
+// GetServiceStatus returns the current service status per AI.md PART 24
 func (m *SystemServiceManager) GetServiceStatus() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
@@ -400,7 +400,7 @@ func (m *SystemServiceManager) hasRunit() bool {
 func (m *SystemServiceManager) installSystemd() error {
 	unitPath := filepath.Join("/etc/systemd/system", m.name+".service")
 
-	// Per AI.md PART 25: systemd unit file with security hardening
+	// Per AI.md PART 24: systemd unit file with security hardening
 	content := fmt.Sprintf(`[Unit]
 Description=%s
 Documentation=https://apimgr.github.io/%s
@@ -417,7 +417,7 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 
-# Security hardening per AI.md PART 25
+# Security hardening per AI.md PART 24
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

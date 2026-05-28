@@ -12,9 +12,9 @@ import (
 	"github.com/apimgr/vidveil/src/common/i18n"
 )
 
-// injectLocaleData populates Lang and Dir on template data per AI.md PART 31
+// injectLocaleData populates Lang and Dir on template data per AI.md PART 30
 // (<html lang="{{.Lang}}" dir="{{.Dir}}">). Locale resolution: ?lang= query,
-// "locale" cookie, then the first acceptable Accept-Language tag, otherwise
+// "lang" cookie, then the first acceptable Accept-Language tag, otherwise
 // the default locale.
 func injectLocaleData(r *http.Request, data map[string]interface{}) {
 	if data == nil || r == nil {
@@ -34,7 +34,7 @@ func resolveLocale(r *http.Request) string {
 	if v := strings.TrimSpace(r.URL.Query().Get("lang")); v != "" {
 		return strings.ToLower(v)
 	}
-	if c, err := r.Cookie("locale"); err == nil && c.Value != "" {
+	if c, err := r.Cookie("lang"); err == nil && c.Value != "" {
 		return strings.ToLower(c.Value)
 	}
 	if al := r.Header.Get("Accept-Language"); al != "" {

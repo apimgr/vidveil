@@ -114,7 +114,7 @@ type RateLimiter struct {
 	// Time window
 	window  time.Duration
 	clients map[string]*clientInfo
-	// Logger for security events per AI.md PART 121
+	// Logger for security events per AI.md PART 11
 	logger *logging.AppLogger
 }
 
@@ -148,7 +148,7 @@ func NewRateLimiter(enabled bool, requests int, windowSeconds int) *RateLimiter 
 	return l
 }
 
-// SetLogger sets the logger for security event logging per AI.md PART 121
+// SetLogger sets the logger for security event logging per AI.md PART 11
 func (l *RateLimiter) SetLogger(logger *logging.AppLogger) {
 	l.logger = logger
 }
@@ -297,7 +297,7 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Per AI.md PART 122: Call Allow() FIRST, then set headers with accurate remaining count
+		// Per AI.md PART 12: Call Allow() FIRST, then set headers with accurate remaining count
 		// This ensures X-RateLimit-Remaining reflects the count AFTER this request
 		allowed := l.Allow(ip)
 
@@ -306,7 +306,7 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 		w.Header().Set("X-RateLimit-Reset", itoa(int(l.Reset(ip).Unix())))
 
 		if !allowed {
-			// Log security event per AI.md PART 121
+			// Log security event per AI.md PART 11
 			if l.logger != nil {
 				l.logger.Security("rate_limit_exceeded", ip, map[string]interface{}{
 					"endpoint": r.URL.Path,

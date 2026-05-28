@@ -77,7 +77,7 @@ func DropPrivileges(username string) error {
 
 // createSystemUser creates a system user for the service
 func createSystemUser(username string) error {
-	// Find available UID in 200-899 range per AI.md PART 24
+	// Find available UID in 200-899 range per AI.md PART 23
 	uid := findAvailableID(200, 899)
 
 	// Determine home directory
@@ -132,12 +132,12 @@ func GetPrivilegeDropUser() string {
 	return "vidveil"
 }
 
-// IsElevated returns true if running as root per AI.md PART 24
+// IsElevated returns true if running as root per AI.md PART 23
 func IsElevated() bool {
 	return os.Geteuid() == 0
 }
 
-// CanEscalate checks if user can escalate privileges per AI.md PART 24
+// CanEscalate checks if user can escalate privileges per AI.md PART 23
 // Returns true if user has sudo access (passwordless or with password)
 func CanEscalate() bool {
 	// Already elevated
@@ -184,7 +184,7 @@ func CanEscalate() bool {
 	return false
 }
 
-// HandleEscalation prompts user and re-executes with elevated privileges per AI.md PART 24
+// HandleEscalation prompts user and re-executes with elevated privileges per AI.md PART 23
 // Returns nil if already elevated or if escalation succeeded
 // Returns error if user cannot escalate or declined
 func HandleEscalation(action string) error {

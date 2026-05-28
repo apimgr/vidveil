@@ -962,7 +962,7 @@ func (s *Server) ListenAndServe(addr string) error {
 
 // Listen binds to the given address and returns the listener without accepting
 // connections. Call Serve(l) after privilege drop.
-// Per AI.md PART 24: bind privileged ports as root, then drop, then serve.
+// Per AI.md PART 23: bind privileged ports as root, then drop, then serve.
 func (s *Server) Listen(addr string) (net.Listener, error) {
 	return net.Listen("tcp", addr)
 }

@@ -31,7 +31,7 @@ func GetPrivilegeDropUser() string {
 	return ""
 }
 
-// IsElevated returns true if running as Administrator per AI.md PART 24
+// IsElevated returns true if running as Administrator per AI.md PART 23
 func IsElevated() bool {
 	var sid *windows.SID
 	err := windows.AllocateAndInitializeSid(
@@ -51,7 +51,7 @@ func IsElevated() bool {
 	return err == nil && member
 }
 
-// CanEscalate checks if user can escalate via UAC per AI.md PART 24
+// CanEscalate checks if user can escalate via UAC per AI.md PART 23
 func CanEscalate() bool {
 	// If already elevated, no need to escalate
 	if IsElevated() {
@@ -92,7 +92,7 @@ func isInAdminGroup() bool {
 	return err == nil && member
 }
 
-// HandleEscalation prompts user and re-executes with elevated privileges per AI.md PART 24
+// HandleEscalation prompts user and re-executes with elevated privileges per AI.md PART 23
 func HandleEscalation(action string) error {
 	if IsElevated() {
 		// Already elevated

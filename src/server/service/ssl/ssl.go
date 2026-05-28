@@ -78,7 +78,7 @@ func (m *SSLManager) Initialize() error {
 		return fmt.Errorf("failed to create cert directory: %w", err)
 	}
 
-	// Check for existing Let's Encrypt certs first (per AI.md PART 8)
+	// Check for existing Let's Encrypt certs first (per AI.md PART 15)
 	letsEncryptPath := "/etc/letsencrypt/live"
 	domain := m.appConfig.Server.FQDN
 	if domain != "" {
@@ -218,7 +218,7 @@ func (m *SSLManager) generateSelfSigned() error {
 }
 
 // RequestCertificate requests a certificate from Let's Encrypt
-// Supports HTTP-01, TLS-ALPN-01, and DNS-01 challenges per AI.md PART 8
+// Supports HTTP-01, TLS-ALPN-01, and DNS-01 challenges per AI.md PART 15
 func (m *SSLManager) RequestCertificate(domain string) error {
 	if !config.IsValidSSLHost(domain) {
 		return fmt.Errorf("invalid domain for SSL: %s", domain)

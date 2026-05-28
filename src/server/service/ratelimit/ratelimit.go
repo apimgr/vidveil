@@ -10,7 +10,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/logging"
 )
 
-// Endpoint types for rate limiting per AI.md PART 1
+// Endpoint types for rate limiting per AI.md PART 12
 const (
 	EndpointLogin         = "login"
 	EndpointPasswordReset = "password_reset"
@@ -20,7 +20,7 @@ const (
 	EndpointDefault       = "default"
 )
 
-// Default rate limits per AI.md PART 1
+// Default rate limits per AI.md PART 12
 // | Endpoint Type | Limit | Window |
 // |---------------|-------|--------|
 // | Login attempts | 5 | 15 min |
@@ -40,14 +40,14 @@ var DefaultLimits = map[string]struct {
 	EndpointDefault:       {100, time.Minute},
 }
 
-// EndpointLimiters holds multiple rate limiters for different endpoint types per AI.md PART 1
+// EndpointLimiters holds multiple rate limiters for different endpoint types per AI.md PART 12
 type EndpointLimiters struct {
 	limiters map[string]*RateLimiter
 	logger   *logging.AppLogger
 	mu       sync.RWMutex
 }
 
-// NewEndpointLimiters creates endpoint-specific rate limiters per AI.md PART 1
+// NewEndpointLimiters creates endpoint-specific rate limiters per AI.md PART 12
 func NewEndpointLimiters(enabled bool) *EndpointLimiters {
 	el := &EndpointLimiters{
 		limiters: make(map[string]*RateLimiter),
@@ -80,32 +80,32 @@ func (el *EndpointLimiters) Get(endpoint string) *RateLimiter {
 	return el.limiters[EndpointDefault]
 }
 
-// AllowLogin checks rate limit for login attempts per AI.md PART 1 (5 per 15 min)
+// AllowLogin checks rate limit for login attempts per AI.md PART 12 (5 per 15 min)
 func (el *EndpointLimiters) AllowLogin(ip string) bool {
 	return el.Get(EndpointLogin).Allow(ip)
 }
 
-// AllowPasswordReset checks rate limit for password reset per AI.md PART 1 (3 per hour)
+// AllowPasswordReset checks rate limit for password reset per AI.md PART 12 (3 per hour)
 func (el *EndpointLimiters) AllowPasswordReset(ip string) bool {
 	return el.Get(EndpointPasswordReset).Allow(ip)
 }
 
-// AllowAPIAuth checks rate limit for authenticated API per AI.md PART 1 (100 per min)
+// AllowAPIAuth checks rate limit for authenticated API per AI.md PART 12 (100 per min)
 func (el *EndpointLimiters) AllowAPIAuth(ip string) bool {
 	return el.Get(EndpointAPIAuth).Allow(ip)
 }
 
-// AllowAPIUnauth checks rate limit for unauthenticated API per AI.md PART 1 (20 per min)
+// AllowAPIUnauth checks rate limit for unauthenticated API per AI.md PART 12 (20 per min)
 func (el *EndpointLimiters) AllowAPIUnauth(ip string) bool {
 	return el.Get(EndpointAPIUnauth).Allow(ip)
 }
 
-// AllowFileUpload checks rate limit for file uploads per AI.md PART 1 (10 per hour)
+// AllowFileUpload checks rate limit for file uploads per AI.md PART 12 (10 per hour)
 func (el *EndpointLimiters) AllowFileUpload(ip string) bool {
 	return el.Get(EndpointFileUpload).Allow(ip)
 }
 
-// RateLimiter implements a sliding window rate limiter per PART 1
+// RateLimiter implements a sliding window rate limiter per PART 12
 type RateLimiter struct {
 	mu      sync.RWMutex
 	enabled bool
@@ -114,7 +114,7 @@ type RateLimiter struct {
 	// Time window
 	window  time.Duration
 	clients map[string]*clientInfo
-	// Logger for security events per AI.md PART 11
+	// Logger for security events per AI.md PART 121
 	logger *logging.AppLogger
 }
 
@@ -124,13 +124,13 @@ type clientInfo struct {
 }
 
 // NewRateLimiter creates a new rate limiter
-// Default: 100 requests per 60 seconds per AI.md PART 1
+// Default: 100 requests per 60 seconds per AI.md PART 12
 func NewRateLimiter(enabled bool, requests int, windowSeconds int) *RateLimiter {
-	// Default per AI.md PART 1 (API authenticated)
+	// Default per AI.md PART 12 (API authenticated)
 	if requests <= 0 {
 		requests = 100
 	}
-	// Default per AI.md PART 1
+	// Default per AI.md PART 12
 	if windowSeconds <= 0 {
 		windowSeconds = 60
 	}
@@ -148,7 +148,7 @@ func NewRateLimiter(enabled bool, requests int, windowSeconds int) *RateLimiter 
 	return l
 }
 
-// SetLogger sets the logger for security event logging per AI.md PART 11
+// SetLogger sets the logger for security event logging per AI.md PART 121
 func (l *RateLimiter) SetLogger(logger *logging.AppLogger) {
 	l.logger = logger
 }
@@ -297,7 +297,7 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Per AI.md PART 12: Call Allow() FIRST, then set headers with accurate remaining count
+		// Per AI.md PART 122: Call Allow() FIRST, then set headers with accurate remaining count
 		// This ensures X-RateLimit-Remaining reflects the count AFTER this request
 		allowed := l.Allow(ip)
 
@@ -306,7 +306,7 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 		w.Header().Set("X-RateLimit-Reset", itoa(int(l.Reset(ip).Unix())))
 
 		if !allowed {
-			// Log security event per AI.md PART 11
+			// Log security event per AI.md PART 121
 			if l.logger != nil {
 				l.logger.Security("rate_limit_exceeded", ip, map[string]interface{}{
 					"endpoint": r.URL.Path,

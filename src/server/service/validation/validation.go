@@ -82,7 +82,7 @@ func ValidateUsername(username string, isAdmin bool) error {
 // ValidateAdminPassword validates Server Admin password with stricter requirements
 // Minimum 12 characters for admin accounts per AI.md PART 11
 func ValidateAdminPassword(password string) error {
-	// Per AI.md PART 1: Reject passwords with leading/trailing whitespace
+	// Per AI.md PART 11: Reject passwords with leading/trailing whitespace
 	if password != strings.TrimSpace(password) {
 		return &UsernameError{
 			Field:   "password",

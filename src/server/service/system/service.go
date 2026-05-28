@@ -293,7 +293,7 @@ func (sm *ServiceManager) createLinuxUser() error {
 	}
 
 
-	// Create and set ownership of directories per PART 24
+	// Create and set ownership of directories per PART 23
 	// All directories must exist for systemd's ReadWritePaths to work
 	dirs := []string{
 		"/etc/apimgr/" + sm.appName,
@@ -325,7 +325,7 @@ func (sm *ServiceManager) findAvailableUID(min, max int) int {
 func (sm *ServiceManager) installSystemd() error {
 	unitPath := fmt.Sprintf("/etc/systemd/system/%s.service", sm.appName)
 
-	// Per PART 24: NO User/Group - binary drops privileges after port binding
+	// Per PART 23: NO User/Group - binary drops privileges after port binding
 	unit := fmt.Sprintf(`[Unit]
 Description=%s service
 Documentation=https://x.scour.li
@@ -372,7 +372,7 @@ func (sm *ServiceManager) installRunit() error {
 	serviceDir := fmt.Sprintf("/etc/sv/%s", sm.appName)
 	os.MkdirAll(serviceDir, 0755)
 
-	// Per PART 24: Simple run script, binary handles privilege dropping
+	// Per PART 23: binary handles privilege dropping; PART 24: simple run script
 	runScript := fmt.Sprintf(`#!/bin/sh
 exec /usr/local/bin/%s 2>&1
 `, sm.appName)
@@ -552,7 +552,7 @@ func (sm *ServiceManager) installDarwin() error {
 	// Per PART 24: Path is /Library/LaunchDaemons/apimgr.{appname}.plist
 	plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
 
-	// Per PART 24: No UserName/GroupName - binary handles privilege dropping
+	// Per PART 23: No UserName/GroupName - binary handles privilege dropping
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -596,7 +596,7 @@ func (sm *ServiceManager) createDarwinUser() error {
 	// Find available UID in 200-899 range per AI.md PART 23
 	uid := sm.findAvailableUID(200, 899)
 
-	// Create user using dscl per AI.md PART 24
+	// Create user using dscl per AI.md PART 23
 	commands := [][]string{
 		{"dscl", ".", "-create", fmt.Sprintf("/Users/%s", sm.user)},
 		{"dscl", ".", "-create", fmt.Sprintf("/Users/%s", sm.user), "UniqueID", strconv.Itoa(uid)},
@@ -620,7 +620,7 @@ func (sm *ServiceManager) createDarwinUser() error {
 func (sm *ServiceManager) installBSD() error {
 	rcPath := fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.appName)
 
-	// Per PART 24: Simple rc.d script, binary handles privilege dropping
+	// Per PART 23: binary handles privilege dropping; PART 24: simple rc.d script
 	rcScript := fmt.Sprintf(`#!/bin/sh
 
 # PROVIDE: %s
@@ -658,10 +658,10 @@ func (sm *ServiceManager) createBSDUser() error {
 	// Find available UID in 200-899 range per AI.md PART 23
 	uid := sm.findAvailableUID(200, 899)
 
-	// Create group per AI.md PART 24
+	// Create group per AI.md PART 23
 	exec.Command("pw", "groupadd", sm.group, "-g", strconv.Itoa(uid)).Run()
 
-	// Create user using pw per AI.md PART 24
+	// Create user using pw per AI.md PART 23
 	return exec.Command("pw", "useradd", sm.user,
 		"-u", strconv.Itoa(uid),
 		"-g", sm.group,
@@ -955,7 +955,7 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 	}
 
 	// User doesn't exist, create it
-	// Find available UID/GID in 200-899 range per AI.md PART 24
+	// Find available UID/GID in 200-899 range per AI.md PART 23
 	id := findAvailableID(200, 899)
 
 	// Determine home directory (use first data dir if available)
@@ -1009,7 +1009,7 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 	return id, id, nil
 }
 
-// findAvailableID finds an available UID/GID in the given range per AI.md PART 24
+// findAvailableID finds an available UID/GID in the given range per AI.md PART 23
 func findAvailableID(min, max int) int {
 	// Start from top of range (999) and work down
 	for id := max; id >= min; id-- {

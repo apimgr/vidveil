@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// See AI.md PART 1 and PART 14 for API/Swagger rules
+// See AI.md PART 14 for API/Swagger rules
 package swagger
 
 import (

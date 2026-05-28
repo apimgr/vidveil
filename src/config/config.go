@@ -1396,7 +1396,7 @@ func IsValidSSLHost(host string) bool {
 	return IsValidHost(host, false)
 }
 
-// LiveReload per AI.md PART 1 NON-NEGOTIABLE
+// LiveReload per AI.md PART 8 NON-NEGOTIABLE
 // Watches config file and reloads on changes
 
 // ReloadCallback is called when configuration is reloaded

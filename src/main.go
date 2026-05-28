@@ -503,7 +503,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "⚠️  SSL service initialization failed: %v\n", err)
 	}
 
-	// GeoIP service (PART 20)
+	// GeoIP service (PART 19)
 	geoipSvc := geoip.NewGeoIPService(appConfig)
 	if err := geoipSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  GeoIP service initialization failed: %v\n", err)
@@ -518,8 +518,8 @@ func main() {
 	}
 	defer logger.Close()
 
-	// Tor hidden service (PART 32) - auto-enabled if tor binary is found
-	// Per PART 32: Also supports outbound network routing for engine queries
+	// Tor hidden service (PART 31) - auto-enabled if tor binary is found
+	// Per PART 31: Also supports outbound network routing for engine queries
 	torDataDir := filepath.Join(paths.Data, "tor")
 	torSvc := tor.NewTorService(torDataDir, logger)
 	// Pass Tor config for outbound network settings
@@ -564,7 +564,7 @@ func main() {
 			return nil
 		},
 		GeoIPUpdate: func(ctx context.Context) error {
-			// GeoIP database update per PART 20
+			// GeoIP database update per PART 19
 			if !appConfig.Server.GeoIP.Enabled {
 				return nil
 			}
@@ -606,8 +606,8 @@ func main() {
 			return nil
 		},
 		TorHealth: func(ctx context.Context) error {
-			// Tor health check per PART 32 - only if hidden service enabled
-			// Per PART 32: Tor supports hidden service and optional outbound network routing
+			// Tor health check per PART 31 - only if hidden service enabled
+			// Per PART 31: Tor supports hidden service and optional outbound network routing
 			if torSvc == nil {
 				return nil
 			}
@@ -647,19 +647,19 @@ func main() {
 		}
 	}
 
-	// Set Tor provider for engine manager per PART 32
+	// Set Tor provider for engine manager per PART 31
 	// This enables Tor outbound network for anonymized engine queries when UseNetwork is true
 	engineMgr.SetTorProvider(torSvc)
 
-	// Start Tor hidden service per PART 32 (in background to not block HTTP server)
+	// Start Tor hidden service per PART 31 (in background to not block HTTP server)
 	// Auto-enabled if tor binary is installed - no enable flag needed
-	// Per PART 32: ADD_ONION maps .onion:virtualPort → 127.0.0.1:serverPort (existing HTTP listener)
+	// Per PART 31: ADD_ONION maps .onion:virtualPort → 127.0.0.1:serverPort (existing HTTP listener)
 	go func() {
 		torCtx := context.Background()
 		// Parse server port from config — Tor will forward .onion traffic to this existing HTTP port
 		serverPort, _ := strconv.Atoi(appConfig.Server.Port)
 		if err := torSvc.Start(torCtx, serverPort); err != nil {
-			// PART 32: Tor errors are WARN level, server continues without Tor
+			// PART 31: Tor errors are WARN level, server continues without Tor
 			fmt.Fprintf(os.Stderr, "⚠️  Tor hidden service: %v\n", err)
 		} else if torSvc.UseNetworkEnabled() && torSvc.OutboundEnabled() {
 			fmt.Println("[INFO] Tor outbound network enabled - engine queries are anonymized")
@@ -679,7 +679,7 @@ func main() {
 	// Create server with admin service, migration manager, scheduler, and logger per AI.md PART 11
 	srv := server.NewServer(appConfig, configDir, dataDir, engineMgr, adminSvc, migrationMgr, sched, logger)
 
-	// Set Tor service for handlers per AI.md PART 32
+	// Set Tor service for handlers per AI.md PART 31
 	srv.SetTorService(torSvc)
 
 	// Set GeoIP service for content restriction checks and country blocking per AI.md PART 18

@@ -121,7 +121,7 @@ type ServerConfig struct {
 	// Backup (PART 21) - Backup & Restore settings
 	Backup BackupConfig `yaml:"backup"`
 
-	// Tor (PART 32) - Hidden service and outbound network settings
+	// Tor (PART 31) - Hidden service and outbound network settings
 	Tor TorConfig `yaml:"tor"`
 
 	// Healthz (PART 13) - Optional root-level alias for /server/healthz
@@ -142,18 +142,18 @@ type HealthzRootConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
-// TorConfig holds Tor-related configuration per AI.md PART 32
+// TorConfig holds Tor-related configuration per AI.md PART 31
 type TorConfig struct {
 	// Binary path (empty = auto-detect from PATH)
 	Binary string `yaml:"binary"`
 
 	// --- Outbound Network Settings ---
 	// Use Tor network for outbound connections (engine queries)
-	// Per PART 32: Particularly relevant for VidVeil to anonymize search queries
+	// Per PART 31: Particularly relevant for VidVeil to anonymize search queries
 	UseNetwork bool `yaml:"use_network"`
 
 	// Allow users to set their own Tor network preference (override server default)
-	// Per PART 32: Users can set via cookie to always use Tor, never use Tor, or inherit server default
+	// Per PART 31: Users can set via cookie to always use Tor, never use Tor, or inherit server default
 	AllowUserPreference bool `yaml:"allow_user_preference"`
 
 	// Allow users to opt-in to forwarding their IP address to video sites
@@ -201,14 +201,14 @@ type TorConfig struct {
 	VirtualPort int `yaml:"virtual_port"`
 }
 
-// DefaultTorConfig returns the default Tor configuration per PART 32
+// DefaultTorConfig returns the default Tor configuration per PART 31
 func DefaultTorConfig() TorConfig {
 	return TorConfig{
 		// auto-detect
 		Binary: "",
 		// disabled by default, user can enable for privacy
 		UseNetwork: false,
-		// allow users to override outbound Tor routing per PART 32
+		// allow users to override outbound Tor routing per PART 31
 		AllowUserPreference: true,
 		// feature available, but user must opt-in via preferences
 		AllowUserIPForward:        true,
@@ -228,7 +228,7 @@ func DefaultTorConfig() TorConfig {
 
 // AdminConfig holds admin panel settings
 type AdminConfig struct {
-	// Path is the admin panel URL path (default: "admin") per PART 17
+	// Path is the admin panel URL path (default: "admin") per PART 12
 	Path      string          `yaml:"path"`
 	Email     string          `yaml:"email"`
 	Username  string          `yaml:"username"`
@@ -249,7 +249,7 @@ type TwoFactorConfig struct {
 	RememberDeviceDays int `yaml:"remember_device_days"`
 }
 
-// EmailConfig holds SMTP settings per AI.md PART 18
+// EmailConfig holds SMTP settings per AI.md PART 17
 type EmailConfig struct {
 	Enabled        bool     `yaml:"enabled"`
 	Autodetect     bool     `yaml:"autodetect"`
@@ -285,7 +285,7 @@ type NotificationTypesConfig struct {
 	CertExpiry bool `yaml:"cert_expiry"`
 }
 
-// ScheduleConfig holds scheduler settings per AI.md PART 19
+// ScheduleConfig holds scheduler settings per AI.md PART 18
 type ScheduleConfig struct {
 	Enabled       bool   `yaml:"enabled"`
 	Timezone      string `yaml:"timezone"`
@@ -323,7 +323,7 @@ type MetricsConfig struct {
 	SizeBuckets     []float64 `yaml:"size_buckets"`
 }
 
-// GeoIPConfig holds GeoIP settings per AI.md PART 20
+// GeoIPConfig holds GeoIP settings per AI.md PART 19
 type GeoIPConfig struct {
 	Enabled        bool                 `yaml:"enabled"`
 	Dir            string               `yaml:"dir"`
@@ -640,7 +640,7 @@ type CookieConsentConfig struct {
 }
 
 // SearchConfig holds search-specific settings (project-specific)
-// Per PART 32: Tor supports hidden service and optional outbound network routing
+// Per PART 31: Tor supports hidden service and optional outbound network routing
 type SearchConfig struct {
 	DefaultEngines     []string `yaml:"default_engines"`
 	ConcurrentRequests int      `yaml:"concurrent_requests"`
@@ -1009,7 +1009,7 @@ func DefaultAppConfig() *AppConfig {
 					Enabled: false,
 				},
 			},
-			// Tor settings per AI.md PART 32
+			// Tor settings per AI.md PART 31
 			// Hidden service auto-enabled if tor binary found
 			// Outbound network disabled by default - can be enabled for privacy
 			Tor: DefaultTorConfig(),

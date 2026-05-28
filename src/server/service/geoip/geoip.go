@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 20: GeoIP
+// AI.md PART 19: GeoIP
 package geoip
 
 import (
@@ -17,7 +17,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// Database URLs per AI.md PART 20 - using ip-location-db via jsDelivr
+// Database URLs per AI.md PART 19 - using ip-location-db via jsDelivr
 const (
 	ASNURL     = "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb"
 	CountryURL = "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"

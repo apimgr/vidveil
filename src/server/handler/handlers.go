@@ -666,7 +666,7 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 16
+		// Plain text response for curl/CLI per AI.md PART 14
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "%s\n\n", h.appConfig.Server.Branding.Description)
@@ -819,7 +819,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 		})
 
 	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 16
+		// Plain text response for curl/CLI per AI.md PART 14
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "Preferences - %s\n\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "Theme: %s\n", h.getRequestTheme(r))
@@ -860,7 +860,7 @@ func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 16
+		// Plain text response for curl/CLI per AI.md PART 14
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "Version: %s\n", ver)
@@ -893,7 +893,7 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 16
+		// Plain text response for curl/CLI per AI.md PART 14
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "Privacy Policy - %s\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "Version: %s\n\n", ver)
@@ -2221,7 +2221,7 @@ func (h *SearchHandler) APIVersion(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIHealthCheck returns health status as JSON per AI.md PART 16
+// APIHealthCheck returns health status as JSON per AI.md PART 13
 // Returns comprehensive health status with checks object for database/cache/disk
 // APIHealthCheck handles /api/v1/healthz endpoint (JSON only)
 // Per AI.md PART 13: Same JSON as /healthz

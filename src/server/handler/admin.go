@@ -782,7 +782,7 @@ func (h *AdminHandler) SystemInfoPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// NodesPage renders cluster nodes management (AI.md PART 24)
+// NodesPage renders cluster nodes management (AI.md PART 10)
 func (h *AdminHandler) NodesPage(w http.ResponseWriter, r *http.Request) {
 	hostname, _ := os.Hostname()
 
@@ -3748,7 +3748,7 @@ func formatDuration(d time.Duration) string {
 }
 
 // =====================================================
-// Cluster Node Handlers per AI.md PART 24
+// Cluster Node Handlers per AI.md PART 10
 // =====================================================
 
 // AddNodePage renders the add node form

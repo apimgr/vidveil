@@ -275,7 +275,7 @@ func (sm *ServiceManager) createLinuxUser() error {
 
 	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' does not exist, creating...\n", sm.user)
 
-	// Find available UID in 200-899 range per AI.md PART 24
+	// Find available UID in 200-899 range per AI.md PART 23
 	uid := sm.findAvailableUID(200, 899)
 	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Found available UID: %d\n", uid)
 
@@ -609,7 +609,7 @@ func (sm *ServiceManager) createDarwinUser() error {
 		return nil
 	}
 
-	// Find available UID in 200-899 range per AI.md PART 24
+	// Find available UID in 200-899 range per AI.md PART 23
 	uid := sm.findAvailableUID(200, 899)
 
 	// Create user using dscl per AI.md PART 24
@@ -671,7 +671,7 @@ func (sm *ServiceManager) createBSDUser() error {
 		return nil
 	}
 
-	// Find available UID in 200-899 range per AI.md PART 24
+	// Find available UID in 200-899 range per AI.md PART 23
 	uid := sm.findAvailableUID(200, 899)
 
 	// Create group per AI.md PART 24

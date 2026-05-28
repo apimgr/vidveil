@@ -968,7 +968,7 @@ func (s *Server) Listen(addr string) (net.Listener, error) {
 }
 
 // ServeOn serves HTTP requests on the given pre-bound listener.
-// Per AI.md PART 24: called after privilege drop.
+// Per AI.md PART 23: called after privilege drop.
 func (s *Server) ServeOn(listener net.Listener) error {
 	readTimeout := parseDuration(s.appConfig.Server.Limits.ReadTimeout, 30*time.Second)
 	writeTimeout := parseDuration(s.appConfig.Server.Limits.WriteTimeout, 30*time.Second)

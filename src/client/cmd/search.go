@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Client - Search Command
+// AI.md PART 32: CLI Client - Search Command
 package cmd
 
 import (
@@ -25,7 +25,7 @@ var (
 	searchEngineFilter string
 )
 
-// RunSearchCommand runs the search command per AI.md PART 33
+// RunSearchCommand runs the search command per AI.md PART 32
 // Per AI.md PART 1: Function names MUST reveal intent - "runSearch" is ambiguous
 // No short flags except -h
 func RunSearchCommand(args []string) error {
@@ -101,7 +101,7 @@ func RunSearchCommand(args []string) error {
 	}
 }
 
-// PrintSearchCommandHelp prints search command help per AI.md PART 33
+// PrintSearchCommandHelp prints search command help per AI.md PART 32
 // Per AI.md PART 1: Function names MUST reveal intent - "searchHelp" is ambiguous
 func PrintSearchCommandHelp() {
 	fmt.Printf(`Search for videos

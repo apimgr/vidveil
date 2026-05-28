@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 17: Server Admin username and password validation
+// AI.md PART 11: Server Admin username and password validation
 // VidVeil is stateless - no PART 34 (Multi-User), only Server Admin validation
 package validation
 
@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Username validation regex per AI.md PART 31
+// Username validation regex per AI.md PART 11
 // Allowed: a-z, 0-9, _, - (lowercase only)
 // Must start with letter
 // Cannot end with _ or -
@@ -26,7 +26,7 @@ func (e *UsernameError) Error() string {
 	return e.Message
 }
 
-// ValidateUsername validates a Server Admin username per AI.md PART 17
+// ValidateUsername validates a Server Admin username per AI.md PART 11
 // VidVeil only has Server Admins, no regular users - blocklist not applicable
 func ValidateUsername(username string, isAdmin bool) error {
 	// Convert to lowercase for validation
@@ -80,7 +80,7 @@ func ValidateUsername(username string, isAdmin bool) error {
 }
 
 // ValidateAdminPassword validates Server Admin password with stricter requirements
-// Minimum 12 characters for admin accounts per AI.md PART 17
+// Minimum 12 characters for admin accounts per AI.md PART 11
 func ValidateAdminPassword(password string) error {
 	// Per AI.md PART 1: Reject passwords with leading/trailing whitespace
 	if password != strings.TrimSpace(password) {

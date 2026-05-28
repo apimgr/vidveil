@@ -436,7 +436,7 @@ func (s *Server) setupRoutes() {
 	// Store handler references for later service injection
 	s.searchHandler = h
 	s.adminHandler = admin
-	// Set scheduler for admin panel management per AI.md PART 19
+	// Set scheduler for admin panel management per AI.md PART 18
 	admin.SetScheduler(s.scheduler)
 	// Set logger for audit and security event logging per AI.md PART 11
 	admin.SetLogger(s.logger)
@@ -835,7 +835,7 @@ func (s *Server) setupRoutes() {
 					r.Post("/upload", admin.APISSLUpload)
 				})
 
-				// Tor per PART 32
+				// Tor per PART 31
 				r.Route("/tor", func(r chi.Router) {
 					r.Get("/", admin.APITorStatus)
 					r.Patch("/", admin.APITorUpdate)
@@ -857,7 +857,7 @@ func (s *Server) setupRoutes() {
 					r.Post("/test", admin.APITestEmail)
 				})
 
-				// Scheduler per PART 19
+				// Scheduler per PART 18
 				r.Route("/scheduler", func(r chi.Router) {
 					r.Get("/", admin.APISchedulerTasks)
 					r.Get("/{id}", admin.APISchedulerTasks)
@@ -867,7 +867,7 @@ func (s *Server) setupRoutes() {
 					r.Post("/{id}/disable", admin.APISchedulerTasks)
 				})
 
-				// Backup per PART 22
+				// Backup per PART 21
 				r.Route("/backup", func(r chi.Router) {
 					r.Get("/", admin.APIBackup)
 					r.Post("/", admin.APIBackup)
@@ -984,7 +984,7 @@ func (s *Server) ServeOn(listener net.Listener) error {
 }
 
 // Serve serves on the given listener (for Tor hidden service)
-// Per AI.md PART 32: HTTP server serves on both TCP (clearnet) and Tor listener
+// Per AI.md PART 31: HTTP server serves on both TCP (clearnet) and Tor listener
 func (s *Server) Serve(listener net.Listener) error {
 	// Parse timeouts from config per AI.md PART 13
 	readTimeout := parseDuration(s.appConfig.Server.Limits.ReadTimeout, 30*time.Second)

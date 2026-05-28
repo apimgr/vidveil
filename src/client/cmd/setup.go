@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Client - Setup Wizard
+// AI.md PART 32: CLI Client - Setup Wizard
 package cmd
 
 import (
@@ -356,7 +356,7 @@ func SaveSetupWizardConfig(serverURL, token string, saveToFile bool) error {
 }
 
 // RunSetupWizard runs the setup wizard TUI
-// Per AI.md PART 33: CLI First-Run Flow
+// Per AI.md PART 32: CLI First-Run Flow
 // Per AI.md PART 1: Function names MUST reveal intent
 func RunSetupWizard() error {
 	wizardProgram := tea.NewProgram(CreateSetupWizardModel())
@@ -374,7 +374,7 @@ func RunSetupWizard() error {
 }
 
 // IsServerConfigured checks if a server is configured
-// Per AI.md PART 33: Check for config file before showing wizard
+// Per AI.md PART 32: Check for config file before showing wizard
 // Per AI.md PART 1: Function names MUST reveal intent
 func IsServerConfigured() bool {
 	// Check config file
@@ -391,7 +391,7 @@ func IsServerConfigured() bool {
 }
 
 // EnsureServerConfigured ensures a server is configured, running wizard if needed
-// Per AI.md PART 33: CLI First-Run Flow
+// Per AI.md PART 32: CLI First-Run Flow
 // Per AI.md PART 1: Function names MUST reveal intent
 func EnsureServerConfigured() error {
 	if IsServerConfigured() {

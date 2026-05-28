@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// PART 22: Security & Logging - CVE/Security Database Service
+// PART 11: Security & Logging - CVE/Security Database Service
 package cve
 
 import (
@@ -17,7 +17,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// CVEService manages CVE (Common Vulnerabilities and Exposures) database per PART 22
+// CVEService manages CVE (Common Vulnerabilities and Exposures) database per PART 11
 type CVEService struct {
 	appConfig *config.AppConfig
 	dataDir   string
@@ -84,7 +84,7 @@ func NewCVEService(appConfig *config.AppConfig) *CVEService {
 	}
 }
 
-// Initialize creates directory structure per PART 22
+// Initialize creates directory structure per PART 11
 func (s *CVEService) Initialize() error {
 	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create CVE directory: %w", err)
@@ -100,7 +100,7 @@ func (s *CVEService) Update(ctx context.Context) error {
 
 	source := s.appConfig.Server.Security.CVE.Source
 	if source == "" {
-		// Default NVD source per PART 22 specification
+		// Default NVD source per PART 11 specification
 		source = "https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-recent.json.gz"
 	}
 
@@ -109,7 +109,7 @@ func (s *CVEService) Update(ctx context.Context) error {
 		return fmt.Errorf("failed to download CVE feed: %w", err)
 	}
 
-	// Write timestamp file per PART 22 specification
+	// Write timestamp file per PART 11 specification
 	timestampFile := filepath.Join(s.dataDir, ".last_updated")
 	return os.WriteFile(timestampFile, []byte(time.Now().Format(time.RFC3339)), 0644)
 }
@@ -136,7 +136,7 @@ func (s *CVEService) downloadCVEFeed(ctx context.Context, source string) error {
 		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
 	}
 
-	// Save to file per PART 22 directory structure
+	// Save to file per PART 11 directory structure
 	filename := filepath.Join(s.dataDir, "nvd.json")
 	file, err := os.Create(filename)
 	if err != nil {
@@ -196,7 +196,7 @@ func (s *CVEService) loadCVEData(filename string) error {
 			}
 		}
 
-		// Filter by CPE if enabled per PART 22 specification
+		// Filter by CPE if enabled per PART 11 specification
 		if s.appConfig.Server.Security.CVE.FilterByCPE && len(cpes) == 0 {
 			continue
 		}

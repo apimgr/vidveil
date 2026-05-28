@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Client - Shell Completion Command
+// AI.md PART 32: CLI Client - Shell Completion Command
 package cmd
 
 import (
@@ -10,7 +10,7 @@ import (
 
 // RunShellCommand handles shell completion commands
 // Per AI.md PART 1: Function names MUST reveal intent - "runShell" is ambiguous
-// Per AI.md PART 33: Built-in shell completion support
+// Per AI.md PART 32: Built-in shell completion support
 func RunShellCommand(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: %s --shell [completions|init|--help] [shell]", BinaryName)

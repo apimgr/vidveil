@@ -15,11 +15,11 @@ import (
 )
 
 // EngineManager manages all search engines
-// Per PART 32: Supports Tor outbound network for anonymized engine queries
+// Per PART 31: Supports Tor outbound network for anonymized engine queries
 type EngineManager struct {
 	engines   map[string]SearchEngine
 	appConfig *config.AppConfig
-	// Per PART 32: Tor client provider for outbound
+	// Per PART 31: Tor client provider for outbound
 	torProvider TorClientProvider
 	mu          sync.RWMutex
 }
@@ -33,7 +33,7 @@ func NewEngineManager(appConfig *config.AppConfig) *EngineManager {
 }
 
 // SetTorProvider sets the Tor client provider for all engines
-// Per PART 32: When set and UseNetwork is enabled, engine queries are anonymized through Tor
+// Per PART 31: When set and UseNetwork is enabled, engine queries are anonymized through Tor
 func (m *EngineManager) SetTorProvider(provider TorClientProvider) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

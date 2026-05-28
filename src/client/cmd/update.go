@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Auto-Update
+// AI.md PART 32: CLI Auto-Update
 package cmd
 
 import (
@@ -55,7 +55,7 @@ type CLIUpdateInfo struct {
 	ChecksumURL     string
 }
 
-// RunCLIUpdateCommand handles --update [check|yes|branch <name>|--help] per AI.md PART 33.
+// RunCLIUpdateCommand handles --update [check|yes|branch <name>|--help] per AI.md PART 32.
 func RunCLIUpdateCommand(args []string) error {
 	cmd := "yes"
 	var arg string

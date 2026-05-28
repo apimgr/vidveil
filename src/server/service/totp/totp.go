@@ -131,7 +131,7 @@ func (s *TOTPService) generateCode(secret string, counter int64) string {
 	return fmt.Sprintf("%06d", code%1000000)
 }
 
-// TOTPConfig holds 2FA configuration per AI.md PART 31
+// TOTPConfig holds 2FA configuration per AI.md PART 11
 type TOTPConfig struct {
 	// Enabled allows 2FA to be enabled by users
 	Enabled bool `yaml:"enabled"`

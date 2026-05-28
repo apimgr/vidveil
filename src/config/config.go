@@ -115,10 +115,10 @@ type ServerConfig struct {
 	// GeoIP
 	GeoIP GeoIPConfig `yaml:"geoip"`
 
-	// Security (PART 22) - Blocklists, CVE, etc
+	// Security (PART 11) - Blocklists, CVE, etc
 	Security SecurityConfig `yaml:"security"`
 
-	// Backup (PART 22) - Backup & Restore settings
+	// Backup (PART 21) - Backup & Restore settings
 	Backup BackupConfig `yaml:"backup"`
 
 	// Tor (PART 32) - Hidden service and outbound network settings
@@ -312,7 +312,7 @@ type LetsEncryptConfig struct {
 	DNSProviderKey  string `yaml:"dns_provider_key"`
 }
 
-// MetricsConfig holds Prometheus metrics settings per AI.md PART 21
+// MetricsConfig holds Prometheus metrics settings per AI.md PART 20
 type MetricsConfig struct {
 	Enabled         bool      `yaml:"enabled"`
 	Endpoint        string    `yaml:"endpoint"`
@@ -476,7 +476,7 @@ type AllowlistEntry struct {
 	Description string `yaml:"description" json:"description"`
 }
 
-// SecurityConfig holds security-related settings per PART 22
+// SecurityConfig holds security-related settings per PART 11
 type SecurityConfig struct {
 	Dir        string           `yaml:"dir"`
 	Allowlist  []AllowlistEntry `yaml:"allowlist"`
@@ -484,13 +484,13 @@ type SecurityConfig struct {
 	CVE        CVEConfig        `yaml:"cve"`
 }
 
-// BlocklistsConfig holds IP/domain blocklist settings per PART 22
+// BlocklistsConfig holds IP/domain blocklist settings per PART 11
 type BlocklistsConfig struct {
 	Enabled bool              `yaml:"enabled"`
 	Sources []BlocklistSource `yaml:"sources"`
 }
 
-// BlocklistSource represents a blocklist source per PART 22
+// BlocklistSource represents a blocklist source per PART 11
 type BlocklistSource struct {
 	Name string `yaml:"name"`
 	URL  string `yaml:"url"`
@@ -499,20 +499,20 @@ type BlocklistSource struct {
 	Enabled bool   `yaml:"enabled"`
 }
 
-// CVEConfig holds CVE database settings per PART 22
+// CVEConfig holds CVE database settings per PART 11
 type CVEConfig struct {
 	Enabled     bool   `yaml:"enabled"`
 	Source      string `yaml:"source"`
 	FilterByCPE bool   `yaml:"filter_by_cpe"`
 }
 
-// BackupConfig holds backup settings per AI.md PART 22
+// BackupConfig holds backup settings per AI.md PART 21
 type BackupConfig struct {
 	Retention  BackupRetentionConfig  `yaml:"retention"`
 	Encryption BackupEncryptionConfig `yaml:"encryption"`
 }
 
-// BackupRetentionConfig holds backup retention settings per AI.md PART 22
+// BackupRetentionConfig holds backup retention settings per AI.md PART 21
 type BackupRetentionConfig struct {
 	// MaxBackups: daily full backups to keep (default: 1)
 	MaxBackups int `yaml:"max_backups"`
@@ -524,7 +524,7 @@ type BackupRetentionConfig struct {
 	KeepYearly int `yaml:"keep_yearly"`
 }
 
-// BackupEncryptionConfig holds backup encryption settings per AI.md PART 22
+// BackupEncryptionConfig holds backup encryption settings per AI.md PART 21
 type BackupEncryptionConfig struct {
 	// Enabled: true if backup password was set
 	Enabled bool `yaml:"enabled"`
@@ -995,8 +995,8 @@ func DefaultAppConfig() *AppConfig {
 					WarningMessage:      "Adult content may be restricted or require age verification in your region.",
 				},
 			},
-			// Backup settings per AI.md PART 22
-			// Default per PART 22: 1 daily backup, weekly/monthly/yearly disabled
+			// Backup settings per AI.md PART 21
+			// Default per PART 21: 1 daily backup, weekly/monthly/yearly disabled
 			Backup: BackupConfig{
 				Retention: BackupRetentionConfig{
 					MaxBackups:  1,

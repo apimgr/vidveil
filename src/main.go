@@ -539,11 +539,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "⚠️  CVE service initialization failed: %v\n", err)
 	}
 
-	// Initialize scheduler with database persistence per AI.md PART 19
+	// Initialize scheduler with database persistence per AI.md PART 18
 	// Task state (run_count, fail_count, last_run) survives restarts
 	sched := scheduler.NewSchedulerWithDB(migrationMgr.GetDB())
 
-	// Set catch-up window per AI.md PART 19
+	// Set catch-up window per AI.md PART 18
 	// Missed tasks within this window will run on startup
 	if appConfig.Server.Schedule.CatchUpWindow != "" {
 		if catchUpDuration, err := time.ParseDuration(appConfig.Server.Schedule.CatchUpWindow); err == nil {
@@ -551,7 +551,7 @@ func main() {
 		}
 	}
 
-	// Register all built-in tasks per AI.md PART 19
+	// Register all built-in tasks per AI.md PART 18
 	sched.RegisterBuiltinTasks(scheduler.BuiltinTaskFuncs{
 		SSLRenewal: func(ctx context.Context) error {
 			// SSL certificate renewal check per PART 15
@@ -587,7 +587,7 @@ func main() {
 			return adminSvc.CleanupExpiredTokens()
 		},
 		LogRotation: func(ctx context.Context) error {
-			// Log rotation per AI.md PART 19: trigger log file reopen/rotation
+			// Log rotation per AI.md PART 18: trigger log file reopen/rotation
 			logger.Reopen()
 			return nil
 		},
@@ -667,7 +667,7 @@ func main() {
 	}()
 	defer torSvc.Stop()
 
-	// Load scheduler history from database per AI.md PART 19
+	// Load scheduler history from database per AI.md PART 18
 	if err := sched.LoadHistoryFromDB(100); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  Failed to load scheduler history: %v\n", err)
 	}
@@ -682,7 +682,7 @@ func main() {
 	// Set Tor service for handlers per AI.md PART 32
 	srv.SetTorService(torSvc)
 
-	// Set GeoIP service for content restriction checks and country blocking per AI.md PART 19
+	// Set GeoIP service for content restriction checks and country blocking per AI.md PART 18
 	srv.SetGeoIPService(geoipSvc)
 
 	// Set blocklist service for IP/domain blocklist middleware per AI.md PART 11
@@ -1431,7 +1431,7 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
 		}
 
 	case "setup":
-		// Admin recovery per AI.md PART 22
+		// Admin recovery per AI.md PART 11
 		// Clears admin password and API token, generates new setup token
 		fmt.Println()
 		fmt.Println("╔══════════════════════════════════════════════════════════════════╗")

@@ -59,7 +59,7 @@ type Capabilities struct {
 }
 
 // TorClientProvider provides HTTP clients that can route through Tor
-// Per PART 32: Used when UseNetwork is enabled to anonymize engine queries
+// Per PART 31: Used when UseNetwork is enabled to anonymize engine queries
 type TorClientProvider interface {
 	// GetHTTPClient returns an HTTP client, optionally routed through Tor
 	// useTor: true = route through Tor, false = direct connection
@@ -148,13 +148,13 @@ type CircuitResetter interface {
 }
 
 // TorConfigurableEngine interface for engines that support Tor outbound
-// Per PART 32: Engines implementing this can route queries through Tor
+// Per PART 31: Engines implementing this can route queries through Tor
 type TorConfigurableEngine interface {
 	SetTorProvider(provider TorClientProvider)
 }
 
 // BaseEngine provides common functionality for all engines
-// Per PART 32: Supports Tor outbound network for anonymized queries
+// Per PART 31: Supports Tor outbound network for anonymized queries
 type BaseEngine struct {
 	name          string
 	displayName   string
@@ -166,7 +166,7 @@ type BaseEngine struct {
 	appConfig     *config.AppConfig
 	httpClient    *http.Client
 	spoofedClient *http.Client
-	// Per PART 32: Provides Tor-routed HTTP clients
+	// Per PART 31: Provides Tor-routed HTTP clients
 	torProvider    TorClientProvider
 	circuitBreaker *retry.CircuitBreaker
 	retryConfig    *retry.RetryConfig
@@ -297,7 +297,7 @@ func (e *BaseEngine) BaseURL() string {
 }
 
 // SetTorProvider sets the Tor client provider for outbound connections
-// Per PART 32: When set and UseNetwork is enabled, engine queries are anonymized
+// Per PART 31: When set and UseNetwork is enabled, engine queries are anonymized
 func (e *BaseEngine) SetTorProvider(provider TorClientProvider) {
 	e.torProvider = provider
 }
@@ -318,7 +318,7 @@ func (e *BaseEngine) GetClient() *http.Client {
 }
 
 // getClientForCtx returns the appropriate HTTP client considering user Tor preference from context
-// Per PART 32: user pref in context overrides server-wide UseNetwork when AllowUserPreference is true
+// Per PART 31: user pref in context overrides server-wide UseNetwork when AllowUserPreference is true
 func (e *BaseEngine) getClientForCtx(ctx context.Context) *http.Client {
 	if e.torProvider != nil && e.torProvider.OutboundEnabled() {
 		userPref := GetTorPrefFromContext(ctx)

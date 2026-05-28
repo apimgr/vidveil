@@ -276,9 +276,9 @@ func (m *ServerMetrics) Handler() http.HandlerFunc {
 		var memStats runtime.MemStats
 		runtime.ReadMemStats(&memStats)
 
-		// Write metrics in Prometheus format per AI.md PART 21
+		// Write metrics in Prometheus format per AI.md PART 20
 
-		// Application metrics per AI.md PART 21
+		// Application metrics per AI.md PART 20
 		fmt.Fprintf(w, "# HELP vidveil_app_info Application information (always 1, labels carry data)\n")
 		fmt.Fprintf(w, "# TYPE vidveil_app_info gauge\n")
 		fmt.Fprintf(w, "vidveil_app_info{version=\"%s\",commit=\"%s\",build_date=\"%s\",go_version=\"%s\"} 1\n",

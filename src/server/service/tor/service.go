@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 32: Embedded Tor Hidden Service Support using bine
+// AI.md PART 31: Embedded Tor Hidden Service Support using bine
 package tor
 
 import (
@@ -27,7 +27,7 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// TorService represents the embedded Tor hidden service per AI.md PART 32
+// TorService represents the embedded Tor hidden service per AI.md PART 31
 // Uses github.com/cretz/bine for dedicated Tor process management
 // Supports both hidden service hosting AND outbound network routing
 type TorService struct {
@@ -41,7 +41,7 @@ type TorService struct {
 	// bine Tor instance - manages dedicated Tor process
 	torInstance *tor.Tor
 
-	// Outbound Tor dialer per PART 32
+	// Outbound Tor dialer per PART 31
 	// Used when UseNetwork is enabled (or AllowUserPreference is true) to route engine queries through Tor
 	dialer *tor.Dialer
 
@@ -63,12 +63,12 @@ type TorService struct {
 	vanityCancel context.CancelFunc
 	vanityStatus *VanityStatus
 
-	// Process monitoring per PART 32
+	// Process monitoring per PART 31
 	monitorCtx    context.Context
 	monitorCancel context.CancelFunc
 }
 
-// TorServiceConfig holds Tor service configuration per AI.md PART 32
+// TorServiceConfig holds Tor service configuration per AI.md PART 31
 type TorServiceConfig struct {
 	// Set from paths.GetDataDir() + "/tor"
 	DataDir string `yaml:"-"`
@@ -97,7 +97,7 @@ type VanityStatus struct {
 }
 
 // NewTorService creates a new Tor service instance
-// Per PART 32: Tor auto-enables if binary is found - no enable flag needed
+// Per PART 31: Tor auto-enables if binary is found - no enable flag needed
 func NewTorService(dataDir string, logger *logging.AppLogger) *TorService {
 	return &TorService{
 		cfg: &TorServiceConfig{
@@ -126,7 +126,7 @@ func (s *TorService) SetConfigDir(dir string) {
 }
 
 // AllowUserPreference returns true if users are allowed to override the server's Tor outbound setting
-// Per PART 32: When true, users can set their own Tor preference via cookie
+// Per PART 31: When true, users can set their own Tor preference via cookie
 func (s *TorService) AllowUserPreference() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -134,7 +134,7 @@ func (s *TorService) AllowUserPreference() bool {
 }
 
 // ShouldUseTor determines if Tor network should be used for a given request
-// based on server config and optional user preference override per PART 32
+// based on server config and optional user preference override per PART 31
 // userPref: nil = inherit server setting, true = always use Tor, false = never use Tor
 func (s *TorService) ShouldUseTor(userPref *bool) bool {
 	s.mu.RLock()
@@ -159,7 +159,7 @@ func (s *TorService) ShouldUseTor(userPref *bool) bool {
 }
 
 // GetHTTPClient returns an HTTP client, optionally routed through Tor
-// Per PART 32: Use this for engine queries when UseNetwork is enabled
+// Per PART 31: Use this for engine queries when UseNetwork is enabled
 // useTor: true = route through Tor SOCKS5 proxy, false = direct connection
 func (s *TorService) GetHTTPClient(useTor bool) *http.Client {
 	s.mu.RLock()
@@ -183,7 +183,7 @@ func (s *TorService) GetHTTPClient(useTor bool) *http.Client {
 }
 
 // OutboundEnabled returns true if Tor outbound connections are available
-// Per PART 32: This is true when UseNetwork is enabled and Tor is running
+// Per PART 31: This is true when UseNetwork is enabled and Tor is running
 func (s *TorService) OutboundEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -207,7 +207,7 @@ func (s *TorService) AllowUserIPForward() bool {
 }
 
 // Start initializes the Tor hidden service using bine
-// Per AI.md PART 32: Uses dedicated Tor process via bine library
+// Per AI.md PART 31: Uses dedicated Tor process via bine library
 // Auto-enabled if tor binary is found - no enable flag needed
 func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	s.mu.Lock()
@@ -229,7 +229,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 		return fmt.Errorf("failed to create tor site directory: %w", err)
 	}
 
-	// Per AI.md PART 32: Enforce ownership (current user) on all Tor directories recursively
+	// Per AI.md PART 31: Enforce ownership (current user) on all Tor directories recursively
 	// This fixes "is not owned by this user" errors when directories were created by different user
 	// Must be recursive because Tor creates subdirectories (e.g., data/keys)
 	if runtime.GOOS != "windows" {
@@ -274,7 +274,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	}
 	s.onionAddress = s.generateOnionAddress()
 
-	// Generate torrc from config and write to configDir (per PART 32)
+	// Generate torrc from config and write to configDir (per PART 31)
 	// NEVER uses default ports 9050/9051 — SocksPort auto or 0; bine manages ControlPort via TCP auto
 	var torrcFile string
 	if s.configDir != "" {
@@ -295,7 +295,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 
 	// Start dedicated Tor process using bine
 	// Per AI.md: Start OUR OWN Tor process - completely separate from system Tor
-	// Per AI.md PART 32: Tor startup/runtime errors = WARN (server continues without Tor)
+	// Per AI.md PART 31: Tor startup/runtime errors = WARN (server continues without Tor)
 	startConf := &tor.StartConf{
 		// Our own data directory - isolated from system Tor
 		DataDir: torDataDir,
@@ -325,7 +325,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	}
 	s.torInstance = t
 
-	// Wait for Tor to bootstrap using configurable timeout (default 180s per PART 32)
+	// Wait for Tor to bootstrap using configurable timeout (default 180s per PART 31)
 	s.logger.Info("Waiting for Tor to bootstrap...", nil)
 	bootstrapTimeout := 180 * time.Second
 	if s.torConfig != nil && s.torConfig.BootstrapTimeout > 0 {
@@ -345,7 +345,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 		"server_port": serverPort,
 	})
 
-	// Create hidden service via ADD_ONION (per PART 32 spec)
+	// Create hidden service via ADD_ONION (per PART 31 spec)
 	// Maps .onion:{virtualPort} → 127.0.0.1:{serverPort} (server's existing HTTP listener)
 	// No bridge listener needed — Tor handles the forwarding directly
 	virtualPort := 80
@@ -391,7 +391,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 		"target":        fmt.Sprintf("127.0.0.1:%d", serverPort),
 	})
 
-	// Initialize outbound dialer if UseNetwork is enabled OR AllowUserPreference is true (per PART 32)
+	// Initialize outbound dialer if UseNetwork is enabled OR AllowUserPreference is true (per PART 31)
 	// Dialer is needed when either: server routes all outbound through Tor, OR users can opt-in
 	if s.torConfig != nil && (s.torConfig.UseNetwork || s.torConfig.AllowUserPreference) {
 		dialer, err := t.Dialer(ctx, nil)
@@ -410,14 +410,14 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 		}
 	}
 
-	// Start process monitoring per PART 32
+	// Start process monitoring per PART 31
 	s.monitorCtx, s.monitorCancel = context.WithCancel(context.Background())
 	go s.monitorProcess()
 
 	return nil
 }
 
-// monitorProcess monitors Tor and restarts if it crashes per PART 32
+// monitorProcess monitors Tor and restarts if it crashes per PART 31
 func (s *TorService) monitorProcess() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -470,7 +470,7 @@ func (s *TorService) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Cancel process monitoring per PART 32
+	// Cancel process monitoring per PART 31
 	if s.monitorCancel != nil {
 		s.monitorCancel()
 		s.monitorCancel = nil
@@ -627,7 +627,7 @@ func (s *TorService) GetUptime() string {
 }
 
 // IsEnabled returns whether Tor hidden service is active
-// Per PART 32: Tor auto-enables if binary found and connected
+// Per PART 31: Tor auto-enables if binary found and connected
 func (s *TorService) IsEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -716,7 +716,7 @@ func (s *TorService) RegenerateAddress() error {
 }
 
 // GenerateVanityAddress starts background generation of a vanity address
-// maxPrefixLength is limited to 6 characters per AI.md PART 32
+// maxPrefixLength is limited to 6 characters per AI.md PART 31
 func (s *TorService) GenerateVanityAddress(prefix string) error {
 	prefix = strings.ToLower(prefix)
 
@@ -930,7 +930,7 @@ func (s *TorService) GetInfo() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Per PART 32: Tor is enabled if binary found and running
+	// Per PART 31: Tor is enabled if binary found and running
 	enabled := s.status == TorServiceStatusConnected || s.status == TorServiceStatusNoTorBinary
 
 	info := map[string]interface{}{
@@ -949,7 +949,7 @@ func (s *TorService) GetInfo() map[string]interface{} {
 		}
 	}
 
-	// Outbound network status per PART 32
+	// Outbound network status per PART 31
 	outboundConfigured := s.torConfig != nil && s.torConfig.UseNetwork
 	outboundActive := s.dialer != nil
 	info["outbound"] = map[string]interface{}{
@@ -1051,7 +1051,7 @@ func copyFile(src, dst string) error {
 }
 
 // buildTorrc generates a torrc configuration file content from TorConfig settings
-// Per PART 32: NEVER uses default ports 9050/9051; uses Unix sockets or auto high ports
+// Per PART 31: NEVER uses default ports 9050/9051; uses Unix sockets or auto high ports
 // Hidden service itself is created via control.AddOnion (not torrc HiddenServiceDir)
 // Note: bine v0.2.0 manages ControlPort via TCP auto — NOT specified in torrc
 func buildTorrc(cfg *config.TorConfig) string {
@@ -1086,7 +1086,7 @@ AccountingMax %s`, cfg.MaxMonthlyBandwidth)
 
 	return fmt.Sprintf(`# ============================================================
 # Tor Configuration - Generated by vidveil server binary
-# Per AI.md PART 32: NEVER uses default ports 9050/9051
+# Per AI.md PART 31: NEVER uses default ports 9050/9051
 # Hidden service created via ADD_ONION (control protocol), not torrc
 # bine manages ControlPort automatically (TCP auto on localhost)
 # ============================================================
@@ -1132,7 +1132,7 @@ DisableDebuggerAttachment 1
 
 // ensureTorrc creates the torrc if it doesn't exist, or updates it when config changes
 // Returns true if the file was created/updated
-// ensureTorrc creates the torrc only if it doesn't exist (persistent per PART 32).
+// ensureTorrc creates the torrc only if it doesn't exist (persistent per PART 31).
 // torrc is preserved across restarts — only the admin panel can update it.
 // Returns true if the file was newly created.
 func ensureTorrc(torrcPath string, content string) (bool, error) {

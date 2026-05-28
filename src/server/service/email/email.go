@@ -223,7 +223,7 @@ func (s *EmailService) applyVars(text string, vars map[string]string) string {
 
 // getGlobalVars returns global template variables
 func (s *EmailService) getGlobalVars() map[string]string {
-	// Build app_url respecting SSL config per AI.md PART 15/18
+	// Build app_url respecting SSL config per AI.md PART 15
 	scheme := "http"
 	if s.appConfig.Server.SSL.Enabled || s.appConfig.Server.SSL.LetsEncrypt.Enabled {
 		scheme = "https"
@@ -244,7 +244,7 @@ func (s *EmailService) getGlobalVars() map[string]string {
 }
 
 // effectiveEmailConfig returns the email config with SMTP_* env var overrides
-// applied per AI.md PART 18: "SMTP_* env vars override config file settings."
+// applied per AI.md PART 17: "SMTP_* env vars override config file settings."
 func (s *EmailService) effectiveEmailConfig() (host string, port int, username, password, fromAddr, fromName, tlsMode string) {
 	cfg := s.appConfig.Server.Email
 
@@ -269,7 +269,7 @@ func (s *EmailService) effectiveEmailConfig() (host string, port int, username, 
 		fromName = s.appConfig.Server.Branding.Title
 	}
 
-	// SMTP_* env var overrides (PART 18)
+	// SMTP_* env var overrides (PART 17)
 	if v := os.Getenv("SMTP_HOST"); v != "" {
 		host = v
 	}
@@ -337,7 +337,7 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 		auth = smtp.PlainAuth("", username, password, host)
 	}
 
-	// Resolve TLS mode per PART 18: auto, starttls, tls, none
+	// Resolve TLS mode per PART 17: auto, starttls, tls, none
 	if tlsMode == "" || tlsMode == "auto" {
 		if port == 465 {
 			tlsMode = "tls"
@@ -405,20 +405,20 @@ func (s *EmailService) sendTLS(addr, host string, auth smtp.Auth, from, to strin
 	return client.Quit()
 }
 
-// autodetectSMTP tries to find an SMTP server per AI.md PART 18
+// autodetectSMTP tries to find an SMTP server per AI.md PART 17
 func (s *EmailService) autodetectSMTP() (string, int) {
 	hosts := s.appConfig.Server.Email.AutodetectHost
 	ports := s.appConfig.Server.Email.AutodetectPort
 	return AutodetectSMTP(hosts, ports)
 }
 
-// AutodetectSMTP tries to find an SMTP server per AI.md PART 18
+// AutodetectSMTP tries to find an SMTP server per AI.md PART 17
 // It performs actual SMTP EHLO handshake (not just TCP connect)
 // Returns host, port on success; empty string, 0 on failure
 func AutodetectSMTP(customHosts []string, customPorts []int) (string, int) {
 	hosts := customHosts
 	if len(hosts) == 0 {
-		// Per AI.md PART 18: Check localhost, 127.0.0.1, Docker host, gateway
+		// Per AI.md PART 17: Check localhost, 127.0.0.1, Docker host, gateway
 		hosts = []string{"localhost", "127.0.0.1", "172.17.0.1"}
 		// Try to get gateway IP
 		if gw := getGatewayIP(); gw != "" {
@@ -442,7 +442,7 @@ func AutodetectSMTP(customHosts []string, customPorts []int) (string, int) {
 	return "", 0
 }
 
-// testSMTPConnection tests an SMTP server with EHLO handshake per AI.md PART 18
+// testSMTPConnection tests an SMTP server with EHLO handshake per AI.md PART 17
 func testSMTPConnection(host string, port int) bool {
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
@@ -484,7 +484,7 @@ func testSMTPConnection(host string, port int) bool {
 	return true
 }
 
-// TestSMTPConfig tests a specific SMTP configuration per AI.md PART 18
+// TestSMTPConfig tests a specific SMTP configuration per AI.md PART 17
 // Returns nil on success, error on failure
 func TestSMTPConfig(host string, port int) error {
 	if host == "" {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 21: Prometheus Metrics
+// AI.md PART 20: Prometheus Metrics
 package metrics
 
 import (
@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	// Application metrics per AI.md PART 21
+	// Application metrics per AI.md PART 20
 	AppInfo = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "vidveil_app_info",
@@ -31,7 +31,7 @@ var (
 		},
 	)
 
-	// HTTP metrics per AI.md PART 21
+	// HTTP metrics per AI.md PART 20
 	HTTPRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "vidveil_http_requests_total",
@@ -74,7 +74,7 @@ var (
 		},
 	)
 
-	// Database metrics per AI.md PART 21
+	// Database metrics per AI.md PART 20
 	DBQueriesTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "vidveil_db_queries_total",
@@ -114,7 +114,7 @@ var (
 		[]string{"operation", "error_type"},
 	)
 
-	// Authentication metrics per AI.md PART 21
+	// Authentication metrics per AI.md PART 20
 	AuthAttemptsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "vidveil_auth_attempts_total",
@@ -130,7 +130,7 @@ var (
 		},
 	)
 
-	// Cache metrics per AI.md PART 21
+	// Cache metrics per AI.md PART 20
 	CacheHitsTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "vidveil_cache_hits_total",

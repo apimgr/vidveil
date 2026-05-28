@@ -165,7 +165,7 @@ func (s *AdminService) CreateAdmin(username, password string, isPrimary bool) (*
 		return nil, err
 	}
 
-	// Validate password (stricter rules for admin accounts per PART 22)
+	// Validate password (stricter rules for admin accounts per PART 11)
 	if err := validation.ValidateAdminPassword(password); err != nil {
 		return nil, err
 	}

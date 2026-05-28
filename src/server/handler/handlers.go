@@ -51,19 +51,19 @@ const (
 )
 
 // TorStatusChecker is the interface for Tor service in handlers
-// Per PART 32: Supports both status checking and outbound network routing
+// Per PART 31: Supports both status checking and outbound network routing
 type TorStatusChecker interface {
 	IsEnabled() bool
 	IsRunning() bool
 	IsStarting() bool
 	GetInfo() map[string]interface{}
-	// Per PART 32: Admin setting for IP forwarding
+	// Per PART 31: Admin setting for IP forwarding
 	AllowUserIPForward() bool
-	// Per PART 32: Get Tor-routed or direct client
+	// Per PART 31: Get Tor-routed or direct client
 	GetHTTPClient(useTor bool) *http.Client
-	// Per PART 32: Is use_network configured?
+	// Per PART 31: Is use_network configured?
 	UseNetworkEnabled() bool
-	// Per PART 32: Is Tor SOCKS available?
+	// Per PART 31: Is Tor SOCKS available?
 	OutboundEnabled() bool
 }
 
@@ -254,7 +254,7 @@ func (h *SearchHandler) SetGeoIPService(g GeoIPChecker) {
 }
 
 // getProxyClient returns an HTTP client for proxy requests
-// Per PART 32: Routes through Tor when use_network is enabled
+// Per PART 31: Routes through Tor when use_network is enabled
 func (h *SearchHandler) getProxyClient(timeout time.Duration) *http.Client {
 	if h.torSvc != nil && h.torSvc.UseNetworkEnabled() && h.torSvc.OutboundEnabled() {
 		// Use Tor-routed client
@@ -649,7 +649,7 @@ func BuildDateTime() string {
 }
 
 // HomePage renders the main search page
-// HomePage renders the home page with content negotiation per AI.md PART 17
+// HomePage renders the home page with content negotiation per AI.md PART 16
 func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 
@@ -666,7 +666,7 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 17
+		// Plain text response for curl/CLI per AI.md PART 16
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "%s\n\n", h.appConfig.Server.Branding.Description)
@@ -685,7 +685,7 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SearchPage renders search results with content negotiation per AI.md PART 17
+// SearchPage renders search results with content negotiation per AI.md PART 16
 func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	requestStart := time.Now()
 
@@ -803,7 +803,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PreferencesPage renders user preferences with content negotiation per AI.md PART 17
+// PreferencesPage renders user preferences with content negotiation per AI.md PART 16
 func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 
@@ -819,7 +819,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 		})
 
 	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 17
+		// Plain text response for curl/CLI per AI.md PART 16
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "Preferences - %s\n\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "Theme: %s\n", h.getRequestTheme(r))
@@ -843,7 +843,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// AboutPage renders the about page with content negotiation per AI.md PART 17
+// AboutPage renders the about page with content negotiation per AI.md PART 16
 func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 
@@ -860,7 +860,7 @@ func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 17
+		// Plain text response for curl/CLI per AI.md PART 16
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "Version: %s\n", ver)
@@ -878,7 +878,7 @@ func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PrivacyPage renders the privacy policy page with content negotiation per AI.md PART 17
+// PrivacyPage renders the privacy policy page with content negotiation per AI.md PART 16
 func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
 
@@ -893,7 +893,7 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 17
+		// Plain text response for curl/CLI per AI.md PART 16
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "Privacy Policy - %s\n", h.appConfig.Server.Branding.Title)
 		fmt.Fprintf(w, "Version: %s\n\n", ver)
@@ -911,9 +911,7 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// detectResponseFormat returns the response format based on Accept header
-// Per AI.md PART 19: Content Negotiation
-// detectResponseFormat determines response format per AI.md PART 14
+// detectResponseFormat determines response format per AI.md PART 14 (Content Negotiation)
 func detectResponseFormat(r *http.Request) string {
 	// 0. Check URL path extension FIRST per AI.md PART 13
 	// Use original path from context if available (set by extensionStripMiddleware)
@@ -1546,7 +1544,7 @@ Sitemap: ` + baseURL + `/sitemap.xml
 `))
 }
 
-// SecurityTxt returns security.txt per RFC 9116 (PART 22)
+// SecurityTxt returns security.txt per RFC 9116 (PART 11)
 func (h *SearchHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 
@@ -1570,7 +1568,7 @@ Preferred-Languages: en
 `, contact, expires)))
 }
 
-// HumansTxt returns humans.txt per humanstxt.org standard (PART 21)
+// HumansTxt returns humans.txt per humanstxt.org standard (PART 16)
 func (h *SearchHandler) HumansTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
@@ -1762,7 +1760,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		if forwardIP, userIP := h.getUserIPForwardPreference(r); forwardIP {
 			ctx = engine.WithUserIP(ctx, userIP, true)
 		}
-		// Add user's Tor network preference to context per PART 32
+		// Add user's Tor network preference to context per PART 31
 		// Cookie "vidveil-use-tor": "1" = always use Tor, "0" = never use Tor, absent = inherit server
 		if cookie, err := r.Cookie("vidveil-use-tor"); err == nil {
 			switch cookie.Value {
@@ -1884,12 +1882,12 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	ctx := r.Context()
 
 	// Add user IP to context if user has opted-in for geo-targeted content
-	// Per PART 32: This allows video sites to see user's IP for geo content
+	// Per PART 31: This allows video sites to see user's IP for geo content
 	if forwardIP, userIP := h.getUserIPForwardPreference(r); forwardIP {
 		ctx = engine.WithUserIP(ctx, userIP, true)
 	}
 
-	// Add user's Tor network preference to context per PART 32
+	// Add user's Tor network preference to context per PART 31
 	if cookie, err := r.Cookie("vidveil-use-tor"); err == nil {
 		switch cookie.Value {
 		case "1", "true":
@@ -2895,7 +2893,7 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
 
-	// Fetch thumbnail - Per PART 32: Route through Tor when use_network is enabled
+	// Fetch thumbnail - Per PART 31: Route through Tor when use_network is enabled
 	client := h.getProxyClient(10 * time.Second)
 
 	resp, err := client.Do(req)
@@ -3016,7 +3014,7 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 	// Set referer to the video host to avoid hotlink protection
 	req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
 
-	// Fetch video - Per PART 32: Route through Tor when use_network is enabled
+	// Fetch video - Per PART 31: Route through Tor when use_network is enabled
 	client := h.getProxyClient(30 * time.Second)
 
 	resp, err := client.Do(req)

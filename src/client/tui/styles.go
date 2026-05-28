@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Client - TUI TUIStyles from Palette
+// AI.md PART 32: CLI Client - TUI TUIStyles from Palette
 package tui
 
 import (

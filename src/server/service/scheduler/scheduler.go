@@ -34,7 +34,7 @@ type ScheduledTask struct {
 	FailCount  int64     `json:"fail_count"`
 	// Interval is for simple duration-based schedules
 	Interval time.Duration `json:"-"`
-	// cronSched is for cron-expression schedules per AI.md PART 22
+	// cronSched is for cron-expression schedules per AI.md PART 18
 	cronSched cron.Schedule `json:"-"`
 	fn        TaskFunc
 }
@@ -272,7 +272,7 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 		fn:          fn,
 	}
 
-	// Try parsing as cron expression first (per AI.md PART 22)
+	// Try parsing as cron expression first (per AI.md PART 18)
 	if cronSched, err := parseCronSchedule(schedule); err == nil {
 		task.cronSched = cronSched
 		task.NextRun = cronSched.Next(time.Now())
@@ -328,7 +328,7 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 	return nil
 }
 
-// parseCronSchedule parses a cron expression per AI.md PART 22
+// parseCronSchedule parses a cron expression per AI.md PART 18
 // Supports standard cron format: minute hour day-of-month month day-of-week
 func parseCronSchedule(schedule string) (cron.Schedule, error) {
 	// Check if it looks like a cron expression (5 space-separated fields)

@@ -18,7 +18,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// BlocklistService manages IP and domain blocklists per PART 22
+// BlocklistService manages IP and domain blocklists per PART 11
 type BlocklistService struct {
 	appConfig *config.AppConfig
 	dataDir   string
@@ -46,7 +46,7 @@ func NewBlocklistService(appConfig *config.AppConfig) *BlocklistService {
 	}
 }
 
-// Initialize creates directory structure per PART 22
+// Initialize creates directory structure per PART 11
 func (s *BlocklistService) Initialize() error {
 	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create blocklist directory: %w", err)
@@ -79,7 +79,7 @@ func (s *BlocklistService) Update(ctx context.Context) error {
 		return fmt.Errorf("blocklist update errors: %s", strings.Join(errors, "; "))
 	}
 
-	// Write timestamp file per PART 22 specification
+	// Write timestamp file per PART 11 specification
 	timestampFile := filepath.Join(s.dataDir, ".last_updated")
 	return os.WriteFile(timestampFile, []byte(time.Now().Format(time.RFC3339)), 0644)
 }
@@ -106,7 +106,7 @@ func (s *BlocklistService) downloadAndParse(ctx context.Context, source config.B
 		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
 	}
 
-	// Save to file per PART 22 directory structure
+	// Save to file per PART 11 directory structure
 	filename := filepath.Join(s.dataDir, source.Name+".txt")
 	file, err := os.Create(filename)
 	if err != nil {

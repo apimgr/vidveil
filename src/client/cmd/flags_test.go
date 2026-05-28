@@ -388,7 +388,7 @@ func TestLoadCLIConfigFromFilePreservesExistingServerPrimary(t *testing.T) {
 
 // TestLoadCLIConfigFromFileRejectsInsecureConfigPermissions verifies that when
 // cli.yml has world/group-readable permissions the CLI returns an error and writes
-// a warning to stderr — it must NOT silently chmod the file (AI.md PART 33).
+// a warning to stderr — it must NOT silently chmod the file (AI.md PART 32).
 func TestLoadCLIConfigFromFileRejectsInsecureConfigPermissions(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
@@ -421,7 +421,7 @@ func TestLoadCLIConfigFromFileRejectsInsecureConfigPermissions(t *testing.T) {
 		t.Fatalf("writing config file: %v", err)
 	}
 
-	// Per AI.md PART 33: must return an error, not silently fix the file
+	// Per AI.md PART 32: must return an error, not silently fix the file
 	if err := LoadCLIConfigFromFile(); err == nil {
 		t.Fatal("expected LoadCLIConfigFromFile to return an error for insecure config permissions, got nil")
 	}
@@ -717,7 +717,7 @@ func TestLoadCLIConfigFromFileTokenFileFlagOverridesEnvironment(t *testing.T) {
 
 // TestLoadCLIConfigFromFileRejectsInsecureTokenFilePermissions verifies that when
 // the default token file has world/group-readable permissions the CLI returns an error
-// and must NOT silently chmod the file (AI.md PART 33).
+// and must NOT silently chmod the file (AI.md PART 32).
 func TestLoadCLIConfigFromFileRejectsInsecureTokenFilePermissions(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
@@ -751,7 +751,7 @@ func TestLoadCLIConfigFromFileRejectsInsecureTokenFilePermissions(t *testing.T) 
 		t.Fatalf("writing token file: %v", err)
 	}
 
-	// Per AI.md PART 33: must return an error, not silently fix the file
+	// Per AI.md PART 32: must return an error, not silently fix the file
 	if err := LoadCLIConfigFromFile(); err == nil {
 		t.Fatal("expected LoadCLIConfigFromFile to return an error for insecure token permissions, got nil")
 	}

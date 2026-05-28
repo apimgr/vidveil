@@ -63,7 +63,7 @@ type MigrationManager interface {
 }
 
 // TorService interface for Tor hidden service management
-// Per PART 32: Tor supports hidden service and optional outbound network routing
+// Per PART 31: Tor supports hidden service and optional outbound network routing
 type TorService interface {
 	IsEnabled() bool
 	IsRunning() bool
@@ -77,13 +77,13 @@ type TorService interface {
 	GetInfo() map[string]interface{}
 	TestConnection() *tor.TestConnectionResult
 	Restart(ctx context.Context) error
-	// Per PART 32: Admin setting for user IP forwarding
+	// Per PART 31: Admin setting for user IP forwarding
 	AllowUserIPForward() bool
-	// Per PART 32: Get Tor-routed or direct client
+	// Per PART 31: Get Tor-routed or direct client
 	GetHTTPClient(useTor bool) *http.Client
-	// Per PART 32: Is use_network configured?
+	// Per PART 31: Is use_network configured?
 	UseNetworkEnabled() bool
-	// Per PART 32: Is Tor SOCKS available?
+	// Per PART 31: Is Tor SOCKS available?
 	OutboundEnabled() bool
 }
 
@@ -102,7 +102,7 @@ type AdminHandler struct {
 	metrics      *ServerMetrics
 	sessions     map[string]adminSession
 	startTime    time.Time
-	// Note: CSRF tokens now use Double Submit Cookie pattern per AI.md PART 22
+	// Note: CSRF tokens now use Double Submit Cookie pattern per AI.md PART 16 (CSRF)
 	// No server-side storage needed - token is stored in cookie
 }
 
@@ -271,11 +271,11 @@ func (h *AdminHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	// Clear session cookie per AI.md PART 11
 	http.SetCookie(w, DeleteCookie(adminSessionCookieName, h.appConfig.AdminURLPrefix()))
 
-	// Redirect to /auth/login per AI.md PART 31
+	// Redirect to /auth/login 
 	http.Redirect(w, r, "/auth/login", http.StatusFound)
 }
 
-// SetupTokenPage handles setup token entry at /server/{admin_path} on first run per AI.md PART 31
+// SetupTokenPage handles setup token entry at /server/{admin_path} on first run 
 func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
 	// Check if setup is still needed
 	if !h.adminSvc.IsFirstRun() {
@@ -304,7 +304,7 @@ func (h *AdminHandler) SetupTokenPage(w http.ResponseWriter, r *http.Request) {
 	h.renderSetupTokenPage(w, r, errorMsg)
 }
 
-// SetupWizardPage renders the setup wizard at /server/{admin_path}/config/setup per AI.md PART 31
+// SetupWizardPage renders the setup wizard at /server/{admin_path}/config/setup 
 func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 	if !h.adminSvc.IsFirstRun() {
 		http.Redirect(w, r, "/auth/login", http.StatusFound)
@@ -323,7 +323,7 @@ func (h *AdminHandler) SetupWizardPage(w http.ResponseWriter, r *http.Request) {
 		"Theme":     h.appConfig.Web.UI.Theme,
 		"AdminPath": h.appConfig.AdminURLPrefix(),
 	}
-	// AI.md PART 31: lang/dir for <html>
+	// AI.md PART 30: lang/dir for <html>
 	injectLocaleData(r, data)
 
 	if r.Method == http.MethodPost {
@@ -799,7 +799,7 @@ func (h *AdminHandler) NodesPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PagesPage renders standard pages editor per AI.md PART 31
+// PagesPage renders standard pages editor 
 func (h *AdminHandler) PagesPage(w http.ResponseWriter, r *http.Request) {
 	pages, err := h.getPages()
 	if err != nil {
@@ -858,7 +858,7 @@ func (h *AdminHandler) getPages() ([]PageInfo, error) {
 	return pages, nil
 }
 
-// APIPagesGet returns all pages per AI.md PART 31
+// APIPagesGet returns all pages 
 func (h *AdminHandler) APIPagesGet(w http.ResponseWriter, r *http.Request) {
 	pages, err := h.getPages()
 	if err != nil {
@@ -871,7 +871,7 @@ func (h *AdminHandler) APIPagesGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIPageUpdate updates a page per AI.md PART 31
+// APIPageUpdate updates a page 
 func (h *AdminHandler) APIPageUpdate(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -909,7 +909,7 @@ func (h *AdminHandler) APIPageUpdate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIPageReset resets a page to default content per AI.md PART 31
+// APIPageReset resets a page to default content 
 func (h *AdminHandler) APIPageReset(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -1050,8 +1050,8 @@ func (h *AdminHandler) APINotificationsTest(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// TorPage renders Tor hidden service settings (AI.md PART 32)
-// Per PART 32: Tor supports hidden service and optional outbound network routing
+// TorPage renders Tor hidden service settings (AI.md PART 31)
+// Per PART 31: Tor supports hidden service and optional outbound network routing
 func (h *AdminHandler) TorPage(w http.ResponseWriter, r *http.Request) {
 	// Check if Tor binary is installed
 	torInstalled := h.torSvc != nil
@@ -1194,7 +1194,7 @@ func (h *AdminHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 	h.renderAdminTemplate(w, r, "help", nil)
 }
 
-// ProfilePage renders admin profile page per AI.md PART 31
+// ProfilePage renders admin profile page 
 func (h *AdminHandler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 	// Get current admin from session
 	cookie, err := r.Cookie(adminSessionCookieName)
@@ -1243,7 +1243,7 @@ func (h *AdminHandler) AdminNotificationsPage(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// APIProfilePassword handles password change via API per AI.md PART 31
+// APIProfilePassword handles password change via API 
 func (h *AdminHandler) APIProfilePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1277,7 +1277,7 @@ func (h *AdminHandler) APIProfilePassword(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// APIProfileToken regenerates API token per AI.md PART 31
+// APIProfileToken regenerates API token 
 func (h *AdminHandler) APIProfileToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1358,7 +1358,7 @@ func (h *AdminHandler) getSessionAdminID(r *http.Request) int64 {
 	return session.adminID
 }
 
-// APIRecoveryKeysStatus returns the status of recovery keys per AI.md PART 31
+// APIRecoveryKeysStatus returns the status of recovery keys 
 func (h *AdminHandler) APIRecoveryKeysStatus(w http.ResponseWriter, r *http.Request) {
 	adminID := h.getSessionAdminID(r)
 	if adminID == 0 {
@@ -1378,7 +1378,7 @@ func (h *AdminHandler) APIRecoveryKeysStatus(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// APIRecoveryKeysGenerate generates new recovery keys per AI.md PART 31
+// APIRecoveryKeysGenerate generates new recovery keys 
 func (h *AdminHandler) APIRecoveryKeysGenerate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1517,7 +1517,7 @@ func (h *AdminHandler) APIProfile2FADisable(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// UsersAdminsPage renders the admin users management page per AI.md PART 31
+// UsersAdminsPage renders the admin users management page 
 func (h *AdminHandler) UsersAdminsPage(w http.ResponseWriter, r *http.Request) {
 	// Get current admin from session
 	cookie, err := r.Cookie(adminSessionCookieName)
@@ -1582,7 +1582,7 @@ func (h *AdminHandler) getOnlineCount() int {
 	return count
 }
 
-// AdminInvitePage handles the invite acceptance flow per AI.md PART 31
+// AdminInvitePage handles the invite acceptance flow 
 func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
@@ -1600,7 +1600,7 @@ func (h *AdminHandler) AdminInvitePage(w http.ResponseWriter, r *http.Request) {
 		"Valid":     false,
 		"Theme":     h.appConfig.Web.UI.Theme,
 	}
-	// AI.md PART 31: lang/dir for <html>
+	// AI.md PART 30: lang/dir for <html>
 	injectLocaleData(r, data)
 
 	// Validate invite token
@@ -1662,7 +1662,7 @@ func (h *AdminHandler) renderInvitePage(w http.ResponseWriter, data map[string]i
 	}
 }
 
-// APIUsersAdminsInvite creates an admin invite per AI.md PART 31
+// APIUsersAdminsInvite creates an admin invite 
 func (h *AdminHandler) APIUsersAdminsInvite(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1937,7 +1937,7 @@ func (h *AdminHandler) APIAnalytics(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIBackup triggers a backup
-// Per AI.md PART 22: Accepts JSON body with optional password for encryption
+// Per AI.md PART 21: Accepts JSON body with optional password for encryption
 func (h *AdminHandler) APIBackup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -1946,7 +1946,7 @@ func (h *AdminHandler) APIBackup(w http.ResponseWriter, r *http.Request) {
 
 	maint := maintenance.NewMaintenanceManager("", "", "")
 
-	// Per AI.md PART 22: Parse JSON body for password
+	// Per AI.md PART 21: Parse JSON body for password
 	var req struct {
 		Filename string `json:"filename"`
 		Password string `json:"password"`
@@ -2304,7 +2304,7 @@ func (h *AdminHandler) APIConfig(w http.ResponseWriter, r *http.Request) {
 				h.appConfig.Search.ResultsPerPage = int(rpp)
 				updated = true
 			}
-			// Per PART 32: Tor supports hidden service and optional outbound network routing
+			// Per PART 31: Tor supports hidden service and optional outbound network routing
 			// Tor proxy settings removed - hidden service managed via TorService
 		}
 
@@ -2703,7 +2703,7 @@ func (h *AdminHandler) APILogsAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIRestore restores from backup
-// Per AI.md PART 22: Accepts JSON body with backup_file and optional password
+// Per AI.md PART 21: Accepts JSON body with backup_file and optional password
 func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
@@ -2715,7 +2715,7 @@ func (h *AdminHandler) APIRestore(w http.ResponseWriter, r *http.Request) {
 
 	maint := maintenance.NewMaintenanceManager("", "", "")
 
-	// Per AI.md PART 22: Parse JSON body for backup_file and password
+	// Per AI.md PART 21: Parse JSON body for backup_file and password
 	var req struct {
 		BackupFile string `json:"backup_file"`
 		Password   string `json:"password"`
@@ -2763,7 +2763,7 @@ func (h *AdminHandler) APITestEmail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIPassword changes admin password using database per AI.md PART 31
+// APIPassword changes admin password using database 
 func (h *AdminHandler) APIPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
@@ -2897,8 +2897,8 @@ func (h *AdminHandler) APISchedulerHistory(w http.ResponseWriter, r *http.Reques
 }
 
 // =====================================================
-// Tor API handlers per AI.md PART 32
-// Per PART 32: Tor supports hidden service and optional outbound network routing
+// Tor API handlers 
+// Per PART 31: Tor supports hidden service and optional outbound network routing
 // =====================================================
 
 // APITorStatus returns Tor hidden service status
@@ -2923,10 +2923,10 @@ func (h *AdminHandler) APITorStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APITorUpdate is deprecated - Tor proxy settings removed per PART 32
+// APITorUpdate is deprecated - Tor proxy settings removed per PART 31
 // PATCH /api/v1/admin/server/tor
 func (h *AdminHandler) APITorUpdate(w http.ResponseWriter, r *http.Request) {
-	// Per PART 32: Tor supports hidden service and optional outbound network routing
+	// Per PART 31: Tor supports hidden service and optional outbound network routing
 	// Tor hidden service is auto-managed, no settings to update
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":      true,
@@ -3328,16 +3328,16 @@ func (h *AdminHandler) getSession(r *http.Request) *adminSession {
 	return &session
 }
 
-// === CSRF Protection per AI.md PART 22 (Double Submit Cookie) ===
+// === CSRF Protection per AI.md PART 11 / PART 16 (Double Submit Cookie) ===
 
-// generateCSRFToken creates a new CSRF token and sets the cookie per AI.md PART 22
+// generateCSRFToken creates a new CSRF token and sets the cookie per AI.md PART 16 (CSRF)
 // Uses Double Submit Cookie pattern: token in cookie must match form/header value
 func (h *AdminHandler) generateCSRFToken(w http.ResponseWriter) string {
 	b := make([]byte, 32)
 	rand.Read(b)
 	token := hex.EncodeToString(b)
 
-	// Set CSRF token cookie per AI.md PART 11 and PART 22
+	// Set CSRF token cookie per AI.md PART 11 / PART 16 (CSRF)
 	// Cookie is HttpOnly=false so JavaScript can read it for AJAX requests
 	cookie := &http.Cookie{
 		Name:   csrfTokenCookieName,
@@ -3355,7 +3355,7 @@ func (h *AdminHandler) generateCSRFToken(w http.ResponseWriter) string {
 }
 
 // getCSRFToken retrieves the CSRF token from cookie or generates a new one
-// Per AI.md PART 22: Token stored in cookie and must match form/header value
+// Per AI.md PART 16 (CSRF): Token stored in cookie and must match form/header value
 func (h *AdminHandler) getCSRFToken(w http.ResponseWriter, r *http.Request) string {
 	// Check for existing CSRF cookie
 	if cookie, err := r.Cookie(csrfTokenCookieName); err == nil && cookie.Value != "" {
@@ -3367,7 +3367,7 @@ func (h *AdminHandler) getCSRFToken(w http.ResponseWriter, r *http.Request) stri
 }
 
 // validateCSRFToken validates the CSRF token using Double Submit Cookie pattern
-// Per AI.md PART 22: Token from cookie must match token from form/header
+// Per AI.md PART 16 (CSRF): Token from cookie must match token from form/header
 func (h *AdminHandler) validateCSRFToken(r *http.Request) bool {
 	// Get expected token from cookie
 	cookie, err := r.Cookie(csrfTokenCookieName)
@@ -3379,7 +3379,7 @@ func (h *AdminHandler) validateCSRFToken(r *http.Request) bool {
 	// Check for submitted token in form field
 	submittedToken := r.FormValue("_csrf_token")
 	if submittedToken == "" {
-		// Also check header for AJAX requests per AI.md PART 22
+		// Also check header for AJAX requests per AI.md PART 16 (CSRF)
 		submittedToken = r.Header.Get("X-CSRF-Token")
 	}
 
@@ -3391,7 +3391,7 @@ func (h *AdminHandler) validateCSRFToken(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(expectedToken), []byte(submittedToken)) == 1
 }
 
-// CSRFMiddleware validates CSRF tokens on POST/PUT/DELETE requests per AI.md PART 22
+// CSRFMiddleware validates CSRF tokens on POST/PUT/DELETE requests per AI.md PART 11 / PART 16
 func (h *AdminHandler) CSRFMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Only validate for state-changing methods
@@ -3626,7 +3626,7 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 		data["Version"] = version.GetVersion()
 	}
 
-	// Add session info for header display per AI.md PART 31
+	// Add session info for header display 
 	if r != nil {
 		if sess := h.getSession(r); sess != nil {
 			data["AdminUsername"] = sess.username
@@ -3634,10 +3634,10 @@ func (h *AdminHandler) renderAdminTemplate(w http.ResponseWriter, r *http.Reques
 	}
 	data["OnlineCount"] = h.getOnlineCount()
 
-	// AI.md PART 31: lang/dir for <html lang="" dir="">
+	// AI.md PART 30: lang/dir for <html lang="" dir="">
 	injectLocaleData(r, data)
 
-	// Add CSRF token for forms per AI.md PART 22
+	// Add CSRF token for forms per AI.md PART 16 (CSRF)
 	data["CSRFToken"] = h.getCSRFToken(w, r)
 
 	// Set page title based on template name if not already set

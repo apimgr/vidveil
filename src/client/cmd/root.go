@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Client - Root Command
+// AI.md PART 32: CLI Client - Root Command
 package cmd
 
 import (
@@ -210,7 +210,7 @@ type CLIConfig struct {
 	Debug   bool             `yaml:"debug"`
 }
 
-// Global flags per AI.md PART 33
+// Global flags per AI.md PART 32
 // Short flags only for -h (help) and -v (version)
 // Per AI.md PART 1: Variable names MUST reveal intent
 var (
@@ -236,14 +236,14 @@ var (
 )
 
 // ExecuteCLI runs the CLI application
-// Per AI.md PART 33: Auto-detect TUI mode when interactive terminal + no command
+// Per AI.md PART 32: Auto-detect TUI mode when interactive terminal + no command
 func ExecuteCLI() error {
 	args := os.Args[1:]
 
 	// Parse global flags first
 	args = ParseCLIGlobalFlags(args)
 
-	// Per AI.md PART 33: After parsing flags, ensure the standard client directories exist.
+	// Per AI.md PART 32: After parsing flags, ensure the standard client directories exist.
 	if err := paths.EnsureClientDirs(); err != nil {
 		return fmt.Errorf("creating client directories: %w", err)
 	}
@@ -259,7 +259,7 @@ func ExecuteCLI() error {
 	// Initialize API client
 	InitAPIClient()
 
-	// Per AI.md PART 33: Automatic Mode Detection using display.DetectDisplayEnv()
+	// Per AI.md PART 32: Automatic Mode Detection using display.DetectDisplayEnv()
 	// - Interactive terminal + no command = TUI mode
 	// - Interactive terminal + only config flags = TUI mode
 	// - Interactive terminal + command provided = CLI mode
@@ -268,7 +268,7 @@ func ExecuteCLI() error {
 		// Use display.DetectDisplayEnv() from src/common/display for mode detection
 		displayEnv := display.DetectDisplayEnv()
 		if displayEnv.Mode == display.DisplayModeTUI && displayEnv.IsTerminal && IsCLITUIEnabled() {
-			// Per AI.md PART 33: CLI First-Run Flow
+			// Per AI.md PART 32: CLI First-Run Flow
 			// Run setup wizard if no server configured
 			if !IsServerConfigured() {
 				if err := RunSetupWizard(); err != nil {
@@ -291,7 +291,7 @@ func ExecuteCLI() error {
 	}
 
 	// Route to command
-	// Per AI.md PART 33: No tui command (auto-launches), no config command (edit cli.yml directly)
+	// Per AI.md PART 32: No tui command (auto-launches), no config command (edit cli.yml directly)
 	switch args[0] {
 	case "search":
 		// Check server connection before search commands
@@ -386,8 +386,8 @@ func CloseCLILogging() {
 }
 
 // ParseCLIGlobalFlags parses global CLI flags
-// Per AI.md PART 33: Short flags only for -h (help) and -v (version)
-// Per AI.md PART 33: NO --tui/--cli/--gui flags - UI mode is auto-detected
+// Per AI.md PART 32: Short flags only for -h (help) and -v (version)
+// Per AI.md PART 32: NO --tui/--cli/--gui flags - UI mode is auto-detected
 // Note: -h/--help and -v/--version only trigger exit if they appear BEFORE any command
 func ParseCLIGlobalFlags(args []string) []string {
 	var remaining []string
@@ -484,7 +484,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 			debugFlagProvided = true
 			i++
 		case "--update":
-			// Per AI.md PART 33: --update [check|yes|branch <name>|--help]
+			// Per AI.md PART 32: --update [check|yes|branch <name>|--help]
 			updateArgs := make([]string, 0, 2)
 			j := i + 1
 			for j < len(args) && !strings.HasPrefix(args[j], "-") {
@@ -556,7 +556,7 @@ func LoadCLIConfigFromFile() error {
 	cliConfig.TUI.Unicode = true
 	cliConfig.Debug = false
 
-	// Determine config path per AI.md PART 33
+	// Determine config path per AI.md PART 32
 	// Uses paths module for OS-specific resolution
 	cliConfigFilePath = GetCLIConfigFilePath()
 
@@ -599,7 +599,7 @@ func LoadCLIConfigFromFile() error {
 	fileCLIConfig := *cliConfig
 	debugModeEnabled = cliConfig.Debug
 
-	// Per AI.md PART 33: Token priority
+	// Per AI.md PART 32: Token priority
 	// 1. --token flag (highest)
 	// 2. --token-file flag
 	// 3. VIDVEIL_TOKEN env var (VIDVEIL_CLI_TOKEN accepted as compatibility alias)
@@ -666,7 +666,7 @@ func LoadCLIConfigFromFile() error {
 }
 
 // EnsureCLIConfigFilePermissions checks that cli.yml is not group/world-readable.
-// Per AI.md PART 33: if the file is world/group-readable (mode & 0o077 != 0), write a
+// Per AI.md PART 32: if the file is world/group-readable (mode & 0o077 != 0), write a
 // warning to stderr and return an error — never silently chmod it, as a compromised
 // file must be noticed, not silently "fixed". The user must run chmod 0600 manually.
 func EnsureCLIConfigFilePermissions(configFilePath string) error {
@@ -691,7 +691,7 @@ func EnsureCLIConfigFilePermissions(configFilePath string) error {
 }
 
 // EnsureCLIDefaultTokenFilePermissions checks that the token file is not group/world-readable.
-// Per AI.md PART 33: if the file is world/group-readable (mode & 0o077 != 0), write a
+// Per AI.md PART 32: if the file is world/group-readable (mode & 0o077 != 0), write a
 // warning to stderr and return an error — never silently chmod it.
 func EnsureCLIDefaultTokenFilePermissions(tokenFilePath string) error {
 	info, err := os.Stat(tokenFilePath)
@@ -954,7 +954,7 @@ func InitAPIClient() {
 		cliConfig.Server.Address = resolvedServerAddress
 	}
 	apiClient = api.NewAPIClient(cliConfig.Server.Address, cliConfig.Server.Token, cliConfig.Server.Timeout, cliConfig.Server.APIVersion)
-	// Per AI.md PART 33: User-Agent uses hardcoded project name with version
+	// Per AI.md PART 32: User-Agent uses hardcoded project name with version
 	apiClient.SetUserAgent(Version)
 	StartCLIBackgroundDiscovery()
 }
@@ -1139,6 +1139,6 @@ func IsCLITUIEnabled() bool {
 // PrintCLIVersionInfo prints CLI version information
 // Per AI.md PART 1: Function names MUST reveal intent - "printVersion" is ambiguous
 func PrintCLIVersionInfo() {
-	// Per AI.md PART 33: CLI --version format
+	// Per AI.md PART 32: CLI --version format
 	fmt.Printf("%s %s (%s) built %s\n", BinaryName, Version, CommitID, BuildDate)
 }

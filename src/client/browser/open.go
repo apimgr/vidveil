@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 33: CLI Client - Cross-platform browser opening
+// AI.md PART 32: CLI Client - Cross-platform browser opening
 package browser
 
 import (

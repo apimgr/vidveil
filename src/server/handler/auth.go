@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 17: Admin authentication and TOTP Two-Factor Authentication
+// AI.md PART 11: Admin authentication and TOTP Two-Factor Authentication
 // VidVeil is stateless - no PART 34 (Multi-User), only Server Admin auth
 package handler
 
@@ -17,7 +17,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/totp"
 )
 
-// PendingAuth represents a pending 2FA authentication per AI.md PART 17
+// PendingAuth represents a pending 2FA authentication per AI.md PART 11
 type PendingAuth struct {
 	AdminID    int64
 	Username   string
@@ -26,7 +26,7 @@ type PendingAuth struct {
 	CreatedAt  time.Time
 }
 
-// AuthHandler handles admin authentication routes per AI.md PART 17
+// AuthHandler handles admin authentication routes per AI.md PART 11
 type AuthHandler struct {
 	appConfig  *config.AppConfig
 	adminHdl   *AdminHandler
@@ -90,8 +90,8 @@ func (h *AuthHandler) cleanupPendingAuth() {
 	}
 }
 
-// LoginPage renders the admin login form and handles authentication per AI.md PART 17
-// Per AI.md PART 17: If 2FA enabled, show 2FA prompt after password validation
+// LoginPage renders the admin login form and handles authentication per AI.md PART 11
+// Per AI.md PART 11: If 2FA enabled, show 2FA prompt after password validation
 func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	// Clean up expired pending auths
 	h.cleanupPendingAuth()
@@ -126,7 +126,7 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 			if err == nil && adminUser != nil {
 				// Check if 2FA is enabled
 				if adminUser.TOTPEnabled {
-					// Store pending auth and redirect to 2FA page per AI.md PART 17
+					// Store pending auth and redirect to 2FA page per AI.md PART 11
 					pendingToken := h.generatePendingToken()
 					h.storePendingAuth(pendingToken, &PendingAuth{
 						AdminID:    adminUser.ID,
@@ -178,7 +178,7 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	h.renderLoginPage(w, r, errorMsg)
 }
 
-// TwoFactorPage handles the 2FA verification step per AI.md PART 17
+// TwoFactorPage handles the 2FA verification step per AI.md PART 11
 func (h *AuthHandler) TwoFactorPage(w http.ResponseWriter, r *http.Request) {
 	// Get pending auth token from cookie
 	cookie, err := r.Cookie("vidveil_pending_2fa")

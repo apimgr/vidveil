@@ -231,31 +231,24 @@ func (sm *ServiceManager) hasSysVInit() bool {
 // installLinux installs service on Linux per AI.md PART 24.
 // Detection order matches the spec: systemd → OpenRC → SysVinit → runit.
 func (sm *ServiceManager) installLinux() error {
-	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Starting Linux service installation\n")
 
 	// Create system user per AI.md PART 23
-	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Calling createLinuxUser\n")
 	if err := sm.createLinuxUser(); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: User creation completed\n")
 
 	// Install based on init system
 	if sm.hasSystemd() {
-		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing systemd service\n")
 		return sm.installSystemd()
 	}
 	if sm.hasOpenRC() {
-		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing OpenRC service\n")
 		return sm.installOpenRC()
 	}
 	if sm.hasSysVInit() {
-		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing SysVinit service\n")
 		return sm.installSysVInit()
 	}
 	if sm.hasRunit() {
-		fmt.Fprintf(os.Stderr, "[DEBUG] installLinux: Installing runit service\n")
 		return sm.installRunit()
 	}
 	return fmt.Errorf("no supported init system found (systemd, OpenRC, SysVinit, or runit)")
@@ -263,26 +256,20 @@ func (sm *ServiceManager) installLinux() error {
 
 // createLinuxUser creates system user per AI.md PART 23
 func (sm *ServiceManager) createLinuxUser() error {
-	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Checking if user '%s' exists...\n", sm.user)
 
 	// Check if user exists
 	_, err := exec.Command("id", sm.user).CombinedOutput()
 	// User already exists
 	if err == nil {
-		fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' already exists, skipping creation\n", sm.user)
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' does not exist, creating...\n", sm.user)
 
 	// Find available UID in 200-899 range per AI.md PART 23
 	uid := sm.findAvailableUID(200, 899)
-	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Found available UID: %d\n", uid)
 
 	// Create group
-	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Creating group '%s' with GID %d\n", sm.group, uid)
 	if err := exec.Command("groupadd", "-g", strconv.Itoa(uid), sm.group).Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: groupadd failed: %v\n", err)
 	}
 
 	// Create system user with:
@@ -292,7 +279,6 @@ func (sm *ServiceManager) createLinuxUser() error {
 	// -d: Home directory
 	// -s: No login shell
 	// -c: Comment/description
-	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: Creating user '%s' with UID %d\n", sm.user, uid)
 	cmd := exec.Command("useradd",
 		"-r",
 		"-u", strconv.Itoa(uid),
@@ -303,11 +289,9 @@ func (sm *ServiceManager) createLinuxUser() error {
 		sm.user,
 	)
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: useradd failed: %v\n", err)
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "[DEBUG] createLinuxUser: User '%s' created successfully\n", sm.user)
 
 	// Create and set ownership of directories per PART 24
 	// All directories must exist for systemd's ReadWritePaths to work

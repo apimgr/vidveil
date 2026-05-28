@@ -1160,7 +1160,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				"node_count": 0,
 				"role":       "",
 			},
-			// 6. Features — public-safe only; /metrics is internal (PART 20, 32)
+			// 6. Features — public-safe only; /metrics is internal (PART 20)
 			"features": map[string]interface{}{
 				"tor": map[string]interface{}{
 					"enabled":  h.torSvc != nil && h.torSvc.IsEnabled(),

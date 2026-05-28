@@ -107,7 +107,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		data[k] = v
 	}
 
-	// Per AI.md PART 31 inject locale + direction for <html lang="" dir="">.
+	// Per AI.md PART 30 inject locale + direction for <html lang="" dir="">.
 	injectLocaleData(r, data)
 
 	// Buffer template output

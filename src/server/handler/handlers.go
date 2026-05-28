@@ -1272,7 +1272,7 @@ type HealthzHTMLData struct {
 	Version       string
 	BuildDateTime string
 
-	// AI.md PART 31: locale + direction for <html lang dir>
+	// AI.md PART 30: locale + direction for <html lang dir>
 	Lang string
 	Dir  string
 
@@ -1365,7 +1365,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		Version:       version.GetVersion(),
 		BuildDateTime: version.BuildTime,
 
-		// AI.md PART 31: lang/dir for <html>
+		// AI.md PART 30: lang/dir for <html>
 		Lang: lang,
 		Dir:  i18n.Direction(lang),
 
@@ -2452,7 +2452,7 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, r *http.Request, 
 		"SiteTitle": h.appConfig.Server.Branding.Title,
 		"Theme":     h.getRequestTheme(r),
 	}
-	// AI.md PART 31: lang/dir for <html>
+	// AI.md PART 30: lang/dir for <html>
 	injectLocaleData(r, data)
 
 	tmpl, err := template.ParseFS(templatesFS, "template/page/error.tmpl")

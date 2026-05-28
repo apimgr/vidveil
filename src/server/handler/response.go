@@ -205,7 +205,7 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 		return
 	}
 
-	// Inject locale and direction per AI.md PART 31 (<html lang="{{.Lang}}" dir="{{.Dir}}">)
+	// Inject locale and direction per AI.md PART 30 (<html lang="{{.Lang}}" dir="{{.Dir}}">)
 	injectLocaleData(r, data)
 
 	// 2. Text browsers (lynx, w3m, links) - INTERACTIVE, NO JavaScript

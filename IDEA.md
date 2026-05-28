@@ -41,7 +41,7 @@ official_site: https://x.scour.li
 **Non-goals:**
 - VidVeil has NO user accounts - privacy-first, stateless design.
 - No caching of search results - all searches are real-time. Thumbnail proxy may cache images temporarily to reduce repeated fetches.
-- No user management UI in the admin panel. Admin panel is for server configuration only (per PART 17).
+- No user management UI in the admin panel. Admin panel is for server configuration only (per PART 16).
 - Engine availability is best-effort - some sites may block or rate limit, and the app does not guarantee any specific engine remains reachable.
 
 ### Roles & permissions
@@ -49,7 +49,7 @@ official_site: https://x.scour.li
 | Role | Storage | Authentication | Permissions |
 |------|---------|----------------|-------------|
 | **Anonymous visitor** | None (stateless) | None | Search, browse results, set local preferences/favorites/history (localStorage only) |
-| **Server Admin** | `admins` table (per AI.md PART 17) | Local password (Argon2id) + optional MFA (TOTP/Passkey) | Configure engines, rate limiting, Tor settings, GeoIP, content restriction, backups, branding/SEO, server settings |
+| **Server Admin** | `admins` table (per AI.md PART 11) | Local password (Argon2id) + optional MFA (TOTP/Passkey) | Configure engines, rate limiting, Tor settings, GeoIP, content restriction, backups, branding/SEO, server settings |
 
 There are no Regular User accounts (PART 34 NOT implemented). There are no organizations (PART 35 NOT implemented). There are no custom domains (PART 36 NOT implemented).
 
@@ -150,7 +150,7 @@ type CombinedSuggestion struct {
 |------|----------|-------------|-----------|
 | Engine registry | Embedded in binary (`src/server/engine/engines.go`) | Public | Build time |
 | Server config | `server.yml` (or remote DB in cluster mode) | Mixed (admin email + branding public; rate limit values internal) | Until admin edits |
-| Server admin accounts | `admins` table (per PART 17) | High - password is Argon2id, MFA secrets, recovery keys | Lifetime of admin |
+| Server admin accounts | `admins` table (per PART 11) | High - password is Argon2id, MFA secrets, recovery keys | Lifetime of admin |
 | Admin sessions | `srv_admin_sessions` (or `admin_sessions`) | High - SHA-256 hash of session token | Until expiry/logout |
 | Audit log | `srv_audit_log` (or `audit_log`) | Medium - admin actions, config changes | Per retention policy |
 | Backups | `{backup_dir}` | High - contains DB encryption material when compliance encryption is on | `server.scheduler.tasks.backup.retention` (default 4) |
@@ -172,7 +172,7 @@ type CombinedSuggestion struct {
 | Outbound search | 43 third-party adult video sites (HTML/JSON parsing) | UNTRUSTED - response bodies may be malicious or change shape; never executed, only parsed | Engine drops out of `engines_used`, listed in `engines_failed`; search continues with remaining engines |
 | Outbound thumbnails | Same 43 sites + CDN hosts (e.g., `ttcache.com`) | UNTRUSTED - byte stream is rewritten through proxy, never linked directly into HTML | Thumbnail falls back to `placeholder.svg` |
 | Outbound preview videos | Same engines (where supported) | UNTRUSTED - URL only, never inlined as HTML | Preview not shown |
-| Outbound Tor | Local Tor binary if present | TRUSTED inside container/host; auto-detected per AI.md PART 32 | Tor disabled if binary absent; clearnet still works |
+| Outbound Tor | Local Tor binary if present | TRUSTED inside container/host; auto-detected per AI.md PART 31 | Tor disabled if binary absent; clearnet still works |
 | Outbound GeoIP DB feed | Public GeoIP DB endpoint (per scheduler `geoip_update`) | TRUSTED dataset (publicly published) | Stale GeoIP data continues to be used until next successful refresh |
 | Outbound blocklist feed | Configured blocklist source(s) (per scheduler `blocklist_update`) | TRUSTED dataset (publicly published) | Stale blocklist data continues to be used until next successful refresh |
 | Inbound HTTP | Browsers, HTTP tools, text browsers, Tor clients | UNTRUSTED - all input validated; all responses content-negotiated | Standard 4xx error response per AI.md PART 14 canonical error body |
@@ -474,7 +474,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 | `/server/help` | Help page |
 
 **Admin Routes:**
-- Admin panel follows PART 17: ADMIN PANEL hierarchy.
+- Admin panel follows PART 16: ADMIN PANEL hierarchy.
 - VidVeil admin manages: engines, rate limiting, Tor settings, GeoIP, content restriction, backups.
 - No user management (VidVeil is stateless).
 

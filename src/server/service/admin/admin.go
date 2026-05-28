@@ -556,7 +556,7 @@ const (
 )
 
 // hashPassword hashes a password using Argon2id per AI.md (Argon2id required)
-// Returns PHC string format: $argon2id$v=19$m=65536,t=3,p=4$<base64-salt>$<base64-hash>
+// Returns PHC string format: $argon2id$v=19$m=65536,t=3,p=2$<base64-salt>$<base64-hash>
 func hashPassword(password string) (string, error) {
 	// Generate random salt
 	salt := make([]byte, argonSaltLen)

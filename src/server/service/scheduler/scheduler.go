@@ -745,32 +745,32 @@ type BuiltinTaskFuncs struct {
 func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 	s.migrateLegacyTaskIDs()
 
-	// ssl_renewal - Daily (runs check, renews if within 7 days of expiry)
+	// ssl_renewal - Daily at 03:00 per AI.md PART 18 (renews if within 7 days of expiry)
 	if funcs.SSLRenewal != nil {
 		s.RegisterTask("ssl_renewal", "SSL Certificate Renewal",
 			"Check and renew SSL certificates if needed (7 days before expiry)",
-			"daily", funcs.SSLRenewal)
+			"0 3 * * *", funcs.SSLRenewal)
 	}
 
-	// geoip_update - Weekly
+	// geoip_update - Weekly (Sunday 03:00) per AI.md PART 18
 	if funcs.GeoIPUpdate != nil {
 		s.RegisterTask("geoip_update", "GeoIP Database Update",
 			"Download and update GeoIP databases from sapics/ip-location-db",
-			"weekly", funcs.GeoIPUpdate)
+			"0 3 * * 0", funcs.GeoIPUpdate)
 	}
 
-	// blocklist_update - Daily
+	// blocklist_update - Daily at 04:00 per AI.md PART 18
 	if funcs.BlocklistUpdate != nil {
 		s.RegisterTask("blocklist_update", "Blocklist Update",
 			"Download and update IP/domain blocklists",
-			"daily", funcs.BlocklistUpdate)
+			"0 4 * * *", funcs.BlocklistUpdate)
 	}
 
-	// cve_update - Daily
+	// cve_update - Daily at 05:00 per AI.md PART 18
 	if funcs.CVEUpdate != nil {
 		s.RegisterTask("cve_update", "CVE Database Update",
 			"Download and update CVE/security vulnerability databases",
-			"daily", funcs.CVEUpdate)
+			"0 5 * * *", funcs.CVEUpdate)
 	}
 
 	// session_cleanup - Every 15 minutes per AI.md PART 18
@@ -787,11 +787,11 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 			"15m", funcs.TokenCleanup)
 	}
 
-	// log_rotation - Daily
+	// log_rotation - Daily at 00:00 per AI.md PART 18
 	if funcs.LogRotation != nil {
 		s.RegisterTask("log_rotation", "Log Rotation",
 			"Rotate and compress old log files",
-			"daily", funcs.LogRotation)
+			"0 0 * * *", funcs.LogRotation)
 	}
 
 	// backup_daily - Per AI.md PART 18: Daily at 02:00, enabled by default

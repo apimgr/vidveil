@@ -1106,7 +1106,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	paths := GetAppPaths(configDir, dataDir)
 	dbDir := GetDatabaseDir(paths.Data)
 
-	// Ensure directories exist per AI.md PART 8 and PART 27
+	// Ensure directories exist per AI.md PART 8 and PART 23
 	// Binary handles ALL directory creation with proper permissions
 	// Permissions: root=0755, user=0700 per AI.md PART 4
 	dirPerm := os.FileMode(0755)
@@ -1687,7 +1687,7 @@ func (c *AppConfig) AdminAPIPrefix() string {
 }
 
 // GetPublicURL returns the public-facing URL for this server
-// Used by /api/autodiscover endpoint per AI.md PART 37
+// Used by /api/autodiscover endpoint per AI.md PART 14
 func (c *AppConfig) GetPublicURL() string {
 	// Use FQDN if configured
 	if c.Server.FQDN != "" {
@@ -1707,7 +1707,7 @@ func (c *AppConfig) GetPublicURL() string {
 	return fmt.Sprintf("%s://%s:%s", scheme, host, port)
 }
 
-// GetClusterNodes returns the list of peer node URLs for /api/autodiscover (PART 37).
+// GetClusterNodes returns the list of peer node URLs for /api/autodiscover (PART 14).
 // VidVeil ships in single-instance mode, so this is empty until cluster peers are
 // registered via the admin Nodes page (PART 10).
 func (c *AppConfig) GetClusterNodes() []string {

@@ -392,7 +392,7 @@ func main() {
 	// Get paths early so we can override log directory
 	paths := config.GetAppPaths(configDir, dataDir)
 
-	// Ensure system user/group and set directory ownership per AI.md PART 27
+	// Ensure system user/group and set directory ownership per AI.md PART 23
 	// "Binary handles EVERYTHING else: directories, permissions, user/group, Tor, etc."
 	appName := filepath.Base(os.Args[0])
 	if appName == "" {

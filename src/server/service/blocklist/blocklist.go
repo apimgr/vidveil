@@ -54,7 +54,7 @@ func (s *BlocklistService) Initialize() error {
 	return nil
 }
 
-// Update downloads and updates all enabled blocklists per PART 27
+// Update downloads and updates all enabled blocklists per PART 11
 func (s *BlocklistService) Update(ctx context.Context) error {
 	// Check if blocklists are enabled in config
 	if !s.appConfig.Server.Security.Blocklists.Enabled || len(s.appConfig.Server.Security.Blocklists.Sources) == 0 {

@@ -735,7 +735,7 @@ func (s *Server) setupRoutes() {
 	s.router.Get(legacyAdminPath, legacyRedirect)
 	s.router.Get(legacyAdminPath+"/*", legacyRedirect)
 
-	// API autodiscover endpoint (non-versioned per AI.md PART 37)
+	// API autodiscover endpoint (non-versioned per AI.md PART 14)
 	// Clients need this BEFORE they know the API version
 	s.router.Get("/api/autodiscover", h.Autodiscover)
 
@@ -748,7 +748,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/search", h.APISearch)
 		r.Post("/search/batch", h.BatchSearch)
 
-		// Bang endpoints (public) - per AI.md PART 37
+		// Bang endpoints (public) - per AI.md PART 14
 		r.Get("/bangs", h.APIBangs)
 		r.Get("/bangs/autocomplete", h.APIAutocomplete)
 

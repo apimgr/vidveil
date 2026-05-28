@@ -73,7 +73,7 @@ func (s *AdminService) queryRowCtx(query string, args ...interface{}) *sql.Row {
 }
 
 // Initialize checks for first run and generates setup token if needed
-// Per AI.md PART 31: App is FULLY FUNCTIONAL before setup
+// Per AI.md PART 12: App is FULLY FUNCTIONAL before setup
 func (s *AdminService) Initialize() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -155,7 +155,7 @@ func (s *AdminService) ValidateSetupToken(token string) bool {
 
 // CreateAdmin creates a new admin account
 // Uses Argon2id for password hashing per AI.md (Argon2id required)
-// Server admin accounts are exempt from username blocklist per PART 31
+// Server admin accounts are exempt from username blocklist per PART 11
 func (s *AdminService) CreateAdmin(username, password string, isPrimary bool) (*AdminUser, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

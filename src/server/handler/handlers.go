@@ -3057,10 +3057,10 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 }
 
 // Autodiscover returns server connection settings for CLI/agent auto-configuration
-// Per AI.md PART 37: /api/autodiscover (NON-NEGOTIABLE)
+// Per AI.md PART 14: /api/autodiscover (NON-NEGOTIABLE)
 // This endpoint is NOT versioned because clients need it BEFORE they know the API version
 func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
-	// Build response per AI.md PART 37
+	// Build response per AI.md PART 14
 	response := map[string]interface{}{
 		"primary": h.appConfig.GetPublicURL(),
 		"cluster": h.appConfig.GetClusterNodes(),
@@ -3074,7 +3074,7 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 		"retry_delay": 1,
 	}
 
-	// NEVER include admin_path - security by obscurity per AI.md PART 37
+	// NEVER include admin_path - security by obscurity per AI.md PART 14
 	// NEVER include secrets, internal IPs, or sensitive data
 
 	WriteJSON(w, http.StatusOK, response)

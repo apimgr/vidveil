@@ -930,7 +930,7 @@ func ShouldDaemonize(isServiceStart bool, daemonFlag bool, configDaemonize bool)
 	return configDaemonize
 }
 
-// EnsureSystemUser creates system user/group on startup per AI.md PART 27
+// EnsureSystemUser creates system user/group on startup per AI.md PART 23
 // "Binary handles EVERYTHING else: directories, permissions, user/group, Tor, etc."
 // Returns uid, gid for chown operations. Returns 0, 0 if not running as root.
 func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {

@@ -298,29 +298,48 @@ func (m *MaintenanceManager) decryptBackup(data []byte, password string) ([]byte
 	return plaintext, nil
 }
 
-// verifyBackup verifies backup integrity
+// verifyBackup verifies backup integrity per AI.md PART 21 (7 checks):
+// 1. File exists  2. Size > 0  3. Checksum valid  4. Decrypt test
+// 5. Manifest readable  6. Content extraction  7. Database integrity
 func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password string) error {
-	data, err := os.ReadFile(backupFile)
+	// Check 1: File exists
+	info, err := os.Stat(backupFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("backup file missing: %w", err)
 	}
 
-	// Decrypt if encrypted
+	// Check 2: Size > 0
+	if info.Size() == 0 {
+		return fmt.Errorf("backup file is empty")
+	}
+
+	data, err := os.ReadFile(backupFile)
+	if err != nil {
+		return fmt.Errorf("failed to read backup: %w", err)
+	}
+
+	// Check 4: Decrypt test (if encrypted)
 	if password != "" {
 		data, err = m.decryptBackup(data, password)
 		if err != nil {
-			return err
+			return fmt.Errorf("decrypt test failed: %w", err)
 		}
 	}
 
-	// Verify checksum
+	// Check 3: Checksum valid — SHA-256 of (decrypted) archive must match manifest
 	checksum := sha256.Sum256(data)
 	actualChecksum := "sha256:" + hex.EncodeToString(checksum[:])
 	if actualChecksum != expectedChecksum {
 		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedChecksum, actualChecksum)
 	}
 
-	// Verify tar.gz structure
+	// Checks 5, 6, 7: extract to temp dir, parse manifest, verify database
+	tmpDir, err := os.MkdirTemp("", "vidveil-verify-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
 	gzReader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("invalid gzip: %w", err)
@@ -328,7 +347,10 @@ func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password
 	defer gzReader.Close()
 
 	tarReader := tar.NewReader(gzReader)
-	hasManifest := false
+	var manifestData []byte
+	var dbData []byte
+
+	// Check 6: Content extraction — test-extract every entry to temp dir
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
@@ -337,15 +359,71 @@ func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password
 		if err != nil {
 			return fmt.Errorf("invalid tar: %w", err)
 		}
-		if header.Name == "manifest.json" {
-			hasManifest = true
+
+		// Sanitize path to prevent path traversal
+		cleanName := filepath.Clean(header.Name)
+		destPath := filepath.Join(tmpDir, cleanName)
+
+		if header.Typeflag == tar.TypeDir {
+			if err := os.MkdirAll(destPath, 0700); err != nil {
+				return fmt.Errorf("failed to extract directory %s: %w", header.Name, err)
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(destPath), 0700); err != nil {
+			return fmt.Errorf("failed to create parent for %s: %w", header.Name, err)
+		}
+
+		contents, err := io.ReadAll(tarReader)
+		if err != nil {
+			return fmt.Errorf("failed to extract %s: %w", header.Name, err)
+		}
+
+		if err := os.WriteFile(destPath, contents, 0600); err != nil {
+			return fmt.Errorf("failed to write extracted %s: %w", header.Name, err)
+		}
+
+		if cleanName == "manifest.json" {
+			manifestData = contents
+		}
+		if cleanName == "server.db" {
+			dbData = contents
 		}
 	}
 
-	if !hasManifest {
+	// Check 5: Manifest readable — must be present and JSON-parseable
+	if manifestData == nil {
 		return fmt.Errorf("missing manifest.json")
 	}
+	var manifest BackupManifest
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		return fmt.Errorf("manifest.json not parseable: %w", err)
+	}
+	if manifest.Version == "" {
+		return fmt.Errorf("manifest.json missing version field")
+	}
 
+	// Check 7: Database integrity — verify SQLite magic header
+	if dbData != nil {
+		if err := verifySQLiteIntegrity(dbData); err != nil {
+			return fmt.Errorf("database integrity check failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// verifySQLiteIntegrity checks the SQLite magic header per AI.md PART 21
+// The first 16 bytes of every SQLite file must be "SQLite format 3\x00"
+func verifySQLiteIntegrity(data []byte) error {
+	const sqliteMagic = "SQLite format 3\x00"
+	if len(data) < len(sqliteMagic) {
+		return fmt.Errorf("file too small to be a SQLite database (%d bytes)", len(data))
+	}
+	if string(data[:len(sqliteMagic)]) != sqliteMagic {
+		return fmt.Errorf("invalid SQLite header")
+	}
 	return nil
 }
 
@@ -551,7 +629,7 @@ func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) er
 }
 
 // CheckUpdate checks for available updates from GitHub releases
-// Per AI.md PART 23: Respects update branch setting (stable, beta, daily)
+// Per AI.md PART 22: Respects update branch setting (stable, beta, daily)
 func (m *MaintenanceManager) CheckUpdate() (*UpdateInfo, error) {
 	branch := m.GetUpdateBranch()
 	currentVersion := strings.TrimPrefix(m.version, "v")

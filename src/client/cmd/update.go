@@ -23,7 +23,7 @@ import (
 // CLIUpdateBranchFile is the on-disk record of the user-selected update channel.
 const CLIUpdateBranchFile = "update-branch"
 
-// CLIUpdateValidBranches enumerates branches per AI.md PART 23.
+// CLIUpdateValidBranches enumerates branches per AI.md PART 22.
 var CLIUpdateValidBranches = map[string]bool{
 	"stable": true,
 	"beta":   true,

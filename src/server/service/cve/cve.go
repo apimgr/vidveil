@@ -92,7 +92,7 @@ func (s *CVEService) Initialize() error {
 	return nil
 }
 
-// Update downloads and updates CVE database per PART 27
+// Update downloads and updates CVE database per PART 11
 func (s *CVEService) Update(ctx context.Context) error {
 	if !s.appConfig.Server.Security.CVE.Enabled {
 		return nil

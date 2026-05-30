@@ -66,7 +66,7 @@ func (m *EngineManager) InitializeEngines() {
 	m.engines["youporn"] = NewYouPornEngine(m.appConfig)
 	m.engines["pornmd"] = NewPornMDEngine(m.appConfig)
 
-	// Tier 3 - Additional Sites (disabled by default, enable via config)
+	// Tier 3 - Additional Sites (all tiers enabled by default per IDEA.md)
 	m.engines["4tube"] = NewFourTubeEngine(m.appConfig)
 	m.engines["fux"] = NewFuxEngine(m.appConfig)
 	m.engines["porntube"] = NewPornTubeEngine(m.appConfig)

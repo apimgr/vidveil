@@ -326,21 +326,15 @@ func Autocomplete(prefix string) []AutocompleteSuggestion {
 		return nil
 	}
 
-	seen := make(map[string]bool)
-	var suggestions []AutocompleteSuggestion
+	// Track best score per engine across all its bang aliases
+	bestScore := make(map[string]int)
 
 	for bang, engine := range BangMapping {
-		// Skip if we've already added this engine
-		if seen[engine] {
-			continue
-		}
-
-		// Check if bang or engine name starts with prefix
 		bangLower := strings.ToLower(bang)
 		engineLower := strings.ToLower(engine)
 
 		score := 0
-		// Shorter = better
+		// Shorter bang = higher score; bang prefix match beats engine name match
 		if strings.HasPrefix(bangLower, prefix) {
 			score = 100 - len(bang)
 		} else if strings.HasPrefix(engineLower, prefix) {
@@ -349,27 +343,39 @@ func Autocomplete(prefix string) []AutocompleteSuggestion {
 			score = 10
 		}
 
-		if score > 0 {
-			seen[engine] = true
-			// Find shortest bang for this engine
-			shortCode := engine
-			for b, e := range BangMapping {
-				if e == engine && len(b) < len(shortCode) {
-					shortCode = b
-				}
-			}
-			displayName := EngineDisplayNames[engine]
-			if displayName == "" {
-				displayName = engine
-			}
-			suggestions = append(suggestions, AutocompleteSuggestion{
-				Bang:        "!" + engine,
-				EngineName:  engine,
-				DisplayName: displayName,
-				ShortCode:   "!" + shortCode,
-				Score:       score,
-			})
+		if score > bestScore[engine] {
+			bestScore[engine] = score
 		}
+	}
+
+	// Build suggestions from best scores, one entry per engine
+	seen := make(map[string]bool)
+	var suggestions []AutocompleteSuggestion
+
+	for engine, score := range bestScore {
+		if score <= 0 || seen[engine] {
+			continue
+		}
+		seen[engine] = true
+
+		// Find shortest bang for this engine
+		shortCode := engine
+		for b, e := range BangMapping {
+			if e == engine && len(b) < len(shortCode) {
+				shortCode = b
+			}
+		}
+		displayName := EngineDisplayNames[engine]
+		if displayName == "" {
+			displayName = engine
+		}
+		suggestions = append(suggestions, AutocompleteSuggestion{
+			Bang:        "!" + engine,
+			EngineName:  engine,
+			DisplayName: displayName,
+			ShortCode:   "!" + shortCode,
+			Score:       score,
+		})
 	}
 
 	// Sort by score (descending)

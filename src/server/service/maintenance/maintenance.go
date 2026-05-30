@@ -860,7 +860,7 @@ func (m *MaintenanceManager) IsMaintenanceMode() bool {
 }
 
 // ResetAdminCredentials clears admin password/token and generates new setup token
-// per AI.md PART 26
+// per AI.md PART 8 (--maintenance setup command)
 func (m *MaintenanceManager) ResetAdminCredentials() (string, error) {
 	// Generate new setup token
 	tokenBytes := make([]byte, 32)
@@ -887,7 +887,7 @@ func (m *MaintenanceManager) ResetAdminCredentials() (string, error) {
 	return setupToken, nil
 }
 
-// SetUpdateBranch sets the update branch (stable, beta, daily) per AI.md PART 14
+// SetUpdateBranch sets the update branch (stable, beta, daily) per AI.md PART 22
 func (m *MaintenanceManager) SetUpdateBranch(branch string) error {
 	branchFile := filepath.Join(m.paths.Config, "update-branch")
 

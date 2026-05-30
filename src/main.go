@@ -727,19 +727,19 @@ func main() {
 		// Console output per AI.md PART 7
 		isFirstRun := adminSvc.IsFirstRun()
 
-		// Check SMTP status per AI.md PART 18
+		// Check SMTP status per AI.md PART 17
 		smtpInfo := ""
 		if appConfig.Server.Email.Enabled {
 			smtpHost := appConfig.Server.Email.Host
 			smtpPort := appConfig.Server.Email.Port
 
 			if smtpHost != "" && smtpPort > 0 {
-				// Per PART 18: Test configured SMTP on every startup
+				// Per PART 17: Test configured SMTP on every startup
 				if err := email.TestSMTPConfig(smtpHost, smtpPort); err == nil {
 					smtpInfo = fmt.Sprintf("%s:%d", smtpHost, smtpPort)
 				}
 			} else {
-				// Per PART 18: Auto-detect on first run if no host configured
+				// Per PART 17: Auto-detect on first run if no host configured
 				detectedHost, detectedPort := email.AutodetectSMTP(
 					appConfig.Server.Email.AutodetectHost,
 					appConfig.Server.Email.AutodetectPort,

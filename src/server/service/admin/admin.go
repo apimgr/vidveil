@@ -73,7 +73,7 @@ func (s *AdminService) queryRowCtx(query string, args ...interface{}) *sql.Row {
 }
 
 // Initialize checks for first run and generates setup token if needed
-// Per AI.md PART 12: App is FULLY FUNCTIONAL before setup
+// Per AI.md PART 8: App is FULLY FUNCTIONAL before setup
 func (s *AdminService) Initialize() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

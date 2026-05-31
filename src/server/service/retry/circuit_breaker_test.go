@@ -412,3 +412,238 @@ func TestCircuitBreakerSuccessResetFailureCount(t *testing.T) {
 		t.Errorf("Expected failure count 0 after success, got %d", cb.FailureCount())
 	}
 }
+
+// TestCircuitBreakerLastFailureTime covers the LastFailureTime accessor.
+func TestCircuitBreakerLastFailureTime(t *testing.T) {
+	cb := NewCircuitBreaker(nil)
+
+	// Before any failure, zero time
+	if !cb.LastFailureTime().IsZero() {
+		t.Error("Expected zero LastFailureTime before any failure")
+	}
+
+	before := time.Now()
+	cb.RecordFailure()
+	after := time.Now()
+
+	ft := cb.LastFailureTime()
+	if ft.Before(before) || ft.After(after) {
+		t.Errorf("LastFailureTime %v not in range [%v, %v]", ft, before, after)
+	}
+}
+
+// TestCircuitBreakerAllowRequestOpenNotElapsed covers the AllowRequest path where the
+// circuit is open but the timeout has NOT yet elapsed (must return false without
+// transitioning to half-open).
+func TestCircuitBreakerAllowRequestOpenNotElapsed(t *testing.T) {
+	cfg := &CircuitBreakerConfig{
+		Name:             "test",
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		// Long timeout so it never elapses in this test
+		Timeout: 1 * time.Hour,
+	}
+
+	cb := NewCircuitBreaker(cfg)
+	cb.RecordFailure()
+
+	if cb.GetState() != CircuitBreakerStateOpen {
+		t.Fatal("Expected open state after failure")
+	}
+
+	// Timeout has not elapsed; AllowRequest must return false and leave state open
+	if cb.AllowRequest() {
+		t.Error("Open circuit with non-elapsed timeout must not allow requests")
+	}
+
+	if cb.GetState() != CircuitBreakerStateOpen {
+		t.Errorf("State should remain open, got %v", cb.GetState())
+	}
+}
+
+// TestCircuitBreakerExecuteWithResultOpen covers the early-return path of
+// ExecuteWithResult when the circuit is open.
+func TestCircuitBreakerExecuteWithResultOpen(t *testing.T) {
+	cfg := &CircuitBreakerConfig{
+		Name:             "test",
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		Timeout:          1 * time.Hour,
+	}
+
+	cb := NewCircuitBreaker(cfg)
+	cb.RecordFailure()
+
+	result, err := cb.ExecuteWithResult(func() (interface{}, error) {
+		return "should not run", nil
+	})
+
+	if !errors.Is(err, ErrCircuitOpen) {
+		t.Errorf("Expected ErrCircuitOpen, got %v", err)
+	}
+
+	if result != nil {
+		t.Errorf("Expected nil result, got %v", result)
+	}
+}
+
+// TestCircuitBreakerExecuteWithResultError covers the RecordFailure path inside
+// ExecuteWithResult when the operation returns a non-nil error.
+func TestCircuitBreakerExecuteWithResultError(t *testing.T) {
+	cfg := &CircuitBreakerConfig{
+		Name:             "test",
+		FailureThreshold: 3,
+		SuccessThreshold: 1,
+		Timeout:          100 * time.Millisecond,
+	}
+
+	cb := NewCircuitBreaker(cfg)
+	testErr := errors.New("operation failed")
+
+	result, err := cb.ExecuteWithResult(func() (interface{}, error) {
+		return nil, testErr
+	})
+
+	if !errors.Is(err, testErr) {
+		t.Errorf("Expected testErr, got %v", err)
+	}
+
+	if result != nil {
+		t.Errorf("Expected nil result, got %v", result)
+	}
+
+	// Failure must have been recorded
+	if cb.FailureCount() != 1 {
+		t.Errorf("Expected failure count 1, got %d", cb.FailureCount())
+	}
+}
+
+// TestCircuitBreakerSetStateWithCallback covers the setState path where onStateChange
+// is non-nil, verifying the callback fires without deadlock.
+func TestCircuitBreakerSetStateWithCallback(t *testing.T) {
+	done := make(chan struct{})
+	var cbFrom, cbTo CircuitBreakerState
+	var cbName string
+
+	cfg := &CircuitBreakerConfig{
+		Name:             "cb-callback",
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		Timeout:          100 * time.Millisecond,
+		OnStateChange: func(name string, from, to CircuitBreakerState) {
+			cbName = name
+			cbFrom = from
+			cbTo = to
+			close(done)
+		},
+	}
+
+	cb := NewCircuitBreaker(cfg)
+
+	// Trigger a state change: closed -> open
+	cb.RecordFailure()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("onStateChange callback was never called")
+	}
+
+	if cbName != "cb-callback" {
+		t.Errorf("Expected callback name 'cb-callback', got %q", cbName)
+	}
+
+	if cbFrom != CircuitBreakerStateClosed {
+		t.Errorf("Expected from=closed, got %v", cbFrom)
+	}
+
+	if cbTo != CircuitBreakerStateOpen {
+		t.Errorf("Expected to=open, got %v", cbTo)
+	}
+}
+
+// TestCircuitBreakerTransitionToSameState covers the guard in transitionTo that
+// skips setState when the new state equals the current state.
+func TestCircuitBreakerTransitionToSameState(t *testing.T) {
+	callbacks := 0
+	cfg := &CircuitBreakerConfig{
+		Name:             "no-dup",
+		FailureThreshold: 5,
+		SuccessThreshold: 2,
+		Timeout:          50 * time.Millisecond,
+		OnStateChange: func(_ string, _, _ CircuitBreakerState) {
+			callbacks++
+		},
+	}
+
+	cb := NewCircuitBreaker(cfg)
+
+	// Trigger open state
+	for i := 0; i < 5; i++ {
+		cb.RecordFailure()
+	}
+
+	// Wait for any async callback
+	time.Sleep(20 * time.Millisecond)
+	countAfterOpen := callbacks
+
+	// Wait for timeout to elapse so AllowRequest transitions to half-open
+	time.Sleep(60 * time.Millisecond)
+
+	// First AllowRequest transitions closed->open->half-open; second call must not
+	// fire setState again (transitionTo guard prevents it)
+	cb.AllowRequest()
+	cb.AllowRequest()
+
+	// Allow any async callbacks to fire
+	time.Sleep(20 * time.Millisecond)
+
+	// Only one additional state change (open->half-open) should have been recorded
+	newCallbacks := callbacks - countAfterOpen
+	if newCallbacks != 1 {
+		t.Errorf("Expected exactly 1 new callback for open->half-open, got %d", newCallbacks)
+	}
+}
+
+// TestCircuitBreakerRegistryGetDoubleCheck covers the double-check-after-write-lock
+// branch in Registry.Get. The registryGetHook fires between the RLock miss and the
+// WLock acquisition, letting a concurrent goroutine insert the key. When Get then
+// acquires the write lock, the double-check finds the key and returns it directly.
+func TestCircuitBreakerRegistryGetDoubleCheck(t *testing.T) {
+	registry := NewCircuitBreakerRegistry(nil)
+	const key = "double-check-key"
+
+	inserted := make(chan *CircuitBreaker, 1)
+
+	// The hook runs after RLock misses but before WLock — insert the key here.
+	registryGetHook = func() {
+		registry.mu.Lock()
+		cb := NewCircuitBreaker(DefaultCircuitBreakerConfig(key))
+		registry.breakers[key] = cb
+		registry.mu.Unlock()
+		inserted <- cb
+	}
+	t.Cleanup(func() { registryGetHook = nil })
+
+	got := registry.Get(key)
+	prebuilt := <-inserted
+
+	if got != prebuilt {
+		t.Error("double-check branch must return the instance inserted by the hook")
+	}
+}
+
+// TestCircuitBreakerAllowRequestDefaultBranch covers the default (unknown state) branch
+// in AllowRequest which must return false.
+func TestCircuitBreakerAllowRequestDefaultBranch(t *testing.T) {
+	cb := NewCircuitBreaker(nil)
+
+	// Force an invalid state value directly (bypasses normal state machine)
+	cb.mu.Lock()
+	cb.state = CircuitBreakerState(99)
+	cb.mu.Unlock()
+
+	if cb.AllowRequest() {
+		t.Error("Unknown state must not allow requests")
+	}
+}

@@ -269,6 +269,10 @@ func NewCircuitBreakerRegistry(defaultConfig *CircuitBreakerConfig) *CircuitBrea
 	}
 }
 
+// registryGetHook is called between the read-unlock and write-lock in Get; used only
+// by tests to inject a concurrent insertion and exercise the double-check branch.
+var registryGetHook func()
+
 // Get returns a circuit breaker by name, creating if necessary
 func (r *CircuitBreakerRegistry) Get(name string) *CircuitBreaker {
 	r.mu.RLock()
@@ -277,6 +281,10 @@ func (r *CircuitBreakerRegistry) Get(name string) *CircuitBreaker {
 
 	if exists {
 		return cb
+	}
+
+	if registryGetHook != nil {
+		registryGetHook()
 	}
 
 	// Create new circuit breaker

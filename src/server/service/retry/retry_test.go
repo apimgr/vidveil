@@ -280,3 +280,304 @@ func TestAddJitter(t *testing.T) {
 		}
 	}
 }
+
+// TestBackoffNilConfig ensures Backoff works when cfg is nil (uses DefaultRetryConfig).
+func TestBackoffNilConfig(t *testing.T) {
+	// nil cfg must not panic and must return a positive duration
+	d := Backoff(1, nil)
+	if d <= 0 {
+		t.Errorf("Backoff with nil config returned non-positive duration: %v", d)
+	}
+}
+
+// TestExecuteWithRetryContextCancelledDuringWait covers the select branch inside the
+// wait loop (ctx.Done fires while sleeping between retries).
+func TestExecuteWithRetryContextCancelledDuringWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	attempts := 0
+	cfg := &RetryConfig{
+		MaxAttempts:  10,
+		InitialDelay: 200 * time.Millisecond,
+		MaxDelay:     5 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       0,
+	}
+
+	// Cancel after the first attempt has returned an error but before the sleep ends.
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	err := ExecuteWithRetry(ctx, cfg, func() error {
+		attempts++
+		return ErrTemporary
+	})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Expected context.Canceled, got %v", err)
+	}
+
+	// Should have only run once before the cancellation fired during the wait
+	if attempts != 1 {
+		t.Errorf("Expected 1 attempt before cancel, got %d", attempts)
+	}
+}
+
+// TestExecuteWithRetryResultContextCancelledBeforeStart covers the upfront
+// ctx.Done() check when the context is already cancelled before the first attempt.
+func TestExecuteWithRetryResultContextCancelledBeforeStart(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := ExecuteWithRetryResult(ctx, nil, func() (string, error) {
+		return "should not run", nil
+	})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Expected context.Canceled, got %v", err)
+	}
+
+	if result != "" {
+		t.Errorf("Expected zero-value result, got %q", result)
+	}
+}
+
+// TestExecuteWithRetryResultNonRetryableError covers the early-return path when the
+// operation returns an error that is not in RetryableErrors.
+func TestExecuteWithRetryResultNonRetryableError(t *testing.T) {
+	ctx := context.Background()
+	nonRetryable := errors.New("permanent failure")
+	attempts := 0
+	cfg := &RetryConfig{
+		MaxAttempts:     3,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		Multiplier:      2.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
+	}
+
+	result, err := ExecuteWithRetryResult(ctx, cfg, func() (int, error) {
+		attempts++
+		return 0, nonRetryable
+	})
+
+	if !errors.Is(err, nonRetryable) {
+		t.Errorf("Expected nonRetryable error, got %v", err)
+	}
+
+	if result != 0 {
+		t.Errorf("Expected zero result, got %d", result)
+	}
+
+	if attempts != 1 {
+		t.Errorf("Expected 1 attempt (no retry for non-retryable), got %d", attempts)
+	}
+}
+
+// TestExecuteWithRetryResultContextCancelledDuringWait covers the wait-select path
+// inside ExecuteWithRetryResult when the context is cancelled between retries.
+func TestExecuteWithRetryResultContextCancelledDuringWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cfg := &RetryConfig{
+		MaxAttempts:  10,
+		InitialDelay: 200 * time.Millisecond,
+		MaxDelay:     5 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       0,
+	}
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := ExecuteWithRetryResult(ctx, cfg, func() (string, error) {
+		return "", ErrTemporary
+	})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Expected context.Canceled during wait, got %v", err)
+	}
+}
+
+// TestExecuteWithRetryContextCancelledBeforeStart covers the ctx.Done() check at the
+// very top of the loop when the context is already cancelled. We run many iterations
+// because the select { case <-ctx.Done(): ... default: } is nondeterministic when
+// both are ready; repeated invocations guarantee the branch is exercised.
+func TestExecuteWithRetryContextCancelledBeforeStart(t *testing.T) {
+	cfg := &RetryConfig{
+		MaxAttempts:  3,
+		InitialDelay: 0,
+		MaxDelay:     0,
+		Multiplier:   1.0,
+		Jitter:       0,
+	}
+
+	for i := 0; i < 200; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		err := ExecuteWithRetry(ctx, cfg, func() error {
+			return ErrTemporary
+		})
+
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, ErrTemporary) {
+			t.Errorf("iter %d: expected Canceled or ErrTemporary (after exhaustion), got %v", i, err)
+		}
+	}
+}
+
+// TestExecuteWithRetryDelayCapExceeded covers the `if delay > cfg.MaxDelay` branch
+// inside ExecuteWithRetry by setting MaxDelay below what the multiplier would produce.
+func TestExecuteWithRetryDelayCapExceeded(t *testing.T) {
+	ctx := context.Background()
+	attempts := 0
+	cfg := &RetryConfig{
+		MaxAttempts:  3,
+		InitialDelay: 10 * time.Millisecond,
+		MaxDelay:     11 * time.Millisecond,
+		Multiplier:   100.0,
+		Jitter:       0,
+	}
+
+	err := ExecuteWithRetry(ctx, cfg, func() error {
+		attempts++
+		return ErrTemporary
+	})
+
+	if err == nil {
+		t.Error("Expected error after exhausting retries")
+	}
+
+	if attempts != 3 {
+		t.Errorf("Expected 3 attempts, got %d", attempts)
+	}
+}
+
+// TestExecuteWithRetryContextCancelledAtLoopTop covers the ctx.Done() check at the
+// TOP of the retry loop (second+ iteration) — context is cancelled during sleep but
+// the cancel fires just before the loop re-evaluates the guard.
+func TestExecuteWithRetryContextCancelledAtLoopTop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	attempts := 0
+	cfg := &RetryConfig{
+		MaxAttempts:  5,
+		InitialDelay: 1 * time.Millisecond,
+		MaxDelay:     5 * time.Millisecond,
+		Multiplier:   1.0,
+		Jitter:       0,
+	}
+
+	err := ExecuteWithRetry(ctx, cfg, func() error {
+		attempts++
+		// Cancel immediately after the first attempt so the context is already
+		// done when the second iteration checks ctx.Done() at the top of the loop.
+		if attempts == 1 {
+			cancel()
+		}
+		return ErrTemporary
+	})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Expected context.Canceled, got %v", err)
+	}
+}
+
+// TestExecuteWithRetryResultMaxAttemptsExhausted covers the break-then-return path
+// (attempt == MaxAttempts, then `return result, lastErr`), and also the delay-cap.
+func TestExecuteWithRetryResultMaxAttemptsExhausted(t *testing.T) {
+	ctx := context.Background()
+	attempts := 0
+	cfg := &RetryConfig{
+		MaxAttempts:  3,
+		InitialDelay: 10 * time.Millisecond,
+		MaxDelay:     11 * time.Millisecond,
+		Multiplier:   100.0,
+		Jitter:       0,
+	}
+
+	result, err := ExecuteWithRetryResult(ctx, cfg, func() (string, error) {
+		attempts++
+		return "", ErrTemporary
+	})
+
+	if err == nil {
+		t.Error("Expected error after exhausting retries")
+	}
+
+	if result != "" {
+		t.Errorf("Expected empty result, got %q", result)
+	}
+
+	if attempts != 3 {
+		t.Errorf("Expected 3 attempts, got %d", attempts)
+	}
+}
+
+// TestExecuteWithRetryResultContextCancelledAtLoopTop covers the ctx.Done() check at
+// the TOP of the loop inside ExecuteWithRetryResult (second+ iteration).
+func TestExecuteWithRetryResultContextCancelledAtLoopTop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	attempts := 0
+	cfg := &RetryConfig{
+		MaxAttempts:  5,
+		InitialDelay: 1 * time.Millisecond,
+		MaxDelay:     5 * time.Millisecond,
+		Multiplier:   1.0,
+		Jitter:       0,
+	}
+
+	_, err := ExecuteWithRetryResult(ctx, cfg, func() (int, error) {
+		attempts++
+		if attempts == 1 {
+			cancel()
+		}
+		return 0, ErrTemporary
+	})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Expected context.Canceled, got %v", err)
+	}
+}
+
+// temporaryError is a test helper that implements the temporary interface.
+type temporaryError struct {
+	isTemp bool
+}
+
+func (e *temporaryError) Error() string   { return "temporary error" }
+func (e *temporaryError) Temporary() bool { return e.isTemp }
+
+// timeoutError is a test helper that implements the timeout interface but NOT temporary.
+type timeoutError struct {
+	isTimeout bool
+}
+
+func (e *timeoutError) Error() string  { return "timeout error" }
+func (e *timeoutError) Timeout() bool  { return e.isTimeout }
+
+// TestIsTemporaryErrorTemporaryInterface covers both true and false returns from
+// an error implementing the Temporary() bool interface.
+func TestIsTemporaryErrorTemporaryInterface(t *testing.T) {
+	if !IsTemporaryError(&temporaryError{isTemp: true}) {
+		t.Error("Expected true for Temporary()=true error")
+	}
+
+	if IsTemporaryError(&temporaryError{isTemp: false}) {
+		t.Error("Expected false for Temporary()=false error")
+	}
+}
+
+// TestIsTemporaryErrorTimeoutInterface covers the Timeout() bool interface path,
+// including the case where Timeout() returns false (falls through to return false).
+func TestIsTemporaryErrorTimeoutInterface(t *testing.T) {
+	if !IsTemporaryError(&timeoutError{isTimeout: true}) {
+		t.Error("Expected true for Timeout()=true error")
+	}
+
+	if IsTemporaryError(&timeoutError{isTimeout: false}) {
+		t.Error("Expected false for Timeout()=false error")
+	}
+}

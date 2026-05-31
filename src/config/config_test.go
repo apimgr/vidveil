@@ -280,3 +280,426 @@ func TestIsDevelopmentMode(t *testing.T) {
 		t.Error("Expected development mode, got production")
 	}
 }
+
+// TestParseBoolWithDefault covers truthy input, falsy input, empty string (uses default), and invalid input.
+func TestParseBoolWithDefault(t *testing.T) {
+	tests := []struct {
+		input      string
+		defaultVal bool
+		wantVal    bool
+		wantErr    bool
+	}{
+		{"yes", false, true, false},
+		{"true", false, true, false},
+		{"1", false, true, false},
+		{"on", false, true, false},
+		{"no", true, false, false},
+		{"false", true, false, false},
+		{"0", true, false, false},
+		{"off", true, false, false},
+		// Empty string returns the default value
+		{"", true, true, false},
+		{"", false, false, false},
+		// Invalid value returns false and an error
+		{"maybe", false, false, true},
+		{"invalid", true, false, true},
+	}
+
+	for _, tt := range tests {
+		name := tt.input
+		if name == "" {
+			name = "(empty)"
+		}
+		t.Run(name, func(t *testing.T) {
+			got, err := ParseBoolWithDefault(tt.input, tt.defaultVal)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseBoolWithDefault(%q, %v) error = %v, wantErr %v", tt.input, tt.defaultVal, err, tt.wantErr)
+			}
+			if got != tt.wantVal {
+				t.Errorf("ParseBoolWithDefault(%q, %v) = %v, want %v", tt.input, tt.defaultVal, got, tt.wantVal)
+			}
+		})
+	}
+}
+
+// TestMustParseBool verifies correct value on valid input and panic on invalid input.
+func TestMustParseBool(t *testing.T) {
+	if got := MustParseBool("yes", false); got != true {
+		t.Errorf("MustParseBool(\"yes\", false) = %v, want true", got)
+	}
+	if got := MustParseBool("no", true); got != false {
+		t.Errorf("MustParseBool(\"no\", true) = %v, want false", got)
+	}
+	// Empty string returns the default without panic
+	if got := MustParseBool("", true); got != true {
+		t.Errorf("MustParseBool(\"\", true) = %v, want true", got)
+	}
+
+	// Invalid input must panic
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("MustParseBool with invalid input did not panic")
+		}
+	}()
+	MustParseBool("maybe", false)
+}
+
+// TestIsFalsy verifies that falsy strings return true and truthy/empty/invalid return false.
+func TestIsFalsy(t *testing.T) {
+	falsy := []string{"0", "no", "false", "off", "disable", "disabled", "nope", "nah"}
+	for _, s := range falsy {
+		if !IsFalsy(s) {
+			t.Errorf("IsFalsy(%q) = false, want true", s)
+		}
+	}
+
+	notFalsy := []string{"yes", "true", "1", "on", "", "invalid"}
+	for _, s := range notFalsy {
+		if IsFalsy(s) {
+			t.Errorf("IsFalsy(%q) = true, want false", s)
+		}
+	}
+}
+
+// TestIsValidBool verifies truthy and falsy strings are valid; empty and invalid are not.
+func TestIsValidBool(t *testing.T) {
+	valid := []string{"yes", "no", "true", "false", "1", "0", "on", "off", "enable", "disable"}
+	for _, s := range valid {
+		if !IsValidBool(s) {
+			t.Errorf("IsValidBool(%q) = false, want true", s)
+		}
+	}
+
+	invalid := []string{"", "maybe", "invalid", "yesno"}
+	for _, s := range invalid {
+		if IsValidBool(s) {
+			t.Errorf("IsValidBool(%q) = true, want false", s)
+		}
+	}
+}
+
+// TestParseBoolEnv covers env set to truthy, falsy, unset, and invalid values.
+func TestParseBoolEnv(t *testing.T) {
+	// Env set to truthy value
+	t.Setenv("TEST_BOOL_ENV_TRUTHY", "yes")
+	if got := ParseBoolEnv("TEST_BOOL_ENV_TRUTHY", false); got != true {
+		t.Errorf("ParseBoolEnv truthy: got %v, want true", got)
+	}
+
+	// Env set to falsy value
+	t.Setenv("TEST_BOOL_ENV_FALSY", "no")
+	if got := ParseBoolEnv("TEST_BOOL_ENV_FALSY", true); got != false {
+		t.Errorf("ParseBoolEnv falsy: got %v, want false", got)
+	}
+
+	// Env unset — returns default
+	if got := ParseBoolEnv("TEST_BOOL_ENV_UNSET_XYZ", true); got != true {
+		t.Errorf("ParseBoolEnv unset default true: got %v, want true", got)
+	}
+	if got := ParseBoolEnv("TEST_BOOL_ENV_UNSET_XYZ", false); got != false {
+		t.Errorf("ParseBoolEnv unset default false: got %v, want false", got)
+	}
+
+	// Env set to invalid value — returns default
+	t.Setenv("TEST_BOOL_ENV_INVALID", "maybe")
+	if got := ParseBoolEnv("TEST_BOOL_ENV_INVALID", true); got != true {
+		t.Errorf("ParseBoolEnv invalid: got %v, want default true", got)
+	}
+}
+
+// TestIsRunningInContainer just calls the function to ensure no panic. The result
+// depends on the runtime environment and is not asserted.
+func TestIsRunningInContainer(t *testing.T) {
+	_ = IsRunningInContainer()
+}
+
+// TestIsProductionMode verifies development mode returns false and production returns true.
+func TestIsProductionMode(t *testing.T) {
+	cfg := DefaultAppConfig()
+
+	cfg.Server.Mode = "development"
+	if cfg.IsProductionMode() {
+		t.Error("Expected IsProductionMode false in development mode, got true")
+	}
+
+	cfg.Server.Mode = "dev"
+	if cfg.IsProductionMode() {
+		t.Error("Expected IsProductionMode false for mode 'dev', got true")
+	}
+
+	cfg.Server.Mode = "production"
+	if !cfg.IsProductionMode() {
+		t.Error("Expected IsProductionMode true in production mode, got false")
+	}
+}
+
+// TestIsValidSSLHost verifies that SSL host validation always uses production rules.
+func TestIsValidSSLHost(t *testing.T) {
+	if !IsValidSSLHost("example.com") {
+		t.Error("IsValidSSLHost(\"example.com\") = false, want true")
+	}
+	if IsValidSSLHost("localhost") {
+		t.Error("IsValidSSLHost(\"localhost\") = true, want false")
+	}
+	if IsValidSSLHost("192.168.1.1") {
+		t.Error("IsValidSSLHost(\"192.168.1.1\") = true, want false")
+	}
+	if IsValidSSLHost("test.local") {
+		t.Error("IsValidSSLHost(\"test.local\") = true, want false")
+	}
+}
+
+// TestAdminURLPrefix verifies the /server/{admin_path} prefix is returned.
+func TestAdminURLPrefix(t *testing.T) {
+	cfg := DefaultAppConfig()
+
+	cfg.Server.Admin.Path = "admin"
+	if got := cfg.AdminURLPrefix(); got != "/server/admin" {
+		t.Errorf("AdminURLPrefix with 'admin': got %q, want %q", got, "/server/admin")
+	}
+
+	// Empty path falls back to "admin"
+	cfg.Server.Admin.Path = ""
+	if got := cfg.AdminURLPrefix(); got != "/server/admin" {
+		t.Errorf("AdminURLPrefix with empty path: got %q, want %q", got, "/server/admin")
+	}
+
+	cfg.Server.Admin.Path = "myadmin"
+	if got := cfg.AdminURLPrefix(); got != "/server/myadmin" {
+		t.Errorf("AdminURLPrefix with 'myadmin': got %q, want %q", got, "/server/myadmin")
+	}
+}
+
+// TestAdminAPIPrefix verifies the canonical admin API prefix matches AdminURLPrefix.
+func TestAdminAPIPrefix(t *testing.T) {
+	cfg := DefaultAppConfig()
+
+	cfg.Server.Admin.Path = "admin"
+	if got := cfg.AdminAPIPrefix(); got != "/server/admin" {
+		t.Errorf("AdminAPIPrefix with 'admin': got %q, want %q", got, "/server/admin")
+	}
+
+	cfg.Server.Admin.Path = ""
+	if got := cfg.AdminAPIPrefix(); got != "/server/admin" {
+		t.Errorf("AdminAPIPrefix with empty path: got %q, want %q", got, "/server/admin")
+	}
+
+	cfg.Server.Admin.Path = "myadmin"
+	if got := cfg.AdminAPIPrefix(); got != "/server/myadmin" {
+		t.Errorf("AdminAPIPrefix with 'myadmin': got %q, want %q", got, "/server/myadmin")
+	}
+}
+
+// TestGetPublicURL covers FQDN set, address empty, and address 0.0.0.0.
+func TestGetPublicURL(t *testing.T) {
+	cfg := DefaultAppConfig()
+	cfg.Server.Port = "8080"
+
+	// FQDN set — uses https
+	cfg.Server.FQDN = "example.com"
+	if got := cfg.GetPublicURL(); got != "https://example.com" {
+		t.Errorf("GetPublicURL with FQDN: got %q, want %q", got, "https://example.com")
+	}
+
+	// FQDN empty, Address empty — falls back to localhost
+	cfg.Server.FQDN = ""
+	cfg.Server.Address = ""
+	got := cfg.GetPublicURL()
+	if got != "http://localhost:8080" {
+		t.Errorf("GetPublicURL with empty address: got %q, want %q", got, "http://localhost:8080")
+	}
+
+	// Address 0.0.0.0 — also falls back to localhost
+	cfg.Server.Address = "0.0.0.0"
+	got = cfg.GetPublicURL()
+	if got != "http://localhost:8080" {
+		t.Errorf("GetPublicURL with 0.0.0.0: got %q, want %q", got, "http://localhost:8080")
+	}
+}
+
+// TestGetClusterNodes verifies single-instance mode returns an empty slice.
+func TestGetClusterNodes(t *testing.T) {
+	cfg := DefaultAppConfig()
+	nodes := cfg.GetClusterNodes()
+	if len(nodes) != 0 {
+		t.Errorf("GetClusterNodes() = %v, want empty slice", nodes)
+	}
+}
+
+// TestGetFQDNWithEnv verifies that the DOMAIN env var is respected.
+func TestGetFQDNWithEnv(t *testing.T) {
+	t.Setenv("DOMAIN", "env.example.com")
+	if got := GetFQDN(); got != "env.example.com" {
+		t.Errorf("GetFQDN with DOMAIN env: got %q, want %q", got, "env.example.com")
+	}
+}
+
+// TestGetFQDNWithoutEnv verifies that GetFQDN returns a non-empty string when DOMAIN is unset.
+func TestGetFQDNWithoutEnv(t *testing.T) {
+	os.Unsetenv("DOMAIN")
+	got := GetFQDN()
+	if got == "" {
+		t.Error("GetFQDN without DOMAIN env returned empty string")
+	}
+}
+
+// TestNewWatcherNonexistentPath verifies that NewWatcher succeeds and sets lastMod=0 for a missing file.
+func TestNewWatcherNonexistentPath(t *testing.T) {
+	cfg := DefaultAppConfig()
+	w := NewWatcher("/nonexistent/path/that/does/not/exist.yml", cfg)
+	if w == nil {
+		t.Fatal("NewWatcher returned nil for nonexistent path")
+	}
+	if w.lastMod != 0 {
+		t.Errorf("NewWatcher nonexistent path: lastMod = %d, want 0", w.lastMod)
+	}
+}
+
+// TestNewWatcherExistingFile verifies that NewWatcher captures the correct lastMod for an existing file.
+func TestNewWatcherExistingFile(t *testing.T) {
+	tmp, err := os.CreateTemp(t.TempDir(), "watcher-*.yml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	tmp.Close()
+
+	info, err := os.Stat(tmp.Name())
+	if err != nil {
+		t.Fatalf("failed to stat temp file: %v", err)
+	}
+	wantMod := info.ModTime().UnixNano()
+
+	cfg := DefaultAppConfig()
+	w := NewWatcher(tmp.Name(), cfg)
+	if w == nil {
+		t.Fatal("NewWatcher returned nil for existing file")
+	}
+	if w.lastMod != wantMod {
+		t.Errorf("NewWatcher existing file: lastMod = %d, want %d", w.lastMod, wantMod)
+	}
+}
+
+// TestOnReloadRegistersCallback verifies that each OnReload call appends a callback.
+func TestOnReloadRegistersCallback(t *testing.T) {
+	cfg := DefaultAppConfig()
+	w := NewWatcher("/nonexistent", cfg)
+
+	if len(w.callbacks) != 0 {
+		t.Errorf("New watcher should have 0 callbacks, got %d", len(w.callbacks))
+	}
+
+	w.OnReload(func(_ *AppConfig) {})
+	if len(w.callbacks) != 1 {
+		t.Errorf("After first OnReload: expected 1 callback, got %d", len(w.callbacks))
+	}
+
+	w.OnReload(func(_ *AppConfig) {})
+	if len(w.callbacks) != 2 {
+		t.Errorf("After second OnReload: expected 2 callbacks, got %d", len(w.callbacks))
+	}
+}
+
+// TestWatcherStartStop verifies Start/Stop do not panic and the goroutine exits cleanly.
+func TestWatcherStartStop(t *testing.T) {
+	cfg := DefaultAppConfig()
+	w := NewWatcher("/nonexistent", cfg)
+	w.Start()
+	w.Stop()
+}
+
+// TestWatcherReload verifies that Reload on a valid saved config file returns nil.
+func TestWatcherReload(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "server.yml")
+
+	cfg := DefaultAppConfig()
+	if err := SaveAppConfig(cfg, configPath); err != nil {
+		t.Fatalf("SaveAppConfig failed: %v", err)
+	}
+
+	w := NewWatcher(configPath, cfg)
+	if err := w.Reload(); err != nil {
+		t.Errorf("Reload() returned error: %v", err)
+	}
+}
+
+// TestUserAgentString verifies that String() on a UserAgentConfig produces a non-empty value.
+func TestUserAgentString(t *testing.T) {
+	cases := []UserAgentConfig{
+		{OS: "windows", Browser: "chrome", BrowserVersion: "120"},
+		{OS: "macos", Browser: "edge", BrowserVersion: "120"},
+		{OS: "linux", Browser: "firefox", BrowserVersion: "120"},
+		// Default OS/browser (empty fields)
+		{},
+	}
+
+	for _, ua := range cases {
+		got := ua.String()
+		if got == "" {
+			t.Errorf("UserAgentConfig%+v.String() returned empty string", ua)
+		}
+	}
+}
+
+// TestSecChUa verifies that SecChUa returns empty for Firefox and non-empty for Chrome/Edge.
+func TestSecChUa(t *testing.T) {
+	firefoxUA := UserAgentConfig{Browser: "firefox", BrowserVersion: "120"}
+	if got := firefoxUA.SecChUa(); got != "" {
+		t.Errorf("SecChUa for firefox: got %q, want empty string", got)
+	}
+
+	chromeUA := UserAgentConfig{Browser: "chrome", BrowserVersion: "120"}
+	if got := chromeUA.SecChUa(); got == "" {
+		t.Error("SecChUa for chrome returned empty string, want non-empty")
+	}
+
+	edgeUA := UserAgentConfig{Browser: "edge", BrowserVersion: "120"}
+	if got := edgeUA.SecChUa(); got == "" {
+		t.Error("SecChUa for edge returned empty string, want non-empty")
+	}
+}
+
+// TestSecChUaPlatform verifies each OS maps to the correct platform string.
+func TestSecChUaPlatform(t *testing.T) {
+	cases := []struct {
+		os   string
+		want string
+	}{
+		{"windows", `"Windows"`},
+		{"macos", `"macOS"`},
+		{"linux", `"Linux"`},
+		// Unknown OS defaults to Windows
+		{"", `"Windows"`},
+	}
+
+	for _, tc := range cases {
+		ua := UserAgentConfig{OS: tc.os}
+		if got := ua.SecChUaPlatform(); got != tc.want {
+			t.Errorf("SecChUaPlatform(%q) = %q, want %q", tc.os, got, tc.want)
+		}
+	}
+}
+
+// TestIsChromiumBased verifies that only Firefox is not Chromium-based.
+func TestIsChromiumBased(t *testing.T) {
+	firefox := UserAgentConfig{Browser: "firefox"}
+	if firefox.IsChromiumBased() {
+		t.Error("IsChromiumBased() for firefox = true, want false")
+	}
+
+	chrome := UserAgentConfig{Browser: "chrome"}
+	if !chrome.IsChromiumBased() {
+		t.Error("IsChromiumBased() for chrome = false, want true")
+	}
+
+	edge := UserAgentConfig{Browser: "edge"}
+	if !edge.IsChromiumBased() {
+		t.Error("IsChromiumBased() for edge = false, want true")
+	}
+
+	// Empty browser defaults to chrome path (not firefox)
+	empty := UserAgentConfig{}
+	if !empty.IsChromiumBased() {
+		t.Error("IsChromiumBased() for empty browser = false, want true")
+	}
+}

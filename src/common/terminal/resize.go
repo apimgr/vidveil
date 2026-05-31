@@ -14,15 +14,15 @@ import (
 // ResizeHandler is a callback for terminal resize events
 type ResizeHandler func(size TerminalSize)
 
-// WatchResize watches for terminal resize events (SIGWINCH)
-// Returns a channel that will be closed when the watcher stops
+// WatchResize watches for terminal resize events (SIGWINCH).
+// Returns a stop channel: close it (or call StopWatchResize) to stop watching.
+// The goroutine exits as soon as the stop channel is closed.
 func WatchResize(handler ResizeHandler) chan struct{} {
-	done := make(chan struct{})
+	stop := make(chan struct{})
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGWINCH)
 
 	go func() {
-		defer close(done)
 		defer signal.Stop(sigChan)
 
 		for {
@@ -31,16 +31,17 @@ func WatchResize(handler ResizeHandler) chan struct{} {
 				if handler != nil {
 					handler(GetTerminalSize())
 				}
-			case <-done:
+			case <-stop:
 				return
 			}
 		}
 	}()
 
-	return done
+	return stop
 }
 
-// StopWatchResize stops watching for resize events
+// StopWatchResize stops watching for resize events.
+// Safe to call multiple times; subsequent calls are no-ops.
 func StopWatchResize(done chan struct{}) {
 	select {
 	case <-done:

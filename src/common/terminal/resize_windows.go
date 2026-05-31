@@ -12,15 +12,13 @@ import (
 // ResizeHandler is a callback for terminal resize events
 type ResizeHandler func(size TerminalSize)
 
-// WatchResize watches for terminal resize events on Windows
-// Windows doesn't have SIGWINCH, so we poll for size changes
-// Returns a channel that will be closed when the watcher stops
+// WatchResize watches for terminal resize events on Windows.
+// Windows doesn't have SIGWINCH, so we poll for size changes.
+// Returns a stop channel: close it (or call StopWatchResize) to stop watching.
 func WatchResize(handler ResizeHandler) chan struct{} {
-	done := make(chan struct{})
+	stop := make(chan struct{})
 
 	go func() {
-		defer close(done)
-
 		lastSize := GetTerminalSize()
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
@@ -35,16 +33,17 @@ func WatchResize(handler ResizeHandler) chan struct{} {
 						handler(newSize)
 					}
 				}
-			case <-done:
+			case <-stop:
 				return
 			}
 		}
 	}()
 
-	return done
+	return stop
 }
 
-// StopWatchResize stops watching for resize events
+// StopWatchResize stops watching for resize events.
+// Safe to call multiple times; subsequent calls are no-ops.
 func StopWatchResize(done chan struct{}) {
 	select {
 	case <-done:

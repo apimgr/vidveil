@@ -850,7 +850,7 @@ func (s *Server) setupRoutes() {
 					r.Post("/import", admin.APITorImport)
 				})
 
-				// Email per PART 18
+				// Email per PART 17
 				r.Route("/email", func(r chi.Router) {
 					r.Get("/", admin.APIConfig)
 					r.Patch("/", admin.APIConfig)
@@ -891,7 +891,7 @@ func (s *Server) setupRoutes() {
 					r.Post("/{slug}/reset", admin.APIPageReset)
 				})
 
-				// Notifications per PART 18
+				// Notifications per PART 17
 				r.Route("/notifications", func(r chi.Router) {
 					r.Get("/", admin.APINotificationsGet)
 					r.Put("/", admin.APINotificationsUpdate)

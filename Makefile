@@ -4,7 +4,7 @@
 # ============================================
 #
 # Vidveil Makefile
-# Per AI.md PART 26: 6 targets - build, release, docker, test, dev, local
+# Per AI.md PART 25: 6 targets - build, release, docker, test, dev, local
 
 # Infer PROJECTNAME and PROJECTORG from git remote or directory path (NEVER hardcode)
 PROJECTNAME := $(shell git remote get-url origin 2>/dev/null | sed -E -e 's|.*[/:]||' -e 's|\.git$$||' || basename "$$(pwd)")
@@ -33,7 +33,7 @@ LDFLAGS := -s -w \
 	-X 'main.BuildDate=$(BUILD_DATE)' \
 	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
 
-# Linker flags for CLI client (AI.md PART 33)
+# Linker flags for CLI client (AI.md PART 32)
 CLI_LDFLAGS := -s -w \
 	-X 'main.ProjectName=$(PROJECT)' \
 	-X 'main.Version=$(VERSION)' \
@@ -50,7 +50,7 @@ RELDIR := ./releases
 GODIR := $(HOME)/.local/share/go
 GOCACHE := $(GODIR)/build
 
-# Build targets - Per AI.md PART 26: Linux, macOS (Darwin), Windows, FreeBSD - AMD64, ARM64
+# Build targets - Per AI.md PART 25: Linux, macOS (Darwin), Windows, FreeBSD - AMD64, ARM64
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64
 
 # Docker
@@ -67,7 +67,7 @@ GO_DOCKER := docker run --rm \
 
 # =============================================================================
 # BUILD - Build all platforms + host binary (via Docker with cached modules)
-# Per AI.md PART 36: Build CLI client if src/client exists
+# Per AI.md PART 32: Build CLI client if src/client exists
 # =============================================================================
 build:
 	@mkdir -p $(BINDIR)
@@ -84,7 +84,7 @@ build:
 	@$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
 		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT) ./src"
 
-	# Build CLI client if src/client exists (AI.md PART 36)
+	# Build CLI client if src/client exists (AI.md PART 32)
 	@if [ -d "src/client" ]; then \
 		echo "Building CLI client host binary..."; \
 		$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
@@ -234,7 +234,7 @@ docker:
 
 # =============================================================================
 # TEST - Run all tests with coverage (via Docker with cached modules)
-# Per AI.md PART 29: 100% coverage enforcement
+# Per AI.md PART 28: 100% coverage enforcement
 # =============================================================================
 test:
 	@echo "Running tests with coverage..."

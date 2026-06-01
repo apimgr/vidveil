@@ -1,0 +1,761 @@
+// SPDX-License-Identifier: MIT
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/apimgr/vidveil/src/config"
+)
+
+// TestGetRequestTheme_NoCookie verifies that the config default theme is returned when no cookie is present.
+func TestGetRequestTheme_NoCookie(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	got := h.getRequestTheme(req)
+	if got != "dark" {
+		t.Errorf("getRequestTheme no cookie = %q, want %q", got, "dark")
+	}
+}
+
+// TestGetRequestTheme_LightCookie verifies that cookie value "light" is honoured.
+func TestGetRequestTheme_LightCookie(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: "vidveil-theme", Value: "light"})
+	got := h.getRequestTheme(req)
+	if got != "light" {
+		t.Errorf("getRequestTheme light cookie = %q, want %q", got, "light")
+	}
+}
+
+// TestGetRequestTheme_AutoCookie verifies that cookie value "auto" is honoured.
+func TestGetRequestTheme_AutoCookie(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: "vidveil-theme", Value: "auto"})
+	got := h.getRequestTheme(req)
+	if got != "auto" {
+		t.Errorf("getRequestTheme auto cookie = %q, want %q", got, "auto")
+	}
+}
+
+// TestGetRequestTheme_InvalidCookie verifies that an invalid cookie value falls back to the config default.
+func TestGetRequestTheme_InvalidCookie(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: "vidveil-theme", Value: "rainbow"})
+	got := h.getRequestTheme(req)
+	if got != "dark" {
+		t.Errorf("getRequestTheme invalid cookie = %q, want config default %q", got, "dark")
+	}
+}
+
+// TestIsTorRequest_OnionHost verifies that a .onion host is detected as a Tor request.
+func TestIsTorRequest_OnionHost(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "example.onion"
+	if !h.isTorRequest(req) {
+		t.Error("isTorRequest should return true for .onion host")
+	}
+}
+
+// TestIsTorRequest_TorHeader verifies that the X-Tor-Hidden-Service header triggers Tor detection.
+func TestIsTorRequest_TorHeader(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Tor-Hidden-Service", "1")
+	if !h.isTorRequest(req) {
+		t.Error("isTorRequest should return true for X-Tor-Hidden-Service: 1 header")
+	}
+}
+
+// TestIsTorRequest_PlainHost verifies that a plain host returns false.
+func TestIsTorRequest_PlainHost(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "example.com"
+	if h.isTorRequest(req) {
+		t.Error("isTorRequest should return false for plain host")
+	}
+}
+
+// TestHasContentRestrictionAck_NoCookie verifies that absent cookie returns false.
+func TestHasContentRestrictionAck_NoCookie(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	if h.hasContentRestrictionAck(req) {
+		t.Error("hasContentRestrictionAck should return false with no cookie")
+	}
+}
+
+// TestHasContentRestrictionAck_ValueOne verifies that cookie value "1" returns true.
+func TestHasContentRestrictionAck_ValueOne(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: ContentRestrictionAckCookieName, Value: "1"})
+	if !h.hasContentRestrictionAck(req) {
+		t.Error("hasContentRestrictionAck should return true for cookie value '1'")
+	}
+}
+
+// TestHasContentRestrictionAck_OtherValue verifies that other cookie values return false.
+func TestHasContentRestrictionAck_OtherValue(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: ContentRestrictionAckCookieName, Value: "yes"})
+	if h.hasContentRestrictionAck(req) {
+		t.Error("hasContentRestrictionAck should return false for cookie value other than '1'")
+	}
+}
+
+// TestIsOurCliClient_VidveilCli verifies that a UA starting with "vidveil-cli/" returns true.
+func TestIsOurCliClient_VidveilCli(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "vidveil-cli/1.0.0")
+	if !isOurCliClient(req) {
+		t.Error("isOurCliClient should return true for 'vidveil-cli/' UA")
+	}
+}
+
+// TestIsOurCliClient_Browser verifies that a browser UA returns false.
+func TestIsOurCliClient_Browser(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
+	if isOurCliClient(req) {
+		t.Error("isOurCliClient should return false for browser UA")
+	}
+}
+
+// TestIsOurCliClient_EmptyUA verifies that empty UA returns false.
+func TestIsOurCliClient_EmptyUA(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "")
+	if isOurCliClient(req) {
+		t.Error("isOurCliClient should return false for empty UA")
+	}
+}
+
+// TestIsTextBrowser_Lynx verifies lynx UA is detected.
+func TestIsTextBrowser_Lynx(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "lynx/2.8.9")
+	if !isTextBrowser(req) {
+		t.Error("isTextBrowser should return true for lynx UA")
+	}
+}
+
+// TestIsTextBrowser_W3m verifies w3m UA is detected.
+func TestIsTextBrowser_W3m(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "w3m/0.5.3")
+	if !isTextBrowser(req) {
+		t.Error("isTextBrowser should return true for w3m UA")
+	}
+}
+
+// TestIsTextBrowser_Links verifies links UA is detected.
+func TestIsTextBrowser_Links(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "links/2.21")
+	if !isTextBrowser(req) {
+		t.Error("isTextBrowser should return true for links UA")
+	}
+}
+
+// TestIsTextBrowser_Elinks verifies elinks UA is detected.
+func TestIsTextBrowser_Elinks(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "elinks/0.13")
+	if !isTextBrowser(req) {
+		t.Error("isTextBrowser should return true for elinks UA")
+	}
+}
+
+// TestIsTextBrowser_Browsh verifies browsh UA is detected.
+func TestIsTextBrowser_Browsh(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "browsh/1.8.2")
+	if !isTextBrowser(req) {
+		t.Error("isTextBrowser should return true for browsh UA")
+	}
+}
+
+// TestIsTextBrowser_Carbonyl verifies carbonyl UA is detected.
+func TestIsTextBrowser_Carbonyl(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "carbonyl/0.0.3")
+	if !isTextBrowser(req) {
+		t.Error("isTextBrowser should return true for carbonyl UA")
+	}
+}
+
+// TestIsTextBrowser_Netsurf verifies netsurf UA is detected.
+func TestIsTextBrowser_Netsurf(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "netsurf/3.10")
+	if !isTextBrowser(req) {
+		t.Error("isTextBrowser should return true for netsurf UA")
+	}
+}
+
+// TestIsTextBrowser_Browser verifies a standard browser UA returns false.
+func TestIsTextBrowser_Browser(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+	if isTextBrowser(req) {
+		t.Error("isTextBrowser should return false for Mozilla UA")
+	}
+}
+
+// TestIsTextBrowser_Empty verifies empty UA returns false.
+func TestIsTextBrowser_Empty(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "")
+	if isTextBrowser(req) {
+		t.Error("isTextBrowser should return false for empty UA")
+	}
+}
+
+// TestIsHttpTool_Curl verifies curl UA is detected.
+func TestIsHttpTool_Curl(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "curl/7.68.0")
+	if !isHttpTool(req) {
+		t.Error("isHttpTool should return true for curl UA")
+	}
+}
+
+// TestIsHttpTool_Wget verifies wget UA is detected.
+func TestIsHttpTool_Wget(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "wget/1.20.3")
+	if !isHttpTool(req) {
+		t.Error("isHttpTool should return true for wget UA")
+	}
+}
+
+// TestIsHttpTool_EmptyUA verifies empty UA is treated as HTTP tool.
+func TestIsHttpTool_EmptyUA(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "")
+	if !isHttpTool(req) {
+		t.Error("isHttpTool should return true for empty UA")
+	}
+}
+
+// TestIsHttpTool_Httpie verifies httpie UA is detected.
+func TestIsHttpTool_Httpie(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "httpie/3.0.0")
+	if !isHttpTool(req) {
+		t.Error("isHttpTool should return true for httpie UA")
+	}
+}
+
+// TestIsHttpTool_Browser verifies a browser UA returns false.
+func TestIsHttpTool_Browser(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+	if isHttpTool(req) {
+		t.Error("isHttpTool should return false for Mozilla UA")
+	}
+}
+
+// TestIsHttpTool_ShortNonEmpty verifies a short (< 4 chars) non-empty UA returns false.
+func TestIsHttpTool_ShortNonEmpty(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "abc")
+	if isHttpTool(req) {
+		t.Error("isHttpTool should return false for short non-empty UA < 4 chars")
+	}
+}
+
+// TestRenderSimpleHTML_Home verifies the home case includes expected text.
+func TestRenderSimpleHTML_Home(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	result := h.renderSimpleHTML("home", nil)
+	if !strings.Contains(result, "VidVeil") {
+		t.Error("renderSimpleHTML home should contain VidVeil")
+	}
+	if !strings.Contains(result, "<html>") || !strings.Contains(result, "<body>") {
+		t.Error("renderSimpleHTML home should be wrapped in html/body")
+	}
+}
+
+// TestRenderSimpleHTML_About verifies the about case includes expected text.
+func TestRenderSimpleHTML_About(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	result := h.renderSimpleHTML("about", nil)
+	if !strings.Contains(result, "About") {
+		t.Error("renderSimpleHTML about should contain 'About'")
+	}
+}
+
+// TestRenderSimpleHTML_Privacy verifies the privacy case includes expected text.
+func TestRenderSimpleHTML_Privacy(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	result := h.renderSimpleHTML("privacy", nil)
+	if !strings.Contains(result, "Privacy") {
+		t.Error("renderSimpleHTML privacy should contain 'Privacy'")
+	}
+}
+
+// TestRenderSimpleHTML_Preferences verifies the preferences case includes expected text.
+func TestRenderSimpleHTML_Preferences(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	result := h.renderSimpleHTML("preferences", nil)
+	if !strings.Contains(result, "Preferences") {
+		t.Error("renderSimpleHTML preferences should contain 'Preferences'")
+	}
+}
+
+// TestRenderSimpleHTML_Search verifies the search case includes query from data.
+func TestRenderSimpleHTML_Search(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	data := map[string]interface{}{"query": "golang test"}
+	result := h.renderSimpleHTML("search", data)
+	if !strings.Contains(result, "golang test") {
+		t.Error("renderSimpleHTML search should contain query text")
+	}
+}
+
+// TestRenderSimpleHTML_AgeVerify verifies the age-verify case includes expected text.
+func TestRenderSimpleHTML_AgeVerify(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	result := h.renderSimpleHTML("age-verify", nil)
+	if !strings.Contains(result, "Age") {
+		t.Error("renderSimpleHTML age-verify should contain 'Age'")
+	}
+}
+
+// TestRenderSimpleHTML_ContentRestricted verifies Message and Region appear in the output.
+func TestRenderSimpleHTML_ContentRestricted(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	data := map[string]interface{}{
+		"Message": "Adult content restricted",
+		"Region":  "US",
+	}
+	result := h.renderSimpleHTML("content-restricted", data)
+	if !strings.Contains(result, "Adult content restricted") {
+		t.Error("renderSimpleHTML content-restricted should contain Message")
+	}
+	if !strings.Contains(result, "US") {
+		t.Error("renderSimpleHTML content-restricted should contain Region")
+	}
+}
+
+// TestRenderSimpleHTML_ContentBlocked verifies Message and Region appear in the blocked output.
+func TestRenderSimpleHTML_ContentBlocked(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	data := map[string]interface{}{
+		"Message": "Service unavailable",
+		"Region":  "CN",
+	}
+	result := h.renderSimpleHTML("content-blocked", data)
+	if !strings.Contains(result, "Service unavailable") {
+		t.Error("renderSimpleHTML content-blocked should contain Message")
+	}
+	if !strings.Contains(result, "CN") {
+		t.Error("renderSimpleHTML content-blocked should contain Region")
+	}
+}
+
+// TestRenderSimpleHTML_Unknown verifies that an unknown name still returns a body wrapper.
+func TestRenderSimpleHTML_Unknown(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	result := h.renderSimpleHTML("does-not-exist", nil)
+	if !strings.Contains(result, "<body>") || !strings.Contains(result, "</body>") {
+		t.Error("renderSimpleHTML unknown should still return body wrapper")
+	}
+}
+
+// TestConvertHTMLToText_H1 verifies that h1 tags are stripped and title text is preserved.
+func TestConvertHTMLToText_H1(t *testing.T) {
+	input := "<h1>My Title</h1>"
+	result := convertHTMLToText(input, 40)
+	if strings.Contains(result, "<h1>") || strings.Contains(result, "</h1>") {
+		t.Error("convertHTMLToText should remove <h1> tags")
+	}
+	if !strings.Contains(result, "My Title") {
+		t.Error("convertHTMLToText should preserve title text")
+	}
+}
+
+// TestConvertHTMLToText_Paragraph verifies that p tags are removed and text is preserved.
+func TestConvertHTMLToText_Paragraph(t *testing.T) {
+	input := "<p>Hello world</p>"
+	result := convertHTMLToText(input, 40)
+	if strings.Contains(result, "<p>") {
+		t.Error("convertHTMLToText should remove <p> tags")
+	}
+	if !strings.Contains(result, "Hello world") {
+		t.Error("convertHTMLToText should preserve paragraph text")
+	}
+}
+
+// TestConvertHTMLToText_ListItem verifies that li items produce a bullet indicator.
+func TestConvertHTMLToText_ListItem(t *testing.T) {
+	input := "<ul><li>item one</li></ul>"
+	result := convertHTMLToText(input, 40)
+	if !strings.Contains(result, "item one") {
+		t.Error("convertHTMLToText should preserve list item text")
+	}
+	if !strings.Contains(result, "•") {
+		t.Error("convertHTMLToText should convert li to bullet")
+	}
+}
+
+// TestHTMLEscape_LessThan verifies < is escaped.
+func TestHTMLEscape_LessThan(t *testing.T) {
+	if got := htmlEscape("<"); got != "&lt;" {
+		t.Errorf("htmlEscape('<') = %q, want %q", got, "&lt;")
+	}
+}
+
+// TestHTMLEscape_GreaterThan verifies > is escaped.
+func TestHTMLEscape_GreaterThan(t *testing.T) {
+	if got := htmlEscape(">"); got != "&gt;" {
+		t.Errorf("htmlEscape('>') = %q, want %q", got, "&gt;")
+	}
+}
+
+// TestHTMLEscape_Ampersand verifies & is escaped.
+func TestHTMLEscape_Ampersand(t *testing.T) {
+	if got := htmlEscape("&"); got != "&amp;" {
+		t.Errorf("htmlEscape('&') = %q, want %q", got, "&amp;")
+	}
+}
+
+// TestHTMLEscape_Quote verifies " is escaped.
+func TestHTMLEscape_Quote(t *testing.T) {
+	if got := htmlEscape(`"`); got != "&quot;" {
+		t.Errorf(`htmlEscape('"') = %q, want %q`, got, "&quot;")
+	}
+}
+
+// TestHTMLEscape_PlainText verifies plain text is unchanged.
+func TestHTMLEscape_PlainText(t *testing.T) {
+	in := "hello world"
+	if got := htmlEscape(in); got != in {
+		t.Errorf("htmlEscape(%q) = %q, want unchanged", in, got)
+	}
+}
+
+// TestIntToString_Zero verifies 0 maps to "0".
+func TestIntToString_Zero(t *testing.T) {
+	if got := intToString(0); got != "0" {
+		t.Errorf("intToString(0) = %q, want %q", got, "0")
+	}
+}
+
+// TestIntToString_Positive verifies positive numbers convert correctly.
+func TestIntToString_Positive(t *testing.T) {
+	if got := intToString(42); got != "42" {
+		t.Errorf("intToString(42) = %q, want %q", got, "42")
+	}
+}
+
+// TestIntToString_Negative verifies negative numbers convert correctly.
+func TestIntToString_Negative(t *testing.T) {
+	if got := intToString(-5); got != "-5" {
+		t.Errorf("intToString(-5) = %q, want %q", got, "-5")
+	}
+}
+
+// TestIntToString_Hundred verifies intToString(100) returns "100".
+func TestIntToString_Hundred(t *testing.T) {
+	if got := intToString(100); got != "100" {
+		t.Errorf("intToString(100) = %q, want %q", got, "100")
+	}
+}
+
+// TestRepeatStr_Three verifies repeatStr("x", 3) returns "xxx".
+func TestRepeatStr_Three(t *testing.T) {
+	if got := repeatStr("x", 3); got != "xxx" {
+		t.Errorf("repeatStr('x', 3) = %q, want %q", got, "xxx")
+	}
+}
+
+// TestRepeatStr_Zero verifies repeatStr("ab", 0) returns "".
+func TestRepeatStr_Zero(t *testing.T) {
+	if got := repeatStr("ab", 0); got != "" {
+		t.Errorf("repeatStr('ab', 0) = %q, want empty string", got)
+	}
+}
+
+// TestReplaceAll_Match verifies replacement of found substring.
+func TestReplaceAll_Match(t *testing.T) {
+	got := replaceAll("hello <p> world <p> end", "<p>", "")
+	if strings.Contains(got, "<p>") {
+		t.Errorf("replaceAll should remove all <p>, got %q", got)
+	}
+}
+
+// TestReplaceAll_NoMatch verifies that a string with no match is unchanged.
+func TestReplaceAll_NoMatch(t *testing.T) {
+	in := "nothing to replace"
+	got := replaceAll(in, "<p>", "X")
+	if got != in {
+		t.Errorf("replaceAll no match: got %q, want %q", got, in)
+	}
+}
+
+// TestIndexOf_Found verifies the correct index is returned when substring is found.
+func TestIndexOf_Found(t *testing.T) {
+	idx := indexOf("hello world", "world")
+	if idx != 6 {
+		t.Errorf("indexOf('hello world', 'world') = %d, want 6", idx)
+	}
+}
+
+// TestIndexOf_NotFound verifies -1 is returned when substring is absent.
+func TestIndexOf_NotFound(t *testing.T) {
+	idx := indexOf("hello world", "xyz")
+	if idx != -1 {
+		t.Errorf("indexOf not found = %d, want -1", idx)
+	}
+}
+
+// TestGetClientIP_XForwardedForSingle verifies a single XFF IP is returned.
+func TestGetClientIP_XForwardedForSingle(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	if got := getClientIP(req); got != "1.2.3.4" {
+		t.Errorf("getClientIP XFF single = %q, want %q", got, "1.2.3.4")
+	}
+}
+
+// TestGetClientIP_XForwardedForChain verifies the first IP in a chain is returned.
+func TestGetClientIP_XForwardedForChain(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Forwarded-For", "1.2.3.4, 5.6.7.8")
+	if got := getClientIP(req); got != "1.2.3.4" {
+		t.Errorf("getClientIP XFF chain = %q, want %q", got, "1.2.3.4")
+	}
+}
+
+// TestGetClientIP_XRealIP verifies X-Real-IP header is used.
+func TestGetClientIP_XRealIP(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Real-IP", "10.0.0.1")
+	if got := getClientIP(req); got != "10.0.0.1" {
+		t.Errorf("getClientIP X-Real-IP = %q, want %q", got, "10.0.0.1")
+	}
+}
+
+// TestGetClientIP_RemoteAddr verifies RemoteAddr is parsed correctly (IPv4 with port).
+func TestGetClientIP_RemoteAddr(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.0.2.1:9090"
+	if got := getClientIP(req); got != "192.0.2.1" {
+		t.Errorf("getClientIP RemoteAddr = %q, want %q", got, "192.0.2.1")
+	}
+}
+
+// TestGetClientIP_IPv6RemoteAddr verifies IPv6 RemoteAddr brackets are stripped.
+func TestGetClientIP_IPv6RemoteAddr(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "[::1]:8080"
+	if got := getClientIP(req); got != "::1" {
+		t.Errorf("getClientIP IPv6 RemoteAddr = %q, want %q", got, "::1")
+	}
+}
+
+// TestNewServerHandler_NonNil verifies that NewServerHandler returns a non-nil handler.
+func TestNewServerHandler_NonNil(t *testing.T) {
+	cfg := createTestConfig()
+	h := NewServerHandler(cfg)
+	if h == nil {
+		t.Fatal("NewServerHandler should return non-nil handler")
+	}
+}
+
+// TestNewServerHandler_NilConfig verifies that NewServerHandler with nil config uses a default.
+func TestNewServerHandler_NilConfig(t *testing.T) {
+	h := NewServerHandler(nil)
+	if h == nil {
+		t.Fatal("NewServerHandler(nil) should return non-nil handler")
+	}
+	if h.appConfig == nil {
+		t.Error("NewServerHandler(nil) should populate appConfig with default")
+	}
+}
+
+// TestAPIAbout_StatusOK verifies APIAbout returns 200 with ok:true and a name field.
+func TestAPIAbout_StatusOK(t *testing.T) {
+	cfg := createTestConfig()
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest("GET", "/api/v1/server/about", nil)
+	rr := httptest.NewRecorder()
+	h.APIAbout(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIAbout status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("APIAbout returned invalid JSON: %v", err)
+	}
+	if resp["ok"] != true {
+		t.Error("APIAbout should return ok:true")
+	}
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("APIAbout should return a data object")
+	}
+	if data["name"] == nil {
+		t.Error("APIAbout data should contain a name field")
+	}
+}
+
+// TestAPIPrivacy_StatusOK verifies APIPrivacy returns 200 with ok:true.
+func TestAPIPrivacy_StatusOK(t *testing.T) {
+	cfg := createTestConfig()
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest("GET", "/api/v1/server/privacy", nil)
+	rr := httptest.NewRecorder()
+	h.APIPrivacy(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIPrivacy status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("APIPrivacy returned invalid JSON: %v", err)
+	}
+	if resp["ok"] != true {
+		t.Error("APIPrivacy should return ok:true")
+	}
+}
+
+// TestAPIHelp_StatusOK verifies APIHelp returns 200 with ok:true.
+func TestAPIHelp_StatusOK(t *testing.T) {
+	cfg := createTestConfig()
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest("GET", "/api/v1/server/help", nil)
+	rr := httptest.NewRecorder()
+	h.APIHelp(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIHelp status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("APIHelp returned invalid JSON: %v", err)
+	}
+	if resp["ok"] != true {
+		t.Error("APIHelp should return ok:true")
+	}
+}
+
+// TestAPIContact_GetMethodNotAllowed verifies GET returns 405.
+func TestAPIContact_GetMethodNotAllowed(t *testing.T) {
+	cfg := createTestConfig()
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest("GET", "/api/v1/server/contact", nil)
+	rr := httptest.NewRecorder()
+	h.APIContact(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("APIContact GET status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// TestAPIContact_PostMissingFields verifies POST with missing fields returns 400.
+func TestAPIContact_PostMissingFields(t *testing.T) {
+	cfg := createTestConfig()
+	h := NewServerHandler(cfg)
+	body := strings.NewReader("subject=hello")
+	req := httptest.NewRequest("POST", "/api/v1/server/contact", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.APIContact(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("APIContact POST missing fields status = %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+}
+
+// TestAPIContact_PostValid verifies a valid POST returns 200.
+func TestAPIContact_PostValid(t *testing.T) {
+	cfg := createTestConfig()
+	h := NewServerHandler(cfg)
+	body := strings.NewReader("subject=hello&message=world")
+	req := httptest.NewRequest("POST", "/api/v1/server/contact", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.APIContact(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIContact POST valid status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// TestChangePasswordRedirect_RedirectsToAdminLogin verifies the handler redirects to admin path + "/login".
+func TestChangePasswordRedirect_RedirectsToAdminLogin(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Server.Admin.Path = "admin"
+	handler := ChangePasswordRedirect(cfg)
+	req := httptest.NewRequest("GET", "/.well-known/change-password", nil)
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+	if rr.Code != http.StatusFound {
+		t.Errorf("ChangePasswordRedirect status = %d, want %d", rr.Code, http.StatusFound)
+	}
+	loc := rr.Header().Get("Location")
+	want := cfg.AdminURLPrefix() + "/login"
+	if loc != want {
+		t.Errorf("ChangePasswordRedirect Location = %q, want %q", loc, want)
+	}
+}
+
+// TestSetDataDir_NoPanic verifies SetDataDir does not panic.
+func TestSetDataDir_NoPanic(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	h.SetDataDir("/tmp/test-data")
+	if h.dataDir != "/tmp/test-data" {
+		t.Errorf("SetDataDir: dataDir = %q, want %q", h.dataDir, "/tmp/test-data")
+	}
+}
+
+// TestSetMetrics_NoPanic verifies SetMetrics accepts nil without panicking.
+func TestSetMetrics_NoPanic(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	h.SetMetrics(nil)
+	if h.metrics != nil {
+		t.Error("SetMetrics(nil) should set metrics to nil")
+	}
+}
+
+// TestSetTorService_NoPanic verifies SetTorService accepts nil without panicking.
+func TestSetTorService_NoPanic(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	h.SetTorService(nil)
+	if h.torSvc != nil {
+		t.Error("SetTorService(nil) should set torSvc to nil")
+	}
+}
+
+// Ensure createTestConfig is used to suppress the "imported and not used" linter note.
+var _ *config.AppConfig = createTestConfig()

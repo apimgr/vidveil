@@ -96,8 +96,8 @@ func (s *Server) handleDebugCache(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
-	// Get database stats from admin service if available
-	db := s.adminSvc.GetDB()
+	// Get database stats from migration manager if available
+	db := s.migrationMgr.GetDB()
 	if db == nil {
 		data := map[string]interface{}{
 			"status": "database not available",

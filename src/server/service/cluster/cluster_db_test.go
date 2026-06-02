@@ -107,18 +107,25 @@ func TestClusterManager_WithDB_StartIsEnabled(t *testing.T) {
 func TestClusterManager_WithDB_ElectPrimary(t *testing.T) {
 	cm := newDBManager(t)
 	// Very short intervals so heartbeatLoop and primaryElectionLoop fire quickly.
-	cm.heartbeatInt = 2 * time.Millisecond
+	cm.heartbeatInt = 5 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := cm.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	// Give goroutines enough time to run the election ticker at least once.
-	time.Sleep(20 * time.Millisecond)
-	if !cm.IsPrimary() {
-		t.Error("IsPrimary() = false; single node should elect itself as primary")
+	// Poll until the node elects itself primary, with a generous deadline to
+	// survive CPU contention during parallel test runs.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if cm.IsPrimary() {
+			cancel()
+			cm.Stop()
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
+	t.Error("IsPrimary() = false after 500ms; single node should elect itself as primary")
 	cancel()
 	cm.Stop()
 }

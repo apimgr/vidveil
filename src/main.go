@@ -676,8 +676,8 @@ func main() {
 	sched.Start(context.Background())
 	defer sched.Stop()
 
-	// Create server with admin service, migration manager, scheduler, and logger per AI.md PART 11
-	srv := server.NewServer(appConfig, configDir, dataDir, engineMgr, adminSvc, migrationMgr, sched, logger)
+	// Create server with migration manager, scheduler, and logger per AI.md PART 11
+	srv := server.NewServer(appConfig, configDir, dataDir, engineMgr, migrationMgr, sched, logger)
 
 	// Set Tor service for handlers per AI.md PART 31
 	srv.SetTorService(torSvc)

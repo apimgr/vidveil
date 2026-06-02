@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"html/template"
 	"io/fs"
@@ -20,7 +21,6 @@ import (
 	"github.com/apimgr/vidveil/src/graphql"
 	"github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/handler"
-	"github.com/apimgr/vidveil/src/server/service/admin"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
@@ -29,7 +29,7 @@ import (
 	"github.com/apimgr/vidveil/src/swagger"
 )
 
-//go:embed static/css/* static/js/* static/images/* static/icons/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/partial/admin/*.tmpl template/layout/*.tmpl template/admin/*.tmpl template/component/*.tmpl template/nojs/*.tmpl
+//go:embed static/css/* static/js/* static/images/* static/icons/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/layout/*.tmpl template/component/*.tmpl template/nojs/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -49,21 +49,19 @@ type IPBlocklistChecker interface {
 
 // Server represents the HTTP server
 type Server struct {
-	appConfig     *config.AppConfig
-	configDir     string
-	dataDir       string
-	engineMgr     *engine.EngineManager
-	adminSvc      *admin.AdminService
-	migrationMgr  MigrationManager
-	scheduler     *scheduler.Scheduler
-	logger        *logging.AppLogger
-	router        *chi.Mux
-	srv           *http.Server
-	rateLimiter   *ratelimit.RateLimiter
+	appConfig    *config.AppConfig
+	configDir    string
+	dataDir      string
+	engineMgr    *engine.EngineManager
+	migrationMgr MigrationManager
+	scheduler    *scheduler.Scheduler
+	logger       *logging.AppLogger
+	router       *chi.Mux
+	srv          *http.Server
+	rateLimiter  *ratelimit.RateLimiter
 	searchHandler *handler.SearchHandler
-	adminHandler  *handler.AdminHandler
 	// stored for Onion-Location middleware
-	torSvc handler.TorService
+	torSvc handler.TorStatusChecker
 	// geoip for country blocking middleware per AI.md PART 19
 	geoIPBlocker GeoIPBlocker
 	// blocklist for IP/domain blocklist middleware per AI.md PART 11
@@ -75,13 +73,13 @@ type MigrationManager interface {
 	GetMigrationStatus() ([]map[string]interface{}, error)
 	RunMigrations() error
 	RollbackMigration() error
+	GetDB() *sql.DB
 }
 
 // NewServer creates a new server instance
-func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr *engine.EngineManager, adminSvc *admin.AdminService, migrationMgr MigrationManager, sched *scheduler.Scheduler, logger *logging.AppLogger) *Server {
+func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr *engine.EngineManager, migrationMgr MigrationManager, sched *scheduler.Scheduler, logger *logging.AppLogger) *Server {
 	// Set templates filesystem for handlers
 	handler.SetTemplatesFS(embeddedFS)
-	handler.SetAdminTemplatesFS(embeddedFS)
 
 	// Create rate limiter per PART 12
 	limiter := ratelimit.NewRateLimiter(
@@ -97,7 +95,6 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 		configDir:    configDir,
 		dataDir:      dataDir,
 		engineMgr:    engineMgr,
-		adminSvc:     adminSvc,
 		migrationMgr: migrationMgr,
 		scheduler:    sched,
 		logger:       logger,
@@ -112,11 +109,8 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 }
 
 // SetTorService sets the Tor service for handlers that need it
-func (s *Server) SetTorService(t handler.TorService) {
+func (s *Server) SetTorService(t handler.TorStatusChecker) {
 	s.torSvc = t
-	if s.adminHandler != nil {
-		s.adminHandler.SetTorService(t)
-	}
 	if s.searchHandler != nil {
 		s.searchHandler.SetTorService(t)
 	}
@@ -432,22 +426,12 @@ func extensionStripMiddleware(next http.Handler) http.Handler {
 // setupRoutes configures all routes
 func (s *Server) setupRoutes() {
 	h := handler.NewSearchHandler(s.appConfig, s.engineMgr)
-	admin := handler.NewAdminHandler(s.appConfig, s.configDir, s.dataDir, s.engineMgr, s.adminSvc, s.migrationMgr)
-	// Store handler references for later service injection
+	// Store handler reference for later service injection
 	s.searchHandler = h
-	s.adminHandler = admin
-	// Set scheduler for admin panel management per AI.md PART 18
-	admin.SetScheduler(s.scheduler)
-	// Set logger for audit and security event logging per AI.md PART 11
-	admin.SetLogger(s.logger)
-	// Set search cache for cache management per AI.md PART 9
-	admin.SetSearchCache(h.GetSearchCache())
 	// Set data directory for thumbnail disk cache
 	h.SetDataDir(s.dataDir)
 	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
 	h.SetMetrics(metrics)
-	// Share metrics with admin handler for analytics dashboard
-	admin.SetMetrics(metrics)
 
 	// Metrics middleware per AI.md PART 13 - tracks requests and active connections
 	s.router.Use(metrics.MetricsMiddleware)
@@ -586,155 +570,6 @@ func (s *Server) setupRoutes() {
 		r.Get("/help", server.HelpPage)
 	})
 
-	// Auth routes per AI.md PART 14 (Route Scopes)
-	auth := handler.NewAuthHandler(s.appConfig)
-	// Link admin handler for authentication
-	auth.SetAdminHandler(admin)
-	// Admin auth routes per AI.md PART 11
-	// VidVeil is stateless - no PART 34 (Multi-User), only Server Admin auth
-	s.router.Route("/auth", func(r chi.Router) {
-		r.Get("/login", auth.LoginPage)
-		r.Post("/login", auth.LoginPage)
-		r.Get("/logout", auth.LogoutPage)
-		// Per AI.md PART 11: 2FA verification step (after password, before session)
-		r.Get("/2fa", auth.TwoFactorPage)
-		r.Post("/2fa", auth.TwoFactorPage)
-		r.Get("/password/forgot", auth.PasswordForgotPage)
-		r.Post("/password/forgot", auth.PasswordForgotPage)
-		r.Get("/password/reset/{token}", auth.PasswordResetPage)
-		r.Post("/password/reset", auth.PasswordResetPage)
-	})
-
-	// Admin panel routes - PART 14 (routes), PART 16 (admin panel UI)
-	// Spec-canonical mount: /server/{admin_path} (AI.md PART 12 admin path config)
-	// Path is configurable via server.admin.path (default: "admin")
-	adminBasePath := s.appConfig.AdminURLPrefix()
-	s.router.Route(adminBasePath, func(r chi.Router) {
-		// Login page per AI.md PART 11
-		r.Get("/login", admin.LoginPage)
-		r.Post("/login", admin.LoginPage)
-
-		// Logout handler
-		r.Get("/logout", admin.LogoutHandler)
-		r.Post("/logout", admin.LogoutHandler)
-
-		// Root: Setup token entry (first run) or dashboard (authenticated)
-		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
-			if admin.IsFirstRun() {
-				admin.SetupTokenPage(w, req)
-				return
-			}
-			admin.AuthMiddleware(http.HandlerFunc(admin.DashboardPage)).ServeHTTP(w, req)
-		})
-		r.Post("/", func(w http.ResponseWriter, req *http.Request) {
-			if admin.IsFirstRun() {
-				admin.SetupTokenPage(w, req)
-				return
-			}
-			admin.AuthMiddleware(http.HandlerFunc(admin.DashboardPage)).ServeHTTP(w, req)
-		})
-
-		// Protected admin routes per AI.md PART 16
-		r.Group(func(r chi.Router) {
-			r.Use(admin.AuthMiddleware)
-			r.Use(admin.CSRFMiddleware)
-
-			r.Get("/dashboard", admin.DashboardPage)
-			r.Get("/profile", admin.ProfilePage)
-			r.Get("/preferences", admin.PreferencesPage)
-			r.Get("/notifications", admin.AdminNotificationsPage)
-			r.Get("/logout", admin.LogoutHandler)
-
-			// Spec-canonical: ALL server management goes under /config (AI.md PART 14 route scopes)
-			r.Route("/config", func(r chi.Router) {
-				r.Get("/", admin.ServerSettingsPage)
-				r.Get("/settings", admin.ServerSettingsPage)
-				r.Get("/branding", admin.BrandingPage)
-				r.Get("/ssl", admin.SSLPage)
-				r.Get("/scheduler", admin.SchedulerPage)
-				r.Get("/email", admin.EmailPage)
-				r.Get("/logs", admin.LogsPage)
-				r.Get("/logs/audit", admin.AuditLogsPage)
-				r.Get("/database", admin.DatabasePage)
-				r.Get("/web", admin.WebSettingsPage)
-				r.Get("/pages", admin.PagesPage)
-				r.Get("/notifications", admin.NotificationsPage)
-				r.Get("/nodes", admin.NodesPage)
-				r.Get("/nodes/add", admin.AddNodePage)
-				r.Post("/nodes/add", admin.AddNodePage)
-				r.Get("/nodes/remove", admin.RemoveNodePage)
-				r.Get("/nodes/settings", admin.NodeSettingsPage)
-				r.Get("/nodes/{node}", admin.NodeDetailPage)
-
-				r.Route("/security", func(r chi.Router) {
-					r.Get("/", admin.SecurityAuthPage)
-					r.Get("/auth", admin.SecurityAuthPage)
-					r.Get("/tokens", admin.SecurityTokensPage)
-					r.Get("/ratelimit", admin.SecurityRateLimitPage)
-					r.Get("/firewall", admin.SecurityFirewallPage)
-				})
-
-				r.Route("/network", func(r chi.Router) {
-					r.Get("/", admin.TorPage)
-					r.Get("/tor", admin.TorPage)
-					r.Get("/geoip", admin.GeoIPPage)
-					r.Get("/blocklists", admin.BlocklistsPage)
-				})
-
-				r.Get("/backup", admin.BackupPage)
-				r.Get("/maintenance", admin.MaintenancePage)
-				r.Get("/updates", admin.UpdatesPage)
-				r.Get("/info", admin.SystemInfoPage)
-
-				r.Route("/users", func(r chi.Router) {
-					r.Get("/admins", admin.UsersAdminsPage)
-				})
-
-				r.Get("/engines", admin.EnginesPage)
-				r.Get("/help", admin.HelpPage)
-			})
-		})
-
-		// Setup wizard at /server/{admin_path}/config/setup (token-cookie gated)
-		r.Get("/config/setup", admin.SetupWizardPage)
-		r.Post("/config/setup", admin.SetupWizardPage)
-
-		// Admin invite page (public, token validated in handler)
-		r.Get("/invite/{token}", admin.AdminInvitePage)
-		r.Post("/invite/{token}", admin.AdminInvitePage)
-	})
-
-	// Legacy redirects: keep old /{admin_path}/... bookmarks alive per AUDIT plan.
-	legacyAdminPath := "/" + s.appConfig.Server.Admin.Path
-	legacyAdminPrefix := legacyAdminPath + "/"
-	canonicalAdminPrefix := adminBasePath + "/"
-	legacyRedirect := func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		var target string
-		switch {
-		case path == legacyAdminPath:
-			target = adminBasePath
-		case strings.HasPrefix(path, legacyAdminPrefix):
-			tail := strings.TrimPrefix(path, legacyAdminPrefix)
-			tail = strings.TrimPrefix(tail, "server/")
-			if tail != "" && !strings.HasPrefix(tail, "config/") &&
-				tail != "dashboard" && tail != "profile" && tail != "preferences" &&
-				tail != "notifications" && tail != "login" && tail != "logout" &&
-				!strings.HasPrefix(tail, "invite/") {
-				tail = "config/" + tail
-			}
-			target = canonicalAdminPrefix + tail
-		default:
-			target = adminBasePath
-		}
-		if r.URL.RawQuery != "" {
-			target += "?" + r.URL.RawQuery
-		}
-		http.Redirect(w, r, target, http.StatusPermanentRedirect)
-	}
-	s.router.Get(legacyAdminPath, legacyRedirect)
-	s.router.Get(legacyAdminPath+"/*", legacyRedirect)
-
 	// API autodiscover endpoint (non-versioned per AI.md PART 14)
 	// Clients need this BEFORE they know the API version
 	s.router.Get("/api/autodiscover", h.Autodiscover)
@@ -783,160 +618,6 @@ func (s *Server) setupRoutes() {
 		r.Get("/proxy/thumbnails", h.ProxyThumbnail)
 		r.Get("/proxy/videos", h.ProxyVideo)
 
-		// Admin Profile API (session or token) - PART 11
-		// Spec-canonical: /api/{ver}/server/{admin_path}/profile (AI.md PART 14 line 4584)
-		r.Route(s.appConfig.AdminAPIPrefix()+"/profile", func(r chi.Router) {
-			r.Use(admin.SessionOrTokenMiddleware)
-			r.Post("/password", admin.APIProfilePassword)
-			r.Post("/token", admin.APIProfileToken)
-			r.Delete("/sessions", admin.APIRevokeSessions)
-			r.Get("/recovery-keys", admin.APIRecoveryKeysStatus)
-			r.Post("/recovery-keys/generate", admin.APIRecoveryKeysGenerate)
-			r.Post("/2fa/setup", admin.APIProfile2FASetup)
-			r.Post("/2fa/verify", admin.APIProfile2FAVerify)
-			r.Delete("/2fa", admin.APIProfile2FADisable)
-		})
-
-		// Engine management API (session or token — accessible from browser admin panel)
-		r.Route(s.appConfig.AdminAPIPrefix()+"/engines", func(r chi.Router) {
-			r.Use(admin.SessionOrTokenMiddleware)
-			r.Patch("/{name}", admin.APIEnginePatch)
-			r.Post("/{name}/reset", admin.APIEngineReset)
-		})
-
-		// Admin API (token required) - PART 12, PART 14
-		r.Route(s.appConfig.AdminAPIPrefix(), func(r chi.Router) {
-			r.Use(admin.APITokenMiddleware)
-
-			// Spec-canonical: ALL admin API endpoints under /config (AI.md PART 14 line 4584)
-			r.Route("/config", func(r chi.Router) {
-				// Users management per AI.md PART 11
-				r.Post("/users/admins/invite", admin.APIUsersAdminsInvite)
-				r.Get("/users/admins/invites", admin.APIUsersAdminsInvites)
-				r.Delete("/users/admins/invites/{id}", admin.APIUsersAdminsInviteRevoke)
-				// Settings
-				r.Get("/settings", admin.APIConfig)
-				r.Patch("/settings", admin.APIConfig)
-				r.Get("/status", admin.APIStatus)
-				r.Get("/health", admin.APIHealth)
-				r.Post("/restart", admin.APIMaintenanceMode)
-
-				// Branding per PART 16
-				r.Route("/branding", func(r chi.Router) {
-					r.Patch("/", admin.APIBranding)
-					r.Post("/upload", admin.APIBrandingUpload)
-				})
-
-				// SSL per PART 15
-				r.Route("/ssl", func(r chi.Router) {
-					r.Get("/", admin.APIConfig)
-					r.Patch("/", admin.APIConfig)
-					r.Post("/renew", admin.APIConfig)
-					r.Post("/upload", admin.APISSLUpload)
-				})
-
-				// Tor per PART 31
-				r.Route("/tor", func(r chi.Router) {
-					r.Get("/", admin.APITorStatus)
-					r.Patch("/", admin.APITorUpdate)
-					r.Post("/regenerate", admin.APITorRegenerate)
-					r.Post("/test", admin.APITorTest)
-					r.Post("/validate", admin.APITorValidate)
-					r.Post("/restart", admin.APITorRestart)
-					r.Get("/vanity", admin.APITorVanityStatus)
-					r.Post("/vanity", admin.APITorVanityStart)
-					r.Delete("/vanity", admin.APITorVanityCancel)
-					r.Post("/vanity/apply", admin.APITorVanityApply)
-					r.Post("/import", admin.APITorImport)
-				})
-
-				// Email per PART 17
-				r.Route("/email", func(r chi.Router) {
-					r.Get("/", admin.APIConfig)
-					r.Patch("/", admin.APIConfig)
-					r.Post("/test", admin.APITestEmail)
-				})
-
-				// Scheduler per PART 18
-				r.Route("/scheduler", func(r chi.Router) {
-					r.Get("/", admin.APISchedulerTasks)
-					r.Get("/{id}", admin.APISchedulerTasks)
-					r.Patch("/{id}", admin.APISchedulerTasks)
-					r.Post("/{id}/run", admin.APISchedulerRunTask)
-					r.Post("/{id}/enable", admin.APISchedulerTasks)
-					r.Post("/{id}/disable", admin.APISchedulerTasks)
-				})
-
-				// Backup per PART 21
-				r.Route("/backup", func(r chi.Router) {
-					r.Get("/", admin.APIBackup)
-					r.Post("/", admin.APIBackup)
-					r.Get("/{id}", admin.APIBackup)
-					r.Delete("/{id}", admin.APIBackup)
-					r.Get("/{id}/download", admin.APIBackup)
-					r.Post("/restore", admin.APIRestore)
-				})
-
-				// Logs per PART 11
-				r.Route("/logs", func(r chi.Router) {
-					r.Get("/", admin.APILogsAccess)
-					r.Get("/{type}", admin.APILogsAccess)
-					r.Get("/{type}/download", admin.APILogsAccess)
-				})
-
-				// Pages per PART 16
-				r.Route("/pages", func(r chi.Router) {
-					r.Get("/", admin.APIPagesGet)
-					r.Put("/{slug}", admin.APIPageUpdate)
-					r.Post("/{slug}/reset", admin.APIPageReset)
-				})
-
-				// Notifications per PART 17
-				r.Route("/notifications", func(r chi.Router) {
-					r.Get("/", admin.APINotificationsGet)
-					r.Put("/", admin.APINotificationsUpdate)
-					r.Post("/test", admin.APINotificationsTest)
-				})
-
-				// Database per PART 10
-				r.Route("/database", func(r chi.Router) {
-					r.Get("/migrations", admin.APIDatabaseMigrations)
-					r.Post("/migrate", admin.APIDatabaseMigrate)
-					r.Post("/vacuum", admin.APIDatabaseVacuum)
-					r.Post("/analyze", admin.APIDatabaseAnalyze)
-					r.Post("/test", admin.APIDatabaseTest)
-					r.Put("/backend", admin.APIDatabaseBackend)
-				})
-
-				// Cache management per PART 9
-				r.Route("/cache", func(r chi.Router) {
-					r.Post("/clear", admin.APICacheClear)
-				})
-
-				// Nodes per PART 10
-				r.Route("/nodes", func(r chi.Router) {
-					r.Get("/", admin.APINodesGet)
-					r.Post("/", admin.APINodeAdd)
-					r.Post("/test", admin.APINodeTest)
-					r.Post("/token", admin.APINodeTokenRegenerate)
-					r.Post("/leave", admin.APINodeLeave)
-					r.Put("/settings", admin.APINodeSettings)
-					r.Post("/stepdown", admin.APINodeStepDown)
-					r.Post("/regenerate-id", admin.APINodeRegenerateID)
-					r.Post("/{id}/ping", admin.APINodePing)
-					r.Delete("/{id}", admin.APINodeRemove)
-				})
-
-				// Updates per PART 23
-				r.Route("/updates", func(r chi.Router) {
-					r.Get("/", admin.APIUpdatesStatus)
-					r.Post("/check", admin.APIUpdatesCheck)
-				})
-
-				// Analytics (privacy-safe aggregate counters)
-				r.Get("/analytics", admin.APIAnalytics)
-			})
-		})
 	})
 
 	// Custom 404 handler per AI.md PART 14

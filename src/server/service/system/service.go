@@ -775,10 +775,11 @@ func IsRunningAsRoot() bool {
 // IsRunningInContainer checks if running in a container environment per AI.md PART 23
 func IsRunningInContainer() bool {
 	// File-based detection per AI.md PART 8 7732-7740
+	// Docker, Podman, LXC/LXD/Incus marker files
 	containerFiles := []string{
-		"/.dockerenv",        // Docker
-		"/run/.containerenv", // Podman
-		"/dev/lxc",           // LXC/LXD/Incus
+		"/.dockerenv",
+		"/run/.containerenv",
+		"/dev/lxc",
 	}
 	for _, f := range containerFiles {
 		if _, err := os.Stat(f); err == nil {

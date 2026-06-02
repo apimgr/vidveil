@@ -417,7 +417,8 @@ func (t *Translator) Middleware(next http.Handler) http.Handler {
 					Name:     "lang",
 					Value:    locale,
 					Path:     "/",
-					MaxAge:   365 * 24 * 60 * 60, // 1 year
+					// 1 year retention
+					MaxAge:   365 * 24 * 60 * 60,
 					SameSite: http.SameSiteLaxMode,
 					Secure:   r.TLS != nil,
 					HttpOnly: true,

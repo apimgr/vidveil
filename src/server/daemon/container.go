@@ -15,10 +15,11 @@ import (
 // isContainer returns true if running inside a container per AI.md PART 8.
 func isContainer() bool {
 	// File-based detection
+	// Docker, Podman, LXC/LXD/Incus marker files
 	containerFiles := []string{
-		"/.dockerenv",        // Docker
-		"/run/.containerenv", // Podman
-		"/dev/lxc",           // LXC/LXD/Incus
+		"/.dockerenv",
+		"/run/.containerenv",
+		"/dev/lxc",
 	}
 	for _, f := range containerFiles {
 		if _, err := os.Stat(f); err == nil {
@@ -27,11 +28,13 @@ func isContainer() bool {
 	}
 
 	// Environment variable detection
+	// Generic container env var (systemd-nspawn, lxc, etc.)
 	if os.Getenv("container") != "" {
-		return true // Generic (systemd-nspawn, lxc, etc.)
+		return true
 	}
+	// Kubernetes pod indicator
 	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
-		return true // Kubernetes
+		return true
 	}
 
 	// Check parent process name for container init systems

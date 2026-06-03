@@ -75,11 +75,6 @@ func (sm *SchemaManager) EnsureSchema() error {
 		}
 	}
 
-	// Insert default pages if not exist (driver-specific syntax)
-	if err := sm.insertDefaultPages(ctx); err != nil {
-		return fmt.Errorf("failed to insert default pages: %w", err)
-	}
-
 	return nil
 }
 
@@ -149,32 +144,6 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 		)`,
 
-		// SMTP config table per AI.md PART 17
-		`CREATE TABLE IF NOT EXISTS smtp_config (
-			id INTEGER PRIMARY KEY CHECK (id = 1),
-			host TEXT,
-			port INTEGER DEFAULT 587,
-			username TEXT,
-			password_encrypted TEXT,
-			from_address TEXT,
-			from_name TEXT,
-			encryption TEXT DEFAULT 'tls',
-			verified INTEGER DEFAULT 0,
-			verified_at DATETIME,
-			auto_detected INTEGER DEFAULT 0,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-
-		// Pages table for standard page content
-		`CREATE TABLE IF NOT EXISTS pages (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			slug TEXT NOT NULL UNIQUE,
-			title TEXT NOT NULL,
-			content TEXT NOT NULL,
-			meta_description TEXT,
-			enabled INTEGER DEFAULT 1,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
 	}
 }
 
@@ -224,30 +193,6 @@ func (sm *SchemaManager) getPostgresDDL() []string {
 			error TEXT
 		)`,
 
-		`CREATE TABLE IF NOT EXISTS smtp_config (
-			id INTEGER PRIMARY KEY CHECK (id = 1),
-			host TEXT,
-			port INTEGER DEFAULT 587,
-			username TEXT,
-			password_encrypted TEXT,
-			from_address TEXT,
-			from_name TEXT,
-			encryption TEXT DEFAULT 'tls',
-			verified BOOLEAN DEFAULT FALSE,
-			verified_at TIMESTAMP,
-			auto_detected BOOLEAN DEFAULT FALSE,
-			updated_at TIMESTAMP DEFAULT NOW()
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS pages (
-			id SERIAL PRIMARY KEY,
-			slug TEXT NOT NULL UNIQUE,
-			title TEXT NOT NULL,
-			content TEXT NOT NULL,
-			meta_description TEXT,
-			enabled BOOLEAN DEFAULT TRUE,
-			updated_at TIMESTAMP DEFAULT NOW()
-		)`,
 	}
 }
 
@@ -298,30 +243,6 @@ func (sm *SchemaManager) getMySQLDDL() []string {
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 		)`,
 
-		`CREATE TABLE IF NOT EXISTS smtp_config (
-			id INT PRIMARY KEY CHECK (id = 1),
-			host VARCHAR(255),
-			port INT DEFAULT 587,
-			username VARCHAR(255),
-			password_encrypted TEXT,
-			from_address VARCHAR(255),
-			from_name VARCHAR(255),
-			encryption VARCHAR(50) DEFAULT 'tls',
-			verified TINYINT(1) DEFAULT 0,
-			verified_at TIMESTAMP NULL,
-			auto_detected TINYINT(1) DEFAULT 0,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS pages (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			slug VARCHAR(255) NOT NULL UNIQUE,
-			title VARCHAR(255) NOT NULL,
-			content TEXT NOT NULL,
-			meta_description TEXT,
-			enabled TINYINT(1) DEFAULT 1,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-		)`,
 	}
 }
 
@@ -376,65 +297,7 @@ func (sm *SchemaManager) getMSSQLDDL() []string {
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 		)`,
 
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'smtp_config')
-		CREATE TABLE smtp_config (
-			id INT PRIMARY KEY CHECK (id = 1),
-			host NVARCHAR(255),
-			port INT DEFAULT 587,
-			username NVARCHAR(255),
-			password_encrypted NVARCHAR(MAX),
-			from_address NVARCHAR(255),
-			from_name NVARCHAR(255),
-			encryption NVARCHAR(50) DEFAULT 'tls',
-			verified BIT DEFAULT 0,
-			verified_at DATETIME2,
-			auto_detected BIT DEFAULT 0,
-			updated_at DATETIME2 DEFAULT GETDATE()
-		)`,
-
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'pages')
-		CREATE TABLE pages (
-			id INT IDENTITY(1,1) PRIMARY KEY,
-			slug NVARCHAR(255) NOT NULL UNIQUE,
-			title NVARCHAR(255) NOT NULL,
-			content NVARCHAR(MAX) NOT NULL,
-			meta_description NVARCHAR(MAX),
-			enabled BIT DEFAULT 1,
-			updated_at DATETIME2 DEFAULT GETDATE()
-		)`,
 	}
-}
-
-// insertDefaultPages inserts default pages using driver-specific syntax
-func (sm *SchemaManager) insertDefaultPages(ctx context.Context) error {
-	pages := []struct {
-		slug, title, content, metaDesc string
-	}{
-		{"about", "About", "Welcome to our service. This page describes what we do and our mission.", "About our service"},
-		{"privacy", "Privacy Policy", "Your privacy is important to us. This policy describes how we handle your data.", "Privacy policy"},
-		{"contact", "Contact Us", "Get in touch with us using the form below or via email.", "Contact information"},
-		{"help", "Help & FAQ", "Find answers to common questions and get help with our service.", "Help and frequently asked questions"},
-	}
-
-	for _, p := range pages {
-		var query string
-		switch sm.driver {
-		case DriverPostgres:
-			query = `INSERT INTO pages (slug, title, content, meta_description) VALUES ($1, $2, $3, $4) ON CONFLICT (slug) DO NOTHING`
-		case DriverMySQL:
-			query = `INSERT IGNORE INTO pages (slug, title, content, meta_description) VALUES (?, ?, ?, ?)`
-		case DriverMSSQL:
-			// MSSQL doesn't have INSERT IGNORE, use MERGE or check existence
-			query = `IF NOT EXISTS (SELECT 1 FROM pages WHERE slug = @p1) INSERT INTO pages (slug, title, content, meta_description) VALUES (@p1, @p2, @p3, @p4)`
-		default:
-			query = `INSERT OR IGNORE INTO pages (slug, title, content, meta_description) VALUES (?, ?, ?, ?)`
-		}
-
-		if _, err := sm.db.ExecContext(ctx, query, p.slug, p.title, p.content, p.metaDesc); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // GetDB returns the database connection
@@ -479,7 +342,6 @@ func (sm *SchemaManager) GetMigrationStatus() ([]map[string]interface{}, error) 
 	// List all tables we manage
 	tables := []string{
 		"audit_log", "settings", "scheduled_tasks", "task_history",
-		"smtp_config", "pages",
 	}
 
 	var status []map[string]interface{}

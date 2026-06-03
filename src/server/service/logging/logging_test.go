@@ -301,7 +301,7 @@ func TestAuditCategory(t *testing.T) {
 		{"token.create", "tokens"},
 		{"backup.start", "backup"},
 		{"server.restart", "server"},
-		{"cluster.join", "cluster"},
+		{"cluster.join", "other"},
 		{"oidc.login", "authentication"},
 		{"ldap.sync", "authentication"},
 		{"branding.update", "configuration"},

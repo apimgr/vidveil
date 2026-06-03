@@ -24,7 +24,6 @@ import (
 	daemonpkg "github.com/apimgr/vidveil/src/server/daemon"
 	"github.com/apimgr/vidveil/src/server/service/admin"
 	"github.com/apimgr/vidveil/src/server/service/blocklist"
-	"github.com/apimgr/vidveil/src/server/service/cluster"
 	"github.com/apimgr/vidveil/src/server/service/cve"
 	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/email"
@@ -478,15 +477,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize cluster manager per PART 10
-	// Cluster mode auto-detected: SQLite = single instance, PostgreSQL/MySQL/MSSQL = cluster
-	// For now, we use SQLite so cluster is in single-instance mode
-	// In production with external DB, this would enable automatically
-	clusterMgr, err := cluster.NewClusterManager(migrationMgr.GetDB())
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Cluster manager initialization failed: %v\n", err)
-	}
-
 	// Initialize search engines
 	engineMgr := engine.NewEngineManager(appConfig)
 	engineMgr.InitializeEngines()
@@ -617,35 +607,7 @@ func main() {
 			}
 			return nil
 		},
-		ClusterHeartbeat: func(ctx context.Context) error {
-			// Cluster heartbeat per PART 10 - runs every 30 seconds in cluster mode
-			// Heartbeat runs automatically via cluster manager's heartbeatLoop()
-			// This task just verifies cluster is healthy
-			if clusterMgr == nil || !clusterMgr.IsEnabled() {
-				// Single instance mode - no clustering
-				return nil
-			}
-			// Cluster manager handles heartbeats automatically
-			// Just verify we're still registered
-			return nil
-		},
 	})
-
-	// Start cluster manager if initialized per PART 10
-	// Heartbeat loop runs automatically when cluster is started.
-	// Register config saver so cluster manager can cache config to server.yml
-	// every 5 minutes per PART 5 ("periodically to catch any drift").
-	if clusterMgr != nil {
-		clusterMgr.SetConfigSaver(func() error {
-			return config.SaveAppConfig(appConfig, configPath)
-		})
-		ctx := context.Background()
-		if err := clusterMgr.Start(ctx); err != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  Cluster manager start failed: %v\n", err)
-		} else {
-			defer clusterMgr.Stop()
-		}
-	}
 
 	// Set Tor provider for engine manager per PART 31
 	// This enables Tor outbound network for anonymized engine queries when UseNetwork is true

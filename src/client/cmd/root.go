@@ -34,7 +34,6 @@ var (
 // but writes only the spec-aligned form.
 type CLIServerConfig struct {
 	Address    string
-	Cluster    []string
 	APIVersion string
 	AdminPath  string
 	Token      string
@@ -138,7 +137,6 @@ func FormatCLITimeoutDuration(timeoutSeconds int) string {
 func (cliServerConfig *CLIServerConfig) UnmarshalYAML(node *yaml.Node) error {
 	var rawServerConfig struct {
 		Primary    string      `yaml:"primary"`
-		Cluster    []string    `yaml:"cluster"`
 		Address    string      `yaml:"address"`
 		APIVersion string      `yaml:"api_version"`
 		AdminPath  string      `yaml:"admin_path"`
@@ -156,7 +154,6 @@ func (cliServerConfig *CLIServerConfig) UnmarshalYAML(node *yaml.Node) error {
 	if cliServerConfig.Address == "" {
 		cliServerConfig.Address = rawServerConfig.Address
 	}
-	cliServerConfig.Cluster = rawServerConfig.Cluster
 	cliServerConfig.APIVersion = rawServerConfig.APIVersion
 	cliServerConfig.AdminPath = rawServerConfig.AdminPath
 	cliServerConfig.Token = rawServerConfig.Token
@@ -177,17 +174,15 @@ func (cliServerConfig *CLIServerConfig) UnmarshalYAML(node *yaml.Node) error {
 
 func (cliServerConfig CLIServerConfig) MarshalYAML() (interface{}, error) {
 	return struct {
-		Primary    string   `yaml:"primary,omitempty"`
-		Cluster    []string `yaml:"cluster"`
-		APIVersion string   `yaml:"api_version,omitempty"`
-		AdminPath  string   `yaml:"admin_path,omitempty"`
-		Token      string   `yaml:"token,omitempty"`
-		Timeout    string   `yaml:"timeout,omitempty"`
-		Retry      int      `yaml:"retry,omitempty"`
-		RetryDelay string   `yaml:"retry_delay,omitempty"`
+		Primary    string `yaml:"primary,omitempty"`
+		APIVersion string `yaml:"api_version,omitempty"`
+		AdminPath  string `yaml:"admin_path,omitempty"`
+		Token      string `yaml:"token,omitempty"`
+		Timeout    string `yaml:"timeout,omitempty"`
+		Retry      int    `yaml:"retry,omitempty"`
+		RetryDelay string `yaml:"retry_delay,omitempty"`
 	}{
 		Primary:    cliServerConfig.Address,
-		Cluster:    cliServerConfig.Cluster,
 		APIVersion: cliServerConfig.APIVersion,
 		AdminPath:  cliServerConfig.AdminPath,
 		Token:      cliServerConfig.Token,
@@ -969,17 +964,16 @@ func CheckServerConnection() (bool, error) {
 	return apiClient.Health()
 }
 
-// ResolveCLIReachableServerAddress returns the first healthy server from primary then cluster nodes.
+// ResolveCLIReachableServerAddress returns the first healthy server from the primary node.
 func ResolveCLIReachableServerAddress() string {
 	if cliConfig == nil {
 		return ""
 	}
 
-	serverCandidates := make([]string, 0, 1+len(cliConfig.Server.Cluster))
+	serverCandidates := make([]string, 0, 1)
 	if cliConfig.Server.Address != "" {
 		serverCandidates = append(serverCandidates, cliConfig.Server.Address)
 	}
-	serverCandidates = append(serverCandidates, cliConfig.Server.Cluster...)
 
 	seenServerAddress := make(map[string]struct{}, len(serverCandidates))
 	for _, serverAddress := range serverCandidates {
@@ -1032,14 +1026,6 @@ func DiscoverCLIServerConfig(discoveryClient *api.APIClient, fileCLIConfig CLICo
 			fileCLIConfig.Server.Address = discoveryResponse.Primary
 		}
 	}
-
-	filteredClusterNodes := make([]string, 0, len(discoveryResponse.Cluster))
-	for _, clusterNodeAddress := range discoveryResponse.Cluster {
-		if err := ValidateCLIServerURL(clusterNodeAddress); err == nil {
-			filteredClusterNodes = append(filteredClusterNodes, clusterNodeAddress)
-		}
-	}
-	fileCLIConfig.Server.Cluster = filteredClusterNodes
 
 	if discoveryResponse.APIVersion != "" {
 		fileCLIConfig.Server.APIVersion = discoveryResponse.APIVersion

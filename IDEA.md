@@ -41,7 +41,7 @@ official_site: https://x.scour.li
 **Non-goals:**
 - VidVeil has NO user accounts - privacy-first, stateless design.
 - No caching of search results - all searches are real-time. Thumbnail proxy may cache images temporarily to reduce repeated fetches.
-- No user management UI in the admin panel. Admin panel is for server configuration only (per PART 16).
+- No admin web UI. All server configuration is file-only via `server.yml` (per AI.md PART 5).
 - Engine availability is best-effort - some sites may block or rate limit, and the app does not guarantee any specific engine remains reachable.
 
 ### Roles & permissions
@@ -49,9 +49,9 @@ official_site: https://x.scour.li
 | Role | Storage | Authentication | Permissions |
 |------|---------|----------------|-------------|
 | **Anonymous visitor** | None (stateless) | None | Search, browse results, set local preferences/favorites/history (localStorage only) |
-| **Server Admin** | `admins` table (per AI.md PART 11) | Local password (Argon2id) + optional MFA (TOTP/Passkey) | Configure engines, rate limiting, Tor settings, GeoIP, content restriction, backups, branding/SEO, server settings |
+| **Operator** | None (file-only) | OS-level access to server | Edit `server.yml` and restart the server — no web login, no DB accounts |
 
-There are no Regular User accounts (PART 34 NOT implemented). There are no organizations (PART 35 NOT implemented). There are no custom domains (PART 36 NOT implemented).
+There are no Regular User accounts (PART 34 NOT implemented). There are no organizations (PART 35 NOT implemented). There are no custom domains (PART 36 NOT implemented). There is no admin web UI — all configuration is file-only (AI.md PART 5).
 
 ### Data model & sensitivity
 
@@ -149,10 +149,9 @@ type CombinedSuggestion struct {
 | Data | Location | Sensitivity | Retention |
 |------|----------|-------------|-----------|
 | Engine registry | Embedded in binary (`src/server/engine/engines.go`) | Public | Build time |
-| Server config | `server.yml` (or remote DB in cluster mode) | Mixed (admin email + branding public; rate limit values internal) | Until admin edits |
-| Server admin accounts | `admins` table (per PART 11) | High - password is Argon2id, MFA secrets, recovery keys | Lifetime of admin |
-| Admin sessions | `srv_admin_sessions` (or `admin_sessions`) | High - SHA-256 hash of session token | Until expiry/logout |
-| Audit log | `srv_audit_log` (or `audit_log`) | Medium - admin actions, config changes | Per retention policy |
+| Server config | `server.yml` (file-only — no runtime mutation via API) | Mixed (branding public; rate limit values internal) | Until operator edits |
+| Runtime config KV | `srv_config` / `config` table (per PART 5) | Mixed | Until operator edits |
+| Audit log | `srv_audit_log` / `audit_log` table (per PART 11) | Medium - config changes, security events | Per retention policy |
 | Backups | `{backup_dir}` | High - contains DB encryption material when compliance encryption is on | `server.scheduler.tasks.backup.retention` (default 4) |
 | GeoIP / blocklist DBs | `{data_dir}/security/` | Public datasets | Auto-refreshed by scheduler |
 | SSL certs | `{config_dir}/ssl/` | High - private keys | Until renewal |
@@ -176,8 +175,6 @@ type CombinedSuggestion struct {
 | Outbound GeoIP DB feed | Public GeoIP DB endpoint (per scheduler `geoip_update`) | TRUSTED dataset (publicly published) | Stale GeoIP data continues to be used until next successful refresh |
 | Outbound blocklist feed | Configured blocklist source(s) (per scheduler `blocklist_update`) | TRUSTED dataset (publicly published) | Stale blocklist data continues to be used until next successful refresh |
 | Inbound HTTP | Browsers, HTTP tools, text browsers, Tor clients | UNTRUSTED - all input validated; all responses content-negotiated | Standard 4xx error response per AI.md PART 14 canonical error body |
-| Inbound admin panel | Authenticated Server Admin only | TRUSTED after authn + authz, MFA recommended | 401/403 per PART 14 |
-| Stored cluster DB (optional) | PostgreSQL / MySQL / MSSQL when cluster mode is on | TRUSTED operator-managed dependency | Maintenance mode (read-only) per AI.md PART 5 self-healing flow |
 
 External integrations and failure modes are NOT to be extended at code time without updating this section.
 
@@ -186,7 +183,7 @@ External integrations and failure modes are NOT to be extended at code time with
 **Primary assets:**
 1. User privacy - the absence of any record that a particular IP queried a particular term (this is the product itself).
 2. Server availability - the app must keep working even when individual engines fail.
-3. Server admin credentials - protect the panel from takeover and from rogue restore/setup.
+3. `server.yml` integrity - protect config file from unauthorized edits and rogue restore/setup.
 4. The host - VidVeil must never let untrusted engine HTML pivot into XSS, SSRF, or RCE.
 
 **Inputs trusted vs untrusted:**
@@ -195,9 +192,8 @@ External integrations and failure modes are NOT to be extended at code time with
 |-------|-------|
 | Anonymous user search query, autocomplete prefix, filter selections | UNTRUSTED |
 | Engine response bodies (HTML/JSON), thumbnail bytes, preview URLs | UNTRUSTED |
-| Server Admin form submissions (after authn + CSRF) | UNTRUSTED until validated |
+| CLI flags and maintenance commands from the OS user running the server | TRUSTED-on-invoke but still validated for path safety and known values |
 | `server.yml`, environment variables, CLI flags written by the operator | TRUSTED-on-write but normalized via `SafePath()` and `config.ParseBool()` |
-| Cluster DB writes from this same app | TRUSTED |
 
 **Attacker goals + required defenses:**
 
@@ -206,17 +202,14 @@ External integrations and failure modes are NOT to be extended at code time with
 | Correlate IPs to search queries | No request logging of query content; structured logs redact query bodies; rate-limit responses do not echo the query |
 | Inject XSS via crafted engine titles / tags / performer names | All result fields are HTML-escaped server-side before render; CSP + escape-on-render templates; no inline JS or CSS |
 | SSRF via thumbnail/preview URL | Thumbnail proxy validates scheme + host against an allowlist of known engine CDN hosts; rejects file://, gopher://, and RFC1918 targets |
-| Path traversal via admin paths or static asset paths | `PathSecurityMiddleware` (PART 5) blocks `..`, `%2e%2e`, normalizes // -> / |
-| Brute-force admin login | Per-IP login rate limit (5 / 15 min default + lockout per PART 1); generic "Invalid credentials" message; constant-time password compare |
-| Brute-force / enumerate password reset | 3 / 1 hour silent rate limit; "if account exists, email sent" pattern |
-| Scraping / abusing the search endpoint as a free unlogged proxy | Configurable rate limiting (rate_limit.requests/window) + GeoIP allow/deny + IP/domain blocklist (PART 12) |
-| Abuse via Tor exit nodes | Tor traffic is allowed by default (privacy goal), but admin can blocklist exit nodes if abuse is observed |
-| Geographic compliance bypass | Admin-configurable restriction modes (off, warn, soft_block, hard_block) + dismissable acknowledgement cookie (30 days) for soft_block |
-| Restore-to-takeover via `--maintenance restore` | PART 0 / PART 5 authorization flow: empty DB OR root OR admin creds (service user must prompt for creds) |
-| Setup-to-takeover via `--maintenance setup` after install | First-run only OR root OR valid one-time setup token |
-| Mode change to expose debug endpoints | `--maintenance mode` requires root OR admin credentials |
+| Path traversal via static asset paths | `PathSecurityMiddleware` (PART 5) blocks `..`, `%2e%2e`, normalizes // -> / |
+| Scraping / abusing the search endpoint as a free unlogged proxy | Configurable rate limiting (`rate_limit.requests`/`window`) + GeoIP allow/deny + IP/domain blocklist (PART 12) |
+| Abuse via Tor exit nodes | Tor traffic is allowed by default (privacy goal), but operator can blocklist exit nodes in `server.yml` if abuse is observed |
+| Geographic compliance bypass | Operator-configurable restriction modes (off, warn, soft_block, hard_block) via `server.yml`; dismissable acknowledgement cookie (30 days) for soft_block |
+| Restore-to-takeover via `--maintenance restore` | PART 0 / PART 5 authorization flow: empty DB OR root OS user (service user must prompt for credentials) |
+| Setup-to-takeover via `--maintenance setup` after install | First-run only OR root OS user OR valid one-time setup token |
+| Mode change to expose debug endpoints | `--maintenance mode` requires root OS user or service credentials |
 | Untrusted engine HTML pivoting into the proxy host | Engine adapters never render engine HTML; they extract specific fields, all of which are escaped at render |
-| Replay / CSRF on admin actions | CSRF tokens on all state-changing forms; `SameSite=Lax` cookies; admin session uses SHA-256 hashed token |
 
 **Project-specific abuse cases that MUST stay defended:**
 
@@ -233,14 +226,14 @@ The following are intentional, project-defined deviations or strong defaults. An
 | No user accounts (PART 34 NOT implemented) | Stateless privacy-first design; user accounts would create a record of who searched what, defeating the product purpose. |
 | No organizations (PART 35 NOT implemented) | Same reason; multi-tenant search has no product fit here. |
 | No custom domains (PART 36 NOT implemented) | No per-user/per-org branding requirement. |
-| Tor users bypass GeoIP/restriction by default | Tor anonymizes IP, so geo-checks are not actionable. Admin can flip this on if local law requires. |
+| Tor users bypass GeoIP/restriction by default | Tor anonymizes IP, so geo-checks are not actionable. Operator can flip this on in `server.yml` if local law requires. |
 | Server-side AI content filter ON by default | Default-on protects all visitors including ones who never open preferences; user opt-in (preference) overrides. |
 | Default `min_duration` = 10 minutes | Reduces accidental thumbnail count for shorter clips - usability default, not a security control. |
 | `forward_ip` is server-cookie opt-in, not localStorage | LocalStorage is per-browser; geo-forwarding affects requests the server makes, so it must be readable on the request. |
-| Thumbnail proxy is mandatory; cannot be disabled by user | Direct thumbnail URLs would leak the user's IP to source CDNs - core privacy guarantee. The PREFERENCE toggle "Proxy thumbnails through server" is therefore documented as default Yes and the path that disables proxying is server-admin-only (advanced) - it must NOT silently disable the proxy in normal mode. |
+| Thumbnail proxy is mandatory; cannot be disabled by user | Direct thumbnail URLs would leak the user's IP to source CDNs - core privacy guarantee. The PREFERENCE toggle "Proxy thumbnails through server" is documented as default Yes; disabling it is an operator-level `server.yml` option only — it must NOT silently disable the proxy in normal mode. |
 | Engines are HTML-parsed, not iframed | Iframing untrusted adult content origins would leak referrer + cookies to engines and let them frame us. |
 | Run as dedicated `vidveil` system user (no permanent root) | Default per AI.md PART 5; permanent-root would require an IDEA.md-justified exception, which this product does not have. |
-| Admin-only "Manage engines" surface | End users have engine toggles in preferences (client-side), but the engine REGISTRY is admin-only (config) - prevents tampering with which engines are reachable for everyone. |
+| Engine registry is operator-only | End users have engine toggles in preferences (client-side), but the engine REGISTRY is operator-only via `server.yml` — prevents tampering with which engines are reachable for everyone. |
 
 ---
 
@@ -255,7 +248,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Results are merged from all queried engines.
 - URL deduplication with normalization (removes duplicates across engines).
 - Page parameter supports infinite scroll.
-- Admin panel requires authentication (server-admin only).
+- No admin web UI — all server configuration is via `server.yml`.
 
 **Semantic Search & AND-Based Filtering (Server-Side):**
 - Server-side filtering before results are sent to client.
@@ -305,7 +298,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Server-wide default: enabled (AI content blocked).
 - Users can override via preference to show AI content.
 - Keyword-based detection in titles and tags.
-- Configurable keyword list in admin panel.
+- Configurable keyword list in `server.yml` (`content.ai_filter_keywords`).
 
 **Client-Side Filtering (applied after results load):**
 - Duration: Any, Under 10min, 10-30min, Over 30min.
@@ -473,10 +466,9 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 | `/server/contact` | Contact page |
 | `/server/help` | Help page |
 
-**Admin Routes:**
-- Admin panel follows PART 16: ADMIN PANEL hierarchy.
-- VidVeil admin manages: engines, rate limiting, Tor settings, GeoIP, content restriction, backups.
-- No user management (VidVeil is stateless).
+**Server Administration:**
+- All configuration via `server.yml` (file-only) — no admin web routes (AI.md PART 5).
+- Operator restarts the server after editing `server.yml`.
 
 ### Data sources
 
@@ -537,11 +529,9 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 ### Database configuration (reference detail)
 
 **Supported Backends:**
-- SQLite (default) - embedded, zero-config.
-- PostgreSQL - for cluster mode or high-concurrency.
-- MySQL/MariaDB - for cluster mode or high-concurrency.
-- Microsoft SQL Server - enterprise deployments.
+- SQLite (default) — embedded, zero-config (per PART 10).
+- libsql/Turso — remote-only, for cloud or edge deployments (per PART 10).
 
 **Default:** SQLite with WAL mode, 5s busy timeout.
 
-**Cluster Mode:** When using PostgreSQL/MySQL/MSSQL, multiple VidVeil instances can share the same database for horizontal scaling.
+**Single-instance only** — there is no cluster mode, no horizontal scaling, no node election (AI.md line 2055).

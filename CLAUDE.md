@@ -36,19 +36,17 @@ On EVERY new conversation or after "context compacted" message:
 ## Binary Terminology
 - **server** = `vidveil` (main binary, runs as service)
 - **client** = `vidveil-cli` (REQUIRED companion, CLI/TUI/GUI)
-- **agent** = `vidveil-agent` (optional, runs on remote machines)
 
 ## Key Placeholders
 - `{project_name}` = vidveil
 - `{project_org}` = apimgr
 - `{internal_name}` = vidveil
-- `{admin_path}` = admin (default)
 - `{plist_name}` = io.github.apimgr.vidveil
 
 ## Account Types (CRITICAL)
-- **Server Admin** = manages the app (NOT a privileged OS user)
-- **Primary Admin** = first admin, cannot be deleted
-- **No Regular Users** - VidVeil is stateless/privacy-first (PART 34 NOT implemented)
+- **No admin web UI** — all server configuration is file-only via `server.yml` (AI.md PART 5)
+- **No admin accounts in DB** — no `admins` table, no sessions, no web login
+- **No Regular Users** — VidVeil is stateless/privacy-first (PART 34 NOT implemented)
 - **No Organizations** (PART 35 NOT implemented)
 - **No Custom Domains** (PART 36 NOT implemented)
 
@@ -57,7 +55,7 @@ On EVERY new conversation or after "context compacted" message:
 2. Put Dockerfile in root -> `docker/Dockerfile`
 3. Use CGO -> CGO_ENABLED=0 always
 4. Hardcode dev values -> Detect at runtime
-5. Use external cron -> Internal scheduler (PART 19)
+5. Use external cron -> Internal scheduler (PART 18)
 6. Store passwords plaintext -> Argon2id (tokens use SHA-256)
 7. Create premium tiers -> All features free, no paywalls
 8. Use Makefile in CI/CD -> Explicit commands only
@@ -81,7 +79,7 @@ On EVERY new conversation or after "context compacted" message:
 4. All features work without JavaScript
 5. Tor hidden service support (auto-enabled if Tor found)
 6. Built-in scheduler, GeoIP, metrics, email, backup, update
-7. Full admin panel with ALL settings
+7. All server settings configurable via `server.yml` (no admin web UI)
 8. Client binary for ALL projects
 9. Commit often - small, focused commits
 
@@ -99,6 +97,6 @@ On EVERY new conversation or after "context compacted" message:
 - Full spec: `AI.md` (SOURCE OF TRUTH)
 
 ## Current Project State
-- Last read AI.md: 2026-05-16
-- Current task: Bootstrap complete
-- Relevant PARTs: 0-6
+- Last read AI.md: 2026-06-02
+- Current task: PART 28 coverage (wave 15 committed)
+- Relevant PARTs: 0-6, 28

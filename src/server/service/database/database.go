@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 10: Database & Cluster
+// AI.md PART 10: Database
 package database
 
 import (
@@ -59,7 +59,6 @@ type AppDatabase struct {
 	mu       sync.RWMutex
 	ctx      context.Context
 	cancel   context.CancelFunc
-	isLeader bool
 }
 
 // NewAppDatabase creates a new database connection based on the driver
@@ -268,20 +267,6 @@ func (d *AppDatabase) Close() error {
 // Stats returns database connection statistics
 func (d *AppDatabase) Stats() sql.DBStats {
 	return d.db.Stats()
-}
-
-// SetLeader sets whether this node is the cluster leader
-func (d *AppDatabase) SetLeader(isLeader bool) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.isLeader = isLeader
-}
-
-// IsLeader returns whether this node is the cluster leader
-func (d *AppDatabase) IsLeader() bool {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return d.isLeader
 }
 
 // TranslateQuery translates a query for the specific database driver

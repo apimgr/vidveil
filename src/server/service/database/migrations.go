@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 10: Database & Cluster - Schema Management
+// AI.md PART 10: Database - Schema Management
 // Per PART 10: "ALL apps use CREATE TABLE IF NOT EXISTS for self-creating schema"
 // Per PART 10: "No migrations table | Keep it simple"
 package database
@@ -160,27 +160,6 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 		)`,
 
-		// Cluster nodes table for distributed mode
-		`CREATE TABLE IF NOT EXISTS cluster_nodes (
-			id TEXT PRIMARY KEY,
-			hostname TEXT NOT NULL,
-			address TEXT NOT NULL,
-			port INTEGER NOT NULL,
-			is_primary INTEGER DEFAULT 0,
-			last_heartbeat DATETIME,
-			joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			status TEXT DEFAULT 'active'
-		)`,
-
-		// Distributed locks table for cluster coordination
-		`CREATE TABLE IF NOT EXISTS distributed_locks (
-			name TEXT PRIMARY KEY,
-			holder_id TEXT NOT NULL,
-			acquired_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			expires_at DATETIME NOT NULL,
-			metadata TEXT
-		)`,
-
 		// Notifications table
 		`CREATE TABLE IF NOT EXISTS notifications (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -336,25 +315,6 @@ func (sm *SchemaManager) getPostgresDDL() []string {
 			error TEXT
 		)`,
 
-		`CREATE TABLE IF NOT EXISTS cluster_nodes (
-			id TEXT PRIMARY KEY,
-			hostname TEXT NOT NULL,
-			address TEXT NOT NULL,
-			port INTEGER NOT NULL,
-			is_primary BOOLEAN DEFAULT FALSE,
-			last_heartbeat TIMESTAMP,
-			joined_at TIMESTAMP DEFAULT NOW(),
-			status TEXT DEFAULT 'active'
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS distributed_locks (
-			name TEXT PRIMARY KEY,
-			holder_id TEXT NOT NULL,
-			acquired_at TIMESTAMP DEFAULT NOW(),
-			expires_at TIMESTAMP NOT NULL,
-			metadata TEXT
-		)`,
-
 		`CREATE TABLE IF NOT EXISTS notifications (
 			id SERIAL PRIMARY KEY,
 			type TEXT NOT NULL,
@@ -498,25 +458,6 @@ func (sm *SchemaManager) getMySQLDDL() []string {
 			result TEXT,
 			error TEXT,
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS cluster_nodes (
-			id VARCHAR(255) PRIMARY KEY,
-			hostname VARCHAR(255) NOT NULL,
-			address VARCHAR(255) NOT NULL,
-			port INT NOT NULL,
-			is_primary TINYINT(1) DEFAULT 0,
-			last_heartbeat TIMESTAMP NULL,
-			joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			status VARCHAR(50) DEFAULT 'active'
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS distributed_locks (
-			name VARCHAR(255) PRIMARY KEY,
-			holder_id VARCHAR(255) NOT NULL,
-			acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			expires_at TIMESTAMP NOT NULL,
-			metadata TEXT
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS notifications (
@@ -671,27 +612,6 @@ func (sm *SchemaManager) getMSSQLDDL() []string {
 			result NVARCHAR(MAX),
 			error NVARCHAR(MAX),
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
-		)`,
-
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'cluster_nodes')
-		CREATE TABLE cluster_nodes (
-			id NVARCHAR(255) PRIMARY KEY,
-			hostname NVARCHAR(255) NOT NULL,
-			address NVARCHAR(255) NOT NULL,
-			port INT NOT NULL,
-			is_primary BIT DEFAULT 0,
-			last_heartbeat DATETIME2,
-			joined_at DATETIME2 DEFAULT GETDATE(),
-			status NVARCHAR(50) DEFAULT 'active'
-		)`,
-
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'distributed_locks')
-		CREATE TABLE distributed_locks (
-			name NVARCHAR(255) PRIMARY KEY,
-			holder_id NVARCHAR(255) NOT NULL,
-			acquired_at DATETIME2 DEFAULT GETDATE(),
-			expires_at DATETIME2 NOT NULL,
-			metadata NVARCHAR(MAX)
 		)`,
 
 		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'notifications')
@@ -866,7 +786,7 @@ func (sm *SchemaManager) GetMigrationStatus() ([]map[string]interface{}, error) 
 	// List all tables we manage
 	tables := []string{
 		"sessions", "audit_log", "settings", "scheduled_tasks", "task_history",
-		"cluster_nodes", "distributed_locks", "notifications", "admin_credentials",
+		"notifications", "admin_credentials",
 		"setup_tokens", "api_tokens", "smtp_config", "recovery_keys", "pages",
 	}
 

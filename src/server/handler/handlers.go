@@ -1068,23 +1068,12 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		appMode = "development"
 	}
 
-	// Cluster status per PART 10
-	clusterEnabled := false
-	clusterStatus := ""
-	clusterNodes := 0
-	clusterRole := ""
-
 	// Build checks object - MUST be simple "ok"/"error" strings
 	// Per AI.md PART 13
 	checks := map[string]string{
 		"database": "ok",
 		"cache":    "ok",
 		"disk":     "ok",
-	}
-
-	// Add cluster check if clustering enabled
-	if clusterEnabled {
-		checks["cluster"] = "ok"
 	}
 
 	// Add scheduler check
@@ -1130,7 +1119,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	case "application/json":
 		// JSON format per AI.md PART 13 - exact field order from spec
 		// 1. project, 2. status, 3. version/go_version/build, 4. uptime/mode/timestamp
-		// 5. cluster, 6. features, 7. checks, 8. stats
+		// 5. features, 6. checks, 7. stats
 		response := map[string]interface{}{
 			// 1. Project identification (PART 16: branding config)
 			"project": map[string]interface{}{
@@ -1151,16 +1140,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 			"uptime":    uptime,
 			"mode":      appMode,
 			"timestamp": timestamp,
-			// 5. Cluster info (PART 10)
-			"cluster": map[string]interface{}{
-				"enabled":    clusterEnabled,
-				"status":     "",
-				"primary":    "",
-				"nodes":      []string{},
-				"node_count": 0,
-				"role":       "",
-			},
-			// 6. Features — public-safe only; /metrics is internal (PART 20)
+			// 5. Features — public-safe only; /metrics is internal (PART 20)
 			"features": map[string]interface{}{
 				"tor": map[string]interface{}{
 					"enabled":  h.torSvc != nil && h.torSvc.IsEnabled(),
@@ -1185,18 +1165,6 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		if h.appConfig != nil && h.appConfig.PendingRestart {
 			response["pending_restart"] = true
 			response["restart_reason"] = h.appConfig.RestartReasons
-		}
-
-		// Add cluster details if enabled per PART 10
-		if clusterEnabled {
-			response["cluster"] = map[string]interface{}{
-				"enabled":    true,
-				"status":     clusterStatus,
-				"primary":    "",
-				"nodes":      []string{},
-				"node_count": clusterNodes,
-				"role":       clusterRole,
-			}
 		}
 
 		WriteJSON(w, httpStatus, response)
@@ -1226,14 +1194,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "uptime: %s\n", uptime)
 		fmt.Fprintf(w, "mode: %s\n", appMode)
 		fmt.Fprintf(w, "timestamp: %s\n", timestamp)
-		// 5. Cluster
-		fmt.Fprintf(w, "cluster.enabled: %v\n", clusterEnabled)
-		if clusterEnabled {
-			fmt.Fprintf(w, "cluster.status: %s\n", clusterStatus)
-			fmt.Fprintf(w, "cluster.node_count: %d\n", clusterNodes)
-			fmt.Fprintf(w, "cluster.role: %s\n", clusterRole)
-		}
-		// 6. Features
+		// 5. Features
 		torEnabled := h.torSvc != nil && h.torSvc.IsEnabled()
 		torRunning := h.torSvc != nil && h.torSvc.IsRunning()
 		fmt.Fprintf(w, "features.tor.enabled: %v\n", torEnabled)
@@ -1248,9 +1209,6 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "checks.cache: %s\n", checks["cache"])
 		fmt.Fprintf(w, "checks.disk: %s\n", checks["disk"])
 		fmt.Fprintf(w, "checks.scheduler: %s\n", checks["scheduler"])
-		if clusterEnabled {
-			fmt.Fprintf(w, "checks.cluster: %s\n", checks["cluster"])
-		}
 		if _, ok := checks["tor"]; ok {
 			fmt.Fprintf(w, "checks.tor: %s\n", checks["tor"])
 		}
@@ -1261,7 +1219,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		// HTML format (default) per AI.md PART 13 with full template
-		h.renderHealthzHTML(w, r, status, httpStatus, appMode, uptime, hostname, timestamp, checks, clusterEnabled, clusterStatus, clusterNodes, clusterRole)
+		h.renderHealthzHTML(w, r, status, httpStatus, appMode, uptime, hostname, timestamp, checks)
 	}
 }
 
@@ -1298,15 +1256,6 @@ type HealthzHTMLData struct {
 	Mode        string
 	ModeDisplay string
 
-	// Cluster
-	ClusterEnabled     bool
-	ClusterStatus      string
-	ClusterStatusClass string
-	ClusterStatusIcon  string
-	ClusterPrimary     string
-	ClusterRole        string
-	ClusterNodes       []ClusterNodeData
-
 	// Features
 	Features FeaturesData
 
@@ -1319,11 +1268,6 @@ type HealthzHTMLData struct {
 	// Timestamp
 	Timestamp        string
 	TimestampDisplay string
-}
-
-type ClusterNodeData struct {
-	URL       string
-	IsPrimary bool
 }
 
 // FeaturesData holds public-safe feature flags per AI.md PART 13.
@@ -1342,7 +1286,6 @@ type ChecksData struct {
 	Cache     string
 	Disk      string
 	Scheduler string
-	Cluster   string
 }
 
 // StatsData holds statistics for healthz display per AI.md PART 13
@@ -1353,7 +1296,7 @@ type StatsData struct {
 }
 
 // renderHealthzHTML renders the healthz HTML template per AI.md PART 13
-func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request, status string, httpStatus int, appMode, uptime, hostname, timestamp string, checks map[string]string, clusterEnabled bool, clusterStatus string, clusterNodes int, clusterRole string) {
+func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request, status string, httpStatus int, appMode, uptime, hostname, timestamp string, checks map[string]string) {
 	// Parse timestamp
 	ts, _ := time.Parse(time.RFC3339, timestamp)
 
@@ -1391,7 +1334,6 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			Cache:     checks["cache"],
 			Disk:      checks["disk"],
 			Scheduler: checks["scheduler"],
-			Cluster:   checks["cluster"],
 		},
 
 		// Stats per AI.md PART 13
@@ -1419,9 +1361,6 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		// Timestamp
 		Timestamp:        timestamp,
 		TimestampDisplay: ts.Format("Jan 02, 2006 3:04 PM"),
-
-		// Cluster
-		ClusterEnabled: clusterEnabled,
 	}
 
 	// Status display
@@ -1480,19 +1419,6 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			}
 		}
 		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
-	}
-
-	// Cluster info
-	if clusterEnabled {
-		data.ClusterStatus = clusterStatus
-		data.ClusterRole = clusterRole
-		if checks["cluster"] == "ok" {
-			data.ClusterStatusClass = "ok"
-			data.ClusterStatusIcon = "✅"
-		} else {
-			data.ClusterStatusClass = "error"
-			data.ClusterStatusIcon = "❌"
-		}
 	}
 
 	// Parse and execute template
@@ -2239,9 +2165,6 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		appMode = "development"
 	}
 
-	// Cluster status
-	clusterEnabled := false
-
 	// Build checks object - MUST be simple "ok"/"error" strings
 	// Per AI.md PART 13
 	checks := map[string]string{
@@ -2321,9 +2244,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "uptime: %s\n", uptime)
 		fmt.Fprintf(w, "mode: %s\n", appMode)
 		fmt.Fprintf(w, "timestamp: %s\n", timestamp)
-		// 5. Cluster
-		fmt.Fprintf(w, "cluster.enabled: %v\n", clusterEnabled)
-		// 6. Features
+		// 5. Features
 		fmt.Fprintf(w, "features.tor.enabled: %v\n", torEnabled)
 		fmt.Fprintf(w, "features.tor.running: %v\n", torRunning)
 		fmt.Fprintf(w, "features.tor.status: %s\n", h.getTorStatus())
@@ -2366,16 +2287,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		"uptime":    uptime,
 		"mode":      appMode,
 		"timestamp": timestamp,
-		// 5. Cluster info (PART 10)
-		"cluster": map[string]interface{}{
-			"enabled":    clusterEnabled,
-			"status":     "",
-			"primary":    "",
-			"nodes":      []string{},
-			"node_count": 0,
-			"role":       "",
-		},
-		// 6. Features — public-safe only; /metrics is internal (PART 20)
+		// 5. Features — public-safe only; /metrics is internal (PART 20)
 		"features": map[string]interface{}{
 			"tor": map[string]interface{}{
 				"enabled":  torEnabled,
@@ -3063,7 +2975,6 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 	// Build response per AI.md PART 14
 	response := map[string]interface{}{
 		"primary": h.appConfig.GetPublicURL(),
-		"cluster": h.appConfig.GetClusterNodes(),
 		// Per AI.md PART 14: versioned API
 		"api_version": "v1",
 		// Default timeout in seconds

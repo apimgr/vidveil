@@ -517,15 +517,6 @@ func TestGetPublicURL(t *testing.T) {
 	}
 }
 
-// TestGetClusterNodes verifies single-instance mode returns an empty slice.
-func TestGetClusterNodes(t *testing.T) {
-	cfg := DefaultAppConfig()
-	nodes := cfg.GetClusterNodes()
-	if len(nodes) != 0 {
-		t.Errorf("GetClusterNodes() = %v, want empty slice", nodes)
-	}
-}
-
 // TestGetFQDNWithEnv verifies that the DOMAIN env var is respected.
 func TestGetFQDNWithEnv(t *testing.T) {
 	t.Setenv("DOMAIN", "env.example.com")

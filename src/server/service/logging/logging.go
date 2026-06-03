@@ -496,9 +496,7 @@ func auditCategory(event string) string {
 		return "backup"
 	case "server", "scheduler":
 		return "server"
-	case "cluster":
-		return "cluster"
-	case "oidc", "ldap":
+case "oidc", "ldap":
 		return "authentication"
 	case "org":
 		return "organization"

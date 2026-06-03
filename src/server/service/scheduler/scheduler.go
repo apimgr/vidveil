@@ -732,8 +732,6 @@ type BuiltinTaskFuncs struct {
 	HealthcheckSelf TaskFunc
 	// tor.health - Every 10 minutes, check Tor connectivity
 	TorHealth TaskFunc
-	// cluster.heartbeat - Every 30 seconds, cluster heartbeat
-	ClusterHeartbeat TaskFunc
 }
 
 // RegisterBuiltinTasks registers all built-in scheduled tasks per AI.md
@@ -825,12 +823,6 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 			"10m", funcs.TorHealth)
 	}
 
-	// cluster_heartbeat - Every 30 seconds (only in cluster mode)
-	if funcs.ClusterHeartbeat != nil {
-		s.RegisterTask("cluster_heartbeat", "Cluster Heartbeat",
-			"Send heartbeat to cluster nodes",
-			"30s", funcs.ClusterHeartbeat)
-	}
 }
 
 // migrateLegacyTaskIDs renames built-in task IDs from the old "xxx.yyy"
@@ -854,7 +846,6 @@ func (s *Scheduler) migrateLegacyTaskIDs() {
 		"backup_auto":       "backup_daily",
 		"healthcheck.self":  "healthcheck_self",
 		"tor.health":        "tor_health",
-		"cluster.heartbeat": "cluster_heartbeat",
 	}
 	for old, newID := range rename {
 		// Update scheduled_tasks (state). UPDATE OR IGNORE conflict if

@@ -520,9 +520,6 @@ func TestLoadCLIConfigFromFileAutoCreatesMissingConfig(t *testing.T) {
 	if !strings.Contains(configText, "admin_path: admin") {
 		t.Fatalf("config file missing default server.admin_path:\n%s", configText)
 	}
-	if !strings.Contains(configText, "cluster: []") {
-		t.Fatalf("config file missing default server.cluster:\n%s", configText)
-	}
 	if !strings.Contains(configText, "retry: 3") {
 		t.Fatalf("config file missing default server.retry:\n%s", configText)
 	}
@@ -1500,31 +1497,6 @@ func TestInitAPIClientUsesConfiguredAPIVersion(t *testing.T) {
 	}
 }
 
-func TestResolveCLIReachableServerAddressFallsBackToClusterNode(t *testing.T) {
-	healthyClusterServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/api/v1/healthz" {
-			t.Fatalf("unexpected health path %q", request.URL.Path)
-		}
-		responseWriter.WriteHeader(http.StatusOK)
-	}))
-	defer healthyClusterServer.Close()
-
-	originalCLIConfig := cliConfig
-	t.Cleanup(func() {
-		cliConfig = originalCLIConfig
-	})
-
-	cliConfig = &CLIConfig{}
-	cliConfig.Server.Address = "http://127.0.0.1:1"
-	cliConfig.Server.Cluster = []string{healthyClusterServer.URL}
-	cliConfig.Server.APIVersion = "v1"
-	cliConfig.Server.Timeout = 1
-
-	if gotServerAddress := ResolveCLIReachableServerAddress(); gotServerAddress != healthyClusterServer.URL {
-		t.Fatalf("resolved server address = %q, want %q", gotServerAddress, healthyClusterServer.URL)
-	}
-}
-
 func TestDiscoverCLIServerConfigMergesAutodiscoverResponse(t *testing.T) {
 	discoveryServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/api/autodiscover" {
@@ -1532,7 +1504,7 @@ func TestDiscoverCLIServerConfigMergesAutodiscoverResponse(t *testing.T) {
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
 		responseWriter.WriteHeader(http.StatusOK)
-		_, _ = responseWriter.Write([]byte(`{"primary":"https://cluster.example.com","cluster":["https://node-a.example.com","https://node-b.example.com"],"api_version":"v2","timeout":45,"retry":5,"retry_delay":2}`))
+		_, _ = responseWriter.Write([]byte(`{"primary":"https://cluster.example.com","api_version":"v2","timeout":45,"retry":5,"retry_delay":2}`))
 	}))
 	defer discoveryServer.Close()
 
@@ -1551,9 +1523,6 @@ func TestDiscoverCLIServerConfigMergesAutodiscoverResponse(t *testing.T) {
 
 	if discoveredCLIConfig.Server.Address != "https://cluster.example.com" {
 		t.Fatalf("primary server = %q, want %q", discoveredCLIConfig.Server.Address, "https://cluster.example.com")
-	}
-	if len(discoveredCLIConfig.Server.Cluster) != 2 {
-		t.Fatalf("cluster node count = %d, want %d", len(discoveredCLIConfig.Server.Cluster), 2)
 	}
 	if discoveredCLIConfig.Server.APIVersion != "v2" {
 		t.Fatalf("api version = %q, want %q", discoveredCLIConfig.Server.APIVersion, "v2")

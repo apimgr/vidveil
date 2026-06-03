@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net"
 	"net/http"
@@ -22,7 +23,6 @@ import (
 	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server"
 	daemonpkg "github.com/apimgr/vidveil/src/server/daemon"
-	"github.com/apimgr/vidveil/src/server/service/admin"
 	"github.com/apimgr/vidveil/src/server/service/blocklist"
 	"github.com/apimgr/vidveil/src/server/service/cve"
 	"github.com/apimgr/vidveil/src/server/service/database"
@@ -470,13 +470,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize admin service per AI.md PART 11
-	adminSvc := admin.NewAdminService(migrationMgr.GetDB())
-	if err := adminSvc.Initialize(); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to initialize admin service: %v\n", err)
-		os.Exit(1)
-	}
-
 	// Initialize search engines
 	engineMgr := engine.NewEngineManager(appConfig)
 	engineMgr.InitializeEngines()
@@ -569,12 +562,10 @@ func main() {
 			return cveSvc.Update(ctx)
 		},
 		SessionCleanup: func(ctx context.Context) error {
-			// Clean up expired sessions per PART 11
-			return adminSvc.CleanupExpiredSessions()
+			return nil
 		},
 		TokenCleanup: func(ctx context.Context) error {
-			// Clean up expired tokens per PART 11
-			return adminSvc.CleanupExpiredTokens()
+			return nil
 		},
 		LogRotation: func(ctx context.Context) error {
 			// Log rotation per AI.md PART 18: trigger log file reopen/rotation
@@ -687,7 +678,8 @@ func main() {
 		displayAddr := getDisplayAddress(appConfig)
 
 		// Console output per AI.md PART 7
-		isFirstRun := adminSvc.IsFirstRun()
+		// First run = settings table is empty (no config rows exist yet)
+		isFirstRun := isDBFirstRun(migrationMgr.GetDB())
 
 		// Check SMTP status per AI.md PART 17
 		smtpInfo := ""
@@ -724,22 +716,19 @@ func main() {
 			displayURL = "https://" + config.GetDisplayHost(appConfig)
 		}
 
-		// Get setup token for first run
-		var setupToken string
-		if isFirstRun {
-			setupToken = adminSvc.GetSetupToken()
-		}
-
 		// Print responsive startup banner per AI.md PART 7
 		banner.PrintStartupBanner(banner.BannerConfig{
-			AppName:    "VidVeil",
-			Version:    version.GetVersion(),
-			AppMode:    appConfig.Server.Mode,
-			Debug:      mode.IsDebugEnabled(),
-			URLs:       []string{displayURL},
-			ShowSetup:  isFirstRun,
-			SetupToken: setupToken,
+			AppName:   "VidVeil",
+			Version:   version.GetVersion(),
+			AppMode:   appConfig.Server.Mode,
+			Debug:     mode.IsDebugEnabled(),
+			URLs:      []string{displayURL},
+			ShowSetup: isFirstRun,
 		})
+
+		if isFirstRun {
+			fmt.Println("[INFO] First run detected. Edit /etc/apimgr/vidveil/server.yml to configure.")
+		}
 
 		// Log INFO lines per AI.md PART 11
 		fmt.Printf("[INFO] Server started successfully\n")
@@ -1393,32 +1382,10 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
 		}
 
 	case "setup":
-		// Admin recovery per AI.md PART 11
-		// Clears admin password and API token, generates new setup token
-		fmt.Println()
-		fmt.Println("╔══════════════════════════════════════════════════════════════════╗")
-		fmt.Println("║                     ADMIN CREDENTIALS RESET                      ║")
-		fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
-
-		setupToken, err := maint.ResetAdminCredentials()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to reset admin credentials: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Println("║  Admin password and API token have been cleared.                 ║")
-		fmt.Println("║                                                                  ║")
-		fmt.Println("║  NEW SETUP TOKEN (copy this now, shown ONCE):                    ║")
-		fmt.Println("║  ┌────────────────────────────────────────────────────────────┐  ║")
-		fmt.Printf("║  │  %-56s  │  ║\n", setupToken)
-		fmt.Println("║  └────────────────────────────────────────────────────────────┘  ║")
-		fmt.Println("║                                                                  ║")
-		fmt.Println("║  1. Start the service: vidveil --service start                   ║")
-		fmt.Println("║  2. Go to: http://{host}:{port}/admin                            ║")
-		fmt.Println("║  3. Enter the setup token above                                  ║")
-		fmt.Println("║  4. Create new admin account via setup wizard                    ║")
-		fmt.Println("╚══════════════════════════════════════════════════════════════════╝")
-		fmt.Println()
+		// Configuration is entirely via server.yml — no admin web UI exists.
+		fmt.Println("VidVeil has no admin web UI. All configuration is via server.yml.")
+		fmt.Println("Edit /etc/apimgr/vidveil/server.yml to configure the server.")
+		fmt.Println("Restart the service after making changes: vidveil --service restart")
 
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
@@ -1427,7 +1394,7 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
   vidveil --maintenance restore [file] [--password <pwd>]  Restore from backup
   vidveil --maintenance update                              Check and apply updates
   vidveil --maintenance mode <on|off>                       Enable/disable maintenance mode
-  vidveil --maintenance setup                               Reset admin credentials (recovery)
+  vidveil --maintenance setup                               Show configuration instructions
 
 Options:
   --password <password>    Encryption password for backup/restore (per AI.md PART 21)
@@ -1449,6 +1416,17 @@ Usage: vidveil --maintenance [backup|restore|update|mode|setup|--help]
 Run 'vidveil --maintenance --help' for detailed help.`)
 		os.Exit(1)
 	}
+}
+
+// isDBFirstRun returns true if the settings table has no rows, indicating first run.
+// A missing or inaccessible table also counts as first run.
+func isDBFirstRun(db *sql.DB) bool {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM settings").Scan(&count)
+	if err != nil {
+		return true
+	}
+	return count == 0
 }
 
 func getDisplayAddress(serverConfig *config.AppConfig) string {

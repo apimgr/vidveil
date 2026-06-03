@@ -101,18 +101,7 @@ func (sm *SchemaManager) getTablesDDL() []string {
 // getSQLiteDDL returns SQLite-specific DDL
 func (sm *SchemaManager) getSQLiteDDL() []string {
 	return []string{
-		// Sessions table for admin authentication
-		`CREATE TABLE IF NOT EXISTS sessions (
-			id TEXT PRIMARY KEY,
-			user_id TEXT NOT NULL,
-			username TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			expires_at DATETIME NOT NULL,
-			ip_address TEXT,
-			user_agent TEXT
-		)`,
-
-		// Audit log table for tracking admin actions
+		// Audit log table for tracking actions
 		`CREATE TABLE IF NOT EXISTS audit_log (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -160,64 +149,6 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 		)`,
 
-		// Notifications table
-		`CREATE TABLE IF NOT EXISTS notifications (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			type TEXT NOT NULL,
-			title TEXT NOT NULL,
-			message TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			read_at DATETIME,
-			dismissed_at DATETIME,
-			priority TEXT DEFAULT 'normal',
-			metadata TEXT
-		)`,
-
-		// Admin credentials table per AI.md PART 11
-		`CREATE TABLE IF NOT EXISTS admin_credentials (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			username TEXT UNIQUE NOT NULL,
-			password_hash TEXT NOT NULL,
-			totp_secret TEXT,
-			totp_enabled INTEGER DEFAULT 0,
-			totp_backup_codes TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			last_login DATETIME,
-			login_count INTEGER DEFAULT 0,
-			is_primary INTEGER DEFAULT 0,
-			invited_by INTEGER,
-			invite_token TEXT,
-			invite_expires DATETIME,
-			FOREIGN KEY (invited_by) REFERENCES admin_credentials(id)
-		)`,
-
-		// Setup tokens table per AI.md PART 12
-		`CREATE TABLE IF NOT EXISTS setup_tokens (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			token TEXT UNIQUE NOT NULL,
-			purpose TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			expires_at DATETIME NOT NULL,
-			used_at DATETIME,
-			used_by TEXT
-		)`,
-
-		// API tokens table per AI.md PART 11
-		`CREATE TABLE IF NOT EXISTS api_tokens (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			admin_id INTEGER NOT NULL,
-			name TEXT NOT NULL,
-			token_hash TEXT UNIQUE NOT NULL,
-			token_prefix TEXT NOT NULL,
-			permissions TEXT DEFAULT '*',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			expires_at DATETIME,
-			last_used DATETIME,
-			use_count INTEGER DEFAULT 0,
-			FOREIGN KEY (admin_id) REFERENCES admin_credentials(id)
-		)`,
-
 		// SMTP config table per AI.md PART 17
 		`CREATE TABLE IF NOT EXISTS smtp_config (
 			id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -234,16 +165,6 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
-		// Recovery keys table for 2FA backup
-		`CREATE TABLE IF NOT EXISTS recovery_keys (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			admin_id INTEGER NOT NULL,
-			key_hash TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			used_at DATETIME,
-			FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE CASCADE
-		)`,
-
 		// Pages table for standard page content
 		`CREATE TABLE IF NOT EXISTS pages (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,9 +173,7 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			content TEXT NOT NULL,
 			meta_description TEXT,
 			enabled INTEGER DEFAULT 1,
-			updated_by INTEGER,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (updated_by) REFERENCES admin_credentials(id)
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 	}
 }
@@ -262,16 +181,6 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 // getPostgresDDL returns PostgreSQL-specific DDL per AI.md PART 10
 func (sm *SchemaManager) getPostgresDDL() []string {
 	return []string{
-		`CREATE TABLE IF NOT EXISTS sessions (
-			id TEXT PRIMARY KEY,
-			user_id TEXT NOT NULL,
-			username TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT NOW(),
-			expires_at TIMESTAMP NOT NULL,
-			ip_address TEXT,
-			user_agent TEXT
-		)`,
-
 		`CREATE TABLE IF NOT EXISTS audit_log (
 			id SERIAL PRIMARY KEY,
 			timestamp TIMESTAMP DEFAULT NOW(),
@@ -315,58 +224,6 @@ func (sm *SchemaManager) getPostgresDDL() []string {
 			error TEXT
 		)`,
 
-		`CREATE TABLE IF NOT EXISTS notifications (
-			id SERIAL PRIMARY KEY,
-			type TEXT NOT NULL,
-			title TEXT NOT NULL,
-			message TEXT,
-			created_at TIMESTAMP DEFAULT NOW(),
-			read_at TIMESTAMP,
-			dismissed_at TIMESTAMP,
-			priority TEXT DEFAULT 'normal',
-			metadata TEXT
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS admin_credentials (
-			id SERIAL PRIMARY KEY,
-			username TEXT UNIQUE NOT NULL,
-			password_hash TEXT NOT NULL,
-			totp_secret TEXT,
-			totp_enabled BOOLEAN DEFAULT FALSE,
-			totp_backup_codes TEXT,
-			created_at TIMESTAMP DEFAULT NOW(),
-			updated_at TIMESTAMP DEFAULT NOW(),
-			last_login TIMESTAMP,
-			login_count INTEGER DEFAULT 0,
-			is_primary BOOLEAN DEFAULT FALSE,
-			invited_by INTEGER REFERENCES admin_credentials(id),
-			invite_token TEXT,
-			invite_expires TIMESTAMP
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS setup_tokens (
-			id SERIAL PRIMARY KEY,
-			token TEXT UNIQUE NOT NULL,
-			purpose TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT NOW(),
-			expires_at TIMESTAMP NOT NULL,
-			used_at TIMESTAMP,
-			used_by TEXT
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS api_tokens (
-			id SERIAL PRIMARY KEY,
-			admin_id INTEGER NOT NULL REFERENCES admin_credentials(id),
-			name TEXT NOT NULL,
-			token_hash TEXT UNIQUE NOT NULL,
-			token_prefix TEXT NOT NULL,
-			permissions TEXT DEFAULT '*',
-			created_at TIMESTAMP DEFAULT NOW(),
-			expires_at TIMESTAMP,
-			last_used TIMESTAMP,
-			use_count INTEGER DEFAULT 0
-		)`,
-
 		`CREATE TABLE IF NOT EXISTS smtp_config (
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			host TEXT,
@@ -382,14 +239,6 @@ func (sm *SchemaManager) getPostgresDDL() []string {
 			updated_at TIMESTAMP DEFAULT NOW()
 		)`,
 
-		`CREATE TABLE IF NOT EXISTS recovery_keys (
-			id SERIAL PRIMARY KEY,
-			admin_id INTEGER NOT NULL REFERENCES admin_credentials(id) ON DELETE CASCADE,
-			key_hash TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT NOW(),
-			used_at TIMESTAMP
-		)`,
-
 		`CREATE TABLE IF NOT EXISTS pages (
 			id SERIAL PRIMARY KEY,
 			slug TEXT NOT NULL UNIQUE,
@@ -397,7 +246,6 @@ func (sm *SchemaManager) getPostgresDDL() []string {
 			content TEXT NOT NULL,
 			meta_description TEXT,
 			enabled BOOLEAN DEFAULT TRUE,
-			updated_by INTEGER REFERENCES admin_credentials(id),
 			updated_at TIMESTAMP DEFAULT NOW()
 		)`,
 	}
@@ -406,16 +254,6 @@ func (sm *SchemaManager) getPostgresDDL() []string {
 // getMySQLDDL returns MySQL-specific DDL per AI.md PART 10
 func (sm *SchemaManager) getMySQLDDL() []string {
 	return []string{
-		`CREATE TABLE IF NOT EXISTS sessions (
-			id VARCHAR(255) PRIMARY KEY,
-			user_id VARCHAR(255) NOT NULL,
-			username VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			expires_at TIMESTAMP NOT NULL,
-			ip_address VARCHAR(45),
-			user_agent TEXT
-		)`,
-
 		`CREATE TABLE IF NOT EXISTS audit_log (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -460,60 +298,6 @@ func (sm *SchemaManager) getMySQLDDL() []string {
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 		)`,
 
-		`CREATE TABLE IF NOT EXISTS notifications (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			type VARCHAR(50) NOT NULL,
-			title VARCHAR(255) NOT NULL,
-			message TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			read_at TIMESTAMP NULL,
-			dismissed_at TIMESTAMP NULL,
-			priority VARCHAR(50) DEFAULT 'normal',
-			metadata TEXT
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS admin_credentials (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			username VARCHAR(255) UNIQUE NOT NULL,
-			password_hash VARCHAR(255) NOT NULL,
-			totp_secret VARCHAR(255),
-			totp_enabled TINYINT(1) DEFAULT 0,
-			totp_backup_codes TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			last_login TIMESTAMP NULL,
-			login_count INT DEFAULT 0,
-			is_primary TINYINT(1) DEFAULT 0,
-			invited_by INT,
-			invite_token VARCHAR(255),
-			invite_expires TIMESTAMP NULL,
-			FOREIGN KEY (invited_by) REFERENCES admin_credentials(id)
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS setup_tokens (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			token VARCHAR(255) UNIQUE NOT NULL,
-			purpose VARCHAR(50) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			expires_at TIMESTAMP NOT NULL,
-			used_at TIMESTAMP NULL,
-			used_by VARCHAR(255)
-		)`,
-
-		`CREATE TABLE IF NOT EXISTS api_tokens (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			admin_id INT NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			token_hash VARCHAR(255) UNIQUE NOT NULL,
-			token_prefix VARCHAR(50) NOT NULL,
-			permissions TEXT DEFAULT '*',
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			expires_at TIMESTAMP NULL,
-			last_used TIMESTAMP NULL,
-			use_count INT DEFAULT 0,
-			FOREIGN KEY (admin_id) REFERENCES admin_credentials(id)
-		)`,
-
 		`CREATE TABLE IF NOT EXISTS smtp_config (
 			id INT PRIMARY KEY CHECK (id = 1),
 			host VARCHAR(255),
@@ -529,15 +313,6 @@ func (sm *SchemaManager) getMySQLDDL() []string {
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 		)`,
 
-		`CREATE TABLE IF NOT EXISTS recovery_keys (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			admin_id INT NOT NULL,
-			key_hash VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			used_at TIMESTAMP NULL,
-			FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE CASCADE
-		)`,
-
 		`CREATE TABLE IF NOT EXISTS pages (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			slug VARCHAR(255) NOT NULL UNIQUE,
@@ -545,9 +320,7 @@ func (sm *SchemaManager) getMySQLDDL() []string {
 			content TEXT NOT NULL,
 			meta_description TEXT,
 			enabled TINYINT(1) DEFAULT 1,
-			updated_by INT,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			FOREIGN KEY (updated_by) REFERENCES admin_credentials(id)
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 		)`,
 	}
 }
@@ -555,17 +328,6 @@ func (sm *SchemaManager) getMySQLDDL() []string {
 // getMSSQLDDL returns Microsoft SQL Server-specific DDL per AI.md PART 10
 func (sm *SchemaManager) getMSSQLDDL() []string {
 	return []string{
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'sessions')
-		CREATE TABLE sessions (
-			id NVARCHAR(255) PRIMARY KEY,
-			user_id NVARCHAR(255) NOT NULL,
-			username NVARCHAR(255) NOT NULL,
-			created_at DATETIME2 DEFAULT GETDATE(),
-			expires_at DATETIME2 NOT NULL,
-			ip_address NVARCHAR(45),
-			user_agent NVARCHAR(MAX)
-		)`,
-
 		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'audit_log')
 		CREATE TABLE audit_log (
 			id INT IDENTITY(1,1) PRIMARY KEY,
@@ -614,63 +376,6 @@ func (sm *SchemaManager) getMSSQLDDL() []string {
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 		)`,
 
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'notifications')
-		CREATE TABLE notifications (
-			id INT IDENTITY(1,1) PRIMARY KEY,
-			type NVARCHAR(50) NOT NULL,
-			title NVARCHAR(255) NOT NULL,
-			message NVARCHAR(MAX),
-			created_at DATETIME2 DEFAULT GETDATE(),
-			read_at DATETIME2,
-			dismissed_at DATETIME2,
-			priority NVARCHAR(50) DEFAULT 'normal',
-			metadata NVARCHAR(MAX)
-		)`,
-
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'admin_credentials')
-		CREATE TABLE admin_credentials (
-			id INT IDENTITY(1,1) PRIMARY KEY,
-			username NVARCHAR(255) UNIQUE NOT NULL,
-			password_hash NVARCHAR(255) NOT NULL,
-			totp_secret NVARCHAR(255),
-			totp_enabled BIT DEFAULT 0,
-			totp_backup_codes NVARCHAR(MAX),
-			created_at DATETIME2 DEFAULT GETDATE(),
-			updated_at DATETIME2 DEFAULT GETDATE(),
-			last_login DATETIME2,
-			login_count INT DEFAULT 0,
-			is_primary BIT DEFAULT 0,
-			invited_by INT,
-			invite_token NVARCHAR(255),
-			invite_expires DATETIME2
-		)`,
-
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'setup_tokens')
-		CREATE TABLE setup_tokens (
-			id INT IDENTITY(1,1) PRIMARY KEY,
-			token NVARCHAR(255) UNIQUE NOT NULL,
-			purpose NVARCHAR(50) NOT NULL,
-			created_at DATETIME2 DEFAULT GETDATE(),
-			expires_at DATETIME2 NOT NULL,
-			used_at DATETIME2,
-			used_by NVARCHAR(255)
-		)`,
-
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'api_tokens')
-		CREATE TABLE api_tokens (
-			id INT IDENTITY(1,1) PRIMARY KEY,
-			admin_id INT NOT NULL,
-			name NVARCHAR(255) NOT NULL,
-			token_hash NVARCHAR(255) UNIQUE NOT NULL,
-			token_prefix NVARCHAR(50) NOT NULL,
-			permissions NVARCHAR(MAX) DEFAULT '*',
-			created_at DATETIME2 DEFAULT GETDATE(),
-			expires_at DATETIME2,
-			last_used DATETIME2,
-			use_count INT DEFAULT 0,
-			FOREIGN KEY (admin_id) REFERENCES admin_credentials(id)
-		)`,
-
 		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'smtp_config')
 		CREATE TABLE smtp_config (
 			id INT PRIMARY KEY CHECK (id = 1),
@@ -687,16 +392,6 @@ func (sm *SchemaManager) getMSSQLDDL() []string {
 			updated_at DATETIME2 DEFAULT GETDATE()
 		)`,
 
-		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'recovery_keys')
-		CREATE TABLE recovery_keys (
-			id INT IDENTITY(1,1) PRIMARY KEY,
-			admin_id INT NOT NULL,
-			key_hash NVARCHAR(255) NOT NULL,
-			created_at DATETIME2 DEFAULT GETDATE(),
-			used_at DATETIME2,
-			FOREIGN KEY (admin_id) REFERENCES admin_credentials(id) ON DELETE CASCADE
-		)`,
-
 		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'pages')
 		CREATE TABLE pages (
 			id INT IDENTITY(1,1) PRIMARY KEY,
@@ -705,9 +400,7 @@ func (sm *SchemaManager) getMSSQLDDL() []string {
 			content NVARCHAR(MAX) NOT NULL,
 			meta_description NVARCHAR(MAX),
 			enabled BIT DEFAULT 1,
-			updated_by INT,
-			updated_at DATETIME2 DEFAULT GETDATE(),
-			FOREIGN KEY (updated_by) REFERENCES admin_credentials(id)
+			updated_at DATETIME2 DEFAULT GETDATE()
 		)`,
 	}
 }
@@ -785,9 +478,8 @@ func (sm *SchemaManager) GetMigrationStatus() ([]map[string]interface{}, error) 
 
 	// List all tables we manage
 	tables := []string{
-		"sessions", "audit_log", "settings", "scheduled_tasks", "task_history",
-		"notifications", "admin_credentials",
-		"setup_tokens", "api_tokens", "smtp_config", "recovery_keys", "pages",
+		"audit_log", "settings", "scheduled_tasks", "task_history",
+		"smtp_config", "pages",
 	}
 
 	var status []map[string]interface{}

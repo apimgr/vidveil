@@ -405,3 +405,58 @@ func TestRestoreWithPassword_EncryptedWrongPasswordReturnsError(t *testing.T) {
 		t.Error("RestoreWithPassword encrypted wrong pass: expected error, got nil")
 	}
 }
+
+// ── ResetAdminCredentials ─────────────────────────────────────────────────────
+
+// TestResetAdminCredentials_WritesTokenAndFlagFiles verifies that
+// ResetAdminCredentials generates a non-empty setup token, writes it to
+// <data>/setup_token, and creates <data>/admin_reset.flag.
+func TestResetAdminCredentials_WritesTokenAndFlagFiles(t *testing.T) {
+	m, _, dataDir := newManagerWithDirs(t)
+
+	token, err := m.ResetAdminCredentials()
+	if err != nil {
+		t.Fatalf("ResetAdminCredentials() error: %v", err)
+	}
+	if token == "" {
+		t.Error("ResetAdminCredentials() returned empty token")
+	}
+
+	tokenFile := filepath.Join(dataDir, "setup_token")
+	data, err := os.ReadFile(tokenFile)
+	if err != nil {
+		t.Fatalf("failed to read setup_token: %v", err)
+	}
+	if string(data) != token {
+		t.Errorf("setup_token content = %q, want %q", string(data), token)
+	}
+
+	resetFlag := filepath.Join(dataDir, "admin_reset.flag")
+	if _, err := os.Stat(resetFlag); os.IsNotExist(err) {
+		t.Error("admin_reset.flag was not created")
+	}
+}
+
+// ── SetMaintenanceMode disable-when-absent branch ─────────────────────────────
+
+// TestSetMaintenanceMode_DisableWhenNotEnabled verifies that calling
+// SetMaintenanceMode(false) when no flag file exists returns nil (not an error).
+func TestSetMaintenanceMode_DisableWhenNotEnabled(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.SetMaintenanceMode(false); err != nil {
+		t.Fatalf("SetMaintenanceMode(false) on missing flag: got %v, want nil", err)
+	}
+}
+
+// ── SetUpdateBranch invalid branch ────────────────────────────────────────────
+
+// TestSetUpdateBranch_InvalidBranch verifies that SetUpdateBranch rejects
+// unknown branch names with a non-nil error.
+func TestSetUpdateBranch_InvalidBranch(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.SetUpdateBranch("nightly"); err == nil {
+		t.Error("SetUpdateBranch(nightly): expected error for invalid branch, got nil")
+	}
+}

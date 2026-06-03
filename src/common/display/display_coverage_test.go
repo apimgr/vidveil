@@ -299,3 +299,59 @@ func TestDisplayEnvSupportsColorsTrueWithColorTerm(t *testing.T) {
 		t.Error("DisplayEnv.SupportsColors() = false for xterm-256color with terminal, want true")
 	}
 }
+
+// --- detectUnixDisplay: Wayland path via WAYLAND_DISPLAY env var ---
+// When WAYLAND_DISPLAY is set, detectUnixDisplay must set DisplayType="wayland"
+// and HasDisplay=true without calling any external binary.
+
+func TestDetectUnixDisplay_WaylandDisplaySet(t *testing.T) {
+	t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+	t.Setenv("DISPLAY", "")
+
+	e := &DisplayEnv{}
+	e.detectUnixDisplay()
+
+	if e.DisplayType != "wayland" {
+		t.Errorf("detectUnixDisplay() DisplayType = %q, want wayland", e.DisplayType)
+	}
+	if !e.HasDisplay {
+		t.Error("detectUnixDisplay() HasDisplay = false, want true")
+	}
+}
+
+// --- detectUnixDisplay: no-display path (no env vars set) ---
+// When neither WAYLAND_DISPLAY nor DISPLAY is set, DisplayType must be "none"
+// and HasDisplay must be false.
+
+func TestDetectUnixDisplay_NoDisplayVars(t *testing.T) {
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("DISPLAY", "")
+
+	e := &DisplayEnv{}
+	e.detectUnixDisplay()
+
+	if e.DisplayType != "none" {
+		t.Errorf("detectUnixDisplay() no-vars: DisplayType = %q, want none", e.DisplayType)
+	}
+	if e.HasDisplay {
+		t.Error("detectUnixDisplay() no-vars: HasDisplay = true, want false")
+	}
+}
+
+// --- detectUnixDisplay: DISPLAY set but xset unavailable → "none" ---
+// When DISPLAY is set but the X server (xset) is not accessible, fall through
+// to DisplayType="none".
+
+func TestDetectUnixDisplay_DisplaySetXsetFails(t *testing.T) {
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("DISPLAY", ":99")
+
+	e := &DisplayEnv{}
+	e.detectUnixDisplay()
+
+	// In a headless CI container xset will fail, so we expect none.
+	// If somehow xset succeeds (real display), accept "x11" too.
+	if e.DisplayType != "none" && e.DisplayType != "x11" {
+		t.Errorf("detectUnixDisplay() DISPLAY set: DisplayType = %q, want none or x11", e.DisplayType)
+	}
+}

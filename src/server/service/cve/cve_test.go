@@ -4,6 +4,7 @@
 package cve
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -423,5 +424,39 @@ func TestLoadCVEData_InvalidJSON(t *testing.T) {
 
 	if err := svc.loadCVEData(f.Name()); err == nil {
 		t.Error("expected error for invalid JSON, got nil")
+	}
+}
+
+// ---- Update early-exit paths ----
+
+// TestUpdate_DisabledReturnsNil verifies that Update returns nil without any
+// network activity when CVE is disabled in config.
+func TestUpdate_DisabledReturnsNil(t *testing.T) {
+	svc := newTestService(t)
+	svc.appConfig = config.DefaultAppConfig()
+	svc.appConfig.Server.Security.CVE.Enabled = false
+
+	if err := svc.Update(context.Background()); err != nil {
+		t.Fatalf("Update() disabled: got %v, want nil", err)
+	}
+}
+
+// ---- Initialize error path ----
+
+// TestInitialize_ErrorOnUnwritableParent verifies that Initialize propagates the
+// MkdirAll error when the parent directory is unwritable.
+func TestInitialize_ErrorOnUnwritableParent(t *testing.T) {
+	svc := newTestService(t)
+
+	// Create a regular file and try to use it as a directory component.
+	parentFile := filepath.Join(t.TempDir(), "notadir")
+	if err := os.WriteFile(parentFile, []byte("x"), 0644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	svc.dataDir = filepath.Join(parentFile, "sub")
+
+	err := svc.Initialize()
+	if err == nil {
+		t.Error("Initialize() expected error when path goes through a file, got nil")
 	}
 }

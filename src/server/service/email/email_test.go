@@ -393,3 +393,4 @@ func TestResetTemplate_FallsBackToDefault(t *testing.T) {
 		t.Errorf("GetTemplate after reset = %q, want original %q", restored, original)
 	}
 }
+

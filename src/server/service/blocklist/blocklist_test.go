@@ -2,6 +2,7 @@
 package blocklist
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -485,4 +486,53 @@ func writeTempFile(t *testing.T, content string) string {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
 	return f.Name()
+}
+
+// TestUpdate_DisabledReturnsNil verifies that Update returns nil without touching
+// the network when blocklists are disabled in config.
+func TestUpdate_DisabledReturnsNil(t *testing.T) {
+	svc := newTestService(t)
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Security.Blocklists.Enabled = false
+	svc.appConfig = cfg
+
+	if err := svc.Update(context.Background()); err != nil {
+		t.Fatalf("Update() disabled: got %v, want nil", err)
+	}
+}
+
+// TestUpdate_EmptySourcesReturnsNil verifies that Update returns nil when
+// blocklists are enabled but the sources slice is empty.
+func TestUpdate_EmptySourcesReturnsNil(t *testing.T) {
+	svc := newTestService(t)
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Security.Blocklists.Enabled = true
+	cfg.Server.Security.Blocklists.Sources = nil
+	svc.appConfig = cfg
+
+	if err := svc.Update(context.Background()); err != nil {
+		t.Fatalf("Update() empty sources: got %v, want nil", err)
+	}
+}
+
+// TestUpdate_AllSourcesDisabledWritesTimestamp verifies that Update writes the
+// .last_updated file and returns nil when all sources are individually disabled.
+func TestUpdate_AllSourcesDisabledWritesTimestamp(t *testing.T) {
+	svc := newTestService(t)
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Security.Blocklists.Enabled = true
+	cfg.Server.Security.Blocklists.Sources = []config.BlocklistSource{
+		{Name: "list1", URL: "http://example.com/1.txt", Type: "ip", Enabled: false},
+		{Name: "list2", URL: "http://example.com/2.txt", Type: "domain", Enabled: false},
+	}
+	svc.appConfig = cfg
+
+	if err := svc.Update(context.Background()); err != nil {
+		t.Fatalf("Update() all-disabled sources: got %v, want nil", err)
+	}
+
+	tsFile := filepath.Join(svc.dataDir, ".last_updated")
+	if _, err := os.Stat(tsFile); os.IsNotExist(err) {
+		t.Error("Update() did not write .last_updated timestamp file")
+	}
 }

@@ -759,3 +759,294 @@ func TestSetTorService_NoPanic(t *testing.T) {
 
 // Ensure createTestConfig is used to suppress the "imported and not used" linter note.
 var _ *config.AppConfig = createTestConfig()
+
+// ── SetGeoIPService ───────────────────────────────────────────────────────────
+
+// TestSetGeoIPService_NoPanic verifies that SetGeoIPService accepts nil without panicking.
+func TestSetGeoIPService_NoPanic(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	h.SetGeoIPService(nil)
+	if h.geoipSvc != nil {
+		t.Error("SetGeoIPService(nil) should set geoipSvc to nil")
+	}
+}
+
+// ── GetSearchCache ────────────────────────────────────────────────────────────
+
+// TestGetSearchCache_ReturnsCache verifies GetSearchCache returns the cache
+// set during construction.
+func TestGetSearchCache_ReturnsCache(t *testing.T) {
+	cfg := createTestConfig()
+	h := NewSearchHandler(cfg, nil)
+	if h.GetSearchCache() == nil {
+		t.Error("GetSearchCache() should return non-nil after NewSearchHandler")
+	}
+}
+
+// ── nil-metrics getter paths ──────────────────────────────────────────────────
+
+// TestGetSearchCount_NilMetrics verifies getSearchCount returns 0 when metrics is nil.
+func TestGetSearchCount_NilMetrics(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	if got := h.getSearchCount(); got != 0 {
+		t.Errorf("getSearchCount() nil metrics = %d, want 0", got)
+	}
+}
+
+// TestGetRequestsTotal_NilMetrics verifies getRequestsTotal returns 0 when metrics is nil.
+func TestGetRequestsTotal_NilMetrics(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	if got := h.getRequestsTotal(); got != 0 {
+		t.Errorf("getRequestsTotal() nil metrics = %d, want 0", got)
+	}
+}
+
+// TestGetRequests24h_NilMetrics verifies getRequests24h returns 0 when metrics is nil.
+func TestGetRequests24h_NilMetrics(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	if got := h.getRequests24h(); got != 0 {
+		t.Errorf("getRequests24h() nil metrics = %d, want 0", got)
+	}
+}
+
+// TestGetActiveConnections_NilMetrics verifies getActiveConnections returns 0 when nil.
+func TestGetActiveConnections_NilMetrics(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	if got := h.getActiveConnections(); got != 0 {
+		t.Errorf("getActiveConnections() nil metrics = %d, want 0", got)
+	}
+}
+
+// ── nil-torSvc getter paths ───────────────────────────────────────────────────
+
+// TestGetTorStatus_NilTorSvc verifies getTorStatus returns "disabled" when torSvc is nil.
+func TestGetTorStatus_NilTorSvc(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	if got := h.getTorStatus(); got != "disabled" {
+		t.Errorf("getTorStatus() nil tor = %q, want disabled", got)
+	}
+}
+
+// TestGetTorHostname_NilTorSvc verifies getTorHostname returns "" when torSvc is nil.
+func TestGetTorHostname_NilTorSvc(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	if got := h.getTorHostname(); got != "" {
+		t.Errorf("getTorHostname() nil tor = %q, want empty", got)
+	}
+}
+
+// ── getProxyClient nil torSvc ─────────────────────────────────────────────────
+
+// TestGetProxyClient_NilTorSvc verifies getProxyClient returns a plain HTTP
+// client when torSvc is nil.
+func TestGetProxyClient_NilTorSvc(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	client := h.getProxyClient(5 * 1e9)
+	if client == nil {
+		t.Error("getProxyClient() nil tor should return non-nil http.Client")
+	}
+}
+
+// ── getUserIPForwardPreference nil torSvc ─────────────────────────────────────
+
+// TestGetUserIPForwardPreference_NilTorSvc verifies that false/"" is returned
+// when torSvc is nil.
+func TestGetUserIPForwardPreference_NilTorSvc(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	req := httptest.NewRequest("GET", "/", nil)
+	ok, ip := h.getUserIPForwardPreference(req)
+	if ok {
+		t.Error("getUserIPForwardPreference() nil tor should return false")
+	}
+	if ip != "" {
+		t.Errorf("getUserIPForwardPreference() nil tor IP = %q, want empty", ip)
+	}
+}
+
+// ── setContentRestrictionAckCookie ───────────────────────────────────────────
+
+// TestSetContentRestrictionAckCookie_SetsCookie verifies that the ack cookie is
+// set in the response.
+func TestSetContentRestrictionAckCookie_SetsCookie(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	rr := httptest.NewRecorder()
+	h.setContentRestrictionAckCookie(rr)
+
+	cookies := rr.Result().Cookies()
+	found := false
+	for _, c := range cookies {
+		if c.Name == ContentRestrictionAckCookieName {
+			found = true
+			if c.Value != "1" {
+				t.Errorf("ack cookie value = %q, want 1", c.Value)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("ack cookie %q not set in response", ContentRestrictionAckCookieName)
+	}
+}
+
+// ── getAPIResponseFormat ──────────────────────────────────────────────────────
+
+// TestGetAPIResponseFormat_TxtExtension verifies .txt extension returns "text".
+func TestGetAPIResponseFormat_TxtExtension(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/v1/search.txt?q=x", nil)
+	if got := getAPIResponseFormat(req); got != "text" {
+		t.Errorf("getAPIResponseFormat .txt = %q, want text", got)
+	}
+}
+
+// TestGetAPIResponseFormat_AcceptJSON verifies Accept: application/json returns "json".
+func TestGetAPIResponseFormat_AcceptJSON(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/v1/search", nil)
+	req.Header.Set("Accept", "application/json")
+	if got := getAPIResponseFormat(req); got != "json" {
+		t.Errorf("getAPIResponseFormat Accept:json = %q, want json", got)
+	}
+}
+
+// TestGetAPIResponseFormat_AcceptTextPlain verifies Accept: text/plain returns "text".
+func TestGetAPIResponseFormat_AcceptTextPlain(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/v1/search", nil)
+	req.Header.Set("Accept", "text/plain")
+	if got := getAPIResponseFormat(req); got != "text" {
+		t.Errorf("getAPIResponseFormat Accept:text = %q, want text", got)
+	}
+}
+
+// TestGetAPIResponseFormat_CurlUA verifies curl User-Agent returns "text".
+func TestGetAPIResponseFormat_CurlUA(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/v1/search", nil)
+	req.Header.Set("User-Agent", "curl/8.0.0")
+	if got := getAPIResponseFormat(req); got != "text" {
+		t.Errorf("getAPIResponseFormat curl = %q, want text", got)
+	}
+}
+
+// TestGetAPIResponseFormat_EmptyUA verifies empty User-Agent returns "text".
+func TestGetAPIResponseFormat_EmptyUA(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/v1/search", nil)
+	req.Header.Set("User-Agent", "")
+	if got := getAPIResponseFormat(req); got != "text" {
+		t.Errorf("getAPIResponseFormat empty UA = %q, want text", got)
+	}
+}
+
+// TestGetAPIResponseFormat_BrowserUA verifies a browser User-Agent returns "json".
+func TestGetAPIResponseFormat_BrowserUA(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/v1/search", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+	if got := getAPIResponseFormat(req); got != "json" {
+		t.Errorf("getAPIResponseFormat browser = %q, want json", got)
+	}
+}
+
+// ── BuildDateTime ─────────────────────────────────────────────────────────────
+
+// TestBuildDateTime_EmptyReturnsUnknown verifies that an empty BuildTime
+// returns "unknown".
+func TestBuildDateTime_EmptyReturnsUnknown(t *testing.T) {
+	got := BuildDateTime()
+	// BuildTime may be set at build time; in tests it's typically empty or "unknown".
+	if got == "" {
+		t.Error("BuildDateTime() returned empty string, want at least 'unknown'")
+	}
+}
+
+// ── HumansTxt ────────────────────────────────────────────────────────────────
+
+// TestHumansTxt_StatusOK verifies HumansTxt returns 200 with text/plain content type.
+func TestHumansTxt_StatusOK(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	req := httptest.NewRequest("GET", "/humans.txt", nil)
+	rr := httptest.NewRecorder()
+	h.HumansTxt(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("HumansTxt status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("HumansTxt Content-Type = %q, want text/plain", ct)
+	}
+	if !strings.Contains(rr.Body.String(), "TEAM") {
+		t.Error("HumansTxt body should contain TEAM section")
+	}
+}
+
+// ── Favicon / AppleTouchIcon ─────────────────────────────────────────────────
+
+// TestFavicon_RedirectsToCorrctPath verifies Favicon redirects to favicon.ico.
+func TestFavicon_RedirectsToCorrectPath(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	req := httptest.NewRequest("GET", "/favicon.ico", nil)
+	rr := httptest.NewRecorder()
+	h.Favicon(rr, req)
+
+	if rr.Code != http.StatusMovedPermanently {
+		t.Errorf("Favicon status = %d, want %d", rr.Code, http.StatusMovedPermanently)
+	}
+	if loc := rr.Header().Get("Location"); !strings.Contains(loc, "favicon.ico") {
+		t.Errorf("Favicon redirect location = %q, want favicon.ico path", loc)
+	}
+}
+
+// TestAppleTouchIcon_RedirectsToIconPng verifies AppleTouchIcon redirects to icon PNG.
+func TestAppleTouchIcon_RedirectsToIconPng(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	req := httptest.NewRequest("GET", "/apple-touch-icon.png", nil)
+	rr := httptest.NewRecorder()
+	h.AppleTouchIcon(rr, req)
+
+	if rr.Code != http.StatusMovedPermanently {
+		t.Errorf("AppleTouchIcon status = %d, want %d", rr.Code, http.StatusMovedPermanently)
+	}
+	if loc := rr.Header().Get("Location"); !strings.Contains(loc, "icon") {
+		t.Errorf("AppleTouchIcon redirect location = %q, want icon path", loc)
+	}
+}
+
+// ── MaintenanceModeMiddleware ─────────────────────────────────────────────────
+
+// TestMaintenanceModeMiddleware_HealthzBypassed verifies /healthz is never
+// intercepted by maintenance mode even when the flag file exists.
+func TestMaintenanceModeMiddleware_HealthzBypassed(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := h.MaintenanceModeMiddleware(next)
+
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("MaintenanceModeMiddleware should pass /healthz to next handler")
+	}
+}
+
+// TestMaintenanceModeMiddleware_NoFlag passes regular request through when there
+// is no maintenance flag file.
+func TestMaintenanceModeMiddleware_NoFlag(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := h.MaintenanceModeMiddleware(next)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("MaintenanceModeMiddleware with no flag file should call next handler")
+	}
+	if rr.Code == http.StatusServiceUnavailable {
+		t.Error("MaintenanceModeMiddleware with no flag file should not return 503")
+	}
+}

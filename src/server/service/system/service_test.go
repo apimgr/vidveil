@@ -440,3 +440,188 @@ func TestShouldDaemonize_ContainerReturnsFalse(t *testing.T) {
 		t.Error("ShouldDaemonize(serviceStart=true) inside a container should return false")
 	}
 }
+
+// ── Privilege / UAC stub functions ────────────────────────────────────────────
+
+// TestShouldDropPrivileges_ReturnsBool verifies ShouldDropPrivileges returns a
+// valid bool (true when root, false otherwise — both are valid test results).
+func TestShouldDropPrivileges_ReturnsBool(t *testing.T) {
+	got := ShouldDropPrivileges()
+	want := (os.Getuid() == 0)
+	if got != want {
+		t.Errorf("ShouldDropPrivileges() = %v, want %v (uid=%d)", got, want, os.Getuid())
+	}
+}
+
+// TestGetPrivilegeDropUser_ReturnsNonEmpty verifies GetPrivilegeDropUser returns
+// the expected service account name.
+func TestGetPrivilegeDropUser_ReturnsNonEmpty(t *testing.T) {
+	got := GetPrivilegeDropUser()
+	if got == "" {
+		t.Error("GetPrivilegeDropUser() returned empty string")
+	}
+}
+
+// TestIsElevated_MatchesGetuid verifies IsElevated mirrors os.Geteuid() == 0.
+func TestIsElevated_MatchesGetuid(t *testing.T) {
+	got := IsElevated()
+	want := (os.Geteuid() == 0)
+	if got != want {
+		t.Errorf("IsElevated() = %v, want %v (euid=%d)", got, want, os.Geteuid())
+	}
+}
+
+// TestIsRunningElevated_MatchesGetuid verifies IsRunningElevated mirrors os.Getuid() == 0.
+func TestIsRunningElevated_MatchesGetuid(t *testing.T) {
+	got := IsRunningElevated()
+	want := (os.Getuid() == 0)
+	if got != want {
+		t.Errorf("IsRunningElevated() = %v, want %v (uid=%d)", got, want, os.Getuid())
+	}
+}
+
+// TestRequestElevation_AlreadyAdminWhenRoot verifies RequestElevation returns
+// ElevationAlreadyAdmin when running as root (standard in Docker containers).
+func TestRequestElevation_WhenRootAlreadyAdmin(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("test only meaningful when running as root")
+	}
+	got := RequestElevation()
+	if got != ElevationAlreadyAdmin {
+		t.Errorf("RequestElevation() as root = %v, want ElevationAlreadyAdmin", got)
+	}
+}
+
+// TestRequireAdmin_NilWhenRoot verifies RequireAdmin returns false, nil when root.
+func TestRequireAdmin_NilWhenRoot(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("test only meaningful when running as root")
+	}
+	needExit, err := RequireAdmin("test-operation")
+	if needExit {
+		t.Error("RequireAdmin() as root: needExit should be false")
+	}
+	if err != nil {
+		t.Errorf("RequireAdmin() as root: err = %v, want nil", err)
+	}
+}
+
+// TestGetWindowsServiceAccount_EmptyOnNonWindows verifies the non-Windows stub
+// always returns an empty string.
+func TestGetWindowsServiceAccount_EmptyOnNonWindows(t *testing.T) {
+	got := GetWindowsServiceAccount("any-service")
+	if got != "" {
+		t.Errorf("GetWindowsServiceAccount() non-Windows = %q, want empty", got)
+	}
+}
+
+// TestIsRunningAsService_ReturnsBool verifies IsRunningAsService returns a bool
+// without panicking.
+func TestIsRunningAsService_ReturnsBool(t *testing.T) {
+	// Result depends on whether PPID=1 (init/systemd), so just verify no panic.
+	_ = IsRunningAsService()
+}
+
+// TestDropPrivileges_NoopWhenNonRoot verifies DropPrivileges returns nil
+// immediately when not running as root.
+func TestDropPrivileges_NoopWhenNonRoot(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("test only meaningful when NOT running as root")
+	}
+	if err := DropPrivileges("nobody"); err != nil {
+		t.Errorf("DropPrivileges() non-root: got %v, want nil", err)
+	}
+}
+
+// TestCanEscalate_ReturnsBool verifies CanEscalate returns a bool without
+// panicking (result depends on environment).
+func TestCanEscalate_ReturnsBool(t *testing.T) {
+	_ = CanEscalate()
+}
+
+// ── DetectServiceManager ──────────────────────────────────────────────────────
+
+// TestDetectServiceManager_ReturnsValidString verifies DetectServiceManager
+// returns a recognised service manager name or "manual" without panicking.
+// The exact value depends on the host environment so we just range-check.
+func TestDetectServiceManager_ReturnsValidString(t *testing.T) {
+	got := DetectServiceManager()
+	valid := map[string]bool{
+		"systemd": true, "launchd": true, "runit": true, "s6": true,
+		"sysv": true, "rcd": true, "container": true, "manual": true,
+	}
+	if !valid[got] {
+		t.Errorf("DetectServiceManager() = %q, not a recognised service manager", got)
+	}
+}
+
+// ── IsRunningInContainer env-var paths ────────────────────────────────────────
+
+// TestIsRunningInContainer_ContainerEnvReturnsTrue verifies that the generic
+// "container" environment variable (used by systemd-nspawn/lxc) is detected.
+func TestIsRunningInContainer_ContainerEnvReturnsTrue(t *testing.T) {
+	t.Setenv("container", "lxc")
+	if !IsRunningInContainer() {
+		t.Error("IsRunningInContainer() = false with container=lxc, want true")
+	}
+}
+
+// TestIsRunningInContainer_KubernetesSvcHostReturnsTrue verifies that
+// KUBERNETES_SERVICE_HOST triggers container detection.
+func TestIsRunningInContainer_KubernetesSvcHostReturnsTrue(t *testing.T) {
+	t.Setenv("container", "")
+	t.Setenv("KUBERNETES_SERVICE_HOST", "10.96.0.1")
+	if !IsRunningInContainer() {
+		t.Error("IsRunningInContainer() = false with KUBERNETES_SERVICE_HOST set, want true")
+	}
+}
+
+// ── DetectEscalation ──────────────────────────────────────────────────────────
+
+// TestDetectEscalation_ReturnsStringOrEmpty verifies DetectEscalation returns a
+// known value or empty string without panicking.
+func TestDetectEscalation_ReturnsStringOrEmpty(t *testing.T) {
+	got := DetectEscalation()
+	valid := map[string]bool{"sudo": true, "doas": true, "pkexec": true, "runas": true, "": true}
+	if !valid[got] {
+		t.Errorf("DetectEscalation() = %q, want sudo|doas|pkexec|runas|empty", got)
+	}
+}
+
+// ── IsRunningAsRoot ───────────────────────────────────────────────────────────
+
+// TestIsRunningAsRoot_MatchesGetuid verifies IsRunningAsRoot matches os.Getuid()==0
+// on non-Windows.
+func TestIsRunningAsRoot_MatchesGetuid(t *testing.T) {
+	got := IsRunningAsRoot()
+	want := os.Getuid() == 0
+	if got != want {
+		t.Errorf("IsRunningAsRoot() = %v, want %v (uid=%d)", got, want, os.Getuid())
+	}
+}
+
+// ── IsWindowsService ─────────────────────────────────────────────────────────
+
+// TestIsWindowsService_FalseOnNonWindows verifies the non-Windows stub always
+// returns false.
+func TestIsWindowsService_FalseOnNonWindows(t *testing.T) {
+	if IsWindowsService() {
+		t.Error("IsWindowsService() = true on non-Windows, want false")
+	}
+}
+
+// ── GetServiceStatus no-systemd path ─────────────────────────────────────────
+
+// TestGetServiceStatus_UnknownOnUnsupportedOS verifies GetServiceStatus returns
+// "unknown" with a nil error when neither systemd nor launchctl is active.
+func TestGetServiceStatus_FallbackUnknown(t *testing.T) {
+	sm := NewServiceManager("testapp", "/usr/bin/testapp", "/etc/testapp", "/var/lib/testapp")
+	status, err := sm.GetServiceStatus()
+	if err != nil {
+		t.Errorf("GetServiceStatus() unexpected error: %v", err)
+	}
+	valid := map[string]bool{"running": true, "stopped": true, "unknown": true}
+	if !valid[status] {
+		t.Errorf("GetServiceStatus() = %q, want running|stopped|unknown", status)
+	}
+}

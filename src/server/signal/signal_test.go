@@ -6,11 +6,13 @@
 package signal
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
 	"syscall"
 	"testing"
+	"time"
 )
 
 // resetGlobals restores all package-level variables to their zero values.
@@ -436,5 +438,84 @@ func TestGlobalStateDefaultsAfterPreviousTest(t *testing.T) {
 	}
 	if statusDumpFn != nil {
 		t.Error("statusDumpFn not reset to nil after previous test")
+	}
+}
+
+// --- SetupSignalHandler ---
+
+// TestSetupSignalHandlerNilServerNoPanic verifies that SetupSignalHandler does
+// not panic when passed a nil *http.Server. The goroutine spawned internally
+// will simply block until a signal arrives — that is acceptable for a test.
+func TestSetupSignalHandlerNilServerNoPanic(t *testing.T) {
+	resetGlobals(t)
+	dir := t.TempDir()
+	pidPath := filepath.Join(dir, "test.pid")
+	// Must not panic; the goroutine blocks but the test does not send signals.
+	SetupSignalHandler(nil, pidPath)
+}
+
+// TestSetupSignalHandlerEmptyPidFileNoPanic verifies SetupSignalHandler tolerates
+// an empty PID file path without panicking.
+func TestSetupSignalHandlerEmptyPidFileNoPanic(t *testing.T) {
+	resetGlobals(t)
+	SetupSignalHandler(nil, "")
+}
+
+// TestSetupSignalHandlerUSR1InvokesLogReopen verifies that sending SIGUSR1 to
+// the current process causes the registered logReopenFn to be called.
+// SIGUSR1 is safe to send to ourselves — it does not terminate the process.
+func TestSetupSignalHandlerUSR1InvokesLogReopen(t *testing.T) {
+	resetGlobals(t)
+	called := make(chan struct{}, 1)
+	SetLogReopenFunc(func() { called <- struct{}{} })
+	SetupSignalHandler(nil, "")
+	syscall.Kill(os.Getpid(), syscall.SIGUSR1)
+	select {
+	case <-called:
+	case <-waitTimeout(t, 2):
+		t.Error("logReopenFn was not called within 2s after SIGUSR1")
+	}
+}
+
+// TestSetupSignalHandlerUSR2InvokesStatusDump verifies that sending SIGUSR2 to
+// the current process causes the registered statusDumpFn to be called.
+// SIGUSR2 is safe to send to ourselves — it does not terminate the process.
+func TestSetupSignalHandlerUSR2InvokesStatusDump(t *testing.T) {
+	resetGlobals(t)
+	called := make(chan struct{}, 1)
+	SetStatusDumpFunc(func() { called <- struct{}{} })
+	SetupSignalHandler(nil, "")
+	syscall.Kill(os.Getpid(), syscall.SIGUSR2)
+	select {
+	case <-called:
+	case <-waitTimeout(t, 2):
+		t.Error("statusDumpFn was not called within 2s after SIGUSR2")
+	}
+}
+
+// waitTimeout returns a channel that fires after n seconds, used as a test deadline.
+func waitTimeout(t *testing.T, secs int) <-chan struct{} {
+	t.Helper()
+	ch := make(chan struct{})
+	go func() {
+		timer := time.NewTimer(time.Duration(secs) * time.Second)
+		defer timer.Stop()
+		<-timer.C
+		close(ch)
+	}()
+	return ch
+}
+
+// --- WaitForShutdown ---
+
+// TestWaitForShutdownCancelledContextReturnsSIGTERM verifies that when the
+// supplied context is already cancelled WaitForShutdown returns immediately
+// with syscall.SIGTERM.
+func TestWaitForShutdownCancelledContextReturnsSIGTERM(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	sig := WaitForShutdown(ctx)
+	if sig != syscall.SIGTERM {
+		t.Errorf("WaitForShutdown(cancelled ctx) = %v, want SIGTERM", sig)
 	}
 }

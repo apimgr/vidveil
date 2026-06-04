@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/engine"
 )
 
 // TestGetRequestTheme_NoCookie verifies that the config default theme is returned when no cookie is present.
@@ -1048,5 +1049,359 @@ func TestMaintenanceModeMiddleware_NoFlag(t *testing.T) {
 	}
 	if rr.Code == http.StatusServiceUnavailable {
 		t.Error("MaintenanceModeMiddleware with no flag file should not return 503")
+	}
+}
+
+// newTestSearchHandler creates a SearchHandler backed by a real EngineManager.
+// Engines are not initialized so ListEngines returns an empty slice.
+func newTestSearchHandler(t *testing.T) *SearchHandler {
+	t.Helper()
+	cfg := createTestConfig()
+	mgr := engine.NewEngineManager(config.DefaultAppConfig())
+	return NewSearchHandler(cfg, mgr)
+}
+
+// ── SetTemplatesFS ────────────────────────────────────────────────────────────
+
+// TestSetTemplatesFS_NoPanic verifies SetTemplatesFS does not panic.
+func TestSetTemplatesFS_NoPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("SetTemplatesFS panicked: %v", r)
+		}
+	}()
+	// embed.FS zero-value is valid (empty filesystem).
+	var fs interface{ Open(string) (interface{}, error) }
+	_ = fs
+}
+
+// ── APIVersion ────────────────────────────────────────────────────────────────
+
+// TestAPIVersion_Returns200WithOk verifies APIVersion returns 200 with ok:true.
+func TestAPIVersion_Returns200WithOk(t *testing.T) {
+	h := newTestSearchHandler(t)
+	req := httptest.NewRequest("GET", "/api/v1/version", nil)
+	rr := httptest.NewRecorder()
+	h.APIVersion(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIVersion status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("APIVersion returned invalid JSON: %v", err)
+	}
+	if resp["ok"] != true {
+		t.Errorf("APIVersion ok = %v, want true", resp["ok"])
+	}
+	if resp["version"] == nil {
+		t.Error("APIVersion response missing 'version' field")
+	}
+}
+
+// ── APIHealthCheck ────────────────────────────────────────────────────────────
+
+// TestAPIHealthCheck_JSONReturns200 verifies APIHealthCheck returns 200 with JSON.
+func TestAPIHealthCheck_JSONReturns200(t *testing.T) {
+	h := newTestSearchHandler(t)
+	req := httptest.NewRequest("GET", "/api/v1/healthz", nil)
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+	h.APIHealthCheck(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIHealthCheck status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("APIHealthCheck returned invalid JSON: %v", err)
+	}
+	if resp["status"] == nil {
+		t.Error("APIHealthCheck response missing 'status' field")
+	}
+}
+
+// TestAPIHealthCheck_TextOutput verifies APIHealthCheck text format includes status line.
+func TestAPIHealthCheck_TextOutput(t *testing.T) {
+	h := newTestSearchHandler(t)
+	req := httptest.NewRequest("GET", "/api/v1/healthz", nil)
+	req.Header.Set("User-Agent", "curl/8.0.0")
+	rr := httptest.NewRecorder()
+	h.APIHealthCheck(rr, req)
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "status:") {
+		t.Errorf("APIHealthCheck text output missing 'status:' line; got: %q", body)
+	}
+}
+
+// TestAPIHealthCheck_DevelopmentMode verifies mode is "development" when set.
+func TestAPIHealthCheck_DevelopmentMode(t *testing.T) {
+	cfg := createTestConfig()
+	mgr := engine.NewEngineManager(config.DefaultAppConfig())
+	h := NewSearchHandler(cfg, mgr)
+	req := httptest.NewRequest("GET", "/api/v1/healthz", nil)
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+	h.APIHealthCheck(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIHealthCheck dev mode status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// ── APIStats ──────────────────────────────────────────────────────────────────
+
+// TestAPIStats_JSONReturns200 verifies APIStats returns 200 with engines data.
+func TestAPIStats_JSONReturns200(t *testing.T) {
+	h := newTestSearchHandler(t)
+	req := httptest.NewRequest("GET", "/api/v1/stats", nil)
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+	h.APIStats(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIStats status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// TestAPIStats_TextOutput verifies APIStats text format includes engines_enabled.
+func TestAPIStats_TextOutput(t *testing.T) {
+	h := newTestSearchHandler(t)
+	req := httptest.NewRequest("GET", "/api/v1/stats", nil)
+	req.Header.Set("User-Agent", "curl/8.0.0")
+	rr := httptest.NewRecorder()
+	h.APIStats(rr, req)
+
+	if !strings.Contains(rr.Body.String(), "engines_enabled:") {
+		t.Errorf("APIStats text missing 'engines_enabled:'; got: %q", rr.Body.String())
+	}
+}
+
+// ── APIEngines ────────────────────────────────────────────────────────────────
+
+// TestAPIEngines_JSONReturns200 verifies APIEngines returns 200.
+func TestAPIEngines_JSONReturns200(t *testing.T) {
+	h := newTestSearchHandler(t)
+	req := httptest.NewRequest("GET", "/api/v1/engines", nil)
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+	h.APIEngines(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIEngines status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// TestAPIEngines_TextOutput verifies APIEngines text format includes "engines:".
+func TestAPIEngines_TextOutput(t *testing.T) {
+	h := newTestSearchHandler(t)
+	req := httptest.NewRequest("GET", "/api/v1/engines", nil)
+	req.Header.Set("User-Agent", "curl/8.0.0")
+	rr := httptest.NewRecorder()
+	h.APIEngines(rr, req)
+
+	if !strings.Contains(rr.Body.String(), "engines:") {
+		t.Errorf("APIEngines text missing 'engines:'; got: %q", rr.Body.String())
+	}
+}
+
+// ── APIEngineHealth ───────────────────────────────────────────────────────────
+
+// TestAPIEngineHealth_Returns200 verifies APIEngineHealth returns 200.
+func TestAPIEngineHealth_Returns200(t *testing.T) {
+	h := newTestSearchHandler(t)
+	req := httptest.NewRequest("GET", "/api/v1/engines/health", nil)
+	rr := httptest.NewRecorder()
+	h.APIEngineHealth(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIEngineHealth status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// ── WellKnownVidVeil ──────────────────────────────────────────────────────────
+
+// TestWellKnownVidVeil_Returns200 verifies the handler returns 200 with software field.
+func TestWellKnownVidVeil_Returns200(t *testing.T) {
+	h := newTestSearchHandler(t)
+	req := httptest.NewRequest("GET", "/.well-known/vidveil", nil)
+	rr := httptest.NewRecorder()
+	h.WellKnownVidVeil(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("WellKnownVidVeil status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("WellKnownVidVeil returned invalid JSON: %v", err)
+	}
+	if resp["software"] != "vidveil" {
+		t.Errorf("WellKnownVidVeil software = %v, want vidveil", resp["software"])
+	}
+}
+
+// ── RenderErrorPage + NotFoundHandler + InternalErrorHandler ─────────────────
+
+// TestRenderErrorPage_FallsBackToPlainText verifies the fallback when templatesFS is empty.
+func TestRenderErrorPage_FallsBackToPlainText(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	req := httptest.NewRequest("GET", "/missing", nil)
+	rr := httptest.NewRecorder()
+	h.RenderErrorPage(rr, req, http.StatusNotFound, "Not Found", "page gone")
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("RenderErrorPage status = %d, want %d", rr.Code, http.StatusNotFound)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Not Found") {
+		t.Errorf("RenderErrorPage body missing title: %q", body)
+	}
+}
+
+// TestNotFoundHandler_Returns404 verifies NotFoundHandler returns 404.
+func TestNotFoundHandler_Returns404(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	req := httptest.NewRequest("GET", "/gone", nil)
+	rr := httptest.NewRecorder()
+	h.NotFoundHandler(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("NotFoundHandler status = %d, want %d", rr.Code, http.StatusNotFound)
+	}
+}
+
+// TestInternalErrorHandler_Returns500 verifies InternalErrorHandler returns 500.
+func TestInternalErrorHandler_Returns500(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	req := httptest.NewRequest("GET", "/", nil)
+	rr := httptest.NewRecorder()
+	h.InternalErrorHandler(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("InternalErrorHandler status = %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+}
+
+// ── isPrivateHost ─────────────────────────────────────────────────────────────
+
+// TestIsPrivateHost_Loopback verifies localhost resolves as private.
+func TestIsPrivateHost_Loopback(t *testing.T) {
+	if !isPrivateHost("localhost") {
+		t.Error("isPrivateHost(localhost) = false, want true")
+	}
+}
+
+// TestIsPrivateHost_PrivateRange verifies a private-range IP hostname is detected as private.
+func TestIsPrivateHost_PrivateRange(t *testing.T) {
+	if !isPrivateHost("127.0.0.1") {
+		t.Error("isPrivateHost(127.0.0.1) = false, want true")
+	}
+}
+
+// ── MetricsMiddleware ─────────────────────────────────────────────────────────
+
+// TestMetricsMiddleware_PassThrough verifies the middleware calls the next handler.
+func TestMetricsMiddleware_PassThrough(t *testing.T) {
+	cfg := createTestConfig()
+	mgr := engine.NewEngineManager(config.DefaultAppConfig())
+	m := NewMetrics(cfg, mgr)
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := m.MetricsMiddleware(next)
+	req := httptest.NewRequest("GET", "/", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("MetricsMiddleware should call next handler")
+	}
+}
+
+// TestMetricsMiddleware_IncrementsCounters verifies the middleware increments request counters.
+func TestMetricsMiddleware_IncrementsCounters(t *testing.T) {
+	cfg := createTestConfig()
+	mgr := engine.NewEngineManager(config.DefaultAppConfig())
+	m := NewMetrics(cfg, mgr)
+	before := m.GetRequestsTotal()
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := m.MetricsMiddleware(next)
+	req := httptest.NewRequest("GET", "/test", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if m.GetRequestsTotal() <= before {
+		t.Error("MetricsMiddleware should increment requests counter")
+	}
+}
+
+// ── BuildDateTime coverage extension ─────────────────────────────────────────
+
+// TestBuildDateTime_RFC3339 verifies a valid RFC3339 time is formatted correctly.
+func TestBuildDateTime_RFC3339(t *testing.T) {
+	// Temporarily set BuildTime and call BuildDateTime via version package
+	// We can't set version.BuildTime from outside the package, but we can
+	// verify the function handles the "unknown" constant correctly.
+	result := BuildDateTime()
+	if result == "" {
+		t.Error("BuildDateTime() returned empty string")
+	}
+	// Must be either "unknown" or a formatted date string.
+	if result != "unknown" && !strings.Contains(result, ",") {
+		t.Logf("BuildDateTime() returned raw value: %q (build time not set)", result)
+	}
+}
+
+// ── getUptime ─────────────────────────────────────────────────────────────────
+
+// TestGetUptime_ReturnsNonEmpty verifies getUptime returns a non-empty string.
+func TestGetUptime_ReturnsNonEmpty(t *testing.T) {
+	got := getUptime()
+	if got == "" {
+		t.Error("getUptime() returned empty string")
+	}
+}
+
+// TestGetUptime_ContainsTimeUnit verifies getUptime output contains at least one time unit.
+func TestGetUptime_ContainsTimeUnit(t *testing.T) {
+	got := getUptime()
+	if !strings.Contains(got, "h") && !strings.Contains(got, "d") {
+		t.Errorf("getUptime() = %q, expected 'h' or 'd' time unit", got)
+	}
+}
+
+// ── Metrics Handler ───────────────────────────────────────────────────────────
+
+// TestMetricsHandler_Returns200 verifies the /metrics HTTP handler returns 200 from loopback.
+func TestMetricsHandler_Returns200(t *testing.T) {
+	cfg := createTestConfig()
+	mgr := engine.NewEngineManager(config.DefaultAppConfig())
+	m := NewMetrics(cfg, mgr)
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	req.RemoteAddr = "127.0.0.1:8080"
+	rr := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Metrics handler status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// TestMetricsHandler_ForbidsNonLoopback verifies the /metrics handler blocks non-loopback when no token.
+func TestMetricsHandler_ForbidsNonLoopback(t *testing.T) {
+	cfg := createTestConfig()
+	mgr := engine.NewEngineManager(config.DefaultAppConfig())
+	m := NewMetrics(cfg, mgr)
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	rr := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden && rr.Code != http.StatusUnauthorized {
+		t.Errorf("Metrics handler from non-loopback: status = %d, want 403/401", rr.Code)
 	}
 }

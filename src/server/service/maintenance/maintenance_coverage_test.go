@@ -460,3 +460,163 @@ func TestSetUpdateBranch_InvalidBranch(t *testing.T) {
 		t.Error("SetUpdateBranch(nightly): expected error for invalid branch, got nil")
 	}
 }
+
+// ── SetUpdateBranch + GetUpdateBranch valid branches ─────────────────────────
+
+// TestSetUpdateBranch_ValidBranches verifies all three valid branches can be set.
+func TestSetUpdateBranch_ValidBranches(t *testing.T) {
+	for _, branch := range []string{"stable", "beta", "daily"} {
+		m, _, _ := newManagerWithDirs(t)
+		if err := m.SetUpdateBranch(branch); err != nil {
+			t.Errorf("SetUpdateBranch(%q): got %v, want nil", branch, err)
+		}
+	}
+}
+
+// TestGetUpdateBranch_ReturnsSetBranch verifies GetUpdateBranch reads back
+// what SetUpdateBranch wrote.
+func TestGetUpdateBranch_ReturnsSetBranch(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+	if err := m.SetUpdateBranch("beta"); err != nil {
+		t.Fatalf("SetUpdateBranch: %v", err)
+	}
+	if got := m.GetUpdateBranch(); got != "beta" {
+		t.Errorf("GetUpdateBranch() = %q, want %q", got, "beta")
+	}
+}
+
+// ── SetMaintenanceMode enable + disable ───────────────────────────────────────
+
+// TestSetMaintenanceMode_EnableCreatesFlag verifies the enable path creates the
+// flag file and IsMaintenanceMode returns true.
+func TestSetMaintenanceMode_EnableCreatesFlag(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.SetMaintenanceMode(true); err != nil {
+		t.Fatalf("SetMaintenanceMode(true): %v", err)
+	}
+	if !m.IsMaintenanceMode() {
+		t.Error("IsMaintenanceMode() = false after enable, want true")
+	}
+}
+
+// TestSetMaintenanceMode_EnableThenDisable verifies the round-trip leaves
+// maintenance mode off.
+func TestSetMaintenanceMode_EnableThenDisable(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.SetMaintenanceMode(true); err != nil {
+		t.Fatalf("SetMaintenanceMode(true): %v", err)
+	}
+	if err := m.SetMaintenanceMode(false); err != nil {
+		t.Fatalf("SetMaintenanceMode(false): %v", err)
+	}
+	if m.IsMaintenanceMode() {
+		t.Error("IsMaintenanceMode() = true after disable, want false")
+	}
+}
+
+// ── BackupWithOptions encrypted path ─────────────────────────────────────────
+
+// TestBackupWithOptions_EncryptedPath verifies BackupWithOptions with a
+// password creates a .enc file and that RestoreWithPassword can decrypt it.
+func TestBackupWithOptions_EncryptedPath(t *testing.T) {
+	backupDir := t.TempDir()
+	m, configDir, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	outFile := filepath.Join(backupDir, "enc_backup.tar.gz.enc")
+	err := m.BackupWithOptions(BackupOptions{
+		Filename:   outFile,
+		Password:   "testpassword123",
+		MaxBackups: 5,
+	})
+	if err != nil {
+		t.Fatalf("BackupWithOptions encrypted: %v", err)
+	}
+	if _, err := os.Stat(outFile); err != nil {
+		t.Error("BackupWithOptions encrypted: output file missing")
+	}
+
+	if err := m.RestoreWithPassword(outFile, "testpassword123"); err != nil {
+		t.Errorf("RestoreWithPassword correct password: %v", err)
+	}
+}
+
+// ── BackupWithOptions IncludeSSL path ────────────────────────────────────────
+
+// TestBackupWithOptions_IncludeSSL verifies IncludeSSL=true runs without error
+// even when the ssl/ subdirectory does not exist (the stat guard skips it).
+func TestBackupWithOptions_IncludeSSL(t *testing.T) {
+	backupDir := t.TempDir()
+	m, configDir, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	outFile := filepath.Join(backupDir, "ssl_backup.tar.gz")
+	err := m.BackupWithOptions(BackupOptions{
+		Filename:   outFile,
+		IncludeSSL: true,
+		MaxBackups: 5,
+	})
+	if err != nil {
+		t.Fatalf("BackupWithOptions IncludeSSL=true: %v", err)
+	}
+}
+
+// ── BackupIncremental timestamp naming ───────────────────────────────────────
+
+// TestBackupIncremental_AutoNaming verifies BackupIncremental uses auto-naming
+// when no filename is given. We pass empty string via Backup(), which delegates
+// to BackupIncremental with an empty path.
+func TestBackupIncremental_AutoNaming(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.BackupIncremental(""); err != nil {
+		t.Fatalf("BackupIncremental auto-name: %v", err)
+	}
+
+	entries, err := os.ReadDir(m.paths.Backup)
+	if err != nil {
+		t.Fatalf("reading backup dir: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Error("BackupIncremental auto-name: no files in backup dir")
+	}
+}
+
+// ── verifyBackup empty-size path ─────────────────────────────────────────────
+
+// TestVerifyBackup_ZeroSizeFile verifies verifyBackup rejects an empty file.
+func TestVerifyBackup_ZeroSizeFile(t *testing.T) {
+	backupDir := t.TempDir()
+	m, _, _ := newManagerWithDirs(t)
+
+	emptyFile := filepath.Join(backupDir, "empty.tar.gz")
+	os.WriteFile(emptyFile, []byte{}, 0600)
+
+	if err := m.verifyBackup(emptyFile, "sha256:e3b0", ""); err == nil {
+		t.Error("verifyBackup zero-size: expected error, got nil")
+	}
+}
+
+// ── applyRetentionWithOptions weekly/monthly/yearly paths ────────────────────
+
+// TestApplyRetentionWithOptions_KeepWeekly verifies keepWeekly>0 path does not
+// panic or error when there are fewer files than the keep count.
+func TestApplyRetentionWithOptions_KeepWeeklyMonthlyYearly(t *testing.T) {
+	backupDir := t.TempDir()
+	m, configDir, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("x: 1"), 0644)
+
+	for i := 0; i < 3; i++ {
+		fname := filepath.Join(backupDir, time.Now().Add(-time.Duration(i)*24*time.Hour).Format("vidveil_backup_2006-01-02_150405")+".tar.gz")
+		m.BackupWithOptions(BackupOptions{Filename: fname, MaxBackups: 10})
+	}
+
+	if err := m.applyRetentionWithOptions(10, 2, 1, 1); err != nil {
+		t.Errorf("applyRetentionWithOptions weekly/monthly/yearly: %v", err)
+	}
+}

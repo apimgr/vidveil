@@ -57,3 +57,37 @@ func TestCanOpenBrowser_Idempotent(t *testing.T) {
 		t.Errorf("CanOpenBrowser() returned %v then %v; must be idempotent", first, second)
 	}
 }
+
+// --- OpenURL ---
+
+// TestOpenURL_NoPanic verifies OpenURL does not panic on any reachable OS path.
+// It may return an error (xdg-open unavailable, browser fails, etc.); that is
+// acceptable — only a panic is a test failure.
+func TestOpenURL_NoPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("OpenURL panicked: %v", r)
+		}
+	}()
+	// Use a clearly non-opening URL; any error from the OS is fine.
+	_ = OpenURL("about:blank")
+}
+
+// TestOpenURL_EmptyURLNoPanic verifies OpenURL handles an empty URL without
+// panicking (the browser command may fail, which is acceptable).
+func TestOpenURL_EmptyURLNoPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("OpenURL empty URL panicked: %v", r)
+		}
+	}()
+	_ = OpenURL("")
+}
+
+// TestOpenURL_ReturnsErrorOrNil verifies OpenURL returns error or nil — never
+// a panic or an undefined value.
+func TestOpenURL_ReturnsErrorOrNil(t *testing.T) {
+	err := OpenURL("https://example.com")
+	// In headless CI, xdg-open/open may fail. Both nil and non-nil are correct.
+	_ = err
+}

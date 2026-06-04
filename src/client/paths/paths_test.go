@@ -4,6 +4,7 @@ package paths
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -78,6 +79,31 @@ func TestTokenFileUsesConfigDirectory(t *testing.T) {
 	wantTokenPath := filepath.Join(ConfigDir(), "token")
 	if gotTokenPath := TokenFile(); gotTokenPath != wantTokenPath {
 		t.Fatalf("token path = %q, want %q", gotTokenPath, wantTokenPath)
+	}
+}
+
+func TestGitHubOrgReturnsApimgr(t *testing.T) {
+	if got := GitHubOrg(); got != "apimgr" {
+		t.Errorf("GitHubOrg() = %q, want %q", got, "apimgr")
+	}
+}
+
+func TestGitHubRepoReturnsVidveil(t *testing.T) {
+	if got := GitHubRepo(); got != "vidveil" {
+		t.Errorf("GitHubRepo() = %q, want %q", got, "vidveil")
+	}
+}
+
+func TestLogFileContainsLogDir(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("APPDATA", filepath.Join(homeDir, "AppData", "Roaming"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(homeDir, "AppData", "Local"))
+
+	lf := LogFile()
+	ld := LogDir()
+	if !strings.HasPrefix(lf, ld) {
+		t.Errorf("LogFile() = %q, expected prefix %q", lf, ld)
 	}
 }
 

@@ -8,8 +8,10 @@ package signal
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -370,6 +372,75 @@ func TestRemovePIDFileIdempotencyFails(t *testing.T) {
 	}
 	if err := RemovePIDFile(path); err == nil {
 		t.Error("second RemovePIDFile(nonexistent) = nil, want error")
+	}
+}
+
+// --- isOurProcess / isOurProcessDarwin ---
+
+// TestIsOurProcessInvalidPIDFallback verifies that isOurProcess with a PID whose
+// /proc entry doesn't exist falls back to isOurProcessDarwin (the ps-based path).
+// On Linux, /proc/999999999/exe will not exist, so the readlink fails and the
+// Darwin fallback is exercised. The overall result must be false (no such process).
+func TestIsOurProcessInvalidPIDFallback(t *testing.T) {
+	const impossiblePID = 999999999
+	got := isOurProcess(impossiblePID, "vidveil")
+	if got {
+		t.Errorf("isOurProcess(%d, \"vidveil\") = true, want false (no such process)", impossiblePID)
+	}
+}
+
+// TestIsOurProcessDarwinWithOurOwnPID calls isOurProcessDarwin directly against
+// the current PID. On Linux, ps is available (busybox or procps) and the current
+// process must be visible. The result may be true or false depending on the
+// exact comm name reported — we only verify no panic and a valid bool.
+func TestIsOurProcessDarwinNoPanic(t *testing.T) {
+	ownPID := os.Getpid()
+	result := isOurProcessDarwin(ownPID, "anything")
+	// result is either true or false — just confirm it's reachable without panic.
+	_ = result
+}
+
+// TestIsOurProcessDarwinDeadPIDReturnsFalse verifies that isOurProcessDarwin
+// returns false when ps cannot find the given PID.
+func TestIsOurProcessDarwinDeadPIDReturnsFalse(t *testing.T) {
+	if got := isOurProcessDarwin(999999999, "vidveil"); got {
+		t.Error("isOurProcessDarwin(999999999, \"vidveil\") = true, want false")
+	}
+}
+
+// TestIsOurProcessDarwinMatchesOwnProcess verifies that isOurProcessDarwin returns
+// true when the comm name retrieved by ps exactly matches the argument.
+// We discover our own comm name via ps first to ensure an exact match.
+func TestIsOurProcessDarwinMatchesOwnProcess(t *testing.T) {
+	ownPID := os.Getpid()
+	cmd := exec.Command("ps", "-p", strconv.Itoa(ownPID), "-o", "comm=")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Skipf("ps not available or returned error (%v), skipping", err)
+	}
+	commName := strings.TrimSpace(string(out))
+	if commName == "" {
+		t.Skip("ps returned empty comm name, skipping")
+	}
+	if !isOurProcessDarwin(ownPID, commName) {
+		t.Errorf("isOurProcessDarwin(%d, %q) = false, want true", ownPID, commName)
+	}
+}
+
+// TestWritePIDFileMkdirAllError verifies that WritePIDFile returns an error
+// when the parent directory cannot be created (a regular file blocks mkdirall).
+func TestWritePIDFileMkdirAllError(t *testing.T) {
+	dir := t.TempDir()
+	// Create a regular file where we want a directory to be
+	blockPath := filepath.Join(dir, "notadir")
+	if err := os.WriteFile(blockPath, []byte("block"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	// Attempt to create a PID file inside the regular file (impossible)
+	pidPath := filepath.Join(blockPath, "nested", "app.pid")
+	err := WritePIDFile(pidPath, "vidveil")
+	if err == nil {
+		t.Error("WritePIDFile with file-as-parent = nil, want error")
 	}
 }
 

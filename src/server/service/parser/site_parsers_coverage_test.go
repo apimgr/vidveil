@@ -240,3 +240,127 @@ func TestExtractViewsFromText_NoMatch(t *testing.T) {
 		t.Errorf("extractViewsFromText no match count = %d, want 0", count)
 	}
 }
+
+// ---- MotherlessParser ----
+
+// NewMotherlessParser must return a non-nil parser with the expected BaseURL.
+func TestNewMotherlessParser_BaseURL(t *testing.T) {
+	p := NewMotherlessParser()
+	if p == nil {
+		t.Fatal("NewMotherlessParser() returned nil")
+	}
+	if p.BaseURL != "https://motherless.com" {
+		t.Errorf("BaseURL = %q, want %q", p.BaseURL, "https://motherless.com")
+	}
+}
+
+// ItemSelector must return a non-empty CSS selector string.
+func TestMotherlessParser_ItemSelector(t *testing.T) {
+	p := NewMotherlessParser()
+	sel := p.ItemSelector()
+	if sel == "" {
+		t.Error("ItemSelector() returned empty string")
+	}
+}
+
+// No <a> tag in selection → href is empty → Parse returns nil.
+func TestMotherlessParse_NoLink(t *testing.T) {
+	p := NewMotherlessParser()
+	sel := newDoc(`<div class="thumb-container"><span>no link</span></div>`).Find("div.thumb-container")
+	if p.Parse(sel) != nil {
+		t.Error("MotherlessParser.Parse: expected nil when no href present")
+	}
+}
+
+// Valid anchor with href but no img alt and no link title → title empty → Parse returns nil.
+func TestMotherlessParse_NoTitle(t *testing.T) {
+	p := NewMotherlessParser()
+	html := `<div class="thumb-container">
+		<a href="/ABCD1234">
+			<img src="https://cdn.motherlessmedia.com/thumbs/ABCD1234-small.jpg">
+		</a>
+	</div>`
+	sel := newDoc(html).Find("div.thumb-container")
+	if p.Parse(sel) != nil {
+		t.Error("MotherlessParser.Parse: expected nil when title is empty")
+	}
+}
+
+// Valid HTML with href, img alt title, and thumbnail yields a non-nil VideoItem.
+func TestMotherlessParse_Valid(t *testing.T) {
+	p := NewMotherlessParser()
+	html := `<div class="thumb-container">
+		<a href="/ABCD1234">
+			<img src="https://cdn.motherlessmedia.com/thumbs/ABCD1234-small.jpg"
+			     alt="My Motherless Video">
+		</a>
+		<div class="duration">4:20</div>
+	</div>`
+	sel := newDoc(html).Find("div.thumb-container")
+	item := p.Parse(sel)
+	if item == nil {
+		t.Fatal("MotherlessParser.Parse: expected non-nil VideoItem for valid HTML")
+	}
+	if item.URL == "" {
+		t.Error("MotherlessParser.Parse: URL must not be empty")
+	}
+	if item.Title == "" {
+		t.Error("MotherlessParser.Parse: Title must not be empty")
+	}
+}
+
+// Valid HTML where thumbnail uses data-src fallback (placeholder src).
+func TestMotherlessParse_PlaceholderThumbnailFallback(t *testing.T) {
+	p := NewMotherlessParser()
+	html := `<div class="thumb-container">
+		<a href="/EFGH5678">
+			<img src="plc.gif" data-src="https://cdn.motherlessmedia.com/thumbs/EFGH5678-small.jpg"
+			     alt="Fallback Thumbnail Video">
+		</a>
+	</div>`
+	sel := newDoc(html).Find("div.thumb-container")
+	item := p.Parse(sel)
+	if item == nil {
+		t.Fatal("MotherlessParser.Parse: expected non-nil VideoItem with placeholder fallback")
+	}
+	if item.Thumbnail == "" {
+		t.Error("MotherlessParser.Parse: Thumbnail must not be empty when data-src is set")
+	}
+}
+
+// Valid HTML with views counter in a .views element.
+func TestMotherlessParse_WithViews(t *testing.T) {
+	p := NewMotherlessParser()
+	html := `<div class="thumb-container">
+		<a href="/IJKL9012">
+			<img src="https://cdn.motherlessmedia.com/thumbs/IJKL9012-small.jpg"
+			     alt="Video With Views">
+		</a>
+		<span class="views">1.2M</span>
+	</div>`
+	sel := newDoc(html).Find("div.thumb-container")
+	item := p.Parse(sel)
+	if item == nil {
+		t.Fatal("MotherlessParser.Parse: expected non-nil VideoItem with views")
+	}
+}
+
+// Valid HTML with uploader link using /m/ pattern.
+func TestMotherlessParse_WithUploader(t *testing.T) {
+	p := NewMotherlessParser()
+	html := `<div class="thumb-container">
+		<a href="/MNOP3456">
+			<img src="https://cdn.motherlessmedia.com/thumbs/MNOP3456-small.jpg"
+			     alt="Video With Uploader">
+		</a>
+		<a href="/m/UploaderName">UploaderName</a>
+	</div>`
+	sel := newDoc(html).Find("div.thumb-container")
+	item := p.Parse(sel)
+	if item == nil {
+		t.Fatal("MotherlessParser.Parse: expected non-nil VideoItem with uploader")
+	}
+	if item.Uploader == "" {
+		t.Error("MotherlessParser.Parse: Uploader must not be empty when /m/ link is present")
+	}
+}

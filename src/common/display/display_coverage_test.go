@@ -282,6 +282,21 @@ func TestDetectDisplayEnvEmptyTERMPreserved(t *testing.T) {
 	}
 }
 
+// --- autoDetectDisplayMode: no-TTY + HasDisplay + IsSSH → CLI fallback ---
+// This path reaches the final "return DisplayModeCLI" because:
+//   !IsTerminal && !HasDisplay = false (HasDisplay is true) → not headless
+//   TerminalType != "dumb"
+//   HasDisplay && !IsSSH = true && false = false → not GUI
+//   IsTerminal = false → not TUI
+//   → CLI fallback
+func TestAutoDetectDisplayModeCLIFallback(t *testing.T) {
+	e := &DisplayEnv{IsTerminal: false, HasDisplay: true, TerminalType: "xterm-256color", IsSSH: true}
+	got := e.autoDetectDisplayMode()
+	if got != DisplayModeCLI {
+		t.Errorf("autoDetectDisplayMode() no-tty+display+SSH = %s, want cli", got)
+	}
+}
+
 // --- DisplayEnv.SupportsColors (env-level method) vs DisplayMode.SupportsColors ---
 // The env-level method applies additional terminal-name heuristics and also
 // requires IsTerminal=true. This is separate from the mode-level method.

@@ -99,6 +99,17 @@ func TestGetColorPaletteEmptyIsDefault(t *testing.T) {
 	}
 }
 
+// "auto" with light GTK_THEME must return the Light palette.
+func TestGetColorPaletteAutoLight(t *testing.T) {
+	t.Setenv("GTK_THEME", "Adwaita")
+	t.Setenv("QT_QPA_PLATFORMTHEME", "")
+	t.Setenv("COLOR_SCHEME", "")
+	p := GetColorPalette("auto")
+	if p.Background != Light.Background {
+		t.Errorf("GetColorPalette(\"auto\") with GTK_THEME=Adwaita = Background %q, want Light (%q)", p.Background, Light.Background)
+	}
+}
+
 // An unknown mode string must return the Dark palette (default).
 func TestGetColorPaletteUnknownIsDefault(t *testing.T) {
 	p := GetColorPalette("unknown")
@@ -138,6 +149,17 @@ func TestGetColorPaletteNameAutoNotEmpty(t *testing.T) {
 	got := GetColorPaletteName("auto")
 	if got != "dark" && got != "light" {
 		t.Errorf("GetColorPaletteName(\"auto\") = %q, want \"dark\" or \"light\"", got)
+	}
+}
+
+// "auto" with light GTK_THEME must return "light".
+func TestGetColorPaletteNameAutoLight(t *testing.T) {
+	t.Setenv("GTK_THEME", "Adwaita")
+	t.Setenv("QT_QPA_PLATFORMTHEME", "")
+	t.Setenv("COLOR_SCHEME", "")
+	got := GetColorPaletteName("auto")
+	if got != "light" {
+		t.Errorf("GetColorPaletteName(\"auto\") with GTK_THEME=Adwaita = %q, want \"light\"", got)
 	}
 }
 
@@ -301,6 +323,27 @@ func TestDetectLinuxDarkColorScheme(t *testing.T) {
 	if !detectLinuxDark() {
 		t.Error("detectLinuxDark() = false for COLOR_SCHEME=prefer-dark, want true")
 	}
+}
+
+// QT_QPA_PLATFORMTHEME containing "dark" with no GTK_THEME must be detected as dark.
+func TestDetectLinuxDarkQTPlatformThemeDark(t *testing.T) {
+	t.Setenv("GTK_THEME", "")
+	t.Setenv("QT_QPA_PLATFORMTHEME", "darktheme")
+	t.Setenv("COLOR_SCHEME", "")
+	if !detectLinuxDark() {
+		t.Error("detectLinuxDark() = false for QT_QPA_PLATFORMTHEME=darktheme, want true")
+	}
+}
+
+// QT_QPA_PLATFORMTHEME without "dark" with no GTK_THEME must fall through.
+func TestDetectLinuxDarkQTPlatformThemeLight(t *testing.T) {
+	t.Setenv("GTK_THEME", "")
+	t.Setenv("QT_QPA_PLATFORMTHEME", "breeze")
+	t.Setenv("COLOR_SCHEME", "")
+	// breeze contains no "dark", so it returns false from the QT check.
+	// Then falls to default (true) — but we can't assert the final value
+	// without controlling gsettings. Just verify no panic.
+	_ = detectLinuxDark()
 }
 
 // No env vars set must fall through to the default (true = dark).

@@ -2,6 +2,7 @@
 package handler
 
 import (
+	"embed"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -1070,9 +1071,8 @@ func TestSetTemplatesFS_NoPanic(t *testing.T) {
 			t.Errorf("SetTemplatesFS panicked: %v", r)
 		}
 	}()
-	// embed.FS zero-value is valid (empty filesystem).
-	var fs interface{ Open(string) (interface{}, error) }
-	_ = fs
+	var fs embed.FS
+	SetTemplatesFS(fs)
 }
 
 // ── APIVersion ────────────────────────────────────────────────────────────────

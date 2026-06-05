@@ -4,12 +4,28 @@
 package engine
 
 import (
+	"context"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/parser"
 )
+
+// ── mockTorProvider for getClientForCtx tests ─────────────────────────────────
+
+type mockTorProvider struct {
+	outboundEnabled bool
+	shouldUseTor    bool
+}
+
+func (m *mockTorProvider) GetHTTPClient(_ bool) *http.Client  { return &http.Client{} }
+func (m *mockTorProvider) OutboundEnabled() bool              { return m.outboundEnabled }
+func (m *mockTorProvider) UseNetworkEnabled() bool            { return m.outboundEnabled }
+func (m *mockTorProvider) AllowUserPreference() bool          { return false }
+func (m *mockTorProvider) AllowUserIPForward() bool           { return false }
+func (m *mockTorProvider) ShouldUseTor(_ *bool) bool         { return m.shouldUseTor }
 
 // testCfg returns a default AppConfig suitable for engine construction in tests.
 func testCfg() *config.AppConfig {
@@ -317,5 +333,42 @@ func TestMotherlessConvertToResult_Basic(t *testing.T) {
 	}
 	if r.Source != e.Name() {
 		t.Errorf("Motherless convertToResult Source = %q, want %q", r.Source, e.Name())
+	}
+}
+
+// ── getClientForCtx ───────────────────────────────────────────────────────────
+
+func TestGetClientForCtx_NilTorProvider_ReturnsHTTPClient(t *testing.T) {
+	e := NewPornHubEngine(testCfg())
+	client := e.getClientForCtx(context.Background())
+	if client == nil {
+		t.Error("getClientForCtx nil torProvider: returned nil client")
+	}
+}
+
+func TestGetClientForCtx_TorDisabled_ReturnsHTTPClient(t *testing.T) {
+	e := NewPornHubEngine(testCfg())
+	e.SetTorProvider(&mockTorProvider{outboundEnabled: false, shouldUseTor: false})
+	client := e.getClientForCtx(context.Background())
+	if client == nil {
+		t.Error("getClientForCtx tor disabled: returned nil client")
+	}
+}
+
+func TestGetClientForCtx_TorEnabled_ShouldUseTor_ReturnsTorClient(t *testing.T) {
+	e := NewPornHubEngine(testCfg())
+	e.SetTorProvider(&mockTorProvider{outboundEnabled: true, shouldUseTor: true})
+	client := e.getClientForCtx(context.Background())
+	if client == nil {
+		t.Error("getClientForCtx tor enabled + shouldUseTor: returned nil client")
+	}
+}
+
+func TestGetClientForCtx_TorEnabled_ShouldNotUseTor_ReturnsDirect(t *testing.T) {
+	e := NewPornHubEngine(testCfg())
+	e.SetTorProvider(&mockTorProvider{outboundEnabled: true, shouldUseTor: false})
+	client := e.getClientForCtx(context.Background())
+	if client == nil {
+		t.Error("getClientForCtx tor enabled + shouldNotUseTor: returned nil client")
 	}
 }

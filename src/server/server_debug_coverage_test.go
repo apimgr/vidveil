@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 28: Coverage tests for server debug handlers and setter methods.
 // Tests handleDebugConfig, handleDebugRoutes, handleDebugCache, handleDebugMemory,
-// handleDebugGoroutines, registerDebugRoutes (early-return path), debugLog,
+// handleDebugGoroutines, handleDebugDB, handleDebugScheduler, handleDebugEngines,
+// handleDebugEngine, registerDebugRoutes (early-return path), debugLog,
 // debugLogDB, debugLogCache, SetTorService, SetGeoIPService, SetBlocklistService.
 package server
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,8 +17,23 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/handler"
+	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/server/service/scheduler"
 )
+
+// ── mock MigrationManager ─────────────────────────────────────────────────────
+
+type mockMigrationMgr struct {
+	db *sql.DB
+}
+
+func (m *mockMigrationMgr) GetMigrationStatus() ([]map[string]interface{}, error) {
+	return nil, nil
+}
+func (m *mockMigrationMgr) RunMigrations() error    { return nil }
+func (m *mockMigrationMgr) RollbackMigration() error { return nil }
+func (m *mockMigrationMgr) GetDB() *sql.DB          { return m.db }
 
 // ── mock types for server setters ─────────────────────────────────────────────
 
@@ -246,4 +263,82 @@ func TestDebugLogCache_DebugDisabled_NoPanic(t *testing.T) {
 		}
 	}()
 	s.debugLogCache("get", "key:123", true, 500*time.Microsecond)
+}
+
+// ── handleDebugDB ─────────────────────────────────────────────────────────────
+
+func TestHandleDebugDB_NilDB_ReturnsJSON(t *testing.T) {
+	s := &Server{
+		appConfig:    config.DefaultAppConfig(),
+		migrationMgr: &mockMigrationMgr{db: nil},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/debug/db", nil)
+	rec := httptest.NewRecorder()
+	s.handleDebugDB(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("handleDebugDB nil DB: status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if body == "" {
+		t.Error("handleDebugDB nil DB: empty body")
+	}
+}
+
+// ── handleDebugScheduler ──────────────────────────────────────────────────────
+
+func TestHandleDebugScheduler_EmptyScheduler_ReturnsJSON(t *testing.T) {
+	sched := scheduler.NewScheduler()
+	s := &Server{
+		appConfig: config.DefaultAppConfig(),
+		scheduler: sched,
+	}
+	req := httptest.NewRequest(http.MethodGet, "/debug/scheduler", nil)
+	rec := httptest.NewRecorder()
+	s.handleDebugScheduler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("handleDebugScheduler: status = %d, want 200", rec.Code)
+	}
+	if rec.Body.Len() == 0 {
+		t.Error("handleDebugScheduler: empty body")
+	}
+}
+
+// ── handleDebugEngines ────────────────────────────────────────────────────────
+
+// Empty engine manager (no InitializeEngines call) → DebugSearch returns immediately.
+func TestHandleDebugEngines_EmptyManager_ReturnsJSON(t *testing.T) {
+	mgr := engine.NewEngineManager(config.DefaultAppConfig())
+	s := &Server{
+		appConfig: config.DefaultAppConfig(),
+		engineMgr: mgr,
+	}
+	req := httptest.NewRequest(http.MethodGet, "/debug/engines?q=test", nil)
+	rec := httptest.NewRecorder()
+	s.handleDebugEngines(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("handleDebugEngines: status = %d, want 200", rec.Code)
+	}
+}
+
+// ── handleDebugEngine ─────────────────────────────────────────────────────────
+
+// Non-existent engine name → 404 JSON response.
+// chi.URLParam returns "" when no route context is present → GetEngine("") not found.
+func TestHandleDebugEngine_NotFound_Returns404(t *testing.T) {
+	mgr := engine.NewEngineManager(config.DefaultAppConfig())
+	s := &Server{
+		appConfig: config.DefaultAppConfig(),
+		engineMgr: mgr,
+	}
+	// No chi route context → chi.URLParam(r, "name") returns "" → not found.
+	req := httptest.NewRequest(http.MethodGet, "/debug/engine/nonexistent?q=test", nil)
+	rec := httptest.NewRecorder()
+	s.handleDebugEngine(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("handleDebugEngine not found: status = %d, want 404", rec.Code)
+	}
 }

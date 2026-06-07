@@ -507,6 +507,122 @@ func TestHandle_POST_SearchMissingQuery(t *testing.T) {
 	}
 }
 
+// --- Handle: search with non-empty query (empty engine manager) ---
+
+// TestHandle_POST_SearchWithQuery covers the result-building path in handleSearch.
+// With an empty EngineManager, Search returns immediately with zero results.
+func TestHandle_POST_SearchWithQuery(t *testing.T) {
+	h := newTestHandler(t)
+	body := `{"query":"{ search(query: \"test\") { query results { title url source } searchTimeMs } }","variables":{"query":"test"}}`
+	r := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Handle(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Handle search with query: status = %d, want 200", w.Code)
+	}
+	var resp Response
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Handle search with query: body not valid JSON: %v", err)
+	}
+	if resp.Data == nil {
+		t.Fatal("Handle search with query: data is nil")
+	}
+	data, ok := resp.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("Handle search with query: data not a map: %T", resp.Data)
+	}
+	if _, ok := data["search"]; !ok {
+		t.Error("Handle search with query: 'search' key missing in data")
+	}
+}
+
+// TestHandle_POST_SearchWithPage covers the page variable extraction path.
+func TestHandle_POST_SearchWithPage(t *testing.T) {
+	h := newTestHandler(t)
+	body := `{"query":"{ search(query: \"test\", page: 2) { query searchTimeMs } }","variables":{"query":"test","page":2}}`
+	r := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Handle(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Handle search with page: status = %d, want 200", w.Code)
+	}
+}
+
+// --- Handle: GET with variables query parameter ---
+
+// TestHandle_GET_WithVariables covers the variables URL-param JSON-decode path.
+func TestHandle_GET_WithVariables(t *testing.T) {
+	h := newTestHandler(t)
+	r := httptest.NewRequest(http.MethodGet, `/graphql?query={autocomplete(prefix:"g"){bang}}&variables={"prefix":"g"}`, nil)
+	w := httptest.NewRecorder()
+
+	h.Handle(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Handle GET variables: status = %d, want 200", w.Code)
+	}
+}
+
+// --- Handle: autocomplete with non-empty prefix ---
+
+// TestHandle_POST_AutocompleteWithPrefix covers the engine.Autocomplete path.
+func TestHandle_POST_AutocompleteWithPrefix(t *testing.T) {
+	h := newTestHandler(t)
+	body := `{"query":"{ autocomplete(prefix: \"y\") { bang displayName } }","variables":{"prefix":"y"}}`
+	r := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Handle(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Handle autocomplete with prefix: status = %d, want 200", w.Code)
+	}
+	var resp Response
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Handle autocomplete with prefix: body not valid JSON: %v", err)
+	}
+	if resp.Data == nil {
+		t.Fatal("Handle autocomplete with prefix: data is nil")
+	}
+	data, ok := resp.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("Handle autocomplete with prefix: data not a map: %T", resp.Data)
+	}
+	if _, ok := data["autocomplete"]; !ok {
+		t.Error("Handle autocomplete with prefix: 'autocomplete' key missing in data")
+	}
+}
+
+// --- GraphiQL POST with non-empty query ---
+
+// TestGraphiQL_POST_WithQuery covers the POST branch that executes a query and renders HTML.
+func TestGraphiQL_POST_WithQuery(t *testing.T) {
+	h := newTestHandler(t)
+	r := httptest.NewRequest(http.MethodPost, "/graphql/ui", strings.NewReader("query={ health { status enginesEnabled } }"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	h.GraphiQL(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GraphiQL POST with query: status = %d, want 200", w.Code)
+	}
+	if !strings.Contains(w.Header().Get("Content-Type"), "text/html") {
+		t.Errorf("GraphiQL POST with query: Content-Type should be text/html")
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "result") {
+		t.Errorf("GraphiQL POST with query: body should contain result div, got: %.200s", body)
+	}
+}
+
 // --- Content-Type on Handle ---
 
 // TestHandle_ContentType verifies Handle always sets application/json.

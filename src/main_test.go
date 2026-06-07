@@ -6,12 +6,14 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"io"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/apimgr/vidveil/src/config"
+	_ "modernc.org/sqlite"
 )
 
 // captureStdout redirects os.Stdout to a buffer for the duration of f,
@@ -249,5 +251,175 @@ func TestGetDisplayAddress_NonEmpty(t *testing.T) {
 	got := getDisplayAddress(cfg)
 	if got == "" {
 		t.Error("getDisplayAddress: returned empty string")
+	}
+}
+
+// ── printHelp ─────────────────────────────────────────────────────────────────
+
+func TestPrintHelp_NoPanic(t *testing.T) {
+	captureStdout(func() { printHelp() })
+}
+
+func TestPrintHelp_ContainsUsage(t *testing.T) {
+	out := captureStdout(func() { printHelp() })
+	if !strings.Contains(out, "Usage:") {
+		t.Error("printHelp: output does not contain 'Usage:'")
+	}
+}
+
+func TestPrintHelp_ContainsHelpFlag(t *testing.T) {
+	out := captureStdout(func() { printHelp() })
+	if !strings.Contains(out, "--help") {
+		t.Error("printHelp: output does not contain '--help'")
+	}
+}
+
+func TestPrintHelp_ContainsVersionFlag(t *testing.T) {
+	out := captureStdout(func() { printHelp() })
+	if !strings.Contains(out, "--version") {
+		t.Error("printHelp: output does not contain '--version'")
+	}
+}
+
+// ── printVersion ──────────────────────────────────────────────────────────────
+
+func TestPrintVersion_NoPanic(t *testing.T) {
+	captureStdout(func() { printVersion() })
+}
+
+func TestPrintVersion_ContainsBuilt(t *testing.T) {
+	out := captureStdout(func() { printVersion() })
+	if !strings.Contains(out, "Built:") {
+		t.Error("printVersion: output does not contain 'Built:'")
+	}
+}
+
+func TestPrintVersion_ContainsGo(t *testing.T) {
+	out := captureStdout(func() { printVersion() })
+	if !strings.Contains(out, "Go:") {
+		t.Error("printVersion: output does not contain 'Go:'")
+	}
+}
+
+func TestPrintVersion_ContainsOSArch(t *testing.T) {
+	out := captureStdout(func() { printVersion() })
+	if !strings.Contains(out, "OS/Arch:") {
+		t.Error("printVersion: output does not contain 'OS/Arch:'")
+	}
+}
+
+// ── handleShellCommand (non-exit paths) ───────────────────────────────────────
+
+func TestHandleShellCommand_Completions_Bash(t *testing.T) {
+	out := captureStdout(func() { handleShellCommand("completions", "bash") })
+	if !strings.Contains(out, "compgen") {
+		t.Error("handleShellCommand completions bash: missing bash completion content")
+	}
+}
+
+func TestHandleShellCommand_Completions_Zsh(t *testing.T) {
+	out := captureStdout(func() { handleShellCommand("completions", "zsh") })
+	if !strings.Contains(out, "#compdef") {
+		t.Error("handleShellCommand completions zsh: missing zsh content")
+	}
+}
+
+func TestHandleShellCommand_Completions_Fish(t *testing.T) {
+	out := captureStdout(func() { handleShellCommand("completions", "fish") })
+	if !strings.Contains(out, "complete -c") {
+		t.Error("handleShellCommand completions fish: missing fish content")
+	}
+}
+
+func TestHandleShellCommand_Init_Bash(t *testing.T) {
+	out := captureStdout(func() { handleShellCommand("init", "bash") })
+	if out == "" {
+		t.Error("handleShellCommand init bash: empty output")
+	}
+}
+
+func TestHandleShellCommand_Init_Zsh(t *testing.T) {
+	out := captureStdout(func() { handleShellCommand("init", "zsh") })
+	if out == "" {
+		t.Error("handleShellCommand init zsh: empty output")
+	}
+}
+
+func TestHandleShellCommand_Init_Fish(t *testing.T) {
+	out := captureStdout(func() { handleShellCommand("init", "fish") })
+	if out == "" {
+		t.Error("handleShellCommand init fish: empty output")
+	}
+}
+
+func TestHandleShellCommand_Completions_AutoDetect(t *testing.T) {
+	t.Setenv("SHELL", "/bin/bash")
+	out := captureStdout(func() { handleShellCommand("completions", "") })
+	if out == "" {
+		t.Error("handleShellCommand completions auto: empty output")
+	}
+}
+
+// ── handleMaintenanceCommand (setup sub-command, no os.Exit) ─────────────────
+
+func TestHandleMaintenanceCommand_Setup_NoPanic(t *testing.T) {
+	out := captureStdout(func() {
+		handleMaintenanceCommand("setup", "", "", "", "")
+	})
+	if out == "" {
+		t.Error("handleMaintenanceCommand setup: empty output")
+	}
+}
+
+func TestHandleMaintenanceCommand_Setup_ContainsServerYML(t *testing.T) {
+	out := captureStdout(func() {
+		handleMaintenanceCommand("setup", "", "", "", "")
+	})
+	if !strings.Contains(out, "server.yml") {
+		t.Error("handleMaintenanceCommand setup: output does not mention server.yml")
+	}
+}
+
+// ── isDBFirstRun ──────────────────────────────────────────────────────────────
+
+func TestIsDBFirstRun_EmptyDB_ReturnsTrue(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal("sql.Open:", err)
+	}
+	defer db.Close()
+	if !isDBFirstRun(db) {
+		t.Error("isDBFirstRun on empty DB: expected true")
+	}
+}
+
+func TestIsDBFirstRun_TableWithRows_ReturnsFalse(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal("sql.Open:", err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("CREATE TABLE settings (key TEXT, value TEXT)"); err != nil {
+		t.Fatal("CREATE TABLE:", err)
+	}
+	if _, err := db.Exec("INSERT INTO settings VALUES ('key', 'val')"); err != nil {
+		t.Fatal("INSERT:", err)
+	}
+	if isDBFirstRun(db) {
+		t.Error("isDBFirstRun with rows: expected false")
+	}
+}
+
+func TestIsDBFirstRun_EmptySettingsTable_ReturnsTrue(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal("sql.Open:", err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("CREATE TABLE settings (key TEXT, value TEXT)"); err != nil {
+		t.Fatal("CREATE TABLE:", err)
+	}
+	if !isDBFirstRun(db) {
+		t.Error("isDBFirstRun with empty settings table: expected true")
 	}
 }

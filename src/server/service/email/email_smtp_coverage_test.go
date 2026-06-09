@@ -177,3 +177,33 @@ func TestAutodetectSMTP_ViaServiceMethod(t *testing.T) {
 		t.Error("autodetectSMTP (conn refused): expected error, got nil")
 	}
 }
+
+// ── Send — full template flow (covers parseTemplate, applyVars, getGlobalVars) ──
+
+func TestSend_EnabledValidTemplate_CoversFlow(t *testing.T) {
+	t.Setenv("SMTP_HOST", "")
+	appCfg := config.DefaultAppConfig()
+	appCfg.Server.Email.Enabled = true
+	appCfg.Server.Email.Host = ""
+	appCfg.Server.Email.Autodetect = false
+	s := NewEmailService(appCfg)
+
+	err := s.Send("test", "to@example.com", map[string]string{"name": "Tester"})
+	if err == nil {
+		t.Error("Send(no SMTP host): expected error, got nil")
+	}
+}
+
+func TestSend_EnabledValidTemplate_WithVars_CoversApplyVars(t *testing.T) {
+	t.Setenv("SMTP_HOST", "")
+	appCfg := config.DefaultAppConfig()
+	appCfg.Server.Email.Enabled = true
+	appCfg.Server.Email.Host = ""
+	appCfg.Server.Email.Autodetect = false
+	s := NewEmailService(appCfg)
+
+	err := s.Send("security_alert", "to@example.com", map[string]string{"event": "test event"})
+	if err == nil {
+		t.Error("Send security_alert (no SMTP host): expected error, got nil")
+	}
+}

@@ -380,6 +380,112 @@ func TestHandleMaintenanceCommand_Setup_ContainsServerYML(t *testing.T) {
 	}
 }
 
+// ── handleMaintenanceCommand (additional non-exit paths) ─────────────────────
+
+// TestHandleMaintenanceCommand_Backup creates a real backup using temp dirs.
+// It calls the "backup" sub-command which does NOT call os.Exit on success.
+func TestHandleMaintenanceCommand_Backup_NoPanic(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+	t.Setenv("BACKUP_DIR", base+"/backup")
+	os.MkdirAll(base+"/backup", 0755)
+
+	captureStdout(func() {
+		handleMaintenanceCommand("backup", "", "", cfgDir, dataDir)
+	})
+}
+
+// TestHandleMaintenanceCommand_BackupWithPassword tests the encrypted backup path.
+func TestHandleMaintenanceCommand_Backup_WithPassword_NoPanic(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+	t.Setenv("BACKUP_DIR", base+"/backup")
+	os.MkdirAll(base+"/backup", 0755)
+
+	captureStdout(func() {
+		handleMaintenanceCommand("backup", "", "testpassword", cfgDir, dataDir)
+	})
+}
+
+// TestHandleMaintenanceCommand_ModeOn enables maintenance mode (writes flag file).
+func TestHandleMaintenanceCommand_ModeOn_NoPanic(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	captureStdout(func() {
+		handleMaintenanceCommand("mode", "on", "", cfgDir, dataDir)
+	})
+}
+
+// TestHandleMaintenanceCommand_ModeOff disables maintenance mode.
+func TestHandleMaintenanceCommand_ModeOff_NoPanic(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	captureStdout(func() {
+		handleMaintenanceCommand("mode", "off", "", cfgDir, dataDir)
+	})
+}
+
+// TestHandleMaintenanceCommand_ModeTrue covers the "true" alias.
+func TestHandleMaintenanceCommand_ModeTrue_NoPanic(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	captureStdout(func() {
+		handleMaintenanceCommand("mode", "true", "", cfgDir, dataDir)
+	})
+}
+
+// TestHandleMaintenanceCommand_ModeFalse covers the "false" alias.
+func TestHandleMaintenanceCommand_ModeFalse_NoPanic(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	captureStdout(func() {
+		handleMaintenanceCommand("mode", "false", "", cfgDir, dataDir)
+	})
+}
+
+// TestHandleMaintenanceCommand_RestoreEmpty tests the "restore" with no arg.
+// With no backup files, it returns an error — captured without os.Exit.
+func TestHandleMaintenanceCommand_Restore_NoPanic(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+	t.Setenv("BACKUP_DIR", base+"/backup")
+	os.MkdirAll(base+"/backup", 0755)
+
+	// Create a backup first, then restore it
+	captureStdout(func() {
+		handleMaintenanceCommand("backup", "", "", cfgDir, dataDir)
+	})
+
+	captureStdout(func() {
+		handleMaintenanceCommand("restore", "", "", cfgDir, dataDir)
+	})
+}
+
 // ── isDBFirstRun ──────────────────────────────────────────────────────────────
 
 func TestIsDBFirstRun_EmptyDB_ReturnsTrue(t *testing.T) {

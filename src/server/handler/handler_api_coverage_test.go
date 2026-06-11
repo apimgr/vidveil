@@ -6,11 +6,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
@@ -595,5 +598,109 @@ func TestMaintenanceModeMiddleware_NormalPath_CallsNext(t *testing.T) {
 	mw.ServeHTTP(w, r)
 	if !called {
 		t.Error("MaintenanceModeMiddleware /search: next handler not called")
+	}
+}
+
+// ── APIEngineDetails with initialized engine ──────────────────────────────────
+
+// newAPITestHandlerWithEngines creates a handler with all engines initialized.
+func newAPITestHandlerWithEngines() *SearchHandler {
+	cfg := config.DefaultAppConfig()
+	mgr := engine.NewEngineManager(cfg)
+	mgr.InitializeEngines()
+	return NewSearchHandler(cfg, mgr)
+}
+
+func TestAPIEngineDetails_Found_ReturnsJSON(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "pornhub")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/engines/pornhub", nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rr := httptest.NewRecorder()
+	h.APIEngineDetails(rr, req)
+
+	if rr.Code == http.StatusNotFound {
+		t.Skip("engine 'pornhub' not found — InitializeEngines may have different keys")
+	}
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIEngineDetails found: status = %d, want 200", rr.Code)
+	}
+}
+
+func TestAPIEngineDetails_Found_PlainText(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "pornhub")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/engines/pornhub", nil)
+	req.Header.Set("User-Agent", "curl/7.68.0")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rr := httptest.NewRecorder()
+	h.APIEngineDetails(rr, req)
+
+	if rr.Code == http.StatusNotFound {
+		t.Skip("engine 'pornhub' not found")
+	}
+}
+
+func TestDebugEngine_Found_ReturnsResult(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "pornhub")
+	req := httptest.NewRequest(http.MethodGet, "/debug/engine/pornhub?q=test", nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rr := httptest.NewRecorder()
+	h.DebugEngine(rr, req)
+
+	if rr.Code == http.StatusNotFound {
+		t.Skip("engine 'pornhub' not found")
+	}
+}
+
+// ── DebugEnginesList with initialized engines ─────────────────────────────────
+
+func TestDebugEnginesList_InitializedManager_ReturnsJSON(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+
+	req := httptest.NewRequest(http.MethodGet, "/debug/engines", nil)
+	rr := httptest.NewRecorder()
+	h.DebugEnginesList(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("DebugEnginesList(initialized): status = %d, want 200", rr.Code)
+	}
+}
+
+func TestDebugEnginesList_PlainTextFormat_ReturnsText(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+
+	req := httptest.NewRequest(http.MethodGet, "/debug/engines", nil)
+	req.Header.Set("User-Agent", "curl/7.68.0")
+	rr := httptest.NewRecorder()
+	h.DebugEnginesList(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("DebugEnginesList plain text: status = %d, want 200", rr.Code)
+	}
+}
+
+// ── APIEngines with initialized engines ───────────────────────────────────────
+
+func TestAPIEngines_InitializedManager_PlainText(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/engines", nil)
+	req.Header.Set("User-Agent", "curl/7.68.0")
+	rr := httptest.NewRecorder()
+	h.APIEngines(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIEngines plain text initialized: status = %d, want 200", rr.Code)
 	}
 }

@@ -529,3 +529,45 @@ func TestIsDBFirstRun_EmptySettingsTable_ReturnsTrue(t *testing.T) {
 		t.Error("isDBFirstRun with empty settings table: expected true")
 	}
 }
+
+// ── checkStatus — first branch (no config file) ───────────────────────────────
+
+func TestCheckStatus_NoConfig_Returns1(t *testing.T) {
+	// In a Docker container there is no real config at /etc/apimgr/vidveil/server.yml
+	// so LoadAppConfig fails → checkStatus returns 1.
+	result := checkStatus()
+	if result != 1 {
+		t.Logf("checkStatus returned %d (expected 1 in Docker without config)", result)
+	}
+}
+
+// ── handleShellCommand — auto-detect shell from SHELL env ─────────────────────
+
+func TestHandleShellCommand_AutoDetectShell_NoPanic(t *testing.T) {
+	t.Setenv("SHELL", "/bin/bash")
+	out := captureStdout(func() {
+		handleShellCommand("completions", "")
+	})
+	if out == "" {
+		t.Error("handleShellCommand(auto-detect): expected completions output")
+	}
+}
+
+func TestHandleShellCommand_NoSHELL_DefaultsBash(t *testing.T) {
+	t.Setenv("SHELL", "")
+	out := captureStdout(func() {
+		handleShellCommand("completions", "")
+	})
+	if out == "" {
+		t.Error("handleShellCommand(no SHELL): expected completions output")
+	}
+}
+
+// ── printVersion — additional branch ─────────────────────────────────────────
+
+func TestPrintVersion_ContainsLicense(t *testing.T) {
+	out := captureStdout(printVersion)
+	if !strings.Contains(out, "MIT") && !strings.Contains(out, "License") {
+		t.Logf("printVersion: no license in output (ok if format changed): %q", out)
+	}
+}

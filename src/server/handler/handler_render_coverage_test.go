@@ -458,3 +458,53 @@ func TestServerHandler_HelpPage_Returns500(t *testing.T) {
 		t.Errorf("ServerHandler.HelpPage: status = %d, want 500", rr.Code)
 	}
 }
+
+// ── renderHealthzHTML — status and mode branches ──────────────────────────────
+
+func TestRenderHealthzHTML_UnhealthyStatus_Returns500(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	rr := httptest.NewRecorder()
+
+	h.renderHealthzHTML(rr, req, "unhealthy", http.StatusServiceUnavailable,
+		"production", "2h30m", "testhost", "2024-06-15T10:30:00Z",
+		map[string]string{"database": "unhealthy", "cache": "degraded"})
+
+	if rr.Code == http.StatusOK {
+		t.Error("renderHealthzHTML unhealthy+production: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderHealthzHTML_DegradedStatus_Returns500(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	rr := httptest.NewRecorder()
+
+	h.renderHealthzHTML(rr, req, "degraded", http.StatusOK,
+		"development", "1h", "testhost", "not-a-timestamp",
+		map[string]string{"disk": "degraded"})
+
+	if rr.Code == http.StatusOK {
+		t.Error("renderHealthzHTML degraded+development: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderHealthzHTML_ProductionMode_Returns500(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Server.Branding.Title = "My App"
+	cfg.Server.Branding.Tagline = "My tagline"
+	cfg.Server.Branding.Description = "My description"
+	h := &SearchHandler{appConfig: cfg}
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	rr := httptest.NewRecorder()
+
+	h.renderHealthzHTML(rr, req, "healthy", http.StatusOK,
+		"production", "72h", "prod-server", "2024-06-15T10:30:00Z",
+		map[string]string{"scheduler": "healthy"})
+
+	if rr.Code == http.StatusOK {
+		t.Error("renderHealthzHTML healthy+production+branding: should not return 200 with empty FS")
+	}
+}

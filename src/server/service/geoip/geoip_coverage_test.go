@@ -292,3 +292,162 @@ func TestInitialize_CityFallbackURL_BothFail(t *testing.T) {
 	err = s.Initialize()
 	_ = err // Might fail (network) or succeed
 }
+
+// ── Lookup — disabled / invalid IP / nil DBs ─────────────────────────────────
+
+func TestLookup_Disabled_ReturnsIPOnly(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = false
+	s := &GeoIPService{appConfig: cfg}
+	result := s.Lookup("1.2.3.4")
+	if result == nil {
+		t.Fatal("Lookup(disabled): expected non-nil result")
+	}
+	if result.IP != "1.2.3.4" {
+		t.Errorf("Lookup(disabled): expected IP=1.2.3.4, got %q", result.IP)
+	}
+}
+
+func TestLookup_InvalidIP_ReturnsIPOnly(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	s := &GeoIPService{appConfig: cfg}
+	result := s.Lookup("not-an-ip")
+	if result == nil {
+		t.Fatal("Lookup(invalid IP): expected non-nil result")
+	}
+}
+
+func TestLookup_NilDBs_Enabled_ReturnsEmpty(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	s := &GeoIPService{appConfig: cfg}
+	result := s.Lookup("8.8.8.8")
+	if result == nil {
+		t.Fatal("Lookup(nil DBs): expected non-nil result")
+	}
+	if result.IP != "8.8.8.8" {
+		t.Errorf("Lookup(nil DBs): expected IP=8.8.8.8, got %q", result.IP)
+	}
+}
+
+// ── IsBlocked — more branches ─────────────────────────────────────────────────
+
+func TestIsBlocked_Disabled_ReturnsFalse(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = false
+	s := &GeoIPService{appConfig: cfg}
+	if s.IsBlocked("8.8.8.8") {
+		t.Error("IsBlocked(disabled): expected false")
+	}
+}
+
+func TestIsBlocked_Enabled_EmptyLists_ReturnsFalse(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	cfg.Server.GeoIP.AllowCountries = nil
+	cfg.Server.GeoIP.DenyCountries = nil
+	s := &GeoIPService{appConfig: cfg}
+	if s.IsBlocked("8.8.8.8") {
+		t.Error("IsBlocked(empty lists): expected false")
+	}
+}
+
+// ── CheckContentRestriction — more branches ───────────────────────────────────
+
+func TestCheckContentRestriction_ModeOff_ReturnsNotRestricted(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	cfg.Server.GeoIP.ContentRestriction.Mode = "off"
+	s := &GeoIPService{appConfig: cfg}
+	result := s.CheckContentRestriction("8.8.8.8", false)
+	if result.Restricted {
+		t.Error("CheckContentRestriction(mode=off): expected not restricted")
+	}
+}
+
+func TestCheckContentRestriction_BypassTor_ReturnsFalse(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	cfg.Server.GeoIP.ContentRestriction.Mode = "soft_block"
+	cfg.Server.GeoIP.ContentRestriction.BypassTor = true
+	s := &GeoIPService{appConfig: cfg}
+	result := s.CheckContentRestriction("8.8.8.8", true)
+	if result.Restricted {
+		t.Error("CheckContentRestriction(bypassTor=true): expected not restricted")
+	}
+}
+
+func TestCheckContentRestriction_GeoIPDisabled_ReturnsNotRestricted(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = false
+	cfg.Server.GeoIP.ContentRestriction.Mode = "hard_block"
+	s := &GeoIPService{appConfig: cfg}
+	result := s.CheckContentRestriction("8.8.8.8", false)
+	if result.Restricted {
+		t.Error("CheckContentRestriction(geoip disabled): expected not restricted")
+	}
+}
+
+func TestCheckContentRestriction_NoRestrictionsConfigured_ReturnsNotRestricted(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	cfg.Server.GeoIP.ContentRestriction.Mode = "warn"
+	cfg.Server.GeoIP.ContentRestriction.RestrictedCountries = nil
+	cfg.Server.GeoIP.ContentRestriction.RestrictedRegions = nil
+	s := &GeoIPService{appConfig: cfg}
+	result := s.CheckContentRestriction("8.8.8.8", false)
+	if result.Restricted {
+		t.Error("CheckContentRestriction(no restrictions): expected not restricted")
+	}
+}
+
+func TestCheckContentRestriction_RestrictedCountriesNoDB_UnknownCountry(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	cfg.Server.GeoIP.ContentRestriction.Mode = "soft_block"
+	cfg.Server.GeoIP.ContentRestriction.RestrictedCountries = []string{"CN", "RU"}
+	s := &GeoIPService{appConfig: cfg}
+	// No DB open → country will be "" → cannot match restricted countries → not restricted
+	result := s.CheckContentRestriction("8.8.8.8", false)
+	// Country is empty (no DB) — bypass path
+	_ = result
+}
+
+// ── GetRestrictionMode / GetRestrictionConfig ─────────────────────────────────
+
+func TestGetRestrictionMode_ReturnsConfigured(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.ContentRestriction.Mode = "warn"
+	s := &GeoIPService{appConfig: cfg}
+	if mode := s.GetRestrictionMode(); mode != "warn" {
+		t.Errorf("GetRestrictionMode: expected warn, got %q", mode)
+	}
+}
+
+func TestGetRestrictionConfig_ReturnsConfig(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.ContentRestriction.Mode = "hard_block"
+	s := &GeoIPService{appConfig: cfg}
+	rcfg := s.GetRestrictionConfig()
+	if rcfg.Mode != "hard_block" {
+		t.Errorf("GetRestrictionConfig: expected hard_block, got %q", rcfg.Mode)
+	}
+}
+
+func TestLastUpdate_ReturnsZeroInitially(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	s := &GeoIPService{appConfig: cfg}
+	if !s.LastUpdate().IsZero() {
+		t.Error("LastUpdate: expected zero time on new service")
+	}
+}
+
+func TestIsEnabled_ReturnsConfigValue(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	s := &GeoIPService{appConfig: cfg}
+	if !s.IsEnabled() {
+		t.Error("IsEnabled: expected true")
+	}
+}

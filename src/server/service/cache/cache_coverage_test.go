@@ -112,6 +112,77 @@ func TestValkeyCacheCloseOnOpenStructNoPanic(t *testing.T) {
 	}
 }
 
+// ---- ValkeyCache open (closed=false) but Redis unreachable — covers live-path branches ----
+
+// newOpenValkeyCache creates a ValkeyCache that is open but points at a non-listening
+// address so every Redis call returns a connection error rather than panicking.
+func newOpenValkeyCache() *ValkeyCache {
+	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:19999"})
+	return &ValkeyCache{
+		client: client,
+		prefix: "vidveil:",
+		ttl:    time.Second,
+		closed: false,
+	}
+}
+
+func TestValkeyCache_Open_Get_ConnRefused_ReturnsFalse(t *testing.T) {
+	vc := newOpenValkeyCache()
+	defer vc.client.Close()
+
+	resp, ok := vc.Get("missing-key")
+	if ok {
+		t.Error("expected ok=false on conn refused")
+	}
+	if resp != nil {
+		t.Error("expected nil resp on conn refused")
+	}
+}
+
+func TestValkeyCache_Open_Set_ConnRefused_NoPanic(t *testing.T) {
+	vc := newOpenValkeyCache()
+	defer vc.client.Close()
+
+	vc.Set("k", &model.SearchResponse{Ok: true})
+}
+
+func TestValkeyCache_Open_Delete_ConnRefused_NoPanic(t *testing.T) {
+	vc := newOpenValkeyCache()
+	defer vc.client.Close()
+
+	vc.Delete("k")
+}
+
+func TestValkeyCache_Open_Clear_ConnRefused_NoPanic(t *testing.T) {
+	vc := newOpenValkeyCache()
+	defer vc.client.Close()
+
+	vc.Clear()
+}
+
+func TestValkeyCache_Open_Size_ConnRefused_ReturnsZero(t *testing.T) {
+	vc := newOpenValkeyCache()
+	defer vc.client.Close()
+
+	sz := vc.Size()
+	if sz != 0 {
+		t.Errorf("expected Size()=0 on conn refused, got %d", sz)
+	}
+}
+
+func TestValkeyCache_Open_Stats_ConnRefused_ContainsAddr(t *testing.T) {
+	vc := newOpenValkeyCache()
+	defer vc.client.Close()
+
+	stats := vc.Stats()
+	if _, ok := stats["addr"]; !ok {
+		t.Log("Stats: 'addr' key absent (Options() returned nil or no addr)")
+	}
+	if typeVal, _ := stats["type"]; typeVal != "valkey" {
+		t.Errorf("expected stats[type]=valkey, got %v", typeVal)
+	}
+}
+
 // ---- nodeID init ----
 
 func TestNodeIDIsNonEmpty(t *testing.T) {

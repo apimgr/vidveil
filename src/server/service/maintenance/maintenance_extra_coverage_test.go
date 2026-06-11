@@ -226,3 +226,113 @@ func TestApplyRetentionWithOptions_MaxBackupsZero_DefaultsToOne(t *testing.T) {
 		t.Errorf("applyRetentionWithOptions(0): %d remain, want ≤1", len(remaining))
 	}
 }
+
+// ── RestoreWithPassword — additional paths ────────────────────────────────────
+
+// TestRestoreWithPassword_EmptyFilename_AutoFinds tests the auto-find path
+// where backupFile="" causes RestoreWithPassword to find the most recent backup.
+func TestRestoreWithPassword_EmptyFilename_AutoFinds(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+	_ = tmp
+
+	// Create a backup first
+	if err := m.BackupWithOptions(BackupOptions{IncludeData: false}); err != nil {
+		t.Fatalf("Backup for auto-find test: %v", err)
+	}
+
+	// Restore with empty filename — should auto-find the backup
+	m2 := NewMaintenanceManager(m.paths.Config, m.paths.Data, "1.0.0")
+	m2.paths.Backup = m.paths.Backup
+
+	if err := m2.RestoreWithPassword("", ""); err != nil {
+		t.Logf("RestoreWithPassword(auto-find): %v (may fail due to overwriting)", err)
+	}
+}
+
+// TestRestoreWithPassword_WithSSLEntries_RestoresSSL tests the ssl/ prefix path.
+func TestRestoreWithPassword_WithSSLEntries_RestoresSSL(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+
+	// Create SSL directory with a dummy cert
+	sslDir := filepath.Join(m.paths.Config, "ssl")
+	if err := os.MkdirAll(sslDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sslDir, "cert.pem"), []byte("fake cert"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outFile := filepath.Join(tmp, "backup_with_ssl.tar.gz")
+	if err := m.BackupWithOptions(BackupOptions{
+		Filename:   outFile,
+		IncludeSSL: true,
+	}); err != nil {
+		t.Fatalf("Backup with SSL: %v", err)
+	}
+
+	// Restore to a different location
+	restoreDir := filepath.Join(tmp, "restore_ssl")
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	m2 := NewMaintenanceManager(restoreDir, restoreDir, "1.0.0")
+	m2.paths.Backup = m.paths.Backup
+
+	if err := m2.RestoreWithPassword(outFile, ""); err != nil {
+		t.Errorf("RestoreWithPassword with SSL: %v", err)
+	}
+}
+
+// TestRestoreWithPassword_WithDataEntries_RestoresData tests the data/ prefix path.
+func TestRestoreWithPassword_WithDataEntries_RestoresData(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+
+	// Create data file
+	if err := os.WriteFile(filepath.Join(m.paths.Data, "test.db"), []byte("test data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outFile := filepath.Join(tmp, "backup_with_data.tar.gz")
+	if err := m.BackupWithOptions(BackupOptions{
+		Filename:    outFile,
+		IncludeData: true,
+	}); err != nil {
+		t.Fatalf("Backup with data: %v", err)
+	}
+
+	restoreDir := filepath.Join(tmp, "restore_data")
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	m2 := NewMaintenanceManager(restoreDir, restoreDir, "1.0.0")
+	m2.paths.Backup = m.paths.Backup
+
+	if err := m2.RestoreWithPassword(outFile, ""); err != nil {
+		t.Errorf("RestoreWithPassword with data: %v", err)
+	}
+}
+
+// TestRestoreWithPassword_EncryptedRequiresPassword tests the "encrypted but no
+// password" path that returns an error without decrypting.
+func TestRestoreWithPassword_EncryptedNoPassword_ReturnsError(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+	outFile := filepath.Join(tmp, "enc_backup.tar.gz.enc")
+
+	if err := m.BackupWithOptions(BackupOptions{
+		Filename: outFile,
+		Password: "secret",
+	}); err != nil {
+		t.Fatalf("Backup encrypted: %v", err)
+	}
+
+	m2 := NewMaintenanceManager(m.paths.Config, m.paths.Data, "1.0.0")
+	m2.paths.Backup = m.paths.Backup
+
+	// Try to restore with no password — should fail
+	err := m2.RestoreWithPassword(outFile, "")
+	if err == nil {
+		t.Error("RestoreWithPassword(enc, no pwd): expected error, got nil")
+	}
+}

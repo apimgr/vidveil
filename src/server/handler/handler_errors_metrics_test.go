@@ -411,3 +411,111 @@ func TestNewMetrics_WithNilEngine(t *testing.T) {
 		t.Fatal("NewMetrics(cfg, nil engine) returned nil")
 	}
 }
+
+// ── ServerMetrics nil-counter fallback paths (GetRequests24h / GetSearches24h) ─
+
+func TestServerMetrics_GetRequests24h_NilCounter_ReturnsZero(t *testing.T) {
+	// Create struct directly so requests24h == nil → returns 0 via line 176
+	m := &ServerMetrics{}
+	if got := m.GetRequests24h(); got != 0 {
+		t.Errorf("GetRequests24h(nil counter) = %d, want 0", got)
+	}
+}
+
+func TestServerMetrics_GetSearches24h_NilCounter_ReturnsZero(t *testing.T) {
+	m := &ServerMetrics{}
+	if got := m.GetSearches24h(); got != 0 {
+		t.Errorf("GetSearches24h(nil counter) = %d, want 0", got)
+	}
+}
+
+// ── WriteJSON — marshal error fallback path ───────────────────────────────────
+
+func TestWriteJSON_MarshalError_WritesErrorBody(t *testing.T) {
+	rr := httptest.NewRecorder()
+	// Channels are not JSON-serializable → MarshalIndent returns an error
+	WriteJSON(rr, http.StatusOK, make(chan int))
+	body := rr.Body.String()
+	if body == "" {
+		t.Error("WriteJSON(chan): expected non-empty error body")
+	}
+}
+
+// ── RenderErrorPage — plain text fallback (template FS empty in tests) ────────
+
+func TestRenderErrorPage_EmptyFS_ServesPlainText(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/not-found", nil)
+
+	h.RenderErrorPage(rr, req, http.StatusNotFound, "Not Found", "The page does not exist")
+
+	if rr.Code == http.StatusOK {
+		t.Error("RenderErrorPage: expected non-200 code with empty FS")
+	}
+}
+
+// ── ServerMetrics IncrementRequests — nil counter path ────────────────────────
+
+func TestServerMetrics_IncrementRequests_NilCounter_NoPanic(t *testing.T) {
+	m := &ServerMetrics{}
+	m.IncrementRequests()
+	if m.GetRequestsTotal() != 1 {
+		t.Errorf("IncrementRequests(nil 24h counter) = %d, want 1", m.GetRequestsTotal())
+	}
+}
+
+func TestServerMetrics_IncrementSearches_NilCounter_NoPanic(t *testing.T) {
+	m := &ServerMetrics{}
+	m.IncrementSearches()
+	if m.GetSearchesTotal() != 1 {
+		t.Errorf("IncrementSearches(nil 24h counter) = %d, want 1", m.GetSearchesTotal())
+	}
+}
+
+// ── MaintenanceModeMiddleware — active maintenance mode ───────────────────────
+
+func TestMaintenanceModeMiddleware_MaintenanceFlagExists_Returns503(t *testing.T) {
+	h := newRenderTestHandler()
+
+	// Write maintenance flag to the expected location
+	paths := config.GetAppPaths("", "")
+	flagFile := paths.Data + "/maintenance.flag"
+	if err := os.MkdirAll(paths.Data, 0755); err != nil {
+		t.Skipf("cannot create data dir %s: %v", paths.Data, err)
+	}
+	if err := os.WriteFile(flagFile, []byte(""), 0644); err != nil {
+		t.Skipf("cannot create maintenance flag: %v", err)
+	}
+	defer os.Remove(flagFile)
+
+	handler := h.MaintenanceModeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("MaintenanceModeMiddleware(active): status = %d, want 503", rr.Code)
+	}
+}
+
+func TestMaintenanceModeMiddleware_HealthzPath_PassesThrough(t *testing.T) {
+	h := newRenderTestHandler()
+
+	called := false
+	handler := h.MaintenanceModeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("MaintenanceModeMiddleware(/healthz): expected next handler to be called")
+	}
+}

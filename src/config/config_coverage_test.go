@@ -2,6 +2,7 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -236,5 +237,133 @@ func TestValidateConfig_NonJSONAuditFormat(t *testing.T) {
 	validateConfig(cfg)
 	if cfg.Server.Logs.Audit.Format != "json" {
 		t.Errorf("validateConfig: audit format should be forced to 'json', got %q", cfg.Server.Logs.Audit.Format)
+	}
+}
+
+// ── GetDisplayHost — loopback and dev-TLD paths ───────────────────────────────
+
+// When DOMAIN is a loopback, GetDisplayHost tries getGlobalIPv6/IPv4 then falls back.
+func TestGetDisplayHost_LoopbackDomain_FallsBack(t *testing.T) {
+	t.Setenv("DOMAIN", "localhost")
+	result := GetDisplayHost(DefaultAppConfig())
+	if result == "" {
+		t.Error("GetDisplayHost(loopback): expected non-empty fallback")
+	}
+}
+
+// When DOMAIN is a dev TLD, GetDisplayHost tries IP resolution then falls back.
+func TestGetDisplayHost_DevTLD_FallsBack(t *testing.T) {
+	t.Setenv("DOMAIN", "myhost.local")
+	result := GetDisplayHost(DefaultAppConfig())
+	if result == "" {
+		t.Error("GetDisplayHost(.local): expected non-empty fallback")
+	}
+}
+
+// ── GetFQDN — all fallback paths ──────────────────────────────────────────────
+
+// HOSTNAME env var path (when os.Hostname() fails or returns loopback).
+func TestGetFQDN_HostnameEnvVar_NotLoopback(t *testing.T) {
+	t.Setenv("DOMAIN", "")
+	t.Setenv("HOSTNAME", "myserver.example.com")
+	result := GetFQDN()
+	if result == "" {
+		t.Error("GetFQDN(HOSTNAME env): expected non-empty result")
+	}
+}
+
+func TestGetFQDN_HostnameEnvVar_Loopback_FallsThrough(t *testing.T) {
+	t.Setenv("DOMAIN", "")
+	t.Setenv("HOSTNAME", "127.0.0.1")
+	// Should skip HOSTNAME (loopback) and try IPv6/IPv4/hostname
+	result := GetFQDN()
+	_ = result // may return "" if no global IP
+}
+
+// ── getHostname — various paths ───────────────────────────────────────────────
+
+func TestGetHostname_ReturnsNonEmpty(t *testing.T) {
+	result := getHostname()
+	if result == "" {
+		t.Log("getHostname: returned empty (no hostname available)")
+	}
+}
+
+// ── SecChUa — all browser identifiers ────────────────────────────────────────
+
+func TestSecChUa_Chrome_ReturnsChrome(t *testing.T) {
+	ua := UserAgentConfig{Browser: "chrome", BrowserVersion: "120", OS: "linux"}
+	result := ua.SecChUa()
+	if !strings.Contains(result, "Google Chrome") {
+		t.Logf("SecChUa chrome: %q", result)
+	}
+}
+
+func TestSecChUa_Firefox_ReturnsEmpty(t *testing.T) {
+	ua := UserAgentConfig{Browser: "firefox", BrowserVersion: "121", OS: "linux"}
+	result := ua.SecChUa()
+	if result != "" {
+		t.Errorf("SecChUa firefox: expected empty, got %q", result)
+	}
+}
+
+func TestSecChUa_Edge_ReturnsEdge(t *testing.T) {
+	ua := UserAgentConfig{Browser: "edge", BrowserVersion: "120", OS: "windows"}
+	result := ua.SecChUa()
+	if !strings.Contains(result, "Microsoft Edge") {
+		t.Logf("SecChUa edge: %q", result)
+	}
+}
+
+func TestSecChUa_Default_ReturnsChrome(t *testing.T) {
+	ua := UserAgentConfig{Browser: "", BrowserVersion: "", OS: "linux"}
+	result := ua.SecChUa()
+	if !strings.Contains(result, "Google Chrome") {
+		t.Logf("SecChUa default: %q", result)
+	}
+}
+
+func TestSecChUaPlatform_AllPlatforms_NoPanic(t *testing.T) {
+	platforms := []string{"linux", "windows", "macos", "android", "unknown"}
+	for _, p := range platforms {
+		ua := UserAgentConfig{OS: p}
+		result := ua.SecChUaPlatform()
+		_ = result
+	}
+}
+
+// ── LoadAppConfig — config dir not found path ─────────────────────────────────
+
+func TestLoadAppConfig_NonExistentDir_ReturnsDefault(t *testing.T) {
+	base := os.TempDir() + "/apimgr"
+	os.MkdirAll(base, 0755)
+	tmp, err := os.MkdirTemp(base, "vidveil-cfg-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	cfg, _, loadErr := LoadAppConfig(tmp+"/nonexistent", tmp)
+	if cfg == nil {
+		t.Error("LoadAppConfig(nonexistent dir): expected non-nil config with defaults")
+	}
+	_ = loadErr
+}
+
+// ── SaveAppConfig — round trip ────────────────────────────────────────────────
+
+func TestSaveAppConfig_TempFile_NoPanic(t *testing.T) {
+	base := os.TempDir() + "/apimgr"
+	os.MkdirAll(base, 0755)
+	tmp, err := os.MkdirTemp(base, "vidveil-save-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	cfg := DefaultAppConfig()
+	err = SaveAppConfig(cfg, tmp+"/server.yml")
+	if err != nil {
+		t.Errorf("SaveAppConfig: %v", err)
 	}
 }

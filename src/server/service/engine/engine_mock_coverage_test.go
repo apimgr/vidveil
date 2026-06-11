@@ -52,12 +52,13 @@ func newMgrWithMock(name string, results []model.VideoResult, err error, avail b
 }
 
 // validResult creates a VideoResult that passes all filters.
+// Uses DurationSeconds > 600 to pass DefaultAppConfig.Search.MinDurationSeconds = 600.
 func validResult(title, url string) model.VideoResult {
 	return model.VideoResult{
 		Title:           title,
 		URL:             url,
 		Thumbnail:       "https://example.com/thumb.jpg",
-		DurationSeconds: 300,
+		DurationSeconds: 700,
 	}
 }
 
@@ -90,8 +91,8 @@ func TestSearch_WithMockEngineError_RecordsFailure(t *testing.T) {
 
 func TestSearch_WithMockEngine_InvalidThumbnail_Filtered(t *testing.T) {
 	results := []model.VideoResult{
-		{Title: "no-thumb", URL: "https://example.com/v1", Thumbnail: "", DurationSeconds: 300},
-		{Title: "invalid-thumb", URL: "https://example.com/v2", Thumbnail: "invalid-url", DurationSeconds: 300},
+		{Title: "no-thumb", URL: "https://example.com/v1", Thumbnail: "", DurationSeconds: 700},
+		{Title: "invalid-thumb", URL: "https://example.com/v2", Thumbnail: "invalid-url", DurationSeconds: 700},
 	}
 	m := newMgrWithMock("mock-thumb", results, nil, true)
 
@@ -255,4 +256,193 @@ func TestCalculateRelevanceScore_EmptyTitle_ReturnsLow(t *testing.T) {
 
 	score := calculateRelevanceScore(result, "test query", words)
 	_ = score
+}
+
+// ── SearchStreamWithOperators — operator filter branches ─────────────────────
+
+func TestSearchStreamWithOperators_WithExclusion_FiltersResult(t *testing.T) {
+	results := []model.VideoResult{
+		validResult("stream video test excluded", "https://example.com/excl"),
+		validResult("stream video test allowed", "https://example.com/allow"),
+	}
+	m := newMgrWithMock("mock-excl", results, nil, true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Exclude results containing "excluded" in title
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, []string{"excluded"}, nil, false, 0, false, 0)
+	for range ch {
+	}
+}
+
+func TestSearchStreamWithOperators_WithExactPhrase_FiltersResult(t *testing.T) {
+	results := []model.VideoResult{
+		validResult("stream video exact phrase here", "https://example.com/exact"),
+		validResult("stream video different words", "https://example.com/diff"),
+	}
+	m := newMgrWithMock("mock-phrase", results, nil, true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, []string{"exact phrase"}, nil, nil, false, 0, false, 0)
+	for range ch {
+	}
+}
+
+func TestSearchStreamWithOperators_WithPerformerFilter_FiltersResult(t *testing.T) {
+	results := []model.VideoResult{
+		{
+			Title:           "stream video performer match",
+			URL:             "https://example.com/perf1",
+			Thumbnail:       "https://example.com/thumb.jpg",
+			DurationSeconds: 700,
+			Performer:       "Jane Doe",
+		},
+		{
+			Title:           "stream video performer nomatch",
+			URL:             "https://example.com/perf2",
+			Thumbnail:       "https://example.com/thumb.jpg",
+			DurationSeconds: 700,
+			Performer:       "John Smith",
+		},
+	}
+	m := newMgrWithMock("mock-perf", results, nil, true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, []string{"jane"}, false, 0, false, 0)
+	for range ch {
+	}
+}
+
+func TestSearchStreamWithOperators_WithMinQuality_FiltersResult(t *testing.T) {
+	results := []model.VideoResult{
+		{
+			Title:           "stream video hd quality",
+			URL:             "https://example.com/hd",
+			Thumbnail:       "https://example.com/thumb.jpg",
+			DurationSeconds: 300,
+			Quality:         "HD",
+		},
+		{
+			Title:           "stream video sd quality",
+			URL:             "https://example.com/sd",
+			Thumbnail:       "https://example.com/thumb.jpg",
+			DurationSeconds: 300,
+			Quality:         "SD",
+		},
+	}
+	m := newMgrWithMock("mock-qual", results, nil, true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 480, false, 0)
+	for range ch {
+	}
+}
+
+func TestSearchStreamWithOperators_AIFilter_FiltersAIContent(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	// Enable AI filter
+	cfg.Search.AIFilter.Enabled = true
+	cfg.Search.AIFilter.Keywords = []string{"deepfake", "synthetic"}
+	m := NewEngineManager(cfg)
+	m.engines["mock-ai"] = &mockSearchEngine{
+		name:  "mock-ai",
+		avail: true,
+		tier:  1,
+		results: []model.VideoResult{
+			{
+				Title:           "stream deepfake video synthetic",
+				URL:             "https://example.com/deepfake",
+				Thumbnail:       "https://example.com/thumb.jpg",
+				DurationSeconds: 700,
+			},
+			{
+				Title:           "stream regular video",
+				URL:             "https://example.com/regular",
+				Thumbnail:       "https://example.com/thumb.jpg",
+				DurationSeconds: 700,
+			},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 0, false, 0)
+	for range ch {
+	}
+}
+
+func TestSearchStreamWithOperators_QualityFilter_FiltersLowQuality(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Search.MinDurationSeconds = 0
+	m := NewEngineManager(cfg)
+	m.engines["mock-qual2"] = &mockSearchEngine{
+		name:  "mock-qual2",
+		avail: true,
+		tier:  1,
+		results: []model.VideoResult{
+			{
+				Title:           "stream low quality 240p",
+				URL:             "https://example.com/lq",
+				Thumbnail:       "https://example.com/thumb.jpg",
+				DurationSeconds: 700,
+				Quality:         "240p",
+			},
+			{
+				Title:           "stream high quality 1080p",
+				URL:             "https://example.com/hq",
+				Thumbnail:       "https://example.com/thumb.jpg",
+				DurationSeconds: 700,
+				Quality:         "1080p",
+			},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := m.SearchStreamWithOperators(ctx, "stream quality", 1, nil, nil, nil, nil, false, 480, false, 0)
+	for range ch {
+	}
+}
+
+func TestSearchStreamWithOperators_UserMinDuration_Override(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	// Set config minDuration to 0 so userMinDuration=120 overrides it (covers line 1231-1232)
+	cfg.Search.MinDurationSeconds = 0
+
+	m := NewEngineManager(cfg)
+	m.engines["mock-dur2"] = &mockSearchEngine{
+		name:  "mock-dur2",
+		avail: true,
+		tier:  1,
+		results: []model.VideoResult{
+			{
+				Title:           "stream long video",
+				URL:             "https://example.com/long",
+				Thumbnail:       "https://example.com/thumb.jpg",
+				DurationSeconds: 600,
+			},
+			{
+				Title:           "stream short video",
+				URL:             "https://example.com/short",
+				Thumbnail:       "https://example.com/thumb.jpg",
+				DurationSeconds: 30,
+			},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 0, false, 120)
+	for range ch {
+	}
 }

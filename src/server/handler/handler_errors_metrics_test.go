@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -517,5 +518,79 @@ func TestMaintenanceModeMiddleware_HealthzPath_PassesThrough(t *testing.T) {
 
 	if !called {
 		t.Error("MaintenanceModeMiddleware(/healthz): expected next handler to be called")
+	}
+}
+
+// ── SecurityTxt — branches ────────────────────────────────────────────────────
+
+func TestSecurityTxt_ContactWithMailto_SkipsPrefix(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Web.Security.Contact = "mailto:security@example.com"
+	cfg.Web.Security.Expires = "2026-01-01T00:00:00Z"
+	h := NewSearchHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/security.txt", nil)
+	h.SecurityTxt(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("SecurityTxt: status = %d, want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "mailto:security@example.com") {
+		t.Error("SecurityTxt: expected existing mailto prefix preserved")
+	}
+}
+
+func TestSecurityTxt_ContactWithoutMailto_AddsPrefix(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Web.Security.Contact = "security@example.com"
+	cfg.Web.Security.Expires = ""
+	h := NewSearchHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/security.txt", nil)
+	h.SecurityTxt(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("SecurityTxt: status = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "mailto:security@example.com") {
+		t.Errorf("SecurityTxt: expected mailto prefix added, got %q", body)
+	}
+}
+
+// ── WellKnownVidVeil — branches ───────────────────────────────────────────────
+
+func TestWellKnownVidVeil_JSONFormat_ReturnsJSON(t *testing.T) {
+	h := newAPITestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/vidveil", nil)
+	h.WellKnownVidVeil(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("WellKnownVidVeil: status = %d, want 200", rr.Code)
+	}
+}
+
+// ── SearchPage with metrics ───────────────────────────────────────────────────
+
+func TestSearchPage_WithMetrics_IncrementsCounter(t *testing.T) {
+	// Use DefaultAppConfig to ensure ResultsPerPage != 0 (avoids divide-by-zero in Search)
+	cfg := config.DefaultAppConfig()
+	mgr := engine.NewEngineManager(cfg)
+	h := NewSearchHandler(cfg, mgr)
+	h.metrics = NewMetrics(cfg, mgr)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
+	req.Header.Set("Accept", "application/json")
+	h.SearchPage(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("SearchPage with metrics: status = %d, want 200", rr.Code)
+	}
+	if h.metrics.GetSearchesTotal() == 0 {
+		t.Error("SearchPage with metrics: IncrementSearches not called")
 	}
 }

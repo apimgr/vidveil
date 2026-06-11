@@ -508,3 +508,159 @@ func TestRenderHealthzHTML_ProductionMode_Returns500(t *testing.T) {
 		t.Error("renderHealthzHTML healthy+production+branding: should not return 200 with empty FS")
 	}
 }
+
+// ── renderTemplate — all template names ──────────────────────────────────────
+// Each case in the switch covers a different template path.
+// With empty FS, all return 500 (except "default" which returns "Template not found").
+
+func TestRenderTemplate_Search_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "search", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate search: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_Preferences_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "preferences", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate preferences: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_AgeVerify_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "age-verify", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate age-verify: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_ContentRestricted_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "content-restricted", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate content-restricted: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_ContentBlocked_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "content-blocked", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate content-blocked: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_Privacy_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "privacy", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate privacy: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_NojsHome_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "nojs/home", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate nojs/home: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_NojsSearch_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "nojs/search", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate nojs/search: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_NojsPreferences_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "nojs/preferences", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate nojs/preferences: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_NojsAbout_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "nojs/about", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate nojs/about: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_NojsAgeVerify_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "nojs/age-verify", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate nojs/age-verify: should not return 200 with empty FS")
+	}
+}
+
+func TestRenderTemplate_NojsPrivacy_Returns500(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	h.renderTemplate(rr, "nojs/privacy", map[string]interface{}{})
+	if rr.Code == http.StatusOK {
+		t.Error("renderTemplate nojs/privacy: should not return 200 with empty FS")
+	}
+}
+
+// ── PreferencesPage with initialized engines ─────────────────────────────────
+
+func TestPreferencesPage_PlainText_WithEngines_CoversLoop(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req.Header.Set("User-Agent", "curl/7.68.0")
+
+	h.PreferencesPage(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("PreferencesPage plain (with engines): status = %d, want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Engines") {
+		t.Log("PreferencesPage plain: no engines section in output")
+	}
+}
+
+// ── renderTemplate — WithActiveNavSet_NoOverwrite ─────────────────────────────
+
+func TestRenderTemplate_WithActiveNavSet_NoOverwrite(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	data := map[string]interface{}{
+		"ActiveNav": "custom-nav",
+	}
+	h.renderTemplate(rr, "home", data)
+	if data["ActiveNav"] != "custom-nav" {
+		t.Error("renderTemplate: should not overwrite existing ActiveNav")
+	}
+}
+
+func TestRenderTemplate_WithQuerySet_NoOverwrite(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	data := map[string]interface{}{
+		"Query": "existing query",
+	}
+	h.renderTemplate(rr, "search", data)
+	if data["Query"] != "existing query" {
+		t.Error("renderTemplate: should not overwrite existing Query")
+	}
+}

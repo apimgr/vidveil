@@ -704,3 +704,49 @@ func TestAPIEngines_InitializedManager_PlainText(t *testing.T) {
 		t.Errorf("APIEngines plain text initialized: status = %d, want 200", rr.Code)
 	}
 }
+
+// ── APISearch — min_quality, min_duration, show_ai, preview_first params ─────
+
+func TestAPISearch_WithMinQuality_CoversParam(t *testing.T) {
+	h := newAPITestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&min_quality=720", nil)
+	h.APISearch(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APISearch min_quality: status = %d, want 200", rr.Code)
+	}
+}
+
+func TestAPISearch_WithMinDuration_CoversParam(t *testing.T) {
+	h := newAPITestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&min_duration=120", nil)
+	h.APISearch(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APISearch min_duration: status = %d, want 200", rr.Code)
+	}
+}
+
+func TestAPISearch_ShowAI_CoversFlag(t *testing.T) {
+	h := newAPITestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&show_ai=1", nil)
+	h.APISearch(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APISearch show_ai: status = %d, want 200", rr.Code)
+	}
+}
+
+func TestAPISearch_PreviewFirst_CoversFlag(t *testing.T) {
+	h := newAPITestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&preview_first=1", nil)
+	h.APISearch(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APISearch preview_first: status = %d, want 200", rr.Code)
+	}
+}

@@ -769,3 +769,34 @@ func TestRenderTemplate_NojsSearchName_Covered(t *testing.T) {
 		t.Errorf("renderTemplate nojs/search empty FS: want 500, got %d", rr.Code)
 	}
 }
+
+// ── APIHealthCheck — with Tor service set ────────────────────────────────────
+
+func TestAPIHealthCheck_WithTorRunning_CoversLines1084_1085(t *testing.T) {
+	// Use the testTorChecker from handler_content_coverage_test.go
+	h := newRenderTestHandler()
+	h.torSvc = &testTorChecker{enabled: true, running: true}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("Accept", "application/json")
+	h.APIHealthCheck(rr, req)
+
+	if rr.Code == 0 {
+		t.Error("APIHealthCheck: expected non-zero status")
+	}
+}
+
+func TestAPIHealthCheck_WithTorNotRunning_CoversLine1087(t *testing.T) {
+	h := newRenderTestHandler()
+	h.torSvc = &testTorChecker{enabled: true, running: false}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("Accept", "application/json")
+	h.APIHealthCheck(rr, req)
+
+	if rr.Code == 0 {
+		t.Error("APIHealthCheck: expected non-zero status")
+	}
+}

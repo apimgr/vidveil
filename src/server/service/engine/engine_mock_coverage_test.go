@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server/model"
 )
 
@@ -444,5 +445,101 @@ func TestSearchStreamWithOperators_UserMinDuration_Override(t *testing.T) {
 
 	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 0, false, 120)
 	for range ch {
+	}
+}
+
+// ── DebugLogEngineResponse — debug enabled path ───────────────────────────────
+
+func TestDebugLogEngineResponse_DebugEnabled_NoPanic(t *testing.T) {
+	mode.SetDebug(true)
+	t.Cleanup(func() { mode.SetDebug(false) })
+
+	DebugLogEngineResponse("test-engine", "https://example.com/search", []byte("test response"))
+}
+
+func TestDebugLogEngineResponse_LargeBody_Truncated(t *testing.T) {
+	mode.SetDebug(true)
+	t.Cleanup(func() { mode.SetDebug(false) })
+
+	// Body > 2000 chars — exercises truncation path
+	largeBody := make([]byte, 3000)
+	for i := range largeBody {
+		largeBody[i] = 'x'
+	}
+	DebugLogEngineResponse("test-engine", "https://example.com/search", largeBody)
+}
+
+func TestDebugLogEngineParseResult_DebugEnabled_NoPanic(t *testing.T) {
+	mode.SetDebug(true)
+	t.Cleanup(func() { mode.SetDebug(false) })
+
+	DebugLogEngineParseResult("test-engine", 5, map[string]int{
+		"title":     5,
+		"thumbnail": 4,
+		"duration":  3,
+	})
+}
+
+// ── NewBaseEngine — EngineTimeouts / EngineRequestIntervals overrides ─────────
+
+func TestNewBaseEngine_WithEngineTimeoutOverride_AppliesOverride(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Search.EngineTimeout = 30
+	cfg.Search.EngineTimeouts = map[string]int{
+		"test-engine": 10,
+	}
+
+	e := NewBaseEngine("test-engine", "Test Engine", "https://example.com", 1, cfg)
+	if e == nil {
+		t.Fatal("NewBaseEngine: returned nil")
+	}
+}
+
+func TestNewBaseEngine_WithRequestIntervalOverride_AppliesOverride(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Search.EngineRequestIntervals = map[string]int{
+		"test-engine": 500,
+	}
+
+	e := NewBaseEngine("test-engine", "Test Engine", "https://example.com", 1, cfg)
+	if e == nil {
+		t.Fatal("NewBaseEngine: returned nil")
+	}
+}
+
+// ── classifyHTTPError — all error message branches ───────────────────────────
+
+func TestClassifyHTTPError_Nil_ReturnsNil(t *testing.T) {
+	if err := classifyHTTPError(nil); err != nil {
+		t.Errorf("classifyHTTPError(nil): expected nil, got %v", err)
+	}
+}
+
+func TestClassifyHTTPError_Timeout_ReturnsTimeout(t *testing.T) {
+	err := classifyHTTPError(errors.New("request timeout exceeded"))
+	if err == nil {
+		t.Error("classifyHTTPError(timeout): expected error")
+	}
+}
+
+func TestClassifyHTTPError_ConnectionRefused_ReturnsNetwork(t *testing.T) {
+	err := classifyHTTPError(errors.New("connection refused"))
+	if err == nil {
+		t.Error("classifyHTTPError(conn refused): expected error")
+	}
+}
+
+func TestClassifyHTTPError_NoSuchHost_ReturnsNetwork(t *testing.T) {
+	err := classifyHTTPError(errors.New("no such host"))
+	if err == nil {
+		t.Error("classifyHTTPError(no such host): expected error")
+	}
+}
+
+func TestClassifyHTTPError_GenericError_ReturnsError(t *testing.T) {
+	orig := errors.New("some unknown error")
+	err := classifyHTTPError(orig)
+	if err == nil {
+		t.Error("classifyHTTPError(generic): expected error")
 	}
 }

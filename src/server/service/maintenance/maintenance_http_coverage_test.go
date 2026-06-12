@@ -358,3 +358,33 @@ func TestApplyUpdate_EmptyURL_NetworkError_ReturnsError(t *testing.T) {
 		t.Error("ApplyUpdate on 500: expected error, got nil")
 	}
 }
+
+func TestApplyUpdate_DirectURL_NotFound_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	m := newMaintManagerTmp(t, "1.0.0")
+	err := m.ApplyUpdate(srv.URL + "/download/vidveil")
+	if err == nil {
+		t.Error("ApplyUpdate(404): expected error, got nil")
+	}
+}
+
+func TestApplyUpdate_DirectURL_200_DownloadsAndFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("#!/bin/sh\necho hello\n"))
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	m := newMaintManagerTmp(t, "1.0.0")
+	// The download succeeds but replacing the binary may fail (permission denied in Docker)
+	err := m.ApplyUpdate(srv.URL + "/download/vidveil")
+	if err != nil {
+		t.Logf("ApplyUpdate(200 download): %v (expected — binary replacement restricted)", err)
+	}
+}

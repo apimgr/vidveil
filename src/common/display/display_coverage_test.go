@@ -370,3 +370,29 @@ func TestDetectUnixDisplay_DisplaySetXsetFails(t *testing.T) {
 		t.Errorf("detectUnixDisplay() DISPLAY set: DisplayType = %q, want none or x11", e.DisplayType)
 	}
 }
+
+// ── detectUnixDisplay — WAYLAND_DISPLAY path ──────────────────────────────────
+
+func TestDetectUnixDisplay_WaylandSet_ReturnsWayland(t *testing.T) {
+	t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+	t.Setenv("DISPLAY", "")
+
+	e := &DisplayEnv{}
+	e.detectUnixDisplay()
+
+	if e.DisplayType != "wayland" {
+		t.Errorf("detectUnixDisplay(WAYLAND_DISPLAY): DisplayType = %q, want wayland", e.DisplayType)
+	}
+	if !e.HasDisplay {
+		t.Error("detectUnixDisplay(WAYLAND_DISPLAY): HasDisplay should be true")
+	}
+}
+
+// ── detectPlatformDisplay — covers all branches ───────────────────────────────
+
+func TestDetectPlatformDisplay_Linux_NoPanic(t *testing.T) {
+	e := &DisplayEnv{}
+	e.detectPlatformDisplay()
+	// On Linux, calls detectUnixDisplay — should not panic
+	_ = e.DisplayType
+}

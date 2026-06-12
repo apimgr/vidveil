@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
@@ -341,4 +342,52 @@ func TestHandleDebugEngine_NotFound_Returns404(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("handleDebugEngine not found: status = %d, want 404", rec.Code)
 	}
+}
+
+// ── registerDebugRoutes — debug enabled path ──────────────────────────────────
+
+func TestRegisterDebugRoutes_DebugEnabled_RegistersRoutes(t *testing.T) {
+	// Import mode from src/mode package
+	// We use t.Cleanup to restore debug state
+	mode.SetDebug(true)
+	t.Cleanup(func() { mode.SetDebug(false) })
+
+	s := &Server{
+		appConfig: config.DefaultAppConfig(),
+		router:    chi.NewRouter(),
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("registerDebugRoutes (enabled) panicked: %v", r)
+		}
+	}()
+	s.registerDebugRoutes(s.router)
+}
+
+// ── debugLog — debug enabled path ─────────────────────────────────────────────
+
+func TestDebugLog_DebugEnabled_NoPanic(t *testing.T) {
+	mode.SetDebug(true)
+	t.Cleanup(func() { mode.SetDebug(false) })
+
+	s := &Server{appConfig: config.DefaultAppConfig()}
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	s.debugLog(req, 200, 50*time.Millisecond, 1024)
+}
+
+func TestDebugLogDB_DebugEnabled_NoPanic(t *testing.T) {
+	mode.SetDebug(true)
+	t.Cleanup(func() { mode.SetDebug(false) })
+
+	s := &Server{appConfig: config.DefaultAppConfig()}
+	s.debugLogDB("SELECT 1", []any{"arg"}, 5*time.Millisecond, nil)
+}
+
+func TestDebugLogCache_DebugEnabled_NoPanic(t *testing.T) {
+	mode.SetDebug(true)
+	t.Cleanup(func() { mode.SetDebug(false) })
+
+	s := &Server{appConfig: config.DefaultAppConfig()}
+	s.debugLogCache("GET", "test-key", true, 2*time.Millisecond)
 }

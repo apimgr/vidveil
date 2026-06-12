@@ -839,3 +839,46 @@ func TestLearningDisabledSkipsObservations(t *testing.T) {
 		t.Errorf("observations len = %d with Learning=false, want 0", count)
 	}
 }
+
+// ── resolveFQDN — port-stripping paths for X-Forwarded-Host etc. ─────────────
+
+func TestResolveFQDN_XForwardedHostWithPort_StripsPort(t *testing.T) {
+	resolver := NewURLResolver(DefaultURLVarsConfig())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Forwarded-Host", "example.com:8443")
+
+	fqdn := resolver.resolveFQDN(req)
+	if fqdn != "example.com" {
+		t.Errorf("resolveFQDN(X-Forwarded-Host:port): got %q, want example.com", fqdn)
+	}
+}
+
+func TestResolveFQDN_XRealHostWithPort_StripsPort(t *testing.T) {
+	resolver := NewURLResolver(DefaultURLVarsConfig())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Real-Host", "real.example.com:9000")
+
+	fqdn := resolver.resolveFQDN(req)
+	if fqdn != "real.example.com" {
+		t.Errorf("resolveFQDN(X-Real-Host:port): got %q, want real.example.com", fqdn)
+	}
+}
+
+func TestResolveFQDN_XOriginalHostWithPort_StripsPort(t *testing.T) {
+	resolver := NewURLResolver(DefaultURLVarsConfig())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Original-Host", "orig.example.com:7777")
+
+	fqdn := resolver.resolveFQDN(req)
+	if fqdn != "orig.example.com" {
+		t.Errorf("resolveFQDN(X-Original-Host:port): got %q, want orig.example.com", fqdn)
+	}
+}
+
+// ── getPublicIP — basic smoke test ────────────────────────────────────────────
+
+func TestGetPublicIP_ReturnsStringOrEmpty(t *testing.T) {
+	ip := getPublicIP()
+	// May be empty in Docker/CI; just verify it doesn't panic
+	_ = ip
+}

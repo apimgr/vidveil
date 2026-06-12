@@ -5,6 +5,7 @@
 package logging
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -272,4 +273,23 @@ func TestNewAppLogger_AuditLogEnabled(t *testing.T) {
 	defer logger.Close()
 
 	logger.Audit("config.updated", "admin", "admin", "127.0.0.1", "success", nil)
+}
+
+// ── AppLogger.Close — os.File output path ────────────────────────────────────
+
+func TestAppLogger_Close_WithOsFileOutput_CoversElseBranch(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "direct.log")
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Directly add an *os.File to l.outputs to cover the else-if branch (line 690)
+	l := &AppLogger{
+		outputs: map[string]io.Writer{
+			"direct": f,
+		},
+	}
+	l.Close()
 }

@@ -7,6 +7,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -799,4 +800,62 @@ func TestAPIHealthCheck_WithTorNotRunning_CoversLine1087(t *testing.T) {
 	if rr.Code == 0 {
 		t.Error("APIHealthCheck: expected non-zero status")
 	}
+}
+
+// ── detectResponseFormat — vidveil.originalPath context path ─────────────────
+
+func TestDetectResponseFormat_OriginalPathContext_JsonExt(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search", nil)
+	ctx := context.WithValue(req.Context(), "vidveil.originalPath", "/api/v1/search.json")
+	req = req.WithContext(ctx)
+
+	format := detectResponseFormat(req)
+	if format != "application/json" {
+		t.Errorf("detectResponseFormat(originalPath .json): got %q, want application/json", format)
+	}
+}
+
+func TestDetectResponseFormat_FormatQueryParam_RSS(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&format=rss", nil)
+	format := detectResponseFormat(req)
+	if format != "application/rss+xml" {
+		t.Errorf("detectResponseFormat(?format=rss): got %q, want application/rss+xml", format)
+	}
+}
+
+func TestDetectResponseFormat_FormatQueryParam_Atom(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&format=atom", nil)
+	format := detectResponseFormat(req)
+	if format != "application/atom+xml" {
+		t.Errorf("detectResponseFormat(?format=atom): got %q, want application/atom+xml", format)
+	}
+}
+
+func TestDetectResponseFormat_FormatQueryParam_CSV(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&format=csv", nil)
+	format := detectResponseFormat(req)
+	if format != "text/csv" {
+		t.Errorf("detectResponseFormat(?format=csv): got %q, want text/csv", format)
+	}
+}
+
+func TestDetectResponseFormat_FormatQueryParam_Text(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&format=text", nil)
+	format := detectResponseFormat(req)
+	if format != "text/plain" {
+		t.Errorf("detectResponseFormat(?format=text): got %q, want text/plain", format)
+	}
+}
+
+// ── PreferencesPage — browser default path ────────────────────────────────────
+
+func TestPreferencesPage_BrowserDefault_CoversHTMLPath(t *testing.T) {
+	h := newTestHandlerWithEngine()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req.Header.Set("Accept", "text/html,*/*")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	h.PreferencesPage(rr, req)
+	// Coverage: enters default case → renderResponse (template fails with empty FS)
 }

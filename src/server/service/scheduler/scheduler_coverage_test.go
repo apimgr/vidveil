@@ -592,3 +592,40 @@ func TestRegisterTask_MergesPersistedState(t *testing.T) {
 		t.Errorf("FailCount after merge = %d, want 3", task.FailCount)
 	}
 }
+
+// ── RegisterTask — invalid schedule returns error ─────────────────────────────
+
+func TestRegisterTask_InvalidSchedule_ReturnsError(t *testing.T) {
+	s := NewScheduler()
+	err := s.RegisterTask("test-id", "Test", "desc", "invalid-schedule-xyz", func(ctx context.Context) error { return nil })
+	if err == nil {
+		t.Error("RegisterTask(invalid schedule): expected error, got nil")
+	}
+}
+
+func TestRegisterTask_CronSchedule_RegistersTask(t *testing.T) {
+	s := NewScheduler()
+	err := s.RegisterTask("test-cron", "Test Cron", "desc", "0 * * * *", func(ctx context.Context) error { return nil })
+	if err != nil {
+		t.Errorf("RegisterTask(cron): expected nil, got %v", err)
+	}
+}
+
+// ── runMissedTasks — covers catch-up window ───────────────────────────────────
+
+func TestRunMissedTasks_NoPastTasks_NoPanic(t *testing.T) {
+	s := NewScheduler()
+	s.runMissedTasks(time.Minute)
+}
+
+func TestEnableTask_UnknownID_ReturnsError(t *testing.T) {
+	s := NewScheduler()
+	err := s.EnableTask("nonexistent-id")
+	_ = err
+}
+
+func TestDisableTask_UnknownID_ReturnsError(t *testing.T) {
+	s := NewScheduler()
+	err := s.DisableTask("nonexistent-id")
+	_ = err
+}

@@ -543,3 +543,43 @@ func TestClassifyHTTPError_GenericError_ReturnsError(t *testing.T) {
 		t.Error("classifyHTTPError(generic): expected error")
 	}
 }
+
+// ── Search — panic recovery covers lines 158-164 ─────────────────────────────
+
+type panicMockEngine struct {
+	name string
+}
+
+func (m *panicMockEngine) Name() string        { return m.name }
+func (m *panicMockEngine) DisplayName() string { return m.name }
+func (m *panicMockEngine) Search(_ context.Context, _ string, _ int) ([]model.VideoResult, error) {
+	panic("engine test panic")
+}
+func (m *panicMockEngine) IsAvailable() bool               { return true }
+func (m *panicMockEngine) SupportsFeature(_ Feature) bool { return false }
+func (m *panicMockEngine) Tier() int                      { return 1 }
+func (m *panicMockEngine) Capabilities() Capabilities     { return Capabilities{} }
+
+func TestSearch_PanickingEngine_RecoversPanic(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	m := NewEngineManager(cfg)
+	m.engines["panic-engine"] = &panicMockEngine{name: "panic-engine"}
+
+	resp := m.Search(context.Background(), "test", 1, nil)
+	if resp == nil {
+		t.Fatal("Search(panicking engine): nil response")
+	}
+}
+
+func TestSearchStream_PanickingEngine_RecoversPanic(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	m := NewEngineManager(cfg)
+	m.engines["panic-stream"] = &panicMockEngine{name: "panic-stream"}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, false, 0, false, 0)
+	for range ch {
+	}
+}

@@ -169,6 +169,19 @@ func TestGetUserIPForwardPreference_NoCookie(t *testing.T) {
 	}
 }
 
+func TestGetUserIPForwardPreference_WithCookieValue1_ReturnsTrue(t *testing.T) {
+	h := &SearchHandler{
+		appConfig: createTestConfig(),
+		torSvc:    &testTorChecker{enabled: true, allowIPForward: true},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: IPForwardCookieName, Value: "1"})
+	ok, _ := h.getUserIPForwardPreference(req)
+	if !ok {
+		t.Error("getUserIPForwardPreference(cookie=1): expected true")
+	}
+}
+
 // ── ContentRestrictionMiddleware ──────────────────────────────────────────────
 
 // callsNext returns true if the wrapped handler is invoked.
@@ -638,6 +651,29 @@ func TestGetProxyClient_TorDisabled_ReturnsDirect(t *testing.T) {
 	}
 }
 
+func TestGetProxyClient_TorEnabled_ReturnsTorClient(t *testing.T) {
+	h := &SearchHandler{
+		appConfig: createTestConfig(),
+		torSvc:    &testTorChecker{enabled: true, useNetwork: true, outbound: true},
+	}
+	// testTorChecker.GetHTTPClient returns &http.Client{Timeout: 10*time.Second}
+	// With timeout=5s (not 60s), timeout override is applied
+	client := h.getProxyClient(5 * time.Second)
+	if client == nil {
+		t.Error("getProxyClient tor enabled: returned nil client")
+	}
+}
+
+func TestNewSearchHandler_NilAppConfig_UsesDefault(t *testing.T) {
+	h := NewSearchHandler(nil, nil)
+	if h == nil {
+		t.Fatal("NewSearchHandler(nil, nil): returned nil")
+	}
+	if h.appConfig == nil {
+		t.Error("NewSearchHandler(nil config): appConfig should be defaulted")
+	}
+}
+
 // ── HomePage — browser (default) path ────────────────────────────────────────
 
 func TestHomePage_BrowserDefault_CoversHTMLPath(t *testing.T) {
@@ -770,5 +806,74 @@ func TestHandleSearchSSE_NonFlusher_Returns500(t *testing.T) {
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Logf("handleSearchSSE(non-flusher): status = %d (may be SSE-compatible in some versions)", rr.Code)
+	}
+}
+
+// ── AgeVerifySubmit — valid redirect (slash-prefixed) ─────────────────────────
+
+func TestAgeVerifySubmit_POST_ValidRedirect_UsesIt(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	body := strings.NewReader("redirect=/search?q=test")
+	req := httptest.NewRequest(http.MethodPost, "/age-verify/submit", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	h.AgeVerifySubmit(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("AgeVerifySubmit(valid redirect): status = %d, want 302", rr.Code)
+	}
+}
+
+// ── ContentRestrictionMiddleware — soft_block path ───────────────────────────
+
+func TestContentRestrictionMiddleware_SoftBlock_NoAck_Redirects(t *testing.T) {
+	h := &SearchHandler{
+		appConfig: createTestConfig(),
+		geoipSvc: &testGeoIPChecker{
+			enabled: true, mode: "soft_block", restricted: true,
+			msg: "Restricted", reason: "DE",
+		},
+	}
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := h.ContentRestrictionMiddleware(next)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
+	mw.ServeHTTP(rr, req)
+
+	// soft_block without ack cookie → redirect to /content-restricted
+	if rr.Code == http.StatusOK {
+		t.Error("ContentRestrictionMiddleware soft_block: expected redirect, not 200")
+	}
+}
+
+// ── ContentRestrictionMiddleware — hard_block path ───────────────────────────
+
+func TestContentRestrictionMiddleware_HardBlock_BlocksRequest(t *testing.T) {
+	h := &SearchHandler{
+		appConfig: createTestConfig(),
+		geoipSvc: &testGeoIPChecker{
+			enabled: true, mode: "hard_block", restricted: true,
+			msg: "Blocked", reason: "CN",
+		},
+	}
+
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	})
+
+	mw := h.ContentRestrictionMiddleware(next)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
+	req.Header.Set("User-Agent", "curl/7.68.0")
+	mw.ServeHTTP(rr, req)
+
+	if called {
+		t.Error("ContentRestrictionMiddleware hard_block: next should NOT be called")
 	}
 }

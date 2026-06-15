@@ -594,3 +594,45 @@ func TestSearchPage_WithMetrics_IncrementsCounter(t *testing.T) {
 		t.Error("SearchPage with metrics: IncrementSearches not called")
 	}
 }
+
+// ── SecurityTxt — empty contact path (line 1478-1479) ────────────────────────
+
+func TestSecurityTxt_EmptyContact_UsesDefaultFQDN(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Web.Security.Contact = ""
+	cfg.Server.FQDN = "vidveil.example.com"
+	h := NewSearchHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/security.txt", nil)
+	h.SecurityTxt(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("SecurityTxt(empty contact): status = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "security@vidveil.example.com") {
+		t.Errorf("SecurityTxt(empty contact): expected default contact in body, got %q", body)
+	}
+}
+
+// ── HumansTxt — empty app name path (line 1503-1504) ─────────────────────────
+
+func TestHumansTxt_EmptyTitle_UsesVidveilDefault(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Server.Branding.Title = ""
+	cfg.Server.Port = "443"
+	h := NewSearchHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/humans.txt", nil)
+	h.HumansTxt(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("HumansTxt(empty title): status = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Vidveil") {
+		t.Errorf("HumansTxt(empty title): expected 'Vidveil' in body, got %q", body)
+	}
+}

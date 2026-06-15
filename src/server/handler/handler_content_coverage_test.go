@@ -46,6 +46,7 @@ func (g *testGeoIPChecker) CheckContentRestriction(_ string, _ bool) *geoip.Rest
 type testTorChecker struct {
 	enabled        bool
 	running        bool
+	starting       bool
 	allowIPForward bool
 	useNetwork     bool
 	outbound       bool
@@ -53,7 +54,7 @@ type testTorChecker struct {
 
 func (t *testTorChecker) IsEnabled() bool          { return t.enabled }
 func (t *testTorChecker) IsRunning() bool           { return t.running }
-func (t *testTorChecker) IsStarting() bool          { return false }
+func (t *testTorChecker) IsStarting() bool          { return t.starting }
 func (t *testTorChecker) AllowUserIPForward() bool  { return t.allowIPForward }
 func (t *testTorChecker) UseNetworkEnabled() bool   { return t.useNetwork }
 func (t *testTorChecker) OutboundEnabled() bool     { return t.outbound }

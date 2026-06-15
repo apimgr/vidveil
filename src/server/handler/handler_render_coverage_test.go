@@ -686,3 +686,57 @@ func TestRenderHealthzHTML_WithMetrics_CoversMetricsClosures(t *testing.T) {
 		t.Log("renderHealthzHTML with metrics: template loaded successfully")
 	}
 }
+
+// ── renderHealthzHTML — Tor running (lines 1406-1412) ─────────────────────────
+
+func TestRenderHealthzHTML_WithTorRunning_CoversTorLines(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	mgr := engine.NewEngineManager(cfg)
+	h := NewSearchHandler(cfg, mgr)
+	h.torSvc = &testTorChecker{enabled: true, running: true}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/healthz", nil)
+
+	h.renderHealthzHTML(rr, req, "healthy", http.StatusOK, "production",
+		"1h", "testhost", "2026-01-01T00:00:00Z",
+		map[string]string{"database": "ok"})
+
+	// Template fails but Tor running branch (lines 1406-1412) IS covered
+}
+
+// ── renderHealthzHTML — Tor starting (line 1413-1416) ────────────────────────
+
+func TestRenderHealthzHTML_WithTorStarting_CoversStartingLines(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	mgr := engine.NewEngineManager(cfg)
+	h := NewSearchHandler(cfg, mgr)
+	h.torSvc = &testTorChecker{enabled: true, running: false, starting: true}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/healthz", nil)
+
+	h.renderHealthzHTML(rr, req, "healthy", http.StatusOK, "production",
+		"1h", "testhost", "2026-01-01T00:00:00Z",
+		map[string]string{"database": "ok"})
+
+	// Covers IsStarting()=true → lines 1413-1416
+}
+
+// ── renderHealthzHTML — Tor not running (line 1417-1418) ─────────────────────
+
+func TestRenderHealthzHTML_WithTorNotRunning_CoversUnhealthyLine(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	mgr := engine.NewEngineManager(cfg)
+	h := NewSearchHandler(cfg, mgr)
+	h.torSvc = &testTorChecker{enabled: true, running: false, starting: false}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/healthz", nil)
+
+	h.renderHealthzHTML(rr, req, "healthy", http.StatusOK, "development",
+		"1h", "testhost", "2026-01-01T00:00:00Z",
+		map[string]string{"database": "ok"})
+
+	// Covers else branch (lines 1417-1418) — TorStatus = "unhealthy"
+}

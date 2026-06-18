@@ -294,3 +294,17 @@ func TestPrintConnectionWarning_NilError_NoPanic(t *testing.T) {
 	cliConfig.Server.Address = "http://example.com"
 	PrintConnectionWarning(nil)
 }
+
+func TestPrintConnectionWarning_WithDebug_CoversDebugLine(t *testing.T) {
+	origConfig := cliConfig
+	origDebug := debugModeEnabled
+	t.Cleanup(func() {
+		cliConfig = origConfig
+		debugModeEnabled = origDebug
+	})
+	cliConfig = &CLIConfig{}
+	cliConfig.Server.Address = "http://example.com"
+	debugModeEnabled = true
+	// With debugModeEnabled=true and non-nil error → covers line 1053
+	PrintConnectionWarning(fmt.Errorf("connection refused"))
+}

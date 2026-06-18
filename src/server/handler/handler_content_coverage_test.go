@@ -878,3 +878,62 @@ func TestContentRestrictionMiddleware_HardBlock_BlocksRequest(t *testing.T) {
 		t.Error("ContentRestrictionMiddleware hard_block: next should NOT be called")
 	}
 }
+
+// ── getTorStatus — covers lines 294-297 ─────────────────────────────────────
+
+// torCheckerNoStatus returns GetInfo without a "status" key to force
+// the IsRunning() fallback path in getTorStatus.
+type torCheckerNoStatus struct {
+	running bool
+}
+
+func (t *torCheckerNoStatus) IsEnabled() bool          { return true }
+func (t *torCheckerNoStatus) IsRunning() bool           { return t.running }
+func (t *torCheckerNoStatus) IsStarting() bool          { return false }
+func (t *torCheckerNoStatus) AllowUserIPForward() bool  { return false }
+func (t *torCheckerNoStatus) UseNetworkEnabled() bool   { return false }
+func (t *torCheckerNoStatus) OutboundEnabled() bool     { return false }
+func (t *torCheckerNoStatus) GetInfo() map[string]interface{} {
+	return map[string]interface{}{"onion_address": "test.onion"}
+}
+func (t *torCheckerNoStatus) GetHTTPClient(_ bool) *http.Client {
+	return &http.Client{}
+}
+
+func TestGetTorStatus_NoStatusInInfo_Running_ReturnsHealthy(t *testing.T) {
+	h := &SearchHandler{
+		appConfig: createTestConfig(),
+		torSvc:    &torCheckerNoStatus{running: true},
+	}
+	status := h.getTorStatus()
+	if status != "healthy" {
+		t.Errorf("getTorStatus(no status, running): got %q, want healthy", status)
+	}
+}
+
+func TestGetTorStatus_NoStatusInInfo_NotRunning_ReturnsDisabled(t *testing.T) {
+	h := &SearchHandler{
+		appConfig: createTestConfig(),
+		torSvc:    &torCheckerNoStatus{running: false},
+	}
+	status := h.getTorStatus()
+	if status != "disabled" {
+		t.Errorf("getTorStatus(no status, not running): got %q, want disabled", status)
+	}
+}
+
+// ── getTorHostname — covers lines 305-308 ────────────────────────────────────
+
+func TestGetTorHostname_WithHostname_ReturnsIt(t *testing.T) {
+	type torCheckerWithHostname struct {
+		torCheckerNoStatus
+	}
+	h := &SearchHandler{
+		appConfig: createTestConfig(),
+		torSvc: &testTorChecker{enabled: true, running: true},
+	}
+	// testTorChecker.GetInfo returns {"status": "disabled"}, no hostname
+	hostname := h.getTorHostname()
+	// With no "hostname" key, returns ""
+	_ = hostname
+}

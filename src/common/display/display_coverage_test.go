@@ -396,3 +396,71 @@ func TestDetectPlatformDisplay_Linux_NoPanic(t *testing.T) {
 	// On Linux, calls detectUnixDisplay — should not panic
 	_ = e.DisplayType
 }
+
+// ── detectMacOSDisplay — all three execution paths ────────────────────────────
+// detectMacOSDisplay is defined in detect_unix.go (package display) so it can
+// be called directly from within-package tests on Linux.
+
+// TERM_PROGRAM set → graphical macOS session detected immediately.
+func TestDetectMacOSDisplay_TermProgramSet(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	t.Setenv("Apple_PubSub_Socket_Render", "")
+
+	e := &DisplayEnv{}
+	e.detectMacOSDisplay()
+
+	if e.DisplayType != "macos" {
+		t.Errorf("detectMacOSDisplay() TERM_PROGRAM set: DisplayType = %q, want macos", e.DisplayType)
+	}
+	if !e.HasDisplay {
+		t.Error("detectMacOSDisplay() TERM_PROGRAM set: HasDisplay = false, want true")
+	}
+}
+
+// Apple_PubSub_Socket_Render set (and TERM_PROGRAM empty) → also detected as macOS graphical.
+func TestDetectMacOSDisplay_ApplePubSubSet(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("Apple_PubSub_Socket_Render", "/private/tmp/com.apple.launchd.xxx/Render")
+
+	e := &DisplayEnv{}
+	e.detectMacOSDisplay()
+
+	if e.DisplayType != "macos" {
+		t.Errorf("detectMacOSDisplay() Apple_PubSub set: DisplayType = %q, want macos", e.DisplayType)
+	}
+	if !e.HasDisplay {
+		t.Error("detectMacOSDisplay() Apple_PubSub set: HasDisplay = false, want true")
+	}
+}
+
+// Neither env var set, IsSSH=true → no local display access (SSH into headless macOS).
+func TestDetectMacOSDisplay_SSHNoTermProgram(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("Apple_PubSub_Socket_Render", "")
+
+	e := &DisplayEnv{IsSSH: true}
+	e.detectMacOSDisplay()
+
+	if e.DisplayType != "none" {
+		t.Errorf("detectMacOSDisplay() SSH+no env: DisplayType = %q, want none", e.DisplayType)
+	}
+	if e.HasDisplay {
+		t.Error("detectMacOSDisplay() SSH+no env: HasDisplay = true, want false")
+	}
+}
+
+// Neither env var set and not SSH → assume display available (console macOS session).
+func TestDetectMacOSDisplay_NoEnvNoSSH(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("Apple_PubSub_Socket_Render", "")
+
+	e := &DisplayEnv{IsSSH: false}
+	e.detectMacOSDisplay()
+
+	if e.DisplayType != "macos" {
+		t.Errorf("detectMacOSDisplay() no-env+no-SSH: DisplayType = %q, want macos", e.DisplayType)
+	}
+	if !e.HasDisplay {
+		t.Error("detectMacOSDisplay() no-env+no-SSH: HasDisplay = false, want true")
+	}
+}

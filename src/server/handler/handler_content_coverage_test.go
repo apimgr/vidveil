@@ -678,6 +678,7 @@ func TestNewSearchHandler_NilAppConfig_UsesDefault(t *testing.T) {
 // ── HomePage — browser (default) path ────────────────────────────────────────
 
 func TestHomePage_BrowserDefault_CoversHTMLPath(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newAPITestHandler()
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -734,6 +735,7 @@ func TestSearchPage_TextPlain_WithEngines_CoversTextLoop(t *testing.T) {
 // ── AboutPage — browser default path ──────────────────────────────────────────
 
 func TestAboutPage_BrowserDefault_CoversHTMLPath(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newAPITestHandler()
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/about", nil)
@@ -747,6 +749,7 @@ func TestAboutPage_BrowserDefault_CoversHTMLPath(t *testing.T) {
 // ── PrivacyPage — browser default path ────────────────────────────────────────
 
 func TestPrivacyPage_BrowserDefault_CoversHTMLPath(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newAPITestHandler()
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/privacy", nil)

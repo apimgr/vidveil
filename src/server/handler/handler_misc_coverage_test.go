@@ -8,6 +8,7 @@ package handler
 
 import (
 	"context"
+	"embed"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +18,16 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 )
+
+// setEmptyTemplatesFS installs a non-nil but empty embed.FS so that tests exercise
+// the code paths AFTER the nil guard (e.g. ReadFile fails → 500) without panicking.
+func setEmptyTemplatesFS(t *testing.T) {
+	t.Helper()
+	prev := templatesFS
+	var empty embed.FS
+	SetTemplatesFS(empty)
+	t.Cleanup(func() { templatesFS = prev })
+}
 
 // newMiscTestHandler returns a SearchHandler with empty EngineManager and no metrics.
 func newMiscTestHandler() *SearchHandler {
@@ -103,6 +114,7 @@ func TestAgeVerifyPage_NotVerified_CurlUA_ReturnsText(t *testing.T) {
 // Browser UA sends text/html → SearchPage calls renderResponse → renderTemplate →
 // empty templatesFS causes a 500 (covers the html branch code path regardless).
 func TestSearchPage_BrowserUA_HitsHTMLPath(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
@@ -151,6 +163,7 @@ func TestSearchPage_JSONFormat_EnginesParam_ReturnsJSON(t *testing.T) {
 // Unknown UA with Accept: */* falls through to default → text/html → renderResponse →
 // empty templatesFS → 500 (still exercises the default switch case code path).
 func TestSearchPage_DefaultFormat_HitsDefaultCase(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/search?q=amateur", nil)
@@ -700,6 +713,7 @@ func TestAPIHealthCheck_TextFormat_PendingRestart(t *testing.T) {
 
 // Each named template exercises the switch case and hits the parse error (empty FS).
 func TestRenderTemplate_SearchName_Covered(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "search", map[string]interface{}{})
@@ -709,6 +723,7 @@ func TestRenderTemplate_SearchName_Covered(t *testing.T) {
 }
 
 func TestRenderTemplate_PreferencesName_Covered(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "preferences", map[string]interface{}{})
@@ -718,6 +733,7 @@ func TestRenderTemplate_PreferencesName_Covered(t *testing.T) {
 }
 
 func TestRenderTemplate_AgeVerifyName_Covered(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "age-verify", map[string]interface{}{})
@@ -727,6 +743,7 @@ func TestRenderTemplate_AgeVerifyName_Covered(t *testing.T) {
 }
 
 func TestRenderTemplate_ContentRestrictedName_Covered(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "content-restricted", map[string]interface{}{})
@@ -736,6 +753,7 @@ func TestRenderTemplate_ContentRestrictedName_Covered(t *testing.T) {
 }
 
 func TestRenderTemplate_ContentBlockedName_Covered(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "content-blocked", map[string]interface{}{})
@@ -745,6 +763,7 @@ func TestRenderTemplate_ContentBlockedName_Covered(t *testing.T) {
 }
 
 func TestRenderTemplate_PrivacyName_Covered(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "privacy", map[string]interface{}{})
@@ -754,6 +773,7 @@ func TestRenderTemplate_PrivacyName_Covered(t *testing.T) {
 }
 
 func TestRenderTemplate_NojsHomeName_Covered(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "nojs/home", map[string]interface{}{})
@@ -763,6 +783,7 @@ func TestRenderTemplate_NojsHomeName_Covered(t *testing.T) {
 }
 
 func TestRenderTemplate_NojsSearchName_Covered(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newMiscTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "nojs/search", map[string]interface{}{})

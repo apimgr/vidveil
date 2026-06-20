@@ -5,6 +5,7 @@ package handler
 import (
 	"bytes"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"strconv"
@@ -48,6 +49,13 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Guard against uninitialized template filesystem
+	if templatesFS == nil {
+		log.Printf("server template: templates filesystem not initialized")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	// Create base template with partials
 	tmpl := template.New(templateName)
 
@@ -62,7 +70,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	}
 
 	for _, pf := range partialFiles {
-		content, err := templatesFS.ReadFile(pf)
+		content, err := fs.ReadFile(templatesFS, pf)
 		if err != nil {
 			continue
 		}
@@ -73,7 +81,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	content, err := templatesFS.ReadFile(templateFile)
+	content, err := fs.ReadFile(templatesFS, templateFile)
 	if err != nil {
 		log.Printf("server template: read %s: %v", templateFile, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

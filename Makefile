@@ -61,9 +61,9 @@ GO_DOCKER := docker run --rm \
 	-v $(GODIR):/go \
 	-w /build \
 	-e CGO_ENABLED=0 \
-	golang:alpine
+	casjaysdev/go:latest
 
-.PHONY: build local release docker test dev
+.PHONY: build local release docker test dev clean
 
 # =============================================================================
 # BUILD - Build all platforms + host binary (via Docker with cached modules)
@@ -256,3 +256,11 @@ dev:
 		$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
 		echo "Test:  docker run --rm -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
+
+# =============================================================================
+# CLEAN - Remove build artifacts
+# =============================================================================
+clean:
+	@echo "Cleaning build artifacts..."
+	@rm -rf $(BINDIR) $(RELDIR)
+	@echo "Clean complete"

@@ -1071,6 +1071,8 @@ func TestSetTemplatesFS_NoPanic(t *testing.T) {
 			t.Errorf("SetTemplatesFS panicked: %v", r)
 		}
 	}()
+	prev := templatesFS
+	t.Cleanup(func() { templatesFS = prev })
 	var fs embed.FS
 	SetTemplatesFS(fs)
 }

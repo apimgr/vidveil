@@ -41,6 +41,7 @@ func TestRenderTemplate_UnknownName_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_ValidName_EmptyFS_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	// With empty templatesFS the main template file read will fail → 500.
@@ -51,6 +52,7 @@ func TestRenderTemplate_ValidName_EmptyFS_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_AboutName_EmptyFS_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "about", map[string]interface{}{})
@@ -294,6 +296,7 @@ func TestPrivacyPage_PlainTextFormat_ReturnsText(t *testing.T) {
 
 // With empty templatesFS, the template parse fails → http.Error 500.
 func TestRenderHealthzHTML_EmptyFS_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -384,6 +387,7 @@ func TestRenderServerTemplate_UnknownName_Returns500(t *testing.T) {
 }
 
 func TestRenderServerTemplate_ValidName_EmptyFS_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := NewServerHandler(config.DefaultAppConfig())
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/server/about", nil)
@@ -398,6 +402,7 @@ func TestRenderServerTemplate_ValidName_EmptyFS_Returns500(t *testing.T) {
 // ── ServerHandler pages (all call renderServerTemplate → 500 on empty FS) ─────
 
 func TestServerHandler_AboutPage_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := NewServerHandler(config.DefaultAppConfig())
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/server/about", nil)
@@ -410,6 +415,7 @@ func TestServerHandler_AboutPage_Returns500(t *testing.T) {
 }
 
 func TestServerHandler_PrivacyPage_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := NewServerHandler(config.DefaultAppConfig())
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/server/privacy", nil)
@@ -422,6 +428,7 @@ func TestServerHandler_PrivacyPage_Returns500(t *testing.T) {
 }
 
 func TestServerHandler_ContactPage_GET_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := NewServerHandler(config.DefaultAppConfig())
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/server/contact", nil)
@@ -434,6 +441,7 @@ func TestServerHandler_ContactPage_GET_Returns500(t *testing.T) {
 }
 
 func TestServerHandler_ContactPage_POST_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := NewServerHandler(config.DefaultAppConfig())
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/server/contact",
@@ -448,6 +456,7 @@ func TestServerHandler_ContactPage_POST_Returns500(t *testing.T) {
 }
 
 func TestServerHandler_HelpPage_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := NewServerHandler(config.DefaultAppConfig())
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/server/help", nil)
@@ -462,6 +471,7 @@ func TestServerHandler_HelpPage_Returns500(t *testing.T) {
 // ── renderHealthzHTML — status and mode branches ──────────────────────────────
 
 func TestRenderHealthzHTML_UnhealthyStatus_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/healthz", nil)
@@ -477,6 +487,7 @@ func TestRenderHealthzHTML_UnhealthyStatus_Returns500(t *testing.T) {
 }
 
 func TestRenderHealthzHTML_DegradedStatus_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/healthz", nil)
@@ -492,6 +503,7 @@ func TestRenderHealthzHTML_DegradedStatus_Returns500(t *testing.T) {
 }
 
 func TestRenderHealthzHTML_ProductionMode_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	cfg := createTestConfig()
 	cfg.Server.Branding.Title = "My App"
 	cfg.Server.Branding.Tagline = "My tagline"
@@ -514,6 +526,7 @@ func TestRenderHealthzHTML_ProductionMode_Returns500(t *testing.T) {
 // With empty FS, all return 500 (except "default" which returns "Template not found").
 
 func TestRenderTemplate_Search_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "search", map[string]interface{}{})
@@ -523,6 +536,7 @@ func TestRenderTemplate_Search_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_Preferences_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "preferences", map[string]interface{}{})
@@ -532,6 +546,7 @@ func TestRenderTemplate_Preferences_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_AgeVerify_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "age-verify", map[string]interface{}{})
@@ -541,6 +556,7 @@ func TestRenderTemplate_AgeVerify_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_ContentRestricted_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "content-restricted", map[string]interface{}{})
@@ -550,6 +566,7 @@ func TestRenderTemplate_ContentRestricted_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_ContentBlocked_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "content-blocked", map[string]interface{}{})
@@ -559,6 +576,7 @@ func TestRenderTemplate_ContentBlocked_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_Privacy_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "privacy", map[string]interface{}{})
@@ -568,6 +586,7 @@ func TestRenderTemplate_Privacy_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_NojsHome_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "nojs/home", map[string]interface{}{})
@@ -577,6 +596,7 @@ func TestRenderTemplate_NojsHome_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_NojsSearch_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "nojs/search", map[string]interface{}{})
@@ -586,6 +606,7 @@ func TestRenderTemplate_NojsSearch_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_NojsPreferences_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "nojs/preferences", map[string]interface{}{})
@@ -595,6 +616,7 @@ func TestRenderTemplate_NojsPreferences_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_NojsAbout_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "nojs/about", map[string]interface{}{})
@@ -604,6 +626,7 @@ func TestRenderTemplate_NojsAbout_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_NojsAgeVerify_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "nojs/age-verify", map[string]interface{}{})
@@ -613,6 +636,7 @@ func TestRenderTemplate_NojsAgeVerify_Returns500(t *testing.T) {
 }
 
 func TestRenderTemplate_NojsPrivacy_Returns500(t *testing.T) {
+	setEmptyTemplatesFS(t)
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, "nojs/privacy", map[string]interface{}{})

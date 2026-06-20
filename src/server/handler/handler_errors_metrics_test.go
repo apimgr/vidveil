@@ -285,6 +285,28 @@ func TestDebugPprofSymbol_Returns200(t *testing.T) {
 	}
 }
 
+func TestDebugPprofProfile_ContextCancelled_ReturnsFast(t *testing.T) {
+	// Cancel the context immediately so pprof.Profile's sleep returns instantly.
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/profile?seconds=1", nil)
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	DebugPprofProfile(rr, req)
+	// Accept any status — we only care that it doesn't block.
+}
+
+func TestDebugPprofTrace_ContextCancelled_ReturnsFast(t *testing.T) {
+	// Cancel the context immediately so pprof.Trace's sleep returns instantly.
+	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/trace?seconds=1", nil)
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	DebugPprofTrace(rr, req)
+	// Accept any status — we only care that it doesn't block.
+}
+
 func TestDebugPprofHandler_Goroutine_Returns200(t *testing.T) {
 	// DebugPprofHandler uses chi.URLParam to get the handler name; without a
 	// chi router context the name resolves to "goroutine" which is a known

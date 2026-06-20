@@ -4,7 +4,6 @@ package handler
 import (
 	"bytes"
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -15,6 +14,7 @@ import (
 	// register PNG decoder for image.Decode
 	_ "image/png"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -38,11 +38,11 @@ import (
 )
 
 // templatesFS holds the embedded templates filesystem
-var templatesFS embed.FS
+var templatesFS fs.FS
 
 // SetTemplatesFS sets the embedded templates filesystem
-func SetTemplatesFS(fs embed.FS) {
-	templatesFS = fs
+func SetTemplatesFS(fsys fs.FS) {
+	templatesFS = fsys
 }
 
 const (
@@ -1421,6 +1421,13 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
 	}
 
+	// Guard against uninitialized template filesystem
+	if templatesFS == nil {
+		log.Printf("healthz template: templates filesystem not initialized")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	// Parse and execute template
 	tmpl, err := template.ParseFS(templatesFS,
 		"template/page/healthz.tmpl",
@@ -2367,6 +2374,10 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, r *http.Request, 
 	// AI.md PART 30: lang/dir for <html>
 	injectLocaleData(r, data)
 
+	if templatesFS == nil {
+		http.Error(w, fmt.Sprintf("%d %s: %s", code, title, message), code)
+		return
+	}
 	tmpl, err := template.ParseFS(templatesFS, "template/page/error.tmpl")
 	if err != nil {
 		// Fallback to plain text error
@@ -2462,6 +2473,13 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		return
 	}
 
+	// Guard against uninitialized template filesystem
+	if templatesFS == nil {
+		log.Printf("page template: templates filesystem not initialized")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	// Inject version for cache busting in all templates
 	if data["Version"] == nil {
 		data["Version"] = version.GetVersion()
@@ -2499,7 +2517,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 	}
 
 	for _, pf := range partialFiles {
-		content, err := templatesFS.ReadFile(pf)
+		content, err := fs.ReadFile(templatesFS, pf)
 		if err != nil {
 			// Skip missing partials - they may not all be needed
 			continue
@@ -2511,7 +2529,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		}
 	}
 
-	content, err := templatesFS.ReadFile(templateFile)
+	content, err := fs.ReadFile(templatesFS, templateFile)
 	if err != nil {
 		log.Printf("page template: read %s: %v", templateFile, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

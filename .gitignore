@@ -113,6 +113,7 @@ volumes/
 *.swo
 
 # AI config directories (regenerated from AI.md rules, not committed)
+.claude/
 .cursor/
 .aider/
 .ai/
@@ -120,4 +121,3 @@ volumes/
 
 # Claude Code personal files (always gitignored)
 CLAUDE.local.md
-.claude/settings.local.json

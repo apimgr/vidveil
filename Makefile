@@ -2,273 +2,215 @@
 # LOCAL DEVELOPMENT ONLY - NOT FOR CI/CD
 # CI/CD pipelines MUST use explicit commands
 # ============================================
-#
-# Vidveil Makefile
-# Per AI.md PART 25: 6 targets - build, release, docker, test, dev, local
 
 # Infer PROJECTNAME and PROJECTORG from git remote or directory path (NEVER hardcode)
-PROJECTNAME := $(shell git remote get-url origin 2>/dev/null | sed -E -e 's|.*[/:]||' -e 's|\.git$$||' || basename "$$(pwd)")
-PROJECTORG := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$$|\1|' || basename "$$(dirname "$$(pwd)")")
+PROJECTNAME := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$$|\1|' || basename "$$(pwd)")
+PROJECTORG  := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$$|\1|' || basename "$$(dirname "$$(pwd)")")
 
-# Convenience aliases for common use
-PROJECT := $(PROJECTNAME)
-ORG := $(PROJECTORG)
+# Version precedence: env var > release.txt > devel default
+VERSION ?= $(shell cat release.txt 2>/dev/null || echo "devel")
 
-# Version: env var > release.txt > default
-VERSION ?= $(shell cat release.txt 2>/dev/null || echo "0.1.0")
-
-# Build info - use TZ env var or system timezone
-# Format: "Thu Dec 17, 2025 at 18:19:24 EST"
+# Build info — uses TZ env var or system timezone
 BUILD_DATE := $(shell date +"%a %b %d, %Y at %H:%M:%S %Z")
-COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-# Official site URL for server and client builds
-# Source priority per AI.md: OFFICIAL_SITE env/arg, OFFICIALSITE env, then site.txt
-OFFICIAL_SITE_FROM_FILE := $(shell head -n 1 site.txt 2>/dev/null)
-OFFICIAL_SITE ?= $(if $(OFFICIALSITE),$(OFFICIALSITE),$(OFFICIAL_SITE_FROM_FILE))
+COMMIT_ID  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "N/A")
 
-# Linker flags to embed build info (server) per AI.md PART 7
+# Official site URL (OPTIONAL — never guess or assume)
+# Sources in priority order: site.txt → OFFICIALSITE env → empty
+OFFICIALSITE := $(shell [ -f site.txt ] && cat site.txt || echo "$${OFFICIALSITE:-}")
+
+# Linker flags to embed build info into server binary (AI.md PART 7)
 LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)' \
-	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
+	-X 'main.OfficialSite=$(OFFICIALSITE)'
 
-# Linker flags for CLI client (AI.md PART 32)
+# Linker flags for CLI client binary (AI.md PART 8)
 CLI_LDFLAGS := -s -w \
-	-X 'main.ProjectName=$(PROJECT)' \
+	-X 'main.ProjectName=$(PROJECTNAME)' \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)' \
-	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
+	-X 'main.OfficialSite=$(OFFICIALSITE)'
 
 # Directories
-BINDIR := ./binaries
-RELDIR := ./releases
+BINDIR := binaries
+RELDIR := releases
 
-# Go cache directories (persistent across builds)
-# Per AI.md PART 26: Use unified GODIR structure
-GODIR := $(HOME)/.local/share/go
-GOCACHE := $(GODIR)/build
+# Go cache directories (bind-mounted from host for persistence across builds)
+GO_CACHE ?= $(HOME)/go/pkg/mod
+GO_BUILD ?= $(HOME)/.cache/go-build
 
-# Build targets - Per AI.md PART 25: Linux, macOS (Darwin), Windows, FreeBSD - AMD64, ARM64
+# Build targets — all 8 platforms (space-separated for for-loop)
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64
 
-# Docker
-REGISTRY := ghcr.io/$(ORG)/$(PROJECT)
-GO_DOCKER := docker run --rm \
-	-v $(PWD):/build \
-	-v $(GOCACHE):/root/.cache/go-build \
-	-v $(GODIR):/go \
-	-w /build \
-	-e CGO_ENABLED=0
+# Registry for Docker target
+REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
 
-GO_IMAGE := casjaysdev/go:latest
+# Internal: base docker run options without the image.
+# GO_DOCKER (below) is the spec-standard single-command form for simple go commands.
+# _GO_OPTS is used when extra -e or -v flags must appear before the image name
+# (e.g. cross-compile with -e GOOS/-e GOARCH, or temp-dir mounts for test/dev).
+_GO_OPTS = docker run --rm \
+	--name $(PROJECTNAME)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8) \
+	-v $(PWD):/app \
+	-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
+	-v $(GO_BUILD):/usr/local/share/go/cache \
+	-w /app \
+	-e CGO_ENABLED=0 \
+	-e GOFLAGS=-buildvcs=false
+
+# Standard Go Docker command (per AI.md PART 25 — includes image for simple go commands)
+GO_DOCKER = $(_GO_OPTS) casjaysdev/go:latest
 
 .PHONY: build local release docker test dev clean
 
 # =============================================================================
-# BUILD - Build all platforms + host binary (via Docker with cached modules)
-# Per AI.md PART 32: Build CLI client if src/client exists
+# BUILD — Compile all 8 platform binaries via Docker (AI.md PART 25)
 # =============================================================================
-build:
-	@mkdir -p $(BINDIR)
+build: clean
+	@mkdir -p $(BINDIR) $(GO_CACHE) $(GO_BUILD)
 	@echo "Building version $(VERSION)..."
-	@mkdir -p $(GOCACHE) $(GODIR)
-
-	# Tidy and download modules (per AI.md PART 26)
 	@echo "Tidying and downloading Go modules..."
-	@$(GO_DOCKER) $(GO_IMAGE) go mod tidy
-	@$(GO_DOCKER) $(GO_IMAGE) go mod download
-
-	# Build server for host OS/ARCH
-	@echo "Building server host binary..."
-	@$(GO_DOCKER) \
-		-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
-		-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
-		$(GO_IMAGE) go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECT) ./src
-
-	# Build CLI client if src/client exists (AI.md PART 32)
-	@if [ -d "src/client" ]; then \
-		echo "Building CLI client host binary..."; \
-		$(GO_DOCKER) \
-			-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
-			-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
-			$(GO_IMAGE) go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o $(BINDIR)/$(PROJECT)-cli ./src/client; \
-	fi
-
-	# Build server for all platforms
+	@$(GO_DOCKER) go mod tidy
+	@$(GO_DOCKER) go mod download
+	@echo "Building server for all 8 platforms..."
 	@for platform in $(PLATFORMS); do \
 		OS=$${platform%/*}; \
 		ARCH=$${platform#*/}; \
-		OUTPUT=$(BINDIR)/$(PROJECT)-$$OS-$$ARCH; \
+		OUTPUT=/app/$(BINDIR)/$(PROJECTNAME)-$$OS-$$ARCH; \
 		[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
-		echo "Building server $$OS/$$ARCH..."; \
-		$(GO_DOCKER) -e GOOS=$$OS -e GOARCH=$$ARCH \
-			$(GO_IMAGE) go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $$OUTPUT ./src || exit 1; \
+		echo "Building server $$OS/$$ARCH → $$OUTPUT..."; \
+		$(_GO_OPTS) -e GOOS=$$OS -e GOARCH=$$ARCH casjaysdev/go:latest \
+			go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $$OUTPUT ./src || exit 1; \
 	done
-
-	# Build CLI client for all platforms if src/client exists
 	@if [ -d "src/client" ]; then \
+		echo "Building CLI for all 8 platforms..."; \
 		for platform in $(PLATFORMS); do \
 			OS=$${platform%/*}; \
 			ARCH=$${platform#*/}; \
-			OUTPUT=$(BINDIR)/$(PROJECT)-cli-$$OS-$$ARCH; \
+			OUTPUT=/app/$(BINDIR)/$(PROJECTNAME)-cli-$$OS-$$ARCH; \
 			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
-			echo "Building CLI $$OS/$$ARCH..."; \
-			$(GO_DOCKER) -e GOOS=$$OS -e GOARCH=$$ARCH \
-				$(GO_IMAGE) go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o $$OUTPUT ./src/client || exit 1; \
+			echo "Building CLI $$OS/$$ARCH → $$OUTPUT..."; \
+			$(_GO_OPTS) -e GOOS=$$OS -e GOARCH=$$ARCH casjaysdev/go:latest \
+				go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o $$OUTPUT ./src/client || exit 1; \
 		done; \
 	fi
-
 	@echo "Build complete: $(BINDIR)/"
 
 # =============================================================================
-# HOST - Build local binaries only (fast development builds)
+# LOCAL — Build host-platform binaries only (fast local test builds)
 # =============================================================================
-local:
-	@mkdir -p $(BINDIR)
+local: clean
+	@mkdir -p $(BINDIR) $(GO_CACHE) $(GO_BUILD)
 	@echo "Building local binaries version $(VERSION)..."
-	@mkdir -p $(GOCACHE) $(GODIR)
-
-	# Tidy and download modules (per AI.md PART 26)
 	@echo "Tidying and downloading Go modules..."
-	@$(GO_DOCKER) $(GO_IMAGE) go mod tidy
-	@$(GO_DOCKER) $(GO_IMAGE) go mod download
-
-	# Build server binary
-	@echo "Building $(PROJECT)..."
+	@$(GO_DOCKER) go mod tidy
+	@$(GO_DOCKER) go mod download
+	@echo "Building server (linux/amd64)..."
 	@$(GO_DOCKER) \
-		-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
-		-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
-		$(GO_IMAGE) go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECT) ./src
-
-	# Build CLI binary (if exists)
+		go build -buildvcs=false -ldflags "$(LDFLAGS)" -o /app/$(BINDIR)/$(PROJECTNAME) ./src
 	@if [ -d "src/client" ]; then \
-		echo "Building $(PROJECT)-cli..."; \
+		echo "Building CLI (linux/amd64)..."; \
 		$(GO_DOCKER) \
-			-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
-			-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
-			$(GO_IMAGE) go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o $(BINDIR)/$(PROJECT)-cli ./src/client; \
+			go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o /app/$(BINDIR)/$(PROJECTNAME)-cli ./src/client; \
 	fi
-
-	# Build agent binary (if exists)
-	@if [ -d "src/agent" ]; then \
-		echo "Building $(PROJECT)-agent..."; \
-		$(GO_DOCKER) \
-			-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
-			-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
-			$(GO_IMAGE) go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECT)-agent ./src/agent; \
-	fi
-
-	@echo "Host build complete: $(BINDIR)/"
+	@echo "Local build complete: $(BINDIR)/"
 
 # =============================================================================
-# RELEASE - Manual local release (stable only)
+# RELEASE — Manual local release build with source archive
 # =============================================================================
 release: build
 	@mkdir -p $(RELDIR)
 	@echo "Preparing release $(VERSION)..."
-
-	# Create version.txt
 	@echo "$(VERSION)" > $(RELDIR)/version.txt
-
-	# Copy binaries to releases (strip if needed)
-	@for f in $(BINDIR)/$(PROJECT)-*; do \
+	@for f in $(BINDIR)/$(PROJECTNAME)-*; do \
 		[ -f "$$f" ] || continue; \
 		strip "$$f" 2>/dev/null || true; \
 		cp "$$f" $(RELDIR)/; \
 	done
-
-	# Create source archive (exclude VCS and build artifacts)
 	@tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
 		--exclude='binaries' --exclude='releases' --exclude='*.tar.gz' \
-		-czf $(RELDIR)/$(PROJECT)-$(VERSION)-source.tar.gz .
-
-	# Delete existing release/tag if exists
+		-czf $(RELDIR)/$(PROJECTNAME)-$(VERSION)-source.tar.gz .
 	@gh release delete $(VERSION) --yes 2>/dev/null || true
 	@git tag -d $(VERSION) 2>/dev/null || true
 	@git push origin :refs/tags/$(VERSION) 2>/dev/null || true
-
-	# Create new release (stable)
 	@gh release create $(VERSION) $(RELDIR)/* \
-		--title "$(PROJECT) $(VERSION)" \
+		--title "$(PROJECTNAME) $(VERSION)" \
 		--notes "Release $(VERSION)" \
 		--latest
-
 	@echo "Release complete: $(VERSION)"
 
 # =============================================================================
-# DOCKER - Build and push container to ghcr.io
+# DOCKER — Build and push multi-arch container image to registry
 # =============================================================================
-# Uses multi-stage Dockerfile - Go compilation happens inside Docker
-# No pre-built binaries needed
 docker:
 	@echo "Building Docker image $(VERSION)..."
-
-	# Ensure buildx is available
 	@docker buildx version > /dev/null 2>&1 || (echo "docker buildx required" && exit 1)
-
-	# Create/use builder
-	@docker buildx create --name $(PROJECT)-builder --use 2>/dev/null || \
-		docker buildx use $(PROJECT)-builder
-
-	# Build and push multi-arch (multi-stage Dockerfile handles Go compilation)
-	# OCI annotations on manifest index (visible on multiarch pulls - no LABEL in Dockerfile)
+	@docker buildx create --name $(PROJECTNAME)-builder --use 2>/dev/null || \
+		docker buildx use $(PROJECTNAME)-builder
 	@docker buildx build \
-		-f ./docker/Dockerfile \
+		-f docker/Dockerfile \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg VERSION="$(VERSION)" \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--build-arg COMMIT_ID="$(COMMIT_ID)" \
-		--build-arg OFFICIAL_SITE="$(OFFICIAL_SITE)" \
-		--annotation "org.opencontainers.image.title=$(PROJECT)" \
-		--annotation "org.opencontainers.image.description=$(PROJECT) - standard image (alpine)" \
-		--annotation "org.opencontainers.image.vendor=$(ORG)" \
-		--annotation "org.opencontainers.image.authors=$(ORG)" \
-		--annotation "org.opencontainers.image.url=https://github.com/$(ORG)/$(PROJECT)" \
-		--annotation "org.opencontainers.image.source=https://github.com/$(ORG)/$(PROJECT)" \
-		--annotation "org.opencontainers.image.documentation=https://github.com/$(ORG)/$(PROJECT)" \
+		--annotation "org.opencontainers.image.title=$(PROJECTNAME)" \
+		--annotation "org.opencontainers.image.vendor=$(PROJECTORG)" \
 		--annotation "org.opencontainers.image.licenses=MIT" \
 		--annotation "org.opencontainers.image.created=$(BUILD_DATE)" \
 		--annotation "org.opencontainers.image.version=$(VERSION)" \
 		--annotation "org.opencontainers.image.revision=$(COMMIT_ID)" \
-		--annotation "org.opencontainers.image.vcs-type=Git" \
-		--annotation "com.github.containers.toolbox=false" \
+		--annotation "org.opencontainers.image.source=https://github.com/$(PROJECTORG)/$(PROJECTNAME)" \
 		-t $(REGISTRY):$(VERSION) \
 		-t $(REGISTRY):latest \
-		--push \
 		.
-
-	@echo "Docker push complete: $(REGISTRY):$(VERSION)"
+	@echo "Docker build complete: $(REGISTRY):$(VERSION)"
 
 # =============================================================================
-# TEST - Run all tests with coverage (via Docker with cached modules)
-# Per AI.md PART 28: 100% coverage enforcement
+# TEST — Run unit tests with coverage enforcement (AI.md PART 25, 29)
+# Coverage minimum: 80% for server template projects (never override downward).
+# Coverage output goes to temp dir — never to the project tree.
+# Two docker invocations: one runs tests (writes coverage.out), one reads it.
 # =============================================================================
 test:
 	@echo "Running tests with coverage..."
-	@mkdir -p $(GOCACHE) $(GODIR)
-	@$(GO_DOCKER) $(GO_IMAGE) go mod tidy
-	@$(GO_DOCKER) $(GO_IMAGE) go mod download
-	@$(GO_DOCKER) $(GO_IMAGE) go test -v -cover ./...
-	@echo "Tests complete"
+	@mkdir -p $(GO_CACHE) $(GO_BUILD)
+	@mkdir -p "/tmp/$(PROJECTORG)"
+	@COVDIR=$$(mktemp -d "/tmp/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \
+	$(_GO_OPTS) -v "$$COVDIR:$$COVDIR" casjaysdev/go:latest \
+		go test -v -cover -coverprofile="$$COVDIR/coverage.out" ./... && \
+	PCT=$$($(_GO_OPTS) -v "$$COVDIR:$$COVDIR" casjaysdev/go:latest \
+		go tool cover -func="$$COVDIR/coverage.out" | \
+		awk '/^total:/{gsub("%","",$$3); print int($$3)}') && \
+	echo "Coverage: $${PCT}%" && \
+	rm -rf "$$COVDIR" && \
+	if [ "$${PCT:-0}" -lt 80 ]; then \
+		echo "ERROR: Coverage $${PCT}% < 80% required"; exit 1; \
+	fi && \
+	echo "Tests complete: $${PCT}% (>= 80% required) ✓"
 
 # =============================================================================
-# DEV - Quick build for local development/testing (to random temp dir)
+# DEV — Quick build to a temp dir for rapid iteration (AI.md PART 25)
+# Builds linux/amd64 (container native). Output is isolated per run.
 # =============================================================================
-# Fast: host platform only, no ldflags, random temp dir for isolation
 dev:
-	@mkdir -p $(GOCACHE) $(GODIR)
-	@$(GO_DOCKER) $(GO_IMAGE) go mod tidy
-	@BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG).XXXXXX") && \
-		echo "Quick dev build..." && \
-		$(GO_DOCKER) -e GOOS=linux -e GOARCH=amd64 $(GO_IMAGE) \
-			go build -buildvcs=false -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
-		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
-		echo "Test:  docker run --rm -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
+	@$(GO_DOCKER) go mod tidy
+	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECTORG)" && \
+	BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \
+	echo "Quick dev build to $$BUILD_DIR..." && \
+	$(_GO_OPTS) -v "$$BUILD_DIR:$$BUILD_DIR" casjaysdev/go:latest \
+		go build -buildvcs=false -ldflags "$(LDFLAGS)" -o "$$BUILD_DIR/$(PROJECTNAME)" ./src && \
+	echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
+	if [ -d "src/client" ]; then \
+		$(_GO_OPTS) -v "$$BUILD_DIR:$$BUILD_DIR" casjaysdev/go:latest \
+			go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o "$$BUILD_DIR/$(PROJECTNAME)-cli" ./src/client && \
+		echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
+	fi && \
+	echo "Test:  docker run --rm -it --name $(PROJECTNAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
 
 # =============================================================================
-# CLEAN - Remove build artifacts
+# CLEAN — Remove build artifacts
 # =============================================================================
 clean:
 	@echo "Cleaning build artifacts..."

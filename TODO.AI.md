@@ -1,9 +1,9 @@
 # TODO.AI.md — vidveil Outstanding Items
 
-## [ ] Fix Makefile cross-compile targets (build/dev/local)
-`casjaysdev/go:latest` entrypoint wraps only `arg[0]`, so `$(GO_DOCKER) sh -c "GOOS=linux GOARCH=arm64 go build ..."` becomes `bash --login -c "sh"` — the `sh -c "..."` string is dropped. Affects `make build`, `make dev`, `make local` (all use `sh -c` to set GOOS/GOARCH inline). `make test` is NOT affected — it uses `$(GO_DOCKER) go test` directly and passes.
-Fix: replace inline `sh -c "GOOS=$$OS GOARCH=$$ARCH go build ..."` with `-e GOOS=$$OS -e GOARCH=$$ARCH` env flags directly in the `docker run` command.
-Read: AI.md PART 26
+## [x] Fix Makefile cross-compile targets (build/dev/local)
+Rewrote Makefile per AI.md PART 25: spec variable names (GO_CACHE, GO_BUILD, OFFICIALSITE, PROJECTNAME/PROJECTORG), spec mount paths (/app, /usr/local/share/go/pkg/mod, /usr/local/share/go/cache), spec targets (build: clean, local: clean), 80% coverage enforcement in test with temp-dir isolation, dev writes to $TMPDIR/$PROJECTORG/$PROJECTNAME-XXXXXX. Cross-compile uses -e GOOS/-e GOARCH env flags (not sh -c which the entrypoint drops); test and dev use -v $$DIR:$$DIR volume mounts. GO_DOCKER defined per spec (includes image); _GO_OPTS is internal helper for cases needing extra flags before image.
+make test passes: 80% coverage ✓, darwin/arm64 cross-compile confirmed ✓
+Read: AI.md PART 25
 
 ## [x] Create GitHub Actions CI/CD workflows
 Created:

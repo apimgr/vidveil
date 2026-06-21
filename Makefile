@@ -60,8 +60,9 @@ GO_DOCKER := docker run --rm \
 	-v $(GOCACHE):/root/.cache/go-build \
 	-v $(GODIR):/go \
 	-w /build \
-	-e CGO_ENABLED=0 \
-	casjaysdev/go:latest
+	-e CGO_ENABLED=0
+
+GO_IMAGE := casjaysdev/go:latest
 
 .PHONY: build local release docker test dev clean
 
@@ -76,19 +77,23 @@ build:
 
 	# Tidy and download modules (per AI.md PART 26)
 	@echo "Tidying and downloading Go modules..."
-	@$(GO_DOCKER) go mod tidy
-	@$(GO_DOCKER) go mod download
+	@$(GO_DOCKER) $(GO_IMAGE) go mod tidy
+	@$(GO_DOCKER) $(GO_IMAGE) go mod download
 
 	# Build server for host OS/ARCH
 	@echo "Building server host binary..."
-	@$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
-		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT) ./src"
+	@$(GO_DOCKER) \
+		-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
+		-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
+		$(GO_IMAGE) go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECT) ./src
 
 	# Build CLI client if src/client exists (AI.md PART 32)
 	@if [ -d "src/client" ]; then \
 		echo "Building CLI client host binary..."; \
-		$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
-			go build -ldflags \"$(CLI_LDFLAGS)\" -o $(BINDIR)/$(PROJECT)-cli ./src/client"; \
+		$(GO_DOCKER) \
+			-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
+			-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
+			$(GO_IMAGE) go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o $(BINDIR)/$(PROJECT)-cli ./src/client; \
 	fi
 
 	# Build server for all platforms
@@ -98,9 +103,8 @@ build:
 		OUTPUT=$(BINDIR)/$(PROJECT)-$$OS-$$ARCH; \
 		[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 		echo "Building server $$OS/$$ARCH..."; \
-		$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
-			go build -ldflags \"$(LDFLAGS)\" \
-			-o $$OUTPUT ./src" || exit 1; \
+		$(GO_DOCKER) -e GOOS=$$OS -e GOARCH=$$ARCH \
+			$(GO_IMAGE) go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $$OUTPUT ./src || exit 1; \
 	done
 
 	# Build CLI client for all platforms if src/client exists
@@ -111,9 +115,8 @@ build:
 			OUTPUT=$(BINDIR)/$(PROJECT)-cli-$$OS-$$ARCH; \
 			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 			echo "Building CLI $$OS/$$ARCH..."; \
-			$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
-				go build -ldflags \"$(CLI_LDFLAGS)\" \
-				-o $$OUTPUT ./src/client" || exit 1; \
+			$(GO_DOCKER) -e GOOS=$$OS -e GOARCH=$$ARCH \
+				$(GO_IMAGE) go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o $$OUTPUT ./src/client || exit 1; \
 		done; \
 	fi
 
@@ -129,26 +132,32 @@ local:
 
 	# Tidy and download modules (per AI.md PART 26)
 	@echo "Tidying and downloading Go modules..."
-	@$(GO_DOCKER) go mod tidy
-	@$(GO_DOCKER) go mod download
+	@$(GO_DOCKER) $(GO_IMAGE) go mod tidy
+	@$(GO_DOCKER) $(GO_IMAGE) go mod download
 
 	# Build server binary
 	@echo "Building $(PROJECT)..."
-	@$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
-		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT) ./src"
+	@$(GO_DOCKER) \
+		-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
+		-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
+		$(GO_IMAGE) go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECT) ./src
 
 	# Build CLI binary (if exists)
 	@if [ -d "src/client" ]; then \
 		echo "Building $(PROJECT)-cli..."; \
-		$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
-			go build -ldflags \"$(CLI_LDFLAGS)\" -o $(BINDIR)/$(PROJECT)-cli ./src/client"; \
+		$(GO_DOCKER) \
+			-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
+			-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
+			$(GO_IMAGE) go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o $(BINDIR)/$(PROJECT)-cli ./src/client; \
 	fi
 
 	# Build agent binary (if exists)
 	@if [ -d "src/agent" ]; then \
 		echo "Building $(PROJECT)-agent..."; \
-		$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
-			go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECT)-agent ./src/agent"; \
+		$(GO_DOCKER) \
+			-e GOOS=$$(docker run --rm $(GO_IMAGE) go env GOOS) \
+			-e GOARCH=$$(docker run --rm $(GO_IMAGE) go env GOARCH) \
+			$(GO_IMAGE) go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECT)-agent ./src/agent; \
 	fi
 
 	@echo "Host build complete: $(BINDIR)/"
@@ -239,9 +248,9 @@ docker:
 test:
 	@echo "Running tests with coverage..."
 	@mkdir -p $(GOCACHE) $(GODIR)
-	@$(GO_DOCKER) go mod tidy
-	@$(GO_DOCKER) go mod download
-	@$(GO_DOCKER) go test -v -cover ./...
+	@$(GO_DOCKER) $(GO_IMAGE) go mod tidy
+	@$(GO_DOCKER) $(GO_IMAGE) go mod download
+	@$(GO_DOCKER) $(GO_IMAGE) go test -v -cover ./...
 	@echo "Tests complete"
 
 # =============================================================================
@@ -250,10 +259,11 @@ test:
 # Fast: host platform only, no ldflags, random temp dir for isolation
 dev:
 	@mkdir -p $(GOCACHE) $(GODIR)
-	@$(GO_DOCKER) go mod tidy
+	@$(GO_DOCKER) $(GO_IMAGE) go mod tidy
 	@BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG).XXXXXX") && \
 		echo "Quick dev build..." && \
-		$(GO_DOCKER) go build -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
+		$(GO_DOCKER) -e GOOS=linux -e GOARCH=amd64 $(GO_IMAGE) \
+			go build -buildvcs=false -o $$BUILD_DIR/$(PROJECTNAME) ./src && \
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
 		echo "Test:  docker run --rm -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
 

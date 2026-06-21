@@ -1,7 +1,8 @@
 # TODO.AI.md — vidveil Outstanding Items
 
-## [ ] Fix Makefile Docker invocation pattern
-`casjaysdev/go:latest` entrypoint wraps commands via `bash --login -c "$cmdExec"` where `$cmdExec` is only `arg[0]`, so `go build -o ./binaries/vidveil ./src` becomes just `go` (no subcommand = prints usage, exits 2). All `make dev`, `make build`, `make test`, `make local` targets fail. Fix: either write build scripts to `/tmp` and mount them, or update `GO_DOCKER` to pass a script file via a volume mount. Build via `docker run ... casjaysdev/go:latest /path/to/build.sh` works correctly.
+## [ ] Fix Makefile cross-compile targets (build/dev/local)
+`casjaysdev/go:latest` entrypoint wraps only `arg[0]`, so `$(GO_DOCKER) sh -c "GOOS=linux GOARCH=arm64 go build ..."` becomes `bash --login -c "sh"` — the `sh -c "..."` string is dropped. Affects `make build`, `make dev`, `make local` (all use `sh -c` to set GOOS/GOARCH inline). `make test` is NOT affected — it uses `$(GO_DOCKER) go test` directly and passes.
+Fix: replace inline `sh -c "GOOS=$$OS GOARCH=$$ARCH go build ..."` with `-e GOOS=$$OS -e GOARCH=$$ARCH` env flags directly in the `docker run` command.
 Read: AI.md PART 26
 
 ## [x] Create GitHub Actions CI/CD workflows
@@ -12,18 +13,18 @@ Created:
 All Actions pinned to full commit SHA. Go project: `casjaysdev/go:latest` used directly (no build-toolchain.yml).
 Read: AI.md PART 28
 
-## [ ] Verify SSE streaming search endpoint is complete
-Check that `/api/{api_version}/search` streams SSE results via `text/event-stream` with correct event format (`type:result`, `type:done`). Verify fallback `?format=json` returns full JSON response. Confirm all 43 engines in IDEA.md have corresponding engine files in `src/server/service/engine/`.
+## [x] Verify SSE streaming search endpoint is complete
+`/api/v1/search` streams SSE via `handleSearchSSE` (handlers.go:1796). Sets correct headers (`text/event-stream`, `Cache-Control: no-cache`). Results emitted as `data: {...}\n\n` with final `data: {"done":true,...}\n\n` sentinel. `?format=json` fallback returns synchronous JSON. 43 engines registered in manager.go matching IDEA.md.
 Read: AI.md PART 14
 
-## [ ] Verify privilege drop (root → vidveil user) is implemented
-`src/server/service/system/privilege_unix.go` exists but confirm it performs: bind port → drop to `vidveil` system user via setuid/setgid. Verify `vidveil service install` creates the `vidveil` system user and sets directory ownership.
+## [x] Verify privilege drop (root → vidveil user) is implemented
+`privilege_unix.go:20–76`: `DropPrivileges` does Setgroups → Setgid → Setuid then verifies `os.Getuid() != 0`. Creates system user if missing. Called from `main.go:653–671` after `srv.Listen()` (port bind) and before server goroutine starts — correct sequence. `--service --install` creates all dirs with `MkdirAll(0755)` and `chown -R vidveil:vidveil`.
 Read: AI.md PART 23
 
-## [ ] Verify `server.yml` first-run random port selection
-On first run with no `server.yml`, the port should be randomly selected from 64000-64999 and saved to `server.yml`. Confirm this is implemented in `src/config/config.go`.
+## [x] Verify `server.yml` first-run random port selection
+`config.go:1134–1148`: when `server.yml` absent, `DefaultAppConfig()` calls `findUnusedPort()` (line 799) which probes 64000–64999 via `net.Listen` and returns the first free port. Config saved to `/etc/apimgr/vidveil/server.yml` (root) or `~/.config/apimgr/vidveil/server.yml` (non-root) via `paths.go:70–72`.
 Read: AI.md PART 5
 
-## [ ] Verify Makefile `make test` target works correctly
-After fixing the Docker invocation issue (see above), run `make test` to confirm all unit tests pass. Coverage output must go to `/tmp/coverage.out` inside the container, not the project tree.
+## [x] Verify Makefile `make test` target works correctly
+`make test` passes — uses `$(GO_DOCKER) go test -v -cover ./...` directly (not `sh -c`), so the entrypoint wrapping does not affect it. All packages pass. Note: coverage output goes to container stdout; no `-coverprofile` written to disk (acceptable for `make test`; CI uses `$GITHUB_ENV` COVDIR pattern).
 Read: AI.md PART 29

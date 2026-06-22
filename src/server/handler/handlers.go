@@ -843,6 +843,32 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// FavoritesPage renders the favorites page per AI.md PART 16
+// Favorites are localStorage-only; the server provides the HTML shell only.
+func (h *SearchHandler) FavoritesPage(w http.ResponseWriter, r *http.Request) {
+	format := detectResponseFormat(r)
+
+	switch format {
+	case "application/json":
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"title":   "Favorites",
+			"message": "Favorites are stored locally in your browser (localStorage).",
+		})
+
+	case "text/plain":
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "Favorites\n\nFavorites are stored locally in your browser.\nVisit /favorites in a browser to view them.\n")
+
+	default:
+		h.renderResponse(w, r, "favorites", map[string]interface{}{
+			"Title":         "Favorites - " + h.appConfig.Server.Branding.Title,
+			"Theme":         h.getRequestTheme(r),
+			"ActiveNav":     "favorites",
+			"BuildDateTime": BuildDateTime(),
+		})
+	}
+}
+
 // AboutPage renders the about page with content negotiation per AI.md PART 16
 func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	format := detectResponseFormat(r)
@@ -1564,6 +1590,11 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
   </url>
   <url>
     <loc>` + baseURL + `/preferences</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>` + baseURL + `/favorites</loc>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
@@ -2434,6 +2465,9 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 	case "preferences":
 		templateFile = "template/page/preferences.tmpl"
 		templateName = "preferences"
+	case "favorites":
+		templateFile = "template/page/favorites.tmpl"
+		templateName = "favorites"
 	case "about":
 		templateFile = "template/page/about.tmpl"
 		templateName = "about"

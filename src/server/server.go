@@ -557,6 +557,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/search.rss", h.SearchRSSFeed)
 		r.Get("/search.atom", h.SearchAtomFeed)
 		r.Get("/preferences", h.PreferencesPage)
+		r.Get("/favorites", h.FavoritesPage)
 		// About/privacy are at /server/* per PART 14 Route Scopes
 	})
 

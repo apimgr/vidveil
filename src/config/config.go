@@ -911,7 +911,7 @@ func DefaultAppConfig() *AppConfig {
 			},
 			RateLimit: RateLimitConfig{
 				Enabled:  true,
-				Requests: 120,
+				Requests: 500,
 				Window:   60,
 			},
 			Limits: LimitsConfig{
@@ -1211,8 +1211,8 @@ func validateConfig(cfg *AppConfig) {
 
 	// Validate rate limit requests (must be positive)
 	if cfg.Server.RateLimit.Requests < 0 {
-		fmt.Fprintf(os.Stderr, "Warning: invalid rate_limit.requests %d, using default 120\n", cfg.Server.RateLimit.Requests)
-		cfg.Server.RateLimit.Requests = 120
+		fmt.Fprintf(os.Stderr, "Warning: invalid rate_limit.requests %d, using default 500\n", cfg.Server.RateLimit.Requests)
+		cfg.Server.RateLimit.Requests = 500
 	}
 
 	// Validate SSL settings

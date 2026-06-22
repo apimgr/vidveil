@@ -25,8 +25,8 @@ const (
 // |---------------|-------|--------|
 // | Login attempts | 5 | 15 min |
 // | Password reset | 3 | 1 hour |
-// | API (authenticated) | 100 | 1 min |
-// | API (unauthenticated) | 20 | 1 min |
+// | API (authenticated) | 1000 | 1 min |
+// | API (unauthenticated) | 300 | 1 min |
 // | File upload | 10 | 1 hour |
 var DefaultLimits = map[string]struct {
 	Requests int
@@ -34,10 +34,10 @@ var DefaultLimits = map[string]struct {
 }{
 	EndpointLogin:         {5, 15 * time.Minute},
 	EndpointPasswordReset: {3, time.Hour},
-	EndpointAPIAuth:       {100, time.Minute},
-	EndpointAPIUnauth:     {20, time.Minute},
+	EndpointAPIAuth:       {1000, time.Minute},
+	EndpointAPIUnauth:     {300, time.Minute},
 	EndpointFileUpload:    {10, time.Hour},
-	EndpointDefault:       {100, time.Minute},
+	EndpointDefault:       {500, time.Minute},
 }
 
 // EndpointLimiters holds multiple rate limiters for different endpoint types per AI.md PART 12
@@ -90,12 +90,12 @@ func (el *EndpointLimiters) AllowPasswordReset(ip string) bool {
 	return el.Get(EndpointPasswordReset).Allow(ip)
 }
 
-// AllowAPIAuth checks rate limit for authenticated API per AI.md PART 12 (100 per min)
+// AllowAPIAuth checks rate limit for authenticated API per AI.md PART 12 (1000 per min)
 func (el *EndpointLimiters) AllowAPIAuth(ip string) bool {
 	return el.Get(EndpointAPIAuth).Allow(ip)
 }
 
-// AllowAPIUnauth checks rate limit for unauthenticated API per AI.md PART 12 (20 per min)
+// AllowAPIUnauth checks rate limit for unauthenticated API per AI.md PART 12 (300 per min)
 func (el *EndpointLimiters) AllowAPIUnauth(ip string) bool {
 	return el.Get(EndpointAPIUnauth).Allow(ip)
 }
@@ -124,11 +124,11 @@ type clientInfo struct {
 }
 
 // NewRateLimiter creates a new rate limiter
-// Default: 100 requests per 60 seconds per AI.md PART 12
+// Default: 500 requests per 60 seconds per AI.md PART 12
 func NewRateLimiter(enabled bool, requests int, windowSeconds int) *RateLimiter {
 	// Default per AI.md PART 12 (API authenticated)
 	if requests <= 0 {
-		requests = 100
+		requests = 500
 	}
 	// Default per AI.md PART 12
 	if windowSeconds <= 0 {

@@ -3,6 +3,12 @@
 <header class="site-header">
     <a href="/" class="site-brand">Vidveil</a>
     <div class="header-actions">
+        {{/* Favorites icon */}}
+        <a href="/favorites" class="header-action{{if eq .ActiveNav "favorites"}} active{{end}}" title="Favorites" aria-label="Favorites">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+            </svg>
+        </a>
         {{/* User preferences icon */}}
         <a href="/preferences" class="header-action" title="Preferences" aria-label="Preferences">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -29,6 +35,7 @@
     </div>
     <a href="/" class="nav-panel-link{{if eq .ActiveNav "home"}} active{{end}}">Home</a>
     <a href="/search" class="nav-panel-link{{if eq .ActiveNav "search"}} active{{end}}">Search</a>
+    <a href="/favorites" class="nav-panel-link{{if eq .ActiveNav "favorites"}} active{{end}}">Favorites</a>
     <a href="/server/about" class="nav-panel-link{{if eq .ActiveNav "about"}} active{{end}}">About</a>
     <a href="/server/privacy" class="nav-panel-link{{if eq .ActiveNav "privacy"}} active{{end}}">Privacy</a>
     <a href="/server/help" class="nav-panel-link{{if eq .ActiveNav "help"}} active{{end}}">Help</a>

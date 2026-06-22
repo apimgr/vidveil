@@ -2537,7 +2537,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		"eq": func(a, b interface{}) bool { return a == b },
 	})
 
-	// Load all partials first (public and admin)
+	// Load all public partials
 	partialFiles := []string{
 		"template/partial/public/head.tmpl",
 		"template/partial/public/header.tmpl",
@@ -2545,9 +2545,6 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		"template/partial/public/footer.tmpl",
 		"template/partial/public/filters.tmpl",
 		"template/partial/public/scripts.tmpl",
-		"template/partial/admin/head.tmpl",
-		"template/partial/admin/sidebar.tmpl",
-		"template/partial/admin/scripts.tmpl",
 	}
 
 	for _, pf := range partialFiles {

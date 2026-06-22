@@ -285,8 +285,8 @@ func TestNewDefaults(t *testing.T) {
 	// Test with zero/negative values - should use defaults per AI.md PART 1
 	limiter := NewRateLimiter(true, 0, 0)
 
-	if limiter.requests != 100 {
-		t.Errorf("Expected default requests=100 (per PART 1), got %d", limiter.requests)
+	if limiter.requests != 500 {
+		t.Errorf("Expected default requests=500 (per PART 1), got %d", limiter.requests)
 	}
 
 	expectedWindow := time.Duration(60) * time.Second
@@ -328,8 +328,8 @@ func TestEndpointLimiterDefaults(t *testing.T) {
 	}{
 		{EndpointLogin, 5, 15 * time.Minute},
 		{EndpointPasswordReset, 3, time.Hour},
-		{EndpointAPIAuth, 100, time.Minute},
-		{EndpointAPIUnauth, 20, time.Minute},
+		{EndpointAPIAuth, 1000, time.Minute},
+		{EndpointAPIUnauth, 300, time.Minute},
 		{EndpointFileUpload, 10, time.Hour},
 	}
 
@@ -362,39 +362,39 @@ func TestEndpointLimiterLoginLimit(t *testing.T) {
 	}
 }
 
-// TestEndpointLimiterAPIAuthLimit tests authenticated API limit (100 per min per PART 1)
+// TestEndpointLimiterAPIAuthLimit tests authenticated API limit (1000 per min per PART 1)
 func TestEndpointLimiterAPIAuthLimit(t *testing.T) {
 	el := NewEndpointLimiters(true)
 	ip := "192.168.1.1"
 
-	// All 100 requests should be allowed
-	for i := 0; i < 100; i++ {
+	// All 1000 requests should be allowed
+	for i := 0; i < 1000; i++ {
 		if !el.AllowAPIAuth(ip) {
 			t.Errorf("API auth request %d should be allowed", i+1)
 		}
 	}
 
-	// 101st request should be denied
+	// 1001st request should be denied
 	if el.AllowAPIAuth(ip) {
-		t.Error("101st API auth request should be denied per PART 1")
+		t.Error("1001st API auth request should be denied per PART 1")
 	}
 }
 
-// TestEndpointLimiterAPIUnauthLimit tests unauthenticated API limit (20 per min per PART 1)
+// TestEndpointLimiterAPIUnauthLimit tests unauthenticated API limit (300 per min per PART 1)
 func TestEndpointLimiterAPIUnauthLimit(t *testing.T) {
 	el := NewEndpointLimiters(true)
 	ip := "192.168.1.1"
 
-	// First 20 requests should be allowed
-	for i := 0; i < 20; i++ {
+	// First 300 requests should be allowed
+	for i := 0; i < 300; i++ {
 		if !el.AllowAPIUnauth(ip) {
 			t.Errorf("API unauth request %d should be allowed", i+1)
 		}
 	}
 
-	// 21st request should be denied
+	// 301st request should be denied
 	if el.AllowAPIUnauth(ip) {
-		t.Error("21st API unauth request should be denied per PART 1")
+		t.Error("301st API unauth request should be denied per PART 1")
 	}
 }
 

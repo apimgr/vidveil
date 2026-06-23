@@ -3,6 +3,10 @@
 package metrics
 
 import (
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -201,4 +205,82 @@ var (
 		},
 		[]string{"engine"},
 	)
+
+	// Rate limit metrics per AI.md PART 20 (REQUIRED)
+	RateLimitHitsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vidveil_rate_limit_hits_total",
+			Help: "Total number of rate limit triggers",
+		},
+		[]string{"endpoint_class", "ip"},
+	)
+
+	RateLimitBlockedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vidveil_rate_limit_blocked_total",
+			Help: "Total number of requests blocked by rate limiter",
+		},
+		[]string{"ip"},
+	)
 )
+
+// Init initialises application-level metric values and starts the uptime updater.
+// Call once from main after build variables are resolved.
+func Init(ver, commit, buildDate, goVer string) {
+	AppInfo.WithLabelValues(ver, commit, buildDate, goVer).Set(1)
+	start := time.Now()
+	AppStartTimestamp.Set(float64(start.Unix()))
+	go func() {
+		t := time.NewTicker(5 * time.Second)
+		defer t.Stop()
+		for range t.C {
+			AppUptimeSeconds.Set(time.Since(start).Seconds())
+		}
+	}()
+}
+
+// statusWriter wraps http.ResponseWriter to capture the status code and bytes written.
+type statusWriter struct {
+	http.ResponseWriter
+	status  int
+	written int64
+}
+
+// WriteHeader intercepts the status code so we can record it.
+func (sw *statusWriter) WriteHeader(code int) {
+	sw.status = code
+	sw.ResponseWriter.WriteHeader(code)
+}
+
+// Write counts bytes written so HTTPResponseSize can observe them.
+func (sw *statusWriter) Write(b []byte) (int, error) {
+	n, err := sw.ResponseWriter.Write(b)
+	sw.written += int64(n)
+	return n, err
+}
+
+// InstrumentMiddleware records per-request labeled Prometheus metrics.
+// It wraps each handler to observe latency, request/response sizes, and status.
+func InstrumentMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		HTTPActiveRequests.Inc()
+		next.ServeHTTP(sw, r)
+		HTTPActiveRequests.Dec()
+
+		method := r.Method
+		path := r.URL.Path
+		status := strconv.Itoa(sw.status)
+
+		HTTPRequestsTotal.WithLabelValues(method, path, status).Inc()
+		HTTPRequestDuration.WithLabelValues(method, path).Observe(time.Since(start).Seconds())
+
+		if r.ContentLength > 0 {
+			HTTPRequestSize.WithLabelValues(method, path).Observe(float64(r.ContentLength))
+		}
+		if sw.written > 0 {
+			HTTPResponseSize.WithLabelValues(method, path).Observe(float64(sw.written))
+		}
+	})
+}

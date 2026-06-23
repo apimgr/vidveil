@@ -267,3 +267,25 @@ func TestEngineResponseTimeCanObserve(t *testing.T) {
 func TestAppInfoCanSetWithLabels(t *testing.T) {
 	AppInfo.WithLabelValues("1.0.0", "abc1234", "2026-01-01", "go1.24").Set(1)
 }
+
+// ---- Rate-limit metrics (PART 20 REQUIRED) ----
+
+func TestRateLimitHitsTotalNotNil(t *testing.T) {
+	if RateLimitHitsTotal == nil {
+		t.Error("RateLimitHitsTotal is nil; promauto registration failed")
+	}
+}
+
+func TestRateLimitBlockedTotalNotNil(t *testing.T) {
+	if RateLimitBlockedTotal == nil {
+		t.Error("RateLimitBlockedTotal is nil; promauto registration failed")
+	}
+}
+
+func TestRateLimitHitsTotalCanInc(t *testing.T) {
+	RateLimitHitsTotal.WithLabelValues("global", "127.0.0.1").Inc()
+}
+
+func TestRateLimitBlockedTotalCanInc(t *testing.T) {
+	RateLimitBlockedTotal.WithLabelValues("127.0.0.1").Inc()
+}

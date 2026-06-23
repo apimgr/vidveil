@@ -32,6 +32,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
+	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
 	"github.com/apimgr/vidveil/src/server/service/system"
 	"github.com/apimgr/vidveil/src/server/service/tor"
@@ -53,6 +54,8 @@ func init() {
 	version.CommitID = CommitID
 	version.BuildTime = BuildDate
 	version.OfficialSite = OfficialSite
+	// Initialise Prometheus application metrics (PART 20)
+	svcmetrics.Init(Version, CommitID, BuildDate, runtime.Version())
 }
 
 func main() {

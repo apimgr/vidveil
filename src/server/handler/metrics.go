@@ -2,18 +2,20 @@
 package handler
 
 import (
-	"fmt"
+	"crypto/subtle"
 	"net"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/apimgr/vidveil/src/common/version"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
+	// Register promauto metrics with the default Prometheus registry.
+	_ "github.com/apimgr/vidveil/src/server/service/metrics"
 )
 
 // slidingWindowCounter tracks counts in a 24-hour sliding window using hourly buckets.
@@ -246,144 +248,35 @@ func isLoopbackRequest(r *http.Request) bool {
 	return ip.IsLoopback()
 }
 
-// Handler returns the Prometheus metrics handler.
-// Per AI.md PART 14/21: metrics are internal-only.
+// Handler returns the Prometheus metrics HTTP handler.
+// Per AI.md PART 20: metrics are internal-only.
 // When a token is configured, it is required for all requests.
 // When no token is configured, access is restricted to loopback (127.x/::1).
+// Responses are served via promhttp.Handler() from the default registry, which
+// includes all promauto-registered vidveil_* metrics (PART 20).
 func (m *ServerMetrics) Handler() http.HandlerFunc {
+	promHandler := promhttp.Handler()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if m.appConfig.Server.Metrics.Token != "" {
 			// Token configured: require it from all clients
-			token := r.Header.Get("Authorization")
-			if token != "Bearer "+m.appConfig.Server.Metrics.Token {
-				token = r.URL.Query().Get("token")
-				if token != m.appConfig.Server.Metrics.Token {
+			header := r.Header.Get("Authorization")
+			expected := "Bearer " + m.appConfig.Server.Metrics.Token
+			// Constant-time comparison prevents token timing side-channels (PART 1, PART 11)
+			if subtle.ConstantTimeCompare([]byte(header), []byte(expected)) != 1 {
+				query := r.URL.Query().Get("token")
+				if subtle.ConstantTimeCompare([]byte(query), []byte(m.appConfig.Server.Metrics.Token)) != 1 {
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
 			}
 		} else {
-			// No token: restrict to loopback only (internal-only per PART 14)
+			// No token: restrict to loopback only (internal-only per PART 14/20)
 			if !isLoopbackRequest(r) {
 				http.Error(w, "Forbidden: metrics are internal-only", http.StatusForbidden)
 				return
 			}
 		}
-
-		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-
-		// Runtime metrics
-		var memStats runtime.MemStats
-		runtime.ReadMemStats(&memStats)
-
-		// Write metrics in Prometheus format per AI.md PART 20
-
-		// Application metrics per AI.md PART 20
-		fmt.Fprintf(w, "# HELP vidveil_app_info Application information (always 1, labels carry data)\n")
-		fmt.Fprintf(w, "# TYPE vidveil_app_info gauge\n")
-		fmt.Fprintf(w, "vidveil_app_info{version=\"%s\",commit=\"%s\",build_date=\"%s\",go_version=\"%s\"} 1\n",
-			version.GetVersion(), version.CommitID, version.BuildTime, runtime.Version())
-		fmt.Fprintf(w, "\n")
-
-		fmt.Fprintf(w, "# HELP vidveil_app_uptime_seconds Seconds since application start\n")
-		fmt.Fprintf(w, "# TYPE vidveil_app_uptime_seconds gauge\n")
-		fmt.Fprintf(w, "vidveil_app_uptime_seconds %.2f\n", time.Since(m.startTime).Seconds())
-		fmt.Fprintf(w, "\n")
-
-		fmt.Fprintf(w, "# HELP vidveil_app_start_timestamp Unix timestamp of application start\n")
-		fmt.Fprintf(w, "# TYPE vidveil_app_start_timestamp gauge\n")
-		fmt.Fprintf(w, "vidveil_app_start_timestamp %d\n", m.startTime.Unix())
-		fmt.Fprintf(w, "\n")
-
-		// Request counters
-		fmt.Fprintf(w, "# HELP vidveil_requests_total Total number of HTTP requests\n")
-		fmt.Fprintf(w, "# TYPE vidveil_requests_total counter\n")
-		fmt.Fprintf(w, "vidveil_requests_total %d\n", atomic.LoadUint64(&m.requestsTotal))
-		fmt.Fprintf(w, "\n")
-
-		fmt.Fprintf(w, "# HELP vidveil_searches_total Total number of searches performed\n")
-		fmt.Fprintf(w, "# TYPE vidveil_searches_total counter\n")
-		fmt.Fprintf(w, "vidveil_searches_total %d\n", atomic.LoadUint64(&m.searchesTotal))
-		fmt.Fprintf(w, "\n")
-
-		fmt.Fprintf(w, "# HELP vidveil_search_errors_total Total number of search errors\n")
-		fmt.Fprintf(w, "# TYPE vidveil_search_errors_total counter\n")
-		fmt.Fprintf(w, "vidveil_search_errors_total %d\n", atomic.LoadUint64(&m.searchErrors))
-		fmt.Fprintf(w, "\n")
-
-		fmt.Fprintf(w, "# HELP vidveil_api_requests_total Total number of API requests\n")
-		fmt.Fprintf(w, "# TYPE vidveil_api_requests_total counter\n")
-		fmt.Fprintf(w, "vidveil_api_requests_total %d\n", atomic.LoadUint64(&m.apiRequestsTotal))
-		fmt.Fprintf(w, "\n")
-
-		// Engine metrics
-		engineList := m.engineMgr.ListEngines()
-		enabledCount := 0
-		for _, eng := range engineList {
-			if eng.Enabled {
-				enabledCount++
-			}
-		}
-
-		fmt.Fprintf(w, "# HELP vidveil_engines_total Total number of search engines\n")
-		fmt.Fprintf(w, "# TYPE vidveil_engines_total gauge\n")
-		fmt.Fprintf(w, "vidveil_engines_total %d\n", len(engineList))
-		fmt.Fprintf(w, "\n")
-
-		fmt.Fprintf(w, "# HELP vidveil_engines_enabled Number of enabled search engines\n")
-		fmt.Fprintf(w, "# TYPE vidveil_engines_enabled gauge\n")
-		fmt.Fprintf(w, "vidveil_engines_enabled %d\n", enabledCount)
-		fmt.Fprintf(w, "\n")
-
-		// Per-engine status
-		fmt.Fprintf(w, "# HELP vidveil_engine_enabled Engine enabled status\n")
-		fmt.Fprintf(w, "# TYPE vidveil_engine_enabled gauge\n")
-		for _, eng := range engineList {
-			enabled := 0
-			if eng.Enabled {
-				enabled = 1
-			}
-			fmt.Fprintf(w, "vidveil_engine_enabled{name=\"%s\",tier=\"%d\"} %d\n", eng.Name, eng.Tier, enabled)
-		}
-		fmt.Fprintf(w, "\n")
-
-		// Memory metrics
-		if m.appConfig.Server.Metrics.IncludeSystem {
-			fmt.Fprintf(w, "# HELP go_memstats_alloc_bytes Number of bytes allocated and still in use\n")
-			fmt.Fprintf(w, "# TYPE go_memstats_alloc_bytes gauge\n")
-			fmt.Fprintf(w, "go_memstats_alloc_bytes %d\n", memStats.Alloc)
-			fmt.Fprintf(w, "\n")
-
-			fmt.Fprintf(w, "# HELP go_memstats_sys_bytes Number of bytes obtained from system\n")
-			fmt.Fprintf(w, "# TYPE go_memstats_sys_bytes gauge\n")
-			fmt.Fprintf(w, "go_memstats_sys_bytes %d\n", memStats.Sys)
-			fmt.Fprintf(w, "\n")
-
-			fmt.Fprintf(w, "# HELP go_memstats_heap_alloc_bytes Number of heap bytes allocated and still in use\n")
-			fmt.Fprintf(w, "# TYPE go_memstats_heap_alloc_bytes gauge\n")
-			fmt.Fprintf(w, "go_memstats_heap_alloc_bytes %d\n", memStats.HeapAlloc)
-			fmt.Fprintf(w, "\n")
-
-			fmt.Fprintf(w, "# HELP go_memstats_heap_sys_bytes Number of heap bytes obtained from system\n")
-			fmt.Fprintf(w, "# TYPE go_memstats_heap_sys_bytes gauge\n")
-			fmt.Fprintf(w, "go_memstats_heap_sys_bytes %d\n", memStats.HeapSys)
-			fmt.Fprintf(w, "\n")
-
-			fmt.Fprintf(w, "# HELP go_memstats_gc_total_count Total number of GC runs\n")
-			fmt.Fprintf(w, "# TYPE go_memstats_gc_total_count counter\n")
-			fmt.Fprintf(w, "go_memstats_gc_total_count %d\n", memStats.NumGC)
-			fmt.Fprintf(w, "\n")
-
-			fmt.Fprintf(w, "# HELP go_goroutines Number of goroutines currently running\n")
-			fmt.Fprintf(w, "# TYPE go_goroutines gauge\n")
-			fmt.Fprintf(w, "go_goroutines %d\n", runtime.NumGoroutine())
-			fmt.Fprintf(w, "\n")
-
-			fmt.Fprintf(w, "# HELP go_threads Number of OS threads created\n")
-			fmt.Fprintf(w, "# TYPE go_threads gauge\n")
-			fmt.Fprintf(w, "go_threads %d\n", runtime.GOMAXPROCS(0))
-			fmt.Fprintf(w, "\n")
-		}
+		promHandler.ServeHTTP(w, r)
 	}
 }
 

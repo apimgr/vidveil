@@ -24,6 +24,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
+	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 	"github.com/apimgr/vidveil/src/server/service/urlvars"
 	"github.com/apimgr/vidveil/src/swagger"
@@ -432,6 +433,9 @@ func (s *Server) setupRoutes() {
 	h.SetDataDir(s.dataDir)
 	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
 	h.SetMetrics(metrics)
+
+	// Prometheus labeled HTTP metrics per AI.md PART 20 (REQUIRED)
+	s.router.Use(svcmetrics.InstrumentMiddleware)
 
 	// Metrics middleware per AI.md PART 13 - tracks requests and active connections
 	s.router.Use(metrics.MetricsMiddleware)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/server/service/logging"
+	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
 )
 
 // Endpoint types for rate limiting per AI.md PART 12
@@ -315,6 +316,9 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 					"window":   int(l.window.Seconds()),
 				})
 			}
+			// Prometheus rate-limit metrics per AI.md PART 20 (REQUIRED)
+			svcmetrics.RateLimitHitsTotal.WithLabelValues("global", ip).Inc()
+			svcmetrics.RateLimitBlockedTotal.WithLabelValues(ip).Inc()
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, "Too many requests. Please try again later.", http.StatusTooManyRequests)
 			return

@@ -7,23 +7,14 @@ Spec source of truth: AI.md (READ-ONLY). Audited PARTs: 1, 8, 13, 14, 16, 17-22,
 
 ### Missing (in spec, not implemented)
 
-- [ ] PART 20 (Metrics): `/metrics` is wired to the hand-written text handler `src/server/handler/metrics.go`,
-  which emits only unlabeled metrics (`vidveil_requests_total`, etc.). The spec-REQUIRED labeled metrics are
-  NOT served: `vidveil_http_requests_total{method,path,status}`, `vidveil_http_request_duration_seconds`,
-  `vidveil_http_request_size_bytes`, `vidveil_http_response_size_bytes` (AI.md:26808-26816);
-  `vidveil_db_queries_total`/`db_query_duration_seconds`/`db_connections_open`/`db_connections_in_use`/`db_errors_total`
-  (AI.md:26834-26842, REQUIRED with database); `vidveil_auth_attempts_total`/`auth_sessions_active`
-  (AI.md:26779-26784). FIX: wire the existing `src/server/service/metrics` package (which already defines the
-  correct promauto metric set) into `/metrics` via `promhttp.Handler()`, replacing/augmenting the hand-written
-  handler, and add instrumentation at the call sites (HTTP middleware, DB layer, auth). This is a feature-level
-  change → next step, not a trivial edit.
-  → src/server/handler/metrics.go, src/server/service/metrics/metrics.go, src/server/server.go
+- [x] PART 20 (Metrics): `/metrics` is now wired to `promhttp.Handler()` from the default Prometheus registry.
+  All promauto-registered labeled metrics are served: HTTP request/latency/size metrics via
+  `InstrumentMiddleware`, rate-limit counters incremented in ratelimit middleware, app-info gauge set via
+  `Init()` in `main.init()`. FIXED: commit b65fa38.
 
-- [ ] PART 20 (Metrics): `vidveil_rate_limit_hits_total` (Counter, labels endpoint_class,ip) and
-  `vidveil_rate_limit_blocked_total` (Counter, label ip) are marked REQUIRED (AI.md:26896-26901) but are
-  defined NOWHERE in the codebase (not even in the orphaned `service/metrics` package). FIX: add both metrics
-  to `src/server/service/metrics/metrics.go` and increment them in the rate-limit middleware.
-  → src/server/service/metrics/metrics.go, rate-limit middleware
+- [x] PART 20 (Metrics): `vidveil_rate_limit_hits_total{endpoint_class,ip}` and
+  `vidveil_rate_limit_blocked_total{ip}` added to `src/server/service/metrics/metrics.go` and incremented
+  in `ratelimit.Middleware()` when a request is blocked. FIXED: commit b65fa38.
 
 - [ ] PART 26 (Docker): IDEA.md does not document the no-`USER` exception. The runtime stage of
   `docker/Dockerfile` has no non-root `USER` directive. vidveil binds port 80 and performs its own privilege

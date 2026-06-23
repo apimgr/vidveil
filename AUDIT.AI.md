@@ -5,7 +5,25 @@ Spec source of truth: AI.md (READ-ONLY). Audited PARTs: 1, 8, 13, 14, 16, 17-22,
 
 ## VIOLATIONS TO FIX
 
-### Missing (in spec, not implemented)
+### Missing (in spec, not implemented) — FIXED IN COMMIT 8ec341b
+
+- [x] FINAL CHECKPOINT: `/.well-known/pgp-key.asc` route missing — Added `PGPKeyAsc()` handler
+  (src/server/handler/handlers.go) and route registration (src/server/server.go). Serves
+  `{data_dir}/security/pgp-key.asc` with Content-Type `application/pgp-keys`; 404 if absent.
+  security.txt now includes `Encryption:` field when `web.security.pgp_key_url` is set. FIXED: commit 8ec341b.
+
+- [x] FINAL CHECKPOINT: `isNonInteractiveClient()` named function required by checklist — Added as
+  explicit alias for `isHttpTool()` in src/server/handler/response.go. FIXED: commit 8ec341b.
+
+- [x] FINAL CHECKPOINT: `make i18n-validate` target missing — Added target to Makefile; created
+  cmd/i18n-validate/main.go with full validation (key parity, empty values, interpolation var parity
+  across all 7 locale files vs en.json). cmd/i18n-validate/main_test.go covers validate(), loadLocale(),
+  equalVarSets(). FIXED: commit 8ec341b.
+
+- [x] PART 16 (SEO/Branding): SEO meta tags, OpenGraph, Twitter Card, site verification tags
+  (Google/Bing/Yandex/Baidu/Pinterest/Facebook) missing from head.tmpl — Added to
+  src/server/template/partial/public/head.tmpl; backed by SEOConfig/BrandingConfig structs in
+  src/config/config.go. FIXED: commit 8ec341b.
 
 - [x] PART 20 (Metrics): `/metrics` is now wired to `promhttp.Handler()` from the default Prometheus registry.
   All promauto-registered labeled metrics are served: HTTP request/latency/size metrics via

@@ -1,0 +1,216 @@
+name: Docker Build
+
+on:
+  push:
+    branches: ['**']
+    tags:
+      - 'v*'
+      - '*.*.*'
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ forgejo.ref }}
+  cancel-in-progress: ${{ forgejo.ref == 'refs/heads/main' || gitea.ref == 'refs/heads/master' || gitea.ref == 'refs/heads/devel' || gitea.ref == 'refs/heads/dev' || gitea.ref == 'refs/heads/beta' }}
+
+env:
+  PROJECTNAME: vidveil
+  IMAGE_NAME: ${{ forgejo.repository }}
+
+jobs:
+  build-standard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
+
+      - name: Set registry from server URL
+        run: |
+          SERVER_URL="${{ forgejo.server_url }}"
+          REGISTRY="${SERVER_URL#https://}"
+          REGISTRY="${REGISTRY#http://}"
+          echo "REGISTRY=${REGISTRY}" >> $FORGEJO_ENV
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ forgejo.actor }}
+          password: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Set build info
+        run: |
+          echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $FORGEJO_ENV
+          echo "YYMM=$(date +"%y%m")" >> $FORGEJO_ENV
+          if [[ "${{ forgejo.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITEA_REF_NAME}"
+            echo "VERSION=${VERSION#v}" >> $FORGEJO_ENV
+            echo "IS_TAG=true" >> $FORGEJO_ENV
+          else
+            echo "VERSION=$(git rev-parse --short HEAD)" >> $FORGEJO_ENV
+            echo "IS_TAG=false" >> $FORGEJO_ENV
+          fi
+          echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $FORGEJO_ENV
+
+      - name: Determine tags (standard)
+        id: tags
+        run: |
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.COMMIT_ID }}"
+          if [[ "${{ env.IS_TAG }}" == "true" ]]; then
+            TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
+            TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.YYMM }}"
+          else
+            TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel"
+            if [[ "${{ forgejo.ref }}" == refs/heads/beta ]]; then
+              TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:beta"
+            fi
+          fi
+          echo "tags=$TAGS" >> $FORGEJO_OUTPUT
+
+      - name: Build and push (standard)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            COMMIT_ID=${{ env.COMMIT_ID }}
+          labels: |
+            org.opencontainers.image.vendor=apimgr
+            org.opencontainers.image.authors=apimgr
+            org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
+            org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.licenses=MIT
+          annotations: |
+            manifest:org.opencontainers.image.vendor=apimgr
+            manifest:org.opencontainers.image.authors=apimgr
+            manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}
+            manifest:org.opencontainers.image.base.name=${{ env.PROJECTNAME }}
+            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - standard image (alpine)
+            manifest:org.opencontainers.image.version=${{ env.VERSION }}
+            manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            manifest:org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.licenses=MIT
+
+  build-aio:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
+
+      - name: Set registry from server URL
+        run: |
+          SERVER_URL="${{ forgejo.server_url }}"
+          REGISTRY="${SERVER_URL#https://}"
+          REGISTRY="${REGISTRY#http://}"
+          echo "REGISTRY=${REGISTRY}" >> $FORGEJO_ENV
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ forgejo.actor }}
+          password: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Set build info
+        run: |
+          echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> $FORGEJO_ENV
+          echo "YYMM=$(date +"%y%m")" >> $FORGEJO_ENV
+          if [[ "${{ forgejo.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITEA_REF_NAME}"
+            echo "VERSION=${VERSION#v}" >> $FORGEJO_ENV
+            echo "IS_TAG=true" >> $FORGEJO_ENV
+          else
+            echo "VERSION=$(git rev-parse --short HEAD)" >> $FORGEJO_ENV
+            echo "IS_TAG=false" >> $FORGEJO_ENV
+          fi
+          echo "BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")" >> $FORGEJO_ENV
+
+      - name: Determine tags (all-in-one)
+        id: tags
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          TAGS="${IMAGE}:${{ env.COMMIT_ID }}-aio"
+          if [[ "${{ env.IS_TAG }}" == "true" ]]; then
+            TAGS="$TAGS,${IMAGE}:${{ env.VERSION }}-aio"
+            TAGS="$TAGS,${IMAGE}:latest-aio"
+            TAGS="$TAGS,${IMAGE}:${{ env.YYMM }}-aio"
+          else
+            TAGS="$TAGS,${IMAGE}:devel-aio"
+            if [[ "${{ forgejo.ref }}" == refs/heads/beta ]]; then
+              TAGS="$TAGS,${IMAGE}:beta-aio"
+            fi
+          fi
+          echo "tags=$TAGS" >> $FORGEJO_OUTPUT
+
+      - name: Build and push (all-in-one)
+        if: hashFiles('docker/Dockerfile.aio') != ''
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf
+        with:
+          context: .
+          file: docker/Dockerfile.aio
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            COMMIT_ID=${{ env.COMMIT_ID }}
+          labels: |
+            org.opencontainers.image.vendor=apimgr
+            org.opencontainers.image.authors=apimgr
+            org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
+            org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + valkey + tor)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.licenses=MIT
+          annotations: |
+            manifest:org.opencontainers.image.vendor=apimgr
+            manifest:org.opencontainers.image.authors=apimgr
+            manifest:org.opencontainers.image.title=${{ env.PROJECTNAME }}-aio
+            manifest:org.opencontainers.image.description=${{ env.PROJECTNAME }} - all-in-one (debian + valkey + tor)
+            manifest:org.opencontainers.image.version=${{ env.VERSION }}
+            manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            manifest:org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.licenses=MIT

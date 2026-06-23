@@ -47,11 +47,10 @@ Spec source of truth: AI.md (READ-ONLY). Audited PARTs: 1, 8, 13, 14, 16, 17-22,
   port 80 then drops to `vidveil` system user at runtime (PART 23). IDEA.md line 235 already documents this.
   No action required.
 
-- [ ] CI multi-provider (AI.md:710-724, 1971-1977, 3036): spec lists `.gitea/workflows/{ci,release}.yml`,
-  `.forgejo/workflows/{ci,release}.yml`, and `.gitlab-ci.yml` as multi-provider CI requirements. Repo has
-  EMPTY `.gitea/` and `.forgejo/` dirs and NO `.gitlab-ci.yml`. NOTE: this conflicts with the project's own
-  `.claude/rules/cicd-rules.md` which describes GitHub + Jenkins only. Flagged below under NOTES — resolve
-  intent with user before populating or removing. → .gitea/, .forgejo/, .gitlab-ci.yml
+- [x] CI multi-provider (AI.md:710-724, 1971-1977, 3036): implemented `.gitea/workflows/{ci,release,beta,daily,docker}.yml`,
+  `.forgejo/workflows/{ci,release,beta,daily,docker}.yml`, and `.gitlab-ci.yml`. All use `casjaysdev/go:latest`
+  directly (no `Dockerfile.build` — forbidden for Go); all third-party Actions pinned to full commit SHAs;
+  Gitea/Forgejo use provider-specific env vars (`$GITEA_ENV`/`$FORGEJO_ENV`, `gitea.*`/`forgejo.*` context).
 
 ### Extra (not in spec, must remove) — FIXED
 

@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ forgejo.workflow }}-${{ forgejo.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECTNAME: vidveil
+  PROJECTORG: apimgr
+
+jobs:
+  lint:
+    if: ${{ forgejo.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - run: go vet ./...
+
+  test:
+    if: ${{ forgejo.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Run tests with coverage
+        run: |
+          mkdir -p "/tmp/${{ env.PROJECTORG }}"
+          COVDIR=$(mktemp -d "/tmp/${{ env.PROJECTORG }}/${{ env.PROJECTNAME }}-XXXXXX")
+          echo "COVDIR=$COVDIR" >> "$FORGEJO_ENV"
+          go test -cover -coverprofile="$COVDIR/coverage.out" ./...
+      - name: Enforce coverage threshold
+        run: |
+          THRESHOLD=60
+          PCT=$(go tool cover -func="$COVDIR/coverage.out" | awk '/^total:/ {gsub("%","",$3); print int($3)}')
+          if [ "$PCT" -lt "$THRESHOLD" ]; then
+            echo "::error::coverage $PCT% < threshold $THRESHOLD%"
+            exit 1
+          fi
+          echo "Coverage: $PCT% (threshold: $THRESHOLD%) OK"
+
+  build:
+    if: ${{ forgejo.event_name != 'schedule' }}
+    needs: [test]
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - run: go build -buildvcs=false ./...
+
+  vuln-check:
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Run vulnerability check
+        run: |
+          if command -v govulncheck >/dev/null 2>&1; then
+            govulncheck ./...
+          else
+            echo "govulncheck not available in this image, skipping"
+          fi
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - name: Secret scan with truffleHog
+        uses: trufflesecurity/trufflehog@30d5bb91af1a771378349dbbb0c82129392acf70
+        with:
+          base: ${{ forgejo.event.before || gitea.event.pull_request.base.sha }}
+          head: ${{ forgejo.event.after || gitea.event.pull_request.head.sha }}
+          extra_args: --only-verified
+        continue-on-error: true

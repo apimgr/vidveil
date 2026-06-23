@@ -1,0 +1,321 @@
+stages:
+  - test
+  - build
+  - release
+  - docker
+
+variables:
+  CGO_ENABLED: "0"
+  PROJECTNAME: "vidveil"
+  PROJECTORG: "apimgr"
+  GO_IMAGE: "casjaysdev/go:latest"
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+.go-build-template: &go-build-template
+  image: casjaysdev/go:latest
+  before_script:
+    - |
+      if [ -f release.txt ]; then
+        export VERSION=$(cat release.txt)
+      elif [ -n "$CI_COMMIT_TAG" ]; then
+        export VERSION="${CI_COMMIT_TAG#v}"
+      else
+        export VERSION="$(date -u +"%Y%m%d%H%M%S")"
+      fi
+      export COMMIT_ID=$(git rev-parse --short HEAD)
+      export BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")
+      if [ -f site.txt ]; then
+        export OFFICIALSITE=$(cat site.txt)
+      else
+        export OFFICIALSITE="${OFFICIALSITE:-}"
+      fi
+      export LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
+
+lint:
+  <<: *go-build-template
+  stage: test
+  script:
+    - go vet ./...
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+test:
+  <<: *go-build-template
+  stage: test
+  script:
+    - mkdir -p "/tmp/${PROJECTORG}"
+    - COVDIR=$(mktemp -d "/tmp/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
+    - go test -cover -coverprofile="${COVDIR}/coverage.out" ./...
+    - |
+      THRESHOLD=60
+      PCT=$(go tool cover -func="${COVDIR}/coverage.out" | awk '/^total:/ {gsub("%","",$3); print int($3)}')
+      if [ "$PCT" -lt "$THRESHOLD" ]; then
+        echo "ERROR: coverage $PCT% < threshold $THRESHOLD%"
+        exit 1
+      fi
+      echo "Coverage: $PCT% (threshold: $THRESHOLD%) OK"
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+vuln-check:
+  <<: *go-build-template
+  stage: test
+  script:
+    - |
+      if command -v govulncheck >/dev/null 2>&1; then
+        govulncheck ./...
+      else
+        echo "govulncheck not available in this image, skipping"
+      fi
+  allow_failure: true
+
+secret-scan:
+  stage: test
+  image: trufflesecurity/trufflehog:latest
+  script:
+    - trufflehog git file://. --since-commit HEAD~1 --only-verified --fail
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+build-linux-amd64:
+  <<: *go-build-template
+  stage: build
+  variables:
+    GOOS: linux
+    GOARCH: amd64
+  script:
+    - go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-amd64 ./src
+    - '[ -d src/client ] && go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-linux-amd64 ./src/client || true'
+  artifacts:
+    paths:
+      - ${PROJECTNAME}-linux-amd64
+      - ${PROJECTNAME}-cli-linux-amd64
+    expire_in: 7 days
+
+build-linux-arm64:
+  <<: *go-build-template
+  stage: build
+  variables:
+    GOOS: linux
+    GOARCH: arm64
+  script:
+    - go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-linux-arm64 ./src
+    - '[ -d src/client ] && go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-linux-arm64 ./src/client || true'
+  artifacts:
+    paths:
+      - ${PROJECTNAME}-linux-arm64
+      - ${PROJECTNAME}-cli-linux-arm64
+    expire_in: 7 days
+
+build-darwin-amd64:
+  <<: *go-build-template
+  stage: build
+  variables:
+    GOOS: darwin
+    GOARCH: amd64
+  script:
+    - go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-amd64 ./src
+    - '[ -d src/client ] && go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-darwin-amd64 ./src/client || true'
+  artifacts:
+    paths:
+      - ${PROJECTNAME}-darwin-amd64
+      - ${PROJECTNAME}-cli-darwin-amd64
+    expire_in: 7 days
+
+build-darwin-arm64:
+  <<: *go-build-template
+  stage: build
+  variables:
+    GOOS: darwin
+    GOARCH: arm64
+  script:
+    - go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-darwin-arm64 ./src
+    - '[ -d src/client ] && go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-darwin-arm64 ./src/client || true'
+  artifacts:
+    paths:
+      - ${PROJECTNAME}-darwin-arm64
+      - ${PROJECTNAME}-cli-darwin-arm64
+    expire_in: 7 days
+
+build-windows-amd64:
+  <<: *go-build-template
+  stage: build
+  variables:
+    GOOS: windows
+    GOARCH: amd64
+  script:
+    - go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-amd64.exe ./src
+    - '[ -d src/client ] && go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-amd64.exe ./src/client || true'
+  artifacts:
+    paths:
+      - ${PROJECTNAME}-windows-amd64.exe
+      - ${PROJECTNAME}-cli-windows-amd64.exe
+    expire_in: 7 days
+
+build-windows-arm64:
+  <<: *go-build-template
+  stage: build
+  variables:
+    GOOS: windows
+    GOARCH: arm64
+  script:
+    - go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-windows-arm64.exe ./src
+    - '[ -d src/client ] && go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-windows-arm64.exe ./src/client || true'
+  artifacts:
+    paths:
+      - ${PROJECTNAME}-windows-arm64.exe
+      - ${PROJECTNAME}-cli-windows-arm64.exe
+    expire_in: 7 days
+
+build-freebsd-amd64:
+  <<: *go-build-template
+  stage: build
+  variables:
+    GOOS: freebsd
+    GOARCH: amd64
+  script:
+    - go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-amd64 ./src
+    - '[ -d src/client ] && go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-amd64 ./src/client || true'
+  artifacts:
+    paths:
+      - ${PROJECTNAME}-freebsd-amd64
+      - ${PROJECTNAME}-cli-freebsd-amd64
+    expire_in: 7 days
+
+build-freebsd-arm64:
+  <<: *go-build-template
+  stage: build
+  variables:
+    GOOS: freebsd
+    GOARCH: arm64
+  script:
+    - go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-freebsd-arm64 ./src
+    - '[ -d src/client ] && go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" -o ${PROJECTNAME}-cli-freebsd-arm64 ./src/client || true'
+  artifacts:
+    paths:
+      - ${PROJECTNAME}-freebsd-arm64
+      - ${PROJECTNAME}-cli-freebsd-arm64
+    expire_in: 7 days
+
+release:
+  stage: release
+  image: casjaysdev/go:latest
+  script:
+    - |
+      if [ -f release.txt ]; then
+        VERSION=$(cat release.txt)
+      elif [ -n "$CI_COMMIT_TAG" ]; then
+        VERSION="${CI_COMMIT_TAG#v}"
+      else
+        VERSION="${CI_COMMIT_SHORT_SHA}"
+      fi
+      echo "VERSION=${VERSION}" > build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+  rules:
+    - if: $CI_COMMIT_TAG
+
+gitlab-release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: release
+      artifacts: true
+    - build-linux-amd64
+    - build-linux-arm64
+    - build-darwin-amd64
+    - build-darwin-arm64
+    - build-windows-amd64
+    - build-windows-arm64
+    - build-freebsd-amd64
+    - build-freebsd-arm64
+  script:
+    - echo "Creating release for $VERSION"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: "Release $VERSION"
+    assets:
+      links:
+        - name: "${PROJECTNAME}-linux-amd64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-linux-amd64?job=build-linux-amd64"
+        - name: "${PROJECTNAME}-linux-arm64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-linux-arm64?job=build-linux-arm64"
+        - name: "${PROJECTNAME}-darwin-amd64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-darwin-amd64?job=build-darwin-amd64"
+        - name: "${PROJECTNAME}-darwin-arm64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-darwin-arm64?job=build-darwin-arm64"
+        - name: "${PROJECTNAME}-windows-amd64.exe"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-windows-amd64.exe?job=build-windows-amd64"
+        - name: "${PROJECTNAME}-windows-arm64.exe"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-windows-arm64.exe?job=build-windows-arm64"
+        - name: "${PROJECTNAME}-freebsd-amd64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-freebsd-amd64?job=build-freebsd-amd64"
+        - name: "${PROJECTNAME}-freebsd-arm64"
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/${PROJECTNAME}-freebsd-arm64?job=build-freebsd-arm64"
+  rules:
+    - if: $CI_COMMIT_TAG
+
+docker-build:
+  stage: docker
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        VERSION="${CI_COMMIT_TAG#v}"
+        IS_TAG=true
+      else
+        VERSION="${CI_COMMIT_SHORT_SHA}"
+        IS_TAG=false
+      fi
+      COMMIT_ID=$(git rev-parse --short HEAD)
+      BUILD_DATE=$(date +"%a %b %d, %Y at %H:%M:%S %Z")
+      YYMM=$(date +"%y%m")
+
+      docker buildx create --use || true
+      docker buildx inspect --bootstrap
+
+      TAGS="-t ${CI_REGISTRY_IMAGE}:${COMMIT_ID}"
+      if [ "$IS_TAG" = "true" ]; then
+        TAGS="${TAGS} -t ${CI_REGISTRY_IMAGE}:${VERSION}"
+        TAGS="${TAGS} -t ${CI_REGISTRY_IMAGE}:latest"
+        TAGS="${TAGS} -t ${CI_REGISTRY_IMAGE}:${YYMM}"
+      else
+        TAGS="${TAGS} -t ${CI_REGISTRY_IMAGE}:devel"
+        if [ "$CI_COMMIT_BRANCH" = "beta" ]; then
+          TAGS="${TAGS} -t ${CI_REGISTRY_IMAGE}:beta"
+        fi
+      fi
+
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --build-arg VERSION="${VERSION}" \
+        --build-arg BUILD_DATE="${BUILD_DATE}" \
+        --build-arg COMMIT_ID="${COMMIT_ID}" \
+        --annotation "org.opencontainers.image.vendor=apimgr" \
+        --annotation "org.opencontainers.image.authors=apimgr" \
+        --annotation "org.opencontainers.image.title=${PROJECTNAME}" \
+        --annotation "org.opencontainers.image.description=${PROJECTNAME} - standard image (alpine)" \
+        --annotation "org.opencontainers.image.version=${VERSION}" \
+        --annotation "org.opencontainers.image.created=${BUILD_DATE}" \
+        --annotation "org.opencontainers.image.revision=${COMMIT_ID}" \
+        --annotation "org.opencontainers.image.url=${CI_PROJECT_URL}" \
+        --annotation "org.opencontainers.image.source=${CI_PROJECT_URL}" \
+        --annotation "org.opencontainers.image.licenses=MIT" \
+        --provenance=false \
+        --push \
+        -f docker/Dockerfile \
+        ${TAGS} .
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG

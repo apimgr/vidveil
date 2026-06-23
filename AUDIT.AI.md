@@ -16,14 +16,22 @@ Spec source of truth: AI.md (READ-ONLY). Audited PARTs: 1, 8, 13, 14, 16, 17-22,
   explicit alias for `isHttpTool()` in src/server/handler/response.go. FIXED: commit 8ec341b.
 
 - [x] FINAL CHECKPOINT: `make i18n-validate` target missing — Added target to Makefile; created
-  cmd/i18n-validate/main.go with full validation (key parity, empty values, interpolation var parity
-  across all 7 locale files vs en.json). cmd/i18n-validate/main_test.go covers validate(), loadLocale(),
-  equalVarSets(). FIXED: commit 8ec341b.
+  src/i18n-validate/main.go with full validation (key parity, empty values, interpolation var parity
+  across all 7 locale files vs en.json). src/i18n-validate/main_test.go covers validate(), loadLocale(),
+  equalVarSets(). Initially placed in cmd/ (spec violation — FINAL CHECKPOINT forbids cmd/ dirs);
+  relocated to src/i18n-validate/; Makefile updated. FIXED: commit 8ec341b + relocation commit.
 
 - [x] PART 16 (SEO/Branding): SEO meta tags, OpenGraph, Twitter Card, site verification tags
   (Google/Bing/Yandex/Baidu/Pinterest/Facebook) missing from head.tmpl — Added to
   src/server/template/partial/public/head.tmpl; backed by SEOConfig/BrandingConfig structs in
   src/config/config.go. FIXED: commit 8ec341b.
+
+- [x] PART 16 (PWA Icons): manifest.json only listed 2 icon sizes (192, 512); spec requires 10+ sizes
+  (72, 96, 128, 144, 152, 192, 384, 512, maskable-192, maskable-512). Generated all missing icons from
+  the existing 512px source; also added favicon-16, favicon-32, badge-72, shortcut-dashboard, splash
+  screens, and screenshots. Updated manifest.json with shortcuts + screenshots sections. Added iOS
+  PWA meta tags (apple-mobile-web-app-capable, status-bar-style, title, startup-image links) to head.tmpl.
+  Apple-touch-icon updated from icon-192.png → icon-180.png per spec. FIXED: see current commit.
 
 - [x] PART 20 (Metrics): `/metrics` is now wired to `promhttp.Handler()` from the default Prometheus registry.
   All promauto-registered labeled metrics are served: HTTP request/latency/size metrics via

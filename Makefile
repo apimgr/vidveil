@@ -211,14 +211,14 @@ dev:
 
 # =============================================================================
 # I18N-VALIDATE — Validate all locale JSON files against en.json key set
-# Runs cmd/i18n-validate/main.go inside casjaysdev/go:latest container.
+# Runs src/i18n-validate/main.go inside casjaysdev/go:latest container.
 # Fails if any locale is missing keys, has extra keys, has empty values, or
 # has mismatched interpolation variables compared to en.json.
 # =============================================================================
 i18n-validate:
 	@echo "Validating i18n locale files..."
 	@mkdir -p $(GO_CACHE) $(GO_BUILD)
-	@$(GO_DOCKER) go run ./cmd/i18n-validate/main.go
+	@$(GO_DOCKER) go run ./src/i18n-validate/main.go
 	@echo "i18n validation complete ✓"
 
 # =============================================================================

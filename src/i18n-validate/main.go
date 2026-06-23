@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // i18n-validate: validates all locale JSON files against the canonical en.json.
-// Run via: go run ./cmd/i18n-validate/main.go
+// Run via: go run ./src/i18n-validate/main.go
 // Or via: make i18n-validate
 //
 // Checks performed per AI.md FINAL CHECKPOINT:

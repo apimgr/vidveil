@@ -671,6 +671,90 @@ func TestSecChUaPlatform(t *testing.T) {
 	}
 }
 
+// TestValidateSEOVerification_ValidCodes verifies that correct verification codes pass validation.
+func TestValidateSEOVerification_ValidCodes(t *testing.T) {
+	v := SEOVerificationConfig{
+		Google:    "abc123_-XYZ",
+		Bing:      "ABCDEF0123456789",
+		Yandex:    "abcdef01234567890",
+		Baidu:     "abc123XYZ",
+		Pinterest: "abcdef0123456789",
+		Facebook:  "abc123",
+	}
+	bad := validateSEOVerification(v)
+	if len(bad) != 0 {
+		t.Errorf("validateSEOVerification() with valid codes returned errors: %v", bad)
+	}
+}
+
+// TestValidateSEOVerification_InvalidCodes verifies that malformed codes are flagged.
+func TestValidateSEOVerification_InvalidCodes(t *testing.T) {
+	v := SEOVerificationConfig{
+		// Bing must be uppercase hex; lowercase is invalid
+		Bing: "abcdef",
+		// Yandex must be lowercase hex; uppercase is invalid
+		Yandex: "ABCDEF",
+	}
+	bad := validateSEOVerification(v)
+	if len(bad) != 2 {
+		t.Errorf("validateSEOVerification() expected 2 bad fields, got %d: %v", len(bad), bad)
+	}
+}
+
+// TestValidateSEOVerification_EmptyCodes verifies that empty codes are skipped (no error).
+func TestValidateSEOVerification_EmptyCodes(t *testing.T) {
+	v := SEOVerificationConfig{}
+	bad := validateSEOVerification(v)
+	if len(bad) != 0 {
+		t.Errorf("validateSEOVerification() with empty config returned errors: %v", bad)
+	}
+}
+
+// TestValidateSEOVerification_CustomTag verifies custom tag validation.
+func TestValidateSEOVerification_CustomTag(t *testing.T) {
+	v := SEOVerificationConfig{
+		Custom: []SEOCustomTag{
+			{Name: "my-tag", Content: "valid-content"},
+		},
+	}
+	bad := validateSEOVerification(v)
+	if len(bad) != 0 {
+		t.Errorf("validateSEOVerification() with valid custom tag returned errors: %v", bad)
+	}
+
+	v2 := SEOVerificationConfig{
+		Custom: []SEOCustomTag{
+			// Missing both name and property is invalid
+			{Content: "some-content"},
+		},
+	}
+	bad2 := validateSEOVerification(v2)
+	if len(bad2) == 0 {
+		t.Error("validateSEOVerification() with empty name/property should return errors")
+	}
+}
+
+// TestSEOVerifyPattern tests the pattern-matching helper.
+func TestSEOVerifyPattern(t *testing.T) {
+	tests := []struct {
+		pattern string
+		value   string
+		want    bool
+	}{
+		{`^[a-z0-9]+$`, "abc123", true},
+		{`^[a-z0-9]+$`, "ABC123", false},
+		{`^[a-zA-Z0-9_-]{1,43}$`, "Valid_Code-123", true},
+		{`^[A-F0-9]{1,32}$`, "DEADBEEF", true},
+		{`^[A-F0-9]{1,32}$`, "deadbeef", false},
+	}
+	for _, tc := range tests {
+		got := seoVerifyPattern(tc.pattern, tc.value)
+		if got != tc.want {
+			t.Errorf("seoVerifyPattern(%q, %q) = %v, want %v", tc.pattern, tc.value, got, tc.want)
+		}
+	}
+}
+
 // TestIsChromiumBased verifies that only Firefox is not Chromium-based.
 func TestIsChromiumBased(t *testing.T) {
 	firefox := UserAgentConfig{Browser: "firefox"}

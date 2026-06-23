@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -127,6 +128,9 @@ type ServerConfig struct {
 	// Healthz (PART 13) - Optional root-level alias for /server/healthz
 	// Canonical route is /server/healthz; root /healthz is opt-in
 	Healthz HealthzConfig `yaml:"healthz"`
+
+	// SEO holds SEO and social metadata settings per AI.md PART 16
+	SEO SEOConfig `yaml:"seo"`
 }
 
 // HealthzConfig holds health-check route configuration per AI.md PART 13
@@ -613,6 +617,49 @@ type RobotsConfig struct {
 type WebSecurityConfig struct {
 	Contact string `yaml:"contact"`
 	Expires string `yaml:"expires"`
+	// PGPKeyURL is the URL of the published PGP public key (set when a keypair is generated).
+	// When non-empty, an Encryption: line is added to security.txt.
+	PGPKeyURL string `yaml:"pgp_key_url"`
+}
+
+// SEOCustomTag holds a custom site verification meta tag per AI.md PART 16
+type SEOCustomTag struct {
+	Name     string `yaml:"name"`
+	Property string `yaml:"property"`
+	Content  string `yaml:"content"`
+}
+
+// SEOVerificationConfig holds search engine verification codes per AI.md PART 16
+// All codes are validated before rendering (empty = skip, invalid = error logged, not rendered)
+type SEOVerificationConfig struct {
+	// Google: alphanumeric+hyphen+underscore, max 43 chars
+	Google string `yaml:"google"`
+	// Bing: uppercase hex, max 32 chars
+	Bing string `yaml:"bing"`
+	// Yandex: lowercase hex, max 32 chars
+	Yandex string `yaml:"yandex"`
+	// Baidu: alphanumeric, max 32 chars
+	Baidu string `yaml:"baidu"`
+	// Pinterest: lowercase hex, max 32 chars
+	Pinterest string `yaml:"pinterest"`
+	// Facebook: lowercase alphanumeric, max 64 chars
+	Facebook string `yaml:"facebook"`
+	// Custom: additional verification tags (validated before rendering)
+	Custom []SEOCustomTag `yaml:"custom"`
+}
+
+// SEOConfig holds SEO/social metadata per AI.md PART 16
+type SEOConfig struct {
+	// Keywords for <meta name="keywords"> (if non-empty)
+	Keywords []string `yaml:"keywords"`
+	// Author for <meta name="author"> (if non-empty)
+	Author string `yaml:"author"`
+	// OGImage is the OpenGraph/Twitter card image URL
+	OGImage string `yaml:"og_image"`
+	// TwitterHandle is the @handle for twitter:site card
+	TwitterHandle string `yaml:"twitter_handle"`
+	// Verification holds search engine verification codes
+	Verification SEOVerificationConfig `yaml:"verification"`
 }
 
 // CSRFConfig holds CSRF settings
@@ -1707,3 +1754,50 @@ func (c *AppConfig) GetPublicURL() string {
 	return fmt.Sprintf("%s://%s:%s", scheme, host, port)
 }
 
+// validateSEOVerification validates SEO verification codes per AI.md PART 16.
+// Returns a list of fields with invalid values; empty = all OK.
+// Invalid codes are logged but NOT rejected (server continues with them skipped).
+func validateSEOVerification(v SEOVerificationConfig) []string {
+	var bad []string
+	if v.Google != "" && !seoVerifyPattern(`^[a-zA-Z0-9_-]{1,43}$`, v.Google) {
+		bad = append(bad, "seo.verification.google")
+	}
+	if v.Bing != "" && !seoVerifyPattern(`^[A-F0-9]{1,32}$`, v.Bing) {
+		bad = append(bad, "seo.verification.bing")
+	}
+	if v.Yandex != "" && !seoVerifyPattern(`^[a-f0-9]{1,32}$`, v.Yandex) {
+		bad = append(bad, "seo.verification.yandex")
+	}
+	if v.Baidu != "" && !seoVerifyPattern(`^[a-zA-Z0-9]{1,32}$`, v.Baidu) {
+		bad = append(bad, "seo.verification.baidu")
+	}
+	if v.Pinterest != "" && !seoVerifyPattern(`^[a-f0-9]{1,32}$`, v.Pinterest) {
+		bad = append(bad, "seo.verification.pinterest")
+	}
+	if v.Facebook != "" && !seoVerifyPattern(`^[a-z0-9]{1,64}$`, v.Facebook) {
+		bad = append(bad, "seo.verification.facebook")
+	}
+	for i, ct := range v.Custom {
+		key := fmt.Sprintf("seo.verification.custom[%d]", i)
+		if ct.Name == "" && ct.Property == "" {
+			bad = append(bad, key+".name_or_property")
+			continue
+		}
+		nameOrProp := ct.Name
+		if nameOrProp == "" {
+			nameOrProp = ct.Property
+		}
+		if !seoVerifyPattern(`^[a-zA-Z0-9_:-]{1,64}$`, nameOrProp) {
+			bad = append(bad, key+".name_or_property")
+		}
+		if ct.Content == "" || len(ct.Content) > 256 {
+			bad = append(bad, key+".content")
+		}
+	}
+	return bad
+}
+
+func seoVerifyPattern(pattern, value string) bool {
+	matched, err := regexp.MatchString(pattern, value)
+	return err == nil && matched
+}

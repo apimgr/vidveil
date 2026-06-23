@@ -3,8 +3,52 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#282a36">
-<meta name="description" content="Privacy-focused video search engine">
+{{- if .BrandingDescription}}<meta name="description" content="{{.BrandingDescription}}">
+{{- else}}<meta name="description" content="Privacy-focused video search engine">
+{{- end}}
+{{- if .SEOKeywords}}<meta name="keywords" content="{{.SEOKeywords}}">
+{{- end}}
+{{- if .SEOAuthor}}<meta name="author" content="{{.SEOAuthor}}">
+{{- end}}
 <title>{{.Title}}</title>
+
+<!-- OpenGraph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{.Title}}">
+{{- if .BrandingDescription}}
+<meta property="og:description" content="{{.BrandingDescription}}">
+{{- else}}
+<meta property="og:description" content="Privacy-focused video search engine">
+{{- end}}
+{{- if .SEOOGImage}}<meta property="og:image" content="{{.SEOOGImage}}">{{- end}}
+{{- if .AppURL}}<meta property="og:url" content="{{.AppURL}}">{{- end}}
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{.Title}}">
+{{- if .BrandingDescription}}
+<meta name="twitter:description" content="{{.BrandingDescription}}">
+{{- else}}
+<meta name="twitter:description" content="Privacy-focused video search engine">
+{{- end}}
+{{- if .SEOOGImage}}<meta name="twitter:image" content="{{.SEOOGImage}}">{{- end}}
+{{- if .SEOTwitterHandle}}<meta name="twitter:site" content="{{.SEOTwitterHandle}}">{{- end}}
+
+{{- if .SEOVerification}}
+{{- with .SEOVerification}}
+{{- if .Google}}<meta name="google-site-verification" content="{{.Google}}">{{- end}}
+{{- if .Bing}}<meta name="msvalidate.01" content="{{.Bing}}">{{- end}}
+{{- if .Yandex}}<meta name="yandex-verification" content="{{.Yandex}}">{{- end}}
+{{- if .Baidu}}<meta name="baidu-site-verification" content="{{.Baidu}}">{{- end}}
+{{- if .Pinterest}}<meta name="p:domain_verify" content="{{.Pinterest}}">{{- end}}
+{{- if .Facebook}}<meta property="fb:domain_verification" content="{{.Facebook}}">{{- end}}
+{{- range .Custom}}
+{{- if .Name}}<meta name="{{.Name}}" content="{{.Content}}">
+{{- else if .Property}}<meta property="{{.Property}}" content="{{.Content}}">{{- end}}
+{{- end}}
+{{- end}}
+{{- end}}
+
 <link rel="stylesheet" href="/static/css/common.css?v={{.Version}}">
 <link rel="stylesheet" href="/static/css/components.css?v={{.Version}}">
 <link rel="stylesheet" href="/static/css/public.css?v={{.Version}}">

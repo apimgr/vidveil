@@ -280,6 +280,13 @@ func isHttpTool(r *http.Request) bool {
 		(len(ual) >= 6 && ual[:6] == "httpie")
 }
 
+// isNonInteractiveClient returns true for non-interactive HTTP clients (curl, wget, httpie,
+// empty UA). It is an alias for isHttpTool — required as its own named function per AI.md
+// FINAL CHECKPOINT.
+func isNonInteractiveClient(r *http.Request) bool {
+	return isHttpTool(r)
+}
+
 // renderSimpleHTML creates basic HTML for HTTP tools (to be converted to text)
 func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{}) string {
 	html := "<html><body>"

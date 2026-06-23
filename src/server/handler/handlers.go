@@ -1517,14 +1517,18 @@ func (h *SearchHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
 
 	expires := h.appConfig.Web.Security.Expires
 	if expires == "" {
-		// Default: 1 year from now
 		expires = time.Now().AddDate(1, 0, 0).Format(time.RFC3339)
 	}
 
-	w.Write([]byte(fmt.Sprintf(`Contact: %s
-Expires: %s
-Preferred-Languages: en
-`, contact, expires)))
+	body := fmt.Sprintf("Contact: %s\nExpires: %s\nPreferred-Languages: en\n",
+		contact, expires)
+
+	// Add Encryption field when PGP key is published (AI.md PART 11)
+	if h.appConfig.Web.Security.PGPKeyURL != "" {
+		body += fmt.Sprintf("Encryption: %s\n", h.appConfig.Web.Security.PGPKeyURL)
+	}
+
+	w.Write([]byte(body))
 }
 
 // PGPKeyAsc serves /.well-known/pgp-key.asc per AI.md FINAL CHECKPOINT
@@ -2530,6 +2534,37 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 	// Inject version for cache busting in all templates
 	if data["Version"] == nil {
 		data["Version"] = version.GetVersion()
+	}
+
+	// Inject SEO and branding data per AI.md PART 16
+	if data["SEOKeywords"] == nil {
+		data["SEOKeywords"] = strings.Join(h.appConfig.Server.SEO.Keywords, ", ")
+	}
+	if data["SEOAuthor"] == nil {
+		data["SEOAuthor"] = h.appConfig.Server.SEO.Author
+	}
+	if data["SEOOGImage"] == nil {
+		data["SEOOGImage"] = h.appConfig.Server.SEO.OGImage
+	}
+	if data["SEOTwitterHandle"] == nil {
+		data["SEOTwitterHandle"] = h.appConfig.Server.SEO.TwitterHandle
+	}
+	if data["SEOVerification"] == nil {
+		data["SEOVerification"] = h.appConfig.Server.SEO.Verification
+	}
+	if data["BrandingDescription"] == nil {
+		data["BrandingDescription"] = h.appConfig.Server.Branding.Description
+	}
+	if data["BrandingTagline"] == nil {
+		data["BrandingTagline"] = h.appConfig.Server.Branding.Tagline
+	}
+	if data["AppURL"] == nil {
+		// Build the canonical app URL from config for og:url
+		scheme := "https"
+		if !h.appConfig.Server.SSL.Enabled {
+			scheme = "http"
+		}
+		data["AppURL"] = scheme + "://" + h.appConfig.Server.FQDN
 	}
 
 	// Create base template with FuncMap

@@ -63,7 +63,7 @@ _GO_OPTS = docker run --rm \
 # Standard Go Docker command (per AI.md PART 25 — includes image for simple go commands)
 GO_DOCKER = $(_GO_OPTS) casjaysdev/go:latest
 
-.PHONY: build local release docker test dev clean
+.PHONY: build local release docker test dev clean i18n-validate
 
 # =============================================================================
 # BUILD — Compile all 8 platform binaries via Docker (AI.md PART 25)
@@ -208,6 +208,18 @@ dev:
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
 	fi && \
 	echo "Test:  docker run --rm -it --name $(PROJECTNAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
+
+# =============================================================================
+# I18N-VALIDATE — Validate all locale JSON files against en.json key set
+# Runs cmd/i18n-validate/main.go inside casjaysdev/go:latest container.
+# Fails if any locale is missing keys, has extra keys, has empty values, or
+# has mismatched interpolation variables compared to en.json.
+# =============================================================================
+i18n-validate:
+	@echo "Validating i18n locale files..."
+	@mkdir -p $(GO_CACHE) $(GO_BUILD)
+	@$(GO_DOCKER) go run ./cmd/i18n-validate/main.go
+	@echo "i18n validation complete ✓"
 
 # =============================================================================
 # CLEAN — Remove build artifacts

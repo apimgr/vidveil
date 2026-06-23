@@ -1,0 +1,3 @@
+FROM casjaysdev/go:latest
+
+RUN go install github.com/google/go-licenses@latest

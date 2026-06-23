@@ -224,9 +224,9 @@ var (
 	)
 )
 
-// Init initialises application-level metric values and starts the uptime updater.
+// InitMetricsAppInfo initialises application-level metric values and starts the uptime updater.
 // Call once from main after build variables are resolved.
-func Init(ver, commit, buildDate, goVer string) {
+func InitMetricsAppInfo(ver, commit, buildDate, goVer string) {
 	AppInfo.WithLabelValues(ver, commit, buildDate, goVer).Set(1)
 	start := time.Now()
 	AppStartTimestamp.Set(float64(start.Unix()))

@@ -3,6 +3,7 @@
 package ratelimit
 
 import (
+	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
@@ -319,8 +320,16 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 			// Prometheus rate-limit metrics per AI.md PART 20 (REQUIRED)
 			svcmetrics.RateLimitHitsTotal.WithLabelValues("global", ip).Inc()
 			svcmetrics.RateLimitBlockedTotal.WithLabelValues(ip).Inc()
-			w.Header().Set("Retry-After", "60")
-			http.Error(w, "Too many requests. Please try again later.", http.StatusTooManyRequests)
+			retryAfter := int(l.window.Seconds())
+			w.Header().Set("Retry-After", itoa(retryAfter))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			body, _ := json.Marshal(map[string]interface{}{
+				"ok":      false,
+				"error":   "RATE_LIMITED",
+				"message": "Too many requests, retry after " + itoa(retryAfter) + " seconds",
+			})
+			w.Write(append(body, '\n'))
 			return
 		}
 

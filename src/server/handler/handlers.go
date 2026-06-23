@@ -1527,6 +1527,19 @@ Preferred-Languages: en
 `, contact, expires)))
 }
 
+// PGPKeyAsc serves /.well-known/pgp-key.asc per AI.md FINAL CHECKPOINT
+// Returns the security-report PGP public key when present; 404 otherwise.
+func (h *SearchHandler) PGPKeyAsc(w http.ResponseWriter, r *http.Request) {
+	pgpPath := filepath.Join(h.dataDir, "security", "pgp-key.asc")
+	data, err := os.ReadFile(pgpPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pgp-keys")
+	w.Write(data)
+}
+
 // HumansTxt returns humans.txt per humanstxt.org standard (PART 16)
 func (h *SearchHandler) HumansTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

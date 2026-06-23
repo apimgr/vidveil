@@ -55,7 +55,7 @@ func init() {
 	version.BuildTime = BuildDate
 	version.OfficialSite = OfficialSite
 	// Initialise Prometheus application metrics (PART 20)
-	svcmetrics.Init(Version, CommitID, BuildDate, runtime.Version())
+	svcmetrics.InitMetricsAppInfo(Version, CommitID, BuildDate, runtime.Version())
 }
 
 func main() {

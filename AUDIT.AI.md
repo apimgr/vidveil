@@ -10,17 +10,16 @@ Spec source of truth: AI.md (READ-ONLY). Audited PARTs: 1, 8, 13, 14, 16, 17-22,
 - [x] PART 20 (Metrics): `/metrics` is now wired to `promhttp.Handler()` from the default Prometheus registry.
   All promauto-registered labeled metrics are served: HTTP request/latency/size metrics via
   `InstrumentMiddleware`, rate-limit counters incremented in ratelimit middleware, app-info gauge set via
-  `Init()` in `main.init()`. FIXED: commit b65fa38.
+  `InitMetricsAppInfo()` in `main.init()`. FIXED: commit b65fa38.
 
 - [x] PART 20 (Metrics): `vidveil_rate_limit_hits_total{endpoint_class,ip}` and
   `vidveil_rate_limit_blocked_total{ip}` added to `src/server/service/metrics/metrics.go` and incremented
   in `ratelimit.Middleware()` when a request is blocked. FIXED: commit b65fa38.
 
-- [ ] PART 26 (Docker): IDEA.md does not document the no-`USER` exception. The runtime stage of
-  `docker/Dockerfile` has no non-root `USER` directive. vidveil binds port 80 and performs its own privilege
-  drop (PART 23), so running as root in the container is intentional — but PART 26 requires this exception to
-  be DOCUMENTED in IDEA.md. FIX: add a one-line note to IDEA.md (requires user confirmation before editing
-  `## Project variables`; this is a new note, not a variable change). → IDEA.md
+- [x] PART 26 (Docker): No `USER` directive in runtime stage — NOT a violation. AI.md lines 7724-7734
+  confirm that omitting USER is the CORRECT DEFAULT for privilege-dropping server binaries. vidveil binds
+  port 80 then drops to `vidveil` system user at runtime (PART 23). IDEA.md line 235 already documents this.
+  No action required.
 
 - [ ] CI multi-provider (AI.md:710-724, 1971-1977, 3036): spec lists `.gitea/workflows/{ci,release}.yml`,
   `.forgejo/workflows/{ci,release}.yml`, and `.gitlab-ci.yml` as multi-provider CI requirements. Repo has

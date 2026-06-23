@@ -5,6 +5,8 @@
 package metrics
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -288,4 +290,66 @@ func TestRateLimitHitsTotalCanInc(t *testing.T) {
 
 func TestRateLimitBlockedTotalCanInc(t *testing.T) {
 	RateLimitBlockedTotal.WithLabelValues("127.0.0.1").Inc()
+}
+
+// ---- InitMetricsAppInfo ----
+
+func TestInitMetricsAppInfoNoPanic(t *testing.T) {
+	// Calling InitMetricsAppInfo must not panic. The goroutine it starts writes
+	// to the global gauge every 5 s; in tests the ticker fires at most once
+	// before the process exits, so no cleanup is needed.
+	InitMetricsAppInfo("1.0.0", "abc1234", "Mon Jan 02, 2006 at 15:04:05 UTC", "go1.24")
+}
+
+func TestInitMetricsAppInfoSetsAppInfo(t *testing.T) {
+	// Calling with distinct values must not panic and must register a time-series.
+	InitMetricsAppInfo("2.0.0", "def5678", "Tue Jan 03, 2006 at 15:04:05 UTC", "go1.24.1")
+}
+
+// ---- InstrumentMiddleware ----
+
+func TestInstrumentMiddlewarePassesThrough(t *testing.T) {
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := InstrumentMiddleware(inner)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if !called {
+		t.Error("InstrumentMiddleware did not call the inner handler")
+	}
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+}
+
+func TestInstrumentMiddlewareRecordsNon200(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	handler := InstrumentMiddleware(inner)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/missing", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", rr.Code)
+	}
+}
+
+func TestInstrumentMiddlewareWithRequestBody(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("hello"))
+	})
+	handler := InstrumentMiddleware(inner)
+	body := []byte(`{"query":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/search", nil)
+	req.ContentLength = int64(len(body))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
 }

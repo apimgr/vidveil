@@ -469,6 +469,7 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/robots.txt", h.RobotsTxt)
 	s.router.Get("/sitemap.xml", h.SitemapXML)
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
+	s.router.Get("/.well-known/pgp-key.asc", h.PGPKeyAsc)
 	s.router.Get("/.well-known/change-password", handler.ChangePasswordRedirect(s.appConfig))
 	s.router.Get("/.well-known/vidveil.json", h.WellKnownVidVeil)
 	s.router.Get("/humans.txt", h.HumansTxt)

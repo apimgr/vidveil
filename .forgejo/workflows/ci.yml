@@ -91,7 +91,7 @@ jobs:
       - name: Secret scan with truffleHog
         uses: trufflesecurity/trufflehog@30d5bb91af1a771378349dbbb0c82129392acf70
         with:
-          base: ${{ forgejo.event.before || gitea.event.pull_request.base.sha }}
-          head: ${{ forgejo.event.after || gitea.event.pull_request.head.sha }}
+          base: ${{ forgejo.event.before || forgejo.event.pull_request.base.sha }}
+          head: ${{ forgejo.event.after || forgejo.event.pull_request.head.sha }}
           extra_args: --only-verified
         continue-on-error: true

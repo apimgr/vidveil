@@ -11,7 +11,7 @@ on:
 
 concurrency:
   group: daily-${{ forgejo.ref }}
-  cancel-in-progress: ${{ forgejo.ref == 'refs/heads/main' || gitea.ref == 'refs/heads/master' || gitea.ref == 'refs/heads/devel' || gitea.ref == 'refs/heads/dev' || gitea.ref == 'refs/heads/beta' }}
+  cancel-in-progress: ${{ forgejo.ref == 'refs/heads/main' || forgejo.ref == 'refs/heads/master' || forgejo.ref == 'refs/heads/devel' || forgejo.ref == 'refs/heads/dev' || forgejo.ref == 'refs/heads/beta' }}
 
 permissions:
   contents: write

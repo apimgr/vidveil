@@ -25,11 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: casjaysdev/go:latest
-    env:
-      CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: go vet ./...
+      - run: staticcheck ./...
 
   test:
     if: github.event_name != 'schedule'
@@ -39,11 +38,11 @@ jobs:
     env:
       CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - name: Run tests with coverage
         run: |
-          mkdir -p "/tmp/${{ env.PROJECTORG }}"
-          COVDIR=$(mktemp -d "/tmp/${{ env.PROJECTORG }}/${{ env.PROJECTNAME }}-XXXXXX")
+          mkdir -p "/tmp/${{ github.repository_owner }}"
+          COVDIR=$(mktemp -d "/tmp/${{ github.repository_owner }}/$(basename "${{ github.repository }}")-XXXXXX")
           echo "COVDIR=$COVDIR" >> "$GITHUB_ENV"
           go test -cover -coverprofile="$COVDIR/coverage.out" ./...
       - name: Enforce coverage threshold
@@ -54,44 +53,123 @@ jobs:
             echo "::error::coverage $PCT% < threshold $THRESHOLD%"
             exit 1
           fi
-          echo "Coverage: $PCT% (threshold: $THRESHOLD%) ✓"
+          echo "Coverage: $PCT% (threshold: $THRESHOLD%) OK"
+      - name: Upload coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-report
+          path: ${{ env.COVDIR }}/coverage.out
+          retention-days: 7
 
-  build:
-    if: github.event_name != 'schedule'
-    needs: [test]
+  secret-scan:
     runs-on: ubuntu-latest
-    container:
-      image: casjaysdev/go:latest
-    env:
-      CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      - run: go build -buildvcs=false ./...
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Secret scan with truffleHog
+        uses: trufflesecurity/trufflehog@30d5bb91af1a771378349dbbb0c82129392acf70  # v3.95.6
+        with:
+          base: ${{ github.event.before || github.event.pull_request.base.sha }}
+          head: ${{ github.event.after || github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+        continue-on-error: true
+
+  workflow-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Check all actions are SHA-pinned
+        run: |
+          fail=0
+          for dir in .github/workflows .forgejo/workflows .gitea/workflows; do
+            [ -d "$dir" ] || continue
+            while IFS= read -r file; do
+              while IFS= read -r line; do
+                if echo "$line" | grep -qE '^\s+uses:\s+\S+/\S+@'; then
+                  ref=$(echo "$line" | grep -oE '@\S+' | head -1 | sed 's/^@//')
+                  if ! echo "$ref" | grep -qE '^[0-9a-f]{40}$'; then
+                    echo "::error file=${file}::Unpinned action: ${line}"
+                    fail=1
+                  fi
+                fi
+              done < "$file"
+            done < <(find "$dir" -name '*.yml' -o -name '*.yaml')
+          done
+          exit $fail
 
   vuln-check:
     runs-on: ubuntu-latest
     container:
       image: casjaysdev/go:latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      - name: Run vulnerability check
-        run: |
-          if command -v govulncheck >/dev/null 2>&1; then
-            govulncheck ./...
-          else
-            echo "govulncheck not available in this image, skipping"
-          fi
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - run: govulncheck ./...
 
-  secret-scan:
+  image-scan:
+    if: hashFiles('docker/Dockerfile') != ''
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Scan Dockerfile with Trivy
+        run: |
+          docker run --rm \
+            -v "$PWD:/src" \
+            aquasecurity/trivy:0.70.0 config \
+            --exit-code 1 --severity CRITICAL,HIGH \
+            /src/docker/Dockerfile
+
+  build:
+    if: github.event_name != 'schedule'
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - run: go build -buildvcs=false ./...
+
+  coverage:
+    if: github.event_name != 'schedule'
+    needs: [test]
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
-          fetch-depth: 0
-      - name: Secret scan with truffleHog
-        uses: trufflesecurity/trufflehog@30d5bb91af1a771378349dbbb0c82129392acf70
+          name: coverage-report
+          path: coverage/
+      - name: Display coverage summary
+        run: go tool cover -func=coverage/coverage.out
+
+  upload-artifacts:
+    if: github.event_name != 'schedule'
+    needs: [build]
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Build server binary
+        run: go build -buildvcs=false -o ${{ env.PROJECTNAME }}-linux-amd64 ./src
+      - name: Build CLI binary
+        if: hashFiles('src/client/') != ''
+        run: go build -buildvcs=false -o ${{ env.PROJECTNAME }}-cli-linux-amd64 ./src/client
+      - name: Upload server artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          base: ${{ github.event.before || github.event.pull_request.base.sha }}
-          head: ${{ github.event.after || github.event.pull_request.head.sha }}
-          extra_args: --only-verified
-        continue-on-error: true
+          name: ${{ env.PROJECTNAME }}-linux-amd64
+          path: ${{ env.PROJECTNAME }}-linux-amd64
+          retention-days: 7
+      - name: Upload CLI artifact
+        if: hashFiles('src/client/') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: ${{ env.PROJECTNAME }}-cli-linux-amd64
+          path: ${{ env.PROJECTNAME }}-cli-linux-amd64
+          retention-days: 7

@@ -3,7 +3,6 @@ package blocklist
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -456,9 +455,7 @@ func TestLoadBlocklist(t *testing.T) {
 
 	t.Run("mixed IP file with CIDRs comments and blanks", func(t *testing.T) {
 		svc := newTestService(t)
-		content := fmt.Sprintf(
-			"# blocklist header\n\n9.9.9.9\n192.168.0.0/16 # LAN\n\n8.8.8.8\n# end\n",
-		)
+		content := "# blocklist header\n\n9.9.9.9\n192.168.0.0/16 # LAN\n\n8.8.8.8\n# end\n"
 		f := writeTempFile(t, content)
 
 		if err := svc.loadBlocklist(f, "ip"); err != nil {

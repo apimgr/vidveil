@@ -313,7 +313,7 @@ func TestListBangs(t *testing.T) {
 func TestAutocomplete_Empty(t *testing.T) {
 	suggestions := Autocomplete("")
 
-	if suggestions != nil && len(suggestions) != 0 {
+	if len(suggestions) != 0 {
 		t.Errorf("Autocomplete('') = %v, want nil or empty", suggestions)
 	}
 }

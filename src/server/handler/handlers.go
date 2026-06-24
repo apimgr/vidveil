@@ -45,6 +45,13 @@ func SetTemplatesFS(fsys fs.FS) {
 	templatesFS = fsys
 }
 
+// contextKey is an unexported type for context keys in the handler package.
+// Using a custom type prevents collisions with string keys from other packages (SA1029).
+type contextKey string
+
+// OriginalPathKey is the context key for storing the original request path before extension stripping.
+const OriginalPathKey contextKey = "vidveil.originalPath"
+
 const (
 	ageVerifyCookieName = "age_verified"
 	ageVerifyCookieDays = 30
@@ -942,7 +949,7 @@ func detectResponseFormat(r *http.Request) string {
 	// 0. Check URL path extension FIRST per AI.md PART 14
 	// Use original path from context if available (set by extensionStripMiddleware)
 	path := r.URL.Path
-	if origPath, ok := r.Context().Value("vidveil.originalPath").(string); ok {
+	if origPath, ok := r.Context().Value(OriginalPathKey).(string); ok {
 		path = origPath
 	}
 	if strings.HasSuffix(path, ".json") {

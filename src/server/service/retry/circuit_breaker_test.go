@@ -295,7 +295,7 @@ func TestCircuitBreakerRegistry(t *testing.T) {
 	// Get creates a new breaker
 	cb1 := registry.Get("engine1")
 	if cb1 == nil {
-		t.Error("Expected circuit breaker, got nil")
+		t.Fatal("Expected circuit breaker, got nil")
 	}
 
 	if cb1.name != "engine1" {

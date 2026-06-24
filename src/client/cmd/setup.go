@@ -43,7 +43,6 @@ type SetupWizardModel struct {
 	state             SetupWizardState
 	serverURL         string
 	apiToken          string
-	cursorPosition    int
 	errorMessage      string
 	statusMessage     string
 	connectionSuccess bool

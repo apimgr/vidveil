@@ -292,10 +292,6 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(extensionStripMiddleware)
 }
 
-// OriginalPathKey is the context key for storing the original request path
-// Uses string type for cross-package compatibility
-const OriginalPathKey = "vidveil.originalPath"
-
 // onionLocationMiddleware adds the Onion-Location header on clearnet HTML responses
 // when a Tor hidden service is running. This allows Tor Browser to auto-redirect
 // to the .onion address. Per Tor Project spec:
@@ -403,7 +399,7 @@ func extensionStripMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Store original path in context for detectResponseFormat
-		ctx := context.WithValue(r.Context(), OriginalPathKey, path)
+		ctx := context.WithValue(r.Context(), handler.OriginalPathKey, path)
 		r = r.WithContext(ctx)
 
 		// Strip known format extensions for routing

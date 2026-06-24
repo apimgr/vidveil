@@ -11,7 +11,7 @@ const WindowsServiceName = "vidveil"
 
 // RunAsWindowsService is a no-op on non-Windows platforms
 func RunAsWindowsService(runFunc func() error) error {
-	return errors.New("Windows service not supported on this platform")
+	return errors.New("windows service not supported on this platform")
 }
 
 // IsWindowsService returns false on non-Windows platforms

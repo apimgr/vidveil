@@ -9,14 +9,6 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// newEnabledEmailService returns an EmailService with Email.Enabled=true.
-func newEnabledEmailService(t *testing.T) *EmailService {
-	t.Helper()
-	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	return NewEmailService(appCfg)
-}
-
 // ── sendEmail — "no SMTP host configured" early-return ───────────────────────
 
 func TestSendEmail_NoHostNoAutodetect_ReturnsError(t *testing.T) {

@@ -861,7 +861,7 @@ func TestCalculateRelevanceScore_ViewsBonus(t *testing.T) {
 
 func TestSortAndFilterByRelevance_Empty(t *testing.T) {
 	result := sortAndFilterByRelevance(nil, "teen", 0)
-	if result != nil && len(result) != 0 {
+	if len(result) != 0 {
 		t.Errorf("sortAndFilterByRelevance(nil) = %v, want nil/empty", result)
 	}
 }

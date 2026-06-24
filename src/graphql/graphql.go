@@ -3,6 +3,7 @@
 package graphql
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -182,7 +183,7 @@ func (h *Handler) handleSearch(req Request) Response {
 		}
 	}
 
-	results := h.engineMgr.Search(nil, q, page, nil)
+	results := h.engineMgr.Search(context.TODO(), q, page, nil)
 
 	// Convert results to GraphQL format
 	gqlResults := make([]map[string]interface{}, len(results.Data.Results))

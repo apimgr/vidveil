@@ -186,7 +186,6 @@ var tuiStyles TUIStyles
 // Per AI.md PART 1: Type names MUST be specific - "model" is ambiguous
 type TUIModel struct {
 	searchQuery       string
-	cursorPosition    int
 	searchResults     []TUISearchResult
 	selectedIndex     int
 	lastError         error

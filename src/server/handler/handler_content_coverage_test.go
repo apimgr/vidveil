@@ -634,7 +634,7 @@ func TestGetProxyClient_NilTorSvc_ReturnsDirect(t *testing.T) {
 	h := &SearchHandler{appConfig: createTestConfig()}
 	client := h.getProxyClient(5 * time.Second)
 	if client == nil {
-		t.Error("getProxyClient nil torSvc: returned nil client")
+		t.Fatal("getProxyClient nil torSvc: returned nil client")
 	}
 	if client.Timeout != 5*time.Second {
 		t.Errorf("getProxyClient nil torSvc: timeout = %v, want 5s", client.Timeout)
@@ -928,9 +928,6 @@ func TestGetTorStatus_NoStatusInInfo_NotRunning_ReturnsDisabled(t *testing.T) {
 // ── getTorHostname — covers lines 305-308 ────────────────────────────────────
 
 func TestGetTorHostname_WithHostname_ReturnsIt(t *testing.T) {
-	type torCheckerWithHostname struct {
-		torCheckerNoStatus
-	}
 	h := &SearchHandler{
 		appConfig: createTestConfig(),
 		torSvc: &testTorChecker{enabled: true, running: true},

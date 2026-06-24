@@ -17,6 +17,7 @@
 package ssl
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -241,7 +242,7 @@ func TestNeedsRenewalFalseForFreshCert(t *testing.T) {
 
 func TestRenewCertificateSSLDisabledReturnsNil(t *testing.T) {
 	m := newTestSSLManager(t)
-	if err := m.RenewCertificate(nil); err != nil {
+	if err := m.RenewCertificate(context.TODO()); err != nil {
 		t.Errorf("RenewCertificate with SSL disabled returned error: %v", err)
 	}
 }
@@ -252,7 +253,7 @@ func TestRenewCertificateFreshCertNoRenewal(t *testing.T) {
 		t.Fatalf("generateSelfSigned() error: %v", err)
 	}
 	// Fresh cert: NeedsRenewal returns false → RenewCertificate is a no-op.
-	if err := m.RenewCertificate(nil); err != nil {
+	if err := m.RenewCertificate(context.TODO()); err != nil {
 		t.Errorf("RenewCertificate with fresh cert returned error: %v", err)
 	}
 }
@@ -262,7 +263,7 @@ func TestRenewCertificateNoCertEmptyDomainRegenSelfSigned(t *testing.T) {
 	// No cert loaded → NeedsRenewal=true, FQDN="" → falls through to generateSelfSigned
 	m.appConfig.Server.SSL.LetsEncrypt.Enabled = false
 	m.appConfig.Server.FQDN = ""
-	if err := m.RenewCertificate(nil); err != nil {
+	if err := m.RenewCertificate(context.TODO()); err != nil {
 		t.Errorf("RenewCertificate (empty domain, no cert) error: %v", err)
 	}
 	m.mu.RLock()
@@ -278,7 +279,7 @@ func TestRenewCertificateNoCertInvalidDomainRegenSelfSigned(t *testing.T) {
 	m.appConfig.Server.SSL.LetsEncrypt.Enabled = false
 	// "localhost" is not a valid SSL host per config.IsValidSSLHost
 	m.appConfig.Server.FQDN = "localhost"
-	if err := m.RenewCertificate(nil); err != nil {
+	if err := m.RenewCertificate(context.TODO()); err != nil {
 		t.Errorf("RenewCertificate (invalid domain, no cert) error: %v", err)
 	}
 	m.mu.RLock()

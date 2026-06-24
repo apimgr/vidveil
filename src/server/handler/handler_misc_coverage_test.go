@@ -827,7 +827,7 @@ func TestAPIHealthCheck_WithTorNotRunning_CoversLine1087(t *testing.T) {
 
 func TestDetectResponseFormat_OriginalPathContext_JsonExt(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/search", nil)
-	ctx := context.WithValue(req.Context(), "vidveil.originalPath", "/api/v1/search.json")
+	ctx := context.WithValue(req.Context(), OriginalPathKey, "/api/v1/search.json")
 	req = req.WithContext(ctx)
 
 	format := detectResponseFormat(req)

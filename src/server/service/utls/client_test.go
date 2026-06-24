@@ -190,7 +190,9 @@ func TestUTLSClient_HTTPClient_NonNil(t *testing.T) {
 // the same pointer (no accidental reconstruction on each call).
 func TestUTLSClient_HTTPClient_SameInstance(t *testing.T) {
 	c := NewUTLSClient(10 * time.Second)
-	if c.HTTPClient() != c.HTTPClient() {
+	first := c.HTTPClient()
+	second := c.HTTPClient()
+	if first != second {
 		t.Error("HTTPClient() returned different pointers on successive calls")
 	}
 }

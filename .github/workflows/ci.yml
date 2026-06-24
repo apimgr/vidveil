@@ -115,7 +115,7 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD:/src" \
-            aquasecurity/trivy:0.70.0 config \
+            aquasec/trivy:0.70.0 config \
             --exit-code 1 --severity CRITICAL,HIGH \
             /src/docker/Dockerfile
 

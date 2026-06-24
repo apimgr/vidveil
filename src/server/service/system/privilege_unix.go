@@ -196,7 +196,7 @@ func HandleEscalation(action string) error {
 	if !CanEscalate() {
 		// User CANNOT escalate - don't ask, just inform
 		return fmt.Errorf("%s requires administrator privileges\n\n"+
-			"You do not have sudo/admin access. Contact your system administrator.", action)
+			"You do not have sudo/admin access. Contact your system administrator", action)
 	}
 
 	// User CAN escalate - ask and re-exec with elevated privileges

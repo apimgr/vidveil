@@ -136,7 +136,7 @@ func TestAutodiscover_ReturnsConfig(t *testing.T) {
 func TestAutodiscover_ServerError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/autodiscover", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "unavailable", 503)
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 	})
 	client, _ := newTestServer(t, mux)
 
@@ -204,7 +204,7 @@ func TestFetchURLResponseBytes_WithToken(t *testing.T) {
 	mux.HandleFunc("/secure", func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer tok-test" {
-			http.Error(w, "unauthorized", 401)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		w.Write([]byte(`"ok"`))
@@ -251,7 +251,7 @@ func TestGet_SendsAuthorizationHeader(t *testing.T) {
 	mux.HandleFunc("/api/v1/version", func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if auth == "" {
-			http.Error(w, "no auth", 401)
+			http.Error(w, "no auth", http.StatusUnauthorized)
 			return
 		}
 		resp := VersionResponse{Ok: true, Version: "1.0.0"}

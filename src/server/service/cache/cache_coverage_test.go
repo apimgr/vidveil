@@ -178,7 +178,7 @@ func TestValkeyCache_Open_Stats_ConnRefused_ContainsAddr(t *testing.T) {
 	if _, ok := stats["addr"]; !ok {
 		t.Log("Stats: 'addr' key absent (Options() returned nil or no addr)")
 	}
-	if typeVal, _ := stats["type"]; typeVal != "valkey" {
+	if typeVal := stats["type"]; typeVal != "valkey" {
 		t.Errorf("expected stats[type]=valkey, got %v", typeVal)
 	}
 }

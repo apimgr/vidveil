@@ -117,7 +117,7 @@ jobs:
             -v "$PWD:/src" \
             aquasec/trivy:0.70.0 config \
             --exit-code 1 --severity CRITICAL,HIGH \
-            --skip-check DS-0002 \
+            --ignorefile /src/.trivyignore \
             /src/docker/Dockerfile
 
   build:

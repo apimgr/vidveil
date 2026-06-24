@@ -1,0 +1,55 @@
+FROM casjaysdev/go:latest AS builder
+
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY src/ ./src/
+
+ARG VERSION=dev
+ARG COMMIT_ID=unknown
+ARG BUILD_DATE=unknown
+
+RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false -trimpath \
+    -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}'" \
+    -o vidveil ./src
+
+FROM debian:latest
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    tini \
+    valkey \
+    supervisor \
+    tor \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /config/valkey \
+             /data/db/valkey \
+             /run/valkey
+
+COPY docker/rootfs/ /
+
+COPY --from=builder /app/vidveil /usr/local/bin/
+RUN chmod +x /usr/local/bin/vidveil /usr/local/bin/entrypoint.sh
+
+ENV MODE=production \
+    PORT=80 \
+    DEBUG=false \
+    TZ=America/New_York \
+    DATABASE_DIR=/data/db/sqlite \
+    VALKEY_SOCKET=/run/valkey/valkey.sock
+
+EXPOSE 80
+
+STOPSIGNAL SIGRTMIN+3
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=90s --retries=3 \
+    CMD /usr/local/bin/vidveil --status || exit 1
+
+ENTRYPOINT ["tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh"]

@@ -36,13 +36,16 @@ cleanup() {
 trap cleanup SIGTERM SIGINT SIGQUIT
 
 # =============================================================================
-# Start services (add supervisord, etc. here if needed)
+# AIO mode: start supervisord when installed (manages valkey + tor + app)
+# Standard mode: fall through and start app binary directly
 # =============================================================================
-# Example: Start supervisord for multi-service containers
-# if [ -f /etc/supervisord.conf ]; then
-#     /usr/bin/supervisord -c /etc/supervisord.conf &
-#     PIDS+=($!)
-# fi
+if command -v supervisord >/dev/null 2>&1; then
+    log "AIO mode detected — starting supervisord..."
+    mkdir -p /data/db/valkey /run/valkey /data/log
+    chmod 755 /run/valkey /data/log
+    export TOR_ENABLED="${TOR_ENABLED:-false}"
+    exec /usr/bin/supervisord -c /etc/supervisor/conf.d/services.conf
+fi
 
 # =============================================================================
 # Log startup info

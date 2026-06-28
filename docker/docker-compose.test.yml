@@ -26,7 +26,7 @@ services:
       - ./volumes/config:/config
       - ./volumes/data:/data
     ports:
-      - '64581:80'
+      - '172.17.0.1:64581:80'
     healthcheck:
       test: /usr/local/bin/vidveil --status || exit 1
       interval: 10s

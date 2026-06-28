@@ -1354,7 +1354,10 @@ func findUnusedPort() int {
 
 func generateToken(length int) string {
 	bytes := make([]byte, length)
-	rand.Read(bytes)
+	// A CSPRNG failure must never silently produce a predictable token
+	if _, err := rand.Read(bytes); err != nil {
+		panic(fmt.Sprintf("config: failed to read from crypto/rand: %v", err))
+	}
 	return hex.EncodeToString(bytes)
 }
 

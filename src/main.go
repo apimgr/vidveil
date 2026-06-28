@@ -1085,8 +1085,21 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 
 	appPaths := config.GetAppPaths(configDir, dataDir)
 
+	// Derive the service name from the binary name so a renamed binary installs
+	// a matching service (AI.md PART 23/24 + binary-rules: os.Args[0] determines name).
+	appName := filepath.Base(os.Args[0])
+	if appName == "" {
+		appName = "vidveil"
+	}
+	if ext := filepath.Ext(appName); ext != "" {
+		appName = strings.TrimSuffix(appName, ext)
+	}
+	if strings.Contains(appName, "-") && !strings.HasPrefix(appName, "vidveil-") {
+		appName = "vidveil"
+	}
+
 	// Use system.NewServiceManager which handles user creation per AI.md PART 23
-	svc := system.NewServiceManager("vidveil", binaryPath, appPaths.Config, appPaths.Data)
+	svc := system.NewServiceManager(appName, binaryPath, appPaths.Config, appPaths.Data)
 
 	switch cmd {
 	case "start":

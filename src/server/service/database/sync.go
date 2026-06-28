@@ -6,11 +6,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
+
+// identifierPattern matches a safe SQL identifier (column name). Sync events
+// arrive over a pub/sub channel, so column keys must be validated as identifiers
+// before being interpolated into a statement — only the values are parameterized.
+var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// validIdentifier reports whether s is a safe SQL identifier.
+func validIdentifier(s string) bool {
+	return identifierPattern.MatchString(s)
+}
 
 // SyncEventType represents the type of sync event
 type SyncEventType string
@@ -98,7 +110,7 @@ func (sm *SyncManager) Start() error {
 	go func() {
 		if err := sm.channel.Subscribe(sm.ctx, sm.handleEvent); err != nil {
 			// Log error but don't stop
-			fmt.Printf("Sync subscription error: %v\n", err)
+			log.Printf("database sync: subscription error: %v", err)
 		}
 	}()
 
@@ -177,7 +189,7 @@ func (sm *SyncManager) handleEvent(event *SyncEvent) {
 
 	// Apply the change to local database
 	if err := sm.applyEvent(event); err != nil {
-		fmt.Printf("Failed to apply sync event: %v\n", err)
+		log.Printf("database sync: failed to apply event for table %q: %v", event.Table, err)
 	}
 }
 
@@ -207,6 +219,9 @@ func (sm *SyncManager) applyInsert(event *SyncEvent) error {
 
 	i := 1
 	for col, val := range event.Data {
+		if !validIdentifier(col) {
+			return fmt.Errorf("rejected sync insert: invalid column identifier %q", col)
+		}
 		columns = append(columns, col)
 		if sm.db.Driver() == DriverPostgres {
 			placeholders = append(placeholders, fmt.Sprintf("$%d", i))
@@ -237,6 +252,9 @@ func (sm *SyncManager) applyUpdate(event *SyncEvent) error {
 
 	i := 1
 	for col, val := range event.Data {
+		if !validIdentifier(col) {
+			return fmt.Errorf("rejected sync update: invalid column identifier %q", col)
+		}
 		if sm.db.Driver() == DriverPostgres {
 			sets = append(sets, fmt.Sprintf("%s = $%d", col, i))
 		} else {

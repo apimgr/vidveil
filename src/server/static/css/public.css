@@ -253,7 +253,7 @@
 }
 
 .favorite-btn.favorited {
-  color: #ff4081;
+  color: var(--color-favorite);
 }
 
 /* Download link styling */

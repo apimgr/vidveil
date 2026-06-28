@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -270,10 +271,48 @@ func (h *SearchHandler) getProxyClient(timeout time.Duration) *http.Client {
 		if timeout > 0 && timeout != 60*time.Second {
 			client.Timeout = timeout
 		}
+		// Block redirects that would escape to a private/internal target even over Tor
+		client.CheckRedirect = ssrfCheckRedirect
 		return client
 	}
-	// Direct connection
-	return &http.Client{Timeout: timeout}
+	// Direct connection with dial-time SSRF protection to close the
+	// DNS-rebinding TOCTOU window left open by the pre-flight host check.
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+			Control: func(_, address string, _ syscall.RawConn) error {
+				host, _, err := net.SplitHostPort(address)
+				if err != nil {
+					return err
+				}
+				if isPrivateIP(net.ParseIP(host)) {
+					return fmt.Errorf("dial to private address %q blocked", host)
+				}
+				return nil
+			},
+		}).DialContext,
+	}
+	return &http.Client{
+		Timeout:       timeout,
+		Transport:     transport,
+		CheckRedirect: ssrfCheckRedirect,
+	}
+}
+
+// ssrfCheckRedirect blocks proxy redirects that target a private/internal host
+// and caps the redirect chain length.
+func ssrfCheckRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 5 {
+		return fmt.Errorf("stopped after %d redirects", len(via))
+	}
+	if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+		return fmt.Errorf("redirect to unsupported scheme %q blocked", req.URL.Scheme)
+	}
+	if isPrivateHost(req.URL.Hostname()) {
+		return fmt.Errorf("redirect to private host %q blocked", req.URL.Hostname())
+	}
+	return nil
 }
 
 // GetSearchCache returns the search cache for sharing with admin handler
@@ -721,21 +760,29 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 	format := detectResponseFormat(r)
 
-	// For regular browsers: render the HTML shell immediately — JavaScript loads results
-	// via SSE (/api/v1/search). Do NOT block on a synchronous search here, as results
-	// are never rendered in search.tmpl — JS populates via EventSource.
+	// For regular browsers: JavaScript streams results into the page via SSE
+	// (/api/v1/search) as an enhancement. To keep core search working WITHOUT
+	// JavaScript (progressive enhancement, AI.md PART 16), also perform a
+	// synchronous search and render the results in a <noscript> fallback.
 	if format == "text/html" {
 		relatedSearches := engine.GetRelatedSearches(searchQuery, 8)
 		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
 		enginesParam := r.URL.Query().Get("engines")
+
+		results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames)
+		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
+		if h.metrics != nil {
+			h.metrics.IncrementSearches()
+		}
 
 		h.renderResponse(w, r, "search", map[string]interface{}{
 			"Title":           query + " - " + h.appConfig.Server.Branding.Title,
 			"Query":           query,
 			"SearchQuery":     searchQuery,
 			"ResultsJSON":     template.JS("[]"),
-			"EnginesUsed":     []string{},
-			"SearchTime":      time.Since(requestStart).Milliseconds(),
+			"Results":         results.Data.Results,
+			"EnginesUsed":     results.Data.EnginesUsed,
+			"SearchTime":      results.Data.SearchTimeMS,
 			"Theme":           h.getRequestTheme(r),
 			"HasBang":         parsed.HasBang,
 			"BangEngines":     parsed.Engines,
@@ -1046,8 +1093,14 @@ func detectResponseFormat(r *http.Request) string {
 // Returns "text" or "json" (raw strings, not MIME types)
 // Priority: .txt extension > Accept header > CLI detection > default JSON
 func getAPIResponseFormat(r *http.Request) string {
-	// 1. Check .txt extension FIRST (highest priority)
-	if strings.HasSuffix(r.URL.Path, ".txt") {
+	// 1. Check .txt extension FIRST (highest priority).
+	// extensionStripMiddleware removes the suffix from r.URL.Path before routing,
+	// so read the original pre-strip path stored in the request context.
+	path := r.URL.Path
+	if origPath, ok := r.Context().Value(OriginalPathKey).(string); ok {
+		path = origPath
+	}
+	if strings.HasSuffix(path, ".txt") {
 		return "text"
 	}
 
@@ -2165,6 +2218,23 @@ func (h *SearchHandler) APIEngineDetails(w http.ResponseWriter, r *http.Request)
 // APIEngineHealth returns health stats for all engines (circuit breaker state, latency, uptime).
 func (h *SearchHandler) APIEngineHealth(w http.ResponseWriter, r *http.Request) {
 	engines := h.engineMgr.ListEnginesWithHealth()
+
+	// Plain text format per AI.md PART 14 content negotiation
+	if detectResponseFormat(r) == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		for _, e := range engines {
+			fmt.Fprintf(w, "name: %s\n", e.Name)
+			fmt.Fprintf(w, "circuit_state: %s\n", e.Health.CircuitState)
+			fmt.Fprintf(w, "uptime_pct: %.2f\n", e.Health.UptimePct)
+			fmt.Fprintf(w, "avg_latency_ms: %d\n", e.Health.AvgLatencyMs)
+			fmt.Fprintf(w, "total_successes: %d\n", e.Health.TotalSuccesses)
+			fmt.Fprintf(w, "total_failures: %d\n", e.Health.TotalFailures)
+			fmt.Fprintln(w)
+		}
+		return
+	}
+
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":   true,
 		"data": engines,
@@ -2433,7 +2503,21 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, fmt.Sprintf("%d %s: %s", code, title, message), code)
 		return
 	}
-	tmpl, err := template.ParseFS(templatesFS, "template/page/error.tmpl")
+
+	// Resolve the request locale so the error page can translate via {{ t "key" }}
+	locale := i18n.DefaultLocale
+	if l, ok := data["Lang"].(string); ok && l != "" {
+		locale = l
+	}
+
+	tmpl, err := template.New("error.tmpl").Funcs(template.FuncMap{
+		"t": func(key string) string {
+			return i18n.Translate(locale, key)
+		},
+		"tf": func(key string, args ...interface{}) string {
+			return i18n.TranslateFormat(locale, key, args...)
+		},
+	}).ParseFS(templatesFS, "template/page/error.tmpl")
 	if err != nil {
 		// Fallback to plain text error
 		http.Error(w, fmt.Sprintf("%d %s: %s", code, title, message), code)
@@ -2574,6 +2658,12 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		data["AppURL"] = scheme + "://" + h.appConfig.Server.FQDN
 	}
 
+	// Resolve the request locale so templates can translate via {{ t "key" }}
+	locale := i18n.DefaultLocale
+	if l, ok := data["Lang"].(string); ok && l != "" {
+		locale = l
+	}
+
 	// Create base template with FuncMap
 	tmpl := template.New(templateName).Funcs(template.FuncMap{
 		// dict creates a map from key-value pairs for passing to templates
@@ -2590,6 +2680,14 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 			return dict
 		},
 		"eq": func(a, b interface{}) bool { return a == b },
+		// t translates an i18n key for the current request locale (PART 30).
+		"t": func(key string) string {
+			return i18n.Translate(locale, key)
+		},
+		// tf translates an i18n key with printf-style arguments.
+		"tf": func(key string, args ...interface{}) string {
+			return i18n.TranslateFormat(locale, key, args...)
+		},
 	})
 
 	// Load all public partials
@@ -2787,37 +2885,58 @@ func (h *SearchHandler) DebugEnginesList(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// privateCIDRs lists every range the SSRF guard treats as off-limits:
+// private, loopback, link-local, carrier-grade NAT, and unique-local.
+var privateCIDRs = func() []*net.IPNet {
+	ranges := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"169.254.0.0/16",
+		"100.64.0.0/10",
+		"::1/128",
+		"fc00::/7",
+		"fe80::/10",
+	}
+	nets := make([]*net.IPNet, 0, len(ranges))
+	for _, cidr := range ranges {
+		if _, network, err := net.ParseCIDR(cidr); err == nil {
+			nets = append(nets, network)
+		}
+	}
+	return nets
+}()
+
+// isPrivateIP reports whether the concrete IP falls in any blocked range.
+func isPrivateIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	for _, network := range privateCIDRs {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // isPrivateHost resolves hostname and returns true if any resolved address
 // falls in a private, loopback, link-local, or unique-local range.
-// Used to block SSRF attacks on the proxy endpoints.
+// Used as a pre-flight SSRF check on the proxy endpoints; the dial-time
+// Control hook in getProxyClient closes the DNS-rebinding TOCTOU window.
 func isPrivateHost(hostname string) bool {
+	if ip := net.ParseIP(hostname); ip != nil {
+		return isPrivateIP(ip)
+	}
 	addrs, err := net.LookupHost(hostname)
 	if err != nil {
 		// Unresolvable host — treat as private to be safe
 		return true
 	}
 	for _, addr := range addrs {
-		ip := net.ParseIP(addr)
-		if ip == nil {
-			continue
-		}
-		// Check all private/reserved ranges
-		privateRanges := []string{
-			"10.0.0.0/8",
-			"172.16.0.0/12",
-			"192.168.0.0/16",
-			"127.0.0.0/8",
-			"169.254.0.0/16",
-			"100.64.0.0/10",
-			"::1/128",
-			"fc00::/7",
-			"fe80::/10",
-		}
-		for _, cidr := range privateRanges {
-			_, network, parseErr := net.ParseCIDR(cidr)
-			if parseErr == nil && network.Contains(ip) {
-				return true
-			}
+		if isPrivateIP(net.ParseIP(addr)) {
+			return true
 		}
 	}
 	return false

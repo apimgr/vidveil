@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ forgejo.workflow }}-${{ forgejo.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -21,17 +21,19 @@ env:
 
 jobs:
   lint:
-    if: forgejo.event_name != 'schedule'
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     container:
       image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: go vet ./...
       - run: staticcheck ./...
 
   test:
-    if: forgejo.event_name != 'schedule'
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     container:
       image: casjaysdev/go:latest
@@ -41,9 +43,9 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - name: Run tests with coverage
         run: |
-          mkdir -p "/tmp/${{ forgejo.repository_owner }}"
-          COVDIR=$(mktemp -d "/tmp/${{ forgejo.repository_owner }}/$(basename "${{ forgejo.repository }}")-XXXXXX")
-          echo "COVDIR=$COVDIR" >> "$FORGEJO_ENV"
+          mkdir -p "/tmp/${{ github.repository_owner }}"
+          COVDIR=$(mktemp -d "/tmp/${{ github.repository_owner }}/$(basename "${{ github.repository }}")-XXXXXX")
+          echo "COVDIR=$COVDIR" >> "$GITHUB_ENV"
           go test -cover -coverprofile="$COVDIR/coverage.out" ./...
       - name: Enforce coverage threshold
         run: |
@@ -65,12 +67,14 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: govulncheck ./...
 
   build:
-    if: forgejo.event_name != 'schedule'
+    if: github.event_name != 'schedule'
     needs: [lint, test]
     runs-on: ubuntu-latest
     container:
@@ -82,7 +86,7 @@ jobs:
       - run: go build -buildvcs=false ./...
 
   coverage:
-    if: forgejo.event_name != 'schedule'
+    if: github.event_name != 'schedule'
     needs: [test]
     runs-on: ubuntu-latest
     container:
@@ -97,7 +101,7 @@ jobs:
         run: go tool cover -func=coverage/coverage.out
 
   upload-artifacts:
-    if: forgejo.event_name != 'schedule'
+    if: github.event_name != 'schedule'
     needs: [build]
     runs-on: ubuntu-latest
     container:

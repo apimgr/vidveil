@@ -476,7 +476,11 @@ type AuditEntry struct {
 // Uses time-based ordering similar to ULID without an external dependency
 func generateAuditID() string {
 	b := make([]byte, 10)
-	rand.Read(b)
+	// On the rare chance the CSPRNG read fails, fall back to a time-only ID
+	// rather than emitting a predictable all-zero random suffix.
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("audit_%d", time.Now().UnixNano())
+	}
 	return fmt.Sprintf("audit_%d%x", time.Now().UnixMilli(), b)
 }
 

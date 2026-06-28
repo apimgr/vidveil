@@ -74,7 +74,7 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Simple query parser (for common operations)
-	result := h.executeQuery(req)
+	result := h.executeQuery(r.Context(), req)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -89,7 +89,7 @@ func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
 		queryStr = r.FormValue("query")
 		if queryStr != "" {
 			req := Request{Query: queryStr}
-			result := h.executeQuery(req)
+			result := h.executeQuery(r.Context(), req)
 			jsonBytes, _ := json.MarshalIndent(result, "", "  ")
 			resultHTML = `<div class="result"><h2>Result</h2><pre>` + html.EscapeString(string(jsonBytes)) + `</pre></div>`
 		}
@@ -131,7 +131,7 @@ func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
 }
 
 // executeQuery executes a GraphQL query
-func (h *Handler) executeQuery(req Request) Response {
+func (h *Handler) executeQuery(ctx context.Context, req Request) Response {
 	query := strings.TrimSpace(req.Query)
 
 	// Handle introspection
@@ -142,7 +142,7 @@ func (h *Handler) executeQuery(req Request) Response {
 	// Parse simple queries - check more specific patterns first
 	// Use query field names to avoid false matches (e.g., "enginesEnabled" matching "engines")
 	if strings.Contains(query, "search(") || strings.Contains(query, "search {") {
-		return h.handleSearch(req)
+		return h.handleSearch(ctx, req)
 	}
 	// Check for bangs query (must check before health)
 	if strings.Contains(query, "bangs {") || strings.Contains(query, "bangs{") || strings.Contains(query, "bangs") {
@@ -165,7 +165,7 @@ func (h *Handler) executeQuery(req Request) Response {
 	}
 }
 
-func (h *Handler) handleSearch(req Request) Response {
+func (h *Handler) handleSearch(ctx context.Context, req Request) Response {
 	// Extract query parameter
 	q := ""
 	page := 1
@@ -183,7 +183,7 @@ func (h *Handler) handleSearch(req Request) Response {
 		}
 	}
 
-	results := h.engineMgr.Search(context.TODO(), q, page, nil)
+	results := h.engineMgr.Search(ctx, q, page, nil)
 
 	// Convert results to GraphQL format
 	gqlResults := make([]map[string]interface{}, len(results.Data.Results))

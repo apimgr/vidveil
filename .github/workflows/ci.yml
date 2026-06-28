@@ -25,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: go vet ./...
@@ -102,6 +104,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: govulncheck ./...
@@ -117,7 +121,7 @@ jobs:
             -v "$PWD:/src" \
             aquasec/trivy:0.70.0 config \
             --exit-code 1 --severity CRITICAL,HIGH \
-            --ignorefile /src/.trivyignore \
+            --ignorefile /src/docker/.trivyignore \
             /src/docker/Dockerfile
 
   build:

@@ -33,7 +33,7 @@
                          aria-label="Bang suggestions"
                          hidden></div>
                 </div>
-                <button type="submit" aria-label="Search" class="search-btn">Search</button>
+                <button type="submit" aria-label="Search" class="search-btn">{{ t "search.button" }}</button>
             </form>
 
             <p class="bang-hint">Use bangs: <code>!ph</code> PornHub, <code>!xv</code> XVideos, <code>!xh</code> xHamster, <code>!rt</code> RedTube</p>
@@ -45,11 +45,11 @@
         <div id="search-history" class="search-history" role="region" aria-label="Recent searches"></div>
 
         <div class="engine-stats" role="contentinfo" aria-label="Service statistics">
-            <span class="stat"><strong>{{.EngineCount}}</strong> engines</span>
+            <span class="stat"><strong>{{.EngineCount}}</strong> {{ t "home.engines" }}</span>
             <span class="divider" aria-hidden="true">|</span>
-            <span class="stat">No tracking</span>
+            <span class="stat">{{ t "home.no_tracking" }}</span>
             <span class="divider" aria-hidden="true">|</span>
-            <span class="stat">Tor support</span>
+            <span class="stat">{{ t "home.tor_support" }}</span>
         </div>
     </main>
     {{template "public/footer" .}}

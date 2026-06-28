@@ -31,6 +31,7 @@
     --color-muted: #888;
     --color-border: #44475a;
     --color-hover: #44475a;
+    --color-favorite: #ff4081;
 
     /* Legacy aliases (for backward compatibility) */
     --bg-primary: var(--color-bg);
@@ -102,6 +103,7 @@
         --color-muted: #6172b0;
         --color-border: #c0caf5;
         --color-hover: #e9e9ec;
+        --color-favorite: #d81b60;
 
         /* Legacy aliases */
         --bg-primary: var(--color-bg);
@@ -152,6 +154,7 @@ html.theme-light {
     --color-muted: #6172b0;
     --color-border: #c0caf5;
     --color-hover: #e9e9ec;
+    --color-favorite: #d81b60;
 
     /* Legacy aliases */
     --bg-primary: var(--color-bg);
@@ -4758,15 +4761,15 @@ a:focus-visible {
     min-height: 100vh;
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #282a36;
-    color: #f8f8f2;
+    background: var(--color-bg);
+    color: var(--color-text);
 }
 .maintenance-page .maintenance {
     text-align: center;
     padding: 2rem;
 }
-.maintenance-page h1 { color: #ffb86c; margin-bottom: 1rem; }
-.maintenance-page p  { color: #6272a4; }
+.maintenance-page h1 { color: var(--color-warning); margin-bottom: 1rem; }
+.maintenance-page p  { color: var(--color-text-secondary); }
 
 /* Auth page utilities (login, 2FA, password reset) */
 .btn {
@@ -4834,6 +4837,11 @@ a:focus-visible {
 .btn-sm {
     padding: 0.3rem 0.75rem;
     font-size: 0.8125rem;
+}
+
+/* File-input label styled as a button needs an explicit pointer cursor */
+.btn-file {
+    cursor: pointer;
 }
 
 .favorites-empty {

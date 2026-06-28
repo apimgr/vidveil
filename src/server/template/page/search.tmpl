@@ -64,6 +64,28 @@
 
         <div class="video-grid" id="video-grid" role="list" aria-label="Video results"></div>
         <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>Loading more...</span></div>
+
+        {{/* Progressive enhancement: server-rendered results for clients without JavaScript */}}
+        <noscript>
+            <p class="meta" aria-live="polite"><span>{{len .Results}}</span> results for "{{.Query}}"</p>
+            <div class="video-grid" role="list" aria-label="Video results">
+                {{range .Results}}
+                <div class="video-card" role="listitem">
+                    <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
+                        <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="Thumbnail for {{.Title}}" loading="lazy">
+                        <div class="video-info">
+                            <h3 class="video-title">{{.Title}}</h3>
+                            <p class="video-meta">
+                                <span class="duration">{{.Duration}}</span>
+                                {{if .Views}}<span class="views">{{.Views}} views</span>{{end}}
+                            </p>
+                            <p class="video-source">{{.Source}}</p>
+                        </div>
+                    </a>
+                </div>
+                {{end}}
+            </div>
+        </noscript>
     </main>
     {{template "public/footer" .}}
     <div class="status-bar" id="status-bar">

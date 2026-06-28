@@ -1,6 +1,6 @@
-# vidveil - Development compose (DEBUG commented)
+# vidveil - Development compose (devel image, debug mode)
 # nginx proxy address - http://172.17.0.1:64893
-# Per AI.md PART 14: Uses temp directory workflow - MUST use image, not build
+# Per AI.md PART 26: Uses temp directory workflow - MUST use image, not build
 
 name: vidveil-dev
 
@@ -12,25 +12,21 @@ x-logging: &default-logging
 
 services:
   vidveil:
-    image: ghcr.io/apimgr/vidveil:latest
-    container_name: vidveil-dev
+    image: ghcr.io/apimgr/vidveil:devel
+    container_name: vidveil-app
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
-    restart: unless-stopped
+    restart: always
+    pull_policy: always
     logging: *default-logging
     environment:
-      # Development: relaxed security, verbose logging, no caching
-      # Does NOT enable debug endpoints - uncomment DEBUG=true for that
       - MODE=development
+      - PORT=80
+      - DEBUG=true
       - TZ=${TZ:-America/New_York}
-      # DEBUG: Uncomment to enable pprof, expvar, detailed request logging
-      # - DEBUG=true
     volumes:
-      # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
-      # NEVER run from project directory - always use temp dir workflow
-      - ./volumes/config:/config
-      - ./volumes/data:/data
+      - './volumes/config:/config:z'
+      - './volumes/data:/data:z'
     ports:
-      # Development: accessible from all interfaces
       - '172.17.0.1:64893:80'
     healthcheck:
       test: /usr/local/bin/vidveil --status || exit 1

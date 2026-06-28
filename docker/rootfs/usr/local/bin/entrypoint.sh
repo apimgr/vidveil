@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 
 # =============================================================================
 # Container Entrypoint Script - MINIMAL
@@ -22,7 +22,7 @@ export BACKUP_DIR="${BACKUP_DIR:-/data/backups/${APP_NAME}}"
 # Track background PIDs for cleanup
 declare -a PIDS=()
 
-log() { echo "[entrypoint] $(date '+%Y-%m-%d %H:%M:%S') $*"; }
+log() { echo "[entrypoint] $(date '+%Y-%m-%dT%H:%M:%S%z') $*"; }
 
 # Signal handling for graceful shutdown
 cleanup() {
@@ -36,26 +36,13 @@ cleanup() {
 trap cleanup SIGTERM SIGINT SIGQUIT
 
 # =============================================================================
-# AIO mode: start supervisord when installed (manages valkey + tor + app)
-# Standard mode: fall through and start app binary directly
-# =============================================================================
-if command -v supervisord >/dev/null 2>&1; then
-    log "AIO mode detected — starting supervisord..."
-    mkdir -p /data/db/valkey /run/valkey /data/log
-    chmod 755 /run/valkey /data/log
-    export TOR_ENABLED="${TOR_ENABLED:-false}"
-    exec /usr/bin/supervisord -c /etc/supervisor/conf.d/services.conf
-fi
-
-# =============================================================================
 # Log startup info
 # =============================================================================
 log "Container starting..."
 log "MODE: ${MODE:-development}"
 log "DEBUG: ${DEBUG:-false}"
 log "TZ: ${TZ}"
-export LISTEN="${LISTEN:-${ADDRESS:-0.0.0.0}}"
-log "LISTEN: ${LISTEN}"
+log "ADDRESS: ${ADDRESS:-0.0.0.0}"
 log "PORT: ${PORT:-80}"
 
 # =============================================================================
@@ -64,7 +51,7 @@ log "PORT: ${PORT:-80}"
 log "Starting ${APP_NAME}..."
 
 # Build flags from environment
-FLAGS="--address ${LISTEN} --port ${PORT:-80}"
+FLAGS="--address ${ADDRESS:-0.0.0.0} --port ${PORT:-80}"
 [ "${DEBUG:-false}" = "true" ] && FLAGS="$FLAGS --debug"
 
 # Start binary (binary handles ALL setup: dirs, perms, user/group, Tor, etc.)

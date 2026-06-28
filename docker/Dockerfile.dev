@@ -1,0 +1,61 @@
+# =============================================================================
+# Dockerfile.dev - Development/debug image (tagged :devel)
+# Per AI.md PART 26: Same as production release but runs in debug mode (DEBUG=true)
+# =============================================================================
+
+# Build Stage - Compile Go binary
+FROM casjaysdev/go:latest AS builder
+
+RUN apk add --no-cache git bash
+
+ARG TARGETARCH
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG COMMIT_ID
+ARG OFFICIAL_SITE
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
+    -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIAL_SITE}'" \
+    -o /app/binary/vidveil ./src
+
+# =============================================================================
+# Runtime Stage - Minimal Alpine image with debug mode enabled
+# =============================================================================
+FROM alpine:latest
+
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG COMMIT_ID
+
+RUN apk add --no-cache \
+    git \
+    curl \
+    bash \
+    tini \
+    tor
+
+COPY --from=builder /app/binary/vidveil /usr/local/bin/vidveil
+COPY docker/rootfs/ /
+COPY docker/Dockerfile.dev /root/Dockerfile
+
+RUN chmod 755 /usr/local/bin/*
+
+ENV MODE=development \
+    DEBUG=true \
+    TZ=America/New_York \
+    DATABASE_DIR=/data/db/sqlite
+
+EXPOSE 80
+
+STOPSIGNAL SIGRTMIN+3
+
+HEALTHCHECK --start-period=10m --interval=5m --timeout=15s --retries=3 \
+    CMD /usr/local/bin/vidveil --status || exit 1
+
+ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]

@@ -1,5 +1,5 @@
 # vidveil - Test compose (DEBUG=true enabled)
-# Per AI.md PART 14: Uses temp directory workflow - MUST use image, not build
+# Per AI.md PART 26: Uses temp directory workflow - MUST use image, not build
 
 name: vidveil-test
 
@@ -18,15 +18,14 @@ services:
     logging: *default-logging
     environment:
       - MODE=development
+      - PORT=80
       - DEBUG=true
       - TZ=${TZ:-America/New_York}
     volumes:
-      # TEMP DIR WORKFLOW: ./volumes/ resolves to $TEMP_DIR/volumes/
-      # NEVER run from project directory - always use temp dir workflow
-      - ./volumes/config:/config
-      - ./volumes/data:/data
+      - ./volumes/config:/config:z
+      - ./volumes/data:/data:z
     ports:
-      - '172.17.0.1:64581:80'
+      - "64581:80"
     healthcheck:
       test: /usr/local/bin/vidveil --status || exit 1
       interval: 10s

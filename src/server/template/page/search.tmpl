@@ -40,17 +40,17 @@
 
         <div class="initial-loading" id="initial-loading" role="status" aria-live="polite">
             <div class="spinner large" aria-hidden="true"></div>
-            <p id="loading-text">Connecting to engines...</p>
+            <p id="loading-text">{{ t "search.connecting_engines" }}</p>
         </div>
-        <p class="meta hidden" id="search-meta" data-query="{{.Query}}" aria-live="polite"><span id="result-count">0</span> results <span id="search-time-container">(streaming...)</span></p>
+        <p class="meta hidden" id="search-meta" data-query="{{.Query}}" aria-live="polite"><span id="result-count">0</span> results <span id="search-time-container">({{ t "search.streaming" }})</span></p>
 
         {{if .SpellSuggestion}}
-        <p class="spell-suggestion" id="spell-suggestion">Did you mean: <a href="/search?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
+        <p class="spell-suggestion" id="spell-suggestion">{{ t "search.did_you_mean" }} <a href="/search?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
         {{end}}
 
         {{if .RelatedSearches}}
         <nav class="related-searches" id="related-searches" role="navigation" aria-label="Related searches">
-            <span class="related-label">Related searches</span>
+            <span class="related-label">{{ t "search.related_searches" }}</span>
             <div class="related-tags" id="related-tags">
                 {{range $i, $term := .RelatedSearches}}
                 <a class="related-tag{{if ge $i 6}} related-tag--hidden{{end}}" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="Search for {{$term}}">
@@ -63,11 +63,11 @@
         {{end}}
 
         <div class="video-grid" id="video-grid" role="list" aria-label="Video results"></div>
-        <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>Loading more...</span></div>
+        <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>{{ t "search.loading_more" }}</span></div>
 
         {{/* Progressive enhancement: server-rendered results for clients without JavaScript */}}
         <noscript>
-            <p class="meta" aria-live="polite"><span>{{len .Results}}</span> results for "{{.Query}}"</p>
+            <p class="meta" aria-live="polite"><span>{{len .Results}}</span> {{ t "search.results_for" }} "{{.Query}}"</p>
             <div class="video-grid" role="list" aria-label="Video results">
                 {{range .Results}}
                 <div class="video-card" role="listitem">
@@ -77,7 +77,7 @@
                             <h3 class="video-title">{{.Title}}</h3>
                             <p class="video-meta">
                                 <span class="duration">{{.Duration}}</span>
-                                {{if .Views}}<span class="views">{{.Views}} views</span>{{end}}
+                                {{if .Views}}<span class="views">{{.Views}} {{ t "time.views" }}</span>{{end}}
                             </p>
                             <p class="video-source">{{.Source}}</p>
                         </div>
@@ -89,7 +89,7 @@
     </main>
     {{template "public/footer" .}}
     <div class="status-bar" id="status-bar">
-        <span id="status-text">Connecting...</span>
+        <span id="status-text">{{ t "search.connecting" }}</span>
         <span id="engine-status"></span>
     </div>
     {{template "public/scripts" .}}

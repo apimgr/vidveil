@@ -1172,8 +1172,11 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	yamlPath := filepath.Join(paths.Config, "server.yaml")
 	if _, err := os.Stat(yamlPath); err == nil {
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			os.Rename(yamlPath, configPath)
-			fmt.Printf("📝 Migrated server.yaml to server.yml\n")
+			if renameErr := os.Rename(yamlPath, configPath); renameErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to migrate server.yaml to server.yml: %v\n", renameErr)
+			} else {
+				fmt.Printf("Migrated server.yaml to server.yml\n")
+			}
 		}
 	}
 
@@ -1324,7 +1327,7 @@ func ParseBoolEnv(key string, defaultVal bool) bool {
 	if val == "" {
 		return defaultVal
 	}
-	result, err := ParseBoolWithDefault(val, defaultVal)
+	result, err := ParseBool(val, defaultVal)
 	if err != nil {
 		return defaultVal
 	}
@@ -1340,15 +1343,22 @@ func getHostname() string {
 }
 
 func findUnusedPort() int {
-	// Find random port in 64xxx range
-	for port := 64000; port < 65000; port++ {
+	// Spec (AI.md PART 5): random unused port in 64000-64999, never sequential
+	const portMin = 64000
+	const portRange = 1000
+	var startOffset int
+	b := make([]byte, 2)
+	if _, err := rand.Read(b); err == nil {
+		startOffset = (int(b[0])<<8 | int(b[1])) % portRange
+	}
+	for i := 0; i < portRange; i++ {
+		port := portMin + (startOffset+i)%portRange
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err == nil {
 			ln.Close()
 			return port
 		}
 	}
-	// Fallback
 	return 64080
 }
 

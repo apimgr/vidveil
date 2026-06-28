@@ -21,7 +21,7 @@ import (
 func resetGlobals(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
-		shuttingDown = false
+		shuttingDown.Store(false)
 		logReopenFn = nil
 		statusDumpFn = nil
 	})
@@ -117,7 +117,7 @@ func TestIsShuttingDownDefaultsFalse(t *testing.T) {
 
 func TestIsShuttingDownReflectsGlobalTrue(t *testing.T) {
 	resetGlobals(t)
-	shuttingDown = true
+	shuttingDown.Store(true)
 	if !IsShuttingDown() {
 		t.Error("IsShuttingDown() = false after shuttingDown = true, want true")
 	}
@@ -125,8 +125,8 @@ func TestIsShuttingDownReflectsGlobalTrue(t *testing.T) {
 
 func TestIsShuttingDownReflectsGlobalFalse(t *testing.T) {
 	resetGlobals(t)
-	shuttingDown = true
-	shuttingDown = false
+	shuttingDown.Store(true)
+	shuttingDown.Store(false)
 	if IsShuttingDown() {
 		t.Error("IsShuttingDown() = true after reset to false, want false")
 	}
@@ -493,7 +493,7 @@ func TestKillProcessExitedProcessReturnsError(t *testing.T) {
 
 func TestGlobalStateIsIsolatedBetweenTests(t *testing.T) {
 	resetGlobals(t)
-	shuttingDown = true
+	shuttingDown.Store(true)
 	logReopenFn = func() {}
 	statusDumpFn = func() {}
 	// Cleanup registered by resetGlobals will restore everything.

@@ -1723,7 +1723,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query().Get("q")
 	if query == "" {
-		h.jsonError(w, "Query parameter 'q' is required", "MISSING_QUERY", http.StatusBadRequest)
+		h.jsonError(w, "Query parameter 'q' is required", CodeValidation, http.StatusBadRequest)
 		return
 	}
 
@@ -1731,7 +1731,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	parsed := engine.ParseBangs(query)
 	searchQuery := parsed.Query
 	if searchQuery == "" {
-		h.jsonError(w, "Query cannot be empty after bang parsing", "EMPTY_QUERY", http.StatusBadRequest)
+		h.jsonError(w, "Query cannot be empty after bang parsing", CodeValidation, http.StatusBadRequest)
 		return
 	}
 
@@ -1910,7 +1910,7 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		h.jsonError(w, "Streaming not supported", "STREAMING_ERROR", http.StatusInternalServerError)
+		h.jsonError(w, "Streaming not supported", CodeServerError, http.StatusInternalServerError)
 		return
 	}
 
@@ -2180,7 +2180,7 @@ func (h *SearchHandler) APIEngineDetails(w http.ResponseWriter, r *http.Request)
 	name := chi.URLParam(r, "name")
 	eng, ok := h.engineMgr.GetEngine(name)
 	if !ok {
-		h.jsonError(w, "Engine not found", "ENGINE_NOT_FOUND", http.StatusNotFound)
+		h.jsonError(w, "Engine not found", CodeNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -2268,14 +2268,14 @@ func (h *SearchHandler) APIStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIVersion returns server version info
-// Per AI.md PART 13: /api/v1/version endpoint for CLI compatibility checking
-// Response format matches client/api/client.go VersionResponse struct
+// Per AI.md PART 13: /api/v1/version returns version, commit, build_date, official_site.
 func (h *SearchHandler) APIVersion(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":      true,
-		"version": version.GetVersion(),
-		"commit":  version.CommitID,
-		"built":   version.BuildTime,
+		"ok":           true,
+		"version":      version.GetVersion(),
+		"commit":       version.CommitID,
+		"build_date":   version.BuildTime,
+		"official_site": version.OfficialSite,
 	})
 }
 
@@ -2469,8 +2469,7 @@ func getUptime() string {
 
 // Helper methods
 
-// jsonResponse is DEPRECATED - use WriteJSON instead
-// Kept temporarily for backward compatibility
+// jsonResponse writes a 200 JSON response.
 func (h *SearchHandler) jsonResponse(w http.ResponseWriter, data interface{}) {
 	WriteJSON(w, http.StatusOK, data)
 }
@@ -2755,7 +2754,7 @@ func (h *SearchHandler) DebugEngine(w http.ResponseWriter, r *http.Request) {
 
 	eng, ok := h.engineMgr.GetEngine(name)
 	if !ok {
-		h.jsonError(w, "Engine not found", "ENGINE_NOT_FOUND", http.StatusNotFound)
+		h.jsonError(w, "Engine not found", CodeNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -3412,23 +3411,23 @@ type BatchQuery struct {
 // Runs up to 5 queries concurrently and returns an array of SearchResponse objects.
 func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		h.jsonError(w, "Method not allowed", "ERR_METHOD_NOT_ALLOWED", http.StatusMethodNotAllowed)
+		h.jsonError(w, "Method not allowed", CodeMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req BatchSearchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.jsonError(w, "Invalid JSON body", "ERR_INVALID_JSON", http.StatusBadRequest)
+		h.jsonError(w, "Invalid JSON body", CodeBadRequest, http.StatusBadRequest)
 		return
 	}
 
 	const maxBatch = 5
 	if len(req.Queries) == 0 {
-		h.jsonError(w, "queries array must not be empty", "ERR_EMPTY_BATCH", http.StatusBadRequest)
+		h.jsonError(w, "queries array must not be empty", CodeValidation, http.StatusBadRequest)
 		return
 	}
 	if len(req.Queries) > maxBatch {
-		h.jsonError(w, fmt.Sprintf("batch limit is %d queries", maxBatch), "ERR_BATCH_LIMIT", http.StatusBadRequest)
+		h.jsonError(w, fmt.Sprintf("batch limit is %d queries", maxBatch), CodeValidation, http.StatusBadRequest)
 		return
 	}
 

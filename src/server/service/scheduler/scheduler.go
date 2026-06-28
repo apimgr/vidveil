@@ -346,15 +346,14 @@ func parseCronSchedule(schedule string) (cron.Schedule, error) {
 // parseInterval converts schedule string to duration per AI.md
 func parseInterval(schedule string) (time.Duration, error) {
 	switch schedule {
-	case "hourly":
+	case "hourly", "@hourly":
 		return time.Hour, nil
-	case "daily":
+	case "daily", "@daily":
 		return 24 * time.Hour, nil
-	case "weekly":
+	case "weekly", "@weekly":
 		return 7 * 24 * time.Hour, nil
-	case "monthly":
+	case "monthly", "@monthly":
 		return 30 * 24 * time.Hour, nil
-	// For testing purposes
 	case "minutely":
 		return time.Minute, nil
 	default:
@@ -413,7 +412,7 @@ func (s *Scheduler) runMissedTasks(window time.Duration) {
 		}
 		// Task is missed if NextRun is in the past but after cutoff
 		if task.NextRun.Before(now) && task.NextRun.After(cutoff) {
-			fmt.Printf("Running missed task: %s (was due at %s)\n", task.Name, task.NextRun.Format(time.RFC3339))
+			log.Printf("running missed task: %s (was due at %s)", task.Name, task.NextRun.Format(time.RFC3339))
 			go s.runTask(task)
 		}
 	}

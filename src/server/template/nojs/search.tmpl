@@ -8,15 +8,15 @@
     <a href="#main-content" class="skip-link">Skip to main content</a>
     {{template "public/header" .}}
     <main class="results" id="main-content" role="main" aria-label="Search results">
-        <p class="meta" aria-live="polite"><span>{{len .Results}}</span> results for "{{.Query}}"</p>
+        <p class="meta" aria-live="polite"><span>{{len .Results}}</span> {{ t "search.results_for" }} "{{.Query}}"</p>
 
         {{if .SpellSuggestion}}
-        <p class="spell-suggestion">Did you mean: <a href="/search?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
+        <p class="spell-suggestion">{{ t "search.did_you_mean" }} <a href="/search?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
         {{end}}
 
         {{if .RelatedSearches}}
         <nav class="related-searches" role="navigation" aria-label="Related searches">
-            <span class="related-label">Related searches</span>
+            <span class="related-label">{{ t "search.related_searches" }}</span>
             <div class="related-tags">
                 {{range $i, $term := .RelatedSearches}}
                 <a class="related-tag" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="Search for {{$term}}">
@@ -31,26 +31,26 @@
         <div class="filters" role="group" aria-label="Filter and sort options">
             <form method="get" action="/search" class="filter-form">
                 <input type="hidden" name="q" value="{{.Query}}">
-                <label for="filter-duration">Duration:</label>
+                <label for="filter-duration">{{ t "filter.duration" }}</label>
                 <select id="filter-duration" name="duration">
-                    <option value="">Any</option>
-                    <option value="short" {{if eq .Duration "short"}}selected{{end}}>Under 10 min</option>
-                    <option value="medium" {{if eq .Duration "medium"}}selected{{end}}>10-30 min</option>
-                    <option value="long" {{if eq .Duration "long"}}selected{{end}}>Over 30 min</option>
+                    <option value="">{{ t "filter.any" }}</option>
+                    <option value="short" {{if eq .Duration "short"}}selected{{end}}>{{ t "filter.under_10" }}</option>
+                    <option value="medium" {{if eq .Duration "medium"}}selected{{end}}>{{ t "filter.10_30" }}</option>
+                    <option value="long" {{if eq .Duration "long"}}selected{{end}}>{{ t "filter.over_30" }}</option>
                 </select>
-                
-                <label for="sort-by">Sort:</label>
+
+                <label for="sort-by">{{ t "filter.sort" }}</label>
                 <select id="sort-by" name="sort">
-                    <option value="">Relevance</option>
-                    <option value="duration-desc" {{if eq .Sort "duration-desc"}}selected{{end}}>Longest</option>
-                    <option value="duration-asc" {{if eq .Sort "duration-asc"}}selected{{end}}>Shortest</option>
-                    <option value="views" {{if eq .Sort "views"}}selected{{end}}>Most Viewed</option>
+                    <option value="">{{ t "filter.relevance" }}</option>
+                    <option value="duration-desc" {{if eq .Sort "duration-desc"}}selected{{end}}>{{ t "filter.longest" }}</option>
+                    <option value="duration-asc" {{if eq .Sort "duration-asc"}}selected{{end}}>{{ t "filter.shortest" }}</option>
+                    <option value="views" {{if eq .Sort "views"}}selected{{end}}>{{ t "filter.most_viewed" }}</option>
                 </select>
-                
-                <button type="submit">Apply Filters</button>
+
+                <button type="submit">{{ t "filter.apply" }}</button>
             </form>
         </div>
-        
+
         <div class="video-grid" role="list" aria-label="Video results">
             {{range .Results}}
             <div class="video-card" role="listitem">
@@ -60,7 +60,7 @@
                         <h3 class="video-title">{{.Title}}</h3>
                         <p class="video-meta">
                             <span class="duration">{{.Duration}}</span>
-                            {{if .Views}}<span class="views">{{.Views}} views</span>{{end}}
+                            {{if .Views}}<span class="views">{{.Views}} {{ t "time.views" }}</span>{{end}}
                         </p>
                         <p class="video-source">{{.Source}}</p>
                     </div>
@@ -68,7 +68,7 @@
             </div>
             {{end}}
         </div>
-        
+
         {{if .HasMore}}
         <div class="pagination">
             <form method="get" action="/search">
@@ -76,7 +76,7 @@
                 <input type="hidden" name="page" value="{{.NextPage}}">
                 {{if .Duration}}<input type="hidden" name="duration" value="{{.Duration}}">{{end}}
                 {{if .Sort}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
-                <button type="submit">Load More Results</button>
+                <button type="submit">{{ t "search.load_more_results" }}</button>
             </form>
         </div>
         {{end}}

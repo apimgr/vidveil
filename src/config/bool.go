@@ -30,11 +30,13 @@ var falsyValues = map[string]bool{
 	"deny": true, "never": true, "noway": true,
 }
 
-// ParseBoolWithDefault parses a string into a boolean using truthy/falsy values.
+// ParseBool parses a string into a boolean using truthy/falsy values.
 // Returns the parsed value and nil on success.
 // Returns false and an error for invalid values.
 // Empty string returns the provided default value.
-func ParseBoolWithDefault(s string, defaultVal bool) (bool, error) {
+// This is the primary boolean parser - NEVER use strconv.ParseBool().
+// Per AI.md PART 5: signature is ParseBool(s string, defaultVal bool) (bool, error).
+func ParseBool(s string, defaultVal bool) (bool, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
 
 	if s == "" {
@@ -55,7 +57,7 @@ func ParseBoolWithDefault(s string, defaultVal bool) (bool, error) {
 // MustParseBool parses a string into a boolean, panics on invalid value.
 // Use only during initialization where invalid config should halt startup.
 func MustParseBool(s string, defaultVal bool) bool {
-	val, err := ParseBoolWithDefault(s, defaultVal)
+	val, err := ParseBool(s, defaultVal)
 	if err != nil {
 		panic(err)
 	}
@@ -78,11 +80,4 @@ func IsFalsy(s string) bool {
 func IsValidBool(s string) bool {
 	s = strings.TrimSpace(strings.ToLower(s))
 	return truthyValues[s] || falsyValues[s]
-}
-
-// ParseBool parses a string into a boolean using truthy/falsy values.
-// Returns true for truthy values, false for everything else (empty, falsy, invalid).
-// This is the primary function to use - NEVER use strconv.ParseBool().
-func ParseBool(s string) bool {
-	return IsTruthy(s)
 }

@@ -1,4 +1,5 @@
 #!/bin/bash
+# @@License : WTFPL
 # Vidveil Install Script
 # OS/distro agnostic installer
 

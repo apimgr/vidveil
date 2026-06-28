@@ -73,7 +73,8 @@ func TestGetFullVersionContainsRequiredFields(t *testing.T) {
 
 	got := GetFullVersion()
 
-	for _, want := range []string{"vidveil", "4.5.6", "2026-01-02T15:04:05Z"} {
+	wantBinary := filepath.Base(os.Args[0])
+	for _, want := range []string{wantBinary, "4.5.6", "2026-01-02T15:04:05Z"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("GetFullVersion() = %q, missing %q", got, want)
 		}

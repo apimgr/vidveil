@@ -19,7 +19,7 @@
                     <input type="text"
                            id="search-input"
                            name="q"
-                           placeholder="Search videos... (try !ph or !xv)"
+                           placeholder="{{ t "search.placeholder" }}"
                            autofocus
                            required
                            aria-required="true"
@@ -36,7 +36,7 @@
                 <button type="submit" aria-label="Search" class="search-btn">{{ t "search.button" }}</button>
             </form>
 
-            <p class="bang-hint">Use bangs: <code>!ph</code> PornHub, <code>!xv</code> XVideos, <code>!xh</code> xHamster, <code>!rt</code> RedTube</p>
+            <p class="bang-hint">{{ t "search.bang_prefix" }} <code>!ph</code> PornHub, <code>!xv</code> XVideos, <code>!xh</code> xHamster, <code>!rt</code> RedTube</p>
 
             {{/* Unified filters - collapsible on all screen sizes */}}
             {{template "public/filters" (dict "ShowEngines" true "Compact" false)}}

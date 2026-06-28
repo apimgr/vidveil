@@ -334,7 +334,10 @@ func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password
 	}
 
 	// Checks 5, 6, 7: extract to temp dir, parse manifest, verify database
-	tmpDir, err := os.MkdirTemp("", "vidveil-verify-*")
+	if err := os.MkdirAll("/tmp/apimgr", 0755); err != nil {
+		return fmt.Errorf("failed to create temp base dir: %w", err)
+	}
+	tmpDir, err := os.MkdirTemp("/tmp/apimgr", "vidveil-XXXXXX")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
@@ -754,7 +757,52 @@ func (m *MaintenanceManager) fetchAllReleases() ([]GitHubRelease, error) {
 	return releases, nil
 }
 
-// ApplyUpdate downloads and applies an update
+// verifyUpdateChecksum fetches the companion .sha256 sidecar for downloadURL and
+// verifies that data matches. A missing checksum file (404) is a hard failure —
+// we refuse to install an unverified binary. Both the download URL and checksum
+// URL must use HTTPS to prevent MITM substitution.
+func verifyUpdateChecksum(downloadURL string, data []byte) error {
+	if !strings.HasPrefix(downloadURL, "https://") {
+		return fmt.Errorf("refusing update: download URL must use HTTPS, got %q", downloadURL)
+	}
+
+	checksumURL := downloadURL + ".sha256"
+	resp, err := http.Get(checksumURL) //nolint:noctx
+	if err != nil {
+		return fmt.Errorf("checksum fetch failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("checksum sidecar not published at %s; refusing to install unverified binary", checksumURL)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("checksum endpoint returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read checksum file: %w", err)
+	}
+
+	// Expected format: "<hex-sha256>  <filename>" (sha256sum output) or just "<hex-sha256>"
+	line := strings.TrimSpace(strings.SplitN(string(body), "\n", 2)[0])
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return fmt.Errorf("checksum file is empty")
+	}
+	expectedHex := fields[0]
+
+	actualSum := sha256.Sum256(data)
+	actualHex := hex.EncodeToString(actualSum[:])
+	if actualHex != expectedHex {
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedHex, actualHex)
+	}
+	return nil
+}
+
+// ApplyUpdate downloads and applies an update per AI.md PART 22.
+// Update flow: download → verify SHA-256 checksum → replace binary.
 func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 	if downloadURL == "" {
 		info, err := m.CheckUpdate()
@@ -782,6 +830,17 @@ func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 		return fmt.Errorf("download failed with status %d", resp.StatusCode)
 	}
 
+	// Read into memory so we can verify checksum before touching the filesystem
+	binaryData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read update body: %w", err)
+	}
+
+	// Per AI.md PART 22 step 3: verify SHA-256 checksum before replacing binary
+	if err := verifyUpdateChecksum(downloadURL, binaryData); err != nil {
+		return fmt.Errorf("update checksum verification failed: %w", err)
+	}
+
 	// Get current executable path
 	execPath, err := os.Executable()
 	if err != nil {
@@ -789,19 +848,22 @@ func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 	}
 
 	// Create temp file for download
-	tmpFile, err := os.CreateTemp("", "vidveil-update-*")
+	if err := os.MkdirAll("/tmp/apimgr", 0755); err != nil {
+		return fmt.Errorf("failed to create temp base dir: %w", err)
+	}
+	tmpFile, err := os.CreateTemp("/tmp/apimgr", "vidveil-XXXXXX")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
-	// Download to temp file
-	_, err = io.Copy(tmpFile, resp.Body)
-	tmpFile.Close()
-	if err != nil {
-		return fmt.Errorf("failed to save update: %w", err)
+	// Write verified binary to temp file
+	if _, err = tmpFile.Write(binaryData); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to write update: %w", err)
 	}
+	tmpFile.Close()
 
 	// Make executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {
@@ -814,7 +876,7 @@ func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 		return fmt.Errorf("failed to backup current binary: %w", err)
 	}
 
-	// Move new binary
+	// Move new binary — atomic replace
 	if err := os.Rename(tmpPath, execPath); err != nil {
 		// Try to restore backup
 		os.Rename(backupPath, execPath)

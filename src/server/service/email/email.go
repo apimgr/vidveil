@@ -44,13 +44,15 @@ Details:
 
 	"backup_complete": `Subject: Backup Complete - {app_name}
 ---
-Hello,
+BACKUP COMPLETE
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
 
 Your backup completed successfully.
 
 Filename: {filename}
 Size: {size}
-Time: {timestamp}
 
 --
 {app_name}
@@ -58,14 +60,16 @@ Time: {timestamp}
 
 	"backup_failed": `Subject: Backup Failed - {app_name}
 ---
-Hello,
+BACKUP FAILED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
 
 A backup operation failed.
 
 Error: {error}
-Time: {timestamp}
 
-Please check your server configuration.
+Please check your server logs.
 
 --
 {app_name}
@@ -100,15 +104,15 @@ Valid until: {valid_until}
 
 	"scheduler_error": `Subject: Scheduled Task Failed - {app_name}
 ---
-Hello,
+SCHEDULED TASK FAILED
 
-A scheduled task failed to complete.
+From: {app_name} ({fqdn})
+Time: {timestamp}
 
-Task: {task_name}
+The scheduled task "{task_name}" failed.
+
 Error: {error}
 Next run: {next_run}
-
-Please check your server logs.
 
 --
 {app_name}
@@ -221,7 +225,7 @@ func (s *EmailService) applyVars(text string, vars map[string]string) string {
 	return text
 }
 
-// getGlobalVars returns global template variables
+// getGlobalVars returns global template variables per AI.md PART 17 §Global Variables.
 func (s *EmailService) getGlobalVars() map[string]string {
 	// Build app_url respecting SSL config per AI.md PART 15
 	scheme := "http"
@@ -234,12 +238,24 @@ func (s *EmailService) getGlobalVars() map[string]string {
 	if port != "" && port != "80" && port != "443" {
 		appURL = fmt.Sprintf("%s://%s:%s", scheme, fqdn, port)
 	}
+
+	// Onion and I2P addresses are runtime values managed by their respective
+	// service packages; the email service does not hold references to them.
+	// Variables default to "" so templates expand the placeholder to empty
+	// string rather than displaying the raw "{onion_url}" literal.
+
 	return map[string]string{
-		"app_name":    s.appConfig.Server.Branding.Title,
-		"app_url":     appURL,
-		"admin_email": s.appConfig.Server.Admin.Email,
-		"timestamp":   time.Now().Format(time.RFC3339),
-		"year":        fmt.Sprintf("%d", time.Now().Year()),
+		"app_name":              s.appConfig.Server.Branding.Title,
+		"app_url":               appURL,
+		"fqdn":                  fqdn,
+		"onion_url":             "",
+		"onion_address":         "",
+		"i2p_url":               "",
+		"i2p_address":           "",
+		"notification_reply_to": "",
+		"admin_email":           s.appConfig.Server.Admin.Email,
+		"timestamp":             time.Now().Format(time.RFC3339),
+		"year":                  fmt.Sprintf("%d", time.Now().Year()),
 	}
 }
 

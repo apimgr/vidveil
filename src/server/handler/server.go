@@ -4,6 +4,7 @@ package handler
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
@@ -175,25 +176,37 @@ func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 // API Routes per AI.md PART 14
 
 // APIAbout handles GET /api/v1/server/about
+// Per AI.md PART 14: content negotiation required on every API route.
 func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok": true,
-		"data": map[string]interface{}{
-			"name":        h.appConfig.Server.Branding.Title,
-			"description": h.appConfig.Server.Branding.Description,
-			"version":     version.GetVersion(),
-			"features": []string{
-				"Privacy-focused video meta-search",
-				"No tracking or personal data collection",
-				"Aggregates results from multiple sources",
-				"Open source and self-hostable",
-			},
+	data := map[string]interface{}{
+		"name":        h.appConfig.Server.Branding.Title,
+		"description": h.appConfig.Server.Branding.Description,
+		"version":     version.GetVersion(),
+		"features": []string{
+			"Privacy-focused video meta-search",
+			"No tracking or personal data collection",
+			"Aggregates results from multiple sources",
+			"Open source and self-hostable",
 		},
-	})
+	}
+	if getAPIResponseFormat(r) == "text" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "name: %s\ndescription: %s\nversion: %s\n",
+			data["name"], data["description"], data["version"])
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": data})
 }
 
 // APIPrivacy handles GET /api/v1/server/privacy
+// Per AI.md PART 14: content negotiation required on every API route.
 func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
+	if getAPIResponseFormat(r) == "text" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nsearch_queries: false\nip_addresses: false\ntracking_cookies: false\nthird_party_sharing: false\n",
+			time.Now().Format("2006-01-02"))
+		return
+	}
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
@@ -214,50 +227,40 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIContact handles POST /api/v1/server/contact
+// Per AI.md PART 9: error codes must use standard constants from response.go.
 func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	if r.Method != http.MethodPost {
-		WriteJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{
-			"ok":      false,
-			"error":   "ERR_METHOD_NOT_ALLOWED",
-			"message": "Method not allowed",
-		})
+		SendError(w, CodeMethodNotAllowed, MsgMethodNotAllowed)
 		return
 	}
 
-	// Parse form data
 	if err := r.ParseForm(); err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"ok":      false,
-			"error":   "ERR_INVALID_REQUEST",
-			"message": "Invalid form data",
-		})
+		SendError(w, CodeBadRequest, "Invalid form data")
 		return
 	}
 
-	// Validate required fields
 	subject := r.FormValue("subject")
 	message := r.FormValue("message")
 
 	if subject == "" || message == "" {
-		WriteJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"ok":      false,
-			"error":   "ERR_MISSING_FIELDS",
-			"message": "Subject and message are required",
-		})
+		SendError(w, CodeValidation, "Subject and message are required")
 		return
 	}
 
-	// In a real implementation, this would send an email or store the message
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":      true,
-		"message": "Message received successfully",
-	})
+	SendOK(w, map[string]interface{}{"message": "Message received successfully"})
 }
 
 // APIHelp handles GET /api/v1/server/help
+// Per AI.md PART 14: content negotiation required; health API is at /api/v1/server/healthz.
 func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
+	if getAPIResponseFormat(r) == "text" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "search: GET /search or /api/v1/search  params: q, page, engines\n")
+		fmt.Fprintf(w, "engines: GET /api/v1/engines\n")
+		fmt.Fprintf(w, "health: GET /api/v1/server/healthz\n")
+		fmt.Fprintf(w, "documentation: /server/docs/swagger\n")
+		return
+	}
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
@@ -273,7 +276,7 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 				"description": "List available search engines",
 			},
 			"health": map[string]interface{}{
-				"endpoint":    "/api/v1/healthz",
+				"endpoint":    "/api/v1/server/healthz",
 				"method":      "GET",
 				"description": "Check server health status",
 			},

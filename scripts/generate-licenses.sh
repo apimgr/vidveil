@@ -1,4 +1,5 @@
 #!/bin/bash
+# @@License : WTFPL
 # Generate LICENSE.md with embedded third-party licenses
 # Per AI.md PART 2 lines 3174-3340
 

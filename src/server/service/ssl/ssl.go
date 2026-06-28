@@ -56,8 +56,9 @@ type CertInfo struct {
 func NewSSLManager(appConfig *config.AppConfig) *SSLManager {
 	certPath := appConfig.Server.SSL.CertPath
 	if certPath == "" {
+		// Per AI.md PART 15: certs are stored under {data_dir}/ssl/
 		paths := config.GetAppPaths("", "")
-		certPath = filepath.Join(paths.Config, "ssl", "certs")
+		certPath = filepath.Join(paths.Data, "ssl")
 	}
 
 	return &SSLManager{

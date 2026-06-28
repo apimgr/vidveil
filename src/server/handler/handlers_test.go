@@ -241,9 +241,9 @@ func TestAPISearch_MissingQuery(t *testing.T) {
 		t.Errorf("APISearch returned invalid JSON: %v", err)
 	}
 
-	// Per AI.md PART 14: error field contains the ERROR_CODE
-	if response["error"] != "MISSING_QUERY" {
-		t.Errorf("APISearch error = %s, want 'MISSING_QUERY'", response["error"])
+	// Per AI.md PART 9: standard error code for validation failures
+	if response["error"] != "VALIDATION_FAILED" {
+		t.Errorf("APISearch error = %s, want 'VALIDATION_FAILED'", response["error"])
 	}
 }
 

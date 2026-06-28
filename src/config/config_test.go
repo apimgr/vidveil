@@ -38,7 +38,7 @@ func TestDefaultAppConfig(t *testing.T) {
 	}
 }
 
-func TestParseBool(t *testing.T) {
+func TestIsTruthy(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected bool
@@ -71,9 +71,9 @@ func TestParseBool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			result := ParseBool(tt.input)
+			result := IsTruthy(tt.input)
 			if result != tt.expected {
-				t.Errorf("ParseBool(%q) = %v, want %v", tt.input, result, tt.expected)
+				t.Errorf("IsTruthy(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -281,8 +281,8 @@ func TestIsDevelopmentMode(t *testing.T) {
 	}
 }
 
-// TestParseBoolWithDefault covers truthy input, falsy input, empty string (uses default), and invalid input.
-func TestParseBoolWithDefault(t *testing.T) {
+// TestParseBool covers truthy input, falsy input, empty string (uses default), and invalid input.
+func TestParseBool(t *testing.T) {
 	tests := []struct {
 		input      string
 		defaultVal bool
@@ -311,12 +311,12 @@ func TestParseBoolWithDefault(t *testing.T) {
 			name = "(empty)"
 		}
 		t.Run(name, func(t *testing.T) {
-			got, err := ParseBoolWithDefault(tt.input, tt.defaultVal)
+			got, err := ParseBool(tt.input, tt.defaultVal)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseBoolWithDefault(%q, %v) error = %v, wantErr %v", tt.input, tt.defaultVal, err, tt.wantErr)
+				t.Errorf("ParseBool(%q, %v) error = %v, wantErr %v", tt.input, tt.defaultVal, err, tt.wantErr)
 			}
 			if got != tt.wantVal {
-				t.Errorf("ParseBoolWithDefault(%q, %v) = %v, want %v", tt.input, tt.defaultVal, got, tt.wantVal)
+				t.Errorf("ParseBool(%q, %v) = %v, want %v", tt.input, tt.defaultVal, got, tt.wantVal)
 			}
 		})
 	}

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -29,7 +30,7 @@ import (
 // SIGRTMIN+3 (37) → Graceful shutdown (Docker STOPSIGNAL)
 
 var (
-	shuttingDown bool
+	shuttingDown atomic.Bool
 	logReopenFn  func()
 	statusDumpFn func()
 )
@@ -46,7 +47,7 @@ func SetStatusDumpFunc(fn func()) {
 
 // IsShuttingDown returns true if shutdown is in progress
 func IsShuttingDown() bool {
-	return shuttingDown
+	return shuttingDown.Load()
 }
 
 // SetupSignalHandler configures graceful shutdown per AI.md PART 8
@@ -137,7 +138,7 @@ func GetStopSignal() os.Signal {
 // gracefulShutdown performs orderly shutdown per AI.md PART 8
 func gracefulShutdown(server *http.Server, pidFile string) {
 	// Set shutdown flag for health checks (return 503)
-	shuttingDown = true
+	shuttingDown.Store(true)
 
 	// Create context with 30s timeout per PART 8
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

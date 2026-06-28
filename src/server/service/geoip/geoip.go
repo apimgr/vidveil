@@ -300,10 +300,35 @@ func (s *GeoIPService) Lookup(ipStr string) *GeoIPResult {
 	return result
 }
 
+// isPrivateIP reports whether ip is an RFC 1918 / RFC 4193 / loopback / link-local address.
+// Private and internal IPs are never subject to country blocking per AI.md PART 19.
+func isPrivateIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	privateRanges := []net.IPNet{
+		{IP: net.ParseIP("10.0.0.0"), Mask: net.CIDRMask(8, 32)},
+		{IP: net.ParseIP("172.16.0.0"), Mask: net.CIDRMask(12, 32)},
+		{IP: net.ParseIP("192.168.0.0"), Mask: net.CIDRMask(16, 32)},
+		{IP: net.ParseIP("fc00::"), Mask: net.CIDRMask(7, 128)},
+		{IP: net.ParseIP("fe80::"), Mask: net.CIDRMask(10, 128)},
+	}
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	for _, r := range privateRanges {
+		if r.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsBlocked checks if an IP is from a blocked country.
 // AllowCountries takes precedence: if non-empty, only listed countries are
 // allowed and all others are blocked (allowlist mode). DenyCountries is only
 // consulted when AllowCountries is empty (denylist mode).
+// RFC 1918 private and loopback IPs are never blocked per AI.md PART 19.
 func (s *GeoIPService) IsBlocked(ipStr string) bool {
 	if !s.appConfig.Server.GeoIP.Enabled {
 		return false
@@ -314,6 +339,11 @@ func (s *GeoIPService) IsBlocked(ipStr string) bool {
 
 	// Nothing configured — nothing blocked
 	if len(allowList) == 0 && len(denyList) == 0 {
+		return false
+	}
+
+	// Per AI.md PART 19: private/internal IPs are never country-blocked
+	if ip := net.ParseIP(ipStr); isPrivateIP(ip) {
 		return false
 	}
 

@@ -850,7 +850,7 @@ Server Configuration:
       --baseurl PATH                URL path prefix (default: /)
       --daemon                      Run as daemon (detach from terminal)
       --debug                       Enable debug mode
-      --color {always|never|auto}   Color output (default: auto, respects NO_COLOR)
+      --color {auto|yes|no}         Color output (default: auto, respects NO_COLOR)
       --lang CODE                   Language for output (default: auto)
 
 Service Management:
@@ -867,9 +867,13 @@ func printVersion() {
 	// Per AI.md PART 8: Use actual binary name, not hardcoded
 	binaryName := filepath.Base(os.Args[0])
 	fmt.Printf("%s %s\n", binaryName, Version)
+	fmt.Printf("Commit: %s\n", CommitID)
 	fmt.Printf("Built: %s\n", BuildDate)
 	fmt.Printf("Go: %s\n", runtime.Version())
 	fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	if OfficialSite != "" {
+		fmt.Printf("Site: %s\n", OfficialSite)
+	}
 }
 
 func checkStatus() int {
@@ -938,19 +942,20 @@ func handleShellCommand(subCmd, shell string) {
 		printInit(shell, binaryName)
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --shell --help prints help and exits 0
-		fmt.Println(`Shell Integration Commands:
-  vidveil --shell completions [SHELL]   Print shell completions script
-  vidveil --shell init [SHELL]          Print shell init command for eval
+		fmt.Printf(`Shell Integration Commands:
+  %s --shell completions [SHELL]   Print shell completions script
+  %s --shell init [SHELL]          Print shell init command for eval
 
 Supported Shells:
   bash, zsh, fish, powershell, pwsh, sh, dash, ksh
 
 Examples:
   # Add to ~/.bashrc or ~/.zshrc
-  eval "$(vidveil --shell init)"
+  eval "$(%s --shell init)"
 
   # Or source completions directly
-  source <(vidveil --shell completions bash)`)
+  source <(%s --shell completions bash)
+`, binaryName, binaryName, binaryName, binaryName)
 		os.Exit(0)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown --shell command: %s\nUsage: --shell [completions|init|--help] [SHELL]\n", subCmd)
@@ -1101,6 +1106,9 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 	// Use system.NewServiceManager which handles user creation per AI.md PART 23
 	svc := system.NewServiceManager(appName, binaryPath, appPaths.Config, appPaths.Data)
 
+	// Capture raw binary name for user-facing help text (not the service name)
+	binaryName := filepath.Base(os.Args[0])
+
 	switch cmd {
 	case "start":
 		fmt.Println("Starting Vidveil service...")
@@ -1204,33 +1212,35 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 
 	case "--help":
 		// Per AI.md PART 8: Service command help
-		fmt.Println(`Service Management Commands:
+		fmt.Printf(`Service Management Commands:
 
-  vidveil --service start         Start the service
-  vidveil --service stop          Stop the service
-  vidveil --service restart       Restart the service
-  vidveil --service reload        Reload configuration
-  vidveil --service status        Show service status
-  vidveil --service --install     Install as system service
-  vidveil --service --uninstall   Uninstall system service
-  vidveil --service --disable     Disable service from starting at boot
+  %s --service start         Start the service
+  %s --service stop          Stop the service
+  %s --service restart       Restart the service
+  %s --service reload        Reload configuration
+  %s --service status        Show service status
+  %s --service --install     Install as system service
+  %s --service --uninstall   Uninstall system service
+  %s --service --disable     Disable service from starting at boot
 
 Supported service managers:
   - systemd (Linux)
   - runit (Linux)
   - launchd (macOS)
   - Windows Service Manager
-  - BSD rc.d`)
+  - BSD rc.d
+`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 
 	default:
 		fmt.Printf("❌ Unknown service command: %s\n", cmd)
-		fmt.Println("   Run 'vidveil --service --help' for available commands")
+		fmt.Printf("   Run '%s --service --help' for available commands\n", binaryName)
 		os.Exit(1)
 	}
 }
 
 // handleUpdateCommand implements AI.md PART 22 --update command
 func handleUpdateCommand(cmd, arg string) {
+	binaryName := filepath.Base(os.Args[0])
 	maint := maintenance.NewMaintenanceManager("", "", version.GetVersion())
 
 	switch cmd {
@@ -1313,29 +1323,28 @@ func handleUpdateCommand(cmd, arg string) {
 
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --update --help prints help and exits 0
-		fmt.Println(`Update Commands:
-  vidveil --update              Check and perform in-place update with restart
-  vidveil --update yes          Same as --update (default)
-  vidveil --update check        Check for updates without installing
-  vidveil --update branch <name>  Set update branch (stable, beta, daily)
+		fmt.Printf(`Update Commands:
+  %s --update              Check and perform in-place update with restart
+  %s --update yes          Same as --update (default)
+  %s --update check        Check for updates without installing
+  %s --update branch <name>  Set update branch (stable, beta, daily)
 
 Update Branches:
   stable (default)  Release builds (v*, *.*.*)
   beta              Pre-release builds (*-beta)
-  daily             Daily builds (YYYYMMDDHHMM)`)
+  daily             Daily builds (YYYYMMDDHHMM)
+`, binaryName, binaryName, binaryName, binaryName)
 		os.Exit(0)
 
 	default:
 		fmt.Printf("❌ Unknown update command: %s\n", cmd)
-		fmt.Println(`
-Usage: vidveil --update [check|yes|branch <name>|--help]
-
-Run 'vidveil --update --help' for detailed help.`)
+		fmt.Printf("\nUsage: %s --update [check|yes|branch <name>|--help]\n\nRun '%s --update --help' for detailed help.\n", binaryName, binaryName)
 		os.Exit(1)
 	}
 }
 
 func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
+	binaryName := filepath.Base(os.Args[0])
 	maint := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
 
 	switch cmd {
@@ -1401,35 +1410,34 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
 		// Configuration is entirely via server.yml — no admin web UI exists.
 		fmt.Println("VidVeil has no admin web UI. All configuration is via server.yml.")
 		fmt.Println("Edit /etc/apimgr/vidveil/server.yml to configure the server.")
-		fmt.Println("Restart the service after making changes: vidveil --service restart")
+		fmt.Printf("Restart the service after making changes: %s --service restart\n", binaryName)
 
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
-		fmt.Println(`Maintenance Commands:
-  vidveil --maintenance backup [file] [--password <pwd>]   Create backup
-  vidveil --maintenance restore [file] [--password <pwd>]  Restore from backup
-  vidveil --maintenance update                              Check and apply updates
-  vidveil --maintenance mode <on|off>                       Enable/disable maintenance mode
-  vidveil --maintenance setup                               Show configuration instructions
+		fmt.Printf(`Maintenance Commands:
+  %s --maintenance backup [file] [--password <pwd>]   Create backup
+  %s --maintenance restore [file] [--password <pwd>]  Restore from backup
+  %s --maintenance update                              Check and apply updates
+  %s --maintenance mode <on|off>                       Enable/disable maintenance mode
+  %s --maintenance setup                               Show configuration instructions
 
 Options:
   --password <password>    Encryption password for backup/restore (per AI.md PART 21)
 
 Examples:
-  vidveil --maintenance backup                              # Backup to default location
-  vidveil --maintenance backup --password "secret"          # Encrypted backup
-  vidveil --maintenance backup /tmp/backup.tar              # Backup to specific file
-  vidveil --maintenance restore                             # Restore from most recent
-  vidveil --maintenance restore backup.tar.gz.enc --password "secret"  # Restore encrypted
-  vidveil --maintenance mode on                             # Enable maintenance mode`)
+  %s --maintenance backup                              # Backup to default location
+  %s --maintenance backup --password "secret"          # Encrypted backup
+  %s --maintenance backup /tmp/backup.tar              # Backup to specific file
+  %s --maintenance restore                             # Restore from most recent
+  %s --maintenance restore backup.tar.gz.enc --password "secret"  # Restore encrypted
+  %s --maintenance mode on                             # Enable maintenance mode
+`, binaryName, binaryName, binaryName, binaryName, binaryName,
+			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 		os.Exit(0)
 
 	default:
 		fmt.Printf("❌ Unknown maintenance command: %s\n", cmd)
-		fmt.Println(`
-Usage: vidveil --maintenance [backup|restore|update|mode|setup|--help]
-
-Run 'vidveil --maintenance --help' for detailed help.`)
+		fmt.Printf("\nUsage: %s --maintenance [backup|restore|update|mode|setup|--help]\n\nRun '%s --maintenance --help' for detailed help.\n", binaryName, binaryName)
 		os.Exit(1)
 	}
 }

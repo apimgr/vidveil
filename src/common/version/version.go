@@ -89,10 +89,15 @@ func GetVersion() string {
 }
 
 // GetFullVersion returns the full version string for display
-// Per AI.md PART 13: --version Output (no v prefix)
+// Per AI.md PART 13: --version Output (no v prefix); binary name from os.Args[0]
 func GetFullVersion() string {
-	return fmt.Sprintf("vidveil %s\nBuilt: %s\nGo: %s\nOS/Arch: %s/%s",
-		Version, BuildTime, GoVersion, GOOS, GOARCH)
+	binaryName := filepath.Base(os.Args[0])
+	result := fmt.Sprintf("%s %s\nCommit: %s\nBuilt: %s\nGo: %s\nOS/Arch: %s/%s",
+		binaryName, Version, CommitID, BuildTime, GoVersion, GOOS, GOARCH)
+	if OfficialSite != "" {
+		result += fmt.Sprintf("\nSite: %s", OfficialSite)
+	}
+	return result
 }
 
 // GetShortVersion returns version string (no v prefix per AI.md version rules)

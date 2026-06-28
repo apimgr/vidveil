@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MIT
+# @@License : WTFPL
 # Vidveil Integration Tests - Auto-detect Runtime
 # Per AI.md PART 29: Testing & Development
 

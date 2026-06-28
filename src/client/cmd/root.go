@@ -844,7 +844,7 @@ func ApplyCLIEnvironmentOverrides() error {
 	}
 
 	if debugEnvValue := os.Getenv("VIDVEIL_DEBUG"); debugEnvValue != "" {
-		debugModeEnabled = config.ParseBool(debugEnvValue)
+		debugModeEnabled = config.IsTruthy(debugEnvValue)
 	}
 
 	return nil
@@ -1076,7 +1076,8 @@ Flags:
       --output FORMAT               Output format: json, yaml, csv, table, plain (default: table)
       --timeout SECONDS             Request timeout in seconds (default: 30)
       --debug                       Debug output
-      --color {always|never|auto}   Color output (default: auto)
+      --color {auto|yes|no}         Color output (default: auto, respects NO_COLOR)
+      --lang CODE                   Language for output (default: auto)
       --update [CMD]                Self-update (--update --help for details)
 
 Commands:
@@ -1125,6 +1126,9 @@ func IsCLITUIEnabled() bool {
 // PrintCLIVersionInfo prints CLI version information
 // Per AI.md PART 1: Function names MUST reveal intent - "printVersion" is ambiguous
 func PrintCLIVersionInfo() {
-	// Per AI.md PART 32: CLI --version format
+	// Per AI.md PART 32: CLI --version format; include site when set
 	fmt.Printf("%s %s (%s) built %s\n", BinaryName, Version, CommitID, BuildDate)
+	if OfficialSite != "" {
+		fmt.Printf("Site: %s\n", OfficialSite)
+	}
 }

@@ -38,7 +38,7 @@ BINDIR := binaries
 RELDIR := releases
 
 # Go cache directories (bind-mounted from host for persistence across builds)
-GO_CACHE ?= $(HOME)/go/pkg/mod
+GO_CACHE ?= $(HOME)/.local/share/go
 GO_BUILD ?= $(HOME)/.cache/go-build
 
 # Build targets — all 8 platforms (space-separated for for-loop)

@@ -501,7 +501,7 @@ func TestGlobalStateIsIsolatedBetweenTests(t *testing.T) {
 
 func TestGlobalStateDefaultsAfterPreviousTest(t *testing.T) {
 	// resetGlobals cleanup must have fired; all globals should be zero.
-	if shuttingDown {
+	if shuttingDown.Load() {
 		t.Error("shuttingDown not reset to false after previous test")
 	}
 	if logReopenFn != nil {

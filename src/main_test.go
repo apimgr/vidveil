@@ -563,11 +563,69 @@ func TestHandleShellCommand_NoSHELL_DefaultsBash(t *testing.T) {
 	}
 }
 
-// ── printVersion — additional branch ─────────────────────────────────────────
+// ── printVersion — additional tests ──────────────────────────────────────────
 
-func TestPrintVersion_ContainsLicense(t *testing.T) {
+func TestPrintVersion_ContainsVersionString(t *testing.T) {
 	out := captureStdout(printVersion)
-	if !strings.Contains(out, "MIT") && !strings.Contains(out, "License") {
-		t.Logf("printVersion: no license in output (ok if format changed): %q", out)
+	if !strings.Contains(out, Version) {
+		t.Errorf("printVersion: output should contain Version %q, got %q", Version, out)
+	}
+}
+
+func TestPrintVersion_ContainsCommit(t *testing.T) {
+	out := captureStdout(printVersion)
+	if !strings.Contains(out, "Commit:") {
+		t.Error("printVersion: output should contain 'Commit:'")
+	}
+}
+
+func TestPrintVersion_WithOfficialSite(t *testing.T) {
+	origSite := OfficialSite
+	OfficialSite = "https://example.com"
+	defer func() { OfficialSite = origSite }()
+
+	out := captureStdout(printVersion)
+	if !strings.Contains(out, "Site:") {
+		t.Error("printVersion: output should contain 'Site:' when OfficialSite is set")
+	}
+	if !strings.Contains(out, "https://example.com") {
+		t.Error("printVersion: output should contain the official site URL")
+	}
+}
+
+// ── printHelp — additional tests ─────────────────────────────────────────────
+
+func TestPrintHelp_ContainsStatusFlag(t *testing.T) {
+	out := captureStdout(printHelp)
+	if !strings.Contains(out, "--status") {
+		t.Error("printHelp: output should contain '--status' flag")
+	}
+}
+
+func TestPrintHelp_ContainsServerConfiguration(t *testing.T) {
+	out := captureStdout(printHelp)
+	if !strings.Contains(out, "Server Configuration:") {
+		t.Error("printHelp: output should contain 'Server Configuration:'")
+	}
+}
+
+func TestPrintHelp_ContainsServiceManagement(t *testing.T) {
+	out := captureStdout(printHelp)
+	if !strings.Contains(out, "Service Management:") {
+		t.Error("printHelp: output should contain 'Service Management:'")
+	}
+}
+
+func TestPrintHelp_ContainsPortFlag(t *testing.T) {
+	out := captureStdout(printHelp)
+	if !strings.Contains(out, "--port") {
+		t.Error("printHelp: output should contain '--port' flag")
+	}
+}
+
+func TestPrintHelp_ContainsDaemonFlag(t *testing.T) {
+	out := captureStdout(printHelp)
+	if !strings.Contains(out, "--daemon") {
+		t.Error("printHelp: output should contain '--daemon' flag")
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 )
@@ -57,8 +58,28 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Create base template with partials
-	tmpl := template.New(templateName)
+	// Resolve locale for i18n translation function
+	locale := i18n.DetectLocale(r)
+
+	// Create base template with FuncMap so templates can use {{ t "key" }}
+	tmpl := template.New(templateName).Funcs(template.FuncMap{
+		"dict": func(values ...interface{}) map[string]interface{} {
+			d := make(map[string]interface{})
+			for i := 0; i+1 < len(values); i += 2 {
+				if key, ok := values[i].(string); ok {
+					d[key] = values[i+1]
+				}
+			}
+			return d
+		},
+		"eq": func(a, b interface{}) bool { return a == b },
+		"t": func(key string) string {
+			return i18n.Translate(locale, key)
+		},
+		"tf": func(key string, args ...interface{}) string {
+			return i18n.TranslateFormat(locale, key, args...)
+		},
+	})
 
 	// Load layout and partials first
 	partialFiles := []string{

@@ -612,6 +612,7 @@ func TestAPIAbout_StatusOK(t *testing.T) {
 	cfg := createTestConfig()
 	h := NewServerHandler(cfg)
 	req := httptest.NewRequest("GET", "/api/v1/server/about", nil)
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
 	h.APIAbout(rr, req)
 	if rr.Code != http.StatusOK {
@@ -638,6 +639,7 @@ func TestAPIPrivacy_StatusOK(t *testing.T) {
 	cfg := createTestConfig()
 	h := NewServerHandler(cfg)
 	req := httptest.NewRequest("GET", "/api/v1/server/privacy", nil)
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
 	h.APIPrivacy(rr, req)
 	if rr.Code != http.StatusOK {
@@ -657,6 +659,7 @@ func TestAPIHelp_StatusOK(t *testing.T) {
 	cfg := createTestConfig()
 	h := NewServerHandler(cfg)
 	req := httptest.NewRequest("GET", "/api/v1/server/help", nil)
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
 	h.APIHelp(rr, req)
 	if rr.Code != http.StatusOK {

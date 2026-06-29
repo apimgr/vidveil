@@ -4970,3 +4970,42 @@ a:focus-visible {
         align-items: center;
     }
 }
+
+/* Long String Handling per AI.md PART 16 */
+/* Required CSS for elements containing: IPs, URLs, hashes, tokens, codes */
+.long-string,
+.ip-address,
+.onion-address,
+.api-token,
+.hash,
+.uuid,
+.monospace-data {
+    word-break: break-all;
+    overflow-wrap: break-word;
+    font-family: monospace;
+    font-size: 0.875rem;
+}
+
+/* Alternative: horizontal scroll for code blocks */
+.code-block {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+}
+
+/* Responsive breakpoints per AI.md PART 16 */
+@media (min-width: 1024px) {
+    :root {
+        --content-width: 95%;
+    }
+}
+
+@media (min-width: 1280px) {
+    :root {
+        --content-width: 1400px;
+        --content-margin: auto;
+    }
+}

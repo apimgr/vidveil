@@ -8,64 +8,64 @@
     {{template "public/header" .}}
     <main class="preferences">
         <div class="preferences-header">
-            <h1>Preferences</h1>
-            <button type="button" class="preferences-close" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'" aria-label="Close">&times;</button>
+            <h1>{{ t "prefs.title" }}</h1>
+            <button type="button" class="preferences-close" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'" aria-label="{{ t "prefs.close" }}">&times;</button>
         </div>
         <form id="preferences-form">
             <section>
-                <h2>Appearance</h2>
+                <h2>{{ t "prefs.appearance" }}</h2>
                 <div class="form-group">
-                    <label for="theme">Theme:</label>
+                    <label for="theme">{{ t "prefs.theme" }}:</label>
                     <select id="theme" name="theme">
-                        <option value="auto">Auto (System)</option>
-                        <option value="dark">Dark (Dracula)</option>
-                        <option value="light">Light</option>
+                        <option value="auto">{{ t "prefs.theme.auto" }}</option>
+                        <option value="dark">{{ t "prefs.theme.dark" }}</option>
+                        <option value="light">{{ t "prefs.theme.light" }}</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="grid-density">Grid density:</label>
+                    <label for="grid-density">{{ t "prefs.grid_density" }}:</label>
                     <select id="grid-density" name="gridDensity">
-                        <option value="comfortable">Comfortable (larger cards)</option>
-                        <option value="default" selected>Default</option>
-                        <option value="compact">Compact (more cards)</option>
+                        <option value="comfortable">{{ t "prefs.grid_comfortable" }}</option>
+                        <option value="default" selected>{{ t "prefs.grid_default" }}</option>
+                        <option value="compact">{{ t "prefs.grid_compact" }}</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="thumbnail-size">Thumbnail size:</label>
+                    <label for="thumbnail-size">{{ t "prefs.thumbnail_size" }}:</label>
                     <select id="thumbnail-size" name="thumbnailSize">
-                        <option value="small">Small</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="large">Large</option>
+                        <option value="small">{{ t "prefs.size_small" }}</option>
+                        <option value="medium" selected>{{ t "prefs.size_medium" }}</option>
+                        <option value="large">{{ t "prefs.size_large" }}</option>
                     </select>
                 </div>
             </section>
 
             <section>
-                <h2>Video Preview</h2>
+                <h2>{{ t "prefs.video_preview" }}</h2>
                 <div class="form-group">
                     <label class="toggle">
                         <input type="checkbox" id="autoplay-preview" name="autoplayPreview" checked>
                         <span class="slider"></span>
-                        <span class="toggle-label">Auto-play preview on hover (desktop)</span>
+                        <span class="toggle-label">{{ t "prefs.autoplay_preview" }}</span>
                     </label>
                 </div>
                 <div class="form-group">
-                    <label for="preview-delay">Preview delay:</label>
+                    <label for="preview-delay">{{ t "prefs.preview_delay" }}:</label>
                     <select id="preview-delay" name="previewDelay">
-                        <option value="0" selected>Instant</option>
-                        <option value="200">Short (200ms)</option>
-                        <option value="500">Medium (500ms)</option>
-                        <option value="1000">Long (1s)</option>
+                        <option value="0" selected>{{ t "prefs.delay_instant" }}</option>
+                        <option value="200">{{ t "prefs.delay_short" }}</option>
+                        <option value="500">{{ t "prefs.delay_medium" }}</option>
+                        <option value="1000">{{ t "prefs.delay_long" }}</option>
                     </select>
                 </div>
             </section>
 
             <section>
-                <h2>Search Settings</h2>
+                <h2>{{ t "prefs.search_settings" }}</h2>
                 <div class="form-group">
-                    <label for="results-per-page">Results per page:</label>
+                    <label for="results-per-page">{{ t "prefs.results_page" }}:</label>
                     <select id="results-per-page" name="resultsPerPage">
-                        <option value="0" selected>Infinite scroll</option>
+                        <option value="0" selected>{{ t "prefs.infinite_scroll" }}</option>
                         <option value="20">20</option>
                         <option value="50">50</option>
                         <option value="100">100</option>
@@ -75,82 +75,82 @@
                     <label class="toggle">
                         <input type="checkbox" id="open-new-tab" name="openNewTab" checked>
                         <span class="slider"></span>
-                        <span class="toggle-label">Open links in new tab</span>
+                        <span class="toggle-label">{{ t "prefs.open_new_tab" }}</span>
                     </label>
                 </div>
             </section>
 
             <section>
-                <h2>Default Filters</h2>
-                <p class="section-description">These filters will be applied automatically to new searches:</p>
+                <h2>{{ t "prefs.default_filters" }}</h2>
+                <p class="section-description">{{ t "prefs.default_filters_desc" }}</p>
                 <div class="form-group">
                     <label class="toggle">
                         <input type="checkbox" id="default-preview-only" name="defaultPreviewOnly" checked>
                         <span class="slider"></span>
-                        <span class="toggle-label">Show videos with preview first</span>
+                        <span class="toggle-label">{{ t "prefs.preview_only" }}</span>
                     </label>
-                    <p class="form-hint">Videos with video preview capability appear first, followed by all other results.</p>
+                    <p class="form-hint">{{ t "prefs.preview_only_hint" }}</p>
                 </div>
                 <div class="form-group">
                     <label class="toggle">
                         <input type="checkbox" id="show-ai-content" name="showAIContent">
                         <span class="slider"></span>
-                        <span class="toggle-label">Show AI-generated content (deepfakes, synthetic)</span>
+                        <span class="toggle-label">{{ t "prefs.show_synthetic_content" }}</span>
                     </label>
-                    <p class="form-hint">Disabled by default. AI-generated videos are filtered out for authenticity.</p>
+                    <p class="form-hint">{{ t "prefs.show_synthetic_hint" }}</p>
                 </div>
                 <div class="form-group">
-                    <label for="default-duration">Default duration filter:</label>
+                    <label for="default-duration">{{ t "prefs.default_duration" }}:</label>
                     <select id="default-duration" name="defaultDuration">
-                        <option value="" selected>Any</option>
-                        <option value="short">Under 10 min</option>
-                        <option value="medium">10-30 min</option>
-                        <option value="long">Over 30 min</option>
+                        <option value="" selected>{{ t "filter.any" }}</option>
+                        <option value="short">{{ t "filter.under_10" }}</option>
+                        <option value="medium">{{ t "filter.10_30" }}</option>
+                        <option value="long">{{ t "filter.over_30" }}</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="min-quality">Minimum video quality:</label>
+                    <label for="min-quality">{{ t "prefs.min_quality" }}:</label>
                     <select id="min-quality" name="minQuality">
-                        <option value="0">Any quality</option>
+                        <option value="0">{{ t "prefs.any_quality" }}</option>
                         <option value="240">240p+</option>
-                        <option value="360" selected>360p+ (Recommended)</option>
+                        <option value="360" selected>{{ t "prefs.quality_recommended" }}</option>
                         <option value="480">480p+</option>
-                        <option value="720">720p+ (HD)</option>
-                        <option value="1080">1080p+ (Full HD)</option>
-                        <option value="2160">4K only</option>
+                        <option value="720">{{ t "prefs.quality_hd" }}</option>
+                        <option value="1080">{{ t "prefs.quality_fhd" }}</option>
+                        <option value="2160">{{ t "prefs.quality_4k" }}</option>
                     </select>
-                    <p class="form-hint">Videos without quality info will pass this filter.</p>
+                    <p class="form-hint">{{ t "prefs.quality_hint" }}</p>
                 </div>
                 <div class="form-group">
-                    <label for="default-sort">Default sort:</label>
+                    <label for="default-sort">{{ t "prefs.default_sort" }}:</label>
                     <select id="default-sort" name="defaultSort">
-                        <option value="" selected>Relevance</option>
-                        <option value="duration-desc">Longest</option>
-                        <option value="duration-asc">Shortest</option>
-                        <option value="views">Most Viewed</option>
-                        <option value="quality">Best Quality</option>
+                        <option value="" selected>{{ t "prefs.sort_relevance" }}</option>
+                        <option value="duration-desc">{{ t "prefs.sort_longest" }}</option>
+                        <option value="duration-asc">{{ t "prefs.sort_shortest" }}</option>
+                        <option value="views">{{ t "prefs.sort_views" }}</option>
+                        <option value="quality">{{ t "prefs.sort_quality" }}</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="min-duration">Minimum video duration:</label>
+                    <label for="min-duration">{{ t "prefs.min_duration" }}:</label>
                     <select id="min-duration" name="minDuration">
-                        <option value="0">No minimum</option>
-                        <option value="60">1 minute</option>
-                        <option value="180">3 minutes</option>
-                        <option value="300">5 minutes</option>
-                        <option value="600" selected>10 minutes</option>
-                        <option value="1200">20 minutes</option>
-                        <option value="1800">30 minutes</option>
+                        <option value="0">{{ t "prefs.no_minimum" }}</option>
+                        <option value="60">1 {{ t "time.minute" }}</option>
+                        <option value="180">3 {{ t "time.minutes_plural" }}</option>
+                        <option value="300">5 {{ t "time.minutes_plural" }}</option>
+                        <option value="600" selected>10 {{ t "time.minutes_plural" }}</option>
+                        <option value="1200">20 {{ t "time.minutes_plural" }}</option>
+                        <option value="1800">30 {{ t "time.minutes_plural" }}</option>
                     </select>
                 </div>
             </section>
 
             <section>
-                <h2>History</h2>
+                <h2>{{ t "prefs.history" }}</h2>
                 <div class="form-group">
-                    <label for="max-history">Maximum history items:</label>
+                    <label for="max-history">{{ t "prefs.max_history" }}:</label>
                     <select id="max-history" name="maxHistory">
-                        <option value="0" selected>Unlimited</option>
+                        <option value="0" selected>{{ t "prefs.unlimited" }}</option>
                         <option value="10">10</option>
                         <option value="25">25</option>
                         <option value="50">50</option>
@@ -158,58 +158,58 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="auto-clear-history">Auto-clear history:</label>
+                    <label for="auto-clear-history">{{ t "prefs.auto_clear_history" }}:</label>
                     <select id="auto-clear-history" name="autoClearHistory">
-                        <option value="0" selected>Never</option>
-                        <option value="1">After 1 day</option>
-                        <option value="7">After 7 days</option>
-                        <option value="30">After 30 days</option>
+                        <option value="0" selected>{{ t "prefs.never" }}</option>
+                        <option value="1">{{ t "prefs.after_1_day" }}</option>
+                        <option value="7">{{ t "prefs.after_7_days" }}</option>
+                        <option value="30">{{ t "prefs.after_30_days" }}</option>
                     </select>
                 </div>
                 <div class="form-group form-group--buttons">
-                    <button type="button" class="btn-secondary" onclick="exportHistory()">Export History</button>
+                    <button type="button" class="btn-secondary" onclick="exportHistory()">{{ t "prefs.export_history" }}</button>
                     <label class="btn-secondary btn-file">
-                        Import History
+                        {{ t "prefs.import_history" }}
                         <input type="file" accept=".json" onchange="importHistory(this.files[0])" hidden>
                     </label>
-                    <button type="button" class="btn-danger" onclick="clearHistory()">Clear History</button>
+                    <button type="button" class="btn-danger" onclick="clearHistory()">{{ t "prefs.clear_history" }}</button>
                 </div>
             </section>
 
             <section>
-                <h2>Favorites</h2>
-                <p class="section-description">You have <span id="favorites-count">0</span> favorites saved.</p>
+                <h2>{{ t "favorites.title" }}</h2>
+                <p class="section-description">{{ t "favorites.count" | printf "%s" "<span id=\"favorites-count\">0</span>" }}</p>
                 <div class="form-group form-group--buttons">
-                    <button type="button" class="btn-secondary" onclick="exportFavorites()">Export Favorites</button>
+                    <button type="button" class="btn-secondary" onclick="exportFavorites()">{{ t "favorites.export" }}</button>
                     <label class="btn-secondary btn-file">
-                        Import Favorites
+                        {{ t "favorites.import" }}
                         <input type="file" accept=".json" onchange="importFavorites(this.files[0])" hidden>
                     </label>
-                    <button type="button" class="btn-danger" onclick="clearFavorites()">Clear Favorites</button>
+                    <button type="button" class="btn-danger" onclick="clearFavorites()">{{ t "favorites.clear" }}</button>
                 </div>
             </section>
 
             <section>
-                <h2>Privacy</h2>
+                <h2>{{ t "prefs.privacy" }}</h2>
                 <div class="form-group">
                     <label class="toggle">
                         <input type="checkbox" id="use-tor" name="useTor">
                         <span class="slider"></span>
-                        <span class="toggle-label">Use Tor for all searches (requires Tor running)</span>
+                        <span class="toggle-label">{{ t "prefs.use_tor" }}</span>
                     </label>
                 </div>
                 <div class="form-group">
                     <label class="toggle">
                         <input type="checkbox" id="proxy-images" name="proxyImages" checked>
                         <span class="slider"></span>
-                        <span class="toggle-label">Proxy thumbnails through server</span>
+                        <span class="toggle-label">{{ t "prefs.proxy_images" }}</span>
                     </label>
                 </div>
             </section>
 
             <section>
-                <h2>Search Engines</h2>
-                <p class="section-description">Toggle tiers on/off or select individual engines:</p>
+                <h2>{{ t "prefs.engines" }}</h2>
+                <p class="section-description">{{ t "prefs.engines_desc" }}</p>
                 <div class="engine-tiers" id="engine-tiers">
                     {{range .Engines}}
                     <label class="engine-toggle" data-tier="{{.Tier}}" data-engine="{{.Name}}" hidden>
@@ -219,14 +219,14 @@
                     {{end}}
                 </div>
                 <div class="engine-actions">
-                    <button type="button" onclick="selectAllEngines()">Select All</button>
-                    <button type="button" onclick="selectNoneEngines()">Select None</button>
+                    <button type="button" onclick="selectAllEngines()">{{ t "search.select_all" }}</button>
+                    <button type="button" onclick="selectNoneEngines()">{{ t "search.deselect_all" }}</button>
                 </div>
             </section>
 
             <div class="form-actions">
-                <button type="submit" class="primary">Save Preferences</button>
-                <button type="button" onclick="resetPreferences()">Reset to Defaults</button>
+                <button type="submit" class="primary">{{ t "prefs.save" }}</button>
+                <button type="button" onclick="resetPreferences()">{{ t "prefs.reset" }}</button>
             </div>
         </form>
     </main>
@@ -348,7 +348,7 @@
             var maxAge = 365 * 24 * 3600;
             document.cookie = 'vidveil-theme=' + encodeURIComponent(prefs.theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
 
-            showToast('Preferences saved!', 'success');
+            showToast('{{ t "prefs.saved" }}', 'success');
             // Auto-close after saving
             setTimeout(function() {
                 if (window.history.length > 1) {
@@ -375,7 +375,7 @@
         window.resetPreferences = function() {
             localStorage.removeItem(STORAGE_KEY);
             loadPreferences();
-            showToast('Preferences reset to defaults', 'info');
+            showToast('{{ t "prefs.reset_done" }}', 'info');
         };
 
         // Engine selection
@@ -426,7 +426,7 @@
         window.exportFavorites = function() {
             const favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
             downloadJSON(favorites, 'vidveil-favorites.json');
-            showToast('Favorites exported', 'success');
+            showToast('{{ t "favorites.exported" }}', 'success');
         };
 
         window.importFavorites = function(file) {
@@ -448,7 +448,7 @@
                         updateFavoritesCount();
                         showToast('Favorites imported (' + data.length + ' items)', 'success');
                     } else {
-                        showToast('Invalid favorites file', 'error');
+                        showToast('{{ t "favorites.invalid_file" }}', 'error');
                     }
                 } catch (err) {
                     showToast('Failed to parse file', 'error');
@@ -459,10 +459,10 @@
 
         window.clearFavorites = function() {
             // Per AI.md PART 16: use showConfirm modal, never window.confirm.
-            showConfirm('Clear all favorites?', function () {
+            showConfirm('{{ t "favorites.confirm_clear" }}', function () {
                 localStorage.removeItem(FAVORITES_KEY);
                 updateFavoritesCount();
-                showToast('Favorites cleared', 'info');
+                showToast('{{ t "favorites.cleared" }}', 'info');
             });
         };
 
@@ -492,12 +492,12 @@
             // Group engines by tier
             const tiers = {};
             const tierNames = {
-                1: 'Tier 1 - Major Sites',
-                2: 'Tier 2 - Popular Sites',
-                3: 'Tier 3 - Additional Sites',
-                4: 'Tier 4 - More Sites',
-                5: 'Tier 5 - Extended Sites',
-                6: 'Tier 6 - Other Sites'
+                1: '{{ t "tier.1" }}',
+                2: '{{ t "tier.2" }}',
+                3: '{{ t "tier.3" }}',
+                4: '{{ t "tier.4" }}',
+                5: '{{ t "tier.5" }}',
+                6: '{{ t "tier.6" }}'
             };
 
             engines.forEach(eng => {
@@ -528,7 +528,7 @@
                     <label class="toggle tier-toggle">
                         <input type="checkbox" data-tier="${tier}" checked>
                         <span class="slider"></span>
-                        <span class="toggle-label">${tierName} (${tierEngines.length} engines)</span>
+                        <span class="toggle-label">${tierName} (${tierEngines.length} {{ t "tier.engines" }})</span>
                     </label>
                     <button type="button" class="tier-expand" aria-expanded="false" aria-label="Expand tier">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

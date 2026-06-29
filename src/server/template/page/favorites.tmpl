@@ -9,37 +9,47 @@
     {{template "public/nav" .}}
     <main class="favorites-page">
         <div class="favorites-toolbar">
-            <h1>Favorites</h1>
+            <h1>{{ t "favorites.title" }}</h1>
             <div class="favorites-actions">
                 <span id="favorites-count-label" class="favorites-count"></span>
-                <button type="button" class="btn-secondary btn-sm" id="export-btn" onclick="exportFavs()">Export</button>
+                <button type="button" class="btn-secondary btn-sm" id="export-btn" onclick="exportFavs()">{{ t "favorites.export" }}</button>
                 <label class="btn-secondary btn-sm btn-file">
-                    Import
+                    {{ t "favorites.import" }}
                     <input type="file" accept=".json" onchange="importFavs(this)" hidden>
                 </label>
-                <button type="button" class="btn-danger btn-sm" id="clear-btn" onclick="clearFavs()">Clear all</button>
+                <button type="button" class="btn-danger btn-sm" id="clear-btn" onclick="clearFavs()">{{ t "favorites.clear" }}</button>
             </div>
         </div>
 
         <noscript>
-            <p class="favorites-nojs">Favorites are stored locally in your browser. JavaScript is required to display them.</p>
+            <p class="favorites-nojs">{{ t "favorites.nojs" }}</p>
         </noscript>
 
         <div id="favorites-empty" class="favorites-empty" hidden>
             <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
             </svg>
-            <p>No favorites yet.</p>
-            <p class="favorites-empty-hint">Use the <strong>⋮</strong> menu on any video to add it here.</p>
-            <a href="/search" class="btn-primary">Start searching</a>
+            <p>{{ t "favorites.empty" }}</p>
+            <p class="favorites-empty-hint">{{ t "favorites.empty_hint" | safeHTML }}</p>
+            <a href="/search" class="btn-primary">{{ t "favorites.start_search" }}</a>
         </div>
 
-        <div id="favorites-grid" class="video-grid" role="list" aria-label="Favorites"></div>
+        <div id="favorites-grid" class="video-grid" role="list" aria-label="{{ t "favorites.title" }}"></div>
     </main>
     {{template "public/footer" .}}
     <script>
     (function() {
         var FAVORITES_KEY = 'vidveil_favorites';
+        var i18n = {
+            countSingular: '{{ t "favorites.count_singular" }}',
+            countPlural: '{{ t "favorites.count" }}',
+            remove: '{{ t "favorites.remove" }}',
+            exported: '{{ t "favorites.exported" }}',
+            imported: '{{ t "favorites.imported" }}',
+            cleared: '{{ t "favorites.cleared" }}',
+            invalidFile: '{{ t "favorites.invalid_file" }}',
+            confirmClear: '{{ t "favorites.confirm_clear" }}'
+        };
 
         function getFavs() {
             try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'); } catch(e) { return []; }
@@ -65,7 +75,7 @@
             }
 
             empty.hidden = true;
-            label.textContent = favs.length + (favs.length === 1 ? ' favorite' : ' favorites');
+            label.textContent = favs.length === 1 ? i18n.countSingular : i18n.countPlural.replace('%d', favs.length);
 
             favs.forEach(function(fav, i) {
                 var card = document.createElement('article');
@@ -89,7 +99,7 @@
                 if (fav.source) html += '<span class="source">' + escHtml(fav.source) + '</span>';
                 html += '</div></div>';
 
-                html += '<button type="button" class="fav-remove" aria-label="Remove from favorites" data-idx="' + i + '" title="Remove">&times;</button>';
+                html += '<button type="button" class="fav-remove" aria-label="' + i18n.remove + '" data-idx="' + i + '" title="' + i18n.remove + '">&times;</button>';
 
                 card.innerHTML = html;
                 card.querySelector('.fav-remove').addEventListener('click', function() {
@@ -120,7 +130,7 @@
             reader.onload = function(e) {
                 try {
                     var imported = JSON.parse(e.target.result);
-                    if (!Array.isArray(imported)) { alert('Invalid favorites file.'); return; }
+                    if (!Array.isArray(imported)) { alert(i18n.invalidFile); return; }
                     var cur = getFavs();
                     imported.forEach(function(item) {
                         if (item.url && !cur.some(function(f) { return f.url === item.url; })) {
@@ -131,14 +141,14 @@
                     render();
                     input.value = '';
                 } catch(e) {
-                    alert('Could not read favorites file.');
+                    alert(i18n.invalidFile);
                 }
             };
             reader.readAsText(file);
         };
 
         window.clearFavs = function() {
-            if (!confirm('Remove all favorites? This cannot be undone.')) return;
+            if (!confirm(i18n.confirmClear)) return;
             saveFavs([]);
             render();
         };

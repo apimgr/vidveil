@@ -7,39 +7,39 @@
 <body>
     {{template "public/header" .}}
     <main class="about">
-        <h1>About Vidveil</h1>
+        <h1>{{ t "about.title" }}</h1>
         <section>
-            <h2>What is Vidveil?</h2>
-            <p>Vidveil is a privacy-respecting meta search engine for adult videos. It aggregates results from 49 adult video sites without tracking you or storing your search history.</p>
+            <h2>{{ t "about.what_is" }}</h2>
+            <p>{{ t "about.description" }}</p>
         </section>
         <section>
-            <h2>Features</h2>
+            <h2>{{ t "about.features" }}</h2>
             <ul>
-                <li>49 search engines across major adult video sites</li>
-                <li>Full Tor support for anonymous searching</li>
-                <li>No tracking, no cookies, no logs</li>
-                <li>Fast parallel search across all engines</li>
-                <li>Video thumbnails, duration, and view counts</li>
-                <li>Configurable engine selection</li>
-                <li>Dark and light themes</li>
-                <li>REST API and GraphQL support</li>
-                <li>Self-hostable single binary</li>
+                <li>{{ t "about.feature_engines" }}</li>
+                <li>{{ t "about.feature_tor" }}</li>
+                <li>{{ t "about.feature_privacy" }}</li>
+                <li>{{ t "about.feature_parallel" }}</li>
+                <li>{{ t "about.feature_thumbnails" }}</li>
+                <li>{{ t "about.feature_config" }}</li>
+                <li>{{ t "about.feature_themes" }}</li>
+                <li>{{ t "about.feature_api" }}</li>
+                <li>{{ t "about.feature_selfhost" }}</li>
             </ul>
         </section>
         <section>
-            <h2>API</h2>
-            <p>Vidveil provides REST, GraphQL, and OpenAPI documentation:</p>
+            <h2>{{ t "about.api" }}</h2>
+            <p>{{ t "about.api_desc" }}</p>
             <div class="api-endpoints">
                 <code>GET /api/v1/search?q={query}&amp;page={page}</code>
                 <code>GET /api/v1/engines</code>
                 <code>GET /api/v1/healthz</code>
                 <code>POST /graphql</code>
             </div>
-            <p><a href="/server/docs/swagger">View API Documentation (Swagger)</a></p>
+            <p><a href="/server/docs/swagger">{{ t "about.api_docs" }}</a></p>
         </section>
         <section>
-            <h2>Self-Hosting</h2>
-            <p>Vidveil is distributed as a single static binary with embedded assets:</p>
+            <h2>{{ t "about.selfhost" }}</h2>
+            <p>{{ t "about.selfhost_desc" }}</p>
             <pre><code># Direct run
 ./vidveil --port 64893
 
@@ -47,9 +47,9 @@
 docker run -p 64580:80 ghcr.io/apimgr/vidveil</code></pre>
         </section>
         <section>
-            <h2>Legal</h2>
-            <p>Vidveil is a meta search engine that aggregates publicly available content from third-party websites. We do not host any content. All search results link directly to their original sources.</p>
-            <p>Users must be 18+ years old to use this service.</p>
+            <h2>{{ t "about.legal" }}</h2>
+            <p>{{ t "about.legal_desc" }}</p>
+            <p>{{ t "about.age_requirement" }}</p>
         </section>
     </main>
     {{template "public/footer" .}}

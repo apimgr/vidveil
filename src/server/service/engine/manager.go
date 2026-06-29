@@ -116,6 +116,9 @@ func (m *EngineManager) InitializeEngines() {
 
 // applyConfig applies engine-specific configuration
 func (m *EngineManager) applyConfig() {
+	if m.appConfig == nil {
+		return
+	}
 	// All engines are enabled by default
 	// DefaultEngines config can limit which engines to use
 	defaultEngines := m.appConfig.Search.DefaultEngines
@@ -191,7 +194,11 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 	// Track per-engine stats
 	engineStats := make(map[string]model.EngineStatInfo)
 
-	minDuration := m.appConfig.Search.MinDurationSeconds
+	// Get min duration from config, defaulting to 0 if config is nil
+	minDuration := 0
+	if m.appConfig != nil {
+		minDuration = m.appConfig.Search.MinDurationSeconds
+	}
 	queryIntent := DetectQueryIntent(query)
 
 	for result := range resultsChan {
@@ -261,7 +268,12 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 
 	// Sort results by relevance and filter by minimum score
 	// Default minimum score of 10.0 ensures at least one query word matches
-	minScore := m.appConfig.Search.MinRelevanceScore
+	minScore := 10.0
+	resultsPerPage := 50
+	if m.appConfig != nil {
+		minScore = m.appConfig.Search.MinRelevanceScore
+		resultsPerPage = m.appConfig.Search.ResultsPerPage
+	}
 	allResults = sortAndFilterByRelevance(allResults, query, minScore)
 
 	// Build response
@@ -279,9 +291,9 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 		},
 		Pagination: model.PaginationData{
 			Page:  page,
-			Limit: m.appConfig.Search.ResultsPerPage,
+			Limit: resultsPerPage,
 			Total: len(allResults),
-			Pages: (len(allResults) + m.appConfig.Search.ResultsPerPage - 1) / m.appConfig.Search.ResultsPerPage,
+			Pages: (len(allResults) + resultsPerPage - 1) / resultsPerPage,
 		},
 	}
 }
@@ -881,7 +893,10 @@ func (m *EngineManager) DebugSearch(ctx context.Context, query string, page int)
 	}()
 
 	// Process results
-	minDuration := m.appConfig.Search.MinDurationSeconds
+	minDuration := 0
+	if m.appConfig != nil {
+		minDuration = m.appConfig.Search.MinDurationSeconds
+	}
 	var engineInfos []EngineDebugInfo
 	successCount := 0
 	failedCount := 0
@@ -1226,7 +1241,11 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 		m.mu.RUnlock()
 
 		var wg sync.WaitGroup
-		minDuration := m.appConfig.Search.MinDurationSeconds
+		// Get min duration from config, defaulting to 0 if config is nil
+		minDuration := 0
+		if m.appConfig != nil {
+			minDuration = m.appConfig.Search.MinDurationSeconds
+		}
 		// User's preference overrides config minimum duration
 		if userMinDuration > minDuration {
 			minDuration = userMinDuration
@@ -1316,9 +1335,9 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						}
 					}
 
-					// AI content filter - skip AI-generated/deepfake content unless user overrides
-					// showAI=true means user wants to see AI content (overrides server default)
-					if m.appConfig.Search.AIFilter.Enabled && !showAI {
+					// Synthetic content filter - skip deepfake/computer-rendered content unless user overrides
+					// showAI=true means user wants to see synthetic content (overrides server default)
+					if m.appConfig != nil && m.appConfig.Search.AIFilter.Enabled && !showAI {
 						if isAIGeneratedContent(titleLower, r.Tags, m.appConfig.Search.AIFilter.Keywords) {
 							continue
 						}

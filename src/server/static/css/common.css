@@ -4904,7 +4904,6 @@ a:focus-visible {
 }
 
 .favorites-empty {
-    display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -4912,6 +4911,11 @@ a:focus-visible {
     padding: 4rem 1rem;
     text-align: center;
     color: var(--muted, #6272a4);
+}
+
+/* Show empty state only when not hidden - prevents [hidden] specificity conflict */
+.favorites-empty:not([hidden]) {
+    display: flex;
 }
 
 .favorites-empty svg {

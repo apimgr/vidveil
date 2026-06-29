@@ -1,6 +1,18 @@
 # TODO.AI.md — vidveil Outstanding Items
 
-## [x] Fix Makefile cross-compile targets (build/dev/local)
+## [ ] PART 32: Implement native GUI mode for vidveil-cli
+AI.md PART 32 requires "Full GUI app (GTK/Cocoa/Win32)" for DisplayModeGUI. Currently only bubbletea TUI is implemented.
+- Use fyne.io cross-platform GUI toolkit (pure Go, no CGO required for basic apps)
+- Implement same functionality as TUI: server list, search, favorites, settings
+- Add --gui flag to launch GUI mode
+- Detect DISPLAY/WAYLAND_DISPLAY on Linux, always available on macOS/Windows
+Read: AI.md PART 32
+
+---
+
+## Completed
+
+### [x] Fix Makefile cross-compile targets (build/dev/local)
 Rewrote Makefile per AI.md PART 25: spec variable names (GO_CACHE, GO_BUILD, OFFICIALSITE, PROJECTNAME/PROJECTORG), spec mount paths (/app, /usr/local/share/go/pkg/mod, /usr/local/share/go/cache), spec targets (build: clean, local: clean), 80% coverage enforcement in test with temp-dir isolation, dev writes to $TMPDIR/$PROJECTORG/$PROJECTNAME-XXXXXX. Cross-compile uses -e GOOS/-e GOARCH env flags (not sh -c which the entrypoint drops); test and dev use -v $$DIR:$$DIR volume mounts. GO_DOCKER defined per spec (includes image); _GO_OPTS is internal helper for cases needing extra flags before image.
 make test passes: 80% coverage ✓, darwin/arm64 cross-compile confirmed ✓
 Read: AI.md PART 25

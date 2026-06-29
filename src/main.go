@@ -820,7 +820,7 @@ func main() {
 }
 
 func printHelp() {
-	// Per AI.md PART 8: Exact --help output format
+	// Per AI.md PART 8: Exact --help output format with " - " separator
 	binaryName := filepath.Base(os.Args[0])
 	fmt.Printf(`%s %s - Privacy-respecting adult video meta search engine
 
@@ -828,37 +828,37 @@ Usage:
   %s [flags]
 
 Information:
-  -h, --help                        Show help (--help for any command shows its help)
-  -v, --version                     Show version
-      --status                      Show server status and health
+-h, --help                             - Show help (--help for any command shows its help)
+-v, --version                          - Show version
+--status                               - Show server status and health
 
 Shell Integration:
-      --shell completions [SHELL]   Print shell completions
-      --shell init [SHELL]          Print shell init command
-      --shell --help                Show shell help
+--shell completions [SHELL]            - Print shell completions
+--shell init [SHELL]                   - Print shell init command
+--shell help                           - Show shell help
 
 Server Configuration:
-      --mode {production|development}  Application mode (default: production)
-      --config DIR                  Config directory
-      --data DIR                    Data directory
-      --cache DIR                   Cache directory
-      --log DIR                     Log directory
-      --backup DIR                  Backup directory
-      --pid FILE                    PID file path
-      --address ADDR                Listen address (default: 0.0.0.0)
-      --port PORT                   Listen port (default: random 64xxx, 80 in container)
-      --baseurl PATH                URL path prefix (default: /)
-      --daemon                      Run as daemon (detach from terminal)
-      --debug                       Enable debug mode
-      --color {auto|yes|no}         Color output (default: auto, respects NO_COLOR)
-      --lang CODE                   Language for output (default: auto)
+--mode {production|development}        - Application mode (default: production)
+--config DIR                           - Config directory
+--data DIR                             - Data directory
+--cache DIR                            - Cache directory
+--log DIR                              - Log directory
+--backup DIR                           - Backup directory
+--pid FILE                             - PID file path
+--address ADDR                         - Listen address (default: 0.0.0.0)
+--port PORT                            - Listen port (default: random 64xxx, 80 in container)
+--baseurl PATH                         - URL path prefix (default: /)
+--daemon                               - Run as daemon (detach from terminal)
+--debug                                - Enable debug mode
+--color {auto|yes|no}                  - Color output (default: auto)
+--lang CODE                            - Language for output (default: auto)
 
 Service Management:
-      --service CMD                 Service management (--service --help for details)
-      --maintenance CMD             Maintenance operations (--maintenance --help for details)
-      --update [CMD]                Check/perform updates (--update --help for details)
+--service CMD                          - Service management (run --service help for details)
+--maintenance CMD                      - Maintenance operations (run --maintenance help for details)
+--update [CMD]                         - Check/perform updates (run --update help for details)
 
-Run '%s <command> --help' for detailed help on any command.
+Run '%s <command> help' for detailed help on any command.
 `, binaryName, version.GetVersion(), binaryName, binaryName)
 }
 

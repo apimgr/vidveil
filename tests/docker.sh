@@ -164,9 +164,10 @@ docker run -d \
 sleep 3
 
 # Wait for server to be ready (retry health check up to 15 times)
+# Per AI.md PART 13: /server/healthz is canonical; /healthz is opt-in
 info "Waiting for server to be ready..."
 for i in $(seq 1 15); do
-    if docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/healthz" 2>/dev/null | grep -q "200"; then
+    if docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/server/healthz" 2>/dev/null | grep -q "200"; then
         break
     fi
     sleep 1
@@ -174,7 +175,7 @@ done
 
 # Step 7: Test Health Endpoint
 info "Testing health endpoint..."
-test_endpoint GET "/healthz" "200" "Health check"
+test_endpoint GET "/server/healthz" "200" "Health check"
 
 # Step 8: Test Vidveil-Specific Endpoints (PART 36)
 info "Testing vidveil-specific endpoints..."

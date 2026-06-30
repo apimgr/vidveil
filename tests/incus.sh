@@ -186,30 +186,39 @@ fi
 
 # Detect port from service logs (random 64xxx per AI.md PART 5)
 info "Detecting service port..."
-SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 50 | grep -oP 'Listening on \[::\]:\K[0-9]+' | tail -1 || echo "")
+# Try IPv6 format [::]:PORT first, then IPv4 0.0.0.0:PORT
+SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 50 2>/dev/null | grep -oP 'Listening on (\[::\]:|[0-9.]+:)\K[0-9]+' | tail -1 || echo "")
 if [ -z "$SERVICE_PORT" ]; then
-    SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- ss -tlnp | grep vidveil | grep -oP ':\K[0-9]+' | head -1 || echo "64080")
+    SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- ss -tlnp 2>/dev/null | grep vidveil | grep -oP ':\K[0-9]+' | head -1 || echo "")
+fi
+if [ -z "$SERVICE_PORT" ]; then
+    # Fall back to reading config file
+    SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- grep -oP 'port:\s*["'"'"']?\K[0-9]+' /etc/apimgr/vidveil/server.yml 2>/dev/null || echo "64080")
 fi
 info "Service running on port: ${SERVICE_PORT}"
 
 # Step 13: Test HTTP endpoints
+# Per AI.md PART 13: /server/healthz is canonical; /healthz is opt-in via config
 info "Testing API endpoints..."
-if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/healthz" | grep -q "^200$"; then
+if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/server/healthz" | grep -q "^200$"; then
     pass "Health endpoint responding"
 else
     fail "Health endpoint not responding"
 fi
 
-if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/api/v1/engines" | grep -q '"ok"'; then
+# Per AI.md PART 14: API endpoints return JSON when Accept: application/json
+ENGINES_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -s -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/api/v1/engines" 2>&1 || echo "curl failed")
+if echo "$ENGINES_OUT" | grep -q '"ok"'; then
     pass "Engines API responding"
 else
-    fail "Engines API not responding"
+    fail "Engines API not responding (got: ${ENGINES_OUT:0:200})"
 fi
 
-if incus exec "${INSTANCE_NAME}" -- curl -s "http://localhost:${SERVICE_PORT}/api/v1/bangs" | grep -q '"ok"'; then
+BANGS_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -s -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/api/v1/bangs" 2>&1 || echo "curl failed")
+if echo "$BANGS_OUT" | grep -q '"ok"'; then
     pass "Bangs API responding"
 else
-    fail "Bangs API not responding"
+    fail "Bangs API not responding (got: ${BANGS_OUT:0:200})"
 fi
 
 # Test SSE streaming (informational - may fail without configured engines)

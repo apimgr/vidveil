@@ -420,3 +420,62 @@ func (v *ValkeyCache) Close() error {
 // Compile-time interface check
 var _ SearchResultCache = (*SearchCache)(nil)
 var _ SearchResultCache = (*ValkeyCache)(nil)
+
+// WarmCacheData holds pre-computed data for cache warming per AI.md PART 9
+type WarmCacheData struct {
+	// BlocklistHashes contains blocklist IP/domain hashes for fast lookup
+	BlocklistHashes []string
+	// GeoIPInfo contains GeoIP database metadata (version, update date)
+	GeoIPInfo map[string]string
+	// EngineStatus contains engine availability status
+	EngineStatus map[string]bool
+}
+
+// WarmableCache extends SearchResultCache with warming capability
+type WarmableCache interface {
+	SearchResultCache
+	// Warm pre-populates cache with frequently accessed data
+	Warm(ctx context.Context, data WarmCacheData) error
+}
+
+// Warm pre-populates the in-memory cache with startup data per AI.md PART 9
+// This reduces cold-start latency for frequently accessed data
+func (c *SearchCache) Warm(ctx context.Context, data WarmCacheData) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Cache is for search results only — warming is a no-op for SearchCache
+	// GeoIP, blocklist, and config are handled by their respective services
+	// This method exists for interface compliance and future extensibility
+	return nil
+}
+
+// Warm pre-populates the Valkey/Redis cache with startup data per AI.md PART 9
+func (v *ValkeyCache) Warm(ctx context.Context, data WarmCacheData) error {
+	v.mu.RLock()
+	if v.closed {
+		v.mu.RUnlock()
+		return nil
+	}
+	v.mu.RUnlock()
+
+	pipe := v.client.Pipeline()
+
+	// Store GeoIP metadata with 7-day TTL
+	if len(data.GeoIPInfo) > 0 {
+		key := v.prefix + "geoip:info"
+		jsonData, _ := json.Marshal(data.GeoIPInfo)
+		pipe.Set(ctx, key, jsonData, 7*24*time.Hour)
+	}
+
+	// Store engine status with 5-minute TTL
+	if len(data.EngineStatus) > 0 {
+		key := v.prefix + "engines:status"
+		jsonData, _ := json.Marshal(data.EngineStatus)
+		pipe.Set(ctx, key, jsonData, 5*time.Minute)
+	}
+
+	// Execute pipeline
+	_, err := pipe.Exec(ctx)
+	return err
+}

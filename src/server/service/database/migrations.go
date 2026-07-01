@@ -144,6 +144,17 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 		)`,
 
+		// App secrets table per AI.md PART 11
+		// Stores installation_secret, cookie_signing_key, csrf_token_secret
+		`CREATE TABLE IF NOT EXISTS app_secrets (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			rotated_at DATETIME,
+			expires_at DATETIME,
+			previous_value TEXT
+		)`,
+
 	}
 }
 
@@ -191,6 +202,16 @@ func (sm *SchemaManager) getPostgresDDL() []string {
 			duration_ms INTEGER,
 			result TEXT,
 			error TEXT
+		)`,
+
+		// App secrets table per AI.md PART 11
+		`CREATE TABLE IF NOT EXISTS app_secrets (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT NOW(),
+			rotated_at TIMESTAMP,
+			expires_at TIMESTAMP,
+			previous_value TEXT
 		)`,
 
 	}
@@ -242,6 +263,17 @@ func (sm *SchemaManager) getMySQLDDL() []string {
 			error TEXT,
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 		)`,
+
+		// App secrets table per AI.md PART 11
+		// MySQL requires backtick-quoted "key" since it's a reserved word
+		"CREATE TABLE IF NOT EXISTS app_secrets (" +
+			"`key` VARCHAR(255) PRIMARY KEY," +
+			"value TEXT NOT NULL," +
+			"created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+			"rotated_at TIMESTAMP NULL," +
+			"expires_at TIMESTAMP NULL," +
+			"previous_value TEXT" +
+			")",
 
 	}
 }
@@ -295,6 +327,17 @@ func (sm *SchemaManager) getMSSQLDDL() []string {
 			result NVARCHAR(MAX),
 			error NVARCHAR(MAX),
 			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
+		)`,
+
+		// App secrets table per AI.md PART 11
+		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'app_secrets')
+		CREATE TABLE app_secrets (
+			[key] NVARCHAR(255) PRIMARY KEY,
+			value NVARCHAR(MAX) NOT NULL,
+			created_at DATETIME2 DEFAULT GETDATE(),
+			rotated_at DATETIME2,
+			expires_at DATETIME2,
+			previous_value NVARCHAR(MAX)
 		)`,
 
 	}

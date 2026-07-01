@@ -32,6 +32,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
+	"github.com/apimgr/vidveil/src/server/service/secrets"
 	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
 	"github.com/apimgr/vidveil/src/server/service/system"
@@ -470,6 +471,14 @@ func main() {
 	migrationMgr.RegisterDefaultMigrations()
 	if err := migrationMgr.RunMigrations(); err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Failed to run migrations: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize app secrets per AI.md PART 11
+	// Generates installation_secret, cookie_signing_key, csrf_token_secret on first run
+	secretsMgr := secrets.NewManager(migrationMgr.GetDB())
+	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "❌ Failed to initialize secrets: %v\n", err)
 		os.Exit(1)
 	}
 

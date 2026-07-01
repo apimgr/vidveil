@@ -191,13 +191,40 @@ test_endpoint GET "/api/v1/stats" "200" "Statistics endpoint"
 info "Testing .txt extension for simple output..."
 test_endpoint GET "/api/v1/search.txt?q=test" "200" "Search .txt extension"
 
-# Step 10: Test Accept headers (PART 13 requirement)
-info "Testing Accept headers..."
+# Step 10: Test Content Negotiation (PART 28 requirement - ALL routes with ALL Accept headers)
+info "Testing content negotiation..."
+
+# Test API routes with application/json
 RESPONSE=$(docker exec vidveil-test curl -s -H "Accept: application/json" "http://localhost:8080/api/v1/engines" 2>/dev/null)
 if echo "$RESPONSE" | grep -q '"ok"'; then
-    pass "JSON Accept header"
+    pass "API Accept: application/json"
 else
-    fail "JSON Accept header"
+    fail "API Accept: application/json"
+fi
+
+# Test API routes with text/plain
+RESPONSE=$(docker exec vidveil-test curl -s -H "Accept: text/plain" "http://localhost:8080/api/v1/engines" 2>/dev/null)
+if echo "$RESPONSE" | grep -qE "^(engines:|ok:)"; then
+    pass "API Accept: text/plain"
+else
+    fail "API Accept: text/plain"
+fi
+
+# Test frontend routes with text/html (browser detection)
+# Use -L to follow redirects (homepage may redirect to /age-verify for browser UA)
+RESPONSE=$(docker exec vidveil-test curl -s -L -H "Accept: text/html" -H "User-Agent: Mozilla/5.0" "http://localhost:8080/" 2>/dev/null)
+if echo "$RESPONSE" | grep -qi "<!DOCTYPE html\|<html"; then
+    pass "Frontend Accept: text/html"
+else
+    fail "Frontend Accept: text/html"
+fi
+
+# Test frontend routes with text/plain (CLI detection)
+RESPONSE=$(docker exec vidveil-test curl -s -H "Accept: text/plain" "http://localhost:8080/" 2>/dev/null)
+if [ -n "$RESPONSE" ]; then
+    pass "Frontend Accept: text/plain"
+else
+    fail "Frontend Accept: text/plain"
 fi
 
 # Step 11: Test SSE Streaming (PART 36 requirement)
@@ -245,10 +272,39 @@ info "Testing frontend routes..."
 test_endpoint GET "/age-verify" "200" "Age verification page"
 test_endpoint GET "/server/about" "200" "About page (per PART 14: /server/*)"
 
-# Step 14: Test well-known endpoints
+# Step 14: Test well-known endpoints and .txt extensions
 info "Testing well-known endpoints..."
 test_endpoint GET "/robots.txt" "200" "robots.txt"
 test_endpoint GET "/.well-known/security.txt" "200" "security.txt"
+
+# Test .txt extension for API endpoints (PART 28 requirement)
+info "Testing .txt endpoint extensions..."
+test_endpoint GET "/api/v1/engines.txt" "200" "Engines .txt extension"
+test_endpoint GET "/api/v1/bangs.txt" "200" "Bangs .txt extension"
+test_endpoint GET "/api/v1/stats.txt" "200" "Stats .txt extension"
+
+# Step 15: Test shell completions (PART 8 - built into binary)
+info "Testing shell completions..."
+BASH_COMPL=$(docker exec vidveil-test /app/${PROJECT_NAME} --shell completions bash 2>&1 || true)
+if echo "$BASH_COMPL" | grep -q "complete\|_vidveil"; then
+    pass "Shell completions: bash"
+else
+    fail "Shell completions: bash"
+fi
+
+ZSH_COMPL=$(docker exec vidveil-test /app/${PROJECT_NAME} --shell completions zsh 2>&1 || true)
+if echo "$ZSH_COMPL" | grep -q "compdef\|_vidveil"; then
+    pass "Shell completions: zsh"
+else
+    fail "Shell completions: zsh"
+fi
+
+FISH_COMPL=$(docker exec vidveil-test /app/${PROJECT_NAME} --shell completions fish 2>&1 || true)
+if echo "$FISH_COMPL" | grep -q "complete.*vidveil"; then
+    pass "Shell completions: fish"
+else
+    fail "Shell completions: fish"
+fi
 
 # Final Summary
 echo

@@ -5,19 +5,24 @@
 
 set -e
 
+PROJECT_ORG="apimgr"
+PROJECT_NAME="vidveil"
 PROJECTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECTDIR"
 
 echo "Generating LICENSE.md with embedded dependencies..."
 
-# Check if go-licenses is available in Docker
-docker run --rm -v $(pwd):/build -w /build golang:alpine sh -c '
-  apk add --no-cache git
-  go install github.com/google/go-licenses@latest
-  /root/go/bin/go-licenses csv ./... 2>/dev/null | sort
-' > /tmp/licenses.csv
+# Create proper temp directory per PART 28
+mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
-echo "Found $(cat /tmp/licenses.csv | wc -l) dependencies"
+# Use casjaysdev/go:latest per PART 26 (Go projects)
+docker run --rm -v $PWD:/build -w /build casjaysdev/go:latest sh -c '
+  go-licenses csv ./... 2>/dev/null | sort
+' > "$TEMP_DIR/licenses.csv"
+
+echo "Found $(cat "$TEMP_DIR/licenses.csv" | wc -l) dependencies"
 
 # Create LICENSE.md with embedded licenses
 cat > LICENSE.md << 'EOF'
@@ -51,13 +56,6 @@ This software includes the following third-party libraries:
 
 EOF
 
-# Note: Full license embedding would require fetching each dependency's LICENSE file
-# This is a template - full implementation requires:
-# 1. Clone each dependency
-# 2. Find LICENSE file
-# 3. Extract full text
-# 4. Append to LICENSE.md
-
 echo "---" >> LICENSE.md
 echo "" >> LICENSE.md
 echo "### Dependencies List" >> LICENSE.md
@@ -65,7 +63,7 @@ echo "" >> LICENSE.md
 echo "The following open-source libraries are used:" >> LICENSE.md
 echo "" >> LICENSE.md
 
-cat /tmp/licenses.csv | while IFS=, read -r package url license; do
+cat "$TEMP_DIR/licenses.csv" | while IFS=, read -r package url license; do
   echo "- **${package}** - ${license}" >> LICENSE.md
 done
 

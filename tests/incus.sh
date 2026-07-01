@@ -221,6 +221,54 @@ else
     fail "Bangs API not responding (got: ${BANGS_OUT:0:200})"
 fi
 
+# Per AI.md PART 28: Content negotiation - test ALL Accept headers
+info "Testing content negotiation..."
+
+# Test API with text/plain
+PLAIN_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -s -H "Accept: text/plain" "http://localhost:${SERVICE_PORT}/api/v1/engines" 2>&1 || echo "curl failed")
+if echo "$PLAIN_OUT" | grep -qE "^(engines:|ok:)"; then
+    pass "API Accept: text/plain"
+else
+    fail "API Accept: text/plain (got: ${PLAIN_OUT:0:100})"
+fi
+
+# Test frontend with text/html (browser)
+# Use -L to follow redirects (homepage may redirect to /age-verify for browser UA)
+HTML_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -s -L -H "Accept: text/html" -H "User-Agent: Mozilla/5.0" "http://localhost:${SERVICE_PORT}/" 2>&1 || echo "curl failed")
+if echo "$HTML_OUT" | grep -qi "<!DOCTYPE html\|<html"; then
+    pass "Frontend Accept: text/html"
+else
+    fail "Frontend Accept: text/html"
+fi
+
+# Test frontend with text/plain (CLI)
+PLAIN_FRONT=$(incus exec "${INSTANCE_NAME}" -- curl -s -H "Accept: text/plain" "http://localhost:${SERVICE_PORT}/" 2>&1 || echo "curl failed")
+if [ -n "$PLAIN_FRONT" ]; then
+    pass "Frontend Accept: text/plain"
+else
+    fail "Frontend Accept: text/plain"
+fi
+
+# Test .txt endpoints (PART 28 requirement)
+info "Testing .txt endpoints..."
+if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/api/v1/engines.txt" | grep -q "^200$"; then
+    pass "Engines .txt extension"
+else
+    fail "Engines .txt extension"
+fi
+
+if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/api/v1/bangs.txt" | grep -q "^200$"; then
+    pass "Bangs .txt extension"
+else
+    fail "Bangs .txt extension"
+fi
+
+if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/robots.txt" | grep -q "^200$"; then
+    pass "robots.txt"
+else
+    fail "robots.txt"
+fi
+
 # Test SSE streaming (informational - may fail without configured engines)
 info "Testing SSE streaming..."
 SSE_OUTPUT=$(incus exec "${INSTANCE_NAME}" -- timeout 5 curl -s -N -H "Accept: text/event-stream" "http://localhost:${SERVICE_PORT}/api/v1/search?q=test" 2>/dev/null || true)
@@ -238,7 +286,23 @@ else
     fail "No service logs found"
 fi
 
-# Step 15: Test service stop
+# Step 15: Test shell completions (PART 8 - built into binary)
+info "Testing shell completions..."
+BASH_COMPL=$(incus exec "${INSTANCE_NAME}" -- ${PROJECT_NAME} --shell completions bash 2>&1 || true)
+if echo "$BASH_COMPL" | grep -q "complete\|_vidveil"; then
+    pass "Shell completions: bash"
+else
+    fail "Shell completions: bash"
+fi
+
+ZSH_COMPL=$(incus exec "${INSTANCE_NAME}" -- ${PROJECT_NAME} --shell completions zsh 2>&1 || true)
+if echo "$ZSH_COMPL" | grep -q "compdef\|_vidveil"; then
+    pass "Shell completions: zsh"
+else
+    fail "Shell completions: zsh"
+fi
+
+# Step 16: Test service stop
 info "Testing service stop..."
 if incus exec "${INSTANCE_NAME}" -- systemctl stop ${PROJECT_NAME}; then
     pass "Service stopped cleanly"

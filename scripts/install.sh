@@ -59,20 +59,19 @@ get_latest_version() {
     info "Latest version: $VERSION"
 }
 
-# Download and install binary
+# Download and install binaries (server + CLI per AI.md PART 8)
 install_binary() {
+    # Install server binary
     DOWNLOAD_URL="https://github.com/$REPO/releases/download/v$VERSION/${BINARY_NAME}-${OS}-${ARCH}"
-
-    info "Downloading from: $DOWNLOAD_URL"
+    info "Downloading server from: $DOWNLOAD_URL"
 
     TMP_FILE=$(mktemp)
     if ! curl -q -LSsf "$DOWNLOAD_URL" -o "$TMP_FILE"; then
-        error "Download failed"
+        error "Server download failed"
     fi
 
     chmod +x "$TMP_FILE"
 
-    # Install
     if [ -w "$INSTALL_DIR" ]; then
         mv "$TMP_FILE" "$INSTALL_DIR/$BINARY_NAME"
     else
@@ -80,7 +79,27 @@ install_binary() {
         sudo mv "$TMP_FILE" "$INSTALL_DIR/$BINARY_NAME"
     fi
 
-    info "Installed to $INSTALL_DIR/$BINARY_NAME"
+    info "Installed server to $INSTALL_DIR/$BINARY_NAME"
+
+    # Install CLI binary (required per AI.md PART 8)
+    CLI_URL="https://github.com/$REPO/releases/download/v$VERSION/${BINARY_NAME}-cli-${OS}-${ARCH}"
+    info "Downloading CLI from: $CLI_URL"
+
+    TMP_FILE=$(mktemp)
+    if ! curl -q -LSsf "$CLI_URL" -o "$TMP_FILE"; then
+        warn "CLI download failed - server-only install"
+        return
+    fi
+
+    chmod +x "$TMP_FILE"
+
+    if [ -w "$INSTALL_DIR" ]; then
+        mv "$TMP_FILE" "$INSTALL_DIR/${BINARY_NAME}-cli"
+    else
+        sudo mv "$TMP_FILE" "$INSTALL_DIR/${BINARY_NAME}-cli"
+    fi
+
+    info "Installed CLI to $INSTALL_DIR/${BINARY_NAME}-cli"
 }
 
 # Verify installation

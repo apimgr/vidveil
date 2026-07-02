@@ -86,7 +86,6 @@ func (n *Notification) ToJSON() NotificationJSON {
 // Service manages notifications per AI.md PART 17
 type Service struct {
 	db *sql.DB
-	mu sync.RWMutex
 
 	// In-memory subscribers for real-time toast/banner
 	subscribers map[string]chan *Notification

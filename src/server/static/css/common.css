@@ -1078,6 +1078,18 @@ header .search-form {
     color: inherit;
 }
 
+/* Card link - ensures click area is accessible */
+.video-card .card-link {
+    position: relative;
+    z-index: 1;
+}
+
+/* Info section links - ensure clickable */
+.video-card .info a {
+    position: relative;
+    z-index: 1;
+}
+
 .video-card .thumb-container {
     position: relative;
     background: var(--bg-tertiary);
@@ -1243,6 +1255,7 @@ header .search-form {
     color: white;
     cursor: pointer;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.2s, background 0.2s;
     list-style: none;
 }
@@ -1255,6 +1268,7 @@ header .search-form {
 .card-menu-container[open] > summary,
 .card-menu-container > summary:focus {
     opacity: 1;
+    pointer-events: auto;
 }
 
 .card-menu-container > summary:hover {

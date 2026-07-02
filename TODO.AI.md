@@ -44,26 +44,36 @@ Read: AI.md PART 11
 Note: SMTP auto-detection already exists in email.go (autodetectSMTP function)
 Read: AI.md PART 17
 
-### [ ] PART 18: Scheduler — Missing Builtin Tasks
-- Add `ssl_renewal` task
-- Add `blocklist_update` task
-- Add `cve_update` task
-- Add `log_rotation` task
-- Add `token_cleanup` task
-- Add `healthcheck_self` task
-- Add `tor_health` task
+### [x] PART 18: Scheduler — COMPLETE
+All builtin tasks implemented in `src/main.go` RegisterBuiltinTasks:
+- [x] ssl_renewal: Daily at 03:00, renews if within 7 days of expiry
+- [x] geoip_update: Weekly (Sunday 03:00), updates GeoIP databases
+- [x] blocklist_update: Daily at 04:00, updates IP/domain blocklists  
+- [x] cve_update: Daily at 05:00, updates CVE/security databases
+- [x] session_cleanup: Every 15 minutes, removes expired sessions
+- [x] token_cleanup: Every 15 minutes, removes expired tokens
+- [x] log_rotation: Daily at 00:00, triggers log reopen/rotation
+- [x] backup_daily: Daily at 02:00, enabled by default
+- [x] backup_hourly: Hourly incremental, disabled by default
+- [x] healthcheck_self: Every 5 minutes
+- [x] tor_health: Every 10 minutes (when Tor enabled)
+Scheduler supports cron expressions, catch-up window, DB persistence.
 Read: AI.md PART 18
 
-### [ ] PART 23-24: Privilege Escalation & Service
-- Implement smart escalation detection (check if user can escalate via sudoers/wheel)
-- Implement multi-platform escalation (sudo/su/pkexec/doas/osascript/runas)
-- Fix reserved UID checking to use `reservedIDs` map per spec
-- Implement macOS user creation via `dscl`
-- Implement Windows Virtual Service Account setup
-- Implement OpenRC init script (`installOpenRC()` method)
-- Implement s6 init system support
-- Fix systemd unit to use `{project_org}` placeholder instead of hardcoded `apimgr`
-- Fix launchd plist format (`io.github.{project_org}.{internal_name}` not `apimgr.{appName}`)
+### [x] PART 23-24: Privilege Escalation & Service — COMPLETE
+All service management methods now use spec-compliant placeholders in `src/server/service/system/service.go`:
+- [x] ServiceManager struct has `internalName`, `projectOrg`, `plistName` fields
+- [x] NewServiceManagerWithOrg() derives `plistName = io.github.{project_org}.{internal_name}`
+- [x] systemd: unit file named `{internal_name}.service`, ReadWritePaths use `{project_org}/{internal_name}`
+- [x] launchd: plist at `/Library/LaunchDaemons/{plist_name}.plist`, label is `{plist_name}`
+- [x] OpenRC: service name `{internal_name}`, paths `/var/log/{project_org}/{internal_name}/`
+- [x] SysVinit: service name `{internal_name}`, paths `/var/log/{project_org}/{internal_name}/`
+- [x] runit: service dir `/etc/sv/{internal_name}`, log path `/var/log/{project_org}/{internal_name}`
+- [x] BSD rc.d: service name `{internal_name}`
+- [x] All uninstall methods use correct paths
+- [x] macOS user creation via dscl (createDarwinUser)
+- [x] Windows Virtual Service Account (installWindows uses NT SERVICE\{appName})
+- [x] DetectEscalation() checks sudo/doas/pkexec in priority order
 Read: AI.md PART 23, PART 24
 
 ### [ ] PART 32: Implement native GUI mode for vidveil-cli

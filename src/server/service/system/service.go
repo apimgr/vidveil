@@ -14,25 +14,39 @@ import (
 
 // ServiceManager handles system service installation per AI.md PART 23
 type ServiceManager struct {
-	appName     string
-	binaryPath  string
-	configDir   string
-	dataDir     string
-	user        string
-	group       string
-	description string
+	appName      string
+	internalName string
+	projectOrg   string
+	plistName    string
+	binaryPath   string
+	configDir    string
+	dataDir      string
+	user         string
+	group        string
+	description  string
 }
 
 // NewServiceManager creates a new service manager
+// Per AI.md PART 24: Uses {project_org} and {internal_name} for paths
 func NewServiceManager(appName, binaryPath, configDir, dataDir string) *ServiceManager {
+	// Default to apimgr org and appName as internal name
+	return NewServiceManagerWithOrg(appName, "apimgr", appName, binaryPath, configDir, dataDir)
+}
+
+// NewServiceManagerWithOrg creates a service manager with explicit org/internal names
+// Per AI.md PART 24: plist_name = io.github.{project_org}.{internal_name}
+func NewServiceManagerWithOrg(appName, projectOrg, internalName, binaryPath, configDir, dataDir string) *ServiceManager {
 	return &ServiceManager{
-		appName:     appName,
-		binaryPath:  binaryPath,
-		configDir:   configDir,
-		dataDir:     dataDir,
-		user:        appName,
-		group:       appName,
-		description: fmt.Sprintf("%s service", appName),
+		appName:      appName,
+		internalName: internalName,
+		projectOrg:   projectOrg,
+		plistName:    fmt.Sprintf("io.github.%s.%s", projectOrg, internalName),
+		binaryPath:   binaryPath,
+		configDir:    configDir,
+		dataDir:      dataDir,
+		user:         internalName,
+		group:        internalName,
+		description:  fmt.Sprintf("%s service", appName),
 	}
 }
 
@@ -102,7 +116,8 @@ func (sm *ServiceManager) Disable() error {
 		return fmt.Errorf("no supported init system found")
 	case "darwin":
 		// macOS: unload the plist (stops and prevents autostart)
-		plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
+		// Per AI.md PART 24: plist path uses {plist_name}
+		plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
 		return exec.Command("launchctl", "unload", "-w", plistPath).Run()
 	case "freebsd", "openbsd", "netbsd":
 		// BSD: set enable=NO in rc.conf
@@ -133,7 +148,8 @@ func (sm *ServiceManager) GetServiceStatus() (string, error) {
 			return "stopped", nil
 		}
 	case "darwin":
-		out, err := exec.Command("launchctl", "list", fmt.Sprintf("apimgr.%s", sm.appName)).CombinedOutput()
+		// Per AI.md PART 24: list using {plist_name}
+		out, err := exec.Command("launchctl", "list", sm.plistName).CombinedOutput()
 		if err != nil {
 			return "stopped", nil
 		}
@@ -156,7 +172,8 @@ func (sm *ServiceManager) runServiceCommand(action string) error {
 		}
 		return exec.Command("service", sm.appName, action).Run()
 	case "darwin":
-		plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
+		// Per AI.md PART 24: plist path uses {plist_name}
+		plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
 		switch action {
 		case "start":
 			return exec.Command("launchctl", "load", plistPath).Run()
@@ -295,11 +312,12 @@ func (sm *ServiceManager) createLinuxUser() error {
 
 	// Create and set ownership of directories per PART 23
 	// All directories must exist for systemd's ReadWritePaths to work
+	// Per PART 24: paths use {project_org}/{internal_name}
 	dirs := []string{
-		"/etc/apimgr/" + sm.appName,
-		"/var/lib/apimgr/" + sm.appName,
-		"/var/cache/apimgr/" + sm.appName,
-		"/var/log/apimgr/" + sm.appName,
+		fmt.Sprintf("/etc/%s/%s", sm.projectOrg, sm.internalName),
+		fmt.Sprintf("/var/lib/%s/%s", sm.projectOrg, sm.internalName),
+		fmt.Sprintf("/var/cache/%s/%s", sm.projectOrg, sm.internalName),
+		fmt.Sprintf("/var/log/%s/%s", sm.projectOrg, sm.internalName),
 	}
 	for _, dir := range dirs {
 		os.MkdirAll(dir, 0755)
@@ -323,12 +341,14 @@ func (sm *ServiceManager) findAvailableUID(min, max int) int {
 // installSystemd installs systemd service unit per AI.md PART 24
 // Service starts as root, binary drops privileges after port binding
 func (sm *ServiceManager) installSystemd() error {
-	unitPath := fmt.Sprintf("/etc/systemd/system/%s.service", sm.appName)
+	// Per PART 24: unit file uses {internal_name}.service
+	unitPath := fmt.Sprintf("/etc/systemd/system/%s.service", sm.internalName)
 
 	// Per PART 23: NO User/Group - binary drops privileges after port binding
+	// Per PART 24: paths use {project_org}/{internal_name}
 	unit := fmt.Sprintf(`[Unit]
 Description=%s service
-Documentation=https://x.scour.li
+Documentation=https://%s.github.io/%s
 After=network-online.target
 Wants=network-online.target
 
@@ -344,14 +364,18 @@ StandardError=journal
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/etc/apimgr/%s
-ReadWritePaths=/var/lib/apimgr/%s
-ReadWritePaths=/var/cache/apimgr/%s
-ReadWritePaths=/var/log/apimgr/%s
+ReadWritePaths=/etc/%s/%s
+ReadWritePaths=/var/lib/%s/%s
+ReadWritePaths=/var/cache/%s/%s
+ReadWritePaths=/var/log/%s/%s
 
 [Install]
 WantedBy=multi-user.target
-`, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName, sm.appName)
+`, sm.appName, sm.projectOrg, sm.appName, sm.appName,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName)
 
 	if err := os.WriteFile(unitPath, []byte(unit), 0644); err != nil {
 		return fmt.Errorf("failed to write systemd unit: %w", err)
@@ -359,17 +383,18 @@ WantedBy=multi-user.target
 
 	// Reload systemd and enable service
 	exec.Command("systemctl", "daemon-reload").Run()
-	exec.Command("systemctl", "enable", sm.appName).Run()
+	exec.Command("systemctl", "enable", sm.internalName).Run()
 
 	fmt.Printf("Systemd service installed: %s\n", unitPath)
-	fmt.Printf("Start with: systemctl start %s\n", sm.appName)
+	fmt.Printf("Start with: systemctl start %s\n", sm.internalName)
 	return nil
 }
 
 // installRunit installs runit service per AI.md PART 24
 // Binary drops privileges after port binding - no chpst needed
 func (sm *ServiceManager) installRunit() error {
-	serviceDir := fmt.Sprintf("/etc/sv/%s", sm.appName)
+	// Per PART 24: service name uses {internal_name}
+	serviceDir := fmt.Sprintf("/etc/sv/%s", sm.internalName)
 	os.MkdirAll(serviceDir, 0755)
 
 	// Per PART 23: binary handles privilege dropping; PART 24: simple run script
@@ -383,31 +408,34 @@ exec /usr/local/bin/%s 2>&1
 	}
 
 	// Create log directory and script per PART 24
+	// Per PART 24: log path uses {project_org}/{internal_name}
 	logDir := filepath.Join(serviceDir, "log")
 	os.MkdirAll(logDir, 0755)
 
 	logScript := fmt.Sprintf(`#!/bin/sh
-exec svlogd -tt /var/log/apimgr/%s
-`, sm.appName)
+exec svlogd -tt /var/log/%s/%s
+`, sm.projectOrg, sm.internalName)
 	if err := os.WriteFile(filepath.Join(logDir, "run"), []byte(logScript), 0755); err != nil {
 		return err
 	}
 
 	// Enable service
-	exec.Command("ln", "-sf", serviceDir, fmt.Sprintf("/var/service/%s", sm.appName)).Run()
+	exec.Command("ln", "-sf", serviceDir, fmt.Sprintf("/var/service/%s", sm.internalName)).Run()
 
 	fmt.Printf("Runit service installed: %s\n", serviceDir)
-	fmt.Printf("Start with: sv start %s\n", sm.appName)
+	fmt.Printf("Start with: sv start %s\n", sm.internalName)
 	return nil
 }
 
 // installOpenRC installs an OpenRC service script per AI.md PART 24.
-// The script lives at /etc/init.d/{appName} (executable). The binary
+// The script lives at /etc/init.d/{internal_name} (executable). The binary
 // drops privileges itself after binding privileged ports, so command_user
 // is set to the dedicated service user.
 func (sm *ServiceManager) installOpenRC() error {
-	scriptPath := fmt.Sprintf("/etc/init.d/%s", sm.appName)
+	// Per PART 24: service name uses {internal_name}
+	scriptPath := fmt.Sprintf("/etc/init.d/%s", sm.internalName)
 
+	// Per PART 24: paths use {project_org}/{internal_name}
 	script := fmt.Sprintf(`#!/sbin/openrc-run
 # OpenRC service for %s per AI.md PART 24.
 # Service identity uses the internal name so config/data/log paths stay
@@ -418,10 +446,10 @@ description="%s"
 command="/usr/local/bin/%s"
 command_args=""
 command_user="%s:%s"
-pidfile="/var/run/apimgr/%s.pid"
+pidfile="/var/run/%s/%s.pid"
 command_background=true
-output_log="/var/log/apimgr/%s/server.log"
-error_log="/var/log/apimgr/%s/error.log"
+output_log="/var/log/%s/%s/server.log"
+error_log="/var/log/%s/%s/error.log"
 
 depend() {
     need net
@@ -430,20 +458,20 @@ depend() {
 }
 
 start_pre() {
-    checkpath -d -m 0755 -o %s:%s /var/run/apimgr
-    checkpath -d -m 0755 -o %s:%s /var/log/apimgr/%s
+    checkpath -d -m 0755 -o %s:%s /var/run/%s
+    checkpath -d -m 0755 -o %s:%s /var/log/%s/%s
 }
 `,
 		sm.appName,
-		sm.appName,
+		sm.internalName,
 		sm.description,
 		sm.appName,
 		sm.user, sm.group,
-		sm.appName,
-		sm.appName,
-		sm.appName,
-		sm.user, sm.group,
-		sm.user, sm.group, sm.appName,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
+		sm.user, sm.group, sm.projectOrg,
+		sm.user, sm.group, sm.projectOrg, sm.internalName,
 	)
 
 	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
@@ -451,21 +479,23 @@ start_pre() {
 	}
 
 	// Enable at default runlevel (idempotent — rc-update is fine on re-run).
-	exec.Command("rc-update", "add", sm.appName, "default").Run()
+	exec.Command("rc-update", "add", sm.internalName, "default").Run()
 
 	fmt.Printf("OpenRC service installed: %s\n", scriptPath)
-	fmt.Printf("Start with: rc-service %s start\n", sm.appName)
+	fmt.Printf("Start with: rc-service %s start\n", sm.internalName)
 	return nil
 }
 
 // installSysVInit installs a SysVinit-style init script per AI.md PART 24.
-// Same path as OpenRC (/etc/init.d/{appName}); detection picks one or the
+// Same path as OpenRC (/etc/init.d/{internal_name}); detection picks one or the
 // other. Uses start-stop-daemon (Debian-style) so it works on legacy
 // Debian/Ubuntu and any distro that ships start-stop-daemon as part of
 // dpkg or sysvinit-utils.
 func (sm *ServiceManager) installSysVInit() error {
-	scriptPath := fmt.Sprintf("/etc/init.d/%s", sm.appName)
+	// Per PART 24: service name uses {internal_name}
+	scriptPath := fmt.Sprintf("/etc/init.d/%s", sm.internalName)
 
+	// Per PART 24: paths use {project_org}/{internal_name}
 	script := fmt.Sprintf(`#!/bin/sh
 ### BEGIN INIT INFO
 # Provides:          %s
@@ -480,8 +510,8 @@ func (sm *ServiceManager) installSysVInit() error {
 NAME=%s
 DAEMON=/usr/local/bin/%s
 DAEMON_USER=%s
-PIDFILE=/var/run/apimgr/%s.pid
-LOGFILE=/var/log/apimgr/%s/server.log
+PIDFILE=/var/run/%s/%s.pid
+LOGFILE=/var/log/%s/%s/server.log
 
 case "$1" in
     start)
@@ -518,14 +548,14 @@ case "$1" in
 esac
 exit 0
 `,
-		sm.appName,
+		sm.internalName,
 		sm.description,
 		sm.description,
-		sm.appName,
+		sm.internalName,
 		sm.appName,
 		sm.user,
-		sm.appName,
-		sm.appName,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
 	)
 
 	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
@@ -535,30 +565,32 @@ exit 0
 	// Register with the host's runlevel manager. Try Debian's update-rc.d
 	// first, fall back to RHEL's chkconfig if present.
 	if _, err := exec.LookPath("update-rc.d"); err == nil {
-		exec.Command("update-rc.d", sm.appName, "defaults").Run()
+		exec.Command("update-rc.d", sm.internalName, "defaults").Run()
 	} else if _, err := exec.LookPath("chkconfig"); err == nil {
-		exec.Command("chkconfig", "--add", sm.appName).Run()
-		exec.Command("chkconfig", sm.appName, "on").Run()
+		exec.Command("chkconfig", "--add", sm.internalName).Run()
+		exec.Command("chkconfig", sm.internalName, "on").Run()
 	}
 
 	fmt.Printf("SysVinit service installed: %s\n", scriptPath)
-	fmt.Printf("Start with: service %s start (or /etc/init.d/%s start)\n", sm.appName, sm.appName)
+	fmt.Printf("Start with: service %s start (or /etc/init.d/%s start)\n", sm.internalName, sm.internalName)
 	return nil
 }
 
 // installDarwin installs launchd service on macOS per AI.md PART 24
 // Binary drops privileges after port binding - no UserName/GroupName needed
 func (sm *ServiceManager) installDarwin() error {
-	// Per PART 24: Path is /Library/LaunchDaemons/apimgr.{appname}.plist
-	plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
+	// Per PART 24: Path is /Library/LaunchDaemons/{plist_name}.plist
+	// plist_name = io.github.{project_org}.{internal_name}
+	plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
 
 	// Per PART 23: No UserName/GroupName - binary handles privilege dropping
+	// Per PART 24: Label uses {plist_name}, paths use {project_org}/{internal_name}
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>apimgr.%s</string>
+    <string>%s</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/%s</string>
@@ -568,12 +600,12 @@ func (sm *ServiceManager) installDarwin() error {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/apimgr/%s/stdout.log</string>
+    <string>/var/log/%s/%s/stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/apimgr/%s/stderr.log</string>
+    <string>/var/log/%s/%s/stderr.log</string>
 </dict>
 </plist>
-`, sm.appName, sm.appName, sm.appName, sm.appName)
+`, sm.plistName, sm.appName, sm.projectOrg, sm.internalName, sm.projectOrg, sm.internalName)
 
 	if err := os.WriteFile(plistPath, []byte(plist), 0644); err != nil {
 		return fmt.Errorf("failed to write plist: %w", err)
@@ -618,7 +650,8 @@ func (sm *ServiceManager) createDarwinUser() error {
 // installBSD installs rc.d service on BSD per AI.md PART 24
 // Binary drops privileges after port binding
 func (sm *ServiceManager) installBSD() error {
-	rcPath := fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.appName)
+	// Per PART 24: service name uses {internal_name}
+	rcPath := fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.internalName)
 
 	// Per PART 23: binary handles privilege dropping; PART 24: simple rc.d script
 	rcScript := fmt.Sprintf(`#!/bin/sh
@@ -635,15 +668,15 @@ command="/usr/local/bin/%s"
 
 load_rc_config $name
 run_rc_command "$1"
-`, sm.appName, sm.appName, sm.appName)
+`, sm.internalName, sm.internalName, sm.appName)
 
 	if err := os.WriteFile(rcPath, []byte(rcScript), 0755); err != nil {
 		return fmt.Errorf("failed to write rc script: %w", err)
 	}
 
 	fmt.Printf("RC script installed: %s\n", rcPath)
-	fmt.Printf("Enable with: sysrc %s_enable=YES\n", sm.appName)
-	fmt.Printf("Start with: service %s start\n", sm.appName)
+	fmt.Printf("Enable with: sysrc %s_enable=YES\n", sm.internalName)
+	fmt.Printf("Start with: service %s start\n", sm.internalName)
 	return nil
 }
 
@@ -703,35 +736,49 @@ func (sm *ServiceManager) installWindows() error {
 func (sm *ServiceManager) uninstallLinux() error {
 	sm.Stop()
 
+	// Per PART 24: service name uses {internal_name}
 	if sm.hasSystemd() {
-		exec.Command("systemctl", "disable", sm.appName).Run()
-		os.Remove(fmt.Sprintf("/etc/systemd/system/%s.service", sm.appName))
+		exec.Command("systemctl", "disable", sm.internalName).Run()
+		os.Remove(fmt.Sprintf("/etc/systemd/system/%s.service", sm.internalName))
 		exec.Command("systemctl", "daemon-reload").Run()
 	}
+	if sm.hasOpenRC() {
+		exec.Command("rc-update", "del", sm.internalName, "default").Run()
+		os.Remove(fmt.Sprintf("/etc/init.d/%s", sm.internalName))
+	}
+	if sm.hasSysVInit() {
+		if _, err := exec.LookPath("update-rc.d"); err == nil {
+			exec.Command("update-rc.d", "-f", sm.internalName, "remove").Run()
+		} else if _, err := exec.LookPath("chkconfig"); err == nil {
+			exec.Command("chkconfig", "--del", sm.internalName).Run()
+		}
+		os.Remove(fmt.Sprintf("/etc/init.d/%s", sm.internalName))
+	}
 	if sm.hasRunit() {
-		os.Remove(fmt.Sprintf("/var/service/%s", sm.appName))
-		os.RemoveAll(fmt.Sprintf("/etc/sv/%s", sm.appName))
+		os.Remove(fmt.Sprintf("/var/service/%s", sm.internalName))
+		os.RemoveAll(fmt.Sprintf("/etc/sv/%s", sm.internalName))
 	}
 
-	fmt.Printf("Service %s uninstalled\n", sm.appName)
+	fmt.Printf("Service %s uninstalled\n", sm.internalName)
 	return nil
 }
 
 // uninstallDarwin removes macOS service
 func (sm *ServiceManager) uninstallDarwin() error {
-	// Per PART 24: Path is /Library/LaunchDaemons/apimgr.{appname}.plist
-	plistPath := fmt.Sprintf("/Library/LaunchDaemons/apimgr.%s.plist", sm.appName)
+	// Per PART 24: Path is /Library/LaunchDaemons/{plist_name}.plist
+	plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
 	exec.Command("launchctl", "unload", plistPath).Run()
 	os.Remove(plistPath)
-	fmt.Printf("Service %s uninstalled\n", sm.appName)
+	fmt.Printf("Service %s uninstalled\n", sm.internalName)
 	return nil
 }
 
 // uninstallBSD removes BSD service
 func (sm *ServiceManager) uninstallBSD() error {
 	sm.Stop()
-	os.Remove(fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.appName))
-	fmt.Printf("Service %s uninstalled\n", sm.appName)
+	// Per PART 24: service name uses {internal_name}
+	os.Remove(fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.internalName))
+	fmt.Printf("Service %s uninstalled\n", sm.internalName)
 	return nil
 }
 

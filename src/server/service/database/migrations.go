@@ -155,6 +155,19 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			previous_value TEXT
 		)`,
 
+		// Notifications table per AI.md PART 17
+		// Stores notification center history (toast/banner are real-time only)
+		`CREATE TABLE IF NOT EXISTS notifications (
+			id TEXT PRIMARY KEY,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			message TEXT,
+			targets INTEGER NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			read_at DATETIME,
+			details TEXT
+		)`,
+
 	}
 }
 
@@ -212,6 +225,18 @@ func (sm *SchemaManager) getPostgresDDL() []string {
 			rotated_at TIMESTAMP,
 			expires_at TIMESTAMP,
 			previous_value TEXT
+		)`,
+
+		// Notifications table per AI.md PART 17
+		`CREATE TABLE IF NOT EXISTS notifications (
+			id TEXT PRIMARY KEY,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			message TEXT,
+			targets INTEGER NOT NULL,
+			created_at TIMESTAMP DEFAULT NOW(),
+			read_at TIMESTAMP,
+			details TEXT
 		)`,
 
 	}
@@ -274,6 +299,18 @@ func (sm *SchemaManager) getMySQLDDL() []string {
 			"expires_at TIMESTAMP NULL," +
 			"previous_value TEXT" +
 			")",
+
+		// Notifications table per AI.md PART 17
+		`CREATE TABLE IF NOT EXISTS notifications (
+			id VARCHAR(255) PRIMARY KEY,
+			type VARCHAR(50) NOT NULL,
+			title VARCHAR(255) NOT NULL,
+			message TEXT,
+			targets INT NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			read_at TIMESTAMP NULL,
+			details TEXT
+		)`,
 
 	}
 }
@@ -338,6 +375,19 @@ func (sm *SchemaManager) getMSSQLDDL() []string {
 			rotated_at DATETIME2,
 			expires_at DATETIME2,
 			previous_value NVARCHAR(MAX)
+		)`,
+
+		// Notifications table per AI.md PART 17
+		`IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'notifications')
+		CREATE TABLE notifications (
+			id NVARCHAR(255) PRIMARY KEY,
+			type NVARCHAR(50) NOT NULL,
+			title NVARCHAR(255) NOT NULL,
+			message NVARCHAR(MAX),
+			targets INT NOT NULL,
+			created_at DATETIME2 DEFAULT GETDATE(),
+			read_at DATETIME2,
+			details NVARCHAR(MAX)
 		)`,
 
 	}

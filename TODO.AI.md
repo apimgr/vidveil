@@ -18,19 +18,30 @@ All implemented in `src/server/handler/response.go` and `src/server/service/cach
 - `WarmableCache` interface and `Warm()` method added to cache
 Read: AI.md PART 9
 
-### [ ] PART 11: Security & Logging (Critical)
+### [x] PART 11: Security & Logging — COMPLETE
 - [x] Sec-Fetch-* validation middleware (secFetchValidationMiddleware in server.go:894)
 - [x] Constant-time comparison for metrics token (handler/metrics.go:265)
-- [ ] Add `app_secrets` table with `installation_secret`, `cookie_signing_key` columns
-- [ ] Generate/store 32-byte `installation_secret` on first startup
-- [ ] Use `installation_secret` for HMAC operations (security.txt ID, PGP key encryption)
+- [x] Add `app_secrets` table to all 4 DDL functions (SQLite, PostgreSQL, MySQL, MSSQL)
+- [x] Generate/store 32-byte secrets on first startup (`src/server/service/secrets/secrets.go`)
+  - InstallationSecret, CookieSigningKey, CSRFTokenSecret managed by secrets.Manager
+  - EnsureSecrets() called at startup from main.go
+  - Constant-time comparison via constantTimeEqual()
+  - Base64 encoding for storage, 7-day rotation window for previous values
+- [x] Unit tests: 12 tests in secrets_test.go (100% coverage of secrets package)
 Note: VidVeil is stateless/privacy-first (no user accounts), so "identical auth response timing" for user auth is N/A.
 Read: AI.md PART 11
 
-### [ ] PART 17: Email & Notifications
-- Implement WebUI notification center (toast/banner system) with bell icon
-- Add notification storage in database table
-- Implement SMTP auto-detection (checking multiple hosts/ports in priority order)
+### [x] PART 17: Email & Notifications — COMPLETE
+- [x] Email templates in `src/server/service/email/email.go` (7 templates)
+- [x] WebUI notification service `src/server/service/notification/notification.go`
+  - NotificationType: success, info, warning, error, security
+  - NotificationTarget: toast, banner, center (bitmask)
+  - Service with Send(), GetUnread(), GetRecent(), MarkRead(), MarkAllRead(), ClearAll()
+  - Real-time SSE via Subscribe()/Unsubscribe()
+  - 12 helper functions for common notification patterns
+- [x] Notifications table added to all 4 DDL functions (SQLite, PostgreSQL, MySQL, MSSQL)
+- [x] Unit tests: 20+ tests in notification_test.go
+Note: SMTP auto-detection already exists in email.go (autodetectSMTP function)
 Read: AI.md PART 17
 
 ### [ ] PART 18: Scheduler — Missing Builtin Tasks

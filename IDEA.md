@@ -2,7 +2,7 @@
 
 ## Project description
 
-Privacy-respecting meta search engine for adult video content that aggregates results from 51 video sites without tracking, logging, or analytics. Results stream in real-time via SSE as each engine responds.
+Privacy-respecting meta search engine for adult video content that aggregates results from 43 video sites without tracking, logging, or analytics. Results stream in real-time via SSE as each engine responds.
 
 **Target Users:**
 - Privacy-conscious users seeking adult content without tracking
@@ -28,7 +28,7 @@ official_site: https://x.scour.li
 
 **In scope (the WHAT):**
 - Privacy-First Search: No tracking, logging, or analytics - complete privacy
-- Multi-Engine Aggregation: 51 engines with bang shortcuts for targeted searches
+- Multi-Engine Aggregation: 43 engines with bang shortcuts for targeted searches
 - Real-Time Streaming: SSE streaming delivers results as each engine responds
 - Thumbnail Proxy: All thumbnails proxied through server to prevent tracking
 - Video Preview: Hover (desktop) and swipe (mobile) preview support
@@ -322,7 +322,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Search history display (up to 8 recent with timestamps).
 - Per-item remove button and clear all button.
 - Timestamps: "just now", "5m ago", "1h ago", "2d ago".
-- Engine statistics (51 engines, no tracking, Tor support).
+- Engine statistics (43 engines, no tracking, Tor support).
 - Collapsible filters panel.
 
 **Search Results Page (`/search?q={query}`):**
@@ -472,7 +472,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 
 ### Data sources
 
-- 51 video sites via HTML parsing.
+- 43 video sites via HTML parsing.
 - Engine definitions embedded at build time (`src/server/engine/engines.go`).
 - Search results fetched in real-time.
 - No local storage of search results (stateless).
@@ -505,7 +505,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 4tube, fux, porntube, youjizz, sunporno, txxx, nuvid, tnaflix, drtuber, empflix, hellporno, alphaporno, pornflip, gotporn, xxxymovies, lovehomeporn, pornerbros, nonktube, nubilesporn, pornbox, porntop, pornotube, pornhd, xbabe, pornone, pornhat, porntrex, hqporner, vjav, flyflv, tube8, anyporn, tubegalore, motherless, 3movs.
 
 **Engine configuration:**
-- Default: All 51 engines enabled.
+- Default: All 43 engines enabled.
 - SSE streaming behavior: results stream as each engine responds; Tier 1 first; Tier 2-6 fill in below; invalid thumbnails auto-discarded.
 
 **Preview URL sources (generic extraction across engines):**

@@ -1908,11 +1908,9 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		h.jsonError(w, "Streaming not supported", CodeServerError, http.StatusInternalServerError)
-		return
-	}
+	// Use ResponseController (Go 1.20+) to flush through wrapped writers
+	// Chi's middleware wraps ResponseWriter; direct Flusher assertion fails
+	rc := http.NewResponseController(w)
 
 	// Increment search count for SSE searches
 	if h.metrics != nil {
@@ -1949,12 +1947,12 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 		}
 
 		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
+		rc.Flush()
 	}
 
 	// Send final done message with total elapsed time since request was received
 	fmt.Fprintf(w, "data: {\"done\":true,\"engine\":\"all\",\"elapsed_ms\":%d}\n\n", time.Since(requestStart).Milliseconds())
-	flusher.Flush()
+	rc.Flush()
 }
 
 // APIBangs returns list of available bang shortcuts

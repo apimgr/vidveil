@@ -268,11 +268,15 @@ main {
 }
 
 .site-footer .footer-links a {
-    color: var(--text-secondary);
+    color: var(--accent);
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s ease;
 }
 
 .site-footer .footer-links a:hover {
-    color: var(--accent);
+    color: var(--accent-hover);
+    text-decoration: underline;
 }
 
 .text-red {
@@ -313,10 +317,6 @@ main {
 
 .site-footer .app-footer .text-red {
     color: var(--error);
-}
-
-.site-footer .footer-links {
-    margin-top: 1rem;
 }
 
 .site-footer .footer-links a {

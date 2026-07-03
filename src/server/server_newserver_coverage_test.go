@@ -25,9 +25,9 @@ type stubMigrationManager struct{}
 func (s *stubMigrationManager) GetMigrationStatus() ([]map[string]interface{}, error) {
 	return nil, nil
 }
-func (s *stubMigrationManager) RunMigrations() error    { return nil }
+func (s *stubMigrationManager) RunMigrations() error     { return nil }
 func (s *stubMigrationManager) RollbackMigration() error { return nil }
-func (s *stubMigrationManager) GetDB() *sql.DB          { return nil }
+func (s *stubMigrationManager) GetDB() *sql.DB           { return nil }
 
 // newTestServer creates a Server using NewServer with minimal dependencies.
 func newTestServer(t *testing.T) *Server {

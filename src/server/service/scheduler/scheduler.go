@@ -835,17 +835,17 @@ func (s *Scheduler) migrateLegacyTaskIDs() {
 		return
 	}
 	rename := map[string]string{
-		"ssl.renewal":       "ssl_renewal",
-		"geoip.update":      "geoip_update",
-		"blocklist.update":  "blocklist_update",
-		"cve.update":        "cve_update",
-		"session.cleanup":   "session_cleanup",
-		"token.cleanup":     "token_cleanup",
-		"log.rotation":      "log_rotation",
-		"backup.auto":       "backup_daily",
-		"backup_auto":       "backup_daily",
-		"healthcheck.self":  "healthcheck_self",
-		"tor.health":        "tor_health",
+		"ssl.renewal":      "ssl_renewal",
+		"geoip.update":     "geoip_update",
+		"blocklist.update": "blocklist_update",
+		"cve.update":       "cve_update",
+		"session.cleanup":  "session_cleanup",
+		"token.cleanup":    "token_cleanup",
+		"log.rotation":     "log_rotation",
+		"backup.auto":      "backup_daily",
+		"backup_auto":      "backup_daily",
+		"healthcheck.self": "healthcheck_self",
+		"tor.health":       "tor_health",
 	}
 	for old, newID := range rename {
 		// Update scheduled_tasks (state). UPDATE OR IGNORE conflict if

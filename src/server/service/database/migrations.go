@@ -167,7 +167,6 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			read_at DATETIME,
 			details TEXT
 		)`,
-
 	}
 }
 
@@ -238,7 +237,6 @@ func (sm *SchemaManager) getPostgresDDL() []string {
 			read_at TIMESTAMP,
 			details TEXT
 		)`,
-
 	}
 }
 
@@ -311,7 +309,6 @@ func (sm *SchemaManager) getMySQLDDL() []string {
 			read_at TIMESTAMP NULL,
 			details TEXT
 		)`,
-
 	}
 }
 
@@ -389,7 +386,6 @@ func (sm *SchemaManager) getMSSQLDDL() []string {
 			read_at DATETIME2,
 			details NVARCHAR(MAX)
 		)`,
-
 	}
 }
 

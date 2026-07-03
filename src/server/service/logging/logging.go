@@ -500,7 +500,7 @@ func auditCategory(event string) string {
 		return "backup"
 	case "server", "scheduler":
 		return "server"
-case "oidc", "ldap":
+	case "oidc", "ldap":
 		return "authentication"
 	case "org":
 		return "organization"

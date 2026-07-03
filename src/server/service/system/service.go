@@ -254,7 +254,6 @@ func (sm *ServiceManager) installLinux() error {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
-
 	// Install based on init system
 	if sm.hasSystemd() {
 		return sm.installSystemd()
@@ -280,7 +279,6 @@ func (sm *ServiceManager) createLinuxUser() error {
 	if err == nil {
 		return nil
 	}
-
 
 	// Find available UID in 200-899 range per AI.md PART 23
 	uid := sm.findAvailableUID(200, 899)
@@ -308,7 +306,6 @@ func (sm *ServiceManager) createLinuxUser() error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
-
 
 	// Create and set ownership of directories per PART 23
 	// All directories must exist for systemd's ReadWritePaths to work

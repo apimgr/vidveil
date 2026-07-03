@@ -53,12 +53,12 @@ type DatabaseConfig struct {
 
 // AppDatabase provides a unified interface for multiple database backends
 type AppDatabase struct {
-	db       *sql.DB
-	driver   Driver
-	config   DatabaseConfig
-	mu       sync.RWMutex
-	ctx      context.Context
-	cancel   context.CancelFunc
+	db     *sql.DB
+	driver Driver
+	config DatabaseConfig
+	mu     sync.RWMutex
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewAppDatabase creates a new database connection based on the driver

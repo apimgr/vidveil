@@ -460,4 +460,3 @@ func TestSchemaManager_RollbackMigration_NoPanic(t *testing.T) {
 	}()
 	_ = sm.RollbackMigration()
 }
-

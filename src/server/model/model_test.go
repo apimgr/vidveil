@@ -157,11 +157,11 @@ func TestSearchResponseJSONRoundTrip(t *testing.T) {
 	original := SearchResponse{
 		Ok: true,
 		Data: SearchData{
-			Query:        "hello",
-			Results:      []VideoResult{{ID: "r1", Title: "Result 1", Source: "src"}},
-			EnginesUsed:  []string{"eng_a"},
+			Query:         "hello",
+			Results:       []VideoResult{{ID: "r1", Title: "Result 1", Source: "src"}},
+			EnginesUsed:   []string{"eng_a"},
 			EnginesFailed: []string{},
-			SearchTimeMS: 42,
+			SearchTimeMS:  42,
 		},
 		Pagination: PaginationData{Page: 2, Limit: 10, Total: 25, Pages: 3},
 	}
@@ -358,12 +358,12 @@ func TestPaginationDataFieldNames(t *testing.T) {
 func TestEngineInfoConstruction(t *testing.T) {
 	caps := &EngineCapabilities{HasPreview: true, HasDownload: false}
 	ei := EngineInfo{
-		Name:        "testengine",
-		DisplayName: "Test Engine",
-		Enabled:     true,
-		Available:   true,
-		Features:    []string{"search", "preview"},
-		Tier:        1,
+		Name:         "testengine",
+		DisplayName:  "Test Engine",
+		Enabled:      true,
+		Available:    true,
+		Features:     []string{"search", "preview"},
+		Tier:         1,
 		Capabilities: caps,
 		Privacy: EnginePrivacyScore{
 			RequiresJS:  false,
@@ -389,14 +389,14 @@ func TestEngineInfoConstruction(t *testing.T) {
 func TestEngineInfoJSONRoundTrip(t *testing.T) {
 	caps := &EngineCapabilities{HasPreview: true, HasDownload: true}
 	original := EngineInfo{
-		Name:        "eng1",
-		DisplayName: "Engine One",
-		Enabled:     true,
-		Available:   false,
-		Features:    []string{"f1"},
-		Tier:        2,
+		Name:         "eng1",
+		DisplayName:  "Engine One",
+		Enabled:      true,
+		Available:    false,
+		Features:     []string{"f1"},
+		Tier:         2,
 		Capabilities: caps,
-		Privacy: EnginePrivacyScore{RequiresJS: true, SetsCookies: false, HasTracking: true},
+		Privacy:      EnginePrivacyScore{RequiresJS: true, SetsCookies: false, HasTracking: true},
 	}
 
 	data, err := json.Marshal(original)

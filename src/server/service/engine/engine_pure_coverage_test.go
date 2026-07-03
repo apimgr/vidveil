@@ -20,11 +20,11 @@ type mockTorProvider struct {
 	shouldUseTor    bool
 }
 
-func (m *mockTorProvider) GetHTTPClient(_ bool) *http.Client  { return &http.Client{} }
-func (m *mockTorProvider) OutboundEnabled() bool              { return m.outboundEnabled }
-func (m *mockTorProvider) UseNetworkEnabled() bool            { return m.outboundEnabled }
-func (m *mockTorProvider) AllowUserPreference() bool          { return false }
-func (m *mockTorProvider) AllowUserIPForward() bool           { return false }
+func (m *mockTorProvider) GetHTTPClient(_ bool) *http.Client { return &http.Client{} }
+func (m *mockTorProvider) OutboundEnabled() bool             { return m.outboundEnabled }
+func (m *mockTorProvider) UseNetworkEnabled() bool           { return m.outboundEnabled }
+func (m *mockTorProvider) AllowUserPreference() bool         { return false }
+func (m *mockTorProvider) AllowUserIPForward() bool          { return false }
 func (m *mockTorProvider) ShouldUseTor(_ *bool) bool         { return m.shouldUseTor }
 
 // testCfg returns a default AppConfig suitable for engine construction in tests.

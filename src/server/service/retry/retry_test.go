@@ -555,8 +555,8 @@ type timeoutError struct {
 	isTimeout bool
 }
 
-func (e *timeoutError) Error() string  { return "timeout error" }
-func (e *timeoutError) Timeout() bool  { return e.isTimeout }
+func (e *timeoutError) Error() string { return "timeout error" }
+func (e *timeoutError) Timeout() bool { return e.isTimeout }
 
 // TestIsTemporaryErrorTemporaryInterface covers both true and false returns from
 // an error implementing the Temporary() bool interface.

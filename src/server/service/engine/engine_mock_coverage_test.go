@@ -33,10 +33,10 @@ func (m *mockSearchEngine) Search(_ context.Context, _ string, _ int) ([]model.V
 	}
 	return m.results, nil
 }
-func (m *mockSearchEngine) IsAvailable() bool                        { return m.avail }
-func (m *mockSearchEngine) SupportsFeature(_ Feature) bool          { return false }
-func (m *mockSearchEngine) Tier() int                               { return m.tier }
-func (m *mockSearchEngine) Capabilities() Capabilities              { return Capabilities{} }
+func (m *mockSearchEngine) IsAvailable() bool              { return m.avail }
+func (m *mockSearchEngine) SupportsFeature(_ Feature) bool { return false }
+func (m *mockSearchEngine) Tier() int                      { return m.tier }
+func (m *mockSearchEngine) Capabilities() Capabilities     { return Capabilities{} }
 
 // newMgrWithMock creates an EngineManager that contains one mock engine.
 func newMgrWithMock(name string, results []model.VideoResult, err error, avail bool) *EngineManager {
@@ -555,7 +555,7 @@ func (m *panicMockEngine) DisplayName() string { return m.name }
 func (m *panicMockEngine) Search(_ context.Context, _ string, _ int) ([]model.VideoResult, error) {
 	panic("engine test panic")
 }
-func (m *panicMockEngine) IsAvailable() bool               { return true }
+func (m *panicMockEngine) IsAvailable() bool              { return true }
 func (m *panicMockEngine) SupportsFeature(_ Feature) bool { return false }
 func (m *panicMockEngine) Tier() int                      { return 1 }
 func (m *panicMockEngine) Capabilities() Capabilities     { return Capabilities{} }

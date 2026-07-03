@@ -43,14 +43,14 @@ const (
 
 // Notification represents a notification entry per AI.md PART 17
 type Notification struct {
-	ID        string           `json:"id"`
-	Type      NotificationType `json:"type"`
-	Title     string           `json:"title"`
-	Message   string           `json:"message"`
+	ID        string             `json:"id"`
+	Type      NotificationType   `json:"type"`
+	Title     string             `json:"title"`
+	Message   string             `json:"message"`
 	Targets   NotificationTarget `json:"-"`
-	CreatedAt time.Time        `json:"created_at"`
-	ReadAt    *time.Time       `json:"read_at,omitempty"`
-	Details   map[string]any   `json:"details,omitempty"`
+	CreatedAt time.Time          `json:"created_at"`
+	ReadAt    *time.Time         `json:"read_at,omitempty"`
+	Details   map[string]any     `json:"details,omitempty"`
 }
 
 // NotificationJSON is the JSON serialization format

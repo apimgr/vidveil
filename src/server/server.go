@@ -23,8 +23,8 @@ import (
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
-	"github.com/apimgr/vidveil/src/server/service/ratelimit"
 	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
+	"github.com/apimgr/vidveil/src/server/service/ratelimit"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 	"github.com/apimgr/vidveil/src/server/service/urlvars"
 	"github.com/apimgr/vidveil/src/swagger"
@@ -50,16 +50,16 @@ type IPBlocklistChecker interface {
 
 // Server represents the HTTP server
 type Server struct {
-	appConfig    *config.AppConfig
-	configDir    string
-	dataDir      string
-	engineMgr    *engine.EngineManager
-	migrationMgr MigrationManager
-	scheduler    *scheduler.Scheduler
-	logger       *logging.AppLogger
-	router       *chi.Mux
-	srv          *http.Server
-	rateLimiter  *ratelimit.RateLimiter
+	appConfig     *config.AppConfig
+	configDir     string
+	dataDir       string
+	engineMgr     *engine.EngineManager
+	migrationMgr  MigrationManager
+	scheduler     *scheduler.Scheduler
+	logger        *logging.AppLogger
+	router        *chi.Mux
+	srv           *http.Server
+	rateLimiter   *ratelimit.RateLimiter
 	searchHandler *handler.SearchHandler
 	// stored for Onion-Location middleware
 	torSvc handler.TorStatusChecker

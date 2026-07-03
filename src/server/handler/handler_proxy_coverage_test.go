@@ -139,7 +139,6 @@ func TestProxyVideo_LoopbackHost_Returns400(t *testing.T) {
 	}
 }
 
-
 // ── getProxyClient ────────────────────────────────────────────────────────────
 
 func TestGetProxyClient_NilTorService_ReturnsDefaultClient(t *testing.T) {

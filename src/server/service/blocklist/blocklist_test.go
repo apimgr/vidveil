@@ -74,12 +74,12 @@ func TestInitialize_Idempotent(t *testing.T) {
 // comment stripping and invalid input handling.
 func TestParseIPLine(t *testing.T) {
 	tests := []struct {
-		name          string
-		line          string
-		wantIP        string
-		wantSubnet    string
-		wantIPCount   int
-		wantNetCount  int
+		name         string
+		line         string
+		wantIP       string
+		wantSubnet   string
+		wantIPCount  int
+		wantNetCount int
 	}{
 		{
 			name:        "plain IPv4",
@@ -88,8 +88,8 @@ func TestParseIPLine(t *testing.T) {
 			wantIPCount: 1,
 		},
 		{
-			name:        "CIDR block",
-			line:        "10.0.0.0/8",
+			name:         "CIDR block",
+			line:         "10.0.0.0/8",
 			wantNetCount: 1,
 		},
 		{
@@ -99,8 +99,8 @@ func TestParseIPLine(t *testing.T) {
 			wantIPCount: 1,
 		},
 		{
-			name:        "CIDR with comment",
-			line:        "10.0.0.0/8 # comment",
+			name:         "CIDR with comment",
+			line:         "10.0.0.0/8 # comment",
 			wantNetCount: 1,
 		},
 		{

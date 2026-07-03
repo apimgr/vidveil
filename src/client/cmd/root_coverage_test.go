@@ -47,9 +47,9 @@ func TestParseCLITimeoutSeconds(t *testing.T) {
 
 func TestFormatCLITimeoutDuration(t *testing.T) {
 	testCases := []struct {
-		name    string
-		input   int
-		want    string
+		name  string
+		input int
+		want  string
 	}{
 		{name: "zero returns empty", input: 0, want: ""},
 		{name: "negative returns empty", input: -1, want: ""},

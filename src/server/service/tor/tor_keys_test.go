@@ -339,8 +339,8 @@ func TestGetVanityStatus_NilStatusReturnsNil(t *testing.T) {
 func TestGetVanityStatus_ReturnsACopy(t *testing.T) {
 	s := newTestService(t)
 	s.vanityStatus = &VanityStatus{
-		Active:  true,
-		Prefix:  "abc",
+		Active:   true,
+		Prefix:   "abc",
 		Attempts: 42,
 	}
 	got := s.GetVanityStatus()

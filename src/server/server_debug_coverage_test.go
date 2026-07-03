@@ -32,27 +32,27 @@ type mockMigrationMgr struct {
 func (m *mockMigrationMgr) GetMigrationStatus() ([]map[string]interface{}, error) {
 	return nil, nil
 }
-func (m *mockMigrationMgr) RunMigrations() error    { return nil }
+func (m *mockMigrationMgr) RunMigrations() error     { return nil }
 func (m *mockMigrationMgr) RollbackMigration() error { return nil }
-func (m *mockMigrationMgr) GetDB() *sql.DB          { return m.db }
+func (m *mockMigrationMgr) GetDB() *sql.DB           { return m.db }
 
 // ── mock types for server setters ─────────────────────────────────────────────
 
 type mockSrvTorChecker struct{}
 
-func (m *mockSrvTorChecker) IsEnabled() bool                          { return false }
-func (m *mockSrvTorChecker) IsRunning() bool                          { return false }
-func (m *mockSrvTorChecker) IsStarting() bool                         { return false }
-func (m *mockSrvTorChecker) AllowUserIPForward() bool                  { return false }
-func (m *mockSrvTorChecker) UseNetworkEnabled() bool                   { return false }
-func (m *mockSrvTorChecker) OutboundEnabled() bool                     { return false }
-func (m *mockSrvTorChecker) GetInfo() map[string]interface{}           { return nil }
-func (m *mockSrvTorChecker) GetHTTPClient(_ bool) *http.Client        { return &http.Client{} }
+func (m *mockSrvTorChecker) IsEnabled() bool                   { return false }
+func (m *mockSrvTorChecker) IsRunning() bool                   { return false }
+func (m *mockSrvTorChecker) IsStarting() bool                  { return false }
+func (m *mockSrvTorChecker) AllowUserIPForward() bool          { return false }
+func (m *mockSrvTorChecker) UseNetworkEnabled() bool           { return false }
+func (m *mockSrvTorChecker) OutboundEnabled() bool             { return false }
+func (m *mockSrvTorChecker) GetInfo() map[string]interface{}   { return nil }
+func (m *mockSrvTorChecker) GetHTTPClient(_ bool) *http.Client { return &http.Client{} }
 
 type mockSrvGeoIPChecker struct{}
 
-func (m *mockSrvGeoIPChecker) IsEnabled() bool                { return false }
-func (m *mockSrvGeoIPChecker) GetRestrictionMode() string      { return "off" }
+func (m *mockSrvGeoIPChecker) IsEnabled() bool            { return false }
+func (m *mockSrvGeoIPChecker) GetRestrictionMode() string { return "off" }
 func (m *mockSrvGeoIPChecker) CheckContentRestriction(_ string, _ bool) *geoip.RestrictionResult {
 	return nil
 }
@@ -60,12 +60,12 @@ func (m *mockSrvGeoIPChecker) CheckContentRestriction(_ string, _ bool) *geoip.R
 // mockSrvGeoIPBlocker implements both handler.GeoIPChecker and GeoIPBlocker.
 type mockSrvGeoIPBlocker struct{}
 
-func (m *mockSrvGeoIPBlocker) IsEnabled() bool                { return false }
-func (m *mockSrvGeoIPBlocker) GetRestrictionMode() string      { return "off" }
+func (m *mockSrvGeoIPBlocker) IsEnabled() bool            { return false }
+func (m *mockSrvGeoIPBlocker) GetRestrictionMode() string { return "off" }
 func (m *mockSrvGeoIPBlocker) CheckContentRestriction(_ string, _ bool) *geoip.RestrictionResult {
 	return nil
 }
-func (m *mockSrvGeoIPBlocker) IsBlocked(_ string) bool        { return false }
+func (m *mockSrvGeoIPBlocker) IsBlocked(_ string) bool { return false }
 
 type mockSrvBlocklist struct{}
 

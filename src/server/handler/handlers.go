@@ -2269,10 +2269,10 @@ func (h *SearchHandler) APIStats(w http.ResponseWriter, r *http.Request) {
 // Per AI.md PART 13: /api/v1/version returns version, commit, build_date, official_site.
 func (h *SearchHandler) APIVersion(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":           true,
-		"version":      version.GetVersion(),
-		"commit":       version.CommitID,
-		"build_date":   version.BuildTime,
+		"ok":            true,
+		"version":       version.GetVersion(),
+		"commit":        version.CommitID,
+		"build_date":    version.BuildTime,
 		"official_site": version.OfficialSite,
 	})
 }

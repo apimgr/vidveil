@@ -61,11 +61,11 @@ type VersionResponse struct {
 
 // AutodiscoverResponse is the non-versioned client bootstrap response.
 type AutodiscoverResponse struct {
-	Primary    string   `json:"primary"`
-	APIVersion string   `json:"api_version"`
-	Timeout    int      `json:"timeout"`
-	Retry      int      `json:"retry"`
-	RetryDelay int      `json:"retry_delay"`
+	Primary    string `json:"primary"`
+	APIVersion string `json:"api_version"`
+	Timeout    int    `json:"timeout"`
+	Retry      int    `json:"retry"`
+	RetryDelay int    `json:"retry_delay"`
 }
 
 // NewAPIClient creates a new API client

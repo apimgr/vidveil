@@ -153,4 +153,3 @@ func TestServerMetrics_GetAnalyticsSummary_CacheHitPct(t *testing.T) {
 		t.Errorf("CacheHitPct = %v, want 100.0", s.CacheHitPct)
 	}
 }
-

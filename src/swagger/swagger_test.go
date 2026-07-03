@@ -15,10 +15,10 @@ import (
 // invalid values, and cookie-over-query precedence.
 func TestDetectTheme(t *testing.T) {
 	tests := []struct {
-		name        string
-		cookie      string
-		queryParam  string
-		wantTheme   string
+		name       string
+		cookie     string
+		queryParam string
+		wantTheme  string
 	}{
 		{
 			name:      "no cookie no query returns auto",

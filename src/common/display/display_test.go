@@ -180,11 +180,11 @@ func TestAutoDetectDisplayModeMoshWithDisplay(t *testing.T) {
 
 func TestDisplayEnvModePredicates(t *testing.T) {
 	tests := []struct {
-		mode           DisplayMode
-		wantGUI        bool
-		wantTUI        bool
-		wantCLI        bool
-		wantHeadless   bool
+		mode         DisplayMode
+		wantGUI      bool
+		wantTUI      bool
+		wantCLI      bool
+		wantHeadless bool
 	}{
 		{DisplayModeGUI, true, false, false, false},
 		{DisplayModeTUI, false, true, false, false},

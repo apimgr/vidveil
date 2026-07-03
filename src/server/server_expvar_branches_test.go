@@ -27,9 +27,9 @@ type mockTorWithOnion struct {
 func (m *mockTorWithOnion) IsEnabled() bool                   { return true }
 func (m *mockTorWithOnion) IsRunning() bool                   { return true }
 func (m *mockTorWithOnion) IsStarting() bool                  { return false }
-func (m *mockTorWithOnion) AllowUserIPForward() bool           { return false }
-func (m *mockTorWithOnion) UseNetworkEnabled() bool            { return false }
-func (m *mockTorWithOnion) OutboundEnabled() bool              { return false }
+func (m *mockTorWithOnion) AllowUserIPForward() bool          { return false }
+func (m *mockTorWithOnion) UseNetworkEnabled() bool           { return false }
+func (m *mockTorWithOnion) OutboundEnabled() bool             { return false }
 func (m *mockTorWithOnion) GetHTTPClient(_ bool) *http.Client { return &http.Client{} }
 func (m *mockTorWithOnion) GetInfo() map[string]interface{} {
 	if m.addr == "" {

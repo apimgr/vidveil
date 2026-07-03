@@ -460,7 +460,7 @@ func TestRegisterParserOverwrites(t *testing.T) {
 // stubParser satisfies VideoSiteParser for registration tests.
 type stubParser struct{}
 
-func (s *stubParser) ItemSelector() string           { return ".item" }
+func (s *stubParser) ItemSelector() string                  { return ".item" }
 func (s *stubParser) Parse(_ *goquery.Selection) *VideoItem { return nil }
 
 // ---- ExtractAttr ----

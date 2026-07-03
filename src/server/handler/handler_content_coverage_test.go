@@ -32,7 +32,7 @@ type testGeoIPChecker struct {
 	reason     string
 }
 
-func (g *testGeoIPChecker) IsEnabled() bool { return g.enabled }
+func (g *testGeoIPChecker) IsEnabled() bool            { return g.enabled }
 func (g *testGeoIPChecker) GetRestrictionMode() string { return g.mode }
 func (g *testGeoIPChecker) CheckContentRestriction(_ string, _ bool) *geoip.RestrictionResult {
 	return &geoip.RestrictionResult{
@@ -53,11 +53,11 @@ type testTorChecker struct {
 }
 
 func (t *testTorChecker) IsEnabled() bool          { return t.enabled }
-func (t *testTorChecker) IsRunning() bool           { return t.running }
-func (t *testTorChecker) IsStarting() bool          { return t.starting }
-func (t *testTorChecker) AllowUserIPForward() bool  { return t.allowIPForward }
-func (t *testTorChecker) UseNetworkEnabled() bool   { return t.useNetwork }
-func (t *testTorChecker) OutboundEnabled() bool     { return t.outbound }
+func (t *testTorChecker) IsRunning() bool          { return t.running }
+func (t *testTorChecker) IsStarting() bool         { return t.starting }
+func (t *testTorChecker) AllowUserIPForward() bool { return t.allowIPForward }
+func (t *testTorChecker) UseNetworkEnabled() bool  { return t.useNetwork }
+func (t *testTorChecker) OutboundEnabled() bool    { return t.outbound }
 func (t *testTorChecker) GetInfo() map[string]interface{} {
 	return map[string]interface{}{"status": "disabled"}
 }
@@ -891,11 +891,11 @@ type torCheckerNoStatus struct {
 }
 
 func (t *torCheckerNoStatus) IsEnabled() bool          { return true }
-func (t *torCheckerNoStatus) IsRunning() bool           { return t.running }
-func (t *torCheckerNoStatus) IsStarting() bool          { return false }
-func (t *torCheckerNoStatus) AllowUserIPForward() bool  { return false }
-func (t *torCheckerNoStatus) UseNetworkEnabled() bool   { return false }
-func (t *torCheckerNoStatus) OutboundEnabled() bool     { return false }
+func (t *torCheckerNoStatus) IsRunning() bool          { return t.running }
+func (t *torCheckerNoStatus) IsStarting() bool         { return false }
+func (t *torCheckerNoStatus) AllowUserIPForward() bool { return false }
+func (t *torCheckerNoStatus) UseNetworkEnabled() bool  { return false }
+func (t *torCheckerNoStatus) OutboundEnabled() bool    { return false }
 func (t *torCheckerNoStatus) GetInfo() map[string]interface{} {
 	return map[string]interface{}{"onion_address": "test.onion"}
 }
@@ -930,7 +930,7 @@ func TestGetTorStatus_NoStatusInInfo_NotRunning_ReturnsDisabled(t *testing.T) {
 func TestGetTorHostname_WithHostname_ReturnsIt(t *testing.T) {
 	h := &SearchHandler{
 		appConfig: createTestConfig(),
-		torSvc: &testTorChecker{enabled: true, running: true},
+		torSvc:    &testTorChecker{enabled: true, running: true},
 	}
 	// testTorChecker.GetInfo returns {"status": "disabled"}, no hostname
 	hostname := h.getTorHostname()

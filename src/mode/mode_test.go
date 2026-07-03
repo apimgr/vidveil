@@ -140,10 +140,10 @@ func TestCurrentAppModeReflectsSetAppMode(t *testing.T) {
 
 func TestIsAppModeDevelopmentAndProduction(t *testing.T) {
 	tests := []struct {
-		name        string
-		mode        AppMode
-		wantDev     bool
-		wantProd    bool
+		name     string
+		mode     AppMode
+		wantDev  bool
+		wantProd bool
 	}{
 		{"production", Production, false, true},
 		{"development", Development, true, false},

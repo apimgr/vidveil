@@ -27,9 +27,9 @@ func makeValidDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	en := map[string]string{
-		"key.one":      "value one",
-		"key.two":      "value %d two",
-		"key.three":    "three %s end",
+		"key.one":   "value one",
+		"key.two":   "value %d two",
+		"key.three": "three %s end",
 	}
 	writeTempLocale(t, dir, "en.json", en)
 	for _, name := range requiredLocales {

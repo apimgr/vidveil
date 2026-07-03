@@ -2685,6 +2685,10 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		"tf": func(key string, args ...interface{}) string {
 			return i18n.TranslateFormat(locale, key, args...)
 		},
+		// safeHTML marks a string as safe HTML (trusted, not escaped)
+		"safeHTML": func(s string) template.HTML {
+			return template.HTML(s)
+		},
 	})
 
 	// Load all public partials

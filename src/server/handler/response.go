@@ -218,7 +218,8 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 
 	// 3. HTTP tools (curl, wget) - NON-INTERACTIVE, just dump output
 	//    Receive pre-formatted text via HTML2TextConverter
-	if isHttpTool(r) {
+	//    Exception: if Accept header explicitly requests text/html, return HTML
+	if isHttpTool(r) && !strings.Contains(r.Header.Get("Accept"), "text/html") {
 		// Render simple HTML content
 		html := h.renderSimpleHTML(name, data)
 

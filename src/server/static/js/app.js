@@ -1689,6 +1689,10 @@ if (document.readyState === 'loading') {
                     continue;
                 }
                 allResults.push(r);
+                // Track engine for status display
+                if (r.source) {
+                    enginesWithResults.add(r.source);
+                }
                 addResultCard(r);
 
                 // Add to source filter if new
@@ -2258,6 +2262,10 @@ if (document.readyState === 'loading') {
                 var r = data.result;
 
                 allResults.push(r);
+                // Track engine for status display
+                if (data.engine) {
+                    enginesWithResults.add(data.engine);
+                }
                 addResultCard(r);
 
                 var countEl = document.getElementById('result-count');

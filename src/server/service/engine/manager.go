@@ -105,7 +105,7 @@ func (m *EngineManager) InitializeEngines() {
 	// Tier 5 - New engines
 	m.engines["anyporn"] = NewAnyPornEngine(m.appConfig)
 	m.engines["tubegalore"] = NewTubeGaloreEngine(m.appConfig)
-	m.engines["motherless"] = NewMotherlessEngine(m.appConfig)
+	// motherless removed - site uses aggressive TLS fingerprinting that blocks automated requests
 
 	// Tier 6 - Additional engines
 	m.engines["3movs"] = NewThreeMovsEngine(m.appConfig)

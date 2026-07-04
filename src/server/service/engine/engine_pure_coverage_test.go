@@ -372,3 +372,42 @@ func TestGetClientForCtx_TorEnabled_ShouldNotUseTor_ReturnsDirect(t *testing.T) 
 		t.Error("getClientForCtx tor enabled + shouldNotUseTor: returned nil client")
 	}
 }
+
+// ── sanitizePreviewURL tests ─────────────────────────────────────────────────
+
+func TestSanitizePreviewURL(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"empty", "", ""},
+		{"whitespace only", "   ", ""},
+		{"http mp4 kept", "http://cdn.example.com/v/clip.mp4", "http://cdn.example.com/v/clip.mp4"},
+		{"https mp4 kept", "https://cdn.example.com/v/clip.mp4", "https://cdn.example.com/v/clip.mp4"},
+		{"https webm kept", "https://cdn.example.com/v/clip.webm", "https://cdn.example.com/v/clip.webm"},
+		{"protocol-relative becomes https", "//cdn.example.com/v/clip.mp4", "https://cdn.example.com/v/clip.mp4"},
+		{"site-relative dropped", "/videos/preview/clip.mp4", ""},
+		{"bare filename dropped", "clip.mp4", ""},
+		{"gif dropped", "https://cdn.example.com/roll/clip.gif", ""},
+		{"jpg dropped", "https://cdn.example.com/thumb/clip.jpg", ""},
+		{"jpeg dropped", "https://cdn.example.com/thumb/clip.jpeg", ""},
+		{"png dropped", "https://cdn.example.com/thumb/clip.png", ""},
+		{"webp dropped", "https://cdn.example.com/thumb/clip.webp", ""},
+		{"avif dropped", "https://cdn.example.com/thumb/clip.avif", ""},
+		{"m3u8 dropped", "https://cdn.example.com/hls/master.m3u8", ""},
+		{"uppercase extension dropped", "https://cdn.example.com/roll/CLIP.GIF", ""},
+		{"query string on mp4 kept", "https://cdn.example.com/v/clip.mp4?tok=abc&exp=1", "https://cdn.example.com/v/clip.mp4?tok=abc&exp=1"},
+		{"query string on gif dropped", "https://cdn.example.com/roll/clip.gif?x=1", ""},
+		{"fragment on m3u8 dropped", "https://cdn.example.com/hls/master.m3u8#start", ""},
+		{"extensionless URL kept", "https://cdn.example.com/preview/12345", "https://cdn.example.com/preview/12345"},
+		{"leading whitespace trimmed", "  https://cdn.example.com/v/clip.mp4", "https://cdn.example.com/v/clip.mp4"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizePreviewURL(tt.input); got != tt.want {
+				t.Errorf("sanitizePreviewURL(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

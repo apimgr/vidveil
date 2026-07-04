@@ -94,6 +94,8 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 		if previewURL != "" && !strings.HasPrefix(previewURL, "http") {
 			if strings.HasPrefix(previewURL, "//") {
 				previewURL = "https:" + previewURL
+			} else {
+				previewURL = e.baseURL + previewURL
 			}
 		}
 

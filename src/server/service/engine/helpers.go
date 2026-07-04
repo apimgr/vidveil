@@ -147,6 +147,8 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 			if !strings.HasPrefix(preview, "http") {
 				if strings.HasPrefix(preview, "//") {
 					preview = "https:" + preview
+				} else {
+					preview = baseURL + preview
 				}
 			}
 			r.PreviewURL = preview
@@ -160,6 +162,8 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 				if !strings.HasPrefix(preview, "http") {
 					if strings.HasPrefix(preview, "//") {
 						preview = "https:" + preview
+					} else {
+						preview = baseURL + preview
 					}
 				}
 				r.PreviewURL = preview
@@ -174,6 +178,8 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 				if !strings.HasPrefix(preview, "http") {
 					if strings.HasPrefix(preview, "//") {
 						preview = "https:" + preview
+					} else {
+						preview = baseURL + preview
 					}
 				}
 				r.PreviewURL = preview

@@ -1135,6 +1135,8 @@ header .search-form {
 
 .video-card .thumb-container[data-preview] {
     cursor: pointer;
+    /* Keep vertical scrolling native while letting horizontal swipes reach the preview touch handlers */
+    touch-action: pan-y;
 }
 
 .video-card .thumb-container[data-preview]::after {

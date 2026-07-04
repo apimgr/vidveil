@@ -222,6 +222,8 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 				if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
 					continue
 				}
+				// Drop preview URLs a <video> element cannot play (images, HLS, relative paths)
+				r.PreviewURL = sanitizePreviewURL(r.PreviewURL)
 				// AND-based term filter: result must match ALL search terms (using synonyms)
 				if !resultMatchesAllTerms(r, query) {
 					continue
@@ -1024,6 +1026,38 @@ func isValidThumbnail(thumbnail string) bool {
 	return true
 }
 
+// sanitizePreviewURL validates a preview URL for browser <video> playback
+// Returns "" when the URL is not absolute http(s) or points at a resource a
+// <video> element cannot play (image rollovers, HLS playlists), so the frontend
+// never shows a swipe/hover preview affordance that is guaranteed to fail
+func sanitizePreviewURL(preview string) string {
+	preview = strings.TrimSpace(preview)
+	if preview == "" {
+		return ""
+	}
+	// Protocol-relative URLs default to https
+	if strings.HasPrefix(preview, "//") {
+		preview = "https:" + preview
+	}
+	if !strings.HasPrefix(preview, "http://") && !strings.HasPrefix(preview, "https://") {
+		return ""
+	}
+	// Strip query string and fragment to inspect the path extension
+	pathOnly := preview
+	if idx := strings.IndexAny(pathOnly, "?#"); idx != -1 {
+		pathOnly = pathOnly[:idx]
+	}
+	lower := strings.ToLower(pathOnly)
+	// Extensions a <video> element cannot play natively: static/animated images and HLS playlists
+	unplayable := []string{".gif", ".jpg", ".jpeg", ".png", ".webp", ".avif", ".m3u8"}
+	for _, ext := range unplayable {
+		if strings.HasSuffix(lower, ext) {
+			return ""
+		}
+	}
+	return preview
+}
+
 // normalizeURL normalizes a URL for deduplication purposes
 // Handles: http/https, www/non-www, trailing slashes, query params
 func normalizeURL(urlStr string) string {
@@ -1292,6 +1326,9 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 					if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
 						continue
 					}
+
+					// Drop preview URLs a <video> element cannot play (images, HLS, relative paths)
+					r.PreviewURL = sanitizePreviewURL(r.PreviewURL)
 
 					// Apply search operators
 					titleLower := strings.ToLower(r.Title)

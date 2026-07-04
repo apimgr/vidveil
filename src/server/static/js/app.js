@@ -1819,7 +1819,8 @@ if (document.readyState === 'loading') {
 
         // Check autoplay preference (default true)
         var autoplayEnabled = userPrefs.autoplayPreview !== false;
-        var previewDelay = parseInt(userPrefs.previewDelay) || 200;
+        var previewDelayRaw = parseInt(userPrefs.previewDelay, 10);
+        var previewDelay = isNaN(previewDelayRaw) ? 0 : previewDelayRaw;
 
         var isPlaying = false;
         var videoFailed = false;

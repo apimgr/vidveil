@@ -312,6 +312,10 @@ func main() {
 	if pidFile == "" && os.Getenv("PID_FILE") != "" {
 		pidFile = os.Getenv("PID_FILE")
 	}
+	// Port chain per AI.md: --port > VIDVEIL_PORT > PORT > config > random
+	if port == "" && os.Getenv("VIDVEIL_PORT") != "" {
+		port = os.Getenv("VIDVEIL_PORT")
+	}
 	if port == "" && os.Getenv("PORT") != "" {
 		port = os.Getenv("PORT")
 	}

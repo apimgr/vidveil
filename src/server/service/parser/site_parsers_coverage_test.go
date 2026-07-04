@@ -208,22 +208,22 @@ func TestPornMDParse_Valid(t *testing.T) {
 
 // ---- extractViewsFromText (xvideos.go, unexported) ----
 
-// "6.4M Views" → viewStr "6.4M views", count ~6400000.
+// "6.4M Views" → viewStr "6.4M" (bare count, label appended by templates/JS), count ~6400000.
 func TestExtractViewsFromText_Millions(t *testing.T) {
 	viewStr, count := extractViewsFromText("10 min Gabiconkey - 6.4M Views -")
-	if viewStr != "6.4M views" {
-		t.Errorf("extractViewsFromText millions viewStr = %q, want %q", viewStr, "6.4M views")
+	if viewStr != "6.4M" {
+		t.Errorf("extractViewsFromText millions viewStr = %q, want %q", viewStr, "6.4M")
 	}
 	if count < 6000000 || count > 7000000 {
 		t.Errorf("extractViewsFromText millions count = %d, want ~6400000", count)
 	}
 }
 
-// "500K Views" → count ~500000.
+// "500K Views" → viewStr "500K" (bare count), count ~500000.
 func TestExtractViewsFromText_Thousands(t *testing.T) {
 	viewStr, count := extractViewsFromText("8 min SomeModel - 500K Views -")
-	if viewStr != "500K views" {
-		t.Errorf("extractViewsFromText thousands viewStr = %q, want %q", viewStr, "500K views")
+	if viewStr != "500K" {
+		t.Errorf("extractViewsFromText thousands viewStr = %q, want %q", viewStr, "500K")
 	}
 	if count < 450000 || count > 550000 {
 		t.Errorf("extractViewsFromText thousands count = %d, want ~500000", count)

@@ -18,7 +18,7 @@ func extractViewsFromText(text string) (string, int64) {
 		if len(matches) >= 3 && matches[2] != "" {
 			viewStr += strings.ToUpper(matches[2])
 		}
-		return viewStr + " views", ParseViewCount(viewStr)
+		return viewStr, ParseViewCount(viewStr)
 	}
 	return "", 0
 }

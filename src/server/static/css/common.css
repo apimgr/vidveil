@@ -1972,6 +1972,7 @@ header .search-form {
 }
 
 /* Toast Container per AI.md PART 16 */
+/* pointer-events none so the fixed overlay never blocks taps/clicks on content beneath it */
 #toast-container {
     position: fixed;
     top: 1rem;
@@ -1982,9 +1983,11 @@ header .search-form {
     gap: 0.5rem;
     max-height: calc(100vh - 2rem);
     overflow: hidden;
+    pointer-events: none;
 }
 
 /* Standalone toast element (used in preferences, etc.) */
+/* Hidden state must not intercept touches — opacity 0 still hit-tests without pointer-events none */
 #toast {
     position: fixed;
     top: 1rem;
@@ -1993,15 +1996,19 @@ header .search-form {
     opacity: 0;
     transform: translateX(100%);
     transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
 }
 
 #toast.show {
     opacity: 1;
     transform: translateX(0);
+    pointer-events: auto;
 }
 
 /* Toast Notifications per AI.md PART 16 */
+/* Individual toasts stay interactive inside the pointer-events:none container */
 .toast {
+    pointer-events: auto;
     display: flex;
     align-items: center;
     gap: 0.75rem;

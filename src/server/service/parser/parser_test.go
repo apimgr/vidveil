@@ -205,11 +205,25 @@ func TestParseViewsCommaFormatted(t *testing.T) {
 	}
 }
 
-// A " views" suffix must be stripped before parsing.
+// A " views" suffix must be stripped before parsing AND from the returned display string.
 func TestParseViewsWithViewsSuffix(t *testing.T) {
-	_, count := ParseViews("500K views")
+	str, count := ParseViews("500K views")
 	if count != 500000 {
 		t.Errorf("ParseViews 'views' suffix count: got %d, want 500000", count)
+	}
+	if str != "500K" {
+		t.Errorf("ParseViews 'views' suffix str: got %q, want %q", str, "500K")
+	}
+}
+
+// Uppercase "VIEWS" suffix must also be stripped from the display string.
+func TestParseViewsUppercaseSuffixStripped(t *testing.T) {
+	str, count := ParseViews("6.4M Views")
+	if count != 6400000 {
+		t.Errorf("ParseViews '6.4M Views' count: got %d, want 6400000", count)
+	}
+	if str != "6.4M" {
+		t.Errorf("ParseViews '6.4M Views' str: got %q, want %q", str, "6.4M")
 	}
 }
 

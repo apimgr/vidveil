@@ -143,20 +143,23 @@ func ParseDuration(duration string) (string, int) {
 	return duration, 0
 }
 
-// ParseViews parses view counts like "1.2M" or "500K" to (display string, count)
+// ParseViews parses view counts like "1.2M" or "500K views" to (display string, count).
+// The display string never contains the word "views" — templates and JS append the label.
 func ParseViews(views string) (string, int64) {
 	views = strings.TrimSpace(views)
 	if views == "" {
 		return "", 0
 	}
 
+	// Strip a trailing "views" word from the display string, preserving the count's original case
 	original := views
-	views = strings.ToUpper(views)
-
-	// Remove "views" suffix
-	views = strings.TrimSuffix(views, " VIEWS")
-	views = strings.TrimSuffix(views, "VIEWS")
-	views = strings.TrimSpace(views)
+	if lower := strings.ToLower(original); strings.HasSuffix(lower, "views") {
+		original = strings.TrimSpace(original[:len(original)-len("views")])
+	}
+	if original == "" {
+		original = views
+	}
+	views = strings.ToUpper(original)
 
 	multiplier := int64(1)
 	if strings.HasSuffix(views, "K") {

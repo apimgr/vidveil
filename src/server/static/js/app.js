@@ -316,105 +316,6 @@ function filterByDuration(duration) {
     });
 }
 
-// ============================================================================
-// Video Preview - Hover (desktop) and Tap (mobile)
-// ============================================================================
-function setupVideoPreview() {
-    const containers = document.querySelectorAll('.thumb-container[data-preview]');
-    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-
-    containers.forEach(container => {
-        const video = container.querySelector('.thumb-preview');
-        const staticImg = container.querySelector('.thumb-static');
-        if (!video) return;
-
-        let hoverTimeout;
-        let isPlaying = false;
-
-        // Desktop: hover behavior
-        if (!isTouchDevice) {
-            container.addEventListener('mouseenter', () => {
-                hoverTimeout = setTimeout(() => {
-                    video.style.opacity = '1';
-                    staticImg.style.opacity = '0';
-                    video.play().catch(() => {});
-                    isPlaying = true;
-                }, 200);
-            });
-
-            container.addEventListener('mouseleave', () => {
-                clearTimeout(hoverTimeout);
-                video.style.opacity = '0';
-                staticImg.style.opacity = '1';
-                video.pause();
-                video.currentTime = 0;
-                isPlaying = false;
-            });
-        } else {
-            // Mobile: swipe right to preview
-            let touchStartX = 0;
-            let touchEndX = 0;
-            
-            container.addEventListener('touchstart', (e) => {
-                touchStartX = e.changedTouches[0].screenX;
-            }, { passive: true });
-            
-            container.addEventListener('touchend', (e) => {
-                touchEndX = e.changedTouches[0].screenX;
-                handleSwipeGesture();
-            }, { passive: true });
-            
-            function handleSwipeGesture() {
-                const swipeThreshold = 50; // minimum swipe distance
-                const swipeDistance = touchEndX - touchStartX;
-                
-                // Swipe right - show preview
-                if (swipeDistance > swipeThreshold && !isPlaying) {
-                    video.style.opacity = '1';
-                    staticImg.style.opacity = '0';
-                    video.play().catch(() => {});
-                    isPlaying = true;
-                    
-                    // Auto-stop after 5 seconds
-                    setTimeout(() => {
-                        if (isPlaying) {
-                            video.style.opacity = '0';
-                            staticImg.style.opacity = '1';
-                            video.pause();
-                            video.currentTime = 0;
-                            isPlaying = false;
-                        }
-                    }, 5000);
-                }
-                // Swipe left - stop preview
-                else if (swipeDistance < -swipeThreshold && isPlaying) {
-                    video.style.opacity = '0';
-                    staticImg.style.opacity = '1';
-                    video.pause();
-                    video.currentTime = 0;
-                    isPlaying = false;
-                }
-            }
-            
-            // Tap to navigate (when not previewing)
-            container.addEventListener('click', (e) => {
-                // If not previewing, allow navigation
-                if (!isPlaying) {
-                    return; // Let link work normally
-                }
-                // If previewing, stop it
-                e.preventDefault();
-                e.stopPropagation();
-                video.style.opacity = '0';
-                staticImg.style.opacity = '1';
-                video.pause();
-                video.currentTime = 0;
-                isPlaying = false;
-            });
-        }
-    });
-}
-
 // Lazy loading: Uses native loading="lazy" attribute on images - no JS needed
 
 // ============================================================================
@@ -605,9 +506,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // Lazy loading uses native loading="lazy" attribute - no JS setup needed
-
-    // Setup video preview on hover
-    setupVideoPreview();
 
     // Setup keyboard shortcuts
     setupKeyboardShortcuts();
@@ -1797,7 +1695,7 @@ if (document.readyState === 'loading') {
         html += '<div class="info">';
         html += '<h3><a href="' + escapeHtmlUtil(r.url) + '"' + targetAttr + ' rel="noopener noreferrer nofollow">' + escapeHtmlUtil(r.title || 'Untitled') + '</a></h3>';
         html += '<div class="meta"><span class="source">' + escapeHtmlUtil(r.source_display || r.source || '') + '</span>';
-        if (r.views) html += '<span>' + escapeHtmlUtil(r.views) + '</span>';
+        if (r.views) html += '<span>' + escapeHtmlUtil(r.views) + ' views</span>';
         html += '</div></div>';
 
         card.innerHTML = html;

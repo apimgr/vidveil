@@ -1195,6 +1195,9 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 
 		// Console output is handled in main.go per AI.md PART 7
 
+		// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
+		ApplyEnvOverrides(cfg)
+
 		return cfg, configPath, nil
 	}
 
@@ -1218,6 +1221,9 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	if cfg.Server.Database.SQLite.Dir == "" || os.Getenv("DATABASE_DIR") != "" {
 		cfg.Server.Database.SQLite.Dir = dbDir
 	}
+
+	// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
+	ApplyEnvOverrides(cfg)
 
 	return cfg, configPath, nil
 }

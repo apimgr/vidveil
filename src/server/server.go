@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/graphql"
 	"github.com/apimgr/vidveil/src/paths"
@@ -480,10 +481,13 @@ func (s *Server) setupRoutes() {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+		// Tie the SW cache name to version+commit so every deploy invalidates stale caches
+		swCache := "vidveil-" + version.Version + "-" + version.CommitID
+		body := strings.Replace(string(data), "vidveil-v1", swCache, 1)
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Header().Set("Service-Worker-Allowed", "/")
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Write(data)
+		w.Write([]byte(body))
 	})
 	s.router.Get("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
 		data, err := embeddedFS.ReadFile("static/manifest.json")

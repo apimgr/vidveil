@@ -89,8 +89,7 @@ func (p *XNXXParser) Parse(s *goquery.Selection) *VideoItem {
 	viewSpan := s.Find("p.metadata span.right")
 	if viewSpan.Length() > 0 {
 		viewText := CleanText(viewSpan.Contents().First().Text())
-		item.Views = viewText
-		item.ViewsCount = ParseViewCount(viewText)
+		item.Views, item.ViewsCount = ParseViews(viewText)
 	}
 
 	// Check for premium/gold

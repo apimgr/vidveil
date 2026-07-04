@@ -391,6 +391,9 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 		"target":        fmt.Sprintf("127.0.0.1:%d", serverPort),
 	})
 
+	// Per AI.md PART 31 file table: write {data_dir}/tor/tor.pid (0600)
+	s.writePIDFile(t)
+
 	// Initialize outbound dialer if UseNetwork is enabled OR AllowUserPreference is true (per PART 31)
 	// Dialer is needed when either: server routes all outbound through Tor, OR users can opt-in
 	if s.torConfig != nil && (s.torConfig.UseNetwork || s.torConfig.AllowUserPreference) {
@@ -415,6 +418,25 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	go s.monitorProcess()
 
 	return nil
+}
+
+// writePIDFile queries the Tor control port for the process PID and writes it
+// to {data_dir}/tor/tor.pid per AI.md PART 31 file table (permissions 0600)
+func (s *TorService) writePIDFile(t *tor.Tor) {
+	kvs, err := t.Control.GetInfo("process/pid")
+	if err != nil || len(kvs) == 0 || kvs[0].Val == "" {
+		if s.logger != nil {
+			s.logger.Warn("Could not determine Tor PID for tor.pid", nil)
+		}
+		return
+	}
+
+	pidPath := filepath.Join(s.dataDir, "tor.pid")
+	if err := os.WriteFile(pidPath, []byte(kvs[0].Val+"\n"), 0600); err != nil {
+		if s.logger != nil {
+			s.logger.Warn("Failed to write tor.pid", map[string]interface{}{"error": err.Error()})
+		}
+	}
 }
 
 // monitorProcess monitors Tor and restarts if it crashes per PART 31
@@ -489,6 +511,9 @@ func (s *TorService) Stop() error {
 		}
 		s.torInstance = nil
 	}
+
+	// Per AI.md PART 31: remove tor.pid when the Tor process is stopped
+	os.Remove(filepath.Join(s.dataDir, "tor.pid"))
 
 	s.status = TorServiceStatusDisconnected
 	return nil
@@ -921,8 +946,19 @@ func (s *TorService) ImportKeys(secretKey []byte) error {
 		return fmt.Errorf("failed to write secret key: %w", err)
 	}
 
-	// Reload keys
-	return s.loadOrGenerateKeys()
+	// Reload keys from the newly written secret key
+	if err := s.loadOrGenerateKeys(); err != nil {
+		return err
+	}
+
+	// Per AI.md PART 31: imported keys replace the address — refresh hostname file
+	s.onionAddress = s.generateOnionAddress()
+	hostname := s.onionAddress + "\n"
+	if err := os.WriteFile(filepath.Join(siteDir, "hostname"), []byte(hostname), 0600); err != nil {
+		return fmt.Errorf("failed to write hostname: %w", err)
+	}
+
+	return nil
 }
 
 // GetInfo returns current Tor service info for API/status

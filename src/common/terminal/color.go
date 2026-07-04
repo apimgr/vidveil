@@ -52,7 +52,7 @@ func SetEmojiMode(mode ColorMode) {
 }
 
 // ParseColorFlag parses the --color flag value
-// Per AI.md PART 8: Accepts always, never, auto
+// Per AI.md PART 8: canonical values are auto, yes, no (aliases accepted)
 func ParseColorFlag(value string) ColorMode {
 	switch strings.ToLower(value) {
 	case "always", "yes", "true", "on", "1":

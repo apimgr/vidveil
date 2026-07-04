@@ -78,7 +78,7 @@ func main() {
 		modeStr string
 		debug   bool
 		daemon  bool
-		// Per AI.md PART 8: --color flag (always, never, auto)
+		// Per AI.md PART 8: --color flag (auto, yes, no)
 		colorFlag string
 		// Per AI.md PART 8: --lang CODE (output language, default "auto")
 		langFlag   string
@@ -89,6 +89,9 @@ func main() {
 		maintPassword string
 		updateCmd     string
 		updateArg     string
+		// Per AI.md PART 31: tor subcommand args (status, validate, restart, ...)
+		torArgs []string
+		torCmd  bool
 	)
 
 	i := 0
@@ -199,7 +202,7 @@ func main() {
 			debug = true
 
 		case "--color":
-			// Per AI.md PART 8: --color {always|never|auto}
+			// Per AI.md PART 8: --color {auto|yes|no}
 			if i+1 < len(args) {
 				i++
 				colorFlag = args[i]
@@ -223,6 +226,14 @@ func main() {
 					updateArg = args[i]
 				}
 			}
+
+		case "tor":
+			// Per AI.md PART 31: tor {status|validate|restart|regenerate|vanity|import-keys}
+			// All remaining args belong to the tor command
+			torCmd = true
+			torArgs = args[i+1:]
+			i = len(args)
+			continue
 
 		case "--maintenance":
 			if i+1 < len(args) {
@@ -349,6 +360,11 @@ func main() {
 	// plumbing parameter.
 	setPathEnv("BASEURL", baseURL)
 	setPathEnv("LANG", langFlag)
+
+	// Per AI.md PART 31: tor CLI commands
+	if torCmd {
+		os.Exit(handleTorCommand(torArgs, configDir, dataDir))
+	}
 
 	if serviceCmd != "" {
 		handleServiceCommand(serviceCmd, configDir, dataDir)
@@ -867,6 +883,9 @@ Service Management:
 --maintenance CMD                      - Maintenance operations (run --maintenance help for details)
 --update [CMD]                         - Check/perform updates (run --update help for details)
 
+Tor Hidden Service:
+tor CMD                                - Tor management (run tor help for details)
+
 Run '%s <command> help' for detailed help on any command.
 `, binaryName, version.GetVersion(), binaryName, binaryName)
 }
@@ -886,14 +905,15 @@ func printVersion() {
 }
 
 func checkStatus() int {
-	// Get paths
+	// Per AI.md PART 31 CLI: exact --status output format
+	// Server Status / Port / Mode / Uptime + Tor Hidden Service section
 	appPaths := config.GetAppPaths("", "")
 
 	// Try to load config to check if initialized
 	statusConfig, _, err := config.LoadAppConfig("", "")
 	if err != nil {
-		fmt.Println("❌ Status: Not initialized")
-		fmt.Printf("   Config dir: %s\n", appPaths.Config)
+		fmt.Println("Server Status: Not initialized")
+		fmt.Printf("  Config dir: %s\n", appPaths.Config)
 		return 1
 	}
 
@@ -901,33 +921,38 @@ func checkStatus() int {
 	addr := net.JoinHostPort("127.0.0.1", statusConfig.Server.Port)
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
-		fmt.Println("⚠️  Status: Stopped")
-		fmt.Printf("   Port: %s (not listening)\n", statusConfig.Server.Port)
+		fmt.Println("Server Status: Stopped")
+		fmt.Printf("  Port: %s\n", statusConfig.Server.Port)
 		return 1
 	}
 	conn.Close()
 
-	// Server is running - try health check
-	healthURL := fmt.Sprintf("http://%s/healthz", addr)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(healthURL)
-	if err != nil {
-		fmt.Println("⚠️  Status: Running (health check failed)")
-		fmt.Printf("   Port: %s\n", statusConfig.Server.Port)
+	// Server is listening - query /healthz for mode, uptime, and Tor status
+	health := queryHealthz("", "")
+	if health == nil {
+		fmt.Println("Server Status: Starting")
+		fmt.Printf("  Port: %s\n", statusConfig.Server.Port)
 		return 1
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode == 200 {
-		fmt.Println("✅ Status: Running")
-		fmt.Printf("   Port: %s\n", statusConfig.Server.Port)
-		fmt.Printf("   FQDN: %s\n", statusConfig.Server.FQDN)
-		return 0
+	fmt.Println("Server Status: Running")
+	fmt.Printf("  Port: %s\n", statusConfig.Server.Port)
+	fmt.Printf("  Mode: %s\n", health.Mode)
+	fmt.Printf("  Uptime: %s\n", health.Uptime)
+	fmt.Println()
+
+	// Per AI.md PART 31: Tor status field is Connected/disabled + onion address
+	t := health.Features.Tor
+	switch {
+	case t.Running:
+		fmt.Println("Tor Hidden Service: Connected")
+		fmt.Printf("  Address: %s\n", t.Hostname)
+	case t.Status == "starting":
+		fmt.Println("Tor Hidden Service: Starting")
+	default:
+		fmt.Println("Tor Hidden Service: Disabled")
 	}
-
-	fmt.Println("⚠️  Status: Running (unhealthy)")
-	fmt.Printf("   Port: %s\n", statusConfig.Server.Port)
-	return 1
+	return 0
 }
 
 // handleShellCommand handles --shell completions and --shell init per PART 8
@@ -1013,7 +1038,7 @@ func printInit(shell, binaryName string) {
 func printBashCompletions(binaryName string) {
 	fmt.Printf(`_%s_completions() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
-    local opts="--help --version --shell --config --data --cache --log --backup --pid --address --port --baseurl --mode --status --daemon --debug --color --lang --service --maintenance --update"
+    local opts="--help --version --shell --config --data --cache --log --backup --pid --address --port --baseurl --mode --status --daemon --debug --color --lang --service --maintenance --update tor"
     COMPREPLY=($(compgen -W "$opts" -- "$cur"))
 }
 complete -F _%s_completions %s
@@ -1040,11 +1065,13 @@ _arguments \
     '--status[Show status]' \
     '--daemon[Run as daemon]' \
     '--debug[Enable debug mode]' \
-    '--color[Color output]:color:(always never auto)' \
+    '--color[Color output]:color:(auto yes no)' \
     '--lang[Output language]:code:' \
-    '--service[Service command]:command:(start stop restart reload status install uninstall)' \
+    '--service[Service command]:command:(start stop restart reload status --install --uninstall --disable)' \
     '--maintenance[Maintenance command]:command:(backup restore update mode setup)' \
-    '--update[Update command]:command:(check yes)'
+    '--update[Update command]:command:(check yes branch)' \
+    '1:command:(tor)' \
+    '2:tor command:(status validate restart regenerate vanity import-keys help)'
 `, binaryName)
 }
 
@@ -1065,12 +1092,14 @@ complete -c %s -l mode -d 'Application mode' -xa 'production development'
 complete -c %s -l status -d 'Show status'
 complete -c %s -l daemon -d 'Run as daemon'
 complete -c %s -l debug -d 'Enable debug mode'
-complete -c %s -l color -d 'Color output' -xa 'always never auto'
+complete -c %s -l color -d 'Color output' -xa 'auto yes no'
 complete -c %s -l lang -d 'Output language'
-complete -c %s -l service -d 'Service command' -xa 'start stop restart reload status install uninstall'
+complete -c %s -l service -d 'Service command' -xa 'start stop restart reload status --install --uninstall --disable'
 complete -c %s -l maintenance -d 'Maintenance command' -xa 'backup restore update mode setup'
-complete -c %s -l update -d 'Update command' -xa 'check yes'
-`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
+complete -c %s -l update -d 'Update command' -xa 'check yes branch'
+complete -c %s -n '__fish_use_subcommand' -a tor -d 'Tor hidden service management'
+complete -c %s -n '__fish_seen_subcommand_from tor' -a 'status validate restart regenerate vanity import-keys help'
+`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 }
 
 func printPowerShellCompletions(binaryName string) {
@@ -1079,7 +1108,7 @@ func printPowerShellCompletions(binaryName string) {
     $completions = @(
         '--help', '--version', '--shell', '--config', '--data', '--cache',
         '--log', '--backup', '--pid', '--address', '--port', '--baseurl', '--mode',
-        '--status', '--daemon', '--debug', '--color', '--lang', '--service', '--maintenance', '--update'
+        '--status', '--daemon', '--debug', '--color', '--lang', '--service', '--maintenance', '--update', 'tor'
     )
     $completions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)

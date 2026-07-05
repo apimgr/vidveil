@@ -8,11 +8,10 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/robfig/cron/v3"
 )
 
 // TaskFunc is a function that executes a scheduled task
@@ -36,7 +35,7 @@ type ScheduledTask struct {
 	// Interval is for simple duration-based schedules
 	Interval time.Duration `json:"-"`
 	// cronSched is for cron-expression schedules per AI.md PART 18
-	cronSched cron.Schedule `json:"-"`
+	cronSched cronSchedule `json:"-"`
 	fn        TaskFunc
 }
 
@@ -329,18 +328,145 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 	return nil
 }
 
+// cronSchedule is the interface for cron-expression schedules (replaces robfig/cron dependency)
+type cronSchedule interface {
+	Next(t time.Time) time.Time
+}
+
+// cronExpr is a parsed 5-field cron expression (minute hour dom month dow)
+type cronExpr struct {
+	minutes  []int
+	hours    []int
+	doms     []int
+	months   []int
+	dows     []int
+}
+
+// Next returns the next activation time after t per AI.md PART 18
+func (c *cronExpr) Next(t time.Time) time.Time {
+	// Advance by one second so we never return t itself
+	t = t.Add(time.Second).Truncate(time.Second)
+	// Search up to 4 years to avoid infinite loop on impossible expressions
+	limit := t.Add(4 * 365 * 24 * time.Hour)
+	for t.Before(limit) {
+		if !inList(c.months, int(t.Month())) {
+			t = time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, t.Location())
+			continue
+		}
+		if !inList(c.doms, t.Day()) || !inList(c.dows, int(t.Weekday())) {
+			t = time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, t.Location())
+			continue
+		}
+		if !inList(c.hours, t.Hour()) {
+			t = time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
+			continue
+		}
+		if !inList(c.minutes, t.Minute()) {
+			t = t.Add(time.Minute).Truncate(time.Minute)
+			continue
+		}
+		return t.Truncate(time.Minute)
+	}
+	return time.Time{}
+}
+
+// inList reports whether v is in the sorted list
+func inList(list []int, v int) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
 // parseCronSchedule parses a cron expression per AI.md PART 18
-// Supports standard cron format: minute hour day-of-month month day-of-week
-func parseCronSchedule(schedule string) (cron.Schedule, error) {
-	// Check if it looks like a cron expression (5 space-separated fields)
+// Supports standard 5-field cron format: minute hour day-of-month month day-of-week
+// No external dependencies — built-in parser only.
+func parseCronSchedule(schedule string) (cronSchedule, error) {
+	// Must be exactly 5 space-separated fields
 	fields := strings.Fields(schedule)
 	if len(fields) != 5 {
 		return nil, fmt.Errorf("not a cron expression")
 	}
 
-	// Use standard cron parser (minute hour dom month dow)
-	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	return parser.Parse(schedule)
+	ranges := [5][2]int{
+		{0, 59},  // minute
+		{0, 23},  // hour
+		{1, 31},  // dom
+		{1, 12},  // month
+		{0, 6},   // dow
+	}
+
+	parsed := make([][]int, 5)
+	for i, field := range fields {
+		vals, err := parseCronField(field, ranges[i][0], ranges[i][1])
+		if err != nil {
+			return nil, fmt.Errorf("field %d (%s): %w", i, field, err)
+		}
+		parsed[i] = vals
+	}
+
+	return &cronExpr{
+		minutes: parsed[0],
+		hours:   parsed[1],
+		doms:    parsed[2],
+		months:  parsed[3],
+		dows:    parsed[4],
+	}, nil
+}
+
+// parseCronField expands one cron field (supports *, */n, n, n-m, n,m,...)
+func parseCronField(field string, min, max int) ([]int, error) {
+	set := make(map[int]struct{})
+
+	for _, part := range strings.Split(field, ",") {
+		var step int = 1
+		// Handle step syntax: */n or range/n
+		if idx := strings.Index(part, "/"); idx >= 0 {
+			s, err := strconv.Atoi(part[idx+1:])
+			if err != nil || s < 1 {
+				return nil, fmt.Errorf("invalid step in %q", part)
+			}
+			step = s
+			part = part[:idx]
+		}
+
+		var lo, hi int
+		if part == "*" {
+			lo, hi = min, max
+		} else if idx := strings.Index(part, "-"); idx >= 0 {
+			var err error
+			lo, err = strconv.Atoi(part[:idx])
+			if err != nil {
+				return nil, fmt.Errorf("invalid range start in %q", part)
+			}
+			hi, err = strconv.Atoi(part[idx+1:])
+			if err != nil {
+				return nil, fmt.Errorf("invalid range end in %q", part)
+			}
+		} else {
+			v, err := strconv.Atoi(part)
+			if err != nil {
+				return nil, fmt.Errorf("invalid value %q", part)
+			}
+			lo, hi = v, v
+		}
+
+		if lo < min || hi > max || lo > hi {
+			return nil, fmt.Errorf("value out of range [%d-%d] in %q", min, max, part)
+		}
+		for v := lo; v <= hi; v += step {
+			set[v] = struct{}{}
+		}
+	}
+
+	result := make([]int, 0, len(set))
+	for v := range set {
+		result = append(result, v)
+	}
+	sort.Ints(result)
+	return result, nil
 }
 
 // parseInterval converts schedule string to duration per AI.md

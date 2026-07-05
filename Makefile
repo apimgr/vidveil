@@ -18,15 +18,18 @@ COMMIT_ID  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "N/A")
 # Sources in priority order: site.txt → OFFICIALSITE env → empty
 OFFICIALSITE := $(shell [ -f site.txt ] && cat site.txt || echo "$${OFFICIALSITE:-}")
 
+# go build flags applied to every binary (AI.md PART 7/8: -trimpath is a go build flag, not a linker flag)
+BUILD_FLAGS := -trimpath -buildvcs=false
+
 # Linker flags to embed build info into server binary (AI.md PART 7)
-LDFLAGS := -s -w -trimpath \
+LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)' \
 	-X 'main.OfficialSite=$(OFFICIALSITE)'
 
 # Linker flags for CLI client binary (AI.md PART 8)
-CLI_LDFLAGS := -s -w -trimpath \
+CLI_LDFLAGS := -s -w \
 	-X 'main.ProjectName=$(PROJECTNAME)' \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
@@ -82,7 +85,7 @@ build: clean
 		[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 		echo "Building server $$OS/$$ARCH → $$OUTPUT..."; \
 		$(_GO_OPTS) -e GOOS=$$OS -e GOARCH=$$ARCH casjaysdev/go:latest \
-			go build -buildvcs=false -ldflags "$(LDFLAGS)" -o $$OUTPUT ./src || exit 1; \
+			go build $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o $$OUTPUT ./src || exit 1; \
 	done
 	@if [ -d "src/client" ]; then \
 		echo "Building CLI for all 8 platforms..."; \
@@ -93,7 +96,7 @@ build: clean
 			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 			echo "Building CLI $$OS/$$ARCH → $$OUTPUT..."; \
 			$(_GO_OPTS) -e GOOS=$$OS -e GOARCH=$$ARCH casjaysdev/go:latest \
-				go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o $$OUTPUT ./src/client || exit 1; \
+				go build $(BUILD_FLAGS) -ldflags "$(CLI_LDFLAGS)" -o $$OUTPUT ./src/client || exit 1; \
 		done; \
 	fi
 	@echo "Build complete: $(BINDIR)/"
@@ -109,11 +112,11 @@ local: clean
 	@$(GO_DOCKER) go mod download
 	@echo "Building server (linux/amd64)..."
 	@$(GO_DOCKER) \
-		go build -buildvcs=false -ldflags "$(LDFLAGS)" -o /app/$(BINDIR)/$(PROJECTNAME) ./src
+		go build $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o /app/$(BINDIR)/$(PROJECTNAME) ./src
 	@if [ -d "src/client" ]; then \
 		echo "Building CLI (linux/amd64)..."; \
 		$(GO_DOCKER) \
-			go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o /app/$(BINDIR)/$(PROJECTNAME)-cli ./src/client; \
+			go build $(BUILD_FLAGS) -ldflags "$(CLI_LDFLAGS)" -o /app/$(BINDIR)/$(PROJECTNAME)-cli ./src/client; \
 	fi
 	@echo "Local build complete: $(BINDIR)/"
 
@@ -200,11 +203,11 @@ dev:
 	BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \
 	echo "Quick dev build to $$BUILD_DIR..." && \
 	$(_GO_OPTS) -v "$$BUILD_DIR:$$BUILD_DIR" casjaysdev/go:latest \
-		go build -buildvcs=false -ldflags "$(LDFLAGS)" -o "$$BUILD_DIR/$(PROJECTNAME)" ./src && \
+		go build $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$$BUILD_DIR/$(PROJECTNAME)" ./src && \
 	echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
 	if [ -d "src/client" ]; then \
 		$(_GO_OPTS) -v "$$BUILD_DIR:$$BUILD_DIR" casjaysdev/go:latest \
-			go build -buildvcs=false -ldflags "$(CLI_LDFLAGS)" -o "$$BUILD_DIR/$(PROJECTNAME)-cli" ./src/client && \
+			go build $(BUILD_FLAGS) -ldflags "$(CLI_LDFLAGS)" -o "$$BUILD_DIR/$(PROJECTNAME)-cli" ./src/client && \
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
 	fi && \
 	echo "Test:  docker run --rm -it --name $(PROJECTNAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"

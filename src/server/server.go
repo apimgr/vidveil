@@ -14,7 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
+	"github.com/rs/cors"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/version"
@@ -159,14 +159,14 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(middleware.Recoverer)
 
 	// CORS
-	s.router.Use(cors.Handler(cors.Options{
+	s.router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Content-Type", "X-Requested-With"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: false,
 		MaxAge:           300,
-	}))
+	}).Handler)
 
 	// Security headers per AI.md PART 11 (NON-NEGOTIABLE)
 	s.router.Use(func(next http.Handler) http.Handler {

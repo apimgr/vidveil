@@ -128,7 +128,10 @@ func (s *Scheduler) loadTaskStateFromDB(taskID string) (*ScheduledTask, error) {
 		return nil, nil
 	}
 
-	row := s.queryRowCtx(`
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	row := s.db.QueryRowContext(ctx, `
 		SELECT id, name, schedule, enabled, last_run, next_run,
 		       last_result, last_error, run_count, fail_count
 		FROM scheduled_tasks WHERE id = ?`, taskID)

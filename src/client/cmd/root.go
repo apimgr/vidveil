@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/client/api"
+	"github.com/apimgr/vidveil/src/client/gui"
 	"github.com/apimgr/vidveil/src/client/paths"
 	"github.com/apimgr/vidveil/src/common/display"
 	"github.com/apimgr/vidveil/src/common/terminal"
@@ -255,6 +256,7 @@ func ExecuteCLI() error {
 	InitAPIClient()
 
 	// Per AI.md PART 32: Automatic Mode Detection using display.DetectDisplayEnv()
+	// - Local display + not SSH/Mosh = GUI mode (native GTK/Cocoa/Win32 when available)
 	// - Interactive terminal + no command = TUI mode
 	// - Interactive terminal + only config flags = TUI mode
 	// - Interactive terminal + command provided = CLI mode
@@ -262,6 +264,34 @@ func ExecuteCLI() error {
 	if len(args) == 0 {
 		// Use display.DetectDisplayEnv() from src/common/display for mode detection
 		displayEnv := display.DetectDisplayEnv()
+
+		// Priority 1: GUI mode — local display, not a remote session
+		if displayEnv.IsAutoDetectDisplayModeGUI() && gui.IsAvailable() {
+			// Per AI.md PART 32: CLI First-Run Flow — run setup wizard if unconfigured
+			if !IsServerConfigured() {
+				if err := RunSetupWizard(); err != nil {
+					return err
+				}
+				if err := LoadCLIConfigFromFile(); err != nil {
+					return err
+				}
+				if err := InitializeCLILogging(); err != nil {
+					return err
+				}
+				InitAPIClient()
+			}
+			guiCfg := &gui.Config{
+				BinaryName: BinaryName,
+				Version:    Version,
+			}
+			if cliConfig != nil {
+				guiCfg.ServerURL = cliConfig.Server.Address
+				guiCfg.Token = cliConfig.Server.Token
+			}
+			return gui.Launch(guiCfg)
+		}
+
+		// Priority 2: TUI mode — interactive terminal
 		if displayEnv.Mode == display.DisplayModeTUI && displayEnv.IsTerminal && IsCLITUIEnabled() {
 			// Per AI.md PART 32: CLI First-Run Flow
 			// Run setup wizard if no server configured

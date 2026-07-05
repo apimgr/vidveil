@@ -556,22 +556,15 @@ type CacheConfig struct {
 	TTL      int    `yaml:"ttl"`
 }
 
-// DatabaseConfig holds database settings
+// DatabaseConfig holds database settings per AI.md PART 10.
+// Supported drivers: sqlite (aliases sqlite2/sqlite3/file) and libsql (alias turso).
 type DatabaseConfig struct {
 	Driver string       `yaml:"driver"`
 	SQLite SQLiteConfig `yaml:"sqlite"`
-	// For Postgres/MySQL
-	Host string `yaml:"host"`
-	// For Postgres/MySQL
-	Port int `yaml:"port"`
-	// Database name for Postgres/MySQL
-	Name string `yaml:"name"`
-	// For Postgres/MySQL
-	User string `yaml:"user"`
-	// For Postgres/MySQL
-	Password string `yaml:"password"`
-	// disable, require, verify-ca, verify-full
-	SSLMode string `yaml:"ssl_mode"`
+	// URL is the connection URL for libsql/Turso (remote-only)
+	URL string `yaml:"url"`
+	// Token is the libsql/Turso auth token; appended as authToken when not in URL
+	Token string `yaml:"token"`
 }
 
 // SQLiteConfig holds SQLite settings

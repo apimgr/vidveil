@@ -217,19 +217,13 @@ func (sm *SyncManager) applyInsert(event *SyncEvent) error {
 	placeholders := make([]string, 0, len(event.Data))
 	values := make([]interface{}, 0, len(event.Data))
 
-	i := 1
 	for col, val := range event.Data {
 		if !validIdentifier(col) {
 			return fmt.Errorf("rejected sync insert: invalid column identifier %q", col)
 		}
 		columns = append(columns, col)
-		if sm.db.Driver() == DriverPostgres {
-			placeholders = append(placeholders, fmt.Sprintf("$%d", i))
-		} else {
-			placeholders = append(placeholders, "?")
-		}
+		placeholders = append(placeholders, "?")
 		values = append(values, val)
-		i++
 	}
 
 	query := fmt.Sprintf("INSERT OR REPLACE INTO %s (%s) VALUES (%s)",
@@ -250,30 +244,18 @@ func (sm *SyncManager) applyUpdate(event *SyncEvent) error {
 	sets := make([]string, 0, len(event.Data))
 	values := make([]interface{}, 0, len(event.Data)+1)
 
-	i := 1
 	for col, val := range event.Data {
 		if !validIdentifier(col) {
 			return fmt.Errorf("rejected sync update: invalid column identifier %q", col)
 		}
-		if sm.db.Driver() == DriverPostgres {
-			sets = append(sets, fmt.Sprintf("%s = $%d", col, i))
-		} else {
-			sets = append(sets, fmt.Sprintf("%s = ?", col))
-		}
+		sets = append(sets, fmt.Sprintf("%s = ?", col))
 		values = append(values, val)
-		i++
 	}
 
 	values = append(values, event.PrimaryKey)
 
-	var query string
-	if sm.db.Driver() == DriverPostgres {
-		query = fmt.Sprintf("UPDATE %s SET %s WHERE id = $%d",
-			event.Table, joinStrings(sets, ", "), i)
-	} else {
-		query = fmt.Sprintf("UPDATE %s SET %s WHERE id = ?",
-			event.Table, joinStrings(sets, ", "))
-	}
+	query := fmt.Sprintf("UPDATE %s SET %s WHERE id = ?",
+		event.Table, joinStrings(sets, ", "))
 
 	_, err := sm.db.Exec(query, values...)
 	return err
@@ -281,12 +263,7 @@ func (sm *SyncManager) applyUpdate(event *SyncEvent) error {
 
 // applyDelete applies a DELETE event
 func (sm *SyncManager) applyDelete(event *SyncEvent) error {
-	var query string
-	if sm.db.Driver() == DriverPostgres {
-		query = fmt.Sprintf("DELETE FROM %s WHERE id = $1", event.Table)
-	} else {
-		query = fmt.Sprintf("DELETE FROM %s WHERE id = ?", event.Table)
-	}
+	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", event.Table)
 
 	_, err := sm.db.Exec(query, event.PrimaryKey)
 	return err

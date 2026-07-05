@@ -21,7 +21,7 @@ Read: AI.md PART 9
 ### [x] PART 11: Security & Logging — COMPLETE
 - [x] Sec-Fetch-* validation middleware (secFetchValidationMiddleware in server.go:894)
 - [x] Constant-time comparison for metrics token (handler/metrics.go:265)
-- [x] Add `app_secrets` table to all 4 DDL functions (SQLite, PostgreSQL, MySQL, MSSQL)
+- [x] Add `app_secrets` table to the DDL (SQLite/libsql — the only spec-supported backends; multi-DB DDL removed 2026-07-04)
 - [x] Generate/store 32-byte secrets on first startup (`src/server/service/secrets/secrets.go`)
   - InstallationSecret, CookieSigningKey, CSRFTokenSecret managed by secrets.Manager
   - EnsureSecrets() called at startup from main.go
@@ -39,7 +39,7 @@ Read: AI.md PART 11
   - Service with Send(), GetUnread(), GetRecent(), MarkRead(), MarkAllRead(), ClearAll()
   - Real-time SSE via Subscribe()/Unsubscribe()
   - 12 helper functions for common notification patterns
-- [x] Notifications table added to all 4 DDL functions (SQLite, PostgreSQL, MySQL, MSSQL)
+- [x] Notifications table added to the DDL (SQLite/libsql — the only spec-supported backends; multi-DB DDL removed 2026-07-04)
 - [x] Unit tests: 20+ tests in notification_test.go
 Note: SMTP auto-detection already exists in email.go (autodetectSMTP function)
 Read: AI.md PART 17
@@ -88,8 +88,9 @@ Read: AI.md PART 32
 
 ## MEDIUM PRIORITY (Feature completeness)
 
-### [ ] PART 10: Database — libsql/Turso
-- Add libsql/Turso support for remote SQLite
+### [x] PART 10: Database — libsql/Turso — COMPLETE (2026-07-04)
+- libsql/Turso remote support added per AI.md PART 3/10 (`openLibSQL`, driver aliases libsql/turso, authToken append)
+- Out-of-spec PostgreSQL/MySQL/MSSQL drivers, DDL, and deps REMOVED (spec supports ONLY SQLite + libsql)
 Read: AI.md PART 10
 
 ### [ ] PART 15: SSL/TLS & Let's Encrypt
@@ -187,8 +188,8 @@ Read: AI.md PART 8, PART 26, PART 28
 
 Walking AI.md PART by PART, diffing every requirement against code, fixing violations directly.
 
-- [ ] PART 2: License & Attribution
-- [ ] PART 3: Project Structure
+- [x] PART 2: License & Attribution
+- [x] PART 3: Project Structure
 - [ ] PART 4: OS-Specific Paths
 - [ ] PART 5: Configuration
 - [ ] PART 6: Application Modes
@@ -222,4 +223,13 @@ Walking AI.md PART by PART, diffing every requirement against code, fixing viola
 - [ ] FINAL: Compliance Checklist
 
 ### Violations found
-(recorded as found)
+- PART 2: `scripts/verify-licenses.sh` missing → CREATED (go-licenses check, fails on GPL/AGPL/LGPL)
+- PART 3: `sqlite2` driver alias not accepted → FIXED (normalizeDriver handles sqlite/sqlite2/sqlite3/file)
+- PART 3/10 (MAJOR): code shipped PostgreSQL/MySQL/MSSQL support NOT in spec, and lacked libsql/Turso which IS in spec → FIXED:
+  - database.go: removed openPostgres/openMySQL/openMSSQL + driver constants; added openLibSQL (URL required, authToken append) and normalizeDriver
+  - migrations.go: removed getPostgresDDL/getMySQLDDL/getMSSQLDDL; single SQLite/libsql DDL; sqlite_master-only tableExists; SQLite-only error matchers
+  - sync.go: removed Postgres placeholder branches; plain `?` placeholders
+  - config.go: DatabaseConfig reshaped (Driver/SQLite/URL/Token; Host/Port/Name/User/Password/SSLMode removed)
+  - go.mod: dropped pgx/v5, go-sql-driver/mysql, go-mssqldb; added tursodatabase/libsql-client-go
+  - tests rewritten for the 2 supported drivers; LICENSE.md regenerated; README admin-panel row corrected
+- Flagged for user decision (library-table deviations, NOT fixed): robfig/cron/v3 vs spec gocron/v2; go-chi/cors vs spec rs/cors

@@ -41,6 +41,17 @@ func TestNewAppDatabase_SQLiteInMemory(t *testing.T) {
 	}
 }
 
+// TestNewAppDatabase_SQLiteAliases verifies sqlite2 and sqlite3 config aliases resolve to SQLite per AI.md PART 3.
+func TestNewAppDatabase_SQLiteAliases(t *testing.T) {
+	for _, alias := range []Driver{"sqlite2", "sqlite3"} {
+		db, err := NewAppDatabase(DatabaseConfig{Driver: alias, Path: ":memory:"})
+		if err != nil {
+			t.Fatalf("NewAppDatabase(%s alias) error: %v", alias, err)
+		}
+		_ = db.Close()
+	}
+}
+
 // TestNewAppDatabase_EmptyDriverOpensSQLite verifies empty driver falls back to SQLite successfully.
 func TestNewAppDatabase_EmptyDriverOpensSQLite(t *testing.T) {
 	db, err := NewAppDatabase(DatabaseConfig{Path: ":memory:"})
@@ -344,11 +355,11 @@ type testError struct{ msg string }
 
 func (e *testError) Error() string { return e.msg }
 
-// TestIsSerializationError_Serialization verifies "could not serialize" text is detected.
-func TestIsSerializationError_Serialization(t *testing.T) {
-	err := &testError{"could not serialize"}
+// TestIsSerializationError_Locked verifies "database is locked" text is detected.
+func TestIsSerializationError_Locked(t *testing.T) {
+	err := &testError{"database is locked"}
 	if !isSerializationError(err) {
-		t.Error("isSerializationError(could not serialize) = false, want true")
+		t.Error("isSerializationError(database is locked) = false, want true")
 	}
 }
 
@@ -369,9 +380,7 @@ func TestDriverConstants(t *testing.T) {
 		want string
 	}{
 		{DriverSQLite, "sqlite"},
-		{DriverPostgres, "postgres"},
-		{DriverMySQL, "mysql"},
-		{DriverMSSQL, "mssql"},
+		{DriverLibSQL, "libsql"},
 	}
 	for _, c := range cases {
 		if string(c.d) != c.want {

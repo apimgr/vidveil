@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 28: Coverage tests for database DDL functions.
-// Tests getPostgresDDL, getMySQLDDL, getMSSQLDDL, getTablesDDL (all branches),
-// RegisterDefaultMigrations, and TranslateQuery (non-SQLite paths).
+// Per AI.md PART 3/10 only SQLite and libsql/Turso are supported; both share one DDL dialect.
 package database
 
 import (
@@ -18,98 +17,44 @@ func newSchemaManagerForDriver(d Driver) *SchemaManager {
 	return &SchemaManager{driver: d}
 }
 
-func TestGetPostgresDDL_NonEmpty(t *testing.T) {
-	sm := newSchemaManagerForDriver(DriverPostgres)
-	ddl := sm.getPostgresDDL()
+func TestGetSQLiteDDL_NonEmpty(t *testing.T) {
+	sm := newSchemaManagerForDriver(DriverSQLite)
+	ddl := sm.getSQLiteDDL()
 	if len(ddl) == 0 {
-		t.Error("getPostgresDDL: returned empty slice")
+		t.Error("getSQLiteDDL: returned empty slice")
 	}
 	for i, stmt := range ddl {
 		if strings.TrimSpace(stmt) == "" {
-			t.Errorf("getPostgresDDL[%d]: empty statement", i)
+			t.Errorf("getSQLiteDDL[%d]: empty statement", i)
 		}
 	}
 }
 
-func TestGetPostgresDDL_ContainsCreateTable(t *testing.T) {
-	sm := newSchemaManagerForDriver(DriverPostgres)
-	for _, stmt := range sm.getPostgresDDL() {
+func TestGetSQLiteDDL_ContainsCreateTable(t *testing.T) {
+	sm := newSchemaManagerForDriver(DriverSQLite)
+	for _, stmt := range sm.getSQLiteDDL() {
 		if strings.Contains(strings.ToUpper(stmt), "CREATE TABLE") {
 			return
 		}
 	}
-	t.Error("getPostgresDDL: no CREATE TABLE statement found")
+	t.Error("getSQLiteDDL: no CREATE TABLE statement found")
 }
 
-func TestGetMySQLDDL_NonEmpty(t *testing.T) {
-	sm := newSchemaManagerForDriver(DriverMySQL)
-	ddl := sm.getMySQLDDL()
-	if len(ddl) == 0 {
-		t.Error("getMySQLDDL: returned empty slice")
-	}
-	for i, stmt := range ddl {
-		if strings.TrimSpace(stmt) == "" {
-			t.Errorf("getMySQLDDL[%d]: empty statement", i)
-		}
-	}
-}
+// ── getTablesDDL coverage ─────────────────────────────────────────────────────
 
-func TestGetMySQLDDL_ContainsCreateTable(t *testing.T) {
-	sm := newSchemaManagerForDriver(DriverMySQL)
-	for _, stmt := range sm.getMySQLDDL() {
-		if strings.Contains(strings.ToUpper(stmt), "CREATE TABLE") {
-			return
-		}
-	}
-	t.Error("getMySQLDDL: no CREATE TABLE statement found")
-}
-
-func TestGetMSSQLDDL_NonEmpty(t *testing.T) {
-	sm := newSchemaManagerForDriver(DriverMSSQL)
-	ddl := sm.getMSSQLDDL()
-	if len(ddl) == 0 {
-		t.Error("getMSSQLDDL: returned empty slice")
-	}
-	for i, stmt := range ddl {
-		if strings.TrimSpace(stmt) == "" {
-			t.Errorf("getMSSQLDDL[%d]: empty statement", i)
-		}
-	}
-}
-
-func TestGetMSSQLDDL_ContainsCreateTable(t *testing.T) {
-	sm := newSchemaManagerForDriver(DriverMSSQL)
-	for _, stmt := range sm.getMSSQLDDL() {
-		if strings.Contains(strings.ToUpper(stmt), "CREATE TABLE") {
-			return
-		}
-	}
-	t.Error("getMSSQLDDL: no CREATE TABLE statement found")
-}
-
-// ── getTablesDDL branch coverage ──────────────────────────────────────────────
-
-func TestGetTablesDDL_PostgresBranch(t *testing.T) {
-	sm := newSchemaManagerForDriver(DriverPostgres)
+func TestGetTablesDDL_SQLite(t *testing.T) {
+	sm := newSchemaManagerForDriver(DriverSQLite)
 	ddl := sm.getTablesDDL()
 	if len(ddl) == 0 {
-		t.Error("getTablesDDL postgres: returned empty slice")
+		t.Error("getTablesDDL sqlite: returned empty slice")
 	}
 }
 
-func TestGetTablesDDL_MySQLBranch(t *testing.T) {
-	sm := newSchemaManagerForDriver(DriverMySQL)
+func TestGetTablesDDL_LibSQL_SharesSQLiteDialect(t *testing.T) {
+	sm := newSchemaManagerForDriver(DriverLibSQL)
 	ddl := sm.getTablesDDL()
 	if len(ddl) == 0 {
-		t.Error("getTablesDDL mysql: returned empty slice")
-	}
-}
-
-func TestGetTablesDDL_MSSQLBranch(t *testing.T) {
-	sm := newSchemaManagerForDriver(DriverMSSQL)
-	ddl := sm.getTablesDDL()
-	if len(ddl) == 0 {
-		t.Error("getTablesDDL mssql: returned empty slice")
+		t.Error("getTablesDDL libsql: returned empty slice")
 	}
 }
 
@@ -125,31 +70,22 @@ func TestRegisterDefaultMigrations_NoPanic(t *testing.T) {
 	sm.RegisterDefaultMigrations()
 }
 
-// ── TranslateQuery (non-SQLite drivers) ───────────────────────────────────────
+// ── TranslateQuery ────────────────────────────────────────────────────────────
 
-func TestTranslateQuery_PostgresPassthrough(t *testing.T) {
-	db := &AppDatabase{driver: DriverPostgres}
-	input := "SELECT * FROM t WHERE id = $1 AND name = $2"
-	got := db.TranslateQuery(input)
-	if got != input {
-		t.Errorf("TranslateQuery postgres: got %q, want unchanged %q", got, input)
-	}
-}
-
-func TestTranslateQuery_MySQLPassthrough(t *testing.T) {
-	db := &AppDatabase{driver: DriverMySQL}
+func TestTranslateQuery_Passthrough(t *testing.T) {
+	db := &AppDatabase{driver: DriverSQLite}
 	input := "SELECT * FROM t WHERE id = ? AND name = ?"
 	got := db.TranslateQuery(input)
 	if got != input {
-		t.Errorf("TranslateQuery mysql: got %q, want unchanged %q", got, input)
+		t.Errorf("TranslateQuery: got %q, want unchanged %q", got, input)
 	}
 }
 
-func TestTranslateQuery_MSSQLPassthrough(t *testing.T) {
-	db := &AppDatabase{driver: DriverMSSQL}
+func TestTranslateQuery_LibSQLPassthrough(t *testing.T) {
+	db := &AppDatabase{driver: DriverLibSQL}
 	input := "INSERT INTO t (a,b) VALUES (?, ?)"
 	got := db.TranslateQuery(input)
 	if got != input {
-		t.Errorf("TranslateQuery mssql: got %q, want unchanged %q", got, input)
+		t.Errorf("TranslateQuery libsql: got %q, want unchanged %q", got, input)
 	}
 }

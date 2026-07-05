@@ -271,7 +271,7 @@ Access at `https://x.scour.li/admin` (setup token shown on first run).
 | `https://x.scour.li/admin/server/email` | Email | SMTP configuration |
 | `https://x.scour.li/admin/server/scheduler` | Scheduler | Scheduled tasks |
 | `https://x.scour.li/admin/server/logs` | Logs | Access and error logs |
-| `https://x.scour.li/admin/server/database` | Database | Database management (SQLite/PostgreSQL/MySQL/MSSQL) |
+| `https://x.scour.li/admin/server/database` | Database | Database management (SQLite/libsql-Turso) |
 | `https://x.scour.li/admin/server/security/*` | Security | Auth, tokens, rate limiting, firewall |
 | `https://x.scour.li/admin/server/network/*` | Network | Tor, GeoIP, content restriction, blocklists |
 | `https://x.scour.li/admin/server/system/*` | System | Backup, maintenance, updates |

@@ -19,14 +19,14 @@ COMMIT_ID  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "N/A")
 OFFICIALSITE := $(shell [ -f site.txt ] && cat site.txt || echo "$${OFFICIALSITE:-}")
 
 # Linker flags to embed build info into server binary (AI.md PART 7)
-LDFLAGS := -s -w \
+LDFLAGS := -s -w -trimpath \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)' \
 	-X 'main.OfficialSite=$(OFFICIALSITE)'
 
 # Linker flags for CLI client binary (AI.md PART 8)
-CLI_LDFLAGS := -s -w \
+CLI_LDFLAGS := -s -w -trimpath \
 	-X 'main.ProjectName=$(PROJECTNAME)' \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
@@ -39,7 +39,7 @@ RELDIR := releases
 
 # Go cache directories (bind-mounted from host for persistence across builds)
 GO_CACHE ?= $(HOME)/.local/share/go
-GO_BUILD ?= $(HOME)/.cache/go-build
+GO_BUILD ?= $(HOME)/.cache/go-build/$(PROJECTNAME)
 
 # Build targets — all 8 platforms (space-separated for for-loop)
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64

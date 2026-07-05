@@ -6,21 +6,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	// Database drivers - imported for side effects per AI.md PART 10.
-	// One blank import per supported engine; the per-import comments below
-	// are placed above each line per AI.md PART 0/5 (no inline comments).
+	// Spec supports ONLY SQLite (local) and libsql/Turso (remote).
 
-	// MySQL / MariaDB
-	_ "github.com/go-sql-driver/mysql"
-
-	// PostgreSQL
-	_ "github.com/jackc/pgx/v5/stdlib"
-
-	// Microsoft SQL Server
-	_ "github.com/microsoft/go-mssqldb"
+	// libsql / Turso (remote SQLite)
+	_ "github.com/tursodatabase/libsql-client-go/libsql"
 
 	// SQLite (pure Go)
 	_ "modernc.org/sqlite"
@@ -30,25 +24,34 @@ import (
 type Driver string
 
 const (
-	DriverSQLite   Driver = "sqlite"
-	DriverPostgres Driver = "postgres"
-	DriverMySQL    Driver = "mysql"
-	DriverMSSQL    Driver = "mssql"
+	DriverSQLite Driver = "sqlite"
+	DriverLibSQL Driver = "libsql"
 )
 
-// DatabaseConfig holds database connection configuration
+// DatabaseConfig holds database connection configuration per AI.md PART 10.
+// Supported drivers: sqlite (aliases sqlite2/sqlite3/file) and libsql (alias turso).
 type DatabaseConfig struct {
-	Driver   Driver `yaml:"driver"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Name     string `yaml:"name"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	SSLMode  string `yaml:"ssl_mode"`
+	Driver Driver `yaml:"driver"`
+	// URL is the connection URL for libsql/Turso (remote-only)
+	URL string `yaml:"url"`
+	// Token is the auth token for libsql/Turso; appended as authToken if not in URL
+	Token string `yaml:"token"`
 	// SQLite-specific
 	Path        string `yaml:"path"`
 	JournalMode string `yaml:"journal_mode"`
 	BusyTimeout int    `yaml:"busy_timeout"`
+}
+
+// normalizeDriver maps config driver aliases to canonical drivers per AI.md PART 3
+func normalizeDriver(driver Driver) Driver {
+	switch driver {
+	case DriverSQLite, "sqlite2", "sqlite3", "file", "":
+		return DriverSQLite
+	case DriverLibSQL, "turso":
+		return DriverLibSQL
+	default:
+		return driver
+	}
 }
 
 // AppDatabase provides a unified interface for multiple database backends
@@ -66,15 +69,12 @@ func NewAppDatabase(cfg DatabaseConfig) (*AppDatabase, error) {
 	var db *sql.DB
 	var err error
 
-	switch cfg.Driver {
-	case DriverSQLite, "sqlite3", "":
+	driver := normalizeDriver(cfg.Driver)
+	switch driver {
+	case DriverSQLite:
 		db, err = openSQLite(cfg)
-	case DriverPostgres, "postgresql":
-		db, err = openPostgres(cfg)
-	case DriverMySQL, "mariadb":
-		db, err = openMySQL(cfg)
-	case DriverMSSQL, "sqlserver":
-		db, err = openMSSQL(cfg)
+	case DriverLibSQL:
+		db, err = openLibSQL(cfg)
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", cfg.Driver)
 	}
@@ -94,7 +94,7 @@ func NewAppDatabase(cfg DatabaseConfig) (*AppDatabase, error) {
 
 	return &AppDatabase{
 		db:     db,
-		driver: cfg.Driver,
+		driver: driver,
 		config: cfg,
 		ctx:    ctx,
 		cancel: cancel,
@@ -122,66 +122,23 @@ func openSQLite(cfg DatabaseConfig) (*sql.DB, error) {
 	return sql.Open("sqlite", dsn)
 }
 
-// openPostgres opens a PostgreSQL database connection
-func openPostgres(cfg DatabaseConfig) (*sql.DB, error) {
-	sslMode := cfg.SSLMode
-	if sslMode == "" {
-		sslMode = "disable"
+// openLibSQL opens a libsql/Turso remote database connection per AI.md PART 3.
+// libsql is remote-only: a URL is required; the auth token is appended if not already present.
+func openLibSQL(cfg DatabaseConfig) (*sql.DB, error) {
+	url := cfg.URL
+	if url == "" {
+		return nil, fmt.Errorf("libsql driver requires a database URL (libsql is remote-only)")
 	}
 
-	port := cfg.Port
-	if port == 0 {
-		port = 5432
+	if cfg.Token != "" && !strings.Contains(url, "authToken=") {
+		if strings.Contains(url, "?") {
+			url += "&authToken=" + cfg.Token
+		} else {
+			url += "?authToken=" + cfg.Token
+		}
 	}
 
-	host := cfg.Host
-	if host == "" {
-		host = "localhost"
-	}
-
-	// DSN format for PostgreSQL: host=%s port=%d user=%s password=%s dbname=%s sslmode=%s
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		host, port, cfg.User, cfg.Password, cfg.Name, sslMode)
-
-	return sql.Open("pgx", dsn)
-}
-
-// openMySQL opens a MySQL/MariaDB database connection
-func openMySQL(cfg DatabaseConfig) (*sql.DB, error) {
-	port := cfg.Port
-	if port == 0 {
-		port = 3306
-	}
-
-	host := cfg.Host
-	if host == "" {
-		host = "localhost"
-	}
-
-	// DSN format for MySQL: user:password@tcp(host:port)/dbname?parseTime=true
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
-		cfg.User, cfg.Password, host, port, cfg.Name)
-
-	return sql.Open("mysql", dsn)
-}
-
-// openMSSQL opens a Microsoft SQL Server database connection
-func openMSSQL(cfg DatabaseConfig) (*sql.DB, error) {
-	port := cfg.Port
-	if port == 0 {
-		port = 1433
-	}
-
-	host := cfg.Host
-	if host == "" {
-		host = "localhost"
-	}
-
-	// DSN format for MSSQL: sqlserver://user:password@host:port?database=dbname
-	dsn := fmt.Sprintf("sqlserver://%s:%s@%s:%d?database=%s",
-		cfg.User, cfg.Password, host, port, cfg.Name)
-
-	return sql.Open("sqlserver", dsn)
+	return sql.Open("libsql", url)
 }
 
 // DB returns the underlying *sql.DB connection
@@ -269,34 +226,16 @@ func (d *AppDatabase) Stats() sql.DBStats {
 	return d.db.Stats()
 }
 
-// TranslateQuery translates a query for the specific database driver
-// This handles differences in SQL syntax between databases
+// TranslateQuery translates a query for the specific database driver.
+// SQLite and libsql share the same dialect; queries pass through unchanged.
 func (d *AppDatabase) TranslateQuery(query string) string {
-	switch d.driver {
-	case DriverPostgres:
-		// PostgreSQL uses $1, $2, etc. for placeholders
-		// Convert ? to $1, $2, etc. if needed
-		return query
-	case DriverMySQL:
-		// MySQL uses ? for placeholders (same as SQLite)
-		return query
-	default:
-		// SQLite uses ? for placeholders
-		return query
-	}
+	return query
 }
 
-// TableExists checks if a table exists in the database
+// TableExists checks if a table exists in the database.
+// SQLite and libsql share the sqlite_master catalog.
 func (d *AppDatabase) TableExists(tableName string) (bool, error) {
-	var query string
-	switch d.driver {
-	case DriverPostgres:
-		query = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)"
-	case DriverMySQL:
-		query = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ?"
-	default:
-		query = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
-	}
+	query := "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
 
 	var exists int
 	err := d.QueryRow(query, tableName).Scan(&exists)
@@ -305,18 +244,8 @@ func (d *AppDatabase) TableExists(tableName string) (bool, error) {
 
 // Version returns the database server version
 func (d *AppDatabase) Version() (string, error) {
-	var query string
-	switch d.driver {
-	case DriverPostgres:
-		query = "SELECT version()"
-	case DriverMySQL:
-		query = "SELECT VERSION()"
-	default:
-		query = "SELECT sqlite_version()"
-	}
-
 	var version string
-	err := d.QueryRow(query).Scan(&version)
+	err := d.QueryRow("SELECT sqlite_version()").Scan(&version)
 	return version, err
 }
 

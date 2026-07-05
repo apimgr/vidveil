@@ -180,3 +180,46 @@ Read: AI.md PART 8, PART 26, PART 28
 - **MEDIUM priority**: 6 sections
 - **LOW priority**: 3 sections
 - **Completed**: 7 items
+
+---
+
+## FULL RE-VALIDATION 2026-07-04 (in progress)
+
+Walking AI.md PART by PART, diffing every requirement against code, fixing violations directly.
+
+- [ ] PART 2: License & Attribution
+- [ ] PART 3: Project Structure
+- [ ] PART 4: OS-Specific Paths
+- [ ] PART 5: Configuration
+- [ ] PART 6: Application Modes
+- [ ] PART 7: Binary Requirements
+- [ ] PART 8: Server Binary CLI
+- [ ] PART 9: Error Handling & Caching
+- [ ] PART 10: Database
+- [ ] PART 11: Security & Logging
+- [ ] PART 12: Server Configuration
+- [ ] PART 13: Health & Versioning
+- [ ] PART 14: API Structure
+- [ ] PART 15: SSL/TLS & Let's Encrypt
+- [ ] PART 16: Web Frontend
+- [ ] PART 17: Email & Notifications
+- [ ] PART 18: Scheduler
+- [ ] PART 19: GeoIP
+- [ ] PART 20: Metrics
+- [ ] PART 21: Backup & Restore
+- [ ] PART 22: Update Command
+- [ ] PART 23: Privilege Escalation & Service
+- [ ] PART 24: Service Support
+- [ ] PART 25: Makefile
+- [ ] PART 26: Docker
+- [ ] PART 27: CI/CD Workflows
+- [ ] PART 28: Testing & Development
+- [ ] PART 29: ReadTheDocs Documentation
+- [ ] PART 30: I18N & A11Y
+- [ ] PART 31: Tor Hidden Service
+- [ ] PART 32: Client
+- [ ] PART 33: IDEA.md Reference
+- [ ] FINAL: Compliance Checklist
+
+### Violations found
+(recorded as found)

@@ -295,36 +295,6 @@ func (m *SSLManager) requestTLSALPN01(domain string) error {
 	return nil
 }
 
-// requestDNS01 requests a certificate using DNS-01 challenge
-// DNS-01 requires external DNS provider integration which is not directly supported by autocert
-// This implementation falls back to self-signed but can use external certbot-generated certs
-func (m *SSLManager) requestDNS01(domain string) error {
-	fmt.Printf("Requesting Let's Encrypt certificate for %s using DNS-01 challenge\n", domain)
-
-	providerType := m.appConfig.Server.SSL.LetsEncrypt.DNSProviderType
-	if providerType == "" {
-		return fmt.Errorf("DNS-01 challenge requires dns_provider_type to be set")
-	}
-
-	// Check if certbot/external tool has generated certs
-	letsEncryptPath := "/etc/letsencrypt/live"
-	leCertPath := filepath.Join(letsEncryptPath, domain, "fullchain.pem")
-	leKeyPath := filepath.Join(letsEncryptPath, domain, "privkey.pem")
-
-	if _, err := os.Stat(leCertPath); err == nil {
-		if _, err := os.Stat(leKeyPath); err == nil {
-			fmt.Printf("Found Let's Encrypt certificates for %s generated via DNS-01\n", domain)
-			return m.copyLetsEncryptCerts(leCertPath, leKeyPath)
-		}
-	}
-
-	fmt.Printf("DNS-01 challenge for provider '%s' requires external certificate generation.\n", providerType)
-	fmt.Println("Options:")
-	fmt.Println("  1. Use certbot with DNS plugin: certbot certonly --dns-cloudflare -d " + domain)
-	fmt.Println("  2. Use HTTP-01 or TLS-ALPN-01 challenge instead")
-	fmt.Println("Falling back to self-signed certificate.")
-	return m.generateSelfSigned()
-}
 
 // GetCertificate returns the current certificate for TLS config
 func (m *SSLManager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {

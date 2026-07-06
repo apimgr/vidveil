@@ -349,18 +349,13 @@ func TestRequestDNS01MissingProviderReturnsError(t *testing.T) {
 	}
 }
 
-func TestRequestDNS01WithProviderFallsBackToSelfSigned(t *testing.T) {
+func TestRequestDNS01MissingCredsReturnsError(t *testing.T) {
 	m := newEnabledSSLManager(t)
 	m.appConfig.Server.SSL.LetsEncrypt.DNSProviderType = "cloudflare"
-	// No /etc/letsencrypt/live/... → falls back to generateSelfSigned
-	if err := m.requestDNS01("example.com"); err != nil {
-		t.Fatalf("requestDNS01() with provider but no existing certs: %v", err)
-	}
-	m.mu.RLock()
-	cert := m.certificate
-	m.mu.RUnlock()
-	if cert == nil {
-		t.Error("certificate should be set after DNS-01 fallback to self-signed")
+	// No credentials in env or config — lego provider init must return an error.
+	err := m.requestDNS01("example.com")
+	if err == nil {
+		t.Error("requestDNS01() with missing cloudflare credentials should return an error")
 	}
 }
 

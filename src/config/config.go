@@ -74,6 +74,9 @@ type ServerConfig struct {
 	// Email/SMTP
 	Email EmailConfig `yaml:"email"`
 
+	// Contact routing: admin/security/abuse/general roles with email + webhooks
+	Contact ContactConfig `yaml:"contact"`
+
 	// Notifications
 	Notifications NotificationsConfig `yaml:"notifications"`
 
@@ -296,6 +299,28 @@ type NotificationTypesConfig struct {
 	Security   bool `yaml:"security"`
 	Update     bool `yaml:"update"`
 	CertExpiry bool `yaml:"cert_expiry"`
+}
+
+// ContactRoleConfig holds contact settings for one notification role per AI.md PART 12.
+// Each role has an email address and an open map of named webhook transports.
+// Empty fields fall back to the admin role values at dispatch time.
+type ContactRoleConfig struct {
+	// Email address for this role. Empty string triggers fallback chain.
+	Email string `yaml:"email"`
+	// Webhooks maps transport name (telegram, discord, slack, mattermost,
+	// pushover, gotify, generic, …) to the destination URL/token.
+	// Each key also has a companion "<name>_secret" key that holds the
+	// per-webhook HMAC-SHA256 signing secret (auto-generated on first save).
+	Webhooks map[string]string `yaml:"webhooks,omitempty"`
+}
+
+// ContactConfig holds the unified notification-routing tree per AI.md PART 12.
+// One config tree for every "where do messages go" decision.
+type ContactConfig struct {
+	Admin    ContactRoleConfig `yaml:"admin"`
+	Security ContactRoleConfig `yaml:"security"`
+	Abuse    ContactRoleConfig `yaml:"abuse"`
+	General  ContactRoleConfig `yaml:"general"`
 }
 
 // ScheduleConfig holds scheduler settings per AI.md PART 18
@@ -880,6 +905,24 @@ func DefaultAppConfig() *AppConfig {
 				Port:           587,
 				From:           "no-reply@" + fqdn,
 				TLS:            "auto",
+			},
+			Contact: ContactConfig{
+				Admin: ContactRoleConfig{
+					Email:    "admin@" + fqdn,
+					Webhooks: map[string]string{},
+				},
+				Security: ContactRoleConfig{
+					Email:    "security@" + fqdn,
+					Webhooks: map[string]string{},
+				},
+				Abuse: ContactRoleConfig{
+					Email:    "",
+					Webhooks: map[string]string{},
+				},
+				General: ContactRoleConfig{
+					Email:    "",
+					Webhooks: map[string]string{},
+				},
 			},
 			Notifications: NotificationsConfig{
 				Enabled: true,

@@ -317,9 +317,11 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 					"window":   int(l.window.Seconds()),
 				})
 			}
-			// Prometheus rate-limit metrics per AI.md PART 20 (REQUIRED)
-			svcmetrics.RateLimitHitsTotal.WithLabelValues("global", ip).Inc()
-			svcmetrics.RateLimitBlockedTotal.WithLabelValues(ip).Inc()
+			// Prometheus rate-limit metrics per AI.md PART 20 (REQUIRED).
+			// Labels use the limit type (global/per_ip/per_user/per_endpoint), never a raw IP.
+			// Raw IP is logged to structured logs above; metrics track aggregates only.
+			svcmetrics.RateLimitRequestsTotal.WithLabelValues("global", "limited").Inc()
+			svcmetrics.RateLimitBlockedTotal.WithLabelValues("global").Inc()
 			retryAfter := int(l.window.Seconds())
 			w.Header().Set("Retry-After", itoa(retryAfter))
 			w.Header().Set("Content-Type", "application/json")

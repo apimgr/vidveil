@@ -97,9 +97,16 @@ Read: AI.md PART 10
 - Complete DNS-01 challenge provider implementations
 Read: AI.md PART 15
 
-### [ ] PART 20: Metrics
-- Add missing metric: `rate_limit_hits_total`
-- Add system metrics (CPU/memory/disk)
+### [x] PART 20: Metrics — COMPLETE (2026-07-06)
+- Renamed `rate_limit_hits_total` → `ratelimit_requests_total{limit, status}` (PART 20 exact name)
+- `ratelimit_blocked_total{limit}` — label is limit type (global/per_ip/per_user/per_endpoint), never raw IP
+- Cache metrics changed to CounterVec/GaugeVec with `{cache}` label per spec
+- Added: CacheSize, CacheBytes gauges
+- Added: scheduler metrics (SchedulerTasksTotal/Duration/Running/LastRunTimestamp)
+- Added: system metrics (CPU, memory, disk — 7 gauges total)
+- Added: Tor metrics (TorEnabled/Running/CircuitEstablished/RequestsTotal)
+- `src/server/service/ratelimit/ratelimit.go` updated to use new metric names
+- All metrics tests updated and extended (18 new tests)
 Read: AI.md PART 20
 
 ### [ ] PART 13: Health & Versioning
@@ -124,8 +131,22 @@ Read: AI.md PART 22
 - Add display environment detection files (`detect_unix.go`, `detect_windows.go`)
 Read: AI.md PART 7
 
-### [ ] PART 12: Server Configuration
-- Verify webhook adapters (Telegram/Discord/Slack sending)
+### [x] PART 12: Server Configuration — COMPLETE (2026-07-06)
+- `ContactConfig`, `ContactRoleConfig` structs added to `src/config/config.go`
+- `Contact ContactConfig` field added to `ServerConfig`
+- Defaults populated in `DefaultAppConfig()` (admin@, security@ per RFC 2142)
+- `src/notify/` package created with all 7 adapters:
+  - telegram.go — Bot API POST with text param
+  - discord.go — {"content", "username"}
+  - slack.go — {"text"}
+  - mattermost.go — Slack-compatible
+  - pushover.go — Pushover API JSON
+  - gotify.go — /message?token= endpoint
+  - generic.go — canonical JSON Payload
+- Webhook signing: HMAC-SHA256, X-Webhook-Signature/Timestamp/ID/Event headers
+- Exponential backoff retries: 1m, 5m, 15m, 1h, 6h, 24h
+- Per-role fallback chain: abuse→general→admin, security→admin
+- 18 unit tests, all pass
 Read: AI.md PART 12
 
 ### [ ] PART 31: Tor Hidden Service
@@ -210,15 +231,15 @@ Walking AI.md PART by PART, diffing every requirement against code, fixing viola
 - [ ] PART 9: Error Handling & Caching
 - [ ] PART 10: Database
 - [ ] PART 11: Security & Logging
-- [ ] PART 12: Server Configuration
+- [x] PART 12: Server Configuration — ContactConfig + src/notify/ (7 adapters, HMAC signing, retry)
 - [ ] PART 13: Health & Versioning
 - [ ] PART 14: API Structure
 - [ ] PART 15: SSL/TLS & Let's Encrypt
 - [ ] PART 16: Web Frontend
-- [ ] PART 17: Email & Notifications
-- [ ] PART 18: Scheduler
+- [x] PART 17: Email & Notifications — verified complete
+- [x] PART 18: Scheduler — verified complete
 - [ ] PART 19: GeoIP
-- [ ] PART 20: Metrics
+- [x] PART 20: Metrics — ratelimit renamed, cache labels added, scheduler/system/tor metrics added
 - [ ] PART 21: Backup & Restore
 - [ ] PART 22: Update Command
 - [ ] PART 23: Privilege Escalation & Service

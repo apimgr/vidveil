@@ -231,15 +231,15 @@ func TestAuthSessionsActiveCanSet(t *testing.T) {
 }
 
 func TestCacheHitsTotalCanInc(t *testing.T) {
-	CacheHitsTotal.Inc()
+	CacheHitsTotal.WithLabelValues("items").Inc()
 }
 
 func TestCacheMissesTotalCanInc(t *testing.T) {
-	CacheMissesTotal.Inc()
+	CacheMissesTotal.WithLabelValues("items").Inc()
 }
 
 func TestCacheEvictionsCanInc(t *testing.T) {
-	CacheEvictions.Inc()
+	CacheEvictions.WithLabelValues("items").Inc()
 }
 
 func TestSearchQueriesTotalCanInc(t *testing.T) {
@@ -272,9 +272,9 @@ func TestAppInfoCanSetWithLabels(t *testing.T) {
 
 // ---- Rate-limit metrics (PART 20 REQUIRED) ----
 
-func TestRateLimitHitsTotalNotNil(t *testing.T) {
-	if RateLimitHitsTotal == nil {
-		t.Error("RateLimitHitsTotal is nil; promauto registration failed")
+func TestRateLimitRequestsTotalNotNil(t *testing.T) {
+	if RateLimitRequestsTotal == nil {
+		t.Error("RateLimitRequestsTotal is nil; promauto registration failed")
 	}
 }
 
@@ -284,12 +284,13 @@ func TestRateLimitBlockedTotalNotNil(t *testing.T) {
 	}
 }
 
-func TestRateLimitHitsTotalCanInc(t *testing.T) {
-	RateLimitHitsTotal.WithLabelValues("global", "127.0.0.1").Inc()
+func TestRateLimitRequestsTotalCanInc(t *testing.T) {
+	RateLimitRequestsTotal.WithLabelValues("global", "limited").Inc()
+	RateLimitRequestsTotal.WithLabelValues("per_ip", "allowed").Inc()
 }
 
 func TestRateLimitBlockedTotalCanInc(t *testing.T) {
-	RateLimitBlockedTotal.WithLabelValues("127.0.0.1").Inc()
+	RateLimitBlockedTotal.WithLabelValues("global").Inc()
 }
 
 // ---- InitMetricsAppInfo ----
@@ -352,4 +353,124 @@ func TestInstrumentMiddlewareWithRequestBody(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rr.Code)
 	}
+}
+
+// ---- Cache size/bytes gauges ----
+
+func TestCacheSizeNotNil(t *testing.T) {
+	if CacheSize == nil {
+		t.Error("CacheSize is nil; promauto registration failed")
+	}
+}
+
+func TestCacheBytesNotNil(t *testing.T) {
+	if CacheBytes == nil {
+		t.Error("CacheBytes is nil; promauto registration failed")
+	}
+}
+
+func TestCacheSizeCanSet(t *testing.T) {
+	CacheSize.WithLabelValues("items").Set(42)
+}
+
+func TestCacheBytesCanSet(t *testing.T) {
+	CacheBytes.WithLabelValues("items").Set(1024)
+}
+
+// ---- Scheduler metrics ----
+
+func TestSchedulerTasksTotalNotNil(t *testing.T) {
+	if SchedulerTasksTotal == nil {
+		t.Error("SchedulerTasksTotal is nil; promauto registration failed")
+	}
+}
+
+func TestSchedulerTaskDurationNotNil(t *testing.T) {
+	if SchedulerTaskDuration == nil {
+		t.Error("SchedulerTaskDuration is nil; promauto registration failed")
+	}
+}
+
+func TestSchedulerTasksRunningNotNil(t *testing.T) {
+	if SchedulerTasksRunning == nil {
+		t.Error("SchedulerTasksRunning is nil; promauto registration failed")
+	}
+}
+
+func TestSchedulerLastRunTimestampNotNil(t *testing.T) {
+	if SchedulerLastRunTimestamp == nil {
+		t.Error("SchedulerLastRunTimestamp is nil; promauto registration failed")
+	}
+}
+
+func TestSchedulerTasksTotalCanInc(t *testing.T) {
+	SchedulerTasksTotal.WithLabelValues("backup", "success").Inc()
+	SchedulerTasksTotal.WithLabelValues("geoip_update", "error").Inc()
+}
+
+func TestSchedulerTaskDurationCanObserve(t *testing.T) {
+	SchedulerTaskDuration.WithLabelValues("backup").Observe(12.5)
+}
+
+func TestSchedulerTasksRunningCanSet(t *testing.T) {
+	SchedulerTasksRunning.WithLabelValues("backup").Set(1)
+	SchedulerTasksRunning.WithLabelValues("backup").Set(0)
+}
+
+func TestSchedulerLastRunTimestampCanSet(t *testing.T) {
+	SchedulerLastRunTimestamp.WithLabelValues("backup").Set(1_705_398_600)
+}
+
+// ---- System metrics ----
+
+func TestSystemCPUUsagePercentNotNil(t *testing.T) {
+	if SystemCPUUsagePercent == nil {
+		t.Error("SystemCPUUsagePercent is nil; promauto registration failed")
+	}
+}
+
+func TestSystemMemoryUsagePercentNotNil(t *testing.T) {
+	if SystemMemoryUsagePercent == nil {
+		t.Error("SystemMemoryUsagePercent is nil; promauto registration failed")
+	}
+}
+
+func TestSystemDiskUsagePercentNotNil(t *testing.T) {
+	if SystemDiskUsagePercent == nil {
+		t.Error("SystemDiskUsagePercent is nil; promauto registration failed")
+	}
+}
+
+func TestSystemMetricsCanSet(t *testing.T) {
+	SystemCPUUsagePercent.Set(12.5)
+	SystemMemoryUsagePercent.Set(45.2)
+	SystemMemoryUsedBytes.Set(1_073_741_824)
+	SystemMemoryTotalBytes.Set(8_589_934_592)
+	SystemDiskUsagePercent.WithLabelValues("/var/lib/apimgr/vidveil").Set(30.0)
+	SystemDiskUsedBytes.WithLabelValues("/var/lib/apimgr/vidveil").Set(10_737_418_240)
+	SystemDiskTotalBytes.WithLabelValues("/var/lib/apimgr/vidveil").Set(107_374_182_400)
+}
+
+// ---- Tor metrics ----
+
+func TestTorMetricsNotNil(t *testing.T) {
+	if TorEnabled == nil {
+		t.Error("TorEnabled is nil; promauto registration failed")
+	}
+	if TorRunning == nil {
+		t.Error("TorRunning is nil; promauto registration failed")
+	}
+	if TorCircuitEstablished == nil {
+		t.Error("TorCircuitEstablished is nil; promauto registration failed")
+	}
+	if TorRequestsTotal == nil {
+		t.Error("TorRequestsTotal is nil; promauto registration failed")
+	}
+}
+
+func TestTorMetricsCanSet(t *testing.T) {
+	TorEnabled.Set(1)
+	TorRunning.Set(1)
+	TorCircuitEstablished.Set(1)
+	TorRequestsTotal.Inc()
 }

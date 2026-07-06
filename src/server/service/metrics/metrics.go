@@ -134,26 +134,45 @@ var (
 		},
 	)
 
-	// Cache metrics per AI.md PART 20
-	CacheHitsTotal = promauto.NewCounter(
+	// Cache metrics per AI.md PART 20 — label "cache" = cache name/purpose
+	CacheHitsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "vidveil_cache_hits_total",
 			Help: "Total number of cache hits",
 		},
+		[]string{"cache"},
 	)
 
-	CacheMissesTotal = promauto.NewCounter(
+	CacheMissesTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "vidveil_cache_misses_total",
 			Help: "Total number of cache misses",
 		},
+		[]string{"cache"},
 	)
 
-	CacheEvictions = promauto.NewCounter(
+	CacheEvictions = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "vidveil_cache_evictions_total",
 			Help: "Total number of cache evictions",
 		},
+		[]string{"cache"},
+	)
+
+	CacheSize = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "vidveil_cache_size",
+			Help: "Current number of items in cache",
+		},
+		[]string{"cache"},
+	)
+
+	CacheBytes = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "vidveil_cache_bytes",
+			Help: "Current cache size in bytes",
+		},
+		[]string{"cache"},
 	)
 
 	// Search metrics
@@ -206,21 +225,140 @@ var (
 		[]string{"engine"},
 	)
 
-	// Rate limit metrics per AI.md PART 20 (REQUIRED)
-	RateLimitHitsTotal = promauto.NewCounterVec(
+	// Rate limiting metrics per AI.md PART 20.
+	// label "limit"  = global | per_ip | per_user | per_endpoint
+	// label "status" = allowed | limited
+	// NEVER use raw client IP as a label — unbounded cardinality; log IPs to structured logs instead.
+	RateLimitRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "vidveil_rate_limit_hits_total",
-			Help: "Total number of rate limit triggers",
+			Name: "vidveil_ratelimit_requests_total",
+			Help: "Total rate-limited requests by limit type and outcome",
 		},
-		[]string{"endpoint_class", "ip"},
+		[]string{"limit", "status"},
 	)
 
 	RateLimitBlockedTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "vidveil_rate_limit_blocked_total",
-			Help: "Total number of requests blocked by rate limiter",
+			Name: "vidveil_ratelimit_blocked_total",
+			Help: "Requests blocked by rate limiter",
 		},
-		[]string{"ip"},
+		[]string{"limit"},
+	)
+
+	// Scheduler metrics per AI.md PART 20 (required when using PART 18 scheduler)
+	SchedulerTasksTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vidveil_scheduler_tasks_total",
+			Help: "Total scheduled task executions",
+		},
+		[]string{"task", "status"},
+	)
+
+	SchedulerTaskDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "vidveil_scheduler_task_duration_seconds",
+			Help:    "Scheduled task execution duration",
+			Buckets: []float64{0.1, 0.5, 1, 5, 10, 30, 60, 300, 600},
+		},
+		[]string{"task"},
+	)
+
+	SchedulerTasksRunning = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "vidveil_scheduler_tasks_running",
+			Help: "Currently running task instances",
+		},
+		[]string{"task"},
+	)
+
+	SchedulerLastRunTimestamp = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "vidveil_scheduler_last_run_timestamp",
+			Help: "Unix timestamp of last task execution",
+		},
+		[]string{"task"},
+	)
+
+	// System metrics per AI.md PART 20 (enabled when include_system: true in config)
+	SystemCPUUsagePercent = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_system_cpu_usage_percent",
+			Help: "Current CPU usage percentage (0-100)",
+		},
+	)
+
+	SystemMemoryUsagePercent = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_system_memory_usage_percent",
+			Help: "Current memory usage percentage (0-100)",
+		},
+	)
+
+	SystemMemoryUsedBytes = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_system_memory_used_bytes",
+			Help: "Memory currently in use",
+		},
+	)
+
+	SystemMemoryTotalBytes = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_system_memory_total_bytes",
+			Help: "Total system memory",
+		},
+	)
+
+	SystemDiskUsagePercent = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "vidveil_system_disk_usage_percent",
+			Help: "Disk usage percentage for a given path",
+		},
+		[]string{"path"},
+	)
+
+	SystemDiskUsedBytes = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "vidveil_system_disk_used_bytes",
+			Help: "Disk space used",
+		},
+		[]string{"path"},
+	)
+
+	SystemDiskTotalBytes = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "vidveil_system_disk_total_bytes",
+			Help: "Total disk space",
+		},
+		[]string{"path"},
+	)
+
+	// Tor metrics per AI.md PART 20 (enabled when Tor hidden service is active)
+	TorEnabled = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_tor_enabled",
+			Help: "1 if Tor is enabled, 0 otherwise",
+		},
+	)
+
+	TorRunning = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_tor_running",
+			Help: "1 if Tor process is running, 0 otherwise",
+		},
+	)
+
+	TorCircuitEstablished = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "vidveil_tor_circuit_established",
+			Help: "1 if a Tor circuit is established, 0 otherwise",
+		},
+	)
+
+	TorRequestsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "vidveil_tor_requests_total",
+			Help: "Total requests received via Tor hidden service",
+		},
 	)
 )
 

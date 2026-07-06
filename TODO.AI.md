@@ -136,6 +136,18 @@ Read: AI.md PART 31
 
 ## Completed
 
+### [x] Fix .gitignore format — ignoredirmessage on line 2
+Removed `# Disable reminder in prompt` extra comment from line 2. Spec requires `ignoredirmessage` as the literal line 2, immediately after the timestamp comment on line 1. No other content between lines 1 and 2.
+Read: AI.md PART 3
+
+### [x] Create src/data/ directory
+Created `src/data/` with `.gitkeep` per PART 7 spec: "Application data | `src/data/` (JSON files)" — this is the designated location for embedded application data JSON files.
+Read: AI.md PART 7
+
+### [x] Remove AUDIT.AI.md
+AUDIT.AI.md was not in the allowed root files list (AI.md PART 3). Its single open item (PART 32 native GUI) is tracked in TODO.AI.md HIGH PRIORITY section. File removed.
+Read: AI.md PART 3
+
 ### [x] Fix Makefile cross-compile targets (build/dev/local)
 Rewrote Makefile per AI.md PART 25: spec variable names (GO_CACHE, GO_BUILD, OFFICIALSITE, PROJECTNAME/PROJECTORG), spec mount paths (/app, /usr/local/share/go/pkg/mod, /usr/local/share/go/cache), spec targets (build: clean, local: clean), 80% coverage enforcement in test with temp-dir isolation, dev writes to $TMPDIR/$PROJECTORG/$PROJECTNAME-XXXXXX. Cross-compile uses -e GOOS/-e GOARCH env flags (not sh -c which the entrypoint drops); test and dev use -v $$DIR:$$DIR volume mounts. GO_DOCKER defined per spec (includes image); _GO_OPTS is internal helper for cases needing extra flags before image.
 make test passes: 80% coverage ✓, darwin/arm64 cross-compile confirmed ✓
@@ -184,15 +196,15 @@ Read: AI.md PART 8, PART 26, PART 28
 
 ---
 
-## FULL RE-VALIDATION 2026-07-04 (in progress)
+## FULL RE-VALIDATION 2026-07-06 (in progress)
 
 Walking AI.md PART by PART, diffing every requirement against code, fixing violations directly.
 
 - [x] PART 2: License & Attribution
-- [x] PART 3: Project Structure
-- [ ] PART 4: OS-Specific Paths
-- [ ] PART 5: Configuration
-- [ ] PART 6: Application Modes
+- [x] PART 3: Project Structure — .gitignore fixed (removed extra comment; ignoredirmessage now on line 2 per spec)
+- [x] PART 4: OS-Specific Paths — paths verified: /etc/apimgr/vidveil/, /var/lib/apimgr/vidveil/, /var/log/apimgr/vidveil/ all correct
+- [x] PART 5: Configuration — bool.go, path security, maintenance mode, server.yml structure all verified in codebase
+- [x] PART 6: Application Modes — mode.go, debug.go, debug_log.go, expvar.go, middleware_debug.go all exist and match spec
 - [ ] PART 7: Binary Requirements
 - [ ] PART 8: Server Binary CLI
 - [ ] PART 9: Error Handling & Caching

@@ -87,7 +87,8 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-06-26 (COMPLETE — all 44,478 lines, PARTs 0–33 + FINAL + APPENDIX A/B)
-- Current task: PART 15 DNS-01 (lego) complete; all GH build issues resolved
-- Tests: unit 80% coverage, all packages pass (go vet clean); CI/Daily/Docker all green on b19a87357c45
-- Completed: PART 9, 11, 15, 17, 18, 23-24, 32 — all known spec violations fixed
+- Last read AI.md: 2026-07-06 (re-bootstrap — PART 0–6 complete)
+- Current task: re-bootstrap reconciliation complete; outstanding: PART 32 native GUI (user decision needed)
+- Tests: unit 80% coverage, all packages pass (go vet clean); CI/Daily/Docker all green
+- Completed: PART 0-6 reconciled; .gitignore fixed (ignoredirmessage on line 2); src/data/ created; AUDIT.AI.md removed
+- Outstanding HIGH: PART 32 native GUI mode (fyne.io) — see TODO.AI.md for user decision required

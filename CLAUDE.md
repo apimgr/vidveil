@@ -88,6 +88,6 @@ Purpose:
 ## Current Project State
 [AI updates this section as work progresses]
 - Last read AI.md: 2026-06-26 (COMPLETE — all 44,478 lines, PARTs 0–33 + FINAL + APPENDIX A/B)
-- Current task: PART 23-24 (Service Management) complete
-- Tests: unit 79% coverage, integration 17/17 pass (go vet + govulncheck clean)
-- Completed: PART 9, 11, 17, 18, 23-24 — remaining HIGH priority: PART 32 (GUI mode)
+- Current task: PART 15 DNS-01 (lego) complete; all GH build issues resolved
+- Tests: unit 80% coverage, all packages pass (go vet clean); CI/Daily/Docker all green on b19a87357c45
+- Completed: PART 9, 11, 15, 17, 18, 23-24, 32 — all known spec violations fixed

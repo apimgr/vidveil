@@ -217,8 +217,9 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	s.startTime = time.Now()
 	s.serverPort = serverPort
 
-	// Ensure data directories exist
-	torDataDir := filepath.Join(s.dataDir, "data")
+	// Ensure data directories exist per AI.md PART 31 spec.
+	// DataDir = {data_dir}/tor/ (s.dataDir); siteDir = {data_dir}/tor/site/
+	torDataDir := s.dataDir
 	siteDir := filepath.Join(s.dataDir, "site")
 	if err := os.MkdirAll(torDataDir, 0700); err != nil {
 		s.status = TorServiceStatusError
@@ -231,7 +232,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 
 	// Per AI.md PART 31: Enforce ownership (current user) on all Tor directories recursively
 	// This fixes "is not owned by this user" errors when directories were created by different user
-	// Must be recursive because Tor creates subdirectories (e.g., data/keys)
+	// Must be recursive because Tor creates subdirectories (e.g., keys/, site/)
 	if runtime.GOOS != "windows" {
 		currentUID := os.Getuid()
 		currentGID := os.Getgid()

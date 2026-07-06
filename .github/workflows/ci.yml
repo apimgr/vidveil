@@ -46,7 +46,7 @@ jobs:
           mkdir -p "/tmp/${{ github.repository_owner }}"
           COVDIR=$(mktemp -d "/tmp/${{ github.repository_owner }}/$(basename "${{ github.repository }}")-XXXXXX")
           echo "COVDIR=$COVDIR" >> "$GITHUB_ENV"
-          go test -cover -coverprofile="$COVDIR/coverage.out" ./...
+          go test -buildvcs=false -cover -coverprofile="$COVDIR/coverage.out" ./...
       - name: Enforce coverage threshold
         run: |
           THRESHOLD=60

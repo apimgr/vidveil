@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 8: URL Variables & Reverse Proxy Headers
+// AI.md PART 8/12: URL Variables & Reverse Proxy Headers
+// X-Forwarded-* headers are only trusted when the immediate peer IP is in the
+// trusted set (loopback, RFC1918, fc00::/7, link-local, and additional CIDRs).
+// Tor requests (Host matches tor.onion_address) bypass the gate at priority 0.
 package urlvars
 
 import (
@@ -9,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/apimgr/vidveil/src/config"
 )
 
 // URLVarsConfig holds URL detection configuration per AI.md
@@ -39,7 +44,7 @@ type domainObservation struct {
 	lastSeen  time.Time
 }
 
-// URLResolver handles URL variable resolution per AI.md PART 8
+// URLResolver handles URL variable resolution per AI.md PART 8/12
 type URLResolver struct {
 	mu           sync.RWMutex
 	config       URLVarsConfig
@@ -47,6 +52,8 @@ type URLResolver struct {
 	baseDomain   string
 	wildcard     string
 	logger       func(format string, args ...interface{})
+	// appCfg provides trusted_proxies.additional and tor.onion_address
+	appCfg *config.AppConfig
 }
 
 // NewURLResolver creates a new URL resolver
@@ -55,6 +62,80 @@ func NewURLResolver(cfg URLVarsConfig) *URLResolver {
 		config:       cfg,
 		observations: make(map[string]*domainObservation),
 	}
+}
+
+// SetAppConfig updates the app config reference used for trusted proxy and Tor detection.
+// Must be called before the resolver handles requests. Safe to call concurrently.
+func (r *URLResolver) SetAppConfig(cfg *config.AppConfig) {
+	r.mu.Lock()
+	r.appCfg = cfg
+	r.mu.Unlock()
+}
+
+// isTorRequest returns true when the request Host matches tor.onion_address per AI.md PART 12.
+// Tor requests bypass the trusted_proxies gate entirely — priority 0 in FQDN resolution.
+func (r *URLResolver) isTorRequest(req *http.Request) bool {
+	r.mu.RLock()
+	cfg := r.appCfg
+	r.mu.RUnlock()
+	if cfg == nil || cfg.Server.Tor.OnionAddress == "" {
+		return false
+	}
+	host := req.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return host == cfg.Server.Tor.OnionAddress
+}
+
+// isTrustedProxy returns true when the request's immediate peer IP is in the trusted set
+// per AI.md PART 12: loopback, RFC1918, fc00::/7, link-local, and additional CIDRs.
+func (r *URLResolver) isTrustedProxy(remoteAddr string) bool {
+	host := remoteAddr
+	if h, _, err := net.SplitHostPort(remoteAddr); err == nil {
+		host = h
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	// Always trusted: loopback (127.0.0.0/8, ::1)
+	if ip.IsLoopback() {
+		return true
+	}
+	// Always trusted: link-local (169.254.0.0/16, fe80::/10)
+	if ip.IsLinkLocalUnicast() {
+		return true
+	}
+	// Always trusted: private ranges (RFC1918 + fc00::/7)
+	if ip.IsPrivate() {
+		return true
+	}
+	// Check additional CIDRs from config
+	r.mu.RLock()
+	cfg := r.appCfg
+	r.mu.RUnlock()
+	if cfg != nil {
+		for _, cidr := range cfg.Server.TrustedProxies.Additional {
+			if cidrContains(cidr, ip) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// cidrContains returns true when ip falls within the given CIDR or equals the given IP.
+func cidrContains(cidr string, ip net.IP) bool {
+	if !strings.Contains(cidr, "/") {
+		peer := net.ParseIP(cidr)
+		return peer != nil && peer.Equal(ip)
+	}
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false
+	}
+	return network.Contains(ip)
 }
 
 // SetLogger sets the logger function
@@ -87,21 +168,31 @@ func (r *URLResolver) GetURLVars(req *http.Request) (proto, fqdn, port string) {
 	return
 }
 
-// resolveProto resolves protocol per AI.md priority order
+// resolveProto resolves protocol per AI.md PART 12 priority order.
+// X-Forwarded-* headers are only honored from trusted proxy peers.
+// Tor requests always return "http" — TLS terminates in the Tor layer.
 func (r *URLResolver) resolveProto(req *http.Request) string {
-	// Priority 1: X-Forwarded-Proto
-	if proto := req.Header.Get("X-Forwarded-Proto"); proto != "" {
-		return strings.ToLower(proto)
+	// Priority 0: Tor exception — always http, no proxy header inspection
+	if r.isTorRequest(req) {
+		return "http"
 	}
 
-	// Priority 2: X-Forwarded-Ssl
-	if ssl := req.Header.Get("X-Forwarded-Ssl"); strings.EqualFold(ssl, "on") {
-		return "https"
-	}
+	// Proxy headers only trusted from known-good peers
+	if r.isTrustedProxy(req.RemoteAddr) {
+		// Priority 1: X-Forwarded-Proto
+		if proto := req.Header.Get("X-Forwarded-Proto"); proto != "" {
+			return strings.ToLower(proto)
+		}
 
-	// Priority 3: X-Url-Scheme
-	if scheme := req.Header.Get("X-Url-Scheme"); scheme != "" {
-		return strings.ToLower(scheme)
+		// Priority 2: X-Forwarded-Ssl
+		if ssl := req.Header.Get("X-Forwarded-Ssl"); strings.EqualFold(ssl, "on") {
+			return "https"
+		}
+
+		// Priority 3: X-Url-Scheme
+		if scheme := req.Header.Get("X-Url-Scheme"); scheme != "" {
+			return strings.ToLower(scheme)
+		}
 	}
 
 	// Priority 4: TLS on connection
@@ -113,27 +204,38 @@ func (r *URLResolver) resolveProto(req *http.Request) string {
 	return "http"
 }
 
-// resolveFQDN resolves FQDN per AI.md priority order
+// resolveFQDN resolves FQDN per AI.md PART 12 priority order.
+// Priority 0 (Tor) is evaluated before any proxy headers — no IP check required.
+// Reverse proxy headers (priority 1) are only honored from trusted peers.
 func (r *URLResolver) resolveFQDN(req *http.Request) string {
-	// Priority 1: Reverse Proxy Headers
-	if host := req.Header.Get("X-Forwarded-Host"); host != "" {
-		// Strip port if present
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			return h
-		}
-		return host
+	// Priority 0: Tor request detection — always trusted, bypasses proxy gate
+	if r.isTorRequest(req) {
+		r.mu.RLock()
+		onion := r.appCfg.Server.Tor.OnionAddress
+		r.mu.RUnlock()
+		return onion
 	}
-	if host := req.Header.Get("X-Real-Host"); host != "" {
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			return h
+
+	// Priority 1: Reverse Proxy Headers — only from trusted peers
+	if r.isTrustedProxy(req.RemoteAddr) {
+		if host := req.Header.Get("X-Forwarded-Host"); host != "" {
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				return h
+			}
+			return host
 		}
-		return host
-	}
-	if host := req.Header.Get("X-Original-Host"); host != "" {
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			return h
+		if host := req.Header.Get("X-Real-Host"); host != "" {
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				return h
+			}
+			return host
 		}
-		return host
+		if host := req.Header.Get("X-Original-Host"); host != "" {
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				return h
+			}
+			return host
+		}
 	}
 
 	// Priority 2: DOMAIN env var (first in comma-separated list)
@@ -163,24 +265,42 @@ func (r *URLResolver) resolveFQDN(req *http.Request) string {
 	return "localhost"
 }
 
-// resolvePort resolves port per AI.md priority order
-// Returns empty string for 80/443 (port stripping)
+// resolvePort resolves port per AI.md PART 12 priority order.
+// Returns empty string for 80/443 (always stripped).
+// Tor requests always return empty — port is never appended to onion URLs.
 func (r *URLResolver) resolvePort(req *http.Request, proto string) string {
+	// Tor exception: no port in onion URLs
+	if r.isTorRequest(req) {
+		return ""
+	}
+
 	var port string
 
-	// Priority 1: X-Forwarded-Port
-	if p := req.Header.Get("X-Forwarded-Port"); p != "" {
-		port = p
-	} else if _, p, err := net.SplitHostPort(req.Host); err == nil && p != "" {
-		// Priority 2: Host header port
-		port = p
-	} else if addr := req.Context().Value(http.LocalAddrContextKey); addr != nil {
-		// Priority 3: Server listen port
-		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
-			port = strings.TrimPrefix(strings.TrimPrefix(tcpAddr.String(), "[::]:"), ":")
+	// Priority 1: X-Forwarded-Port — only from trusted peers
+	if r.isTrustedProxy(req.RemoteAddr) {
+		if p := req.Header.Get("X-Forwarded-Port"); p != "" {
+			port = p
 		}
-	} else {
-		// Priority 4: Proto default
+	}
+
+	// Priority 2: Host header port
+	if port == "" {
+		if _, p, err := net.SplitHostPort(req.Host); err == nil && p != "" {
+			port = p
+		}
+	}
+
+	// Priority 3: Server listen port
+	if port == "" {
+		if addr := req.Context().Value(http.LocalAddrContextKey); addr != nil {
+			if tcpAddr, ok := addr.(*net.TCPAddr); ok {
+				port = strings.TrimPrefix(strings.TrimPrefix(tcpAddr.String(), "[::]:"), ":")
+			}
+		}
+	}
+
+	// Priority 4: Proto default
+	if port == "" {
 		if proto == "https" {
 			port = "443"
 		} else {

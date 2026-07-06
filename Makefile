@@ -198,6 +198,7 @@ test:
 # Builds linux/amd64 (container native). Output is isolated per run.
 # =============================================================================
 dev:
+	@mkdir -p $(GO_CACHE) $(GO_BUILD)
 	@$(GO_DOCKER) go mod tidy
 	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECTORG)" && \
 	BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \

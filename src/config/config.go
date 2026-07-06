@@ -203,6 +203,15 @@ type TorConfig struct {
 
 	// Virtual port for hidden service (1-65535, default 80)
 	VirtualPort int `yaml:"virtual_port"`
+
+	// OnionAddress is the .onion hostname for this service (without http:// prefix).
+	// When set, requests whose Host header matches this value are treated as Tor requests.
+	// Set automatically by the Tor service on startup; can also be set manually.
+	OnionAddress string `yaml:"onion_address"`
+
+	// ContactEmail is the contact address shown in Tor responses (security.txt, contact pages).
+	// If unset, no email is shown on Tor responses — never falls back to the clearnet email.
+	ContactEmail string `yaml:"contact_email"`
 }
 
 // DefaultTorConfig returns the default Tor configuration per PART 31

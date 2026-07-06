@@ -104,6 +104,10 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 		rateLimiter:  limiter,
 	}
 
+	// Wire app config into the URL resolver for trusted proxy gate and Tor detection
+	// per AI.md PART 12. Must be called before setupMiddleware uses the resolver.
+	urlvars.GlobalResolver().SetAppConfig(appConfig)
+
 	s.setupMiddleware()
 	s.setupRoutes()
 

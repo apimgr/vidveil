@@ -28,16 +28,24 @@ import (
 
 // SSLManager handles SSL/TLS certificates including Let's Encrypt
 type SSLManager struct {
-	appConfig   *config.AppConfig
-	certPath    string
-	mu          sync.RWMutex
+	appConfig *config.AppConfig
+	// certPath is the base SSL directory ({config_dir}/ssl or CertPath override)
+	certPath string
+	// configDir is the config root used to build spec-compliant subdirectory paths
+	configDir string
+	mu        sync.RWMutex
+	// certificate currently loaded into TLS config
 	certificate *tls.Certificate
-	// token -> keyAuth for HTTP-01
+	// token -> keyAuth for HTTP-01 challenges
 	httpChallenge map[string]string
-	// For Let's Encrypt ACME
+	// autocertMgr is the ACME autocert manager (HTTP-01/TLS-ALPN-01)
 	autocertMgr *autocert.Manager
-	// Whether to use autocert for certificate management
+	// useAutocert selects the autocert code path for GetTLSConfig/GetHTTPHandler
 	useAutocert bool
+	// systemCert is true when the loaded cert is under /etc/letsencrypt — never auto-renewed
+	systemCert bool
+	// userCert is true when the loaded cert is under {config_dir}/ssl/local — never auto-renewed
+	userCert bool
 }
 
 // CertInfo contains certificate information
@@ -52,95 +60,121 @@ type CertInfo struct {
 	ChallenType string    `json:"challenge_type"`
 }
 
-// NewSSLManager creates a new SSL manager
-func NewSSLManager(appConfig *config.AppConfig) *SSLManager {
+// NewSSLManager creates a new SSL manager.
+// configDir is the OS-appropriate config root (e.g. /etc/apimgr/vidveil on Linux).
+// Pass "" to auto-detect via GetAppPaths.
+func NewSSLManager(appConfig *config.AppConfig, configDir string) *SSLManager {
+	if configDir == "" {
+		paths := config.GetAppPaths("", "")
+		configDir = paths.Config
+	}
+
 	certPath := appConfig.Server.SSL.CertPath
 	if certPath == "" {
-		// Per AI.md PART 15: certs are stored under {data_dir}/ssl/
-		paths := config.GetAppPaths("", "")
-		certPath = filepath.Join(paths.Data, "ssl")
+		// Per AI.md PART 15: cert base dir is {config_dir}/ssl/
+		certPath = filepath.Join(configDir, "ssl")
 	}
 
 	return &SSLManager{
 		appConfig:     appConfig,
 		certPath:      certPath,
+		configDir:     configDir,
 		httpChallenge: make(map[string]string),
 	}
 }
 
-// Initialize sets up SSL if enabled
+// Initialize sets up SSL if enabled.
+// Certificate lookup follows AI.md PART 15 priority order:
+//  1. /etc/letsencrypt/live/domain/    (literal "domain" dir — system certbot setup)
+//  2. /etc/letsencrypt/live/{fqdn}/    (FQDN-named system certbot dir)
+//  3. {config_dir}/ssl/letsencrypt/{fqdn}/  (app-managed, auto-renews at 7 days)
+//  4. {config_dir}/ssl/local/{fqdn}/   (user-managed, no auto-renewal)
 func (m *SSLManager) Initialize() error {
 	if !m.appConfig.Server.SSL.Enabled {
 		return nil
 	}
 
-	// Ensure cert directory exists
-	if err := os.MkdirAll(m.certPath, 0700); err != nil {
-		return fmt.Errorf("failed to create cert directory: %w", err)
-	}
+	fqdn := m.appConfig.Server.FQDN
 
-	// Check for existing Let's Encrypt certs first (per AI.md PART 15)
-	letsEncryptPath := "/etc/letsencrypt/live"
-	domain := m.appConfig.Server.FQDN
-	if domain != "" {
-		leCertPath := filepath.Join(letsEncryptPath, domain, "fullchain.pem")
-		leKeyPath := filepath.Join(letsEncryptPath, domain, "privkey.pem")
-		if _, err := os.Stat(leCertPath); err == nil {
-			if _, err := os.Stat(leKeyPath); err == nil {
-				// Copy Let's Encrypt certs to our path
-				return m.copyLetsEncryptCerts(leCertPath, leKeyPath)
+	if fqdn != "" {
+		// Priority 1: /etc/letsencrypt/live/domain/ (literal "domain" directory)
+		p1 := "/etc/letsencrypt/live/domain"
+		if certExists(p1, "fullchain.pem", "privkey.pem") {
+			if err := m.loadCertificate(
+				filepath.Join(p1, "fullchain.pem"),
+				filepath.Join(p1, "privkey.pem"),
+			); err == nil {
+				m.systemCert = true
+				return nil
+			}
+		}
+
+		// Priority 2: /etc/letsencrypt/live/{fqdn}/
+		p2 := filepath.Join("/etc/letsencrypt/live", fqdn)
+		if certExists(p2, "fullchain.pem", "privkey.pem") {
+			if err := m.loadCertificate(
+				filepath.Join(p2, "fullchain.pem"),
+				filepath.Join(p2, "privkey.pem"),
+			); err == nil {
+				m.systemCert = true
+				return nil
+			}
+		}
+
+		// Priority 3: {config_dir}/ssl/letsencrypt/{fqdn}/ (app manages, auto-renews)
+		p3 := filepath.Join(m.configDir, "ssl", "letsencrypt", fqdn)
+		if certExists(p3, "fullchain.pem", "privkey.pem") {
+			if err := m.loadCertificate(
+				filepath.Join(p3, "fullchain.pem"),
+				filepath.Join(p3, "privkey.pem"),
+			); err == nil {
+				return nil
+			}
+		}
+
+		// Priority 4: {config_dir}/ssl/local/{fqdn}/ (user manages, no auto-renewal)
+		p4 := filepath.Join(m.configDir, "ssl", "local", fqdn)
+		if certExists(p4, "cert.pem", "key.pem") {
+			if err := m.loadCertificate(
+				filepath.Join(p4, "cert.pem"),
+				filepath.Join(p4, "key.pem"),
+			); err == nil {
+				m.userCert = true
+				return nil
 			}
 		}
 	}
 
-	// Check for existing certs in our path
-	certFile := filepath.Join(m.certPath, "cert.pem")
-	keyFile := filepath.Join(m.certPath, "key.pem")
-
-	if _, err := os.Stat(certFile); err == nil {
-		if _, err := os.Stat(keyFile); err == nil {
-			return m.loadCertificate(certFile, keyFile)
+	// Fallback for no-FQDN or when none of the 4 paths have a cert:
+	// check legacy flat path (used by self-signed certs generated on previous runs)
+	legacyCert := filepath.Join(m.certPath, "cert.pem")
+	legacyKey := filepath.Join(m.certPath, "key.pem")
+	if certExists(m.certPath, "cert.pem", "key.pem") {
+		if err := m.loadCertificate(legacyCert, legacyKey); err == nil {
+			return nil
 		}
 	}
 
-	// If Let's Encrypt is enabled and we have a valid domain, request cert
-	if m.appConfig.Server.SSL.LetsEncrypt.Enabled && domain != "" {
-		if config.IsValidSSLHost(domain) {
-			return m.RequestCertificate(domain)
+	// No existing cert found — request via Let's Encrypt or generate self-signed
+	if m.appConfig.Server.SSL.LetsEncrypt.Enabled && fqdn != "" {
+		if config.IsValidSSLHost(fqdn) {
+			return m.RequestCertificate(fqdn)
 		}
-		// Invalid domain for SSL - log warning and use self-signed
-		fmt.Printf("Warning: Domain '%s' is not valid for Let's Encrypt. Using self-signed certificate.\n", domain)
+		fmt.Printf("Warning: Domain '%s' is not valid for Let's Encrypt. Using self-signed certificate.\n", fqdn)
 	}
 
-	// Generate self-signed certificate as fallback
 	return m.generateSelfSigned()
 }
 
-// copyLetsEncryptCerts copies certs from Let's Encrypt directory
-func (m *SSLManager) copyLetsEncryptCerts(certPath, keyPath string) error {
-	destCert := filepath.Join(m.certPath, "cert.pem")
-	destKey := filepath.Join(m.certPath, "key.pem")
-
-	// Read and copy cert
-	certData, err := os.ReadFile(certPath)
-	if err != nil {
-		return fmt.Errorf("failed to read Let's Encrypt cert: %w", err)
+// certExists returns true when both files exist and are readable under dir.
+func certExists(dir, certFile, keyFile string) bool {
+	if _, err := os.Stat(filepath.Join(dir, certFile)); err != nil {
+		return false
 	}
-	if err := os.WriteFile(destCert, certData, 0644); err != nil {
-		return fmt.Errorf("failed to write cert: %w", err)
-	}
-
-	// Read and copy key
-	keyData, err := os.ReadFile(keyPath)
-	if err != nil {
-		return fmt.Errorf("failed to read Let's Encrypt key: %w", err)
-	}
-	if err := os.WriteFile(destKey, keyData, 0600); err != nil {
-		return fmt.Errorf("failed to write key: %w", err)
-	}
-
-	return m.loadCertificate(destCert, destKey)
+	_, err := os.Stat(filepath.Join(dir, keyFile))
+	return err == nil
 }
+
 
 // loadCertificate loads an existing certificate
 func (m *SSLManager) loadCertificate(certFile, keyFile string) error {
@@ -380,13 +414,20 @@ func (m *SSLManager) GetCertInfo() (*CertInfo, error) {
 	}, nil
 }
 
-// NeedsRenewal checks if the certificate needs renewal (< 30 days)
+// NeedsRenewal returns true when the app-managed cert expires within 7 days.
+// Per AI.md PART 15: only {config_dir}/ssl/letsencrypt/{fqdn}/ certs are auto-renewed.
+// System certs (/etc/letsencrypt/live/**) and user certs (ssl/local/**) are never renewed by the app.
 func (m *SSLManager) NeedsRenewal() bool {
+	// System certs and user-managed certs are never renewed by the app
+	if m.systemCert || m.userCert {
+		return false
+	}
 	info, err := m.GetCertInfo()
 	if err != nil {
+		// No cert loaded — attempt renewal to get one
 		return true
 	}
-	return info.DaysLeft < 30
+	return info.DaysLeft < 7
 }
 
 // RenewCertificate renews the certificate if needed

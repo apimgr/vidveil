@@ -513,7 +513,7 @@ func main() {
 
 	// Initialize services per AI.md specifications
 	// SSL service (PART 15)
-	sslSvc := ssl.NewSSLManager(appConfig)
+	sslSvc := ssl.NewSSLManager(appConfig, paths.Config)
 	if err := sslSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  SSL service initialization failed: %v\n", err)
 	}
@@ -535,8 +535,8 @@ func main() {
 
 	// Tor hidden service (PART 31) - auto-enabled if tor binary is found
 	// Per PART 31: Also supports outbound network routing for engine queries
-	torDataDir := filepath.Join(paths.Data, "tor")
-	torSvc := tor.NewTorService(torDataDir, logger)
+	// Pass paths.Data so NewTorService can append "tor" internally → {data_dir}/tor/
+	torSvc := tor.NewTorService(paths.Data, logger)
 	// Pass Tor config for outbound network settings
 	torSvc.SetConfig(&appConfig.Server.Tor)
 	// Pass config dir for torrc generation
@@ -646,8 +646,15 @@ func main() {
 		if err := torSvc.Start(torCtx, serverPort); err != nil {
 			// PART 31: Tor errors are WARN level, server continues without Tor
 			fmt.Fprintf(os.Stderr, "⚠️  Tor hidden service: %v\n", err)
-		} else if torSvc.UseNetworkEnabled() && torSvc.OutboundEnabled() {
-			fmt.Println("[INFO] Tor outbound network enabled - engine queries are anonymized")
+		} else {
+			// Wire resolved onion address back to config so PART 12 Tor request
+			// detection (urlvars.isTorRequest) can match the Host header.
+			if addr := torSvc.GetOnionAddress(); addr != "" {
+				appConfig.Server.Tor.OnionAddress = addr
+			}
+			if torSvc.UseNetworkEnabled() && torSvc.OutboundEnabled() {
+				fmt.Println("[INFO] Tor outbound network enabled - engine queries are anonymized")
+			}
 		}
 	}()
 	defer torSvc.Stop()

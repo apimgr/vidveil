@@ -31,7 +31,7 @@ func newTestSSLManager(t *testing.T) *SSLManager {
 func TestNewSSLManagerReturnsNonNil(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	cfg.Server.SSL.Enabled = false
-	m := NewSSLManager(cfg)
+	m := NewSSLManager(cfg, "")
 	if m == nil {
 		t.Fatal("NewSSLManager returned nil")
 	}
@@ -40,7 +40,7 @@ func TestNewSSLManagerReturnsNonNil(t *testing.T) {
 func TestNewSSLManagerCertPathSet(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	cfg.Server.SSL.Enabled = false
-	m := NewSSLManager(cfg)
+	m := NewSSLManager(cfg, "")
 	if m.certPath == "" {
 		t.Error("certPath is empty after NewSSLManager")
 	}
@@ -49,7 +49,7 @@ func TestNewSSLManagerCertPathSet(t *testing.T) {
 func TestNewSSLManagerHTTPChallengeMapNonNil(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	cfg.Server.SSL.Enabled = false
-	m := NewSSLManager(cfg)
+	m := NewSSLManager(cfg, "")
 	if m.httpChallenge == nil {
 		t.Error("httpChallenge map is nil after NewSSLManager")
 	}
@@ -59,7 +59,7 @@ func TestNewSSLManagerUsesCertPathFromConfig(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	cfg.Server.SSL.Enabled = false
 	cfg.Server.SSL.CertPath = t.TempDir()
-	m := NewSSLManager(cfg)
+	m := NewSSLManager(cfg, "")
 	if m.certPath != cfg.Server.SSL.CertPath {
 		t.Errorf("certPath = %q, want %q", m.certPath, cfg.Server.SSL.CertPath)
 	}

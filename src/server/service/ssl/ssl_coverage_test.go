@@ -3,12 +3,11 @@
 // Targets paths not exercised by ssl_test.go:
 //   - generateSelfSigned: key+cert written to tempdir, certificate loaded
 //   - loadCertificate: PEM files on disk parsed into m.certificate
-//   - copyLetsEncryptCerts: files copied and loaded
 //   - GetCertInfo: all fields populated from a loaded certificate
-//   - NeedsRenewal: false when cert has 365 days left
+//   - NeedsRenewal: false when cert has 365 days left (app-managed only)
 //   - RenewCertificate: SSL disabled path, empty/invalid domain path, self-signed regeneration
 //   - requestHTTP01 / requestTLSALPN01: autocert manager configured
-//   - requestDNS01: missing provider returns error; fallback to self-signed
+//   - requestDNS01: missing provider returns error
 //   - Initialize: SSL enabled + no LE certs → generateSelfSigned
 //   - Initialize: SSL enabled + existing cert files → loadCertificate
 //   - GetTLSConfig: autocert path (useAutocert=true)
@@ -118,37 +117,35 @@ func TestLoadCertificateNonExistentFileReturnsError(t *testing.T) {
 	}
 }
 
-// ---- copyLetsEncryptCerts ----
+// ---- loadCertificate (direct load, replaces copyLetsEncryptCerts tests) ----
 
-// copyLetsEncryptCerts copies PEM files from a source path to m.certPath.
-// We create synthetic (but valid, self-signed-generated) source files.
-func TestCopyLetsEncryptCertsSuccess(t *testing.T) {
-	// Source manager: generate cert into a temp dir.
+// loadCertificate loads valid PEM files — verifies the certificate is set in-memory.
+func TestLoadCertificateFromValidPEM(t *testing.T) {
+	// Generate a cert into a temp dir, then reload it via loadCertificate directly.
 	src := newEnabledSSLManager(t)
 	if err := src.generateSelfSigned(); err != nil {
-		t.Fatalf("generateSelfSigned for source: %v", err)
+		t.Fatalf("generateSelfSigned: %v", err)
 	}
-	srcCert := filepath.Join(src.certPath, "cert.pem")
-	srcKey := filepath.Join(src.certPath, "key.pem")
+	certFile := filepath.Join(src.certPath, "cert.pem")
+	keyFile := filepath.Join(src.certPath, "key.pem")
 
-	// Destination manager with a separate tempdir.
 	dst := newEnabledSSLManager(t)
-	if err := dst.copyLetsEncryptCerts(srcCert, srcKey); err != nil {
-		t.Fatalf("copyLetsEncryptCerts() error: %v", err)
+	if err := dst.loadCertificate(certFile, keyFile); err != nil {
+		t.Fatalf("loadCertificate() error: %v", err)
 	}
 	dst.mu.RLock()
 	cert := dst.certificate
 	dst.mu.RUnlock()
 	if cert == nil {
-		t.Error("certificate should be loaded after copyLetsEncryptCerts")
+		t.Error("certificate should be loaded after loadCertificate")
 	}
 }
 
-func TestCopyLetsEncryptCertsMissingSourceReturnsError(t *testing.T) {
+func TestLoadCertificateMissingFileReturnsError(t *testing.T) {
 	m := newEnabledSSLManager(t)
-	err := m.copyLetsEncryptCerts("/no/such/cert.pem", "/no/such/key.pem")
+	err := m.loadCertificate("/no/such/cert.pem", "/no/such/key.pem")
 	if err == nil {
-		t.Error("expected error when source cert file does not exist")
+		t.Error("expected error when cert file does not exist")
 	}
 }
 

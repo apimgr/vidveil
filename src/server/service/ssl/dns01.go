@@ -102,12 +102,14 @@ func (m *SSLManager) requestDNS01(domain string) error {
 		return fmt.Errorf("DNS-01: certificate obtain failed: %w", err)
 	}
 
-	// Write certificate and key to cert path
-	if err := os.MkdirAll(m.certPath, 0o700); err != nil {
+	// Write certificate and key to {config_dir}/ssl/letsencrypt/{domain}/ per AI.md PART 15.
+	// This is the app-managed path; the scheduler auto-renews it 7 days before expiry.
+	leDir := filepath.Join(m.configDir, "ssl", "letsencrypt", domain)
+	if err := os.MkdirAll(leDir, 0o700); err != nil {
 		return fmt.Errorf("DNS-01: failed to create cert dir: %w", err)
 	}
-	certFile := filepath.Join(m.certPath, "cert.pem")
-	keyFile := filepath.Join(m.certPath, "key.pem")
+	certFile := filepath.Join(leDir, "fullchain.pem")
+	keyFile := filepath.Join(leDir, "privkey.pem")
 
 	if err := os.WriteFile(certFile, certs.Certificate, 0o600); err != nil {
 		return fmt.Errorf("DNS-01: failed to write cert: %w", err)

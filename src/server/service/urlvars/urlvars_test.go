@@ -99,6 +99,8 @@ func TestSetLoggerIsInvoked(t *testing.T) {
 func TestResolveProtoXForwardedProto(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	// Loopback is always a trusted proxy — header must be honored
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "HTTPS")
 
 	proto, _, _ := r.GetURLVars(req)
@@ -111,6 +113,7 @@ func TestResolveProtoXForwardedProto(t *testing.T) {
 func TestResolveProtoXForwardedSslOn(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Ssl", "on")
 
 	proto, _, _ := r.GetURLVars(req)
@@ -123,6 +126,7 @@ func TestResolveProtoXForwardedSslOn(t *testing.T) {
 func TestResolveProtoXForwardedSslOffIgnored(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Ssl", "off")
 
 	proto, _, _ := r.GetURLVars(req)
@@ -135,6 +139,7 @@ func TestResolveProtoXForwardedSslOffIgnored(t *testing.T) {
 func TestResolveProtoXUrlScheme(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Url-Scheme", "https")
 
 	proto, _, _ := r.GetURLVars(req)
@@ -171,6 +176,7 @@ func TestResolveProtoDefaultHttp(t *testing.T) {
 func TestResolveProtoXForwardedProtoBeatsXForwardedSsl(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "http")
 	req.Header.Set("X-Forwarded-Ssl", "on")
 
@@ -186,6 +192,7 @@ func TestResolveProtoXForwardedProtoBeatsXForwardedSsl(t *testing.T) {
 func TestResolveFQDNXForwardedHost(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Host", "example.com")
 
 	_, fqdn, _ := r.GetURLVars(req)
@@ -198,6 +205,7 @@ func TestResolveFQDNXForwardedHost(t *testing.T) {
 func TestResolveFQDNXForwardedHostStripsPort(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Host", "example.com:8080")
 
 	_, fqdn, _ := r.GetURLVars(req)
@@ -210,6 +218,7 @@ func TestResolveFQDNXForwardedHostStripsPort(t *testing.T) {
 func TestResolveFQDNXRealHost(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Real-Host", "real.example.com")
 
 	_, fqdn, _ := r.GetURLVars(req)
@@ -222,6 +231,7 @@ func TestResolveFQDNXRealHost(t *testing.T) {
 func TestResolveFQDNXOriginalHost(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Original-Host", "original.example.com")
 
 	_, fqdn, _ := r.GetURLVars(req)
@@ -263,6 +273,7 @@ func TestResolveFQDNHeaderBeatsDomainEnv(t *testing.T) {
 
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Host", "header.example.com")
 
 	_, fqdn, _ := r.GetURLVars(req)
@@ -291,6 +302,7 @@ func TestResolveFQDNFallbackNonEmpty(t *testing.T) {
 func TestResolvePortXForwardedPort(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "8080")
 
@@ -304,6 +316,7 @@ func TestResolvePortXForwardedPort(t *testing.T) {
 func TestResolvePortStrips80(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "80")
 
@@ -317,6 +330,7 @@ func TestResolvePortStrips80(t *testing.T) {
 func TestResolvePortStrips443(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "443")
 
@@ -398,6 +412,7 @@ func TestExtractBaseDomainEmpty(t *testing.T) {
 func TestBuildURLWithPort(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/path", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "http")
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "8080")
@@ -413,6 +428,7 @@ func TestBuildURLWithPort(t *testing.T) {
 func TestBuildURLPort80Omitted(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/page", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "http")
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "80")
@@ -428,6 +444,7 @@ func TestBuildURLPort80Omitted(t *testing.T) {
 func TestBuildURLPort443Omitted(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/secure", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "443")
@@ -443,6 +460,7 @@ func TestBuildURLPort443Omitted(t *testing.T) {
 func TestBuildURLEmptyPath(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "http")
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "80")
@@ -567,6 +585,7 @@ func TestMiddlewareSetsResolvedProtoAndHost(t *testing.T) {
 
 	handler := r.Middleware(inner)
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "middleware.example.com")
 	rec := httptest.NewRecorder()
@@ -591,6 +610,7 @@ func TestMiddlewareSetsBaseURL(t *testing.T) {
 
 	handler := r.Middleware(inner)
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "http")
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "80")
@@ -613,6 +633,7 @@ func TestMiddlewareSetsPortWhenNonStandard(t *testing.T) {
 
 	handler := r.Middleware(inner)
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "http")
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "8080")
@@ -635,6 +656,7 @@ func TestMiddlewareOmitsPortFor80(t *testing.T) {
 
 	handler := r.Middleware(inner)
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "http")
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "80")
@@ -677,6 +699,7 @@ func TestMiddlewareBaseURLIncludesNonStandardPort(t *testing.T) {
 
 	handler := r.Middleware(inner)
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "http")
 	req.Header.Set("X-Forwarded-Host", "example.com")
 	req.Header.Set("X-Forwarded-Port", "9000")
@@ -712,6 +735,7 @@ func TestGlobalResolverSameInstance(t *testing.T) {
 // Package-level GetURLVars must delegate to GlobalResolver and return sensible values.
 func TestPackageGetURLVars(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "pkg.example.com")
 	req.Header.Set("X-Forwarded-Port", "443")
@@ -731,6 +755,7 @@ func TestPackageGetURLVars(t *testing.T) {
 // Package-level BuildURL must delegate to GlobalResolver.
 func TestPackageBuildURL(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "http")
 	req.Header.Set("X-Forwarded-Host", "pkg.example.com")
 	req.Header.Set("X-Forwarded-Port", "80")
@@ -760,6 +785,7 @@ func TestPackageGetWildcardDomain(t *testing.T) {
 func TestGetURLVarsIdempotent(t *testing.T) {
 	r := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Host", "idempotent.example.com")
 
 	for i := 0; i < 10; i++ {
@@ -845,6 +871,7 @@ func TestLearningDisabledSkipsObservations(t *testing.T) {
 func TestResolveFQDN_XForwardedHostWithPort_StripsPort(t *testing.T) {
 	resolver := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Host", "example.com:8443")
 
 	fqdn := resolver.resolveFQDN(req)
@@ -856,6 +883,7 @@ func TestResolveFQDN_XForwardedHostWithPort_StripsPort(t *testing.T) {
 func TestResolveFQDN_XRealHostWithPort_StripsPort(t *testing.T) {
 	resolver := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Real-Host", "real.example.com:9000")
 
 	fqdn := resolver.resolveFQDN(req)
@@ -867,6 +895,7 @@ func TestResolveFQDN_XRealHostWithPort_StripsPort(t *testing.T) {
 func TestResolveFQDN_XOriginalHostWithPort_StripsPort(t *testing.T) {
 	resolver := NewURLResolver(DefaultURLVarsConfig())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Original-Host", "orig.example.com:7777")
 
 	fqdn := resolver.resolveFQDN(req)

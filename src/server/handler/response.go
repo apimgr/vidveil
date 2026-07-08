@@ -208,7 +208,20 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 	// Inject locale and direction per AI.md PART 30 (<html lang="{{.Lang}}" dir="{{.Dir}}">)
 	injectLocaleData(r, data)
 
-	// 2. Text browsers (lynx, w3m, links) - INTERACTIVE, NO JavaScript
+	accept := r.Header.Get("Accept")
+
+	// 2. Accept: text/plain explicitly requested — per AI.md PART 14 returns formatted text
+	//    via HTML2TextConverter (same output as HTTP tools), not raw data strings.
+	//    Only applies when text/html is NOT also in the Accept header.
+	if strings.Contains(accept, "text/plain") && !strings.Contains(accept, "text/html") {
+		html := h.renderSimpleHTML(name, data)
+		text := convertHTMLToText(html, 80)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte(text + "\n"))
+		return
+	}
+
+	// 3. Text browsers (lynx, w3m, links) - INTERACTIVE, NO JavaScript
 	//    Receive server-rendered HTML that works without JS
 	if isTextBrowser(r) {
 		// Use no-JS templates from template/nojs/ directory per AI.md PART 14
@@ -216,22 +229,18 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 		return
 	}
 
-	// 3. HTTP tools (curl, wget) - NON-INTERACTIVE, just dump output
+	// 4. HTTP tools (curl, wget) - NON-INTERACTIVE, just dump output
 	//    Receive pre-formatted text via HTML2TextConverter
 	//    Exception: if Accept header explicitly requests text/html, return HTML
-	if isHttpTool(r) && !strings.Contains(r.Header.Get("Accept"), "text/html") {
-		// Render simple HTML content
+	if isHttpTool(r) && !strings.Contains(accept, "text/html") {
 		html := h.renderSimpleHTML(name, data)
-
-		// Convert to formatted text using full HTML2TextConverter
 		text := convertHTMLToText(html, 80)
-
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write([]byte(text + "\n"))
 		return
 	}
 
-	// 4. Regular browsers (Chrome, Firefox) - full HTML with JavaScript
+	// 5. Regular browsers (Chrome, Firefox) - full HTML with JavaScript
 	h.renderTemplate(w, name, data)
 }
 
@@ -322,6 +331,10 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 		html += "<li>No analytics</li>"
 		html += "<li>No third-party tracking</li>"
 		html += "</ul>"
+	case "favorites":
+		html += "<h1>Favorites</h1>"
+		html += "<p>Favorites are stored locally in your browser (localStorage).</p>"
+		html += "<p>Visit /favorites in a browser to view and manage your saved items.</p>"
 	case "preferences":
 		html += "<h1>Preferences</h1>"
 		html += "<p>Customize your search experience.</p>"

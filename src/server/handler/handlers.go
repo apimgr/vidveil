@@ -711,16 +711,9 @@ func (h *SearchHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 			"version":      version.GetVersion(),
 		})
 
-	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 14
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Branding.Title)
-		fmt.Fprintf(w, "%s\n\n", h.appConfig.Server.Branding.Description)
-		fmt.Fprintf(w, "Search Engines: %d enabled\n", engineCount)
-		fmt.Fprintf(w, "Version: %s\n", version.GetVersion())
-
 	default:
-		// HTML response for browsers (default)
+		// HTML/text response — renderResponse() applies full content negotiation
+		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		h.renderResponse(w, r, "home", map[string]interface{}{
 			"Title":         h.appConfig.Server.Branding.Title,
 			"Description":   h.appConfig.Server.Branding.Description,
@@ -814,24 +807,9 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"has_bang":     parsed.HasBang,
 		})
 
-	case "text/plain":
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "Search: %s\n", query)
-		fmt.Fprintf(w, "Results: %d found in %dms\n\n", len(results.Data.Results), results.Data.SearchTimeMS)
-		for i, result := range results.Data.Results {
-			fmt.Fprintf(w, "%d. %s\n", i+1, result.Title)
-			fmt.Fprintf(w, "   %s\n", result.URL)
-			if result.Duration != "" {
-				fmt.Fprintf(w, "   Duration: %s", result.Duration)
-				if result.Views != "" {
-					fmt.Fprintf(w, " | Views: %s", result.Views)
-				}
-				fmt.Fprintf(w, "\n")
-			}
-			fmt.Fprintf(w, "\n")
-		}
-
 	default:
+		// HTML/text response — renderResponse() applies full content negotiation
+		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		// Fallback: embed results in HTML shell
 		resultsJSON, _ := json.Marshal(results.Data.Results)
 		relatedSearches := engine.GetRelatedSearches(searchQuery, 8)
@@ -872,22 +850,9 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 			"theme":   h.getRequestTheme(r),
 		})
 
-	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 14
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "Preferences - %s\n\n", h.appConfig.Server.Branding.Title)
-		fmt.Fprintf(w, "Theme: %s\n", h.getRequestTheme(r))
-		fmt.Fprintf(w, "\nAvailable Engines:\n")
-		for _, eng := range engines {
-			status := "disabled"
-			if eng.Enabled {
-				status = "enabled"
-			}
-			fmt.Fprintf(w, "  %s (%s)\n", eng.DisplayName, status)
-		}
-
 	default:
-		// HTML response for browsers (default)
+		// HTML/text response — renderResponse() applies full content negotiation
+		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		h.renderResponse(w, r, "preferences", map[string]interface{}{
 			"Title":         "Preferences - " + h.appConfig.Server.Branding.Title,
 			"Theme":         h.getRequestTheme(r),
@@ -909,11 +874,9 @@ func (h *SearchHandler) FavoritesPage(w http.ResponseWriter, r *http.Request) {
 			"message": "Favorites are stored locally in your browser (localStorage).",
 		})
 
-	case "text/plain":
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "Favorites\n\nFavorites are stored locally in your browser.\nVisit /favorites in a browser to view them.\n")
-
 	default:
+		// HTML/text response — renderResponse() applies full content negotiation
+		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		h.renderResponse(w, r, "favorites", map[string]interface{}{
 			"Title":         "Favorites - " + h.appConfig.Server.Branding.Title,
 			"Theme":         h.getRequestTheme(r),
@@ -939,16 +902,9 @@ func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 			"description": h.appConfig.Server.Branding.Description,
 		})
 
-	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 14
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "%s\n", h.appConfig.Server.Branding.Title)
-		fmt.Fprintf(w, "Version: %s\n", ver)
-		fmt.Fprintf(w, "Build Date: %s\n", BuildDateTime())
-		fmt.Fprintf(w, "\n%s\n", h.appConfig.Server.Branding.Description)
-
 	default:
-		// HTML response for browsers (default)
+		// HTML/text response — renderResponse() applies full content negotiation
+		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		h.renderResponse(w, r, "about", map[string]interface{}{
 			"Title":         "About - " + h.appConfig.Server.Branding.Title,
 			"Theme":         h.getRequestTheme(r),
@@ -972,16 +928,9 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 			"version": ver,
 		})
 
-	case "text/plain":
-		// Plain text response for curl/CLI per AI.md PART 14
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "Privacy Policy - %s\n", h.appConfig.Server.Branding.Title)
-		fmt.Fprintf(w, "Version: %s\n\n", ver)
-		fmt.Fprintf(w, "VidVeil is a privacy-respecting meta search engine.\n")
-		fmt.Fprintf(w, "We do not track, log, or collect any user data.\n")
-
 	default:
-		// HTML response for browsers (default)
+		// HTML/text response — renderResponse() applies full content negotiation
+		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		h.renderResponse(w, r, "privacy", map[string]interface{}{
 			"Title":         "Privacy Policy - " + h.appConfig.Server.Branding.Title,
 			"Theme":         h.getRequestTheme(r),

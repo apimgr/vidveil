@@ -590,3 +590,21 @@ func TestWaitForShutdownCancelledContextReturnsSIGTERM(t *testing.T) {
 		t.Errorf("WaitForShutdown(cancelled ctx) = %v, want SIGTERM", sig)
 	}
 }
+
+// --- NotifyReload ---
+
+// TestNotifyReloadIsNoOp verifies NotifyReload does not panic and ignores the handler.
+func TestNotifyReloadIsNoOp(t *testing.T) {
+	called := false
+	// Must not panic; per spec SIGHUP is ignored and config auto-reloads via watcher.
+	NotifyReload(func() { called = true })
+	if called {
+		t.Error("NotifyReload: handler must never be called (no-op)")
+	}
+}
+
+// TestNotifyReloadNilHandlerDoesNotPanic verifies nil handler is accepted.
+func TestNotifyReloadNilHandlerDoesNotPanic(t *testing.T) {
+	// Should not panic on nil handler.
+	NotifyReload(nil)
+}

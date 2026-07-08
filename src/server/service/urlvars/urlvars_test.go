@@ -4,10 +4,13 @@ package urlvars
 
 import (
 	"crypto/tls"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/apimgr/vidveil/src/config"
 )
 
 // --- DefaultURLVarsConfig ---
@@ -910,4 +913,183 @@ func TestGetPublicIP_ReturnsStringOrEmpty(t *testing.T) {
 	ip := getPublicIP()
 	// May be empty in Docker/CI; just verify it doesn't panic
 	_ = ip
+}
+
+// ── SetAppConfig ──────────────────────────────────────────────────────────────
+
+func TestSetAppConfig_StoresConfig(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	cfg := &config.AppConfig{}
+	r.SetAppConfig(cfg)
+	r.mu.RLock()
+	got := r.appCfg
+	r.mu.RUnlock()
+	if got != cfg {
+		t.Error("SetAppConfig: stored pointer does not match supplied config")
+	}
+}
+
+func TestSetAppConfig_OverwritesPrevious(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	first := &config.AppConfig{}
+	second := &config.AppConfig{}
+	r.SetAppConfig(first)
+	r.SetAppConfig(second)
+	r.mu.RLock()
+	got := r.appCfg
+	r.mu.RUnlock()
+	if got != second {
+		t.Error("SetAppConfig: expected second config to overwrite first")
+	}
+}
+
+func TestSetAppConfig_NilClears(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	r.SetAppConfig(&config.AppConfig{})
+	r.SetAppConfig(nil)
+	r.mu.RLock()
+	got := r.appCfg
+	r.mu.RUnlock()
+	if got != nil {
+		t.Error("SetAppConfig(nil): expected appCfg to be nil")
+	}
+}
+
+// ── cidrContains ──────────────────────────────────────────────────────────────
+
+func TestCIDRContains_CIDRMatch(t *testing.T) {
+	ip := net.ParseIP("192.168.1.50")
+	if !cidrContains("192.168.1.0/24", ip) {
+		t.Error("cidrContains: 192.168.1.50 should be inside 192.168.1.0/24")
+	}
+}
+
+func TestCIDRContains_CIDRNoMatch(t *testing.T) {
+	ip := net.ParseIP("10.0.0.1")
+	if cidrContains("192.168.1.0/24", ip) {
+		t.Error("cidrContains: 10.0.0.1 should NOT be inside 192.168.1.0/24")
+	}
+}
+
+func TestCIDRContains_ExactIPMatch(t *testing.T) {
+	ip := net.ParseIP("203.0.113.42")
+	if !cidrContains("203.0.113.42", ip) {
+		t.Error("cidrContains: exact IP match should return true")
+	}
+}
+
+func TestCIDRContains_ExactIPNoMatch(t *testing.T) {
+	ip := net.ParseIP("203.0.113.42")
+	if cidrContains("203.0.113.99", ip) {
+		t.Error("cidrContains: different exact IP should return false")
+	}
+}
+
+func TestCIDRContains_InvalidCIDR(t *testing.T) {
+	ip := net.ParseIP("192.168.1.1")
+	if cidrContains("not-a-cidr/99", ip) {
+		t.Error("cidrContains: invalid CIDR should return false")
+	}
+}
+
+func TestCIDRContains_InvalidExactIP(t *testing.T) {
+	ip := net.ParseIP("192.168.1.1")
+	if cidrContains("not-an-ip", ip) {
+		t.Error("cidrContains: unparseable plain IP should return false")
+	}
+}
+
+func TestCIDRContains_IPv6CIDR(t *testing.T) {
+	ip := net.ParseIP("2001:db8::1")
+	if !cidrContains("2001:db8::/32", ip) {
+		t.Error("cidrContains: 2001:db8::1 should be inside 2001:db8::/32")
+	}
+}
+
+// ── isTorRequest ─────────────────────────────────────────────────────────────
+
+func TestIsTorRequest_NilConfig(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "abc123.onion"
+	if r.isTorRequest(req) {
+		t.Error("isTorRequest: nil config should return false")
+	}
+}
+
+func TestIsTorRequest_EmptyOnionAddress(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	cfg := &config.AppConfig{}
+	cfg.Server.Tor.OnionAddress = ""
+	r.SetAppConfig(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "abc123.onion"
+	if r.isTorRequest(req) {
+		t.Error("isTorRequest: empty onion address should return false")
+	}
+}
+
+func TestIsTorRequest_MatchesOnionAddress(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	cfg := &config.AppConfig{}
+	cfg.Server.Tor.OnionAddress = "abc123fake.onion"
+	r.SetAppConfig(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "abc123fake.onion"
+	if !r.isTorRequest(req) {
+		t.Error("isTorRequest: matching onion host should return true")
+	}
+}
+
+func TestIsTorRequest_MatchesOnionAddressWithPort(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	cfg := &config.AppConfig{}
+	cfg.Server.Tor.OnionAddress = "abc123fake.onion"
+	r.SetAppConfig(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "abc123fake.onion:8080"
+	if !r.isTorRequest(req) {
+		t.Error("isTorRequest: onion host with port should still match")
+	}
+}
+
+func TestIsTorRequest_DifferentHost(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	cfg := &config.AppConfig{}
+	cfg.Server.Tor.OnionAddress = "abc123fake.onion"
+	r.SetAppConfig(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "other.onion"
+	if r.isTorRequest(req) {
+		t.Error("isTorRequest: non-matching host should return false")
+	}
+}
+
+// ── isTrustedProxy additional CIDR path ──────────────────────────────────────
+
+func TestIsTrustedProxy_AdditionalCIDR_Matches(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	cfg := &config.AppConfig{}
+	cfg.Server.TrustedProxies.Additional = []string{"203.0.113.0/24"}
+	r.SetAppConfig(cfg)
+	if !r.isTrustedProxy("203.0.113.42:9999") {
+		t.Error("isTrustedProxy: 203.0.113.42 should be trusted via additional CIDR")
+	}
+}
+
+func TestIsTrustedProxy_AdditionalCIDR_NoMatch(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	cfg := &config.AppConfig{}
+	cfg.Server.TrustedProxies.Additional = []string{"203.0.113.0/24"}
+	r.SetAppConfig(cfg)
+	if r.isTrustedProxy("198.51.100.1:9999") {
+		t.Error("isTrustedProxy: 198.51.100.1 should NOT be trusted via additional CIDR")
+	}
+}
+
+func TestIsTrustedProxy_InvalidAddr(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	if r.isTrustedProxy("not-an-ip") {
+		t.Error("isTrustedProxy: invalid address should return false")
+	}
 }

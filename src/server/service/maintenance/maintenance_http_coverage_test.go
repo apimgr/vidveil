@@ -7,7 +7,10 @@
 package maintenance
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -386,5 +389,95 @@ func TestApplyUpdate_DirectURL_200_DownloadsAndFails(t *testing.T) {
 	err := m.ApplyUpdate(srv.URL + "/download/vidveil")
 	if err != nil {
 		t.Logf("ApplyUpdate(200 download): %v (expected — binary replacement restricted)", err)
+	}
+}
+
+// ── verifyUpdateChecksum ──────────────────────────────────────────────────────
+
+// verifyUpdateChecksum rejects non-HTTPS URLs immediately.
+func TestVerifyUpdateChecksum_NonHTTPS_ReturnsError(t *testing.T) {
+	err := verifyUpdateChecksum("http://example.com/binary", []byte("data"))
+	if err == nil {
+		t.Error("verifyUpdateChecksum non-HTTPS: expected error, got nil")
+	}
+}
+
+// verifyUpdateChecksum returns error when the checksum sidecar is not published (404).
+func TestVerifyUpdateChecksum_404_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	// URL string starts with "https://" so the prefix check passes;
+	// the mock transport redirects the actual request to the test server.
+	err := verifyUpdateChecksum("https://example.com/binary", []byte("data"))
+	if err == nil {
+		t.Error("verifyUpdateChecksum 404: expected error, got nil")
+	}
+}
+
+// verifyUpdateChecksum returns error when the checksum endpoint returns a non-200/non-404 status.
+func TestVerifyUpdateChecksum_ServerError_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	err := verifyUpdateChecksum("https://example.com/binary", []byte("data"))
+	if err == nil {
+		t.Error("verifyUpdateChecksum 500: expected error, got nil")
+	}
+}
+
+// verifyUpdateChecksum returns error when the checksum body is empty.
+func TestVerifyUpdateChecksum_EmptyBody_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("   \n"))
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	err := verifyUpdateChecksum("https://example.com/binary", []byte("data"))
+	if err == nil {
+		t.Error("verifyUpdateChecksum empty body: expected error, got nil")
+	}
+}
+
+// verifyUpdateChecksum returns error when the checksum does not match.
+func TestVerifyUpdateChecksum_Mismatch_ReturnsError(t *testing.T) {
+	data := []byte("my binary data")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  binary\n"))
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	err := verifyUpdateChecksum("https://example.com/binary", data)
+	if err == nil {
+		t.Error("verifyUpdateChecksum mismatch: expected error, got nil")
+	}
+}
+
+// verifyUpdateChecksum returns nil when the checksum matches.
+func TestVerifyUpdateChecksum_Match_ReturnsNil(t *testing.T) {
+	data := []byte("my binary data")
+	sum := sha256.Sum256(data)
+	hexSum := hex.EncodeToString(sum[:])
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "%s  binary\n", hexSum)
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	err := verifyUpdateChecksum("https://example.com/binary", data)
+	if err != nil {
+		t.Errorf("verifyUpdateChecksum match: expected nil, got %v", err)
 	}
 }

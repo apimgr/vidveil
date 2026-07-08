@@ -2,6 +2,8 @@
 package cmd
 
 import (
+	"io"
+	"os"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -413,4 +415,106 @@ func TestCloseCLILoggingWithNilFile(t *testing.T) {
 	cliLogOutputFile = nil
 
 	CloseCLILogging()
+}
+
+// ── PrintCLIVersionInfo ───────────────────────────────────────────────────────
+
+// TestPrintCLIVersionInfo_WithoutSite verifies the no-site branch does not panic.
+func TestPrintCLIVersionInfo_WithoutSite(t *testing.T) {
+	origSite := OfficialSite
+	t.Cleanup(func() { OfficialSite = origSite })
+	OfficialSite = ""
+	// Redirect stdout to discard to avoid polluting test output.
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	PrintCLIVersionInfo()
+
+	w.Close()
+	io.ReadAll(r)
+	os.Stdout = old
+}
+
+// TestPrintCLIVersionInfo_WithSite verifies the OfficialSite != "" branch.
+func TestPrintCLIVersionInfo_WithSite(t *testing.T) {
+	origSite := OfficialSite
+	t.Cleanup(func() { OfficialSite = origSite })
+	OfficialSite = "https://example.com"
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	PrintCLIVersionInfo()
+
+	w.Close()
+	io.ReadAll(r)
+	os.Stdout = old
+}
+
+// ── EnsureCLIConfigFilePermissions ───────────────────────────────────────────
+
+// TestEnsureCLIConfigFilePermissions_NonExistent verifies a missing config file
+// returns nil (not an error) — consistent with function contract.
+func TestEnsureCLIConfigFilePermissions_NonExistent(t *testing.T) {
+	err := EnsureCLIConfigFilePermissions("/tmp/no-such-config-file-vidveil-xyz.yml")
+	if err != nil {
+		t.Errorf("expected nil for non-existent config file, got: %v", err)
+	}
+}
+
+// TestEnsureCLIConfigFilePermissions_InsecurePermissions verifies that a file
+// with group/world-readable bits set triggers an error.
+func TestEnsureCLIConfigFilePermissions_InsecurePermissions(t *testing.T) {
+	f, err := os.CreateTemp("", "vidveil-cfg-test-*.yml")
+	if err != nil {
+		t.Fatalf("creating temp file: %v", err)
+	}
+	defer os.Remove(f.Name())
+	f.Close()
+	if err := os.Chmod(f.Name(), 0o644); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	if err := EnsureCLIConfigFilePermissions(f.Name()); err == nil {
+		t.Error("expected error for insecure config permissions, got nil")
+	}
+}
+
+// TestEnsureCLIDefaultTokenFilePermissions_NonExistent verifies a missing token
+// file returns nil (file-not-found is not an error for token files).
+func TestEnsureCLIDefaultTokenFilePermissions_NonExistent(t *testing.T) {
+	err := EnsureCLIDefaultTokenFilePermissions("/tmp/no-such-token-vidveil-xyz")
+	if err != nil {
+		t.Errorf("expected nil for non-existent token file, got: %v", err)
+	}
+}
+
+// TestEnsureCLIDefaultTokenFilePermissions_InsecurePermissions verifies that a
+// token file with group/world-readable bits set triggers an error.
+func TestEnsureCLIDefaultTokenFilePermissions_InsecurePermissions(t *testing.T) {
+	f, err := os.CreateTemp("", "vidveil-tok-test-*")
+	if err != nil {
+		t.Fatalf("creating temp file: %v", err)
+	}
+	defer os.Remove(f.Name())
+	f.Close()
+	if err := os.Chmod(f.Name(), 0o644); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	if err := EnsureCLIDefaultTokenFilePermissions(f.Name()); err == nil {
+		t.Error("expected error for insecure token permissions, got nil")
+	}
+}
+
+// TestPrintConnectionWarning_NilErrNoPanic verifies nil error does not panic.
+func TestPrintConnectionWarning_NilErrNoPanic(t *testing.T) {
+	old := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	PrintConnectionWarning(nil)
+
+	w.Close()
+	io.ReadAll(r)
+	os.Stderr = old
 }

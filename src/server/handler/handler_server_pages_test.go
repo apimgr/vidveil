@@ -75,3 +75,118 @@ func TestRenderServerTemplate_UnknownTemplate_Returns500(t *testing.T) {
 		t.Errorf("renderServerTemplate with unknown template: status=%d want 500", rr.Code)
 	}
 }
+
+// ContactPage POST routes to handleContactSubmit and renders a success response.
+func TestServerHandler_ContactPage_POST_Returns200(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader("subject=hello&message=world"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ContactPage(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("ContactPage POST: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// HelpPage renders the server help template.
+func TestServerHandler_HelpPage_Returns200(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/server/help", nil)
+	rr := httptest.NewRecorder()
+	h.HelpPage(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("HelpPage: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// APIAbout text/plain path returns plain text with name and version.
+func TestAPIAbout_TextPlain_ReturnsText(t *testing.T) {
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/about", nil)
+	req.Header.Set("Accept", "text/plain")
+	rr := httptest.NewRecorder()
+	h.APIAbout(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIAbout text: status=%d want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("APIAbout text: Content-Type=%q want text/plain", rr.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(rr.Body.String(), "name:") {
+		t.Errorf("APIAbout text: body missing 'name:': %s", rr.Body.String())
+	}
+}
+
+// APIPrivacy text/plain path returns plain text with policy fields.
+func TestAPIPrivacy_TextPlain_ReturnsText(t *testing.T) {
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/privacy", nil)
+	req.Header.Set("Accept", "text/plain")
+	rr := httptest.NewRecorder()
+	h.APIPrivacy(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIPrivacy text: status=%d want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("APIPrivacy text: Content-Type=%q want text/plain", rr.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(rr.Body.String(), "policy_version:") {
+		t.Errorf("APIPrivacy text: body missing 'policy_version:': %s", rr.Body.String())
+	}
+}
+
+// APIHelp text/plain path returns plain text with endpoint list.
+func TestAPIHelp_TextPlain_ReturnsText(t *testing.T) {
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/help", nil)
+	req.Header.Set("Accept", "text/plain")
+	rr := httptest.NewRecorder()
+	h.APIHelp(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIHelp text: status=%d want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("APIHelp text: Content-Type=%q want text/plain", rr.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(rr.Body.String(), "search:") {
+		t.Errorf("APIHelp text: body missing 'search:': %s", rr.Body.String())
+	}
+}
+
+// ── RenderErrorPage (real FS success path) ────────────────────────────────────
+
+// RenderErrorPage with a real template filesystem renders HTML and returns the given status.
+func TestRenderErrorPage_RealFS_Returns404WithHTML(t *testing.T) {
+	setRealTemplatesFS(t)
+	cfg := config.DefaultAppConfig()
+	h := &SearchHandler{appConfig: cfg}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/missing", nil)
+
+	h.RenderErrorPage(rr, req, http.StatusNotFound, "Not Found", "Resource not found")
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("RenderErrorPage real FS: status=%d want 404", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/html") {
+		t.Errorf("RenderErrorPage real FS: Content-Type=%q want text/html", ct)
+	}
+}
+
+// RenderErrorPage with a real template filesystem also covers the 500 code path.
+func TestRenderErrorPage_RealFS_Returns500WithHTML(t *testing.T) {
+	setRealTemplatesFS(t)
+	cfg := config.DefaultAppConfig()
+	h := &SearchHandler{appConfig: cfg}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/error", nil)
+
+	h.RenderErrorPage(rr, req, http.StatusInternalServerError, "Server Error", "Internal error")
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("RenderErrorPage real FS 500: status=%d want 500", rr.Code)
+	}
+}

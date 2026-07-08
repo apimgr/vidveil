@@ -296,6 +296,164 @@ func TestFormatPushoverContainsMessage(t *testing.T) {
 	}
 }
 
+// ---- resolveWebhooks additional roles ----
+
+func TestResolveWebhooksAbuseFallsBackToGeneralThenAdmin(t *testing.T) {
+	contact := &config.ContactConfig{
+		Admin: config.ContactRoleConfig{
+			Webhooks: map[string]string{"slack": "https://admin.slack.com/wh"},
+		},
+		General: config.ContactRoleConfig{
+			Webhooks: map[string]string{"discord": "https://general.discord.com/wh"},
+		},
+		Abuse: config.ContactRoleConfig{
+			Webhooks: map[string]string{},
+		},
+	}
+	d := New(contact, "vidveil", "1.0.0", "https://example.com")
+	m := d.resolveWebhooks(contact, RoleAbuse)
+	if m["slack"] != "https://admin.slack.com/wh" {
+		t.Errorf("abuse did not fall back to admin slack: %v", m)
+	}
+	if m["discord"] != "https://general.discord.com/wh" {
+		t.Errorf("abuse did not inherit general discord: %v", m)
+	}
+}
+
+func TestResolveWebhooksGeneralFallsBackToAdmin(t *testing.T) {
+	contact := &config.ContactConfig{
+		Admin: config.ContactRoleConfig{
+			Webhooks: map[string]string{"gotify": "https://gotify.example.com?token=x"},
+		},
+		General: config.ContactRoleConfig{
+			Webhooks: map[string]string{},
+		},
+	}
+	d := New(contact, "vidveil", "1.0.0", "https://example.com")
+	m := d.resolveWebhooks(contact, RoleGeneral)
+	if m["gotify"] != "https://gotify.example.com?token=x" {
+		t.Errorf("general did not fall back to admin gotify: %v", m)
+	}
+}
+
+func TestResolveWebhooksUnknownRoleFallsBackToAdmin(t *testing.T) {
+	contact := testContact("https://admin.example.com/wh")
+	d := New(contact, "vidveil", "1.0.0", "https://example.com")
+	m := d.resolveWebhooks(contact, Role("unknown"))
+	if m["generic"] != "https://admin.example.com/wh" {
+		t.Errorf("unknown role did not fall back to admin: %v", m)
+	}
+}
+
+// ---- send error paths ----
+
+func TestSendHTTPError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	d := New(nil, "vidveil", "1.0.0", "https://example.com")
+	d.httpClient = ts.Client()
+
+	err := d.send(context.Background(), "generic", ts.URL, "", "uuid-999", testPayload())
+	if err == nil {
+		t.Error("send: expected error on HTTP 500, got nil")
+	}
+}
+
+func TestSendNetworkError(t *testing.T) {
+	d := New(nil, "vidveil", "1.0.0", "https://example.com")
+	err := d.send(context.Background(), "generic", "http://127.0.0.1:1", "", "uuid-net", testPayload())
+	if err == nil {
+		t.Error("send: expected network error on unreachable address, got nil")
+	}
+}
+
+// ---- dispatchWithRetry ----
+
+func TestDispatchWithRetryExhaustsAllRetries(t *testing.T) {
+	// Use a server that always returns 500.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	d := New(nil, "vidveil", "1.0.0", "https://example.com")
+	d.httpClient = ts.Client()
+
+	// Override retry delays to zero so the test completes quickly.
+	original := retryDelays
+	retryDelays = []time.Duration{0, 0}
+	defer func() { retryDelays = original }()
+
+	done := make(chan struct{})
+	go func() {
+		d.dispatchWithRetry(context.Background(), "generic", ts.URL, "", testPayload())
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Error("dispatchWithRetry did not finish within 5s")
+	}
+}
+
+func TestDispatchWithRetryContextCancelled(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	d := New(nil, "vidveil", "1.0.0", "https://example.com")
+	d.httpClient = ts.Client()
+
+	// Use a long retry delay so context cancellation is the exit path.
+	original := retryDelays
+	retryDelays = []time.Duration{5 * time.Minute}
+	defer func() { retryDelays = original }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		d.dispatchWithRetry(ctx, "generic", ts.URL, "", testPayload())
+		close(done)
+	}()
+
+	// Cancel after a short delay to trigger ctx.Done() path.
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Error("dispatchWithRetry did not exit on context cancellation within 3s")
+	}
+}
+
+// ---- logWebhookFailed ----
+
+func TestLogWebhookFailed(t *testing.T) {
+	// logWebhookFailed must not panic; it discards all args.
+	logWebhookFailed("telegram", "https://api.telegram.org/botX", "connection refused")
+}
+
+// ---- GenerateWebhookSecret error path ----
+
+func TestGenerateWebhookSecretUniqueness(t *testing.T) {
+	seen := make(map[string]bool)
+	for i := 0; i < 10; i++ {
+		s, err := GenerateWebhookSecret()
+		if err != nil {
+			t.Fatalf("GenerateWebhookSecret: %v", err)
+		}
+		if seen[s] {
+			t.Fatalf("GenerateWebhookSecret returned duplicate value: %s", s)
+		}
+		seen[s] = true
+	}
+}
+
 // ---- Signature header ----
 
 func TestSendIncludesSignatureHeader(t *testing.T) {
@@ -337,5 +495,72 @@ func TestSendNoSecretOmitsSignature(t *testing.T) {
 	}
 	if gotSig != "" {
 		t.Errorf("X-Webhook-Signature should be empty when no secret, got %q", gotSig)
+	}
+}
+
+// ── Timestamp zero branch (lines 132–133) ────────────────────────────────────
+
+// Send with Timestamp=0 triggers the auto-fill branch that sets it to time.Now().Unix().
+func TestSend_TimestampZero_AutoFills(t *testing.T) {
+	received := make(chan struct{}, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received <- struct{}{}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	d := New(testContact(ts.URL), "vidveil", "1.0.0", ts.URL)
+	p := testPayload()
+	p.Timestamp = 0
+	d.Send(context.Background(), RoleAdmin, p)
+
+	select {
+	case <-received:
+	case <-time.After(3 * time.Second):
+		t.Error("TimestampZero: webhook server never reached")
+	}
+}
+
+// ── Empty webhook URL skipped (lines 141–142) ─────────────────────────────────
+
+// Send with an empty webhook URL skips dispatch without panicking.
+func TestSend_EmptyWebhookURL_SkipsDispatch(t *testing.T) {
+	d := New(testContact(""), "vidveil", "1.0.0", "https://example.com")
+	d.Send(context.Background(), RoleAdmin, testPayload())
+	// Must not panic; no network call is made.
+}
+
+// ── dispatchWebhook switch cases (lines 227–238) ─────────────────────────────
+
+// TestSend_WebhookTransports_CoversSwitchCases exercises each named transport case
+// in the dispatchWebhook switch (telegram, discord, slack, mattermost, pushover, gotify).
+func TestSend_WebhookTransports_CoversSwitchCases(t *testing.T) {
+	transports := []string{"telegram", "discord", "slack", "mattermost", "pushover", "gotify"}
+	for _, transport := range transports {
+		t.Run(transport, func(t *testing.T) {
+			received := make(chan struct{}, 1)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				select {
+				case received <- struct{}{}:
+				default:
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+
+			d := New(nil, "vidveil", "1.0.0", "https://example.com")
+			d.httpClient = srv.Client()
+
+			err := d.send(context.Background(), transport, srv.URL, "", "uuid-"+transport, testPayload())
+			if err != nil {
+				t.Errorf("send %s: %v", transport, err)
+			}
+
+			select {
+			case <-received:
+			case <-time.After(3 * time.Second):
+				t.Errorf("%s: server was never reached", transport)
+			}
+		})
 	}
 }

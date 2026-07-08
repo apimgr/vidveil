@@ -466,6 +466,12 @@ func main() {
 	if port != "" {
 		appConfig.Server.Port = port
 	}
+	// Per AI.md PART 12: CLI --baseurl overrides server.baseurl config value.
+	if baseURL != "" {
+		appConfig.Server.BaseURL = baseURL
+	} else if appConfig.Server.BaseURL == "" {
+		appConfig.Server.BaseURL = "/"
+	}
 
 	// Apply mode (CLI > env > config, normalized)
 	if modeStr != "" {

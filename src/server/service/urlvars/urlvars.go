@@ -168,6 +168,60 @@ func (r *URLResolver) GetURLVars(req *http.Request) (proto, fqdn, port string) {
 	return
 }
 
+// resolvePathPrefix resolves the base URL path prefix per AI.md PART 12 priority order.
+// Priority 1: X-Forwarded-Prefix (from trusted proxy)
+// Priority 2: X-Forwarded-Path (alternative, from trusted proxy)
+// Priority 3: X-Script-Name (WSGI-style, from trusted proxy)
+// Priority 4: server.baseurl config / BASEURL env var / --baseurl CLI flag
+// Priority 5: "/"
+func (r *URLResolver) resolvePathPrefix(req *http.Request) string {
+	// Reverse proxy headers only trusted from known-good peers
+	if r.isTrustedProxy(req.RemoteAddr) {
+		if prefix := req.Header.Get("X-Forwarded-Prefix"); prefix != "" {
+			return normalizePathPrefix(prefix)
+		}
+		if prefix := req.Header.Get("X-Forwarded-Path"); prefix != "" {
+			return normalizePathPrefix(prefix)
+		}
+		if prefix := req.Header.Get("X-Script-Name"); prefix != "" {
+			return normalizePathPrefix(prefix)
+		}
+	}
+
+	// Config value (populated from server.baseurl YAML or --baseurl CLI flag via BASEURL env)
+	r.mu.RLock()
+	cfg := r.appCfg
+	r.mu.RUnlock()
+	if cfg != nil && cfg.Server.BaseURL != "" && cfg.Server.BaseURL != "/" {
+		return normalizePathPrefix(cfg.Server.BaseURL)
+	}
+
+	// BASEURL env var (set by main.go from --baseurl or env)
+	if baseurl := os.Getenv("BASEURL"); baseurl != "" && baseurl != "/" {
+		return normalizePathPrefix(baseurl)
+	}
+
+	return "/"
+}
+
+// normalizePathPrefix ensures the prefix starts with "/" and has no trailing slash.
+// "/" is returned as-is. Empty string becomes "/".
+func normalizePathPrefix(s string) string {
+	s = strings.TrimRight(s, "/")
+	if s == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(s, "/") {
+		s = "/" + s
+	}
+	return s
+}
+
+// GetPathPrefix returns the resolved path prefix for the given request.
+func (r *URLResolver) GetPathPrefix(req *http.Request) string {
+	return r.resolvePathPrefix(req)
+}
+
 // resolveProto resolves protocol per AI.md PART 12 priority order.
 // X-Forwarded-* headers are only honored from trusted proxy peers.
 // Tor requests always return "http" — TLS terminates in the Tor layer.
@@ -459,10 +513,18 @@ func extractBaseDomain(hostname string) string {
 // :80 and :443 are NEVER included
 func (r *URLResolver) BuildURL(req *http.Request, path string) string {
 	proto, fqdn, port := r.GetURLVars(req)
+	prefix := r.resolvePathPrefix(req)
+	// Avoid double-slash: if prefix is "/" treat as empty path component.
+	var base string
 	if port == "" {
-		return proto + "://" + fqdn + path
+		base = proto + "://" + fqdn
+	} else {
+		base = proto + "://" + fqdn + ":" + port
 	}
-	return proto + "://" + fqdn + ":" + port + path
+	if prefix == "/" {
+		return base + path
+	}
+	return base + prefix + path
 }
 
 // GetBaseDomain returns inferred base domain from learning
@@ -532,20 +594,31 @@ func GetWildcardDomain() string {
 	return GlobalResolver().GetWildcardDomain()
 }
 
+// GetPathPrefix is a convenience function using global resolver
+func GetPathPrefix(req *http.Request) string {
+	return GlobalResolver().GetPathPrefix(req)
+}
+
 // Middleware returns HTTP middleware that sets X-Resolved-* headers for templates
 func (r *URLResolver) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		proto, fqdn, port := r.GetURLVars(req)
+		prefix := r.resolvePathPrefix(req)
 		// Set resolved values as headers for downstream handlers
 		req.Header.Set("X-Resolved-Proto", proto)
 		req.Header.Set("X-Resolved-Host", fqdn)
 		if port != "" {
 			req.Header.Set("X-Resolved-Port", port)
 		}
-		// Set full base URL for convenience
+		// X-Resolved-PathPrefix: "/" means root (no prefix)
+		req.Header.Set("X-Resolved-PathPrefix", prefix)
+		// Set full base URL including path prefix for convenience
 		baseURL := proto + "://" + fqdn
 		if port != "" {
 			baseURL += ":" + port
+		}
+		if prefix != "/" {
+			baseURL += prefix
 		}
 		req.Header.Set("X-Resolved-BaseURL", baseURL)
 		next.ServeHTTP(w, req)

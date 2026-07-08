@@ -53,6 +53,10 @@ type ServerConfig struct {
 	Port    string `yaml:"port"`
 	FQDN    string `yaml:"fqdn"`
 	Address string `yaml:"address"`
+	// BaseURL is the URL path prefix per AI.md PART 12.
+	// Priority: X-Forwarded-Prefix > X-Forwarded-Path > X-Script-Name > this value > "/"
+	// CLI flag: --baseurl PATH; env var: BASEURL
+	BaseURL string `yaml:"baseurl"`
 
 	// Application mode: production or development
 	// Can be overridden by MODE env var or --mode CLI flag
@@ -877,6 +881,7 @@ func DefaultAppConfig() *AppConfig {
 			Port:    defaultPort,
 			FQDN:    fqdn,
 			Address: "[::]",
+			BaseURL: "/",
 			Mode:    "production",
 			Branding: ServerBrandingConfig{
 				Title:       "Vidveil",

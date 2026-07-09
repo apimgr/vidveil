@@ -20,7 +20,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/graphql"
-	"github.com/apimgr/vidveil/src/paths"
+	"github.com/apimgr/vidveil/src/path"
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
@@ -154,7 +154,7 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(URLNormalizeMiddleware)
 
 	// Path Security (AI.md PART 5 - must be early in chain)
-	s.router.Use(paths.PathSecurityMiddleware)
+	s.router.Use(path.PathSecurityMiddleware)
 
 	// Logger
 	s.router.Use(middleware.Logger)
@@ -896,7 +896,7 @@ func extractClientIP(r *http.Request) string {
 //
 // Rules per PART 11:
 //   - Sec-Fetch-Site: reject cross-site on POST/PUT/PATCH/DELETE without Bearer token
-//     and path not in CSRF exempt paths.
+//     and path not in CSRF exempt path.
 //   - Sec-Fetch-Mode: reject navigate on /api/* endpoints (unintended top-level nav).
 //   - Sec-Fetch-Dest: reject iframe on endpoints not in frame-ancestors allow-list.
 func secFetchValidationMiddleware(next http.Handler) http.Handler {

@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/apimgr/vidveil/src/client/paths"
+	"github.com/apimgr/vidveil/src/client/path"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,7 +48,7 @@ func RunLoginCommand(args []string) error {
 	}
 
 	// Save token to token file
-	tokenFileLocation := paths.TokenFile()
+	tokenFileLocation := path.TokenFile()
 	if err := WriteCLIDefaultTokenFile(apiTokenInput); err != nil {
 		return err
 	}
@@ -112,5 +112,5 @@ You can also use environment variables or flags:
   VIDVEIL_TOKEN     API token (canonical)
   VIDVEIL_CLI_TOKEN API token compatibility alias
   --token-file      Read token from a file
-`, BinaryName, paths.TokenFile(), paths.ConfigFile())
+`, BinaryName, path.TokenFile(), path.ConfigFile())
 }

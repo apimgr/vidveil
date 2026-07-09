@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apimgr/vidveil/src/paths"
+	"github.com/apimgr/vidveil/src/path"
 	"gopkg.in/yaml.v3"
 )
 
-// paths.ProjectOrg and paths.ProjectName are defined in paths package
+// path.ProjectOrg and path.ProjectName are defined in paths package
 
 // Version is set at build time via ldflags
 var Version = "dev"
@@ -138,6 +138,9 @@ type ServerConfig struct {
 
 	// SEO holds SEO and social metadata settings per AI.md PART 16
 	SEO SEOConfig `yaml:"seo"`
+
+	// Update holds release-channel and auto-install settings per AI.md PART 22
+	Update UpdateConfig `yaml:"update"`
 }
 
 // HealthzConfig holds health-check route configuration per AI.md PART 13
@@ -574,6 +577,18 @@ type BackupEncryptionConfig struct {
 	PasswordHint string `yaml:"password_hint,omitempty"`
 }
 
+// UpdateConfig holds update settings per AI.md PART 22
+type UpdateConfig struct {
+	// Branch: release channel — stable | beta | daily (default: stable)
+	Branch string `yaml:"branch"`
+	// AutoInstall: when true the update_check scheduler task installs eligible updates automatically
+	// Default: false — the task notifies only; installing is always an explicit operator decision
+	AutoInstall bool `yaml:"auto_install"`
+	// DeferDays: a release must be at least this many days old before the task considers it eligible
+	// 0 = immediately eligible; 30 = adopt only after 30 days of public availability
+	DeferDays int `yaml:"defer_days"`
+}
+
 // SessionConfig holds session settings
 type SessionConfig struct {
 	CookieName string `yaml:"cookie_name"`
@@ -868,7 +883,7 @@ type AgeVerificationConfig struct {
 
 // AppPaths holds resolved directory paths
 // AppPaths is now defined in paths package
-type AppPaths = paths.AppPaths
+type AppPaths = path.AppPaths
 
 // DefaultAppConfig returns an AppConfig with sensible defaults per AI.md
 func DefaultAppConfig() *AppConfig {
@@ -1110,6 +1125,13 @@ func DefaultAppConfig() *AppConfig {
 			// Hidden service auto-enabled if tor binary found
 			// Outbound network disabled by default - can be enabled for privacy
 			Tor: DefaultTorConfig(),
+			// Update settings per AI.md PART 22
+			// Branch: stable by default; auto_install: false (notify-only); defer_days: 0
+			Update: UpdateConfig{
+				Branch:      "stable",
+				AutoInstall: false,
+				DeferDays:   0,
+			},
 		},
 		Web: WebConfig{
 			UI: UIConfig{
@@ -1190,12 +1212,12 @@ func DefaultAppConfig() *AppConfig {
 
 // GetAppPaths returns OS-appropriate paths (delegated to paths package)
 func GetAppPaths(configDir, dataDir string) *AppPaths {
-	return paths.GetAppPaths(configDir, dataDir)
+	return path.GetAppPaths(configDir, dataDir)
 }
 
 // GetDatabaseDir returns the SQLite database directory.
 func GetDatabaseDir(dataDir string) string {
-	return paths.GetDatabaseDir(dataDir)
+	return path.GetDatabaseDir(dataDir)
 }
 
 // LoadAppConfig loads configuration from file or creates default
@@ -1740,7 +1762,7 @@ func isDevTLD(fqdn string) bool {
 		".local", ".test", ".example", ".invalid",
 		".localhost", ".lan", ".internal", ".home", ".localdomain",
 		".home.arpa", ".intranet", ".corp", ".private",
-		"." + paths.ProjectName,
+		"." + path.ProjectName,
 	}
 	for _, suffix := range devSuffixes {
 		if strings.HasSuffix(lower, suffix) {

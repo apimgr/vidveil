@@ -861,6 +861,8 @@ type BuiltinTaskFuncs struct {
 	HealthcheckSelf TaskFunc
 	// tor.health - Every 10 minutes, check Tor connectivity
 	TorHealth TaskFunc
+	// update_check - Daily at 06:00 per AI.md PART 18/22: notify-only unless auto_install is true
+	UpdateCheck TaskFunc
 }
 
 // RegisterBuiltinTasks registers all built-in scheduled tasks per AI.md
@@ -950,6 +952,14 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 		s.RegisterTask("tor_health", "Tor Health Check",
 			"Check Tor connectivity and restart if needed",
 			"10m", funcs.TorHealth)
+	}
+
+	// update_check - Daily at 06:00 per AI.md PART 18/22
+	// Notify-only unless update.auto_install is true; honors update.defer_days
+	if funcs.UpdateCheck != nil {
+		s.RegisterTask("update_check", "Update Check",
+			"Check release channel for a newer version; notify or auto-install per config",
+			"0 6 * * *", funcs.UpdateCheck)
 	}
 
 }

@@ -636,6 +636,37 @@ func main() {
 			}
 			return nil
 		},
+		UpdateCheck: func(ctx context.Context) error {
+			// Update check per AI.md PART 18/22 — daily at 06:00
+			// Notify-only unless update.auto_install is true; honors update.defer_days
+			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
+			info, err := maint.CheckUpdate()
+			if err != nil {
+				return fmt.Errorf("update check: %w", err)
+			}
+			if !info.UpdateAvailable {
+				return nil
+			}
+			// Apply defer_days gate: skip releases younger than defer_days
+			deferDays := appConfig.Server.Update.DeferDays
+			if deferDays > 0 && !info.PublishedAt.IsZero() {
+				cutoff := info.PublishedAt.AddDate(0, 0, deferDays)
+				if time.Now().Before(cutoff) {
+					return nil
+				}
+			}
+			// Notify via structured log — event consumed by the email/webhook notification path
+			logger.Info("update available", map[string]interface{}{
+				"current": info.CurrentVersion,
+				"latest":  info.LatestVersion,
+				"url":     info.ReleaseURL,
+			})
+			// Auto-install only when explicitly configured
+			if appConfig.Server.Update.AutoInstall {
+				return maint.ApplyUpdate(info.DownloadURL)
+			}
+			return nil
+		},
 	})
 
 	// Set Tor provider for engine manager per PART 31

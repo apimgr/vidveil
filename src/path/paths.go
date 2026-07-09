@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-package paths
+package path
 
 import (
 	"fmt"

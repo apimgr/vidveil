@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 5: Path Security Functions
-package paths
+package path
 
 import (
 	"errors"
 	"net/http"
-	"path"
+	stdpath "path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -30,8 +30,8 @@ func normalizePath(input string) string {
 		return ""
 	}
 
-	// Use path.Clean to handle .., ., and //
-	cleaned := path.Clean(input)
+	// Use stdpath.Clean to handle .., ., and //
+	cleaned := stdpath.Clean(input)
 
 	// Strip leading/trailing slashes
 	cleaned = strings.Trim(cleaned, "/")
@@ -143,7 +143,7 @@ func PathSecurityMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Normalize the path
-		cleaned := path.Clean(original)
+		cleaned := stdpath.Clean(original)
 
 		// Ensure leading slash
 		if !strings.HasPrefix(cleaned, "/") {

@@ -949,42 +949,36 @@ func (m *MaintenanceManager) ResetAdminCredentials() (string, error) {
 	return setupToken, nil
 }
 
-// SetUpdateBranch sets the update branch (stable, beta, daily) per AI.md PART 22
+// SetUpdateBranch sets the update branch (stable, beta, daily) per AI.md PART 22.
+// Writes update.branch to server.yml — the config is the single source of truth.
 func (m *MaintenanceManager) SetUpdateBranch(branch string) error {
-	branchFile := filepath.Join(m.paths.Config, "update-branch")
-
 	// Validate branch
 	validBranches := map[string]bool{"stable": true, "beta": true, "daily": true}
 	if !validBranches[branch] {
 		return fmt.Errorf("invalid branch: %s (valid: stable, beta, daily)", branch)
 	}
 
-	// Ensure config directory exists
-	if err := os.MkdirAll(m.paths.Config, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+	// Load the current config, update branch, and save back to server.yml
+	configPath := filepath.Join(m.paths.Config, "server.yml")
+	cfg, _, err := config.LoadAppConfig(m.paths.Config, m.paths.Data)
+	if err != nil {
+		return fmt.Errorf("failed to load config to set update branch: %w", err)
 	}
+	cfg.Server.Update.Branch = branch
 
-	// Write branch file
-	if err := os.WriteFile(branchFile, []byte(branch), 0644); err != nil {
-		return fmt.Errorf("failed to set update branch: %w", err)
+	if err := config.SaveAppConfig(cfg, configPath); err != nil {
+		return fmt.Errorf("failed to save config with new update branch: %w", err)
 	}
-
 	return nil
 }
 
-// GetUpdateBranch gets the current update branch (defaults to stable)
+// GetUpdateBranch gets the current update branch from server.yml (defaults to stable)
 func (m *MaintenanceManager) GetUpdateBranch() string {
-	branchFile := filepath.Join(m.paths.Config, "update-branch")
-	data, err := os.ReadFile(branchFile)
-	// Default per AI.md
-	if err != nil {
+	cfg, _, err := config.LoadAppConfig(m.paths.Config, m.paths.Data)
+	if err != nil || cfg.Server.Update.Branch == "" {
 		return "stable"
 	}
-	branch := strings.TrimSpace(string(data))
-	if branch == "" {
-		return "stable"
-	}
-	return branch
+	return cfg.Server.Update.Branch
 }
 
 // Helper to add directory to tar

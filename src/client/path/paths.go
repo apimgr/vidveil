@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 32: CLI Client - OS-specific paths
-package paths
+package path
 
 import (
 	"os"

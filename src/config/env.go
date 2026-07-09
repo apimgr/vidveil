@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/apimgr/vidveil/src/paths"
+	"github.com/apimgr/vidveil/src/path"
 )
 
 // EnvPrefix is the project env var prefix derived from the project name
-var EnvPrefix = strings.ToUpper(paths.ProjectName) + "_"
+var EnvPrefix = strings.ToUpper(path.ProjectName) + "_"
 
 // ApplyEnvOverrides walks the config struct and applies {PREFIX}_{PATH} env overrides.
 // Two names are checked per field: the full yaml path (VIDVEIL_SERVER_DATABASE_TYPE) and,

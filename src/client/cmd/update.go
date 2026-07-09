@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/apimgr/vidveil/src/client/paths"
+	"github.com/apimgr/vidveil/src/client/path"
 )
 
 // CLIUpdateBranchFile is the on-disk record of the user-selected update channel.
@@ -197,7 +197,7 @@ func runCLIUpdateBranch(branch string) error {
 
 // SetCLIUpdateBranch persists the selected branch to the CLI config dir.
 func SetCLIUpdateBranch(branch string) error {
-	configDir := paths.ConfigDir()
+	configDir := path.ConfigDir()
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
@@ -210,7 +210,7 @@ func SetCLIUpdateBranch(branch string) error {
 
 // GetCLIUpdateBranch returns the persisted branch (defaulting to stable).
 func GetCLIUpdateBranch() string {
-	branchFile := filepath.Join(paths.ConfigDir(), CLIUpdateBranchFile)
+	branchFile := filepath.Join(path.ConfigDir(), CLIUpdateBranchFile)
 	data, err := os.ReadFile(branchFile)
 	if err != nil {
 		return "stable"
@@ -271,7 +271,7 @@ func cliReleaseBinaryName() string {
 }
 
 func fetchLatestCLIStableRelease() (*CLIGitHubRelease, error) {
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", paths.GitHubOrg(), paths.GitHubRepo())
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", path.GitHubOrg(), path.GitHubRepo())
 	resp, err := http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetching latest release: %w", err)
@@ -288,7 +288,7 @@ func fetchLatestCLIStableRelease() (*CLIGitHubRelease, error) {
 }
 
 func fetchAllCLIReleases() ([]CLIGitHubRelease, error) {
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=50", paths.GitHubOrg(), paths.GitHubRepo())
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=50", path.GitHubOrg(), path.GitHubRepo())
 	resp, err := http.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetching releases: %w", err)
@@ -341,7 +341,7 @@ func downloadCLIBinary(downloadURL string) (string, error) {
 		return "", fmt.Errorf("download status %d", resp.StatusCode)
 	}
 
-	tmpDir := filepath.Join(os.TempDir(), paths.GitHubOrg())
+	tmpDir := filepath.Join(os.TempDir(), path.GitHubOrg())
 	if err := os.MkdirAll(tmpDir, 0700); err != nil {
 		return "", fmt.Errorf("creating temp dir: %w", err)
 	}

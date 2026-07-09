@@ -150,7 +150,7 @@ func (c *APIClient) Autodiscover() (*AutodiscoverResponse, error) {
 
 // Health checks if the server is reachable
 func (c *APIClient) Health() (bool, error) {
-	url := fmt.Sprintf("%s/healthz", c.GetAPIBaseURL())
+	url := fmt.Sprintf("%s/server/healthz", c.GetAPIBaseURL())
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

@@ -944,7 +944,7 @@ func checkStatus() int {
 	}
 	conn.Close()
 
-	// Server is listening - query /healthz for mode, uptime, and Tor status
+	// Server is listening - query /server/healthz for mode, uptime, and Tor status
 	health := queryHealthz("", "")
 	if health == nil {
 		fmt.Println("Server Status: Starting")

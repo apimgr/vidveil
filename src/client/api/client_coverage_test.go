@@ -150,7 +150,7 @@ func TestAutodiscover_ServerError(t *testing.T) {
 
 func TestHealth_Returns200WhenUp(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/server/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	client, _ := newTestServer(t, mux)
@@ -166,7 +166,7 @@ func TestHealth_Returns200WhenUp(t *testing.T) {
 
 func TestHealth_Returns503WhenDown(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/server/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	})
 	client, _ := newTestServer(t, mux)

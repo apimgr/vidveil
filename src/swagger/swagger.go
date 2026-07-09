@@ -161,10 +161,10 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 					},
 				},
 			},
-			"/api/v1/healthz": map[string]interface{}{
+			"/api/v1/server/healthz": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "Health check",
-					"description": "Get API health status (per PART 13)",
+					"description": "Get API health status (per AI.md PART 13)",
 					"responses": map[string]interface{}{
 						"200": map[string]interface{}{
 							"description": "Healthy",
@@ -177,10 +177,10 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 					},
 				},
 			},
-			"/healthz": map[string]interface{}{
+			"/server/healthz": map[string]interface{}{
 				"get": map[string]interface{}{
-					"summary":     "Kubernetes health",
-					"description": "Kubernetes-style health endpoint",
+					"summary":     "Health check (frontend)",
+					"description": "Frontend health endpoint with smart content negotiation (per AI.md PART 13)",
 					"responses": map[string]interface{}{
 						"200": map[string]interface{}{
 							"description": "OK",

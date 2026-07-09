@@ -112,7 +112,7 @@ type healthzResponse struct {
 	} `json:"features"`
 }
 
-// queryHealthz fetches /healthz JSON from the running server, or nil if not running
+// queryHealthz fetches /server/healthz JSON from the running server, or nil if not running
 func queryHealthz(configDir, dataDir string) *healthzResponse {
 	cfg, _, err := config.LoadAppConfig(configDir, dataDir)
 	if err != nil {
@@ -121,7 +121,7 @@ func queryHealthz(configDir, dataDir string) *healthzResponse {
 
 	addr := net.JoinHostPort("127.0.0.1", cfg.Server.Port)
 	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequest("GET", fmt.Sprintf("http://%s/healthz", addr), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://%s/server/healthz", addr), nil)
 	if err != nil {
 		return nil
 	}

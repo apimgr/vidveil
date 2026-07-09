@@ -708,13 +708,17 @@ type SEOConfig struct {
 	Verification SEOVerificationConfig `yaml:"verification"`
 }
 
-// CSRFConfig holds CSRF settings
+// CSRFConfig holds CSRF settings per AI.md PART 16 → CSRF Protection
 type CSRFConfig struct {
-	Enabled     bool   `yaml:"enabled"`
-	TokenLength int    `yaml:"token_length"`
-	CookieName  string `yaml:"cookie_name"`
-	HeaderName  string `yaml:"header_name"`
-	Secure      string `yaml:"secure"`
+	Enabled     bool     `yaml:"enabled"`
+	TokenLength int      `yaml:"token_length"`
+	CookieName  string   `yaml:"cookie_name"`
+	HeaderName  string   `yaml:"header_name"`
+	// Secure sets the Secure cookie flag: "auto" (https only), "true", or "false"
+	Secure      string   `yaml:"secure"`
+	// ExemptPaths lists endpoints exempt from CSRF (OAuth callbacks, webhook receivers).
+	// Glob patterns supported. Default exempts /api/{api_version}/webhooks/*.
+	ExemptPaths []string `yaml:"exempt_paths"`
 }
 
 // FooterConfig holds footer settings
@@ -1062,7 +1066,9 @@ func DefaultAppConfig() *AppConfig {
 				MaxAge:   2592000,
 				Secure:   "auto",
 				HTTPOnly: true,
-				SameSite: "lax",
+				// Strict per AI.md PART 16: blocks cross-site cookie attachment entirely,
+				// neutralizing most CSRF before the token check even runs.
+				SameSite: "strict",
 			},
 			Cache: CacheConfig{
 				Type:   "memory",
@@ -1155,6 +1161,7 @@ func DefaultAppConfig() *AppConfig {
 				CookieName:  "csrf_token",
 				HeaderName:  "X-CSRF-Token",
 				Secure:      "auto",
+				ExemptPaths: []string{"/api/v1/webhooks/*"},
 			},
 			Footer: FooterConfig{
 				CookieConsent: CookieConsentConfig{
@@ -1353,8 +1360,8 @@ func validateConfig(cfg *AppConfig) {
 	// Validate session same_site (must be strict, lax, or none)
 	sameSite := strings.ToLower(cfg.Server.Session.SameSite)
 	if sameSite != "" && sameSite != "strict" && sameSite != "lax" && sameSite != "none" {
-		fmt.Fprintf(os.Stderr, "Warning: invalid session.same_site %q, using default 'lax'\n", cfg.Server.Session.SameSite)
-		cfg.Server.Session.SameSite = "lax"
+		fmt.Fprintf(os.Stderr, "Warning: invalid session.same_site %q, using default 'strict'\n", cfg.Server.Session.SameSite)
+		cfg.Server.Session.SameSite = "strict"
 	}
 
 	// Validate compression level (1-9)

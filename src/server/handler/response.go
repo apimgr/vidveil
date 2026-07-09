@@ -208,6 +208,12 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 	// Inject locale and direction per AI.md PART 30 (<html lang="{{.Lang}}" dir="{{.Dir}}">)
 	injectLocaleData(r, data)
 
+	// Inject CSRF token per AI.md PART 16 — server-rendered HTML always provides the
+	// token in template data so POST forms can include the hidden input automatically.
+	if data["CSRFToken"] == nil {
+		data["CSRFToken"] = CSRFTokenFromRequest(r)
+	}
+
 	accept := r.Header.Get("Accept")
 
 	// 2. Accept: text/plain explicitly requested — per AI.md PART 14 returns formatted text

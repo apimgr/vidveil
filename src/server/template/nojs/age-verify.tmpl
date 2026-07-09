@@ -19,6 +19,7 @@
             <div class="age-buttons">
                 <form method="POST" action="/age-verify" class="d-inline">
                     <input type="hidden" name="redirect" value="{{.Redirect}}">
+                    {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
                     <button type="submit" class="btn-yes">I am 18+</button>
                 </form>
                 <a href="https://www.google.com" class="btn-no">Exit</a>

@@ -53,6 +53,22 @@ type contextKey string
 // OriginalPathKey is the context key for storing the original request path before extension stripping.
 const OriginalPathKey contextKey = "vidveil.originalPath"
 
+// csrfContextKeyType is an exported struct type for the CSRF context key.
+// Using an exported struct type prevents collisions and lets the server package
+// reference handler.CSRFTokenKey without exporting the contextKey string type.
+type csrfContextKeyType struct{}
+
+// CSRFTokenKey is the context key used by the CSRF middleware to store the token.
+// The server package writes the key; the handler package reads it.
+var CSRFTokenKey = csrfContextKeyType{}
+
+// CSRFTokenFromRequest reads the CSRF token from the request context.
+// Returns an empty string when the CSRF middleware did not run (e.g., bypassed request).
+func CSRFTokenFromRequest(r *http.Request) string {
+	v, _ := r.Context().Value(CSRFTokenKey).(string)
+	return v
+}
+
 const (
 	ageVerifyCookieName = "age_verified"
 	ageVerifyCookieDays = 30

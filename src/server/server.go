@@ -262,6 +262,13 @@ func (s *Server) setupMiddleware() {
 	// and clickjacking. Present-and-bad reject only; absence is a legacy-browser pass.
 	s.router.Use(secFetchValidationMiddleware)
 
+	// CSRF double-submit cookie middleware per AI.md PART 16 → CSRF Protection.
+	// Runs after Sec-Fetch-* (which blocks cross-site requests from modern browsers)
+	// as the second CSRF layer for legacy browsers without Sec-Fetch-* headers.
+	if s.appConfig.Web.CSRF.Enabled {
+		s.router.Use(newCSRFMiddleware(s.appConfig.Web.CSRF, s.appConfig.Server.Session.CookieName, s.logger))
+	}
+
 	// Request body size limiting per AI.md PART 12 (max_body_size default 10MB)
 	// Applied before handler so untrusted input is size-capped per memory safety rules
 	maxBodyBytes := parseBodySize(s.appConfig.Server.Limits.MaxBodySize, 10*1024*1024)

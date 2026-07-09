@@ -21,6 +21,7 @@
         {{if .ContactEnabled}}
         <h2>Contact Form</h2>
         <form method="POST" action="/server/contact" class="preferences-form">
+            {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             <div class="form-group">
                 <label class="form-label" for="email">Your Email (optional)</label>
                 <input class="form-input" type="email" id="email" name="email" placeholder="your@email.com">

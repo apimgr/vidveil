@@ -11,6 +11,7 @@
         <p><em>Note: Preferences are stored in your browser's cookies and local storage. No server-side tracking.</em></p>
         
         <form method="post" action="/preferences/save">
+            {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             <section>
                 <h2>Appearance</h2>
                 <div class="form-group">

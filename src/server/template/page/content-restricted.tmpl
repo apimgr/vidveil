@@ -27,6 +27,7 @@
             <div class="age-buttons">
                 <form method="POST" action="/content-restricted" class="d-inline">
                     <input type="hidden" name="redirect" value="{{.Redirect}}">
+                    {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
                     <button type="submit" class="btn-yes">I Understand &amp; Proceed</button>
                 </form>
                 <button class="btn-no" onclick="window.location.href='https://www.google.com'">Exit</button>

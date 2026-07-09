@@ -102,6 +102,24 @@ Valid until: {valid_until}
 {app_name}
 {app_url}`,
 
+	"ssl_renewal_failed": `Subject: SSL Renewal Failed - {app_name}
+---
+SSL CERTIFICATE RENEWAL FAILED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+Automatic SSL certificate renewal failed for domain: {fqdn}
+
+Error: {error}
+
+Current certificate expires in {expires_in} days ({expiry_date}).
+The system will retry automatically: {next_retry}
+
+--
+{app_name}
+{app_url}`,
+
 	"scheduler_error": `Subject: Scheduled Task Failed - {app_name}
 ---
 SCHEDULED TASK FAILED
@@ -421,11 +439,38 @@ func (s *EmailService) sendTLS(addr, host string, auth smtp.Auth, from, to strin
 	return client.Quit()
 }
 
+// buildSMTPAutodetectHosts builds the SMTP autodetect host list per AI.md PART 17 priority order:
+// 1: 127.0.0.1, 2: Docker bridge 172.17.0.1, 3: default gateway, 4: FQDN,
+// 5: global IPv4, 6: mail.{fqdn}, 7: smtp.{fqdn}.
+func buildSMTPAutodetectHosts(fqdn string) []string {
+	hosts := []string{"127.0.0.1", "172.17.0.1"}
+	if gw := getGatewayIP(); gw != "" {
+		hosts = append(hosts, gw)
+	}
+	if fqdn != "" && fqdn != "localhost" {
+		hosts = append(hosts, fqdn)
+	}
+	// Global IPv4 via outbound route probe (priority 5)
+	if conn, err := net.Dial("udp", "8.8.8.8:80"); err == nil {
+		if udp, ok := conn.LocalAddr().(*net.UDPAddr); ok && !udp.IP.IsLoopback() && !udp.IP.IsPrivate() {
+			hosts = append(hosts, udp.IP.String())
+		}
+		conn.Close()
+	}
+	if fqdn != "" && fqdn != "localhost" {
+		hosts = append(hosts, "mail."+fqdn, "smtp."+fqdn)
+	}
+	return hosts
+}
+
 // autodetectSMTP tries to find an SMTP server per AI.md PART 17
 func (s *EmailService) autodetectSMTP() (string, int) {
-	hosts := s.appConfig.Server.Email.AutodetectHost
+	customHosts := s.appConfig.Server.Email.AutodetectHost
 	ports := s.appConfig.Server.Email.AutodetectPort
-	return AutodetectSMTP(hosts, ports)
+	if len(customHosts) == 0 {
+		customHosts = buildSMTPAutodetectHosts(s.appConfig.Server.FQDN)
+	}
+	return AutodetectSMTP(customHosts, ports)
 }
 
 // AutodetectSMTP tries to find an SMTP server per AI.md PART 17
@@ -434,9 +479,8 @@ func (s *EmailService) autodetectSMTP() (string, int) {
 func AutodetectSMTP(customHosts []string, customPorts []int) (string, int) {
 	hosts := customHosts
 	if len(hosts) == 0 {
-		// Per AI.md PART 17: Check localhost, 127.0.0.1, Docker host, gateway
-		hosts = []string{"localhost", "127.0.0.1", "172.17.0.1"}
-		// Try to get gateway IP
+		// Per AI.md PART 17: full priority list (no FQDN available here)
+		hosts = []string{"127.0.0.1", "172.17.0.1"}
 		if gw := getGatewayIP(); gw != "" {
 			hosts = append(hosts, gw)
 		}

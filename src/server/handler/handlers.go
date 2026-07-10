@@ -107,7 +107,7 @@ const IPForwardCookieName = "forward_ip"
 // getRequestTheme returns the user's theme preference from their cookie, falling
 // back to the server-configured default. Valid values: "dark", "light", "auto".
 func (h *SearchHandler) getRequestTheme(r *http.Request) string {
-	if c, err := r.Cookie("vidveil-theme"); err == nil {
+	if c, err := r.Cookie("theme"); err == nil {
 		switch c.Value {
 		case "dark", "light", "auto":
 			return c.Value

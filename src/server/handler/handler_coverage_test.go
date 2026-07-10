@@ -29,7 +29,7 @@ func TestGetRequestTheme_LightCookie(t *testing.T) {
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/", nil)
-	req.AddCookie(&http.Cookie{Name: "vidveil-theme", Value: "light"})
+	req.AddCookie(&http.Cookie{Name: "theme", Value: "light"})
 	got := h.getRequestTheme(req)
 	if got != "light" {
 		t.Errorf("getRequestTheme light cookie = %q, want %q", got, "light")
@@ -41,7 +41,7 @@ func TestGetRequestTheme_AutoCookie(t *testing.T) {
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/", nil)
-	req.AddCookie(&http.Cookie{Name: "vidveil-theme", Value: "auto"})
+	req.AddCookie(&http.Cookie{Name: "theme", Value: "auto"})
 	got := h.getRequestTheme(req)
 	if got != "auto" {
 		t.Errorf("getRequestTheme auto cookie = %q, want %q", got, "auto")
@@ -53,7 +53,7 @@ func TestGetRequestTheme_InvalidCookie(t *testing.T) {
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/", nil)
-	req.AddCookie(&http.Cookie{Name: "vidveil-theme", Value: "rainbow"})
+	req.AddCookie(&http.Cookie{Name: "theme", Value: "rainbow"})
 	got := h.getRequestTheme(req)
 	if got != "dark" {
 		t.Errorf("getRequestTheme invalid cookie = %q, want config default %q", got, "dark")

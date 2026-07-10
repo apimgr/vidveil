@@ -14,7 +14,7 @@ function setTheme(theme) {
     // Set cookie so server can render the correct theme class on initial load
     // (prevents FOUC for no-JS users and speeds up first paint for JS users)
     var maxAge = 365 * 24 * 3600; // 1 year
-    document.cookie = 'vidveil-theme=' + encodeURIComponent(theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+    document.cookie = 'theme=' + encodeURIComponent(theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
 
     // Update meta theme-color for mobile browsers
     updateMetaThemeColor(theme);

@@ -465,11 +465,24 @@ function showNotification(message, type = 'info') {
 // ============================================================================
 // API Helpers
 // ============================================================================
+// Read the csrf_token cookie for the CSRF double-submit pattern (AI.md PART 16)
+function getCsrfToken() {
+    var match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
 async function fetchAPI(endpoint, options = {}) {
     try {
+        var method = (options.method || 'GET').toUpperCase();
+        // Add X-CSRF-Token header on non-GET/HEAD/OPTIONS requests (AI.md PART 16 CSRF)
+        var csrfHeaders = {};
+        if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+            csrfHeaders['X-CSRF-Token'] = getCsrfToken();
+        }
         const response = await fetch(`/api${endpoint}`, {
             headers: {
                 'Content-Type': 'application/json',
+                ...csrfHeaders,
                 ...options.headers
             },
             ...options

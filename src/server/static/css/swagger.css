@@ -59,10 +59,10 @@ code { font-family: "Fira Code", Consolas, monospace; font-size: 13px; }
     font-family: monospace;
 }
 
-.method-get    { background: #22c55e22; color: #22c55e; }
-.method-post   { background: #3b82f622; color: #3b82f6; }
-.method-put    { background: #f59e0b22; color: #f59e0b; }
-.method-delete { background: #ef444422; color: #ef4444; }
+.method-get    { background: var(--color-method-get-bg); color: var(--color-method-get); }
+.method-post   { background: var(--color-method-post-bg); color: var(--color-method-post); }
+.method-put    { background: var(--color-method-put-bg); color: var(--color-method-put); }
+.method-delete { background: var(--color-method-delete-bg); color: var(--color-method-delete); }
 
 .spec-link { margin-top: 16px; font-size: 13px; }
 

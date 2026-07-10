@@ -43,20 +43,22 @@
 </div>
 <script>
 // Cookie Consent per AI.md PART 12
+// cookieConsent is a COOKIE (not localStorage) — server reads it per request
+// to skip the banner and suppress non-essential tracking. localStorage is NOT used.
 (function() {
-    var stored = localStorage.getItem('cookieConsent');
+    var match = document.cookie.match(/(?:^|;\s*)cookieConsent=([^;]*)/);
     var banner = document.getElementById('cookie-consent');
-    if (!stored && banner) {
-        banner.hidden = false;
+    if (!match) {
+        if (banner) banner.hidden = false;
+        return;
     }
-    if (stored) {
-        try {
-            var consent = JSON.parse(stored);
-            applyConsent(consent);
-        } catch (e) {
-            localStorage.removeItem('cookieConsent');
-            if (banner) banner.hidden = false;
-        }
+    try {
+        var consent = JSON.parse(decodeURIComponent(match[1]));
+        applyConsent(consent);
+    } catch (e) {
+        // Corrupt cookie — expire it and show the banner
+        document.cookie = 'cookieConsent=; path=/; max-age=0; SameSite=Lax';
+        if (banner) banner.hidden = false;
     }
 })();
 
@@ -71,15 +73,20 @@ function declineCookies() {
 }
 
 function saveAndApplyConsent(consent) {
-    localStorage.setItem('cookieConsent', JSON.stringify(consent));
+    // Store as cookie — server reads it per request (AI.md PART 12)
+    document.cookie = 'cookieConsent=' + encodeURIComponent(JSON.stringify(consent)) +
+        '; path=/; max-age=31536000; SameSite=Lax';
     var banner = document.getElementById('cookie-consent');
     if (banner) banner.hidden = true;
     applyConsent(consent);
 }
 
 function applyConsent(consent) {
-    if (consent.preferences) {
-        document.cookie = "preferencesEnabled=true; path=/; max-age=31536000; SameSite=Lax";
+    // cookieConsent JSON carries all categories; no separate preferencesEnabled cookie needed
+    if (!consent.preferences) {
+        // Expire preference cookies when user declines
+        document.cookie = 'theme=; path=/; max-age=0; SameSite=Lax';
+        document.cookie = 'lang=; path=/; max-age=0; SameSite=Lax';
     }
 }
 </script>

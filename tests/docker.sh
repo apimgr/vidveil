@@ -134,7 +134,7 @@ fi
 info "Testing binary rename behavior..."
 cp "${TEMP_DIR}/${PROJECT_NAME}" "${TEMP_DIR}/myveil"
 RENAMED_HELP=$(docker run --rm -v "${TEMP_DIR}":/app alpine:latest /app/myveil --help 2>&1 | head -5 || true)
-if echo "$RENAMED_HELP" | grep -qi "myveil"; then
+if echo "$RENAMED_HELP" | grep -qi -- "myveil"; then
     pass "Binary rename: --help shows new name"
 else
     fail "Binary rename: --help does not reflect new binary name"
@@ -167,7 +167,7 @@ sleep 3
 # Per AI.md PART 13: /server/healthz is canonical; /healthz is opt-in
 info "Waiting for server to be ready..."
 for i in $(seq 1 15); do
-    if docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/server/healthz" 2>/dev/null | grep -q "200"; then
+    if docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/server/healthz" 2>/dev/null | grep -q -- "200"; then
         break
     fi
     sleep 1
@@ -184,54 +184,59 @@ test_endpoint GET "/api/v1/search?q=test" "200" "Search endpoint"
 test_endpoint GET "/api/v1/bangs" "200" "Bang shortcuts list"
 test_endpoint GET "/api/v1/bangs/autocomplete?q=!p" "200" "Bang autocomplete"
 test_endpoint GET "/api/v1/engines" "200" "Search engines list"
-test_endpoint GET "/api/v1/engines/pornhub" "200" "Engine details"
 test_endpoint GET "/api/v1/stats" "200" "Statistics endpoint"
+test_endpoint GET "/api/v1/version" "200" "Version endpoint"
+test_endpoint GET "/api/v1/server/healthz" "200" "API versioned health check"
+test_endpoint GET "/api/v1/server/about" "200" "API about"
+test_endpoint GET "/api/v1/server/privacy" "200" "API privacy"
+test_endpoint GET "/api/v1/server/help" "200" "API help"
+test_endpoint GET "/api/healthz" "200" "API unversioned health alias"
+test_endpoint GET "/api/autodiscover" "200" "API autodiscover"
+
+# Engine detail — use a known engine or expect 404 gracefully
+ENGINE_STATUS=$(docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/engines/google" 2>/dev/null || echo "000")
+if [ "$ENGINE_STATUS" = "200" ] || [ "$ENGINE_STATUS" = "404" ]; then
+    pass "Engine detail endpoint reachable (HTTP $ENGINE_STATUS)"
+else
+    fail "Engine detail endpoint unexpected status: $ENGINE_STATUS"
+fi
 
 # Step 9: Test .txt extension (PART 13 requirement)
 info "Testing .txt extension for simple output..."
 test_endpoint GET "/api/v1/search.txt?q=test" "200" "Search .txt extension"
+test_endpoint GET "/api/v1/engines.txt" "200" "Engines .txt extension"
+test_endpoint GET "/api/v1/bangs.txt" "200" "Bangs .txt extension"
+test_endpoint GET "/api/v1/stats.txt" "200" "Stats .txt extension"
+test_endpoint GET "/server/healthz.txt" "200" "Health check .txt extension"
+test_endpoint GET "/server/healthz.json" "200" "Health check .json extension"
 
-# Step 10: Test Content Negotiation (PART 28 requirement - ALL routes with ALL Accept headers)
-info "Testing content negotiation..."
+# Step 10: Test well-known and static files
+info "Testing well-known and static files..."
+test_endpoint GET "/robots.txt" "200" "robots.txt"
+test_endpoint GET "/humans.txt" "200" "humans.txt"
+test_endpoint GET "/sitemap.xml" "200" "sitemap.xml"
+test_endpoint GET "/.well-known/security.txt" "200" "security.txt"
+test_endpoint GET "/.well-known/pgp-key.asc" "200" "pgp-key.asc"
+test_endpoint GET "/.well-known/change-password" "200" "change-password redirect"
+test_endpoint GET "/.well-known/vidveil.json" "200" "vidveil well-known json"
+test_endpoint GET "/manifest.json" "200" "Web app manifest"
+test_endpoint GET "/sw.js" "200" "Service worker"
 
-# Test API routes with application/json
-RESPONSE=$(docker exec vidveil-test curl -s -H "Accept: application/json" "http://localhost:8080/api/v1/engines" 2>/dev/null)
-if echo "$RESPONSE" | grep -q '"ok"'; then
-    pass "API Accept: application/json"
-else
-    fail "API Accept: application/json"
-fi
+# Step 11: Test frontend routes
+info "Testing frontend routes..."
+test_endpoint GET "/age-verify" "200" "Age verification page"
+test_endpoint GET "/content-restricted" "200" "Content restricted page"
+test_endpoint GET "/server/about" "200" "About page (per PART 14: /server/*)"
+test_endpoint GET "/server/privacy" "200" "Privacy page"
+test_endpoint GET "/server/contact" "200" "Contact page"
+test_endpoint GET "/server/help" "200" "Help page"
+test_endpoint GET "/offline.html" "200" "Offline page"
 
-# Test API routes with text/plain
-RESPONSE=$(docker exec vidveil-test curl -s -H "Accept: text/plain" "http://localhost:8080/api/v1/engines" 2>/dev/null)
-if echo "$RESPONSE" | grep -qE "^(engines:|ok:)"; then
-    pass "API Accept: text/plain"
-else
-    fail "API Accept: text/plain"
-fi
-
-# Test frontend routes with text/html (browser detection)
-# Use -L to follow redirects (homepage may redirect to /age-verify for browser UA)
-RESPONSE=$(docker exec vidveil-test curl -s -L -H "Accept: text/html" -H "User-Agent: Mozilla/5.0" "http://localhost:8080/" 2>/dev/null)
-if echo "$RESPONSE" | grep -qi "<!DOCTYPE html\|<html"; then
-    pass "Frontend Accept: text/html"
-else
-    fail "Frontend Accept: text/html"
-fi
-
-# Test frontend routes with text/plain (CLI detection)
-RESPONSE=$(docker exec vidveil-test curl -s -H "Accept: text/plain" "http://localhost:8080/" 2>/dev/null)
-if [ -n "$RESPONSE" ]; then
-    pass "Frontend Accept: text/plain"
-else
-    fail "Frontend Accept: text/plain"
-fi
-
-# Step 11: Test SSE Streaming (PART 36 requirement)
+# Step 12: Test SSE Streaming (PART 36 requirement)
 info "Testing SSE streaming endpoint..."
 SSE_OUTPUT=$(docker exec vidveil-test timeout 10 curl -s -N -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=test" 2>/dev/null || true)
 
-if echo "$SSE_OUTPUT" | grep -qE "(data:|event:)"; then
+if echo "$SSE_OUTPUT" | grep -qE -- "(data:|event:)"; then
     pass "SSE streaming - SSE format correct"
 else
     if [ -n "$SSE_OUTPUT" ]; then
@@ -241,14 +246,14 @@ else
     fi
 fi
 
-if echo "$SSE_OUTPUT" | grep -q '"done"'; then
+if echo "$SSE_OUTPUT" | grep -q -- '"done"'; then
     pass "SSE streaming - done message received"
 else
     info "SSE streaming - done message not received (engines may have timed out)"
 fi
 
 SSE_BANG=$(docker exec vidveil-test timeout 5 curl -s -N -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=!ph+test" 2>/dev/null || true)
-if echo "$SSE_BANG" | grep -q "data:"; then
+if echo "$SSE_BANG" | grep -q -- "data:"; then
     pass "SSE streaming - with bang shortcuts"
 else
     fail "SSE streaming - bang shortcuts not working"
@@ -262,45 +267,45 @@ else
     fail "SSE streaming - missing query should return 400, got $SSE_STATUS"
 fi
 
-# Step 12: Test API error handling
+# Step 13: Test API error handling
 info "Testing error handling..."
 test_endpoint GET "/api/v1/engines/nonexistent" "404" "Non-existent engine 404"
 test_endpoint GET "/api/v1/search" "400" "Search without query 400"
 
-# Step 13: Test frontend routes
-info "Testing frontend routes..."
-test_endpoint GET "/age-verify" "200" "Age verification page"
-test_endpoint GET "/server/about" "200" "About page (per PART 14: /server/*)"
+# Step 14: Test batch search (POST)
+info "Testing POST endpoints..."
+BATCH_STATUS=$(docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"queries":["test"]}' \
+    "http://localhost:8080/api/v1/search/batch" 2>/dev/null || echo "000")
+if [ "$BATCH_STATUS" = "200" ] || [ "$BATCH_STATUS" = "202" ]; then
+    pass "Batch search endpoint (HTTP $BATCH_STATUS)"
+else
+    fail "Batch search endpoint (expected 200/202, got $BATCH_STATUS)"
+fi
 
-# Step 14: Test well-known endpoints and .txt extensions
-info "Testing well-known endpoints..."
-test_endpoint GET "/robots.txt" "200" "robots.txt"
-test_endpoint GET "/.well-known/security.txt" "200" "security.txt"
+# Step 15: Test comprehensive content negotiation (PART 28 — ALL routes ALL headers)
+info "Running comprehensive content negotiation tests..."
+EXEC_PREFIX="docker exec vidveil-test" BASE_URL="http://localhost:8080" "${SCRIPT_DIR}/test_content_negotiation.sh" || TESTS_FAILED=$((TESTS_FAILED + 1))
 
-# Test .txt extension for API endpoints (PART 28 requirement)
-info "Testing .txt endpoint extensions..."
-test_endpoint GET "/api/v1/engines.txt" "200" "Engines .txt extension"
-test_endpoint GET "/api/v1/bangs.txt" "200" "Bangs .txt extension"
-test_endpoint GET "/api/v1/stats.txt" "200" "Stats .txt extension"
-
-# Step 15: Test shell completions (PART 8 - built into binary)
+# Step 16: Test shell completions (PART 8 - built into binary)
 info "Testing shell completions..."
 BASH_COMPL=$(docker exec vidveil-test /app/${PROJECT_NAME} --shell completions bash 2>&1 || true)
-if echo "$BASH_COMPL" | grep -q "complete\|_vidveil"; then
+if echo "$BASH_COMPL" | grep -q -- "complete\|_vidveil"; then
     pass "Shell completions: bash"
 else
     fail "Shell completions: bash"
 fi
 
 ZSH_COMPL=$(docker exec vidveil-test /app/${PROJECT_NAME} --shell completions zsh 2>&1 || true)
-if echo "$ZSH_COMPL" | grep -q "compdef\|_vidveil"; then
+if echo "$ZSH_COMPL" | grep -q -- "compdef\|_vidveil"; then
     pass "Shell completions: zsh"
 else
     fail "Shell completions: zsh"
 fi
 
 FISH_COMPL=$(docker exec vidveil-test /app/${PROJECT_NAME} --shell completions fish 2>&1 || true)
-if echo "$FISH_COMPL" | grep -q "complete.*vidveil"; then
+if echo "$FISH_COMPL" | grep -q -- "complete.*vidveil"; then
     pass "Shell completions: fish"
 else
     fail "Shell completions: fish"

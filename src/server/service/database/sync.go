@@ -212,6 +212,9 @@ func (sm *SyncManager) applyInsert(event *SyncEvent) error {
 	if len(event.Data) == 0 {
 		return nil
 	}
+	if !validIdentifier(event.Table) {
+		return fmt.Errorf("rejected sync insert: invalid table identifier %q", event.Table)
+	}
 
 	columns := make([]string, 0, len(event.Data))
 	placeholders := make([]string, 0, len(event.Data))
@@ -240,6 +243,9 @@ func (sm *SyncManager) applyUpdate(event *SyncEvent) error {
 	if len(event.Data) == 0 {
 		return nil
 	}
+	if !validIdentifier(event.Table) {
+		return fmt.Errorf("rejected sync update: invalid table identifier %q", event.Table)
+	}
 
 	sets := make([]string, 0, len(event.Data))
 	values := make([]interface{}, 0, len(event.Data)+1)
@@ -263,6 +269,9 @@ func (sm *SyncManager) applyUpdate(event *SyncEvent) error {
 
 // applyDelete applies a DELETE event
 func (sm *SyncManager) applyDelete(event *SyncEvent) error {
+	if !validIdentifier(event.Table) {
+		return fmt.Errorf("rejected sync delete: invalid table identifier %q", event.Table)
+	}
 	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", event.Table)
 
 	_, err := sm.db.Exec(query, event.PrimaryKey)

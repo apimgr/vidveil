@@ -5,29 +5,29 @@
     {{template "public/head" .}}
 </head>
 <body>
-    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
     {{template "public/header" .}}
-    <main class="results" id="main-content" role="main" aria-label="Search results">
+    <main class="results" id="main-content" role="main" aria-label="{{ t "a11y.search_results" }}">
         {{/* Search header with inline search and collapsible filters */}}
         <div class="search-header" id="search-header">
-            <form action="/search" method="get" class="search-form search-form--inline" role="search" aria-label="Refine search" onsubmit="return handleSearchSubmit(this)">
+            <form action="/search" method="get" class="search-form search-form--inline" role="search" aria-label="{{ t "a11y.refine_search" }}" onsubmit="return handleSearchSubmit(this)">
                 <div class="search-wrapper search-wrapper--compact">
                     <input type="text"
                            id="results-search-input"
                            name="q"
                            value="{{.Query}}"
-                           placeholder="Refine search..."
+                           placeholder="{{ t "a11y.refine_search" }}..."
                            autocomplete="off"
                            class="search-input--compact"
-                           aria-label="Search query"
+                           aria-label="{{ t "a11y.search_query" }}"
                            aria-autocomplete="list"
                            aria-controls="autocomplete-dropdown-results">
                     <div id="autocomplete-dropdown-results"
                          class="autocomplete-dropdown"
                          role="listbox"
-                         aria-label="Search suggestions"
+                         aria-label="{{ t "a11y.search_suggestions" }}"
                          hidden></div>
-                    <button type="submit" class="search-btn--compact" aria-label="Search">
+                    <button type="submit" class="search-btn--compact" aria-label="{{ t "search.button" }}">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.35-4.35"></path>
@@ -49,11 +49,11 @@
         {{end}}
 
         {{if .RelatedSearches}}
-        <nav class="related-searches" id="related-searches" role="navigation" aria-label="Related searches">
+        <nav class="related-searches" id="related-searches" role="navigation" aria-label="{{ t "a11y.related_searches" }}">
             <span class="related-label">{{ t "search.related_searches" }}</span>
             <div class="related-tags" id="related-tags">
                 {{range $i, $term := .RelatedSearches}}
-                <a class="related-tag{{if ge $i 6}} related-tag--hidden{{end}}" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="Search for {{$term}}">
+                <a class="related-tag{{if ge $i 6}} related-tag--hidden{{end}}" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="{{tf "a11y.search_for" $term}}">
                     <svg class="related-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                     <span>{{$term}}</span>
                 </a>
@@ -62,17 +62,17 @@
         </nav>
         {{end}}
 
-        <div class="video-grid" id="video-grid" role="list" aria-label="Video results"></div>
+        <div class="video-grid" id="video-grid" role="list" aria-label="{{ t "a11y.video_results" }}"></div>
         <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>{{ t "search.loading_more" }}</span></div>
 
         {{/* Progressive enhancement: server-rendered results for clients without JavaScript */}}
         <noscript>
             <p class="meta" aria-live="polite"><span>{{len .Results}}</span> {{ t "search.results_for" }} "{{.Query}}"</p>
-            <div class="video-grid" role="list" aria-label="Video results">
+            <div class="video-grid" role="list" aria-label="{{ t "a11y.video_results" }}">
                 {{range .Results}}
                 <div class="video-card" role="listitem">
                     <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
-                        <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="Thumbnail for {{.Title}}" loading="lazy">
+                        <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" .Title}}" loading="lazy">
                         <div class="video-info">
                             <h3 class="video-title">{{.Title}}</h3>
                             <p class="video-meta">

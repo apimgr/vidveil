@@ -3,15 +3,15 @@
 <dialog id="{{.ID}}" class="modal">
   <div class="modal-header">
     <h3 class="modal-title">{{.Title}}</h3>
-    <button type="button" class="modal-close" onclick="this.closest('dialog').close()" aria-label="Close">&times;</button>
+    <button type="button" class="modal-close" onclick="this.closest('dialog').close()" aria-label="{{ t "a11y.close_dialog" }}">&times;</button>
   </div>
   <div class="modal-body">
     {{.Content}}
   </div>
   {{if .ShowFooter}}
   <div class="modal-footer">
-    <button type="button" class="btn btn-secondary" onclick="this.closest('dialog').close()">Cancel</button>
-    <button type="button" class="btn btn-primary" id="{{.ID}}-confirm">Confirm</button>
+    <button type="button" class="btn btn-secondary" onclick="this.closest('dialog').close()">{{ t "action.cancel" }}</button>
+    <button type="button" class="btn btn-primary" id="{{.ID}}-confirm">{{ t "action.confirm" }}</button>
   </div>
   {{end}}
 </dialog>

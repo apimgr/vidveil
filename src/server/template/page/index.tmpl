@@ -5,7 +5,7 @@
     {{template "public/head" .}}
 </head>
 <body>
-    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
     {{template "public/header" .}}
     <main class="home" id="main-content" role="main">
         <div class="home-hero">
@@ -13,8 +13,8 @@
             <p class="tagline">{{.Description}}</p>
 
             {{/* Large search form - consistent with nav search styling */}}
-            <form action="/search" method="get" class="search-form search-form--large" role="search" aria-label="Video search" onsubmit="return handleSearchSubmit(this)">
-                <label for="search-input" class="visually-hidden">Search query</label>
+            <form action="/search" method="get" class="search-form search-form--large" role="search" aria-label="{{ t "a11y.video_search" }}" onsubmit="return handleSearchSubmit(this)">
+                <label for="search-input" class="visually-hidden">{{ t "a11y.search_query" }}</label>
                 <div class="search-wrapper">
                     <input type="text"
                            id="search-input"
@@ -24,16 +24,16 @@
                            required
                            aria-required="true"
                            autocomplete="off"
-                           aria-label="Enter search terms"
+                           aria-label="{{ t "a11y.search_input" }}"
                            aria-autocomplete="list"
                            aria-controls="autocomplete-dropdown">
                     <div id="autocomplete-dropdown"
                          class="autocomplete-dropdown"
                          role="listbox"
-                         aria-label="Bang suggestions"
+                         aria-label="{{ t "a11y.bang_suggestions" }}"
                          hidden></div>
                 </div>
-                <button type="submit" aria-label="Search" class="search-btn">{{ t "search.button" }}</button>
+                <button type="submit" aria-label="{{ t "search.button" }}" class="search-btn">{{ t "search.button" }}</button>
             </form>
 
             <p class="bang-hint">{{ t "search.bang_prefix" }} <code>!ph</code> PornHub, <code>!xv</code> XVideos, <code>!xh</code> xHamster, <code>!rt</code> RedTube</p>
@@ -42,9 +42,9 @@
             {{template "public/filters" (dict "ShowEngines" true "Compact" false)}}
         </div>
 
-        <div id="search-history" class="search-history" role="region" aria-label="Recent searches"></div>
+        <div id="search-history" class="search-history" role="region" aria-label="{{ t "a11y.recent_searches" }}"></div>
 
-        <div class="engine-stats" role="contentinfo" aria-label="Service statistics">
+        <div class="engine-stats" role="contentinfo" aria-label="{{ t "a11y.service_stats" }}">
             <span class="stat"><strong>{{.EngineCount}}</strong> {{ t "home.engines" }}</span>
             <span class="divider" aria-hidden="true">|</span>
             <span class="stat">{{ t "home.no_tracking" }}</span>

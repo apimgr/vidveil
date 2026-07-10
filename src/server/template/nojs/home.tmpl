@@ -5,20 +5,20 @@
     {{template "public/head" .}}
 </head>
 <body>
-    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
     {{template "public/header" .}}
     <main class="home" id="main-content" role="main">
         <h1>Vidveil</h1>
         <p>{{.Description}}</p>
-        <form action="/search" method="get" class="search-form" role="search" aria-label="Video search">
-            <label for="search-input" class="visually-hidden">Search query</label>
+        <form action="/search" method="get" class="search-form" role="search" aria-label="{{ t "a11y.video_search" }}">
+            <label for="search-input" class="visually-hidden">{{ t "a11y.search_query" }}</label>
             <div class="search-wrapper">
-                <input type="text" id="search-input" name="q" placeholder="{{ t "search.placeholder" }}" autofocus required aria-required="true" aria-label="Enter search terms">
+                <input type="text" id="search-input" name="q" placeholder="{{ t "search.placeholder" }}" autofocus required aria-required="true" aria-label="{{ t "a11y.search_input" }}">
             </div>
-            <button type="submit" aria-label="Submit search">{{ t "search.button" }}</button>
+            <button type="submit" aria-label="{{ t "search.button" }}">{{ t "search.button" }}</button>
         </form>
         <p class="bang-hint">{{ t "search.bang_prefix" }} <code>!ph</code> PornHub, <code>!rt</code> RedTube, <code>!xv</code> XVideos, <code>!xh</code> xHamster</p>
-        <div class="engine-stats" role="contentinfo" aria-label="Service statistics">
+        <div class="engine-stats" role="contentinfo" aria-label="{{ t "a11y.service_stats" }}">
             <span class="stat"><strong>{{.EngineCount}}</strong> {{ t "home.engines" }}</span>
             <span class="divider" aria-hidden="true">|</span>
             <span class="stat">{{ t "home.no_tracking" }}</span>

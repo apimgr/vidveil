@@ -8,64 +8,64 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
         </svg>
-        <span class="filters-toggle-text">Filters</span>
+        <span class="filters-toggle-text">{{ t "filter.filters" }}</span>
         <span class="filter-count hidden" id="filter-count" aria-live="polite">0</span>
     </summary>
-    <div class="filters-content" id="filters-content" role="group" aria-label="Search filters">
+    <div class="filters-content" id="filters-content" role="group" aria-label="{{ t "a11y.search_filters" }}">
         <div class="filters-grid">
             <div class="filter-group">
-                <label for="filter-duration" class="filter-label">Duration</label>
+                <label for="filter-duration" class="filter-label">{{ t "filter.duration" }}</label>
                 <select id="filter-duration" name="duration" onchange="handleFilterChange()" class="filter-select">
-                    <option value="">Any</option>
-                    <option value="short">Under 10 min</option>
-                    <option value="medium">10-30 min</option>
-                    <option value="long">Over 30 min</option>
+                    <option value="">{{ t "filter.any" }}</option>
+                    <option value="short">{{ t "filter.under_10" }}</option>
+                    <option value="medium">{{ t "filter.10_30" }}</option>
+                    <option value="long">{{ t "filter.over_30" }}</option>
                 </select>
             </div>
             <div class="filter-group">
-                <label for="filter-quality" class="filter-label">Quality</label>
+                <label for="filter-quality" class="filter-label">{{ t "filter.quality" }}</label>
                 <select id="filter-quality" name="quality" onchange="handleFilterChange()" class="filter-select">
-                    <option value="">Any</option>
-                    <option value="4k">4K</option>
-                    <option value="1080">1080p HD</option>
-                    <option value="720">720p</option>
+                    <option value="">{{ t "filter.any" }}</option>
+                    <option value="4k">{{ t "filter.quality_4k" }}</option>
+                    <option value="1080">{{ t "filter.quality_1080" }}</option>
+                    <option value="720">{{ t "filter.quality_720" }}</option>
                 </select>
             </div>
             <div class="filter-group">
-                <label for="filter-sort" class="filter-label">Sort</label>
+                <label for="filter-sort" class="filter-label">{{ t "filter.sort" }}</label>
                 <select id="filter-sort" name="sort" onchange="handleFilterChange()" class="filter-select">
-                    <option value="">Relevance</option>
-                    <option value="duration-desc">Longest</option>
-                    <option value="duration-asc">Shortest</option>
-                    <option value="views">Most Viewed</option>
-                    <option value="quality">Best Quality</option>
+                    <option value="">{{ t "filter.relevance" }}</option>
+                    <option value="duration-desc">{{ t "filter.longest" }}</option>
+                    <option value="duration-asc">{{ t "filter.shortest" }}</option>
+                    <option value="views">{{ t "filter.most_viewed" }}</option>
+                    <option value="quality">{{ t "filter.quality_best" }}</option>
                 </select>
             </div>
             {{if .ShowEngines}}
             <div class="filter-group">
-                <label for="filter-engines" class="filter-label">Engines</label>
+                <label for="filter-engines" class="filter-label">{{ t "filter.engines" }}</label>
                 <select id="filter-engines" name="engines" onchange="handleFilterChange()" class="filter-select">
-                    <option value="">All Engines</option>
-                    <option value="tier1">Tier 1 Only</option>
-                    <option value="tier12">Tier 1-2</option>
+                    <option value="">{{ t "filter.all_engines" }}</option>
+                    <option value="tier1">{{ t "filter.tier1_only" }}</option>
+                    <option value="tier12">{{ t "filter.tier12" }}</option>
                 </select>
             </div>
             {{else}}
             <div class="filter-group filter-group--sources">
-                <label class="filter-label">Sources</label>
+                <label class="filter-label">{{ t "filter.sources" }}</label>
                 <details class="source-filter-wrapper" id="source-filter-wrapper">
                     <summary class="source-filter-toggle" id="source-filter-toggle">
-                        <span id="source-filter-label">All Sources</span>
+                        <span id="source-filter-label">{{ t "filter.all_sources" }}</span>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                     </summary>
-                    <div class="source-filter-dropdown" id="source-filter-list" role="group" aria-label="Source filter options">
+                    <div class="source-filter-dropdown" id="source-filter-list" role="group" aria-label="{{ t "a11y.source_filter_options" }}">
                         <label class="source-option source-option--special">
                             <input type="checkbox" id="filter-preview-first" onchange="updatePreviewFirst(this.checked)">
-                            <span>Preview First</span>
+                            <span>{{ t "filter.preview_first" }}</span>
                         </label>
                         <label class="source-option">
                             <input type="checkbox" id="source-all" checked onchange="toggleAllSources(this.checked)">
-                            <span>All Sources</span>
+                            <span>{{ t "filter.all_sources" }}</span>
                         </label>
                         <div class="source-options" id="source-options">
                             {{/* Source checkboxes populated dynamically by JS */}}

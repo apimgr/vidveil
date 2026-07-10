@@ -5,9 +5,9 @@
     {{template "public/head" .}}
 </head>
 <body>
-    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
     {{template "public/header" .}}
-    <main class="results" id="main-content" role="main" aria-label="Search results">
+    <main class="results" id="main-content" role="main" aria-label="{{ t "a11y.search_results" }}">
         <p class="meta" aria-live="polite"><span>{{len .Results}}</span> {{ t "search.results_for" }} "{{.Query}}"</p>
 
         {{if .SpellSuggestion}}
@@ -15,11 +15,11 @@
         {{end}}
 
         {{if .RelatedSearches}}
-        <nav class="related-searches" role="navigation" aria-label="Related searches">
+        <nav class="related-searches" role="navigation" aria-label="{{ t "a11y.related_searches" }}">
             <span class="related-label">{{ t "search.related_searches" }}</span>
             <div class="related-tags">
                 {{range $i, $term := .RelatedSearches}}
-                <a class="related-tag" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="Search for {{$term}}">
+                <a class="related-tag" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="{{tf "a11y.search_for" $term}}">
                     <svg class="related-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                     <span>{{$term}}</span>
                 </a>
@@ -28,7 +28,7 @@
         </nav>
         {{end}}
 
-        <div class="filters" role="group" aria-label="Filter and sort options">
+        <div class="filters" role="group" aria-label="{{ t "a11y.filter_options" }}">
             <form method="get" action="/search" class="filter-form">
                 <input type="hidden" name="q" value="{{.Query}}">
                 <label for="filter-duration">{{ t "filter.duration" }}</label>
@@ -51,11 +51,11 @@
             </form>
         </div>
 
-        <div class="video-grid" role="list" aria-label="Video results">
+        <div class="video-grid" role="list" aria-label="{{ t "a11y.video_results" }}">
             {{range .Results}}
             <div class="video-card" role="listitem">
                 <a href="{{.URL}}" target="_blank" rel="noopener noreferrer" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
-                    <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="Thumbnail for {{.Title}}" loading="lazy">
+                    <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" .Title}}" loading="lazy">
                     <div class="video-info">
                         <h3 class="video-title">{{.Title}}</h3>
                         <p class="video-meta">

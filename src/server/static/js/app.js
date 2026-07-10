@@ -9,29 +9,34 @@ function setTheme(theme) {
     // Supports: 'dark', 'light', 'auto' (auto uses prefers-color-scheme)
     document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
     document.documentElement.classList.add('theme-' + theme);
-    localStorage.setItem('vidveil-theme', theme);
 
-    // Set cookie so server can render the correct theme class on initial load
-    // (prevents FOUC for no-JS users and speeds up first paint for JS users)
+    // Cookie is the authoritative preference — server reads it to render <html class="theme-X">
+    // with no init JS and no FOUC (AI.md PART 16: "Store preference in the theme cookie")
     var maxAge = 365 * 24 * 3600; // 1 year
     document.cookie = 'theme=' + encodeURIComponent(theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+
+    // Also persist in vidveil_prefs for localStorage-reading JS paths
+    try {
+        var prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+        prefs.theme = theme;
+        localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    } catch (e) {}
 
     // Update meta theme-color for mobile browsers
     updateMetaThemeColor(theme);
 }
 
 function getTheme() {
-    // Check vidveil_prefs first (newer, more reliable source)
+    // Cookie is the primary source — server reads it per AI.md PART 16
+    var match = document.cookie.match(/(?:^|;\s*)theme=([^;]*)/);
+    if (match) return decodeURIComponent(match[1]);
+    // Fall back to vidveil_prefs.theme in localStorage
     try {
-        var prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}');
-        if (prefs.theme) {
-            // Sync standalone key with prefs
-            localStorage.setItem('vidveil-theme', prefs.theme);
-            return prefs.theme;
-        }
+        var prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+        if (prefs.theme) return prefs.theme;
     } catch (e) {}
-    // Fall back to standalone key, default to 'auto' per AI.md PART 16
-    return localStorage.getItem('vidveil-theme') || 'auto';
+    // Default 'auto' per AI.md PART 16
+    return 'auto';
 }
 
 // Get the effective theme (resolves 'auto' to actual light/dark)
@@ -170,7 +175,8 @@ function savePreferences(prefs) {
 
 function resetPreferences() {
     localStorage.removeItem(PREFS_KEY);
-    localStorage.removeItem('vidveil-theme');
+    // Expire the theme cookie — server reads it, so clearing here resets server-rendered theme
+    document.cookie = 'theme=; path=/; max-age=0; SameSite=Lax';
     location.reload();
 }
 
@@ -581,12 +587,12 @@ function saveCollapsedState() {
     document.querySelectorAll('.nav-section.collapsed').forEach(function(el) {
         collapsed.push(el.id.replace('section-', ''));
     });
-    localStorage.setItem('adminCollapsed', JSON.stringify(collapsed));
+    localStorage.setItem('vidveil_admin_collapsed', JSON.stringify(collapsed));
 }
 
 function loadCollapsedState() {
     try {
-        var collapsed = JSON.parse(localStorage.getItem('adminCollapsed')) || [];
+        var collapsed = JSON.parse(localStorage.getItem('vidveil_admin_collapsed')) || [];
         collapsed.forEach(function(name) {
             var section = document.getElementById('section-' + name);
             if (section) section.classList.add('collapsed');

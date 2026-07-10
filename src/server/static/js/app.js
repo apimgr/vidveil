@@ -2521,3 +2521,31 @@ if ('serviceWorker' in navigator) {
 
 window.showUpdateNotification = showUpdateNotification;
 window.updateApp = updateApp;
+
+// ============================================================================
+// Announcement Banner Dismissal (AI.md PART 16)
+// Enhancement only — the POST form works without JS (server appends id to cookie)
+// ============================================================================
+(function() {
+    'use strict';
+    // Intercept dismiss forms to avoid a full page reload while keeping the
+    // dismissed_announcements cookie so the server never renders them again.
+    // Dismissal is keyed on the announcement id — changing the id resets dismissals.
+    document.querySelectorAll('.site-banner .site-banner-dismiss').forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            var banner = form.closest('.site-banner');
+            if (!banner) return;
+            var id = banner.dataset.announcementId;
+            if (!id) return;
+            var match = document.cookie.match(/(?:^|;\s*)dismissed_announcements=([^;]*)/);
+            var ids = match ? decodeURIComponent(match[1]).split(',').filter(Boolean) : [];
+            if (ids.indexOf(id) === -1) {
+                ids.push(id);
+            }
+            document.cookie = 'dismissed_announcements=' + encodeURIComponent(ids.join(',')) +
+                '; path=/; max-age=31536000; SameSite=Lax';
+            banner.remove();
+        });
+    });
+})();

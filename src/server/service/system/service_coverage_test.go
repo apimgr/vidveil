@@ -185,23 +185,27 @@ func TestCreateBSDUser_NoPanic(t *testing.T) {
 
 // ── findAvailableUID ─────────────────────────────────────────────────────────
 
-// TestFindAvailableUID_ReturnsInRange verifies the function returns a value in
-// the requested range (or the min if all are taken).
-func TestFindAvailableUID_ReturnsInRange(t *testing.T) {
+// TestFindAvailableUID_ReturnsInSpecRange verifies the function returns a value
+// in the spec range 200-899, ignoring any passed min/max per AI.md PART 23.
+func TestFindAvailableUID_ReturnsInSpecRange(t *testing.T) {
 	sm := newCovSM(t)
-	uid := sm.findAvailableUID(800, 810)
-	if uid < 800 || uid > 810 {
-		t.Errorf("findAvailableUID(800,810) = %d, want 800–810", uid)
+	uid := sm.findAvailableUID(200, 899)
+	if uid < 200 || uid > 899 {
+		t.Errorf("findAvailableUID() = %d, want 200–899 (spec range per AI.md PART 23)", uid)
+	}
+	// Result must not be a reserved ID
+	if reservedSystemIDs[uid] {
+		t.Errorf("findAvailableUID() = %d is a reserved ID per AI.md PART 23", uid)
 	}
 }
 
-// TestFindAvailableUID_SmallRange exercises the loop body with a tiny range so
-// it completes quickly even if getent is slow.
+// TestFindAvailableUID_SmallRange exercises the wrapper with alternate params;
+// result is still in the spec range because findAvailableSystemID ignores min/max.
 func TestFindAvailableUID_SmallRange(t *testing.T) {
 	sm := newCovSM(t)
 	uid := sm.findAvailableUID(895, 899)
-	if uid < 895 || uid > 899 {
-		t.Errorf("findAvailableUID(895,899) = %d, want 895–899", uid)
+	if uid < 200 || uid > 899 {
+		t.Errorf("findAvailableUID(895,899) = %d, want 200–899 (spec range per AI.md PART 23)", uid)
 	}
 }
 
@@ -231,20 +235,24 @@ func TestEnsureSystemUser_NonRoot_ReturnsCurrent(t *testing.T) {
 
 // ── findAvailableID (package-level function) ─────────────────────────────────
 
-// TestFindAvailableID_ReturnsInRange verifies the package-level function
-// returns a value within the requested bounds.
-func TestFindAvailableID_ReturnsInRange(t *testing.T) {
-	id := findAvailableID(800, 810)
-	if id < 800 || id > 810 {
-		t.Errorf("findAvailableID(800,810) = %d, want 800–810", id)
+// TestFindAvailableID_ReturnsInSpecRange verifies the package-level function
+// returns a value in the spec range 200-899 per AI.md PART 23.
+func TestFindAvailableID_ReturnsInSpecRange(t *testing.T) {
+	id := findAvailableID(200, 899)
+	if id < 200 || id > 899 {
+		t.Errorf("findAvailableID() = %d, want 200–899 (spec range per AI.md PART 23)", id)
+	}
+	if reservedSystemIDs[id] {
+		t.Errorf("findAvailableID() = %d is a reserved ID per AI.md PART 23", id)
 	}
 }
 
-// TestFindAvailableID_SmallRange exercises the loop body with a small range.
+// TestFindAvailableID_SmallRange exercises the wrapper with alternate params;
+// result is still in the spec range because findAvailableSystemID ignores min/max.
 func TestFindAvailableID_SmallRange(t *testing.T) {
 	id := findAvailableID(895, 899)
-	if id < 895 || id > 899 {
-		t.Errorf("findAvailableID(895,899) = %d, want 895–899", id)
+	if id < 200 || id > 899 {
+		t.Errorf("findAvailableID(895,899) = %d, want 200–899 (spec range per AI.md PART 23)", id)
 	}
 }
 

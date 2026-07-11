@@ -3,9 +3,11 @@
 package system
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -283,24 +285,18 @@ func (sm *ServiceManager) createLinuxUser() error {
 	// Find available UID in 200-899 range per AI.md PART 23
 	uid := sm.findAvailableUID(200, 899)
 
-	// Create group
-	if err := exec.Command("groupadd", "-g", strconv.Itoa(uid), sm.group).Run(); err != nil {
-	}
+	// groupadd --system --gid {id} {name} per AI.md PART 23
+	exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), sm.group).Run()
 
-	// Create system user with:
-	// -r: System account
-	// -u: UID
-	// -g: Primary group
-	// -d: Home directory
-	// -s: No login shell
-	// -c: Comment/description
+	// useradd: --system, numeric --gid, --uid, --home-dir, --shell, --comment
+	// per AI.md PART 23 (--gid must be numeric, not a group name)
 	cmd := exec.Command("useradd",
-		"-r",
-		"-u", strconv.Itoa(uid),
-		"-g", sm.group,
-		"-d", sm.dataDir,
-		"-s", "/sbin/nologin",
-		"-c", sm.description,
+		"--system",
+		"--uid", strconv.Itoa(uid),
+		"--gid", strconv.Itoa(uid),
+		"--home-dir", sm.dataDir,
+		"--shell", "/sbin/nologin",
+		"--comment", sm.description,
 		sm.user,
 	)
 	if err := cmd.Run(); err != nil {
@@ -324,15 +320,14 @@ func (sm *ServiceManager) createLinuxUser() error {
 	return nil
 }
 
-// findAvailableUID finds an available UID in the given range
+// findAvailableUID returns an available system UID/GID per AI.md PART 23.
+// Delegates to the package-level findAvailableSystemID.
 func (sm *ServiceManager) findAvailableUID(min, max int) int {
-	for uid := min; uid <= max; uid++ {
-		_, err := exec.Command("getent", "passwd", strconv.Itoa(uid)).CombinedOutput()
-		if err != nil {
-			return uid
-		}
+	id, err := findAvailableSystemID()
+	if err != nil {
+		return min
 	}
-	return min
+	return id
 }
 
 // installSystemd installs systemd service unit per AI.md PART 24
@@ -729,8 +724,25 @@ func (sm *ServiceManager) installWindows() error {
 	return nil
 }
 
+// confirmUninstall prints the required prompt and returns nil only if the
+// user types "y" or "Y". Per AI.md PART 23: required before any destructive
+// uninstall that removes data, config, and the system user.
+func confirmUninstall() error {
+	fmt.Print("This will delete ALL data, configs, and the system user. Continue? [y/N]: ")
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	resp := strings.TrimSpace(scanner.Text())
+	if strings.ToLower(resp) != "y" {
+		return fmt.Errorf("uninstall aborted")
+	}
+	return nil
+}
+
 // uninstallLinux removes Linux service
 func (sm *ServiceManager) uninstallLinux() error {
+	if err := confirmUninstall(); err != nil {
+		return err
+	}
 	sm.Stop()
 
 	// Per PART 24: service name uses {internal_name}
@@ -762,6 +774,9 @@ func (sm *ServiceManager) uninstallLinux() error {
 
 // uninstallDarwin removes macOS service
 func (sm *ServiceManager) uninstallDarwin() error {
+	if err := confirmUninstall(); err != nil {
+		return err
+	}
 	// Per PART 24: Path is /Library/LaunchDaemons/{plist_name}.plist
 	plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
 	exec.Command("launchctl", "unload", plistPath).Run()
@@ -772,6 +787,9 @@ func (sm *ServiceManager) uninstallDarwin() error {
 
 // uninstallBSD removes BSD service
 func (sm *ServiceManager) uninstallBSD() error {
+	if err := confirmUninstall(); err != nil {
+		return err
+	}
 	sm.Stop()
 	// Per PART 24: service name uses {internal_name}
 	os.Remove(fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.internalName))
@@ -781,6 +799,9 @@ func (sm *ServiceManager) uninstallBSD() error {
 
 // uninstallWindows removes Windows service
 func (sm *ServiceManager) uninstallWindows() error {
+	if err := confirmUninstall(); err != nil {
+		return err
+	}
 	sm.Stop()
 	exec.Command("sc", "delete", sm.appName).Run()
 	fmt.Printf("Service %s uninstalled\n", sm.appName)
@@ -1009,28 +1030,24 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 		homeDir = dirs[0]
 	}
 
-	// Try standard Linux commands first (Debian, RHEL, etc.).
-	// useradd/adduser flag annotations live above the args (no inline
-	// comments per AI.md PART 0/5).
+	// groupadd --system --gid {id} {name} per AI.md PART 23
+	// --gid is numeric; Alpine uses addgroup -g -S
 	if _, err := exec.LookPath("groupadd"); err == nil {
-		exec.Command("groupadd", "-g", strconv.Itoa(id), appName).Run()
-		// useradd: -r system account, -u UID, -g primary group,
-		//          -d home dir, -s shell (nologin), -c GECOS comment.
+		exec.Command("groupadd", "--system", "--gid", strconv.Itoa(id), appName).Run()
+		// useradd: --system, numeric --gid per AI.md PART 23
 		cmd := exec.Command("useradd",
-			"-r",
-			"-u", strconv.Itoa(id),
-			"-g", appName,
-			"-d", homeDir,
-			"-s", "/sbin/nologin",
-			"-c", appName+" service account",
+			"--system",
+			"--uid", strconv.Itoa(id),
+			"--gid", strconv.Itoa(id),
+			"--home-dir", homeDir,
+			"--shell", "/sbin/nologin",
+			"--comment", appName+" service account",
 			appName,
 		)
 		cmd.Run()
 	} else {
-		// Alpine Linux uses addgroup/adduser (busybox).
+		// Alpine Linux uses addgroup/adduser (busybox)
 		exec.Command("addgroup", "-g", strconv.Itoa(id), "-S", appName).Run()
-		// adduser (busybox): -D no password, -S system user, -H no home,
-		//                    -u UID, -G primary group, -s shell (nologin).
 		cmd := exec.Command("adduser",
 			"-D",
 			"-S",
@@ -1054,43 +1071,45 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 	return id, id, nil
 }
 
-// findAvailableID finds an available UID/GID in the given range per AI.md PART 23
-func findAvailableID(min, max int) int {
-	// Start from top of range (999) and work down
-	for id := max; id >= min; id-- {
-		idStr := strconv.Itoa(id)
+// reservedSystemIDs is the set of IDs never to assign, per AI.md PART 23.
+// Covers common service UIDs (999-980), well-known daemon IDs (101-110,
+// 170-179), and the nobody/nfsnobody sentinel (65534).
+var reservedSystemIDs = map[int]bool{
+	65534: true,
+	999: true, 998: true, 997: true, 996: true, 995: true,
+	994: true, 993: true, 992: true, 991: true, 990: true,
+	989: true, 988: true, 987: true, 986: true, 985: true,
+	984: true, 983: true, 982: true, 981: true, 980: true,
+	101: true, 102: true, 103: true, 104: true, 105: true,
+	106: true, 107: true, 108: true, 109: true, 110: true,
+	170: true, 171: true, 172: true, 173: true, 174: true,
+	175: true, 176: true, 177: true, 178: true, 179: true,
+}
 
-		// Check if UID is unused
-		uidUsed := false
-		// Try getent first (standard Linux)
-		if _, err := exec.Command("getent", "passwd", idStr).Output(); err == nil {
-			uidUsed = true
-		} else {
-			// Fallback: grep /etc/passwd for :UID: pattern
-			// grep -q returns 0 if found, non-zero if not found
-			if err := exec.Command("grep", "-q", ":"+idStr+":", "/etc/passwd").Run(); err == nil {
-				uidUsed = true
-			}
-		}
-		if uidUsed {
+// findAvailableSystemID finds an available UID/GID per AI.md PART 23.
+// Starts at 899 and works DOWN to 200, skipping reserved IDs.
+// Uses os/user package (not getent) for portable, subprocess-free lookup.
+func findAvailableSystemID() (int, error) {
+	for id := 899; id >= 200; id-- {
+		if reservedSystemIDs[id] {
 			continue
 		}
-
-		// Check if GID is unused
-		gidUsed := false
-		if _, err := exec.Command("getent", "group", idStr).Output(); err == nil {
-			gidUsed = true
-		} else {
-			if err := exec.Command("grep", "-q", ":"+idStr+":", "/etc/group").Run(); err == nil {
-				gidUsed = true
-			}
-		}
-		if gidUsed {
+		if _, err := user.LookupId(strconv.Itoa(id)); err == nil {
 			continue
 		}
-
-		// Both available
-		return id
+		if _, err := user.LookupGroupId(strconv.Itoa(id)); err == nil {
+			continue
+		}
+		return id, nil
 	}
-	return min
+	return 0, fmt.Errorf("no available UID/GID in safe range 200-899")
+}
+
+// findAvailableID is a backward-compatible wrapper around findAvailableSystemID.
+func findAvailableID(min, max int) int {
+	id, err := findAvailableSystemID()
+	if err != nil {
+		return min
+	}
+	return id
 }

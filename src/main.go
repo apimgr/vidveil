@@ -599,9 +599,6 @@ func main() {
 			// CVE/security database update per PART 11
 			return cveSvc.Update(ctx)
 		},
-		SessionCleanup: func(ctx context.Context) error {
-			return nil
-		},
 		TokenCleanup: func(ctx context.Context) error {
 			return nil
 		},

@@ -472,8 +472,18 @@ func parseCronField(field string, min, max int) ([]int, error) {
 	return result, nil
 }
 
-// parseInterval converts schedule string to duration per AI.md
+// parseInterval converts schedule string to duration per AI.md PART 18.
+// Supports: @every Xm / @every Xh / @hourly / @daily / @weekly / @monthly
+// and bare Go duration strings (e.g. "15m") for backward compatibility.
 func parseInterval(schedule string) (time.Duration, error) {
+	// @every <duration> per AI.md PART 18 ("@every 15m", "@every 5m", "@every 1h", …)
+	if strings.HasPrefix(schedule, "@every ") {
+		d, err := time.ParseDuration(strings.TrimPrefix(schedule, "@every "))
+		if err != nil {
+			return 0, fmt.Errorf("invalid @every duration %q: %w", schedule, err)
+		}
+		return d, nil
+	}
 	switch schedule {
 	case "hourly", "@hourly":
 		return time.Hour, nil
@@ -847,8 +857,6 @@ type BuiltinTaskFuncs struct {
 	BlocklistUpdate TaskFunc
 	// cve.update - Daily, update CVE/security databases
 	CVEUpdate TaskFunc
-	// session.cleanup - Every 15 minutes, remove expired sessions
-	SessionCleanup TaskFunc
 	// token.cleanup - Every 15 minutes, remove expired tokens
 	TokenCleanup TaskFunc
 	// log.rotation - Daily, rotate and compress logs
@@ -902,18 +910,11 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 			"0 5 * * *", funcs.CVEUpdate)
 	}
 
-	// session_cleanup - Every 15 minutes per AI.md PART 18
-	if funcs.SessionCleanup != nil {
-		s.RegisterTask("session_cleanup", "Session Cleanup",
-			"Remove expired user and admin sessions",
-			"15m", funcs.SessionCleanup)
-	}
-
 	// token_cleanup - Every 15 minutes per AI.md PART 18
 	if funcs.TokenCleanup != nil {
 		s.RegisterTask("token_cleanup", "Token Cleanup",
 			"Remove expired API tokens and reset tokens",
-			"15m", funcs.TokenCleanup)
+			"@every 15m", funcs.TokenCleanup)
 	}
 
 	// log_rotation - Daily at 00:00 per AI.md PART 18
@@ -944,14 +945,14 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 	if funcs.HealthcheckSelf != nil {
 		s.RegisterTask("healthcheck_self", "Self Health Check",
 			"Perform internal health verification",
-			"5m", funcs.HealthcheckSelf)
+			"@every 5m", funcs.HealthcheckSelf)
 	}
 
 	// tor_health - Every 10 minutes (only when Tor is installed/enabled)
 	if funcs.TorHealth != nil {
 		s.RegisterTask("tor_health", "Tor Health Check",
 			"Check Tor connectivity and restart if needed",
-			"10m", funcs.TorHealth)
+			"@every 10m", funcs.TorHealth)
 	}
 
 	// update_check - Daily at 06:00 per AI.md PART 18/22
@@ -978,7 +979,6 @@ func (s *Scheduler) migrateLegacyTaskIDs() {
 		"geoip.update":     "geoip_update",
 		"blocklist.update": "blocklist_update",
 		"cve.update":       "cve_update",
-		"session.cleanup":  "session_cleanup",
 		"token.cleanup":    "token_cleanup",
 		"log.rotation":     "log_rotation",
 		"backup.auto":      "backup_daily",
@@ -1018,7 +1018,7 @@ func (s *Scheduler) RegisterDefaultTasks(
 ) {
 	funcs := BuiltinTaskFuncs{
 		SSLRenewal:      certRenewal,
-		SessionCleanup:  cleanup,
+		TokenCleanup:    cleanup,
 		HealthcheckSelf: healthCheck,
 	}
 	s.RegisterBuiltinTasks(funcs)

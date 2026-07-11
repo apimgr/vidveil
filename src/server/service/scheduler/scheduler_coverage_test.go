@@ -248,17 +248,20 @@ func TestRegisterBuiltinTasks_MultipleTasksRegistered(t *testing.T) {
 	}
 }
 
-func TestRegisterBuiltinTasks_SessionAndTokenCleanup(t *testing.T) {
+func TestRegisterBuiltinTasks_TokenCleanupAndTorHealth(t *testing.T) {
 	s := NewScheduler()
 	s.RegisterBuiltinTasks(BuiltinTaskFuncs{
-		SessionCleanup: func(_ context.Context) error { return nil },
-		TokenCleanup:   func(_ context.Context) error { return nil },
-		TorHealth:      func(_ context.Context) error { return nil },
+		TokenCleanup: func(_ context.Context) error { return nil },
+		TorHealth:    func(_ context.Context) error { return nil },
 	})
-	for _, id := range []string{"session_cleanup", "token_cleanup", "tor_health"} {
+	// session_cleanup is NOT a built-in task per AI.md PART 18 (only 11 tasks)
+	for _, id := range []string{"token_cleanup", "tor_health"} {
 		if _, err := s.GetTask(id); err != nil {
 			t.Errorf("task %q not found: %v", id, err)
 		}
+	}
+	if _, err := s.GetTask("session_cleanup"); err == nil {
+		t.Error("session_cleanup must not be registered (not in PART 18 spec)")
 	}
 }
 
@@ -293,11 +296,11 @@ func TestRegisterDefaultTasks_DelegatesToBuiltins(t *testing.T) {
 	cleanupFn := func(_ context.Context) error { return nil }
 	healthFn := func(_ context.Context) error { return nil }
 
-	// RegisterDefaultTasks maps certRenewal→SSLRenewal, cleanup→SessionCleanup,
-	// healthCheck→HealthcheckSelf.
+	// RegisterDefaultTasks maps certRenewal→SSLRenewal, cleanup→TokenCleanup,
+	// healthCheck→HealthcheckSelf per current wrapper implementation.
 	s.RegisterDefaultTasks(certFn, nil, cleanupFn, healthFn)
 
-	for _, id := range []string{"ssl_renewal", "session_cleanup", "healthcheck_self"} {
+	for _, id := range []string{"ssl_renewal", "token_cleanup", "healthcheck_self"} {
 		if _, err := s.GetTask(id); err != nil {
 			t.Errorf("task %q not registered via RegisterDefaultTasks: %v", id, err)
 		}

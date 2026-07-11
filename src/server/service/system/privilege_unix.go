@@ -83,21 +83,18 @@ func createSystemUser(username string) error {
 	// Determine home directory
 	homeDir := fmt.Sprintf("/var/lib/apimgr/%s", username)
 
-	// Try standard Linux commands first (Debian, RHEL, etc.)
+	// groupadd --system --gid {id} {name} per AI.md PART 23
+	// --gid is numeric; Alpine uses addgroup -g -S
 	if _, err := exec.LookPath("groupadd"); err == nil {
-		exec.Command("groupadd", "-g", strconv.Itoa(uid), username).Run()
+		exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), username).Run()
+		// useradd: --system, numeric --gid per AI.md PART 23
 		cmd := exec.Command("useradd",
-			// System account
-			"-r",
-			// UID
-			"-u", strconv.Itoa(uid),
-			// Primary group
-			"-g", username,
-			// Home directory
-			"-d", homeDir,
-			// No login shell
-			"-s", "/sbin/nologin",
-			"-c", username+" service account",
+			"--system",
+			"--uid", strconv.Itoa(uid),
+			"--gid", strconv.Itoa(uid),
+			"--home-dir", homeDir,
+			"--shell", "/sbin/nologin",
+			"--comment", username+" service account",
 			username,
 		)
 		return cmd.Run()
@@ -106,17 +103,11 @@ func createSystemUser(username string) error {
 	// Alpine Linux uses addgroup/adduser (busybox)
 	exec.Command("addgroup", "-g", strconv.Itoa(uid), "-S", username).Run()
 	return exec.Command("adduser",
-		// Don't assign password
 		"-D",
-		// System user
 		"-S",
-		// No home directory
 		"-H",
-		// UID
 		"-u", strconv.Itoa(uid),
-		// Primary group
 		"-G", username,
-		// No login shell
 		"-s", "/sbin/nologin",
 		username,
 	).Run()

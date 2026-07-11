@@ -417,6 +417,10 @@ type LogsConfig struct {
 	Error    ErrorLogConfig    `yaml:"error"`
 	Audit    AuditLogConfig    `yaml:"audit"`
 	Security SecurityLogConfig `yaml:"security"`
+	// AI.md PART 11: auth.log (authentication events, syslog format)
+	Auth AuthLogConfig `yaml:"auth"`
+	// AI.md PART 11: app.log / vidveil.log (general info/warn, logfmt format)
+	App AppLogConfig `yaml:"app"`
 }
 
 // DebugLogConfig holds debug log settings
@@ -471,6 +475,29 @@ type SecurityLogConfig struct {
 	Format   string `yaml:"format"`
 	Keep     string `yaml:"keep"`
 	Rotate   string `yaml:"rotate"`
+}
+
+// AuthLogConfig holds authentication log settings per AI.md PART 11
+// Default format: syslog (RFC 3164) for Fail2ban/SIEM integration
+type AuthLogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Filename string `yaml:"filename"`
+	// Format: syslog (default), json
+	Format string `yaml:"format"`
+	Keep   string `yaml:"keep"`
+	Rotate string `yaml:"rotate"`
+}
+
+// AppLogConfig holds general application log settings per AI.md PART 11
+// Default format: logfmt (key=value pairs)
+// Also known as {project_name}.log
+type AppLogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Filename string `yaml:"filename"`
+	// Format: logfmt (default), json
+	Format string `yaml:"format"`
+	Keep   string `yaml:"keep"`
+	Rotate string `yaml:"rotate"`
 }
 
 // RateLimitConfig holds rate limiting settings
@@ -1013,16 +1040,35 @@ func DefaultAppConfig() *AppConfig {
 					Rotate:   "weekly,50MB",
 				},
 				Audit: AuditLogConfig{
+					Enabled:  true,
 					Filename: "audit.log",
 					Format:   "json",
 					Keep:     "none",
-					Rotate:   "monthly",
+					// AI.md PART 11: audit.log rotates daily
+					Rotate: "daily",
 				},
 				Security: SecurityLogConfig{
+					Enabled:  true,
 					Filename: "security.log",
 					Format:   "fail2ban",
 					Keep:     "none",
-					Rotate:   "monthly",
+					Rotate:   "weekly,50MB",
+				},
+				Auth: AuthLogConfig{
+					Enabled:  true,
+					Filename: "auth.log",
+					// AI.md PART 11: auth.log default format syslog (RFC 3164)
+					Format: "syslog",
+					Keep:   "none",
+					Rotate: "weekly,50MB",
+				},
+				App: AppLogConfig{
+					Enabled:  true,
+					Filename: "vidveil.log",
+					// AI.md PART 11: app.log default format logfmt
+					Format: "logfmt",
+					Keep:   "none",
+					Rotate: "weekly,50MB",
 				},
 			},
 			RateLimit: RateLimitConfig{

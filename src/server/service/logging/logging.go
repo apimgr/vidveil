@@ -485,13 +485,15 @@ func generateAuditID() string {
 }
 
 // auditCategory maps event prefixes to category names per PART 11
+// Category strings match the JSON wire format shown in the PART 11 spec example:
+// config.updated → "config", security.* → "security", etc.
 func auditCategory(event string) string {
 	prefix := strings.SplitN(event, ".", 2)[0]
 	switch prefix {
-	case "admin", "user":
+	case "admin", "user", "oidc", "ldap":
 		return "authentication"
 	case "config", "branding", "ssl":
-		return "configuration"
+		return "config"
 	case "security":
 		return "security"
 	case "token":
@@ -500,8 +502,6 @@ func auditCategory(event string) string {
 		return "backup"
 	case "server", "scheduler":
 		return "server"
-	case "oidc", "ldap":
-		return "authentication"
 	case "org":
 		return "organization"
 	default:
@@ -607,6 +607,22 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 		keep := parseKeepString(appConfig.Server.Logs.Security.Keep)
 		if err := l.addFileOutput("security", appConfig.Server.Logs.Security.Filename, appConfig.Server.Logs.Security.Rotate, keep); err != nil {
 			return nil, fmt.Errorf("failed to open security log: %w", err)
+		}
+	}
+
+	// Setup auth log with rotation per PART 11 (authentication events, syslog format)
+	if appConfig.Server.Logs.Auth.Enabled && appConfig.Server.Logs.Auth.Filename != "" {
+		keep := parseKeepString(appConfig.Server.Logs.Auth.Keep)
+		if err := l.addFileOutput("auth", appConfig.Server.Logs.Auth.Filename, appConfig.Server.Logs.Auth.Rotate, keep); err != nil {
+			return nil, fmt.Errorf("failed to open auth log: %w", err)
+		}
+	}
+
+	// Setup app/project log with rotation per PART 11 (general info/warn, logfmt format)
+	if appConfig.Server.Logs.App.Enabled && appConfig.Server.Logs.App.Filename != "" {
+		keep := parseKeepString(appConfig.Server.Logs.App.Keep)
+		if err := l.addFileOutput("app", appConfig.Server.Logs.App.Filename, appConfig.Server.Logs.App.Rotate, keep); err != nil {
+			return nil, fmt.Errorf("failed to open app log: %w", err)
 		}
 	}
 
@@ -783,16 +799,82 @@ func (l *AppLogger) Error(message string, fields map[string]interface{}) {
 	l.log(LevelError, "server", message, fields)
 }
 
-// Access logs an access log entry
-func (l *AppLogger) Access(method, path, remoteAddr, userAgent string, status int, duration time.Duration) {
-	l.log(LevelInfo, "access", "HTTP request", map[string]interface{}{
-		"method":      method,
-		"path":        path,
-		"remote_addr": remoteAddr,
-		"user_agent":  userAgent,
-		"status":      status,
-		"duration_ms": duration.Milliseconds(),
-	})
+// apacheLog formats an access log line in Apache Combined Log Format per AI.md PART 11.
+// Format: %h %l %u %t "%r" %>s %b "%{Referer}i" "%{User-agent}i"
+// Example: 127.0.0.1 - - [10/Oct/2024:13:55:36 -0700] "GET /health HTTP/1.1" 200 2326 "-" "curl/7.64.1"
+func apacheLog(remoteAddr, method, path, proto, referer, userAgent string, status, size int) string {
+	ts := time.Now().Format("02/Jan/2006:15:04:05 -0700")
+	if referer == "" {
+		referer = "-"
+	}
+	if userAgent == "" {
+		userAgent = "-"
+	}
+	if proto == "" {
+		proto = "HTTP/1.1"
+	}
+	return fmt.Sprintf("%s - - [%s] \"%s %s %s\" %d %d \"%s\" \"%s\"",
+		remoteAddr, ts, method, path, proto, status, size, referer, userAgent)
+}
+
+// nginxLog formats an access log line in Nginx Common Log Format per AI.md PART 11.
+// Format: %h %l %u %t "%r" %>s %b
+func nginxLog(remoteAddr, method, path, proto string, status, size int) string {
+	ts := time.Now().Format("02/Jan/2006:15:04:05 -0700")
+	if proto == "" {
+		proto = "HTTP/1.1"
+	}
+	return fmt.Sprintf("%s - - [%s] \"%s %s %s\" %d %d",
+		remoteAddr, ts, method, path, proto, status, size)
+}
+
+// Access logs an HTTP access log entry per AI.md PART 11.
+// Format is determined by the configured access log format (apache, nginx, json).
+// Default: apache (Apache Combined Log Format).
+func (l *AppLogger) Access(method, path, proto, remoteAddr, referer, userAgent string, status, size int) {
+	if _, ok := l.outputs["access"]; !ok {
+		return
+	}
+
+	// Determine format from config
+	format := "apache"
+	if l.appConfig != nil {
+		format = strings.ToLower(l.appConfig.Server.Logs.Access.Format)
+	}
+
+	var line string
+	switch format {
+	case "nginx":
+		line = nginxLog(remoteAddr, method, path, proto, status, size)
+	case "json":
+		entry := LogEntry{
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Level:     "INFO",
+			Message:   "HTTP request",
+			Fields: map[string]interface{}{
+				"ip":     remoteAddr,
+				"method": method,
+				"path":   path,
+				"status": status,
+				"size":   size,
+				"ua":     userAgent,
+			},
+		}
+		data, err := json.Marshal(entry)
+		if err != nil {
+			return
+		}
+		line = string(data)
+	default:
+		// apache (default) per AI.md PART 11
+		line = apacheLog(remoteAddr, method, path, proto, referer, userAgent, status, size)
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	w := l.outputs["access"]
+	w.Write([]byte(line))
+	w.Write([]byte("\n"))
 }
 
 // Audit logs an audit event in PART 11-compliant JSON Lines format.
@@ -835,6 +917,54 @@ func (l *AppLogger) Audit(event, actorID, actorType, actorIP, result string, det
 	w.Write([]byte("\n"))
 }
 
+// Auth logs an authentication event to auth.log in syslog RFC 3164 format per AI.md PART 11.
+// Format: "May 13 10:58:00 hostname vidveil[pid]: auth: user=xxx ip=1.2.3.4 result=fail reason=invalid_credentials"
+// user should be masked before calling; result is "success" or "fail"; reason is a stable machine code.
+func (l *AppLogger) Auth(user, remoteAddr, result, reason string) {
+	if _, ok := l.outputs["auth"]; !ok {
+		return
+	}
+
+	// Determine format from config
+	format := "syslog"
+	if l.appConfig != nil {
+		format = strings.ToLower(l.appConfig.Server.Logs.Auth.Format)
+	}
+
+	var line string
+	switch format {
+	case "json":
+		entry := LogEntry{
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Level:     "INFO",
+			Message:   "auth event",
+			Fields: map[string]interface{}{
+				"user":   MaskUsername(user),
+				"ip":     remoteAddr,
+				"result": result,
+				"reason": reason,
+			},
+		}
+		data, err := json.Marshal(entry)
+		if err != nil {
+			return
+		}
+		line = string(data)
+	default:
+		// syslog RFC 3164 (default) per AI.md PART 11
+		ts := time.Now().Format("Jan _2 15:04:05")
+		hostname, _ := os.Hostname()
+		line = fmt.Sprintf("%s %s vidveil[%d]: auth: user=%s ip=%s result=%s reason=%s",
+			ts, hostname, os.Getpid(), MaskUsername(user), remoteAddr, result, reason)
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	w := l.outputs["auth"]
+	w.Write([]byte(line))
+	w.Write([]byte("\n"))
+}
+
 // Security logs a security event with automatic PII masking per AI.md PART 11
 func (l *AppLogger) Security(event, remoteAddr string, details map[string]interface{}) {
 	fields := map[string]interface{}{
@@ -858,15 +988,22 @@ func NewAccessLogMiddleware(logger *AppLogger) *AccessLogMiddleware {
 	return &AccessLogMiddleware{logger: logger}
 }
 
-// responseWriter wraps http.ResponseWriter to capture status code
+// responseWriter wraps http.ResponseWriter to capture status code and response size
 type responseWriter struct {
 	http.ResponseWriter
 	status int
+	size   int
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.status = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	n, err := rw.ResponseWriter.Write(b)
+	rw.size += n
+	return n, err
 }
 
 // Ensure we implement http.Hijacker if the underlying ResponseWriter does
@@ -879,21 +1016,22 @@ func (rw *responseWriter) Hijack() (interface{}, interface{}, error) {
 	return nil, nil, fmt.Errorf("hijack not supported")
 }
 
-// Handler wraps an http.Handler with access logging
+// Handler wraps an http.Handler with access logging per AI.md PART 11.
+// Captures method, path, protocol, remote address, referrer, user-agent, status, and size.
 func (m *AccessLogMiddleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
 		wrapped := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(wrapped, r)
 
 		m.logger.Access(
 			r.Method,
 			r.URL.Path,
+			r.Proto,
 			r.RemoteAddr,
+			r.Referer(),
 			r.UserAgent(),
 			wrapped.status,
-			time.Since(start),
+			wrapped.size,
 		)
 	})
 }

@@ -113,7 +113,7 @@ func TestAppLoggerAccessWritesToOutput(t *testing.T) {
 	var buf bytes.Buffer
 	l := newInMemoryLogger(LevelDebug, &buf)
 
-	l.Access("GET", "/ping", "127.0.0.1:9000", "go-test/1.0", 200, 5*time.Millisecond)
+	l.Access("GET", "/ping", "HTTP/1.1", "127.0.0.1:9000", "", "go-test/1.0", 200, 512)
 
 	if buf.Len() == 0 {
 		t.Error("Access() produced no output")

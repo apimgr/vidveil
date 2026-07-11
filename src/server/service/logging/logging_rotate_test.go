@@ -220,7 +220,7 @@ func TestNewAppLogger_AccessLogEnabled(t *testing.T) {
 	}
 	defer logger.Close()
 
-	logger.Access("GET", "/", "127.0.0.1", "test", 200, 0)
+	logger.Access("GET", "/", "HTTP/1.1", "127.0.0.1", "", "test", 200, 0)
 }
 
 func TestNewAppLogger_SecurityLogEnabled(t *testing.T) {

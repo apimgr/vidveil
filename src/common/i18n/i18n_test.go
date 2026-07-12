@@ -105,10 +105,10 @@ func TestMiddleware(t *testing.T) {
 	translator := NewTranslator()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get locale from X-Locale header (set by middleware)
-		locale := r.Header.Get("X-Locale")
+		// Get locale from request context (set by middleware per AI.md PART 30)
+		locale := LocaleFromContext(r.Context())
 		if locale == "" {
-			t.Error("X-Locale header not set by middleware")
+			t.Error("locale not set in context by middleware")
 		}
 		w.WriteHeader(http.StatusOK)
 	})
@@ -611,7 +611,8 @@ func TestMiddlewareAllPaths(t *testing.T) {
 	tr := NewTranslator()
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Got-Locale", r.Header.Get("X-Locale"))
+		// Read locale from context per AI.md PART 30 (middleware stores it there)
+		w.Header().Set("X-Got-Locale", LocaleFromContext(r.Context()))
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -623,7 +624,7 @@ func TestMiddlewareAllPaths(t *testing.T) {
 		wrapped.ServeHTTP(rr, req)
 
 		if got := rr.Header().Get("X-Got-Locale"); got != "ar" {
-			t.Errorf("Middleware ?lang=ar: X-Locale = %q, want ar", got)
+			t.Errorf("Middleware ?lang=ar: locale =%q, want ar", got)
 		}
 
 		// Cookie must have been written.
@@ -658,7 +659,7 @@ func TestMiddlewareAllPaths(t *testing.T) {
 		wrapped.ServeHTTP(rr, req)
 
 		if got := rr.Header().Get("X-Got-Locale"); got != "ar" {
-			t.Errorf("Middleware cookie=ar: X-Locale = %q, want ar", got)
+			t.Errorf("Middleware cookie=ar: locale =%q, want ar", got)
 		}
 	})
 
@@ -670,7 +671,7 @@ func TestMiddlewareAllPaths(t *testing.T) {
 		wrapped.ServeHTTP(rr, req)
 
 		if got := rr.Header().Get("X-Got-Locale"); got != "en" {
-			t.Errorf("Middleware unknown cookie: X-Locale = %q, want en", got)
+			t.Errorf("Middleware unknown cookie: locale =%q, want en", got)
 		}
 	})
 
@@ -680,7 +681,7 @@ func TestMiddlewareAllPaths(t *testing.T) {
 		wrapped.ServeHTTP(rr, req)
 
 		if got := rr.Header().Get("X-Got-Locale"); got != DefaultLocale {
-			t.Errorf("Middleware no signals: X-Locale = %q, want %q", got, DefaultLocale)
+			t.Errorf("Middleware no signals: locale =%q, want %q", got, DefaultLocale)
 		}
 	})
 

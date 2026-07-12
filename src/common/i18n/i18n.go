@@ -3,6 +3,7 @@
 package i18n
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,21 @@ import (
 	"strings"
 	"sync"
 )
+
+// ctxKey is an unexported type for context keys in this package.
+type ctxKey int
+
+// langKey is the context key for the resolved locale.
+const langKey ctxKey = iota
+
+// LocaleFromContext returns the locale stored by LanguageMiddleware,
+// or DefaultLocale ("en") if none is present.
+func LocaleFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(langKey).(string); ok && v != "" {
+		return v
+	}
+	return DefaultLocale
+}
 
 //go:embed locales/*.json
 var localesFS embed.FS
@@ -469,9 +485,9 @@ func (t *Translator) Middleware(next http.Handler) http.Handler {
 			locale = t.fallback
 		}
 
-		// Surface to handlers via request header (context key would require a context package dep)
-		r.Header.Set("X-Locale", locale)
-		next.ServeHTTP(w, r)
+		// Store resolved locale in request context per AI.md PART 30.
+		ctx := context.WithValue(r.Context(), langKey, locale)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

@@ -28,9 +28,13 @@ func injectLocaleData(r *http.Request, data map[string]interface{}) {
 	}
 }
 
-// resolveLocale picks the request locale without requiring a Translator
-// instance (templates may render before i18n is wired into the handler).
+// resolveLocale returns the locale for a request. Prefers the value set by
+// i18n.LanguageMiddleware in the request context (primary path); falls back to
+// direct header/cookie/query inspection when the middleware is not in the chain.
 func resolveLocale(r *http.Request) string {
+	if loc := i18n.LocaleFromContext(r.Context()); loc != i18n.DefaultLocale {
+		return loc
+	}
 	if v := strings.TrimSpace(r.URL.Query().Get("lang")); v != "" {
 		return strings.ToLower(v)
 	}
@@ -38,7 +42,7 @@ func resolveLocale(r *http.Request) string {
 		return strings.ToLower(c.Value)
 	}
 	if al := r.Header.Get("Accept-Language"); al != "" {
-		// Accept-Language: en-US,en;q=0.9 -> "en-us"
+		// Accept-Language: en-US,en;q=0.9 → "en-us"
 		first := al
 		if idx := strings.IndexAny(first, ",;"); idx > 0 {
 			first = first[:idx]

@@ -459,13 +459,24 @@ type ErrorLogConfig struct {
 	Rotate   string `yaml:"rotate"`
 }
 
-// AuditLogConfig holds audit log settings
+// AuditLogEventsConfig controls which event categories are written to audit.log
+type AuditLogEventsConfig struct {
+	Configuration bool `yaml:"configuration"`
+	Security      bool `yaml:"security"`
+	Backup        bool `yaml:"backup"`
+	Server        bool `yaml:"server"`
+}
+
+// AuditLogConfig holds audit log settings per AI.md PART 11
 type AuditLogConfig struct {
-	Enabled  bool   `yaml:"enabled"`
-	Filename string `yaml:"filename"`
-	Format   string `yaml:"format"`
-	Keep     string `yaml:"keep"`
-	Rotate   string `yaml:"rotate"`
+	Enabled          bool                 `yaml:"enabled"`
+	Filename         string               `yaml:"filename"`
+	Format           string               `yaml:"format"`
+	Keep             string               `yaml:"keep"`
+	Rotate           string               `yaml:"rotate"`
+	Compress         bool                 `yaml:"compress"`
+	Events           AuditLogEventsConfig `yaml:"events"`
+	IncludeUserAgent bool                 `yaml:"include_user_agent"`
 }
 
 // SecurityLogConfig holds security log settings
@@ -1045,7 +1056,15 @@ func DefaultAppConfig() *AppConfig {
 					Format:   "json",
 					Keep:     "none",
 					// AI.md PART 11: audit.log rotates daily
-					Rotate: "daily",
+					Rotate:           "daily",
+					Compress:         false,
+					IncludeUserAgent: true,
+					Events: AuditLogEventsConfig{
+						Configuration: true,
+						Security:      true,
+						Backup:        true,
+						Server:        true,
+					},
 				},
 				Security: SecurityLogConfig{
 					Enabled:  true,

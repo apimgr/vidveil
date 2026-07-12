@@ -100,10 +100,12 @@ func TestResponseWriterHijack_Supported(t *testing.T) {
 
 func TestAppLogger_Log_UnmarshalableFields(t *testing.T) {
 	var buf bytes.Buffer
+	// Use json format so that an unmarshalable value (channel) triggers the silent-return path.
 	l := &AppLogger{
-		level:     LevelDebug,
-		outputs:   map[string]io.Writer{"debug": &buf},
-		appConfig: config.DefaultAppConfig(),
+		level:         LevelDebug,
+		outputs:       map[string]io.Writer{"debug": &buf},
+		outputFormats: map[string]string{"debug": "json"},
+		appConfig:     config.DefaultAppConfig(),
 	}
 	// A channel value cannot be JSON-marshaled; this triggers the err != nil branch in log().
 	l.log(LevelDebug, "debug", "test", map[string]interface{}{

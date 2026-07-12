@@ -469,7 +469,7 @@ type AuditEntry struct {
 	Target   *AuditTarget           `json:"target,omitempty"`
 	Details  map[string]interface{} `json:"details,omitempty"`
 	Result   string                 `json:"result"`
-	NodeID   string                 `json:"node_id,omitempty"`
+	Reason   string                 `json:"reason,omitempty"`
 }
 
 // generateAuditID generates a unique audit entry ID using timestamp + random hex
@@ -535,17 +535,19 @@ func auditSeverity(event, result string) string {
 
 // AppLogger handles structured logging
 type AppLogger struct {
-	mu        sync.Mutex
-	level     Level
-	outputs   map[string]io.Writer
-	appConfig *config.AppConfig
+	mu            sync.Mutex
+	level         Level
+	outputs       map[string]io.Writer
+	outputFormats map[string]string // output name → format ("text", "logfmt", "json")
+	appConfig     *config.AppConfig
 }
 
 // NewAppLogger creates a new logger
 func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 	l := &AppLogger{
-		outputs:   make(map[string]io.Writer),
-		appConfig: appConfig,
+		outputs:       make(map[string]io.Writer),
+		outputFormats: make(map[string]string),
+		appConfig:     appConfig,
 	}
 
 	// Parse log level
@@ -562,66 +564,74 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 		l.level = LevelInfo
 	}
 
-	// Setup debug log with rotation per PART 11
+	// Setup debug log — text format per PART 11
 	if appConfig.Server.Logs.Debug.Enabled && appConfig.Server.Logs.Debug.Filename != "" {
 		keep := parseKeepString(appConfig.Server.Logs.Debug.Keep)
-		if err := l.addFileOutput("debug", appConfig.Server.Logs.Debug.Filename, appConfig.Server.Logs.Debug.Rotate, keep); err != nil {
+		if err := l.addFileOutput("debug", appConfig.Server.Logs.Debug.Filename, appConfig.Server.Logs.Debug.Rotate, "text", keep); err != nil {
 			return nil, fmt.Errorf("failed to open debug log: %w", err)
 		}
 	}
 
-	// Setup access log with rotation per PART 11
+	// Setup access log — apache combined format per PART 11
 	if appConfig.Server.Logs.Access.Enabled && appConfig.Server.Logs.Access.Filename != "" {
 		keep := parseKeepString(appConfig.Server.Logs.Access.Keep)
-		if err := l.addFileOutput("access", appConfig.Server.Logs.Access.Filename, appConfig.Server.Logs.Access.Rotate, keep); err != nil {
+		accessFmt := appConfig.Server.Logs.Access.Format
+		if accessFmt == "" {
+			accessFmt = "apache_combined"
+		}
+		if err := l.addFileOutput("access", appConfig.Server.Logs.Access.Filename, appConfig.Server.Logs.Access.Rotate, accessFmt, keep); err != nil {
 			return nil, fmt.Errorf("failed to open access log: %w", err)
 		}
 	}
 
-	// Setup server log with rotation per PART 11
+	// Setup server log — text format per PART 11
 	if appConfig.Server.Logs.Server.Enabled && appConfig.Server.Logs.Server.Filename != "" {
 		keep := parseKeepString(appConfig.Server.Logs.Server.Keep)
-		if err := l.addFileOutput("server", appConfig.Server.Logs.Server.Filename, appConfig.Server.Logs.Server.Rotate, keep); err != nil {
+		if err := l.addFileOutput("server", appConfig.Server.Logs.Server.Filename, appConfig.Server.Logs.Server.Rotate, "text", keep); err != nil {
 			return nil, fmt.Errorf("failed to open server log: %w", err)
 		}
 	}
 
-	// Setup error log with rotation per PART 11
+	// Setup error log — text format per PART 11
 	if appConfig.Server.Logs.Error.Enabled && appConfig.Server.Logs.Error.Filename != "" {
 		keep := parseKeepString(appConfig.Server.Logs.Error.Keep)
-		if err := l.addFileOutput("error", appConfig.Server.Logs.Error.Filename, appConfig.Server.Logs.Error.Rotate, keep); err != nil {
+		if err := l.addFileOutput("error", appConfig.Server.Logs.Error.Filename, appConfig.Server.Logs.Error.Rotate, "text", keep); err != nil {
 			return nil, fmt.Errorf("failed to open error log: %w", err)
 		}
 	}
 
-	// Setup audit log with rotation per PART 11
+	// Setup audit log — JSON Lines format per PART 11
 	if appConfig.Server.Logs.Audit.Enabled && appConfig.Server.Logs.Audit.Filename != "" {
 		keep := parseKeepString(appConfig.Server.Logs.Audit.Keep)
-		if err := l.addFileOutput("audit", appConfig.Server.Logs.Audit.Filename, appConfig.Server.Logs.Audit.Rotate, keep); err != nil {
+		if err := l.addFileOutput("audit", appConfig.Server.Logs.Audit.Filename, appConfig.Server.Logs.Audit.Rotate, "json", keep); err != nil {
 			return nil, fmt.Errorf("failed to open audit log: %w", err)
 		}
 	}
 
-	// Setup security log with rotation per PART 11
+	// Setup security log — fail2ban format by default per PART 11 (Security() writes directly)
 	if appConfig.Server.Logs.Security.Enabled && appConfig.Server.Logs.Security.Filename != "" {
 		keep := parseKeepString(appConfig.Server.Logs.Security.Keep)
-		if err := l.addFileOutput("security", appConfig.Server.Logs.Security.Filename, appConfig.Server.Logs.Security.Rotate, keep); err != nil {
+		secFmt := appConfig.Server.Logs.Security.Format
+		if secFmt == "" {
+			secFmt = "fail2ban"
+		}
+		if err := l.addFileOutput("security", appConfig.Server.Logs.Security.Filename, appConfig.Server.Logs.Security.Rotate, secFmt, keep); err != nil {
 			return nil, fmt.Errorf("failed to open security log: %w", err)
 		}
 	}
 
-	// Setup auth log with rotation per PART 11 (authentication events, syslog format)
+	// Setup auth log — syslog RFC 3164 format per PART 11
 	if appConfig.Server.Logs.Auth.Enabled && appConfig.Server.Logs.Auth.Filename != "" {
 		keep := parseKeepString(appConfig.Server.Logs.Auth.Keep)
-		if err := l.addFileOutput("auth", appConfig.Server.Logs.Auth.Filename, appConfig.Server.Logs.Auth.Rotate, keep); err != nil {
+		if err := l.addFileOutput("auth", appConfig.Server.Logs.Auth.Filename, appConfig.Server.Logs.Auth.Rotate, "syslog", keep); err != nil {
 			return nil, fmt.Errorf("failed to open auth log: %w", err)
 		}
 	}
 
-	// Setup app/project log with rotation per PART 11 (general info/warn, logfmt format)
+	// Setup app/project log — logfmt format per PART 11
 	if appConfig.Server.Logs.App.Enabled && appConfig.Server.Logs.App.Filename != "" {
 		keep := parseKeepString(appConfig.Server.Logs.App.Keep)
-		if err := l.addFileOutput("app", appConfig.Server.Logs.App.Filename, appConfig.Server.Logs.App.Rotate, keep); err != nil {
+		if err := l.addFileOutput("app", appConfig.Server.Logs.App.Filename, appConfig.Server.Logs.App.Rotate, "logfmt", keep); err != nil {
 			return nil, fmt.Errorf("failed to open app log: %w", err)
 		}
 	}
@@ -629,8 +639,9 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 	return l, nil
 }
 
-// addFileOutput adds a rotating file output per PART 11
-func (l *AppLogger) addFileOutput(name, path, rotate string, keep int) error {
+// addFileOutput adds a rotating file output per PART 11.
+// format controls how log() writes to this output ("text", "logfmt", "json").
+func (l *AppLogger) addFileOutput(name, path, rotate, format string, keep int) error {
 	// Parse rotation config from string like "weekly,50MB" or "daily" or "100MB"
 	rotCfg := parseRotationString(rotate)
 	rotCfg.Keep = keep
@@ -647,6 +658,9 @@ func (l *AppLogger) addFileOutput(name, path, rotate string, keep int) error {
 	}
 
 	l.outputs[name] = rf
+	if format != "" {
+		l.outputFormats[name] = format
+	}
 	return nil
 }
 
@@ -758,25 +772,66 @@ func (l *AppLogger) log(level Level, output string, message string, fields map[s
 		return
 	}
 
-	entry := LogEntry{
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Level:     level.String(),
-		Message:   message,
-		Fields:    fields,
-	}
-
-	data, err := json.Marshal(entry)
-	if err != nil {
-		return
-	}
+	ts := time.Now().Format("2006-01-02T15:04:05-07:00")
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if w, ok := l.outputs[output]; ok {
-		w.Write(data)
-		w.Write([]byte("\n"))
+	w, ok := l.outputs[output]
+	if !ok {
+		return
 	}
+
+	format := l.outputFormats[output]
+	var line string
+	switch format {
+	case "logfmt":
+		// logfmt: time=... level=INFO msg="..." key=val per PART 11
+		var sb strings.Builder
+		sb.WriteString("time=")
+		sb.WriteString(ts)
+		sb.WriteString(" level=")
+		sb.WriteString(strings.ToUpper(level.String()))
+		sb.WriteString(" msg=")
+		sb.WriteString(fmt.Sprintf("%q", message))
+		for k, v := range fields {
+			sb.WriteString(" ")
+			sb.WriteString(k)
+			sb.WriteString("=")
+			sb.WriteString(fmt.Sprintf("%v", v))
+		}
+		line = sb.String()
+	case "json":
+		// JSON Lines per PART 11
+		entry := LogEntry{
+			Timestamp: ts,
+			Level:     level.String(),
+			Message:   message,
+			Fields:    fields,
+		}
+		data, err := json.Marshal(entry)
+		if err != nil {
+			return
+		}
+		line = string(data)
+	default:
+		// text: YYYY-MM-DDTHH:MM:SS±HH:MM [LEVEL] message key=val per PART 11
+		var sb strings.Builder
+		sb.WriteString(ts)
+		sb.WriteString(" [")
+		sb.WriteString(strings.ToUpper(level.String()))
+		sb.WriteString("] ")
+		sb.WriteString(message)
+		for k, v := range fields {
+			sb.WriteString(" ")
+			sb.WriteString(k)
+			sb.WriteString("=")
+			sb.WriteString(fmt.Sprintf("%v", v))
+		}
+		line = sb.String()
+	}
+
+	w.Write([]byte(line + "\n"))
 }
 
 // Debug logs a debug message
@@ -784,14 +839,16 @@ func (l *AppLogger) Debug(message string, fields map[string]interface{}) {
 	l.log(LevelDebug, "debug", message, fields)
 }
 
-// Info logs an info message
+// Info logs an info message to server.log (text) and app.log (logfmt) per PART 11.
 func (l *AppLogger) Info(message string, fields map[string]interface{}) {
 	l.log(LevelInfo, "server", message, fields)
+	l.log(LevelInfo, "app", message, fields)
 }
 
-// Warn logs a warning message
+// Warn logs a warning message to server.log (text) and app.log (logfmt) per PART 11.
 func (l *AppLogger) Warn(message string, fields map[string]interface{}) {
 	l.log(LevelWarn, "server", message, fields)
+	l.log(LevelWarn, "app", message, fields)
 }
 
 // Error logs an error message
@@ -966,16 +1023,58 @@ func (l *AppLogger) Auth(user, remoteAddr, result, reason string) {
 }
 
 // Security logs a security event with automatic PII masking per AI.md PART 11
+// Security logs a security event to security.log using the configured format
+// (default: fail2ban per AI.md PART 11).
+//
+// Fail2ban format: "2024-10-10T13:55:36-04:00 [security] <message> from <ip>"
 func (l *AppLogger) Security(event, remoteAddr string, details map[string]interface{}) {
-	fields := map[string]interface{}{
-		"event":       event,
-		"remote_addr": MaskIP(remoteAddr),
+	w, ok := l.outputs["security"]
+	if !ok {
+		// Fall back to server log so the event is never silently dropped
+		l.log(LevelWarn, "security", event, map[string]interface{}{
+			"remote_addr": MaskIP(remoteAddr),
+		})
+		return
 	}
-	for k, v := range details {
-		fields[k] = v
+
+	format := "fail2ban"
+	if l.appConfig != nil {
+		format = l.appConfig.Server.Logs.Security.Format
+		if format == "" {
+			format = "fail2ban"
+		}
 	}
-	// Sanitize sensitive fields before logging
-	l.log(LevelWarn, "security", "Security event", SanitizeLogFields(fields))
+
+	maskedIP := MaskIP(remoteAddr)
+	ts := time.Now().Format("2006-01-02T15:04:05-07:00")
+
+	var line string
+	switch format {
+	case "fail2ban":
+		// "YYYY-MM-DDTHH:MM:SS±HH:MM [security] <event description> from <ip>"
+		line = fmt.Sprintf("%s [security] %s from %s", ts, event, maskedIP)
+	case "syslog":
+		host, _ := os.Hostname()
+		line = fmt.Sprintf("%s %s vidveil[%d]: security: event=%s ip=%s",
+			ts, host, os.Getpid(), event, maskedIP)
+	case "json":
+		entry := map[string]interface{}{
+			"time":    ts,
+			"event":   event,
+			"ip":      maskedIP,
+			"details": SanitizeLogFields(details),
+		}
+		b, _ := json.Marshal(entry)
+		line = string(b)
+	case "text":
+		line = fmt.Sprintf("%s [WARN] security event=%s ip=%s", ts, event, maskedIP)
+	default:
+		line = fmt.Sprintf("%s [security] %s from %s", ts, event, maskedIP)
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	w.Write([]byte(line + "\n"))
 }
 
 // AccessLogMiddleware creates middleware for access logging

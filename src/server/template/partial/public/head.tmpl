@@ -61,19 +61,6 @@
 <link rel="apple-touch-startup-image" href="/static/splash/iphone-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)">
 <link rel="apple-touch-startup-image" href="/static/splash/iphone-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)">
 <script>
-  // Anti-FOUC: apply stored theme before CSS loads so the page never flickers.
-  // Runs synchronously in <head> — must stay tiny and side-effect-free.
-  (function() {
-    try {
-      var t = (JSON.parse(localStorage.getItem('vidveil_prefs') || '{}')).theme
-              || localStorage.getItem('vidveil-theme') || 'auto';
-      var h = document.documentElement;
-      h.classList.remove('theme-dark', 'theme-light', 'theme-auto');
-      h.classList.add('theme-' + t);
-    } catch (e) {}
-  })();
-</script>
-<script>
   // Register service worker for PWA (AI.md PART 16)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

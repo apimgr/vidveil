@@ -2,7 +2,7 @@
 # nginx proxy address - http://172.17.0.1:64893
 # Per AI.md PART 26: Uses temp directory workflow - MUST use image, not build
 
-name: vidveil-dev
+name: vidveil
 
 x-logging: &default-logging
   options:

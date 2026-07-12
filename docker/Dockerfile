@@ -12,7 +12,7 @@ ARG BUILD_DATE
 ARG COMMIT_ID
 ARG OFFICIAL_SITE
 
-WORKDIR /build
+WORKDIR /app
 
 # Copy go.mod first for layer caching
 COPY go.mod go.sum ./
@@ -23,7 +23,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -trimpath -buildvcs=false \
     -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIAL_SITE}'" \
-    -o /build/binary/vidveil ./src
+    -o /app/binary/vidveil ./src
 
 # =============================================================================
 # Runtime Stage - Minimal Alpine image
@@ -55,7 +55,7 @@ RUN apk add --no-cache \
 # Docker volume mounts auto-create mount points
 
 # Copy binary from builder stage (multi-stage build)
-COPY --from=builder /build/binary/vidveil /usr/local/bin/vidveil
+COPY --from=builder /app/binary/vidveil /usr/local/bin/vidveil
 
 # Copy BUILD-TIME overlay (entrypoint.sh) from docker/rootfs/ into image
 # Note: This is docker/rootfs/ (build context), NOT runtime ./volumes/ mounts

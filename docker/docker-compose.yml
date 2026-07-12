@@ -48,7 +48,7 @@ services:
     pull_policy: always
     logging: *default-logging
     volumes:
-      - './volumes/cache:/data:z'
+      - './volumes/data/db/valkey:/data:z'
     healthcheck:
       test: valkey-cli ping || exit 1
       interval: 10s

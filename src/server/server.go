@@ -141,25 +141,26 @@ func (s *Server) SetBlocklistService(b IPBlocklistChecker) {
 
 // setupMiddleware configures middleware
 func (s *Server) setupMiddleware() {
-	// Request ID
-	s.router.Use(middleware.RequestID)
+	// Middleware execution order per AI.md PART 5 / PART 16 spec (first Use = first to execute):
+	// 1. URLNormalize → 2. RequestID → 3. PathSecurity → 4. SecurityHeaders →
+	// 5. Allowlist → 6. Blocklist → 7. RateLimit → 8. GeoIP → 10. Logger (innermost)
 
-	// Real IP
+	// 1. URL Normalization per AI.md PART 16 — MUST be first to execute
+	s.router.Use(URLNormalizeMiddleware)
+
+	// Real IP — normalize RemoteAddr from trusted proxy headers before anything reads it
 	s.router.Use(middleware.RealIP)
 
 	// URL Variables resolution per AI.md PART 8 (reverse proxy headers)
 	s.router.Use(urlvars.GlobalResolver().Middleware)
 
-	// URL Normalization per AI.md PART 16 - redirect /path/ to /path (MUST be early)
-	s.router.Use(URLNormalizeMiddleware)
+	// 2. Request ID per AI.md PART 5 — must run before Logging so logs carry the ID
+	s.router.Use(middleware.RequestID)
 
-	// Path Security (AI.md PART 5 - must be early in chain)
+	// 3. Path Security per AI.md PART 5 — validate paths, block traversal
 	s.router.Use(path.PathSecurityMiddleware)
 
-	// Logger
-	s.router.Use(middleware.Logger)
-
-	// Recoverer
+	// Recoverer — recover panics in any downstream middleware or handler
 	s.router.Use(middleware.Recoverer)
 
 	// CORS
@@ -302,6 +303,10 @@ func (s *Server) setupMiddleware() {
 	// Extension stripping middleware per AI.md PART 14
 	// Strips .txt and .json extensions from API paths for routing
 	s.router.Use(extensionStripMiddleware)
+
+	// 10. Logger — LAST (innermost) per AI.md PART 5/16 spec so logs carry
+	// request_id and only log requests that reached the handler chain
+	s.router.Use(middleware.Logger)
 }
 
 // onionLocationMiddleware adds the Onion-Location header on clearnet HTML responses

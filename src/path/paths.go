@@ -283,19 +283,20 @@ func GetDefaultBackupDir(isRoot bool) string {
 			return fmt.Sprintf("/mnt/Backups/%s/%s", ProjectOrg, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
-		// User backup path: ~/.local/share/Backups/apimgr/vidveil/ per spec
 		return filepath.Join(home, ".local", "share", "Backups", ProjectOrg, ProjectName)
 	case "darwin":
 		if isRoot {
-			return fmt.Sprintf("/Library/Backups/%s/%s", ProjectOrg, ProjectName)
+			// macOS backup: /Library/Application Support/{org}/{name}/backups per AI.md PART 4
+			return fmt.Sprintf("/Library/Application Support/%s/%s/backups", ProjectOrg, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Backups", ProjectOrg, ProjectName)
+		return filepath.Join(home, "Library", "Application Support", ProjectOrg, ProjectName, "backups")
 	case "windows":
 		if isRoot {
-			return filepath.Join(os.Getenv("ProgramData"), "Backups", ProjectOrg, ProjectName)
+			// Windows backup: %PROGRAMDATA%\{org}\{name}\backups per AI.md PART 4
+			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName, "backups")
 		}
-		return filepath.Join(os.Getenv("LocalAppData"), "Backups", ProjectOrg, ProjectName)
+		return filepath.Join(os.Getenv("LocalAppData"), ProjectOrg, ProjectName, "backups")
 	// BSD and other Unix-like systems
 	default:
 		if isRoot {

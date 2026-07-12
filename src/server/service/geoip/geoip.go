@@ -324,14 +324,23 @@ func isPrivateIP(ip net.IP) bool {
 	return false
 }
 
-// IsBlocked checks if an IP is from a blocked country.
-// AllowCountries takes precedence: if non-empty, only listed countries are
-// allowed and all others are blocked (allowlist mode). DenyCountries is only
-// consulted when AllowCountries is empty (denylist mode).
-// RFC 1918 private and loopback IPs are never blocked per AI.md PART 19.
+// IsBlocked checks if an IP is from a blocked country per AI.md PART 19.
+// CountryMode controls behavior: "none" disables blocking, "allow" = allowlist-only,
+// "deny" = blocklist. AllowCountries takes precedence when both are set (allowlist mode).
+// RFC 1918 private and loopback IPs are never blocked.
 func (s *GeoIPService) IsBlocked(ipStr string) bool {
 	if !s.appConfig.Server.GeoIP.Enabled {
 		return false
+	}
+
+	// country_mode: "none" means no country blocking
+	mode := s.appConfig.Server.GeoIP.CountryMode
+	if mode == "none" || mode == "" {
+		// legacy: if CountryMode unset, fall back to list presence
+		if len(s.appConfig.Server.GeoIP.AllowCountries) == 0 &&
+			len(s.appConfig.Server.GeoIP.DenyCountries) == 0 {
+			return false
+		}
 	}
 
 	allowList := s.appConfig.Server.GeoIP.AllowCountries

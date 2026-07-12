@@ -370,21 +370,25 @@ type MetricsConfig struct {
 
 // GeoIPConfig holds GeoIP settings per AI.md PART 19
 type GeoIPConfig struct {
-	Enabled        bool                 `yaml:"enabled"`
-	Dir            string               `yaml:"dir"`
-	Update         string               `yaml:"update"`
-	DenyCountries  []string             `yaml:"deny_countries"`
-	AllowCountries []string             `yaml:"allow_countries"`
+	Enabled     bool   `yaml:"enabled"`
+	Dir         string `yaml:"dir"`
+	Update      string `yaml:"update"`
+	// CountryMode is "none" (default), "deny" (blocklist), or "allow" (allowlist-only)
+	CountryMode    string   `yaml:"country_mode"`
+	DenyCountries  []string `yaml:"deny_countries"`
+	AllowCountries []string `yaml:"allow_countries"`
 	Databases      GeoIPDatabasesConfig `yaml:"databases"`
 	// Content restriction for adult content laws
 	ContentRestriction ContentRestrictionConfig `yaml:"content_restriction"`
 }
 
-// GeoIPDatabasesConfig holds which GeoIP databases to use
+// GeoIPDatabasesConfig holds which GeoIP databases to use per AI.md PART 19
 type GeoIPDatabasesConfig struct {
 	ASN     bool `yaml:"asn"`
 	Country bool `yaml:"country"`
 	City    bool `yaml:"city"`
+	// Whois enables combined WHOIS/ASN/country lookup (same source as Country)
+	Whois bool `yaml:"whois"`
 }
 
 // ContentRestrictionConfig holds settings for geographic content restrictions
@@ -1156,13 +1160,15 @@ func DefaultAppConfig() *AppConfig {
 				Enabled:        true,
 				Dir:            "",
 				Update:         "weekly",
+				CountryMode:    "none",
 				DenyCountries:  []string{},
 				AllowCountries: []string{},
 				Databases: GeoIPDatabasesConfig{
 					ASN:     true,
 					Country: true,
 					// Need city for region-level restriction
-					City: true,
+					City:  true,
+					Whois: true,
 				},
 				ContentRestriction: ContentRestrictionConfig{
 					Mode:      "warn",

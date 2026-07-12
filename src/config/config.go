@@ -330,14 +330,33 @@ type ContactConfig struct {
 	General  ContactRoleConfig `yaml:"general"`
 }
 
-// ScheduleConfig holds scheduler settings per AI.md PART 18
+// ScheduleConfig holds scheduler settings per AI.md PART 18.
+// The scheduler is ALWAYS running — there is no top-level enable/disable.
+// Individual tasks can be toggled via Tasks[id].Enabled.
 type ScheduleConfig struct {
-	Enabled       bool   `yaml:"enabled"`
-	Timezone      string `yaml:"timezone"`
-	CatchUpWindow string `yaml:"catch_up_window"`
-	CertRenewal   string `yaml:"cert_renewal"`
-	Notifications string `yaml:"notifications"`
-	Cleanup       string `yaml:"cleanup"`
+	Timezone      string                        `yaml:"timezone"`
+	CatchUpWindow string                        `yaml:"catch_up_window"`
+	Tasks         map[string]ScheduleTaskConfig `yaml:"tasks"`
+}
+
+// ScheduleTaskConfig holds per-task scheduler settings per AI.md PART 18
+type ScheduleTaskConfig struct {
+	Schedule       string                 `yaml:"schedule"`
+	Enabled        bool                   `yaml:"enabled"`
+	RetryOnFail    bool                   `yaml:"retry_on_fail,omitempty"`
+	RetryDelay     string                 `yaml:"retry_delay,omitempty"`
+	Verify         bool                   `yaml:"verify,omitempty"`
+	RestartOnFail  bool                   `yaml:"restart_on_fail,omitempty"`
+	Retention      *ScheduleRetentionConfig `yaml:"retention,omitempty"`
+}
+
+// ScheduleRetentionConfig holds backup retention settings per AI.md PART 18
+type ScheduleRetentionConfig struct {
+	MaxBackups   int    `yaml:"max_backups"`
+	KeepWeekly  int    `yaml:"keep_weekly"`
+	KeepMonthly int    `yaml:"keep_monthly"`
+	KeepYearly  int    `yaml:"keep_yearly"`
+	MaxTotalSize string `yaml:"max_total_size"`
 }
 
 // SSLConfig holds SSL/TLS settings
@@ -609,6 +628,8 @@ type BackupRetentionConfig struct {
 	KeepMonthly int `yaml:"keep_monthly"`
 	// KeepYearly: yearly backups (Jan 1st) to keep (0 = disabled)
 	KeepYearly int `yaml:"keep_yearly"`
+	// MaxTotalSize: hard cap on total backup directory size; percent ("10%") or absolute ("50G"); "" or "0" = disabled
+	MaxTotalSize string `yaml:"max_total_size"`
 }
 
 // BackupEncryptionConfig holds backup encryption settings per AI.md PART 21
@@ -1004,12 +1025,27 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			Schedule: ScheduleConfig{
-				Enabled:       true,
 				Timezone:      "America/New_York",
 				CatchUpWindow: "1h",
-				CertRenewal:   "daily",
-				Notifications: "hourly",
-				Cleanup:       "weekly",
+				Tasks: map[string]ScheduleTaskConfig{
+					"ssl_renewal":     {Schedule: "0 3 * * *", Enabled: true},
+					"geoip_update":    {Schedule: "0 3 * * 0", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+					"blocklist_update": {Schedule: "0 4 * * *", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+					"cve_update":      {Schedule: "0 5 * * *", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+					"update_check":    {Schedule: "0 6 * * *", Enabled: true},
+					"token_cleanup":   {Schedule: "@every 15m", Enabled: true},
+					"log_rotation":    {Schedule: "0 0 * * *", Enabled: true},
+					"backup_daily": {
+						Schedule: "0 2 * * *", Enabled: true, Verify: true,
+						Retention: &ScheduleRetentionConfig{
+							MaxBackups: 1, KeepWeekly: 0, KeepMonthly: 0, KeepYearly: 0,
+							MaxTotalSize: "10%",
+						},
+					},
+					"backup_hourly":    {Schedule: "@hourly", Enabled: false},
+					"healthcheck_self": {Schedule: "@every 5m", Enabled: true},
+					"tor_health":       {Schedule: "@every 10m", Enabled: true, RestartOnFail: true},
+				},
 			},
 			SSL: SSLConfig{
 				Enabled:  false,
@@ -1188,10 +1224,11 @@ func DefaultAppConfig() *AppConfig {
 			// Default per PART 21: 1 daily backup, weekly/monthly/yearly disabled
 			Backup: BackupConfig{
 				Retention: BackupRetentionConfig{
-					MaxBackups:  1,
-					KeepWeekly:  0,
-					KeepMonthly: 0,
-					KeepYearly:  0,
+					MaxBackups:   1,
+					KeepWeekly:   0,
+					KeepMonthly:  0,
+					KeepYearly:   0,
+					MaxTotalSize: "10%",
 				},
 				Encryption: BackupEncryptionConfig{
 					// Not encrypted by default

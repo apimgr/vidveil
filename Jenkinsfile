@@ -51,9 +51,9 @@ pipeline {
                 sh '''
                     docker run --rm \
                         --name "${PROJECTNAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                        -v $PWD:/app \
+                        -v ${WORKSPACE}:/app \
                         -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                        -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                        -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                         -w /app \
                         -e CGO_ENABLED=0 \
                         casjaysdev/go:latest \
@@ -68,7 +68,7 @@ pipeline {
                 sh '''
                     docker run --rm \
                         --name "${PROJECTNAME}-trufflehog-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                        -v $PWD:/repo \
+                        -v ${WORKSPACE}:/repo \
                         -w /repo \
                         ghcr.io/trufflesecurity/trufflehog:3.95.6 \
                         git file:///repo --only-verified --fail
@@ -84,9 +84,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -102,9 +102,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -120,9 +120,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -138,9 +138,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -156,9 +156,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -174,9 +174,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -192,9 +192,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -210,9 +210,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -236,9 +236,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-cli-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -254,9 +254,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-cli-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=linux \
@@ -272,9 +272,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-cli-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -290,9 +290,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-cli-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=darwin \
@@ -308,9 +308,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-cli-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -326,9 +326,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-cli-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=windows \
@@ -344,9 +344,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-cli-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \
@@ -362,9 +362,9 @@ pipeline {
                         sh '''
                             docker run --rm \
                                 --name "${PROJECTNAME}-cli-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
-                                -v $PWD:/app \
+                                -v ${WORKSPACE}:/app \
                                 -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
-                                -v ${GO_BUILD:-$HOME/.cache/go-build}:/usr/local/share/go/cache \
+                                -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                                 -w /app \
                                 -e CGO_ENABLED=0 \
                                 -e GOOS=freebsd \

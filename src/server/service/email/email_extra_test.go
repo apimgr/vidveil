@@ -97,7 +97,7 @@ func TestGetGatewayIP_ReturnsStringOrEmpty(t *testing.T) {
 // Send and returns an error when email is disabled.
 func TestSendTest_DisabledReturnsError(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.Enabled = false
+	cfg.Server.Notifications.Email.Enabled = false
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 	if err := svc.SendTest("admin@example.com"); err == nil {
 		t.Error("SendTest with email disabled: expected error, got nil")
@@ -110,9 +110,9 @@ func TestSendTest_DisabledReturnsError(t *testing.T) {
 // when the requested template does not exist.
 func TestSend_UnknownTemplateReturnsError(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.Enabled = true
-	cfg.Server.Email.Host = "smtp.example.com"
-	cfg.Server.Email.Port = 587
+	cfg.Server.Notifications.Email.Enabled = true
+	cfg.Server.Notifications.Email.SMTP.Host = "smtp.example.com"
+	cfg.Server.Notifications.Email.SMTP.Port = 587
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 	err := svc.Send("nonexistent_template_xyz", "user@example.com", nil)
 	if err == nil {

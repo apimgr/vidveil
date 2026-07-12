@@ -755,25 +755,22 @@ func main() {
 		isFirstRun := isDBFirstRun(migrationMgr.GetDB())
 
 		// Check SMTP status per AI.md PART 17
+		// enabled is determined by SMTP connectivity, not a manual toggle
 		smtpInfo := ""
-		if appConfig.Server.Email.Enabled {
-			smtpHost := appConfig.Server.Email.Host
-			smtpPort := appConfig.Server.Email.Port
-
-			if smtpHost != "" && smtpPort > 0 {
-				// Per PART 17: Test configured SMTP on every startup
-				if err := email.TestSMTPConfig(smtpHost, smtpPort); err == nil {
-					smtpInfo = fmt.Sprintf("%s:%d", smtpHost, smtpPort)
-				}
-			} else {
-				// Per PART 17: Auto-detect on first run if no host configured
-				detectedHost, detectedPort := email.AutodetectSMTP(
-					appConfig.Server.Email.AutodetectHost,
-					appConfig.Server.Email.AutodetectPort,
-				)
-				if detectedHost != "" && detectedPort > 0 {
-					smtpInfo = fmt.Sprintf("%s:%d (auto)", detectedHost, detectedPort)
-				}
+		smtpHost := appConfig.Server.Notifications.Email.SMTP.Host
+		smtpPort := appConfig.Server.Notifications.Email.SMTP.Port
+		if smtpHost != "" && smtpPort > 0 {
+			// Per PART 17: Test configured SMTP on every startup
+			if err := email.TestSMTPConfig(smtpHost, smtpPort); err == nil {
+				smtpInfo = fmt.Sprintf("%s:%d", smtpHost, smtpPort)
+				appConfig.Server.Notifications.Email.Enabled = true
+			}
+		} else {
+			// Per PART 17: Auto-detect on first run if no host configured
+			detectedHost, detectedPort := email.AutodetectSMTP(nil, nil)
+			if detectedHost != "" && detectedPort > 0 {
+				smtpInfo = fmt.Sprintf("%s:%d (auto)", detectedHost, detectedPort)
+				appConfig.Server.Notifications.Email.Enabled = true
 			}
 		}
 

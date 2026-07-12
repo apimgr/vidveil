@@ -170,7 +170,7 @@ func NewEmailService(appConfig *config.AppConfig) *EmailService {
 
 // Send sends an email using a template
 func (s *EmailService) Send(templateName string, to string, vars map[string]string) error {
-	if !s.appConfig.Server.Email.Enabled {
+	if !s.appConfig.Server.Notifications.Email.Enabled {
 		return fmt.Errorf("email is not enabled")
 	}
 
@@ -280,25 +280,22 @@ func (s *EmailService) getGlobalVars() map[string]string {
 // effectiveEmailConfig returns the email config with SMTP_* env var overrides
 // applied per AI.md PART 17: "SMTP_* env vars override config file settings."
 func (s *EmailService) effectiveEmailConfig() (host string, port int, username, password, fromAddr, fromName, tlsMode string) {
-	cfg := s.appConfig.Server.Email
+	notif := s.appConfig.Server.Notifications.Email
 
-	host = cfg.Host
-	port = cfg.Port
-	username = cfg.Username
-	password = cfg.Password
-	tlsMode = cfg.TLS
+	host = notif.SMTP.Host
+	port = notif.SMTP.Port
+	username = notif.SMTP.Username
+	password = notif.SMTP.Password
+	tlsMode = notif.SMTP.TLS
 
-	// From address: prefer FromEmail, fall back to From (legacy), then default
-	fromAddr = cfg.FromEmail
-	if fromAddr == "" {
-		fromAddr = cfg.From
-	}
+	// From address: use configured From.Email, then default
+	fromAddr = notif.From.Email
 	if fromAddr == "" {
 		fromAddr = "no-reply@" + s.appConfig.Server.FQDN
 	}
 
-	// From name: prefer FromName, fall back to app title
-	fromName = cfg.FromName
+	// From name: use configured From.Name, then app title
+	fromName = notif.From.Name
 	if fromName == "" {
 		fromName = s.appConfig.Server.Branding.Title
 	}
@@ -335,8 +332,8 @@ func (s *EmailService) effectiveEmailConfig() (host string, port int, username, 
 func (s *EmailService) sendEmail(to, subject, body string) error {
 	host, port, username, password, fromAddr, fromName, tlsMode := s.effectiveEmailConfig()
 
-	// Try autodetect if host is still empty and autodetect is enabled
-	if host == "" && s.appConfig.Server.Email.Autodetect {
+	// Try autodetect if host is empty (per AI.md PART 17: autodetect is always enabled)
+	if host == "" {
 		h, p := s.autodetectSMTP()
 		if h != "" {
 			host, port = h, p
@@ -463,14 +460,11 @@ func buildSMTPAutodetectHosts(fqdn string) []string {
 	return hosts
 }
 
-// autodetectSMTP tries to find an SMTP server per AI.md PART 17
+// autodetectSMTP tries to find an SMTP server per AI.md PART 17.
+// Hosts are always built from the spec priority list; ports are always {25, 465, 587}.
 func (s *EmailService) autodetectSMTP() (string, int) {
-	customHosts := s.appConfig.Server.Email.AutodetectHost
-	ports := s.appConfig.Server.Email.AutodetectPort
-	if len(customHosts) == 0 {
-		customHosts = buildSMTPAutodetectHosts(s.appConfig.Server.FQDN)
-	}
-	return AutodetectSMTP(customHosts, ports)
+	hosts := buildSMTPAutodetectHosts(s.appConfig.Server.FQDN)
+	return AutodetectSMTP(hosts, nil)
 }
 
 // AutodetectSMTP tries to find an SMTP server per AI.md PART 17

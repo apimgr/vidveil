@@ -75,13 +75,10 @@ type ServerConfig struct {
 	// Admin panel configuration
 	Admin AdminConfig `yaml:"admin"`
 
-	// Email/SMTP
-	Email EmailConfig `yaml:"email"`
-
 	// Contact routing: admin/security/abuse/general roles with email + webhooks
 	Contact ContactConfig `yaml:"contact"`
 
-	// Notifications
+	// Notifications (email SMTP lives here per AI.md PART 17)
 	Notifications NotificationsConfig `yaml:"notifications"`
 
 	// Scheduler
@@ -272,40 +269,40 @@ type TwoFactorConfig struct {
 	RememberDeviceDays int `yaml:"remember_device_days"`
 }
 
-// EmailConfig holds SMTP settings per AI.md PART 17
-type EmailConfig struct {
-	Enabled        bool     `yaml:"enabled"`
-	Autodetect     bool     `yaml:"autodetect"`
-	AutodetectHost []string `yaml:"autodetect_hosts"`
-	AutodetectPort []int    `yaml:"autodetect_ports"`
-	Host           string   `yaml:"host"`
-	Port           int      `yaml:"port"`
-	Username       string   `yaml:"username"`
-	Password       string   `yaml:"password"`
-	// From is the legacy single-string sender address kept for backwards compat.
-	// New code should use FromName + FromEmail.
-	From      string `yaml:"from"`
-	FromName  string `yaml:"from_name"`
-	FromEmail string `yaml:"from_email"`
-	TLS       string `yaml:"tls"`
+// SMTPConfig holds SMTP connection settings per AI.md PART 17
+type SMTPConfig struct {
+	// If empty: autodetect on first run. If set: test connection on every startup.
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	// TLS mode: auto, starttls, tls, none
+	TLS string `yaml:"tls"`
 }
 
-// NotificationsConfig holds notification settings
+// EmailFromConfig holds sender address settings per AI.md PART 17
+type EmailFromConfig struct {
+	// Default: app title (Branding.Title)
+	Name string `yaml:"name"`
+	// Default: no-reply@{fqdn}
+	Email string `yaml:"email"`
+}
+
+// EmailNotificationsConfig holds email notification config per AI.md PART 17.
+// SMTP detection is automatic: empty Host triggers autodetect; a set Host triggers connection test.
+// Enabled is set at runtime (true when SMTP test passes); it is never stored in YAML.
+type EmailNotificationsConfig struct {
+	// Enabled is set at runtime by the startup SMTP check. Not stored in config file.
+	Enabled bool            `yaml:"-"`
+	SMTP    SMTPConfig      `yaml:"smtp"`
+	From    EmailFromConfig `yaml:"from"`
+	// ReplyTo is optional. If set, it is included as a Reply-To header on all emails.
+	ReplyTo string `yaml:"reply_to,omitempty"`
+}
+
+// NotificationsConfig holds notification settings per AI.md PART 17
 type NotificationsConfig struct {
-	Enabled bool                    `yaml:"enabled"`
-	Email   bool                    `yaml:"email"`
-	Bell    bool                    `yaml:"bell"`
-	Types   NotificationTypesConfig `yaml:"types"`
-}
-
-// NotificationTypesConfig holds which events to notify
-type NotificationTypesConfig struct {
-	Startup    bool `yaml:"startup"`
-	Shutdown   bool `yaml:"shutdown"`
-	Error      bool `yaml:"error"`
-	Security   bool `yaml:"security"`
-	Update     bool `yaml:"update"`
-	CertExpiry bool `yaml:"cert_expiry"`
+	Email EmailNotificationsConfig `yaml:"email"`
 }
 
 // ContactRoleConfig holds contact settings for one notification role per AI.md PART 12.
@@ -984,15 +981,6 @@ func DefaultAppConfig() *AppConfig {
 					RememberDeviceDays: 30,
 				},
 			},
-			Email: EmailConfig{
-				Enabled:        false,
-				Autodetect:     true,
-				AutodetectHost: []string{"localhost", "172.17.0.1"},
-				AutodetectPort: []int{25, 465, 587},
-				Port:           587,
-				From:           "no-reply@" + fqdn,
-				TLS:            "auto",
-			},
 			Contact: ContactConfig{
 				Admin: ContactRoleConfig{
 					Email:    "admin@" + fqdn,
@@ -1012,16 +1000,14 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			Notifications: NotificationsConfig{
-				Enabled: true,
-				Email:   true,
-				Bell:    true,
-				Types: NotificationTypesConfig{
-					Startup:    true,
-					Shutdown:   true,
-					Error:      true,
-					Security:   true,
-					Update:     true,
-					CertExpiry: true,
+				Email: EmailNotificationsConfig{
+					SMTP: SMTPConfig{
+						Port: 587,
+						TLS:  "auto",
+					},
+					From: EmailFromConfig{
+						Email: "no-reply@" + fqdn,
+					},
 				},
 			},
 			Schedule: ScheduleConfig{
@@ -1751,7 +1737,6 @@ func (w *ConfigWatcher) reload() {
 
 	w.appConfig.Server.Branding = newCfg.Server.Branding
 	w.appConfig.Server.RateLimit = newCfg.Server.RateLimit
-	w.appConfig.Server.Email = newCfg.Server.Email
 	w.appConfig.Server.Notifications = newCfg.Server.Notifications
 	w.appConfig.Server.Schedule = newCfg.Server.Schedule
 	w.appConfig.Server.SSL = newCfg.Server.SSL

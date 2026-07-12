@@ -39,7 +39,7 @@ func TestNewEmailService_TemplateDirNonEmpty(t *testing.T) {
 
 func TestSend_DisabledReturnsError(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.Enabled = false
+	cfg.Server.Notifications.Email.Enabled = false
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 	err := svc.Send("security_alert", "user@example.com", nil)
 	if err == nil {
@@ -51,13 +51,13 @@ func TestSend_DisabledReturnsError(t *testing.T) {
 
 func TestEffectiveEmailConfig_ReturnsConfigValues(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.Host = "smtp.example.com"
-	cfg.Server.Email.Port = 587
-	cfg.Server.Email.Username = "user"
-	cfg.Server.Email.Password = "pass"
-	cfg.Server.Email.TLS = "starttls"
-	cfg.Server.Email.FromEmail = "from@example.com"
-	cfg.Server.Email.FromName = "Example App"
+	cfg.Server.Notifications.Email.SMTP.Host = "smtp.example.com"
+	cfg.Server.Notifications.Email.SMTP.Port = 587
+	cfg.Server.Notifications.Email.SMTP.Username = "user"
+	cfg.Server.Notifications.Email.SMTP.Password = "pass"
+	cfg.Server.Notifications.Email.SMTP.TLS = "starttls"
+	cfg.Server.Notifications.Email.From.Email = "from@example.com"
+	cfg.Server.Notifications.Email.From.Name = "Example App"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	host, port, username, password, fromAddr, fromName, tlsMode := svc.effectiveEmailConfig()
@@ -88,7 +88,7 @@ func TestEffectiveEmailConfig_ReturnsConfigValues(t *testing.T) {
 func TestEffectiveEmailConfig_EnvVarOverridesHost(t *testing.T) {
 	t.Setenv("SMTP_HOST", "envhost.example.com")
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.Host = "config-host.example.com"
+	cfg.Server.Notifications.Email.SMTP.Host = "config-host.example.com"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	host, _, _, _, _, _, _ := svc.effectiveEmailConfig()
@@ -100,7 +100,7 @@ func TestEffectiveEmailConfig_EnvVarOverridesHost(t *testing.T) {
 func TestEffectiveEmailConfig_EnvVarOverridesPort(t *testing.T) {
 	t.Setenv("SMTP_PORT", "2525")
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.Port = 25
+	cfg.Server.Notifications.Email.SMTP.Port = 25
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	_, port, _, _, _, _, _ := svc.effectiveEmailConfig()
@@ -112,7 +112,7 @@ func TestEffectiveEmailConfig_EnvVarOverridesPort(t *testing.T) {
 func TestEffectiveEmailConfig_InvalidPortEnvIgnored(t *testing.T) {
 	t.Setenv("SMTP_PORT", "notanumber")
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.Port = 587
+	cfg.Server.Notifications.Email.SMTP.Port = 587
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	_, port, _, _, _, _, _ := svc.effectiveEmailConfig()
@@ -124,7 +124,7 @@ func TestEffectiveEmailConfig_InvalidPortEnvIgnored(t *testing.T) {
 func TestEffectiveEmailConfig_EnvVarOverridesUsername(t *testing.T) {
 	t.Setenv("SMTP_USERNAME", "envuser")
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.Username = "cfguser"
+	cfg.Server.Notifications.Email.SMTP.Username = "cfguser"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	_, _, username, _, _, _, _ := svc.effectiveEmailConfig()
@@ -136,7 +136,7 @@ func TestEffectiveEmailConfig_EnvVarOverridesUsername(t *testing.T) {
 func TestEffectiveEmailConfig_EnvVarOverridesPassword(t *testing.T) {
 	t.Setenv("SMTP_PASSWORD", "envpass")
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.Password = "cfgpass"
+	cfg.Server.Notifications.Email.SMTP.Password = "cfgpass"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	_, _, _, password, _, _, _ := svc.effectiveEmailConfig()
@@ -148,7 +148,7 @@ func TestEffectiveEmailConfig_EnvVarOverridesPassword(t *testing.T) {
 func TestEffectiveEmailConfig_EnvVarOverridesTLS(t *testing.T) {
 	t.Setenv("SMTP_TLS", "ssl")
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.TLS = "none"
+	cfg.Server.Notifications.Email.SMTP.TLS = "none"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	_, _, _, _, _, _, tlsMode := svc.effectiveEmailConfig()
@@ -160,7 +160,7 @@ func TestEffectiveEmailConfig_EnvVarOverridesTLS(t *testing.T) {
 func TestEffectiveEmailConfig_EnvVarOverridesFromEmail(t *testing.T) {
 	t.Setenv("SMTP_FROM_EMAIL", "env-from@example.com")
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.FromEmail = "cfg-from@example.com"
+	cfg.Server.Notifications.Email.From.Email = "cfg-from@example.com"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	_, _, _, _, fromAddr, _, _ := svc.effectiveEmailConfig()
@@ -172,7 +172,7 @@ func TestEffectiveEmailConfig_EnvVarOverridesFromEmail(t *testing.T) {
 func TestEffectiveEmailConfig_EnvVarOverridesFromName(t *testing.T) {
 	t.Setenv("SMTP_FROM_NAME", "Env App Name")
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.FromName = "Config App Name"
+	cfg.Server.Notifications.Email.From.Name = "Config App Name"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	_, _, _, _, _, fromName, _ := svc.effectiveEmailConfig()
@@ -181,22 +181,9 @@ func TestEffectiveEmailConfig_EnvVarOverridesFromName(t *testing.T) {
 	}
 }
 
-func TestEffectiveEmailConfig_FallsBackFromToLegacyFrom(t *testing.T) {
-	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.FromEmail = ""
-	cfg.Server.Email.From = "legacy@example.com"
-	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
-
-	_, _, _, _, fromAddr, _, _ := svc.effectiveEmailConfig()
-	if fromAddr != "legacy@example.com" {
-		t.Errorf("legacy From fallback: fromAddr = %q, want legacy@example.com", fromAddr)
-	}
-}
-
 func TestEffectiveEmailConfig_FallsBackFromAddrToFQDN(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.FromEmail = ""
-	cfg.Server.Email.From = ""
+	cfg.Server.Notifications.Email.From.Email = ""
 	cfg.Server.FQDN = "myserver.example.com"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
@@ -208,7 +195,7 @@ func TestEffectiveEmailConfig_FallsBackFromAddrToFQDN(t *testing.T) {
 
 func TestEffectiveEmailConfig_FallsBackFromNameToBrandingTitle(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Email.FromName = ""
+	cfg.Server.Notifications.Email.From.Name = ""
 	cfg.Server.Branding.Title = "My Branding Title"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 

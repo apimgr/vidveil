@@ -9,32 +9,29 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// ── sendEmail — "no SMTP host configured" early-return ───────────────────────
+// ── sendEmail — "no SMTP host configured, autodetect fails" early-return ─────
 
-func TestSendEmail_NoHostNoAutodetect_ReturnsError(t *testing.T) {
+func TestSendEmail_NoHostAutodetectFails_ReturnsError(t *testing.T) {
 	t.Setenv("SMTP_HOST", "")
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = ""
-	appCfg.Server.Email.Autodetect = false
-	appCfg.Server.Email.AutodetectHost = nil
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = ""
+	appCfg.Server.FQDN = "127.0.0.1"
 	s := NewEmailService(appCfg)
 	err := s.sendEmail("to@example.com", "subject", "body")
 	if err == nil {
-		t.Error("sendEmail(no host, no autodetect): expected error, got nil")
+		t.Error("sendEmail(no host, autodetect fails): expected error, got nil")
 	}
 }
 
-// ── sendEmail — autodetect enabled but no reachable host ─────────────────────
+// ── sendEmail — host empty → autodetect runs but port 1 is unreachable ───────
 
-func TestSendEmail_AutodetectEnabled_NoReachableHost(t *testing.T) {
+func TestSendEmail_AutodetectNoReachableHost(t *testing.T) {
 	t.Setenv("SMTP_HOST", "")
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = ""
-	appCfg.Server.Email.Autodetect = true
-	appCfg.Server.Email.AutodetectHost = []string{"127.0.0.1"}
-	appCfg.Server.Email.AutodetectPort = []int{1}
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = ""
+	appCfg.Server.FQDN = "127.0.0.1"
 	s := NewEmailService(appCfg)
 
 	err := s.sendEmail("to@example.com", "subject", "body")
@@ -47,10 +44,10 @@ func TestSendEmail_AutodetectEnabled_NoReachableHost(t *testing.T) {
 
 func TestSendEmail_StarttlsConnRefused(t *testing.T) {
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = "127.0.0.1"
-	appCfg.Server.Email.Port = 1
-	appCfg.Server.Email.TLS = "starttls"
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = "127.0.0.1"
+	appCfg.Server.Notifications.Email.SMTP.Port = 1
+	appCfg.Server.Notifications.Email.SMTP.TLS = "starttls"
 	s := NewEmailService(appCfg)
 
 	err := s.sendEmail("to@example.com", "subject", "body")
@@ -63,10 +60,10 @@ func TestSendEmail_StarttlsConnRefused(t *testing.T) {
 
 func TestSendEmail_TLSModeNone_ConnRefused(t *testing.T) {
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = "127.0.0.1"
-	appCfg.Server.Email.Port = 1
-	appCfg.Server.Email.TLS = "none"
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = "127.0.0.1"
+	appCfg.Server.Notifications.Email.SMTP.Port = 1
+	appCfg.Server.Notifications.Email.SMTP.TLS = "none"
 	s := NewEmailService(appCfg)
 
 	err := s.sendEmail("to@example.com", "subject", "body")
@@ -79,9 +76,9 @@ func TestSendEmail_TLSModeNone_ConnRefused(t *testing.T) {
 
 func TestSendEmail_ImplicitTLS_Port465_ConnRefused(t *testing.T) {
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = "127.0.0.1"
-	appCfg.Server.Email.Port = 465
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = "127.0.0.1"
+	appCfg.Server.Notifications.Email.SMTP.Port = 465
 	s := NewEmailService(appCfg)
 
 	err := s.sendEmail("to@example.com", "subject", "body")
@@ -94,10 +91,10 @@ func TestSendEmail_ImplicitTLS_Port465_ConnRefused(t *testing.T) {
 
 func TestSendEmail_ExplicitTLSMode_ConnRefused(t *testing.T) {
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = "127.0.0.1"
-	appCfg.Server.Email.Port = 1
-	appCfg.Server.Email.TLS = "tls"
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = "127.0.0.1"
+	appCfg.Server.Notifications.Email.SMTP.Port = 1
+	appCfg.Server.Notifications.Email.SMTP.TLS = "tls"
 	s := NewEmailService(appCfg)
 
 	err := s.sendEmail("to@example.com", "subject", "body")
@@ -110,12 +107,12 @@ func TestSendEmail_ExplicitTLSMode_ConnRefused(t *testing.T) {
 
 func TestSendEmail_WithUsername_ConnRefused(t *testing.T) {
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = "127.0.0.1"
-	appCfg.Server.Email.Port = 1
-	appCfg.Server.Email.Username = "user@example.com"
-	appCfg.Server.Email.Password = "pass"
-	appCfg.Server.Email.TLS = "starttls"
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = "127.0.0.1"
+	appCfg.Server.Notifications.Email.SMTP.Port = 1
+	appCfg.Server.Notifications.Email.SMTP.Username = "user@example.com"
+	appCfg.Server.Notifications.Email.SMTP.Password = "pass"
+	appCfg.Server.Notifications.Email.SMTP.TLS = "starttls"
 	s := NewEmailService(appCfg)
 
 	err := s.sendEmail("to@example.com", "subject", "body")
@@ -128,12 +125,12 @@ func TestSendEmail_WithUsername_ConnRefused(t *testing.T) {
 
 func TestSendEmail_WithFromName_ConnRefused(t *testing.T) {
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = "127.0.0.1"
-	appCfg.Server.Email.Port = 1
-	appCfg.Server.Email.TLS = "starttls"
-	appCfg.Server.Email.FromName = "VidVeil"
-	appCfg.Server.Email.FromEmail = "no-reply@example.com"
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = "127.0.0.1"
+	appCfg.Server.Notifications.Email.SMTP.Port = 1
+	appCfg.Server.Notifications.Email.SMTP.TLS = "starttls"
+	appCfg.Server.Notifications.Email.From.Name = "VidVeil"
+	appCfg.Server.Notifications.Email.From.Email = "no-reply@example.com"
 	s := NewEmailService(appCfg)
 
 	err := s.sendEmail("to@example.com", "subject", "body")
@@ -154,14 +151,13 @@ func TestSendTLS_ConnRefused(t *testing.T) {
 	}
 }
 
-// ── autodetectSMTP (method): call via sendEmail with empty custom host lists ──
+// ── autodetectSMTP (method): FQDN set to localhost, port 1 is unreachable ────
 
 func TestAutodetectSMTP_ViaServiceMethod(t *testing.T) {
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Autodetect = true
-	appCfg.Server.Email.AutodetectHost = []string{"127.0.0.1"}
-	appCfg.Server.Email.AutodetectPort = []int{1}
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = ""
+	appCfg.Server.FQDN = "127.0.0.1"
 	s := NewEmailService(appCfg)
 
 	err := s.sendEmail("to@example.com", "subj", "body")
@@ -175,9 +171,9 @@ func TestAutodetectSMTP_ViaServiceMethod(t *testing.T) {
 func TestSend_EnabledValidTemplate_CoversFlow(t *testing.T) {
 	t.Setenv("SMTP_HOST", "")
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = ""
-	appCfg.Server.Email.Autodetect = false
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = ""
+	appCfg.Server.FQDN = "127.0.0.1"
 	s := NewEmailService(appCfg)
 
 	err := s.Send("test", "to@example.com", map[string]string{"name": "Tester"})
@@ -189,9 +185,9 @@ func TestSend_EnabledValidTemplate_CoversFlow(t *testing.T) {
 func TestSend_EnabledValidTemplate_WithVars_CoversApplyVars(t *testing.T) {
 	t.Setenv("SMTP_HOST", "")
 	appCfg := config.DefaultAppConfig()
-	appCfg.Server.Email.Enabled = true
-	appCfg.Server.Email.Host = ""
-	appCfg.Server.Email.Autodetect = false
+	appCfg.Server.Notifications.Email.Enabled = true
+	appCfg.Server.Notifications.Email.SMTP.Host = ""
+	appCfg.Server.FQDN = "127.0.0.1"
 	s := NewEmailService(appCfg)
 
 	err := s.Send("security_alert", "to@example.com", map[string]string{"event": "test event"})

@@ -10,8 +10,8 @@ PROJECTORG  := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/
 # Version precedence: env var > release.txt > devel default
 VERSION ?= $(shell cat release.txt 2>/dev/null || echo "devel")
 
-# Build info — uses TZ env var or system timezone
-BUILD_DATE := $(shell date +"%a %b %d, %Y at %H:%M:%S %Z")
+# Build info — ISO 8601 UTC (AI.md PART 25; parseable by BuildDateTime() in handlers.go)
+BUILD_DATE := $(shell date -u +"%%Y-%%m-%%dT%%H:%%M:%%SZ")
 COMMIT_ID  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "N/A")
 
 # Official site URL (OPTIONAL — never guess or assume)
@@ -41,7 +41,7 @@ BINDIR := binaries
 RELDIR := releases
 
 # Go cache directories (bind-mounted from host for persistence across builds)
-GO_CACHE ?= $(HOME)/.local/share/go
+GO_CACHE ?= $(HOME)/go/pkg/mod
 GO_BUILD ?= $(HOME)/.cache/go-build/$(PROJECTNAME)
 
 # Build targets — all 8 platforms (space-separated for for-loop)
@@ -77,6 +77,9 @@ build: clean
 	@echo "Tidying and downloading Go modules..."
 	@$(GO_DOCKER) go mod tidy
 	@$(GO_DOCKER) go mod download
+	@echo "Building local server binary..."
+	@$(GO_DOCKER) sh -c "GOOS=\$$(go env GOOS) GOARCH=\$$(go env GOARCH) \
+		go build $(BUILD_FLAGS) -ldflags \"$(LDFLAGS)\" -o /app/$(BINDIR)/$(PROJECTNAME) ./src"
 	@echo "Building server for all 8 platforms..."
 	@for platform in $(PLATFORMS); do \
 		OS=$${platform%/*}; \

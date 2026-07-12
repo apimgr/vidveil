@@ -688,13 +688,17 @@ func BuildDateTime() string {
 		return "unknown"
 	}
 
-	// Try to parse common build time formats
+	// Try to parse common build time formats.
+	// Handles both Makefile (ISO 8601 UTC) and CI (human-readable) formats.
 	formats := []string{
 		time.RFC3339,
 		"2006-01-02T15:04:05Z",
 		"2006-01-02T15:04:05",
 		"2006-01-02 15:04:05",
 		"2006-01-02",
+		// CI/CD format from AI.md PART 28: "Mon Jan 02, 2006 at 15:04:05 MST"
+		"Mon Jan 02, 2006 at 15:04:05 MST",
+		"Mon Jan _2, 2006 at 15:04:05 MST",
 		"Jan 2 2006 15:04:05",
 		"Mon Jan 2 15:04:05 2006",
 	}

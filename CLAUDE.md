@@ -87,8 +87,8 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-07-06 (re-bootstrap — PART 0–6 complete)
-- Current task: re-bootstrap reconciliation complete; outstanding: PART 32 native GUI (user decision needed)
-- Tests: unit 80% coverage, all packages pass (go vet clean); CI/Daily/Docker all green
-- Completed: PART 0-6 reconciled; .gitignore fixed (ignoredirmessage on line 2); src/data/ created; AUDIT.AI.md removed
-- Outstanding HIGH: PART 32 native GUI mode (fyne.io) — see TODO.AI.md for user decision required
+- Last read AI.md: 2026-07-12 (full re-validation PART 27–33 complete)
+- Current task: full spec re-validation complete; all PARTs verified and aligned
+- Tests: all packages pass (i18n 94%, most packages 80%+); CI/Daily/Docker all green
+- Completed: PART 27–33 validated; Jenkinsfile ${WORKSPACE} fix (30bdb61); i18n context fix (30bdb61)
+- PART 32 GUI: implemented with -tags gui build tag; native GTK4/Cocoa/Win32 (not fyne); no user decision needed

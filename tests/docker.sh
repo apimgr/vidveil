@@ -123,7 +123,9 @@ pass "CLI binary built successfully"
 
 # Step 3: Test server binary info
 info "Testing server binary..."
-VERSION=$(docker run --rm -v "${TEMP_DIR}":/app alpine:latest /app/${PROJECT_NAME} --version 2>&1 | head -1)
+# Capture full output first to avoid SIGPIPE from `| head -1` with pipefail
+VERSION_OUT=$(docker run --rm -v "${TEMP_DIR}":/app alpine:latest /app/${PROJECT_NAME} --version 2>&1 || true)
+VERSION=$(printf '%s\n' "$VERSION_OUT" | head -1)
 if [ -n "$VERSION" ]; then
     pass "Server version check: $VERSION"
 else
@@ -133,7 +135,8 @@ fi
 # Step 4: Binary rename test (per AI.md PART 7: binary renames itself gracefully)
 info "Testing binary rename behavior..."
 cp "${TEMP_DIR}/${PROJECT_NAME}" "${TEMP_DIR}/myveil"
-RENAMED_HELP=$(docker run --rm -v "${TEMP_DIR}":/app alpine:latest /app/myveil --help 2>&1 | head -5 || true)
+RENAMED_HELP_OUT=$(docker run --rm -v "${TEMP_DIR}":/app alpine:latest /app/myveil --help 2>&1 || true)
+RENAMED_HELP=$(printf '%s\n' "$RENAMED_HELP_OUT" | head -5)
 if echo "$RENAMED_HELP" | grep -qi -- "myveil"; then
     pass "Binary rename: --help shows new name"
 else
@@ -143,7 +146,8 @@ rm -f "${TEMP_DIR}/myveil"
 
 # Step 5: Test CLI binary info
 info "Testing CLI binary..."
-CLI_VERSION=$(docker run --rm -v "${TEMP_DIR}":/app alpine:latest /app/vidveil-cli --version 2>&1 | head -1)
+CLI_VERSION_OUT=$(docker run --rm -v "${TEMP_DIR}":/app alpine:latest /app/vidveil-cli --version 2>&1 || true)
+CLI_VERSION=$(printf '%s\n' "$CLI_VERSION_OUT" | head -1)
 if [ -n "$CLI_VERSION" ]; then
     pass "CLI version check: $CLI_VERSION"
 else

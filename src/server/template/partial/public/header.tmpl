@@ -34,7 +34,6 @@
         <button class="nav-panel-close" onclick="closeNav()" aria-label="{{ t "a11y.close_menu" }}">&times;</button>
     </div>
     <a href="/" class="nav-panel-link{{if eq .ActiveNav "home"}} active{{end}}">{{ t "nav.home" }}</a>
-    <a href="/search" class="nav-panel-link{{if eq .ActiveNav "search"}} active{{end}}">{{ t "nav.search" }}</a>
     <a href="/favorites" class="nav-panel-link{{if eq .ActiveNav "favorites"}} active{{end}}">{{ t "nav.favorites" }}</a>
     <a href="/server/about" class="nav-panel-link{{if eq .ActiveNav "about"}} active{{end}}">{{ t "nav.about" }}</a>
     <a href="/server/privacy" class="nav-panel-link{{if eq .ActiveNav "privacy"}} active{{end}}">{{ t "nav.privacy" }}</a>

@@ -87,9 +87,9 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-07-12 (full re-validation PART 27–33 complete)
-- Current task: change-password/well-known removal, footer PART 16 compliance, and engine debug-log HTML-stripping fix — all committed (cc56c36c)
+- Last read AI.md: 2026-07-19 (full compliance audit PART 0–33 complete via `audit` agent)
+- Current task: full AI.md compliance audit complete — one gap found and fixed (e650bacf), all else confirmed compliant
 - Tests: full `go build` + `go vet ./...` + `go test -cover ./...` pass, zero FAIL, all packages ok
-- Completed: PART 27–33 validated; Jenkinsfile ${WORKSPACE} fix (30bdb61); i18n context fix (30bdb61); engine debug logging now strips raw HTML (logfmt only, verified live via Docker debug build + search); footer/CSS restructured to PART 16 fixed-row order; change-password and well-known endpoints removed (out of spec)
+- Completed: PART 27–33 validated; Jenkinsfile ${WORKSPACE} fix (30bdb61); i18n context fix (30bdb61); engine debug logging now strips raw HTML (logfmt only, verified live via Docker debug build + search); footer/CSS restructured to PART 16 fixed-row order; change-password and well-known endpoints removed (out of spec); full PART 0–33 audit found and fixed missing PART 5 env var overrides (DATABASE_DRIVER, DATABASE_URL, APPLICATION_NAME, APPLICATION_TAGLINE were documented but not implemented in config.go) — verified fix with own build+vet+test pass before committing, not just agent's self-report
 - PART 32 GUI: implemented with -tags gui build tag; native GTK4/Cocoa/Win32 (not fyne); no user decision needed
 - `gitcommit --dir {dir} all` always stages ALL modified files (git add -A behavior) — pre-staging a subset via `git add` does NOT limit the commit to that subset. This is documented in AI.md ("there is no local staging window to catch mistakes" — Tool Access section, ~line 3250); per Commit Cadence (~line 1573), splitting into small focused commits when multiple logical groups are dirty simultaneously requires `git stash`/`git stash pop` between groups, not `git add` staging

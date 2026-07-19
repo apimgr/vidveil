@@ -55,7 +55,7 @@ func searchTTCache(ctx context.Context, e *BaseEngine, url string) ([]model.Vide
 		return nil, err
 	}
 
-	DebugLogEngineResponse(e.Name(), url, body)
+	DebugLogEngineResponse(e.Name(), url, len(body))
 
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
@@ -126,7 +126,7 @@ func searchTTCache(ctx context.Context, e *BaseEngine, url string) ([]model.Vide
 
 	// "preview" equals len(results) because every result gets a
 	// constructed preview; "thumb" matches for the same reason.
-	DebugLogEngineParseResult(e.Name(), len(results), map[string]int{
+	DebugLogEngineParseResult(e.Name(), results, map[string]int{
 		"preview": len(results),
 		"thumb":   len(results),
 	})

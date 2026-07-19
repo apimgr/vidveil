@@ -73,7 +73,7 @@ func (e *MotherlessEngine) Search(ctx context.Context, query string, page int) (
 	})
 
 	// Log extraction stats for debugging
-	DebugLogEngineParseResult(e.Name(), len(results), fieldStats)
+	DebugLogEngineParseResult(e.Name(), results, fieldStats)
 
 	return results, nil
 }

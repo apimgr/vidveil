@@ -227,9 +227,9 @@ if [ "$PGP_STATUS" = "200" ] || [ "$PGP_STATUS" = "404" ]; then
 else
     __fail "pgp-key.asc (expected 200 or 404, got $PGP_STATUS)"
 fi
-# change-password returns 302 redirect per RFC 8615 — browsers follow it to the login page
-__test_endpoint GET "/.well-known/change-password" "302" "change-password redirect"
-__test_endpoint GET "/.well-known/vidveil.json" "200" "vidveil well-known json"
+# Unsupported well-known entries must return 404 per AI.md well-known allowlist (PART 14)
+__test_endpoint GET "/.well-known/change-password" "404" "change-password not allowlisted"
+__test_endpoint GET "/.well-known/vidveil.json" "404" "vidveil.json not allowlisted"
 __test_endpoint GET "/manifest.json" "200" "Web app manifest"
 __test_endpoint GET "/sw.js" "200" "Service worker"
 

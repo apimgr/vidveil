@@ -237,39 +237,17 @@ main {
     color: var(--link-color);
 }
 
-.site-footer .footer-branding {
-    margin-bottom: 1.5rem;
-    line-height: 1.8;
-}
-
-.site-footer .footer-branding a {
-    color: var(--accent);
-}
-
-/* BASE spec footer format */
-.site-footer .text-center {
-    margin-bottom: 1rem;
-}
-
-.site-footer .text-center p {
+/* Footer rows per AI.md PART 16 - fixed row order, no <br/> spacers between rows */
+.site-footer p {
     margin: 0.25rem 0;
 }
 
-.site-footer .page-footer__links {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.site-footer .page-footer__divider {
+.site-footer span {
     color: var(--text-muted);
     margin: 0 0.25rem;
 }
 
-.site-footer .footer-links {
-    margin-top: 1rem;
+.site-footer .footer-onion {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
@@ -277,16 +255,13 @@ main {
     gap: 0.5rem;
 }
 
-.site-footer .footer-links a {
-    color: var(--accent);
-    text-decoration: none;
+.site-footer .copy-btn {
+    background: none;
+    border: none;
     cursor: pointer;
-    transition: color 0.2s ease;
-}
-
-.site-footer .footer-links a:hover {
-    color: var(--accent-hover);
-    text-decoration: underline;
+    font-size: 1rem;
+    color: var(--link-color);
+    padding: 0;
 }
 
 .text-red {
@@ -314,34 +289,6 @@ main {
 
 .d-flex {
     display: flex;
-}
-
-.site-footer .app-footer {
-    color: var(--link-color);
-    margin-top: 1rem;
-}
-
-.site-footer .app-footer p {
-    margin: 0.25rem 0;
-}
-
-.site-footer .app-footer .text-red {
-    color: var(--error);
-}
-
-.site-footer .footer-links a {
-    margin: 0 0.5rem;
-}
-
-.site-footer .footer-divider {
-    color: var(--border);
-    margin: 0 0.5rem;
-}
-
-.site-footer .footer-timestamp {
-    color: var(--color-info);
-    margin-top: 1rem;
-    font-size: 0.8rem;
 }
 
 a {

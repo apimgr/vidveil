@@ -4,10 +4,12 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
 )
 
 func TestParseBangs_EmptyQuery(t *testing.T) {
@@ -845,27 +847,27 @@ func containsStr(s, sub string) bool {
 // DebugLogEngineResponse and DebugLogEngineParseResult smoke tests — just verify no panic
 
 func TestDebugLogEngineResponse_NoPanic(t *testing.T) {
-	DebugLogEngineResponse("testengine", "https://example.com/search", []byte("some body"))
+	DebugLogEngineResponse("testengine", "https://example.com/search", len("some body"))
 }
 
 func TestDebugLogEngineResponse_EmptyBody(t *testing.T) {
-	DebugLogEngineResponse("testengine", "https://example.com/search", []byte{})
+	DebugLogEngineResponse("testengine", "https://example.com/search", 0)
 }
 
 func TestDebugLogEngineResponse_LargeBody(t *testing.T) {
-	// Body larger than the 2000-char truncation limit must not panic
-	body := make([]byte, 4000)
-	for i := range body {
-		body[i] = 'x'
-	}
-	DebugLogEngineResponse("testengine", "https://example.com/search", body)
+	// Must not panic regardless of the reported response size
+	DebugLogEngineResponse("testengine", "https://example.com/search", 4000)
 }
 
 func TestDebugLogEngineParseResult_NoPanic(t *testing.T) {
 	stats := map[string]int{"title": 10, "thumbnail": 8, "duration": 5}
-	DebugLogEngineParseResult("testengine", 10, stats)
+	results := make([]model.VideoResult, 10)
+	for i := range results {
+		results[i].URL = fmt.Sprintf("https://example.com/video/%d", i)
+	}
+	DebugLogEngineParseResult("testengine", results, stats)
 }
 
 func TestDebugLogEngineParseResult_NilStats(t *testing.T) {
-	DebugLogEngineParseResult("testengine", 0, nil)
+	DebugLogEngineParseResult("testengine", nil, nil)
 }

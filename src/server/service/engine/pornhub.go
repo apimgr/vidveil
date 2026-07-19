@@ -72,7 +72,7 @@ func (e *PornHubEngine) Search(ctx context.Context, query string, page int) ([]m
 	})
 
 	// Log preview extraction stats
-	DebugLogEngineParseResult(e.Name(), len(results), map[string]int{"preview": previewCount})
+	DebugLogEngineParseResult(e.Name(), results, map[string]int{"preview": previewCount})
 
 	return results, nil
 }

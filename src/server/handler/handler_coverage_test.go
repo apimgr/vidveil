@@ -714,24 +714,6 @@ func TestAPIContact_PostValid(t *testing.T) {
 	}
 }
 
-// TestChangePasswordRedirect_RedirectsToAdminLogin verifies the handler redirects to admin path + "/login".
-func TestChangePasswordRedirect_RedirectsToAdminLogin(t *testing.T) {
-	cfg := createTestConfig()
-	cfg.Server.Admin.Path = "admin"
-	handler := ChangePasswordRedirect(cfg)
-	req := httptest.NewRequest("GET", "/.well-known/change-password", nil)
-	rr := httptest.NewRecorder()
-	handler(rr, req)
-	if rr.Code != http.StatusFound {
-		t.Errorf("ChangePasswordRedirect status = %d, want %d", rr.Code, http.StatusFound)
-	}
-	loc := rr.Header().Get("Location")
-	want := cfg.AdminURLPrefix() + "/login"
-	if loc != want {
-		t.Errorf("ChangePasswordRedirect Location = %q, want %q", loc, want)
-	}
-}
-
 // TestSetDataDir_NoPanic verifies SetDataDir does not panic.
 func TestSetDataDir_NoPanic(t *testing.T) {
 	cfg := createTestConfig()
@@ -1222,27 +1204,6 @@ func TestAPIEngineHealth_Returns200(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("APIEngineHealth status = %d, want %d", rr.Code, http.StatusOK)
-	}
-}
-
-// ── WellKnownVidVeil ──────────────────────────────────────────────────────────
-
-// TestWellKnownVidVeil_Returns200 verifies the handler returns 200 with software field.
-func TestWellKnownVidVeil_Returns200(t *testing.T) {
-	h := newTestSearchHandler(t)
-	req := httptest.NewRequest("GET", "/.well-known/vidveil", nil)
-	rr := httptest.NewRecorder()
-	h.WellKnownVidVeil(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("WellKnownVidVeil status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	var resp map[string]interface{}
-	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("WellKnownVidVeil returned invalid JSON: %v", err)
-	}
-	if resp["software"] != "vidveil" {
-		t.Errorf("WellKnownVidVeil software = %v, want vidveil", resp["software"])
 	}
 }
 

@@ -62,6 +62,7 @@ type Server struct {
 	srv           *http.Server
 	rateLimiter   *ratelimit.RateLimiter
 	searchHandler *handler.SearchHandler
+	serverHandler *handler.ServerHandler
 	// stored for Onion-Location middleware
 	torSvc handler.TorStatusChecker
 	// geoip for country blocking middleware per AI.md PART 19
@@ -119,6 +120,9 @@ func (s *Server) SetTorService(t handler.TorStatusChecker) {
 	s.torSvc = t
 	if s.searchHandler != nil {
 		s.searchHandler.SetTorService(t)
+	}
+	if s.serverHandler != nil {
+		s.serverHandler.SetTorService(t)
 	}
 }
 
@@ -483,8 +487,6 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/sitemap.xml", h.SitemapXML)
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
 	s.router.Get("/.well-known/pgp-key.asc", h.PGPKeyAsc)
-	s.router.Get("/.well-known/change-password", handler.ChangePasswordRedirect(s.appConfig))
-	s.router.Get("/.well-known/vidveil.json", h.WellKnownVidVeil)
 	s.router.Get("/humans.txt", h.HumansTxt)
 	s.router.Get("/favicon.ico", h.Favicon)
 	s.router.Get("/apple-touch-icon.png", h.AppleTouchIcon)
@@ -584,6 +586,7 @@ func (s *Server) setupRoutes() {
 
 	// Server routes per AI.md PART 14 (Route Scopes)
 	server := handler.NewServerHandler(s.appConfig)
+	s.serverHandler = server
 	s.router.Route("/server", func(r chi.Router) {
 		r.Get("/about", server.AboutPage)
 		r.Get("/privacy", server.PrivacyPage)

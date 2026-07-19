@@ -47,7 +47,7 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 		return nil, err
 	}
 
-	DebugLogEngineResponse(e.Name(), searchURL, body)
+	DebugLogEngineResponse(e.Name(), searchURL, len(body))
 
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
@@ -122,7 +122,7 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 		})
 	})
 
-	DebugLogEngineParseResult(e.Name(), len(results), nil)
+	DebugLogEngineParseResult(e.Name(), results, nil)
 	return results, nil
 }
 

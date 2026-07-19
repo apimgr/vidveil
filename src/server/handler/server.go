@@ -20,6 +20,7 @@ import (
 // ServerHandler handles /server/ routes per AI.md PART 14
 type ServerHandler struct {
 	appConfig *config.AppConfig
+	torSvc    TorStatusChecker
 }
 
 // NewServerHandler creates a new server handler
@@ -31,6 +32,12 @@ func NewServerHandler(appConfig *config.AppConfig) *ServerHandler {
 	return &ServerHandler{
 		appConfig: appConfig,
 	}
+}
+
+// SetTorService sets the Tor service so the footer can show the onion address
+// per AI.md PART 16 (footer row is dropped entirely when Tor is disabled/not running).
+func (h *ServerHandler) SetTorService(t TorStatusChecker) {
+	h.torSvc = t
 }
 
 // renderServerTemplate renders a server page template with common data
@@ -130,6 +137,16 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"Theme":          "dark",
 		"ActiveNav":      templateName,
 		"Query":          "",
+	}
+
+	// Footer onion-address row per AI.md PART 16 — dropped entirely unless
+	// Tor is both enabled and actually running.
+	if h.torSvc != nil && h.torSvc.IsEnabled() && h.torSvc.IsRunning() {
+		data["TorEnabled"] = true
+		data["TorRunning"] = true
+		if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
+			data["TorAddress"] = addr
+		}
 	}
 
 	// Merge extra data
@@ -304,12 +321,4 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 			"documentation": "/server/docs/swagger",
 		},
 	})
-}
-
-// ChangePasswordRedirect handles /.well-known/change-password per RFC 8615.
-// Redirects to the spec-canonical admin login (/server/{admin_path}/login).
-func ChangePasswordRedirect(appConfig *config.AppConfig) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, appConfig.AdminURLPrefix()+"/login", http.StatusFound)
-	}
 }

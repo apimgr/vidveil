@@ -1,28 +1,37 @@
 {{define "public/footer"}}
 {{/* AI.md PART 16: Footer contains About, Privacy, Contact, Help, GitHub, version */}}
 <footer class="site-footer">
+    {{/* Onion address - shown only if Tor is enabled and running (AI.md PART 16) */}}
+    {{ if and .TorEnabled .TorRunning }}
+    <p class="footer-onion">
+        <a href="/server/help#tor-access" aria-label="Tor Support">&#129365;</a>
+        <code class="onion-address">{{.TorAddress}}</code>
+        <button type="button" class="copy-btn" data-copy="{{.TorAddress}}" aria-live="polite" aria-label="Copy onion address">&#128203;</button>
+    </p>
+    {{ end }}
+
     {{/* Standard page links per spec - /server/* prefix per AI.md PART 14 Route Scopes */}}
-    <div class="footer-links">
+    <p>
         <a href="/server/about">About</a>
-        <span class="page-footer__divider">&#8226;</span>
+        <span>&#8226;</span>
         <a href="/server/privacy">Privacy</a>
-        <span class="page-footer__divider">&#8226;</span>
+        <span>&#8226;</span>
         <a href="/server/contact">Contact</a>
-        <span class="page-footer__divider">&#8226;</span>
+        <span>&#8226;</span>
         <a href="/server/help">Help</a>
-    </div>
+    </p>
 
     {{/* Application branding */}}
-    <div class="app-footer">
-        <p class="page-footer__links">
-            <a href="https://github.com/apimgr/vidveil" target="_blank">Made with</a>
-            <span class="text-red">&#10084;</span>
-            {{if .Version}}<span class="page-footer__divider">&#8226;</span>
-            <span>v{{.Version}}</span>{{end}}
-        </p>
-    </div>
+    <p>
+        <a href="https://github.com/apimgr/vidveil" target="_blank">Made with</a> &#10084;&#65039;
+        {{if .Version}}<span>&#8226;</span>
+        <span>v{{.Version}}</span>{{end}}
+    </p>
 
-    <a href="/healthz" class="footer-timestamp">Last update: {{.BuildDateTime}}</a>
+    {{/* Build stamp */}}
+    <p>
+        <a href="/server/healthz">Last update: {{.BuildDateTime}}</a>
+    </p>
 </footer>
 
 {{/* Toast container for notifications */}}

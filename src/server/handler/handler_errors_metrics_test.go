@@ -582,19 +582,6 @@ func TestSecurityTxt_ContactWithoutMailto_AddsPrefix(t *testing.T) {
 	}
 }
 
-// ── WellKnownVidVeil — branches ───────────────────────────────────────────────
-
-func TestWellKnownVidVeil_JSONFormat_ReturnsJSON(t *testing.T) {
-	h := newAPITestHandler()
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/vidveil", nil)
-	h.WellKnownVidVeil(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("WellKnownVidVeil: status = %d, want 200", rr.Code)
-	}
-}
-
 // ── SearchPage with metrics ───────────────────────────────────────────────────
 
 func TestSearchPage_WithMetrics_IncrementsCounter(t *testing.T) {

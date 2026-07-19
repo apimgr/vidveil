@@ -2592,6 +2592,19 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 	if data["Version"] == nil {
 		data["Version"] = version.GetVersion()
 	}
+	if data["BuildDateTime"] == nil {
+		data["BuildDateTime"] = BuildDateTime()
+	}
+
+	// Footer onion-address row per AI.md PART 16 — dropped entirely unless
+	// Tor is both enabled and actually running.
+	if h.torSvc != nil && h.torSvc.IsEnabled() && h.torSvc.IsRunning() {
+		data["TorEnabled"] = true
+		data["TorRunning"] = true
+		if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
+			data["TorAddress"] = addr
+		}
+	}
 
 	// Inject SEO and branding data per AI.md PART 16
 	if data["SEOKeywords"] == nil {
@@ -3437,28 +3450,5 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":   true,
 		"data": responses,
-	})
-}
-
-// WellKnownVidVeil serves GET /.well-known/vidveil.json
-// Returns public instance metadata for discovery.
-func (h *SearchHandler) WellKnownVidVeil(w http.ResponseWriter, r *http.Request) {
-	engineCount := len(h.engineMgr.ListEngines())
-
-	torEnabled := false
-	if h.torSvc != nil {
-		torEnabled = h.torSvc.IsEnabled() && h.torSvc.IsRunning()
-	}
-
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"software":      "vidveil",
-		"version":       version.GetVersion(),
-		"title":         h.appConfig.Server.Branding.Title,
-		"tagline":       h.appConfig.Server.Branding.Tagline,
-		"url":           h.appConfig.GetPublicURL(),
-		"engines_count": engineCount,
-		"tor_enabled":   torEnabled,
-		"public":        true,
-		"api_version":   "v1",
 	})
 }

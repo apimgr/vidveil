@@ -539,6 +539,11 @@ func main() {
 	}
 	defer logger.Close()
 
+	// Route engine debug logging through the governed AppLogger/debug.log
+	// pipeline (AI.md PART 11) instead of the package's stdlib log.Printf
+	// fallback.
+	engine.SetDebugLogger(logger)
+
 	// Tor hidden service (PART 31) - auto-enabled if tor binary is found
 	// Per PART 31: Also supports outbound network routing for engine queries
 	// Pass paths.Data so NewTorService can append "tor" internally → {data_dir}/tor/

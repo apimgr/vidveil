@@ -711,35 +711,71 @@ func (e *BaseEngine) GetUserAgent() string {
 	return DefaultUserAgent
 }
 
-// DebugLogEngineResponse logs raw response body when --debug is enabled
-// Per IDEA.md: Verbose logging helps identify site changes and extraction opportunities
-// Per AI.md: Debug features tied to --debug flag
-func DebugLogEngineResponse(engineName, requestURL string, body []byte) {
-	if !mode.IsDebugEnabled() {
-		return
-	}
-
-	// Truncate to 2000 chars as per IDEA.md spec
-	bodyStr := string(body)
-	if len(bodyStr) > 2000 {
-		bodyStr = bodyStr[:2000] + "\n... [truncated]"
-	}
-
-	log.Printf("[DEBUG ENGINE] %s request: %s\n[DEBUG ENGINE] %s response (%d bytes):\n%s\n",
-		engineName, requestURL, engineName, len(body), bodyStr)
+// DebugLogger is the minimal logging interface engines need to route debug
+// output through the governed debug.log pipeline (AI.md PART 11 - rotation,
+// retention, and text format) instead of bare stdlib log.Printf, which
+// writes straight to stderr and bypasses all of that.
+type DebugLogger interface {
+	Debug(message string, fields map[string]interface{})
 }
 
-// DebugLogEngineParseResult logs parsing results when --debug is enabled
-// Helps identify extraction successes/failures and missing fields
-func DebugLogEngineParseResult(engineName string, resultCount int, fieldStats map[string]int) {
+// debugLogger is wired in by main.go via SetDebugLogger once the
+// application's AppLogger is constructed. Nil until then (e.g. in tests),
+// in which case logDebug falls back to stdlib log.Printf.
+var debugLogger DebugLogger
+
+// SetDebugLogger wires the application logger into the engine package so
+// engine debug output is written to the governed debug.log file instead of
+// stderr, per AI.md PART 11.
+func SetDebugLogger(l DebugLogger) {
+	debugLogger = l
+}
+
+// logDebug routes a debug-level log line through the wired AppLogger when
+// available, falling back to stdlib log.Printf otherwise.
+func logDebug(message string, fields map[string]interface{}) {
+	if debugLogger != nil {
+		debugLogger.Debug(message, fields)
+		return
+	}
+	log.Printf("[DEBUG ENGINE] %s %v", message, fields)
+}
+
+// DebugLogEngineResponse logs response metadata when --debug is enabled.
+// Per AI.md PART 11 debug logs must be raw text, one event per line - never
+// dump the full HTML body, which is noisy and not useful for diagnosis.
+func DebugLogEngineResponse(engineName, requestURL string, bodyLen int) {
+	if !mode.IsDebugEnabled() {
+		return
+	}
+	logDebug("engine response received", map[string]interface{}{
+		"engine":         engineName,
+		"request_url":    requestURL,
+		"response_bytes": bodyLen,
+	})
+}
+
+// DebugLogEngineParseResult logs the parsed video URLs when --debug is
+// enabled. Helps identify extraction successes/failures and missing fields
+// without dumping raw HTML - per AI.md PART 11 we log just the parsed URLs.
+func DebugLogEngineParseResult(engineName string, results []model.VideoResult, fieldStats map[string]int) {
 	if !mode.IsDebugEnabled() {
 		return
 	}
 
-	statsStr := ""
-	for field, count := range fieldStats {
-		statsStr += fmt.Sprintf(" %s=%d", field, count)
+	urls := make([]string, 0, len(results))
+	for _, r := range results {
+		urls = append(urls, r.URL)
 	}
 
-	log.Printf("[DEBUG ENGINE] %s parsed %d results:%s\n", engineName, resultCount, statsStr)
+	fields := map[string]interface{}{
+		"engine": engineName,
+		"count":  len(results),
+		"urls":   strings.Join(urls, ","),
+	}
+	for field, count := range fieldStats {
+		fields[field] = count
+	}
+
+	logDebug("engine parsed results", fields)
 }

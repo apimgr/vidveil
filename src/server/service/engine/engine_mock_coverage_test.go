@@ -7,6 +7,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -454,26 +455,27 @@ func TestDebugLogEngineResponse_DebugEnabled_NoPanic(t *testing.T) {
 	mode.SetDebug(true)
 	t.Cleanup(func() { mode.SetDebug(false) })
 
-	DebugLogEngineResponse("test-engine", "https://example.com/search", []byte("test response"))
+	DebugLogEngineResponse("test-engine", "https://example.com/search", len("test response"))
 }
 
 func TestDebugLogEngineResponse_LargeBody_Truncated(t *testing.T) {
 	mode.SetDebug(true)
 	t.Cleanup(func() { mode.SetDebug(false) })
 
-	// Body > 2000 chars — exercises truncation path
-	largeBody := make([]byte, 3000)
-	for i := range largeBody {
-		largeBody[i] = 'x'
-	}
-	DebugLogEngineResponse("test-engine", "https://example.com/search", largeBody)
+	// Reported size > 2000 bytes — must not panic regardless of magnitude
+	DebugLogEngineResponse("test-engine", "https://example.com/search", 3000)
 }
 
 func TestDebugLogEngineParseResult_DebugEnabled_NoPanic(t *testing.T) {
 	mode.SetDebug(true)
 	t.Cleanup(func() { mode.SetDebug(false) })
 
-	DebugLogEngineParseResult("test-engine", 5, map[string]int{
+	results := make([]model.VideoResult, 5)
+	for i := range results {
+		results[i].URL = fmt.Sprintf("https://example.com/video/%d", i)
+	}
+
+	DebugLogEngineParseResult("test-engine", results, map[string]int{
 		"title":     5,
 		"thumbnail": 4,
 		"duration":  3,

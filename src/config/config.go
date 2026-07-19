@@ -949,6 +949,14 @@ type AgeVerificationConfig struct {
 // AppPaths is now defined in paths package
 type AppPaths = path.AppPaths
 
+// envDefault returns the value of env var key when set and non-empty, else def
+func envDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 // DefaultAppConfig returns an AppConfig with sensible defaults per AI.md
 func DefaultAppConfig() *AppConfig {
 	fqdn := getHostname()
@@ -963,8 +971,11 @@ func DefaultAppConfig() *AppConfig {
 			BaseURL: "/",
 			Mode:    "production",
 			Branding: ServerBrandingConfig{
-				Title:       "Vidveil",
-				Tagline:     "Privacy-first video search",
+				// Per AI.md PART 5 Init-Only Variables: APPLICATION_NAME /
+				// APPLICATION_TAGLINE seed branding on first run; the written
+				// config file wins on subsequent loads (env then ignored)
+				Title:       envDefault("APPLICATION_NAME", "Vidveil"),
+				Tagline:     envDefault("APPLICATION_TAGLINE", "Privacy-first video search"),
 				Description: "Privacy-respecting adult video search",
 			},
 			User:    "",
@@ -1393,6 +1404,15 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 
 	if cfg.Server.Database.SQLite.Dir == "" || os.Getenv("DATABASE_DIR") != "" {
 		cfg.Server.Database.SQLite.Dir = dbDir
+	}
+
+	// Per AI.md PART 5 Runtime Variables (Always Checked): bare DATABASE_DRIVER
+	// and DATABASE_URL override the config file's database driver/connection URL
+	if driver := os.Getenv("DATABASE_DRIVER"); driver != "" {
+		cfg.Server.Database.Driver = driver
+	}
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		cfg.Server.Database.URL = dbURL
 	}
 
 	// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)

@@ -88,7 +88,8 @@ Purpose:
 ## Current Project State
 [AI updates this section as work progresses]
 - Last read AI.md: 2026-07-12 (full re-validation PART 27–33 complete)
-- Current task: full spec re-validation complete; all PARTs verified and aligned
-- Tests: all packages pass (i18n 94%, most packages 80%+); CI/Daily/Docker all green
-- Completed: PART 27–33 validated; Jenkinsfile ${WORKSPACE} fix (30bdb61); i18n context fix (30bdb61)
+- Current task: change-password/well-known removal, footer PART 16 compliance, and engine debug-log HTML-stripping fix — all committed (cc56c36c)
+- Tests: full `go build` + `go vet ./...` + `go test -cover ./...` pass, zero FAIL, all packages ok
+- Completed: PART 27–33 validated; Jenkinsfile ${WORKSPACE} fix (30bdb61); i18n context fix (30bdb61); engine debug logging now strips raw HTML (logfmt only, verified live via Docker debug build + search); footer/CSS restructured to PART 16 fixed-row order; change-password and well-known endpoints removed (out of spec)
 - PART 32 GUI: implemented with -tags gui build tag; native GTK4/Cocoa/Win32 (not fyne); no user decision needed
+- `gitcommit --dir {dir} all` always stages ALL modified files (git add -A behavior) — pre-staging a subset via `git add` does NOT limit the commit to that subset; plan commits as one combined change when multiple logical groups are dirty simultaneously, or fully commit/stash between groups if a true split is required

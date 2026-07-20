@@ -160,7 +160,7 @@ type EmailService struct {
 // NewEmailService creates a new email service
 func NewEmailService(appConfig *config.AppConfig) *EmailService {
 	paths := config.GetAppPaths("", "")
-	templateDir := filepath.Join(paths.Config, "templates", "email")
+	templateDir := filepath.Join(paths.Config, "template", "email")
 
 	return &EmailService{
 		appConfig:   appConfig,
@@ -270,7 +270,7 @@ func (s *EmailService) getGlobalVars() map[string]string {
 		"onion_address":         "",
 		"i2p_url":               "",
 		"i2p_address":           "",
-		"notification_reply_to": "",
+		"notification_reply_to": s.appConfig.Server.Notifications.Email.ReplyTo,
 		"admin_email":           s.appConfig.Server.Admin.Email,
 		"timestamp":             time.Now().Format(time.RFC3339),
 		"year":                  fmt.Sprintf("%d", time.Now().Year()),
@@ -354,6 +354,9 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 	var msg bytes.Buffer
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	if replyTo := strings.TrimSpace(s.appConfig.Server.Notifications.Email.ReplyTo); replyTo != "" {
+		msg.WriteString(fmt.Sprintf("Reply-To: %s\r\n", replyTo))
+	}
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")

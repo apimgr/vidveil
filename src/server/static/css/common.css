@@ -3054,7 +3054,7 @@ a:focus-visible {
 }
 
 .strength-weak { background: var(--error); width: 25%; }
-.strength-fair { background: #f59e0b; width: 50%; }
+.strength-fair { background: var(--warning); width: 50%; }
 .strength-good { background: #84cc16; width: 75%; }
 .strength-strong { background: var(--success); width: 100%; }
 

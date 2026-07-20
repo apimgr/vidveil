@@ -242,7 +242,9 @@ func TestSetAppModeFromEnvSetsDebugFromDEBUGVar(t *testing.T) {
 	}
 }
 
-func TestSetAppModeFromEnvDoesNotSetDebugForFalsyDEBUG(t *testing.T) {
+func TestSetAppModeFromEnvExplicitFalsyDEBUGDisablesDebug(t *testing.T) {
+	// PART 6: an explicitly set DEBUG (truthy OR falsy) always wins. A falsy
+	// DEBUG must turn debug off even if it was previously on (e.g. via MODE=debug).
 	falsyValues := []string{"0", "false", "no", "disabled", "off", ""}
 	for _, v := range falsyValues {
 		t.Run("DEBUG="+v, func(t *testing.T) {
@@ -251,10 +253,43 @@ func TestSetAppModeFromEnvDoesNotSetDebugForFalsyDEBUG(t *testing.T) {
 			t.Setenv("MODE", "")
 			t.Setenv("DEBUG", v)
 			SetAppModeFromEnv()
-			// IsTruthy(falsy) is false so SetDebug is never called; debugEnabled stays true.
-			// This matches the source: only sets debug to true, never to false.
-			_ = debugEnabled
+			if debugEnabled {
+				t.Errorf("SetAppModeFromEnv with explicit DEBUG=%q: debugEnabled = true, want false", v)
+			}
 		})
+	}
+}
+
+func TestSetAppModeDevelVariant(t *testing.T) {
+	resetState(t)
+	SetAppMode("devel")
+	if currentMode != Development {
+		t.Errorf("SetAppMode(devel): currentMode = %v, want Development", currentMode)
+	}
+}
+
+func TestSetAppModeDebugAliasEnablesDevelopmentAndDebug(t *testing.T) {
+	resetState(t)
+	SetAppMode("debug")
+	if currentMode != Development {
+		t.Errorf("SetAppMode(debug): currentMode = %v, want Development", currentMode)
+	}
+	if !debugEnabled {
+		t.Error("SetAppMode(debug): debugEnabled = false, want true")
+	}
+}
+
+func TestSetAppModeFromEnvDebugAliasOverriddenByExplicitDEBUG(t *testing.T) {
+	// PART 6: MODE=debug DEBUG=false runs development mode with debug off.
+	resetState(t)
+	t.Setenv("MODE", "debug")
+	t.Setenv("DEBUG", "false")
+	SetAppModeFromEnv()
+	if currentMode != Development {
+		t.Errorf("MODE=debug DEBUG=false: currentMode = %v, want Development", currentMode)
+	}
+	if debugEnabled {
+		t.Error("MODE=debug DEBUG=false: debugEnabled = true, want false")
 	}
 }
 

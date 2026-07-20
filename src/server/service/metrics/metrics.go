@@ -4,12 +4,42 @@ package metrics
 
 import (
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
+
+// uuidPathSegment matches a UUID path segment (any version).
+var uuidPathSegment = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// numericPathSegment matches a purely numeric path segment (resource IDs).
+var numericPathSegment = regexp.MustCompile(`^\d+$`)
+
+// longHexPathSegment matches long hex tokens (SHA hashes, opaque IDs).
+var longHexPathSegment = regexp.MustCompile(`^[0-9a-fA-F]{16,}$`)
+
+// normalizePath replaces high-cardinality path segments (UUIDs, numeric IDs,
+// long hex tokens) with ":id" so Prometheus label cardinality stays bounded
+// per AI.md PART 20 (path label must be normalized, never raw r.URL.Path).
+func normalizePath(p string) string {
+	if p == "" {
+		return "/"
+	}
+	segments := strings.Split(p, "/")
+	for i, seg := range segments {
+		if seg == "" {
+			continue
+		}
+		if uuidPathSegment.MatchString(seg) || numericPathSegment.MatchString(seg) || longHexPathSegment.MatchString(seg) {
+			segments[i] = ":id"
+		}
+	}
+	return strings.Join(segments, "/")
+}
 
 var (
 	// Application metrics per AI.md PART 20
@@ -408,7 +438,9 @@ func InstrumentMiddleware(next http.Handler) http.Handler {
 		HTTPActiveRequests.Dec()
 
 		method := r.Method
-		path := r.URL.Path
+		// Normalize the path so IDs/UUIDs collapse to :id — prevents unbounded
+		// label cardinality per AI.md PART 20.
+		path := normalizePath(r.URL.Path)
 		status := strconv.Itoa(sw.status)
 
 		HTTPRequestsTotal.WithLabelValues(method, path, status).Inc()

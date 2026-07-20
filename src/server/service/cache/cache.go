@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -230,7 +231,7 @@ func (c *SearchCache) cleanup() {
 
 // CacheKey generates a cache key for a search query
 func CacheKey(query string, page int, engines []string) string {
-	key := query + "|" + string(rune(page))
+	key := query + "|" + strconv.Itoa(page)
 	if len(engines) > 0 {
 		for _, e := range engines {
 			key += "|" + e

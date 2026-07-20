@@ -7,11 +7,11 @@
 //   - On POST/PUT/PATCH/DELETE: the cookie value is compared against the value in the
 //     X-CSRF-Token header (or the csrf_token form field). Mismatch → 403 Forbidden.
 //   - Bypass conditions (any one bypasses validation):
-//       * Method is GET, HEAD, or OPTIONS
-//       * Authorization: Bearer … or X-API-Token header is present
-//       * Request is a WebSocket upgrade
-//       * Path matches an exempt_paths glob in config
-//       * No session cookie present (public/unauthenticated request)
+//   - Method is GET, HEAD, or OPTIONS
+//   - Authorization: Bearer … or X-API-Token header is present
+//   - Request is a WebSocket upgrade
+//   - Path matches an exempt_paths glob in config
+//   - No session cookie present (public/unauthenticated request)
 //
 // Cookie posture:
 //   - csrf_token: SameSite=Strict, HttpOnly=false (form JS must read it), Secure per config
@@ -21,6 +21,7 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -59,7 +60,8 @@ func newCSRFMiddleware(cfg config.CSRFConfig, sessionCookieName string, logger *
 					_ = r.ParseForm()
 					submitted = r.FormValue(cfg.CookieName)
 				}
-				if submitted == "" || submitted != existingToken {
+				// Constant-time comparison per AI.md PART 11 (CSRF tokens are credentials).
+				if submitted == "" || subtle.ConstantTimeCompare([]byte(submitted), []byte(existingToken)) != 1 {
 					csrfDeny(w, r, "token_mismatch", r.URL.Path, logger)
 					return
 				}

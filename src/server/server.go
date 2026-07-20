@@ -31,7 +31,7 @@ import (
 	"github.com/apimgr/vidveil/src/swagger"
 )
 
-//go:embed static/css/* static/js/* static/images/* static/icons/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/layout/*.tmpl template/component/*.tmpl template/nojs/*.tmpl
+//go:embed static/css/* static/js/* static/images/* static/icons/* static/splash/* static/screenshots/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/layout/*.tmpl template/component/*.tmpl template/nojs/*.tmpl
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem

@@ -175,7 +175,6 @@ func certExists(dir, certFile, keyFile string) bool {
 	return err == nil
 }
 
-
 // loadCertificate loads an existing certificate
 func (m *SSLManager) loadCertificate(certFile, keyFile string) error {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
@@ -328,7 +327,6 @@ func (m *SSLManager) requestTLSALPN01(domain string) error {
 
 	return nil
 }
-
 
 // GetCertificate returns the current certificate for TLS config
 func (m *SSLManager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {

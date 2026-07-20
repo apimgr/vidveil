@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/binary"
 	"fmt"
@@ -86,7 +87,8 @@ func (s *TOTPService) ValidateCode(secret, code string) bool {
 	for i := int64(-1); i <= 1; i++ {
 		counter := (now / DefaultPeriod) + i
 		expectedCode := s.generateCode(secret, counter)
-		if expectedCode == code {
+		// Constant-time comparison per AI.md PART 11 (applies to TOTP codes).
+		if subtle.ConstantTimeCompare([]byte(expectedCode), []byte(code)) == 1 {
 			return true
 		}
 	}
@@ -98,7 +100,8 @@ func (s *TOTPService) ValidateBackupCode(code string, validCodes []string) bool 
 	code = strings.ToUpper(strings.ReplaceAll(code, "-", ""))
 	for _, valid := range validCodes {
 		normalizedValid := strings.ToUpper(strings.ReplaceAll(valid, "-", ""))
-		if code == normalizedValid {
+		// Constant-time comparison per AI.md PART 11 (backup codes are credentials).
+		if subtle.ConstantTimeCompare([]byte(code), []byte(normalizedValid)) == 1 {
 			return true
 		}
 	}

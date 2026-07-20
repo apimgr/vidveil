@@ -7,6 +7,7 @@ package secrets
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
@@ -137,7 +138,7 @@ func (m *Manager) ValidateWithPrevious(ctx context.Context, key SecretKey, value
 	// Check current value
 	if current.Valid {
 		currentBytes, err := base64.StdEncoding.DecodeString(current.String)
-		if err == nil && constantTimeEqual(currentBytes, value) {
+		if err == nil && subtle.ConstantTimeCompare(currentBytes, value) == 1 {
 			return true, nil
 		}
 	}
@@ -145,7 +146,7 @@ func (m *Manager) ValidateWithPrevious(ctx context.Context, key SecretKey, value
 	// Check previous value if not expired
 	if previous.Valid && (!expiresAt.Valid || time.Now().Before(expiresAt.Time)) {
 		prevBytes, err := base64.StdEncoding.DecodeString(previous.String)
-		if err == nil && constantTimeEqual(prevBytes, value) {
+		if err == nil && subtle.ConstantTimeCompare(prevBytes, value) == 1 {
 			return true, nil
 		}
 	}
@@ -187,17 +188,4 @@ func generateSecretBytes() ([]byte, error) {
 		return nil, fmt.Errorf("generate random bytes: %w", err)
 	}
 	return bytes, nil
-}
-
-// constantTimeEqual compares two byte slices in constant time
-// Per PART 11: Use constant-time comparison for all secret comparisons
-func constantTimeEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	var result byte
-	for i := range a {
-		result |= a[i] ^ b[i]
-	}
-	return result == 0
 }

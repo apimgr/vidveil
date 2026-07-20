@@ -1076,7 +1076,7 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 // 170-179), and the nobody/nfsnobody sentinel (65534).
 var reservedSystemIDs = map[int]bool{
 	65534: true,
-	999: true, 998: true, 997: true, 996: true, 995: true,
+	999:   true, 998: true, 997: true, 996: true, 995: true,
 	994: true, 993: true, 992: true, 991: true, 990: true,
 	989: true, 988: true, 987: true, 986: true, 985: true,
 	984: true, 983: true, 982: true, 981: true, 980: true,

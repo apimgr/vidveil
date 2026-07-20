@@ -38,11 +38,16 @@ func (m AppMode) String() string {
 }
 
 // SetAppMode sets the application mode from a string
-// Accepts: dev, development, prod, production
+// Accepts (PART 6 Mode Shortcuts): dev/devel/development, prod/production, debug
+// "debug" is an alias for development mode with debug enabled; an explicit
+// --debug flag or DEBUG env var still wins over this alias.
 func SetAppMode(m string) {
 	switch strings.ToLower(m) {
-	case "dev", "development":
+	case "dev", "devel", "development":
 		currentMode = Development
+	case "debug":
+		currentMode = Development
+		SetDebug(true)
 	default:
 		currentMode = Production
 	}
@@ -111,8 +116,10 @@ func SetAppModeFromEnv() {
 	if m := os.Getenv("MODE"); m != "" {
 		SetAppMode(m)
 	}
-	if config.IsTruthy(os.Getenv("DEBUG")) {
-		SetDebug(true)
+	// An explicitly set DEBUG (truthy OR falsy) always wins over the MODE=debug
+	// alias; if DEBUG is unset the alias-derived value is preserved.
+	if v, set := os.LookupEnv("DEBUG"); set {
+		SetDebug(config.IsTruthy(v))
 	}
 }
 

@@ -56,6 +56,7 @@ pipeline {
                         -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECTNAME}}:/usr/local/share/go/cache \
                         -w /app \
                         -e CGO_ENABLED=0 \
+                        -e GOFLAGS=-buildvcs=false \
                         casjaysdev/go:latest \
                         go test -v -cover ./...
                 '''

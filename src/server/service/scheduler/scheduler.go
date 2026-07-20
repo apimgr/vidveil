@@ -7,12 +7,34 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/apimgr/vidveil/src/server/service/metrics"
 )
+
+// defaultSchedulerTimezone is applied when the TZ environment variable is not
+// set, per AI.md PART 18 (default timezone: America/New_York).
+const defaultSchedulerTimezone = "America/New_York"
+
+// resolveSchedulerLocation returns the location used to evaluate cron
+// schedules. When TZ is set, Go already reflects it in time.Local; otherwise
+// the AI.md PART 18 default (America/New_York) is used, falling back to UTC if
+// the zone database is unavailable.
+func resolveSchedulerLocation() *time.Location {
+	if os.Getenv("TZ") != "" {
+		return time.Local
+	}
+	loc, err := time.LoadLocation(defaultSchedulerTimezone)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
 
 // TaskFunc is a function that executes a scheduled task
 type TaskFunc func(ctx context.Context) error
@@ -37,7 +59,15 @@ type ScheduledTask struct {
 	// cronSched is for cron-expression schedules per AI.md PART 18
 	cronSched cronSchedule `json:"-"`
 	fn        TaskFunc
+	// retryCount tracks consecutive failed attempts for exponential backoff per AI.md PART 18
+	retryCount int
 }
+
+// Retry policy per AI.md PART 18: max 3 retries, 5m base delay, exponential backoff (5m, 10m, 20m)
+const (
+	schedulerMaxRetries = 3
+	schedulerRetryDelay = 5 * time.Minute
+)
 
 // TaskHistory represents a historical run of a task
 type TaskHistory struct {
@@ -63,6 +93,17 @@ type Scheduler struct {
 	db *sql.DB
 	// Catch-up window per AI.md PART 18: run missed tasks if within this duration
 	catchUpWindow time.Duration
+	// loc is the timezone used to evaluate cron schedules per AI.md PART 18
+	loc *time.Location
+}
+
+// now returns the current time in the scheduler's configured timezone so cron
+// expressions evaluate against the AI.md PART 18 timezone.
+func (s *Scheduler) now() time.Time {
+	if s.loc == nil {
+		return time.Now()
+	}
+	return time.Now().In(s.loc)
 }
 
 // NewScheduler creates a new scheduler without database persistence
@@ -72,6 +113,7 @@ func NewScheduler() *Scheduler {
 		history: make([]TaskHistory, 0),
 		// Keep last 100 history entries in memory
 		maxHist: 100,
+		loc:     resolveSchedulerLocation(),
 	}
 }
 
@@ -83,6 +125,7 @@ func NewSchedulerWithDB(db *sql.DB) *Scheduler {
 		history: make([]TaskHistory, 0),
 		maxHist: 100,
 		db:      db,
+		loc:     resolveSchedulerLocation(),
 	}
 }
 
@@ -278,7 +321,7 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 	// Try parsing as cron expression first (per AI.md PART 18)
 	if cronSched, err := parseCronSchedule(schedule); err == nil {
 		task.cronSched = cronSched
-		task.NextRun = cronSched.Next(time.Now())
+		task.NextRun = cronSched.Next(s.now())
 	} else {
 		// Fall back to simple interval
 		interval, err := parseInterval(schedule)
@@ -286,7 +329,7 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 			return fmt.Errorf("invalid schedule '%s': %w", schedule, err)
 		}
 		task.Interval = interval
-		task.NextRun = time.Now().Add(interval)
+		task.NextRun = s.now().Add(interval)
 	}
 
 	// Merge persisted state from database per AI.md PART 18
@@ -306,16 +349,16 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 			if task.cronSched != nil {
 				nextFromLast := task.cronSched.Next(existingState.LastRun)
 				// If next run from last run is in the past, calculate from now
-				if nextFromLast.Before(time.Now()) {
-					task.NextRun = task.cronSched.Next(time.Now())
+				if nextFromLast.Before(s.now()) {
+					task.NextRun = task.cronSched.Next(s.now())
 				} else {
 					task.NextRun = nextFromLast
 				}
 			} else {
 				nextFromLast := existingState.LastRun.Add(task.Interval)
 				// If next run from last run is in the past, calculate from now
-				if nextFromLast.Before(time.Now()) {
-					task.NextRun = time.Now().Add(task.Interval)
+				if nextFromLast.Before(s.now()) {
+					task.NextRun = s.now().Add(task.Interval)
 				} else {
 					task.NextRun = nextFromLast
 				}
@@ -338,11 +381,11 @@ type cronSchedule interface {
 
 // cronExpr is a parsed 5-field cron expression (minute hour dom month dow)
 type cronExpr struct {
-	minutes  []int
-	hours    []int
-	doms     []int
-	months   []int
-	dows     []int
+	minutes []int
+	hours   []int
+	doms    []int
+	months  []int
+	dows    []int
 }
 
 // Next returns the next activation time after t per AI.md PART 18
@@ -394,11 +437,11 @@ func parseCronSchedule(schedule string) (cronSchedule, error) {
 	}
 
 	ranges := [5][2]int{
-		{0, 59},  // minute
-		{0, 23},  // hour
-		{1, 31},  // dom
-		{1, 12},  // month
-		{0, 6},   // dow
+		{0, 59}, // minute
+		{0, 23}, // hour
+		{1, 31}, // dom
+		{1, 12}, // month
+		{0, 6},  // dow
 	}
 
 	parsed := make([][]int, 5)
@@ -605,8 +648,13 @@ func (s *Scheduler) checkAndRunTasks() {
 func (s *Scheduler) runTask(task *ScheduledTask) {
 	s.mu.Lock()
 	task.LastResult = "running"
-	startTime := time.Now()
+	startTime := s.now()
 	s.mu.Unlock()
+
+	// Emit Prometheus scheduler metrics per AI.md PART 20
+	metrics.SchedulerTasksRunning.WithLabelValues(task.ID).Inc()
+	metrics.SchedulerLastRunTimestamp.WithLabelValues(task.ID).Set(float64(startTime.Unix()))
+	defer metrics.SchedulerTasksRunning.WithLabelValues(task.ID).Dec()
 
 	// Create task context with timeout
 	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Minute)
@@ -634,17 +682,36 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 		Duration:  duration,
 	}
 
+	status := "success"
 	if err != nil {
+		status = "failure"
 		task.LastResult = "failure"
 		task.LastError = err.Error()
 		task.FailCount++
 		hist.Result = "failure"
 		hist.Error = err.Error()
+		// Retry policy per AI.md PART 18: schedule a retry with exponential
+		// backoff (5m, 10m, 20m) until max_retries is reached, then fall back
+		// to the task's normal schedule computed above.
+		if task.retryCount < schedulerMaxRetries {
+			task.retryCount++
+			backoff := schedulerRetryDelay * time.Duration(1<<(task.retryCount-1))
+			task.NextRun = startTime.Add(backoff)
+			log.Printf("task %s failed, retry %d/%d scheduled in %s: %v",
+				task.ID, task.retryCount, schedulerMaxRetries, backoff, err)
+		} else {
+			task.retryCount = 0
+		}
 	} else {
 		task.LastResult = "success"
 		task.LastError = ""
 		hist.Result = "success"
+		task.retryCount = 0
 	}
+
+	// Record execution count and duration per AI.md PART 20
+	metrics.SchedulerTasksTotal.WithLabelValues(task.ID, status).Inc()
+	metrics.SchedulerTaskDuration.WithLabelValues(task.ID).Observe(duration.Seconds())
 
 	// Add to in-memory history
 	s.history = append(s.history, hist)
@@ -688,12 +755,12 @@ func (s *Scheduler) EnableTask(taskID string) error {
 	}
 
 	task.Enabled = true
-	if task.NextRun.Before(time.Now()) {
+	if task.NextRun.Before(s.now()) {
 		// Calculate next run: use cron schedule if available, else use interval
 		if task.cronSched != nil {
-			task.NextRun = task.cronSched.Next(time.Now())
+			task.NextRun = task.cronSched.Next(s.now())
 		} else {
-			task.NextRun = time.Now().Add(task.Interval)
+			task.NextRun = s.now().Add(task.Interval)
 		}
 	}
 	taskCopy := *task
@@ -737,7 +804,7 @@ func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 	if cronSched, err := parseCronSchedule(schedule); err == nil {
 		task.cronSched = cronSched
 		task.Interval = 0
-		task.NextRun = cronSched.Next(time.Now())
+		task.NextRun = cronSched.Next(s.now())
 	} else {
 		// Fall back to simple interval
 		interval, err := parseInterval(schedule)
@@ -747,7 +814,7 @@ func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 		}
 		task.cronSched = nil
 		task.Interval = interval
-		task.NextRun = time.Now().Add(interval)
+		task.NextRun = s.now().Add(interval)
 	}
 
 	task.Schedule = schedule

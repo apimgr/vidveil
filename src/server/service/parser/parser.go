@@ -51,6 +51,7 @@ func init() {
 	RegisterParser("redtube", NewRedTubeParser())
 	RegisterParser("eporner", NewEpornerParser())
 	RegisterParser("pornmd", NewPornMDParser())
+	RegisterParser("motherless", NewMotherlessParser())
 }
 
 // VideoItem represents parsed video data

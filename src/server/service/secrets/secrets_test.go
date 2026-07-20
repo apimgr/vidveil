@@ -4,12 +4,12 @@
 package secrets
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -111,7 +111,7 @@ func TestEnsureSecrets_Idempotent(t *testing.T) {
 		t.Fatalf("Get after second: %v", err)
 	}
 
-	if !constantTimeEqual(first, second) {
+	if !bytes.Equal(first, second) {
 		t.Error("EnsureSecrets regenerated existing secret")
 	}
 }
@@ -178,7 +178,7 @@ func TestRotate(t *testing.T) {
 	}
 
 	// Should be different
-	if constantTimeEqual(original, rotated) {
+	if bytes.Equal(original, rotated) {
 		t.Error("Rotate did not change secret")
 	}
 }
@@ -261,38 +261,21 @@ func TestValidateWithPrevious_InvalidValue(t *testing.T) {
 	}
 }
 
-func TestConstantTimeEqual(t *testing.T) {
-	a := []byte{1, 2, 3, 4}
-	b := []byte{1, 2, 3, 4}
-	c := []byte{1, 2, 3, 5}
-	d := []byte{1, 2, 3}
-
-	if !constantTimeEqual(a, b) {
-		t.Error("equal slices should match")
-	}
-	if constantTimeEqual(a, c) {
-		t.Error("different slices should not match")
-	}
-	if constantTimeEqual(a, d) {
-		t.Error("different length slices should not match")
-	}
-}
-
 func TestGenerateSecretBytes(t *testing.T) {
-	bytes, err := generateSecretBytes()
+	secretBytes, err := generateSecretBytes()
 	if err != nil {
 		t.Fatalf("generateSecretBytes: %v", err)
 	}
-	if len(bytes) != 32 {
-		t.Errorf("length = %d, want 32", len(bytes))
+	if len(secretBytes) != 32 {
+		t.Errorf("length = %d, want 32", len(secretBytes))
 	}
 
 	// Generate another - should be different
-	bytes2, err := generateSecretBytes()
+	secretBytes2, err := generateSecretBytes()
 	if err != nil {
 		t.Fatalf("generateSecretBytes 2: %v", err)
 	}
-	if constantTimeEqual(bytes, bytes2) {
+	if bytes.Equal(secretBytes, secretBytes2) {
 		t.Error("two generated secrets should differ")
 	}
 }
@@ -306,60 +289,5 @@ func TestSecretKeyConstants(t *testing.T) {
 	}
 	if CSRFTokenSecret != "csrf_token_secret" {
 		t.Errorf("CSRFTokenSecret = %q", CSRFTokenSecret)
-	}
-}
-
-// Benchmark constant-time comparison
-func BenchmarkConstantTimeEqual(b *testing.B) {
-	a := make([]byte, 32)
-	c := make([]byte, 32)
-	for i := range a {
-		a[i] = byte(i)
-		c[i] = byte(i)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		constantTimeEqual(a, c)
-	}
-}
-
-// Verify constant-time behavior by checking timing doesn't leak position
-func TestConstantTimeEqual_TimingConsistency(t *testing.T) {
-	a := make([]byte, 32)
-	for i := range a {
-		a[i] = byte(i)
-	}
-
-	// Early mismatch
-	earlyMismatch := make([]byte, 32)
-	copy(earlyMismatch, a)
-	earlyMismatch[0] = 255
-
-	// Late mismatch
-	lateMismatch := make([]byte, 32)
-	copy(lateMismatch, a)
-	lateMismatch[31] = 255
-
-	// Run many iterations and verify both complete in similar time
-	iterations := 10000
-
-	startEarly := time.Now()
-	for i := 0; i < iterations; i++ {
-		constantTimeEqual(a, earlyMismatch)
-	}
-	earlyDuration := time.Since(startEarly)
-
-	startLate := time.Now()
-	for i := 0; i < iterations; i++ {
-		constantTimeEqual(a, lateMismatch)
-	}
-	lateDuration := time.Since(startLate)
-
-	// Both should be within 50% of each other (allowing for noise)
-	ratio := float64(earlyDuration) / float64(lateDuration)
-	if ratio < 0.5 || ratio > 2.0 {
-		t.Logf("timing: early=%v late=%v ratio=%.2f", earlyDuration, lateDuration, ratio)
-		// Not failing - timing tests are inherently noisy
 	}
 }

@@ -195,4 +195,3 @@ func applyCredsFromJSON(credsJSON string) error {
 	}
 	return nil
 }
-

@@ -338,21 +338,21 @@ type ScheduleConfig struct {
 
 // ScheduleTaskConfig holds per-task scheduler settings per AI.md PART 18
 type ScheduleTaskConfig struct {
-	Schedule       string                 `yaml:"schedule"`
-	Enabled        bool                   `yaml:"enabled"`
-	RetryOnFail    bool                   `yaml:"retry_on_fail,omitempty"`
-	RetryDelay     string                 `yaml:"retry_delay,omitempty"`
-	Verify         bool                   `yaml:"verify,omitempty"`
-	RestartOnFail  bool                   `yaml:"restart_on_fail,omitempty"`
-	Retention      *ScheduleRetentionConfig `yaml:"retention,omitempty"`
+	Schedule      string                   `yaml:"schedule"`
+	Enabled       bool                     `yaml:"enabled"`
+	RetryOnFail   bool                     `yaml:"retry_on_fail,omitempty"`
+	RetryDelay    string                   `yaml:"retry_delay,omitempty"`
+	Verify        bool                     `yaml:"verify,omitempty"`
+	RestartOnFail bool                     `yaml:"restart_on_fail,omitempty"`
+	Retention     *ScheduleRetentionConfig `yaml:"retention,omitempty"`
 }
 
 // ScheduleRetentionConfig holds backup retention settings per AI.md PART 18
 type ScheduleRetentionConfig struct {
 	MaxBackups   int    `yaml:"max_backups"`
-	KeepWeekly  int    `yaml:"keep_weekly"`
-	KeepMonthly int    `yaml:"keep_monthly"`
-	KeepYearly  int    `yaml:"keep_yearly"`
+	KeepWeekly   int    `yaml:"keep_weekly"`
+	KeepMonthly  int    `yaml:"keep_monthly"`
+	KeepYearly   int    `yaml:"keep_yearly"`
 	MaxTotalSize string `yaml:"max_total_size"`
 }
 
@@ -386,13 +386,13 @@ type MetricsConfig struct {
 
 // GeoIPConfig holds GeoIP settings per AI.md PART 19
 type GeoIPConfig struct {
-	Enabled     bool   `yaml:"enabled"`
-	Dir         string `yaml:"dir"`
-	Update      string `yaml:"update"`
+	Enabled bool   `yaml:"enabled"`
+	Dir     string `yaml:"dir"`
+	Update  string `yaml:"update"`
 	// CountryMode is "none" (default), "deny" (blocklist), or "allow" (allowlist-only)
-	CountryMode    string   `yaml:"country_mode"`
-	DenyCountries  []string `yaml:"deny_countries"`
-	AllowCountries []string `yaml:"allow_countries"`
+	CountryMode    string               `yaml:"country_mode"`
+	DenyCountries  []string             `yaml:"deny_countries"`
+	AllowCountries []string             `yaml:"allow_countries"`
 	Databases      GeoIPDatabasesConfig `yaml:"databases"`
 	// Content restriction for adult content laws
 	ContentRestriction ContentRestrictionConfig `yaml:"content_restriction"`
@@ -770,12 +770,12 @@ type SEOConfig struct {
 
 // CSRFConfig holds CSRF settings per AI.md PART 16 → CSRF Protection
 type CSRFConfig struct {
-	Enabled     bool     `yaml:"enabled"`
-	TokenLength int      `yaml:"token_length"`
-	CookieName  string   `yaml:"cookie_name"`
-	HeaderName  string   `yaml:"header_name"`
+	Enabled     bool   `yaml:"enabled"`
+	TokenLength int    `yaml:"token_length"`
+	CookieName  string `yaml:"cookie_name"`
+	HeaderName  string `yaml:"header_name"`
 	// Secure sets the Secure cookie flag: "auto" (https only), "true", or "false"
-	Secure      string   `yaml:"secure"`
+	Secure string `yaml:"secure"`
 	// ExemptPaths lists endpoints exempt from CSRF (OAuth callbacks, webhook receivers).
 	// Glob patterns supported. Default exempts /api/{api_version}/webhooks/*.
 	ExemptPaths []string `yaml:"exempt_paths"`
@@ -1025,13 +1025,13 @@ func DefaultAppConfig() *AppConfig {
 				Timezone:      "America/New_York",
 				CatchUpWindow: "1h",
 				Tasks: map[string]ScheduleTaskConfig{
-					"ssl_renewal":     {Schedule: "0 3 * * *", Enabled: true},
-					"geoip_update":    {Schedule: "0 3 * * 0", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+					"ssl_renewal":      {Schedule: "0 3 * * *", Enabled: true},
+					"geoip_update":     {Schedule: "0 3 * * 0", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
 					"blocklist_update": {Schedule: "0 4 * * *", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
-					"cve_update":      {Schedule: "0 5 * * *", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
-					"update_check":    {Schedule: "0 6 * * *", Enabled: true},
-					"token_cleanup":   {Schedule: "@every 15m", Enabled: true},
-					"log_rotation":    {Schedule: "0 0 * * *", Enabled: true},
+					"cve_update":       {Schedule: "0 5 * * *", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+					"update_check":     {Schedule: "0 6 * * *", Enabled: true},
+					"token_cleanup":    {Schedule: "@every 15m", Enabled: true},
+					"log_rotation":     {Schedule: "0 0 * * *", Enabled: true},
 					"backup_daily": {
 						Schedule: "0 2 * * *", Enabled: true, Verify: true,
 						Retention: &ScheduleRetentionConfig{

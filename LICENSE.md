@@ -32,11 +32,6 @@ This software includes the following third-party libraries:
 
 The following open-source libraries are used:
 
-- **# - - - ✅ Service go completed successfully - configuration service    ✅ - - - #** - 
-- **** - 
-- **** - 
-- **✅ All service initializations completed successfully** - 
-- **** - 
 - **github.com/PuerkitoBio/goquery** - BSD-3-Clause
 - **github.com/andybalholm/brotli** - MIT
 - **github.com/andybalholm/cascadia** - BSD-2-Clause

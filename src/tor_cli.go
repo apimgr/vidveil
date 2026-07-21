@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/tor"
 )
@@ -190,38 +191,38 @@ func torValidate(configDir, dataDir string) int {
 
 	cfg, configPath, err := config.LoadAppConfig(configDir, dataDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Config: failed to load: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Config: failed to load: %v\n", err)
 		return 1
 	}
-	fmt.Printf("✅ Config: %s\n", configPath)
+	fmt.Printf(terminal.StatusIcon(true)+" Config: %s\n", configPath)
 
 	// Tor binary: explicit path from config or auto-detect from PATH
 	binary := cfg.Server.Tor.Binary
 	if binary != "" {
 		if _, err := os.Stat(binary); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Tor binary: %s not found\n", binary)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Tor binary: %s not found\n", binary)
 			failures++
 		} else {
-			fmt.Printf("✅ Tor binary: %s\n", binary)
+			fmt.Printf(terminal.StatusIcon(true)+" Tor binary: %s\n", binary)
 		}
 	} else if path, err := exec.LookPath("tor"); err != nil {
-		fmt.Println("⚠️  Tor binary: not found in PATH (server runs without Tor)")
+		fmt.Println(terminal.WarningIcon()+" Tor binary: not found in PATH (server runs without Tor)")
 	} else {
-		fmt.Printf("✅ Tor binary: %s (auto-detected)\n", path)
+		fmt.Printf(terminal.StatusIcon(true)+" Tor binary: %s (auto-detected)\n", path)
 	}
 
 	// Data directory and key material
 	if _, err := os.Stat(torDir); err != nil {
-		fmt.Printf("⚠️  Tor data dir: %s (created on first server start)\n", torDir)
+		fmt.Printf(terminal.WarningIcon()+" Tor data dir: %s (created on first server start)\n", torDir)
 	} else {
-		fmt.Printf("✅ Tor data dir: %s\n", torDir)
+		fmt.Printf(terminal.StatusIcon(true)+" Tor data dir: %s\n", torDir)
 		if _, err := os.Stat(filepath.Join(siteDir, "hs_ed25519_secret_key")); err != nil {
-			fmt.Println("⚠️  Keys: not generated yet")
+			fmt.Println(terminal.WarningIcon()+" Keys: not generated yet")
 		} else if hostname := readHostnameFile(siteDir); hostname == "" {
-			fmt.Fprintln(os.Stderr, "❌ Keys: secret key exists but hostname file is missing")
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Keys: secret key exists but hostname file is missing")
 			failures++
 		} else {
-			fmt.Printf("✅ Keys: %s\n", hostname)
+			fmt.Printf(terminal.StatusIcon(true)+" Keys: %s\n", hostname)
 		}
 	}
 
@@ -264,11 +265,11 @@ func torRestart(configDir, dataDir string) int {
 	torDir, _ := torDirs(configDir, dataDir)
 
 	if err := signalTorProcess(torDir); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 		return 1
 	}
 
-	fmt.Println("✅ Tor process stopped - server monitor restarts it within 30 seconds")
+	fmt.Println(terminal.StatusIcon(true)+" Tor process stopped - server monitor restarts it within 30 seconds")
 	return 0
 }
 
@@ -279,7 +280,7 @@ func restartTorIfRunning(torDir string) {
 		return
 	}
 	if err := signalTorProcess(torDir); err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Could not restart Tor: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Could not restart Tor: %v\n", err)
 		return
 	}
 	fmt.Println("Tor restarting - server monitor applies the new address within 30 seconds")
@@ -292,17 +293,17 @@ func torRegenerate(configDir, dataDir string) int {
 	torDir, siteDir := torDirs(configDir, dataDir)
 
 	if err := os.MkdirAll(siteDir, 0700); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to create %s: %v\n", siteDir, err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to create %s: %v\n", siteDir, err)
 		return 1
 	}
 
 	svc := tor.NewTorService(paths.Data, nil)
 	if err := svc.RegenerateAddress(); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to regenerate address: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to regenerate address: %v\n", err)
 		return 1
 	}
 
-	fmt.Printf("✅ New .onion address: %s\n", svc.GetOnionAddress())
+	fmt.Printf(terminal.StatusIcon(true)+" New .onion address: %s\n", svc.GetOnionAddress())
 	restartTorIfRunning(torDir)
 	return 0
 }
@@ -314,13 +315,13 @@ func torVanityStart(configDir, dataDir, prefix string) int {
 	_, siteDir := torDirs(configDir, dataDir)
 
 	if err := os.MkdirAll(siteDir, 0700); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to create %s: %v\n", siteDir, err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to create %s: %v\n", siteDir, err)
 		return 1
 	}
 
 	svc := tor.NewTorService(paths.Data, nil)
 	if err := svc.GenerateVanityAddress(prefix); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 		return 1
 	}
 
@@ -329,7 +330,7 @@ func torVanityStart(configDir, dataDir, prefix string) int {
 		time.Sleep(2 * time.Second)
 		status := svc.GetVanityStatus()
 		if status == nil {
-			fmt.Fprintln(os.Stderr, "❌ Vanity generation stopped unexpectedly")
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Vanity generation stopped unexpectedly")
 			return 1
 		}
 		if !status.Active {
@@ -341,11 +342,11 @@ func torVanityStart(configDir, dataDir, prefix string) int {
 	torDir, _ := torDirs(configDir, dataDir)
 	pending := readHostnameFile(filepath.Join(torDir, "vanity_pending"))
 	if pending == "" {
-		fmt.Fprintln(os.Stderr, "❌ Vanity generation finished without a pending address")
+		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Vanity generation finished without a pending address")
 		return 1
 	}
 
-	fmt.Printf("✅ Found vanity address: %s\n", pending)
+	fmt.Printf(terminal.StatusIcon(true)+" Found vanity address: %s\n", pending)
 	fmt.Printf("Run '%s tor vanity apply' to activate it\n", filepath.Base(os.Args[0]))
 	return 0
 }
@@ -357,11 +358,11 @@ func torVanityApply(configDir, dataDir string) int {
 
 	svc := tor.NewTorService(paths.Data, nil)
 	if err := svc.ApplyVanityAddress(); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 		return 1
 	}
 
-	fmt.Printf("✅ Vanity address applied: %s\n", readHostnameFile(siteDir))
+	fmt.Printf(terminal.StatusIcon(true)+" Vanity address applied: %s\n", readHostnameFile(siteDir))
 	restartTorIfRunning(torDir)
 	return 0
 }
@@ -374,22 +375,22 @@ func torImportKeys(configDir, dataDir, keyPath string) int {
 
 	secretKey, err := os.ReadFile(keyPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to read key file: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to read key file: %v\n", err)
 		return 1
 	}
 
 	if err := os.MkdirAll(siteDir, 0700); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to create %s: %v\n", siteDir, err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to create %s: %v\n", siteDir, err)
 		return 1
 	}
 
 	svc := tor.NewTorService(paths.Data, nil)
 	if err := svc.ImportKeys(secretKey); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to import keys: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to import keys: %v\n", err)
 		return 1
 	}
 
-	fmt.Printf("✅ Keys imported - new address: %s\n", svc.GetOnionAddress())
+	fmt.Printf(terminal.StatusIcon(true)+" Keys imported - new address: %s\n", svc.GetOnionAddress())
 	restartTorIfRunning(torDir)
 	return 0
 }

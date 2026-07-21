@@ -368,3 +368,18 @@ func StopIcon() string {
 func UserIcon() string {
 	return Emoji("👤", "[USER]")
 }
+
+// StopButtonIcon returns the stopped-state icon based on emoji support
+func StopButtonIcon() string {
+	return Emoji("⏹️", "[STOPPED]")
+}
+
+// QuestionIcon returns the unknown-state icon based on emoji support
+func QuestionIcon() string {
+	return Emoji("❓", "[?]")
+}
+
+// PackageIcon returns the package/update icon based on emoji support
+func PackageIcon() string {
+	return Emoji("📦", "[UPDATE]")
+}

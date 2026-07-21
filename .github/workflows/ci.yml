@@ -134,7 +134,34 @@ jobs:
       CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-      - run: go build -buildvcs=false ./...
+      - name: Set build info
+        env:
+          OFFICIALSITE_SECRET: ${{ secrets.OFFICIALSITE }}
+        run: |
+          VERSION="devel"
+          if [ -f release.txt ]; then
+            VERSION=$(cat release.txt)
+            if ! echo "$VERSION" | grep -qE '^[A-Za-z0-9._+-]+$'; then
+              echo "::error::release.txt contains invalid version string"
+              exit 1
+            fi
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_ENV"
+          OFFICIALSITE="$OFFICIALSITE_SECRET"
+          if [ -f site.txt ]; then
+            OFFICIALSITE=$(cat site.txt)
+            if ! echo "$OFFICIALSITE" | grep -qE '^[A-Za-z0-9._+/:-]*$'; then
+              echo "::error::site.txt contains invalid characters"
+              exit 1
+            fi
+          fi
+          echo "OFFICIALSITE=${OFFICIALSITE}" >> "$GITHUB_ENV"
+      - name: Build all packages
+        run: |
+          LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
+          go build -buildvcs=false -trimpath -ldflags "${LDFLAGS}" ./...
 
   coverage:
     if: github.event_name != 'schedule'
@@ -161,11 +188,39 @@ jobs:
       CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Set build info
+        env:
+          OFFICIALSITE_SECRET: ${{ secrets.OFFICIALSITE }}
+        run: |
+          VERSION="devel"
+          if [ -f release.txt ]; then
+            VERSION=$(cat release.txt)
+            if ! echo "$VERSION" | grep -qE '^[A-Za-z0-9._+-]+$'; then
+              echo "::error::release.txt contains invalid version string"
+              exit 1
+            fi
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "COMMIT_ID=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_ENV"
+          OFFICIALSITE="$OFFICIALSITE_SECRET"
+          if [ -f site.txt ]; then
+            OFFICIALSITE=$(cat site.txt)
+            if ! echo "$OFFICIALSITE" | grep -qE '^[A-Za-z0-9._+/:-]*$'; then
+              echo "::error::site.txt contains invalid characters"
+              exit 1
+            fi
+          fi
+          echo "OFFICIALSITE=${OFFICIALSITE}" >> "$GITHUB_ENV"
       - name: Build server binary
-        run: go build -trimpath -buildvcs=false -o ${{ env.PROJECTNAME }}-linux-amd64 ./src
+        run: |
+          LDFLAGS="-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
+          go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o "${PROJECTNAME}-linux-amd64" ./src
       - name: Build CLI binary
         if: hashFiles('src/client/') != ''
-        run: go build -trimpath -buildvcs=false -o ${{ env.PROJECTNAME }}-cli-linux-amd64 ./src/client
+        run: |
+          CLI_LDFLAGS="-s -w -X 'main.ProjectName=${PROJECTNAME}' -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'"
+          go build -trimpath -buildvcs=false -ldflags "${CLI_LDFLAGS}" -o "${PROJECTNAME}-cli-linux-amd64" ./src/client
       - name: Upload server artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:

@@ -349,7 +349,7 @@ func main() {
 		}
 
 		if err := os.Setenv(name, value); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to set %s: %v\n", name, err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to set %s: %v\n", name, err)
 			os.Exit(1)
 		}
 	}
@@ -399,7 +399,7 @@ func main() {
 	// Handle daemon mode per AI.md PART 8
 	if daemon {
 		if err := daemonpkg.Daemonize(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to daemonize: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to daemonize: %v\n", err)
 			os.Exit(1)
 		}
 		// If we get here, we're either the child or daemonization failed
@@ -408,7 +408,7 @@ func main() {
 	// Load configuration
 	appConfig, configPath, err := config.LoadAppConfig(configDir, dataDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to load configuration: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -436,9 +436,9 @@ func main() {
 	dirsToOwn := []string{paths.Config, paths.Data, dbDir, paths.Cache, paths.Log}
 	uid, gid, err := system.EnsureSystemUser(appName, dirsToOwn)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Failed to ensure system user: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Failed to ensure system user: %v\n", err)
 	} else if system.IsRunningAsRoot() && uid > 0 {
-		fmt.Printf("👤 Running as user %s (uid=%d, gid=%d)\n", appName, uid, gid)
+		fmt.Printf(terminal.UserIcon()+" Running as user %s (uid=%d, gid=%d)\n", appName, uid, gid)
 	}
 
 	// Override log directory if specified
@@ -453,7 +453,7 @@ func main() {
 	// - Removes stale PID files automatically
 	if pidFile != "" {
 		if err := signalpkg.WritePIDFile(pidFile, appName); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 			os.Exit(1)
 		}
 		defer signalpkg.RemovePIDFile(pidFile)
@@ -488,7 +488,7 @@ func main() {
 	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
 	migrationMgr, err := database.NewMigrationManager(serverDBPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to initialize database: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to initialize database: %v\n", err)
 		os.Exit(1)
 	}
 	defer migrationMgr.Close()
@@ -496,7 +496,7 @@ func main() {
 	// Register and run migrations
 	migrationMgr.RegisterDefaultMigrations()
 	if err := migrationMgr.RunMigrations(); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to run migrations: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to run migrations: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -504,7 +504,7 @@ func main() {
 	// Generates installation_secret, cookie_signing_key, csrf_token_secret on first run
 	secretsMgr := secrets.NewManager(migrationMgr.GetDB())
 	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to initialize secrets: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to initialize secrets: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -521,19 +521,19 @@ func main() {
 	// SSL service (PART 15)
 	sslSvc := ssl.NewSSLManager(appConfig, paths.Config)
 	if err := sslSvc.Initialize(); err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  SSL service initialization failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" SSL service initialization failed: %v\n", err)
 	}
 
 	// GeoIP service (PART 19)
 	geoipSvc := geoip.NewGeoIPService(appConfig)
 	if err := geoipSvc.Initialize(); err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  GeoIP service initialization failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" GeoIP service initialization failed: %v\n", err)
 	}
 
 	// Initialize logger per PART 11
 	logger, err := logging.NewAppLogger(appConfig)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Logger initialization failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Logger initialization failed: %v\n", err)
 		// Create a basic logger that doesn't write to files
 		logger = &logging.AppLogger{}
 	}
@@ -556,13 +556,13 @@ func main() {
 	// Blocklist service (PART 11)
 	blocklistSvc := blocklist.NewBlocklistService(appConfig)
 	if err := blocklistSvc.Initialize(); err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Blocklist service initialization failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Blocklist service initialization failed: %v\n", err)
 	}
 
 	// CVE service (PART 11)
 	cveSvc := cve.NewCVEService(appConfig)
 	if err := cveSvc.Initialize(); err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  CVE service initialization failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" CVE service initialization failed: %v\n", err)
 	}
 
 	// Initialize scheduler with database persistence per AI.md PART 18
@@ -684,7 +684,7 @@ func main() {
 		serverPort, _ := strconv.Atoi(appConfig.Server.Port)
 		if err := torSvc.Start(torCtx, serverPort); err != nil {
 			// PART 31: Tor errors are WARN level, server continues without Tor
-			fmt.Fprintf(os.Stderr, "⚠️  Tor hidden service: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: %v\n", err)
 		} else {
 			// Wire resolved onion address back to config so PART 12 Tor request
 			// detection (urlvars.isTorRequest) can match the Host header.
@@ -700,7 +700,7 @@ func main() {
 
 	// Load scheduler history from database per AI.md PART 18
 	if err := sched.LoadHistoryFromDB(100); err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Failed to load scheduler history: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Failed to load scheduler history: %v\n", err)
 	}
 
 	// Start scheduler
@@ -734,7 +734,7 @@ func main() {
 	listenAddr := appConfig.Server.Address + ":" + appConfig.Server.Port
 	listener, err := srv.Listen(listenAddr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to bind %s: %v\n", listenAddr, err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to bind %s: %v\n", listenAddr, err)
 		os.Exit(1)
 	}
 
@@ -742,10 +742,10 @@ func main() {
 	// ShouldDropPrivileges() returns true only on Unix when current uid == 0.
 	if system.ShouldDropPrivileges() {
 		if err := system.DropPrivileges(appName); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to drop privileges: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to drop privileges: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("👤 Dropped privileges to %s\n", appName)
+		fmt.Printf(terminal.UserIcon()+" Dropped privileges to %s\n", appName)
 	}
 
 	// Start server goroutine — serves on the pre-bound listener
@@ -815,7 +815,7 @@ func main() {
 
 		// Serve on the pre-bound listener (bound before privilege drop above)
 		if err := srv.ServeOn(listener); err != nil && err != http.ErrServerClosed {
-			fmt.Fprintf(os.Stderr, "❌ Server error: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Server error: %v\n", err)
 			os.Exit(1)
 		}
 	}()
@@ -884,7 +884,7 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Shutdown error: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Shutdown error: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -1169,7 +1169,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 	// Get binary path
 	binaryPath, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "❌ Failed to get executable path: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to get executable path: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -1198,66 +1198,66 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 	case "start":
 		fmt.Println("Starting Vidveil service...")
 		if err := svc.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to start: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to start: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("✅ Service started")
+		fmt.Println(terminal.StatusIcon(true)+" Service started")
 
 	case "stop":
 		fmt.Println("Stopping Vidveil service...")
 		if err := svc.Stop(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to stop: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to stop: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("✅ Service stopped")
+		fmt.Println(terminal.StatusIcon(true)+" Service stopped")
 
 	case "restart":
 		fmt.Println("Restarting Vidveil service...")
 		if err := svc.Restart(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to restart: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to restart: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("✅ Service restarted")
+		fmt.Println(terminal.StatusIcon(true)+" Service restarted")
 
 	case "reload":
 		fmt.Println("Reloading Vidveil configuration...")
 		if err := svc.Reload(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to reload: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to reload: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("✅ Configuration reloaded")
+		fmt.Println(terminal.StatusIcon(true)+" Configuration reloaded")
 
 	case "status":
 		// Per AI.md PART 24: Show service status
 		status, err := svc.GetServiceStatus()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to get status: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to get status: %v\n", err)
 			os.Exit(1)
 		}
 		switch status {
 		case "running":
-			fmt.Println("✅ Vidveil service is running")
+			fmt.Println(terminal.StatusIcon(true)+" Vidveil service is running")
 		case "stopped":
-			fmt.Println("⏹️ Vidveil service is stopped")
+			fmt.Println(terminal.StopButtonIcon()+" Vidveil service is stopped")
 		default:
-			fmt.Printf("❓ Vidveil service status: %s\n", status)
+			fmt.Printf(terminal.QuestionIcon()+" Vidveil service status: %s\n", status)
 		}
 
 	case "--install":
 		// Per AI.md PART 23: Check escalation before service install
 		if err := system.HandleEscalation("Service installation"); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Println("Installing Vidveil as system service...")
 		if err := svc.Install(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to install: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to install: %v\n", err)
 			os.Exit(1)
 		}
 
 	case "--uninstall":
 		// Per AI.md PART 23: Confirmation required before destructive action
-		fmt.Println("⚠️  WARNING: This will:")
+		fmt.Println(terminal.WarningIcon()+" WARNING: This will:")
 		fmt.Println("   • Stop the service (if running)")
 		fmt.Println("   • Remove service configuration")
 		fmt.Println("   • Delete data, configs, and logs")
@@ -1275,25 +1275,25 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 
 		// Per AI.md PART 23: Check escalation before service uninstall
 		if err := system.HandleEscalation("Service uninstallation"); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 			os.Exit(1)
 		}
 
 		fmt.Println("Uninstalling Vidveil system service...")
 		if err := svc.Uninstall(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to uninstall: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to uninstall: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("✅ Service uninstalled")
+		fmt.Println(terminal.StatusIcon(true)+" Service uninstalled")
 
 	case "--disable":
 		// Per AI.md PART 8: Disable service from starting at boot
 		fmt.Println("Disabling Vidveil service from starting at boot...")
 		if err := svc.Disable(); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to disable: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to disable: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("✅ Service disabled (will not start at boot)")
+		fmt.Println(terminal.StatusIcon(true)+" Service disabled (will not start at boot)")
 
 	case "--help":
 		// Per AI.md PART 8: Service command help
@@ -1317,7 +1317,7 @@ Supported service managers:
 `, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 
 	default:
-		fmt.Printf("❌ Unknown service command: %s\n", cmd)
+		fmt.Printf(terminal.StatusIcon(false)+" Unknown service command: %s\n", cmd)
 		fmt.Printf("   Run '%s --service --help' for available commands\n", binaryName)
 		os.Exit(1)
 	}
@@ -1338,21 +1338,21 @@ func handleUpdateCommand(cmd, arg string) {
 		if err != nil {
 			// HTTP 404 means no updates available per AI.md
 			if strings.Contains(err.Error(), "404") {
-				fmt.Println("✅ Already up to date (no newer release found)")
+				fmt.Println(terminal.StatusIcon(true)+" Already up to date (no newer release found)")
 				os.Exit(0)
 			}
-			fmt.Fprintf(os.Stderr, "❌ Update check failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Update check failed: %v\n", err)
 			os.Exit(1)
 		}
 
 		fmt.Printf("Latest version:  %s\n", info.LatestVersion)
 
 		if info.UpdateAvailable {
-			fmt.Println("\n📦 Update available!")
+			fmt.Println("\n"+terminal.PackageIcon()+" Update available!")
 			fmt.Printf("   Release: %s\n", info.ReleaseURL)
 			fmt.Println("\n   Run 'vidveil --update' to download and install")
 		} else {
-			fmt.Println("✅ Already up to date")
+			fmt.Println(terminal.StatusIcon(true)+" Already up to date")
 		}
 		os.Exit(0)
 
@@ -1364,29 +1364,29 @@ func handleUpdateCommand(cmd, arg string) {
 		info, err := maint.CheckUpdate()
 		if err != nil {
 			if strings.Contains(err.Error(), "404") {
-				fmt.Println("✅ Already up to date")
+				fmt.Println(terminal.StatusIcon(true)+" Already up to date")
 				os.Exit(0)
 			}
-			fmt.Fprintf(os.Stderr, "❌ Update check failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Update check failed: %v\n", err)
 			os.Exit(1)
 		}
 
 		fmt.Printf("Latest version:  %s\n", info.LatestVersion)
 
 		if info.UpdateAvailable {
-			fmt.Println("\n📦 Update available!")
+			fmt.Println("\n"+terminal.PackageIcon()+" Update available!")
 			fmt.Printf("   Release: %s\n", info.ReleaseURL)
 
 			if info.DownloadURL != "" {
 				fmt.Println("\nApplying update...")
 				if err := maint.ApplyUpdate(info.DownloadURL); err != nil {
-					fmt.Fprintf(os.Stderr, "❌ Update failed: %v\n", err)
+					fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Update failed: %v\n", err)
 					os.Exit(1)
 				}
-				fmt.Println("✅ Update successful! Please restart the application.")
+				fmt.Println(terminal.StatusIcon(true)+" Update successful! Please restart the application.")
 			}
 		} else {
-			fmt.Println("✅ Already up to date")
+			fmt.Println(terminal.StatusIcon(true)+" Already up to date")
 		}
 		os.Exit(0)
 
@@ -1394,16 +1394,16 @@ func handleUpdateCommand(cmd, arg string) {
 		// Set update branch (stable, beta, daily)
 		validBranches := map[string]bool{"stable": true, "beta": true, "daily": true}
 		if !validBranches[arg] {
-			fmt.Printf("❌ Invalid branch: %s\n", arg)
+			fmt.Printf(terminal.StatusIcon(false)+" Invalid branch: %s\n", arg)
 			fmt.Println("   Valid branches: stable, beta, daily")
 			os.Exit(1)
 		}
 
 		if err := maint.SetUpdateBranch(arg); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed to set branch: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to set branch: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("✅ Update branch set to: %s\n", arg)
+		fmt.Printf(terminal.StatusIcon(true)+" Update branch set to: %s\n", arg)
 		os.Exit(0)
 
 	case "--help", "help", "-h":
@@ -1422,7 +1422,7 @@ Update Branches:
 		os.Exit(0)
 
 	default:
-		fmt.Printf("❌ Unknown update command: %s\n", cmd)
+		fmt.Printf(terminal.StatusIcon(false)+" Unknown update command: %s\n", cmd)
 		fmt.Printf("\nUsage: %s --update [check|yes|branch <name>|--help]\n\nRun '%s --update --help' for detailed help.\n", binaryName, binaryName)
 		os.Exit(1)
 	}
@@ -1443,13 +1443,13 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
 				IncludeData: true,
 				MaxBackups:  1,
 			}); err != nil {
-				fmt.Fprintf(os.Stderr, "❌ Backup failed: %v\n", err)
+				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Backup failed: %v\n", err)
 				os.Exit(1)
 			}
 		} else {
 			fmt.Println("Creating backup...")
 			if err := maint.Backup(arg); err != nil {
-				fmt.Fprintf(os.Stderr, "❌ Backup failed: %v\n", err)
+				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Backup failed: %v\n", err)
 				os.Exit(1)
 			}
 		}
@@ -1462,13 +1462,13 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
 		}
 		// Per AI.md PART 21: Support --password for encrypted backups
 		if err := maint.RestoreWithPassword(arg, password); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Restore failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Restore failed: %v\n", err)
 			os.Exit(1)
 		}
 
 	case "mode":
 		if arg == "" {
-			fmt.Println("❌ Missing mode argument")
+			fmt.Println(terminal.StatusIcon(false)+" Missing mode argument")
 			fmt.Println("   Usage: vidveil --maintenance mode <on|off>")
 			os.Exit(1)
 		}
@@ -1481,13 +1481,13 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
 		case "0", "no", "false", "disable", "disabled", "off":
 			enabled = false
 		default:
-			fmt.Printf("❌ Invalid mode value: %s\n", arg)
+			fmt.Printf(terminal.StatusIcon(false)+" Invalid mode value: %s\n", arg)
 			fmt.Println("   Valid values: on, off, true, false, yes, no, enable, disable")
 			os.Exit(1)
 		}
 
 		if err := maint.SetMaintenanceMode(enabled); err != nil {
-			fmt.Fprintf(os.Stderr, "❌ Failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -1521,7 +1521,7 @@ Examples:
 		os.Exit(0)
 
 	default:
-		fmt.Printf("❌ Unknown maintenance command: %s\n", cmd)
+		fmt.Printf(terminal.StatusIcon(false)+" Unknown maintenance command: %s\n", cmd)
 		fmt.Printf("\nUsage: %s --maintenance [backup|restore|update|mode|setup|--help]\n\nRun '%s --maintenance --help' for detailed help.\n", binaryName, binaryName)
 		os.Exit(1)
 	}

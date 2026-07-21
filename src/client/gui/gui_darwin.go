@@ -7,6 +7,6 @@
 
 package gui
 
-func launchCocoaGui(_ *Config) error {
+func launchNativeGUI(_ *Config) error {
 	return ErrGUIUnsupported
 }

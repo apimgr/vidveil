@@ -168,8 +168,8 @@ type CombinedSuggestion struct {
 
 | Boundary | Service / Source | Trust assumption | Failure mode |
 |----------|------------------|------------------|--------------|
-| Outbound search | 43 third-party adult video sites (HTML/JSON parsing) | UNTRUSTED - response bodies may be malicious or change shape; never executed, only parsed | Engine drops out of `engines_used`, listed in `engines_failed`; search continues with remaining engines |
-| Outbound thumbnails | Same 43 sites + CDN hosts (e.g., `ttcache.com`) | UNTRUSTED - byte stream is rewritten through proxy, never linked directly into HTML | Thumbnail falls back to `placeholder.svg` |
+| Outbound search | 42 third-party adult video sites (HTML/JSON parsing) | UNTRUSTED - response bodies may be malicious or change shape; never executed, only parsed | Engine drops out of `engines_used`, listed in `engines_failed`; search continues with remaining engines |
+| Outbound thumbnails | Same 42 sites + CDN hosts (e.g., `ttcache.com`) | UNTRUSTED - byte stream is rewritten through proxy, never linked directly into HTML | Thumbnail falls back to `placeholder.svg` |
 | Outbound preview videos | Same engines (where supported) | UNTRUSTED - URL only, never inlined as HTML | Preview not shown |
 | Outbound Tor | Local Tor binary if present | TRUSTED inside container/host; auto-detected per AI.md PART 31 | Tor disabled if binary absent; clearnet still works |
 | Outbound GeoIP DB feed | Public GeoIP DB endpoint (per scheduler `geoip_update`) | TRUSTED dataset (publicly published) | Stale GeoIP data continues to be used until next successful refresh |
@@ -481,7 +481,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 
 ### Engine registry (reference detail)
 
-**All Registered Engines (43 total)**
+**All Registered Engines (42 total)**
 
 **Tier 1 - Major Sites (5 engines):**
 
@@ -501,7 +501,7 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 | youporn | !yp | Preview (data-mediabook), Duration, Views, Rating, Quality |
 | pornmd | !pmd | Duration, Views |
 
-**Tier 3-6 - Additional Sites (35 engines):**
+**Tier 3-6 - Additional Sites (34 engines):**
 4tube, fux, porntube, youjizz, sunporno, txxx, nuvid, tnaflix, drtuber, empflix, hellporno, alphaporno, pornflip, gotporn, xxxymovies, lovehomeporn, pornerbros, nonktube, nubilesporn, pornbox, porntop, pornotube, pornhd, xbabe, pornone, pornhat, porntrex, hqporner, vjav, flyflv, tube8, anyporn, tubegalore, 3movs.
 
 **Engine configuration:**

@@ -8,6 +8,6 @@
 
 package gui
 
-func launchGTKGui(_ *Config) error {
+func launchNativeGUI(_ *Config) error {
 	return ErrGUIUnsupported
 }

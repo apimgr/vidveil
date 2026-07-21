@@ -86,7 +86,8 @@ func createSystemUser(username string) error {
 	// groupadd --system --gid {id} {name} per AI.md PART 23
 	// --gid is numeric; Alpine uses addgroup -g -S
 	if _, err := exec.LookPath("groupadd"); err == nil {
-		exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), username).Run()
+		// Group may already exist; useradd below fails loudly if it does not
+		_ = exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), username).Run()
 		// useradd: --system, numeric --gid per AI.md PART 23
 		cmd := exec.Command("useradd",
 			"--system",
@@ -101,7 +102,8 @@ func createSystemUser(username string) error {
 	}
 
 	// Alpine Linux uses addgroup/adduser (busybox)
-	exec.Command("addgroup", "-g", strconv.Itoa(uid), "-S", username).Run()
+	// Group may already exist; adduser below fails loudly if it does not
+	_ = exec.Command("addgroup", "-g", strconv.Itoa(uid), "-S", username).Run()
 	return exec.Command("adduser",
 		"-D",
 		"-S",

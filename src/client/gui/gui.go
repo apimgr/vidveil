@@ -8,7 +8,6 @@ package gui
 
 import (
 	"errors"
-	"runtime"
 
 	"github.com/apimgr/vidveil/src/common/display"
 )
@@ -32,18 +31,11 @@ func IsAvailable() bool {
 }
 
 // Launch starts the native GUI application for the current platform.
-// Falls back to ErrGUIUnsupported on unsupported platforms.
+// The concrete launcher is selected at compile time via GOOS-gated build
+// tags (see gui_gtk.go, gui_darwin.go, gui_windows.go); each platform file
+// provides its own launchNativeGUI. Referencing a single symbol here keeps
+// the -tags gui build compiling on every GOOS rather than requiring every
+// platform's launcher symbol to exist in every build.
 func Launch(cfg *Config) error {
-	switch runtime.GOOS {
-	case "linux":
-		return launchGTKGui(cfg)
-	case "darwin":
-		return launchCocoaGui(cfg)
-	case "windows":
-		return launchWin32Gui(cfg)
-	case "freebsd", "openbsd", "netbsd":
-		return launchGTKGui(cfg)
-	default:
-		return ErrGUIUnsupported
-	}
+	return launchNativeGUI(cfg)
 }

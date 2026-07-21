@@ -65,7 +65,7 @@ func wndProc(hwnd, wm, wParam, lParam uintptr) uintptr {
 	return ret
 }
 
-func launchWin32Gui(cfg *Config) error {
+func launchNativeGUI(cfg *Config) error {
 	className := windows.StringToUTF16Ptr("vidveil_cli_window")
 	windowTitle := windows.StringToUTF16Ptr(cfg.BinaryName)
 

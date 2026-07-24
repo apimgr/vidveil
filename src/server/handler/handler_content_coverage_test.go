@@ -806,7 +806,7 @@ func TestHandleSearchSSE_NonFlusher_Returns500(t *testing.T) {
 
 	// httptest.NewRecorder does NOT implement http.Flusher
 	// → handleSearchSSE detects streaming not supported → returns 500
-	h.handleSearchSSE(rr, req, time.Now(), "test", 1, nil, nil, nil, nil, false, 0, false, 0)
+	h.handleSearchSSE(rr, req, time.Now(), "test", 1, nil, nil, nil, nil, false, 0, false, 0, "")
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Logf("handleSearchSSE(non-flusher): status = %d (may be SSE-compatible in some versions)", rr.Code)

@@ -183,7 +183,7 @@ func (h *Handler) handleSearch(ctx context.Context, req Request) Response {
 		}
 	}
 
-	results := h.engineMgr.Search(ctx, q, page, nil)
+	results := h.engineMgr.Search(ctx, q, page, nil, "")
 
 	// Convert results to GraphQL format
 	gqlResults := make([]map[string]interface{}, len(results.Data.Results))

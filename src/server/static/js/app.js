@@ -1351,13 +1351,32 @@ if (document.readyState === 'loading') {
     var isLoadingMore = false;
     var hasMoreResults = true;
     var infiniteScrollObserver = null;
+    // Opaque per-search session token, generated once per new search and sent
+    // as a passthrough query param on every page request (initial + infinite
+    // scroll + fallback) so the server can dedup results across pages.
+    var searchSessionID = '';
 
     // Preferences loaded from storage
     var userPrefs = {};
 
-    // Note: Deduplication is handled server-side in manager.go
+    // Note: Deduplication is handled server-side in manager.go, scoped per
+    // searchSessionID (see SessionDedupStore). The client performs NO dedup
+    // logic itself — it only generates and forwards the opaque session token.
     // AND-based term filtering with synonym expansion is also handled server-side
     // in manager.go using taxonomy.go. Client-side only handles duration/quality/source/preview filters.
+
+    // Generates a random opaque session token for the current search.
+    // Uses crypto.randomUUID() where available, falling back to Math.random()
+    // for older browsers (progressive enhancement — dedup simply narrows to
+    // per-request scope if the token is empty, per server contract).
+    function generateSearchSessionID() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+        return 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'.replace(/x/g, function() {
+            return Math.floor(Math.random() * 16).toString(16);
+        });
+    }
 
     function initSearchPage() {
         var searchMeta = document.getElementById('search-meta');
@@ -1408,6 +1427,7 @@ if (document.readyState === 'loading') {
 
         // Save to search history
         if (searchQuery) {
+            searchSessionID = generateSearchSessionID();
             saveSearchPageHistory(searchQuery);
             streamResults(minDuration);
         }
@@ -1417,7 +1437,7 @@ if (document.readyState === 'loading') {
         if (!searchQuery) return;
 
         // Build search URL with optional parameters
-        var searchUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery);
+        var searchUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID);
 
         // Add show_ai parameter if user has enabled AI content in preferences
         if (userPrefs.showAIContent) {
@@ -1562,7 +1582,7 @@ if (document.readyState === 'loading') {
         var loadingText = document.getElementById('loading-text');
         if (loadingText) loadingText.textContent = 'Loading results...';
 
-        fetch('/api/v1/search?q=' + encodeURIComponent(searchQuery), {
+        fetch('/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID), {
             headers: { 'Accept': 'application/json' }
         })
         .then(function(response) {
@@ -2123,7 +2143,7 @@ if (document.readyState === 'loading') {
         if (loadIndicator) loadIndicator.classList.remove('hidden');
 
         // Stream next page of results (include AI, quality, preview, and engine preferences)
-        var pageUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage;
+        var pageUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage + '&session=' + encodeURIComponent(searchSessionID);
         if (userPrefs.showAIContent) {
             pageUrl += '&show_ai=1';
         }

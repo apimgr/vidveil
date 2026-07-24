@@ -23,7 +23,7 @@ func newEmptyMgr() *EngineManager {
 
 func TestEngineManager_Search_EmptyManager_ReturnsResponse(t *testing.T) {
 	m := newEmptyMgr()
-	resp := m.Search(context.Background(), "test", 1, nil)
+	resp := m.Search(context.Background(), "test", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search: nil response")
 	}
@@ -31,7 +31,7 @@ func TestEngineManager_Search_EmptyManager_ReturnsResponse(t *testing.T) {
 
 func TestEngineManager_Search_WithEngineNames_ReturnsEmpty(t *testing.T) {
 	m := newEmptyMgr()
-	resp := m.Search(context.Background(), "test", 1, []string{"ph", "xv"})
+	resp := m.Search(context.Background(), "test", 1, []string{"ph", "xv"}, "")
 	if resp == nil {
 		t.Fatal("Search with engineNames: nil response")
 	}
@@ -39,7 +39,7 @@ func TestEngineManager_Search_WithEngineNames_ReturnsEmpty(t *testing.T) {
 
 func TestEngineManager_Search_PageTwo_ReturnsEmpty(t *testing.T) {
 	m := newEmptyMgr()
-	resp := m.Search(context.Background(), "amateur", 2, nil)
+	resp := m.Search(context.Background(), "amateur", 2, nil, "")
 	if resp == nil {
 		t.Fatal("Search page 2: nil response")
 	}
@@ -50,7 +50,7 @@ func TestEngineManager_Search_CancelledContext_ReturnsResponse(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	// Even with cancelled context, empty manager completes immediately
-	resp := m.Search(ctx, "test", 1, nil)
+	resp := m.Search(ctx, "test", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search cancelled ctx: nil response")
 	}
@@ -58,7 +58,7 @@ func TestEngineManager_Search_CancelledContext_ReturnsResponse(t *testing.T) {
 
 func TestEngineManager_Search_ResponseHasPagination(t *testing.T) {
 	m := newEmptyMgr()
-	resp := m.Search(context.Background(), "test", 1, nil)
+	resp := m.Search(context.Background(), "test", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search: nil response")
 	}
@@ -105,7 +105,7 @@ func TestEngineManager_SearchStreamWithOperators_EmptyManager_ChannelClosed(t *t
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, false, 0, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, false, 0, false, 0, "")
 	if ch == nil {
 		t.Fatal("SearchStreamWithOperators: nil channel")
 	}
@@ -120,7 +120,7 @@ func TestEngineManager_SearchStreamWithOperators_WithEngineNames_ChannelClosed(t
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "test", 1, []string{"ph"}, nil, nil, nil, false, 0, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, []string{"ph"}, nil, nil, nil, false, 0, false, 0, "")
 	if ch == nil {
 		t.Fatal("SearchStreamWithOperators with engineNames: nil channel")
 	}

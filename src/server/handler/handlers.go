@@ -782,7 +782,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
 		enginesParam := r.URL.Query().Get("engines")
 
-		results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames)
+		results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames, "")
 		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 		if h.metrics != nil {
 			h.metrics.IncrementSearches()
@@ -809,7 +809,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-browser clients (CLI, curl, JSON API): perform synchronous search
-	results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames)
+	results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames, "")
 	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 
 	if h.metrics != nil {
@@ -1741,15 +1741,28 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Opaque client-generated token scoping cross-page result dedup to a single
+	// infinite-scroll search session (see AI.md PART 14 "State management ->
+	// Server (sessions)"). The client only passes this through; all dedup state
+	// and logic lives server-side.
+	sessionID := r.URL.Query().Get("session")
+
 	// SSE streaming mode - stream results as they arrive from engines
 	if format == "text/event-stream" {
-		h.handleSearchSSE(w, r, requestStart, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, nil, showAI, minQuality, previewFirst, userMinDuration)
+		h.handleSearchSSE(w, r, requestStart, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, nil, showAI, minQuality, previewFirst, userMinDuration, sessionID)
 		return
 	}
 
 	// Check cache first (skip cache param allows bypassing)
 	skipCache := r.URL.Query().Get("nocache") == "1"
 	cacheKey := cache.CacheKey(searchQuery, page, engineNames)
+	if sessionID != "" {
+		// Session-scoped dedup filtering means the same query/page/engines
+		// combination can yield different results per session; keep each
+		// session's cache entry separate to avoid serving another session's
+		// dedup-filtered results.
+		cacheKey += "|s:" + sessionID
+	}
 
 	var results *model.SearchResponse
 	if !skipCache {
@@ -1782,7 +1795,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 				ctx = engine.WithTorPref(ctx, &useTor)
 			}
 		}
-		results = h.engineMgr.Search(ctx, searchQuery, page, engineNames)
+		results = h.engineMgr.Search(ctx, searchQuery, page, engineNames, sessionID)
 		results.Data.Cached = false
 		// Cache the results
 		h.searchCache.Set(cacheKey, results)
@@ -1870,7 +1883,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSearchSSE handles SSE streaming for search results
-func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, requestStart time.Time, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int) {
+func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, requestStart time.Time, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, sessionID string) {
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -1907,7 +1920,7 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers, showAI, minQuality, previewFirst, userMinDuration)
+	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers, showAI, minQuality, previewFirst, userMinDuration, sessionID)
 
 	for result := range resultsChan {
 		data, err := json.Marshal(result)
@@ -3355,7 +3368,7 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.Search(r.Context(), parsed.Query, page, parsed.Engines)
+	results := h.engineMgr.Search(r.Context(), parsed.Query, page, parsed.Engines, "")
 	results.Data.Query = query
 	renderSearchRSS(w, r, results, h.appConfig)
 }
@@ -3374,7 +3387,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.Search(r.Context(), parsed.Query, page, parsed.Engines)
+	results := h.engineMgr.Search(r.Context(), parsed.Query, page, parsed.Engines, "")
 	results.Data.Query = query
 	renderSearchAtom(w, r, results, h.appConfig)
 }
@@ -3435,7 +3448,7 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 			if len(engineNames) == 0 {
 				engineNames = parsed.Engines
 			}
-			res := h.engineMgr.Search(r.Context(), parsed.Query, page, engineNames)
+			res := h.engineMgr.Search(r.Context(), parsed.Query, page, engineNames, "")
 			res.Data.Query = bq.Q
 			ch <- batchResult{idx: idx, resp: res}
 		}(i, q)

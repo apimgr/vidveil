@@ -22,13 +22,17 @@ type EngineManager struct {
 	// Per PART 31: Tor client provider for outbound
 	torProvider TorClientProvider
 	mu          sync.RWMutex
+	// Cross-page dedup state for infinite-scroll search sessions (server-side
+	// per AI.md PART 14 "State management -> Server (sessions)")
+	sessionDedup *SessionDedupStore
 }
 
 // NewEngineManager creates a new engine manager
 func NewEngineManager(appConfig *config.AppConfig) *EngineManager {
 	return &EngineManager{
-		engines:   make(map[string]SearchEngine),
-		appConfig: appConfig,
+		engines:      make(map[string]SearchEngine),
+		appConfig:    appConfig,
+		sessionDedup: NewSessionDedupStore(),
 	}
 }
 
@@ -139,8 +143,12 @@ func (m *EngineManager) applyConfig() {
 
 }
 
-// Search performs a search across enabled engines
-func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string) *model.SearchResponse {
+// Search performs a search across enabled engines.
+// sessionID, when non-empty, scopes cross-page result deduplication to a
+// single client search session (see AI.md PART 14 "State management ->
+// Server (sessions)") so that page=2, page=3, ... of the same infinite-scroll
+// search never resurface a result already returned on an earlier page.
+func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string, sessionID string) *model.SearchResponse {
 	startTime := time.Now()
 
 	m.mu.RLock()
@@ -251,6 +259,11 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 					}
 				}
 				if isDupTitle {
+					continue
+				}
+				// Cross-page dedup: skip results already returned on an
+				// earlier page of the same search session
+				if m.sessionDedup.CheckAndMark(sessionID, normalizedURL, normalizedTitle) {
 					continue
 				}
 				// Mark as seen
@@ -1253,7 +1266,7 @@ type StreamResult struct {
 // SearchStream performs a search across enabled engines and streams results via channel
 // Results are deduplicated by URL across all engines
 func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
-	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, 0, false, 0)
+	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, 0, false, 0, "")
 }
 
 // SearchStreamWithOperators performs a streaming search with optional search operators
@@ -1264,7 +1277,11 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 // minQuality filters by minimum quality level (0 = no filter, 360 = 360p+, etc.)
 // previewFirst sorts each engine's result batch so preview-capable results stream first
 // userMinDuration is the user's minimum duration preference in seconds (0 = use server config)
-func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int) <-chan StreamResult {
+// sessionID, when non-empty, scopes cross-page result deduplication to a single
+// client search session (see AI.md PART 14 "State management -> Server (sessions)")
+// so that page=2, page=3, ... of the same infinite-scroll search never resurface
+// a result already returned on an earlier page.
+func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, sessionID string) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
 	go func() {
@@ -1414,6 +1431,12 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						}
 					}
 					if isDupTitle {
+						seenMu.Unlock()
+						continue
+					}
+					// Cross-page dedup: skip results already returned on an
+					// earlier page of the same search session
+					if m.sessionDedup.CheckAndMark(sessionID, normalizedURL, normalizedTitle) {
 						seenMu.Unlock()
 						continue
 					}

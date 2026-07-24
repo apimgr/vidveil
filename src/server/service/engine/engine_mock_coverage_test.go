@@ -73,7 +73,7 @@ func TestSearch_WithMockEngine_ReturnsResults(t *testing.T) {
 	}
 	m := newMgrWithMock("mock", results, nil, true)
 
-	resp := m.Search(context.Background(), "amateur teen", 1, nil)
+	resp := m.Search(context.Background(), "amateur teen", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search: nil response")
 	}
@@ -85,7 +85,7 @@ func TestSearch_WithMockEngine_ReturnsResults(t *testing.T) {
 func TestSearch_WithMockEngineError_RecordsFailure(t *testing.T) {
 	m := newMgrWithMock("mock-err", nil, errors.New("engine failed"), true)
 
-	resp := m.Search(context.Background(), "test", 1, nil)
+	resp := m.Search(context.Background(), "test", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search with error: nil response")
 	}
@@ -98,7 +98,7 @@ func TestSearch_WithMockEngine_InvalidThumbnail_Filtered(t *testing.T) {
 	}
 	m := newMgrWithMock("mock-thumb", results, nil, true)
 
-	resp := m.Search(context.Background(), "test", 1, nil)
+	resp := m.Search(context.Background(), "test", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search(invalid thumbs): nil response")
 	}
@@ -111,7 +111,7 @@ func TestSearch_WithMockEngine_DuplicateURL_Deduped(t *testing.T) {
 	}
 	m := newMgrWithMock("mock-dup", results, nil, true)
 
-	resp := m.Search(context.Background(), "test video", 1, nil)
+	resp := m.Search(context.Background(), "test video", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search(dup URLs): nil response")
 	}
@@ -121,7 +121,7 @@ func TestSearch_WithMockEngine_UnavailableEngine_NoResults(t *testing.T) {
 	results := []model.VideoResult{validResult("test", "https://example.com/v1")}
 	m := newMgrWithMock("mock-unav", results, nil, false)
 
-	resp := m.Search(context.Background(), "test", 1, nil)
+	resp := m.Search(context.Background(), "test", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search(unavailable engine): nil response")
 	}
@@ -158,7 +158,7 @@ func TestSearch_WithMockEngine_ByName_ReturnsResults(t *testing.T) {
 	}
 	m := newMgrWithMock("mock-named", results, nil, true)
 
-	resp := m.Search(context.Background(), "named engine", 1, []string{"mock-named"})
+	resp := m.Search(context.Background(), "named engine", 1, []string{"mock-named"}, "")
 	if resp == nil {
 		t.Fatal("Search by name: nil response")
 	}
@@ -190,7 +190,7 @@ func TestSearch_MinDuration_FiltersShortVideos(t *testing.T) {
 		},
 	}
 
-	resp := m.Search(context.Background(), "video test", 1, nil)
+	resp := m.Search(context.Background(), "video test", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search(min duration): nil response")
 	}
@@ -207,7 +207,7 @@ func TestSearchStreamWithOperators_WithMockEngine_ChannelReceivesData(t *testing
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream test", 1, nil, nil, nil, nil, false, 0, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "stream test", 1, nil, nil, nil, nil, false, 0, false, 0, "")
 	if ch == nil {
 		t.Fatal("SearchStreamWithOperators: nil channel")
 	}
@@ -226,7 +226,7 @@ func TestSearchStreamWithOperators_WithMockEngineError_ChannelCloses(t *testing.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, false, 0, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, false, 0, false, 0, "")
 	if ch == nil {
 		t.Fatal("SearchStreamWithOperators(error): nil channel")
 	}
@@ -273,7 +273,7 @@ func TestSearchStreamWithOperators_WithExclusion_FiltersResult(t *testing.T) {
 	defer cancel()
 
 	// Exclude results containing "excluded" in title
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, []string{"excluded"}, nil, false, 0, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, []string{"excluded"}, nil, false, 0, false, 0, "")
 	for range ch {
 	}
 }
@@ -288,7 +288,7 @@ func TestSearchStreamWithOperators_WithExactPhrase_FiltersResult(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, []string{"exact phrase"}, nil, nil, false, 0, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, []string{"exact phrase"}, nil, nil, false, 0, false, 0, "")
 	for range ch {
 	}
 }
@@ -315,7 +315,7 @@ func TestSearchStreamWithOperators_WithPerformerFilter_FiltersResult(t *testing.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, []string{"jane"}, false, 0, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, []string{"jane"}, false, 0, false, 0, "")
 	for range ch {
 	}
 }
@@ -342,7 +342,7 @@ func TestSearchStreamWithOperators_WithMinQuality_FiltersResult(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 480, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 480, false, 0, "")
 	for range ch {
 	}
 }
@@ -376,7 +376,7 @@ func TestSearchStreamWithOperators_AIFilter_FiltersAIContent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 0, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 0, false, 0, "")
 	for range ch {
 	}
 }
@@ -410,7 +410,7 @@ func TestSearchStreamWithOperators_QualityFilter_FiltersLowQuality(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream quality", 1, nil, nil, nil, nil, false, 480, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "stream quality", 1, nil, nil, nil, nil, false, 480, false, 0, "")
 	for range ch {
 	}
 }
@@ -444,7 +444,7 @@ func TestSearchStreamWithOperators_UserMinDuration_Override(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 0, false, 120)
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, false, 0, false, 120, "")
 	for range ch {
 	}
 }
@@ -567,7 +567,7 @@ func TestSearch_PanickingEngine_RecoversPanic(t *testing.T) {
 	m := NewEngineManager(cfg)
 	m.engines["panic-engine"] = &panicMockEngine{name: "panic-engine"}
 
-	resp := m.Search(context.Background(), "test", 1, nil)
+	resp := m.Search(context.Background(), "test", 1, nil, "")
 	if resp == nil {
 		t.Fatal("Search(panicking engine): nil response")
 	}
@@ -581,7 +581,72 @@ func TestSearchStream_PanickingEngine_RecoversPanic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, false, 0, false, 0)
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, false, 0, false, 0, "")
 	for range ch {
+	}
+}
+
+// ── Session-scoped cross-page dedup regression ────────────────────────────────
+//
+// Reproduces the reported bug (search "Pregnant lesbian teen" showed many
+// duplicates while scrolling): a single engine returns the same result set
+// on every page (as flaky/overlapping upstream engines do), and successive
+// pages of the SAME session must not repeat a result already returned on an
+// earlier page, while a DIFFERENT session must still see the full result set.
+
+func TestSearchStream_SameSession_DedupsAcrossPages(t *testing.T) {
+	results := []model.VideoResult{
+		validResult("pregnant lesbian teen one", "https://example.com/dup1"),
+		validResult("pregnant lesbian teen two", "https://example.com/dup2"),
+	}
+	m := newMgrWithMock("mock-dedup", results, nil, true)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sessionID := "test-session-1"
+
+	page1 := m.Search(ctx, "pregnant lesbian teen", 1, nil, sessionID)
+	if page1 == nil || len(page1.Data.Results) == 0 {
+		t.Fatal("page1: expected at least one result")
+	}
+	seenOnPage1 := make(map[string]bool)
+	for _, r := range page1.Data.Results {
+		seenOnPage1[r.URL] = true
+	}
+
+	// Same session, same upstream results on "page 2" (simulating an
+	// upstream engine that returns overlapping/duplicate results across
+	// pages) must not resurface anything already returned on page 1.
+	page2 := m.Search(ctx, "pregnant lesbian teen", 2, nil, sessionID)
+	if page2 == nil {
+		t.Fatal("page2: nil response")
+	}
+	for _, r := range page2.Data.Results {
+		if seenOnPage1[r.URL] {
+			t.Fatalf("page2: result %q already returned on page1 of the same session (dedup regression)", r.URL)
+		}
+	}
+}
+
+func TestSearchStream_DifferentSession_NotDeduped(t *testing.T) {
+	results := []model.VideoResult{
+		validResult("pregnant lesbian teen one", "https://example.com/dup1"),
+		validResult("pregnant lesbian teen two", "https://example.com/dup2"),
+	}
+	m := newMgrWithMock("mock-dedup2", results, nil, true)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	page1 := m.Search(ctx, "pregnant lesbian teen", 1, nil, "session-a")
+	if page1 == nil || len(page1.Data.Results) == 0 {
+		t.Fatal("page1 (session-a): expected at least one result")
+	}
+
+	// A fresh session must see the full result set again — dedup state
+	// must not leak across sessions.
+	otherSession := m.Search(ctx, "pregnant lesbian teen", 1, nil, "session-b")
+	if otherSession == nil || len(otherSession.Data.Results) != len(page1.Data.Results) {
+		t.Fatalf("session-b: expected %d results (independent of session-a), got %v",
+			len(page1.Data.Results), otherSession)
 	}
 }

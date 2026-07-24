@@ -234,7 +234,7 @@ func TestApplyRetentionWithOptions_KeepTwo(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 
-	if err := m.applyRetentionWithOptions(2, 0, 0, 0); err != nil {
+	if err := m.applyRetentionWithOptions(2, 0, 0, 0, ""); err != nil {
 		t.Fatalf("applyRetentionWithOptions: %v", err)
 	}
 
@@ -616,7 +616,100 @@ func TestApplyRetentionWithOptions_KeepWeeklyMonthlyYearly(t *testing.T) {
 		m.BackupWithOptions(BackupOptions{Filename: fname, MaxBackups: 10})
 	}
 
-	if err := m.applyRetentionWithOptions(10, 2, 1, 1); err != nil {
+	if err := m.applyRetentionWithOptions(10, 2, 1, 1, ""); err != nil {
 		t.Errorf("applyRetentionWithOptions weekly/monthly/yearly: %v", err)
+	}
+}
+
+// ── BackupDailyFull ────────────────────────────────────────────────────────────
+
+// TestBackupDailyFull_CreatesBothFiles verifies the scheduled backup_daily run
+// (AI.md PART 21) produces both the date-stamped full backup and the fixed
+// vidveil-daily incremental file in the same pass.
+func TestBackupDailyFull_CreatesBothFiles(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	if err := m.BackupDailyFull(BackupOptions{IncludeData: true, MaxBackups: 5}); err != nil {
+		t.Fatalf("BackupDailyFull: %v", err)
+	}
+
+	dateStr := time.Now().Format("2006-01-02")
+	fullFile := filepath.Join(backupDir, "vidveil_backup_"+dateStr+".tar.gz")
+	if _, err := os.Stat(fullFile); err != nil {
+		t.Errorf("BackupDailyFull: expected full backup file %s: %v", fullFile, err)
+	}
+
+	dailyFile := filepath.Join(backupDir, "vidveil-daily.tar.gz")
+	if _, err := os.Stat(dailyFile); err != nil {
+		t.Errorf("BackupDailyFull: expected daily incremental file %s: %v", dailyFile, err)
+	}
+}
+
+// TestBackupDailyFull_EncryptedNamesUseEncExtension verifies both files get the
+// .enc suffix when a password is supplied.
+func TestBackupDailyFull_EncryptedNamesUseEncExtension(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	if err := m.BackupDailyFull(BackupOptions{IncludeData: true, MaxBackups: 5, Password: "s3cret"}); err != nil {
+		t.Fatalf("BackupDailyFull encrypted: %v", err)
+	}
+
+	dateStr := time.Now().Format("2006-01-02")
+	fullFile := filepath.Join(backupDir, "vidveil_backup_"+dateStr+".tar.gz.enc")
+	if _, err := os.Stat(fullFile); err != nil {
+		t.Errorf("BackupDailyFull encrypted: expected full backup file %s: %v", fullFile, err)
+	}
+
+	dailyFile := filepath.Join(backupDir, "vidveil-daily.tar.gz.enc")
+	if _, err := os.Stat(dailyFile); err != nil {
+		t.Errorf("BackupDailyFull encrypted: expected daily incremental file %s: %v", dailyFile, err)
+	}
+}
+
+// TestBackupDailyFull_DailyIncrementalSurvivesRetention verifies the fixed
+// vidveil-daily file is never swept by count-based retention even when
+// MaxBackups is small and other backups already exist.
+func TestBackupDailyFull_DailyIncrementalSurvivesRetention(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	for i := 0; i < 3; i++ {
+		fname := filepath.Join(backupDir, time.Now().Add(-time.Duration(i+1)*24*time.Hour).Format("vidveil_backup_2006-01-02")+".tar.gz")
+		if err := m.BackupWithOptions(BackupOptions{Filename: fname, MaxBackups: 10}); err != nil {
+			t.Fatalf("seed backup %d: %v", i, err)
+		}
+	}
+
+	if err := m.BackupDailyFull(BackupOptions{IncludeData: true, MaxBackups: 1}); err != nil {
+		t.Fatalf("BackupDailyFull: %v", err)
+	}
+
+	dailyFile := filepath.Join(backupDir, "vidveil-daily.tar.gz")
+	if _, err := os.Stat(dailyFile); err != nil {
+		t.Errorf("BackupDailyFull: daily incremental should survive retention: %v", err)
+	}
+}
+
+// TestBackupDailyFull_FullBackupErrorPropagates verifies an error from the
+// full-backup step (invalid Filename directory) is returned wrapped.
+func TestBackupDailyFull_FullBackupErrorPropagates(t *testing.T) {
+	m, configDir, _ := newManagerWithDirs(t)
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	err := m.BackupDailyFull(BackupOptions{
+		Filename:    filepath.Join(string([]byte{0}), "bad.tar.gz"),
+		IncludeData: true,
+		MaxBackups:  5,
+	})
+	if err == nil {
+		t.Fatal("BackupDailyFull: expected error for invalid full-backup filename, got nil")
 	}
 }

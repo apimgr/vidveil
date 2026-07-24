@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"io"
 	"net/http"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,6 +53,9 @@ type BackupOptions struct {
 	KeepMonthly int
 	// KeepYearly is yearly backups (Jan 1st) to keep (0 = disabled)
 	KeepYearly int
+	// MaxTotalSize is a hard cap on total backup directory size per AI.md PART 21.
+	// Accepts a percentage ("10%") or absolute size ("50G", "50GB"); "" or "0" disables the cap.
+	MaxTotalSize string
 }
 
 // BackupManifest contains backup metadata per AI.md PART 21
@@ -97,6 +102,44 @@ func (m *MaintenanceManager) BackupIncremental(backupFile string) error {
 	})
 }
 
+// BackupDailyFull creates the scheduled backup_daily run per AI.md PART 21
+// "Backup Creation Flow" / "Backup Files Created": a retention-controlled full
+// backup named {project_name}_backup_YYYY-MM-DD.tar.gz[.enc] plus a daily
+// incremental named {project_name}-daily.tar.gz[.enc] (always exactly 1 file,
+// replaced each run and never subject to count-based retention deletion).
+// opts carries encryption/inclusion/retention settings sourced from the caller's
+// server.backup.retention configuration.
+func (m *MaintenanceManager) BackupDailyFull(opts BackupOptions) error {
+	ext := ".tar.gz"
+	if opts.Password != "" {
+		ext = ".tar.gz.enc"
+	}
+
+	// Step 3-4: full backup, retention-controlled, date-only filename per PART 21.
+	fullOpts := opts
+	if fullOpts.Filename == "" {
+		dateStr := time.Now().Format("2006-01-02")
+		fullOpts.Filename = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil_backup_%s%s", dateStr, ext))
+	}
+	if err := m.BackupWithOptions(fullOpts); err != nil {
+		return fmt.Errorf("daily full backup failed: %w", err)
+	}
+
+	// Step 5-6: daily incremental, fixed filename, always exactly 1 file.
+	dailyOpts := opts
+	dailyOpts.Filename = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil-daily%s", ext))
+	dailyOpts.MaxBackups = 1
+	dailyOpts.KeepWeekly = 0
+	dailyOpts.KeepMonthly = 0
+	dailyOpts.KeepYearly = 0
+	dailyOpts.MaxTotalSize = ""
+	if err := m.BackupWithOptions(dailyOpts); err != nil {
+		return fmt.Errorf("daily incremental backup failed: %w", err)
+	}
+
+	return nil
+}
+
 // BackupWithOptions creates a backup with full options per AI.md PART 21
 func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 	// Generate filename per PART 21: vidveil_backup_YYYY-MM-DD_HHMMSS.tar.gz
@@ -116,23 +159,42 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
+	// Run retention sweep BEFORE creating the new archive per AI.md PART 21
+	// Backup Creation Flow step 1 (prevents transient over-capacity of the backup dir).
+	maxBackups := opts.MaxBackups
+	if maxBackups == 0 {
+		maxBackups = 1
+	}
+	if err := m.applyRetentionWithOptions(maxBackups, opts.KeepWeekly, opts.KeepMonthly, opts.KeepYearly, opts.MaxTotalSize); err != nil {
+		fmt.Printf("Warning: failed to apply retention policy: %v\n", err)
+	}
+
+	// Disk-space precheck per AI.md PART 21: abort (do NOT create the backup) if
+	// free space < 2x the most recent existing backup, or disk usage > 90%.
+	if err := m.checkDiskSpace(backupDir); err != nil {
+		fmt.Printf("backup.skipped_disk_full: %v\n", err)
+		return err
+	}
+
 	// Create archive in memory for encryption support
 	var archiveBuf bytes.Buffer
 	gzWriter := gzip.NewWriter(&archiveBuf)
 	tarWriter := tar.NewWriter(gzWriter)
 
-	// Track contents for manifest
+	// Track contents for manifest, and a content-addressable hash (name+content per
+	// regular file) so the manifest checksum is independent of tar/gzip metadata.
 	var contents []string
+	contentHash := sha256.New()
 
 	// Always include config directory (server.yml, server.db)
-	if err := m.addDirToTar(tarWriter, m.paths.Config, "config"); err != nil {
+	if err := m.addDirToTar(tarWriter, m.paths.Config, "config", contentHash); err != nil {
 		return fmt.Errorf("failed to backup config: %w", err)
 	}
 	contents = append(contents, "config/")
 
 	// Include data directory if requested
 	if opts.IncludeData {
-		if err := m.addDirToTar(tarWriter, m.paths.Data, "data"); err != nil {
+		if err := m.addDirToTar(tarWriter, m.paths.Data, "data", contentHash); err != nil {
 			return fmt.Errorf("failed to backup data: %w", err)
 		}
 		contents = append(contents, "data/")
@@ -140,9 +202,9 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 
 	// Include SSL certificates if requested
 	if opts.IncludeSSL {
-		sslDir := filepath.Join(m.paths.Config, "ssl")
+		sslDir := m.paths.SSL
 		if _, err := os.Stat(sslDir); err == nil {
-			if err := m.addDirToTar(tarWriter, sslDir, "ssl"); err != nil {
+			if err := m.addDirToTar(tarWriter, sslDir, "ssl", contentHash); err != nil {
 				return fmt.Errorf("failed to backup ssl: %w", err)
 			}
 			contents = append(contents, "ssl/")
@@ -150,6 +212,7 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 	}
 
 	// Create manifest
+	manifestChecksum := "sha256:" + hex.EncodeToString(contentHash.Sum(nil))
 	manifest := BackupManifest{
 		Version:    "1.0.0",
 		CreatedAt:  time.Now().Format(time.RFC3339),
@@ -157,6 +220,7 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 		AppVersion: m.version,
 		Contents:   contents,
 		Encrypted:  opts.Password != "",
+		Checksum:   manifestChecksum,
 	}
 	if opts.Password != "" {
 		manifest.EncryptionMethod = "AES-256-GCM"
@@ -211,17 +275,39 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 		return fmt.Errorf("backup verification failed: %w", err)
 	}
 
-	// Apply retention policy (default max 1 per AI.md PART 21)
-	maxBackups := opts.MaxBackups
-	if maxBackups == 0 {
-		maxBackups = 1
-	}
-	if err := m.applyRetentionWithOptions(maxBackups, opts.KeepWeekly, opts.KeepMonthly, opts.KeepYearly); err != nil {
-		fmt.Printf("Warning: failed to apply retention policy: %v\n", err)
-	}
-
 	fmt.Printf("Backup created: %s\n", backupFile)
 	fmt.Printf("Checksum: %s\n", checksumStr)
+	return nil
+}
+
+// checkDiskSpace aborts the backup per AI.md PART 21 if free space is less than
+// 2x the most recent existing backup's size, or if disk usage exceeds 90%.
+func (m *MaintenanceManager) checkDiskSpace(backupDir string) error {
+	total, free, err := diskSpace(backupDir)
+	if err != nil {
+		// Can't determine disk space (e.g. unsupported platform) - don't block the backup.
+		return nil
+	}
+
+	if total > 0 {
+		used := total - free
+		if float64(used)/float64(total) > 0.90 {
+			return fmt.Errorf("disk usage exceeds 90%% threshold, aborting backup")
+		}
+	}
+
+	backups, err := m.ListBackups()
+	if err == nil && len(backups) > 0 {
+		sort.Slice(backups, func(i, j int) bool {
+			return backups[i].Modified.After(backups[j].Modified)
+		})
+		mostRecentSize := uint64(backups[0].Size)
+		if mostRecentSize > 0 && free < 2*mostRecentSize {
+			return fmt.Errorf("free space (%s) is less than 2x most recent backup size (%s), aborting backup",
+				formatBytes(int64(free)), formatBytes(int64(mostRecentSize)))
+		}
+	}
+
 	return nil
 }
 
@@ -432,12 +518,12 @@ func verifySQLiteIntegrity(data []byte) error {
 
 // applyRetention removes old backups to stay under max limit (legacy wrapper)
 func (m *MaintenanceManager) applyRetention(maxBackups int) error {
-	return m.applyRetentionWithOptions(maxBackups, 0, 0, 0)
+	return m.applyRetentionWithOptions(maxBackups, 0, 0, 0, "")
 }
 
 // applyRetentionWithOptions removes old backups per AI.md PART 21 retention policy
-// Priority order: yearly > monthly > weekly > daily
-func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, keepMonthly, keepYearly int) error {
+// Priority order: yearly > monthly > weekly > daily, followed by a max_total_size hard cap.
+func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, keepMonthly, keepYearly int, maxTotalSize string) error {
 	if maxBackups <= 0 {
 		// Default per PART 21
 		maxBackups = 1
@@ -530,6 +616,114 @@ func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, k
 		}
 	}
 
+	// Enforce max_total_size hard cap per AI.md PART 21: delete oldest-first (never the
+	// vidveil-daily/vidveil-hourly incrementals) until the backup dir is back under the cap.
+	if err := m.enforceMaxTotalSize(maxTotalSize); err != nil {
+		fmt.Printf("Warning: failed to enforce max_total_size: %v\n", err)
+	}
+
+	return nil
+}
+
+// parseSizeString parses a max_total_size value per AI.md PART 21. Accepted forms:
+//   - percentage: "10%" (percentage of total disk size for the backup dir's filesystem)
+//   - suffixed size: "50G", "50GB", "500M", "500MB", "1T", "1TB" (case-insensitive)
+//   - bare bytes: "1048576"
+//   - "" or "0" disables the cap (returns 0, false, nil)
+func (m *MaintenanceManager) parseSizeString(s, path string) (bytesLimit uint64, enabled bool, err error) {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" {
+		return 0, false, nil
+	}
+
+	if strings.HasSuffix(s, "%") {
+		pctStr := strings.TrimSuffix(s, "%")
+		pct, err := strconv.ParseFloat(pctStr, 64)
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid percentage %q: %w", s, err)
+		}
+		total, _, err := diskSpace(path)
+		if err != nil {
+			return 0, false, fmt.Errorf("failed to determine disk size: %w", err)
+		}
+		return uint64(pct / 100 * float64(total)), true, nil
+	}
+
+	upper := strings.ToUpper(s)
+	multipliers := []struct {
+		suffixes []string
+		mult     uint64
+	}{
+		{[]string{"TB", "T"}, 1024 * 1024 * 1024 * 1024},
+		{[]string{"GB", "G"}, 1024 * 1024 * 1024},
+		{[]string{"MB", "M"}, 1024 * 1024},
+		{[]string{"KB", "K"}, 1024},
+	}
+	for _, m := range multipliers {
+		for _, suf := range m.suffixes {
+			if strings.HasSuffix(upper, suf) {
+				numStr := strings.TrimSpace(upper[:len(upper)-len(suf)])
+				n, err := strconv.ParseFloat(numStr, 64)
+				if err != nil {
+					return 0, false, fmt.Errorf("invalid size %q: %w", s, err)
+				}
+				return uint64(n * float64(m.mult)), true, nil
+			}
+		}
+	}
+
+	// Bare bytes
+	n, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0, false, fmt.Errorf("invalid size %q: %w", s, err)
+	}
+	return n, true, nil
+}
+
+// enforceMaxTotalSize deletes oldest backups (never vidveil-daily/vidveil-hourly incrementals)
+// until the backup directory's total size is under the max_total_size cap.
+func (m *MaintenanceManager) enforceMaxTotalSize(maxTotalSize string) error {
+	limit, enabled, err := m.parseSizeString(maxTotalSize, m.paths.Backup)
+	if err != nil {
+		return err
+	}
+	if !enabled || limit == 0 {
+		return nil
+	}
+
+	backups, err := m.ListBackups()
+	if err != nil {
+		return err
+	}
+
+	var total int64
+	for _, b := range backups {
+		total += b.Size
+	}
+	if uint64(total) <= limit {
+		return nil
+	}
+
+	// Oldest first
+	sort.Slice(backups, func(i, j int) bool {
+		return backups[i].Modified.Before(backups[j].Modified)
+	})
+
+	for _, b := range backups {
+		if uint64(total) <= limit {
+			break
+		}
+		if strings.HasPrefix(b.Filename, "vidveil-daily") || strings.HasPrefix(b.Filename, "vidveil-hourly") {
+			continue
+		}
+		if err := os.Remove(b.Path); err != nil {
+			fmt.Printf("Warning: failed to delete old backup %s: %v\n", b.Filename, err)
+			continue
+		}
+		fmt.Printf("Deleted old backup (max_total_size cap): %s\n", b.Filename)
+		total -= b.Size
+	}
+
 	return nil
 }
 
@@ -568,67 +762,138 @@ func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) er
 		}
 	}
 
-	// Create gzip reader
+	// Phase 1: decrypt + parse fully into memory, validating before touching disk.
+	entry, err := loadRestoreArchive(data)
+	if err != nil {
+		return err
+	}
+
+	if entry.manifest.Version == "" {
+		return fmt.Errorf("invalid backup: manifest.json missing or has empty version")
+	}
+
+	if entry.manifest.Checksum != "" {
+		computed := "sha256:" + hex.EncodeToString(entry.contentHash.Sum(nil))
+		if computed != entry.manifest.Checksum {
+			return fmt.Errorf("backup checksum mismatch: manifest says %s, computed %s", entry.manifest.Checksum, computed)
+		}
+	}
+
+	if entry.manifest.AppVersion != "" && entry.manifest.AppVersion != m.version {
+		fmt.Printf("Warning: backup was created by app version %s, current version is %s\n", entry.manifest.AppVersion, m.version)
+	}
+
+	// Phase 2: all checks passed - write buffered contents to real paths.
+	for _, f := range entry.files {
+		var targetPath string
+		switch {
+		case strings.HasPrefix(f.name, "config/"):
+			targetPath = filepath.Join(m.paths.Config, strings.TrimPrefix(f.name, "config/"))
+		case strings.HasPrefix(f.name, "data/"):
+			targetPath = filepath.Join(m.paths.Data, strings.TrimPrefix(f.name, "data/"))
+		case strings.HasPrefix(f.name, "ssl/"):
+			targetPath = filepath.Join(m.paths.SSL, strings.TrimPrefix(f.name, "ssl/"))
+		default:
+			continue
+		}
+
+		if f.isDir {
+			if err := os.MkdirAll(targetPath, os.FileMode(f.mode)); err != nil {
+				return fmt.Errorf("failed to create directory: %w", err)
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return fmt.Errorf("failed to create parent directory: %w", err)
+		}
+		if err := os.WriteFile(targetPath, f.content, os.FileMode(f.mode)); err != nil {
+			return fmt.Errorf("failed to extract file: %w", err)
+		}
+	}
+
+	fmt.Printf("Restored from: %s\n", backupFile)
+	return nil
+}
+
+// restoreFileEntry is a fully-buffered tar entry staged for Phase 2 extraction.
+type restoreFileEntry struct {
+	name    string
+	isDir   bool
+	mode    int64
+	content []byte
+}
+
+// restoreArchive holds a fully-parsed, validated backup archive prior to extraction.
+type restoreArchive struct {
+	manifest    BackupManifest
+	files       []restoreFileEntry
+	contentHash hash.Hash
+}
+
+// loadRestoreArchive decompresses and parses a decrypted backup archive fully into
+// memory, per AI.md PART 21's Phase 1 (validate before writing anything to disk).
+// It recomputes the same content-addressable hash used by BackupWithOptions
+// (name+NUL+content+NUL per regular file, in tar order) for checksum verification.
+func loadRestoreArchive(data []byte) (*restoreArchive, error) {
 	gzReader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("failed to read gzip: %w", err)
+		return nil, fmt.Errorf("failed to read gzip: %w", err)
 	}
 	defer gzReader.Close()
 
-	// Create tar reader
 	tarReader := tar.NewReader(gzReader)
+	archive := &restoreArchive{contentHash: sha256.New()}
 
-	// Extract files
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to read tar: %w", err)
+			return nil, fmt.Errorf("failed to read tar: %w", err)
 		}
 
-		// Skip manifest (informational only)
 		if header.Name == "manifest.json" {
-			continue
-		}
-
-		// Determine target path
-		var targetPath string
-		if strings.HasPrefix(header.Name, "config/") {
-			targetPath = filepath.Join(m.paths.Config, strings.TrimPrefix(header.Name, "config/"))
-		} else if strings.HasPrefix(header.Name, "data/") {
-			targetPath = filepath.Join(m.paths.Data, strings.TrimPrefix(header.Name, "data/"))
-		} else if strings.HasPrefix(header.Name, "ssl/") {
-			targetPath = filepath.Join(m.paths.Config, header.Name)
-		} else {
-			continue
-		}
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
-				return fmt.Errorf("failed to create directory: %w", err)
-			}
-		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-				return fmt.Errorf("failed to create parent directory: %w", err)
-			}
-			outFile, err := os.Create(targetPath)
+			manifestData, err := io.ReadAll(tarReader)
 			if err != nil {
-				return fmt.Errorf("failed to create file: %w", err)
+				return nil, fmt.Errorf("failed to read manifest: %w", err)
 			}
-			if _, err := io.Copy(outFile, tarReader); err != nil {
-				outFile.Close()
-				return fmt.Errorf("failed to extract file: %w", err)
+			if err := json.Unmarshal(manifestData, &archive.manifest); err != nil {
+				return nil, fmt.Errorf("failed to parse manifest: %w", err)
 			}
-			outFile.Close()
-			os.Chmod(targetPath, os.FileMode(header.Mode))
+			continue
 		}
+
+		// Only these prefixes are ever extracted; others are ignored per Phase 2.
+		relevant := strings.HasPrefix(header.Name, "config/") ||
+			strings.HasPrefix(header.Name, "data/") ||
+			strings.HasPrefix(header.Name, "ssl/")
+		if !relevant {
+			continue
+		}
+
+		if header.Typeflag == tar.TypeDir {
+			archive.files = append(archive.files, restoreFileEntry{name: header.Name, isDir: true, mode: header.Mode})
+			continue
+		}
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		content, err := io.ReadAll(tarReader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file %s: %w", header.Name, err)
+		}
+		archive.contentHash.Write([]byte(header.Name))
+		archive.contentHash.Write([]byte{0})
+		archive.contentHash.Write(content)
+		archive.contentHash.Write([]byte{0})
+
+		archive.files = append(archive.files, restoreFileEntry{name: header.Name, mode: header.Mode, content: content})
 	}
 
-	fmt.Printf("Restored from: %s\n", backupFile)
-	return nil
+	return archive, nil
 }
 
 // CheckUpdate checks for available updates from GitHub releases
@@ -981,8 +1246,10 @@ func (m *MaintenanceManager) GetUpdateBranch() string {
 	return cfg.Server.Update.Branch
 }
 
-// Helper to add directory to tar
-func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string) error {
+// Helper to add directory to tar. contentHash, if non-nil, is fed name+NUL+content+NUL
+// for every regular file (in walk/tar order) to build a content-addressable checksum
+// that is independent of tar/gzip metadata (mtimes, permissions, etc).
+func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, contentHash hash.Hash) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -1012,8 +1279,18 @@ func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string) 
 				return err
 			}
 			defer file.Close()
-			if _, err := io.Copy(tw, file); err != nil {
+
+			var writer io.Writer = tw
+			if contentHash != nil {
+				contentHash.Write([]byte(tarPath))
+				contentHash.Write([]byte{0})
+				writer = io.MultiWriter(tw, contentHash)
+			}
+			if _, err := io.Copy(writer, file); err != nil {
 				return err
+			}
+			if contentHash != nil {
+				contentHash.Write([]byte{0})
 			}
 		}
 

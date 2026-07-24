@@ -6,6 +6,12 @@
 package maintenance
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +19,53 @@ import (
 	"testing"
 	"time"
 )
+
+// buildTestBackupArchive constructs a minimal gzip+tar backup archive with the
+// given manifest and file contents (keyed by tar entry name, e.g.
+// "config/server.yml"). Mirrors the layout loadRestoreArchive expects.
+func buildTestBackupArchive(t *testing.T, manifest BackupManifest, files map[string]string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+
+	manifestJSON, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.WriteHeader(&tar.Header{
+		Name: "manifest.json",
+		Mode: 0644,
+		Size: int64(len(manifestJSON)),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(manifestJSON); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, content := range files {
+		if err := tw.WriteHeader(&tar.Header{
+			Name: name,
+			Mode: 0644,
+			Size: int64(len(content)),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
 
 // newMaintMgrWithTempDirs creates a MaintenanceManager with fully initialized
 // temp directories. Uses os.MkdirTemp under the project org prefix per spec.
@@ -31,7 +84,8 @@ func newMaintMgrWithTempDirs(t *testing.T) (*MaintenanceManager, string) {
 	cfgDir := filepath.Join(tmp, "config")
 	dataDir := filepath.Join(tmp, "data")
 	backupDir := filepath.Join(tmp, "backup")
-	for _, d := range []string{cfgDir, dataDir, backupDir} {
+	sslDir := filepath.Join(tmp, "ssl")
+	for _, d := range []string{cfgDir, dataDir, backupDir, sslDir} {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -39,6 +93,7 @@ func newMaintMgrWithTempDirs(t *testing.T) (*MaintenanceManager, string) {
 
 	m := NewMaintenanceManager(cfgDir, dataDir, "1.0.0")
 	m.paths.Backup = backupDir
+	m.paths.SSL = sslDir
 	return m, tmp
 }
 
@@ -91,12 +146,8 @@ func TestBackupWithOptions_EncryptedAutoFilename_UsesEncExt(t *testing.T) {
 func TestBackupWithOptions_IncludeSSL_ExistsAndIncluded(t *testing.T) {
 	m, tmp := newMaintMgrWithTempDirs(t)
 
-	// Create SSL directory with a dummy cert file
-	sslDir := filepath.Join(m.paths.Config, "ssl")
-	if err := os.MkdirAll(sslDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(sslDir, "cert.pem"), []byte("cert"), 0644); err != nil {
+	// Create SSL directory (m.paths.SSL) with a dummy cert file
+	if err := os.WriteFile(filepath.Join(m.paths.SSL, "cert.pem"), []byte("cert"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -110,6 +161,27 @@ func TestBackupWithOptions_IncludeSSL_ExistsAndIncluded(t *testing.T) {
 	}
 	if _, err := os.Stat(outFile); os.IsNotExist(err) {
 		t.Error("BackupWithOptions IncludeSSL: output file missing")
+	}
+
+	// Verify the cert was actually captured under the ssl/ prefix by
+	// restoring to a fresh location and checking the file lands correctly.
+	restoreDir := filepath.Join(tmp, "restore_ssl_capture_check")
+	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	m2 := NewMaintenanceManager(restoreDir, restoreDir, "1.0.0")
+	m2.paths.Backup = m.paths.Backup
+	m2.paths.SSL = filepath.Join(restoreDir, "ssl")
+	if err := m2.RestoreWithPassword(outFile, ""); err != nil {
+		t.Fatalf("RestoreWithPassword to verify SSL capture: %v", err)
+	}
+	restoredCert := filepath.Join(m2.paths.SSL, "cert.pem")
+	content, err := os.ReadFile(restoredCert)
+	if err != nil {
+		t.Fatalf("restored cert missing at %s: %v", restoredCert, err)
+	}
+	if string(content) != "cert" {
+		t.Errorf("restored cert content = %q, want %q", content, "cert")
 	}
 }
 
@@ -192,7 +264,7 @@ func TestApplyRetentionWithOptions_WeeklyMonthlyYearly_NoPanic(t *testing.T) {
 	}
 
 	// Apply retention keeping 1 daily, 1 weekly, 1 monthly, 1 yearly
-	if err := m.applyRetentionWithOptions(1, 1, 1, 1); err != nil {
+	if err := m.applyRetentionWithOptions(1, 1, 1, 1, ""); err != nil {
 		t.Fatalf("applyRetentionWithOptions: %v", err)
 	}
 
@@ -217,7 +289,7 @@ func TestApplyRetentionWithOptions_MaxBackupsZero_DefaultsToOne(t *testing.T) {
 	}
 
 	// maxBackups=0 should default to 1
-	if err := m.applyRetentionWithOptions(0, 0, 0, 0); err != nil {
+	if err := m.applyRetentionWithOptions(0, 0, 0, 0, ""); err != nil {
 		t.Fatalf("applyRetentionWithOptions(0,0,0,0): %v", err)
 	}
 
@@ -253,12 +325,8 @@ func TestRestoreWithPassword_EmptyFilename_AutoFinds(t *testing.T) {
 func TestRestoreWithPassword_WithSSLEntries_RestoresSSL(t *testing.T) {
 	m, tmp := newMaintMgrWithTempDirs(t)
 
-	// Create SSL directory with a dummy cert
-	sslDir := filepath.Join(m.paths.Config, "ssl")
-	if err := os.MkdirAll(sslDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(sslDir, "cert.pem"), []byte("fake cert"), 0644); err != nil {
+	// Create SSL directory (m.paths.SSL) with a dummy cert
+	if err := os.WriteFile(filepath.Join(m.paths.SSL, "cert.pem"), []byte("fake cert"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -278,9 +346,19 @@ func TestRestoreWithPassword_WithSSLEntries_RestoresSSL(t *testing.T) {
 
 	m2 := NewMaintenanceManager(restoreDir, restoreDir, "1.0.0")
 	m2.paths.Backup = m.paths.Backup
+	m2.paths.SSL = filepath.Join(restoreDir, "ssl")
 
 	if err := m2.RestoreWithPassword(outFile, ""); err != nil {
 		t.Errorf("RestoreWithPassword with SSL: %v", err)
+	}
+
+	restoredCert := filepath.Join(m2.paths.SSL, "cert.pem")
+	content, err := os.ReadFile(restoredCert)
+	if err != nil {
+		t.Fatalf("restored cert missing at %s: %v", restoredCert, err)
+	}
+	if string(content) != "fake cert" {
+		t.Errorf("restored cert content = %q, want %q", content, "fake cert")
 	}
 }
 
@@ -334,5 +412,346 @@ func TestRestoreWithPassword_EncryptedNoPassword_ReturnsError(t *testing.T) {
 	err := m2.RestoreWithPassword(outFile, "")
 	if err == nil {
 		t.Error("RestoreWithPassword(enc, no pwd): expected error, got nil")
+	}
+}
+
+// ── parseSizeString ──────────────────────────────────────────────────────────
+
+func TestParseSizeString(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+
+	cases := []struct {
+		name       string
+		input      string
+		wantBytes  uint64
+		wantEnable bool
+		wantErr    bool
+	}{
+		{"empty disables", "", 0, false, false},
+		{"zero disables", "0", 0, false, false},
+		{"bare bytes", "12345", 12345, true, false},
+		{"kilobytes bare", "10K", 10 * 1024, true, false},
+		{"kilobytes suffixed", "10KB", 10 * 1024, true, false},
+		{"megabytes lowercase", "10m", 10 * 1024 * 1024, true, false},
+		{"megabytes suffixed", "10MB", 10 * 1024 * 1024, true, false},
+		{"gigabytes bare", "2G", 2 * 1024 * 1024 * 1024, true, false},
+		{"gigabytes suffixed", "2GB", 2 * 1024 * 1024 * 1024, true, false},
+		{"terabytes bare", "1T", 1024 * 1024 * 1024 * 1024, true, false},
+		{"terabytes suffixed", "1TB", 1024 * 1024 * 1024 * 1024, true, false},
+		{"invalid suffix number", "abcM", 0, false, true},
+		{"invalid bare bytes", "abc", 0, false, true},
+		{"invalid percent", "abc%", 0, false, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, enabled, err := m.parseSizeString(tc.input, tmp)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("parseSizeString(%q): expected error, got nil", tc.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseSizeString(%q): unexpected error: %v", tc.input, err)
+			}
+			if enabled != tc.wantEnable {
+				t.Errorf("parseSizeString(%q): enabled = %v, want %v", tc.input, enabled, tc.wantEnable)
+			}
+			if got != tc.wantBytes {
+				t.Errorf("parseSizeString(%q): bytes = %d, want %d", tc.input, got, tc.wantBytes)
+			}
+		})
+	}
+}
+
+// TestParseSizeString_Percentage verifies the "%" branch resolves against the
+// real disk containing the given path without erroring.
+func TestParseSizeString_Percentage(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+
+	got, enabled, err := m.parseSizeString("50%", tmp)
+	if err != nil {
+		t.Fatalf("parseSizeString(50%%): unexpected error: %v", err)
+	}
+	if !enabled {
+		t.Error("parseSizeString(50%): expected enabled=true")
+	}
+	if got == 0 {
+		t.Error("parseSizeString(50%): expected non-zero byte limit")
+	}
+}
+
+// ── enforceMaxTotalSize ───────────────────────────────────────────────────────
+
+// TestEnforceMaxTotalSize_Disabled verifies an empty cap is a no-op.
+func TestEnforceMaxTotalSize_Disabled(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+	if err := m.enforceMaxTotalSize(""); err != nil {
+		t.Errorf("enforceMaxTotalSize(\"\"): unexpected error: %v", err)
+	}
+}
+
+// TestEnforceMaxTotalSize_DeletesOldestNonProtected verifies backups over the
+// cap are deleted oldest-first, while vidveil-daily/vidveil-hourly named
+// backups are never removed.
+func TestEnforceMaxTotalSize_DeletesOldestNonProtected(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+
+	write := func(name string, size int, age time.Duration) {
+		p := filepath.Join(m.paths.Backup, name)
+		if err := os.WriteFile(p, make([]byte, size), 0644); err != nil {
+			t.Fatal(err)
+		}
+		modTime := time.Now().Add(-age)
+		if err := os.Chtimes(p, modTime, modTime); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write("vidveil-daily_old.tar.gz", 100, 5*time.Hour)
+	write("vidveil-hourly_old.tar.gz", 100, 4*time.Hour)
+	write("vidveil_backup_old1.tar.gz", 100, 3*time.Hour)
+	write("vidveil_backup_old2.tar.gz", 100, 2*time.Hour)
+	write("vidveil_backup_newer.tar.gz", 100, 1*time.Hour)
+
+	// Total is 500 bytes; cap of 350 requires deleting old1 and old2 (oldest
+	// non-protected first) but stops (breaks) once under the cap, leaving
+	// "newer" untouched — this exercises the loop's early-break path.
+	if err := m.enforceMaxTotalSize("350"); err != nil {
+		t.Fatalf("enforceMaxTotalSize: unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(m.paths.Backup, "vidveil_backup_old1.tar.gz")); !os.IsNotExist(err) {
+		t.Error("expected oldest non-protected backup (old1) to be deleted")
+	}
+	if _, err := os.Stat(filepath.Join(m.paths.Backup, "vidveil_backup_old2.tar.gz")); !os.IsNotExist(err) {
+		t.Error("expected next-oldest non-protected backup (old2) to be deleted")
+	}
+	if _, err := os.Stat(filepath.Join(m.paths.Backup, "vidveil_backup_newer.tar.gz")); err != nil {
+		t.Error("expected newest non-protected backup to be preserved once under the cap")
+	}
+	if _, err := os.Stat(filepath.Join(m.paths.Backup, "vidveil-daily_old.tar.gz")); err != nil {
+		t.Error("expected vidveil-daily backup to be preserved")
+	}
+	if _, err := os.Stat(filepath.Join(m.paths.Backup, "vidveil-hourly_old.tar.gz")); err != nil {
+		t.Error("expected vidveil-hourly backup to be preserved")
+	}
+}
+
+// TestEnforceMaxTotalSize_InvalidSize verifies a malformed cap value surfaces
+// the parseSizeString error instead of silently being ignored.
+func TestEnforceMaxTotalSize_InvalidSize(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+	if err := m.enforceMaxTotalSize("not-a-size"); err == nil {
+		t.Error("enforceMaxTotalSize(\"not-a-size\"): expected error, got nil")
+	}
+}
+
+// ── checkDiskSpace ────────────────────────────────────────────────────────────
+
+// TestCheckDiskSpace_NoExistingBackups verifies the happy path (no prior
+// backups, ample free space on the real filesystem) returns no error.
+func TestCheckDiskSpace_NoExistingBackups(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+	if err := m.checkDiskSpace(m.paths.Backup); err != nil {
+		t.Errorf("checkDiskSpace: unexpected error: %v", err)
+	}
+}
+
+// TestCheckDiskSpace_WithExistingBackup verifies the precheck still passes
+// when a small prior backup already exists (well under any real free-space
+// threshold on a CI/dev filesystem).
+func TestCheckDiskSpace_WithExistingBackup(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+	if err := os.WriteFile(filepath.Join(m.paths.Backup, "vidveil_backup_prior.tar.gz"), []byte("small backup content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.checkDiskSpace(m.paths.Backup); err != nil {
+		t.Errorf("checkDiskSpace: unexpected error: %v", err)
+	}
+}
+
+// TestCheckDiskSpace_MultipleExistingBackups verifies the newest-first sort
+// comparator over the existing backups list is actually exercised (requires
+// at least two backups to invoke the comparator).
+func TestCheckDiskSpace_MultipleExistingBackups(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+
+	older := filepath.Join(m.paths.Backup, "vidveil_backup_a.tar.gz")
+	newer := filepath.Join(m.paths.Backup, "vidveil_backup_b.tar.gz")
+	if err := os.WriteFile(older, []byte("older backup"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newer, []byte("newer backup"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(older, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.checkDiskSpace(m.paths.Backup); err != nil {
+		t.Errorf("checkDiskSpace: unexpected error: %v", err)
+	}
+}
+
+// ── RestoreWithPassword / loadRestoreArchive validation branches ──────────────
+
+// TestRestoreWithPassword_MissingManifestVersion verifies a manifest with an
+// empty Version is rejected before anything is extracted.
+func TestRestoreWithPassword_MissingManifestVersion(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+
+	data := buildTestBackupArchive(t, BackupManifest{Version: ""}, nil)
+	path := filepath.Join(m.paths.Backup, "vidveil_backup_noversion.tar.gz")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := m.RestoreWithPassword(path, "")
+	if err == nil || !strings.Contains(err.Error(), "missing or has empty version") {
+		t.Errorf("expected missing-version error, got: %v", err)
+	}
+}
+
+// TestRestoreWithPassword_ChecksumMismatch verifies a manifest with an
+// incorrect Checksum is rejected before extraction.
+func TestRestoreWithPassword_ChecksumMismatch(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+
+	data := buildTestBackupArchive(t, BackupManifest{
+		Version:  "1",
+		Checksum: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+	}, map[string]string{"config/server.yml": "content"})
+	path := filepath.Join(m.paths.Backup, "vidveil_backup_badsum.tar.gz")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := m.RestoreWithPassword(path, "")
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Errorf("expected checksum mismatch error, got: %v", err)
+	}
+}
+
+// TestRestoreWithPassword_ValidChecksumSucceeds verifies a manifest whose
+// Checksum matches the recomputed content hash restores successfully and
+// extracts the file to the config directory.
+func TestRestoreWithPassword_ValidChecksumSucceeds(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+
+	const name, content = "config/server.yml", "restored content"
+	hasher := sha256.New()
+	hasher.Write([]byte(name))
+	hasher.Write([]byte{0})
+	hasher.Write([]byte(content))
+	hasher.Write([]byte{0})
+	checksum := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
+
+	data := buildTestBackupArchive(t, BackupManifest{
+		Version:  "1",
+		Checksum: checksum,
+	}, map[string]string{name: content})
+	path := filepath.Join(m.paths.Backup, "vidveil_backup_goodsum.tar.gz")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.RestoreWithPassword(path, ""); err != nil {
+		t.Fatalf("RestoreWithPassword: unexpected error: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(m.paths.Config, "server.yml"))
+	if err != nil {
+		t.Fatalf("expected extracted file: %v", err)
+	}
+	if string(got) != content {
+		t.Errorf("extracted content = %q, want %q", got, content)
+	}
+}
+
+// TestRestoreWithPassword_AppVersionMismatchWarns verifies an AppVersion
+// differing from the running version only warns (non-fatal) rather than
+// failing the restore.
+func TestRestoreWithPassword_AppVersionMismatchWarns(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+
+	data := buildTestBackupArchive(t, BackupManifest{
+		Version:    "1",
+		AppVersion: "0.0.1-does-not-match",
+	}, map[string]string{"config/server.yml": "content"})
+	path := filepath.Join(m.paths.Backup, "vidveil_backup_oldver.tar.gz")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.RestoreWithPassword(path, ""); err != nil {
+		t.Errorf("expected AppVersion mismatch to only warn, got error: %v", err)
+	}
+}
+
+// TestRestoreWithPassword_NoBackupFileFound verifies an empty backup
+// directory with no explicit path surfaces a clear error instead of a panic.
+func TestRestoreWithPassword_NoBackupFileFound(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+
+	err := m.RestoreWithPassword("", "")
+	if err == nil || !strings.Contains(err.Error(), "no backup files found") {
+		t.Errorf("expected no-backup-files error, got: %v", err)
+	}
+}
+
+// TestLoadRestoreArchive_InvalidGzip verifies non-gzip data is rejected with
+// a wrapped gzip error.
+func TestLoadRestoreArchive_InvalidGzip(t *testing.T) {
+	_, err := loadRestoreArchive([]byte("not gzip data at all"))
+	if err == nil || !strings.Contains(err.Error(), "failed to read gzip") {
+		t.Errorf("expected gzip read error, got: %v", err)
+	}
+}
+
+// TestLoadRestoreArchive_InvalidTar verifies valid gzip wrapping non-tar
+// content is rejected with a wrapped tar error.
+func TestLoadRestoreArchive_InvalidTar(t *testing.T) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write([]byte("not a tar archive, just garbage bytes padded out long enough to not look like a valid header block")); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := loadRestoreArchive(buf.Bytes())
+	if err == nil || !strings.Contains(err.Error(), "failed to read tar") {
+		t.Errorf("expected tar read error, got: %v", err)
+	}
+}
+
+// TestLoadRestoreArchive_MalformedManifestJSON verifies a manifest.json entry
+// containing invalid JSON is rejected with a wrapped parse error.
+func TestLoadRestoreArchive_MalformedManifestJSON(t *testing.T) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+
+	badJSON := []byte("{not valid json")
+	if err := tw.WriteHeader(&tar.Header{Name: "manifest.json", Mode: 0644, Size: int64(len(badJSON))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(badJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := loadRestoreArchive(buf.Bytes())
+	if err == nil || !strings.Contains(err.Error(), "failed to parse manifest") {
+		t.Errorf("expected manifest parse error, got: %v", err)
 	}
 }

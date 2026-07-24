@@ -85,3 +85,24 @@ func TestColorAutoDetect_NonTTY_ReturnsFalse(t *testing.T) {
 	result := colorAutoDetect()
 	_ = result
 }
+
+func TestStopButtonIcon(t *testing.T) {
+	got := StopButtonIcon()
+	if got == "" {
+		t.Error("StopButtonIcon(): expected non-empty result")
+	}
+}
+
+func TestQuestionIcon(t *testing.T) {
+	got := QuestionIcon()
+	if got == "" {
+		t.Error("QuestionIcon(): expected non-empty result")
+	}
+}
+
+func TestPackageIcon(t *testing.T) {
+	got := PackageIcon()
+	if got == "" {
+		t.Error("PackageIcon(): expected non-empty result")
+	}
+}

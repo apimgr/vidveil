@@ -1371,3 +1371,13 @@ func TestMetricsHandler_ForbidsNonLoopback(t *testing.T) {
 		t.Errorf("Metrics handler from non-loopback: status = %d, want 403/401", rr.Code)
 	}
 }
+
+// TestServerHandlerSetTorService verifies SetTorService wires the Tor checker in.
+func TestServerHandlerSetTorService(t *testing.T) {
+	h := NewServerHandler(createTestConfig())
+	checker := &testTorChecker{enabled: true, running: true}
+	h.SetTorService(checker)
+	if h.torSvc != checker {
+		t.Error("SetTorService() did not wire the provided TorStatusChecker")
+	}
+}

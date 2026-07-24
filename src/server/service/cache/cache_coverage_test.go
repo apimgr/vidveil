@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -19,6 +20,22 @@ func newClosedValkeyCache() *ValkeyCache {
 		prefix: "vidveil:",
 		ttl:    time.Second,
 		closed: true,
+	}
+}
+
+// ---- SearchCache.Warm ----
+
+func TestSearchCacheWarmIsNoOpReturnsNil(t *testing.T) {
+	c := NewSearchCache(time.Minute, 10)
+	defer c.Close()
+
+	err := c.Warm(context.Background(), WarmCacheData{
+		BlocklistHashes: []string{"a", "b"},
+		GeoIPInfo:       map[string]string{"version": "1"},
+		EngineStatus:    map[string]bool{"engine1": true},
+	})
+	if err != nil {
+		t.Errorf("SearchCache.Warm() = %v, want nil", err)
 	}
 }
 

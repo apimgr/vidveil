@@ -48,6 +48,7 @@ func newInMemoryLogger(level Level, buf io.Writer) *AppLogger {
 			"debug":    buf,
 			"access":   buf,
 			"security": buf,
+			"auth":     buf,
 		},
 		appConfig: config.DefaultAppConfig(),
 	}
@@ -121,6 +122,71 @@ func TestAppLoggerAccessWritesToOutput(t *testing.T) {
 	if !strings.Contains(buf.String(), "GET") {
 		t.Errorf("Access() output does not contain method name: %s", buf.String())
 	}
+}
+
+func TestNginxLog(t *testing.T) {
+	line := nginxLog("127.0.0.1", "GET", "/health", "HTTP/1.1", 200, 512)
+	if !strings.Contains(line, "GET") || !strings.Contains(line, "/health") {
+		t.Errorf("nginxLog() = %q, missing expected fields", line)
+	}
+}
+
+func TestNginxLogDefaultProto(t *testing.T) {
+	line := nginxLog("127.0.0.1", "GET", "/health", "", 200, 512)
+	if !strings.Contains(line, "HTTP/1.1") {
+		t.Errorf("nginxLog() with empty proto = %q, want default HTTP/1.1", line)
+	}
+}
+
+func TestAppLoggerAccessNginxFormat(t *testing.T) {
+	var buf bytes.Buffer
+	l := newInMemoryLogger(LevelDebug, &buf)
+	l.appConfig.Server.Logs.Access.Format = "nginx"
+
+	l.Access("GET", "/ping", "HTTP/1.1", "127.0.0.1:9000", "", "go-test/1.0", 200, 512)
+
+	if buf.Len() == 0 {
+		t.Error("Access() with nginx format produced no output")
+	}
+}
+
+func TestAppLoggerAuthWritesToOutput(t *testing.T) {
+	var buf bytes.Buffer
+	l := newInMemoryLogger(LevelDebug, &buf)
+
+	l.Auth("testuser", "127.0.0.1", "success", "valid_credentials")
+
+	if buf.Len() == 0 {
+		t.Error("Auth() produced no output")
+	}
+	if !strings.Contains(buf.String(), "result=success") {
+		t.Errorf("Auth() output missing result field: %s", buf.String())
+	}
+}
+
+func TestAppLoggerAuthJSONFormat(t *testing.T) {
+	var buf bytes.Buffer
+	l := newInMemoryLogger(LevelDebug, &buf)
+	l.appConfig.Server.Logs.Auth.Format = "json"
+
+	l.Auth("testuser", "127.0.0.1", "fail", "invalid_credentials")
+
+	if buf.Len() == 0 {
+		t.Error("Auth() with json format produced no output")
+	}
+	if !strings.Contains(buf.String(), "invalid_credentials") {
+		t.Errorf("Auth() json output missing reason field: %s", buf.String())
+	}
+}
+
+func TestAppLoggerAuthNoOutputConfigured(t *testing.T) {
+	l := &AppLogger{
+		level:     LevelDebug,
+		outputs:   map[string]io.Writer{},
+		appConfig: config.DefaultAppConfig(),
+	}
+	// Must not panic when the "auth" output is not configured.
+	l.Auth("testuser", "127.0.0.1", "success", "valid_credentials")
 }
 
 func TestAppLoggerSecurityWritesToOutput(t *testing.T) {
@@ -283,6 +349,26 @@ func TestResponseWriterWriteHeader(t *testing.T) {
 	}
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("underlying ResponseWriter code = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestResponseWriterWrite(t *testing.T) {
+	rec := httptest.NewRecorder()
+	rw := &responseWriter{ResponseWriter: rec, status: http.StatusOK}
+
+	body := []byte("hello world")
+	n, err := rw.Write(body)
+	if err != nil {
+		t.Fatalf("Write() unexpected error: %v", err)
+	}
+	if n != len(body) {
+		t.Errorf("Write() = %d, want %d", n, len(body))
+	}
+	if rw.size != len(body) {
+		t.Errorf("responseWriter.size = %d, want %d", rw.size, len(body))
+	}
+	if rec.Body.String() != "hello world" {
+		t.Errorf("underlying ResponseWriter body = %q, want %q", rec.Body.String(), "hello world")
 	}
 }
 

@@ -411,3 +411,43 @@ func TestSanitizePreviewURL(t *testing.T) {
 		})
 	}
 }
+
+// ── SetDebugLogger ──────────────────────────────────────────────────────────
+
+type testDebugLogger struct {
+	called  bool
+	message string
+}
+
+func (l *testDebugLogger) Debug(message string, fields map[string]interface{}) {
+	l.called = true
+	l.message = message
+}
+
+func TestSetDebugLogger(t *testing.T) {
+	mock := &testDebugLogger{}
+	SetDebugLogger(mock)
+	defer SetDebugLogger(nil)
+
+	logDebug("test message", nil)
+
+	if !mock.called {
+		t.Error("SetDebugLogger() did not wire the logger into logDebug")
+	}
+	if mock.message != "test message" {
+		t.Errorf("logDebug message = %q, want %q", mock.message, "test message")
+	}
+}
+
+// ── MotherlessEngine.SupportsFeature ────────────────────────────────────────
+
+func TestMotherlessEngine_SupportsFeature(t *testing.T) {
+	e := NewMotherlessEngine(config.DefaultAppConfig())
+
+	if !e.SupportsFeature(FeaturePagination) {
+		t.Error("MotherlessEngine.SupportsFeature(FeaturePagination) = false, want true")
+	}
+	if e.SupportsFeature(FeatureThumbnailPreview) {
+		t.Error("MotherlessEngine.SupportsFeature(FeatureThumbnailPreview) = true, want false")
+	}
+}

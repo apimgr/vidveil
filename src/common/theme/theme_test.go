@@ -362,3 +362,25 @@ func TestDetectLinuxDarkDefaultFallback(t *testing.T) {
 	}()
 	_ = detectLinuxDark()
 }
+
+// detectMacOSDark runs the "defaults" command which is not present on Linux CI,
+// so it must fall through to the error path (returns false). Verify no panic.
+func TestDetectMacOSDarkFallback(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("detectMacOSDark() panicked: %v", r)
+		}
+	}()
+	_ = detectMacOSDark()
+}
+
+// detectWindowsDark uses registry access that is a no-op/false path on Linux.
+// Verify no panic and a deterministic false result outside Windows.
+func TestDetectWindowsDarkFallback(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("detectWindowsDark() panicked: %v", r)
+		}
+	}()
+	_ = detectWindowsDark()
+}

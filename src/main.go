@@ -6,11 +6,14 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -616,13 +619,17 @@ func main() {
 			// Threads server.backup.retention into the full+daily-incremental backup pair.
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
 			retention := appConfig.Server.Backup.Retention
+			// ComplianceMode with no stored password (per PART 21, passwords are
+			// never stored) causes BackupWithOptions to reject unattended runs -
+			// this is the spec's "Scheduled backups skip with audit log warning".
 			return maint.BackupDailyFull(maintenance.BackupOptions{
-				IncludeData:  true,
-				MaxBackups:   retention.MaxBackups,
-				KeepWeekly:   retention.KeepWeekly,
-				KeepMonthly:  retention.KeepMonthly,
-				KeepYearly:   retention.KeepYearly,
-				MaxTotalSize: retention.MaxTotalSize,
+				IncludeData:    true,
+				MaxBackups:     retention.MaxBackups,
+				KeepWeekly:     retention.KeepWeekly,
+				KeepMonthly:    retention.KeepMonthly,
+				KeepYearly:     retention.KeepYearly,
+				MaxTotalSize:   retention.MaxTotalSize,
+				ComplianceMode: appConfig.Server.Compliance.IsEnabled(),
 			})
 		},
 		BackupHourly: func(ctx context.Context) error {
@@ -1480,18 +1487,34 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 	switch cmd {
 	case "backup":
 		// Per AI.md PART 21: no --password flag - password is always prompted for
-		// interactively (shell history/process list leakage). Encryption is opt-in.
+		// interactively (shell history/process list leakage). Encryption is opt-in
+		// unless compliance mode is enabled, in which case it is mandatory.
+		appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
+			os.Exit(1)
+		}
+		complianceMode := appConfig.Server.Compliance.IsEnabled()
+
 		password := ""
-		if promptYesNo("Encrypt backup with password? [y/N]: ") {
+		if complianceMode {
+			fmt.Println(terminal.WarningIcon() + " Compliance mode requires encrypted backups.")
+			password = promptPasswordConfirmed()
+			if password == "" {
+				fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Compliance mode requires backup encryption: set a backup password.")
+				os.Exit(1)
+			}
+		} else if promptYesNo("Encrypt backup with password? [y/N]: ") {
 			password = promptPasswordConfirmed()
 		}
 		if password != "" {
 			fmt.Println("Creating encrypted backup...")
 			if err := maint.BackupWithOptions(maintenance.BackupOptions{
-				Filename:    arg,
-				Password:    password,
-				IncludeData: true,
-				MaxBackups:  1,
+				Filename:       arg,
+				Password:       password,
+				IncludeData:    true,
+				MaxBackups:     1,
+				ComplianceMode: complianceMode,
 			}); err != nil {
 				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Backup failed: %v\n", err)
 				os.Exit(1)
@@ -1505,6 +1528,13 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 		}
 
 	case "restore":
+		// Per AI.md PART 5 "Sensitive Operations": restore requires server.token OR
+		// root OR an empty database (nothing to protect yet).
+		if err := authorizeRestore(configDir, dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+			os.Exit(1)
+		}
+
 		if arg == "" {
 			fmt.Println("Restoring from most recent backup...")
 		} else {
@@ -1523,6 +1553,14 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 		}
 
 	case "mode":
+		// Per AI.md PART 5 "Sensitive Operations": --maintenance mode requires
+		// server.token OR root (no empty-database exception - it changes live
+		// server behavior, not data).
+		if err := authorizeSensitiveOperation(configDir, dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+			os.Exit(1)
+		}
+
 		if arg == "" {
 			fmt.Println(terminal.StatusIcon(false)+" Missing mode argument")
 			fmt.Println("   Usage: vidveil --maintenance mode <on|off>")
@@ -1592,6 +1630,78 @@ func isDBFirstRun(db *sql.DB) bool {
 		return true
 	}
 	return count == 0
+}
+
+// authorizeRestore enforces AI.md PART 5 "Sensitive Operations" restore
+// authorization flow:
+//   - Empty database (first run) -> allowed, nothing to protect
+//   - Root -> allowed (with a warning; caller proceeds)
+//   - Service user ({project_name}) -> requires the operator token (server.token)
+//   - Any other user -> rejected
+func authorizeRestore(configDir, dataDir string) error {
+	if isDatabaseEmpty(configDir, dataDir) {
+		return nil
+	}
+	if system.IsRunningAsRoot() {
+		fmt.Println(terminal.WarningIcon() + " Running as root: this will OVERWRITE all data.")
+		return nil
+	}
+	return authorizeViaOperatorToken(configDir, dataDir,
+		"This will OVERWRITE all data. Enter operator token to confirm: ")
+}
+
+// authorizeSensitiveOperation enforces AI.md PART 5 "Sensitive Operations" for
+// operations with no empty-database exception (e.g. --maintenance mode):
+//   - Root -> allowed (with a warning; caller proceeds)
+//   - Service user ({project_name}) -> requires the operator token (server.token)
+//   - Any other user -> rejected
+func authorizeSensitiveOperation(configDir, dataDir string) error {
+	if system.IsRunningAsRoot() {
+		fmt.Println(terminal.WarningIcon() + " Running as root: this will change server behavior.")
+		return nil
+	}
+	return authorizeViaOperatorToken(configDir, dataDir,
+		"This will change server behavior. Enter operator token to confirm: ")
+}
+
+// authorizeViaOperatorToken is the shared service-user/operator-token tail of the
+// PART 5 authorization flows: only the service user may be prompted for the
+// operator token; any other non-root user is rejected outright.
+func authorizeViaOperatorToken(configDir, dataDir, prompt string) error {
+	currentUser, err := user.Current()
+	if err != nil || currentUser.Username != "vidveil" {
+		return fmt.Errorf("requires administrator authorization\n   Run as root or provide the operator token")
+	}
+
+	appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+	if appConfig.Server.Token == "" {
+		return fmt.Errorf("requires administrator authorization: no operator token configured")
+	}
+
+	token := promptPassword(prompt)
+	sum := sha256.Sum256([]byte(token))
+	expected := sha256.Sum256([]byte(appConfig.Server.Token))
+	if subtle.ConstantTimeCompare(sum[:], expected[:]) != 1 {
+		return fmt.Errorf("invalid operator token")
+	}
+	return nil
+}
+
+// isDatabaseEmpty reports whether the server database has no settings rows yet
+// (fresh install / first run per AI.md PART 5). Any error opening the database
+// is treated as empty (nothing to protect).
+func isDatabaseEmpty(configDir, dataDir string) bool {
+	paths := config.GetAppPaths(configDir, dataDir)
+	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
+	migrationMgr, err := database.NewMigrationManager(serverDBPath)
+	if err != nil {
+		return true
+	}
+	defer migrationMgr.Close()
+	return isDBFirstRun(migrationMgr.GetDB())
 }
 
 func getDisplayAddress(serverConfig *config.AppConfig) string {

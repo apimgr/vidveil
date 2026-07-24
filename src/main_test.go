@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/system"
 	_ "modernc.org/sqlite"
 )
 
@@ -630,4 +631,106 @@ func TestPrintHelp_ContainsDaemonFlag(t *testing.T) {
 	if !strings.Contains(out, "--daemon") {
 		t.Error("printHelp: output should contain '--daemon' flag")
 	}
+}
+
+// ── authorizeRestore / authorizeSensitiveOperation / isDatabaseEmpty ──────────
+// Per AI.md PART 5 "Sensitive Operations". These tests run as root inside the
+// Docker build container, so only the empty-database and root-allowed paths
+// are exercised; the operator-token and non-root-rejected paths require a
+// non-root/service-user process and are covered by manual/integration testing.
+
+func TestIsDatabaseEmpty_NoDBFile_ReturnsTrue(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	if !isDatabaseEmpty(cfgDir, dataDir) {
+		t.Error("isDatabaseEmpty with no db file: expected true")
+	}
+}
+
+func TestIsDatabaseEmpty_WithSettingsRow_ReturnsFalse(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	dbDir := dataDir + "/db"
+	os.MkdirAll(dbDir, 0755)
+
+	db, err := sql.Open("sqlite", dbDir+"/server.db")
+	if err != nil {
+		t.Fatal("sql.Open:", err)
+	}
+	if _, err := db.Exec("CREATE TABLE settings (key TEXT, value TEXT)"); err != nil {
+		t.Fatal("CREATE TABLE:", err)
+	}
+	if _, err := db.Exec("INSERT INTO settings VALUES ('key', 'val')"); err != nil {
+		t.Fatal("INSERT:", err)
+	}
+	db.Close()
+
+	if isDatabaseEmpty(cfgDir, dataDir) {
+		t.Error("isDatabaseEmpty with settings rows: expected false")
+	}
+}
+
+func TestAuthorizeRestore_EmptyDatabase_Allowed(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	if err := authorizeRestore(cfgDir, dataDir); err != nil {
+		t.Errorf("authorizeRestore on empty database: expected nil, got %v", err)
+	}
+}
+
+func TestAuthorizeRestore_NonEmptyDatabase_AsRoot_Allowed(t *testing.T) {
+	if !system.IsRunningAsRoot() {
+		t.Skip("requires root (test container runs as root)")
+	}
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	dbDir := dataDir + "/db"
+	os.MkdirAll(dbDir, 0755)
+
+	db, err := sql.Open("sqlite", dbDir+"/server.db")
+	if err != nil {
+		t.Fatal("sql.Open:", err)
+	}
+	if _, err := db.Exec("CREATE TABLE settings (key TEXT, value TEXT)"); err != nil {
+		t.Fatal("CREATE TABLE:", err)
+	}
+	if _, err := db.Exec("INSERT INTO settings VALUES ('key', 'val')"); err != nil {
+		t.Fatal("INSERT:", err)
+	}
+	db.Close()
+
+	captureStdout(func() {
+		if err := authorizeRestore(cfgDir, dataDir); err != nil {
+			t.Errorf("authorizeRestore as root on non-empty database: expected nil, got %v", err)
+		}
+	})
+}
+
+func TestAuthorizeSensitiveOperation_AsRoot_Allowed(t *testing.T) {
+	if !system.IsRunningAsRoot() {
+		t.Skip("requires root (test container runs as root)")
+	}
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	captureStdout(func() {
+		if err := authorizeSensitiveOperation(cfgDir, dataDir); err != nil {
+			t.Errorf("authorizeSensitiveOperation as root: expected nil, got %v", err)
+		}
+	})
 }

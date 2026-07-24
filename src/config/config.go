@@ -62,6 +62,14 @@ type ServerConfig struct {
 	// Can be overridden by MODE env var or --mode CLI flag
 	Mode string `yaml:"mode"`
 
+	// Token is the global operator token per AI.md PART 11 ("server.token").
+	// Auto-generated and written to server.yml on first run if absent or empty.
+	// Grants full access to every resource and every sensitive server management
+	// operation (PART 5 "Sensitive Operations": restore, mode change, PGP key ops).
+	// Validated by SHA-256-hashing the inbound value and comparing against
+	// SHA-256(server.token) with crypto/subtle.ConstantTimeCompare - never with ==.
+	Token string `yaml:"token"`
+
 	// Application branding per AI.md PART 16
 	Branding ServerBrandingConfig `yaml:"branding"`
 
@@ -125,6 +133,10 @@ type ServerConfig struct {
 
 	// Backup (PART 21) - Backup & Restore settings
 	Backup BackupConfig `yaml:"backup"`
+
+	// Compliance holds regulatory-standard toggles per AI.md "Compliance Standards".
+	// All disabled by default; enable individually as needed.
+	Compliance ComplianceConfig `yaml:"compliance"`
 
 	// Tor (PART 31) - Hidden service and outbound network settings
 	Tor TorConfig `yaml:"tor"`
@@ -637,6 +649,33 @@ type BackupEncryptionConfig struct {
 	PasswordHint string `yaml:"password_hint,omitempty"`
 }
 
+// ComplianceConfig holds regulatory-standard toggles per AI.md "Compliance Standards".
+// All standards are disabled by default; enable individually as needed. When any
+// standard is enabled, PART 21's "server.compliance.enabled" backup-encryption
+// enforcement (Backup Encryption / Compliance Mode Enforcement) is active - see
+// IsEnabled().
+type ComplianceConfig struct {
+	GDPR     bool `yaml:"gdpr"`
+	CCPA     bool `yaml:"ccpa"`
+	HIPAA    bool `yaml:"hipaa"`
+	SOC2     bool `yaml:"soc2"`
+	PCIDSS   bool `yaml:"pci_dss"`
+	ISO27001 bool `yaml:"iso27001"`
+	FedRAMP  bool `yaml:"fedramp"`
+	LGPD     bool `yaml:"lgpd"`
+	PIPEDA   bool `yaml:"pipeda"`
+	APPI     bool `yaml:"appi"`
+	PDPA     bool `yaml:"pdpa"`
+}
+
+// IsEnabled reports whether "compliance mode" is active - true when any single
+// regulatory standard is enabled. Per AI.md PART 21, this is what gates backup
+// encryption being mandatory ("server.compliance.enabled: true").
+func (c ComplianceConfig) IsEnabled() bool {
+	return c.GDPR || c.CCPA || c.HIPAA || c.SOC2 || c.PCIDSS || c.ISO27001 ||
+		c.FedRAMP || c.LGPD || c.PIPEDA || c.APPI || c.PDPA
+}
+
 // UpdateConfig holds update settings per AI.md PART 22
 type UpdateConfig struct {
 	// Branch: release channel — stable | beta | daily (default: stable)
@@ -970,6 +1009,7 @@ func DefaultAppConfig() *AppConfig {
 			Address: "[::]",
 			BaseURL: "/",
 			Mode:    "production",
+			Token:   generateToken(32),
 			Branding: ServerBrandingConfig{
 				// Per AI.md PART 5 Init-Only Variables: APPLICATION_NAME /
 				// APPLICATION_TAGLINE seed branding on first run; the written

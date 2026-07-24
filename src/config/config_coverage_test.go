@@ -367,3 +367,33 @@ func TestSaveAppConfig_TempFile_NoPanic(t *testing.T) {
 		t.Errorf("SaveAppConfig: %v", err)
 	}
 }
+
+// ── ComplianceConfig.IsEnabled ────────────────────────────────────────────────
+
+func TestComplianceConfig_IsEnabled_AllFalse_ReturnsFalse(t *testing.T) {
+	c := ComplianceConfig{}
+	if c.IsEnabled() {
+		t.Error("IsEnabled with all standards false: expected false")
+	}
+}
+
+func TestComplianceConfig_IsEnabled_OneTrue_ReturnsTrue(t *testing.T) {
+	cases := []ComplianceConfig{
+		{GDPR: true},
+		{CCPA: true},
+		{HIPAA: true},
+		{SOC2: true},
+		{PCIDSS: true},
+		{ISO27001: true},
+		{FedRAMP: true},
+		{LGPD: true},
+		{PIPEDA: true},
+		{APPI: true},
+		{PDPA: true},
+	}
+	for i, c := range cases {
+		if !c.IsEnabled() {
+			t.Errorf("case %d: IsEnabled with one standard true: expected true", i)
+		}
+	}
+}

@@ -755,3 +755,47 @@ func TestLoadRestoreArchive_MalformedManifestJSON(t *testing.T) {
 		t.Errorf("expected manifest parse error, got: %v", err)
 	}
 }
+
+// ── BackupWithOptions — compliance mode enforcement (AI.md PART 21) ─────────
+
+// TestBackupWithOptions_ComplianceModeNoPassword_Rejected verifies that when
+// ComplianceMode is set and no password is supplied, the backup is rejected
+// before touching disk (spec: "Backups will NOT run unless encryption
+// password is set").
+func TestBackupWithOptions_ComplianceModeNoPassword_Rejected(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+	outFile := filepath.Join(tmp, "compliance_backup.tar.gz")
+
+	err := m.BackupWithOptions(BackupOptions{
+		Filename:       outFile,
+		ComplianceMode: true,
+	})
+	if err == nil {
+		t.Fatal("expected error when ComplianceMode is set with no password, got nil")
+	}
+	if !strings.Contains(err.Error(), "compliance mode requires backup encryption") {
+		t.Errorf("expected compliance-mode error message, got: %v", err)
+	}
+	if _, statErr := os.Stat(outFile); !os.IsNotExist(statErr) {
+		t.Error("BackupWithOptions ComplianceMode rejection: output file should not exist")
+	}
+}
+
+// TestBackupWithOptions_ComplianceModeWithPassword_Allowed verifies that
+// ComplianceMode with a password set proceeds to create an encrypted backup.
+func TestBackupWithOptions_ComplianceModeWithPassword_Allowed(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+	outFile := filepath.Join(tmp, "compliance_backup.tar.gz.enc")
+
+	err := m.BackupWithOptions(BackupOptions{
+		Filename:       outFile,
+		Password:       "testpassword123",
+		ComplianceMode: true,
+	})
+	if err != nil {
+		t.Fatalf("BackupWithOptions ComplianceMode with password: %v", err)
+	}
+	if _, statErr := os.Stat(outFile); os.IsNotExist(statErr) {
+		t.Error("BackupWithOptions ComplianceMode with password: output file missing")
+	}
+}

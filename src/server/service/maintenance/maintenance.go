@@ -56,6 +56,10 @@ type BackupOptions struct {
 	// MaxTotalSize is a hard cap on total backup directory size per AI.md PART 21.
 	// Accepts a percentage ("10%") or absolute size ("50G", "50GB"); "" or "0" disables the cap.
 	MaxTotalSize string
+	// ComplianceMode mirrors server.compliance.IsEnabled() per AI.md PART 21
+	// "Compliance Mode Enforcement": when true, Password MUST be set - the backup
+	// is rejected before any file is written.
+	ComplianceMode bool
 }
 
 // BackupManifest contains backup metadata per AI.md PART 21
@@ -142,6 +146,13 @@ func (m *MaintenanceManager) BackupDailyFull(opts BackupOptions) error {
 
 // BackupWithOptions creates a backup with full options per AI.md PART 21
 func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
+	// Per AI.md PART 21 "Compliance Mode Enforcement": when compliance mode is
+	// active (server.compliance.enabled), backup.encryption.enabled MUST be true -
+	// reject unencrypted backups before touching disk.
+	if opts.ComplianceMode && opts.Password == "" {
+		return fmt.Errorf("compliance mode requires backup encryption: set a backup password")
+	}
+
 	// Generate filename per PART 21: vidveil_backup_YYYY-MM-DD_HHMMSS.tar.gz
 	backupFile := opts.Filename
 	if backupFile == "" {

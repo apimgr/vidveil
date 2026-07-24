@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"io"
 	"os"
+	"os/user"
 	"strings"
 	"testing"
 
@@ -733,4 +734,32 @@ func TestAuthorizeSensitiveOperation_AsRoot_Allowed(t *testing.T) {
 			t.Errorf("authorizeSensitiveOperation as root: expected nil, got %v", err)
 		}
 	})
+}
+
+func TestAuthorizeViaOperatorToken_NonServiceUser_Rejected(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	// The test process never runs as the "vidveil" service user (it runs as
+	// whatever CI/dev account invoked `go test`, typically root), so this
+	// exercises the "any other user -> rejected" branch of AI.md PART 5
+	// "Sensitive Operations" -> Restore/Mode-change authorization flow.
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Skip("user.Current unavailable in this environment")
+	}
+	if currentUser.Username == "vidveil" {
+		t.Skip("test process is running as the vidveil service user")
+	}
+
+	err = authorizeViaOperatorToken(cfgDir, dataDir, "Enter operator token to confirm: ")
+	if err == nil {
+		t.Fatal("authorizeViaOperatorToken as non-service-user: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "requires administrator authorization") {
+		t.Errorf("authorizeViaOperatorToken as non-service-user: unexpected error message: %v", err)
+	}
 }

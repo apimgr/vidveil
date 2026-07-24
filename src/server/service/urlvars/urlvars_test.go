@@ -1093,3 +1093,42 @@ func TestIsTrustedProxy_InvalidAddr(t *testing.T) {
 		t.Error("isTrustedProxy: invalid address should return false")
 	}
 }
+
+func TestNormalizePathPrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty stays root", "", "/"},
+		{"trailing slash trimmed", "/foo/", "/foo"},
+		{"root stays root", "/", "/"},
+		{"missing leading slash added", "foo/bar", "/foo/bar"},
+		{"already normalized", "/foo/bar", "/foo/bar"},
+		{"multiple trailing slashes trimmed", "/foo//", "/foo"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizePathPrefix(tt.in); got != tt.want {
+				t.Errorf("normalizePathPrefix(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestURLResolver_GetPathPrefix(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	req.RemoteAddr = "203.0.113.5:1234"
+	if got := r.GetPathPrefix(req); got != "/" {
+		t.Errorf("GetPathPrefix: with no baseurl configured = %q, want /", got)
+	}
+}
+
+func TestGetPathPrefix_PackageLevel(t *testing.T) {
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	req.RemoteAddr = "203.0.113.5:1234"
+	if got := GetPathPrefix(req); got == "" {
+		t.Error("GetPathPrefix (package-level): expected non-empty prefix")
+	}
+}

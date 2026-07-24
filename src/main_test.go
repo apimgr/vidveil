@@ -364,7 +364,7 @@ func TestHandleShellCommand_Completions_AutoDetect(t *testing.T) {
 
 func TestHandleMaintenanceCommand_Setup_NoPanic(t *testing.T) {
 	out := captureStdout(func() {
-		handleMaintenanceCommand("setup", "", "", "", "")
+		handleMaintenanceCommand("setup", "", "", "")
 	})
 	if out == "" {
 		t.Error("handleMaintenanceCommand setup: empty output")
@@ -373,7 +373,7 @@ func TestHandleMaintenanceCommand_Setup_NoPanic(t *testing.T) {
 
 func TestHandleMaintenanceCommand_Setup_ContainsServerYML(t *testing.T) {
 	out := captureStdout(func() {
-		handleMaintenanceCommand("setup", "", "", "", "")
+		handleMaintenanceCommand("setup", "", "", "")
 	})
 	if !strings.Contains(out, "server.yml") {
 		t.Error("handleMaintenanceCommand setup: output does not mention server.yml")
@@ -394,11 +394,13 @@ func TestHandleMaintenanceCommand_Backup_NoPanic(t *testing.T) {
 	os.MkdirAll(base+"/backup", 0755)
 
 	captureStdout(func() {
-		handleMaintenanceCommand("backup", "", "", cfgDir, dataDir)
+		handleMaintenanceCommand("backup", "", cfgDir, dataDir)
 	})
 }
 
-// TestHandleMaintenanceCommand_BackupWithPassword tests the encrypted backup path.
+// TestHandleMaintenanceCommand_BackupWithPassword covers the backup path when
+// stdin has no data (EOF): the interactive encryption prompt reads as "no" per
+// AI.md PART 21 (no --password flag), so this exercises the plain-backup branch.
 func TestHandleMaintenanceCommand_Backup_WithPassword_NoPanic(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
@@ -409,7 +411,7 @@ func TestHandleMaintenanceCommand_Backup_WithPassword_NoPanic(t *testing.T) {
 	os.MkdirAll(base+"/backup", 0755)
 
 	captureStdout(func() {
-		handleMaintenanceCommand("backup", "", "testpassword", cfgDir, dataDir)
+		handleMaintenanceCommand("backup", "", cfgDir, dataDir)
 	})
 }
 
@@ -422,7 +424,7 @@ func TestHandleMaintenanceCommand_ModeOn_NoPanic(t *testing.T) {
 	os.MkdirAll(dataDir, 0755)
 
 	captureStdout(func() {
-		handleMaintenanceCommand("mode", "on", "", cfgDir, dataDir)
+		handleMaintenanceCommand("mode", "on", cfgDir, dataDir)
 	})
 }
 
@@ -435,7 +437,7 @@ func TestHandleMaintenanceCommand_ModeOff_NoPanic(t *testing.T) {
 	os.MkdirAll(dataDir, 0755)
 
 	captureStdout(func() {
-		handleMaintenanceCommand("mode", "off", "", cfgDir, dataDir)
+		handleMaintenanceCommand("mode", "off", cfgDir, dataDir)
 	})
 }
 
@@ -448,7 +450,7 @@ func TestHandleMaintenanceCommand_ModeTrue_NoPanic(t *testing.T) {
 	os.MkdirAll(dataDir, 0755)
 
 	captureStdout(func() {
-		handleMaintenanceCommand("mode", "true", "", cfgDir, dataDir)
+		handleMaintenanceCommand("mode", "true", cfgDir, dataDir)
 	})
 }
 
@@ -461,7 +463,7 @@ func TestHandleMaintenanceCommand_ModeFalse_NoPanic(t *testing.T) {
 	os.MkdirAll(dataDir, 0755)
 
 	captureStdout(func() {
-		handleMaintenanceCommand("mode", "false", "", cfgDir, dataDir)
+		handleMaintenanceCommand("mode", "false", cfgDir, dataDir)
 	})
 }
 
@@ -478,11 +480,11 @@ func TestHandleMaintenanceCommand_Restore_NoPanic(t *testing.T) {
 
 	// Create a backup first, then restore it
 	captureStdout(func() {
-		handleMaintenanceCommand("backup", "", "", cfgDir, dataDir)
+		handleMaintenanceCommand("backup", "", cfgDir, dataDir)
 	})
 
 	captureStdout(func() {
-		handleMaintenanceCommand("restore", "", "", cfgDir, dataDir)
+		handleMaintenanceCommand("restore", "", cfgDir, dataDir)
 	})
 }
 

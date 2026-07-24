@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 
 	"github.com/apimgr/vidveil/src/common/banner"
 	"github.com/apimgr/vidveil/src/common/terminal"
@@ -85,10 +88,8 @@ func main() {
 		serviceCmd string
 		maintCmd   string
 		maintArg   string
-		// Per AI.md PART 21: encryption password for backup/restore
-		maintPassword string
-		updateCmd     string
-		updateArg     string
+		updateCmd  string
+		updateArg  string
 		// Per AI.md PART 31: tor subcommand args (status, validate, restart, ...)
 		torArgs []string
 		torCmd  bool
@@ -240,13 +241,11 @@ func main() {
 				i++
 				maintCmd = args[i]
 				// Parse remaining args for maintenance command
+				// Per AI.md PART 21: no --password flag - password is always
+				// prompted for interactively (shell history/process list leakage)
 				for i+1 < len(args) {
 					nextArg := args[i+1]
-					if nextArg == "--password" && i+2 < len(args) {
-						// Per AI.md PART 21: --password for backup/restore encryption
-						i += 2
-						maintPassword = args[i]
-					} else if !strings.HasPrefix(nextArg, "--") && maintArg == "" {
+					if !strings.HasPrefix(nextArg, "--") && maintArg == "" {
 						i++
 						maintArg = args[i]
 					} else {
@@ -388,7 +387,7 @@ func main() {
 			handleUpdateCommand("yes", "")
 			return
 		}
-		handleMaintenanceCommand(maintCmd, maintArg, maintPassword, configDir, dataDir)
+		handleMaintenanceCommand(maintCmd, maintArg, configDir, dataDir)
 		return
 	}
 
@@ -1437,13 +1436,55 @@ Update Branches:
 	}
 }
 
-func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
+// promptYesNo reads a y/N answer from stdin. Any answer starting with "y" or
+// "Y" is treated as yes; everything else (including empty input) is no.
+func promptYesNo(prompt string) bool {
+	fmt.Print(prompt)
+	reader := bufio.NewReader(os.Stdin)
+	line, _ := reader.ReadString('\n')
+	line = strings.TrimSpace(line)
+	return strings.HasPrefix(strings.ToLower(line), "y")
+}
+
+// promptPassword reads a password from the terminal with input hidden, per
+// AI.md PART 21 ("passwords on the command line leak via shell history and
+// process lists" - so no --password flag, always an interactive prompt).
+func promptPassword(prompt string) string {
+	fmt.Print(prompt)
+	bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to read password: %v\n", err)
+		os.Exit(1)
+	}
+	return string(bytePassword)
+}
+
+// promptPasswordConfirmed prompts for a new password twice and requires both
+// entries to match before returning it, per AI.md PART 21 encryption setup.
+func promptPasswordConfirmed() string {
+	for {
+		p1 := promptPassword("Password: ")
+		p2 := promptPassword("Confirm password: ")
+		if p1 == p2 {
+			return p1
+		}
+		fmt.Println(terminal.StatusIcon(false) + " Passwords do not match, try again.")
+	}
+}
+
+func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 	binaryName := filepath.Base(os.Args[0])
 	maint := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
 
 	switch cmd {
 	case "backup":
-		// Per AI.md PART 21: Support --password for encrypted backups
+		// Per AI.md PART 21: no --password flag - password is always prompted for
+		// interactively (shell history/process list leakage). Encryption is opt-in.
+		password := ""
+		if promptYesNo("Encrypt backup with password? [y/N]: ") {
+			password = promptPasswordConfirmed()
+		}
 		if password != "" {
 			fmt.Println("Creating encrypted backup...")
 			if err := maint.BackupWithOptions(maintenance.BackupOptions{
@@ -1469,8 +1510,14 @@ func handleMaintenanceCommand(cmd, arg, password, configDir, dataDir string) {
 		} else {
 			fmt.Printf("Restoring from %s...\n", arg)
 		}
-		// Per AI.md PART 21: Support --password for encrypted backups
-		if err := maint.RestoreWithPassword(arg, password); err != nil {
+		// Per AI.md PART 21: no --password flag - only prompt interactively if the
+		// backup turns out to be encrypted (avoids prompting for plaintext backups).
+		err := maint.RestoreWithPassword(arg, "")
+		if err != nil && strings.Contains(err.Error(), "password required") {
+			password := promptPassword("Backup password: ")
+			err = maint.RestoreWithPassword(arg, password)
+		}
+		if err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Restore failed: %v\n", err)
 			os.Exit(1)
 		}

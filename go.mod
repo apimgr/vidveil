@@ -9,7 +9,7 @@ require (
 	github.com/charmbracelet/x/term v0.2.1
 	github.com/cretz/bine v0.2.0
 	github.com/go-acme/lego/v4 v4.35.2
-	github.com/go-chi/chi/v5 v5.1.0
+	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/prometheus/client_golang v1.20.5

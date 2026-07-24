@@ -614,8 +614,17 @@ func main() {
 		},
 		BackupDaily: func(ctx context.Context) error {
 			// Daily backup per AI.md PART 18/21 (enabled by default, daily at 02:00)
+			// Threads server.backup.retention into the full+daily-incremental backup pair.
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
-			return maint.Backup("")
+			retention := appConfig.Server.Backup.Retention
+			return maint.BackupDailyFull(maintenance.BackupOptions{
+				IncludeData:  true,
+				MaxBackups:   retention.MaxBackups,
+				KeepWeekly:   retention.KeepWeekly,
+				KeepMonthly:  retention.KeepMonthly,
+				KeepYearly:   retention.KeepYearly,
+				MaxTotalSize: retention.MaxTotalSize,
+			})
 		},
 		BackupHourly: func(ctx context.Context) error {
 			// Hourly incremental backup per AI.md PART 18/21 (disabled by default)

@@ -1490,6 +1490,47 @@ func validateConfig(cfg *AppConfig) {
 		fmt.Fprintf(os.Stderr, "Warning: audit log format must be 'json', ignoring %q\n", cfg.Server.Logs.Audit.Format)
 		cfg.Server.Logs.Audit.Format = "json"
 	}
+
+	// Validate backup retention settings (warn, don't error - server must start) per AI.md PART 21
+	validateBackupRetention(cfg)
+}
+
+// validateBackupRetention validates cfg.Server.Backup.Retention per AI.md PART 21.
+// Invalid values (negative, or max_backups == 0) are reset to their defaults with a WARN.
+// Values above the recommended threshold are accepted but still generate a WARN.
+func validateBackupRetention(cfg *AppConfig) {
+	r := &cfg.Server.Backup.Retention
+
+	if r.MaxBackups < 0 {
+		fmt.Fprintf(os.Stderr, "WARN: max_backups: %d invalid, using default 1\n", r.MaxBackups)
+		r.MaxBackups = 1
+	} else if r.MaxBackups == 0 {
+		fmt.Fprintf(os.Stderr, "WARN: max_backups: 0 invalid, using default 1\n")
+		r.MaxBackups = 1
+	} else if r.MaxBackups > 7 {
+		fmt.Fprintf(os.Stderr, "WARN: max_backups: %d exceeds recommended 7 (30 days of daily backups)\n", r.MaxBackups)
+	}
+
+	if r.KeepWeekly < 0 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_weekly: %d invalid, using default 0\n", r.KeepWeekly)
+		r.KeepWeekly = 0
+	} else if r.KeepWeekly > 8 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_weekly: %d exceeds recommended 8 (2 months of weekly backups)\n", r.KeepWeekly)
+	}
+
+	if r.KeepMonthly < 0 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_monthly: %d invalid, using default 0\n", r.KeepMonthly)
+		r.KeepMonthly = 0
+	} else if r.KeepMonthly > 12 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_monthly: %d exceeds recommended 12 (2 years of monthly backups)\n", r.KeepMonthly)
+	}
+
+	if r.KeepYearly < 0 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_yearly: %d invalid, using default 0\n", r.KeepYearly)
+		r.KeepYearly = 0
+	} else if r.KeepYearly > 2 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_yearly: %d exceeds recommended 2 (2 years of yearly backups)\n", r.KeepYearly)
+	}
 }
 
 // SaveAppConfig saves configuration to file

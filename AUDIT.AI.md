@@ -11,8 +11,13 @@ Priority key: HIGH = broken/missing core behavior · MED = non-conforming ·
 LOW = minor/cleanup.
 
 ## Pass: Config & Structure (PART 2-6)
-- [ ] MED path/paths.go: GetDefaultBackupDir wrong macOS/Windows backup paths
-- [ ] LOW path/paths.go: GetDatabaseDir nests db under data/ on privileged macOS/Windows
+- [x] MED path/paths.go: GetDefaultBackupDir wrong macOS/Windows backup paths — FIXED
+  (darwin sys=/Library/Backups/{org}/{name}, user=~/Library/Backups/...; windows
+  sys=%ProgramData%\Backups\..., user=%LocalAppData%\Backups\... per PART 8 systemBackupDir/userBackupDir)
+- [~] LOW path/paths.go: GetDatabaseDir nests db under data/ on privileged macOS/Windows —
+  WONTFIX: current `filepath.Join(dataDir,"db")` matches AI.md 12133-12142 reference
+  implementation exactly. Spec path table (6700) shows db as data sibling but the
+  authoritative reference impl nests it; code follows the reference impl. Not a bug.
 - [ ] LOW main.go:321-325,465-469: PORT/LISTEN env honored every run; spec (AI.md
   7705-7712) = first-run-only seeding
 

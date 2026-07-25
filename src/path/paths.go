@@ -275,7 +275,8 @@ func GetDefaultSecurityDir(isRoot bool) string {
 	}
 }
 
-// GetDefaultBackupDir returns OS-appropriate backup directory per AI.md PART 4
+// GetDefaultBackupDir returns OS-appropriate backup directory per AI.md PART 8
+// systemBackupDir (root) / userBackupDir (non-root).
 func GetDefaultBackupDir(isRoot bool) string {
 	switch runtime.GOOS {
 	case "linux":
@@ -286,17 +287,19 @@ func GetDefaultBackupDir(isRoot bool) string {
 		return filepath.Join(home, ".local", "share", "Backups", ProjectOrg, ProjectName)
 	case "darwin":
 		if isRoot {
-			// macOS backup: /Library/Application Support/{org}/{name}/backups per AI.md PART 4
-			return fmt.Sprintf("/Library/Application Support/%s/%s/backups", ProjectOrg, ProjectName)
+			// macOS system backup: /Library/Backups/{org}/{name} per AI.md PART 8 systemBackupDir
+			return filepath.Join("/Library/Backups", ProjectOrg, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", ProjectOrg, ProjectName, "backups")
+		// macOS user backup: ~/Library/Backups/{org}/{name} per AI.md PART 8 userBackupDir
+		return filepath.Join(home, "Library", "Backups", ProjectOrg, ProjectName)
 	case "windows":
 		if isRoot {
-			// Windows backup: %PROGRAMDATA%\{org}\{name}\backups per AI.md PART 4
-			return filepath.Join(os.Getenv("ProgramData"), ProjectOrg, ProjectName, "backups")
+			// Windows system backup: %ProgramData%\Backups\{org}\{name} per AI.md PART 8 systemBackupDir
+			return filepath.Join(os.Getenv("ProgramData"), "Backups", ProjectOrg, ProjectName)
 		}
-		return filepath.Join(os.Getenv("LocalAppData"), ProjectOrg, ProjectName, "backups")
+		// Windows user backup: %LocalAppData%\Backups\{org}\{name} per AI.md PART 8 userBackupDir
+		return filepath.Join(os.Getenv("LocalAppData"), "Backups", ProjectOrg, ProjectName)
 	// BSD and other Unix-like systems
 	default:
 		if isRoot {

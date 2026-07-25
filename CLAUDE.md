@@ -87,8 +87,23 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-07-19 (full compliance audit PART 0–33 complete via `audit` agent)
-- Current task: PART 21 (BACKUP & RESTORE) full-implementation verification complete — 9 fixes
+- Last read AI.md: 2026-07-24 (PART 21 Audit Events table, lines 29154-29162, re-verified for audit-logging wiring)
+- Current task: PART 21 audit-logging gap fixed — MaintenanceManager now emits all 5
+  required "Audit Events" (backup.created, backup.retention_cleanup,
+  backup.verification_failed, backup.daily_updated, backup.skipped_disk_full) via a new
+  nil-safe SetLogger/audit() pair in maintenance.go, wired from main.go's BackupDaily and
+  BackupHourly scheduler closures and from handleMaintenanceCommand's CLI "backup" case
+  (logging.NewAppLogger(appConfig)-backed). New test file maintenance_audit_test.go covers
+  SetLogger nil-safety/attachment and real emission of 4 of the 5 events via a temp-dir
+  audit-log-backed AppLogger; maintenance package coverage 80.6%, project-wide `go test
+  ./src/... -cover` all packages ok, zero FAIL. go-lint agent found zero violations across
+  main.go/maintenance.go/maintenance_audit_test.go. Committed+pushed as d5498baa4c20; CI
+  verified green via `gh run list --branch main --json databaseId,status,conclusion,
+  workflowName,headSha` (CI, Daily Build, Docker Build all conclusion=success for this SHA).
+  This closes the last of the four "fix" items from the disambiguated backlog (audit-logging
+  gap, MaxTotalSize admin/API coverage — already compliant, PART21↔PART5 cross-reference —
+  done in 178ba954f612, redundant git stash — dropped).
+- Prior task: PART 21 (BACKUP & RESTORE) full-implementation verification complete — 9 fixes
   (SSL path in backup+restore, manifest checksum, two-phase validate-then-extract restore,
   disk-space precheck, retention-before-backup ordering, max_total_size enforcement,
   BackupDailyFull scheduler wiring, config.go retention validation, --password flag removal

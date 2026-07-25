@@ -1602,24 +1602,24 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
 		fmt.Printf(`Maintenance Commands:
-  %s --maintenance backup [file] [--password <pwd>]   Create backup
-  %s --maintenance restore [file] [--password <pwd>]  Restore from backup
-  %s --maintenance update                              Check and apply updates
-  %s --maintenance mode <on|off>                       Enable/disable maintenance mode
-  %s --maintenance setup                               Show configuration instructions
+  %s --maintenance backup [file]      Create backup (prompts for password)
+  %s --maintenance restore [file]     Restore from backup (prompts if encrypted)
+  %s --maintenance update             Check and apply updates
+  %s --maintenance mode <on|off>      Enable/disable maintenance mode
+  %s --maintenance setup              Show configuration instructions
 
-Options:
-  --password <password>    Encryption password for backup/restore (per AI.md PART 21)
+Per AI.md PART 21 the backup password is never passed on the command
+line; backup always prompts and restore prompts only when the archive
+is encrypted.
 
 Examples:
-  %s --maintenance backup                              # Backup to default location
-  %s --maintenance backup --password "secret"          # Encrypted backup
-  %s --maintenance backup /tmp/backup.tar              # Backup to specific file
-  %s --maintenance restore                             # Restore from most recent
-  %s --maintenance restore backup.tar.gz.enc --password "secret"  # Restore encrypted
-  %s --maintenance mode on                             # Enable maintenance mode
+  %s --maintenance backup             # Backup to default location
+  %s --maintenance backup /tmp/backup.tar  # Backup to specific file
+  %s --maintenance restore            # Restore from most recent
+  %s --maintenance restore backup.tar.gz.enc  # Restore an encrypted archive
+  %s --maintenance mode on            # Enable maintenance mode
 `, binaryName, binaryName, binaryName, binaryName, binaryName,
-			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
+			binaryName, binaryName, binaryName, binaryName, binaryName)
 		os.Exit(0)
 
 	default:

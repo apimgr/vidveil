@@ -31,8 +31,10 @@ LOW = minor/cleanup.
 - [ ] HIGH main.go handleMaintenanceCommand: `token` subcommand missing (spec 11815)
 - [ ] MED main.go handleMaintenanceCommand: `data` (GDPR export/delete) missing (spec 15291-15340)
 - [ ] MED main.go handleMaintenanceCommand: `compliance` report missing (spec 15444)
-- [ ] LOW main.go:1604-1622: --maintenance help stale (advertises removed --password,
-  omits pgp/token/data/compliance)
+- [x] LOW main.go: --maintenance --help advertised the removed --password flag —
+  rewritten to describe interactive password prompting per AI.md PART 21 — FIXED.
+  (pgp/token/data/compliance still omitted deliberately: those subcommands are not
+  yet implemented — tracked under LARGE subsystems below; advertising them would lie)
 
 ## Pass: Backend (PART 9-12)
 - [x] LOW database.go HandleQueryError: used direct `==` comparison; spec (AI.md 13476)

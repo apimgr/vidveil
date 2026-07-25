@@ -10,6 +10,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
+	"github.com/apimgr/vidveil/src/server/service/urlvars"
 )
 
 // Endpoint types for rate limiting per AI.md PART 12
@@ -284,20 +285,9 @@ func (l *RateLimiter) cleanup() {
 // Middleware returns an HTTP middleware that enforces rate limiting
 func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get client IP (use X-Real-IP or X-Forwarded-For if behind proxy)
-		ip := r.RemoteAddr
-		if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-			ip = realIP
-		} else if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			// Use first IP in the chain
-			ip = forwarded
-			for i, c := range forwarded {
-				if c == ',' {
-					ip = forwarded[:i]
-					break
-				}
-			}
-		}
+		// Get client IP per AI.md PART 12 "Client IP Detection" — proxy headers
+		// only honored when the immediate peer passes the trusted_proxies gate.
+		ip := urlvars.ResolveClientIP(r)
 
 		// Per AI.md PART 12: Call Allow() FIRST, then set headers with accurate remaining count
 		// This ensures X-RateLimit-Remaining reflects the count AFTER this request

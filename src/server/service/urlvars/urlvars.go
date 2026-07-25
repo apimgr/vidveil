@@ -599,6 +599,58 @@ func GetPathPrefix(req *http.Request) string {
 	return GlobalResolver().GetPathPrefix(req)
 }
 
+// resolveClientIP resolves the client IP per AI.md PART 12 "Client IP Detection"
+// priority order. Headers are only honored when the immediate TCP peer passes
+// isTrustedProxy — evaluated against req.RemoteAddr, which this resolver never
+// mutates. Otherwise resolution falls straight to req.RemoteAddr (priority 6).
+func (r *URLResolver) resolveClientIP(req *http.Request) string {
+	if r.isTrustedProxy(req.RemoteAddr) {
+		// Priority 1: CF-Connecting-IP (Cloudflare)
+		if ip := strings.TrimSpace(req.Header.Get("CF-Connecting-IP")); ip != "" {
+			return ip
+		}
+		// Priority 2: True-Client-IP (Akamai / Cloudflare Enterprise)
+		if ip := strings.TrimSpace(req.Header.Get("True-Client-IP")); ip != "" {
+			return ip
+		}
+		// Priority 3: X-Real-IP (nginx)
+		if ip := strings.TrimSpace(req.Header.Get("X-Real-IP")); ip != "" {
+			return ip
+		}
+		// Priority 4: X-Forwarded-For — leftmost entry of "client, proxy1, proxy2"
+		if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
+			leftmost := xff
+			if idx := strings.Index(xff, ","); idx != -1 {
+				leftmost = xff[:idx]
+			}
+			if ip := strings.TrimSpace(leftmost); ip != "" {
+				return ip
+			}
+		}
+		// Priority 5: X-Client-IP
+		if ip := strings.TrimSpace(req.Header.Get("X-Client-IP")); ip != "" {
+			return ip
+		}
+	}
+
+	// Priority 6: r.RemoteAddr fallback
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return req.RemoteAddr
+	}
+	return host
+}
+
+// ResolveClientIP returns the resolved client IP for req using the global
+// resolver, per AI.md PART 12 "Client IP Detection" priority order. This is
+// the canonical client-IP source for access logs, rate limiting, blocklists,
+// and GeoIP — it never mutates req.RemoteAddr, so trust-gate checks elsewhere
+// (isTrustedProxy, BuildURL, X-Forwarded-Prefix, domain/CORS/CSP learning)
+// keep evaluating the original TCP peer.
+func ResolveClientIP(req *http.Request) string {
+	return GlobalResolver().resolveClientIP(req)
+}
+
 // Middleware returns HTTP middleware that sets X-Resolved-* headers for templates
 func (r *URLResolver) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

@@ -152,8 +152,13 @@ func (s *Server) setupMiddleware() {
 	// 1. URL Normalization per AI.md PART 16 — MUST be first to execute
 	s.router.Use(URLNormalizeMiddleware)
 
-	// Real IP — normalize RemoteAddr from trusted proxy headers before anything reads it
-	s.router.Use(middleware.RealIP)
+	// NOTE: chi's middleware.RealIP is intentionally NOT used — it mutates
+	// r.RemoteAddr from proxy headers unconditionally (no trusted_proxies gate),
+	// which is the same IP-spoofing class as GHSA-3fxj-6jh8-hvhx / GHSA-rjr7-jggh-pgcp
+	// / GHSA-9g5q-2w5x-hmxf and is now deprecated upstream for it. r.RemoteAddr is
+	// left untouched here; urlvars.ResolveClientIP resolves the trusted-gated client
+	// IP per AI.md PART 12 without rewriting the original TCP peer (see PART 12
+	// "Middleware ordering").
 
 	// URL Variables resolution per AI.md PART 8 (reverse proxy headers)
 	s.router.Use(urlvars.GlobalResolver().Middleware)
@@ -893,15 +898,11 @@ func (s *Server) geoIPMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// extractClientIP returns the best-effort client IP from a request.
-// chi's RealIP middleware has already normalized r.RemoteAddr to the real IP.
+// extractClientIP returns the resolved client IP per AI.md PART 12 "Client IP
+// Detection" — proxy headers only honored when the immediate peer passes the
+// trusted_proxies gate, otherwise falls back to the raw TCP peer.
 func extractClientIP(r *http.Request) string {
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		// No port separator — RemoteAddr is already a bare IP
-		ip = r.RemoteAddr
-	}
-	return ip
+	return urlvars.ResolveClientIP(r)
 }
 
 // secFetchValidationMiddleware validates Sec-Fetch-* request headers per AI.md PART 11.

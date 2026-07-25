@@ -542,30 +542,48 @@ func TestIndexOf_NotFound(t *testing.T) {
 	}
 }
 
-// TestGetClientIP_XForwardedForSingle verifies a single XFF IP is returned.
+// TestGetClientIP_XForwardedForSingle verifies a single XFF IP is returned
+// when the immediate peer is a trusted proxy (AI.md PART 12 "Client IP Detection").
 func TestGetClientIP_XForwardedForSingle(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "1.2.3.4")
 	if got := getClientIP(req); got != "1.2.3.4" {
 		t.Errorf("getClientIP XFF single = %q, want %q", got, "1.2.3.4")
 	}
 }
 
-// TestGetClientIP_XForwardedForChain verifies the first IP in a chain is returned.
+// TestGetClientIP_XForwardedForChain verifies the first IP in a chain is
+// returned when the immediate peer is a trusted proxy.
 func TestGetClientIP_XForwardedForChain(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "1.2.3.4, 5.6.7.8")
 	if got := getClientIP(req); got != "1.2.3.4" {
 		t.Errorf("getClientIP XFF chain = %q, want %q", got, "1.2.3.4")
 	}
 }
 
-// TestGetClientIP_XRealIP verifies X-Real-IP header is used.
+// TestGetClientIP_XRealIP verifies X-Real-IP header is used when the
+// immediate peer is a trusted proxy.
 func TestGetClientIP_XRealIP(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Real-IP", "10.0.0.1")
 	if got := getClientIP(req); got != "10.0.0.1" {
 		t.Errorf("getClientIP X-Real-IP = %q, want %q", got, "10.0.0.1")
+	}
+}
+
+// TestGetClientIP_XForwardedForUntrustedPeer verifies proxy headers are
+// ignored when the immediate peer is not a trusted proxy — the resolver
+// must fall back to the raw TCP peer (priority 6) per AI.md PART 12.
+func TestGetClientIP_XForwardedForUntrustedPeer(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "203.0.113.5:12345"
+	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	if got := getClientIP(req); got != "203.0.113.5" {
+		t.Errorf("getClientIP untrusted peer = %q, want %q", got, "203.0.113.5")
 	}
 }
 

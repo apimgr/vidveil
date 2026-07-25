@@ -36,6 +36,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/server/service/urlvars"
 )
 
 // templatesFS holds the embedded templates filesystem
@@ -203,30 +204,11 @@ func (h *SearchHandler) setContentRestrictionAckCookie(w http.ResponseWriter) {
 	))
 }
 
-// getClientIP extracts the client's real IP address
+// getClientIP extracts the client's real IP address per AI.md PART 12
+// "Client IP Detection" — proxy headers only honored when the immediate
+// peer passes the trusted_proxies gate.
 func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header first (for proxied requests)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP in the chain (original client)
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	ip := r.RemoteAddr
-	if idx := strings.LastIndex(ip, ":"); idx != -1 {
-		ip = ip[:idx]
-	}
-	// Remove brackets from IPv6
-	ip = strings.Trim(ip, "[]")
-	return ip
+	return urlvars.ResolveClientIP(r)
 }
 
 // SearchHandler holds dependencies for HTTP handlers

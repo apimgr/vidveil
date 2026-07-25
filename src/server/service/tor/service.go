@@ -250,11 +250,11 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 		}
 	}
 
-	// Check if Tor binary exists
-	torPath, err := exec.LookPath("tor")
-	if err != nil {
+	// Find Tor binary per AI.md PART 31: config server.tor.binary -> PATH -> OS common locations
+	torPath := findTorBinary(s.torConfig)
+	if torPath == "" {
 		// Tor binary not found - fall back to key-only mode
-		s.logger.Info("Tor binary not found in PATH, running in key-only mode", nil)
+		s.logger.Info("Tor binary not found, running in key-only mode", nil)
 		s.status = TorServiceStatusNoTorBinary
 
 		// Still load/generate keys for address generation
@@ -1091,6 +1091,37 @@ func copyFile(src, dst string) error {
 // Per PART 31: NEVER uses default ports 9050/9051; uses Unix sockets or auto high ports
 // Hidden service itself is created via control.AddOnion (not torrc HiddenServiceDir)
 // Note: bine v0.2.0 manages ControlPort via TCP auto — NOT specified in torrc
+// findTorBinary locates the Tor executable per AI.md PART 31 in priority order:
+// 1) the configured server.tor.binary path, 2) the PATH, 3) OS common locations.
+// Returns an empty string when Tor is not found (caller falls back to key-only mode).
+func findTorBinary(cfg *config.TorConfig) string {
+	if cfg != nil && cfg.Binary != "" {
+		if _, err := os.Stat(cfg.Binary); err == nil {
+			return cfg.Binary
+		}
+	}
+	if p, err := exec.LookPath("tor"); err == nil {
+		return p
+	}
+	var candidates []string
+	switch runtime.GOOS {
+	case "linux":
+		candidates = []string{"/usr/bin/tor", "/usr/local/bin/tor"}
+	case "darwin":
+		candidates = []string{"/usr/local/bin/tor", "/opt/homebrew/bin/tor"}
+	case "windows":
+		candidates = []string{`C:\Program Files\Tor\tor.exe`}
+	default:
+		candidates = []string{"/usr/local/bin/tor"}
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	return ""
+}
+
 func buildTorrc(cfg *config.TorConfig) string {
 	if cfg == nil {
 		cfg = &config.TorConfig{}

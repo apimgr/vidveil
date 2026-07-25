@@ -76,8 +76,8 @@ LOW = minor/cleanup.
 - [ ] LOW Makefile:69: extra targets `clean`+`i18n-validate` beyond mandated 6 (spec 30967)
 
 ## Pass: PART 28-33
-- [ ] MED tor/service.go:254: Start() only exec.LookPath("tor"); ignores config
-  Binary + OS common-location fallback (spec 39563-39572). Add shared findTorBinary.
+- [x] MED tor/service.go: Start() only used exec.LookPath("tor"); added findTorBinary
+  helper (config server.tor.binary -> PATH -> OS common locations per spec 39563-39572) — FIXED
 - [ ] MED mkdocs.yml:100-127: nav points to nested files; spec-required flat pages
   (installation/configuration/api/development.md) orphaned (spec 37134 nav template)
 - [ ] LOW tor/service.go buildTorrc: omits `ControlPort 127.0.0.1:auto` (spec 40036);

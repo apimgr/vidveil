@@ -618,6 +618,7 @@ func main() {
 			// Daily backup per AI.md PART 18/21 (enabled by default, daily at 02:00)
 			// Threads server.backup.retention into the full+daily-incremental backup pair.
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
+			maint.SetLogger(logger)
 			retention := appConfig.Server.Backup.Retention
 			// ComplianceMode with no stored password (per PART 21, passwords are
 			// never stored) causes BackupWithOptions to reject unattended runs -
@@ -635,6 +636,7 @@ func main() {
 		BackupHourly: func(ctx context.Context) error {
 			// Hourly incremental backup per AI.md PART 18/21 (disabled by default)
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
+			maint.SetLogger(logger)
 			return maint.BackupIncremental("")
 		},
 		HealthcheckSelf: func(ctx context.Context) error {
@@ -1495,6 +1497,12 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 			os.Exit(1)
 		}
 		complianceMode := appConfig.Server.Compliance.IsEnabled()
+
+		// Attach the audit logger so backup.created/verification_failed/etc. per
+		// AI.md PART 21 "Audit Events" are recorded for CLI-triggered backups too.
+		if cliLogger, err := logging.NewAppLogger(appConfig); err == nil {
+			maint.SetLogger(cliLogger)
+		}
 
 		password := ""
 		if complianceMode {

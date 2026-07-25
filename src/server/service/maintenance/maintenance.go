@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/logging"
 	"golang.org/x/crypto/argon2"
 )
 
@@ -33,6 +34,26 @@ import (
 type MaintenanceManager struct {
 	paths   *config.AppPaths
 	version string
+	// logger is optional — when nil, audit events per AI.md PART 21 "Audit Events"
+	// are silently skipped. Set via SetLogger once a logger is available.
+	logger *logging.AppLogger
+}
+
+// SetLogger attaches the audit logger used to emit the PART 21 backup audit
+// events (backup.created, backup.retention_cleanup, backup.verification_failed,
+// backup.daily_updated, backup.skipped_disk_full). Safe to call with nil.
+func (m *MaintenanceManager) SetLogger(logger *logging.AppLogger) {
+	m.logger = logger
+}
+
+// audit emits a PART 21 backup audit event via the attached logger, if any.
+// actorType is always "system" per AI.md PART 11 (scheduler/CLI-triggered, no
+// end-user actor); actorIP is empty since backup operations are not HTTP requests.
+func (m *MaintenanceManager) audit(event, result string, details map[string]interface{}) {
+	if m.logger == nil {
+		return
+	}
+	m.logger.Audit(event, "system", "system", "", result, details)
 }
 
 // BackupOptions configures backup behavior per AI.md PART 21
@@ -141,6 +162,18 @@ func (m *MaintenanceManager) BackupDailyFull(opts BackupOptions) error {
 		return fmt.Errorf("daily incremental backup failed: %w", err)
 	}
 
+	// "Changes since last" per AI.md PART 21 Audit Events: this manager always
+	// snapshots config+data fully rather than diffing against the prior daily
+	// incremental, so the on-disk size is reported as the closest available signal.
+	dailySize := int64(0)
+	if info, err := os.Stat(dailyOpts.Filename); err == nil {
+		dailySize = info.Size()
+	}
+	m.audit("backup.daily_updated", "success", map[string]interface{}{
+		"filename": filepath.Base(dailyOpts.Filename),
+		"size":     dailySize,
+	})
+
 	return nil
 }
 
@@ -184,6 +217,17 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 	// free space < 2x the most recent existing backup, or disk usage > 90%.
 	if err := m.checkDiskSpace(backupDir); err != nil {
 		fmt.Printf("backup.skipped_disk_full: %v\n", err)
+		total, free, _ := diskSpace(backupDir)
+		usagePct := 0.0
+		if total > 0 {
+			usagePct = float64(total-free) / float64(total) * 100
+		}
+		m.audit("backup.skipped_disk_full", "failure", map[string]interface{}{
+			"free_bytes": free,
+			"disk_usage": fmt.Sprintf("%.1f%%", usagePct),
+			"threshold":  "90%",
+			"reason":     err.Error(),
+		})
 		return err
 	}
 
@@ -283,11 +327,21 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 	if err := m.verifyBackup(backupFile, checksumStr, opts.Password); err != nil {
 		// Remove failed backup
 		os.Remove(backupFile)
+		m.audit("backup.verification_failed", "failure", map[string]interface{}{
+			"filename": filepath.Base(backupFile),
+			"check":    err.Error(),
+		})
 		return fmt.Errorf("backup verification failed: %w", err)
 	}
 
 	fmt.Printf("Backup created: %s\n", backupFile)
 	fmt.Printf("Checksum: %s\n", checksumStr)
+	m.audit("backup.created", "success", map[string]interface{}{
+		"filename":  filepath.Base(backupFile),
+		"size":      len(finalData),
+		"encrypted": opts.Password != "",
+		"verified":  true,
+	})
 	return nil
 }
 
@@ -613,6 +667,7 @@ func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, k
 	}
 
 	// Delete backups not marked for keeping
+	var deleted []string
 	for i, b := range backups {
 		if _, ok := keep[i]; !ok {
 			// Skip incremental files (vidveil-daily.tar.gz, vidveil-hourly.tar.gz)
@@ -623,8 +678,16 @@ func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, k
 				fmt.Printf("Warning: failed to delete old backup %s: %v\n", b.Filename, err)
 			} else {
 				fmt.Printf("Deleted old backup: %s\n", b.Filename)
+				deleted = append(deleted, b.Filename)
 			}
 		}
+	}
+	if len(deleted) > 0 {
+		m.audit("backup.retention_cleanup", "success", map[string]interface{}{
+			"deleted_files": deleted,
+			"reason":        "retention_policy",
+			"remaining":     len(keep),
+		})
 	}
 
 	// Enforce max_total_size hard cap per AI.md PART 21: delete oldest-first (never the
@@ -720,6 +783,7 @@ func (m *MaintenanceManager) enforceMaxTotalSize(maxTotalSize string) error {
 		return backups[i].Modified.Before(backups[j].Modified)
 	})
 
+	var deleted []string
 	for _, b := range backups {
 		if uint64(total) <= limit {
 			break
@@ -732,7 +796,15 @@ func (m *MaintenanceManager) enforceMaxTotalSize(maxTotalSize string) error {
 			continue
 		}
 		fmt.Printf("Deleted old backup (max_total_size cap): %s\n", b.Filename)
+		deleted = append(deleted, b.Filename)
 		total -= b.Size
+	}
+	if len(deleted) > 0 {
+		m.audit("backup.retention_cleanup", "success", map[string]interface{}{
+			"deleted_files": deleted,
+			"reason":        "max_total_size_cap",
+			"remaining":     len(backups) - len(deleted),
+		})
 	}
 
 	return nil

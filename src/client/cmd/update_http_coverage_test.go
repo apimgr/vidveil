@@ -68,13 +68,15 @@ const mockAllReleasesJSON = `[
     "html_url": "https://github.com/apimgr/vidveil/releases/tag/v1.0.0-beta",
     "body": "Beta release",
     "published_at": "2024-01-02T00:00:00Z",
+    "prerelease": true,
     "assets": []
   },
   {
-    "tag_name": "202401010000",
-    "html_url": "https://github.com/apimgr/vidveil/releases/tag/202401010000",
+    "tag_name": "20240101000000",
+    "html_url": "https://github.com/apimgr/vidveil/releases/tag/20240101000000",
     "body": "Daily release",
     "published_at": "2024-01-01T00:00:00Z",
+    "prerelease": true,
     "assets": []
   },
   {
@@ -82,6 +84,7 @@ const mockAllReleasesJSON = `[
     "html_url": "https://github.com/apimgr/vidveil/releases/tag/v1.0.0",
     "body": "Stable release",
     "published_at": "2024-01-01T00:00:00Z",
+    "prerelease": false,
     "assets": []
   }
 ]`
@@ -195,16 +198,33 @@ func TestFetchLatestCLIBetaRelease_Success(t *testing.T) {
 	}
 }
 
-func TestFetchLatestCLIBetaRelease_NoBeta_ReturnsError(t *testing.T) {
-	// Server returns releases with no beta tag
+// Cumulative: with only a stable release, the beta channel falls back to it.
+func TestFetchLatestCLIBetaRelease_StableFallback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[{"tag_name":"v1.0.0","html_url":"","assets":[]}]`))
 	}))
 	defer srv.Close()
 	installMockTransport(t, srv)
 
+	rel, err := fetchLatestCLIBetaRelease()
+	if err != nil {
+		t.Fatalf("fetchLatestCLIBetaRelease(stable fallback): %v", err)
+	}
+	if rel == nil || rel.TagName != "v1.0.0" {
+		t.Errorf("fetchLatestCLIBetaRelease(stable fallback): got %+v, want v1.0.0", rel)
+	}
+}
+
+// With zero releases the beta channel must error.
+func TestFetchLatestCLIBetaRelease_NoReleases_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+	installMockTransport(t, srv)
+
 	if _, err := fetchLatestCLIBetaRelease(); err == nil {
-		t.Error("fetchLatestCLIBetaRelease no-beta: expected error")
+		t.Error("fetchLatestCLIBetaRelease no-releases: expected error")
 	}
 }
 
@@ -218,20 +238,40 @@ func TestFetchLatestCLIDailyRelease_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetchLatestCLIDailyRelease: %v", err)
 	}
-	if len(release.TagName) != 12 {
-		t.Errorf("fetchLatestCLIDailyRelease: TagName %q has unexpected length", release.TagName)
+	// Cumulative: the daily channel returns the newest of {daily, beta, stable}.
+	// The beta release (2024-01-02) is newest, so it is selected.
+	if release == nil || release.TagName != "v1.0.0-beta" {
+		t.Errorf("fetchLatestCLIDailyRelease: got %+v, want v1.0.0-beta (newest overall)", release)
 	}
 }
 
-func TestFetchLatestCLIDailyRelease_NoDaily_ReturnsError(t *testing.T) {
+// Cumulative: with only a stable release, the daily channel falls back to it.
+func TestFetchLatestCLIDailyRelease_StableFallback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[{"tag_name":"v1.0.0","html_url":"","assets":[]}]`))
 	}))
 	defer srv.Close()
 	installMockTransport(t, srv)
 
+	rel, err := fetchLatestCLIDailyRelease()
+	if err != nil {
+		t.Fatalf("fetchLatestCLIDailyRelease(stable fallback): %v", err)
+	}
+	if rel == nil || rel.TagName != "v1.0.0" {
+		t.Errorf("fetchLatestCLIDailyRelease(stable fallback): got %+v, want v1.0.0", rel)
+	}
+}
+
+// With zero releases the daily channel must error.
+func TestFetchLatestCLIDailyRelease_NoReleases_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+	installMockTransport(t, srv)
+
 	if _, err := fetchLatestCLIDailyRelease(); err == nil {
-		t.Error("fetchLatestCLIDailyRelease no-daily: expected error")
+		t.Error("fetchLatestCLIDailyRelease no-releases: expected error")
 	}
 }
 
@@ -286,7 +326,7 @@ func TestVerifyCLIChecksum_CorrectChecksum_NoPanic(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := verifyCLIChecksum(binaryPath, srv.URL+"/checksum"); err != nil {
+	if err := verifyCLIChecksum(binaryPath, srv.URL+"/checksum", "fake-binary"); err != nil {
 		t.Errorf("verifyCLIChecksum correct checksum: %v", err)
 	}
 }
@@ -303,7 +343,7 @@ func TestVerifyCLIChecksum_WrongChecksum_ReturnsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := verifyCLIChecksum(binaryPath, srv.URL+"/checksum"); err == nil {
+	if err := verifyCLIChecksum(binaryPath, srv.URL+"/checksum", "binary"); err == nil {
 		t.Error("verifyCLIChecksum wrong checksum: expected error")
 	}
 }
@@ -320,7 +360,7 @@ func TestVerifyCLIChecksum_ServerError_ReturnsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := verifyCLIChecksum(binaryPath, srv.URL+"/checksum"); err == nil {
+	if err := verifyCLIChecksum(binaryPath, srv.URL+"/checksum", "binary"); err == nil {
 		t.Error("verifyCLIChecksum server error: expected error")
 	}
 }

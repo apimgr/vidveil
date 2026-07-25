@@ -18,7 +18,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -996,7 +995,7 @@ func (m *MaintenanceManager) CheckUpdate() (*UpdateInfo, error) {
 		// Beta: fetch latest release containing "-beta" in tag
 		release, err = m.fetchLatestBetaRelease()
 	case "daily":
-		// Daily: fetch latest release matching YYYYMMDDHHMM format
+		// Daily: newest of {stable, beta, daily}; daily tags are YYYYMMDDHHMMSS
 		release, err = m.fetchLatestDailyRelease()
 	default:
 		// Default to stable
@@ -1050,35 +1049,56 @@ func (m *MaintenanceManager) fetchLatestRelease() (*GitHubRelease, error) {
 	return &release, nil
 }
 
-// fetchLatestBetaRelease fetches the latest beta release (tag contains "-beta")
+// matchesBranch implements cumulative update channels per AI.md PART 22: each
+// channel also accepts every release from all more-stable channels. stable
+// matches every channel; beta = {stable, beta}; daily = {stable, beta, daily}.
+// Daily builds are 14-digit timestamps (YYYYMMDDHHMMSS) with no dots.
+func matchesBranch(r GitHubRelease, branch string) bool {
+	if !r.Prerelease {
+		return true
+	}
+	isBeta := strings.HasSuffix(r.TagName, "-beta")
+	isDaily := len(r.TagName) == 14 && !strings.Contains(r.TagName, ".")
+	switch branch {
+	case "beta":
+		return isBeta
+	case "daily":
+		return isBeta || isDaily
+	default:
+		return false
+	}
+}
+
+// fetchLatestBetaRelease returns the newest release eligible for the beta
+// channel: the newest of {stable, beta}. Releases are returned newest-first,
+// so the first match wins.
 func (m *MaintenanceManager) fetchLatestBetaRelease() (*GitHubRelease, error) {
 	releases, err := m.fetchAllReleases()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, release := range releases {
-		if strings.Contains(strings.ToLower(release.TagName), "-beta") {
-			return &release, nil
+	for i := range releases {
+		if matchesBranch(releases[i], "beta") {
+			return &releases[i], nil
 		}
 	}
 
 	return nil, fmt.Errorf("no beta releases found")
 }
 
-// fetchLatestDailyRelease fetches the latest daily release (tag matches YYYYMMDDHHMM)
+// fetchLatestDailyRelease returns the newest release eligible for the daily
+// channel: the newest of {stable, beta, daily}. Releases are returned
+// newest-first, so the first match wins.
 func (m *MaintenanceManager) fetchLatestDailyRelease() (*GitHubRelease, error) {
 	releases, err := m.fetchAllReleases()
 	if err != nil {
 		return nil, err
 	}
 
-	// Daily builds have tags like "202602011200" (12 digits)
-	dailyPattern := regexp.MustCompile(`^\d{12}$`)
-
-	for _, release := range releases {
-		if dailyPattern.MatchString(release.TagName) {
-			return &release, nil
+	for i := range releases {
+		if matchesBranch(releases[i], "daily") {
+			return &releases[i], nil
 		}
 	}
 
@@ -1105,24 +1125,35 @@ func (m *MaintenanceManager) fetchAllReleases() ([]GitHubRelease, error) {
 	return releases, nil
 }
 
-// verifyUpdateChecksum fetches the companion .sha256 sidecar for downloadURL and
-// verifies that data matches. A missing checksum file (404) is a hard failure —
-// we refuse to install an unverified binary. Both the download URL and checksum
-// URL must use HTTPS to prevent MITM substitution.
+// verifyUpdateChecksum fetches the release's checksums.txt asset (a sibling of
+// the binary asset in the same release directory) and verifies that data
+// matches the entry for this binary. Per AI.md PART 22 the source of truth is
+// the checksums.txt asset, NOT a per-file .sha256 sidecar. Each line is
+// "{sha256}  {filename}". A missing checksums.txt (404) is a hard failure — we
+// refuse to install an unverified binary. The download URL must use HTTPS to
+// prevent MITM substitution.
 func verifyUpdateChecksum(downloadURL string, data []byte) error {
 	if !strings.HasPrefix(downloadURL, "https://") {
 		return fmt.Errorf("refusing update: download URL must use HTTPS, got %q", downloadURL)
 	}
 
-	checksumURL := downloadURL + ".sha256"
-	resp, err := http.Get(checksumURL) //nolint:noctx
+	// checksums.txt is a sibling asset: same release directory, last path
+	// segment replaced. The final path segment is this binary's asset name.
+	slash := strings.LastIndex(downloadURL, "/")
+	if slash < 0 {
+		return fmt.Errorf("malformed download URL: %q", downloadURL)
+	}
+	assetName := downloadURL[slash+1:]
+	checksumsURL := downloadURL[:slash+1] + "checksums.txt"
+
+	resp, err := http.Get(checksumsURL) //nolint:noctx
 	if err != nil {
 		return fmt.Errorf("checksum fetch failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("checksum sidecar not published at %s; refusing to install unverified binary", checksumURL)
+		return fmt.Errorf("checksums.txt not published at %s; refusing to install unverified binary", checksumsURL)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("checksum endpoint returned status %d", resp.StatusCode)
@@ -1130,20 +1161,25 @@ func verifyUpdateChecksum(downloadURL string, data []byte) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read checksum file: %w", err)
+		return fmt.Errorf("failed to read checksums.txt: %w", err)
 	}
 
-	// Expected format: "<hex-sha256>  <filename>" (sha256sum output) or just "<hex-sha256>"
-	line := strings.TrimSpace(strings.SplitN(string(body), "\n", 2)[0])
-	fields := strings.Fields(line)
-	if len(fields) == 0 {
-		return fmt.Errorf("checksum file is empty")
+	// Find the "{sha256}  {filename}" line matching this asset
+	var expectedHex string
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[1] == assetName {
+			expectedHex = fields[0]
+			break
+		}
 	}
-	expectedHex := fields[0]
+	if expectedHex == "" {
+		return fmt.Errorf("no checksum entry for %s in checksums.txt", assetName)
+	}
 
 	actualSum := sha256.Sum256(data)
 	actualHex := hex.EncodeToString(actualSum[:])
-	if actualHex != expectedHex {
+	if !strings.EqualFold(actualHex, expectedHex) {
 		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedHex, actualHex)
 	}
 	return nil
@@ -1397,6 +1433,7 @@ type GitHubRelease struct {
 	TagName     string        `json:"tag_name"`
 	HTMLURL     string        `json:"html_url"`
 	Body        string        `json:"body"`
+	Prerelease  bool          `json:"prerelease"`
 	PublishedAt time.Time     `json:"published_at"`
 	Assets      []GitHubAsset `json:"assets"`
 }

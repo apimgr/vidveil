@@ -183,7 +183,10 @@ func TestFetchLatestBetaRelease_Found(t *testing.T) {
 	}
 }
 
-func TestFetchLatestBetaRelease_NoneFound(t *testing.T) {
+// Channels are cumulative: with only a stable release present, the beta
+// channel falls back to that stable release (never leaves the user older
+// than stable) — so a non-nil release with no error is expected.
+func TestFetchLatestBetaRelease_StableFallback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]GitHubRelease{
@@ -194,9 +197,28 @@ func TestFetchLatestBetaRelease_NoneFound(t *testing.T) {
 	installMaintenanceMockTransport(t, srv)
 
 	m := newMaintManagerTmp(t, "1.0.0")
+	rel, err := m.fetchLatestBetaRelease()
+	if err != nil {
+		t.Fatalf("fetchLatestBetaRelease(stable fallback): %v", err)
+	}
+	if rel == nil || rel.TagName != "v1.0.0" {
+		t.Errorf("fetchLatestBetaRelease(stable fallback): got %+v, want v1.0.0", rel)
+	}
+}
+
+// With zero releases the beta channel has nothing to select and must error.
+func TestFetchLatestBetaRelease_NoneFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]GitHubRelease{})
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	m := newMaintManagerTmp(t, "1.0.0")
 	_, err := m.fetchLatestBetaRelease()
 	if err == nil {
-		t.Error("fetchLatestBetaRelease(no beta): expected error, got nil")
+		t.Error("fetchLatestBetaRelease(no releases): expected error, got nil")
 	}
 }
 
@@ -217,12 +239,32 @@ func TestFetchLatestDailyRelease_Found(t *testing.T) {
 	}
 }
 
-func TestFetchLatestDailyRelease_NoneFound(t *testing.T) {
+// Cumulative: with only a stable release, the daily channel falls back to it.
+func TestFetchLatestDailyRelease_StableFallback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]GitHubRelease{
-			{TagName: "v1.0.0-stable"},
+			{TagName: "v1.0.0"},
 		})
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	m := newMaintManagerTmp(t, "1.0.0")
+	rel, err := m.fetchLatestDailyRelease()
+	if err != nil {
+		t.Fatalf("fetchLatestDailyRelease(stable fallback): %v", err)
+	}
+	if rel == nil || rel.TagName != "v1.0.0" {
+		t.Errorf("fetchLatestDailyRelease(stable fallback): got %+v, want v1.0.0", rel)
+	}
+}
+
+// With zero releases the daily channel must error.
+func TestFetchLatestDailyRelease_NoneFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]GitHubRelease{})
 	}))
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)
@@ -230,7 +272,7 @@ func TestFetchLatestDailyRelease_NoneFound(t *testing.T) {
 	m := newMaintManagerTmp(t, "1.0.0")
 	_, err := m.fetchLatestDailyRelease()
 	if err == nil {
-		t.Error("fetchLatestDailyRelease(no daily): expected error, got nil")
+		t.Error("fetchLatestDailyRelease(no releases): expected error, got nil")
 	}
 }
 

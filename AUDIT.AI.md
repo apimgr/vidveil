@@ -47,12 +47,14 @@ LOW = minor/cleanup.
 - [ ] LOW templates: hardcoded English strings (should be i18n keys)
 
 ## Pass: Features (PART 17-22) — all in PART 22 Update
-- [ ] MED maintenance.go:1061 + client/cmd/update.go: beta channel non-cumulative
-  (must pick newest of {beta,stable}) (spec 29514)
-- [ ] MED maintenance.go:1079 + client: daily channel non-cumulative
-  (must pick newest of {daily,beta,stable}) (spec 29515)
-- [ ] MED maintenance.go:1077 + client: daily tag regex `^\d{12}$`, spec = 14 digits (29911)
-- [ ] MED maintenance.go:1117 + client: checksum from `.sha256` sidecar; spec = `checksums.txt` asset (29818)
+- [x] MED maintenance.go + client/cmd/update.go: beta channel now cumulative
+  (newest of {beta,stable} via matchesBranch/matchesCLIBranch) (spec 29514) — FIXED
+- [x] MED maintenance.go + client: daily channel now cumulative
+  (newest of {daily,beta,stable}) (spec 29515) — FIXED
+- [x] MED maintenance.go + client: daily tag detection now 14 digits (len==14, no dot);
+  main.go/update.go help text YYYYMMDDHHMMSS (spec 29911) — FIXED
+- [x] MED maintenance.go + client: checksum now from `checksums.txt` asset
+  (parsed by asset filename), client checksum mandatory (spec 29818) — FIXED
 - [ ] LOW/MED maintenance.go:1238: server ApplyUpdate no re-exec/restart (spec 29554/29929)
 - [ ] LOW main.go:671-675: defer_days skips instead of newest-eligible-older fallback (29523-29526)
 
@@ -61,7 +63,28 @@ LOW = minor/cleanup.
 - [ ] LOW Makefile:69: extra targets `clean`+`i18n-validate` beyond mandated 6 (spec 30967)
 
 ## Pass: PART 28-33
-- [ ] (pending agent a7b6ae595a00aa22d)
+- [ ] MED tor/service.go:254: Start() only exec.LookPath("tor"); ignores config
+  Binary + OS common-location fallback (spec 39563-39572). Add shared findTorBinary.
+- [ ] MED mkdocs.yml:100-127: nav points to nested files; spec-required flat pages
+  (installation/configuration/api/development.md) orphaned (spec 37134 nav template)
+- [ ] LOW tor/service.go buildTorrc: omits `ControlPort 127.0.0.1:auto` (spec 40036);
+  bine-managed so functionally OK — parity-only, likely WONTFIX
+- [~] LOW coverage threshold: testing-rules.md + Makefile enforce 80%; AI.md floor is
+  60% (31358) with upward override via IDEA.md coverage_minimum. NOT-A-BUG: 80% is a
+  stricter, allowed target and is internally consistent. Only nit: IDEA.md lacks the
+  formal coverage_minimum:80 declaration — needs USER confirmation to add (rule 17).
+  Makefile comment cites a non-existent "SERVER gate" — harmless. WONTFIX without user.
+
+## LARGE subsystems — need dedicated implementation (flagged, tracked)
+These are genuine spec gaps but multi-hour builds and/or carry regression/
+deployment risk; listed precisely so work persists.
+- [ ] HIGH TLS/ACME serving (PART 13-15): server.go ServeOn has no TLSConfig/ServeTLS;
+  ssl.GetTLSConfig/GetHTTPHandler unused; no HTTP->HTTPS redirect; ACME handler
+  unmounted. Wiring changes live deployment behavior.
+- [ ] HIGH maintenance subcommands (PART 8): pgp (14659-14673), token (11815),
+  data/GDPR (15291-15340), compliance (15444) all missing from dispatcher.
+- [ ] HIGH frontend CSP+inline (PART 16): extract inline <script>/on* handlers from
+  ~13 templates AND tighten CSP script-src to 'self'. Must ship together; UI-regression risk.
 
 ## Completed
 - response.go: added Details field + SendErrorWithDetails helper (bfdfc2f6f39c)

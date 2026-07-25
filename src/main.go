@@ -1434,7 +1434,7 @@ func handleUpdateCommand(cmd, arg string) {
 Update Branches:
   stable (default)  Release builds (v*, *.*.*)
   beta              Pre-release builds (*-beta)
-  daily             Daily builds (YYYYMMDDHHMM)
+  daily             Daily builds (YYYYMMDDHHMMSS)
 `, binaryName, binaryName, binaryName, binaryName)
 		os.Exit(0)
 

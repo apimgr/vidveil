@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -35,6 +34,7 @@ type CLIGitHubRelease struct {
 	TagName     string           `json:"tag_name"`
 	HTMLURL     string           `json:"html_url"`
 	Body        string           `json:"body"`
+	Prerelease  bool             `json:"prerelease"`
 	PublishedAt time.Time        `json:"published_at"`
 	Assets      []CLIGitHubAsset `json:"assets"`
 }
@@ -53,6 +53,7 @@ type CLIUpdateInfo struct {
 	ReleaseURL      string
 	DownloadURL     string
 	ChecksumURL     string
+	AssetName       string
 }
 
 // RunCLIUpdateCommand handles --update [check|yes|branch <name>|--help] per AI.md PART 32.
@@ -94,7 +95,7 @@ func PrintCLIUpdateHelp() {
 Update Branches:
   stable (default)  Release builds (v*, *.*.*)
   beta              Pre-release builds (*-beta)
-  daily             Daily builds (YYYYMMDDHHMM)
+  daily             Daily builds (YYYYMMDDHHMMSS)
 `, BinaryName, BinaryName, BinaryName, BinaryName)
 }
 
@@ -155,11 +156,12 @@ func runCLIUpdateApply() error {
 	}
 	defer os.Remove(tmpPath)
 
-	if info.ChecksumURL != "" {
-		fmt.Println("Verifying SHA-256 checksum...")
-		if err := verifyCLIChecksum(tmpPath, info.ChecksumURL); err != nil {
-			return fmt.Errorf("checksum verification failed: %w", err)
-		}
+	if info.ChecksumURL == "" {
+		return fmt.Errorf("release has no checksums.txt asset; refusing to install unverified binary")
+	}
+	fmt.Println("Verifying SHA-256 checksum...")
+	if err := verifyCLIChecksum(tmpPath, info.ChecksumURL, info.AssetName); err != nil {
+		return fmt.Errorf("checksum verification failed: %w", err)
 	}
 
 	execPath, err := os.Executable()
@@ -249,13 +251,15 @@ func CheckCLIUpdate() (*CLIUpdateInfo, error) {
 		ReleaseURL:      release.HTMLURL,
 	}
 
+	// Per AI.md PART 22 checksums come from the release's checksums.txt asset
+	// (lines "{sha256}  {filename}"), NOT a per-file .sha256 sidecar.
 	binaryAssetName := cliReleaseBinaryName()
-	checksumAssetName := binaryAssetName + ".sha256"
+	info.AssetName = binaryAssetName
 	for _, asset := range release.Assets {
 		switch asset.Name {
 		case binaryAssetName:
 			info.DownloadURL = asset.BrowserDownloadURL
-		case checksumAssetName:
+		case "checksums.txt":
 			info.ChecksumURL = asset.BrowserDownloadURL
 		}
 	}
@@ -304,27 +308,49 @@ func fetchAllCLIReleases() ([]CLIGitHubRelease, error) {
 	return releases, nil
 }
 
+// matchesCLIBranch implements cumulative update channels per AI.md PART 22:
+// stable matches every channel; beta = {stable, beta}; daily = {stable, beta,
+// daily}. Daily builds are 14-digit timestamps (YYYYMMDDHHMMSS) with no dots.
+func matchesCLIBranch(r CLIGitHubRelease, branch string) bool {
+	if !r.Prerelease {
+		return true
+	}
+	isBeta := strings.HasSuffix(r.TagName, "-beta")
+	isDaily := len(r.TagName) == 14 && !strings.Contains(r.TagName, ".")
+	switch branch {
+	case "beta":
+		return isBeta
+	case "daily":
+		return isBeta || isDaily
+	default:
+		return false
+	}
+}
+
+// fetchLatestCLIBetaRelease returns the newest of {stable, beta}. Releases are
+// returned newest-first, so the first match wins.
 func fetchLatestCLIBetaRelease() (*CLIGitHubRelease, error) {
 	releases, err := fetchAllCLIReleases()
 	if err != nil {
 		return nil, err
 	}
 	for i := range releases {
-		if strings.Contains(strings.ToLower(releases[i].TagName), "-beta") {
+		if matchesCLIBranch(releases[i], "beta") {
 			return &releases[i], nil
 		}
 	}
 	return nil, fmt.Errorf("no beta releases found")
 }
 
+// fetchLatestCLIDailyRelease returns the newest of {stable, beta, daily}.
+// Releases are returned newest-first, so the first match wins.
 func fetchLatestCLIDailyRelease() (*CLIGitHubRelease, error) {
 	releases, err := fetchAllCLIReleases()
 	if err != nil {
 		return nil, err
 	}
-	dailyPattern := regexp.MustCompile(`^\d{12}$`)
 	for i := range releases {
-		if dailyPattern.MatchString(releases[i].TagName) {
+		if matchesCLIBranch(releases[i], "daily") {
 			return &releases[i], nil
 		}
 	}
@@ -366,7 +392,7 @@ func downloadCLIBinary(downloadURL string) (string, error) {
 	return tmpPath, nil
 }
 
-func verifyCLIChecksum(binaryPath, checksumURL string) error {
+func verifyCLIChecksum(binaryPath, checksumURL, assetName string) error {
 	resp, err := http.Get(checksumURL)
 	if err != nil {
 		return fmt.Errorf("downloading checksum: %w", err)
@@ -379,7 +405,18 @@ func verifyCLIChecksum(binaryPath, checksumURL string) error {
 	if err != nil {
 		return fmt.Errorf("reading checksum: %w", err)
 	}
-	expected := strings.ToLower(strings.TrimSpace(strings.Fields(string(body))[0]))
+	// checksums.txt has one "{sha256}  {filename}" line per asset
+	var expected string
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[1] == assetName {
+			expected = strings.ToLower(fields[0])
+			break
+		}
+	}
+	if expected == "" {
+		return fmt.Errorf("no checksum entry for %s in checksums.txt", assetName)
+	}
 
 	binaryFile, err := os.Open(binaryPath)
 	if err != nil {

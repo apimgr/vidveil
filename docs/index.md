@@ -37,11 +37,11 @@ Default config file locations:
 - Windows: `%AppData%\apimgr\vidveil\server.yml`
 - Docker: `/config/vidveil/server.yml`
 
-See [Getting Started / Configuration](getting-started/configuration.md) for details.
+See [Configuration](configuration.md) for details.
 
 ## Documentation
 
-- [Installation](getting-started/installation.md)
+- [Installation](installation.md)
 - [Docker](getting-started/docker.md)
 - [Search Guide](user-guide/search.md)
 - [Preferences](user-guide/preferences.md)

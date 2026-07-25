@@ -80,8 +80,12 @@ LOW = minor/cleanup.
 ## Pass: PART 28-33
 - [x] MED tor/service.go: Start() only used exec.LookPath("tor"); added findTorBinary
   helper (config server.tor.binary -> PATH -> OS common locations per spec 39563-39572) — FIXED
-- [ ] MED mkdocs.yml:100-127: nav points to nested files; spec-required flat pages
-  (installation/configuration/api/development.md) orphaned (spec 37134 nav template)
+- [x] MED mkdocs.yml:100-127: nav points to nested files; spec-required flat pages
+  (installation/configuration/api/development.md) orphaned (spec 37134 nav template) — FIXED.
+  Filled the flat spec-required pages (installation.md, configuration.md consolidated
+  from the getting-started/ duplicates; api.md, development.md, admin.md as overview
+  landing pages) and rewired nav so every flat required page is a nav entry; deleted the
+  two consolidated nested duplicates; fixed index.md links. All nav md targets verified to exist.
 - [ ] LOW tor/service.go buildTorrc: omits `ControlPort 127.0.0.1:auto` (spec 40036);
   bine-managed so functionally OK — parity-only, likely WONTFIX
 - [~] LOW coverage threshold: testing-rules.md + Makefile enforce 80%; AI.md floor is

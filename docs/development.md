@@ -1,7 +1,11 @@
 # Development
 
-This page moved to the canonical MkDocs locations:
+Vidveil is a single self-contained Go binary. All builds run through
+the repository Makefile and the Docker-backed Go toolchain — never on
+the host.
 
-- [Development / Contributing](development/contributing.md)
-- [Development / Building](development/building.md)
-- [Development / Architecture](development/architecture.md)
+## Detailed Pages
+
+- [Contributing](development/contributing.md) — workflow, conventions, commits
+- [Building](development/building.md) — local builds, cross-compilation, release
+- [Architecture](development/architecture.md) — package layout and design

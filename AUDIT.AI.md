@@ -44,11 +44,16 @@ LOW = minor/cleanup.
   wired into NewAppDatabase per AI.md PART 10 Pool Configuration — FIXED
 
 ## Pass: API & SSL (PART 13-15)
-- [ ] HIGH server.go ServeOn (683-695): no TLSConfig/ServeTLS — SSL never served;
+- [x] HIGH server.go ServeOn (683-695): no TLSConfig/ServeTLS — SSL never served;
   ssl.GetTLSConfig/GetHTTPHandler defined but never called. COUPLED w/ redirect+ACME.
-- [ ] HIGH: no HTTP→HTTPS redirect when SSL enabled (spec PART 15)
-- [ ] MED: ACME challenge handler never mounted in serve path
-- [ ] MED: port-based listen behavior vs spec
+  FIXED: added Server.SetSSLManager + ServeTLSOn (ServeTLS via ssl.GetTLSConfig) +
+  ServeHTTPRedirectOn; main.go wires sslSvc and serves dual listeners.
+- [x] HIGH: no HTTP→HTTPS redirect when SSL enabled (spec PART 15) — FIXED via
+  httpRedirectHandler (301 to HTTPS, strips :443) on the HTTP listener in dual mode.
+- [x] MED: ACME challenge handler never mounted in serve path — FIXED: /.well-known/
+  acme-challenge/ routed to ssl.GetHTTPHandler() in httpRedirectHandler.
+- [x] MED: port-based listen behavior vs spec — FIXED: config.ParsePorts implements
+  PART 15 single/dual/443-only/ssl.enabled rules; main.go binds HTTP+HTTPS listeners.
 - [x] MED response.go: error envelope missing `details` field — FIXED bfdfc2f6f39c
 
 ## Pass: Frontend (PART 16) — COUPLED cluster (CSP+inline must ship together)
@@ -97,9 +102,9 @@ LOW = minor/cleanup.
 ## LARGE subsystems — need dedicated implementation (flagged, tracked)
 These are genuine spec gaps but multi-hour builds and/or carry regression/
 deployment risk; listed precisely so work persists.
-- [ ] HIGH TLS/ACME serving (PART 13-15): server.go ServeOn has no TLSConfig/ServeTLS;
-  ssl.GetTLSConfig/GetHTTPHandler unused; no HTTP->HTTPS redirect; ACME handler
-  unmounted. Wiring changes live deployment behavior.
+- [x] HIGH TLS/ACME serving (PART 13-15): FIXED — Server.SetSSLManager/ServeTLSOn/
+  ServeHTTPRedirectOn added; config.ParsePorts implements PART 15 port model;
+  main.go binds+serves HTTP (ACME+redirect) and HTTPS listeners.
 - [ ] HIGH maintenance subcommands (PART 8): pgp (14659-14673), token (11815),
   data/GDPR (15291-15340), compliance (15444) all missing from dispatcher.
 - [ ] HIGH frontend CSP+inline (PART 16): extract inline <script>/on* handlers from

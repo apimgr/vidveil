@@ -697,8 +697,15 @@ func main() {
 	// Per PART 31: ADD_ONION maps .onion:virtualPort → 127.0.0.1:serverPort (existing HTTP listener)
 	go func() {
 		torCtx := context.Background()
-		// Parse server port from config — Tor will forward .onion traffic to this existing HTTP port
-		serverPort, _ := strconv.Atoi(appConfig.Server.Port)
+		// Parse server port from config — Tor forwards .onion traffic to the local
+		// serving port. Per AI.md PART 15 overlays prefer the HTTP port; fall back to
+		// the HTTPS port in HTTPS-only mode. Handles dual "80,443" without a parse error.
+		torHTTPPort, torHTTPSPort := config.ParsePorts(appConfig.Server.Port, appConfig.Server.SSL.Enabled)
+		torTargetPort := torHTTPPort
+		if torTargetPort == "" {
+			torTargetPort = torHTTPSPort
+		}
+		serverPort, _ := strconv.Atoi(torTargetPort)
 		if err := torSvc.Start(torCtx, serverPort); err != nil {
 			// PART 31: Tor errors are WARN level, server continues without Tor
 			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: %v\n", err)
@@ -736,6 +743,9 @@ func main() {
 	// Set blocklist service for IP/domain blocklist middleware per AI.md PART 11
 	srv.SetBlocklistService(blocklistSvc)
 
+	// Wire SSL manager for HTTPS serving and ACME challenges per AI.md PART 15
+	srv.SetSSLManager(sslSvc)
+
 	// Start live config watcher per AI.md PART 8 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, appConfig)
 	configWatcher.OnReload(func(newCfg *config.AppConfig) {
@@ -745,15 +755,39 @@ func main() {
 	configWatcher.Start()
 	defer configWatcher.Stop()
 
-	// Per AI.md PART 23: bind privileged port as root BEFORE starting the goroutine
+	// Per AI.md PART 15: split the configured port into HTTP and HTTPS ports.
+	// Single port = HTTP (or HTTPS when 443 / ssl.enabled); dual "80,443" = HTTP + HTTPS.
+	httpPort, httpsPort := config.ParsePorts(appConfig.Server.Port, appConfig.Server.SSL.Enabled)
+
+	// Per AI.md PART 23: bind privileged ports as root BEFORE starting the goroutine
 	// so we can drop privileges while still in the main goroutine.
 	// This satisfies: "Bind privileged ports as root, then drop"
-	listenAddr := appConfig.Server.Address + ":" + appConfig.Server.Port
-	listener, err := srv.Listen(listenAddr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to bind %s: %v\n", listenAddr, err)
-		os.Exit(1)
+	var httpListener, httpsListener net.Listener
+	if httpPort != "" {
+		addr := appConfig.Server.Address + ":" + httpPort
+		httpListener, err = srv.Listen(addr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to bind %s: %v\n", addr, err)
+			os.Exit(1)
+		}
 	}
+	if httpsPort != "" {
+		addr := appConfig.Server.Address + ":" + httpsPort
+		httpsListener, err = srv.Listen(addr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to bind %s: %v\n", addr, err)
+			os.Exit(1)
+		}
+	}
+
+	// Primary listener drives the startup banner: HTTPS when present, else HTTP.
+	primaryPort := httpsPort
+	primaryIsHTTPS := true
+	if primaryPort == "" {
+		primaryPort = httpPort
+		primaryIsHTTPS = false
+	}
+	listenAddr := appConfig.Server.Address + ":" + primaryPort
 
 	// Drop privileges to the vidveil system user after port is bound per AI.md PART 23.
 	// ShouldDropPrivileges() returns true only on Unix when current uid == 0.
@@ -796,16 +830,17 @@ func main() {
 			}
 		}
 
-		// Build URL per AI.md PART 8:
+		// Build URL per AI.md PART 8 / PART 15:
 		// - NEVER show localhost, 127.0.0.1, 0.0.0.0
-		// - Show only one address, the most relevant
+		// - Show only one address, the most relevant (the primary listener)
 		// - Strip :80 and :443 from URLs
-		port := appConfig.Server.Port
-		displayURL := "http://" + displayAddr
-		if port == "80" {
-			displayURL = "http://" + config.GetDisplayHost(appConfig)
-		} else if port == "443" {
-			displayURL = "https://" + config.GetDisplayHost(appConfig)
+		proto := "http"
+		if primaryIsHTTPS {
+			proto = "https"
+		}
+		displayURL := proto + "://" + displayAddr
+		if primaryPort == "80" || primaryPort == "443" {
+			displayURL = proto + "://" + config.GetDisplayHost(appConfig)
 		}
 
 		// Print responsive startup banner per AI.md PART 7
@@ -830,10 +865,32 @@ func main() {
 		}
 		fmt.Println()
 
-		// Serve on the pre-bound listener (bound before privilege drop above)
-		if err := srv.ServeOn(listener); err != nil && err != http.ErrServerClosed {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Server error: %v\n", err)
-			os.Exit(1)
+		// Serve on the pre-bound listeners (bound before privilege drop above)
+		// per AI.md PART 15. In dual mode the HTTP listener serves ACME challenges
+		// and 301-redirects to HTTPS; the HTTPS listener terminates TLS.
+		if httpListener != nil {
+			if httpsListener != nil {
+				// Dual-port: HTTP listener does ACME + HTTPS redirect
+				go func() {
+					if err := srv.ServeHTTPRedirectOn(httpListener, httpsPort); err != nil && err != http.ErrServerClosed {
+						fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" HTTP redirect server error: %v\n", err)
+					}
+				}()
+			} else {
+				// HTTP-only
+				go func() {
+					if err := srv.ServeOn(httpListener); err != nil && err != http.ErrServerClosed {
+						fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Server error: %v\n", err)
+						os.Exit(1)
+					}
+				}()
+			}
+		}
+		if httpsListener != nil {
+			if err := srv.ServeTLSOn(httpsListener); err != nil && err != http.ErrServerClosed {
+				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" HTTPS server error: %v\n", err)
+				os.Exit(1)
+			}
 		}
 	}()
 

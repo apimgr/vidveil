@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"embed"
 	"html/template"
@@ -49,6 +50,14 @@ type IPBlocklistChecker interface {
 	IsBlocked(ipOrDomain string) bool
 }
 
+// TLSProvider supplies the TLS config and ACME HTTP handler for HTTPS serving
+// per AI.md PART 15. Implemented by the ssl.SSLManager. Kept as a local interface
+// so the server package does not import the ssl package directly.
+type TLSProvider interface {
+	GetTLSConfig() *tls.Config
+	GetHTTPHandler() http.Handler
+}
+
 // Server represents the HTTP server
 type Server struct {
 	appConfig     *config.AppConfig
@@ -69,6 +78,8 @@ type Server struct {
 	geoIPBlocker GeoIPBlocker
 	// blocklist for IP/domain blocklist middleware per AI.md PART 11
 	ipBlocklist IPBlocklistChecker
+	// tlsProvider supplies TLS config + ACME handler for HTTPS serving per AI.md PART 15
+	tlsProvider TLSProvider
 }
 
 // MigrationManager interface for database migrations
@@ -709,6 +720,75 @@ func (s *Server) Serve(listener net.Listener) error {
 		IdleTimeout:  idleTimeout,
 	}
 	return torSrv.Serve(listener)
+}
+
+// SetSSLManager wires the TLS provider (ssl.SSLManager) used for HTTPS serving
+// and ACME challenges per AI.md PART 15. Must be called before ServeTLSOn.
+func (s *Server) SetSSLManager(p TLSProvider) {
+	s.tlsProvider = p
+}
+
+// ServeTLSOn serves HTTPS on the pre-bound listener using the wired TLS provider.
+// Per AI.md PART 15/23: bind privileged ports as root, drop, then serve TLS.
+func (s *Server) ServeTLSOn(listener net.Listener) error {
+	if s.tlsProvider == nil {
+		return http.ErrServerClosed
+	}
+	readTimeout := parseDuration(s.appConfig.Server.Limits.ReadTimeout, 30*time.Second)
+	writeTimeout := parseDuration(s.appConfig.Server.Limits.WriteTimeout, 30*time.Second)
+	idleTimeout := parseDuration(s.appConfig.Server.Limits.IdleTimeout, 120*time.Second)
+
+	s.srv = &http.Server{
+		Handler:      s.router,
+		TLSConfig:    s.tlsProvider.GetTLSConfig(),
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
+	}
+	// Empty cert/key: the certificate is served via TLSConfig.GetCertificate.
+	return s.srv.ServeTLS(listener, "", "")
+}
+
+// ServeHTTPRedirectOn serves the ACME HTTP-01 challenge handler and redirects all
+// other requests to HTTPS on the pre-bound HTTP listener. Used in dual-port mode
+// (e.g. "80,443") per AI.md PART 15.
+func (s *Server) ServeHTTPRedirectOn(listener net.Listener, httpsPort string) error {
+	readTimeout := parseDuration(s.appConfig.Server.Limits.ReadTimeout, 30*time.Second)
+	writeTimeout := parseDuration(s.appConfig.Server.Limits.WriteTimeout, 30*time.Second)
+	idleTimeout := parseDuration(s.appConfig.Server.Limits.IdleTimeout, 120*time.Second)
+
+	redirectSrv := &http.Server{
+		Handler:      s.httpRedirectHandler(httpsPort),
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
+	}
+	return redirectSrv.Serve(listener)
+}
+
+// httpRedirectHandler routes ACME challenges to the TLS provider's HTTP handler
+// and 301-redirects everything else to the HTTPS endpoint per AI.md PART 15.
+func (s *Server) httpRedirectHandler(httpsPort string) http.Handler {
+	var acme http.Handler
+	if s.tlsProvider != nil {
+		acme = s.tlsProvider.GetHTTPHandler()
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if acme != nil && strings.HasPrefix(r.URL.Path, "/.well-known/acme-challenge/") {
+			acme.ServeHTTP(w, r)
+			return
+		}
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		target := "https://" + host
+		if httpsPort != "" && httpsPort != "443" {
+			target += ":" + httpsPort
+		}
+		target += r.URL.RequestURI()
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+	})
 }
 
 // parseDuration parses a duration string, returning the default if parsing fails

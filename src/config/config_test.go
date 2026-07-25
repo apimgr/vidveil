@@ -778,3 +778,31 @@ func TestIsChromiumBased(t *testing.T) {
 		t.Error("IsChromiumBased() for empty browser = false, want true")
 	}
 }
+
+// TestParsePorts verifies AI.md PART 15 port-splitting rules.
+func TestParsePorts(t *testing.T) {
+	cases := []struct {
+		name       string
+		port       string
+		sslEnabled bool
+		wantHTTP   string
+		wantHTTPS  string
+	}{
+		{"single http", "8080", false, "8080", ""},
+		{"single 443 https only", "443", false, "", "443"},
+		{"single http ssl override", "8080", true, "", "8080"},
+		{"dual 80 443", "80,443", false, "80", "443"},
+		{"dual custom", "8080,8443", false, "8080", "8443"},
+		{"dual with spaces", " 80 , 443 ", false, "80", "443"},
+		{"empty", "", false, "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotHTTP, gotHTTPS := ParsePorts(tc.port, tc.sslEnabled)
+			if gotHTTP != tc.wantHTTP || gotHTTPS != tc.wantHTTPS {
+				t.Errorf("ParsePorts(%q, %v) = (%q, %q), want (%q, %q)",
+					tc.port, tc.sslEnabled, gotHTTP, gotHTTPS, tc.wantHTTP, tc.wantHTTPS)
+			}
+		})
+	}
+}

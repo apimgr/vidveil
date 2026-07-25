@@ -1884,6 +1884,38 @@ func (w *ConfigWatcher) Reload() error {
 // GetDisplayHost returns the appropriate host for display per AI.md PART 8
 // Never shows: 0.0.0.0, 127.0.0.1, localhost, [::]
 // Uses global IP if dev TLD or localhost detected
+// ParsePorts splits the configured Server.Port into the HTTP and HTTPS ports
+// per AI.md PART 15 "Port Configuration (Project-Wide, NON-NEGOTIABLE)".
+//
+// Rules:
+//   - Two comma-separated ports: first = HTTP, second = HTTPS ("80,443").
+//   - Single port: HTTP by default.
+//   - Single port 443: HTTPS-only mode.
+//   - CONFIG(ssl.enabled) overrides a single port from HTTP to HTTPS.
+//
+// An empty return value for either port means that protocol is not served.
+func ParsePorts(portStr string, sslEnabled bool) (httpPort, httpsPort string) {
+	parts := make([]string, 0, 2)
+	for _, p := range strings.Split(portStr, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+
+	switch {
+	case len(parts) == 0:
+		return "", ""
+	case len(parts) >= 2:
+		return parts[0], parts[1]
+	default:
+		single := parts[0]
+		if single == "443" || sslEnabled {
+			return "", single
+		}
+		return single, ""
+	}
+}
+
 func GetDisplayHost(_ *AppConfig) string {
 	fqdn := GetFQDN()
 

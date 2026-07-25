@@ -18,8 +18,13 @@ LOW = minor/cleanup.
   WONTFIX: current `filepath.Join(dataDir,"db")` matches AI.md 12133-12142 reference
   implementation exactly. Spec path table (6700) shows db as data sibling but the
   authoritative reference impl nests it; code follows the reference impl. Not a bug.
-- [ ] LOW main.go:321-325,465-469: PORT/LISTEN env honored every run; spec (AI.md
-  7705-7712) = first-run-only seeding
+- [~] LOW main.go:321-325,465-469: PORT/LISTEN env honored every run vs first-run-only.
+  WONTFIX-ambiguous: AI.md self-conflicts — 7705-7706 lists PORT/LISTEN as Init-Only,
+  but the config-precedence table 12107-12108 explicitly maps PORT->--port / LISTEN->
+  --address as runtime env fallbacks, and 10606-10607 defines the runtime port chain.
+  Current code implements the 12107-table (runtime) reading. Flipping to init-only would
+  break the documented flag<->env mapping. Left as-is; needs a spec de-conflict (AI.md is
+  READ-ONLY) — not a code bug against the authoritative precedence table.
 
 ## Pass: Binary & CLI (PART 7-8)
 - [ ] HIGH main.go handleMaintenanceCommand: `pgp` subcommand missing (spec 14659-14673)
@@ -30,8 +35,11 @@ LOW = minor/cleanup.
   omits pgp/token/data/compliance)
 
 ## Pass: Backend (PART 9-12)
-- [ ] LOW database.go HandleQueryError (296-312): dead code, non-sentinel non-%w errors
-- [ ] LOW database.go: pool settings hardcoded (25/5/5m/1m), no DatabaseConfig fields (verify spec)
+- [x] LOW database.go HandleQueryError: used direct `==` comparison; spec (AI.md 13476)
+  uses errors.Is — fixed to errors.Is (now matches wrapped errors) — FIXED
+- [x] LOW database.go: pool settings hardcoded; added PoolConfig (max_open/max_idle/
+  max_lifetime/max_idle_time) to DatabaseConfig with spec defaults (25/5/5m/1m),
+  wired into NewAppDatabase per AI.md PART 10 Pool Configuration — FIXED
 
 ## Pass: API & SSL (PART 13-15)
 - [ ] HIGH server.go ServeOn (683-695): no TLSConfig/ServeTLS — SSL never served;

@@ -5,6 +5,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -40,6 +41,50 @@ type DatabaseConfig struct {
 	Path        string `yaml:"path"`
 	JournalMode string `yaml:"journal_mode"`
 	BusyTimeout int    `yaml:"busy_timeout"`
+	// Pool holds connection pool settings per AI.md PART 10 (libsql/remote;
+	// SQLite uses a single writer). Zero values fall back to defaults.
+	Pool PoolConfig `yaml:"pool"`
+}
+
+// PoolConfig holds connection pool settings per AI.md PART 10 Pool Configuration.
+// MaxLifetime/MaxIdleTime accept Go duration strings (e.g. "5m", "1m").
+type PoolConfig struct {
+	MaxOpen     int    `yaml:"max_open"`
+	MaxIdle     int    `yaml:"max_idle"`
+	MaxLifetime string `yaml:"max_lifetime"`
+	MaxIdleTime string `yaml:"max_idle_time"`
+}
+
+// maxOpen returns the configured max open connections or the default (25).
+func (p PoolConfig) maxOpen() int {
+	if p.MaxOpen > 0 {
+		return p.MaxOpen
+	}
+	return 25
+}
+
+// maxIdle returns the configured max idle connections or the default (5).
+func (p PoolConfig) maxIdle() int {
+	if p.MaxIdle > 0 {
+		return p.MaxIdle
+	}
+	return 5
+}
+
+// maxLifetime returns the configured connection max lifetime or the default (5m).
+func (p PoolConfig) maxLifetime() time.Duration {
+	if d, err := time.ParseDuration(p.MaxLifetime); err == nil && d > 0 {
+		return d
+	}
+	return 5 * time.Minute
+}
+
+// maxIdleTime returns the configured connection max idle time or the default (1m).
+func (p PoolConfig) maxIdleTime() time.Duration {
+	if d, err := time.ParseDuration(p.MaxIdleTime); err == nil && d > 0 {
+		return d
+	}
+	return 1 * time.Minute
 }
 
 // normalizeDriver maps config driver aliases to canonical drivers per AI.md PART 3
@@ -83,12 +128,12 @@ func NewAppDatabase(cfg DatabaseConfig) (*AppDatabase, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool per AI.md PART 10
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	// Per PART 10 requirement
-	db.SetConnMaxIdleTime(1 * time.Minute)
+	// Configure connection pool per AI.md PART 10 (configurable via
+	// server.database.pool; zero values fall back to defaults).
+	db.SetMaxOpenConns(cfg.Pool.maxOpen())
+	db.SetMaxIdleConns(cfg.Pool.maxIdle())
+	db.SetConnMaxLifetime(cfg.Pool.maxLifetime())
+	db.SetConnMaxIdleTime(cfg.Pool.maxIdleTime())
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -300,12 +345,12 @@ func HandleQueryError(err error) error {
 		return nil
 	}
 	switch {
-	case err == context.DeadlineExceeded:
-		return fmt.Errorf("TIMEOUT: query timed out")
-	case err == sql.ErrNoRows:
-		return fmt.Errorf("NOT_FOUND: resource not found")
-	case err == context.Canceled:
-		return fmt.Errorf("CANCELED: request was canceled")
+	case errors.Is(err, context.DeadlineExceeded):
+		return errors.New("TIMEOUT: request timed out")
+	case errors.Is(err, sql.ErrNoRows):
+		return errors.New("NOT_FOUND: resource not found")
+	case errors.Is(err, context.Canceled):
+		return errors.New("CANCELED: request was canceled")
 	default:
 		return fmt.Errorf("SERVER_ERROR: database error: %w", err)
 	}

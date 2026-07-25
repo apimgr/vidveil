@@ -97,11 +97,14 @@ func DeleteCookie(name, path string) *http.Cookie {
 }
 
 // APIResponse is the unified response structure per AI.md PART 9
+// Details carries optional structured context for validation errors and similar
+// (e.g. {"field":"email","rule":"format"}). It is omitted when not needed.
 type APIResponse struct {
 	OK      bool   `json:"ok"`
 	Data    any    `json:"data,omitempty"`
 	Error   string `json:"error,omitempty"`
 	Message string `json:"message,omitempty"`
+	Details any    `json:"details,omitempty"`
 }
 
 // SendOK sends a success response per AI.md PART 9
@@ -127,6 +130,23 @@ func SendError(w http.ResponseWriter, code string, message string) {
 	w.WriteHeader(status)
 	// Use MarshalIndent with 2-space indentation per PART 14
 	response := APIResponse{OK: false, Error: code, Message: message}
+	output, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		w.Write([]byte(`{"ok":false,"error":"SERVER_ERROR","message":"Failed to encode error"}`))
+		w.Write([]byte("\n"))
+		return
+	}
+	w.Write(output)
+	w.Write([]byte("\n"))
+}
+
+// SendErrorWithDetails sends an error response including the structured details
+// object per AI.md PART 14 (e.g. {"field":"email","rule":"format"}).
+func SendErrorWithDetails(w http.ResponseWriter, code string, message string, details any) {
+	status := ErrorCodeToHTTP(code)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	response := APIResponse{OK: false, Error: code, Message: message, Details: details}
 	output, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
 		w.Write([]byte(`{"ok":false,"error":"SERVER_ERROR","message":"Failed to encode error"}`))

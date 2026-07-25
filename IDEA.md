@@ -12,11 +12,12 @@ Privacy-respecting meta search engine for adult video content that aggregates re
 
 ## Project variables
 
-project_name:  vidveil
-project_org:   apimgr
-internal_name: vidveil
-app_name:      vidveil
-official_site: https://x.scour.li
+project_name:      vidveil
+project_org:       apimgr
+internal_name:     vidveil
+app_name:          vidveil
+official_site:     https://x.scour.li
+coverage_minimum:  80
 
 `{plist_name}` is NOT stored - it is derived at substitution time as `io.github.apimgr.vidveil`.
 

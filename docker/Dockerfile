@@ -69,8 +69,9 @@ RUN chmod 755 /usr/local/bin/*
 
 # Set environment
 # Note: Tor available (binary installed) but server binary controls Tor startup (see PART 32)
-ENV MODE=development \
-    TZ=America/New_York \
+# MODE is intentionally NOT set here (AI.md PART 26): the binary defaults to
+# production; compose files set MODE explicitly (production/development).
+ENV TZ=America/New_York \
     DATABASE_DIR=/data/db/sqlite
 
 # Expose internal port (always 80)

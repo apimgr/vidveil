@@ -1693,6 +1693,7 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 PGP actions (AI.md PART 12 "GPG Keypair Management"):
   generate                            Generate the security keypair
   rotate                              Rotate the keypair (cross-signs, 30-day grace)
+  publish                             Publish the public key to configured keyservers
   export public [path]                Write the public key (stdout if omitted)
 
 Per AI.md PART 21 the backup password is never passed on the command
@@ -1707,9 +1708,10 @@ Examples:
   %s --maintenance mode on            # Enable maintenance mode
   %s --maintenance pgp generate       # Generate the security keypair
   %s --maintenance pgp rotate         # Rotate the security keypair
+  %s --maintenance pgp publish        # Publish the public key to keyservers
 `, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
 			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
-			binaryName, binaryName)
+			binaryName, binaryName, binaryName)
 		os.Exit(0)
 
 	default:
@@ -1745,6 +1747,13 @@ func handlePGPMaintenance(arg, configDir, dataDir string) {
 		}
 		pgpRotate(configDir, dataDir)
 
+	case "publish":
+		if err := authorizeSensitiveOperation(configDir, dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+			os.Exit(1)
+		}
+		pgpPublish(configDir, dataDir)
+
 	case "export":
 		target := ""
 		if len(fields) > 1 {
@@ -1763,7 +1772,7 @@ func handlePGPMaintenance(arg, configDir, dataDir string) {
 
 	default:
 		fmt.Printf(terminal.StatusIcon(false)+" Unknown pgp action: %q\n", action)
-		fmt.Printf("   Usage: %s --maintenance pgp [generate|rotate|export public [path]]\n", binaryName)
+		fmt.Printf("   Usage: %s --maintenance pgp [generate|rotate|publish|export public [path]]\n", binaryName)
 		os.Exit(1)
 	}
 }
@@ -1967,6 +1976,89 @@ func pgpRotateCore(configDir, dataDir string) (*pgpRotateResult, error) {
 		archiveDir:      archiveDir,
 		graceUntil:      rotatedAt.Add(pgp.RotationGracePeriod),
 	}, nil
+}
+
+// pgpPublishResult carries the outcome of a keyserver publish for reporting.
+type pgpPublishResult struct {
+	published []pgp.KeyserverState
+	attempted int
+}
+
+// pgpPublish submits the security public key to the configured keyservers and
+// reports the result, exiting non-zero on failure (AI.md PART 12 "Publish to
+// keyservers").
+func pgpPublish(configDir, dataDir string) {
+	res, err := pgpPublishCore(configDir, dataDir)
+	if err != nil {
+		if res != nil {
+			for _, st := range res.published {
+				fmt.Printf(terminal.StatusIcon(true)+" Published to %s\n", st.URL)
+			}
+		}
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+		os.Exit(1)
+	}
+	if len(res.published) == 0 {
+		fmt.Println(terminal.WarningIcon() + " No keyservers configured; nothing published.")
+		return
+	}
+	fmt.Printf(terminal.StatusIcon(true)+" Published the security public key to %d keyserver(s):\n", len(res.published))
+	for _, st := range res.published {
+		fmt.Printf("   %s (at %s)\n", st.URL, st.PublishedAt.Format(time.RFC3339))
+	}
+}
+
+// pgpPublishCore loads the security public key and POSTs it to every keyserver
+// in web.security.keyservers, persisting per-keyserver publish state to disk and
+// the DB so a later restore does not double-submit (AI.md PART 12 "Publish to
+// keyservers" and PART 21 "Backup Integration"). Partial success is possible:
+// the returned result carries the servers that accepted the key even when err
+// is non-nil.
+func pgpPublishCore(configDir, dataDir string) (*pgpPublishResult, error) {
+	appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	paths := config.GetAppPaths(configDir, dataDir)
+	pub, err := pgp.LoadPublicKey(paths.Config)
+	if err != nil {
+		return nil, fmt.Errorf("no public key found (run 'pgp generate' first): %w", err)
+	}
+
+	keyservers := appConfig.Web.Security.Keyservers
+	if len(keyservers) == 0 {
+		return &pgpPublishResult{}, nil
+	}
+
+	ctx := context.Background()
+	states, pubErr := pgp.PublishToKeyservers(ctx, pub, keyservers)
+	res := &pgpPublishResult{published: states, attempted: len(keyservers)}
+
+	// Persist state even on partial failure so a restore does not re-submit the
+	// servers that already accepted the key.
+	if len(states) > 0 {
+		if err := pgp.WriteKeyserverState(paths.Config, states); err != nil {
+			return res, fmt.Errorf("published but failed to write keyserver state: %w", err)
+		}
+		serverDBPath := filepath.Join(paths.Data, "db", "server.db")
+		dbMgr, dbErr := database.NewMigrationManager(serverDBPath)
+		if dbErr != nil {
+			return res, fmt.Errorf("published but failed to open database: %w", dbErr)
+		}
+		defer dbMgr.Close()
+		if err := dbMgr.RunMigrations(); err != nil {
+			return res, fmt.Errorf("published but failed to run migrations: %w", err)
+		}
+		if err := pgp.UpdateKeyserversPublished(dbMgr.GetDB(), states); err != nil {
+			return res, fmt.Errorf("published but failed to record keyserver state: %w", err)
+		}
+	}
+
+	if pubErr != nil {
+		return res, pubErr
+	}
+	return res, nil
 }
 
 // pgpExportPublic writes the armored public key to outPath, or stdout if empty,

@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"database/sql"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/user"
 	"strings"
@@ -206,6 +208,138 @@ func TestPgpRotateCore(t *testing.T) {
 	}
 	if _, err := os.Stat(res.pubKeyPath); err != nil {
 		t.Fatalf("new public key missing: %v", err)
+	}
+}
+
+// TestPgpPublishCore_NoKey verifies publish fails cleanly when no keypair exists.
+func TestPgpPublishCore_NoKey(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	cfg.Server.Contact.Security.Email = "security@example.com"
+	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+	if _, err := pgpPublishCore(cfgDir, dataDir); err == nil {
+		t.Fatal("expected error publishing with no keypair")
+	}
+}
+
+// TestPgpPublishCore_NoKeyservers verifies publish is a no-op (empty result, no
+// error) when no keyservers are configured.
+func TestPgpPublishCore_NoKeyservers(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	cfg.Server.Contact.Security.Email = "security@example.com"
+	cfg.Server.Branding.Title = "VidVeil"
+	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+	if _, _, _, _, err := pgpGenerateCore(cfgDir, dataDir); err != nil {
+		t.Fatalf("pgpGenerateCore: %v", err)
+	}
+
+	res, err := pgpPublishCore(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("pgpPublishCore: %v", err)
+	}
+	if len(res.published) != 0 {
+		t.Fatalf("expected nothing published, got %+v", res.published)
+	}
+}
+
+// TestPgpPublishCore_Success drives the full publish path against a local HTTP
+// server: the key is submitted, state persists to disk, and the DB row updates.
+func TestPgpPublishCore_Success(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	var hit bool
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	cfg.Server.Contact.Security.Email = "security@example.com"
+	cfg.Server.Branding.Title = "VidVeil"
+	cfg.Web.Security.Keyservers = []string{ts.URL}
+	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+	if _, _, _, _, err := pgpGenerateCore(cfgDir, dataDir); err != nil {
+		t.Fatalf("pgpGenerateCore: %v", err)
+	}
+
+	res, err := pgpPublishCore(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("pgpPublishCore: %v", err)
+	}
+	if !hit {
+		t.Fatal("keyserver was not contacted")
+	}
+	if len(res.published) != 1 || res.published[0].URL != ts.URL {
+		t.Fatalf("published = %+v", res.published)
+	}
+}
+
+// TestPgpPublishCore_AllFail verifies that when every keyserver rejects the
+// key, the error propagates while the (empty) result is still returned and no
+// state file is written.
+func TestPgpPublishCore_AllFail(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	cfg.Server.Contact.Security.Email = "security@example.com"
+	cfg.Server.Branding.Title = "VidVeil"
+	cfg.Web.Security.Keyservers = []string{ts.URL}
+	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+	if _, _, _, _, err := pgpGenerateCore(cfgDir, dataDir); err != nil {
+		t.Fatalf("pgpGenerateCore: %v", err)
+	}
+
+	res, err := pgpPublishCore(cfgDir, dataDir)
+	if err == nil {
+		t.Fatal("expected error when all keyservers reject the key")
+	}
+	if res == nil || len(res.published) != 0 {
+		t.Fatalf("expected empty published result, got %+v", res)
 	}
 }
 

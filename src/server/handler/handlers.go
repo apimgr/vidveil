@@ -1095,6 +1095,79 @@ func getAPIResponseFormat(r *http.Request) string {
 
 // HealthCheck returns health status with content negotiation
 // Per AI.md PART 16: Supports HTML (default), JSON (Accept: application/json), and Text
+// HealthResponse is the canonical JSON body for /server/healthz and
+// /api/{api_version}/server/healthz per AI.md PART 13 ("Field Order &
+// Structure"). Field order here is significant: encoding/json preserves
+// struct field order on output, whereas map[string]interface{} is always
+// emitted in alphabetical key order regardless of insertion order — using
+// a map here would silently violate the spec's mandated field order.
+type HealthResponse struct {
+	Project ProjectInfo `json:"project"`
+
+	Status         string   `json:"status"`
+	PendingRestart bool     `json:"pending_restart,omitempty"`
+	RestartReason  []string `json:"restart_reason,omitempty"`
+
+	Version   string    `json:"version"`
+	GoVersion string    `json:"go_version"`
+	Build     BuildInfo `json:"build"`
+
+	Uptime    string `json:"uptime"`
+	Mode      string `json:"mode"`
+	Timestamp string `json:"timestamp"`
+
+	Features FeaturesInfo `json:"features"`
+	Checks   ChecksInfo   `json:"checks"`
+	Stats    StatsInfo    `json:"stats"`
+}
+
+// ProjectInfo is the project-identification block of HealthResponse,
+// sourced from branding config per AI.md PART 16.
+type ProjectInfo struct {
+	Name        string `json:"name"`
+	Tagline     string `json:"tagline"`
+	Description string `json:"description"`
+}
+
+// BuildInfo is the build-metadata block of HealthResponse per AI.md PART 7.
+type BuildInfo struct {
+	Commit string `json:"commit"`
+	Date   string `json:"date"`
+}
+
+// FeaturesInfo lists PUBLIC-safe feature flags only per AI.md PART 13.
+// /metrics is internal-only (PART 20) and must NOT appear here.
+type FeaturesInfo struct {
+	Tor   TorInfo `json:"tor"`
+	GeoIP bool    `json:"geoip"`
+}
+
+// TorInfo is the Tor hidden-service block of FeaturesInfo per AI.md PART 31.
+type TorInfo struct {
+	Enabled  bool   `json:"enabled"`
+	Running  bool   `json:"running"`
+	Status   string `json:"status"`
+	Hostname string `json:"hostname,omitempty"`
+}
+
+// ChecksInfo holds component health checks — "ok"/"error" only, no details,
+// per AI.md PART 13's public-safe-only requirement.
+type ChecksInfo struct {
+	Database  string `json:"database"`
+	Cache     string `json:"cache"`
+	Disk      string `json:"disk"`
+	Scheduler string `json:"scheduler"`
+	Tor       string `json:"tor,omitempty"`
+}
+
+// StatsInfo holds public-safe aggregate statistics per AI.md PART 13.
+type StatsInfo struct {
+	RequestsTotal     uint64 `json:"requests_total"`
+	Requests24h       uint64 `json:"requests_24h"`
+	ActiveConnections int64  `json:"active_connections"`
+	SearchesTotal     uint64 `json:"searches_total"`
+}
+
 // HealthCheck handles /healthz endpoint with content negotiation
 // Per AI.md PART 13
 func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
@@ -1160,54 +1233,53 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 	switch format {
 	case "application/json":
-		// JSON format per AI.md PART 13 - exact field order from spec
-		// 1. project, 2. status, 3. version/go_version/build, 4. uptime/mode/timestamp
-		// 5. features, 6. checks, 7. stats
-		response := map[string]interface{}{
-			// 1. Project identification (PART 16: branding config)
-			"project": map[string]interface{}{
-				"name":        projectName,
-				"tagline":     projectTagline,
-				"description": projectDescription,
+		// JSON format per AI.md PART 13 - canonical HealthResponse struct
+		// preserves the spec-mandated field order on the wire (see
+		// HealthResponse doc comment for why a map cannot be used here).
+		response := HealthResponse{
+			Project: ProjectInfo{
+				Name:        projectName,
+				Tagline:     projectTagline,
+				Description: projectDescription,
 			},
-			// 2. Overall status (+pending_restart/restart_reason when set — omitempty)
-			"status": status,
-			// 3. Version & build info (PART 7)
-			"version":    version.GetVersion(),
-			"go_version": runtime.Version(),
-			"build": map[string]interface{}{
-				"commit": version.CommitID,
-				"date":   version.BuildTime,
+			Status:    status,
+			Version:   version.GetVersion(),
+			GoVersion: runtime.Version(),
+			Build: BuildInfo{
+				Commit: version.CommitID,
+				Date:   version.BuildTime,
 			},
-			// 4. Runtime info (PART 6)
-			"uptime":    uptime,
-			"mode":      appMode,
-			"timestamp": timestamp,
-			// 5. Features — public-safe only; /metrics is internal (PART 20)
-			"features": map[string]interface{}{
-				"tor": map[string]interface{}{
-					"enabled":  h.torSvc != nil && h.torSvc.IsEnabled(),
-					"running":  h.torSvc != nil && h.torSvc.IsRunning(),
-					"status":   h.getTorStatus(),
-					"hostname": h.getTorHostname(),
+			Uptime:    uptime,
+			Mode:      appMode,
+			Timestamp: timestamp,
+			Features: FeaturesInfo{
+				Tor: TorInfo{
+					Enabled:  h.torSvc != nil && h.torSvc.IsEnabled(),
+					Running:  h.torSvc != nil && h.torSvc.IsRunning(),
+					Status:   h.getTorStatus(),
+					Hostname: h.getTorHostname(),
 				},
-				"geoip": h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
+				GeoIP: h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 			},
-			// 7. Component health checks
-			"checks": checks,
-			// 8. Statistics (public-safe aggregates + app-specific)
-			"stats": map[string]interface{}{
-				"requests_total":     h.getRequestsTotal(),
-				"requests_24h":       h.getRequests24h(),
-				"active_connections": h.getActiveConnections(),
-				"searches_total":     h.getSearchCount(),
+			Checks: ChecksInfo{
+				Database:  checks["database"],
+				Cache:     checks["cache"],
+				Disk:      checks["disk"],
+				Scheduler: checks["scheduler"],
+				Tor:       checks["tor"],
+			},
+			Stats: StatsInfo{
+				RequestsTotal:     h.getRequestsTotal(),
+				Requests24h:       h.getRequests24h(),
+				ActiveConnections: h.getActiveConnections(),
+				SearchesTotal:     h.getSearchCount(),
 			},
 		}
 
 		// pending_restart / restart_reason — omitempty: only include when set
 		if h.appConfig != nil && h.appConfig.PendingRestart {
-			response["pending_restart"] = true
-			response["restart_reason"] = h.appConfig.RestartReasons
+			response.PendingRestart = true
+			response.RestartReason = h.appConfig.RestartReasons
 		}
 
 		WriteJSON(w, httpStatus, response)
@@ -2384,52 +2456,54 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// JSON response (default) - per AI.md PART 13 canonical field order
-	response := map[string]interface{}{
-		// 1. Project identification (PART 16)
-		"project": map[string]interface{}{
-			"name":        apiProjectName,
-			"tagline":     apiProjectTagline,
-			"description": apiProjectDesc,
+	// JSON response (default) - canonical HealthResponse struct per AI.md
+	// PART 13; must be byte-for-byte the same shape as HealthCheck's JSON
+	// branch ("Same JSON as /healthz" — a map would alphabetize keys and
+	// risk drifting out of sync with the struct-based frontend response).
+	response := HealthResponse{
+		Project: ProjectInfo{
+			Name:        apiProjectName,
+			Tagline:     apiProjectTagline,
+			Description: apiProjectDesc,
 		},
-		// 2. Overall status (+pending_restart/restart_reason when set — omitempty)
-		"status": status,
-		// 3. Version & build info (PART 7)
-		"version":    version.GetVersion(),
-		"go_version": version.GoVersion,
-		"build": map[string]interface{}{
-			"commit": version.CommitID,
-			"date":   version.BuildTime,
+		Status:    status,
+		Version:   version.GetVersion(),
+		GoVersion: runtime.Version(),
+		Build: BuildInfo{
+			Commit: version.CommitID,
+			Date:   version.BuildTime,
 		},
-		// 4. Runtime info (PART 6)
-		"uptime":    uptime,
-		"mode":      appMode,
-		"timestamp": timestamp,
-		// 5. Features — public-safe only; /metrics is internal (PART 20)
-		"features": map[string]interface{}{
-			"tor": map[string]interface{}{
-				"enabled":  torEnabled,
-				"running":  torRunning,
-				"status":   h.getTorStatus(),
-				"hostname": h.getTorHostname(),
+		Uptime:    uptime,
+		Mode:      appMode,
+		Timestamp: timestamp,
+		Features: FeaturesInfo{
+			Tor: TorInfo{
+				Enabled:  torEnabled,
+				Running:  torRunning,
+				Status:   h.getTorStatus(),
+				Hostname: h.getTorHostname(),
 			},
-			"geoip": h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
+			GeoIP: h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 		},
-		// 7. Component health checks
-		"checks": checks,
-		// 8. Statistics (public-safe aggregates + app-specific)
-		"stats": map[string]interface{}{
-			"requests_total":     h.getRequestsTotal(),
-			"requests_24h":       h.getRequests24h(),
-			"active_connections": h.getActiveConnections(),
-			"searches_total":     h.getSearchCount(),
+		Checks: ChecksInfo{
+			Database:  checks["database"],
+			Cache:     checks["cache"],
+			Disk:      checks["disk"],
+			Scheduler: checks["scheduler"],
+			Tor:       checks["tor"],
+		},
+		Stats: StatsInfo{
+			RequestsTotal:     h.getRequestsTotal(),
+			Requests24h:       h.getRequests24h(),
+			ActiveConnections: h.getActiveConnections(),
+			SearchesTotal:     h.getSearchCount(),
 		},
 	}
 
 	// pending_restart / restart_reason — omitempty: only include when set
 	if h.appConfig != nil && h.appConfig.PendingRestart {
-		response["pending_restart"] = true
-		response["restart_reason"] = h.appConfig.RestartReasons
+		response.PendingRestart = true
+		response.RestartReason = h.appConfig.RestartReasons
 	}
 
 	WriteJSON(w, httpStatus, response)

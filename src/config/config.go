@@ -676,6 +676,46 @@ func (c ComplianceConfig) IsEnabled() bool {
 		c.FedRAMP || c.LGPD || c.PIPEDA || c.APPI || c.PDPA
 }
 
+// ComplianceStandard pairs a regulatory standard's config key with its display
+// name and whether it is currently enabled. Used by the
+// "--maintenance compliance report" summary (AI.md PART 5 "Compliance Routes").
+type ComplianceStandard struct {
+	Key     string
+	Name    string
+	Enabled bool
+}
+
+// Standards returns every regulatory standard with its enabled state, in a
+// stable order matching the AI.md "Compliance-Specific Behaviors" section. The
+// order is deterministic so the compliance report is reproducible.
+func (c ComplianceConfig) Standards() []ComplianceStandard {
+	return []ComplianceStandard{
+		{"gdpr", "GDPR (EU General Data Protection Regulation)", c.GDPR},
+		{"ccpa", "CCPA (California Consumer Privacy Act)", c.CCPA},
+		{"hipaa", "HIPAA (US Health Insurance Portability and Accountability Act)", c.HIPAA},
+		{"soc2", "SOC 2 (Service Organization Control 2)", c.SOC2},
+		{"pci_dss", "PCI-DSS (Payment Card Industry Data Security Standard)", c.PCIDSS},
+		{"iso27001", "ISO 27001 (Information Security Management)", c.ISO27001},
+		{"fedramp", "FedRAMP (US Federal Risk and Authorization Management)", c.FedRAMP},
+		{"lgpd", "LGPD (Brazil Lei Geral de Proteção de Dados)", c.LGPD},
+		{"pipeda", "PIPEDA (Canada Personal Information Protection)", c.PIPEDA},
+		{"appi", "APPI (Japan Act on Protection of Personal Information)", c.APPI},
+		{"pdpa", "PDPA (Singapore Personal Data Protection Act)", c.PDPA},
+	}
+}
+
+// EnabledStandards returns the display names of the standards that are enabled,
+// in the same stable order as Standards.
+func (c ComplianceConfig) EnabledStandards() []string {
+	var names []string
+	for _, s := range c.Standards() {
+		if s.Enabled {
+			names = append(names, s.Name)
+		}
+	}
+	return names
+}
+
 // UpdateConfig holds update settings per AI.md PART 22
 type UpdateConfig struct {
 	// Branch: release channel — stable | beta | daily (default: stable)

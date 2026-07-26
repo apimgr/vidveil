@@ -1275,7 +1275,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to start: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true)+" Service started")
+		fmt.Println(terminal.StatusIcon(true) + " Service started")
 
 	case "stop":
 		fmt.Println("Stopping Vidveil service...")
@@ -1283,7 +1283,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to stop: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true)+" Service stopped")
+		fmt.Println(terminal.StatusIcon(true) + " Service stopped")
 
 	case "restart":
 		fmt.Println("Restarting Vidveil service...")
@@ -1291,7 +1291,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to restart: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true)+" Service restarted")
+		fmt.Println(terminal.StatusIcon(true) + " Service restarted")
 
 	case "reload":
 		fmt.Println("Reloading Vidveil configuration...")
@@ -1299,7 +1299,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to reload: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true)+" Configuration reloaded")
+		fmt.Println(terminal.StatusIcon(true) + " Configuration reloaded")
 
 	case "status":
 		// Per AI.md PART 24: Show service status
@@ -1310,9 +1310,9 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 		}
 		switch status {
 		case "running":
-			fmt.Println(terminal.StatusIcon(true)+" Vidveil service is running")
+			fmt.Println(terminal.StatusIcon(true) + " Vidveil service is running")
 		case "stopped":
-			fmt.Println(terminal.StopButtonIcon()+" Vidveil service is stopped")
+			fmt.Println(terminal.StopButtonIcon() + " Vidveil service is stopped")
 		default:
 			fmt.Printf(terminal.QuestionIcon()+" Vidveil service status: %s\n", status)
 		}
@@ -1331,7 +1331,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 
 	case "--uninstall":
 		// Per AI.md PART 23: Confirmation required before destructive action
-		fmt.Println(terminal.WarningIcon()+" WARNING: This will:")
+		fmt.Println(terminal.WarningIcon() + " WARNING: This will:")
 		fmt.Println("   • Stop the service (if running)")
 		fmt.Println("   • Remove service configuration")
 		fmt.Println("   • Delete data, configs, and logs")
@@ -1358,7 +1358,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to uninstall: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true)+" Service uninstalled")
+		fmt.Println(terminal.StatusIcon(true) + " Service uninstalled")
 
 	case "--disable":
 		// Per AI.md PART 8: Disable service from starting at boot
@@ -1367,7 +1367,7 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to disable: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true)+" Service disabled (will not start at boot)")
+		fmt.Println(terminal.StatusIcon(true) + " Service disabled (will not start at boot)")
 
 	case "--help":
 		// Per AI.md PART 8: Service command help
@@ -1412,7 +1412,7 @@ func handleUpdateCommand(cmd, arg string) {
 		if err != nil {
 			// HTTP 404 means no updates available per AI.md
 			if strings.Contains(err.Error(), "404") {
-				fmt.Println(terminal.StatusIcon(true)+" Already up to date (no newer release found)")
+				fmt.Println(terminal.StatusIcon(true) + " Already up to date (no newer release found)")
 				os.Exit(0)
 			}
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Update check failed: %v\n", err)
@@ -1422,11 +1422,11 @@ func handleUpdateCommand(cmd, arg string) {
 		fmt.Printf("Latest version:  %s\n", info.LatestVersion)
 
 		if info.UpdateAvailable {
-			fmt.Println("\n"+terminal.PackageIcon()+" Update available!")
+			fmt.Println("\n" + terminal.PackageIcon() + " Update available!")
 			fmt.Printf("   Release: %s\n", info.ReleaseURL)
 			fmt.Println("\n   Run 'vidveil --update' to download and install")
 		} else {
-			fmt.Println(terminal.StatusIcon(true)+" Already up to date")
+			fmt.Println(terminal.StatusIcon(true) + " Already up to date")
 		}
 		os.Exit(0)
 
@@ -1438,7 +1438,7 @@ func handleUpdateCommand(cmd, arg string) {
 		info, err := maint.CheckUpdate()
 		if err != nil {
 			if strings.Contains(err.Error(), "404") {
-				fmt.Println(terminal.StatusIcon(true)+" Already up to date")
+				fmt.Println(terminal.StatusIcon(true) + " Already up to date")
 				os.Exit(0)
 			}
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Update check failed: %v\n", err)
@@ -1448,7 +1448,7 @@ func handleUpdateCommand(cmd, arg string) {
 		fmt.Printf("Latest version:  %s\n", info.LatestVersion)
 
 		if info.UpdateAvailable {
-			fmt.Println("\n"+terminal.PackageIcon()+" Update available!")
+			fmt.Println("\n" + terminal.PackageIcon() + " Update available!")
 			fmt.Printf("   Release: %s\n", info.ReleaseURL)
 
 			if info.DownloadURL != "" {
@@ -1457,10 +1457,10 @@ func handleUpdateCommand(cmd, arg string) {
 					fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Update failed: %v\n", err)
 					os.Exit(1)
 				}
-				fmt.Println(terminal.StatusIcon(true)+" Update successful! Please restart the application.")
+				fmt.Println(terminal.StatusIcon(true) + " Update successful! Please restart the application.")
 			}
 		} else {
-			fmt.Println(terminal.StatusIcon(true)+" Already up to date")
+			fmt.Println(terminal.StatusIcon(true) + " Already up to date")
 		}
 		os.Exit(0)
 
@@ -1627,7 +1627,7 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 		}
 
 		if arg == "" {
-			fmt.Println(terminal.StatusIcon(false)+" Missing mode argument")
+			fmt.Println(terminal.StatusIcon(false) + " Missing mode argument")
 			fmt.Println("   Usage: vidveil --maintenance mode <on|off>")
 			os.Exit(1)
 		}
@@ -1656,6 +1656,23 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 		fmt.Println("Edit /etc/apimgr/vidveil/server.yml to configure the server.")
 		fmt.Printf("Restart the service after making changes: %s --service restart\n", binaryName)
 
+	case "compliance":
+		// Per AI.md PART 5 "Compliance Routes": operators run
+		// "--maintenance compliance report" for a compliance summary. Compliance
+		// is configured entirely in server.yml; this reads the live config and
+		// reports which regulatory standards are active.
+		if arg != "" && arg != "report" {
+			fmt.Printf(terminal.StatusIcon(false)+" Unknown compliance action: %s\n", arg)
+			fmt.Printf("   Usage: %s --maintenance compliance report\n", binaryName)
+			os.Exit(1)
+		}
+		appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
+			os.Exit(1)
+		}
+		printComplianceReport(appConfig)
+
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
 		fmt.Printf(`Maintenance Commands:
@@ -1663,6 +1680,7 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
   %s --maintenance restore [file]     Restore from backup (prompts if encrypted)
   %s --maintenance update             Check and apply updates
   %s --maintenance mode <on|off>      Enable/disable maintenance mode
+  %s --maintenance compliance report  Show regulatory compliance summary
   %s --maintenance setup              Show configuration instructions
 
 Per AI.md PART 21 the backup password is never passed on the command
@@ -1676,14 +1694,59 @@ Examples:
   %s --maintenance restore backup.tar.gz.enc  # Restore an encrypted archive
   %s --maintenance mode on            # Enable maintenance mode
 `, binaryName, binaryName, binaryName, binaryName, binaryName,
-			binaryName, binaryName, binaryName, binaryName, binaryName)
+			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 		os.Exit(0)
 
 	default:
 		fmt.Printf(terminal.StatusIcon(false)+" Unknown maintenance command: %s\n", cmd)
-		fmt.Printf("\nUsage: %s --maintenance [backup|restore|update|mode|setup|--help]\n\nRun '%s --maintenance --help' for detailed help.\n", binaryName, binaryName)
+		fmt.Printf("\nUsage: %s --maintenance [backup|restore|update|mode|compliance|setup|--help]\n\nRun '%s --maintenance --help' for detailed help.\n", binaryName, binaryName)
 		os.Exit(1)
 	}
+}
+
+// printComplianceReport writes a human-readable regulatory compliance summary to
+// stdout per AI.md PART 5 ("Operators run ... --maintenance compliance report for
+// a compliance summary"). Compliance is configured entirely in server.yml, so the
+// report reflects the live config: which standards are enabled and the operational
+// controls those toggles activate.
+func printComplianceReport(appConfig *config.AppConfig) {
+	c := appConfig.Server.Compliance
+	enabled := c.EnabledStandards()
+
+	fmt.Println("Compliance Report")
+	fmt.Println("=================")
+	fmt.Printf("Application: %s\n", appConfig.Server.Branding.Title)
+	fmt.Printf("Generated:   %s\n\n", time.Now().UTC().Format(time.RFC3339))
+
+	if len(enabled) == 0 {
+		fmt.Println("Compliance mode: DISABLED")
+		fmt.Println("No regulatory standards are enabled. Backups are optional and")
+		fmt.Println("encryption is not mandatory. Enable standards under")
+		fmt.Println("server.compliance in server.yml.")
+		return
+	}
+
+	fmt.Println("Compliance mode: ENABLED")
+	fmt.Println("\nEnabled standards:")
+	for _, s := range c.Standards() {
+		if s.Enabled {
+			fmt.Printf("  [x] %s\n", s.Name)
+		}
+	}
+	fmt.Println("\nDisabled standards:")
+	for _, s := range c.Standards() {
+		if !s.Enabled {
+			fmt.Printf("  [ ] %s\n", s.Name)
+		}
+	}
+
+	fmt.Println("\nActive controls (derived from enabled standards):")
+	fmt.Println("  - Backup encryption is MANDATORY (--maintenance backup requires a password)")
+	if c.GDPR || c.CCPA || c.LGPD {
+		fmt.Println("  - Data-subject requests: --maintenance data export / data delete")
+	}
+	fmt.Println("  - Audit logging active for compliance.* events")
+	fmt.Println("\nCompliance is configured in server.yml under server.compliance.")
 }
 
 // isDBFirstRun returns true if the settings table has no rows, indicating first run.

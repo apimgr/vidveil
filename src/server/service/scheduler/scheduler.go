@@ -1056,19 +1056,19 @@ func (s *Scheduler) migrateLegacyTaskIDs() {
 		// Update scheduled_tasks (state). UPDATE OR IGNORE conflict if
 		// the new ID already has a row from a prior migration / a fresh
 		// install — keep the new row in that case.
-		if _, err := s.db.Exec(
+		if _, err := s.execCtx(
 			`UPDATE scheduled_tasks SET id = ? WHERE id = ? `+
 				`AND NOT EXISTS (SELECT 1 FROM scheduled_tasks WHERE id = ?)`,
 			newID, old, newID,
 		); err != nil {
 			log.Printf("scheduler: migrate task id %q->%q (scheduled_tasks): %v", old, newID, err)
 		}
-		if _, err := s.db.Exec(`DELETE FROM scheduled_tasks WHERE id = ?`, old); err != nil {
+		if _, err := s.execCtx(`DELETE FROM scheduled_tasks WHERE id = ?`, old); err != nil {
 			log.Printf("scheduler: delete legacy task id %q: %v", old, err)
 		}
 
 		// Update task_history (run records).
-		if _, err := s.db.Exec(`UPDATE task_history SET task_id = ? WHERE task_id = ?`, newID, old); err != nil {
+		if _, err := s.execCtx(`UPDATE task_history SET task_id = ? WHERE task_id = ?`, newID, old); err != nil {
 			log.Printf("scheduler: migrate task id %q->%q (task_history): %v", old, newID, err)
 		}
 	}

@@ -1165,3 +1165,34 @@ func TestAuthorizeViaOperatorToken_NonServiceUser_Rejected(t *testing.T) {
 		t.Errorf("authorizeViaOperatorToken as non-service-user: unexpected error message: %v", err)
 	}
 }
+
+// TestParseUpdateArgs verifies the shared parser for "--update" and its alias
+// "--maintenance update" per AI.md PART 22: [check|yes|branch {stable|beta|daily}].
+func TestParseUpdateArgs(t *testing.T) {
+	cases := []struct {
+		name         string
+		rest         []string
+		wantCmd      string
+		wantArg      string
+		wantConsumed int
+	}{
+		{"no args defaults to yes", nil, "yes", "", 0},
+		{"check subcommand", []string{"check"}, "check", "", 1},
+		{"yes subcommand", []string{"yes"}, "yes", "", 1},
+		{"branch with name", []string{"branch", "beta"}, "branch", "beta", 2},
+		{"branch stable", []string{"branch", "stable"}, "branch", "stable", 2},
+		{"branch missing name", []string{"branch"}, "branch", "", 1},
+		{"branch then flag stops", []string{"branch", "--debug"}, "branch", "", 1},
+		{"next flag is not a subcommand", []string{"--debug"}, "yes", "", 0},
+		{"trailing args after check ignored", []string{"check", "extra"}, "check", "", 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd, arg, consumed := parseUpdateArgs(tc.rest)
+			if cmd != tc.wantCmd || arg != tc.wantArg || consumed != tc.wantConsumed {
+				t.Errorf("parseUpdateArgs(%v) = (%q, %q, %d); want (%q, %q, %d)",
+					tc.rest, cmd, arg, consumed, tc.wantCmd, tc.wantArg, tc.wantConsumed)
+			}
+		})
+	}
+}

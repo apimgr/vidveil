@@ -67,6 +67,24 @@ func init() {
 	svcmetrics.InitMetricsAppInfo(Version, CommitID, BuildDate, runtime.Version())
 }
 
+// parseUpdateArgs parses the arguments that follow "--update" (or its alias
+// "--maintenance update") per AI.md PART 22: [check|yes|branch {stable|beta|daily}].
+// rest is the slice of args after the update token. It returns the update
+// subcommand (default "yes"), its argument (branch name, if any), and the
+// number of args from rest that were consumed.
+func parseUpdateArgs(rest []string) (cmd, arg string, consumed int) {
+	cmd = "yes"
+	if len(rest) > 0 && !strings.HasPrefix(rest[0], "--") {
+		cmd = rest[0]
+		consumed = 1
+		if cmd == "branch" && len(rest) > 1 && !strings.HasPrefix(rest[1], "--") {
+			arg = rest[1]
+			consumed = 2
+		}
+	}
+	return cmd, arg, consumed
+}
+
 func main() {
 	startTime := time.Now()
 	args := os.Args[1:]
@@ -222,16 +240,9 @@ func main() {
 
 		case "--update":
 			// AI.md PART 22: --update [check|yes|branch {stable|beta|daily}]
-			// Default per spec
-			updateCmd = "yes"
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-				i++
-				updateCmd = args[i]
-				if updateCmd == "branch" && i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-					i++
-					updateArg = args[i]
-				}
-			}
+			var consumed int
+			updateCmd, updateArg, consumed = parseUpdateArgs(args[i+1:])
+			i += consumed
 
 		case "tor":
 			// Per AI.md PART 31: tor {status|validate|restart|regenerate|vanity|import-keys}
@@ -245,6 +256,17 @@ func main() {
 			if i+1 < len(args) {
 				i++
 				maintCmd = args[i]
+				// Per AI.md PART 22: "--maintenance update [cmd]" is an alias for
+				// "--update [cmd]" - it accepts the same subcommands (check, yes,
+				// branch {name}) and the same default (yes). Parse it exactly like
+				// --update so the subcommand and branch name are not lost.
+				if maintCmd == "update" {
+					maintCmd = ""
+					var consumed int
+					updateCmd, updateArg, consumed = parseUpdateArgs(args[i+1:])
+					i += consumed
+					break
+				}
 				// Parse remaining args for maintenance command
 				// Per AI.md PART 21: no --password flag - password is always
 				// prompted for interactively (shell history/process list leakage)
@@ -387,11 +409,6 @@ func main() {
 
 	// Handle maintenance command
 	if maintCmd != "" {
-		// --maintenance update is alias for --update yes per AI.md
-		if maintCmd == "update" {
-			handleUpdateCommand("yes", "")
-			return
-		}
 		handleMaintenanceCommand(maintCmd, maintArg, configDir, dataDir)
 		return
 	}

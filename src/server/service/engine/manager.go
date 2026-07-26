@@ -291,6 +291,18 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 	}
 	allResults = sortAndFilterByRelevance(allResults, query, minScore)
 
+	// Slice to the requested page window so the returned data array never
+	// exceeds resultsPerPage, per AI.md PART 14 pagination contract ("data"
+	// array size must respect "limit"). Cross-page duplicates across
+	// successive calls are already removed above via m.sessionDedup, so this
+	// window is the next resultsPerPage NEW items for this session.
+	total := len(allResults)
+	pages := (total + resultsPerPage - 1) / resultsPerPage
+	pageResults := allResults
+	if resultsPerPage > 0 && total > resultsPerPage {
+		pageResults = allResults[:resultsPerPage]
+	}
+
 	// Build response
 	elapsed := time.Since(startTime)
 
@@ -298,7 +310,7 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 		Ok: true,
 		Data: model.SearchData{
 			Query:         query,
-			Results:       allResults,
+			Results:       pageResults,
 			EnginesUsed:   enginesUsed,
 			EnginesFailed: enginesFailed,
 			SearchTimeMS:  elapsed.Milliseconds(),
@@ -307,8 +319,8 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 		Pagination: model.PaginationData{
 			Page:  page,
 			Limit: resultsPerPage,
-			Total: len(allResults),
-			Pages: (len(allResults) + resultsPerPage - 1) / resultsPerPage,
+			Total: total,
+			Pages: pages,
 		},
 	}
 }

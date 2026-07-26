@@ -390,7 +390,10 @@ var femaleOnlyTerms = []string{
 var malePresenceWords = []string{
 	"cock", "cocks", "dick", "dicks", "penis",
 	"bbc",
-	"stepbro", "stepfather", "stepdad",
+	"dad", "daddy", "father", "son", "brother",
+	"stepbro", "stepfather", "stepdad", "stepdaddy", "stepson",
+	"grandpa", "uncle", "nephew",
+	"boyfriend", "bf", "hubby",
 	"blowbang", "facial", "cumshot", "cum shot",
 	"handjob", "hand job",
 	"he fucks", "guy fucks", "man fucks",

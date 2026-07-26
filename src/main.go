@@ -1692,6 +1692,7 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 
 PGP actions (AI.md PART 12 "GPG Keypair Management"):
   generate                            Generate the security keypair
+  rotate                              Rotate the keypair (cross-signs, 30-day grace)
   export public [path]                Write the public key (stdout if omitted)
 
 Per AI.md PART 21 the backup password is never passed on the command
@@ -1705,9 +1706,10 @@ Examples:
   %s --maintenance restore backup.tar.gz.enc  # Restore an encrypted archive
   %s --maintenance mode on            # Enable maintenance mode
   %s --maintenance pgp generate       # Generate the security keypair
+  %s --maintenance pgp rotate         # Rotate the security keypair
 `, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
 			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
-			binaryName)
+			binaryName, binaryName)
 		os.Exit(0)
 
 	default:
@@ -1736,6 +1738,13 @@ func handlePGPMaintenance(arg, configDir, dataDir string) {
 		}
 		pgpGenerate(configDir, dataDir)
 
+	case "rotate":
+		if err := authorizeSensitiveOperation(configDir, dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+			os.Exit(1)
+		}
+		pgpRotate(configDir, dataDir)
+
 	case "export":
 		target := ""
 		if len(fields) > 1 {
@@ -1754,7 +1763,7 @@ func handlePGPMaintenance(arg, configDir, dataDir string) {
 
 	default:
 		fmt.Printf(terminal.StatusIcon(false)+" Unknown pgp action: %q\n", action)
-		fmt.Printf("   Usage: %s --maintenance pgp [generate|export public [path]]\n", binaryName)
+		fmt.Printf("   Usage: %s --maintenance pgp [generate|rotate|export public [path]]\n", binaryName)
 		os.Exit(1)
 	}
 }
@@ -1829,6 +1838,135 @@ func pgpGenerateCore(configDir, dataDir string) (kp *pgp.Keypair, identityName, 
 
 	pubKeyPath = filepath.Join(pgp.SecurityDir(paths.Config), pgp.PublicKeyFile)
 	return kp, identityName, securityContact, pubKeyPath, nil
+}
+
+// pgpRotate generates a fresh security keypair, cross-signs it with the outgoing
+// key, archives the old key for the grace window, and reports the result,
+// exiting non-zero on failure (AI.md PART 12 "Rotate").
+func pgpRotate(configDir, dataDir string) {
+	res, err := pgpRotateCore(configDir, dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(terminal.StatusIcon(true) + " Security PGP keypair rotated.")
+	fmt.Printf("   Identity:        %s <%s>\n", res.identityName, res.securityContact)
+	fmt.Printf("   New fingerprint: %s\n", res.newFingerprint)
+	if res.oldFingerprint != "" {
+		fmt.Printf("   Old fingerprint: %s\n", res.oldFingerprint)
+	}
+	fmt.Printf("   Expires:         %s\n", res.expiresAt.Format("2006-01-02"))
+	fmt.Printf("   Public key:      %s\n", res.pubKeyPath)
+	fmt.Printf("   Old key kept:    %s (valid until %s for in-flight reports)\n",
+		res.archiveDir, res.graceUntil.Format("2006-01-02"))
+	fmt.Printf("   Next: run '%s --maintenance pgp publish' to push the new key to keyservers.\n",
+		filepath.Base(os.Args[0]))
+}
+
+// pgpRotateResult carries the outcome of a rotation for reporting.
+type pgpRotateResult struct {
+	identityName    string
+	securityContact string
+	newFingerprint  string
+	oldFingerprint  string
+	expiresAt       time.Time
+	pubKeyPath      string
+	archiveDir      string
+	graceUntil      time.Time
+}
+
+// pgpRotateCore generates a new keypair, signs its public key with the outgoing
+// private key, archives the previous keypair for RotationGracePeriod, installs
+// the new keypair, and updates DB metadata and config (AI.md PART 12 "Rotate":
+// "Generates a new keypair, signs the new pubkey with the old key ... Old key
+// stays valid for 30 days for in-flight reports"). Keyserver publishing is a
+// separate step (`--maintenance pgp publish`).
+func pgpRotateCore(configDir, dataDir string) (*pgpRotateResult, error) {
+	appConfig, configPath, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	securityContact := appConfig.Server.Contact.Security.Email
+	if securityContact == "" {
+		return nil, fmt.Errorf("no security contact configured: set server.contact.security.email in server.yml before rotating a keypair")
+	}
+	appName := appConfig.Server.Branding.Title
+	if appName == "" {
+		appName = "VidVeil"
+	}
+	identityName := appName + " Security"
+
+	paths := config.GetAppPaths(configDir, dataDir)
+	secret, err := loadInstallationSecret(paths.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load installation secret: %w", err)
+	}
+
+	oldPriv, err := pgp.LoadPrivateKey(paths.Config, secret)
+	if err != nil {
+		return nil, fmt.Errorf("no existing keypair to rotate (run 'pgp generate' first): %w", err)
+	}
+
+	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
+	dbMgr, err := database.NewMigrationManager(serverDBPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+	defer dbMgr.Close()
+	if err := dbMgr.RunMigrations(); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+	oldMeta, err := pgp.GetKeypairMeta(dbMgr.GetDB())
+	if err != nil {
+		return nil, fmt.Errorf("failed to read current keypair metadata: %w", err)
+	}
+	oldFingerprint := ""
+	if oldMeta != nil {
+		oldFingerprint = oldMeta.Fingerprint
+	}
+
+	newKP, err := pgp.GenerateKeypair(identityName, securityContact, pgp.DefaultValidity)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate new keypair: %w", err)
+	}
+	crossSigned, err := pgp.CrossSignPublicKey(newKP.PublicArmored, oldPriv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to cross-sign new public key: %w", err)
+	}
+	newKP.PublicArmored = crossSigned
+
+	rotatedAt := time.Now()
+	archiveDir, err := pgp.ArchiveCurrentKeys(paths.Config, oldFingerprint, rotatedAt, pgp.RotationGracePeriod)
+	if err != nil {
+		return nil, fmt.Errorf("failed to archive previous keypair: %w", err)
+	}
+	if err := pgp.WriteKeypair(paths.Config, newKP, secret); err != nil {
+		return nil, fmt.Errorf("failed to write new keypair: %w", err)
+	}
+	if err := pgp.SaveKeypairMeta(dbMgr.GetDB(), newKP); err != nil {
+		return nil, fmt.Errorf("failed to record new keypair metadata: %w", err)
+	}
+	if err := pgp.SetLastRotated(dbMgr.GetDB(), rotatedAt); err != nil {
+		return nil, fmt.Errorf("failed to stamp rotation time: %w", err)
+	}
+
+	appConfig.Web.Security.PublishPGPKey = true
+	appConfig.Web.Security.PGPKeyURL = strings.TrimRight(appConfig.GetPublicURL(), "/") + "/.well-known/pgp-key.asc"
+	if err := config.SaveAppConfig(appConfig, configPath); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Keypair rotated but failed to update config: %v\n", err)
+	}
+
+	return &pgpRotateResult{
+		identityName:    identityName,
+		securityContact: securityContact,
+		newFingerprint:  newKP.Fingerprint,
+		oldFingerprint:  oldFingerprint,
+		expiresAt:       newKP.ExpiresAt,
+		pubKeyPath:      filepath.Join(pgp.SecurityDir(paths.Config), pgp.PublicKeyFile),
+		archiveDir:      archiveDir,
+		graceUntil:      rotatedAt.Add(pgp.RotationGracePeriod),
+	}, nil
 }
 
 // pgpExportPublic writes the armored public key to outPath, or stdout if empty,

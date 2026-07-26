@@ -117,6 +117,36 @@ func TestGetKeypairMetaRotatedAndPublished(t *testing.T) {
 	}
 }
 
+// TestSetLastRotated verifies the rotation timestamp is stamped on the live row.
+func TestSetLastRotated(t *testing.T) {
+	db := newTestDB(t)
+	created := time.Now().UTC().Truncate(time.Second)
+	kp := &Keypair{Fingerprint: "AAAA", CreatedAt: created, ExpiresAt: created.Add(DefaultValidity)}
+	if err := SaveKeypairMeta(db, kp); err != nil {
+		t.Fatalf("SaveKeypairMeta: %v", err)
+	}
+
+	rotated := created.Add(48 * time.Hour)
+	if err := SetLastRotated(db, rotated); err != nil {
+		t.Fatalf("SetLastRotated: %v", err)
+	}
+	meta, err := GetKeypairMeta(db)
+	if err != nil {
+		t.Fatalf("GetKeypairMeta: %v", err)
+	}
+	if meta.LastRotatedAt == nil || !meta.LastRotatedAt.Equal(rotated) {
+		t.Fatalf("LastRotatedAt = %v, want %v", meta.LastRotatedAt, rotated)
+	}
+}
+
+// TestSetLastRotatedNoRow verifies an error when there is no keypair to stamp.
+func TestSetLastRotatedNoRow(t *testing.T) {
+	db := newTestDB(t)
+	if err := SetLastRotated(db, time.Now()); err == nil {
+		t.Fatal("expected error stamping empty pgp_keypair table")
+	}
+}
+
 // TestSaveKeypairMetaReplaces verifies a second save replaces the prior row so
 // only the live keypair remains.
 func TestSaveKeypairMetaReplaces(t *testing.T) {

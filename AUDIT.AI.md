@@ -27,10 +27,15 @@ LOW = minor/cleanup.
   READ-ONLY) — not a code bug against the authoritative precedence table.
 
 ## Pass: Binary & CLI (PART 7-8)
-- [ ] HIGH main.go handleMaintenanceCommand: `pgp` subcommand missing (spec 14659-14673)
-- [ ] HIGH main.go handleMaintenanceCommand: `token` subcommand missing (spec 11815)
+- [~] HIGH main.go handleMaintenanceCommand: `pgp` subcommand (spec 14659-14673) —
+  generate + export public DONE (d8ffd841; CI-red fixed in 417545ba, all green);
+  rotate DONE (cross-signs new pubkey with old key, 30-day archive grace window).
+  Remaining: publish (keyserver.go parked at scratchpad keyserver.go.pending),
+  export private <path>, import <file>, delete — one commit each.
+- [x] N/A main.go handleMaintenanceCommand: `token` subcommand (spec 11815) —
+  N/A: no owner-token resources declared in IDEA.md; nothing to manage.
 - [ ] MED main.go handleMaintenanceCommand: `data` (GDPR export/delete) missing (spec 15291-15340)
-- [ ] MED main.go handleMaintenanceCommand: `compliance` report missing (spec 15444)
+- [x] MED main.go handleMaintenanceCommand: `compliance` report — DONE (b46bd39cb961)
 - [x] LOW main.go: --maintenance --help advertised the removed --password flag —
   rewritten to describe interactive password prompting per AI.md PART 21 — FIXED.
   (pgp/token/data/compliance still omitted deliberately: those subcommands are not
@@ -105,8 +110,9 @@ deployment risk; listed precisely so work persists.
 - [x] HIGH TLS/ACME serving (PART 13-15): FIXED — Server.SetSSLManager/ServeTLSOn/
   ServeHTTPRedirectOn added; config.ParsePorts implements PART 15 port model;
   main.go binds+serves HTTP (ACME+redirect) and HTTPS listeners.
-- [ ] HIGH maintenance subcommands (PART 8): pgp (14659-14673), token (11815),
-  data/GDPR (15291-15340), compliance (15444) all missing from dispatcher.
+- [~] HIGH maintenance subcommands (PART 8): pgp generate/export/rotate DONE +
+  compliance DONE; token N/A. Remaining: pgp publish/export-private/import/delete
+  and data/GDPR (15291-15340).
 - [ ] HIGH frontend CSP+inline (PART 16): extract inline <script>/on* handlers from
   ~13 templates AND tighten CSP script-src to 'self'. Must ship together; UI-regression risk.
 

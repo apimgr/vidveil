@@ -41,6 +41,28 @@ func SaveKeypairMeta(db *sql.DB, kp *Keypair) error {
 	return nil
 }
 
+// SetLastRotated stamps the current keypair row's last_rotated_at column,
+// recording when the keypair was most recently rotated (AI.md PART 12 keypair
+// field "last_rotated_at"). It returns an error if there is no keypair row.
+func SetLastRotated(db *sql.DB, t time.Time) error {
+	res, err := db.Exec(
+		`UPDATE pgp_keypair SET last_rotated_at = ?
+		 WHERE id = (SELECT id FROM pgp_keypair ORDER BY id DESC LIMIT 1)`,
+		t.UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("update last_rotated_at: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("no keypair row to stamp last_rotated_at")
+	}
+	return nil
+}
+
 // GetKeypairMeta returns the current keypair metadata, or (nil, nil) if none.
 func GetKeypairMeta(db *sql.DB) (*KeypairMeta, error) {
 	row := db.QueryRow(

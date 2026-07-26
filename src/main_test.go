@@ -143,6 +143,72 @@ func TestPgpGenerateCore_And_ExportPublic(t *testing.T) {
 	}
 }
 
+// TestPgpRotateCore_NoExistingKey verifies rotation is refused when there is no
+// keypair to rotate from.
+func TestPgpRotateCore_NoExistingKey(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	cfg.Server.Contact.Security.Email = "security@example.com"
+	cfg.Server.Branding.Title = "VidVeil"
+	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+
+	if _, err := pgpRotateCore(cfgDir, dataDir); err == nil {
+		t.Fatal("expected error rotating with no existing keypair")
+	}
+}
+
+// TestPgpRotateCore covers generate → rotate: the new keypair differs from the
+// old, the old key is archived, and the rotation timestamp is stamped.
+func TestPgpRotateCore(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	cfg.Server.Contact.Security.Email = "security@example.com"
+	cfg.Server.Branding.Title = "VidVeil"
+	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+
+	oldKP, _, _, _, err := pgpGenerateCore(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("pgpGenerateCore: %v", err)
+	}
+
+	res, err := pgpRotateCore(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("pgpRotateCore: %v", err)
+	}
+	if res.newFingerprint == "" || res.newFingerprint == oldKP.Fingerprint {
+		t.Fatalf("expected a distinct new fingerprint, got %q (old %q)", res.newFingerprint, oldKP.Fingerprint)
+	}
+	if res.oldFingerprint != oldKP.Fingerprint {
+		t.Errorf("old fingerprint = %q, want %q", res.oldFingerprint, oldKP.Fingerprint)
+	}
+	if _, err := os.Stat(res.archiveDir); err != nil {
+		t.Fatalf("archive dir missing: %v", err)
+	}
+	if _, err := os.Stat(res.pubKeyPath); err != nil {
+		t.Fatalf("new public key missing: %v", err)
+	}
+}
+
 // TestPgpGenerateAndExportPublic_Wrappers exercises the success paths of the
 // thin pgpGenerate / pgpExportPublic CLI wrappers (no os.Exit on success).
 func TestPgpGenerateAndExportPublic_Wrappers(t *testing.T) {

@@ -766,7 +766,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	// JavaScript (progressive enhancement, AI.md PART 16), also perform a
 	// synchronous search and render the results in a <noscript> fallback.
 	if format == "text/html" {
-		relatedSearches := engine.GetRelatedSearches(searchQuery, 8)
+		relatedSearches := h.engineMgr.GetValidatedRelatedSearches(searchQuery, 8)
 		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
 		enginesParam := r.URL.Query().Get("engines")
 
@@ -820,7 +820,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		// Fallback: embed results in HTML shell
 		resultsJSON, _ := json.Marshal(results.Data.Results)
-		relatedSearches := engine.GetRelatedSearches(searchQuery, 8)
+		relatedSearches := h.engineMgr.GetValidatedRelatedSearches(searchQuery, 8)
 		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
 		enginesParam := r.URL.Query().Get("engines")
 
@@ -1802,7 +1802,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	results.Data.BangEngines = parsed.Engines
 
 	// Add related searches
-	results.Data.RelatedSearches = engine.GetRelatedSearches(searchQuery, 8)
+	results.Data.RelatedSearches = h.engineMgr.GetValidatedRelatedSearches(searchQuery, 8)
 
 	// ETag for cached searches: SHA-256 of cacheKey + result count
 	etag := `"` + func() string {

@@ -147,6 +147,51 @@ func TestSetLastRotatedNoRow(t *testing.T) {
 	}
 }
 
+// TestMarkRevoked verifies the live keypair row is flagged revoked while the
+// fingerprint is retained for audit history (AI.md PART 12 "revoked").
+func TestMarkRevoked(t *testing.T) {
+	db := newTestDB(t)
+	created := time.Now().UTC().Truncate(time.Second)
+	kp := &Keypair{Fingerprint: "REVOKEME", CreatedAt: created, ExpiresAt: created.Add(DefaultValidity)}
+	if err := SaveKeypairMeta(db, kp); err != nil {
+		t.Fatalf("SaveKeypairMeta: %v", err)
+	}
+	if err := MarkRevoked(db); err != nil {
+		t.Fatalf("MarkRevoked: %v", err)
+	}
+	meta, err := GetKeypairMeta(db)
+	if err != nil {
+		t.Fatalf("GetKeypairMeta: %v", err)
+	}
+	if !meta.Revoked {
+		t.Fatal("expected revoked=true after MarkRevoked")
+	}
+	if meta.Fingerprint != "REVOKEME" {
+		t.Fatalf("fingerprint = %q, want REVOKEME", meta.Fingerprint)
+	}
+}
+
+// TestMarkRevokedNoRow verifies an error when there is no keypair to revoke.
+func TestMarkRevokedNoRow(t *testing.T) {
+	db := newTestDB(t)
+	if err := MarkRevoked(db); err == nil {
+		t.Fatal("expected error revoking empty pgp_keypair table")
+	}
+}
+
+// TestMarkRevokedNoTable verifies the underlying Exec error surfaces when the
+// pgp_keypair table is missing entirely.
+func TestMarkRevokedNoTable(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := MarkRevoked(db); err == nil {
+		t.Fatal("expected error revoking with no pgp_keypair table")
+	}
+}
+
 // TestSaveKeypairMetaReplaces verifies a second save replaces the prior row so
 // only the live keypair remains.
 func TestSaveKeypairMetaReplaces(t *testing.T) {

@@ -63,6 +63,27 @@ func SetLastRotated(db *sql.DB, t time.Time) error {
 	return nil
 }
 
+// MarkRevoked flags the current keypair row as revoked (AI.md PART 12 keypair
+// field "revoked": set if Delete was used — the key file may be gone but the
+// fingerprint stays in audit history). It returns an error if no row exists.
+func MarkRevoked(db *sql.DB) error {
+	res, err := db.Exec(
+		`UPDATE pgp_keypair SET revoked = 1
+		 WHERE id = (SELECT id FROM pgp_keypair ORDER BY id DESC LIMIT 1)`,
+	)
+	if err != nil {
+		return fmt.Errorf("mark keypair revoked: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("no keypair row to revoke")
+	}
+	return nil
+}
+
 // GetKeypairMeta returns the current keypair metadata, or (nil, nil) if none.
 func GetKeypairMeta(db *sql.DB) (*KeypairMeta, error) {
 	row := db.QueryRow(

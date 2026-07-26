@@ -179,6 +179,52 @@ func TestWriteAndLoadKeypair(t *testing.T) {
 	}
 }
 
+// TestDeleteKeypair verifies both key files (and the keyserver state) are removed
+// and that a second delete is a no-op error-free (AI.md PART 12 "Delete").
+func TestDeleteKeypair(t *testing.T) {
+	dir := t.TempDir()
+	secret := []byte("installation-secret-value")
+	kp, err := GenerateKeypair("VidVeil Security", "security@example.com", DefaultValidity)
+	if err != nil {
+		t.Fatalf("GenerateKeypair: %v", err)
+	}
+	if err := WriteKeypair(dir, kp, secret); err != nil {
+		t.Fatalf("WriteKeypair: %v", err)
+	}
+	statePath := filepath.Join(SecurityDir(dir), KeyserverStateFile)
+	if err := os.WriteFile(statePath, []byte("{}"), 0o600); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	if err := DeleteKeypair(dir); err != nil {
+		t.Fatalf("DeleteKeypair: %v", err)
+	}
+	for _, name := range []string{PublicKeyFile, PrivateKeyFile, KeyserverStateFile} {
+		if _, err := os.Stat(filepath.Join(SecurityDir(dir), name)); !os.IsNotExist(err) {
+			t.Fatalf("%s still present after delete: %v", name, err)
+		}
+	}
+
+	// Idempotent: deleting again when files are gone is not an error.
+	if err := DeleteKeypair(dir); err != nil {
+		t.Fatalf("second DeleteKeypair should be a no-op: %v", err)
+	}
+}
+
+// TestDeleteKeypairRemoveError verifies a non-NotExist removal failure is
+// surfaced. A non-empty directory occupying a key file path makes os.Remove fail
+// with something other than "not exist" even for the root test user.
+func TestDeleteKeypairRemoveError(t *testing.T) {
+	dir := t.TempDir()
+	secDir := SecurityDir(dir)
+	if err := os.MkdirAll(filepath.Join(secDir, PublicKeyFile, "child"), 0o700); err != nil {
+		t.Fatalf("setup non-empty dir at key path: %v", err)
+	}
+	if err := DeleteKeypair(dir); err == nil {
+		t.Fatal("expected DeleteKeypair to fail removing a non-empty directory")
+	}
+}
+
 // TestParsePrivateKey verifies that a generated private key round-trips through
 // ParsePrivateKey with matching fingerprint, identity, and validity window, and
 // that the derived public key re-parses. Powers the import flow (AI.md PART 12).

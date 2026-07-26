@@ -207,6 +207,20 @@ func WriteKeypair(configDir string, kp *Keypair, secret []byte) error {
 	return nil
 }
 
+// DeleteKeypair removes the public key, encrypted private key, and keyserver
+// state file from {config_dir}/security/ (AI.md PART 12 "Delete"). Missing files
+// are not an error, so the operation is idempotent. In-flight encrypted reports
+// become un-decryptable once the private key is gone.
+func DeleteKeypair(configDir string) error {
+	dir := SecurityDir(configDir)
+	for _, name := range []string{PublicKeyFile, PrivateKeyFile, KeyserverStateFile} {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
 // LoadPublicKey reads the armored public key from {config_dir}/security/.
 func LoadPublicKey(configDir string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(SecurityDir(configDir), PublicKeyFile))

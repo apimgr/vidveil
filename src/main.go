@@ -1708,6 +1708,7 @@ PGP actions (AI.md PART 12 "GPG Keypair Management"):
   export public [path]                Write the public key (stdout if omitted)
   export private <path>               Write the decrypted private key (0600, audited, 1/hour)
   import <file>                       Import an existing private key (identity checked)
+  delete                              Delete the keypair (irreversible, typed confirmation)
 
 Per AI.md PART 21 the backup password is never passed on the command
 line; backup always prompts and restore prompts only when the archive
@@ -1812,9 +1813,16 @@ func handlePGPMaintenance(arg, configDir, dataDir string) {
 		}
 		pgpImport(configDir, dataDir, inPath)
 
+	case "delete":
+		if err := authorizeSensitiveOperation(configDir, dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+			os.Exit(1)
+		}
+		pgpDelete(configDir, dataDir)
+
 	default:
 		fmt.Printf(terminal.StatusIcon(false)+" Unknown pgp action: %q\n", action)
-		fmt.Printf("   Usage: %s --maintenance pgp [generate|rotate|publish|export <public|private> [path]|import <file>]\n", binaryName)
+		fmt.Printf("   Usage: %s --maintenance pgp [generate|rotate|publish|export <public|private> [path]|import <file>|delete]\n", binaryName)
 		os.Exit(1)
 	}
 }
@@ -2434,6 +2442,108 @@ func emitPrivateImportAudit(configDir, dataDir, operator, operatorIP, inPath, fi
 	}
 	logger.Audit("security.private_key_imported", operator, "operator", operatorIP, "success",
 		map[string]interface{}{"source": inPath, "fingerprint": fingerprint})
+}
+
+// pgpDelete permanently deletes the security keypair after the caller has run the
+// sensitive-operation gate. It warns that in-flight encrypted reports become
+// un-decryptable, requires a typed confirmation, and reports the result (AI.md
+// PART 12 "Delete"). It exits non-zero on failure or an unconfirmed deletion.
+func pgpDelete(configDir, dataDir string) {
+	done, err := pgpDeleteCore(configDir, dataDir, promptDeleteConfirm)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+		os.Exit(1)
+	}
+	if !done {
+		fmt.Println(terminal.WarningIcon() + " Deletion aborted: confirmation not provided.")
+		os.Exit(1)
+	}
+	fmt.Println(terminal.StatusIcon(true) + " Security PGP keypair deleted.")
+	fmt.Println("   Publishing disabled and the Encryption: line removed from security.txt.")
+}
+
+// pgpDeleteCore deletes both key files, marks the keypair revoked in the DB (the
+// fingerprint stays for audit history), and clears the publishing config so the
+// Encryption: line drops out of the dynamically generated security.txt (AI.md
+// PART 12 "Delete"). confirm is injected so the typed-confirmation gate is
+// testable without a terminal; it returns nil,false with no error when declined.
+func pgpDeleteCore(configDir, dataDir string, confirm func() bool) (bool, error) {
+	appConfig, configPath, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to load configuration: %w", err)
+	}
+	paths := config.GetAppPaths(configDir, dataDir)
+
+	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
+	dbMgr, err := database.NewMigrationManager(serverDBPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to open database: %w", err)
+	}
+	defer dbMgr.Close()
+	if err := dbMgr.RunMigrations(); err != nil {
+		return false, fmt.Errorf("failed to run migrations: %w", err)
+	}
+	meta, err := pgp.GetKeypairMeta(dbMgr.GetDB())
+	if err != nil {
+		return false, fmt.Errorf("failed to read keypair metadata: %w", err)
+	}
+
+	if confirm == nil || !confirm() {
+		return false, nil
+	}
+
+	if err := pgp.DeleteKeypair(paths.Config); err != nil {
+		return false, fmt.Errorf("failed to delete key files: %w", err)
+	}
+	fingerprint := ""
+	if meta != nil {
+		fingerprint = meta.Fingerprint
+		if err := pgp.MarkRevoked(dbMgr.GetDB()); err != nil {
+			return false, fmt.Errorf("key files deleted but failed to mark revoked: %w", err)
+		}
+	}
+
+	appConfig.Web.Security.PublishPGPKey = false
+	appConfig.Web.Security.PGPKeyURL = ""
+	if err := config.SaveAppConfig(appConfig, configPath); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Keys deleted but failed to update config: %v\n", err)
+	}
+
+	operator := "unknown"
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		operator = u.Username
+	}
+	emitPrivateDeleteAudit(configDir, dataDir, operator, localOperatorIP(), fingerprint)
+
+	return true, nil
+}
+
+// promptDeleteConfirm warns that deletion is irreversible and that in-flight
+// encrypted reports become un-decryptable, then requires the operator to type
+// DELETE exactly (AI.md PART 12 "operator warned and must type confirmation").
+func promptDeleteConfirm() bool {
+	fmt.Fprintln(os.Stderr, terminal.WarningIcon()+" Deleting the security keypair is irreversible.")
+	fmt.Fprintln(os.Stderr, "   In-flight encrypted security reports will become permanently un-decryptable.")
+	return promptLine("Type DELETE to confirm: ") == "DELETE"
+}
+
+// emitPrivateDeleteAudit writes the security.private_key_deleted audit event for
+// the sensitive-operation delete flow (AI.md PART 12 — the fingerprint stays in
+// audit history). Audit failures are non-fatal: the keys are already gone, so we
+// warn rather than error.
+func emitPrivateDeleteAudit(configDir, dataDir, operator, operatorIP, fingerprint string) {
+	appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" keypair deleted but audit log unavailable: %v\n", err)
+		return
+	}
+	logger, err := logging.NewAppLogger(appConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" keypair deleted but audit log unavailable: %v\n", err)
+		return
+	}
+	logger.Audit("security.private_key_deleted", operator, "operator", operatorIP, "success",
+		map[string]interface{}{"fingerprint": fingerprint})
 }
 
 // loadInstallationSecret opens the server database and returns the

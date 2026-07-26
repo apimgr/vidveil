@@ -1072,12 +1072,12 @@ func TestPGPKeyAsc_FileExists_Returns200(t *testing.T) {
 		t.Fatalf("mkdir security: %v", err)
 	}
 	keyData := []byte("-----BEGIN PGP PUBLIC KEY BLOCK-----\nfakekey\n-----END PGP PUBLIC KEY BLOCK-----\n")
-	if err := os.WriteFile(secDir+"/pgp-key.asc", keyData, 0644); err != nil {
-		t.Fatalf("write pgp-key.asc: %v", err)
+	if err := os.WriteFile(secDir+"/pgp.pub.asc", keyData, 0644); err != nil {
+		t.Fatalf("write pgp.pub.asc: %v", err)
 	}
 
 	h := newMiscTestHandler()
-	h.dataDir = tmp
+	h.configDir = tmp
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/pgp-key.asc", nil)
 

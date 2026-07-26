@@ -157,6 +157,19 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			read_at DATETIME,
 			details TEXT
 		)`,
+
+		// PGP keypair metadata per AI.md PART 12 "GPG Keypair Management".
+		// The keys themselves live on disk under {config_dir}/security/; this
+		// table stores only metadata. Single logical row (id=1).
+		`CREATE TABLE IF NOT EXISTS pgp_keypair (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			fingerprint TEXT NOT NULL,
+			created_at DATETIME NOT NULL,
+			expires_at DATETIME NOT NULL,
+			last_rotated_at DATETIME,
+			keyservers_published TEXT DEFAULT '[]',
+			revoked INTEGER DEFAULT 0
+		)`,
 	}
 }
 

@@ -38,6 +38,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
+	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 	"github.com/apimgr/vidveil/src/server/service/secrets"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
@@ -1673,6 +1674,11 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 		}
 		printComplianceReport(appConfig)
 
+	case "pgp":
+		// Per AI.md PART 12 "GPG Keypair Management": keypair actions run through
+		// the --maintenance dispatcher, authorized like other sensitive operations.
+		handlePGPMaintenance(arg, configDir, dataDir)
+
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
 		fmt.Printf(`Maintenance Commands:
@@ -1681,7 +1687,12 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
   %s --maintenance update             Check and apply updates
   %s --maintenance mode <on|off>      Enable/disable maintenance mode
   %s --maintenance compliance report  Show regulatory compliance summary
+  %s --maintenance pgp <action>       Manage the security PGP keypair
   %s --maintenance setup              Show configuration instructions
+
+PGP actions (AI.md PART 12 "GPG Keypair Management"):
+  generate                            Generate the security keypair
+  export public [path]                Write the public key (stdout if omitted)
 
 Per AI.md PART 21 the backup password is never passed on the command
 line; backup always prompts and restore prompts only when the archive
@@ -1693,15 +1704,166 @@ Examples:
   %s --maintenance restore            # Restore from most recent
   %s --maintenance restore backup.tar.gz.enc  # Restore an encrypted archive
   %s --maintenance mode on            # Enable maintenance mode
-`, binaryName, binaryName, binaryName, binaryName, binaryName,
-			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
+  %s --maintenance pgp generate       # Generate the security keypair
+`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
+			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
+			binaryName)
 		os.Exit(0)
 
 	default:
 		fmt.Printf(terminal.StatusIcon(false)+" Unknown maintenance command: %s\n", cmd)
-		fmt.Printf("\nUsage: %s --maintenance [backup|restore|update|mode|compliance|setup|--help]\n\nRun '%s --maintenance --help' for detailed help.\n", binaryName, binaryName)
+		fmt.Printf("\nUsage: %s --maintenance [backup|restore|update|mode|compliance|pgp|setup|--help]\n\nRun '%s --maintenance --help' for detailed help.\n", binaryName, binaryName)
 		os.Exit(1)
 	}
+}
+
+// handlePGPMaintenance implements "--maintenance pgp <action>" per AI.md PART 12
+// "GPG Keypair Management". Keypair actions are sensitive operations, authorized
+// the same way as other --maintenance sensitive operations (server.token OR root).
+func handlePGPMaintenance(arg, configDir, dataDir string) {
+	binaryName := filepath.Base(os.Args[0])
+	fields := strings.Fields(arg)
+	action := ""
+	if len(fields) > 0 {
+		action = fields[0]
+	}
+
+	switch action {
+	case "generate":
+		if err := authorizeSensitiveOperation(configDir, dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+			os.Exit(1)
+		}
+		pgpGenerate(configDir, dataDir)
+
+	case "export":
+		target := ""
+		if len(fields) > 1 {
+			target = fields[1]
+		}
+		if target != "public" {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Unsupported export target: %q\n", target)
+			fmt.Printf("   Usage: %s --maintenance pgp export public [path]\n", binaryName)
+			os.Exit(1)
+		}
+		outPath := ""
+		if len(fields) > 2 {
+			outPath = fields[2]
+		}
+		pgpExportPublic(configDir, dataDir, outPath)
+
+	default:
+		fmt.Printf(terminal.StatusIcon(false)+" Unknown pgp action: %q\n", action)
+		fmt.Printf("   Usage: %s --maintenance pgp [generate|export public [path]]\n", binaryName)
+		os.Exit(1)
+	}
+}
+
+// pgpGenerate generates the project security keypair, writes it under
+// {config_dir}/security/, records metadata in the DB, and flips the config
+// flags that expose the public key (AI.md PART 12 "Generate").
+func pgpGenerate(configDir, dataDir string) {
+	appConfig, configPath, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	securityContact := appConfig.Server.Contact.Security.Email
+	if securityContact == "" {
+		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" No security contact configured.")
+		fmt.Fprintln(os.Stderr, "   Set server.contact.security.email in server.yml before generating a keypair.")
+		os.Exit(1)
+	}
+	appName := appConfig.Server.Branding.Title
+	if appName == "" {
+		appName = "VidVeil"
+	}
+	identityName := appName + " Security"
+
+	paths := config.GetAppPaths(configDir, dataDir)
+	secret, err := loadInstallationSecret(paths.Data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load installation secret: %v\n", err)
+		os.Exit(1)
+	}
+
+	kp, err := pgp.GenerateKeypair(identityName, securityContact, pgp.DefaultValidity)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to generate keypair: %v\n", err)
+		os.Exit(1)
+	}
+	if err := pgp.WriteKeypair(paths.Config, kp, secret); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to write keypair: %v\n", err)
+		os.Exit(1)
+	}
+
+	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
+	dbMgr, err := database.NewMigrationManager(serverDBPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer dbMgr.Close()
+	if err := dbMgr.RunMigrations(); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to run migrations: %v\n", err)
+		os.Exit(1)
+	}
+	if err := pgp.SaveKeypairMeta(dbMgr.GetDB(), kp); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to record keypair metadata: %v\n", err)
+		os.Exit(1)
+	}
+
+	appConfig.Web.Security.PublishPGPKey = true
+	appConfig.Web.Security.PGPKeyURL = strings.TrimRight(appConfig.GetPublicURL(), "/") + "/.well-known/pgp-key.asc"
+	if err := config.SaveAppConfig(appConfig, configPath); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Keypair generated but failed to update config: %v\n", err)
+	}
+
+	fmt.Println(terminal.StatusIcon(true) + " Security PGP keypair generated.")
+	fmt.Printf("   Identity:    %s <%s>\n", identityName, securityContact)
+	fmt.Printf("   Fingerprint: %s\n", kp.Fingerprint)
+	fmt.Printf("   Expires:     %s\n", kp.ExpiresAt.Format("2006-01-02"))
+	fmt.Printf("   Public key:  %s\n", filepath.Join(pgp.SecurityDir(paths.Config), pgp.PublicKeyFile))
+}
+
+// pgpExportPublic writes the armored public key to outPath, or stdout if empty
+// (AI.md PART 12 "Export public key"). Reading the public key is not sensitive.
+func pgpExportPublic(configDir, dataDir, outPath string) {
+	paths := config.GetAppPaths(configDir, dataDir)
+	pub, err := pgp.LoadPublicKey(paths.Config)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" No public key found (run 'pgp generate' first): %v\n", err)
+		os.Exit(1)
+	}
+	if outPath == "" {
+		os.Stdout.Write(pub)
+		return
+	}
+	if err := os.WriteFile(outPath, pub, 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to write public key: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf(terminal.StatusIcon(true)+" Public key written to %s\n", outPath)
+}
+
+// loadInstallationSecret opens the server database and returns the
+// installation_secret used to derive the PGP private-key encryption key.
+func loadInstallationSecret(dataDir string) ([]byte, error) {
+	serverDBPath := filepath.Join(dataDir, "db", "server.db")
+	dbMgr, err := database.NewMigrationManager(serverDBPath)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	defer dbMgr.Close()
+	if err := dbMgr.RunMigrations(); err != nil {
+		return nil, fmt.Errorf("run migrations: %w", err)
+	}
+	secretsMgr := secrets.NewManager(dbMgr.GetDB())
+	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
+		return nil, fmt.Errorf("ensure secrets: %w", err)
+	}
+	return secretsMgr.GetInstallationSecret(context.Background())
 }
 
 // printComplianceReport writes a human-readable regulatory compliance summary to

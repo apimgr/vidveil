@@ -805,6 +805,12 @@ type WebSecurityConfig struct {
 	// PGPKeyURL is the URL of the published PGP public key (set when a keypair is generated).
 	// When non-empty, an Encryption: line is added to security.txt.
 	PGPKeyURL string `yaml:"pgp_key_url"`
+	// Keyservers lists the OpenPGP keyservers the public key is published to
+	// via `--maintenance pgp publish` (AI.md PART 12 "GPG Keypair Management").
+	Keyservers []string `yaml:"keyservers"`
+	// PublishPGPKey is set true once a keypair has been generated and the public
+	// key is being served, gating the security.txt Encryption line and endpoints.
+	PublishPGPKey bool `yaml:"publish_pgp_key"`
 }
 
 // SEOCustomTag holds a custom site verification meta tag per AI.md PART 16

@@ -215,6 +215,7 @@ func getClientIP(r *http.Request) string {
 type SearchHandler struct {
 	appConfig   *config.AppConfig
 	dataDir     string
+	configDir   string
 	engineMgr   *engine.EngineManager
 	searchCache *cache.SearchCache
 	metrics     *ServerMetrics
@@ -242,6 +243,11 @@ func NewSearchHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManag
 // SetDataDir sets the data directory (used for thumbnail disk cache)
 func (h *SearchHandler) SetDataDir(dir string) {
 	h.dataDir = dir
+}
+
+// SetConfigDir sets the configuration directory (used to serve the PGP public key)
+func (h *SearchHandler) SetConfigDir(dir string) {
+	h.configDir = dir
 }
 
 // SetMetrics sets the metrics collector for statistics display
@@ -1542,10 +1548,11 @@ func (h *SearchHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(body))
 }
 
-// PGPKeyAsc serves /.well-known/pgp-key.asc per AI.md FINAL CHECKPOINT
-// Returns the security-report PGP public key when present; 404 otherwise.
+// PGPKeyAsc serves /.well-known/pgp-key.asc per AI.md PART 12 "GPG Keypair
+// Management". The public key lives at {config_dir}/security/pgp.pub.asc (written
+// by "--maintenance pgp generate"). Returns 404 when no keypair exists.
 func (h *SearchHandler) PGPKeyAsc(w http.ResponseWriter, r *http.Request) {
-	pgpPath := filepath.Join(h.dataDir, "security", "pgp-key.asc")
+	pgpPath := filepath.Join(h.configDir, "security", "pgp.pub.asc")
 	data, err := os.ReadFile(pgpPath)
 	if err != nil {
 		http.NotFound(w, r)

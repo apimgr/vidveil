@@ -464,6 +464,9 @@ func (s *Server) setupRoutes() {
 	s.searchHandler = h
 	// Set data directory for thumbnail disk cache
 	h.SetDataDir(s.dataDir)
+	// Set config directory so the PGP public key (/.well-known/pgp-key.asc) can
+	// be served from {config_dir}/security/pgp.pub.asc per AI.md PART 12.
+	h.SetConfigDir(s.configDir)
 	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
 	h.SetMetrics(metrics)
 

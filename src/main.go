@@ -1759,59 +1759,66 @@ func handlePGPMaintenance(arg, configDir, dataDir string) {
 	}
 }
 
-// pgpGenerate generates the project security keypair, writes it under
-// {config_dir}/security/, records metadata in the DB, and flips the config
-// flags that expose the public key (AI.md PART 12 "Generate").
+// pgpGenerate generates the project security keypair and reports the result,
+// exiting non-zero on failure (AI.md PART 12 "Generate").
 func pgpGenerate(configDir, dataDir string) {
-	appConfig, configPath, err := config.LoadAppConfig(configDir, dataDir)
+	kp, identityName, securityContact, pubKeyPath, err := pgpGenerateCore(configDir, dataDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println(terminal.StatusIcon(true) + " Security PGP keypair generated.")
+	fmt.Printf("   Identity:    %s <%s>\n", identityName, securityContact)
+	fmt.Printf("   Fingerprint: %s\n", kp.Fingerprint)
+	fmt.Printf("   Expires:     %s\n", kp.ExpiresAt.Format("2006-01-02"))
+	fmt.Printf("   Public key:  %s\n", pubKeyPath)
+}
 
-	securityContact := appConfig.Server.Contact.Security.Email
+// pgpGenerateCore generates the project security keypair, writes it under
+// {config_dir}/security/, records metadata in the DB, and flips the config
+// flags that expose the public key (AI.md PART 12 "Generate"). It returns the
+// keypair, its identity, and the public-key path, or an error.
+func pgpGenerateCore(configDir, dataDir string) (kp *pgp.Keypair, identityName, securityContact, pubKeyPath string, err error) {
+	appConfig, configPath, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		return nil, "", "", "", fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	securityContact = appConfig.Server.Contact.Security.Email
 	if securityContact == "" {
-		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" No security contact configured.")
-		fmt.Fprintln(os.Stderr, "   Set server.contact.security.email in server.yml before generating a keypair.")
-		os.Exit(1)
+		return nil, "", "", "", fmt.Errorf("no security contact configured: set server.contact.security.email in server.yml before generating a keypair")
 	}
 	appName := appConfig.Server.Branding.Title
 	if appName == "" {
 		appName = "VidVeil"
 	}
-	identityName := appName + " Security"
+	identityName = appName + " Security"
 
 	paths := config.GetAppPaths(configDir, dataDir)
 	secret, err := loadInstallationSecret(paths.Data)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load installation secret: %v\n", err)
-		os.Exit(1)
+		return nil, "", "", "", fmt.Errorf("failed to load installation secret: %w", err)
 	}
 
-	kp, err := pgp.GenerateKeypair(identityName, securityContact, pgp.DefaultValidity)
+	kp, err = pgp.GenerateKeypair(identityName, securityContact, pgp.DefaultValidity)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to generate keypair: %v\n", err)
-		os.Exit(1)
+		return nil, "", "", "", fmt.Errorf("failed to generate keypair: %w", err)
 	}
 	if err := pgp.WriteKeypair(paths.Config, kp, secret); err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to write keypair: %v\n", err)
-		os.Exit(1)
+		return nil, "", "", "", fmt.Errorf("failed to write keypair: %w", err)
 	}
 
 	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
 	dbMgr, err := database.NewMigrationManager(serverDBPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to open database: %v\n", err)
-		os.Exit(1)
+		return nil, "", "", "", fmt.Errorf("failed to open database: %w", err)
 	}
 	defer dbMgr.Close()
 	if err := dbMgr.RunMigrations(); err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to run migrations: %v\n", err)
-		os.Exit(1)
+		return nil, "", "", "", fmt.Errorf("failed to run migrations: %w", err)
 	}
 	if err := pgp.SaveKeypairMeta(dbMgr.GetDB(), kp); err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to record keypair metadata: %v\n", err)
-		os.Exit(1)
+		return nil, "", "", "", fmt.Errorf("failed to record keypair metadata: %w", err)
 	}
 
 	appConfig.Web.Security.PublishPGPKey = true
@@ -1820,31 +1827,41 @@ func pgpGenerate(configDir, dataDir string) {
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Keypair generated but failed to update config: %v\n", err)
 	}
 
-	fmt.Println(terminal.StatusIcon(true) + " Security PGP keypair generated.")
-	fmt.Printf("   Identity:    %s <%s>\n", identityName, securityContact)
-	fmt.Printf("   Fingerprint: %s\n", kp.Fingerprint)
-	fmt.Printf("   Expires:     %s\n", kp.ExpiresAt.Format("2006-01-02"))
-	fmt.Printf("   Public key:  %s\n", filepath.Join(pgp.SecurityDir(paths.Config), pgp.PublicKeyFile))
+	pubKeyPath = filepath.Join(pgp.SecurityDir(paths.Config), pgp.PublicKeyFile)
+	return kp, identityName, securityContact, pubKeyPath, nil
 }
 
-// pgpExportPublic writes the armored public key to outPath, or stdout if empty
-// (AI.md PART 12 "Export public key"). Reading the public key is not sensitive.
+// pgpExportPublic writes the armored public key to outPath, or stdout if empty,
+// exiting non-zero on failure (AI.md PART 12 "Export public key").
 func pgpExportPublic(configDir, dataDir, outPath string) {
-	paths := config.GetAppPaths(configDir, dataDir)
-	pub, err := pgp.LoadPublicKey(paths.Config)
+	pub, err := pgpExportPublicCore(configDir, dataDir, outPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" No public key found (run 'pgp generate' first): %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 		os.Exit(1)
 	}
 	if outPath == "" {
 		os.Stdout.Write(pub)
 		return
 	}
-	if err := os.WriteFile(outPath, pub, 0o644); err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to write public key: %v\n", err)
-		os.Exit(1)
-	}
 	fmt.Printf(terminal.StatusIcon(true)+" Public key written to %s\n", outPath)
+}
+
+// pgpExportPublicCore loads the armored public key and, when outPath is set,
+// writes it there (0644). Reading the public key is not sensitive. When outPath
+// is empty it returns the key bytes for the caller to emit.
+func pgpExportPublicCore(configDir, dataDir, outPath string) ([]byte, error) {
+	paths := config.GetAppPaths(configDir, dataDir)
+	pub, err := pgp.LoadPublicKey(paths.Config)
+	if err != nil {
+		return nil, fmt.Errorf("no public key found (run 'pgp generate' first): %w", err)
+	}
+	if outPath == "" {
+		return pub, nil
+	}
+	if err := os.WriteFile(outPath, pub, 0o644); err != nil {
+		return nil, fmt.Errorf("failed to write public key: %w", err)
+	}
+	return pub, nil
 }
 
 // loadInstallationSecret opens the server database and returns the

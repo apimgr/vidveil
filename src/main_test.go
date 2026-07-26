@@ -18,6 +18,208 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// ── loadInstallationSecret / pgpGenerateCore / pgpExportPublicCore ────────────
+// AI.md PART 12 GPG Keypair Management. These exercise the error-returning cores
+// (no os.Exit) so the generate/export logic is unit-testable.
+
+// TestLoadInstallationSecret verifies a secret is produced and is stable across
+// calls against the same data dir (persisted in the DB).
+func TestLoadInstallationSecret(t *testing.T) {
+	base := t.TempDir()
+	dataDir := base + "/data"
+	os.MkdirAll(dataDir, 0755)
+
+	secret, err := loadInstallationSecret(dataDir)
+	if err != nil {
+		t.Fatalf("loadInstallationSecret: %v", err)
+	}
+	if len(secret) == 0 {
+		t.Fatal("empty installation secret")
+	}
+	secret2, err := loadInstallationSecret(dataDir)
+	if err != nil {
+		t.Fatalf("loadInstallationSecret second call: %v", err)
+	}
+	if !bytes.Equal(secret, secret2) {
+		t.Fatal("installation secret not stable across calls")
+	}
+}
+
+// TestPgpGenerateCore_NoSecurityContact verifies generation is refused when no
+// security contact email is configured.
+func TestPgpGenerateCore_NoSecurityContact(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	cfg.Server.Contact.Security.Email = ""
+	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+
+	_, _, _, _, err = pgpGenerateCore(cfgDir, dataDir)
+	if err == nil {
+		t.Fatal("expected error when no security contact configured")
+	}
+	if !strings.Contains(err.Error(), "security contact") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestPgpExportPublicCore_NoKey verifies exporting before generating fails.
+func TestPgpExportPublicCore_NoKey(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	if _, err := pgpExportPublicCore(cfgDir, dataDir, ""); err == nil {
+		t.Fatal("expected error exporting public key when none exists")
+	}
+}
+
+// TestPgpGenerateCore_And_ExportPublic covers the full generate → export flow:
+// keypair generation, DB metadata, config flip, and public-key export to both
+// stdout (empty outPath) and a file.
+func TestPgpGenerateCore_And_ExportPublic(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	cfg.Server.Contact.Security.Email = "security@example.com"
+	cfg.Server.Branding.Title = "VidVeil"
+	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+
+	kp, identity, contact, pubPath, err := pgpGenerateCore(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("pgpGenerateCore: %v", err)
+	}
+	if kp == nil || kp.Fingerprint == "" {
+		t.Fatal("expected non-empty keypair")
+	}
+	if contact != "security@example.com" {
+		t.Errorf("contact = %q, want security@example.com", contact)
+	}
+	if !strings.Contains(identity, "Security") {
+		t.Errorf("identity = %q, want it to contain 'Security'", identity)
+	}
+	if _, err := os.Stat(pubPath); err != nil {
+		t.Fatalf("public key not written at %s: %v", pubPath, err)
+	}
+
+	pub, err := pgpExportPublicCore(cfgDir, dataDir, "")
+	if err != nil {
+		t.Fatalf("pgpExportPublicCore stdout: %v", err)
+	}
+	if !bytes.Contains(pub, []byte("BEGIN PGP PUBLIC KEY BLOCK")) {
+		t.Fatal("exported bytes are not an armored public key")
+	}
+
+	out := base + "/exported.asc"
+	if _, err := pgpExportPublicCore(cfgDir, dataDir, out); err != nil {
+		t.Fatalf("pgpExportPublicCore file: %v", err)
+	}
+	written, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read exported: %v", err)
+	}
+	if !bytes.Equal(written, pub) {
+		t.Fatal("file export does not match stdout export")
+	}
+}
+
+// TestPgpGenerateAndExportPublic_Wrappers exercises the success paths of the
+// thin pgpGenerate / pgpExportPublic CLI wrappers (no os.Exit on success).
+func TestPgpGenerateAndExportPublic_Wrappers(t *testing.T) {
+	base := t.TempDir()
+	cfgDir := base + "/config"
+	dataDir := base + "/data"
+	os.MkdirAll(cfgDir, 0755)
+	os.MkdirAll(dataDir, 0755)
+
+	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	cfg.Server.Contact.Security.Email = "security@example.com"
+	cfg.Server.Branding.Title = "VidVeil"
+	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+
+	out := captureStdout(func() { pgpGenerate(cfgDir, dataDir) })
+	if !strings.Contains(out, "Fingerprint:") {
+		t.Errorf("pgpGenerate output missing fingerprint line: %q", out)
+	}
+
+	dest := base + "/pub.asc"
+	out = captureStdout(func() { pgpExportPublic(cfgDir, dataDir, dest) })
+	if !strings.Contains(out, dest) {
+		t.Errorf("pgpExportPublic output missing path: %q", out)
+	}
+	if _, err := os.Stat(dest); err != nil {
+		t.Fatalf("exported public key not written: %v", err)
+	}
+}
+
+// TestPrintComplianceReport_Disabled verifies the disabled-mode branch renders
+// when no regulatory standards are enabled.
+func TestPrintComplianceReport_Disabled(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	out := captureStdout(func() { printComplianceReport(cfg) })
+	if !strings.Contains(out, "Compliance Report") {
+		t.Errorf("missing report header: %q", out)
+	}
+	if !strings.Contains(out, "DISABLED") {
+		t.Errorf("expected disabled mode, got: %q", out)
+	}
+}
+
+// TestPrintComplianceReport_Enabled verifies the enabled-mode branch lists the
+// active standard and the data-subject-request controls it activates.
+func TestPrintComplianceReport_Enabled(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Compliance.GDPR = true
+	out := captureStdout(func() { printComplianceReport(cfg) })
+	if !strings.Contains(out, "ENABLED") {
+		t.Errorf("expected enabled mode, got: %q", out)
+	}
+	if !strings.Contains(out, "GDPR") {
+		t.Errorf("expected GDPR listed, got: %q", out)
+	}
+	if !strings.Contains(out, "data export") {
+		t.Errorf("expected data-subject controls, got: %q", out)
+	}
+}
+
+// TestAuthorizeViaOperatorToken_NonServiceUser verifies that a non-service,
+// non-root user is rejected outright before any token prompt (AI.md PART 5).
+func TestAuthorizeViaOperatorToken_NonServiceUser(t *testing.T) {
+	base := t.TempDir()
+	err := authorizeViaOperatorToken(base+"/config", base+"/data", "confirm: ")
+	if err == nil {
+		t.Fatal("expected rejection for non-service user")
+	}
+	if !strings.Contains(err.Error(), "administrator authorization") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 // captureStdout redirects os.Stdout to a buffer for the duration of f,
 // returning the captured output.
 func captureStdout(f func()) string {

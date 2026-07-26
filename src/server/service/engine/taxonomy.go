@@ -383,7 +383,7 @@ var femaleOnlyTerms = []string{
 	"women only", "all female",
 }
 
-// malePresenceWords are tokens in a result title that strongly indicate
+// malePresenceWords are tokens in a result's metadata that strongly indicate
 // a biological male participant, contradicting female-only queries.
 // "strapon", "dildo", "strap-on" are intentionally excluded — they appear in
 // lesbian content and must NOT trigger this filter.
@@ -395,6 +395,35 @@ var malePresenceWords = []string{
 	"handjob", "hand job",
 	"he fucks", "guy fucks", "man fucks",
 	"boyfriend fucks", "hubby fucks",
+	"male", "man", "men", "guy", "guys", "husband", "dude",
+}
+
+// familyFemaleWords are family-relationship terms that, in combination (2+
+// distinct matches with no familyMaleWords present), imply a female-only cast
+// — e.g. "mom daughter", "stepmom stepdaughter" — without needing every such
+// phrase hardcoded individually.
+var familyFemaleWords = []string{
+	"mom", "mother", "mommy", "daughter", "sister",
+	"stepmom", "stepmother", "stepsister", "stepdaughter",
+	"grandma", "granny", "aunt", "aunty", "niece",
+}
+
+// familyMaleWords, if any is present alongside familyFemaleWords matches,
+// prevent the family-combo female-only inference above (e.g. "mom son").
+var familyMaleWords = []string{
+	"dad", "father", "son", "brother",
+	"stepdad", "stepfather", "stepbro", "stepson",
+	"grandpa", "uncle", "nephew",
+}
+
+// teenIndicatorWords / olderIndicatorWords are result-metadata signals used
+// to enforce age-category exclusivity — a "teen" query must not surface
+// milf/mature results and vice versa, unless the query itself is a combo.
+var teenIndicatorWords = []string{"teen", "teens", "18yo", "19yo", "barely legal"}
+
+var olderIndicatorWords = []string{
+	"milf", "milfs", "mom", "mother", "mommy", "cougar",
+	"mature", "granny", "gilf", "grandma", "stepmom", "step mom",
 }
 
 // containsWholeWord reports whether s contains word as a standalone word token.
@@ -429,10 +458,34 @@ func DetectQueryIntent(query string) QueryIntent {
 		}
 	}
 
+	// Generalized family-combo detection: 2+ distinct female family-relation
+	// terms with no male family-relation term implies a female-only cast
+	// (e.g. "mom daughter", "stepmom stepdaughter") without hardcoding every
+	// such phrase individually — per the general "these are just examples"
+	// requirement.
+	if !intent.IsFemaleOnly {
+		matchedFamily := map[string]bool{}
+		for _, w := range familyFemaleWords {
+			if containsWholeWord(lower, w) {
+				matchedFamily[w] = true
+			}
+		}
+		hasMaleFamily := false
+		for _, w := range familyMaleWords {
+			if containsWholeWord(lower, w) {
+				hasMaleFamily = true
+				break
+			}
+		}
+		if len(matchedFamily) >= 2 && !hasMaleFamily {
+			intent.IsFemaleOnly = true
+		}
+	}
+
 	ageGroups := map[string][]string{
-		"teen":   {"teen", "teens", "18yo", "19yo", "young girl", "young adult"},
-		"milf":   {"milf", "milfs", "cougar", "mommy", "mature woman"},
-		"mature": {"mature", "granny", "gilf", "older woman"},
+		"teen":   {"teen", "teens", "18yo", "19yo", "young girl", "young adult", "barely legal"},
+		"milf":   {"milf", "milfs", "cougar", "mommy", "mom", "mother", "mature woman", "stepmom", "step mom"},
+		"mature": {"mature", "granny", "gilf", "older woman", "grandma"},
 	}
 	for age, synonyms := range ageGroups {
 		for _, syn := range synonyms {
@@ -455,37 +508,86 @@ var toyWords = []string{"dildo", "strapon", "strap-on", "vibrator", "toy", "arti
 // e.g. "bbc dildo" or "strapon dick" refer to toys, not biological males.
 var ambiguousMaleWords = []string{"cock", "cocks", "dick", "dicks", "bbc"}
 
+// resultTextBlob builds a single lowercase text blob from all of a result's
+// text-bearing metadata fields — title alone is not enough to reliably
+// detect gender/age-category contradictions, since male-presence or
+// wrong-age-category signals often only appear in tags, description, or the
+// performer field.
+func resultTextBlob(r model.VideoResult) string {
+	parts := make([]string, 0, 4)
+	parts = append(parts, r.Title, r.Description, r.Performer)
+	if len(r.Tags) > 0 {
+		parts = append(parts, strings.Join(r.Tags, " "))
+	}
+	return strings.ToLower(strings.Join(parts, " "))
+}
+
+// containsAnyWholeWord reports whether text contains any of words as a
+// standalone token.
+func containsAnyWholeWord(text string, words []string) bool {
+	for _, w := range words {
+		if containsWholeWord(text, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAgeType reports whether name is present in types.
+func hasAgeType(types []string, name string) bool {
+	for _, t := range types {
+		if t == name {
+			return true
+		}
+	}
+	return false
+}
+
 // Conservative: only rejects when there is clear, unambiguous evidence of contradiction.
 func ResultMatchesIntent(r model.VideoResult, intent QueryIntent) bool {
-	if !intent.IsFemaleOnly {
-		return true
-	}
+	blob := resultTextBlob(r)
 
-	titleLower := strings.ToLower(r.Title)
-
-	// If title mentions a sex toy, skip ambiguous words ("bbc dildo", "artificial cock")
-	hasToy := false
-	for _, tw := range toyWords {
-		if strings.Contains(titleLower, tw) {
-			hasToy = true
-			break
+	if intent.IsFemaleOnly {
+		// If the blob mentions a sex toy, skip ambiguous words ("bbc dildo", "artificial cock")
+		hasToy := false
+		for _, tw := range toyWords {
+			if strings.Contains(blob, tw) {
+				hasToy = true
+				break
+			}
 		}
-	}
 
-	for _, word := range malePresenceWords {
-		if hasToy {
-			isAmbiguous := false
-			for _, aw := range ambiguousMaleWords {
-				if word == aw {
-					isAmbiguous = true
-					break
+		for _, word := range malePresenceWords {
+			if hasToy {
+				isAmbiguous := false
+				for _, aw := range ambiguousMaleWords {
+					if word == aw {
+						isAmbiguous = true
+						break
+					}
+				}
+				if isAmbiguous {
+					continue
 				}
 			}
-			if isAmbiguous {
-				continue
+			if containsWholeWord(blob, word) {
+				return false
 			}
 		}
-		if containsWholeWord(titleLower, word) {
+	}
+
+	// Age-category exclusivity: a teen-only query must not surface milf/mature
+	// results and vice versa. A query that mentions both a young and an older
+	// age bucket simultaneously (e.g. "milf teen threesome") is treated as an
+	// intentional combo and skips this check entirely.
+	if len(intent.HasAgeTypes) > 0 {
+		teenQuery := hasAgeType(intent.HasAgeTypes, "teen")
+		olderQuery := hasAgeType(intent.HasAgeTypes, "milf") || hasAgeType(intent.HasAgeTypes, "mature")
+
+		if teenQuery && !olderQuery && containsAnyWholeWord(blob, olderIndicatorWords) {
+			return false
+		}
+		if olderQuery && !teenQuery && containsAnyWholeWord(blob, teenIndicatorWords) {
 			return false
 		}
 	}

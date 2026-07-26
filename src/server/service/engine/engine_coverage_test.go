@@ -1152,6 +1152,109 @@ func TestResultMatchesIntent_FemaleOnly_ToyWordExemptsBBC(t *testing.T) {
 	}
 }
 
+func TestDetectQueryIntent_MomDaughterIsFemaleOnly(t *testing.T) {
+	intent := DetectQueryIntent("mom daughter share")
+	if !intent.IsFemaleOnly {
+		t.Error("DetectQueryIntent('mom daughter share'): IsFemaleOnly should be true (family-combo)")
+	}
+}
+
+func TestDetectQueryIntent_MomSonIsNotFemaleOnly(t *testing.T) {
+	intent := DetectQueryIntent("mom son taboo")
+	if intent.IsFemaleOnly {
+		t.Error("DetectQueryIntent('mom son taboo'): IsFemaleOnly should be false (male family member present)")
+	}
+}
+
+func TestDetectQueryIntent_SingleFamilyWordIsNotFemaleOnly(t *testing.T) {
+	intent := DetectQueryIntent("mom solo")
+	if intent.IsFemaleOnly {
+		t.Error("DetectQueryIntent('mom solo'): IsFemaleOnly should be false (only one family word)")
+	}
+}
+
+func TestDetectQueryIntent_MomAgeTypeIsMilf(t *testing.T) {
+	intent := DetectQueryIntent("hot mom")
+	found := false
+	for _, a := range intent.HasAgeTypes {
+		if a == "milf" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("DetectQueryIntent('hot mom'): HasAgeTypes = %v, should include 'milf'", intent.HasAgeTypes)
+	}
+}
+
+func TestResultMatchesIntent_FemaleOnly_MaleWordInDescription_False(t *testing.T) {
+	// Title alone gives no signal — the male-presence indicator is only in
+	// the description/tags/performer metadata, which must still be checked.
+	intent := QueryIntent{IsFemaleOnly: true}
+	r := model.VideoResult{Title: "girls only fun", Description: "featuring a man joining in"}
+	if ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: male-presence word in Description should reject the result")
+	}
+}
+
+func TestResultMatchesIntent_FemaleOnly_MaleWordInTags_False(t *testing.T) {
+	intent := QueryIntent{IsFemaleOnly: true}
+	r := model.VideoResult{Title: "lesbian scene", Tags: []string{"guy", "threesome"}}
+	if ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: male-presence word in Tags should reject the result")
+	}
+}
+
+func TestResultMatchesIntent_FemaleOnly_MaleWordInPerformer_False(t *testing.T) {
+	intent := QueryIntent{IsFemaleOnly: true}
+	r := model.VideoResult{Title: "lesbian scene", Performer: "Jane Doe and a man"}
+	if ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: male-presence word in Performer should reject the result")
+	}
+}
+
+func TestResultMatchesIntent_TeenQuery_RejectsMilfResult(t *testing.T) {
+	intent := QueryIntent{HasAgeTypes: []string{"teen"}}
+	r := model.VideoResult{Title: "hot milf compilation"}
+	if ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: teen-only query should reject a milf-tagged result")
+	}
+}
+
+func TestResultMatchesIntent_MilfQuery_RejectsTeenResult(t *testing.T) {
+	intent := QueryIntent{HasAgeTypes: []string{"milf"}}
+	r := model.VideoResult{Title: "petite teen compilation"}
+	if ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: milf-only query should reject a teen-tagged result")
+	}
+}
+
+func TestResultMatchesIntent_TeenQuery_AllowsTeenResult(t *testing.T) {
+	intent := QueryIntent{HasAgeTypes: []string{"teen"}}
+	r := model.VideoResult{Title: "petite teen amateur"}
+	if !ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: teen-only query should allow a teen-tagged result")
+	}
+}
+
+func TestResultMatchesIntent_ComboAgeQuery_SkipsAgeFilter(t *testing.T) {
+	// A query mentioning both a young and older age bucket is an intentional
+	// combo query — age-exclusivity filtering must not apply.
+	intent := QueryIntent{HasAgeTypes: []string{"teen", "milf"}}
+	r := model.VideoResult{Title: "milf teaches teen threesome"}
+	if !ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: combo teen+milf query should not be filtered by age exclusivity")
+	}
+}
+
+func TestResultMatchesIntent_AgeIndicatorOnlyInTags_StillRejects(t *testing.T) {
+	intent := QueryIntent{HasAgeTypes: []string{"teen"}}
+	r := model.VideoResult{Title: "amateur homemade", Tags: []string{"mature", "wife"}}
+	if ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: age-category indicator only present in Tags should still reject")
+	}
+}
+
 // ── containsWholeWord ─────────────────────────────────────────────────────────
 
 func TestContainsWholeWord_Match(t *testing.T) {

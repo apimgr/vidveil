@@ -384,45 +384,6 @@ func TestExecCtx_ExecutesStatement(t *testing.T) {
 	}
 }
 
-func TestQueryCtx_ReturnsRows(t *testing.T) {
-	db := openTestDB(t)
-	s := NewSchedulerWithDB(db)
-
-	_, _ = db.Exec(`INSERT INTO scheduled_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
-		"qtest", "Q", "hourly", 1)
-
-	rows, err := s.queryCtx(`SELECT id FROM scheduled_tasks WHERE id = ?`, "qtest")
-	if err != nil {
-		t.Fatalf("queryCtx: %v", err)
-	}
-	defer rows.Close()
-
-	var count int
-	for rows.Next() {
-		count++
-	}
-	if count != 1 {
-		t.Errorf("queryCtx returned %d rows, want 1", count)
-	}
-}
-
-func TestQueryRowCtx_ScansValue(t *testing.T) {
-	db := openTestDB(t)
-	s := NewSchedulerWithDB(db)
-
-	_, _ = db.Exec(`INSERT INTO scheduled_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
-		"rtest", "R", "hourly", 1)
-
-	var name string
-	row := s.queryRowCtx(`SELECT name FROM scheduled_tasks WHERE id = ?`, "rtest")
-	if err := row.Scan(&name); err != nil {
-		t.Fatalf("queryRowCtx Scan: %v", err)
-	}
-	if name != "R" {
-		t.Errorf("name = %q, want 'R'", name)
-	}
-}
-
 func TestLoadTaskStateFromDB_NilDBReturnsNil(t *testing.T) {
 	s := NewScheduler()
 	task, err := s.loadTaskStateFromDB("any")
@@ -553,10 +514,7 @@ func TestLoadHistoryFromDB_LoadsEntries(t *testing.T) {
 		"lhtask", now.Add(-20*time.Second), now.Add(-10*time.Second), 10000, "failure")
 
 	if err := s.LoadHistoryFromDB(100); err != nil {
-		// modernc.org/sqlite cancels context during row scan when queryCtx's
-		// defer cancel() fires — treat as a known driver limitation, not a test failure.
-		t.Logf("LoadHistoryFromDB: %v (skipping row-count assertion)", err)
-		return
+		t.Fatalf("LoadHistoryFromDB: %v", err)
 	}
 
 	hist := s.GetHistory("lhtask", 10)

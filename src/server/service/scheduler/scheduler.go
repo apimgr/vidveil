@@ -146,22 +146,15 @@ func (s *Scheduler) SetCatchUpWindow(window time.Duration) {
 }
 
 // Query timeout helpers per AI.md PART 10: All queries MUST have timeouts
+// execCtx runs a statement whose execution completes before this helper
+// returns, so scoping the timeout context to the helper is safe. Query
+// helpers that return lazily-scanned *sql.Rows / *sql.Row are intentionally
+// omitted: their context must outlive the caller's Scan, so callers create
+// the context inline and defer cancel() in the scanning function.
 func (s *Scheduler) execCtx(query string, args ...interface{}) (sql.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return s.db.ExecContext(ctx, query, args...)
-}
-
-func (s *Scheduler) queryCtx(query string, args ...interface{}) (*sql.Rows, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return s.db.QueryContext(ctx, query, args...)
-}
-
-func (s *Scheduler) queryRowCtx(query string, args ...interface{}) *sql.Row {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return s.db.QueryRowContext(ctx, query, args...)
 }
 
 // loadTaskStateFromDB loads persisted task state from database
@@ -262,7 +255,13 @@ func (s *Scheduler) LoadHistoryFromDB(limit int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rows, err := s.queryCtx(`
+	// Context must remain live through the row iteration below, so it is
+	// created here and cancelled on function return (not inside a helper
+	// that returns before Scan runs) per AI.md PART 10.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT task_id, start_time, end_time, duration_ms, result, error
 		FROM task_history
 		ORDER BY start_time DESC

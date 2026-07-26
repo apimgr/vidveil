@@ -1909,9 +1909,23 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
+	// Total engines actually being queried, independent of how many return
+	// results — reported to the client so a zero-match query is shown as
+	// "0 of N engines had results" rather than the misleading "0 engines".
+	enginesTotal := h.engineMgr.EnginesToUseCount(engineNames)
+
 	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers, showAI, minQuality, previewFirst, userMinDuration, sessionID)
 
+	// Tracked server-side (not left to the client) so the final "N of M
+	// engines had results" count is always authoritative, not re-derived from
+	// whichever SSE messages the browser happened to parse.
+	enginesWithResults := make(map[string]struct{})
+
 	for result := range resultsChan {
+		if result.Engine != "" && result.Engine != "all" && result.Error == "" {
+			enginesWithResults[result.Engine] = struct{}{}
+		}
+
 		data, err := json.Marshal(result)
 		if err != nil {
 			continue
@@ -1921,8 +1935,11 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 		rc.Flush()
 	}
 
-	// Send final done message with total elapsed time since request was received
-	fmt.Fprintf(w, "data: {\"done\":true,\"engine\":\"all\",\"elapsed_ms\":%d}\n\n", time.Since(requestStart).Milliseconds())
+	// Send final done message with total elapsed time since request was received.
+	// engines_total / engines_with_results are computed server-side (not
+	// re-derived from streamed messages in JS) per PART 14's server-side
+	// processing philosophy — the client only displays these numbers.
+	fmt.Fprintf(w, "data: {\"done\":true,\"engine\":\"all\",\"elapsed_ms\":%d,\"engines_total\":%d,\"engines_with_results\":%d}\n\n", time.Since(requestStart).Milliseconds(), enginesTotal, len(enginesWithResults))
 	rc.Flush()
 }
 

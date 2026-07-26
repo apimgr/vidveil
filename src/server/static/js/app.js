@@ -1338,7 +1338,12 @@ if (document.readyState === 'loading') {
     var displayedCount = 0;
     var isSearching = true;
     var enginesCompleted = 0;
+    // Live tracker, used only while streaming (isSearching)
     var enginesWithResults = new Set();
+    // Total engines queried, from the SSE 'done' payload
+    var enginesTotal = 0;
+    // Authoritative final count, from the SSE 'done' payload
+    var enginesWithResultsFinal = null;
     var sourcesSet = new Set();
     var searchCurrentDurationFilter = '';
     var searchCurrentQualityFilter = '';
@@ -1477,6 +1482,8 @@ if (document.readyState === 'loading') {
                 streamDone = true;
                 eventSource.close();
                 isSearching = false;
+                if (data.engines_total != null) enginesTotal = data.engines_total;
+                if (data.engines_with_results != null) enginesWithResultsFinal = data.engines_with_results;
                 var elapsed = data.elapsed_ms != null ? data.elapsed_ms : Math.round(performance.now() - startTime);
                 var timeContainer = document.getElementById('search-time-container');
                 if (timeContainer) timeContainer.textContent = 'in ' + elapsed + 'ms';
@@ -2061,6 +2068,8 @@ if (document.readyState === 'loading') {
         var minDuration = parseInt(prefs.minDuration) || 0;
 
         if (isSearching) {
+            // Still streaming: no authoritative server count yet, so this is a
+            // live client-side tally (progress indicator only, not the final claim).
             if (statusText) statusText.textContent = allResults.length + ' results (streaming...)';
             if (engineStatus) engineStatus.textContent = enginesWithResults.size + ' engines responding';
         } else {
@@ -2069,7 +2078,16 @@ if (document.readyState === 'loading') {
                 msg += ' (min ' + Math.floor(minDuration / 60) + ' min)';
             }
             if (statusText) statusText.textContent = msg;
-            if (engineStatus) engineStatus.textContent = enginesWithResults.size + ' engines';
+            // Final state: use the server-authoritative counts from the SSE
+            // 'done' payload, not the client-side tally, per PART 14's
+            // server-side-processing philosophy.
+            if (engineStatus) {
+                if (enginesWithResultsFinal != null && enginesTotal > 0) {
+                    engineStatus.textContent = enginesWithResultsFinal + ' of ' + enginesTotal + ' engines had results';
+                } else {
+                    engineStatus.textContent = enginesWithResults.size + ' engines';
+                }
+            }
         }
     }
 

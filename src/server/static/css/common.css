@@ -2062,12 +2062,16 @@ header .search-form {
     white-space: nowrap;
 }
 
-/* Status Bar */
+/* Status Bar: fixed to the viewport bottom per IDEA.md ("Status bar: fixed
+   bottom, connection status + engine count, real-time updates"). The
+   .search-page rule below reserves matching space above .site-footer so this
+   bar never visually overlaps/merges with the real page footer. */
 .status-bar {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
+    z-index: 100;
     background: var(--bg-secondary);
     border-top: 1px solid var(--border);
     padding: 0.5rem 1rem;
@@ -2076,7 +2080,12 @@ header .search-form {
     align-items: center;
     font-size: 0.8rem;
     color: var(--text-secondary);
-    z-index: 100;
+}
+
+/* Reserve room so the fixed status bar (search page only) never covers the
+   real site footer. */
+.search-page .site-footer {
+    padding-bottom: calc(2rem + 2.25rem);
 }
 
 #status-text {

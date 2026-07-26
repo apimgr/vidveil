@@ -1263,6 +1263,16 @@ type StreamResult struct {
 	Error  string            `json:"error,omitempty"`
 }
 
+// EnginesToUseCount returns how many engines will be queried for the given
+// engine name filter, without performing a search. SSE handlers use this to
+// report an accurate "engines queried" total, distinct from "engines that
+// returned results" (which can legitimately be 0 for a zero-match query).
+func (m *EngineManager) EnginesToUseCount(engineNames []string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.getEnginesToUse(engineNames))
+}
+
 // SearchStream performs a search across enabled engines and streams results via channel
 // Results are deduplicated by URL across all engines
 func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {

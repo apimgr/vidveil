@@ -222,7 +222,7 @@ main {
 }
 
 /* Footer always at bottom */
-.site-footer {
+.footer {
     flex-shrink: 0;
     text-align: center;
     padding: 2rem 1rem;
@@ -233,21 +233,21 @@ main {
     margin-top: auto;
 }
 
-.site-footer a {
+.footer a {
     color: var(--link-color);
 }
 
 /* Footer rows per AI.md PART 16 - fixed row order, no <br/> spacers between rows */
-.site-footer p {
+.footer p {
     margin: 0.25rem 0;
 }
 
-.site-footer span {
+.footer span {
     color: var(--text-muted);
     margin: 0 0.25rem;
 }
 
-.site-footer .footer-onion {
+.footer .footer-onion {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
@@ -255,7 +255,7 @@ main {
     gap: 0.5rem;
 }
 
-.site-footer .copy-btn {
+.footer .copy-btn {
     background: none;
     border: none;
     cursor: pointer;
@@ -2064,7 +2064,7 @@ header .search-form {
 
 /* Status Bar: fixed to the viewport bottom per IDEA.md ("Status bar: fixed
    bottom, connection status + engine count, real-time updates"). The
-   .search-page rule below reserves matching space above .site-footer so this
+   .search-page rule below reserves matching space above .footer so this
    bar never visually overlaps/merges with the real page footer. */
 .status-bar {
     position: fixed;
@@ -2084,7 +2084,7 @@ header .search-form {
 
 /* Reserve room so the fixed status bar (search page only) never covers the
    real site footer. */
-.search-page .site-footer {
+.search-page .footer {
     padding-bottom: calc(2rem + 2.25rem);
 }
 
@@ -2892,7 +2892,7 @@ a:focus-visible {
     /* Hide non-essential elements */
     .site-header,
     .site-nav,
-    .site-footer,
+    .footer,
     .nav-panel,
     .nav-overlay,
     .nav-toggle,

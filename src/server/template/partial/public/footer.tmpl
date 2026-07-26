@@ -1,6 +1,6 @@
 {{define "public/footer"}}
 {{/* AI.md PART 16: Footer contains About, Privacy, Contact, Help, GitHub, version */}}
-<footer class="site-footer">
+<footer class="footer">
     {{/* Onion address - shown only if Tor is enabled and running (AI.md PART 16) */}}
     {{ if and .TorEnabled .TorRunning }}
     <p class="footer-onion">
@@ -21,11 +21,11 @@
         <a href="/server/help">Help</a>
     </p>
 
-    {{/* Application branding */}}
+    {{/* Application branding - {project_version} shown with no "v" prefix per AI.md version rules */}}
     <p>
         <a href="https://github.com/apimgr/vidveil" target="_blank">Made with</a> &#10084;&#65039;
-        {{if .Version}}<span>&#8226;</span>
-        <span>v{{.Version}}</span>{{end}}
+        <span>&#8226;</span>
+        <span>{{.Version}}</span>
     </p>
 
     {{/* Build stamp */}}

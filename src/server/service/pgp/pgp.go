@@ -220,3 +220,47 @@ func LoadPrivateKey(configDir string, secret []byte) ([]byte, error) {
 	}
 	return DecryptPrivateKey(blob, secret)
 }
+
+// ParsePrivateKey parses an ASCII-armored private key block and returns a
+// normalized Keypair (with the derived public key, fingerprint, and timestamps)
+// plus the primary identity's name and email. It powers the import flow
+// (AI.md PART 12 "Import private key"). The private key must be passphrase-less,
+// matching the format this project generates.
+func ParsePrivateKey(armoredPriv []byte) (kp *Keypair, name, email string, err error) {
+	ring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(armoredPriv))
+	if err != nil {
+		return nil, "", "", fmt.Errorf("read private key: %w", err)
+	}
+	if len(ring) == 0 {
+		return nil, "", "", fmt.Errorf("private key ring is empty")
+	}
+	entity := ring[0]
+	if entity.PrivateKey == nil {
+		return nil, "", "", fmt.Errorf("armored block contains no private key")
+	}
+
+	pub, err := armorEntity(entity, false, nil)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("armor public key: %w", err)
+	}
+
+	created := entity.PrimaryKey.CreationTime.UTC()
+	expires := created.Add(DefaultValidity)
+	for _, id := range entity.Identities {
+		name = id.UserId.Name
+		email = id.UserId.Email
+		if id.SelfSignature != nil && id.SelfSignature.KeyLifetimeSecs != nil {
+			expires = created.Add(time.Duration(*id.SelfSignature.KeyLifetimeSecs) * time.Second)
+		}
+		break
+	}
+
+	kp = &Keypair{
+		Fingerprint:    strings.ToUpper(hex.EncodeToString(entity.PrimaryKey.Fingerprint)),
+		PublicArmored:  pub,
+		PrivateArmored: armoredPriv,
+		CreatedAt:      created,
+		ExpiresAt:      expires,
+	}
+	return kp, name, email, nil
+}

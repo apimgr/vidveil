@@ -178,3 +178,55 @@ func TestWriteAndLoadKeypair(t *testing.T) {
 		t.Fatal("loaded private key mismatch")
 	}
 }
+
+// TestParsePrivateKey verifies that a generated private key round-trips through
+// ParsePrivateKey with matching fingerprint, identity, and validity window, and
+// that the derived public key re-parses. Powers the import flow (AI.md PART 12).
+func TestParsePrivateKey(t *testing.T) {
+	kp, err := GenerateKeypair("VidVeil Security", "security@example.com", DefaultValidity)
+	if err != nil {
+		t.Fatalf("GenerateKeypair: %v", err)
+	}
+
+	got, name, email, err := ParsePrivateKey(kp.PrivateArmored)
+	if err != nil {
+		t.Fatalf("ParsePrivateKey: %v", err)
+	}
+	if got.Fingerprint != kp.Fingerprint {
+		t.Fatalf("fingerprint = %q, want %q", got.Fingerprint, kp.Fingerprint)
+	}
+	if name != "VidVeil Security" {
+		t.Fatalf("name = %q, want %q", name, "VidVeil Security")
+	}
+	if email != "security@example.com" {
+		t.Fatalf("email = %q, want %q", email, "security@example.com")
+	}
+	if d := got.ExpiresAt.Sub(kp.CreatedAt.Add(DefaultValidity)); d > time.Minute || d < -time.Minute {
+		t.Fatalf("expiry %v not ~2 years after creation", got.ExpiresAt)
+	}
+	if !bytes.Equal(got.PrivateArmored, kp.PrivateArmored) {
+		t.Fatal("private armored mismatch")
+	}
+	if _, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(got.PublicArmored)); err != nil {
+		t.Fatalf("derived public key does not parse: %v", err)
+	}
+}
+
+// TestParsePrivateKeyRejectsPublic verifies a public-only armored block is
+// rejected (no private key material to import).
+func TestParsePrivateKeyRejectsPublic(t *testing.T) {
+	kp, err := GenerateKeypair("VidVeil Security", "security@example.com", DefaultValidity)
+	if err != nil {
+		t.Fatalf("GenerateKeypair: %v", err)
+	}
+	if _, _, _, err := ParsePrivateKey(kp.PublicArmored); err == nil {
+		t.Fatal("expected error parsing a public-only block as private")
+	}
+}
+
+// TestParsePrivateKeyGarbage verifies non-armored input is rejected.
+func TestParsePrivateKeyGarbage(t *testing.T) {
+	if _, _, _, err := ParsePrivateKey([]byte("not a pgp key")); err == nil {
+		t.Fatal("expected error parsing garbage input")
+	}
+}

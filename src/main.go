@@ -1707,6 +1707,7 @@ PGP actions (AI.md PART 12 "GPG Keypair Management"):
   publish                             Publish the public key to configured keyservers
   export public [path]                Write the public key (stdout if omitted)
   export private <path>               Write the decrypted private key (0600, audited, 1/hour)
+  import <file>                       Import an existing private key (identity checked)
 
 Per AI.md PART 21 the backup password is never passed on the command
 line; backup always prompts and restore prompts only when the archive
@@ -1795,9 +1796,25 @@ func handlePGPMaintenance(arg, configDir, dataDir string) {
 			os.Exit(1)
 		}
 
+	case "import":
+		inPath := ""
+		if len(fields) > 1 {
+			inPath = fields[1]
+		}
+		if inPath == "" {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" A source file is required to import a private key.")
+			fmt.Printf("   Usage: %s --maintenance pgp import <file>\n", binaryName)
+			os.Exit(1)
+		}
+		if err := authorizeSensitiveOperation(configDir, dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+			os.Exit(1)
+		}
+		pgpImport(configDir, dataDir, inPath)
+
 	default:
 		fmt.Printf(terminal.StatusIcon(false)+" Unknown pgp action: %q\n", action)
-		fmt.Printf("   Usage: %s --maintenance pgp [generate|rotate|publish|export <public|private> [path]]\n", binaryName)
+		fmt.Printf("   Usage: %s --maintenance pgp [generate|rotate|publish|export <public|private> [path]|import <file>]\n", binaryName)
 		os.Exit(1)
 	}
 }
@@ -2285,6 +2302,138 @@ func localOperatorIP() string {
 		return addr.IP.String()
 	}
 	return ""
+}
+
+// pgpImportResult carries the outcome of a private-key import for reporting.
+type pgpImportResult struct {
+	identityName  string
+	identityEmail string
+	fingerprint   string
+	expiresAt     time.Time
+	pubKeyPath    string
+}
+
+// pgpImport imports an existing armored private key from a local file and
+// reports the result, exiting non-zero on failure or an unconfirmed identity
+// mismatch (AI.md PART 12 "Import private key").
+func pgpImport(configDir, dataDir, inPath string) {
+	res, err := pgpImportCore(configDir, dataDir, inPath, promptImportOverride)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+		os.Exit(1)
+	}
+	if res == nil {
+		fmt.Println(terminal.WarningIcon() + " Import aborted: identity mismatch was not confirmed.")
+		os.Exit(1)
+	}
+	fmt.Println(terminal.StatusIcon(true) + " Security PGP private key imported.")
+	fmt.Printf("   Identity:    %s <%s>\n", res.identityName, res.identityEmail)
+	fmt.Printf("   Fingerprint: %s\n", res.fingerprint)
+	fmt.Printf("   Expires:     %s\n", res.expiresAt.Format("2006-01-02"))
+	fmt.Printf("   Public key:  %s\n", res.pubKeyPath)
+}
+
+// pgpImportCore reads and parses the armored private key at inPath, validates its
+// identity against the project's expected identity (calling confirmMismatch on a
+// mismatch so the operator can override), then installs the keypair, records its
+// metadata, and re-enables publishing (AI.md PART 12 "Import private key"). It
+// returns nil result with nil error when a mismatch is declined. confirmMismatch
+// is injected so the identity-gate is testable without a terminal.
+func pgpImportCore(configDir, dataDir, inPath string, confirmMismatch func(expected, got string) bool) (*pgpImportResult, error) {
+	armored, err := os.ReadFile(inPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read private key file: %w", err)
+	}
+	kp, name, email, err := pgp.ParsePrivateKey(armored)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
+
+	appConfig, configPath, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+	appName := appConfig.Server.Branding.Title
+	if appName == "" {
+		appName = "VidVeil"
+	}
+	expectedName := appName + " Security"
+	expectedEmail := appConfig.Server.Contact.Security.Email
+	if name != expectedName || (expectedEmail != "" && email != expectedEmail) {
+		expected := fmt.Sprintf("%s <%s>", expectedName, expectedEmail)
+		got := fmt.Sprintf("%s <%s>", name, email)
+		if confirmMismatch == nil || !confirmMismatch(expected, got) {
+			return nil, nil
+		}
+	}
+
+	paths := config.GetAppPaths(configDir, dataDir)
+	secret, err := loadInstallationSecret(paths.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load installation secret: %w", err)
+	}
+	if err := pgp.WriteKeypair(paths.Config, kp, secret); err != nil {
+		return nil, fmt.Errorf("failed to write keypair: %w", err)
+	}
+
+	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
+	dbMgr, err := database.NewMigrationManager(serverDBPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+	defer dbMgr.Close()
+	if err := dbMgr.RunMigrations(); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+	if err := pgp.SaveKeypairMeta(dbMgr.GetDB(), kp); err != nil {
+		return nil, fmt.Errorf("failed to record keypair metadata: %w", err)
+	}
+
+	appConfig.Web.Security.PublishPGPKey = true
+	appConfig.Web.Security.PGPKeyURL = strings.TrimRight(appConfig.GetPublicURL(), "/") + "/.well-known/pgp-key.asc"
+	if err := config.SaveAppConfig(appConfig, configPath); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Key imported but failed to update config: %v\n", err)
+	}
+
+	operator := "unknown"
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		operator = u.Username
+	}
+	emitPrivateImportAudit(configDir, dataDir, operator, localOperatorIP(), inPath, kp.Fingerprint)
+
+	return &pgpImportResult{
+		identityName:  name,
+		identityEmail: email,
+		fingerprint:   kp.Fingerprint,
+		expiresAt:     kp.ExpiresAt,
+		pubKeyPath:    filepath.Join(pgp.SecurityDir(paths.Config), pgp.PublicKeyFile),
+	}, nil
+}
+
+// promptImportOverride warns about an identity mismatch and asks the operator to
+// confirm the import (AI.md PART 12 "warns on mismatch — operator can override").
+func promptImportOverride(expected, got string) bool {
+	fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Imported key identity %q does not match the expected identity %q.\n", got, expected)
+	ans := strings.ToLower(promptLine("Import anyway? [y/N]: "))
+	return ans == "y" || ans == "yes"
+}
+
+// emitPrivateImportAudit writes the security.private_key_imported audit event for
+// the sensitive-operation import flow (AI.md PART 5 sensitive operations). Audit
+// failures are non-fatal: the key was already imported, so we warn rather than error.
+func emitPrivateImportAudit(configDir, dataDir, operator, operatorIP, inPath, fingerprint string) {
+	appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" private key imported but audit log unavailable: %v\n", err)
+		return
+	}
+	logger, err := logging.NewAppLogger(appConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" private key imported but audit log unavailable: %v\n", err)
+		return
+	}
+	logger.Audit("security.private_key_imported", operator, "operator", operatorIP, "success",
+		map[string]interface{}{"source": inPath, "fingerprint": fingerprint})
 }
 
 // loadInstallationSecret opens the server database and returns the

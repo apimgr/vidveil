@@ -87,8 +87,26 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-07-24 (PART 21 Audit Events table, lines 29154-29162, re-verified for audit-logging wiring)
-- Current task: PART 21 audit-logging gap fixed — MaintenanceManager now emits all 5
+- Last read AI.md: 2026-07-26 (PART 13 HEALTH & VERSIONING, lines 17048-17247, re-verified for healthz field-order/go_version Data Sources; PART 16 WEB FRONTEND error-pages/public-layout footer spec, lines 23414-23533 and 45201-45213)
+- Current task: female-only/age-category search filtering feature (taxonomy.go) committed as
+  3b057f0abf08; CI verified green via `gh run list --branch main --json databaseId,status,
+  conclusion,workflowName,headSha` (CI, Daily Build, Docker Build all conclusion=success for
+  this SHA). Separately, audited /healthz and /api/{version}/server/healthz JSON responses
+  against AI.md PART 13 and found both handlers built their response bodies from
+  `map[string]interface{}` literals — Go's encoding/json always alphabetizes map keys on
+  marshal, so despite comments claiming spec field order, the actual wire JSON did not match
+  PART 13's mandated order. Fixed in handlers.go by adding canonical HealthResponse,
+  ProjectInfo, BuildInfo, FeaturesInfo, TorInfo, ChecksInfo, StatsInfo structs (struct field
+  order is preserved by encoding/json, unlike maps) and rewiring both HealthCheck and
+  APIHealthCheck to build these structs instead of maps; also fixed a latent inconsistency
+  where APIHealthCheck sourced go_version from version.GoVersion while HealthCheck used
+  runtime.Version() directly — unified both to runtime.Version() per PART 13's Data Sources
+  table. Verified via full test suite, go-lint agent (zero violations), and Docker rebuild;
+  committed+pushed as d3edd0aa5265. CI verified fully green via the same `gh run list`
+  command (CI, Docker Build, Daily Build all conclusion=success for this SHA) — Docker
+  Build's multi-platform job took longer than the other two workflows but completed clean,
+  no stuck-job intervention needed.
+- Prior task: PART 21 audit-logging gap fixed — MaintenanceManager now emits all 5
   required "Audit Events" (backup.created, backup.retention_cleanup,
   backup.verification_failed, backup.daily_updated, backup.skipped_disk_full) via a new
   nil-safe SetLogger/audit() pair in maintenance.go, wired from main.go's BackupDaily and

@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -1527,6 +1528,16 @@ func promptPassword(prompt string) string {
 	return string(bytePassword)
 }
 
+// promptLine prints prompt and reads a single trimmed line of visible input from
+// stdin (unlike promptPassword, the text is echoed). Used for free-text operator
+// input such as the reason required for a private-key export.
+func promptLine(prompt string) string {
+	fmt.Print(prompt)
+	reader := bufio.NewReader(os.Stdin)
+	line, _ := reader.ReadString('\n')
+	return strings.TrimSpace(line)
+}
+
 // promptPasswordConfirmed prompts for a new password twice and requires both
 // entries to match before returning it, per AI.md PART 21 encryption setup.
 func promptPasswordConfirmed() string {
@@ -1695,6 +1706,7 @@ PGP actions (AI.md PART 12 "GPG Keypair Management"):
   rotate                              Rotate the keypair (cross-signs, 30-day grace)
   publish                             Publish the public key to configured keyservers
   export public [path]                Write the public key (stdout if omitted)
+  export private <path>               Write the decrypted private key (0600, audited, 1/hour)
 
 Per AI.md PART 21 the backup password is never passed on the command
 line; backup always prompts and restore prompts only when the archive
@@ -1759,20 +1771,33 @@ func handlePGPMaintenance(arg, configDir, dataDir string) {
 		if len(fields) > 1 {
 			target = fields[1]
 		}
-		if target != "public" {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Unsupported export target: %q\n", target)
-			fmt.Printf("   Usage: %s --maintenance pgp export public [path]\n", binaryName)
-			os.Exit(1)
-		}
 		outPath := ""
 		if len(fields) > 2 {
 			outPath = fields[2]
 		}
-		pgpExportPublic(configDir, dataDir, outPath)
+		switch target {
+		case "public":
+			pgpExportPublic(configDir, dataDir, outPath)
+		case "private":
+			if outPath == "" {
+				fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" A destination path is required for a private key export.")
+				fmt.Printf("   Usage: %s --maintenance pgp export private <path>\n", binaryName)
+				os.Exit(1)
+			}
+			if err := authorizeSensitiveOperation(configDir, dataDir); err != nil {
+				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+				os.Exit(1)
+			}
+			pgpExportPrivate(configDir, dataDir, outPath)
+		default:
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Unsupported export target: %q\n", target)
+			fmt.Printf("   Usage: %s --maintenance pgp export <public|private> [path]\n", binaryName)
+			os.Exit(1)
+		}
 
 	default:
 		fmt.Printf(terminal.StatusIcon(false)+" Unknown pgp action: %q\n", action)
-		fmt.Printf("   Usage: %s --maintenance pgp [generate|rotate|publish|export public [path]]\n", binaryName)
+		fmt.Printf("   Usage: %s --maintenance pgp [generate|rotate|publish|export <public|private> [path]]\n", binaryName)
 		os.Exit(1)
 	}
 }
@@ -2092,6 +2117,174 @@ func pgpExportPublicCore(configDir, dataDir, outPath string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to write public key: %w", err)
 	}
 	return pub, nil
+}
+
+// privateExportWindow is the minimum interval between private-key exports for a
+// single operator, per AI.md PART 12 ("rate-limited to 1 per hour per operator").
+const privateExportWindow = time.Hour
+
+// privateExportStateName is the on-disk record of the last private-key export per
+// operator, kept in the security dir alongside the keypair so the rate limit
+// survives across CLI invocations.
+const privateExportStateName = "private_export.state"
+
+// pgpExportPrivate exports the decrypted private key to outPath after the caller
+// has already run the sensitive-operation gate. It prompts the operator for the
+// mandatory reason text, enforces the per-operator rate limit, writes the key at
+// mode 0600, and emits a security.private_key_exported audit event (AI.md PART 12
+// "Export private key"). It exits non-zero on any failure.
+func pgpExportPrivate(configDir, dataDir, outPath string) {
+	operator := "unknown"
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		operator = u.Username
+	}
+
+	reason := promptLine("Reason for exporting the private key (required): ")
+	if reason == "" {
+		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" A reason is required to export the private key.")
+		os.Exit(1)
+	}
+
+	if err := pgpExportPrivateCore(configDir, dataDir, outPath, operator, localOperatorIP(), reason, time.Now().UTC()); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf(terminal.StatusIcon(true)+" Private key exported to %s (mode 0600).\n", outPath)
+	fmt.Println(terminal.WarningIcon() + " This file contains the decrypted private key. Store it securely and delete it when no longer needed.")
+}
+
+// pgpExportPrivateCore enforces the per-operator rate limit, decrypts and writes
+// the private key at mode 0600, records the export timestamp, and audits the
+// event. now is passed in so the rate limit is deterministically testable.
+func pgpExportPrivateCore(configDir, dataDir, outPath, operator, operatorIP, reason string, now time.Time) error {
+	paths := config.GetAppPaths(configDir, dataDir)
+
+	if err := checkPrivateExportRateLimit(paths.Config, operator, now); err != nil {
+		return err
+	}
+
+	secret, err := loadInstallationSecret(paths.Data)
+	if err != nil {
+		return fmt.Errorf("failed to load installation secret: %w", err)
+	}
+	priv, err := pgp.LoadPrivateKey(paths.Config, secret)
+	if err != nil {
+		return fmt.Errorf("no private key found (run 'pgp generate' first): %w", err)
+	}
+
+	if dir := filepath.Dir(outPath); dir != "" {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("failed to create destination directory: %w", err)
+		}
+	}
+	if err := os.WriteFile(outPath, priv, 0o600); err != nil {
+		return fmt.Errorf("failed to write private key: %w", err)
+	}
+
+	if err := recordPrivateExport(paths.Config, operator, now); err != nil {
+		return fmt.Errorf("private key written but failed to record export state: %w", err)
+	}
+
+	emitPrivateExportAudit(configDir, dataDir, operator, operatorIP, reason, outPath)
+	return nil
+}
+
+// checkPrivateExportRateLimit rejects a private-key export when this operator
+// exported within privateExportWindow of now (AI.md PART 12 "1 per hour per
+// operator"). A missing or unreadable state file means no prior export.
+func checkPrivateExportRateLimit(configDir, operator string, now time.Time) error {
+	state, err := loadPrivateExportState(configDir)
+	if err != nil {
+		return err
+	}
+	last, ok := state[operator]
+	if !ok {
+		return nil
+	}
+	lastAt, err := time.Parse(time.RFC3339, last)
+	if err != nil {
+		return nil
+	}
+	if elapsed := now.Sub(lastAt); elapsed < privateExportWindow {
+		wait := (privateExportWindow - elapsed).Round(time.Minute)
+		return fmt.Errorf("rate limited: this operator exported the private key less than an hour ago; try again in %s", wait)
+	}
+	return nil
+}
+
+// recordPrivateExport stamps now as this operator's most recent private-key
+// export in the state file (mode 0600).
+func recordPrivateExport(configDir, operator string, now time.Time) error {
+	state, err := loadPrivateExportState(configDir)
+	if err != nil {
+		return err
+	}
+	state[operator] = now.Format(time.RFC3339)
+
+	dir := pgp.SecurityDir(configDir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create security dir: %w", err)
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("marshal export state: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, privateExportStateName), data, 0o600); err != nil {
+		return fmt.Errorf("write export state: %w", err)
+	}
+	return nil
+}
+
+// loadPrivateExportState reads the per-operator private-key export timestamps. A
+// missing file yields an empty map; a malformed file is a hard error so a
+// corrupt state cannot silently defeat the rate limit.
+func loadPrivateExportState(configDir string) (map[string]string, error) {
+	path := filepath.Join(pgp.SecurityDir(configDir), privateExportStateName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]string{}, nil
+		}
+		return nil, fmt.Errorf("read export state: %w", err)
+	}
+	state := map[string]string{}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("parse export state: %w", err)
+	}
+	return state, nil
+}
+
+// emitPrivateExportAudit writes the security.private_key_exported audit event,
+// including the operator IP and typed reason (AI.md PART 12). Audit failures are
+// non-fatal: the key was already exported, so we warn rather than error.
+func emitPrivateExportAudit(configDir, dataDir, operator, operatorIP, reason, outPath string) {
+	appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" private key exported but audit log unavailable: %v\n", err)
+		return
+	}
+	logger, err := logging.NewAppLogger(appConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" private key exported but audit log unavailable: %v\n", err)
+		return
+	}
+	logger.Audit("security.private_key_exported", operator, "operator", operatorIP, "success",
+		map[string]interface{}{"reason": reason, "path": outPath})
+}
+
+// localOperatorIP returns the machine's primary outbound IP on a best-effort
+// basis for the audit trail. A UDP "connection" to a documentation-range address
+// sends no packets but resolves the local source IP; failures yield "".
+func localOperatorIP() string {
+	conn, err := net.Dial("udp", "192.0.2.1:9")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+		return addr.IP.String()
+	}
+	return ""
 }
 
 // loadInstallationSecret opens the server database and returns the

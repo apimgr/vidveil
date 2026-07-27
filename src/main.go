@@ -1057,12 +1057,27 @@ func checkStatus() int {
 		return 1
 	}
 
+	// Resolve the effective port the same way the running server does
+	// (Port chain per AI.md: --port > VIDVEIL_PORT > PORT > config > random).
+	// The server never persists an env-resolved port back to server.yml, so
+	// reading statusConfig.Server.Port alone would report a stale/wrong port
+	// whenever VIDVEIL_PORT or PORT overrides the config file (e.g. the
+	// standard Docker deployment sets PORT=80) — causing --status, and thus
+	// the Docker HEALTHCHECK, to falsely report "Stopped" against a healthy
+	// server listening on a different port.
+	statusPort := statusConfig.Server.Port
+	if envPort := os.Getenv("VIDVEIL_PORT"); envPort != "" {
+		statusPort = envPort
+	} else if envPort := os.Getenv("PORT"); envPort != "" {
+		statusPort = envPort
+	}
+
 	// Try to connect to the server
-	addr := net.JoinHostPort("127.0.0.1", statusConfig.Server.Port)
+	addr := net.JoinHostPort("127.0.0.1", statusPort)
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		fmt.Println("Server Status: Stopped")
-		fmt.Printf("  Port: %s\n", statusConfig.Server.Port)
+		fmt.Printf("  Port: %s\n", statusPort)
 		return 1
 	}
 	conn.Close()
@@ -1071,12 +1086,12 @@ func checkStatus() int {
 	health := queryHealthz("", "")
 	if health == nil {
 		fmt.Println("Server Status: Starting")
-		fmt.Printf("  Port: %s\n", statusConfig.Server.Port)
+		fmt.Printf("  Port: %s\n", statusPort)
 		return 1
 	}
 
 	fmt.Println("Server Status: Running")
-	fmt.Printf("  Port: %s\n", statusConfig.Server.Port)
+	fmt.Printf("  Port: %s\n", statusPort)
 	fmt.Printf("  Mode: %s\n", health.Mode)
 	fmt.Printf("  Uptime: %s\n", health.Uptime)
 	fmt.Println()

@@ -120,7 +120,18 @@ func queryHealthz(configDir, dataDir string) *healthzResponse {
 		return nil
 	}
 
-	addr := net.JoinHostPort("127.0.0.1", cfg.Server.Port)
+	// Port chain per AI.md: --port > VIDVEIL_PORT > PORT > config > random.
+	// The running server never persists an env-resolved port back to
+	// server.yml, so cfg.Server.Port alone can be stale (e.g. Docker sets
+	// PORT=80 while the config file still has a random generated port).
+	port := cfg.Server.Port
+	if envPort := os.Getenv("VIDVEIL_PORT"); envPort != "" {
+		port = envPort
+	} else if envPort := os.Getenv("PORT"); envPort != "" {
+		port = envPort
+	}
+
+	addr := net.JoinHostPort("127.0.0.1", port)
 	client := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequest("GET", fmt.Sprintf("http://%s/server/healthz", addr), nil)
 	if err != nil {

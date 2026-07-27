@@ -149,6 +149,16 @@ func (m *EngineManager) applyConfig() {
 // Server (sessions)") so that page=2, page=3, ... of the same infinite-scroll
 // search never resurface a result already returned on an earlier page.
 func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string, sessionID string) *model.SearchResponse {
+	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, sessionID)
+}
+
+// SearchWithOperators is identical to Search but additionally applies
+// exact-phrase and exclusion operators (parsed via engine.ParseBangs) to the
+// non-streaming search paths (JSON/HTML/RSS/Atom/batch), matching the
+// operator support already present in SearchStreamWithOperators. Without
+// this, "-word" and "\"exact phrase\"" queries silently had no effect on
+// every endpoint except SSE streaming.
+func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, sessionID string) *model.SearchResponse {
 	startTime := time.Now()
 
 	m.mu.RLock()
@@ -289,7 +299,7 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 		minScore = m.appConfig.Search.MinRelevanceScore
 		resultsPerPage = m.appConfig.Search.ResultsPerPage
 	}
-	allResults = sortAndFilterByRelevance(allResults, query, minScore)
+	allResults = sortAndFilterByRelevanceWithOperators(allResults, query, minScore, exactPhrases, exclusions, nil)
 
 	// Slice to the requested page window so the returned data array never
 	// exceeds resultsPerPage, per AI.md PART 14 pagination contract ("data"

@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -770,7 +771,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
 		enginesParam := r.URL.Query().Get("engines")
 
-		results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames, "")
+		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, "")
 		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 		if h.metrics != nil {
 			h.metrics.IncrementSearches()
@@ -797,7 +798,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-browser clients (CLI, curl, JSON API): perform synchronous search
-	results := h.engineMgr.Search(r.Context(), searchQuery, 1, engineNames, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, "")
 	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 
 	if h.metrics != nil {
@@ -1817,6 +1818,20 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	// Check cache first (skip cache param allows bypassing)
 	skipCache := r.URL.Query().Get("nocache") == "1"
 	cacheKey := cache.CacheKey(searchQuery, page, engineNames)
+	// Exclusion/exact-phrase operators change the filtered result set for an
+	// otherwise-identical query/page/engines combination, so they must be
+	// part of the cache key to avoid serving one operator combo's cached
+	// results for a different combo.
+	if len(parsed.Exclusions) > 0 {
+		sortedExclusions := append([]string(nil), parsed.Exclusions...)
+		sort.Strings(sortedExclusions)
+		cacheKey += "|x:" + strings.Join(sortedExclusions, ",")
+	}
+	if len(parsed.ExactPhrases) > 0 {
+		sortedPhrases := append([]string(nil), parsed.ExactPhrases...)
+		sort.Strings(sortedPhrases)
+		cacheKey += "|p:" + strings.Join(sortedPhrases, "\x1f")
+	}
 	if sessionID != "" {
 		// Session-scoped dedup filtering means the same query/page/engines
 		// combination can yield different results per session; keep each
@@ -1856,7 +1871,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 				ctx = engine.WithTorPref(ctx, &useTor)
 			}
 		}
-		results = h.engineMgr.Search(ctx, searchQuery, page, engineNames, sessionID)
+		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, sessionID)
 		results.Data.Cached = false
 		// Cache the results
 		h.searchCache.Set(cacheKey, results)
@@ -3448,7 +3463,7 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.Search(r.Context(), parsed.Query, page, parsed.Engines, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, "")
 	results.Data.Query = query
 	renderSearchRSS(w, r, results, h.appConfig)
 }
@@ -3467,7 +3482,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.Search(r.Context(), parsed.Query, page, parsed.Engines, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, "")
 	results.Data.Query = query
 	renderSearchAtom(w, r, results, h.appConfig)
 }
@@ -3528,7 +3543,7 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 			if len(engineNames) == 0 {
 				engineNames = parsed.Engines
 			}
-			res := h.engineMgr.Search(r.Context(), parsed.Query, page, engineNames, "")
+			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, "")
 			res.Data.Query = bq.Q
 			ch <- batchResult{idx: idx, resp: res}
 		}(i, q)

@@ -39,6 +39,18 @@ func TestEngineManager_Search_WithEngineNames_ReturnsEmpty(t *testing.T) {
 	}
 }
 
+// SearchWithOperators must exist alongside Search (mirroring the
+// SearchStream/SearchStreamWithOperators convention) so exclusion/exact-phrase
+// operators reach the non-SSE search paths (JSON API, HTML fallback, RSS/Atom
+// feeds, batch search) instead of being silently ignored.
+func TestEngineManager_SearchWithOperators_EmptyManager_ReturnsResponse(t *testing.T) {
+	m := newEmptyMgr()
+	resp := m.SearchWithOperators(context.Background(), "test", 1, nil, []string{"exact phrase"}, []string{"excluded"}, "")
+	if resp == nil {
+		t.Fatal("SearchWithOperators: nil response")
+	}
+}
+
 func TestEngineManager_Search_PageTwo_ReturnsEmpty(t *testing.T) {
 	m := newEmptyMgr()
 	resp := m.Search(context.Background(), "amateur", 2, nil, "")

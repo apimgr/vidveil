@@ -133,6 +133,19 @@ func TestParseBangs_MultipleExclusions(t *testing.T) {
 	}
 }
 
+// An unknown bang is stripped from the base query (not left dangling in
+// search text) while still being recorded as InvalidBang for a caller to
+// surface as a warning.
+func TestParseBangs_UnknownBangStrippedFromQuery(t *testing.T) {
+	result := ParseBangs("!bogusbang milf teen")
+	if result.Query != "milf teen" {
+		t.Errorf("ParseBangs unknown bang: query = %q, want 'milf teen'", result.Query)
+	}
+	if result.InvalidBang != "!bogusbang" {
+		t.Errorf("ParseBangs unknown bang: InvalidBang = %q, want '!bogusbang'", result.InvalidBang)
+	}
+}
+
 // ── BaseEngine – methods not covered by engines_test.go ─────────────────────
 
 func TestBaseEngine_GetStats_InitialState(t *testing.T) {

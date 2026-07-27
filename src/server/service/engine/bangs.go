@@ -131,6 +131,7 @@ type ParsedQuery struct {
 //   - "exact phrase" -> require exact phrase match
 //   - -word -> exclude results containing word
 //   - @word -> strips @ prefix (used for autocomplete, word kept in query)
+//   - !unknownbang -> stripped from query, recorded in InvalidBang
 func ParseBangs(query string) ParsedQuery {
 	result := ParsedQuery{
 		Query:        query,
@@ -186,9 +187,10 @@ func ParseBangs(query string) ParsedQuery {
 					result.Engines = append(result.Engines, engineName)
 				}
 			} else {
-				// Unknown bang - keep it as part of query but note it
+				// Unknown bang - strip it from the query and note it so
+				// the rest of the query still searches cleanly; the
+				// caller can surface InvalidBang as a warning.
 				result.InvalidBang = word
-				queryWords = append(queryWords, word)
 			}
 		} else if strings.HasPrefix(word, "@") && len(word) > 1 {
 			// @ prefix is for autocomplete only - strip it and keep word in query

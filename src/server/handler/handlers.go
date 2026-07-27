@@ -773,6 +773,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, "")
 		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
+		results.Data.InvalidBang = parsed.InvalidBang
 		if h.metrics != nil {
 			h.metrics.IncrementSearches()
 		}
@@ -800,6 +801,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	// Non-browser clients (CLI, curl, JSON API): perform synchronous search
 	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, "")
 	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
+	results.Data.InvalidBang = parsed.InvalidBang
 
 	if h.metrics != nil {
 		h.metrics.IncrementSearches()
@@ -814,6 +816,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"engines_used": results.Data.EnginesUsed,
 			"search_time":  results.Data.SearchTimeMS,
 			"has_bang":     parsed.HasBang,
+			"invalid_bang": parsed.InvalidBang,
 		})
 
 	default:
@@ -1803,10 +1806,6 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Opaque client-generated token scoping cross-page result dedup to a single
-	// infinite-scroll search session (see AI.md PART 14 "State management ->
-	// Server (sessions)"). The client only passes this through; all dedup state
-	// and logic lives server-side.
 	sessionID := r.URL.Query().Get("session")
 
 	// SSE streaming mode - stream results as they arrive from engines
@@ -1887,6 +1886,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	results.Data.SearchQuery = searchQuery
 	results.Data.HasBang = parsed.HasBang
 	results.Data.BangEngines = parsed.Engines
+	results.Data.InvalidBang = parsed.InvalidBang
 
 	// Add related searches
 	results.Data.RelatedSearches = h.engineMgr.GetValidatedRelatedSearches(searchQuery, 8)
@@ -3465,6 +3465,7 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 	parsed := engine.ParseBangs(query)
 	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, "")
 	results.Data.Query = query
+	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchRSS(w, r, results, h.appConfig)
 }
 
@@ -3484,6 +3485,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 	parsed := engine.ParseBangs(query)
 	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, "")
 	results.Data.Query = query
+	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchAtom(w, r, results, h.appConfig)
 }
 
@@ -3545,6 +3547,7 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 			}
 			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, "")
 			res.Data.Query = bq.Q
+			res.Data.InvalidBang = parsed.InvalidBang
 			ch <- batchResult{idx: idx, resp: res}
 		}(i, q)
 	}

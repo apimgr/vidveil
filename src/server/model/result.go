@@ -65,6 +65,7 @@ type SearchData struct {
 	EngineStats     map[string]EngineStatInfo `json:"engine_stats,omitempty"`
 	RelatedSearches []string                  `json:"related_searches,omitempty"`
 	SpellSuggestion string                    `json:"spell_suggestion,omitempty"`
+	InvalidBang     string                    `json:"invalid_bang,omitempty"`
 }
 
 // PaginationData holds pagination information

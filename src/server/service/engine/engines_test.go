@@ -132,8 +132,8 @@ func TestParseBangs_DuplicateBangs(t *testing.T) {
 func TestParseBangs_UnknownBang(t *testing.T) {
 	result := ParseBangs("!unknown test")
 
-	if result.Query != "!unknown test" {
-		t.Errorf("ParseBangs query = %q, want '!unknown test'", result.Query)
+	if result.Query != "test" {
+		t.Errorf("ParseBangs query = %q, want 'test' (unknown bang stripped)", result.Query)
 	}
 
 	if result.InvalidBang != "!unknown" {

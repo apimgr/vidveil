@@ -108,7 +108,7 @@ var BangMapping = map[string]string{
 
 // ParsedQuery represents a query after bang parsing
 type ParsedQuery struct {
-	// The search query without bangs, quotes, and exclusions
+	// The search query without bangs, quotes, exclusions, and required terms
 	Query string
 	// Engine names to search (empty = all)
 	Engines []string
@@ -120,6 +120,8 @@ type ParsedQuery struct {
 	ExactPhrases []string
 	// Words to exclude from results (from -word)
 	Exclusions []string
+	// Words required in results (from +word)
+	RequiredTerms []string
 }
 
 // ParseBangs extracts bang commands from a query
@@ -130,15 +132,17 @@ type ParsedQuery struct {
 //   - !pornhub query -> search pornhub for "query"
 //   - "exact phrase" -> require exact phrase match
 //   - -word -> exclude results containing word
+//   - +word -> require results to contain word
 //   - @word -> strips @ prefix (used for autocomplete, word kept in query)
 //   - !unknownbang -> stripped from query, recorded in InvalidBang
 func ParseBangs(query string) ParsedQuery {
 	result := ParsedQuery{
-		Query:        query,
-		Engines:      []string{},
-		HasBang:      false,
-		ExactPhrases: []string{},
-		Exclusions:   []string{},
+		Query:         query,
+		Engines:       []string{},
+		HasBang:       false,
+		ExactPhrases:  []string{},
+		Exclusions:    []string{},
+		RequiredTerms: []string{},
 	}
 
 	if query == "" {
@@ -200,6 +204,10 @@ func ParseBangs(query string) ParsedQuery {
 			// Exclusion term
 			exclusion := strings.ToLower(word[1:])
 			result.Exclusions = append(result.Exclusions, exclusion)
+		} else if strings.HasPrefix(word, "+") && len(word) > 1 {
+			// Required term - must be present in every result
+			required := strings.ToLower(word[1:])
+			result.RequiredTerms = append(result.RequiredTerms, required)
 		} else {
 			queryWords = append(queryWords, word)
 		}

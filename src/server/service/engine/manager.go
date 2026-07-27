@@ -149,16 +149,17 @@ func (m *EngineManager) applyConfig() {
 // Server (sessions)") so that page=2, page=3, ... of the same infinite-scroll
 // search never resurface a result already returned on an earlier page.
 func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string, sessionID string) *model.SearchResponse {
-	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, sessionID)
+	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, nil, sessionID)
 }
 
 // SearchWithOperators is identical to Search but additionally applies
-// exact-phrase and exclusion operators (parsed via engine.ParseBangs) to the
-// non-streaming search paths (JSON/HTML/RSS/Atom/batch), matching the
-// operator support already present in SearchStreamWithOperators. Without
-// this, "-word" and "\"exact phrase\"" queries silently had no effect on
-// every endpoint except SSE streaming.
-func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, sessionID string) *model.SearchResponse {
+// exact-phrase, exclusion, and required-term operators (parsed via
+// engine.ParseBangs) to the non-streaming search paths (JSON/HTML/RSS/Atom/
+// batch), matching the operator support already present in
+// SearchStreamWithOperators. Without this, "-word", "+word", and
+// "\"exact phrase\"" queries silently had no effect on every endpoint except
+// SSE streaming.
+func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, sessionID string) *model.SearchResponse {
 	startTime := time.Now()
 
 	m.mu.RLock()
@@ -299,7 +300,7 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 		minScore = m.appConfig.Search.MinRelevanceScore
 		resultsPerPage = m.appConfig.Search.ResultsPerPage
 	}
-	allResults = sortAndFilterByRelevanceWithOperators(allResults, query, minScore, exactPhrases, exclusions, nil)
+	allResults = sortAndFilterByRelevanceWithOperators(allResults, query, minScore, exactPhrases, exclusions, requiredTerms, nil)
 
 	// Slice to the requested page window so the returned data array never
 	// exceeds resultsPerPage, per AI.md PART 14 pagination contract ("data"
@@ -344,19 +345,20 @@ type scoredResult struct {
 // sortAndFilterByRelevance sorts results by relevance score and filters by minimum score
 // Returns filtered results that meet the minimum relevance threshold
 func sortAndFilterByRelevance(results []model.VideoResult, query string, minScore float64) []model.VideoResult {
-	return sortAndFilterByRelevanceWithOperators(results, query, minScore, nil, nil, nil)
+	return sortAndFilterByRelevanceWithOperators(results, query, minScore, nil, nil, nil, nil)
 }
 
 // sortAndFilterByRelevanceWithOperators sorts results by relevance and applies search operators
 // exactPhrases requires results to contain all specified phrases
 // exclusions removes results containing any excluded word
+// requiredTerms requires results to contain every specified term (AND match)
 // performers filters by performer name (OR match)
-func sortAndFilterByRelevanceWithOperators(results []model.VideoResult, query string, minScore float64, exactPhrases []string, exclusions []string, performers []string) []model.VideoResult {
+func sortAndFilterByRelevanceWithOperators(results []model.VideoResult, query string, minScore float64, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string) []model.VideoResult {
 	queryLower := strings.ToLower(query)
 	queryWords := strings.Fields(queryLower)
 
-	// First, apply search operators (exclusions, exact phrases, performers)
-	if len(exactPhrases) > 0 || len(exclusions) > 0 || len(performers) > 0 {
+	// First, apply search operators (exclusions, exact phrases, required terms, performers)
+	if len(exactPhrases) > 0 || len(exclusions) > 0 || len(requiredTerms) > 0 || len(performers) > 0 {
 		var operatorFiltered []model.VideoResult
 		for _, r := range results {
 			titleLower := strings.ToLower(r.Title)
@@ -382,6 +384,18 @@ func sortAndFilterByRelevanceWithOperators(results []model.VideoResult, query st
 				}
 			}
 			if !hasAllPhrases {
+				continue
+			}
+
+			// Check required terms - every term must be present (AND)
+			hasAllRequired := true
+			for _, rt := range requiredTerms {
+				if !strings.Contains(titleLower, rt) {
+					hasAllRequired = false
+					break
+				}
+			}
+			if !hasAllRequired {
 				continue
 			}
 
@@ -1298,12 +1312,13 @@ func (m *EngineManager) EnginesToUseCount(engineNames []string) int {
 // SearchStream performs a search across enabled engines and streams results via channel
 // Results are deduplicated by URL across all engines
 func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
-	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, 0, false, 0, "")
+	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, nil, false, 0, false, 0, "")
 }
 
 // SearchStreamWithOperators performs a streaming search with optional search operators
 // exactPhrases requires results to contain all specified phrases
 // exclusions removes results containing any excluded word
+// requiredTerms requires results to contain every specified term (AND match)
 // performers filters by performer name (OR match)
 // showAI overrides server AI filter setting (true = show AI content)
 // minQuality filters by minimum quality level (0 = no filter, 360 = 360p+, etc.)
@@ -1313,7 +1328,7 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 // client search session (see AI.md PART 14 "State management -> Server (sessions)")
 // so that page=2, page=3, ... of the same infinite-scroll search never resurface
 // a result already returned on an earlier page.
-func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, sessionID string) <-chan StreamResult {
+func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, sessionID string) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
 	go func() {
@@ -1403,6 +1418,18 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						}
 					}
 					if !hasAllPhrases {
+						continue
+					}
+
+					// Check required terms - every term must be present (AND)
+					hasAllRequired := true
+					for _, rt := range requiredTerms {
+						if !strings.Contains(titleLower, rt) {
+							hasAllRequired = false
+							break
+						}
+					}
+					if !hasAllRequired {
 						continue
 					}
 

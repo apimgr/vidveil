@@ -771,7 +771,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
 		enginesParam := r.URL.Query().Get("engines")
 
-		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, "")
+		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
 		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 		results.Data.InvalidBang = parsed.InvalidBang
 		if h.metrics != nil {
@@ -799,7 +799,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-browser clients (CLI, curl, JSON API): perform synchronous search
-	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
 	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 	results.Data.InvalidBang = parsed.InvalidBang
 
@@ -1810,7 +1810,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 
 	// SSE streaming mode - stream results as they arrive from engines
 	if format == "text/event-stream" {
-		h.handleSearchSSE(w, r, requestStart, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, nil, showAI, minQuality, previewFirst, userMinDuration, sessionID)
+		h.handleSearchSSE(w, r, requestStart, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, nil, showAI, minQuality, previewFirst, userMinDuration, sessionID)
 		return
 	}
 
@@ -1870,7 +1870,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 				ctx = engine.WithTorPref(ctx, &useTor)
 			}
 		}
-		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, sessionID)
+		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, sessionID)
 		results.Data.Cached = false
 		// Cache the results
 		h.searchCache.Set(cacheKey, results)
@@ -1959,7 +1959,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSearchSSE handles SSE streaming for search results
-func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, requestStart time.Time, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, sessionID string) {
+func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, requestStart time.Time, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, sessionID string) {
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -2001,7 +2001,7 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	// "0 of N engines had results" rather than the misleading "0 engines".
 	enginesTotal := h.engineMgr.EnginesToUseCount(engineNames)
 
-	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, performers, showAI, minQuality, previewFirst, userMinDuration, sessionID)
+	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, requiredTerms, performers, showAI, minQuality, previewFirst, userMinDuration, sessionID)
 
 	// Tracked server-side (not left to the client) so the final "N of M
 	// engines had results" count is always authoritative, not re-derived from
@@ -3463,7 +3463,7 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchRSS(w, r, results, h.appConfig)
@@ -3483,7 +3483,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchAtom(w, r, results, h.appConfig)
@@ -3545,7 +3545,7 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 			if len(engineNames) == 0 {
 				engineNames = parsed.Engines
 			}
-			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, "")
+			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
 			res.Data.Query = bq.Q
 			res.Data.InvalidBang = parsed.InvalidBang
 			ch <- batchResult{idx: idx, resp: res}

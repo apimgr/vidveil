@@ -45,7 +45,7 @@ func TestEngineManager_Search_WithEngineNames_ReturnsEmpty(t *testing.T) {
 // feeds, batch search) instead of being silently ignored.
 func TestEngineManager_SearchWithOperators_EmptyManager_ReturnsResponse(t *testing.T) {
 	m := newEmptyMgr()
-	resp := m.SearchWithOperators(context.Background(), "test", 1, nil, []string{"exact phrase"}, []string{"excluded"}, "")
+	resp := m.SearchWithOperators(context.Background(), "test", 1, nil, []string{"exact phrase"}, []string{"excluded"}, nil, "")
 	if resp == nil {
 		t.Fatal("SearchWithOperators: nil response")
 	}
@@ -160,7 +160,7 @@ func TestEngineManager_SearchStreamWithOperators_EmptyManager_ChannelClosed(t *t
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, false, 0, false, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, "")
 	if ch == nil {
 		t.Fatal("SearchStreamWithOperators: nil channel")
 	}
@@ -175,7 +175,7 @@ func TestEngineManager_SearchStreamWithOperators_WithEngineNames_ChannelClosed(t
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "test", 1, []string{"ph"}, nil, nil, nil, false, 0, false, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, []string{"ph"}, nil, nil, nil, nil, false, 0, false, 0, "")
 	if ch == nil {
 		t.Fatal("SearchStreamWithOperators with engineNames: nil channel")
 	}

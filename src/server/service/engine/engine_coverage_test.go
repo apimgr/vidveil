@@ -87,6 +87,23 @@ func TestParseBangs_ExclusionWord(t *testing.T) {
 	}
 }
 
+func TestParseBangs_RequiredWord(t *testing.T) {
+	result := ParseBangs("amateur +teen")
+	if result.Query != "amateur" {
+		t.Errorf("ParseBangs required: query = %q, want 'amateur'", result.Query)
+	}
+	if len(result.RequiredTerms) != 1 || result.RequiredTerms[0] != "teen" {
+		t.Errorf("ParseBangs required: RequiredTerms = %v, want [teen]", result.RequiredTerms)
+	}
+}
+
+func TestParseBangs_MultipleRequiredTerms(t *testing.T) {
+	result := ParseBangs("milf +teen +amateur")
+	if len(result.RequiredTerms) != 2 {
+		t.Errorf("ParseBangs multi-required: got %v, want 2 required terms", result.RequiredTerms)
+	}
+}
+
 // "quoted text" populates ExactPhrases.
 func TestParseBangs_QuotedPhrase(t *testing.T) {
 	result := ParseBangs(`"big tits" amateur`)
@@ -925,7 +942,7 @@ func TestSortAndFilterByRelevanceWithOperators_ExactPhrase(t *testing.T) {
 		makeVideoResult("small tits video", "", 0, 0),
 	}
 	phrases := []string{"big tits"}
-	filtered := sortAndFilterByRelevanceWithOperators(results, "tits", 0, phrases, nil, nil)
+	filtered := sortAndFilterByRelevanceWithOperators(results, "tits", 0, phrases, nil, nil, nil)
 	for _, r := range filtered {
 		if r.Title == "small tits video" {
 			t.Error("exact phrase filter: 'small tits' should be excluded when phrase 'big tits' required")
@@ -939,11 +956,34 @@ func TestSortAndFilterByRelevanceWithOperators_Exclusion(t *testing.T) {
 		makeVideoResult("teen milf video", "", 0, 0),
 	}
 	exclusions := []string{"milf"}
-	filtered := sortAndFilterByRelevanceWithOperators(results, "teen", 0, nil, exclusions, nil)
+	filtered := sortAndFilterByRelevanceWithOperators(results, "teen", 0, nil, exclusions, nil, nil)
 	for _, r := range filtered {
 		if r.Title == "teen milf video" {
 			t.Error("exclusion filter: 'milf' title should have been excluded")
 		}
+	}
+}
+
+func TestSortAndFilterByRelevanceWithOperators_RequiredTerm(t *testing.T) {
+	results := []model.VideoResult{
+		makeVideoResult("teen amateur video", "", 0, 0),
+		makeVideoResult("teen milf video", "", 0, 0),
+	}
+	required := []string{"amateur"}
+	filtered := sortAndFilterByRelevanceWithOperators(results, "teen", 0, nil, nil, required, nil)
+	for _, r := range filtered {
+		if r.Title == "teen milf video" {
+			t.Error("required term filter: 'teen milf video' should have been excluded when 'amateur' is required")
+		}
+	}
+	found := false
+	for _, r := range filtered {
+		if r.Title == "teen amateur video" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("required term filter: 'teen amateur video' should be present when 'amateur' is required")
 	}
 }
 
@@ -953,7 +993,7 @@ func TestSortAndFilterByRelevanceWithOperators_Performer(t *testing.T) {
 		{Title: "scene", Performer: "Mia Khalifa", Thumbnail: "https://cdn.example.com/t.jpg", URL: "https://x.com/2", Source: "t"},
 	}
 	performers := []string{"riley"}
-	filtered := sortAndFilterByRelevanceWithOperators(results, "scene", 0, nil, nil, performers)
+	filtered := sortAndFilterByRelevanceWithOperators(results, "scene", 0, nil, nil, nil, performers)
 	for _, r := range filtered {
 		if r.Performer == "Mia Khalifa" {
 			t.Error("performer filter: Mia Khalifa should be excluded when filtering for Riley")

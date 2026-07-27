@@ -3,7 +3,9 @@ package handler
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -203,6 +205,62 @@ func (h *SearchHandler) setContentRestrictionAckCookie(w http.ResponseWriter) {
 		30*24*60*60,
 		h.appConfig.Server.SSL.Enabled,
 	))
+}
+
+// SearchSessionCookieName stores an opaque per-search-session identifier for
+// browser HTML requests that arrive without an explicit ?session= override.
+// app.js already generates and forwards its own session token to the JSON/SSE
+// API (see static/js/app.js), but the plain-HTML SearchPage route (used on
+// first load and on any pagination that reloads the page without JavaScript)
+// had no session identity at all, so cross-page result dedup never applied
+// to it. This cookie closes that gap per AI.md PART 16 progressive
+// enhancement: core search — including cross-page dedup — must work without
+// JavaScript.
+const SearchSessionCookieName = "search_session"
+
+// resolveSearchSessionID returns the session identifier to use for
+// EngineManager cross-page result dedup. An explicit ?session= query
+// parameter always wins (this is how app.js's own JS-generated token, and
+// any API/CLI client's explicit session, keep working unchanged). Absent
+// that, a search_session cookie is read/created so non-JS browser page
+// reloads (pagination) still dedup against earlier pages of the same
+// search.
+func (h *SearchHandler) resolveSearchSessionID(w http.ResponseWriter, r *http.Request) string {
+	if s := r.URL.Query().Get("session"); s != "" {
+		return s
+	}
+
+	if cookie, err := r.Cookie(SearchSessionCookieName); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+
+	sessionID, err := generateSearchSessionID()
+	if err != nil {
+		// Random generation failure: proceed without cross-page dedup rather
+		// than fail the search.
+		return ""
+	}
+
+	http.SetCookie(w, NewSecureCookie(
+		SearchSessionCookieName,
+		sessionID,
+		"/",
+		// 1 hour - long enough to cover a multi-page browsing session
+		60*60,
+		h.appConfig.Server.SSL.Enabled,
+	))
+
+	return sessionID
+}
+
+// generateSearchSessionID returns a random opaque token suitable for the
+// search_session cookie value.
+func generateSearchSessionID() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate search session id: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 // getClientIP extracts the client's real IP address per AI.md PART 12
@@ -771,7 +829,8 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		spellSuggestion := h.engineMgr.SpellCorrect(searchQuery)
 		enginesParam := r.URL.Query().Get("engines")
 
-		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
+		sessionID := h.resolveSearchSessionID(w, r)
+		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, sessionID)
 		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 		results.Data.InvalidBang = parsed.InvalidBang
 		if h.metrics != nil {

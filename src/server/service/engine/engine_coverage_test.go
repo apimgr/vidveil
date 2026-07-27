@@ -98,6 +98,33 @@ func TestParseBangs_QuotedPhrase(t *testing.T) {
 	}
 }
 
+// A fully-quoted query must still yield a non-empty base Query so engines
+// have search text to match against; ExactPhrases still drives the
+// exact-match post-filter. Regression test for a bug where a query like
+// `"milf"` produced an empty result.Query, causing APISearch to reject it
+// with VALIDATION_FAILED.
+func TestParseBangs_FullyQuotedQuery(t *testing.T) {
+	result := ParseBangs(`"milf"`)
+	if result.Query == "" {
+		t.Errorf("ParseBangs fully-quoted: query = %q, want non-empty", result.Query)
+	}
+	if len(result.ExactPhrases) != 1 || result.ExactPhrases[0] != "milf" {
+		t.Errorf("ParseBangs fully-quoted: ExactPhrases = %v, want [milf]", result.ExactPhrases)
+	}
+}
+
+// A multi-word fully-quoted query must retain all phrase words in the base
+// Query, not just the first.
+func TestParseBangs_FullyQuotedMultiWordQuery(t *testing.T) {
+	result := ParseBangs(`"mom son"`)
+	if !strings.Contains(result.Query, "mom") || !strings.Contains(result.Query, "son") {
+		t.Errorf("ParseBangs fully-quoted multi-word: query = %q, want both words retained", result.Query)
+	}
+	if len(result.ExactPhrases) != 1 || result.ExactPhrases[0] != "mom son" {
+		t.Errorf("ParseBangs fully-quoted multi-word: ExactPhrases = %v, want [mom son]", result.ExactPhrases)
+	}
+}
+
 // Multiple exclusions in a single query.
 func TestParseBangs_MultipleExclusions(t *testing.T) {
 	result := ParseBangs("milf -teen -amateur")

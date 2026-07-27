@@ -166,6 +166,13 @@ func ParseBangs(query string) ParsedQuery {
 
 	words := strings.Fields(remaining)
 	var queryWords []string
+	// Retain phrase words in the base search query (in addition to
+	// ExactPhrases) so a fully-quoted query still yields non-empty
+	// search text for engines to match against; ExactPhrases still
+	// drives exact-match post-filtering.
+	for _, phrase := range result.ExactPhrases {
+		queryWords = append(queryWords, strings.Fields(phrase)...)
+	}
 	// Deduplicate engines
 	engineSet := make(map[string]bool)
 

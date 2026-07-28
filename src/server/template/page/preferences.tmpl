@@ -178,7 +178,7 @@
 
             <section>
                 <h2>{{ t "favorites.title" }}</h2>
-                <p class="section-description">{{ t "favorites.count" | printf "%s" "<span id=\"favorites-count\">0</span>" }}</p>
+                <p class="section-description"><span id="favorites-count" data-format="{{ t "favorites.count" }}">{{ tf "favorites.count" 0 }}</span></p>
                 <div class="form-group form-group--buttons">
                     <button type="button" class="btn-secondary" onclick="exportFavorites()">{{ t "favorites.export" }}</button>
                     <label class="btn-secondary btn-file">
@@ -368,7 +368,9 @@
 
         function updateFavoritesCount() {
             const favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-            document.getElementById('favorites-count').textContent = favorites.length;
+            const el = document.getElementById('favorites-count');
+            const fmt = el.getAttribute('data-format') || '%d favorites';
+            el.textContent = fmt.replace('%d', favorites.length);
         }
 
         // Reset to defaults

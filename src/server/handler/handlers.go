@@ -108,6 +108,14 @@ const ContentRestrictionAckCookieName = "content_ack"
 // Cookie name for user IP forwarding preference
 const IPForwardCookieName = "forward_ip"
 
+// Cookie names for no-JS preference persistence. The JS-enabled UI stores
+// these in localStorage instead (see static/js/app.js loadPreferences), but
+// the nojs/preferences.tmpl fallback form has no localStorage available, so
+// it needs a server-side equivalent per AI.md PART 16's progressive
+// enhancement mandate (core features work without JavaScript).
+const ResultsPerPageCookieName = "results_per_page"
+const OpenNewTabCookieName = "open_new_tab"
+
 // getRequestTheme returns the user's theme preference from their cookie, falling
 // back to the server-configured default. Valid values: "dark", "light", "auto".
 func (h *SearchHandler) getRequestTheme(r *http.Request) string {
@@ -925,12 +933,73 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 		// HTML/text response — renderResponse() applies full content negotiation
 		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		h.renderResponse(w, r, "preferences", map[string]interface{}{
-			"Title":         "Preferences - " + h.appConfig.Server.Branding.Title,
-			"Theme":         h.getRequestTheme(r),
-			"Engines":       engines,
-			"BuildDateTime": BuildDateTime(),
+			"Title":           "Preferences - " + h.appConfig.Server.Branding.Title,
+			"Theme":           h.getRequestTheme(r),
+			"Engines":         engines,
+			"ResultsPerPage":  h.getRequestResultsPerPage(r),
+			"OpenNewTab":      h.getRequestOpenNewTab(r),
+			"CSRFToken":       CSRFTokenFromRequest(r),
+			"BuildDateTime":   BuildDateTime(),
 		})
 	}
+}
+
+// getRequestResultsPerPage returns the user's results-per-page preference from
+// their cookie (set by PreferencesSave for no-JS clients), falling back to the
+// JS-UI default of "20" (see static/js/app.js DEFAULT_PREFS.resultsPerPage).
+func (h *SearchHandler) getRequestResultsPerPage(r *http.Request) string {
+	if c, err := r.Cookie(ResultsPerPageCookieName); err == nil {
+		switch c.Value {
+		case "20", "50", "100":
+			return c.Value
+		}
+	}
+	return "20"
+}
+
+// getRequestOpenNewTab returns the user's open-links-in-new-tab preference
+// from their cookie (set by PreferencesSave for no-JS clients), falling back
+// to the JS-UI default of true (see static/js/app.js DEFAULT_PREFS.openNewTab).
+func (h *SearchHandler) getRequestOpenNewTab(r *http.Request) bool {
+	if c, err := r.Cookie(OpenNewTabCookieName); err == nil {
+		return c.Value == "1"
+	}
+	return true
+}
+
+// PreferencesSave handles the nojs/preferences.tmpl form submission, persisting
+// preferences as cookies for clients with no JavaScript/localStorage available.
+// The JS-enabled UI never posts here — it saves directly to localStorage — so
+// this exists solely to close the no-JS gap per AI.md PART 16's progressive
+// enhancement mandate (core features, including preferences, work without JS).
+func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/preferences", http.StatusFound)
+		return
+	}
+
+	sslEnabled := h.appConfig.Server.SSL.Enabled
+
+	// Theme — validated against the same allow-list as getRequestTheme.
+	switch r.FormValue("theme") {
+	case "dark", "light", "auto":
+		http.SetCookie(w, NewSecureCookie("theme", r.FormValue("theme"), "/", 365*24*60*60, sslEnabled))
+	}
+
+	// Results per page — validated against the same allow-list as the <select>.
+	switch r.FormValue("resultsPerPage") {
+	case "20", "50", "100":
+		http.SetCookie(w, NewSecureCookie(ResultsPerPageCookieName, r.FormValue("resultsPerPage"), "/", 365*24*60*60, sslEnabled))
+	}
+
+	// Open-links-in-new-tab — an absent checkbox means "unchecked" in HTML forms.
+	openNewTab := "0"
+	if r.FormValue("openNewTab") != "" {
+		openNewTab = "1"
+	}
+	http.SetCookie(w, NewSecureCookie(OpenNewTabCookieName, openNewTab, "/", 365*24*60*60, sslEnabled))
+
+	http.Redirect(w, r, "/preferences", http.StatusFound)
 }
 
 // FavoritesPage renders the favorites page per AI.md PART 16

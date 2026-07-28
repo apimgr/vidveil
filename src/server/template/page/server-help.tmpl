@@ -11,6 +11,15 @@
         <h2>Basic Search</h2>
         <p>Simply type your search query and press Enter or click the search button. Results from all enabled engines will be displayed.</p>
 
+        <h2>Search Operators</h2>
+        <p>Refine your search with these operators, which can be combined in a single query:</p>
+        <ul>
+            <li><code>+word</code> - Require this word (must appear in the result)</li>
+            <li><code>-word</code> - Exclude this word (result must not contain it)</li>
+            <li><code>"exact phrase"</code> - Match the phrase exactly, not word-by-word</li>
+        </ul>
+        <p>Example: <code>+lesbian -amateur "hot tub"</code> requires "lesbian", excludes "amateur", and matches the exact phrase "hot tub".</p>
+
         <h2>Bang Shortcuts</h2>
         <p>Use bang shortcuts to search specific sites:</p>
         <ul>
@@ -18,19 +27,41 @@
             <li><code>!xv sunset</code> - Search XVideos only</li>
             <li><code>!ph !rt beach</code> - Search PornHub and RedTube</li>
         </ul>
-        <p>Type <code>!</code> followed by the shortcut at the start of your search. Multiple bangs are supported.</p>
+        <p>Type <code>!</code> followed by the shortcut at the start of your search. Multiple bangs are supported. An unrecognized <code>!bang</code> is stripped with a warning and the rest of the query still searches normally.</p>
 
         <h2>Available Bangs</h2>
-        <p>View all available bang shortcuts on the <a href="/search?q=!">search page</a> by typing <code>!</code> in the search box.</p>
+        <p>View all available bang shortcuts on the <a href="/search?q=!">search page</a> by typing <code>!</code> in the search box, or fetch the full list from the API:</p>
+        <pre><code>curl {{.BaseURL}}/api/v1/bangs</code></pre>
+
+        <h2>Autocomplete</h2>
+        <p>Bang shortcuts, performer names, and search terms are all suggested as you type:</p>
+        <pre><code>curl "{{.BaseURL}}/api/v1/bangs/autocomplete?q=!p"</code></pre>
 
         <h2>Preferences</h2>
         <p>Customize your experience in <a href="/preferences">Preferences</a>:</p>
         <ul>
-            <li>Theme (dark/light)</li>
-            <li>Safe search settings</li>
-            <li>Default engines</li>
+            <li>Theme (dark/light/auto)</li>
             <li>Results per page</li>
+            <li>Open links in a new tab</li>
+            <li>Default/enabled engines</li>
         </ul>
+        <p>Preferences are stored client-side (cookie/localStorage) — there is no server-side account or tracking.</p>
+
+        <h2>History &amp; Favorites</h2>
+        <p><a href="/favorites">Favorites</a> and search history are stored locally in your browser only. Export/import as JSON from the Preferences and Favorites pages so you can move them between devices or back them up yourself.</p>
+
+        <h2>Video Preview</h2>
+        <p>Hover a result thumbnail on desktop, or swipe on mobile, to preview a video before opening it — where the source engine supports it.</p>
+
+        <h2>Privacy: Thumbnail Proxy</h2>
+        <p>All thumbnails are served through this server's own proxy so third-party engines never see your IP address:</p>
+        <pre><code>curl "{{.BaseURL}}/api/v1/proxy/thumbnails?url=https://example.com/thumb.jpg"</code></pre>
+
+        <h2>Tor Hidden Service</h2>
+        <p>{{if .TorOnionAddr}}This server is also reachable over Tor at <code>{{.TorOnionAddr}}</code>. Content restrictions based on geography do not apply to Tor users.{{else}}If this server has Tor installed, it automatically exposes a hidden service (<code>.onion</code>) address, shown in the footer, which bypasses geographic content restrictions.{{end}}</p>
+
+        <h2>Age Verification &amp; Content Restrictions</h2>
+        <p>First-time visitors confirm they are of legal age at <code>/age-verify</code>. Depending on the operator's configuration, visitors from certain regions may see a warning or be blocked per <code>/content-restricted</code> — this restriction never applies to Tor users.</p>
 
         <h2>Keyboard Shortcuts</h2>
         <ul>
@@ -40,7 +71,60 @@
         </ul>
 
         <h2>API Access</h2>
-        <p>VidVeil provides a REST API for programmatic access. View the <a href="/server/docs/swagger">API documentation</a> for details.</p>
+        <p>{{.AppName}} provides a full REST API for programmatic access — every endpoint supports content negotiation via the <code>Accept</code> header (<code>application/json</code>, <code>text/plain</code>, or a <code>.txt</code> URL suffix), and search additionally supports <code>text/event-stream</code> for live SSE results.</p>
+
+        <table>
+            <thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead>
+            <tbody>
+                <tr><td><code>GET /api/v1/search?q={query}</code></td><td>Search videos</td></tr>
+                <tr><td><code>POST /api/v1/search/batch</code></td><td>Batch search multiple queries</td></tr>
+                <tr><td><code>GET /api/v1/bangs</code></td><td>List all bang shortcuts</td></tr>
+                <tr><td><code>GET /api/v1/bangs/autocomplete?q={partial}</code></td><td>Autocomplete bangs/performers/terms</td></tr>
+                <tr><td><code>GET /api/v1/engines</code></td><td>List all search engines</td></tr>
+                <tr><td><code>GET /api/v1/engines/{name}</code></td><td>Get details for one engine</td></tr>
+                <tr><td><code>GET /api/v1/engines/health</code></td><td>Per-engine health status</td></tr>
+                <tr><td><code>GET /api/v1/stats</code></td><td>Server-wide search statistics</td></tr>
+                <tr><td><code>GET /api/v1/proxy/thumbnails?url={url}</code></td><td>Privacy-preserving thumbnail proxy</td></tr>
+                <tr><td><code>GET /api/v1/proxy/videos?url={url}</code></td><td>Privacy-preserving video proxy</td></tr>
+                <tr><td><code>GET /api/v1/server/healthz</code></td><td>Health check (JSON)</td></tr>
+                <tr><td><code>GET /api/v1/version</code></td><td>Version, commit, build date</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Examples</h3>
+        <pre><code>curl "{{.BaseURL}}/api/v1/search?q=+lesbian+-amateur"
+
+curl -H "Accept: text/event-stream" "{{.BaseURL}}/api/v1/search?q=sunset"
+
+curl "{{.BaseURL}}/api/v1/search?q=sunset&engines=ph,xv"
+
+curl "{{.BaseURL}}/api/v1/engines"
+
+curl "{{.BaseURL}}/api/v1/server/healthz"
+
+curl "{{.BaseURL}}/api/v1/search.txt?q=sunset"</code></pre>
+
+        <p>Full interactive documentation: <a href="/server/docs/swagger">Swagger/OpenAPI docs</a>.</p>
+
+        <h2>FAQ</h2>
+
+        <h3>Does {{.AppName}} host any videos?</h3>
+        <p>No. {{.AppName}} is a search aggregator only — it queries and links to third-party sites, and never stores, proxies, or re-hosts video content itself.</p>
+
+        <h3>Do I need an account?</h3>
+        <p>No. There are no user accounts. Preferences, history, and favorites all live in your browser only.</p>
+
+        <h3>Why did some engines return no results?</h3>
+        <p>A source site may be temporarily unreachable, rate-limiting, or have changed its page layout. The search still returns results from every engine that responded — check <code>/api/v1/engines/health</code> for per-engine status.</p>
+
+        <h3>Is my search query logged?</h3>
+        <p>No server-side accounts or per-user query logs are kept. Thumbnails and (where supported) video previews are proxied through this server so the upstream site never sees your IP.</p>
+
+        <h3>Does JavaScript need to be enabled?</h3>
+        <p>No. Every core feature — search, preferences, favorites — works without JavaScript. JavaScript only adds convenience (instant theme toggling, infinite scroll, hover-preview).</p>
+
+        <h3>How do I search only specific sites?</h3>
+        <p>Use a bang shortcut (<code>!ph query</code>), or disable unwanted engines in <a href="/preferences">Preferences</a>.</p>
 
         <h2>Need More Help?</h2>
         <p>Check out our <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">GitHub repository</a> or <a href="/server/contact">contact us</a>.</p>

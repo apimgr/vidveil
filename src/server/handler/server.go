@@ -128,10 +128,16 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	appName := h.appConfig.Server.Branding.Title
 	// Required fields by head.tmpl: Title
 	// Required fields by nav.tmpl: ActiveNav, Query
+	scheme := "https"
+	if !h.appConfig.Server.SSL.Enabled {
+		scheme = "http"
+	}
+
 	data := map[string]interface{}{
 		"Title":          appName,
 		"AppName":        appName,
 		"AppDescription": h.appConfig.Server.Branding.Description,
+		"BaseURL":        scheme + "://" + h.appConfig.Server.FQDN,
 		"Version":        versionInfo["version"],
 		"BuildDateTime":  versionInfo["build_time"],
 		"Theme":          "dark",
@@ -146,6 +152,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		data["TorRunning"] = true
 		if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
 			data["TorAddress"] = addr
+			data["TorOnionAddr"] = addr
 		}
 	}
 

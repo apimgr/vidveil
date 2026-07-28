@@ -36,26 +36,6 @@
             </dl>
         </section>
 
-        {{if .ClusterEnabled}}
-        <!-- Cluster Info per AI.md PART 13 -->
-        <section class="health-section">
-            <h2>🔗 Cluster</h2>
-            <dl class="info-grid">
-                <dt>Status</dt><dd><span class="status-{{.ClusterStatusClass}}">{{.ClusterStatusIcon}} {{.ClusterStatus}}</span></dd>
-                <dt>👑 Primary</dt><dd><code>{{.ClusterPrimary}}</code></dd>
-                <dt>🎭 Role</dt><dd>{{.ClusterRole}}</dd>
-            </dl>
-            {{if .ClusterNodes}}
-            <h3>🖥️ Nodes</h3>
-            <ul class="node-list">
-                {{range .ClusterNodes}}
-                <li><code>{{.URL}}</code>{{if .IsPrimary}} <span class="badge badge-primary">👑 Primary</span>{{end}}</li>
-                {{end}}
-            </ul>
-            {{end}}
-        </section>
-        {{end}}
-
         <!-- Features per AI.md PART 13 (VidVeil: stateless per IDEA.md) -->
         <section class="health-section">
             <h2>🎛️ Features</h2>
@@ -91,12 +71,6 @@
                         <td>⏰ Scheduler</td>
                         <td class="status-{{if eq .Checks.Scheduler "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Scheduler "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
                     </tr>
-                    {{if .ClusterEnabled}}
-                    <tr>
-                        <td>🔗 Cluster</td>
-                        <td class="status-{{if eq .Checks.Cluster "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cluster "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
-                    </tr>
-                    {{end}}
                 </tbody>
             </table>
         </section>

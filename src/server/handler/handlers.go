@@ -1485,6 +1485,25 @@ type HealthzHTMLData struct {
 	ActiveNav string
 	Query     string
 
+	// Shared partial compatibility (head.tmpl / footer.tmpl per AI.md PART 16) —
+	// these are flat top-level fields the shared head/footer partials read
+	// directly; renderTemplate() injects them for every other page, but healthz
+	// renders via a dedicated struct+ParseFS path (not renderTemplate), so they
+	// must be populated here too or html/template hard-errors on the missing
+	// field at ExecuteTemplate (unlike a map, a struct has no "zero value" for
+	// an absent field — it's a template execution error, not silent omission).
+	TorEnabled          bool
+	TorRunning          bool
+	TorAddress          string
+	SEOKeywords         string
+	SEOAuthor           string
+	SEOOGImage          string
+	SEOTwitterHandle    string
+	SEOVerification     config.SEOVerificationConfig
+	BrandingDescription string
+	BrandingTagline     string
+	AppURL              string
+
 	// Project info (PART 16 branding)
 	ProjectName        string
 	ProjectTagline     string
@@ -1643,6 +1662,33 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		}
 		if h.appConfig.Server.Branding.Description != "" {
 			data.ProjectDescription = h.appConfig.Server.Branding.Description
+		}
+	}
+
+	// Shared partial data (head.tmpl / footer.tmpl per AI.md PART 16) — same
+	// injection renderTemplate() performs for every other page (handlers.go
+	// renderTemplate, ~line 2835 "Footer onion-address row" / "SEO and branding").
+	if h.appConfig != nil {
+		data.SEOKeywords = strings.Join(h.appConfig.Server.SEO.Keywords, ", ")
+		data.SEOAuthor = h.appConfig.Server.SEO.Author
+		data.SEOOGImage = h.appConfig.Server.SEO.OGImage
+		data.SEOTwitterHandle = h.appConfig.Server.SEO.TwitterHandle
+		data.SEOVerification = h.appConfig.Server.SEO.Verification
+		data.BrandingDescription = h.appConfig.Server.Branding.Description
+		data.BrandingTagline = h.appConfig.Server.Branding.Tagline
+		scheme := "https"
+		if !h.appConfig.Server.SSL.Enabled {
+			scheme = "http"
+		}
+		data.AppURL = scheme + "://" + h.appConfig.Server.FQDN
+	}
+	// Footer onion-address row — dropped entirely unless Tor is both enabled
+	// and actually running (matches renderTemplate's identical gate).
+	if h.torSvc != nil && h.torSvc.IsEnabled() && h.torSvc.IsRunning() {
+		data.TorEnabled = true
+		data.TorRunning = true
+		if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
+			data.TorAddress = addr
 		}
 	}
 

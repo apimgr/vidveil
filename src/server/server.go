@@ -6,8 +6,10 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -325,8 +327,40 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(extensionStripMiddleware)
 
 	// 10. Logger — LAST (innermost) per AI.md PART 5/16 spec so logs carry
-	// request_id and only log requests that reached the handler chain
-	s.router.Use(middleware.Logger)
+	// request_id and only log requests that reached the handler chain.
+	// NOTE: chi's stock middleware.Logger is intentionally NOT used here — its
+	// DefaultLogFormatter logs r.RemoteAddr directly, which is blind to
+	// X-Forwarded-For/X-Real-IP/CF-Connecting-IP and defeats the trusted-proxy
+	// resolution built in urlvars.ResolveClientIP (PART 12 "Client IP Detection").
+	// requestLogMiddleware below reproduces the same console format but sources
+	// the IP through ResolveClientIP so console logs match the access log file.
+	s.router.Use(requestLogMiddleware)
+}
+
+// requestLogMiddleware logs each request to the console in the same format as
+// chi's DefaultLogFormatter ("[host/request-id] "METHOD scheme://host/path proto"
+// from <ip> - <status> <size>B in <duration>"), but resolves the client IP via
+// urlvars.ResolveClientIP instead of raw r.RemoteAddr, so console output honors
+// trusted reverse-proxy headers per AI.md PART 12.
+func requestLogMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(ww, r)
+
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		reqID := middleware.GetReqID(r.Context())
+		log.Printf("[%s/%s] %q from %s - %d %dB in %s",
+			r.Host, reqID,
+			fmt.Sprintf("%s %s://%s%s %s", r.Method, scheme, r.Host, r.RequestURI, r.Proto),
+			urlvars.ResolveClientIP(r),
+			ww.Status(), ww.BytesWritten(),
+			time.Since(start),
+		)
+	})
 }
 
 // onionLocationMiddleware adds the Onion-Location header on clearnet HTML responses

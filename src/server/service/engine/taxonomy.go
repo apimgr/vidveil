@@ -387,6 +387,12 @@ var femaleOnlyTerms = []string{
 // a biological male participant, contradicting female-only queries.
 // "strapon", "dildo", "strap-on" are intentionally excluded — they appear in
 // lesbian content and must NOT trigger this filter.
+// Ultra-generic single words ("male", "man", "men", "guy", "guys", "husband",
+// "dude") were intentionally removed — scraped tags/ad/nav boilerplate
+// trips them constantly with no actual male performer present, which was
+// zeroing out results for common compound queries (e.g. "lesbian teen").
+// Explicit/anatomical and relationship-specific terms are kept since they
+// carry unambiguous signal.
 var malePresenceWords = []string{
 	"cock", "cocks", "dick", "dicks", "penis",
 	"bbc",
@@ -398,7 +404,6 @@ var malePresenceWords = []string{
 	"handjob", "hand job",
 	"he fucks", "guy fucks", "man fucks",
 	"boyfriend fucks", "hubby fucks",
-	"male", "man", "men", "guy", "guys", "husband", "dude",
 }
 
 // familyFemaleWords are family-relationship terms that, in combination (2+
@@ -511,18 +516,17 @@ var toyWords = []string{"dildo", "strapon", "strap-on", "vibrator", "toy", "arti
 // e.g. "bbc dildo" or "strapon dick" refer to toys, not biological males.
 var ambiguousMaleWords = []string{"cock", "cocks", "dick", "dicks", "bbc"}
 
-// resultTextBlob builds a single lowercase text blob from all of a result's
-// text-bearing metadata fields — title alone is not enough to reliably
-// detect gender/age-category contradictions, since male-presence or
-// wrong-age-category signals often only appear in tags, description, or the
-// performer field.
+// resultTextBlob builds a lowercase text blob from a result's Title and
+// Performer fields only — deliberately EXCLUDING Description and Tags.
+// Those fields routinely carry scraped ad/nav/related-video boilerplate
+// text (site-wide footers, cross-promo tags) that is not part of the
+// actual video's content description, so matching male-presence or
+// wrong-age-category signal words against them produces false positives
+// that were zeroing out results for common compound queries (e.g.
+// "lesbian teen"). Title and Performer are the fields an upstream engine
+// scrape reliably ties to the specific result, so they remain in scope.
 func resultTextBlob(r model.VideoResult) string {
-	parts := make([]string, 0, 4)
-	parts = append(parts, r.Title, r.Description, r.Performer)
-	if len(r.Tags) > 0 {
-		parts = append(parts, strings.Join(r.Tags, " "))
-	}
-	return strings.ToLower(strings.Join(parts, " "))
+	return strings.ToLower(strings.Join([]string{r.Title, r.Performer}, " "))
 }
 
 // containsAnyWholeWord reports whether text contains any of words as a

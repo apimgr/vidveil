@@ -1267,27 +1267,39 @@ func TestDetectQueryIntent_MomAgeTypeIsMilf(t *testing.T) {
 	}
 }
 
-func TestResultMatchesIntent_FemaleOnly_MaleWordInDescription_False(t *testing.T) {
-	// Title alone gives no signal — the male-presence indicator is only in
-	// the description/tags/performer metadata, which must still be checked.
+// TestResultMatchesIntent_FemaleOnly_MaleWordInDescription_OutOfScope was
+// renamed (previously ..._False) after the approved fix to resultTextBlob:
+// Description is deliberately out of scope for the male-presence check
+// because it routinely carries scraped ad/nav/related-video boilerplate
+// unrelated to the actual result, which was zeroing out results for common
+// compound queries like "lesbian teen". A male-presence word appearing only
+// in Description must no longer reject the result.
+func TestResultMatchesIntent_FemaleOnly_MaleWordInDescription_OutOfScope(t *testing.T) {
 	intent := QueryIntent{IsFemaleOnly: true}
 	r := model.VideoResult{Title: "girls only fun", Description: "featuring a man joining in"}
-	if ResultMatchesIntent(r, intent) {
-		t.Error("ResultMatchesIntent: male-presence word in Description should reject the result")
+	if !ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: male-presence word only in Description must not reject the result")
 	}
 }
 
-func TestResultMatchesIntent_FemaleOnly_MaleWordInTags_False(t *testing.T) {
+// TestResultMatchesIntent_FemaleOnly_MaleWordInTags_OutOfScope was renamed
+// (previously ..._False) for the same reason — Tags is out of scope, and
+// "guy" was additionally removed from malePresenceWords as overly generic.
+func TestResultMatchesIntent_FemaleOnly_MaleWordInTags_OutOfScope(t *testing.T) {
 	intent := QueryIntent{IsFemaleOnly: true}
 	r := model.VideoResult{Title: "lesbian scene", Tags: []string{"guy", "threesome"}}
-	if ResultMatchesIntent(r, intent) {
-		t.Error("ResultMatchesIntent: male-presence word in Tags should reject the result")
+	if !ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: male-presence word only in Tags must not reject the result")
 	}
 }
 
+// TestResultMatchesIntent_FemaleOnly_MaleWordInPerformer_False still asserts
+// rejection — Performer remains in scope after the fix. The fixture word was
+// updated from "man" (removed from malePresenceWords as overly generic) to
+// "dad", which is still a strong, unambiguous male-presence indicator.
 func TestResultMatchesIntent_FemaleOnly_MaleWordInPerformer_False(t *testing.T) {
 	intent := QueryIntent{IsFemaleOnly: true}
-	r := model.VideoResult{Title: "lesbian scene", Performer: "Jane Doe and a man"}
+	r := model.VideoResult{Title: "lesbian scene", Performer: "Jane Doe and dad"}
 	if ResultMatchesIntent(r, intent) {
 		t.Error("ResultMatchesIntent: male-presence word in Performer should reject the result")
 	}
@@ -1327,11 +1339,16 @@ func TestResultMatchesIntent_ComboAgeQuery_SkipsAgeFilter(t *testing.T) {
 	}
 }
 
-func TestResultMatchesIntent_AgeIndicatorOnlyInTags_StillRejects(t *testing.T) {
+// TestResultMatchesIntent_AgeIndicatorOnlyInTags_OutOfScope was renamed
+// (previously ..._StillRejects) after the approved fix to resultTextBlob:
+// Tags are deliberately out of scope for the age-category indicator check,
+// for the same boilerplate-noise reason as the male-presence check above.
+// An age-category indicator present only in Tags must no longer reject.
+func TestResultMatchesIntent_AgeIndicatorOnlyInTags_OutOfScope(t *testing.T) {
 	intent := QueryIntent{HasAgeTypes: []string{"teen"}}
 	r := model.VideoResult{Title: "amateur homemade", Tags: []string{"mature", "wife"}}
-	if ResultMatchesIntent(r, intent) {
-		t.Error("ResultMatchesIntent: age-category indicator only present in Tags should still reject")
+	if !ResultMatchesIntent(r, intent) {
+		t.Error("ResultMatchesIntent: age-category indicator only in Tags must not reject the result")
 	}
 }
 

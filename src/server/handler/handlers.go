@@ -3836,6 +3836,12 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 
 	for i, q := range req.Queries {
 		go func(idx int, bq BatchQuery) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("[batch] panic processing query %q: %v", bq.Q, rec)
+					ch <- batchResult{idx: idx, resp: &model.SearchResponse{}}
+				}
+			}()
 			parsed := engine.ParseBangs(bq.Q)
 			page := bq.Page
 			if page < 1 {

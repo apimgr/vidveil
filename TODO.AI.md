@@ -105,16 +105,6 @@ the not-found case (`{"error":"message","code":404}` for JSON, plain text for
 `/api/v1` mount to branch on `Accept`/`.txt` the same way real handlers do,
 rather than falling through to the generic frontend 404 template.
 
-### 6. Unconditional emoji in `src/server/handler/handlers.go` server-rendered output
-go-lint flagged 4 pre-existing (not introduced by any current session's
-changes) emoji characters used unconditionally in server-rendered HTML:
-"🔧" on the maintenance page (~line 521), and "✅"/"🔴"/"⚠️" as `StatusIcon`
-template field values for the healthz template (~lines 1644, 1648, 1652).
-Per CLAUDE.md's "no emojis in code or inline tool output unless asked" rule,
-these should be replaced with text labels (e.g. "OK"/"DOWN"/"WARN") or made
-conditional. Left unfixed here since it's unrelated to the two findings this
-session's commits address; logged so it isn't lost.
-
 ### 8. `/server/security` coordinated-disclosure feature (AI.md PART 12) not implemented
 While making the `/server/*` pages accurate, the `/server/contact` page was given
 its spec-mandated (AI.md PART 16, line ~26185) "Security Issues" section, which

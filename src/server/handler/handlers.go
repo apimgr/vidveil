@@ -518,7 +518,7 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 </head>
 <body class="maintenance-page">
     <div class="maintenance">
-        <h1>🔧 Under Maintenance</h1>
+        <h1>Under Maintenance</h1>
         <p>We're performing scheduled maintenance.</p>
         <p>Please check back shortly.</p>
     </div>
@@ -1648,15 +1648,15 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	switch status {
 	case "healthy":
 		data.StatusClass = "healthy"
-		data.StatusIcon = "✅"
+		data.StatusIcon = "OK"
 		data.StatusText = "All Systems Operational"
 	case "unhealthy":
 		data.StatusClass = "unhealthy"
-		data.StatusIcon = "🔴"
+		data.StatusIcon = "DOWN"
 		data.StatusText = "System Unhealthy"
 	default:
 		data.StatusClass = "degraded"
-		data.StatusIcon = "⚠️"
+		data.StatusIcon = "WARN"
 		data.StatusText = "System Degraded"
 	}
 

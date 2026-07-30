@@ -475,13 +475,21 @@ func WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 // MaintenanceModeMiddleware checks if maintenance mode is enabled
 func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip maintenance check for health endpoints and admin (any of the canonical/legacy prefixes)
+		// Skip maintenance check for health/version/static endpoints and admin
+		// (any of the canonical/legacy prefixes). Per AI.md PART 5/6, health
+		// and version endpoints must stay reachable during maintenance so
+		// monitoring/orchestration can still see the server is up, and static
+		// assets must keep serving so the maintenance page itself renders.
 		path := r.URL.Path
 		adminPrefix := h.appConfig.AdminURLPrefix()
 		legacyAdminPrefix := "/" + h.appConfig.Server.Admin.Path
 		apiAdminPrefix := "/api/v1" + h.appConfig.AdminAPIPrefix()
 		legacyAPIAdminPrefix := "/api/v1/" + h.appConfig.Server.Admin.Path
 		if path == "/healthz" ||
+			path == "/server/healthz" || path == "/server/healthz.json" || path == "/server/healthz.txt" ||
+			path == "/api/v1/server/healthz" || path == "/api/healthz" ||
+			path == "/version" || path == "/api/v1/version" ||
+			strings.HasPrefix(path, "/static/") ||
 			strings.HasPrefix(path, adminPrefix) ||
 			strings.HasPrefix(path, legacyAdminPrefix+"/") || path == legacyAdminPrefix ||
 			strings.HasPrefix(path, apiAdminPrefix) ||
@@ -1721,8 +1729,33 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Parse and execute template
-	tmpl, err := template.ParseFS(templatesFS,
+	// Parse and execute template. FuncMap must be registered before ParseFS
+	// since healthz.tmpl and its partials call {{ t }}/{{ tf }}/{{ safeHTML }}
+	// (PART 30 i18n) — template.ParseFS alone has no funcs and fails at
+	// execute time with "function \"t\" not defined".
+	tmpl, err := template.New("healthz.tmpl").Funcs(template.FuncMap{
+		"dict": func(values ...interface{}) map[string]interface{} {
+			dict := make(map[string]interface{})
+			for i := 0; i < len(values); i += 2 {
+				if i+1 < len(values) {
+					if key, ok := values[i].(string); ok {
+						dict[key] = values[i+1]
+					}
+				}
+			}
+			return dict
+		},
+		"eq": func(a, b interface{}) bool { return a == b },
+		"t": func(key string) string {
+			return i18n.Translate(lang, key)
+		},
+		"tf": func(key string, args ...interface{}) string {
+			return i18n.TranslateFormat(lang, key, args...)
+		},
+		"safeHTML": func(s string) template.HTML {
+			return template.HTML(s)
+		},
+	}).ParseFS(templatesFS,
 		"template/page/healthz.tmpl",
 		"template/partial/public/head.tmpl",
 		"template/partial/public/header.tmpl",

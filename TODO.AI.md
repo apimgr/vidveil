@@ -62,3 +62,42 @@ real `/api/v1/bangs` endpoint (straightforward, has all needed fields) and (b)
 either drop the METHOD/PREVIEW/DOWNLOAD columns from the `engines` table (data
 doesn't exist server-side) or add those fields to the server's `/api/v1/engines`
 response (server-side scope change) — whichever the operator/spec intends.
+
+### 4. Maintenance mode's spec-shaped JSON body / content negotiation still incomplete (AI.md PART 5/6, lines ~7336-7418)
+`MaintenanceModeMiddleware` (src/server/handler/handlers.go) was found, via
+live Docker testing (touching `{data_dir}/maintenance.flag`), to block
+`/server/healthz`, `/api/v1/server/healthz`, and `/api/v1/version` with the
+same hardcoded HTML 503 page as write operations, even with
+`Accept: application/json`. The exemption list has been fixed (see this
+session's commit) so health/version/static routes now bypass the block
+entirely. Still outstanding, and out of scope for a one-line patch:
+- Per AI.md lines 7336-7359, blocked write-operation requests should receive
+  the canonical `{"ok":false,"error":"MAINTENANCE","message":...,
+  "details":{...}}` JSON body (with `Retry-After`/`X-Maintenance-Mode`/
+  `X-Maintenance-Reason` headers) for API/text/JSON requests, keeping the
+  HTML page only for browser/frontend requests, per PART 14 content
+  negotiation rules — currently it's the hardcoded HTML string regardless
+  of `Accept`.
+- If self-healing state (attempts/last_attempt/next_attempt) is ever
+  surfaced through a JSON healthz-during-maintenance body, that tracking
+  needs to be built — it doesn't exist yet.
+
+### 5. `/api/v1/*` 404s return HTML instead of negotiated content type
+Beta-testing found that unmatched routes under `/api/v1/*` (e.g. a typoed or
+removed endpoint) return the generic HTML 404 error page even when the
+request sends `Accept: application/json` or `Accept: text/plain`. Per PART
+13/14, every route under `/api/v1/` must honor content negotiation, including
+the not-found case (`{"error":"message","code":404}` for JSON, plain text for
+`text/plain`). This needs the router's `NotFoundHandler`/catch-all for the
+`/api/v1` mount to branch on `Accept`/`.txt` the same way real handlers do,
+rather than falling through to the generic frontend 404 template.
+
+### 6. Unconditional emoji in `src/server/handler/handlers.go` server-rendered output
+go-lint flagged 4 pre-existing (not introduced by any current session's
+changes) emoji characters used unconditionally in server-rendered HTML:
+"🔧" on the maintenance page (~line 521), and "✅"/"🔴"/"⚠️" as `StatusIcon`
+template field values for the healthz template (~lines 1644, 1648, 1652).
+Per CLAUDE.md's "no emojis in code or inline tool output unless asked" rule,
+these should be replaced with text labels (e.g. "OK"/"DOWN"/"WARN") or made
+conditional. Left unfixed here since it's unrelated to the two findings this
+session's commits address; logged so it isn't lost.

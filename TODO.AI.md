@@ -35,17 +35,6 @@ even though this repo's own `docker/docker-compose.yml` (production) already
 sets `MODE=production` with no `DEBUG` override. The discrepancy must be in
 the actual deployment/CD configuration outside this repo's visibility.
 
-### 2. No-JS `resultsPerPage` / `openNewTab` preferences are stored but not wired to behavior
-`PreferencesSave` (handlers.go) now persists `resultsPerPage` and `openNewTab`
-as cookies for the no-JS fallback path (`nojs/preferences.tmpl`), fixing the
-preferences form's previous 404. However, no page-size concept exists anywhere
-in the search results rendering (JS or no-JS), and no-JS result links don't
-read the `open_new_tab` cookie to set `target="_blank"`. This is a pre-existing
-feature gap larger than "fix the broken preferences template" — needs its own
-implementation pass:
-- Wire `getRequestResultsPerPage()` into the no-JS search handler's page-size logic.
-- Wire `getRequestOpenNewTab()` into no-JS result-link `target` attribute rendering.
-
 ### 3. `vidveil-cli engines`/`bangs` still show blank Bang/Method/Preview/Download columns after the data-envelope fix
 Beta-testing `vidveil-cli` against a live server found `engines`/`bangs`/`search`
 all silently returned empty/zero-valued output because the client's response
@@ -75,25 +64,6 @@ real `/api/v1/bangs` endpoint (straightforward, has all needed fields) and (b)
 either drop the METHOD/PREVIEW/DOWNLOAD columns from the `engines` table (data
 doesn't exist server-side) or add those fields to the server's `/api/v1/engines`
 response (server-side scope change) — whichever the operator/spec intends.
-
-### 4. Maintenance mode's spec-shaped JSON body / content negotiation still incomplete (AI.md PART 5/6, lines ~7336-7418)
-`MaintenanceModeMiddleware` (src/server/handler/handlers.go) was found, via
-live Docker testing (touching `{data_dir}/maintenance.flag`), to block
-`/server/healthz`, `/api/v1/server/healthz`, and `/api/v1/version` with the
-same hardcoded HTML 503 page as write operations, even with
-`Accept: application/json`. The exemption list has been fixed (see this
-session's commit) so health/version/static routes now bypass the block
-entirely. Still outstanding, and out of scope for a one-line patch:
-- Per AI.md lines 7336-7359, blocked write-operation requests should receive
-  the canonical `{"ok":false,"error":"MAINTENANCE","message":...,
-  "details":{...}}` JSON body (with `Retry-After`/`X-Maintenance-Mode`/
-  `X-Maintenance-Reason` headers) for API/text/JSON requests, keeping the
-  HTML page only for browser/frontend requests, per PART 14 content
-  negotiation rules — currently it's the hardcoded HTML string regardless
-  of `Accept`.
-- If self-healing state (attempts/last_attempt/next_attempt) is ever
-  surfaced through a JSON healthz-during-maintenance body, that tracking
-  needs to be built — it doesn't exist yet.
 
 ### 8. `/server/security` coordinated-disclosure feature (AI.md PART 12) not implemented
 While making the `/server/*` pages accurate, the `/server/contact` page was given

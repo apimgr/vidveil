@@ -548,12 +548,17 @@ func (h *SearchHandler) AgeVerifyMiddleware(next http.Handler) http.Handler {
 		// Check for age verification cookie
 		cookie, err := r.Cookie(ageVerifyCookieName)
 		if err != nil || cookie.Value != "1" {
-			// Redirect to age verification page
+			// Redirect to age verification page. The target path+query must be
+			// percent-encoded before being embedded as the "redirect" query
+			// value — an unescaped "?" (e.g. "/search?q=Test") produces a
+			// malformed Location header with an ambiguous nested query string
+			// that Chrome rejects outright as net::ERR_FAILED, even though
+			// lenient clients like curl still follow it.
 			redirect := r.URL.Path
 			if r.URL.RawQuery != "" {
 				redirect += "?" + r.URL.RawQuery
 			}
-			http.Redirect(w, r, "/age-verify?redirect="+redirect, http.StatusFound)
+			http.Redirect(w, r, "/age-verify?redirect="+url.QueryEscape(redirect), http.StatusFound)
 			return
 		}
 
@@ -654,11 +659,13 @@ func (h *SearchHandler) ContentRestrictionMiddleware(next http.Handler) http.Han
 		case "soft_block":
 			// Require acknowledgment before proceeding
 			if !h.hasContentRestrictionAck(r) {
+				// Percent-encode before embedding as a query value — see the
+				// identical fix/comment in AgeVerifyMiddleware above.
 				redirect := r.URL.Path
 				if r.URL.RawQuery != "" {
 					redirect += "?" + r.URL.RawQuery
 				}
-				http.Redirect(w, r, "/content-restricted?redirect="+redirect, http.StatusFound)
+				http.Redirect(w, r, "/content-restricted?redirect="+url.QueryEscape(redirect), http.StatusFound)
 				return
 			}
 			// Has acknowledgment, proceed

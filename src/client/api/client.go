@@ -30,18 +30,22 @@ type APIClient struct {
 }
 
 // SearchResult represents a single search result
+// Per AI.md PART 32: field tags match the server's actual /api/v1/search
+// result schema (src/server/model/result.go) - "source" is the engine slug.
 type SearchResult struct {
 	Title       string   `json:"title"`
 	URL         string   `json:"url"`
 	Thumbnail   string   `json:"thumbnail"`
 	Duration    string   `json:"duration"`
 	Views       string   `json:"views"`
-	Engine      string   `json:"engine"`
+	Engine      string   `json:"source"`
 	Description string   `json:"description,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 }
 
-// SearchResponse is the API response for search
+// SearchResponse is the API response for search.
+// Per AI.md PART 14, the server wraps search results in an "ok"/"data"/
+// "pagination" envelope, not a flat top-level object - see UnmarshalJSON.
 type SearchResponse struct {
 	Ok           bool           `json:"ok"`
 	Query        string         `json:"query"`
@@ -51,12 +55,49 @@ type SearchResponse struct {
 	Error        string         `json:"error,omitempty"`
 }
 
+// searchResponseWire mirrors the actual wire shape returned by
+// GET /api/{version}/search: {"ok":bool,"data":{...},"pagination":{...}}.
+type searchResponseWire struct {
+	Ok    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+	Data  struct {
+		Query        string         `json:"query"`
+		Results      []SearchResult `json:"results"`
+		SearchTimeMS int64          `json:"search_time_ms"`
+	} `json:"data"`
+	Pagination struct {
+		Total int `json:"total"`
+	} `json:"pagination"`
+}
+
+// UnmarshalJSON adapts the server's nested ok/data/pagination envelope onto
+// the flat SearchResponse fields consumed throughout src/client/cmd.
+func (s *SearchResponse) UnmarshalJSON(raw []byte) error {
+	var wire searchResponseWire
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return err
+	}
+
+	s.Ok = wire.Ok
+	s.Error = wire.Error
+	s.Query = wire.Data.Query
+	s.Results = wire.Data.Results
+	s.SearchTimeMS = wire.Data.SearchTimeMS
+	if wire.Pagination.Total > 0 {
+		s.Count = wire.Pagination.Total
+	} else {
+		s.Count = len(wire.Data.Results)
+	}
+
+	return nil
+}
+
 // VersionResponse is the API response for version
 type VersionResponse struct {
 	Ok      bool   `json:"ok"`
 	Version string `json:"version"`
 	Commit  string `json:"commit"`
-	Built   string `json:"built"`
+	Built   string `json:"build_date"`
 }
 
 // AutodiscoverResponse is the non-versioned client bootstrap response.

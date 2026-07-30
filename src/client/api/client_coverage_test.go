@@ -24,11 +24,23 @@ func newTestServer(t *testing.T, mux *http.ServeMux) (*APIClient, *httptest.Serv
 func TestSearch_ReturnsResults(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/search", func(w http.ResponseWriter, r *http.Request) {
-		resp := SearchResponse{Ok: true, Query: "cats", Count: 1, Results: []SearchResult{
-			{Title: "Cats Video", URL: "https://example.com/cats"},
-		}}
+		// Wire shape confirmed via a live curl against a running
+		// vidveil-beta-test container: {"ok":...,"data":{...},"pagination":{...}}.
+		// SearchResponse only implements UnmarshalJSON (client-side adapter),
+		// so this test writes the raw wire JSON rather than encoding the
+		// (deliberately flat, unmarshal-only) SearchResponse struct.
+		const wire = `{
+			"ok": true,
+			"data": {
+				"query": "cats",
+				"results": [
+					{"title": "Cats Video", "url": "https://example.com/cats"}
+				]
+			},
+			"pagination": {"total": 1}
+		}`
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_, _ = w.Write([]byte(wire))
 	})
 	client, _ := newTestServer(t, mux)
 

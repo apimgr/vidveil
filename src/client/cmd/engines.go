@@ -42,9 +42,12 @@ type EngineInfo struct {
 
 // EnginesListResponse represents the API response for engines list
 // Per AI.md PART 1: Type names MUST be specific
+// Per AI.md PART 14, the server wraps the list in the "data" envelope
+// (GET /api/{version}/engines returns {"ok":bool,"data":[...]}), not a
+// top-level "engines" field.
 type EnginesListResponse struct {
 	Ok      bool         `json:"ok"`
-	Engines []EngineInfo `json:"engines"`
+	Engines []EngineInfo `json:"data"`
 	Count   int          `json:"count"`
 	Error   string       `json:"error,omitempty"`
 }

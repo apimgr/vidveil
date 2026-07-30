@@ -17,55 +17,63 @@ import (
 
 // ── server fixtures ───────────────────────────────────────────────────────────
 
+// apiSearchJSON mirrors the real GET /api/{version}/search wire shape,
+// confirmed via a live curl against a running vidveil-beta-test container:
+// {"ok":true,"data":{"query":...,"results":[...]},"pagination":{...}}.
+// SearchResult's engine slug field is tagged "source" server-side.
 const apiSearchJSON = `{
   "ok": true,
-  "query": "test",
-  "results": [
-    {
-      "title": "Test Video One",
-      "url": "https://example.com/v/1",
-      "thumbnail": "https://example.com/t/1.jpg",
-      "duration": "10:00",
-      "views": "1000",
-      "engine": "ph"
-    },
-    {
-      "title": "Test Video Two",
-      "url": "https://example.com/v/2",
-      "thumbnail": "",
-      "duration": "",
-      "views": "",
-      "engine": "xv",
-      "description": "A test video",
-      "tags": ["test", "video"]
-    }
-  ],
-  "count": 2,
-  "search_time": 42
+  "data": {
+    "query": "test",
+    "results": [
+      {
+        "title": "Test Video One",
+        "url": "https://example.com/v/1",
+        "thumbnail": "https://example.com/t/1.jpg",
+        "duration": "10:00",
+        "views": "1000",
+        "source": "ph"
+      },
+      {
+        "title": "Test Video Two",
+        "url": "https://example.com/v/2",
+        "thumbnail": "",
+        "duration": "",
+        "views": "",
+        "source": "xv",
+        "description": "A test video",
+        "tags": ["test", "video"]
+      }
+    ],
+    "search_time_ms": 42
+  },
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 2,
+    "pages": 1
+  }
 }`
 
+// apiEnginesJSON mirrors the real GET /api/{version}/engines wire shape,
+// confirmed via a live curl against a running vidveil-beta-test container:
+// {"ok":true,"data":[...]} - not a top-level "engines" key.
 const apiEnginesJSON = `{
   "ok": true,
-  "engines": [
+  "data": [
     {
       "name": "ph",
       "display_name": "PornHub",
-      "bang": "ph",
-      "tier": 1,
       "enabled": true,
-      "method": "html",
-      "has_preview": false,
-      "has_download": false
+      "available": true,
+      "tier": 1
     },
     {
       "name": "xv",
       "display_name": "XVideos",
-      "bang": "xv",
-      "tier": 1,
       "enabled": false,
-      "method": "html",
-      "has_preview": true,
-      "has_download": true
+      "available": true,
+      "tier": 1
     }
   ],
   "count": 2

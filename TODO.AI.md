@@ -32,3 +32,33 @@ feature gap larger than "fix the broken preferences template" — needs its own
 implementation pass:
 - Wire `getRequestResultsPerPage()` into the no-JS search handler's page-size logic.
 - Wire `getRequestOpenNewTab()` into no-JS result-link `target` attribute rendering.
+
+### 3. `vidveil-cli engines`/`bangs` still show blank Bang/Method/Preview/Download columns after the data-envelope fix
+Beta-testing `vidveil-cli` against a live server found `engines`/`bangs`/`search`
+all silently returned empty/zero-valued output because the client's response
+structs (`src/client/api/client.go` `SearchResponse`, `src/client/cmd/engines.go`
+`EnginesListResponse`) expected a flat top-level JSON shape while the server
+actually wraps everything in `{"ok":bool,"data":...}` (confirmed via direct
+curl against `/api/v1/search`, `/api/v1/engines`). Fixed the envelope mismatch
+(custom `UnmarshalJSON` on `SearchResponse`; retagged `EnginesListResponse.
+Engines` to `json:"data"`) and the `SearchResult.Engine` field tag (was
+`json:"engine"`, server sends `"source"`) and `VersionResponse.Built` (was
+`json:"built"`, server sends `"build_date"`).
+
+**Not fixed — needs a product decision:** `EngineInfo` (`src/client/cmd/
+engines.go:32-40`) still declares `Bang`, `Method`, `HasPreview`, `HasDownload`
+fields that `GET /api/v1/engines` does not send at all (actual server engine
+object has `name`, `display_name`, `enabled`, `available`, `features[]`,
+`tier`, `privacy{requires_js,sets_cookies,has_tracking}` — verified live).
+`RunBangsCommand` (`engines.go:248-310`) derives bangs from this same engines
+response (reading `engine.Bang`), even though the server has a dedicated
+`GET /api/v1/bangs` endpoint (`{"count":N,"data":[{"bang","engine_name",
+"display_name","short_code"}]}`) that already carries real bang data — the
+CLI never calls it. Net effect after today's fix: `engines` table's BANG,
+METHOD, PREVIEW, DOWNLOAD columns still render empty/blank for every engine,
+and `bangs` still returns zero rows (`engine.Bang` is always `""`, so nothing
+passes into `BangInfo`). Needs a decision: (a) point `RunBangsCommand` at the
+real `/api/v1/bangs` endpoint (straightforward, has all needed fields) and (b)
+either drop the METHOD/PREVIEW/DOWNLOAD columns from the `engines` table (data
+doesn't exist server-side) or add those fields to the server's `/api/v1/engines`
+response (server-side scope change) — whichever the operator/spec intends.

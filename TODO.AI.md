@@ -115,25 +115,10 @@ these should be replaced with text labels (e.g. "OK"/"DOWN"/"WARN") or made
 conditional. Left unfixed here since it's unrelated to the two findings this
 session's commits address; logged so it isn't lost.
 
-### 7. Live production deployment running with MODE=development and DEBUG=true
-The user reported (and live `/server/healthz` + `/debug/routes` confirmed)
-that `https://x.scour.li` is currently running with `mode: development` and
-debug mode enabled, publicly exposing `/debug/*` (pprof, `/debug/config`,
-`/debug/cache`, `/debug/db`, `/debug/scheduler`, `/debug/memory`,
-`/debug/goroutines`, `/debug/engines`, etc. — see src/server/debug.go). This
-is a live security/information-disclosure exposure, not a benign dev
-convenience.
-
-Checked every MODE-setting file in this repo: `docker/docker-compose.yml`
-(production) already correctly sets `MODE=production` with no `DEBUG`
-override; only `docker-compose.dev.yml`/`docker-compose.test.yml` set
-`MODE=development`, and `docker/Dockerfile` intentionally omits `MODE`
-entirely (AI.md PART 26). None of this repo's own files explain the live
-anomaly — the production deployment must be running from a different
-compose file/env override/CD variable than what's committed here, which is
-outside this repo's visibility.
-
-**Next step**: the user (or whoever controls the actual deployment/CD
-pipeline for x.scour.li) needs to correct the live environment to
-`MODE=production` and `DEBUG=false`/unset. This cannot be fixed by editing
-code in this repo.
+### 7. Live deployment intentionally running MODE=development/DEBUG=true — not an issue
+`https://x.scour.li` was observed reporting `mode: development` with
+`/debug/*` reachable. **User confirmed this is intentional** — set deliberately
+to debug the app while it was broken (see item 1), not a misconfiguration.
+No action needed here; this repo's own `docker/docker-compose.yml`
+(production) still correctly defaults to `MODE=production`/no `DEBUG` for
+normal deploys, which is unaffected by the user's deliberate live override.

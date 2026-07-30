@@ -2,25 +2,38 @@
 
 ## Open Items
 
-### 1. `/search?q=...` intermittently fails with `net::ERR_FAILED` in browser
-Reported by user against `https://x.scour.li/search?q=lesbian%20teen`. Investigated:
-- No panic, `os.Exit`, or hijack-misuse found in the `/search` handler pipeline.
-- Blocklist logic is IP/domain-only; does not match query text, so it is not
-  rejecting this specific query.
-- Each engine's `http.Client` has a bounded timeout (`EngineTimeout` config,
-  default 15s, per-engine override via `EngineTimeouts`) — not an unbounded hang
-  in application code.
-- Could not reproduce locally: sandboxed build environment has no outbound
-  internet, so a live end-to-end request against the real search engines
-  couldn't be exercised.
-- Leading hypothesis: a reverse-proxy or edge-layer timeout in front of
-  `x.scour.li` that is shorter than the engine fetch time, or a TLS/SNI
-  mismatch at the proxy — both are infrastructure/deployment concerns, not
-  something fixable by editing this repo's Go code.
-- **Next step**: needs production server logs (request ID + timing for the
-  failing request) or reverse-proxy access logs to confirm/deny the timeout
-  hypothesis. Ask the user for proxy config or logs, or reproduce against a
-  deployed instance with real network access.
+### 1. `/search?q=...` intermittently fails with `net::ERR_FAILED` in browser — RESOLVED
+Root-caused via live `curl` testing against `https://x.scour.li/search?q=Test`
+with a mobile Chrome User-Agent: `AgeVerifyMiddleware` and
+`ContentRestrictionMiddleware` (src/server/handler/handlers.go) built the
+redirect `Location` header by raw string-concatenating the original
+path+query (e.g. `/search?q=Test`) directly as the `redirect` query
+parameter's value, producing a malformed URL with an ambiguous nested query
+string. Chrome's strict URI parser rejects this outright as
+`net::ERR_FAILED`; lenient clients like `curl` (without a query string of
+their own) still followed it, which is why earlier reproduction attempts in
+this file didn't catch it. Confirmed via `git blame`/`git log -L` that this
+defect has existed since the project's initial commit (2025-12-15) — not a
+regression from any recent session's changes. Fixed both call sites with
+`url.QueryEscape()`; the consuming side (`r.URL.Query().Get("redirect")`)
+already auto-decodes, and the existing open-redirect guard
+(`strings.HasPrefix(redirect, "/")`) is unaffected. Verified via full
+build+vet+test+go-lint pass; committed+pushed as `951a480b3ae7`; CI (CI,
+Daily Build, Docker Build) verified green for this commit.
+
+Separately, the user flagged the live healthz response as spec-noncompliant.
+Audited `TorInfo` (handlers.go) against AI.md PART 13's canonical struct and
+found `Hostname` was tagged `json:"hostname,omitempty"` instead of the spec's
+required `json:"hostname"` — causing the `hostname` key to silently vanish
+from live JSON instead of serializing as `""`. Fixed, verified, committed+
+pushed as `d97f831ee38a`; CI verified green for this commit too.
+
+**Still open, NOT fixable from this repo** — see item 7 below: the live
+production server was observed reporting `"mode": "development"` in its
+healthz JSON with debug mode also enabled (`/debug/*` endpoints reachable),
+even though this repo's own `docker/docker-compose.yml` (production) already
+sets `MODE=production` with no `DEBUG` override. The discrepancy must be in
+the actual deployment/CD configuration outside this repo's visibility.
 
 ### 2. No-JS `resultsPerPage` / `openNewTab` preferences are stored but not wired to behavior
 `PreferencesSave` (handlers.go) now persists `resultsPerPage` and `openNewTab`
@@ -101,3 +114,26 @@ Per CLAUDE.md's "no emojis in code or inline tool output unless asked" rule,
 these should be replaced with text labels (e.g. "OK"/"DOWN"/"WARN") or made
 conditional. Left unfixed here since it's unrelated to the two findings this
 session's commits address; logged so it isn't lost.
+
+### 7. Live production deployment running with MODE=development and DEBUG=true
+The user reported (and live `/server/healthz` + `/debug/routes` confirmed)
+that `https://x.scour.li` is currently running with `mode: development` and
+debug mode enabled, publicly exposing `/debug/*` (pprof, `/debug/config`,
+`/debug/cache`, `/debug/db`, `/debug/scheduler`, `/debug/memory`,
+`/debug/goroutines`, `/debug/engines`, etc. — see src/server/debug.go). This
+is a live security/information-disclosure exposure, not a benign dev
+convenience.
+
+Checked every MODE-setting file in this repo: `docker/docker-compose.yml`
+(production) already correctly sets `MODE=production` with no `DEBUG`
+override; only `docker-compose.dev.yml`/`docker-compose.test.yml` set
+`MODE=development`, and `docker/Dockerfile` intentionally omits `MODE`
+entirely (AI.md PART 26). None of this repo's own files explain the live
+anomaly — the production deployment must be running from a different
+compose file/env override/CD variable than what's committed here, which is
+outside this repo's visibility.
+
+**Next step**: the user (or whoever controls the actual deployment/CD
+pipeline for x.scour.li) needs to correct the live environment to
+`MODE=production` and `DEBUG=false`/unset. This cannot be fixed by editing
+code in this repo.

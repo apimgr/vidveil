@@ -525,6 +525,91 @@ func TestMaintenanceModeMiddleware_MaintenanceFlagExists_Returns503(t *testing.T
 	}
 }
 
+// TestMaintenanceModeMiddleware_APIPath_ReturnsJSONEnvelope verifies that
+// /api/** requests blocked by maintenance mode get the canonical
+// {"ok":false,"error":"MAINTENANCE",...} JSON body and X-Maintenance-*
+// headers per AI.md PART 5/6, not the hardcoded HTML page.
+func TestMaintenanceModeMiddleware_APIPath_ReturnsJSONEnvelope(t *testing.T) {
+	h := newRenderTestHandler()
+
+	paths := config.GetAppPaths("", "")
+	flagFile := paths.Data + "/maintenance.flag"
+	if err := os.MkdirAll(paths.Data, 0755); err != nil {
+		t.Skipf("cannot create data dir %s: %v", paths.Data, err)
+	}
+	if err := os.WriteFile(flagFile, []byte(""), 0644); err != nil {
+		t.Skipf("cannot create maintenance flag: %v", err)
+	}
+	defer os.Remove(flagFile)
+
+	handler := h.MaintenanceModeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test", nil)
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("MaintenanceModeMiddleware(/api/v1/search): status = %d, want 503", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if !strings.Contains(ct, "application/json") {
+		t.Errorf("MaintenanceModeMiddleware(/api/v1/search): Content-Type = %q, want application/json", ct)
+	}
+	if rr.Header().Get("X-Maintenance-Mode") != "true" {
+		t.Errorf("MaintenanceModeMiddleware(/api/v1/search): X-Maintenance-Mode = %q, want true", rr.Header().Get("X-Maintenance-Mode"))
+	}
+	if rr.Header().Get("X-Maintenance-Reason") == "" {
+		t.Error("MaintenanceModeMiddleware(/api/v1/search): X-Maintenance-Reason header missing")
+	}
+	if rr.Header().Get("Retry-After") == "" {
+		t.Error("MaintenanceModeMiddleware(/api/v1/search): Retry-After header missing")
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `"ok":false`) || !strings.Contains(body, `"error":"MAINTENANCE"`) {
+		t.Errorf("MaintenanceModeMiddleware(/api/v1/search): body = %q, want canonical MAINTENANCE envelope", body)
+	}
+}
+
+// TestMaintenanceModeMiddleware_BrowserPath_ReturnsHTML verifies a plain
+// browser request blocked by maintenance mode still gets the HTML page, not
+// the JSON envelope.
+func TestMaintenanceModeMiddleware_BrowserPath_ReturnsHTML(t *testing.T) {
+	h := newRenderTestHandler()
+
+	paths := config.GetAppPaths("", "")
+	flagFile := paths.Data + "/maintenance.flag"
+	if err := os.MkdirAll(paths.Data, 0755); err != nil {
+		t.Skipf("cannot create data dir %s: %v", paths.Data, err)
+	}
+	if err := os.WriteFile(flagFile, []byte(""), 0644); err != nil {
+		t.Skipf("cannot create maintenance flag: %v", err)
+	}
+	defer os.Remove(flagFile)
+
+	handler := h.MaintenanceModeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/128.0")
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("MaintenanceModeMiddleware(/search, browser): status = %d, want 503", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/html") {
+		t.Errorf("MaintenanceModeMiddleware(/search, browser): Content-Type = %q, want text/html", ct)
+	}
+	if !strings.Contains(rr.Body.String(), "Under Maintenance") {
+		t.Error("MaintenanceModeMiddleware(/search, browser): body missing HTML maintenance page")
+	}
+}
+
 func TestMaintenanceModeMiddleware_HealthzPath_PassesThrough(t *testing.T) {
 	h := newRenderTestHandler()
 

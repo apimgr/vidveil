@@ -318,6 +318,70 @@ func TestNotFoundHandler_ReturnsPlainText404(t *testing.T) {
 	}
 }
 
+// NotFoundHandler on an /api/** path from a browser (non-empty, non-CLI
+// User-Agent) with no Accept header must return the canonical JSON error
+// envelope per AI.md PART 14, not the HTML error page.
+func TestNotFoundHandler_APIPath_ReturnsJSON(t *testing.T) {
+	h := newMiscTestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/does-not-exist", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/128.0")
+
+	h.NotFoundHandler(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("NotFoundHandler: status = %d, want 404", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if !strings.Contains(ct, "application/json") {
+		t.Errorf("NotFoundHandler: Content-Type = %q, want application/json", ct)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `"ok": false`) || !strings.Contains(body, `"error": "NOT_FOUND"`) {
+		t.Errorf("NotFoundHandler: body = %q, want canonical NOT_FOUND envelope", body)
+	}
+}
+
+// NotFoundHandler on an /api/** path with Accept: text/plain must return
+// plain text per AI.md PART 14 content negotiation rules.
+func TestNotFoundHandler_APIPath_AcceptTextPlain_ReturnsText(t *testing.T) {
+	h := newMiscTestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/does-not-exist", nil)
+	req.Header.Set("Accept", "text/plain")
+
+	h.NotFoundHandler(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("NotFoundHandler: status = %d, want 404", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/plain") {
+		t.Errorf("NotFoundHandler: Content-Type = %q, want text/plain", ct)
+	}
+	if strings.Contains(rr.Body.String(), "{") {
+		t.Errorf("NotFoundHandler: body = %q, want plain text not JSON", rr.Body.String())
+	}
+}
+
+// NotFoundHandler on an /api/** path with a .txt extension must return
+// plain text regardless of Accept header, per AI.md PART 14 priority order.
+func TestNotFoundHandler_APIPath_TxtExtension_ReturnsText(t *testing.T) {
+	h := newMiscTestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/does-not-exist.txt", nil)
+
+	h.NotFoundHandler(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("NotFoundHandler: status = %d, want 404", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/plain") {
+		t.Errorf("NotFoundHandler: Content-Type = %q, want text/plain", ct)
+	}
+}
+
 // InternalErrorHandler uses empty templatesFS → falls back to plain text 500.
 func TestInternalErrorHandler_ReturnsPlainText500(t *testing.T) {
 	h := newMiscTestHandler()

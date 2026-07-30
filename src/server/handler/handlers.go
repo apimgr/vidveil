@@ -512,10 +512,43 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 		paths := config.GetAppPaths("", "")
 		modeFile := filepath.Join(paths.Data, "maintenance.flag")
 		if _, err := os.Stat(modeFile); err == nil {
-			// Maintenance mode is active
-			w.Header().Set("Retry-After", "3600")
+			// Maintenance mode is active. Per AI.md PART 5/6 "API Responses in
+			// Maintenance Mode": API/JSON/text clients get the canonical
+			// {"ok":false,"error":"MAINTENANCE",...} envelope with
+			// Retry-After/X-Maintenance-* headers; browsers get the HTML page.
+			// This project has no self-healing/reason tracking (maintenance is
+			// only ever toggled manually via the CLI), so those fields reflect
+			// that reality rather than fabricating unimplemented state.
+			const maintenanceReason = "manual"
+			wantsHTML := true
+			if strings.HasPrefix(path, "/api/") {
+				wantsHTML = false
+			} else if detectResponseFormat(r) != "text/html" {
+				wantsHTML = false
+			}
+
+			headers := w.Header()
+			headers.Set("Retry-After", "3600")
+			headers.Set("X-Maintenance-Mode", "true")
+			headers.Set("X-Maintenance-Reason", maintenanceReason)
+
+			if !wantsHTML {
+				headers.Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"ok":      false,
+					"error":   CodeMaintenance,
+					"message": MsgMaintenance,
+					"details": map[string]interface{}{
+						"reason":       maintenanceReason,
+						"self_healing": false,
+					},
+				})
+				return
+			}
+
+			headers.Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			lang := resolveLocale(r)
 			dir := i18n.Direction(lang)
 			w.Write([]byte(fmt.Sprintf(`<!DOCTYPE html>
@@ -2860,7 +2893,19 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, r *http.Request, 
 }
 
 // NotFoundHandler handles 404 errors per AI.md PART 30
+// Per AI.md PART 14, /api/** routes must honor content negotiation (including
+// the not-found case) instead of falling through to the HTML frontend page.
 func (h *SearchHandler) NotFoundHandler(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		if getAPIResponseFormat(r) == "text" {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(MsgNotFound + "\n"))
+			return
+		}
+		SendError(w, CodeNotFound, MsgNotFound)
+		return
+	}
 	h.RenderErrorPage(w, r, http.StatusNotFound, "Page Not Found",
 		"The page you're looking for doesn't exist or has been moved.")
 }

@@ -95,16 +95,6 @@ entirely. Still outstanding, and out of scope for a one-line patch:
   surfaced through a JSON healthz-during-maintenance body, that tracking
   needs to be built — it doesn't exist yet.
 
-### 5. `/api/v1/*` 404s return HTML instead of negotiated content type
-Beta-testing found that unmatched routes under `/api/v1/*` (e.g. a typoed or
-removed endpoint) return the generic HTML 404 error page even when the
-request sends `Accept: application/json` or `Accept: text/plain`. Per PART
-13/14, every route under `/api/v1/` must honor content negotiation, including
-the not-found case (`{"error":"message","code":404}` for JSON, plain text for
-`text/plain`). This needs the router's `NotFoundHandler`/catch-all for the
-`/api/v1` mount to branch on `Accept`/`.txt` the same way real handlers do,
-rather than falling through to the generic frontend 404 template.
-
 ### 8. `/server/security` coordinated-disclosure feature (AI.md PART 12) not implemented
 While making the `/server/*` pages accurate, the `/server/contact` page was given
 its spec-mandated (AI.md PART 16, line ~26185) "Security Issues" section, which

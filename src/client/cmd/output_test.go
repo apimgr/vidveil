@@ -92,22 +92,22 @@ func TestOutputEnginesAsCSV(t *testing.T) {
 	engineList := []EngineInfo{{
 		Name:        "pornhub",
 		DisplayName: "PornHub",
-		Bang:        "ph",
 		Tier:        1,
 		Enabled:     true,
-		Method:      "html",
-		HasPreview:  true,
-		HasDownload: false,
+		Capabilities: &EngineCapabilities{
+			HasPreview:  true,
+			HasDownload: false,
+		},
 	}}
 
 	outputText := captureStdoutForTest(t, func() error {
 		return OutputEnginesAsCSV(engineList)
 	})
 
-	if !strings.Contains(outputText, "name,display_name,bang,tier,enabled,method,has_preview,has_download") {
+	if !strings.Contains(outputText, "name,display_name,tier,enabled,has_preview,has_download") {
 		t.Fatalf("csv output missing engines header:\n%s", outputText)
 	}
-	if !strings.Contains(outputText, "pornhub,PornHub,ph,1,true,html,true,false") {
+	if !strings.Contains(outputText, "pornhub,PornHub,1,true,true,false") {
 		t.Fatalf("csv output missing engines row:\n%s", outputText)
 	}
 }

@@ -661,6 +661,7 @@ func (m *EngineManager) ListEngines() []model.EngineInfo {
 
 	var infos []model.EngineInfo
 	for _, engine := range m.engines {
+		caps := engine.Capabilities()
 		infos = append(infos, model.EngineInfo{
 			Name:        engine.Name(),
 			DisplayName: engine.DisplayName(),
@@ -668,7 +669,11 @@ func (m *EngineManager) ListEngines() []model.EngineInfo {
 			Available:   engine.IsAvailable(),
 			Tier:        engine.Tier(),
 			Features:    getFeatures(engine),
-			Privacy:     getEnginePrivacyScore(engine.Name()),
+			Capabilities: &model.EngineCapabilities{
+				HasPreview:  caps.HasPreview,
+				HasDownload: caps.HasDownload,
+			},
+			Privacy: getEnginePrivacyScore(engine.Name()),
 		})
 	}
 	return infos

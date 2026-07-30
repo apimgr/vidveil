@@ -27,17 +27,35 @@ var (
 	enginesShowAllDetails   bool
 )
 
+// EngineCapabilities represents an engine's optional capabilities
+// Per AI.md PART 1: Type names MUST be specific
+// Per IDEA.md's EngineCapabilities struct: {"has_preview","has_download"}
+type EngineCapabilities struct {
+	HasPreview  bool `json:"has_preview"`
+	HasDownload bool `json:"has_download"`
+}
+
 // EngineInfo represents engine information from the server
 // Per AI.md PART 1: Type names MUST be specific
+// Per IDEA.md's EngineInfo struct - the server never sends "bang" or
+// "method" fields on this object; capabilities are nested, not flat.
 type EngineInfo struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Bang        string `json:"bang"`
-	Tier        int    `json:"tier"`
-	Enabled     bool   `json:"enabled"`
-	Method      string `json:"method"`
-	HasPreview  bool   `json:"has_preview"`
-	HasDownload bool   `json:"has_download"`
+	Name         string              `json:"name"`
+	DisplayName  string              `json:"display_name"`
+	Tier         int                 `json:"tier"`
+	Enabled      bool                `json:"enabled"`
+	Available    bool                `json:"available"`
+	Capabilities *EngineCapabilities `json:"capabilities,omitempty"`
+}
+
+// hasPreview reports whether the engine supports preview, tolerating a nil Capabilities.
+func (e EngineInfo) hasPreview() bool {
+	return e.Capabilities != nil && e.Capabilities.HasPreview
+}
+
+// hasDownload reports whether the engine supports download, tolerating a nil Capabilities.
+func (e EngineInfo) hasDownload() bool {
+	return e.Capabilities != nil && e.Capabilities.HasDownload
 }
 
 // EnginesListResponse represents the API response for engines list
@@ -172,17 +190,15 @@ func OutputEnginesAsCSV(engines []EngineInfo) error {
 		csvRows = append(csvRows, []string{
 			engine.Name,
 			engine.DisplayName,
-			engine.Bang,
 			fmt.Sprintf("%d", engine.Tier),
 			fmt.Sprintf("%t", engine.Enabled),
-			engine.Method,
-			fmt.Sprintf("%t", engine.HasPreview),
-			fmt.Sprintf("%t", engine.HasDownload),
+			fmt.Sprintf("%t", engine.hasPreview()),
+			fmt.Sprintf("%t", engine.hasDownload()),
 		})
 	}
 
 	return OutputDataAsCSV(
-		[]string{"name", "display_name", "bang", "tier", "enabled", "method", "has_preview", "has_download"},
+		[]string{"name", "display_name", "tier", "enabled", "has_preview", "has_download"},
 		csvRows,
 	)
 }
@@ -195,7 +211,7 @@ func OutputEnginesAsPlain(engines []EngineInfo) error {
 		if engine.Enabled {
 			status = EngineStatusEnabled
 		}
-		fmt.Printf("%s (!%s) - %s [%s]\n", engine.DisplayName, engine.Bang, engine.Method, status)
+		fmt.Printf("%s [%s]\n", engine.DisplayName, status)
 	}
 	fmt.Printf("\nTotal: %d engines\n", len(engines))
 	return nil
@@ -208,11 +224,11 @@ func OutputEnginesAsTable(engines []EngineInfo, showDetails bool) error {
 
 	// Header
 	if showDetails {
-		fmt.Fprintf(tableWriter, "NAME\tBANG\tTIER\tSTATUS\tMETHOD\tPREVIEW\tDOWNLOAD\n")
-		fmt.Fprintf(tableWriter, "----\t----\t----\t------\t------\t-------\t--------\n")
+		fmt.Fprintf(tableWriter, "NAME\tTIER\tSTATUS\tPREVIEW\tDOWNLOAD\n")
+		fmt.Fprintf(tableWriter, "----\t----\t------\t-------\t--------\n")
 	} else {
-		fmt.Fprintf(tableWriter, "NAME\tBANG\tSTATUS\n")
-		fmt.Fprintf(tableWriter, "----\t----\t------\n")
+		fmt.Fprintf(tableWriter, "NAME\tSTATUS\n")
+		fmt.Fprintf(tableWriter, "----\t------\n")
 	}
 
 	enabledCount := 0
@@ -226,17 +242,17 @@ func OutputEnginesAsTable(engines []EngineInfo, showDetails bool) error {
 		if showDetails {
 			preview := EngineDataNotAvail
 			download := EngineDataNotAvail
-			if engine.HasPreview {
+			if engine.hasPreview() {
 				preview = EngineDataYes
 			}
-			if engine.HasDownload {
+			if engine.hasDownload() {
 				download = EngineDataYes
 			}
-			fmt.Fprintf(tableWriter, "%s\t!%s\t%d\t%s\t%s\t%s\t%s\n",
-				engine.DisplayName, engine.Bang, engine.Tier, status, engine.Method, preview, download)
+			fmt.Fprintf(tableWriter, "%s\t%d\t%s\t%s\t%s\n",
+				engine.DisplayName, engine.Tier, status, preview, download)
 		} else {
-			fmt.Fprintf(tableWriter, "%s\t!%s\t%s\n",
-				engine.DisplayName, engine.Bang, status)
+			fmt.Fprintf(tableWriter, "%s\t%s\n",
+				engine.DisplayName, status)
 		}
 	}
 
@@ -269,32 +285,25 @@ func RunBangsCommand(args []string) error {
 		}
 	}
 
-	// Fetch engines from server (bangs are derived from engines)
-	enginesData, err := FetchEnginesList()
+	// Fetch bangs from the dedicated server endpoint
+	bangsData, err := FetchBangsList()
 	if err != nil {
 		return fmt.Errorf("failed to fetch bangs: %w", err)
 	}
 
-	// Extract and filter bangs
+	// Filter bangs
 	var bangs []BangInfo
-	for _, engine := range enginesData.Engines {
-		if !engine.Enabled {
-			continue
-		}
+	for _, bang := range bangsData.Bangs {
 		if searchFilter != "" {
 			// Filter by search term
 			lowerFilter := strings.ToLower(searchFilter)
-			if !strings.Contains(strings.ToLower(engine.Bang), lowerFilter) &&
-				!strings.Contains(strings.ToLower(engine.DisplayName), lowerFilter) &&
-				!strings.Contains(strings.ToLower(engine.Name), lowerFilter) {
+			if !strings.Contains(strings.ToLower(bang.Bang), lowerFilter) &&
+				!strings.Contains(strings.ToLower(bang.DisplayName), lowerFilter) &&
+				!strings.Contains(strings.ToLower(bang.EngineName), lowerFilter) {
 				continue
 			}
 		}
-		bangs = append(bangs, BangInfo{
-			Bang:        engine.Bang,
-			EngineName:  engine.Name,
-			DisplayName: engine.DisplayName,
-		})
+		bangs = append(bangs, bang)
 	}
 
 	// Output results
@@ -314,10 +323,44 @@ func RunBangsCommand(args []string) error {
 
 // BangInfo represents a bang shortcut
 // Per AI.md PART 1: Type names MUST be specific
+// Matches the server's engine.BangInfo (GET /api/{version}/bangs):
+// {"bang","engine_name","display_name","short_code"} - Bang already
+// carries its "!" prefix, it must never be re-prepended when printed.
 type BangInfo struct {
 	Bang        string `json:"bang"`
 	EngineName  string `json:"engine_name"`
 	DisplayName string `json:"display_name"`
+	ShortCode   string `json:"short_code"`
+}
+
+// BangsListResponse represents the API response for the bangs list
+// Per AI.md PART 14, the server wraps the list in the "data" envelope.
+type BangsListResponse struct {
+	Ok    bool       `json:"ok"`
+	Bangs []BangInfo `json:"data"`
+	Count int        `json:"count"`
+	Error string     `json:"error,omitempty"`
+}
+
+// FetchBangsList fetches the list of bang shortcuts from the server
+// Per AI.md PART 1: Function names MUST reveal intent
+func FetchBangsList() (*BangsListResponse, error) {
+	url := fmt.Sprintf("%s/bangs", apiClient.GetAPIBaseURL())
+	responseBytes, err := apiClient.FetchURLResponseBytes(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var response BangsListResponse
+	if err := json.Unmarshal(responseBytes, &response); err != nil {
+		return nil, fmt.Errorf("parsing response: %w", err)
+	}
+
+	if !response.Ok {
+		return nil, fmt.Errorf("server error: %s", response.Error)
+	}
+
+	return &response, nil
 }
 
 // PrintBangsCommandHelp prints help for the bangs command
@@ -367,11 +410,12 @@ func OutputBangsAsCSV(bangs []BangInfo) error {
 			bang.Bang,
 			bang.EngineName,
 			bang.DisplayName,
+			bang.ShortCode,
 		})
 	}
 
 	return OutputDataAsCSV(
-		[]string{"bang", "engine_name", "display_name"},
+		[]string{"bang", "engine_name", "display_name", "short_code"},
 		csvRows,
 	)
 }
@@ -380,7 +424,7 @@ func OutputBangsAsCSV(bangs []BangInfo) error {
 // Per AI.md PART 1: Function names MUST reveal intent
 func OutputBangsAsPlain(bangs []BangInfo) error {
 	for _, bang := range bangs {
-		fmt.Printf("!%s - %s\n", bang.Bang, bang.DisplayName)
+		fmt.Printf("%s - %s\n", bang.Bang, bang.DisplayName)
 	}
 	fmt.Printf("\nTotal: %d bangs available\n", len(bangs))
 	return nil
@@ -395,7 +439,7 @@ func OutputBangsAsTable(bangs []BangInfo) error {
 	fmt.Fprintf(tableWriter, "----\t------\n")
 
 	for _, bang := range bangs {
-		fmt.Fprintf(tableWriter, "!%s\t%s\n", bang.Bang, bang.DisplayName)
+		fmt.Fprintf(tableWriter, "%s\t%s\n", bang.Bang, bang.DisplayName)
 	}
 
 	tableWriter.Flush()

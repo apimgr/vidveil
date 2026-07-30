@@ -17,30 +17,32 @@ func sampleEngineInfos() []EngineInfo {
 		{
 			Name:        "pornhub",
 			DisplayName: "PornHub",
-			Bang:        "ph",
 			Tier:        1,
 			Enabled:     true,
-			Method:      "GET",
-			HasPreview:  true,
-			HasDownload: false,
+			Available:   true,
+			Capabilities: &EngineCapabilities{
+				HasPreview:  true,
+				HasDownload: false,
+			},
 		},
 		{
 			Name:        "xvideos",
 			DisplayName: "XVideos",
-			Bang:        "xv",
 			Tier:        2,
 			Enabled:     false,
-			Method:      "GET",
-			HasPreview:  false,
-			HasDownload: true,
+			Available:   true,
+			Capabilities: &EngineCapabilities{
+				HasPreview:  false,
+				HasDownload: true,
+			},
 		},
 	}
 }
 
 func sampleBangInfos() []BangInfo {
 	return []BangInfo{
-		{Bang: "ph", EngineName: "pornhub", DisplayName: "PornHub"},
-		{Bang: "xv", EngineName: "xvideos", DisplayName: "XVideos"},
+		{Bang: "!ph", EngineName: "pornhub", DisplayName: "PornHub", ShortCode: "!ph"},
+		{Bang: "!xv", EngineName: "xvideos", DisplayName: "XVideos", ShortCode: "!xv"},
 	}
 }
 

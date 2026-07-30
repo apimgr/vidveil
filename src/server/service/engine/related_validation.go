@@ -3,6 +3,7 @@ package engine
 
 import (
 	"context"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -81,6 +82,11 @@ func validateRelatedTermsAsync(mgr *EngineManager, candidates []string) {
 			continue
 		}
 		go func(term string) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("[related] panic validating term %q: %v", term, rec)
+				}
+			}()
 			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 			defer cancel()
 			resp := mgr.Search(ctx, term, 1, quickValidationEngines, "")

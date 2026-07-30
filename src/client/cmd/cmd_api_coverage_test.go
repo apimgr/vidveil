@@ -79,6 +79,27 @@ const apiEnginesJSON = `{
   "count": 2
 }`
 
+// apiBangsJSON mirrors the real GET /api/{version}/bangs wire shape:
+// {"ok":true,"data":[{"bang","engine_name","display_name","short_code"}],"count":N}.
+const apiBangsJSON = `{
+  "ok": true,
+  "data": [
+    {
+      "bang": "!ph",
+      "engine_name": "ph",
+      "display_name": "PornHub",
+      "short_code": "!ph"
+    },
+    {
+      "bang": "!xv",
+      "engine_name": "xv",
+      "display_name": "XVideos",
+      "short_code": "!xv"
+    }
+  ],
+  "count": 2
+}`
+
 const apiEngineDetailJSON = `{
   "ok": true,
   "data": {
@@ -113,6 +134,12 @@ func newAPITestServer(t *testing.T) *httptest.Server {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(apiEnginesJSON))
+	})
+
+	// bangs list
+	mux.HandleFunc("/api/v1/bangs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(apiBangsJSON))
 	})
 
 	srv := httptest.NewServer(mux)
@@ -601,7 +628,7 @@ func TestRunProbeCommand_EngineSearchError_StillOutputs(t *testing.T) {
 // ── helper output functions (not yet covered elsewhere) ───────────────────────
 
 func TestOutputEnginesAsCSV_NoPanic(t *testing.T) {
-	engines := []EngineInfo{{Name: "ph", DisplayName: "PornHub", Bang: "ph", Tier: 1, Enabled: false, HasPreview: true, HasDownload: true}}
+	engines := []EngineInfo{{Name: "ph", DisplayName: "PornHub", Tier: 1, Enabled: false, Capabilities: &EngineCapabilities{HasPreview: true, HasDownload: true}}}
 	if err := OutputEnginesAsCSV(engines); err != nil {
 		t.Errorf("OutputEnginesAsCSV: %v", err)
 	}
@@ -609,7 +636,7 @@ func TestOutputEnginesAsCSV_NoPanic(t *testing.T) {
 
 func TestOutputEnginesAsTable_NoDetails_NoPanic(t *testing.T) {
 	engines := []EngineInfo{
-		{Name: "ph", DisplayName: "PornHub", Bang: "ph", Tier: 1, Enabled: true},
+		{Name: "ph", DisplayName: "PornHub", Tier: 1, Enabled: true},
 	}
 	if err := OutputEnginesAsTable(engines, false); err != nil {
 		t.Errorf("OutputEnginesAsTable no-details: %v", err)
@@ -618,8 +645,8 @@ func TestOutputEnginesAsTable_NoDetails_NoPanic(t *testing.T) {
 
 func TestOutputEnginesAsTable_WithDetails_NoPanic(t *testing.T) {
 	engines := []EngineInfo{
-		{Name: "ph", DisplayName: "PornHub", Bang: "ph", Tier: 1, Enabled: true, Method: "html", HasPreview: true, HasDownload: false},
-		{Name: "xv", DisplayName: "XVideos", Bang: "xv", Tier: 1, Enabled: false, Method: "html"},
+		{Name: "ph", DisplayName: "PornHub", Tier: 1, Enabled: true, Capabilities: &EngineCapabilities{HasPreview: true, HasDownload: false}},
+		{Name: "xv", DisplayName: "XVideos", Tier: 1, Enabled: false},
 	}
 	if err := OutputEnginesAsTable(engines, true); err != nil {
 		t.Errorf("OutputEnginesAsTable with-details: %v", err)

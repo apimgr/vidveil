@@ -903,12 +903,23 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			h.metrics.IncrementSearches()
 		}
 
+		// Apply the no-JS/text-browser page-size preference (AI.md PART 16
+		// preferences); JS-enabled clients ignore this and page via SSE instead.
+		resultsPerPage := 20
+		if n, err := strconv.Atoi(h.getRequestResultsPerPage(r)); err == nil {
+			resultsPerPage = n
+		}
+		pageResults := results.Data.Results
+		if len(pageResults) > resultsPerPage {
+			pageResults = pageResults[:resultsPerPage]
+		}
+
 		h.renderResponse(w, r, "search", map[string]interface{}{
 			"Title":           query + " - " + h.appConfig.Server.Branding.Title,
 			"Query":           query,
 			"SearchQuery":     searchQuery,
 			"ResultsJSON":     template.JS("[]"),
-			"Results":         results.Data.Results,
+			"Results":         pageResults,
 			"EnginesUsed":     results.Data.EnginesUsed,
 			"SearchTime":      results.Data.SearchTimeMS,
 			"Theme":           h.getRequestTheme(r),
@@ -917,6 +928,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"RelatedSearches": relatedSearches,
 			"SpellSuggestion": spellSuggestion,
 			"EnginesParam":    enginesParam,
+			"OpenNewTab":      h.getRequestOpenNewTab(r),
 			"Version":         version.GetVersion(),
 			"BuildDateTime":   BuildDateTime(),
 		})

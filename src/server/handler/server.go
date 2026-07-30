@@ -4,23 +4,38 @@ package handler
 
 import (
 	"bytes"
+	"database/sql"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/email"
+	"github.com/apimgr/vidveil/src/server/service/logging"
+	"github.com/apimgr/vidveil/src/server/service/pgp"
+	"github.com/apimgr/vidveil/src/server/service/secreport"
+	"github.com/apimgr/vidveil/src/server/service/secrets"
+	"github.com/apimgr/vidveil/src/server/service/urlvars"
 )
 
 // ServerHandler handles /server/ routes per AI.md PART 14
 type ServerHandler struct {
-	appConfig *config.AppConfig
-	torSvc    TorStatusChecker
+	appConfig  *config.AppConfig
+	torSvc     TorStatusChecker
+	db         *sql.DB
+	secretsMgr *secrets.Manager
+	configDir  string
+	logger     *logging.AppLogger
+	emailSvc   *email.EmailService
 }
 
 // NewServerHandler creates a new server handler
@@ -40,6 +55,36 @@ func (h *ServerHandler) SetTorService(t TorStatusChecker) {
 	h.torSvc = t
 }
 
+// SetDB wires the database connection used by the coordinated-disclosure
+// pipeline (AI.md PART 11 "Security Reports") to store/read security_reports rows.
+func (h *ServerHandler) SetDB(db *sql.DB) {
+	h.db = db
+}
+
+// SetSecretsManager wires the app-secrets manager used to validate the
+// rotating {security_id} token (AI.md PART 11 "Security Reports").
+func (h *ServerHandler) SetSecretsManager(m *secrets.Manager) {
+	h.secretsMgr = m
+}
+
+// SetConfigDir wires the config directory so the security pipeline can find
+// the project PGP keypair under {config_dir}/security/.
+func (h *ServerHandler) SetConfigDir(dir string) {
+	h.configDir = dir
+}
+
+// SetLogger wires the app logger so security-report events can be recorded
+// to security.log per AI.md PART 11.
+func (h *ServerHandler) SetLogger(l *logging.AppLogger) {
+	h.logger = l
+}
+
+// SetEmailService wires the email service used to send maintainer
+// notifications and researcher acknowledgments per AI.md PART 11.
+func (h *ServerHandler) SetEmailService(e *email.EmailService) {
+	h.emailSvc = e
+}
+
 // renderServerTemplate renders a server page template with common data
 func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Request, templateName string, extraData map[string]interface{}) {
 	// Map template names to file paths
@@ -53,6 +98,14 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		templateFile = "template/page/server-contact.tmpl"
 	case "server-help":
 		templateFile = "template/page/server-help.tmpl"
+	case "server-security":
+		templateFile = "template/page/server-security.tmpl"
+	case "server-security-policy":
+		templateFile = "template/page/server-security-policy.tmpl"
+	case "server-security-thanks":
+		templateFile = "template/page/server-security-thanks.tmpl"
+	case "server-security-report":
+		templateFile = "template/page/server-security-report.tmpl"
 	default:
 		http.Error(w, "Template not found", http.StatusInternalServerError)
 		return
@@ -190,11 +243,38 @@ func (h *ServerHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-privacy", nil)
 }
 
-// ContactPage renders /server/contact web page
+// ContactPage renders /server/contact web page. Per AI.md PART 11
+// "/server/contact?security_id={id} — Mode Switch": a valid, current-or-
+// previous-window security_id switches the form into coordinated-disclosure
+// mode; an invalid/expired one silently falls back to the standard form.
 func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
+	securityID := h.securityIDFromRequest(r)
+	securityMode := false
+	if securityID != "" {
+		if h.validSecurityID(r, securityID) {
+			securityMode = true
+		} else {
+			h.logSecurityEvent("security.security_id_invalid", r, map[string]interface{}{"supplied_id": securityID})
+			securityID = ""
+		}
+	}
+
 	if r.Method == http.MethodPost {
-		// Handle contact form submission
+		if securityMode {
+			h.handleSecurityReportSubmit(w, r, securityID)
+			return
+		}
 		h.handleContactSubmit(w, r)
+		return
+	}
+
+	if securityMode {
+		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+			"SecurityMode":          true,
+			"SecurityID":            securityID,
+			"DefaultDisclosureDays": h.defaultDisclosureDays(),
+			"Components":            h.securityComponentOptions(),
+		})
 		return
 	}
 
@@ -203,6 +283,81 @@ func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
 		"ContactEnabled": true,
 		"AbuseEmail":     h.publicAbuseEmail(),
 	})
+}
+
+// securityIDFromRequest reads the security_id from the query string (used by
+// both the GET link in security.txt and the form's action URL) or, failing
+// that, a submitted form field.
+func (h *ServerHandler) securityIDFromRequest(r *http.Request) string {
+	if id := r.URL.Query().Get("security_id"); id != "" {
+		return id
+	}
+	return r.FormValue("security_id")
+}
+
+// validSecurityID re-validates the security_id server-side per AI.md PART 11
+// step 1 of the Submission Flow — the form value can be tampered with.
+func (h *ServerHandler) validSecurityID(r *http.Request, id string) bool {
+	if id == "" || h.secretsMgr == nil {
+		return false
+	}
+	secret, err := h.secretsMgr.GetInstallationSecret(r.Context())
+	if err != nil {
+		return false
+	}
+	return secreport.ValidateSecurityID(secret, id, time.Now())
+}
+
+// defaultDisclosureDays returns the configured default coordinated-disclosure
+// window, falling back to the AI.md PART 11 spec default of 90 days.
+func (h *ServerHandler) defaultDisclosureDays() int {
+	if h.appConfig.Web.Security.DisclosureWindowDays > 0 {
+		return h.appConfig.Web.Security.DisclosureWindowDays
+	}
+	return 90
+}
+
+// securityComponentOptions returns the "Affected component" dropdown options
+// for the security-mode contact form, per AI.md PART 11: "Dropdown populated
+// from project's IDEA.md features (auth, API, frontend, CLI, etc.)". VidVeil
+// has no user accounts/auth (IDEA.md non-goals), so the list is drawn from
+// IDEA.md's actual in-scope feature set instead of AI.md's generic example.
+// The template always appends a final "Other" option with a free-text field.
+func (h *ServerHandler) securityComponentOptions() []string {
+	return []string{
+		"Search / Multi-Engine Aggregation",
+		"Thumbnail Proxy",
+		"Video Preview",
+		"Real-Time Streaming (SSE)",
+		"Client-Side Preferences / Favorites / History",
+		"Tor Hidden Service",
+		"Geographic Content Restriction",
+		"API",
+		"Frontend / Web UI",
+		"CLI Client",
+		"Contact / Security Reporting",
+	}
+}
+
+// resolveSecurityComponent resolves the "Affected component" value from the
+// security-mode contact form: the select dropdown, falling back to the
+// adjacent "component_other" free-text field when the dropdown value is
+// "other" (AI.md PART 11: "'Other' allows free text").
+func resolveSecurityComponent(r *http.Request) string {
+	component := r.FormValue("component")
+	if component == "other" {
+		return strings.TrimSpace(r.FormValue("component_other"))
+	}
+	return component
+}
+
+// logSecurityEvent writes to security.log per AI.md PART 11 when a logger is
+// wired; silently no-ops otherwise (e.g. in tests that don't set one up).
+func (h *ServerHandler) logSecurityEvent(event string, r *http.Request, details map[string]interface{}) {
+	if h.logger == nil {
+		return
+	}
+	h.logger.Security(event, r.RemoteAddr, details)
 }
 
 // publicAbuseEmail resolves the abuse-report address shown on /server/contact per
@@ -229,6 +384,261 @@ func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Reque
 // HelpPage renders /server/help web page
 func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-help", nil)
+}
+
+// handleSecurityReportSubmit implements the Submission Flow of AI.md PART 11
+// "Security Reports — Coordinated Disclosure Pipeline" for the HTML form POST.
+func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *http.Request, securityID string) {
+	if err := r.ParseForm(); err != nil {
+		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+			"SecurityMode":          true,
+			"SecurityID":            securityID,
+			"DefaultDisclosureDays": h.defaultDisclosureDays(),
+			"Components":            h.securityComponentOptions(),
+			"Message":               "Invalid form submission.",
+			"MessageType":           "error",
+		})
+		return
+	}
+
+	email := r.FormValue("email")
+	component := resolveSecurityComponent(r)
+	severity := r.FormValue("severity")
+	summary := r.FormValue("summary")
+	steps := r.FormValue("steps")
+	impact := r.FormValue("impact")
+	creditPref := r.FormValue("credit_preference")
+	if email == "" || component == "" || severity == "" || summary == "" ||
+		steps == "" || impact == "" || creditPref == "" || r.FormValue("disclosure_agreement") == "" {
+		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+			"SecurityMode":          true,
+			"SecurityID":            securityID,
+			"DefaultDisclosureDays": h.defaultDisclosureDays(),
+			"Components":            h.securityComponentOptions(),
+			"Message":               "Please complete all required fields, including the coordinated disclosure agreement.",
+			"MessageType":           "error",
+		})
+		return
+	}
+
+	disclosureDays := h.defaultDisclosureDays()
+	if v, err := strconv.Atoi(r.FormValue("disclosure_days")); err == nil && v > 0 {
+		disclosureDays = v
+	}
+
+	body := "Steps to reproduce:\n" + steps + "\n\nImpact:\n" + impact
+	if fix := r.FormValue("suggested_fix"); fix != "" {
+		body += "\n\nSuggested fix:\n" + fix
+	}
+
+	submission, err := secreport.CreateReport(r.Context(), h.db, h.configDir, h.appConfig.Server.Security.EncryptionKey, secreport.Input{
+		Severity:                 severity,
+		Component:                component,
+		Endpoint:                 r.FormValue("endpoint"),
+		Summary:                  summary,
+		Body:                     []byte(body),
+		ResearcherEmail:          email,
+		ResearcherGPGFingerprint: r.FormValue("researcher_gpg"),
+		CVERequested:             r.FormValue("cve_requested") != "",
+		DisclosureWindowDays:     disclosureDays,
+		CreditPreference:         creditPref,
+		CreditName:               r.FormValue("credit_name"),
+		AppVersion:               version.GetVersion(),
+		CommitHash:               version.GetVersionInfo()["commit"],
+	})
+	if err != nil {
+		log.Printf("security report: create: %v", err)
+		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+			"SecurityMode":          true,
+			"SecurityID":            securityID,
+			"DefaultDisclosureDays": h.defaultDisclosureDays(),
+			"Components":            h.securityComponentOptions(),
+			"Message":               "We could not process your report. Please try again later.",
+			"MessageType":           "error",
+		})
+		return
+	}
+
+	h.notifyMaintainer(submission.TrackingID, severity, component, r.FormValue("endpoint"), summary)
+	h.acknowledgeResearcher(r, email, r.FormValue("researcher_gpg"), submission.TrackingID, submission.ReportToken)
+
+	h.logSecurityEvent("security.report_received", r, map[string]interface{}{
+		"tracking_id": submission.TrackingID,
+		"severity":    severity,
+		"component":   component,
+	})
+
+	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+		"Message":     "Thank you — your security report was received. Tracking ID: " + submission.TrackingID + ". Check your email for a confirmation with a status-tracking link.",
+		"MessageType": "success",
+	})
+}
+
+// notifyMaintainer sends the maintainer notification per Submission Flow
+// step 4 — PGP-encrypted to server.contact.security.email when a project
+// keypair exists, otherwise a plaintext fallback with a warning.
+func (h *ServerHandler) notifyMaintainer(trackingID, severity, component, endpoint, summary string) {
+	if h.emailSvc == nil {
+		return
+	}
+	to := h.appConfig.Server.Contact.Security.Email
+	if to == "" {
+		to = h.appConfig.Server.Contact.Admin.Email
+	}
+	if to == "" {
+		return
+	}
+	vars := map[string]string{
+		"tracking_id": trackingID,
+		"severity":    severity,
+		"component":   component,
+		"endpoint":    endpoint,
+		"summary":     summary,
+	}
+	if pub, err := pgp.LoadPublicKey(h.configDir); err == nil && len(pub) > 0 {
+		plaintext := fmt.Sprintf("Tracking ID: %s\nSeverity: %s\nComponent: %s\nEndpoint: %s\nSummary: %s\n",
+			trackingID, severity, component, endpoint, summary)
+		if encrypted, encErr := pgp.EncryptMessageToPublicKey(pub, []byte(plaintext)); encErr == nil {
+			subject := fmt.Sprintf("[Security Report] %s - %s (%s)", severity, component, trackingID)
+			if err := h.emailSvc.SendRaw(to, subject, string(encrypted)); err != nil {
+				log.Printf("security report: send maintainer notification: %v", err)
+			}
+			return
+		}
+	}
+	if err := h.emailSvc.Send("security_report_maintainer", to, vars); err != nil {
+		log.Printf("security report: send maintainer notification (plaintext fallback): %v", err)
+	}
+}
+
+// acknowledgeResearcher sends the researcher acknowledgment per Submission
+// Flow step 5 — PGP-encrypted to the researcher's supplied key when present.
+func (h *ServerHandler) acknowledgeResearcher(r *http.Request, to, rawResearcherKey, trackingID, reportToken string) {
+	if h.emailSvc == nil || to == "" {
+		return
+	}
+	statusURL := urlvars.BuildURL(r, "/server/security/report/"+trackingID) + "?token=" + reportToken
+	vars := map[string]string{
+		"tracking_id":       trackingID,
+		"report_status_url": statusURL,
+	}
+	if pub, err := secreport.ResolveResearcherKey(rawResearcherKey); err == nil && len(pub) > 0 {
+		plaintext := fmt.Sprintf("Tracking ID: %s\nStatus URL: %s\n", trackingID, statusURL)
+		if encrypted, encErr := pgp.EncryptMessageToPublicKey(pub, []byte(plaintext)); encErr == nil {
+			if err := h.emailSvc.SendRaw(to, "Security report received - "+trackingID, string(encrypted)); err != nil {
+				log.Printf("security report: send researcher acknowledgment: %v", err)
+			}
+			return
+		}
+	}
+	if err := h.emailSvc.Send("security_report_researcher_ack", to, vars); err != nil {
+		log.Printf("security report: send researcher acknowledgment (plaintext fallback): %v", err)
+	}
+}
+
+// SecurityPage renders /server/security — human-readable rendering of
+// security.txt: contact channels in RFC 9116 preference order, Expires,
+// and the Encryption key when a keypair exists. Per AI.md PART 11 "Public
+// Pages", rendered from live config — nothing to edit.
+func (h *ServerHandler) SecurityPage(w http.ResponseWriter, r *http.Request) {
+	var contacts []string
+	if reportURL := h.appConfig.Web.Security.ReportURL; reportURL != "" {
+		contacts = append(contacts, reportURL)
+	}
+	if h.secretsMgr != nil {
+		if secret, err := h.secretsMgr.GetInstallationSecret(r.Context()); err == nil {
+			id := secreport.GenerateSecurityID(secret, time.Now())
+			contacts = append(contacts, urlvars.BuildURL(r, "/server/contact")+"?security_id="+id)
+		}
+	}
+	mailto := h.appConfig.Web.Security.Contact
+	if mailto == "" {
+		mailto = h.appConfig.Server.Contact.Security.Email
+	}
+	if mailto == "" {
+		mailto = "security@" + h.appConfig.Server.FQDN
+	}
+	contacts = append(contacts, "mailto:"+strings.TrimPrefix(mailto, "mailto:"))
+
+	h.renderServerTemplate(w, r, "server-security", map[string]interface{}{
+		"Contacts":       contacts,
+		"Expires":        h.appConfig.Web.Security.Expires,
+		"HasPGPKey":      h.appConfig.Web.Security.PublishPGPKey,
+		"DisclosureDays": h.defaultDisclosureDays(),
+	})
+}
+
+// SecurityPolicyPage renders /server/security/policy. Content is config-file
+// driven (Web.Security.PolicyText) — per AI.md PART 11 "Security
+// Administration": "There are no web routes for server administration."
+func (h *ServerHandler) SecurityPolicyPage(w http.ResponseWriter, r *http.Request) {
+	h.renderServerTemplate(w, r, "server-security-policy", map[string]interface{}{
+		"PolicyText":     h.appConfig.Web.Security.PolicyText,
+		"DisclosureDays": h.defaultDisclosureDays(),
+	})
+}
+
+// SecurityThanksPage renders /server/security/thanks — researchers who opted
+// into credit on disclosed reports, per AI.md PART 11 "Public Pages".
+func (h *ServerHandler) SecurityThanksPage(w http.ResponseWriter, r *http.Request) {
+	type credit struct {
+		Name string
+		Year string
+	}
+	var credits []credit
+	if h.db != nil {
+		rows, err := h.db.QueryContext(r.Context(), `
+			SELECT credit_preference, credit_name, created_at
+			FROM security_reports
+			WHERE disclosed = 1 AND credit_preference != 'none'
+			ORDER BY created_at DESC`)
+		if err == nil {
+			defer rows.Close()
+			n := 0
+			for rows.Next() {
+				var pref, name string
+				var createdAt time.Time
+				if err := rows.Scan(&pref, &name, &createdAt); err != nil {
+					continue
+				}
+				n++
+				display := name
+				if pref == "anonymous" || display == "" {
+					display = fmt.Sprintf("Anonymous Researcher #%d", n)
+				}
+				credits = append(credits, credit{Name: display, Year: createdAt.Format("2006")})
+			}
+		}
+	}
+	h.renderServerTemplate(w, r, "server-security-thanks", map[string]interface{}{
+		"Credits": credits,
+	})
+}
+
+// SecurityReportStatusPage renders /server/security/report/{tracking_id} —
+// the researcher's one-shot status page, gated by ?token=.
+func (h *ServerHandler) SecurityReportStatusPage(w http.ResponseWriter, r *http.Request) {
+	// The one-shot token travels in the query string (delivered via a private
+	// email link); prevent it leaking onward through a Referer header on any
+	// outbound link/asset this page might render, and never log the URL.
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	trackingID := chi.URLParam(r, "tracking_id")
+	token := r.URL.Query().Get("token")
+	if h.db == nil || trackingID == "" || token == "" {
+		http.NotFound(w, r)
+		return
+	}
+	status, err := secreport.GetReportStatus(r.Context(), h.db, trackingID, token)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	h.renderServerTemplate(w, r, "server-security-report", map[string]interface{}{
+		"TrackingID":         status.TrackingID,
+		"Status":             status.Status,
+		"MaintainerComments": status.MaintainerComments,
+		"CreatedAt":          status.CreatedAt.Format("2006-01-02"),
+	})
 }
 
 // API Routes per AI.md PART 14
@@ -322,6 +732,15 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	securityID := h.securityIDFromRequest(r)
+	if securityID != "" {
+		if h.validSecurityID(r, securityID) {
+			h.apiSecurityReportSubmit(w, r, securityID)
+			return
+		}
+		h.logSecurityEvent("security.security_id_invalid", r, map[string]interface{}{"supplied_id": securityID})
+	}
+
 	subject := r.FormValue("subject")
 	message := r.FormValue("message")
 
@@ -331,6 +750,65 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	SendOK(w, map[string]interface{}{"message": "Message received successfully"})
+}
+
+// apiSecurityReportSubmit implements the Submission Flow of AI.md PART 11
+// for POST /api/{api_version}/server/contact with a valid security_id.
+func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.Request, securityID string) {
+	email := r.FormValue("email")
+	component := resolveSecurityComponent(r)
+	severity := r.FormValue("severity")
+	summary := r.FormValue("summary")
+	steps := r.FormValue("steps")
+	impact := r.FormValue("impact")
+	creditPref := r.FormValue("credit_preference")
+	if email == "" || component == "" || severity == "" || summary == "" ||
+		steps == "" || impact == "" || creditPref == "" || r.FormValue("disclosure_agreement") == "" {
+		SendError(w, CodeValidation, "email, component, severity, summary, steps, impact, credit_preference, and disclosure_agreement are required")
+		return
+	}
+
+	disclosureDays := h.defaultDisclosureDays()
+	if v, err := strconv.Atoi(r.FormValue("disclosure_days")); err == nil && v > 0 {
+		disclosureDays = v
+	}
+
+	body := "Steps to reproduce:\n" + steps + "\n\nImpact:\n" + impact
+	if fix := r.FormValue("suggested_fix"); fix != "" {
+		body += "\n\nSuggested fix:\n" + fix
+	}
+
+	submission, err := secreport.CreateReport(r.Context(), h.db, h.configDir, h.appConfig.Server.Security.EncryptionKey, secreport.Input{
+		Severity:                 severity,
+		Component:                component,
+		Endpoint:                 r.FormValue("endpoint"),
+		Summary:                  summary,
+		Body:                     []byte(body),
+		ResearcherEmail:          email,
+		ResearcherGPGFingerprint: r.FormValue("researcher_gpg"),
+		CVERequested:             r.FormValue("cve_requested") != "",
+		DisclosureWindowDays:     disclosureDays,
+		CreditPreference:         creditPref,
+		CreditName:               r.FormValue("credit_name"),
+		AppVersion:               version.GetVersion(),
+		CommitHash:               version.GetVersionInfo()["commit"],
+	})
+	if err != nil {
+		log.Printf("security report: create: %v", err)
+		SendError(w, CodeServerError, "Unable to process security report")
+		return
+	}
+
+	h.notifyMaintainer(submission.TrackingID, severity, component, r.FormValue("endpoint"), summary)
+	h.acknowledgeResearcher(r, email, r.FormValue("researcher_gpg"), submission.TrackingID, submission.ReportToken)
+
+	h.logSecurityEvent("security.report_received", r, map[string]interface{}{
+		"tracking_id": submission.TrackingID,
+		"severity":    severity,
+		"component":   component,
+	})
+
+	SendOK(w, map[string]interface{}{"tracking_id": submission.TrackingID})
 }
 
 // APIHelp handles GET /api/v1/server/help

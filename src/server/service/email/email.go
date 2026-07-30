@@ -42,6 +42,42 @@ Details:
 {app_name}
 {app_url}`,
 
+	"security_report_maintainer": `Subject: [Security Report] {severity} - {component} ({tracking_id})
+---
+A new coordinated-disclosure security report was submitted.
+
+Tracking ID: {tracking_id}
+Severity: {severity}
+Component: {component}
+Endpoint: {endpoint}
+Summary: {summary}
+
+Full details (steps to reproduce, impact, suggested fix) are stored
+encrypted at rest; consult the admin security queue to review the
+complete report body.
+
+────────────────────────────────────────────────────────────────────────
+{app_name}
+{app_url}`,
+
+	"security_report_researcher_ack": `Subject: Security report received - {tracking_id}
+---
+Thank you for your responsible disclosure report.
+
+Tracking ID: {tracking_id}
+
+We have received your report and will review it under our coordinated
+disclosure policy. You can check the status of your report at any time:
+
+{report_status_url}
+
+Please keep this link private — it is a one-shot access URL scoped to
+your report only.
+
+────────────────────────────────────────────────────────────────────────
+{app_name}
+{app_url}`,
+
 	"backup_complete": `Subject: Backup Complete - {app_name}
 ---
 BACKUP COMPLETE
@@ -192,6 +228,16 @@ func (s *EmailService) Send(templateName string, to string, vars map[string]stri
 	subject = s.applyVars(subject, globalVars)
 	body = s.applyVars(body, globalVars)
 
+	return s.sendEmail(to, subject, body)
+}
+
+// SendRaw sends a pre-built subject/body pair directly, bypassing the named
+// template lookup. Used by the coordinated-disclosure pipeline (AI.md PART 11)
+// to deliver PGP-encrypted bodies, which must not be run through applyVars.
+func (s *EmailService) SendRaw(to, subject, body string) error {
+	if !s.appConfig.Server.Notifications.Email.Enabled {
+		return fmt.Errorf("email is not enabled")
+	}
 	return s.sendEmail(to, subject, body)
 }
 

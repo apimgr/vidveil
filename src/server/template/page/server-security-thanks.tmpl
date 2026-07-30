@@ -1,0 +1,24 @@
+{{define "server-security-thanks"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content">
+    <div class="prose">
+        <h1>Researcher Acknowledgments</h1>
+        <p>We thank the following researchers for responsibly disclosing vulnerabilities:</p>
+
+        {{if .Credits}}
+        <ul>
+            {{range .Credits}}
+            <li>{{.Name}} ({{.Year}})</li>
+            {{end}}
+        </ul>
+        {{else}}
+        <p>No disclosed reports yet.</p>
+        {{end}}
+
+        <p><a href="/server/security">Back to Security</a></p>
+    </div>
+</div>
+{{end}}

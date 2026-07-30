@@ -278,3 +278,38 @@ func ParsePrivateKey(armoredPriv []byte) (kp *Keypair, name, email string, err e
 	}
 	return kp, name, email, nil
 }
+
+// EncryptMessageToPublicKey PGP-encrypts and ASCII-armors plaintext for the
+// holder of armoredPub. Used by the coordinated-disclosure pipeline (AI.md
+// PART 11 "Security Reports") to encrypt report bodies at rest and outbound
+// notification/acknowledgment emails when a project or researcher PGP key is
+// available.
+func EncryptMessageToPublicKey(armoredPub, plaintext []byte) ([]byte, error) {
+	ring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(armoredPub))
+	if err != nil {
+		return nil, fmt.Errorf("read public key: %w", err)
+	}
+	if len(ring) == 0 {
+		return nil, fmt.Errorf("public key ring is empty")
+	}
+
+	var buf bytes.Buffer
+	armorWriter, err := armor.Encode(&buf, "PGP MESSAGE", nil)
+	if err != nil {
+		return nil, fmt.Errorf("open armor writer: %w", err)
+	}
+	plaintextWriter, err := openpgp.Encrypt(armorWriter, ring, nil, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("open encrypt writer: %w", err)
+	}
+	if _, err := plaintextWriter.Write(plaintext); err != nil {
+		return nil, fmt.Errorf("write plaintext: %w", err)
+	}
+	if err := plaintextWriter.Close(); err != nil {
+		return nil, fmt.Errorf("close encrypt writer: %w", err)
+	}
+	if err := armorWriter.Close(); err != nil {
+		return nil, fmt.Errorf("close armor writer: %w", err)
+	}
+	return buf.Bytes(), nil
+}

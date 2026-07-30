@@ -39,6 +39,8 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/server/service/secreport"
+	"github.com/apimgr/vidveil/src/server/service/secrets"
 	"github.com/apimgr/vidveil/src/server/service/urlvars"
 )
 
@@ -288,6 +290,14 @@ type SearchHandler struct {
 	metrics     *ServerMetrics
 	torSvc      TorStatusChecker
 	geoipSvc    GeoIPChecker
+	secretsMgr  *secrets.Manager
+}
+
+// SetSecretsManager wires the app-secrets manager used to derive the
+// rotating {security_id} token for the security.txt Contact: line per
+// AI.md PART 11 "Security Reports".
+func (h *SearchHandler) SetSecretsManager(m *secrets.Manager) {
+	h.secretsMgr = m
 }
 
 // NewSearchHandler creates a new handler instance
@@ -948,13 +958,13 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 		// HTML/text response — renderResponse() applies full content negotiation
 		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		h.renderResponse(w, r, "preferences", map[string]interface{}{
-			"Title":           "Preferences - " + h.appConfig.Server.Branding.Title,
-			"Theme":           h.getRequestTheme(r),
-			"Engines":         engines,
-			"ResultsPerPage":  h.getRequestResultsPerPage(r),
-			"OpenNewTab":      h.getRequestOpenNewTab(r),
-			"CSRFToken":       CSRFTokenFromRequest(r),
-			"BuildDateTime":   BuildDateTime(),
+			"Title":          "Preferences - " + h.appConfig.Server.Branding.Title,
+			"Theme":          h.getRequestTheme(r),
+			"Engines":        engines,
+			"ResultsPerPage": h.getRequestResultsPerPage(r),
+			"OpenNewTab":     h.getRequestOpenNewTab(r),
+			"CSRFToken":      CSRFTokenFromRequest(r),
+			"BuildDateTime":  BuildDateTime(),
 		})
 	}
 }
@@ -1810,32 +1820,54 @@ Sitemap: ` + baseURL + `/sitemap.xml
 `))
 }
 
-// SecurityTxt returns security.txt per RFC 9116 (PART 11)
+// SecurityTxt returns security.txt per RFC 9116 (AI.md PART 11 "Security
+// Reports"). Contact: lines are emitted in preference order: (1) the
+// repo-level vulnerability-reporting URL (web.security.report_url, e.g.
+// GitHub private vulnerability reporting), (2) the rotating {security_id}
+// coordinated-disclosure contact mode, (3) the mailto CC address.
 func (h *SearchHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 
-	contact := h.appConfig.Web.Security.Contact
-	if contact == "" {
-		contact = "security@" + h.appConfig.Server.FQDN
+	var contacts []string
+
+	if reportURL := h.appConfig.Web.Security.ReportURL; reportURL != "" {
+		contacts = append(contacts, reportURL)
 	}
-	if !strings.HasPrefix(contact, "mailto:") {
-		contact = "mailto:" + contact
+
+	if h.secretsMgr != nil {
+		if secret, err := h.secretsMgr.GetInstallationSecret(r.Context()); err == nil {
+			id := secreport.GenerateSecurityID(secret, time.Now())
+			contactURL := urlvars.BuildURL(r, "/server/contact") + "?security_id=" + id
+			contacts = append(contacts, contactURL)
+		}
 	}
+
+	mailto := h.appConfig.Web.Security.Contact
+	if mailto == "" {
+		mailto = "security@" + h.appConfig.Server.FQDN
+	}
+	if !strings.HasPrefix(mailto, "mailto:") {
+		mailto = "mailto:" + mailto
+	}
+	contacts = append(contacts, mailto)
 
 	expires := h.appConfig.Web.Security.Expires
 	if expires == "" {
 		expires = time.Now().AddDate(1, 0, 0).Format(time.RFC3339)
 	}
 
-	body := fmt.Sprintf("Contact: %s\nExpires: %s\nPreferred-Languages: en\n",
-		contact, expires)
+	var body strings.Builder
+	for _, contact := range contacts {
+		fmt.Fprintf(&body, "Contact: %s\n", contact)
+	}
+	fmt.Fprintf(&body, "Expires: %s\nPreferred-Languages: en\n", expires)
 
 	// Add Encryption field when PGP key is published (AI.md PART 11)
 	if h.appConfig.Web.Security.PGPKeyURL != "" {
-		body += fmt.Sprintf("Encryption: %s\n", h.appConfig.Web.Security.PGPKeyURL)
+		fmt.Fprintf(&body, "Encryption: %s\n", h.appConfig.Web.Security.PGPKeyURL)
 	}
 
-	w.Write([]byte(body))
+	w.Write([]byte(body.String()))
 }
 
 // PGPKeyAsc serves /.well-known/pgp-key.asc per AI.md PART 12 "GPG Keypair

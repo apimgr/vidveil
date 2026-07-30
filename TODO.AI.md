@@ -35,56 +35,77 @@ even though this repo's own `docker/docker-compose.yml` (production) already
 sets `MODE=production` with no `DEBUG` override. The discrepancy must be in
 the actual deployment/CD configuration outside this repo's visibility.
 
-### 3. `vidveil-cli engines`/`bangs` still show blank Bang/Method/Preview/Download columns after the data-envelope fix
-Beta-testing `vidveil-cli` against a live server found `engines`/`bangs`/`search`
-all silently returned empty/zero-valued output because the client's response
-structs (`src/client/api/client.go` `SearchResponse`, `src/client/cmd/engines.go`
-`EnginesListResponse`) expected a flat top-level JSON shape while the server
-actually wraps everything in `{"ok":bool,"data":...}` (confirmed via direct
-curl against `/api/v1/search`, `/api/v1/engines`). Fixed the envelope mismatch
-(custom `UnmarshalJSON` on `SearchResponse`; retagged `EnginesListResponse.
-Engines` to `json:"data"`) and the `SearchResult.Engine` field tag (was
-`json:"engine"`, server sends `"source"`) and `VersionResponse.Built` (was
-`json:"built"`, server sends `"build_date"`).
-
-**Not fixed — needs a product decision:** `EngineInfo` (`src/client/cmd/
-engines.go:32-40`) still declares `Bang`, `Method`, `HasPreview`, `HasDownload`
-fields that `GET /api/v1/engines` does not send at all (actual server engine
-object has `name`, `display_name`, `enabled`, `available`, `features[]`,
-`tier`, `privacy{requires_js,sets_cookies,has_tracking}` — verified live).
-`RunBangsCommand` (`engines.go:248-310`) derives bangs from this same engines
-response (reading `engine.Bang`), even though the server has a dedicated
-`GET /api/v1/bangs` endpoint (`{"count":N,"data":[{"bang","engine_name",
-"display_name","short_code"}]}`) that already carries real bang data — the
-CLI never calls it. Net effect after today's fix: `engines` table's BANG,
-METHOD, PREVIEW, DOWNLOAD columns still render empty/blank for every engine,
-and `bangs` still returns zero rows (`engine.Bang` is always `""`, so nothing
-passes into `BangInfo`). Needs a decision: (a) point `RunBangsCommand` at the
-real `/api/v1/bangs` endpoint (straightforward, has all needed fields) and (b)
-either drop the METHOD/PREVIEW/DOWNLOAD columns from the `engines` table (data
-doesn't exist server-side) or add those fields to the server's `/api/v1/engines`
-response (server-side scope change) — whichever the operator/spec intends.
-
-### 8. `/server/security` coordinated-disclosure feature (AI.md PART 12) not implemented
-While making the `/server/*` pages accurate, the `/server/contact` page was given
-its spec-mandated (AI.md PART 16, line ~26185) "Security Issues" section, which
-links to `/server/security` and must NEVER point at the raw
-`/.well-known/security.txt`. That link is currently a dangling reference: only
-`/.well-known/security.txt` exists (handlers.go `SecurityTxt`) — the whole
-`/server/security*` HTML feature tree is unbuilt. AI.md PART 12 (lines ~14681-14684)
-mandates:
-- `/server/security` — human-readable security overview page (RFC 9116 channels in
-  preference order, Expires, Encryption key, plain-language reporting instructions),
-  rendered from live config via `BuildURL(r, ...)`.
-- `/server/security/policy` — disclosure policy page (default content, API-editable).
-- `/server/security/thanks` — researcher acknowledgments/hall of fame.
-- `/server/security/report/{tracking_id}` — one-shot-token researcher status page.
-- Also the `/server/contact?security_id={id}` contact mode (line ~14681) that ties a
-  contact submission to a security report — part of the same feature.
-This is a substantial standalone feature (coordinated-disclosure pipeline + GPG
-keypair management), intentionally NOT built as part of the `/server/*` page-accuracy
-task. Until it lands, the "Security Issues" link on `/server/contact` will 404. Build
-per PART 12, then the link resolves.
+### 8. `/server/security` coordinated-disclosure feature (AI.md PART 11) — IMPLEMENTED
+Built per AI.md PART 11 "Security Reports — Coordinated Disclosure Pipeline":
+- `/server/contact?security_id={id}` mode switch — validates the rotating
+  48h HMAC id server-side, renders the security-mode form fields (component,
+  endpoint, severity, summary, steps, impact, suggested fix, CVE requested,
+  disclosure window, credit preference, GPG key URL/paste, agreement
+  checkbox) instead of the standard contact form.
+- `handleSecurityReportSubmit`/`apiSecurityReportSubmit` (server.go) — both
+  HTML-form and JSON-API submission paths: allocates `sec_`-prefixed
+  tracking id, encrypts the report body at rest (PGP if a project keypair
+  exists, else AES-256-GCM via `server.security.encryption_key`), sends a
+  PGP-encrypted maintainer notification and a PGP-encrypted (or plaintext
+  fallback) researcher acknowledgment containing the one-shot status URL,
+  logs `security.report_received` with no PII/vuln content.
+- `/server/security`, `/server/security/policy`, `/server/security/thanks`,
+  `/server/security/report/{tracking_id}` — all four public pages built with
+  templates and handlers.
+- New `secreport` package: `securityid.go` (rotating id gen/validate),
+  `crypto.go` (PGP/AES-256-GCM at-rest encryption), `researcher.go`
+  (SSRF-safe researcher GPG key resolution via an explicit keyserver
+  allowlist), `store.go` (`security_reports` CRUD/status lookup).
+- Test coverage added for the whole `secreport` package (0.0% -> 70.4%):
+  `securityid_test.go`, `crypto_test.go`, `researcher_test.go`,
+  `store_test.go`. Fixed a real bug caught by the new tests: `GetReportStatus`
+  scanned the nullable `maintainer_comments` column into a plain `string`,
+  which panicked with "converting NULL to string is unsupported" on any
+  report with no maintainer comments yet — fixed to `sql.NullString`.
+- Two automated background security-review findings addressed: SSRF in the
+  researcher-key URL fetch (fixed via hostname allowlist + redirect
+  re-validation) and one-shot token exposure via URL query string (mitigated
+  with `Referrer-Policy: no-referrer` on the status page).
+- Full project `go build`, `go vet`, `gofmt -l` (session-touched files),
+  `go test ./src/... -cover` (all packages ok, zero FAIL), and `go-lint`
+  agent pass all clean for this feature's files (one pre-existing,
+  out-of-scope `go-lint` finding in `email.go` logged separately below).
+- `report_token_expires_at` (dead/unused DB column) removed from the
+  `security_reports` DDL — resolved, not deferred. The `--maintenance pgp`
+  CLI dispatcher was independently confirmed already fully implemented in
+  `main.go` (a prior grep in this session had incorrectly claimed it was
+  missing; corrected).
+- Beta-tester agent pass (static trace, Docker build did not finish in
+  reasonable time so no live HTTP verification was performed) found one
+  confirmed spec deviation: the "Affected component" field (AI.md PART 11)
+  is spec'd as a dropdown populated from IDEA.md features with an "Other"
+  free-text fallback; `server-contact.tmpl` implemented it as a plain
+  free-text `<input>` only. FIXED — `server-contact.tmpl`'s component field is
+  now a `<select>` populated from a new `securityComponentOptions()` helper
+  (VidVeil-specific list drawn from IDEA.md's actual in-scope feature set,
+  since VidVeil has no auth/user-accounts to match AI.md's generic example),
+  plus an "Other" option paired with an always-visible `component_other`
+  free-text input (no-JS-required — not toggled by script). New
+  `resolveSecurityComponent()` helper in `server.go` resolves the final value
+  server-side (falls back to `component_other` when the dropdown is "other"),
+  used by both `handleSecurityReportSubmit` and `apiSecurityReportSubmit`.
+  Verified via Docker `go build`/`go vet`/`gofmt -l` (clean) and
+  `go test ./src/server/handler/... ./src/server/service/secreport/... -cover`
+  (handler 82.1%, secreport 70.4%, zero FAIL).
+- Handler-level tests for `handleSecurityReportSubmit`, `apiSecurityReportSubmit`,
+  and the security page handlers — added in new
+  `server_security_test.go` (real tempdir-sqlite DB via
+  `database.SchemaManager`, real `secrets.Manager`, real security_id):
+  covers the security-mode `ContactPage` GET rendering the component dropdown,
+  successful submission with a dropdown value, the "Other" free-text fallback
+  for both the HTML form path and the JSON API path (asserted by querying the
+  stored `security_reports.component` row), rejection when "Other" is selected
+  with no free text, and `SecurityPage`/`SecurityPolicyPage`/
+  `SecurityThanksPage`/`SecurityReportStatusPage` (404 unknown id, 200 valid
+  id/token). `src/server/handler` package coverage 82.1% -> 86.6%. Verified
+  via Docker `go build`, `go vet`, `gofmt -l` (clean), and
+  `go test ./src/server/handler/... ./src/server/service/secreport/... -cover`
+  (handler 86.6%, secreport 70.4%, zero FAIL).
 
 ### 9. Generic PART 16 privacy config-tree (`server.privacy.*`) intentionally not implemented — verify no gap
 AI.md PART 16's `/server/privacy` spec is the generic template model driven by a
@@ -95,6 +116,22 @@ nothing persisted per user, nothing sold. The `/server/privacy` page and API wer
 accurate to VidVeil's actual reality instead of fabricating that config. No code gap —
 this is a deliberate, IDEA.md-documented deviation. Logged only so a future reader
 doesn't "fix" the privacy page back toward the generic CCPA/data.sold model.
+
+### 10. `email.go` `getTemplate()` reads operator-custom templates via `os.ReadFile()` at runtime — flagged by go-lint, needs a decision
+`go-lint` agent run (during the PART 11 coordinated-disclosure feature
+verification) flagged `src/server/service/email/email.go` line 248:
+`getTemplate()` calls `os.ReadFile(customPath)` at send-time to let an
+operator override a built-in email template without a rebuild, falling back
+to the `go:embed`-embedded template and then a Go-literal default. This is
+pre-existing code (not touched by this session's diff — confirmed via
+`git diff --stat` showing this session's `email.go` change was purely
+46 additive lines) and is a deliberate operator-customization mechanism, not
+an oversight — but it does technically violate the "assets embedded at
+build time" convention. Needs a decision: (a) keep as-is (documented
+exception — operator template overrides are inherently a runtime feature),
+(b) cache the custom-template read at startup/init instead of per-send, or
+(c) remove the runtime customization path entirely. Not yet decided/fixed —
+flagging so it isn't lost after compaction.
 
 ### 7. Live deployment intentionally running MODE=development/DEBUG=true — not an issue
 `https://x.scour.li` was observed reporting `mode: development` with

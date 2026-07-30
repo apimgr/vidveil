@@ -18,6 +18,87 @@
         <p>The best way to report bugs or request features is through our GitHub repository:</p>
         <p><a href="https://github.com/apimgr/vidveil/issues" target="_blank" rel="noopener">Open an Issue on GitHub</a></p>
 
+        {{if .SecurityMode}}
+        <h2>Report a Security Vulnerability</h2>
+        <p>This form is a coordinated-disclosure security report. Your submission is encrypted at rest and only maintainers can read it.</p>
+        <form method="POST" action="/server/contact?security_id={{.SecurityID}}" class="preferences-form">
+            {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+            <input type="hidden" name="security_id" value="{{.SecurityID}}">
+            <div class="form-group">
+                <label class="form-label" for="email">Your Email</label>
+                <input class="form-input" type="email" id="email" name="email" required placeholder="your@email.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="researcher_gpg">Your GPG Public Key (URL or pasted block, optional)</label>
+                <textarea class="form-input" id="researcher_gpg" name="researcher_gpg" rows="3" placeholder="https://keys.openpgp.org/vks/v1/by-fingerprint/... or a pasted -----BEGIN PGP PUBLIC KEY BLOCK-----"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="component">Affected Component</label>
+                <select class="form-input" id="component" name="component" required>
+                    <option value="">Select a component...</option>
+                    {{range .Components}}
+                    <option value="{{.}}">{{.}}</option>
+                    {{end}}
+                    <option value="other">Other (specify below)</option>
+                </select>
+                <input class="form-input" type="text" id="component_other" name="component_other" placeholder="If Other, specify the affected component">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="endpoint">Affected Endpoint / URL (optional)</label>
+                <input class="form-input" type="text" id="endpoint" name="endpoint" placeholder="/api/v1/search">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="severity">Severity</label>
+                <select class="form-input" id="severity" name="severity" required>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="low">Low</option>
+                    <option value="informational">Informational</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="summary">Vulnerability Summary</label>
+                <input class="form-input" type="text" id="summary" name="summary" required placeholder="One-line summary">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="steps">Steps to Reproduce</label>
+                <textarea class="form-input" id="steps" name="steps" required rows="5"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="impact">Impact</label>
+                <textarea class="form-input" id="impact" name="impact" required rows="4"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="suggested_fix">Suggested Fix (optional)</label>
+                <textarea class="form-input" id="suggested_fix" name="suggested_fix" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label"><input type="checkbox" name="cve_requested" value="1"> Request CVE assignment</label>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="disclosure_days">Preferred Disclosure Window (days)</label>
+                <input class="form-input" type="number" id="disclosure_days" name="disclosure_days" min="1" value="{{.DefaultDisclosureDays}}">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="credit_preference">Credit Preference</label>
+                <select class="form-input" id="credit_preference" name="credit_preference" required>
+                    <option value="real_name">Yes, use my real name</option>
+                    <option value="handle">Yes, use my handle</option>
+                    <option value="anonymous">Anonymous</option>
+                    <option value="none">No credit</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="credit_name">Name / Handle to Credit (if applicable)</label>
+                <input class="form-input" type="text" id="credit_name" name="credit_name">
+            </div>
+            <div class="form-group">
+                <label class="form-label"><input type="checkbox" name="disclosure_agreement" value="1" required> I agree to coordinated disclosure (no public release until the coordinated date or 90 days, whichever comes first)</label>
+            </div>
+            <button type="submit" class="search-button">Submit Security Report</button>
+        </form>
+        {{else}}
         {{if .ContactEnabled}}
         <h2>Contact Form</h2>
         <form method="POST" action="/server/contact" class="preferences-form">
@@ -40,6 +121,7 @@
 
         <h2>Security Issues</h2>
         <p>To report a security vulnerability, consult our <a href="/server/security">security policy</a>.</p>
+        {{end}}
 
         <h2>Abuse Reports</h2>
         <p>To report abusive content or policy violations, use this contact form{{if .AbuseEmail}} or email <a href="mailto:{{.AbuseEmail}}">{{.AbuseEmail}}</a>{{end}}.</p>

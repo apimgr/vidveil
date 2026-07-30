@@ -597,6 +597,12 @@ type SecurityConfig struct {
 	Allowlist  []AllowlistEntry `yaml:"allowlist"`
 	Blocklists BlocklistsConfig `yaml:"blocklists"`
 	CVE        CVEConfig        `yaml:"cve"`
+	// EncryptionKey is the canonical 32-byte AES-256-GCM at-rest key (hex-encoded).
+	// Per AI.md PART 11 "Cryptographic Keys": auto-generated on first run and
+	// persisted in server.yml; used for ALL at-rest encryption of sensitive
+	// server data (API token hashes, security report bodies as the AES
+	// fallback when no PGP keypair exists, and any future at-rest data).
+	EncryptionKey string `yaml:"encryption_key"`
 }
 
 // BlocklistsConfig holds IP/domain blocklist settings per PART 11
@@ -811,6 +817,21 @@ type WebSecurityConfig struct {
 	// PublishPGPKey is set true once a keypair has been generated and the public
 	// key is being served, gating the security.txt Encryption line and endpoints.
 	PublishPGPKey bool `yaml:"publish_pgp_key"`
+	// ReportURL is the repo-level (source-code) vulnerability reporting channel
+	// (e.g. GitHub private vulnerability reporting). Per AI.md PART 11
+	// "Security Reports": this is the FIRST entry in the security.txt Contact
+	// preference order, ahead of the /server/contact security-id mode and the
+	// mailto CC address.
+	ReportURL string `yaml:"report_url"`
+	// DisclosureWindowDays is the default coordinated-disclosure window (days)
+	// offered to researchers; researcher-submitted preference may differ and
+	// is negotiated by maintainers. Per AI.md PART 11 "Security-mode form
+	// fields" default 90.
+	DisclosureWindowDays int `yaml:"disclosure_window_days"`
+	// PolicyText overrides the default /server/security/policy body when set
+	// (config-file-driven per AI.md PART 11 "Security Administration" — there
+	// is no admin web route/API for this content).
+	PolicyText string `yaml:"policy_text"`
 }
 
 // SEOCustomTag holds a custom site verification meta tag per AI.md PART 16
@@ -1056,6 +1077,12 @@ func DefaultAppConfig() *AppConfig {
 			BaseURL: "/",
 			Mode:    "production",
 			Token:   generateToken(32),
+			Security: SecurityConfig{
+				// Per AI.md PART 11 "Cryptographic Keys": canonical 32-byte
+				// AES-256-GCM at-rest key, auto-generated on first run and
+				// persisted in server.yml.
+				EncryptionKey: generateToken(32),
+			},
 			Branding: ServerBrandingConfig{
 				// Per AI.md PART 5 Init-Only Variables: APPLICATION_NAME /
 				// APPLICATION_TAGLINE seed branding on first run; the written
@@ -1343,7 +1370,8 @@ func DefaultAppConfig() *AppConfig {
 				Deny:  []string{"/server/admin", "/api/v1/server/admin"},
 			},
 			Security: WebSecurityConfig{
-				Contact: "security@" + fqdn,
+				Contact:              "security@" + fqdn,
+				DisclosureWindowDays: 90,
 			},
 			CORS: "*",
 			CSRF: CSRFConfig{

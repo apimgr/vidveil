@@ -25,11 +25,13 @@ import (
 	"github.com/apimgr/vidveil/src/graphql"
 	"github.com/apimgr/vidveil/src/path"
 	"github.com/apimgr/vidveil/src/server/handler"
+	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
+	"github.com/apimgr/vidveil/src/server/service/secrets"
 	"github.com/apimgr/vidveil/src/server/service/urlvars"
 	"github.com/apimgr/vidveil/src/swagger"
 )
@@ -498,6 +500,12 @@ func (s *Server) setupRoutes() {
 	s.searchHandler = h
 	// Set data directory for thumbnail disk cache
 	h.SetDataDir(s.dataDir)
+
+	// Secrets manager backs the {security_id} rotating token (AI.md PART 11
+	// "Security Reports") for both the security.txt Contact: line and the
+	// /server/contact?security_id={id} mode switch.
+	secretsMgr := secrets.NewManager(s.migrationMgr.GetDB())
+	h.SetSecretsManager(secretsMgr)
 	// Set config directory so the PGP public key (/.well-known/pgp-key.asc) can
 	// be served from {config_dir}/security/pgp.pub.asc per AI.md PART 12.
 	h.SetConfigDir(s.configDir)
@@ -640,6 +648,11 @@ func (s *Server) setupRoutes() {
 
 	// Server routes per AI.md PART 14 (Route Scopes)
 	server := handler.NewServerHandler(s.appConfig)
+	server.SetDB(s.migrationMgr.GetDB())
+	server.SetSecretsManager(secretsMgr)
+	server.SetConfigDir(s.configDir)
+	server.SetLogger(s.logger)
+	server.SetEmailService(email.NewEmailService(s.appConfig))
 	s.serverHandler = server
 	s.router.Route("/server", func(r chi.Router) {
 		r.Get("/about", server.AboutPage)
@@ -647,6 +660,10 @@ func (s *Server) setupRoutes() {
 		r.Get("/contact", server.ContactPage)
 		r.Post("/contact", server.ContactPage)
 		r.Get("/help", server.HelpPage)
+		r.Get("/security", server.SecurityPage)
+		r.Get("/security/policy", server.SecurityPolicyPage)
+		r.Get("/security/thanks", server.SecurityThanksPage)
+		r.Get("/security/report/{tracking_id}", server.SecurityReportStatusPage)
 	})
 
 	// API autodiscover endpoint (non-versioned per AI.md PART 14)

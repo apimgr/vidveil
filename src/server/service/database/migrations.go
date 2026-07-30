@@ -170,6 +170,40 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			keyservers_published TEXT DEFAULT '[]',
 			revoked INTEGER DEFAULT 0
 		)`,
+
+		// Security reports table per AI.md PART 11 "Security Reports —
+		// Coordinated Disclosure Pipeline". Tracking metadata only; the
+		// report body is encrypted at rest (PGP if a keypair exists, else
+		// AES-256-GCM under server.security.encryption_key) and plaintext is
+		// NEVER persisted. No admin web UI/API exists for this table per
+		// PART 11 "Security Administration" — status/comments are set by
+		// out-of-band maintainer tooling.
+		`CREATE TABLE IF NOT EXISTS security_reports (
+			tracking_id TEXT PRIMARY KEY,
+			status TEXT NOT NULL DEFAULT 'received',
+			severity TEXT NOT NULL,
+			component TEXT NOT NULL,
+			endpoint TEXT,
+			summary TEXT NOT NULL,
+			encrypted_body BLOB NOT NULL,
+			encryption_method TEXT NOT NULL,
+			researcher_email TEXT,
+			researcher_gpg_fingerprint TEXT,
+			cve_requested INTEGER DEFAULT 0,
+			disclosure_window_days INTEGER,
+			credit_preference TEXT NOT NULL,
+			credit_name TEXT,
+			disclosed INTEGER DEFAULT 0,
+			app_version TEXT,
+			commit_hash TEXT,
+			report_token_hash TEXT,
+			report_token_last_used_date TEXT,
+			maintainer_comments TEXT,
+			expected_disclosure_date DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			closed_at DATETIME
+		)`,
 	}
 }
 

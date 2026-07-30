@@ -1294,7 +1294,7 @@ type TorInfo struct {
 	Enabled  bool   `json:"enabled"`
 	Running  bool   `json:"running"`
 	Status   string `json:"status"`
-	Hostname string `json:"hostname,omitempty"`
+	Hostname string `json:"hostname"`
 }
 
 // ChecksInfo holds component health checks — "ok"/"error" only, no details,

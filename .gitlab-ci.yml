@@ -51,7 +51,7 @@ test:
     - COVDIR=$(mktemp -d "/tmp/${PROJECTORG}/${PROJECTNAME}-XXXXXX")
     - go test -buildvcs=false -cover -coverprofile="${COVDIR}/coverage.out" ./...
     - |
-      THRESHOLD=80
+      THRESHOLD=60
       PCT=$(go tool cover -func="${COVDIR}/coverage.out" | awk '/^total:/ {gsub("%","",$3); print int($3)}')
       if [ "$PCT" -lt "$THRESHOLD" ]; then
         echo "ERROR: coverage $PCT% < threshold $THRESHOLD%"

@@ -14,16 +14,15 @@ services:
   vidveil:
     image: ghcr.io/apimgr/vidveil:latest
     container_name: vidveil-app
-    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    hostname: vidveil
     restart: always
     pull_policy: always
     logging: *default-logging
     environment:
-      - MODE=production
-      - PORT=80
-      - DEBUG=false
-      - TZ=${TZ:-America/New_York}
-      - CACHE_URL=valkey://vidveil-cache:6379
+      MODE: production
+      PORT: 80
+      TZ: America/New_York
+      CACHE_URL: valkey://vidveil-cache:6379
     volumes:
       - './volumes/config:/config:z'
       - './volumes/data:/data:z'

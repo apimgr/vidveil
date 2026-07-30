@@ -14,20 +14,21 @@ services:
   vidveil:
     image: ghcr.io/apimgr/vidveil:devel
     container_name: vidveil-app
-    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    hostname: vidveil
     restart: always
     pull_policy: always
     logging: *default-logging
     environment:
-      - MODE=development
-      - PORT=80
-      - DEBUG=true
-      - TZ=${TZ:-America/New_York}
+      MODE: development
+      PORT: 80
+      DEBUG: true
+      TZ: America/New_York
     volumes:
       - './volumes/config:/config:z'
       - './volumes/data:/data:z'
     ports:
-      - '172.17.0.1:64893:80'
+      # Development: accessible from all interfaces, no 172.17.0.1 bind
+      - '64893:80'
     healthcheck:
       test: /usr/local/bin/vidveil --status || exit 1
       interval: 10s

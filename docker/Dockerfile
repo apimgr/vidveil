@@ -42,7 +42,7 @@ ARG COMMIT_ID
 # See AI.md PART 26 → "Multi-Arch Image Annotations".
 
 # Install required packages
-# NOTE: Tor binary installed but NOT configured here - binary handles all Tor setup (see PART 32)
+# NOTE: Tor binary installed but NOT configured here - binary handles all Tor setup (see PART 31)
 RUN apk add --no-cache \
     git \
     curl \
@@ -68,7 +68,7 @@ COPY docker/Dockerfile /root/Dockerfile
 RUN chmod 755 /usr/local/bin/*
 
 # Set environment
-# Note: Tor available (binary installed) but server binary controls Tor startup (see PART 32)
+# Note: Tor available (binary installed) but server binary controls Tor startup (see PART 31)
 # MODE is intentionally NOT set here (AI.md PART 26): the binary defaults to
 # production; compose files set MODE explicitly (production/development).
 ENV TZ=America/New_York \

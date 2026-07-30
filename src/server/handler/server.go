@@ -136,6 +136,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	data := map[string]interface{}{
 		"Title":          appName,
 		"AppName":        appName,
+		"AppTagline":     h.appConfig.Server.Branding.Tagline,
 		"AppDescription": h.appConfig.Server.Branding.Description,
 		"BaseURL":        scheme + "://" + h.appConfig.Server.FQDN,
 		"Version":        versionInfo["version"],
@@ -200,7 +201,18 @@ func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
 	// Show contact form - contact form always available
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 		"ContactEnabled": true,
+		"AbuseEmail":     h.publicAbuseEmail(),
 	})
+}
+
+// publicAbuseEmail resolves the abuse-report address shown on /server/contact per
+// AI.md PART 16: server.contact.abuse.email if set, else server.contact.general.email
+// if set, else empty. The admin address is never public and is deliberately excluded.
+func (h *ServerHandler) publicAbuseEmail() string {
+	if h.appConfig.Server.Contact.Abuse.Email != "" {
+		return h.appConfig.Server.Contact.Abuse.Email
+	}
+	return h.appConfig.Server.Contact.General.Email
 }
 
 // handleContactSubmit handles contact form submission
@@ -208,6 +220,7 @@ func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Reque
 	// Parse form and show success message
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 		"ContactEnabled": true,
+		"AbuseEmail":     h.publicAbuseEmail(),
 		"Message":        "Thank you for your message. We will get back to you if needed.",
 		"MessageType":    "success",
 	})
@@ -225,19 +238,29 @@ func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"name":        h.appConfig.Server.Branding.Title,
+		"tagline":     h.appConfig.Server.Branding.Tagline,
 		"description": h.appConfig.Server.Branding.Description,
 		"version":     version.GetVersion(),
 		"features": []string{
-			"Privacy-focused video meta-search",
-			"No tracking or personal data collection",
-			"Aggregates results from multiple sources",
-			"Open source and self-hostable",
+			"Privacy-first search: no tracking, logging, or analytics",
+			"Meta-search across 42 adult video engines with bang shortcuts",
+			"Real-time SSE streaming as each engine responds",
+			"Thumbnail proxy so source sites never see your IP",
+			"Video preview on hover (desktop) and swipe (mobile)",
+			"Client-side preferences, favorites, and history (localStorage only)",
+			"Built-in Tor hidden service support",
+			"Admin-configurable geographic content restriction",
+			"Single static binary with all assets embedded",
+		},
+		"links": map[string]interface{}{
+			"source":  "https://github.com/apimgr/vidveil",
+			"website": "https://x.scour.li",
 		},
 	}
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "name: %s\ndescription: %s\nversion: %s\n",
-			data["name"], data["description"], data["version"])
+		fmt.Fprintf(w, "name: %s\ntagline: %s\ndescription: %s\nversion: %s\n",
+			data["name"], data["tagline"], data["description"], data["version"])
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": data})
@@ -248,7 +271,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nsearch_queries: false\nip_addresses: false\ntracking_cookies: false\nthird_party_sharing: false\n",
+		fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nuser_accounts: false\nsearch_queries_logged: false\nip_addresses_stored: false\ntracking_cookies: false\nthird_party_sharing: false\ndata_sold: false\nclient_side_storage_only: true\n",
 			time.Now().Format("2006-01-02"))
 		return
 	}
@@ -257,16 +280,31 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 		"data": map[string]interface{}{
 			"policy_version": "1.0",
 			"last_updated":   time.Now().Format("2006-01-02"),
+			"summary":        "Stateless, privacy-first meta search. No user accounts, no query logging, no data sold.",
 			"data_collection": map[string]interface{}{
-				"search_queries":      false,
-				"ip_addresses":        false,
-				"tracking_cookies":    false,
-				"third_party_sharing": false,
+				"user_accounts":         false,
+				"search_queries_logged": false,
+				"ip_addresses_stored":   false,
+				"tracking_cookies":      false,
+				"browser_fingerprint":   false,
+				"user_profiles":         false,
+				"third_party_sharing":   false,
+				"data_sold":             false,
+			},
+			"client_side_storage": []string{
+				"vidveil-theme",
+				"vidveil_prefs",
+				"vidveil_history",
+				"vidveil_favorites",
 			},
 			"cookies": []string{
-				"age_verification (required)",
-				"user_preferences (optional)",
+				"age_verification (required by law)",
+				"content_restriction_acknowledgment (soft-block regions only)",
+				"forward_ip (opt-in only, when operator enables geo-forwarding)",
 			},
+			"thumbnail_proxy":  true,
+			"tor_supported":    true,
+			"third_party_sent": "Only the video engines you explicitly search receive your query.",
 		},
 	})
 }
@@ -300,32 +338,62 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "search: GET /search or /api/v1/search  params: q, page, engines\n")
+		fmt.Fprintf(w, "search: GET /api/v1/search  params: q, page, engines (bang shortcuts like !ph supported in q)\n")
+		fmt.Fprintf(w, "bangs: GET /api/v1/bangs\n")
+		fmt.Fprintf(w, "autocomplete: GET /api/v1/bangs/autocomplete?q={partial}\n")
 		fmt.Fprintf(w, "engines: GET /api/v1/engines\n")
+		fmt.Fprintf(w, "engines_health: GET /api/v1/engines/health\n")
+		fmt.Fprintf(w, "thumbnail_proxy: GET /api/v1/proxy/thumbnails?url={url}\n")
 		fmt.Fprintf(w, "health: GET /api/v1/server/healthz\n")
-		fmt.Fprintf(w, "documentation: /server/docs/swagger\n")
+		fmt.Fprintf(w, "swagger: /server/docs/swagger\n")
+		fmt.Fprintf(w, "graphql: /server/docs/graphql\n")
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
 			"search": map[string]interface{}{
-				"endpoint":    "/search or /api/v1/search",
+				"endpoint":    "/api/v1/search",
 				"method":      "GET",
-				"parameters":  []string{"q (query)", "page", "engines"},
-				"description": "Search across multiple video sources",
+				"parameters":  []string{"q (query; bang shortcuts like !ph !xv supported)", "page", "engines"},
+				"description": "Search across 42 video engines; supports JSON, SSE (text/event-stream), and text/plain",
+			},
+			"bangs": map[string]interface{}{
+				"endpoint":    "/api/v1/bangs",
+				"method":      "GET",
+				"description": "List all bang shortcuts",
+			},
+			"autocomplete": map[string]interface{}{
+				"endpoint":    "/api/v1/bangs/autocomplete",
+				"method":      "GET",
+				"parameters":  []string{"q (partial query, bang, or @performer)"},
+				"description": "Autocomplete bangs, performer names, and search terms",
 			},
 			"engines": map[string]interface{}{
 				"endpoint":    "/api/v1/engines",
 				"method":      "GET",
 				"description": "List available search engines",
 			},
+			"engines_health": map[string]interface{}{
+				"endpoint":    "/api/v1/engines/health",
+				"method":      "GET",
+				"description": "Per-engine health/availability status",
+			},
+			"thumbnail_proxy": map[string]interface{}{
+				"endpoint":    "/api/v1/proxy/thumbnails",
+				"method":      "GET",
+				"parameters":  []string{"url (upstream thumbnail URL)"},
+				"description": "Privacy-preserving thumbnail proxy",
+			},
 			"health": map[string]interface{}{
 				"endpoint":    "/api/v1/server/healthz",
 				"method":      "GET",
 				"description": "Check server health status",
 			},
-			"documentation": "/server/docs/swagger",
+			"documentation": map[string]interface{}{
+				"swagger": "/server/docs/swagger",
+				"graphql": "/server/docs/graphql",
+			},
 		},
 	})
 }

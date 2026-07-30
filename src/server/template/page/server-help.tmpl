@@ -104,7 +104,12 @@ curl "{{.BaseURL}}/api/v1/server/healthz"
 
 curl "{{.BaseURL}}/api/v1/search.txt?q=sunset"</code></pre>
 
-        <p>Full interactive documentation: <a href="/server/docs/swagger">Swagger/OpenAPI docs</a>.</p>
+        <h3>API Documentation</h3>
+        <p>{{.AppName}} provides a full REST and GraphQL API with interactive documentation:</p>
+        <ul>
+            <li><a href="/server/docs/swagger">Swagger UI</a> — interactive REST API explorer (OpenAPI spec at <code>/api/swagger</code>)</li>
+            <li><a href="/server/docs/graphql">GraphiQL</a> — interactive GraphQL explorer (endpoint at <code>/api/graphql</code>)</li>
+        </ul>
 
         <h2>FAQ</h2>
 

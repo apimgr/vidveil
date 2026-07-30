@@ -37,6 +37,12 @@
             <button type="submit" class="search-button">Send Message</button>
         </form>
         {{end}}
+
+        <h2>Security Issues</h2>
+        <p>To report a security vulnerability, consult our <a href="/server/security">security policy</a>.</p>
+
+        <h2>Abuse Reports</h2>
+        <p>To report abusive content or policy violations, use this contact form{{if .AbuseEmail}} or email <a href="mailto:{{.AbuseEmail}}">{{.AbuseEmail}}</a>{{end}}.</p>
     </div>
 </div>
 {{end}}

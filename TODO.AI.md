@@ -115,6 +115,37 @@ these should be replaced with text labels (e.g. "OK"/"DOWN"/"WARN") or made
 conditional. Left unfixed here since it's unrelated to the two findings this
 session's commits address; logged so it isn't lost.
 
+### 8. `/server/security` coordinated-disclosure feature (AI.md PART 12) not implemented
+While making the `/server/*` pages accurate, the `/server/contact` page was given
+its spec-mandated (AI.md PART 16, line ~26185) "Security Issues" section, which
+links to `/server/security` and must NEVER point at the raw
+`/.well-known/security.txt`. That link is currently a dangling reference: only
+`/.well-known/security.txt` exists (handlers.go `SecurityTxt`) — the whole
+`/server/security*` HTML feature tree is unbuilt. AI.md PART 12 (lines ~14681-14684)
+mandates:
+- `/server/security` — human-readable security overview page (RFC 9116 channels in
+  preference order, Expires, Encryption key, plain-language reporting instructions),
+  rendered from live config via `BuildURL(r, ...)`.
+- `/server/security/policy` — disclosure policy page (default content, API-editable).
+- `/server/security/thanks` — researcher acknowledgments/hall of fame.
+- `/server/security/report/{tracking_id}` — one-shot-token researcher status page.
+- Also the `/server/contact?security_id={id}` contact mode (line ~14681) that ties a
+  contact submission to a security report — part of the same feature.
+This is a substantial standalone feature (coordinated-disclosure pipeline + GPG
+keypair management), intentionally NOT built as part of the `/server/*` page-accuracy
+task. Until it lands, the "Security Issues" link on `/server/contact` will 404. Build
+per PART 12, then the link resolves.
+
+### 9. Generic PART 16 privacy config-tree (`server.privacy.*`) intentionally not implemented — verify no gap
+AI.md PART 16's `/server/privacy` spec is the generic template model driven by a
+`server.privacy.*` config tree (data.sold, CCPA opt-out, retention, third_party
+services, GetDataUsageContent/GetConsentMessage helpers). VidVeil has NO such config
+tree and IDEA.md non-goals explicitly make it inapplicable: no user accounts, stateless,
+nothing persisted per user, nothing sold. The `/server/privacy` page and API were made
+accurate to VidVeil's actual reality instead of fabricating that config. No code gap —
+this is a deliberate, IDEA.md-documented deviation. Logged only so a future reader
+doesn't "fix" the privacy page back toward the generic CCPA/data.sold model.
+
 ### 7. Live deployment intentionally running MODE=development/DEBUG=true — not an issue
 `https://x.scour.li` was observed reporting `mode: development` with
 `/debug/*` reachable. **User confirmed this is intentional** — set deliberately

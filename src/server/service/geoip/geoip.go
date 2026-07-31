@@ -21,9 +21,13 @@ import (
 const (
 	ASNURL     = "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb"
 	CountryURL = "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"
-	// Per spec: dbip-city-mmdb, with geolite2-city-mmdb as fallback (dbip returns 403 on jsDelivr)
-	CityURL         = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb"
-	CityURLFallback = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv4.mmdb"
+	// Per spec (AI.md PART 19, line 9354): dbip city IPv4 and IPv6 are separate
+	// databases — there is no combined MMDB. geolite2-city is the fallback when
+	// dbip returns 403 on jsDelivr.
+	CityURL           = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb"
+	CityURLFallback   = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv4.mmdb"
+	CityURLv6         = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv6.mmdb"
+	CityURLv6Fallback = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv6.mmdb"
 )
 
 // GeoIPResult holds GeoIP lookup results
@@ -49,7 +53,11 @@ type GeoIPService struct {
 
 	asnDB     *maxminddb.Reader
 	countryDB *maxminddb.Reader
-	cityDB    *maxminddb.Reader
+	// cityDB serves IPv4 lookups and cityDBv6 serves IPv6 lookups: per AI.md
+	// PART 19 the dbip/geolite2 city databases ship as separate v4/v6 files
+	// with no combined MMDB, so an IPv6 client needs its own reader.
+	cityDB   *maxminddb.Reader
+	cityDBv6 *maxminddb.Reader
 
 	lastUpdate time.Time
 }
@@ -156,6 +164,15 @@ func (s *GeoIPService) downloadIfMissing() error {
 				}
 			}
 		}
+
+		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
+		if _, err := os.Stat(cityPathV6); os.IsNotExist(err) {
+			if err := s.downloadFile(CityURLv6, cityPathV6); err != nil {
+				if err := s.downloadFile(CityURLv6Fallback, cityPathV6); err != nil {
+					return fmt.Errorf("failed to download city IPv6 database: %w", err)
+				}
+			}
+		}
 	}
 
 	return nil
@@ -235,6 +252,15 @@ func (s *GeoIPService) openDatabases() error {
 			}
 			s.cityDB = db
 		}
+
+		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
+		if _, err := os.Stat(cityPathV6); err == nil {
+			db, err := maxminddb.Open(cityPathV6)
+			if err != nil {
+				return fmt.Errorf("failed to open city IPv6 database: %w", err)
+			}
+			s.cityDBv6 = db
+		}
 	}
 
 	s.lastUpdate = time.Now()
@@ -266,10 +292,20 @@ func (s *GeoIPService) Lookup(ipStr string) *GeoIPResult {
 		}
 	}
 
-	// Country lookup (prefer city DB if available)
-	if s.cityDB != nil {
+	// Country lookup (prefer the family-appropriate city DB if available).
+	// IPv6 clients query cityDBv6; IPv4 clients query cityDB. When the
+	// family-specific reader is missing, cityReader stays nil so the lookup
+	// drops to the family-agnostic country-only DB below rather than probing a
+	// database that cannot contain this address family.
+	var cityReader *maxminddb.Reader
+	if ip.To4() != nil {
+		cityReader = s.cityDB
+	} else {
+		cityReader = s.cityDBv6
+	}
+	if cityReader != nil {
 		var record cityRecord
-		if err := s.cityDB.Lookup(ip, &record); err == nil {
+		if err := cityReader.Lookup(ip, &record); err == nil {
 			result.CountryCode = record.Country.ISOCode
 			if name, ok := record.Country.Names["en"]; ok {
 				result.Country = name
@@ -507,6 +543,13 @@ func (s *GeoIPService) Update() error {
 				return fmt.Errorf("failed to update city database: %w", err)
 			}
 		}
+
+		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
+		if err := s.downloadFile(CityURLv6, cityPathV6); err != nil {
+			if err := s.downloadFile(CityURLv6Fallback, cityPathV6); err != nil {
+				return fmt.Errorf("failed to update city IPv6 database: %w", err)
+			}
+		}
 	}
 
 	return s.openDatabases()
@@ -540,5 +583,9 @@ func (s *GeoIPService) Close() {
 	if s.cityDB != nil {
 		s.cityDB.Close()
 		s.cityDB = nil
+	}
+	if s.cityDBv6 != nil {
+		s.cityDBv6.Close()
+		s.cityDBv6 = nil
 	}
 }

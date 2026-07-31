@@ -118,6 +118,73 @@ func TestLookup_CityDBOnly_ReturnsCountryAndCity(t *testing.T) {
 	}
 }
 
+func TestLookup_CityDBv6_IPv6ResolvedViaV6DB(t *testing.T) {
+	// City=true opens both city.mmdb and city-ipv6.mmdb from testdata. An IPv6
+	// client must be answered by the separate v6 reader (AI.md PART 19: dbip/
+	// geolite2 city ship as separate v4/v6 files with no combined MMDB).
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	cfg.Server.GeoIP.Databases.ASN = false
+	cfg.Server.GeoIP.Databases.Country = false
+	cfg.Server.GeoIP.Databases.City = true
+	s := &GeoIPService{appConfig: cfg, dataDir: "testdata"}
+	if err := s.openDatabases(); err != nil {
+		t.Fatalf("openDatabases: %v", err)
+	}
+	defer s.Close()
+
+	if s.cityDBv6 == nil {
+		t.Fatal("cityDBv6 should be non-nil after openDatabases with city-ipv6.mmdb present")
+	}
+
+	// 2001:218:: → JP in the MaxMind city test DB (IPv6 record).
+	result := s.Lookup("2001:218::")
+	if result == nil {
+		t.Fatal("Lookup returned nil")
+	}
+	if result.CountryCode != "JP" {
+		t.Errorf("Lookup(cityDBv6, 2001:218::): CountryCode = %q, want %q", result.CountryCode, "JP")
+	}
+}
+
+func TestClose_NilsCityV6Pointer(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	cfg.Server.GeoIP.Databases.City = true
+	s := &GeoIPService{appConfig: cfg, dataDir: "testdata"}
+	if err := s.openDatabases(); err != nil {
+		t.Fatalf("openDatabases: %v", err)
+	}
+	s.Close()
+	if s.cityDBv6 != nil {
+		t.Error("cityDBv6 should be nil after Close")
+	}
+}
+
+func TestLookup_IPv6NoV6DB_FallsBackToCountry(t *testing.T) {
+	// When only the country DB is available (no v6 city reader), an IPv6 client
+	// must resolve via the family-agnostic country DB, never by probing the
+	// IPv4-only city reader with a mismatched address family.
+	cfg := config.DefaultAppConfig()
+	cfg.Server.GeoIP.Enabled = true
+	cfg.Server.GeoIP.Databases.ASN = false
+	cfg.Server.GeoIP.Databases.Country = true
+	cfg.Server.GeoIP.Databases.City = false
+	s := &GeoIPService{appConfig: cfg, dataDir: "testdata"}
+	if err := s.openDatabases(); err != nil {
+		t.Fatalf("openDatabases: %v", err)
+	}
+	defer s.Close()
+
+	result := s.Lookup("2001:218::")
+	if result == nil {
+		t.Fatal("Lookup returned nil")
+	}
+	if result.CountryCode != "JP" {
+		t.Errorf("Lookup(countryDB, 2001:218::): CountryCode = %q, want %q", result.CountryCode, "JP")
+	}
+}
+
 func TestLookup_ASNDBOnly_ReturnsASN(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	cfg.Server.GeoIP.Enabled = true

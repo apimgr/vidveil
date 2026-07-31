@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -87,7 +88,19 @@ type Dispatcher struct {
 	appURL         string
 	// httpClient is shared across all sends.
 	httpClient *http.Client
+	// logFailure is an optional sink for permanent webhook failures. It is
+	// invoked (when set) after all retries are exhausted, per AI.md PART 12
+	// "Permanent failures are logged as notify.webhook_failed".
+	logFailure func(event string, fields map[string]any)
+	// failLogMu guards failLogLast, which rate-limits failure logging per
+	// target URL so a broken receiver cannot flood the logs.
+	failLogMu   sync.Mutex
+	failLogLast map[string]time.Time
 }
+
+// failLogInterval is the minimum time between failure-log entries for the same
+// target URL, per AI.md PART 12 (rate-limited so a broken receiver doesn't flood logs).
+const failLogInterval = 5 * time.Minute
 
 // New creates a Dispatcher. Call Update when the config changes (hot-reload safe).
 func New(contact *config.ContactConfig, projectName, projectVersion, appURL string) *Dispatcher {
@@ -104,6 +117,14 @@ func New(contact *config.ContactConfig, projectName, projectVersion, appURL stri
 		d.contact = &cp
 	}
 	return d
+}
+
+// SetFailureLogger installs a sink for permanent webhook failures. Pass nil to
+// disable logging. Safe to call before dispatch begins (wiring time).
+func (d *Dispatcher) SetFailureLogger(fn func(event string, fields map[string]any)) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.logFailure = fn
 }
 
 // Update swaps the contact config without restarting the dispatcher (hot-reload safe).
@@ -202,7 +223,7 @@ func (d *Dispatcher) dispatchWithRetry(ctx context.Context, transport, url, secr
 		}
 		if i >= len(retryDelays) {
 			// All retries exhausted — log and drop.
-			logWebhookFailed(transport, url, err)
+			d.logWebhookFailed(transport, url, err)
 			return
 		}
 		delay := retryDelays[i]
@@ -289,10 +310,52 @@ func GenerateWebhookSecret() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// logWebhookFailed is a thin structured-log shim.
-// A real implementation would call the project's logger.
-func logWebhookFailed(transport, url, err interface{}) {
-	_ = transport
-	_ = url
-	_ = err
+// logWebhookFailed reports a permanent webhook failure to the configured sink,
+// rate-limited per target URL so a broken receiver cannot flood the logs
+// (AI.md PART 12). Credentials in the URL query string are masked before logging.
+func (d *Dispatcher) logWebhookFailed(transport, rawURL string, cause error) {
+	d.mu.RLock()
+	sink := d.logFailure
+	d.mu.RUnlock()
+	if sink == nil {
+		return
+	}
+
+	masked := maskURL(rawURL)
+
+	d.failLogMu.Lock()
+	if d.failLogLast == nil {
+		d.failLogLast = make(map[string]time.Time)
+	}
+	now := time.Now()
+	if last, ok := d.failLogLast[masked]; ok && now.Sub(last) < failLogInterval {
+		d.failLogMu.Unlock()
+		return
+	}
+	d.failLogLast[masked] = now
+	d.failLogMu.Unlock()
+
+	errMsg := ""
+	if cause != nil {
+		errMsg = cause.Error()
+	}
+	sink("notify.webhook_failed", map[string]any{
+		"transport": transport,
+		"url":       masked,
+		"error":     errMsg,
+	})
+}
+
+// maskURL strips the query string (which may carry tokens, chat IDs, or signing
+// secrets) so a webhook URL can be logged without leaking credentials.
+func maskURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	if parsed.RawQuery != "" {
+		parsed.RawQuery = "xxxxx"
+	}
+	parsed.User = nil
+	return parsed.String()
 }

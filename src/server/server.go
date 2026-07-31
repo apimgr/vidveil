@@ -24,6 +24,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/graphql"
 	"github.com/apimgr/vidveil/src/mode"
+	"github.com/apimgr/vidveil/src/notify"
 	"github.com/apimgr/vidveil/src/path"
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/email"
@@ -668,6 +669,13 @@ func (s *Server) setupRoutes() {
 	server.SetConfigDir(s.configDir)
 	server.SetLogger(s.logger)
 	server.SetEmailService(email.NewEmailService(s.appConfig))
+	notifyDispatcher := notify.New(&s.appConfig.Server.Contact, path.ProjectName, version.GetVersion(), s.appConfig.GetPublicURL())
+	if s.logger != nil {
+		notifyDispatcher.SetFailureLogger(func(event string, fields map[string]any) {
+			s.logger.Warn(event, fields)
+		})
+	}
+	server.SetNotifyDispatcher(notifyDispatcher)
 	s.serverHandler = server
 	s.router.Route("/server", func(r chi.Router) {
 		r.Get("/about", server.AboutPage)

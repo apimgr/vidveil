@@ -103,6 +103,10 @@
         <h2>Contact Form</h2>
         <form method="POST" action="/server/contact" class="preferences-form">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+            <div class="form-group hidden" aria-hidden="true">
+                <label class="form-label" for="contact_hp">Leave this field empty</label>
+                <input class="form-input" type="text" id="contact_hp" name="contact_hp" tabindex="-1" autocomplete="off">
+            </div>
             <div class="form-group">
                 <label class="form-label" for="email">Your Email (optional)</label>
                 <input class="form-input" type="email" id="email" name="email" placeholder="your@email.com">

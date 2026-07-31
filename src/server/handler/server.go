@@ -19,6 +19,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/notify"
 	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
@@ -36,6 +37,9 @@ type ServerHandler struct {
 	configDir  string
 	logger     *logging.AppLogger
 	emailSvc   *email.EmailService
+	// notifyDispatcher routes contact-form and other events to the configured
+	// PART 12 webhook transports. Nil until wired via SetNotifyDispatcher.
+	notifyDispatcher *notify.Dispatcher
 }
 
 // NewServerHandler creates a new server handler
@@ -83,6 +87,12 @@ func (h *ServerHandler) SetLogger(l *logging.AppLogger) {
 // notifications and researcher acknowledgments per AI.md PART 11.
 func (h *ServerHandler) SetEmailService(e *email.EmailService) {
 	h.emailSvc = e
+}
+
+// SetNotifyDispatcher wires the PART 12 webhook dispatcher used to route
+// non-security /server/contact submissions to the general contact role.
+func (h *ServerHandler) SetNotifyDispatcher(d *notify.Dispatcher) {
+	h.notifyDispatcher = d
 }
 
 // renderServerTemplate renders a server page template with common data
@@ -372,14 +382,73 @@ func (h *ServerHandler) publicAbuseEmail() string {
 	return h.appConfig.Server.Contact.General.Email
 }
 
-// handleContactSubmit handles contact form submission
+// maxContactFieldLen bounds each contact-form field so a submission cannot be
+// used to flood downstream notification transports.
+const maxContactFieldLen = 8000
+
+// handleContactSubmit handles a non-security /server/contact submission and
+// dispatches it to the general contact role per AI.md PART 12.
 func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Request) {
-	// Parse form and show success message
+	if err := r.ParseForm(); err != nil {
+		h.renderContactError(w, r, "Invalid form submission.")
+		return
+	}
+
+	// Honeypot: legitimate browsers leave the hidden field empty. A filled
+	// value indicates a bot — respond with the normal success page so the
+	// bot cannot distinguish rejection from acceptance.
+	if strings.TrimSpace(r.FormValue("contact_hp")) != "" {
+		h.renderContactSuccess(w, r)
+		return
+	}
+
+	email := strings.TrimSpace(r.FormValue("email"))
+	subject := strings.TrimSpace(r.FormValue("subject"))
+	message := strings.TrimSpace(r.FormValue("message"))
+
+	if subject == "" || message == "" {
+		h.renderContactError(w, r, "Please provide a subject and a message.")
+		return
+	}
+	if len(email) > maxContactFieldLen || len(subject) > maxContactFieldLen || len(message) > maxContactFieldLen {
+		h.renderContactError(w, r, "Your message is too long. Please shorten it and try again.")
+		return
+	}
+
+	if h.notifyDispatcher != nil {
+		from := "anonymous"
+		if email != "" {
+			from = email
+		}
+		body := fmt.Sprintf("From: %s\n\n%s", from, message)
+		h.notifyDispatcher.Send(r.Context(), notify.RoleGeneral, notify.Payload{
+			Event:    "contact.general",
+			Subject:  subject,
+			Body:     body,
+			Severity: notify.SeverityInfo,
+		})
+	}
+
+	h.renderContactSuccess(w, r)
+}
+
+// renderContactSuccess renders the standard contact-form acknowledgment.
+func (h *ServerHandler) renderContactSuccess(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 		"ContactEnabled": true,
 		"AbuseEmail":     h.publicAbuseEmail(),
 		"Message":        "Thank you for your message. We will get back to you if needed.",
 		"MessageType":    "success",
+	})
+}
+
+// renderContactError re-renders the contact form with a validation error.
+func (h *ServerHandler) renderContactError(w http.ResponseWriter, r *http.Request, msg string) {
+	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+		"ContactEnabled": true,
+		"AbuseEmail":     h.publicAbuseEmail(),
+		"Message":        msg,
+		"MessageType":    "error",
 	})
 }
 

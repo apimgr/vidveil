@@ -9,8 +9,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/notify"
 )
 
 // setRealTemplatesFS installs the on-disk template filesystem for tests that exercise
@@ -86,6 +88,118 @@ func TestServerHandler_ContactPage_POST_Returns200(t *testing.T) {
 	h.ContactPage(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Errorf("ContactPage POST: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// A valid contact submission dispatches to the general role via the wired
+// notify.Dispatcher.
+func TestServerHandler_ContactSubmit_DispatchesGeneral(t *testing.T) {
+	setRealTemplatesFS(t)
+
+	received := make(chan struct{}, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case received <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	h := newServerHandler(t)
+	contact := &config.ContactConfig{
+		General: config.ContactRoleConfig{Webhooks: map[string]string{"generic": ts.URL}},
+	}
+	h.SetNotifyDispatcher(notify.New(contact, "vidveil", "1.0.0", ts.URL))
+
+	req := httptest.NewRequest(http.MethodPost, "/server/contact",
+		strings.NewReader("email=a@b.com&subject=hello&message=world"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ContactPage(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("ContactSubmit: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "Thank you") {
+		t.Errorf("ContactSubmit: expected success message; body=%s", rr.Body.String())
+	}
+	select {
+	case <-received:
+	case <-time.After(3 * time.Second):
+		t.Error("ContactSubmit: webhook never dispatched")
+	}
+}
+
+// A submission missing the required message re-renders with an error and does
+// not dispatch.
+func TestServerHandler_ContactSubmit_MissingFieldsError(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+
+	dispatched := make(chan struct{}, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case dispatched <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+	contact := &config.ContactConfig{
+		General: config.ContactRoleConfig{Webhooks: map[string]string{"generic": ts.URL}},
+	}
+	h.SetNotifyDispatcher(notify.New(contact, "vidveil", "1.0.0", ts.URL))
+
+	req := httptest.NewRequest(http.MethodPost, "/server/contact",
+		strings.NewReader("subject=hello"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ContactPage(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("ContactSubmit invalid: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "subject and a message") {
+		t.Errorf("ContactSubmit invalid: expected validation error; body=%s", rr.Body.String())
+	}
+	select {
+	case <-dispatched:
+		t.Error("ContactSubmit invalid: must not dispatch on validation failure")
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+// A filled honeypot field is treated as spam: no dispatch, but a normal success
+// page is returned so the bot cannot detect the rejection.
+func TestServerHandler_ContactSubmit_HoneypotSilentlySucceeds(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+
+	dispatched := make(chan struct{}, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case dispatched <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+	contact := &config.ContactConfig{
+		General: config.ContactRoleConfig{Webhooks: map[string]string{"generic": ts.URL}},
+	}
+	h.SetNotifyDispatcher(notify.New(contact, "vidveil", "1.0.0", ts.URL))
+
+	req := httptest.NewRequest(http.MethodPost, "/server/contact",
+		strings.NewReader("subject=hello&message=world&contact_hp=iamabot"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ContactPage(rr, req)
+	if !strings.Contains(rr.Body.String(), "Thank you") {
+		t.Errorf("Honeypot: expected success page; body=%s", rr.Body.String())
+	}
+	select {
+	case <-dispatched:
+		t.Error("Honeypot: must not dispatch spam")
+	case <-time.After(300 * time.Millisecond):
 	}
 }
 

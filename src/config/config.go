@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/path"
+	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
 )
 
@@ -1749,21 +1750,30 @@ func NormalizeMode(mode string) string {
 
 // AI.md PART 8: URL/FQDN Detection
 
-// devOnlyTLDs are TLDs allowed only in development mode per AI.md
-var devOnlyTLDs = []string{
-	".localhost", ".test", ".example", ".invalid",
-	".local", ".lan", ".internal", ".home", ".localdomain",
-	".home.arpa", ".intranet", ".corp", ".private",
+// devOnlyTLDs are public-suffix labels allowed only in development mode per AI.md
+// PART 8. Keys are the bare suffix as returned by publicsuffix.PublicSuffix.
+var devOnlyTLDs = map[string]bool{
+	"localhost": true, "test": true, "example": true, "invalid": true,
+	"local": true, "lan": true, "internal": true, "home": true,
+	"localdomain": true, "home.arpa": true, "intranet": true,
+	"corp": true, "private": true,
 }
 
-// IsValidHost validates a host per AI.md PART 8
-// In production mode, only valid FQDNs are allowed (no IPs, no localhost, no dev TLDs)
-// In development mode, localhost and dev TLDs are allowed (still no IPs)
-func IsValidHost(host string, devMode bool) bool {
-	lower := strings.ToLower(host)
+// IsValidHost validates a host per AI.md PART 8 (Go reference implementation).
+// In production, only real ICANN eTLD+1 domains are allowed (no IPs, no localhost,
+// no dev TLDs, no suffix-only hosts). In development, localhost, dev TLDs, and the
+// dynamic ".{projectName}" TLD are additionally allowed. Overlay-network hosts
+// (.onion/.i2p/.exit) are always valid since they are app-managed, not DOMAIN-set.
+func IsValidHost(host string, devMode bool, projectName string) bool {
+	lower := strings.ToLower(strings.TrimSpace(host))
+
+	// Reject empty
+	if lower == "" {
+		return false
+	}
 
 	// Reject IP addresses always
-	if net.ParseIP(host) != nil {
+	if net.ParseIP(lower) != nil {
 		return false
 	}
 
@@ -1772,27 +1782,48 @@ func IsValidHost(host string, devMode bool) bool {
 		return devMode
 	}
 
-	// Must contain at least one dot (except localhost in dev)
-	if !strings.Contains(host, ".") {
+	// Must contain at least one dot
+	if !strings.Contains(lower, ".") {
 		return false
 	}
 
-	// In production, reject dev-only TLDs
-	if !devMode {
-		for _, tld := range devOnlyTLDs {
-			if strings.HasSuffix(lower, tld) {
-				return false
-			}
-		}
+	// Overlay network TLDs - valid but app-managed (not set via DOMAIN)
+	if strings.HasSuffix(lower, ".onion") ||
+		strings.HasSuffix(lower, ".i2p") ||
+		strings.HasSuffix(lower, ".exit") {
+		return true
 	}
 
-	return true
+	// Dynamic project-specific dev TLD (e.g. app.vidveil) - dev mode only
+	if projectName != "" && strings.HasSuffix(lower, "."+strings.ToLower(projectName)) {
+		return devMode
+	}
+
+	// Get the public suffix (TLD or eTLD like co.uk)
+	suffix, icann := publicsuffix.PublicSuffix(lower)
+
+	// Dev-only TLDs are valid in dev mode only
+	if devOnlyTLDs[suffix] {
+		return devMode
+	}
+
+	// In production, require a valid ICANN TLD
+	if !devMode && !icann {
+		return false
+	}
+
+	// Require at least eTLD+1 (e.g. "domain.co.uk", not bare "co.uk")
+	etldPlusOne, err := publicsuffix.EffectiveTLDPlusOne(lower)
+	if err != nil {
+		return false
+	}
+	return len(etldPlusOne) > 0
 }
 
 // IsValidSSLHost validates host for SSL/Let's Encrypt per AI.md
 // SSL always requires production-valid host (devMode=false)
 func IsValidSSLHost(host string) bool {
-	return IsValidHost(host, false)
+	return IsValidHost(host, false, path.ProjectName)
 }
 
 // LiveReload per AI.md PART 8 NON-NEGOTIABLE

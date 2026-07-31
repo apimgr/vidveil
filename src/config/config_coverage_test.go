@@ -107,7 +107,38 @@ func TestIsValidHostEdgeCases(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		got := IsValidHost(tc.host, tc.devMode)
+		got := IsValidHost(tc.host, tc.devMode, "vidveil")
+		if got != tc.want {
+			t.Errorf("IsValidHost(%q, devMode=%v) [%s] = %v, want %v",
+				tc.host, tc.devMode, tc.desc, got, tc.want)
+		}
+	}
+}
+
+// TestIsValidHostSpecTable covers the AI.md PART 8 example table: multi-level
+// eTLD+1 acceptance, suffix-only rejection, overlay-network TLDs, and the dynamic
+// ".{projectName}" dev TLD.
+func TestIsValidHostSpecTable(t *testing.T) {
+	tests := []struct {
+		host    string
+		devMode bool
+		want    bool
+		desc    string
+	}{
+		{"my.server.domain.co.uk", false, true, "valid eTLD+1 domain.co.uk in prod"},
+		{"app.company.com.au", false, true, "valid eTLD+1 company.com.au in prod"},
+		{"co.uk", false, false, "public suffix only, no eTLD+1, prod"},
+		{"co.uk", true, false, "public suffix only, no eTLD+1, dev"},
+		{"app.vidveil", false, false, "dynamic project TLD rejected in prod"},
+		{"app.vidveil", true, true, "dynamic project TLD accepted in dev"},
+		{"my.app.vidveil", true, true, "nested dynamic project TLD accepted in dev"},
+		{"expyuzz4wqqyqhjn.onion", false, true, "overlay .onion always valid"},
+		{"example.i2p", false, true, "overlay .i2p always valid"},
+		{"", false, false, "empty host rejected"},
+		{"  ", true, false, "whitespace-only host rejected"},
+	}
+	for _, tc := range tests {
+		got := IsValidHost(tc.host, tc.devMode, "vidveil")
 		if got != tc.want {
 			t.Errorf("IsValidHost(%q, devMode=%v) [%s] = %v, want %v",
 				tc.host, tc.devMode, tc.desc, got, tc.want)

@@ -189,7 +189,7 @@ func TestIsValidHost(t *testing.T) {
 			name += "_dev"
 		}
 		t.Run(name, func(t *testing.T) {
-			result := IsValidHost(tt.host, tt.devMode)
+			result := IsValidHost(tt.host, tt.devMode, "vidveil")
 			if result != tt.expected {
 				t.Errorf("IsValidHost(%q, %v) = %v, want %v", tt.host, tt.devMode, result, tt.expected)
 			}

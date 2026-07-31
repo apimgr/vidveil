@@ -724,7 +724,11 @@ func main() {
 		if torTargetPort == "" {
 			torTargetPort = torHTTPSPort
 		}
-		serverPort, _ := strconv.Atoi(torTargetPort)
+		serverPort, portErr := strconv.Atoi(torTargetPort)
+		if portErr != nil {
+			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: invalid target port %q: %v\n", torTargetPort, portErr)
+			return
+		}
 		if err := torSvc.Start(torCtx, serverPort); err != nil {
 			// PART 31: Tor errors are WARN level, server continues without Tor
 			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: %v\n", err)

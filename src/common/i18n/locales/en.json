@@ -155,6 +155,7 @@
   "privacy.no_trackers": "No third-party trackers or advertising",
   "privacy.what_store": "What We Do Store",
   "privacy.store_desc": "The only data stored is your preferences (theme, enabled engines), which are saved locally in your browser using localStorage. This data never leaves your device.",
+  "privacy.summary": "We do not track you. We do not store your searches. We do not use cookies for tracking.",
   "privacy.third_party": "Third-Party Sites",
   "privacy.third_party_desc": "When you click on a search result, you will be redirected to the original video site. Those third-party sites have their own privacy policies and may collect data about you. We recommend using a VPN or Tor for additional privacy.",
   "privacy.tor_support": "Tor Support",

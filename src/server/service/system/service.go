@@ -830,8 +830,12 @@ func IsRunningAsRoot() bool {
 	switch runtime.GOOS {
 	case "windows":
 		// Check if running with admin privileges
-		_, err := os.Open("\\\\.\\PHYSICALDRIVE0")
-		return err == nil
+		f, err := os.Open("\\\\.\\PHYSICALDRIVE0")
+		if err != nil {
+			return false
+		}
+		f.Close()
+		return true
 	default:
 		return os.Getuid() == 0
 	}

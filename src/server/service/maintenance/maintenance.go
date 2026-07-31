@@ -317,8 +317,14 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 		finalData = archiveData
 	}
 
-	// Write to file
-	if err := os.WriteFile(backupFile, finalData, 0600); err != nil {
+	// Write atomically: a crash mid-write must never leave a partial archive
+	// masquerading as a valid backup.
+	tmpBackup := backupFile + ".tmp"
+	if err := os.WriteFile(tmpBackup, finalData, 0600); err != nil {
+		return fmt.Errorf("failed to write backup file: %w", err)
+	}
+	if err := os.Rename(tmpBackup, backupFile); err != nil {
+		os.Remove(tmpBackup)
 		return fmt.Errorf("failed to write backup file: %w", err)
 	}
 

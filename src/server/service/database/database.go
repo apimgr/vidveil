@@ -212,11 +212,19 @@ func (d *AppDatabase) ExecContext(ctx context.Context, query string, args ...int
 }
 
 // Query executes a query that returns rows
-// Per AI.md PART 10: All queries MUST have timeouts (5s for reads)
+// Per AI.md PART 10: All queries MUST have timeouts (5s for reads).
+// The returned *sql.Rows is consumed by the caller after this function
+// returns, so cancel is fired by the timeout timer rather than deferred
+// (a deferred cancel would cancel the context before the caller iterates).
 func (d *AppDatabase) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return d.db.QueryContext(ctx, query, args...)
+	rows, err := d.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	time.AfterFunc(5*time.Second, cancel)
+	return rows, nil
 }
 
 // QueryContext executes a query that returns rows with context
@@ -225,10 +233,13 @@ func (d *AppDatabase) QueryContext(ctx context.Context, query string, args ...in
 }
 
 // QueryRow executes a query that returns at most one row
-// Per AI.md PART 10: All queries MUST have timeouts (5s for reads)
+// Per AI.md PART 10: All queries MUST have timeouts (5s for reads).
+// The returned *sql.Row is scanned by the caller after this function
+// returns, so cancel is fired by the timeout timer rather than deferred
+// (a deferred cancel would cancel the context before the caller scans).
 func (d *AppDatabase) QueryRow(query string, args ...interface{}) *sql.Row {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	time.AfterFunc(5*time.Second, cancel)
 	return d.db.QueryRowContext(ctx, query, args...)
 }
 
@@ -237,12 +248,19 @@ func (d *AppDatabase) QueryRowContext(ctx context.Context, query string, args ..
 	return d.db.QueryRowContext(ctx, query, args...)
 }
 
-// Begin starts a new transaction
-// Per AI.md PART 10: Transactions have 30s timeout
+// Begin starts a new transaction.
+// Per AI.md PART 10: transactions have a 30s timeout. The returned *sql.Tx
+// outlives this function, so cancel is fired by the timeout timer rather than
+// deferred (a deferred cancel would cancel the tx before the caller uses it).
 func (d *AppDatabase) Begin() (*sql.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	return d.db.BeginTx(ctx, nil)
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	time.AfterFunc(30*time.Second, cancel)
+	return tx, nil
 }
 
 // BeginTx starts a new transaction with context and options

@@ -307,6 +307,9 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 	// array size must respect "limit"). Cross-page duplicates across
 	// successive calls are already removed above via m.sessionDedup, so this
 	// window is the next resultsPerPage NEW items for this session.
+	if resultsPerPage <= 0 {
+		resultsPerPage = 50
+	}
 	total := len(allResults)
 	pages := (total + resultsPerPage - 1) / resultsPerPage
 	pageResults := allResults

@@ -1665,7 +1665,14 @@ func SaveAppConfig(cfg *AppConfig, path string) error {
 `
 	fullData := []byte(header + string(data))
 
-	if err := os.WriteFile(path, fullData, 0644); err != nil {
+	// Write atomically: write to a temp file in the same directory, then rename
+	// over the target so a crash mid-write never leaves a truncated config.
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, fullData, 0644); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

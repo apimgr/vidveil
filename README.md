@@ -1,7 +1,6 @@
 # Vidveil
 
-[![Build](https://github.com/apimgr/vidveil/actions/workflows/build.yml/badge.svg)](https://github.com/apimgr/vidveil/actions/workflows/build.yml)
-[![Security](https://github.com/apimgr/vidveil/actions/workflows/security.yml/badge.svg)](https://github.com/apimgr/vidveil/actions/workflows/security.yml)
+[![CI](https://github.com/apimgr/vidveil/actions/workflows/ci.yml/badge.svg)](https://github.com/apimgr/vidveil/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
 [![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
 [![Documentation](https://readthedocs.org/projects/apimgr-vidveil/badge/?version=latest)](https://apimgr-vidveil.readthedocs.io)

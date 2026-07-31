@@ -23,6 +23,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/graphql"
+	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/path"
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/email"
@@ -691,11 +692,14 @@ func (s *Server) setupRoutes() {
 		// Stats (public)
 		r.Get("/stats", h.APIStats)
 
-		// Debug endpoints (development only per IDEA.md)
-		r.Route("/debug", func(r chi.Router) {
-			r.Get("/engines", h.DebugEnginesList)
-			r.Get("/engines/{name}", h.DebugEngine)
-		})
+		// Debug endpoints (development only per IDEA.md) — gated on debug mode
+		// so they never ship enabled in production, matching registerDebugRoutes.
+		if mode.IsDebugEnabled() {
+			r.Route("/debug", func(r chi.Router) {
+				r.Get("/engines", h.DebugEnginesList)
+				r.Get("/engines/{name}", h.DebugEngine)
+			})
+		}
 
 		// Per AI.md PART 14: canonical health route is /api/{api_version}/server/healthz.
 		// Legacy /api/{api_version}/healthz alias removed — spec requires no shims.

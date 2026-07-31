@@ -203,9 +203,11 @@ func (rf *RotatingFile) rotate() error {
 
 	// Rename current log to rotated name
 	if err := os.Rename(rf.path, rotatedPath); err != nil {
-		// If rename fails, try to reopen original
-		f, _ := os.OpenFile(rf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		rf.file = f
+		// If rename fails, try to reopen original; keep the old handle on failure
+		// rather than storing a nil *os.File that later writes would panic on.
+		if f, openErr := os.OpenFile(rf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); openErr == nil {
+			rf.file = f
+		}
 		return err
 	}
 

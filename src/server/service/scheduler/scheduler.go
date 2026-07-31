@@ -571,31 +571,32 @@ func (s *Scheduler) Start(ctx context.Context) {
 // runMissedTasks runs tasks that were missed while the server was down
 // Per AI.md PART 18: Only runs if missed within catch_up_window
 func (s *Scheduler) runMissedTasks(window time.Duration) {
-	s.mu.RLock()
-	tasks := make([]*ScheduledTask, 0, len(s.tasks))
-	for _, task := range s.tasks {
-		tasks = append(tasks, task)
-	}
-	s.mu.RUnlock()
-
 	now := time.Now()
 	cutoff := now.Add(-window)
 
-	// Sort tasks by NextRun (oldest first) for proper ordering
-	sort.Slice(tasks, func(i, j int) bool {
-		return tasks[i].NextRun.Before(tasks[j].NextRun)
+	// Snapshot the due tasks' schedule fields under the read lock so we never
+	// read Enabled/NextRun concurrently with the writers that mutate them.
+	type missedTask struct {
+		task    *ScheduledTask
+		nextRun time.Time
+	}
+	s.mu.RLock()
+	candidates := make([]missedTask, 0, len(s.tasks))
+	for _, task := range s.tasks {
+		if task.Enabled && task.NextRun.Before(now) && task.NextRun.After(cutoff) {
+			candidates = append(candidates, missedTask{task: task, nextRun: task.NextRun})
+		}
+	}
+	s.mu.RUnlock()
+
+	// Sort candidates by NextRun (oldest first) for proper ordering
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].nextRun.Before(candidates[j].nextRun)
 	})
 
-	for _, task := range tasks {
-		// Skip if not enabled or not missed
-		if !task.Enabled {
-			continue
-		}
-		// Task is missed if NextRun is in the past but after cutoff
-		if task.NextRun.Before(now) && task.NextRun.After(cutoff) {
-			log.Printf("running missed task: %s (was due at %s)", task.Name, task.NextRun.Format(time.RFC3339))
-			go s.runTask(task)
-		}
+	for _, c := range candidates {
+		log.Printf("running missed task: %s (was due at %s)", c.task.Name, c.nextRun.Format(time.RFC3339))
+		go s.runTask(c.task)
 	}
 }
 
@@ -627,18 +628,18 @@ func (s *Scheduler) run() {
 
 // checkAndRunTasks checks all tasks and runs any that are due
 func (s *Scheduler) checkAndRunTasks() {
+	now := time.Now()
 	s.mu.RLock()
-	tasks := make([]*ScheduledTask, 0, len(s.tasks))
+	due := make([]*ScheduledTask, 0, len(s.tasks))
 	for _, task := range s.tasks {
-		tasks = append(tasks, task)
+		if task.Enabled && now.After(task.NextRun) {
+			due = append(due, task)
+		}
 	}
 	s.mu.RUnlock()
 
-	now := time.Now()
-	for _, task := range tasks {
-		if task.Enabled && now.After(task.NextRun) {
-			go s.runTask(task)
-		}
+	for _, task := range due {
+		go s.runTask(task)
 	}
 }
 

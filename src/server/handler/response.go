@@ -164,7 +164,7 @@ func ErrorCodeToHTTP(code string) int {
 		return 400
 	case "UNAUTHORIZED", "TOKEN_EXPIRED", "TOKEN_INVALID", "2FA_REQUIRED", "2FA_INVALID":
 		return 401
-	case "FORBIDDEN", "ACCOUNT_LOCKED":
+	case "FORBIDDEN", "ACCOUNT_LOCKED", "CSRF_FAILED":
 		return 403
 	case "NOT_FOUND":
 		return 404

@@ -32,6 +32,7 @@ This software includes the following third-party libraries:
 
 The following open-source libraries are used:
 
+- **github.com/ProtonMail/go-crypto** - BSD-3-Clause
 - **github.com/PuerkitoBio/goquery** - BSD-3-Clause
 - **github.com/andybalholm/brotli** - MIT
 - **github.com/andybalholm/cascadia** - BSD-2-Clause
@@ -48,8 +49,9 @@ The following open-source libraries are used:
 - **github.com/cretz/bine** - MIT
 - **github.com/dgryski/go-rendezvous** - MIT
 - **github.com/dustin/go-humanize** - MIT
+- **github.com/go-acme/lego/v4** - MIT
 - **github.com/go-chi/chi/v5** - MIT
-- **github.com/go-chi/cors** - MIT
+- **github.com/rs/cors** - MIT
 - **github.com/google/uuid** - BSD-3-Clause
 - **github.com/klauspost/compress** - Apache-2.0
 - **github.com/klauspost/compress/internal/snapref** - BSD-3-Clause
@@ -72,7 +74,6 @@ The following open-source libraries are used:
 - **github.com/refraction-networking/utls/dicttls** - BSD-3-Clause
 - **github.com/remyoudompheng/bigfft** - BSD-3-Clause
 - **github.com/rivo/uniseg** - MIT
-- **github.com/robfig/cron/v3** - MIT
 - **github.com/tursodatabase/libsql-client-go** - MIT
 - **golang.org/x/crypto** - BSD-3-Clause
 - **golang.org/x/exp** - BSD-3-Clause
@@ -84,7 +85,7 @@ The following open-source libraries are used:
 - **google.golang.org/protobuf** - BSD-3-Clause
 - **gopkg.in/yaml.v3** - MIT
 - **modernc.org/libc** - BSD-3-Clause
-- **modernc.org/mathutil** - Unknown
+- **modernc.org/mathutil** - BSD-3-Clause
 - **modernc.org/memory** - BSD-3-Clause
 - **modernc.org/sqlite** - BSD-3-Clause
 

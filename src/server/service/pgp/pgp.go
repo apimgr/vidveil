@@ -201,7 +201,13 @@ func WriteKeypair(configDir string, kp *Keypair, secret []byte) error {
 		return fmt.Errorf("encrypt private key: %w", err)
 	}
 	privPath := filepath.Join(dir, PrivateKeyFile)
-	if err := os.WriteFile(privPath, enc, 0o600); err != nil {
+	// Write atomically so an interrupted write cannot corrupt the private key.
+	tmpPriv := privPath + ".tmp"
+	if err := os.WriteFile(tmpPriv, enc, 0o600); err != nil {
+		return fmt.Errorf("write private key: %w", err)
+	}
+	if err := os.Rename(tmpPriv, privPath); err != nil {
+		os.Remove(tmpPriv)
 		return fmt.Errorf("write private key: %w", err)
 	}
 	return nil

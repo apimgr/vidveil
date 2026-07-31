@@ -18,7 +18,7 @@ TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Use casjaysdev/go:latest per PART 26 (Go projects)
-docker run --rm -v $PWD:/build -w /build casjaysdev/go:latest sh -c '
+docker run --rm -v "$PWD":/build -w /build casjaysdev/go:latest sh -c '
   go-licenses csv ./... 2>/dev/null | sort
 ' > "$TEMP_DIR/licenses.csv"
 

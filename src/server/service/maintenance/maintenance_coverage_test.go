@@ -406,37 +406,6 @@ func TestRestoreWithPassword_EncryptedWrongPasswordReturnsError(t *testing.T) {
 	}
 }
 
-// ── ResetAdminCredentials ─────────────────────────────────────────────────────
-
-// TestResetAdminCredentials_WritesTokenAndFlagFiles verifies that
-// ResetAdminCredentials generates a non-empty setup token, writes it to
-// <data>/setup_token, and creates <data>/admin_reset.flag.
-func TestResetAdminCredentials_WritesTokenAndFlagFiles(t *testing.T) {
-	m, _, dataDir := newManagerWithDirs(t)
-
-	token, err := m.ResetAdminCredentials()
-	if err != nil {
-		t.Fatalf("ResetAdminCredentials() error: %v", err)
-	}
-	if token == "" {
-		t.Error("ResetAdminCredentials() returned empty token")
-	}
-
-	tokenFile := filepath.Join(dataDir, "setup_token")
-	data, err := os.ReadFile(tokenFile)
-	if err != nil {
-		t.Fatalf("failed to read setup_token: %v", err)
-	}
-	if string(data) != token {
-		t.Errorf("setup_token content = %q, want %q", string(data), token)
-	}
-
-	resetFlag := filepath.Join(dataDir, "admin_reset.flag")
-	if _, err := os.Stat(resetFlag); os.IsNotExist(err) {
-		t.Error("admin_reset.flag was not created")
-	}
-}
-
 // ── SetMaintenanceMode disable-when-absent branch ─────────────────────────────
 
 // TestSetMaintenanceMode_DisableWhenNotEnabled verifies that calling

@@ -11,7 +11,7 @@ all are resolved.
 
 ## Pass 1: Security (flagged — design/behavior decisions)
 - [ ] handler CSP: policy still allows `unsafe-inline` for styles/scripts; removing it requires refactoring inline handlers/templates to nonces or hashes (would break current UI until templates migrate)
-- [ ] setup_token stored in plaintext on disk; spec implies hashing — needs a decision on migration/one-time-display flow
+- [x] setup_token plaintext write — FIXED by removal. PART 11 line 1132 forbids storing tokens in plaintext (SHA-256 required). MaintenanceManager.ResetAdminCredentials wrote a plaintext `setup_token` (+ `admin_reset.flag`) "to be read by admin service on startup" — but vidveil has NO admin web UI/accounts (IDEA.md: Operator = None, file-only) and `--maintenance setup` explicitly prints "no admin web UI". The function had no production caller (only its own test) and nothing ever read the files: pure dead template leftover. Deleted the function and its test rather than hashing a token nobody uses — src/server/service/maintenance/maintenance.go
 - [x] metrics query-param token — FIXED (PART 20 specifies `Authorization: Bearer` as the sole auth channel; the `?token=` fallback leaked the secret into access logs and was never in spec — removed, now header-only; test updated to assert 401)
 - [ ] install.sh downloads binary without checksum/signature verification — needs published checksums to verify against
 - [x] audit.log perms — FIXED (spec check corrected the flag: PART 11 mandates 0640, not 0600; code created ALL logs at 0644, so audit.log was world-readable — now 0640, others stay 0644)

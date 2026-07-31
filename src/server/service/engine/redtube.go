@@ -20,8 +20,8 @@ type RedTubeEngine struct {
 	parser *parser.RedTubeParser
 }
 
-// NewRedTubeEngine creates a new RedTube engine
-func NewRedTubeEngine(appConfig *config.AppConfig) *RedTubeEngine {
+// newRedTubeEngine creates a new RedTube engine
+func newRedTubeEngine(appConfig *config.AppConfig) *RedTubeEngine {
 	e := &RedTubeEngine{
 		BaseEngine: NewBaseEngine("redtube", "RedTube", "https://www.redtube.com", 1, appConfig),
 		parser:     parser.NewRedTubeParser(),

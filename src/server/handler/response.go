@@ -55,9 +55,9 @@ func resolveLocale(r *http.Request) string {
 	return i18n.DefaultLocale
 }
 
-// NewSecureCookie creates a cookie with proper security flags per AI.md PART 11
+// newSecureCookie creates a cookie with proper security flags per AI.md PART 11
 // The Secure flag is set when sslEnabled is true
-func NewSecureCookie(name, value, path string, maxAge int, sslEnabled bool) *http.Cookie {
+func newSecureCookie(name, value, path string, maxAge int, sslEnabled bool) *http.Cookie {
 	cookie := &http.Cookie{
 		Name:     name,
 		Value:    value,
@@ -71,9 +71,9 @@ func NewSecureCookie(name, value, path string, maxAge int, sslEnabled bool) *htt
 	return cookie
 }
 
-// NewSecureCookieStrict creates a cookie with SameSite=Strict per AI.md PART 11
+// newSecureCookieStrict creates a cookie with SameSite=Strict per AI.md PART 11
 // Use for sensitive operations like pending 2FA tokens
-func NewSecureCookieStrict(name, value, path string, maxAge int, sslEnabled bool) *http.Cookie {
+func newSecureCookieStrict(name, value, path string, maxAge int, sslEnabled bool) *http.Cookie {
 	cookie := &http.Cookie{
 		Name:     name,
 		Value:    value,
@@ -86,8 +86,8 @@ func NewSecureCookieStrict(name, value, path string, maxAge int, sslEnabled bool
 	return cookie
 }
 
-// DeleteCookie creates a cookie that deletes an existing cookie
-func DeleteCookie(name, path string) *http.Cookie {
+// deleteCookie creates a cookie that deletes an existing cookie
+func deleteCookie(name, path string) *http.Cookie {
 	return &http.Cookie{
 		Name:   name,
 		Value:  "",
@@ -140,9 +140,9 @@ func SendError(w http.ResponseWriter, code string, message string) {
 	w.Write([]byte("\n"))
 }
 
-// SendErrorWithDetails sends an error response including the structured details
+// sendErrorWithDetails sends an error response including the structured details
 // object per AI.md PART 14 (e.g. {"field":"email","rule":"format"}).
-func SendErrorWithDetails(w http.ResponseWriter, code string, message string, details any) {
+func sendErrorWithDetails(w http.ResponseWriter, code string, message string, details any) {
 	status := ErrorCodeToHTTP(code)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -235,7 +235,7 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 	// Inject CSRF token per AI.md PART 16 — server-rendered HTML always provides the
 	// token in template data so POST forms can include the hidden input automatically.
 	if data["CSRFToken"] == nil {
-		data["CSRFToken"] = CSRFTokenFromRequest(r)
+		data["CSRFToken"] = cSRFTokenFromRequest(r)
 	}
 
 	accept := r.Header.Get("Accept")

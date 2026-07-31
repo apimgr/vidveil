@@ -11,8 +11,8 @@ import (
 // XXXYMoviesEngine searches XXXYMovies
 type XXXYMoviesEngine struct{ *BaseEngine }
 
-// NewXXXYMoviesEngine creates a new XXXYMovies engine
-func NewXXXYMoviesEngine(appConfig *config.AppConfig) *XXXYMoviesEngine {
+// newXXXYMoviesEngine creates a new XXXYMovies engine
+func newXXXYMoviesEngine(appConfig *config.AppConfig) *XXXYMoviesEngine {
 	return &XXXYMoviesEngine{NewBaseEngine("xxxymovies", "XXXYMovies", "https://www.xxxymovies.com", 3, appConfig)}
 }
 

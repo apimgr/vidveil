@@ -197,8 +197,8 @@ func GetWindowsServiceAccount(serviceName string) string {
 	return fmt.Sprintf("NT SERVICE\\%s", serviceName)
 }
 
-// IsRunningAsService checks if the current process is running as a Windows service
-func IsRunningAsService() bool {
+// isRunningAsService checks if the current process is running as a Windows service
+func isRunningAsService() bool {
 	// Check if stdin is attached - services don't have stdin
 	fi, err := os.Stdin.Stat()
 	// Probably a service

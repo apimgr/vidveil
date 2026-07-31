@@ -9,7 +9,7 @@ import (
 )
 
 func TestDefaultRetryConfig(t *testing.T) {
-	cfg := DefaultRetryConfig()
+	cfg := defaultRetryConfig()
 
 	if cfg.MaxAttempts != 3 {
 		t.Errorf("Expected MaxAttempts 3, got %d", cfg.MaxAttempts)
@@ -281,7 +281,7 @@ func TestAddJitter(t *testing.T) {
 	}
 }
 
-// TestBackoffNilConfig ensures Backoff works when cfg is nil (uses DefaultRetryConfig).
+// TestBackoffNilConfig ensures Backoff works when cfg is nil (uses defaultRetryConfig).
 func TestBackoffNilConfig(t *testing.T) {
 	// nil cfg must not panic and must return a positive duration
 	d := Backoff(1, nil)

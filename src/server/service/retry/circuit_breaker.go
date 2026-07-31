@@ -257,8 +257,8 @@ type CircuitBreakerRegistry struct {
 	config   *CircuitBreakerConfig
 }
 
-// NewCircuitBreakerRegistry creates a new registry
-func NewCircuitBreakerRegistry(defaultConfig *CircuitBreakerConfig) *CircuitBreakerRegistry {
+// newCircuitBreakerRegistry creates a new registry
+func newCircuitBreakerRegistry(defaultConfig *CircuitBreakerConfig) *CircuitBreakerRegistry {
 	if defaultConfig == nil {
 		defaultConfig = DefaultCircuitBreakerConfig("")
 	}

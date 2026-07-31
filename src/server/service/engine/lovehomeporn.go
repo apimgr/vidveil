@@ -11,8 +11,8 @@ import (
 // LoveHomePornEngine searches LoveHomePorn
 type LoveHomePornEngine struct{ *BaseEngine }
 
-// NewLoveHomePornEngine creates a new LoveHomePorn engine
-func NewLoveHomePornEngine(appConfig *config.AppConfig) *LoveHomePornEngine {
+// newLoveHomePornEngine creates a new LoveHomePorn engine
+func newLoveHomePornEngine(appConfig *config.AppConfig) *LoveHomePornEngine {
 	return &LoveHomePornEngine{NewBaseEngine("lovehomeporn", "LoveHomePorn", "https://lovehomeporn.com", 3, appConfig)}
 }
 

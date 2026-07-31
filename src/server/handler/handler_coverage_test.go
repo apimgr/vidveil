@@ -108,7 +108,7 @@ func TestHasContentRestrictionAck_ValueOne(t *testing.T) {
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/", nil)
-	req.AddCookie(&http.Cookie{Name: ContentRestrictionAckCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: contentRestrictionAckCookieName, Value: "1"})
 	if !h.hasContentRestrictionAck(req) {
 		t.Error("hasContentRestrictionAck should return true for cookie value '1'")
 	}
@@ -119,7 +119,7 @@ func TestHasContentRestrictionAck_OtherValue(t *testing.T) {
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/", nil)
-	req.AddCookie(&http.Cookie{Name: ContentRestrictionAckCookieName, Value: "yes"})
+	req.AddCookie(&http.Cookie{Name: contentRestrictionAckCookieName, Value: "yes"})
 	if h.hasContentRestrictionAck(req) {
 		t.Error("hasContentRestrictionAck should return false for cookie value other than '1'")
 	}
@@ -868,7 +868,7 @@ func TestSetContentRestrictionAckCookie_SetsCookie(t *testing.T) {
 	cookies := rr.Result().Cookies()
 	found := false
 	for _, c := range cookies {
-		if c.Name == ContentRestrictionAckCookieName {
+		if c.Name == contentRestrictionAckCookieName {
 			found = true
 			if c.Value != "1" {
 				t.Errorf("ack cookie value = %q, want 1", c.Value)
@@ -876,7 +876,7 @@ func TestSetContentRestrictionAckCookie_SetsCookie(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("ack cookie %q not set in response", ContentRestrictionAckCookieName)
+		t.Errorf("ack cookie %q not set in response", contentRestrictionAckCookieName)
 	}
 }
 

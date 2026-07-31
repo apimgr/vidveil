@@ -308,13 +308,13 @@ func TestRotatingFileReopen(t *testing.T) {
 	}
 }
 
-// --- NewAccessLogMiddleware + Handler ---
+// --- newAccessLogMiddleware + Handler ---
 
 func TestAccessLogMiddlewareHandler(t *testing.T) {
 	var buf bytes.Buffer
 	l := newInMemoryLogger(LevelDebug, &buf)
 
-	middleware := NewAccessLogMiddleware(l)
+	middleware := newAccessLogMiddleware(l)
 
 	handlerRan := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

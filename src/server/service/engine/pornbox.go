@@ -11,8 +11,8 @@ import (
 // PornboxEngine searches Pornbox
 type PornboxEngine struct{ *BaseEngine }
 
-// NewPornboxEngine creates a new Pornbox engine
-func NewPornboxEngine(appConfig *config.AppConfig) *PornboxEngine {
+// newPornboxEngine creates a new Pornbox engine
+func newPornboxEngine(appConfig *config.AppConfig) *PornboxEngine {
 	return &PornboxEngine{NewBaseEngine("pornbox", "Pornbox", "https://pornbox.com", 4, appConfig)}
 }
 

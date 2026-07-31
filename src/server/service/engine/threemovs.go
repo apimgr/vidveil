@@ -11,8 +11,8 @@ import (
 // ThreeMovsEngine searches 3Movs
 type ThreeMovsEngine struct{ *BaseEngine }
 
-// NewThreeMovsEngine creates a new 3Movs engine
-func NewThreeMovsEngine(appConfig *config.AppConfig) *ThreeMovsEngine {
+// newThreeMovsEngine creates a new 3Movs engine
+func newThreeMovsEngine(appConfig *config.AppConfig) *ThreeMovsEngine {
 	return &ThreeMovsEngine{NewBaseEngine("3movs", "3Movs", "https://www.3movs.com", 3, appConfig)}
 }
 

@@ -19,8 +19,8 @@ func TestSetCustomTerms_NoCustomTerms(t *testing.T) {
 
 	customTerms = nil
 	got := getAllSuggestions()
-	if len(got) != len(SearchSuggestions) {
-		t.Errorf("getAllSuggestions with no custom terms = %d, want %d", len(got), len(SearchSuggestions))
+	if len(got) != len(searchSuggestions) {
+		t.Errorf("getAllSuggestions with no custom terms = %d, want %d", len(got), len(searchSuggestions))
 	}
 }
 
@@ -30,7 +30,7 @@ func TestSetCustomTerms_AddsCustomTerms(t *testing.T) {
 
 	SetCustomTerms([]string{"custom1", "custom2"})
 	got := getAllSuggestions()
-	wantLen := len(SearchSuggestions) + 2
+	wantLen := len(searchSuggestions) + 2
 	if len(got) != wantLen {
 		t.Errorf("getAllSuggestions with 2 custom terms = %d, want %d", len(got), wantLen)
 	}
@@ -43,7 +43,7 @@ func TestSetCustomTerms_ReplacesExistingCustomTerms(t *testing.T) {
 	SetCustomTerms([]string{"first"})
 	SetCustomTerms([]string{"second", "third"})
 	got := getAllSuggestions()
-	wantLen := len(SearchSuggestions) + 2
+	wantLen := len(searchSuggestions) + 2
 	if len(got) != wantLen {
 		t.Errorf("after replacement, getAllSuggestions = %d, want %d", len(got), wantLen)
 	}
@@ -56,8 +56,8 @@ func TestSetCustomTerms_EmptySliceClearsCustom(t *testing.T) {
 	SetCustomTerms([]string{"term"})
 	SetCustomTerms(nil)
 	got := getAllSuggestions()
-	if len(got) != len(SearchSuggestions) {
-		t.Errorf("getAllSuggestions after SetCustomTerms(nil) = %d, want %d", len(got), len(SearchSuggestions))
+	if len(got) != len(searchSuggestions) {
+		t.Errorf("getAllSuggestions after SetCustomTerms(nil) = %d, want %d", len(got), len(searchSuggestions))
 	}
 }
 

@@ -286,10 +286,10 @@ func TestSendError_Maintenance(t *testing.T) {
 
 // ---- Cookie helpers ----
 
-// NewSecureCookie must set Name, Value, Path, MaxAge, HttpOnly=true, SameSite=Lax.
+// newSecureCookie must set Name, Value, Path, MaxAge, HttpOnly=true, SameSite=Lax.
 // When sslEnabled=false the Secure flag must be false.
 func TestNewSecureCookie_Fields(t *testing.T) {
-	c := NewSecureCookie("session", "abc123", "/", 3600, false)
+	c := newSecureCookie("session", "abc123", "/", 3600, false)
 
 	if c.Name != "session" {
 		t.Errorf("Name = %q, want session", c.Name)
@@ -316,15 +316,15 @@ func TestNewSecureCookie_Fields(t *testing.T) {
 
 // When sslEnabled=true, Secure must be true.
 func TestNewSecureCookie_SecureFlag(t *testing.T) {
-	c := NewSecureCookie("tok", "x", "/", 60, true)
+	c := newSecureCookie("tok", "x", "/", 60, true)
 	if !c.Secure {
 		t.Error("Secure must be true when sslEnabled=true")
 	}
 }
 
-// NewSecureCookieStrict must use SameSite=Strict.
+// newSecureCookieStrict must use SameSite=Strict.
 func TestNewSecureCookieStrict_SameSite(t *testing.T) {
-	c := NewSecureCookieStrict("tok", "x", "/admin", 300, false)
+	c := newSecureCookieStrict("tok", "x", "/admin", 300, false)
 
 	if c.SameSite != http.SameSiteStrictMode {
 		t.Errorf("SameSite = %v, want SameSiteStrictMode", c.SameSite)
@@ -334,9 +334,9 @@ func TestNewSecureCookieStrict_SameSite(t *testing.T) {
 	}
 }
 
-// DeleteCookie must produce MaxAge=-1 and an empty value.
+// deleteCookie must produce MaxAge=-1 and an empty value.
 func TestDeleteCookie_Fields(t *testing.T) {
-	c := DeleteCookie("session", "/")
+	c := deleteCookie("session", "/")
 
 	if c.Name != "session" {
 		t.Errorf("Name = %q, want session", c.Name)

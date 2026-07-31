@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 28: Coverage tests for pure-output cmd functions.
-// Covers PrintSearchCommandHelp, OutputSearchResultsAs*, PrintProbeCommandHelp,
-// OutputProbeResultsAs*, RunShellCommand, PrintShellCommandHelp,
+// Covers printSearchCommandHelp, OutputSearchResultsAs*, printProbeCommandHelp,
+// OutputProbeResultsAs*, RunShellCommand, printShellCommandHelp,
 // OutputShellCompletionScript, OutputShellInitSnippet, and all shell-specific
 // completion script generators. No network calls are made.
 package cmd
@@ -66,7 +66,7 @@ func makeProbeResults() []EngineProbeResult {
 // ── search.go output functions ───────────────────────────────────────────────
 
 func TestPrintSearchCommandHelp_NoPanic(t *testing.T) {
-	PrintSearchCommandHelp()
+	printSearchCommandHelp()
 }
 
 func TestOutputSearchResultsAsJSON_NoPanic(t *testing.T) {
@@ -114,7 +114,7 @@ func TestOutputSearchResultsAsTable_Empty_NoPanic(t *testing.T) {
 // ── probe.go output functions ─────────────────────────────────────────────────
 
 func TestPrintProbeCommandHelp_NoPanic(t *testing.T) {
-	PrintProbeCommandHelp()
+	printProbeCommandHelp()
 }
 
 func TestOutputProbeResultsAsJSON_NoPanic(t *testing.T) {
@@ -250,7 +250,7 @@ func TestRunShellCommand_Unknown_ReturnsError(t *testing.T) {
 }
 
 func TestPrintShellCommandHelp_NoPanic(t *testing.T) {
-	PrintShellCommandHelp()
+	printShellCommandHelp()
 }
 
 func TestOutputShellCompletionScript_Bash_NoPanic(t *testing.T) {

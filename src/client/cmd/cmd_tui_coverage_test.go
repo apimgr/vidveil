@@ -12,7 +12,7 @@ import (
 
 // newTestTUIModel creates a TUIModel for testing.
 func newTestTUIModel() TUIModel {
-	return CreateInitialTUIModel()
+	return createInitialTUIModel()
 }
 
 // ── TUIModel.Update — key messages ───────────────────────────────────────────

@@ -17,8 +17,8 @@ type XNXXEngine struct {
 	parser *parser.XNXXParser
 }
 
-// NewXNXXEngine creates a new XNXX engine
-func NewXNXXEngine(appConfig *config.AppConfig) *XNXXEngine {
+// newXNXXEngine creates a new XNXX engine
+func newXNXXEngine(appConfig *config.AppConfig) *XNXXEngine {
 	e := &XNXXEngine{
 		BaseEngine: NewBaseEngine("xnxx", "XNXX", "https://www.xnxx.com", 1, appConfig),
 		parser:     parser.NewXNXXParser(),

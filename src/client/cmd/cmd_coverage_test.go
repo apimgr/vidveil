@@ -2,7 +2,7 @@
 // Additional coverage tests for pure-logic functions in the cmd package.
 // Targets: TruncateSearchResultText, compareCLIVersions, cliReleaseBinaryName,
 // DetectCurrentShellType, OutputDataAsJSON/YAML, PrintCLIVersionInfo,
-// IsServerConfigured, GetCLIHelpServerDefault, PrintConnectionWarning,
+// IsServerConfigured, GetCLIHelpServerDefault, printConnectionWarning,
 // CheckServerConnection (nil guard), and various output helpers.
 package cmd
 
@@ -273,9 +273,9 @@ func TestCheckServerConnection_NilClientReturnsFalse(t *testing.T) {
 	}
 }
 
-// --- PrintConnectionWarning ---
+// --- printConnectionWarning ---
 
-// PrintConnectionWarning dereferences cliConfig, so we must provide a non-nil
+// printConnectionWarning dereferences cliConfig, so we must provide a non-nil
 // config. We capture stderr output via the function's fmt.Fprintf(os.Stderr)
 // by redirecting — but since captureStdoutForTest only redirects stdout, we
 // just verify no panic occurs.
@@ -284,7 +284,7 @@ func TestPrintConnectionWarning_NoPanic(t *testing.T) {
 	t.Cleanup(func() { cliConfig = origConfig })
 	cliConfig = &CLIConfig{}
 	cliConfig.Server.Address = "http://example.com"
-	PrintConnectionWarning(fmt.Errorf("connection refused"))
+	printConnectionWarning(fmt.Errorf("connection refused"))
 }
 
 func TestPrintConnectionWarning_NilError_NoPanic(t *testing.T) {
@@ -292,7 +292,7 @@ func TestPrintConnectionWarning_NilError_NoPanic(t *testing.T) {
 	t.Cleanup(func() { cliConfig = origConfig })
 	cliConfig = &CLIConfig{}
 	cliConfig.Server.Address = "http://example.com"
-	PrintConnectionWarning(nil)
+	printConnectionWarning(nil)
 }
 
 func TestPrintConnectionWarning_WithDebug_CoversDebugLine(t *testing.T) {
@@ -306,5 +306,5 @@ func TestPrintConnectionWarning_WithDebug_CoversDebugLine(t *testing.T) {
 	cliConfig.Server.Address = "http://example.com"
 	debugModeEnabled = true
 	// With debugModeEnabled=true and non-nil error → covers line 1053
-	PrintConnectionWarning(fmt.Errorf("connection refused"))
+	printConnectionWarning(fmt.Errorf("connection refused"))
 }

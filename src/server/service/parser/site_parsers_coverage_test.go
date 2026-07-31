@@ -146,7 +146,7 @@ func TestRedTubeParse_Valid(t *testing.T) {
 
 // No <a> tag → no href → Parse returns nil.
 func TestEpornerParse_NoLink(t *testing.T) {
-	p := NewEpornerParser()
+	p := newEpornerParser()
 	sel := newDoc(`<div class="mb"><span>nothing</span></div>`).Find("div.mb")
 	if p.Parse(sel) != nil {
 		t.Error("EpornerParser.Parse: expected nil when no href present")
@@ -155,7 +155,7 @@ func TestEpornerParse_NoLink(t *testing.T) {
 
 // Valid minimal HTML with an anchor that has title and href yields a non-nil VideoItem.
 func TestEpornerParse_Valid(t *testing.T) {
-	p := NewEpornerParser()
+	p := newEpornerParser()
 	html := `<div class="mb">
 		<a href="/video/ep123/" title="My Eporner Video">
 			<img data-src="thumb.jpg">

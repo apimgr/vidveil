@@ -11,8 +11,8 @@ import (
 // GotPornEngine searches GotPorn
 type GotPornEngine struct{ *BaseEngine }
 
-// NewGotPornEngine creates a new GotPorn engine
-func NewGotPornEngine(appConfig *config.AppConfig) *GotPornEngine {
+// newGotPornEngine creates a new GotPorn engine
+func newGotPornEngine(appConfig *config.AppConfig) *GotPornEngine {
 	return &GotPornEngine{NewBaseEngine("gotporn", "GotPorn", "https://www.gotporn.com", 3, appConfig)}
 }
 

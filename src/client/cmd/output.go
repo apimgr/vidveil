@@ -24,8 +24,8 @@ func OutputDataAsYAML(outputData interface{}) error {
 	return yamlEncoder.Encode(outputData)
 }
 
-// OutputDataAsCSV writes a CSV header row followed by data rows to stdout.
-func OutputDataAsCSV(headerRow []string, dataRows [][]string) error {
+// outputDataAsCSV writes a CSV header row followed by data rows to stdout.
+func outputDataAsCSV(headerRow []string, dataRows [][]string) error {
 	csvWriter := csv.NewWriter(os.Stdout)
 	if err := csvWriter.Write(headerRow); err != nil {
 		return err

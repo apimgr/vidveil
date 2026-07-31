@@ -307,7 +307,7 @@ func TestXNXXParse_PremiumContent_ReturnsNil(t *testing.T) {
 // Link has no "title" attribute — title comes from .mbtit a text instead.
 // Covers eporner.go:37-40.
 func TestEpornerParse_TitleFromMbtit(t *testing.T) {
-	p := NewEpornerParser()
+	p := newEpornerParser()
 	html := `<div class="mb">
 		<a href="/video/ep456/">
 			<img src="thumb.jpg">
@@ -326,7 +326,7 @@ func TestEpornerParse_TitleFromMbtit(t *testing.T) {
 // No title from link attr or .mbtit → return nil.
 // Covers eporner.go:41-43.
 func TestEpornerParse_NoTitle_ReturnsNil(t *testing.T) {
-	p := NewEpornerParser()
+	p := newEpornerParser()
 	html := `<div class="mb">
 		<a href="/video/ep789/">
 			<img src="thumb.jpg">

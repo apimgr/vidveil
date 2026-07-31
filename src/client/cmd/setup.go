@@ -136,14 +136,14 @@ func (m SetupWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m SetupWizardModel) handleEnterKey() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case SetupStateServerURL:
-		if err := ValidateCLIServerURL(m.serverURL); err != nil {
+		if err := validateCLIServerURL(m.serverURL); err != nil {
 			m.errorMessage = fmt.Sprintf("Invalid server URL: %v", err)
 			return m, nil
 		}
 		m.errorMessage = ""
 		m.state = SetupStateTestConnection
 		m.statusMessage = "Testing connection..."
-		return m, TestServerConnection(m.serverURL)
+		return m, testServerConnection(m.serverURL)
 
 	case SetupStateToken:
 		// Token is optional, proceed to save
@@ -252,7 +252,7 @@ func (m SetupWizardModel) View() string {
 	case SetupStateComplete:
 		viewBuilder.WriteString(successStyle.Render("  Setup complete!\n\n"))
 		viewBuilder.WriteString(fmt.Sprintf("    Server: %s\n", m.serverURL))
-		viewBuilder.WriteString(fmt.Sprintf("    Config: %s\n", GetCLIConfigFilePath()))
+		viewBuilder.WriteString(fmt.Sprintf("    Config: %s\n", getCLIConfigFilePath()))
 		if m.apiToken != "" {
 			viewBuilder.WriteString(fmt.Sprintf("    Token:  %s\n", path.TokenFile()))
 		}
@@ -281,9 +281,9 @@ func (m SetupWizardModel) View() string {
 	return viewBuilder.String()
 }
 
-// TestServerConnection tests connection to the server
+// testServerConnection tests connection to the server
 // Per AI.md PART 1: Function names MUST reveal intent
-func TestServerConnection(serverURL string) tea.Cmd {
+func testServerConnection(serverURL string) tea.Cmd {
 	return func() tea.Msg {
 		// Create temporary client for testing
 		testClient := api.NewAPIClient(serverURL, "", SetupTestConnectionTimeoutSecs, "v1")
@@ -321,7 +321,7 @@ func SaveSetupWizardConfig(serverURL, token string, saveToFile bool) error {
 	}
 
 	// Save config file
-	configFilePath := GetCLIConfigFilePath()
+	configFilePath := getCLIConfigFilePath()
 	var fileCLIConfig CLIConfig
 	if data, err := os.ReadFile(configFilePath); err == nil {
 		// Ignore unmarshal errors - start fresh if config is invalid
@@ -340,13 +340,13 @@ func SaveSetupWizardConfig(serverURL, token string, saveToFile bool) error {
 		fileCLIConfig.Output.Color = "auto"
 	}
 
-	if err := WriteCLIConfigFile(fileCLIConfig, configFilePath); err != nil {
+	if err := writeCLIConfigFile(fileCLIConfig, configFilePath); err != nil {
 		return err
 	}
 
 	// Save token to separate file if provided
 	if token != "" {
-		if err := WriteCLIDefaultTokenFile(token); err != nil {
+		if err := writeCLIDefaultTokenFile(token); err != nil {
 			return err
 		}
 	}
@@ -354,10 +354,10 @@ func SaveSetupWizardConfig(serverURL, token string, saveToFile bool) error {
 	return nil
 }
 
-// RunSetupWizard runs the setup wizard TUI
+// runSetupWizard runs the setup wizard TUI
 // Per AI.md PART 32: CLI First-Run Flow
 // Per AI.md PART 1: Function names MUST reveal intent
-func RunSetupWizard() error {
+func runSetupWizard() error {
 	wizardProgram := tea.NewProgram(CreateSetupWizardModel())
 	finalModel, err := wizardProgram.Run()
 	if err != nil {
@@ -382,7 +382,7 @@ func IsServerConfigured() bool {
 	}
 
 	// Check environment variable
-	if GetCLIServerAddressFromEnv() != "" {
+	if getCLIServerAddressFromEnv() != "" {
 		return true
 	}
 
@@ -396,5 +396,5 @@ func EnsureServerConfigured() error {
 	if IsServerConfigured() {
 		return nil
 	}
-	return RunSetupWizard()
+	return runSetupWizard()
 }

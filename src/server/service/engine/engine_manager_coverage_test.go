@@ -2,7 +2,7 @@
 // AI.md PART 28: Coverage tests for engine manager methods that have no tests yet.
 // Tests Search, DebugSearch, SearchStreamWithOperators on an empty EngineManager
 // (no engines initialised) so no network calls are made.
-// Also covers DebugLogEngineResponse, DebugLogEngineParseResult, ListEnginesWithHealth,
+// Also covers debugLogEngineResponse, debugLogEngineParseResult, ListEnginesWithHealth,
 // SpellCorrect, EnabledCount, GetFeatures, and createHTTPClient via GetClient.
 package engine
 

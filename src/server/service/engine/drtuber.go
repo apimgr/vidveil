@@ -11,8 +11,8 @@ import (
 // DrTuberEngine searches DrTuber
 type DrTuberEngine struct{ *BaseEngine }
 
-// NewDrTuberEngine creates a new DrTuber engine
-func NewDrTuberEngine(appConfig *config.AppConfig) *DrTuberEngine {
+// newDrTuberEngine creates a new DrTuber engine
+func newDrTuberEngine(appConfig *config.AppConfig) *DrTuberEngine {
 	return &DrTuberEngine{NewBaseEngine("drtuber", "DrTuber", "https://www.drtuber.com", 3, appConfig)}
 }
 

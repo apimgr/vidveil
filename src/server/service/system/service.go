@@ -32,12 +32,12 @@ type ServiceManager struct {
 // Per AI.md PART 24: Uses {project_org} and {internal_name} for paths
 func NewServiceManager(appName, binaryPath, configDir, dataDir string) *ServiceManager {
 	// Default to apimgr org and appName as internal name
-	return NewServiceManagerWithOrg(appName, "apimgr", appName, binaryPath, configDir, dataDir)
+	return newServiceManagerWithOrg(appName, "apimgr", appName, binaryPath, configDir, dataDir)
 }
 
-// NewServiceManagerWithOrg creates a service manager with explicit org/internal names
+// newServiceManagerWithOrg creates a service manager with explicit org/internal names
 // Per AI.md PART 24: plist_name = io.github.{project_org}.{internal_name}
-func NewServiceManagerWithOrg(appName, projectOrg, internalName, binaryPath, configDir, dataDir string) *ServiceManager {
+func newServiceManagerWithOrg(appName, projectOrg, internalName, binaryPath, configDir, dataDir string) *ServiceManager {
 	return &ServiceManager{
 		appName:      appName,
 		internalName: internalName,

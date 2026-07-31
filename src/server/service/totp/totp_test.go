@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-// Tests for the totp package: NewTOTPService, GenerateSecret, GenerateBackupCodes,
+// Tests for the totp package: newTOTPService, GenerateSecret, GenerateBackupCodes,
 // GetProvisioningURI, ValidateCode, ValidateBackupCode, generateCode, Setup,
-// and DefaultTOTPConfig.
+// and defaultTOTPConfig.
 package totp
 
 import (
@@ -12,17 +12,17 @@ import (
 	"time"
 )
 
-// ---- NewTOTPService ----
+// ---- newTOTPService ----
 
 func TestNewTOTPServiceNonNil(t *testing.T) {
-	svc := NewTOTPService("TestIssuer")
+	svc := newTOTPService("TestIssuer")
 	if svc == nil {
 		t.Fatal("expected non-nil TOTPService")
 	}
 }
 
 func TestNewTOTPServiceStoresIssuer(t *testing.T) {
-	svc := NewTOTPService("MyApp")
+	svc := newTOTPService("MyApp")
 	uri := svc.GetProvisioningURI("user@example.com", "SOMEBASE32SECRET")
 	if !strings.Contains(uri, "MyApp") {
 		t.Errorf("provisioning URI does not contain issuer: %q", uri)
@@ -32,7 +32,7 @@ func TestNewTOTPServiceStoresIssuer(t *testing.T) {
 // ---- GenerateSecret ----
 
 func TestGenerateSecretNonEmpty(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	secret, err := svc.GenerateSecret()
 	if err != nil {
 		t.Fatalf("GenerateSecret returned error: %v", err)
@@ -43,7 +43,7 @@ func TestGenerateSecretNonEmpty(t *testing.T) {
 }
 
 func TestGenerateSecretValidBase32NoPadding(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	secret, err := svc.GenerateSecret()
 	if err != nil {
 		t.Fatalf("GenerateSecret returned error: %v", err)
@@ -63,7 +63,7 @@ func TestGenerateSecretValidBase32NoPadding(t *testing.T) {
 }
 
 func TestGenerateSecretTwoCallsDiffer(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	s1, err1 := svc.GenerateSecret()
 	s2, err2 := svc.GenerateSecret()
 	if err1 != nil || err2 != nil {
@@ -77,7 +77,7 @@ func TestGenerateSecretTwoCallsDiffer(t *testing.T) {
 // ---- GenerateBackupCodes ----
 
 func TestGenerateBackupCodesReturnsTen(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	codes, err := svc.GenerateBackupCodes()
 	if err != nil {
 		t.Fatalf("GenerateBackupCodes returned error: %v", err)
@@ -88,7 +88,7 @@ func TestGenerateBackupCodesReturnsTen(t *testing.T) {
 }
 
 func TestGenerateBackupCodesFormat(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	codes, err := svc.GenerateBackupCodes()
 	if err != nil {
 		t.Fatalf("GenerateBackupCodes returned error: %v", err)
@@ -102,7 +102,7 @@ func TestGenerateBackupCodesFormat(t *testing.T) {
 }
 
 func TestGenerateBackupCodesAllUnique(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	codes, err := svc.GenerateBackupCodes()
 	if err != nil {
 		t.Fatalf("GenerateBackupCodes returned error: %v", err)
@@ -117,7 +117,7 @@ func TestGenerateBackupCodesAllUnique(t *testing.T) {
 }
 
 func TestGenerateBackupCodesTwoCallsDiffer(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	codes1, err1 := svc.GenerateBackupCodes()
 	codes2, err2 := svc.GenerateBackupCodes()
 	if err1 != nil || err2 != nil {
@@ -139,7 +139,7 @@ func TestGenerateBackupCodesTwoCallsDiffer(t *testing.T) {
 // ---- GetProvisioningURI ----
 
 func TestGetProvisioningURIScheme(t *testing.T) {
-	svc := NewTOTPService("ExampleApp")
+	svc := newTOTPService("ExampleApp")
 	secret := "JBSWY3DPEHPK3PXP"
 	uri := svc.GetProvisioningURI("alice@example.com", secret)
 	if !strings.HasPrefix(uri, "otpauth://totp/") {
@@ -148,7 +148,7 @@ func TestGetProvisioningURIScheme(t *testing.T) {
 }
 
 func TestGetProvisioningURIContainsIssuer(t *testing.T) {
-	svc := NewTOTPService("ExampleApp")
+	svc := newTOTPService("ExampleApp")
 	uri := svc.GetProvisioningURI("alice@example.com", "JBSWY3DPEHPK3PXP")
 	if !strings.Contains(uri, "ExampleApp") {
 		t.Errorf("URI missing issuer: %q", uri)
@@ -156,7 +156,7 @@ func TestGetProvisioningURIContainsIssuer(t *testing.T) {
 }
 
 func TestGetProvisioningURIContainsAccount(t *testing.T) {
-	svc := NewTOTPService("ExampleApp")
+	svc := newTOTPService("ExampleApp")
 	uri := svc.GetProvisioningURI("alice@example.com", "JBSWY3DPEHPK3PXP")
 	if !strings.Contains(uri, "alice@example.com") {
 		t.Errorf("URI missing accountName: %q", uri)
@@ -164,7 +164,7 @@ func TestGetProvisioningURIContainsAccount(t *testing.T) {
 }
 
 func TestGetProvisioningURIContainsSecret(t *testing.T) {
-	svc := NewTOTPService("ExampleApp")
+	svc := newTOTPService("ExampleApp")
 	secret := "JBSWY3DPEHPK3PXP"
 	uri := svc.GetProvisioningURI("alice@example.com", secret)
 	if !strings.Contains(uri, secret) {
@@ -173,7 +173,7 @@ func TestGetProvisioningURIContainsSecret(t *testing.T) {
 }
 
 func TestGetProvisioningURIContainsAlgorithm(t *testing.T) {
-	svc := NewTOTPService("ExampleApp")
+	svc := newTOTPService("ExampleApp")
 	uri := svc.GetProvisioningURI("alice@example.com", "JBSWY3DPEHPK3PXP")
 	if !strings.Contains(uri, "algorithm=SHA1") {
 		t.Errorf("URI missing algorithm=SHA1: %q", uri)
@@ -181,7 +181,7 @@ func TestGetProvisioningURIContainsAlgorithm(t *testing.T) {
 }
 
 func TestGetProvisioningURIContainsDigitsAndPeriod(t *testing.T) {
-	svc := NewTOTPService("ExampleApp")
+	svc := newTOTPService("ExampleApp")
 	uri := svc.GetProvisioningURI("alice@example.com", "JBSWY3DPEHPK3PXP")
 	if !strings.Contains(uri, "digits=6") {
 		t.Errorf("URI missing digits=6: %q", uri)
@@ -194,7 +194,7 @@ func TestGetProvisioningURIContainsDigitsAndPeriod(t *testing.T) {
 // ---- ValidateCode ----
 
 func TestValidateCodeCurrentTimeReturnsTrue(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	secret, err := svc.GenerateSecret()
 	if err != nil {
 		t.Fatalf("GenerateSecret error: %v", err)
@@ -211,7 +211,7 @@ func TestValidateCodeCurrentTimeReturnsTrue(t *testing.T) {
 }
 
 func TestValidateCodeWrongCodeReturnsFalse(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	secret, err := svc.GenerateSecret()
 	if err != nil {
 		t.Fatalf("GenerateSecret error: %v", err)
@@ -224,7 +224,7 @@ func TestValidateCodeWrongCodeReturnsFalse(t *testing.T) {
 }
 
 func TestValidateCodeEmptyCodeReturnsFalse(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	secret, err := svc.GenerateSecret()
 	if err != nil {
 		t.Fatalf("GenerateSecret error: %v", err)
@@ -235,7 +235,7 @@ func TestValidateCodeEmptyCodeReturnsFalse(t *testing.T) {
 }
 
 func TestValidateCodePreviousWindowAccepted(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	secret, err := svc.GenerateSecret()
 	if err != nil {
 		t.Fatalf("GenerateSecret error: %v", err)
@@ -249,7 +249,7 @@ func TestValidateCodePreviousWindowAccepted(t *testing.T) {
 }
 
 func TestValidateCodeFutureWindowAccepted(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	secret, err := svc.GenerateSecret()
 	if err != nil {
 		t.Fatalf("GenerateSecret error: %v", err)
@@ -265,42 +265,42 @@ func TestValidateCodeFutureWindowAccepted(t *testing.T) {
 // ---- ValidateBackupCode ----
 
 func TestValidateBackupCodeExactMatch(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	if !svc.ValidateBackupCode("ABCD-EFGH", []string{"ABCD-EFGH"}) {
 		t.Error("expected true for exact match")
 	}
 }
 
 func TestValidateBackupCodeCaseInsensitive(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	if !svc.ValidateBackupCode("abcd-efgh", []string{"ABCD-EFGH"}) {
 		t.Error("expected true for lowercase input against uppercase stored code")
 	}
 }
 
 func TestValidateBackupCodeNoDashes(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	if !svc.ValidateBackupCode("ABCDEFGH", []string{"ABCD-EFGH"}) {
 		t.Error("expected true when dashes are omitted from input")
 	}
 }
 
 func TestValidateBackupCodeNotInList(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	if svc.ValidateBackupCode("WXYZ-1234", []string{"ABCD-EFGH", "IJKL-MNOP"}) {
 		t.Error("expected false for code not in list")
 	}
 }
 
 func TestValidateBackupCodeEmptyList(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	if svc.ValidateBackupCode("ABCD-EFGH", []string{}) {
 		t.Error("expected false for empty validCodes list")
 	}
 }
 
 func TestValidateBackupCodeNilList(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	if svc.ValidateBackupCode("ABCD-EFGH", nil) {
 		t.Error("expected false for nil validCodes list")
 	}
@@ -309,7 +309,7 @@ func TestValidateBackupCodeNilList(t *testing.T) {
 // ---- generateCode (unexported, accessible from same package) ----
 
 func TestGenerateCodeReturnsSixDigits(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	// GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ is the base32 of "12345678901234567890" (no padding)
 	secret := "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 	code := svc.generateCode(secret, 1)
@@ -329,7 +329,7 @@ func TestGenerateCodeEmptySecretStillProducesCode(t *testing.T) {
 	// base32 decoding of "" succeeds with an empty key; HMAC-SHA1 with a zero-length
 	// key still produces a deterministic digest, so generateCode returns a 6-digit code.
 	// The result must be a 6-digit string, not a panic or a crash.
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	code := svc.generateCode("", 1)
 	re := regexp.MustCompile(`^\d{6}$`)
 	if !re.MatchString(code) {
@@ -338,7 +338,7 @@ func TestGenerateCodeEmptySecretStillProducesCode(t *testing.T) {
 }
 
 func TestGenerateCodeInvalidBase32ReturnsEmpty(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	// "!!!" is not valid base32
 	code := svc.generateCode("!!!", 1)
 	if code != "" {
@@ -347,7 +347,7 @@ func TestGenerateCodeInvalidBase32ReturnsEmpty(t *testing.T) {
 }
 
 func TestGenerateCodeDifferentCountersDifferentCodes(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	secret := "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 	code1 := svc.generateCode(secret, 1000)
 	code2 := svc.generateCode(secret, 1001)
@@ -360,7 +360,7 @@ func TestGenerateCodeDifferentCountersDifferentCodes(t *testing.T) {
 // ---- Setup ----
 
 func TestSetupNonNil(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	data, err := svc.Setup("alice@example.com")
 	if err != nil {
 		t.Fatalf("Setup returned error: %v", err)
@@ -371,7 +371,7 @@ func TestSetupNonNil(t *testing.T) {
 }
 
 func TestSetupSecretNonEmpty(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	data, err := svc.Setup("alice@example.com")
 	if err != nil {
 		t.Fatalf("Setup returned error: %v", err)
@@ -382,7 +382,7 @@ func TestSetupSecretNonEmpty(t *testing.T) {
 }
 
 func TestSetupProvisionURIScheme(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	data, err := svc.Setup("alice@example.com")
 	if err != nil {
 		t.Fatalf("Setup returned error: %v", err)
@@ -393,7 +393,7 @@ func TestSetupProvisionURIScheme(t *testing.T) {
 }
 
 func TestSetupBackupCodesCount(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	data, err := svc.Setup("alice@example.com")
 	if err != nil {
 		t.Fatalf("Setup returned error: %v", err)
@@ -404,7 +404,7 @@ func TestSetupBackupCodesCount(t *testing.T) {
 }
 
 func TestSetupSecretMatchesProvisionURI(t *testing.T) {
-	svc := NewTOTPService("issuer")
+	svc := newTOTPService("issuer")
 	data, err := svc.Setup("alice@example.com")
 	if err != nil {
 		t.Fatalf("Setup returned error: %v", err)
@@ -415,24 +415,24 @@ func TestSetupSecretMatchesProvisionURI(t *testing.T) {
 	}
 }
 
-// ---- DefaultTOTPConfig ----
+// ---- defaultTOTPConfig ----
 
 func TestDefaultTOTPConfigEnabled(t *testing.T) {
-	cfg := DefaultTOTPConfig()
+	cfg := defaultTOTPConfig()
 	if !cfg.Enabled {
 		t.Error("expected Enabled=true in default TOTP config")
 	}
 }
 
 func TestDefaultTOTPConfigNotRequired(t *testing.T) {
-	cfg := DefaultTOTPConfig()
+	cfg := defaultTOTPConfig()
 	if cfg.Required {
 		t.Error("expected Required=false in default TOTP config")
 	}
 }
 
 func TestDefaultTOTPConfigRememberDeviceDays(t *testing.T) {
-	cfg := DefaultTOTPConfig()
+	cfg := defaultTOTPConfig()
 	if cfg.RememberDeviceDays != 30 {
 		t.Errorf("expected RememberDeviceDays=30, got %d", cfg.RememberDeviceDays)
 	}

@@ -93,8 +93,8 @@ type Translator struct {
 	mu           sync.RWMutex
 }
 
-// NewTranslator creates a new translator
-func NewTranslator() *Translator {
+// newTranslator creates a new translator
+func newTranslator() *Translator {
 	t := &Translator{
 		translations: make(map[string]map[string]string),
 		fallback:     DefaultLocale,
@@ -508,7 +508,7 @@ var translatorOnce sync.Once
 // GlobalTranslator returns the global translator instance
 func GlobalTranslator() *Translator {
 	translatorOnce.Do(func() {
-		globalTranslator = NewTranslator()
+		globalTranslator = newTranslator()
 	})
 	return globalTranslator
 }

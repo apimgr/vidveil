@@ -1108,8 +1108,8 @@ type AccessLogMiddleware struct {
 	logger *AppLogger
 }
 
-// NewAccessLogMiddleware creates access log middleware
-func NewAccessLogMiddleware(logger *AppLogger) *AccessLogMiddleware {
+// newAccessLogMiddleware creates access log middleware
+func newAccessLogMiddleware(logger *AppLogger) *AccessLogMiddleware {
 	return &AccessLogMiddleware{logger: logger}
 }
 

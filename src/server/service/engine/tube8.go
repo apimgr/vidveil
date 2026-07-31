@@ -11,8 +11,8 @@ import (
 // Tube8Engine searches Tube8
 type Tube8Engine struct{ *BaseEngine }
 
-// NewTube8Engine creates a new Tube8 engine
-func NewTube8Engine(appConfig *config.AppConfig) *Tube8Engine {
+// newTube8Engine creates a new Tube8 engine
+func newTube8Engine(appConfig *config.AppConfig) *Tube8Engine {
 	return &Tube8Engine{NewBaseEngine("tube8", "Tube8", "https://www.tube8.com", 4, appConfig)}
 }
 

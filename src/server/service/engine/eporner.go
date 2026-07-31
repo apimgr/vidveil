@@ -37,8 +37,8 @@ type epornerVideo struct {
 	DefaultThumb map[string]interface{} `json:"default_thumb"`
 }
 
-// NewEpornerEngine creates a new Eporner engine
-func NewEpornerEngine(appConfig *config.AppConfig) *EpornerEngine {
+// newEpornerEngine creates a new Eporner engine
+func newEpornerEngine(appConfig *config.AppConfig) *EpornerEngine {
 	e := &EpornerEngine{
 		BaseEngine: NewBaseEngine("eporner", "Eporner", "https://www.eporner.com", 2, appConfig),
 	}

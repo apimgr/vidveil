@@ -11,8 +11,8 @@ import (
 // HqpornerEngine searches Hqporner
 type HqpornerEngine struct{ *BaseEngine }
 
-// NewHqpornerEngine creates a new Hqporner engine
-func NewHqpornerEngine(appConfig *config.AppConfig) *HqpornerEngine {
+// newHqpornerEngine creates a new Hqporner engine
+func newHqpornerEngine(appConfig *config.AppConfig) *HqpornerEngine {
 	return &HqpornerEngine{NewBaseEngine("hqporner", "Hqporner", "https://hqporner.com", 4, appConfig)}
 }
 

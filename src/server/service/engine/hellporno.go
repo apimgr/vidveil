@@ -11,8 +11,8 @@ import (
 // HellPornoEngine searches HellPorno
 type HellPornoEngine struct{ *BaseEngine }
 
-// NewHellPornoEngine creates a new HellPorno engine
-func NewHellPornoEngine(appConfig *config.AppConfig) *HellPornoEngine {
+// newHellPornoEngine creates a new HellPorno engine
+func newHellPornoEngine(appConfig *config.AppConfig) *HellPornoEngine {
 	return &HellPornoEngine{NewBaseEngine("hellporno", "HellPorno", "https://hellporno.com", 3, appConfig)}
 }
 

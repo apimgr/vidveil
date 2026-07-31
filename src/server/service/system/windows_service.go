@@ -12,8 +12,8 @@ import (
 	"golang.org/x/sys/windows/svc"
 )
 
-// WindowsServiceName is the service name for Windows
-const WindowsServiceName = "vidveil"
+// windowsServiceName is the service name for Windows
+const windowsServiceName = "vidveil"
 
 // windowsService implements the Windows Service interface
 type windowsService struct {
@@ -28,7 +28,7 @@ func RunAsWindowsService(runFunc func() error) error {
 		stopChan: make(chan struct{}),
 		runFunc:  runFunc,
 	}
-	return svc.Run(WindowsServiceName, ws)
+	return svc.Run(windowsServiceName, ws)
 }
 
 // Execute implements svc.Handler interface

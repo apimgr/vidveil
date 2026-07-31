@@ -11,8 +11,8 @@ import (
 // PornFlipEngine searches PornFlip
 type PornFlipEngine struct{ *BaseEngine }
 
-// NewPornFlipEngine creates a new PornFlip engine
-func NewPornFlipEngine(appConfig *config.AppConfig) *PornFlipEngine {
+// newPornFlipEngine creates a new PornFlip engine
+func newPornFlipEngine(appConfig *config.AppConfig) *PornFlipEngine {
 	return &PornFlipEngine{NewBaseEngine("pornflip", "PornFlip", "https://www.pornflip.com", 3, appConfig)}
 }
 

@@ -13,8 +13,8 @@ import (
 // YouJizzEngine searches YouJizz
 type YouJizzEngine struct{ *BaseEngine }
 
-// NewYouJizzEngine creates a new YouJizz engine
-func NewYouJizzEngine(appConfig *config.AppConfig) *YouJizzEngine {
+// newYouJizzEngine creates a new YouJizz engine
+func newYouJizzEngine(appConfig *config.AppConfig) *YouJizzEngine {
 	return &YouJizzEngine{NewBaseEngine("youjizz", "YouJizz", "https://www.youjizz.com", 3, appConfig)}
 }
 

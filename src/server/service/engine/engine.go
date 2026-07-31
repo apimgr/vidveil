@@ -741,10 +741,10 @@ func logDebug(message string, fields map[string]interface{}) {
 	log.Printf("[DEBUG ENGINE] %s %v", message, fields)
 }
 
-// DebugLogEngineResponse logs response metadata when --debug is enabled.
+// debugLogEngineResponse logs response metadata when --debug is enabled.
 // Per AI.md PART 11 debug logs must be raw text, one event per line - never
 // dump the full HTML body, which is noisy and not useful for diagnosis.
-func DebugLogEngineResponse(engineName, requestURL string, bodyLen int) {
+func debugLogEngineResponse(engineName, requestURL string, bodyLen int) {
 	if !mode.IsDebugEnabled() {
 		return
 	}
@@ -755,10 +755,10 @@ func DebugLogEngineResponse(engineName, requestURL string, bodyLen int) {
 	})
 }
 
-// DebugLogEngineParseResult logs the parsed video URLs when --debug is
+// debugLogEngineParseResult logs the parsed video URLs when --debug is
 // enabled. Helps identify extraction successes/failures and missing fields
 // without dumping raw HTML - per AI.md PART 11 we log just the parsed URLs.
-func DebugLogEngineParseResult(engineName string, results []model.VideoResult, fieldStats map[string]int) {
+func debugLogEngineParseResult(engineName string, results []model.VideoResult, fieldStats map[string]int) {
 	if !mode.IsDebugEnabled() {
 		return
 	}

@@ -449,13 +449,13 @@ func TestSearchStreamWithOperators_UserMinDuration_Override(t *testing.T) {
 	}
 }
 
-// ── DebugLogEngineResponse — debug enabled path ───────────────────────────────
+// ── debugLogEngineResponse — debug enabled path ───────────────────────────────
 
 func TestDebugLogEngineResponse_DebugEnabled_NoPanic(t *testing.T) {
 	mode.SetDebug(true)
 	t.Cleanup(func() { mode.SetDebug(false) })
 
-	DebugLogEngineResponse("test-engine", "https://example.com/search", len("test response"))
+	debugLogEngineResponse("test-engine", "https://example.com/search", len("test response"))
 }
 
 func TestDebugLogEngineResponse_LargeBody_Truncated(t *testing.T) {
@@ -463,7 +463,7 @@ func TestDebugLogEngineResponse_LargeBody_Truncated(t *testing.T) {
 	t.Cleanup(func() { mode.SetDebug(false) })
 
 	// Reported size > 2000 bytes — must not panic regardless of magnitude
-	DebugLogEngineResponse("test-engine", "https://example.com/search", 3000)
+	debugLogEngineResponse("test-engine", "https://example.com/search", 3000)
 }
 
 func TestDebugLogEngineParseResult_DebugEnabled_NoPanic(t *testing.T) {
@@ -475,7 +475,7 @@ func TestDebugLogEngineParseResult_DebugEnabled_NoPanic(t *testing.T) {
 		results[i].URL = fmt.Sprintf("https://example.com/video/%d", i)
 	}
 
-	DebugLogEngineParseResult("test-engine", results, map[string]int{
+	debugLogEngineParseResult("test-engine", results, map[string]int{
 		"title":     5,
 		"thumbnail": 4,
 		"duration":  3,

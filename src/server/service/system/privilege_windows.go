@@ -51,8 +51,8 @@ func IsElevated() bool {
 	return err == nil && member
 }
 
-// CanEscalate checks if user can escalate via UAC per AI.md PART 23
-func CanEscalate() bool {
+// canEscalate checks if user can escalate via UAC per AI.md PART 23
+func canEscalate() bool {
 	// If already elevated, no need to escalate
 	if IsElevated() {
 		return true
@@ -99,7 +99,7 @@ func HandleEscalation(action string) error {
 		return nil
 	}
 
-	if !CanEscalate() {
+	if !canEscalate() {
 		return fmt.Errorf("%s requires administrator privileges\n\n"+
 			"You do not have admin access. Contact your system administrator.", action)
 	}

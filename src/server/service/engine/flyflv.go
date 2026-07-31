@@ -11,8 +11,8 @@ import (
 // FlyflvEngine searches Flyflv
 type FlyflvEngine struct{ *BaseEngine }
 
-// NewFlyflvEngine creates a new Flyflv engine
-func NewFlyflvEngine(appConfig *config.AppConfig) *FlyflvEngine {
+// newFlyflvEngine creates a new Flyflv engine
+func newFlyflvEngine(appConfig *config.AppConfig) *FlyflvEngine {
 	return &FlyflvEngine{NewBaseEngine("flyflv", "Flyflv", "https://www.flyflv.com", 4, appConfig)}
 }
 

@@ -81,8 +81,8 @@ type CLITUIConfig struct {
 	Unicode bool   `yaml:"unicode"`
 }
 
-// ParseCLITimeoutSeconds parses a cli.yml timeout value into whole seconds.
-func ParseCLITimeoutSeconds(timeoutValue interface{}) (int, error) {
+// parseCLITimeoutSeconds parses a cli.yml timeout value into whole seconds.
+func parseCLITimeoutSeconds(timeoutValue interface{}) (int, error) {
 	switch parsedTimeoutValue := timeoutValue.(type) {
 	case nil:
 		return 0, nil
@@ -126,8 +126,8 @@ func ParseCLITimeoutSeconds(timeoutValue interface{}) (int, error) {
 	}
 }
 
-// FormatCLITimeoutDuration converts whole seconds to the spec-aligned cli.yml duration form.
-func FormatCLITimeoutDuration(timeoutSeconds int) string {
+// formatCLITimeoutDuration converts whole seconds to the spec-aligned cli.yml duration form.
+func formatCLITimeoutDuration(timeoutSeconds int) string {
 	if timeoutSeconds <= 0 {
 		return ""
 	}
@@ -158,13 +158,13 @@ func (cliServerConfig *CLIServerConfig) UnmarshalYAML(node *yaml.Node) error {
 	cliServerConfig.APIVersion = rawServerConfig.APIVersion
 	cliServerConfig.AdminPath = rawServerConfig.AdminPath
 	cliServerConfig.Token = rawServerConfig.Token
-	timeoutSeconds, err := ParseCLITimeoutSeconds(rawServerConfig.Timeout)
+	timeoutSeconds, err := parseCLITimeoutSeconds(rawServerConfig.Timeout)
 	if err != nil {
 		return err
 	}
 	cliServerConfig.Timeout = timeoutSeconds
 	cliServerConfig.Retry = rawServerConfig.Retry
-	retryDelaySeconds, err := ParseCLITimeoutSeconds(rawServerConfig.RetryDelay)
+	retryDelaySeconds, err := parseCLITimeoutSeconds(rawServerConfig.RetryDelay)
 	if err != nil {
 		return err
 	}
@@ -187,9 +187,9 @@ func (cliServerConfig CLIServerConfig) MarshalYAML() (interface{}, error) {
 		APIVersion: cliServerConfig.APIVersion,
 		AdminPath:  cliServerConfig.AdminPath,
 		Token:      cliServerConfig.Token,
-		Timeout:    FormatCLITimeoutDuration(cliServerConfig.Timeout),
+		Timeout:    formatCLITimeoutDuration(cliServerConfig.Timeout),
 		Retry:      cliServerConfig.Retry,
-		RetryDelay: FormatCLITimeoutDuration(cliServerConfig.RetryDelay),
+		RetryDelay: formatCLITimeoutDuration(cliServerConfig.RetryDelay),
 	}, nil
 }
 
@@ -248,12 +248,12 @@ func ExecuteCLI() error {
 	if err := LoadCLIConfigFromFile(); err != nil {
 		return err
 	}
-	if err := InitializeCLILogging(); err != nil {
+	if err := initializeCLILogging(); err != nil {
 		return err
 	}
 
 	// Initialize API client
-	InitAPIClient()
+	initAPIClient()
 
 	// Per AI.md PART 32: Automatic Mode Detection using display.DetectDisplayEnv()
 	// - Local display + not SSH/Mosh = GUI mode (native GTK/Cocoa/Win32 when available)
@@ -269,16 +269,16 @@ func ExecuteCLI() error {
 		if displayEnv.IsAutoDetectDisplayModeGUI() && gui.IsAvailable() {
 			// Per AI.md PART 32: CLI First-Run Flow — run setup wizard if unconfigured
 			if !IsServerConfigured() {
-				if err := RunSetupWizard(); err != nil {
+				if err := runSetupWizard(); err != nil {
 					return err
 				}
 				if err := LoadCLIConfigFromFile(); err != nil {
 					return err
 				}
-				if err := InitializeCLILogging(); err != nil {
+				if err := initializeCLILogging(); err != nil {
 					return err
 				}
-				InitAPIClient()
+				initAPIClient()
 			}
 			guiCfg := &gui.Config{
 				BinaryName: BinaryName,
@@ -296,22 +296,22 @@ func ExecuteCLI() error {
 			// Per AI.md PART 32: CLI First-Run Flow
 			// Run setup wizard if no server configured
 			if !IsServerConfigured() {
-				if err := RunSetupWizard(); err != nil {
+				if err := runSetupWizard(); err != nil {
 					return err
 				}
 				// Reload config after setup wizard
 				if err := LoadCLIConfigFromFile(); err != nil {
 					return err
 				}
-				if err := InitializeCLILogging(); err != nil {
+				if err := initializeCLILogging(); err != nil {
 					return err
 				}
-				InitAPIClient()
+				initAPIClient()
 			}
-			return RunInteractiveTUI()
+			return runInteractiveTUI()
 		}
 		// Non-interactive or headless: show help
-		PrintCLIHelpMessage()
+		printCLIHelpMessage()
 		return nil
 	}
 
@@ -321,19 +321,19 @@ func ExecuteCLI() error {
 	case "search":
 		// Check server connection before search commands
 		if healthy, err := CheckServerConnection(); !healthy && cliConfig.Server.Address != "" {
-			PrintConnectionWarning(err)
+			printConnectionWarning(err)
 		}
 		return RunSearchCommand(args[1:])
 	case "engines":
 		// Check server connection before engines command
 		if healthy, err := CheckServerConnection(); !healthy && cliConfig.Server.Address != "" {
-			PrintConnectionWarning(err)
+			printConnectionWarning(err)
 		}
 		return RunEnginesCommand(args[1:])
 	case "bangs":
 		// Check server connection before bangs command
 		if healthy, err := CheckServerConnection(); !healthy && cliConfig.Server.Address != "" {
-			PrintConnectionWarning(err)
+			printConnectionWarning(err)
 		}
 		return RunBangsCommand(args[1:])
 	case "login":
@@ -345,14 +345,14 @@ func ExecuteCLI() error {
 		// Treat first arg as search query
 		// Check server connection before search
 		if healthy, err := CheckServerConnection(); !healthy && cliConfig.Server.Address != "" {
-			PrintConnectionWarning(err)
+			printConnectionWarning(err)
 		}
 		return RunSearchCommand(args)
 	}
 }
 
-// ResolveCLILogFilePath returns the configured CLI log file path or the default path.
-func ResolveCLILogFilePath() string {
+// resolveCLILogFilePath returns the configured CLI log file path or the default path.
+func resolveCLILogFilePath() string {
 	if cliConfig != nil {
 		configuredLogFilePath := strings.TrimSpace(cliConfig.Logging.File)
 		if configuredLogFilePath != "" {
@@ -363,9 +363,9 @@ func ResolveCLILogFilePath() string {
 	return path.LogFile()
 }
 
-// InitializeCLILogging creates and opens the CLI log file, then binds the standard logger to it.
-func InitializeCLILogging() error {
-	logFilePath := ResolveCLILogFilePath()
+// initializeCLILogging creates and opens the CLI log file, then binds the standard logger to it.
+func initializeCLILogging() error {
+	logFilePath := resolveCLILogFilePath()
 	if logFilePath == "" {
 		return fmt.Errorf("CLI log file path is required")
 	}
@@ -394,7 +394,7 @@ func InitializeCLILogging() error {
 		return fmt.Errorf("verifying CLI log file ownership: %w", err)
 	}
 
-	CloseCLILogging()
+	closeCLILogging()
 	cliLogOutputFile = logFile
 	log.SetOutput(logFile)
 	log.SetFlags(log.LstdFlags)
@@ -402,8 +402,8 @@ func InitializeCLILogging() error {
 	return nil
 }
 
-// CloseCLILogging closes the current CLI log file when one is open.
-func CloseCLILogging() {
+// closeCLILogging closes the current CLI log file when one is open.
+func closeCLILogging() {
 	if cliLogOutputFile != nil {
 		_ = cliLogOutputFile.Close()
 		cliLogOutputFile = nil
@@ -419,12 +419,12 @@ func ParseCLIGlobalFlags(args []string) []string {
 	commandSeen := false
 	i := 0
 	for i < len(args) {
-		flagName, _, _ := ParseCLILongFlagArgument(args[i])
+		flagName, _, _ := parseCLILongFlagArgument(args[i])
 
 		switch flagName {
 		case "--shell":
 			shellCommandArgs := make([]string, 0, len(args)-i)
-			_, inlineFlagValue, hasInlineFlagValue := ParseCLILongFlagArgument(args[i])
+			_, inlineFlagValue, hasInlineFlagValue := parseCLILongFlagArgument(args[i])
 			if hasInlineFlagValue {
 				shellCommandArgs = append(shellCommandArgs, inlineFlagValue)
 			}
@@ -437,7 +437,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 			}
 			os.Exit(0)
 		case "--server":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				serverAddressFlag = flagValue
 				i = nextIndex + 1
@@ -445,7 +445,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 				i++
 			}
 		case "--token":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				apiTokenFlag = flagValue
 				i = nextIndex + 1
@@ -453,7 +453,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 				i++
 			}
 		case "--token-file":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				tokenFilePath = flagValue
 				i = nextIndex + 1
@@ -461,7 +461,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 				i++
 			}
 		case "--output":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				outputFormatFlag = flagValue
 				i = nextIndex + 1
@@ -469,7 +469,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 				i++
 			}
 		case "--config":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				cliConfigFilePath = path.ResolveConfigFilePath(flagValue)
 				i = nextIndex + 1
@@ -478,7 +478,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 			}
 		case "--color":
 			// Per AI.md PART 8: --color {always|never|auto}
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				colorFlag = flagValue
 				i = nextIndex + 1
@@ -487,7 +487,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 			}
 		case "--lang":
 			// Per AI.md PART 8: --lang {code} — set UI/output language
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				// Store in env for downstream use; i18n is handled server-side for
 				// web content, but the CLI uses this for Accept-Language headers.
@@ -497,7 +497,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 				i++
 			}
 		case "--timeout":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				fmt.Sscanf(flagValue, "%d", &requestTimeoutSeconds)
 				i = nextIndex + 1
@@ -529,7 +529,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 			os.Exit(0)
 		case "-h", "--help":
 			if !commandSeen {
-				PrintCLIHelpMessage()
+				printCLIHelpMessage()
 				os.Exit(0)
 			}
 			remaining = append(remaining, args[i])
@@ -583,7 +583,7 @@ func LoadCLIConfigFromFile() error {
 
 	// Determine config path per AI.md PART 32
 	// Uses paths module for OS-specific resolution
-	cliConfigFilePath = GetCLIConfigFilePath()
+	cliConfigFilePath = getCLIConfigFilePath()
 
 	// Read config file if exists
 	data, err := os.ReadFile(cliConfigFilePath)
@@ -591,7 +591,7 @@ func LoadCLIConfigFromFile() error {
 		// Ignore unmarshal errors - use defaults if config is invalid
 		_ = yaml.Unmarshal(data, cliConfig)
 	} else if os.IsNotExist(err) {
-		if err := WriteCLIConfigFile(*cliConfig, cliConfigFilePath); err != nil {
+		if err := writeCLIConfigFile(*cliConfig, cliConfigFilePath); err != nil {
 			return err
 		}
 	} else {
@@ -606,7 +606,7 @@ func LoadCLIConfigFromFile() error {
 	legacyServerToken := strings.TrimSpace(cliConfig.Server.Token)
 	cliConfig.Server.Token = ""
 	if cliConfig.Auth.TokenFile != "" {
-		if tokenFromFile, err := ReadCLIAuthTokenFile(cliConfig.Auth.TokenFile); err == nil {
+		if tokenFromFile, err := readCLIAuthTokenFile(cliConfig.Auth.TokenFile); err == nil {
 			cliConfig.Server.Token = tokenFromFile
 		}
 	}
@@ -637,30 +637,30 @@ func LoadCLIConfigFromFile() error {
 		if err := EnsureCLIDefaultTokenFilePermissions(defaultTokenFilePath); err != nil {
 			return err
 		}
-		if tokenFromFile, err := ReadCLIAuthTokenFile(defaultTokenFilePath); err == nil {
+		if tokenFromFile, err := readCLIAuthTokenFile(defaultTokenFilePath); err == nil {
 			cliConfig.Server.Token = tokenFromFile
 		}
 	}
 
-	if err := ApplyCLIEnvironmentOverrides(); err != nil {
+	if err := applyCLIEnvironmentOverrides(); err != nil {
 		return err
 	}
 
 	// Token file flag overrides environment variables and config file values.
 	if tokenFilePath != "" {
-		if tokenFromFile, err := ReadCLIAuthTokenFile(tokenFilePath); err == nil {
+		if tokenFromFile, err := readCLIAuthTokenFile(tokenFilePath); err == nil {
 			cliConfig.Server.Token = tokenFromFile
 		}
 	}
 
 	// Command-line flags override everything (highest priority)
 	if serverAddressFlag != "" {
-		if err := ValidateCLIServerURL(serverAddressFlag); err != nil {
+		if err := validateCLIServerURL(serverAddressFlag); err != nil {
 			return fmt.Errorf("invalid --server URL: %w", err)
 		}
 		if fileCLIConfig.Server.Address == "" {
 			fileCLIConfig.Server.Address = serverAddressFlag
-			if err := WriteCLIConfigFile(fileCLIConfig, cliConfigFilePath); err != nil {
+			if err := writeCLIConfigFile(fileCLIConfig, cliConfigFilePath); err != nil {
 				return err
 			}
 		}
@@ -739,8 +739,8 @@ func EnsureCLIDefaultTokenFilePermissions(tokenFilePath string) error {
 	return nil
 }
 
-// WriteCLIDefaultTokenFile writes the default CLI token file with user-only access.
-func WriteCLIDefaultTokenFile(tokenValue string) error {
+// writeCLIDefaultTokenFile writes the default CLI token file with user-only access.
+func writeCLIDefaultTokenFile(tokenValue string) error {
 	tokenFilePath := path.TokenFile()
 	tokenDirPath := filepath.Dir(tokenFilePath)
 	if err := os.MkdirAll(tokenDirPath, 0700); err != nil {
@@ -762,8 +762,8 @@ func WriteCLIDefaultTokenFile(tokenValue string) error {
 	return nil
 }
 
-// ReadCLIAuthTokenFile reads a token file and trims surrounding whitespace.
-func ReadCLIAuthTokenFile(tokenFilePath string) (string, error) {
+// readCLIAuthTokenFile reads a token file and trims surrounding whitespace.
+func readCLIAuthTokenFile(tokenFilePath string) (string, error) {
 	tokenData, err := os.ReadFile(tokenFilePath)
 	if err != nil {
 		return "", err
@@ -772,8 +772,8 @@ func ReadCLIAuthTokenFile(tokenFilePath string) (string, error) {
 	return strings.TrimSpace(string(tokenData)), nil
 }
 
-// GetCLIConfigFilePath returns the resolved CLI config file path.
-func GetCLIConfigFilePath() string {
+// getCLIConfigFilePath returns the resolved CLI config file path.
+func getCLIConfigFilePath() string {
 	if cliConfigFilePath == "" {
 		cliConfigFilePath = path.ResolveConfigFilePath("")
 	}
@@ -781,9 +781,9 @@ func GetCLIConfigFilePath() string {
 	return cliConfigFilePath
 }
 
-// GetCLIAuthTokenFromEnv returns the canonical CLI token environment variable,
+// getCLIAuthTokenFromEnv returns the canonical CLI token environment variable,
 // falling back to the legacy alias when needed.
-func GetCLIAuthTokenFromEnv() string {
+func getCLIAuthTokenFromEnv() string {
 	if envToken := os.Getenv("VIDVEIL_TOKEN"); envToken != "" {
 		return envToken
 	}
@@ -791,9 +791,9 @@ func GetCLIAuthTokenFromEnv() string {
 	return os.Getenv("VIDVEIL_CLI_TOKEN")
 }
 
-// GetCLIServerAddressFromEnv returns the canonical CLI server environment variable,
+// getCLIServerAddressFromEnv returns the canonical CLI server environment variable,
 // falling back to the legacy alias when needed.
-func GetCLIServerAddressFromEnv() string {
+func getCLIServerAddressFromEnv() string {
 	if envServerAddress := os.Getenv("VIDVEIL_SERVER_PRIMARY"); envServerAddress != "" {
 		return envServerAddress
 	}
@@ -801,9 +801,9 @@ func GetCLIServerAddressFromEnv() string {
 	return os.Getenv("VIDVEIL_SERVER")
 }
 
-// GetCLIOutputFormatFromEnv returns the canonical output format env var,
+// getCLIOutputFormatFromEnv returns the canonical output format env var,
 // falling back to the generic alias when needed.
-func GetCLIOutputFormatFromEnv() string {
+func getCLIOutputFormatFromEnv() string {
 	if envOutputFormat := os.Getenv("VIDVEIL_OUTPUT_FORMAT"); envOutputFormat != "" {
 		return envOutputFormat
 	}
@@ -811,9 +811,9 @@ func GetCLIOutputFormatFromEnv() string {
 	return os.Getenv("VIDVEIL_FORMAT")
 }
 
-// GetCLIOutputColorFromEnv returns the canonical output color env var,
+// getCLIOutputColorFromEnv returns the canonical output color env var,
 // falling back to the generic alias when needed.
-func GetCLIOutputColorFromEnv() string {
+func getCLIOutputColorFromEnv() string {
 	if envOutputColor := os.Getenv("VIDVEIL_OUTPUT_COLOR"); envOutputColor != "" {
 		return envOutputColor
 	}
@@ -821,9 +821,9 @@ func GetCLIOutputColorFromEnv() string {
 	return os.Getenv("VIDVEIL_COLOR")
 }
 
-// GetCLITimeoutSecondsFromEnv returns the canonical timeout env var,
+// getCLITimeoutSecondsFromEnv returns the canonical timeout env var,
 // falling back to the generic alias when needed.
-func GetCLITimeoutSecondsFromEnv() (int, error) {
+func getCLITimeoutSecondsFromEnv() (int, error) {
 	timeoutEnvValue := os.Getenv("VIDVEIL_SERVER_TIMEOUT")
 	if timeoutEnvValue == "" {
 		timeoutEnvValue = os.Getenv("VIDVEIL_TIMEOUT")
@@ -840,28 +840,28 @@ func GetCLITimeoutSecondsFromEnv() (int, error) {
 	return timeoutSeconds, nil
 }
 
-// ApplyCLIEnvironmentOverrides applies env vars after config load but before flags.
-func ApplyCLIEnvironmentOverrides() error {
-	if envServerAddress := GetCLIServerAddressFromEnv(); envServerAddress != "" {
-		if err := ValidateCLIServerURL(envServerAddress); err != nil {
+// applyCLIEnvironmentOverrides applies env vars after config load but before flags.
+func applyCLIEnvironmentOverrides() error {
+	if envServerAddress := getCLIServerAddressFromEnv(); envServerAddress != "" {
+		if err := validateCLIServerURL(envServerAddress); err != nil {
 			return fmt.Errorf("invalid server environment variable: %w", err)
 		}
 		cliConfig.Server.Address = envServerAddress
 	}
 
-	if envToken := GetCLIAuthTokenFromEnv(); envToken != "" {
+	if envToken := getCLIAuthTokenFromEnv(); envToken != "" {
 		cliConfig.Server.Token = envToken
 	}
 
-	if envOutputFormat := GetCLIOutputFormatFromEnv(); envOutputFormat != "" {
+	if envOutputFormat := getCLIOutputFormatFromEnv(); envOutputFormat != "" {
 		cliConfig.Output.Format = envOutputFormat
 	}
 
-	if envOutputColor := GetCLIOutputColorFromEnv(); envOutputColor != "" {
+	if envOutputColor := getCLIOutputColorFromEnv(); envOutputColor != "" {
 		cliConfig.Output.Color = envOutputColor
 	}
 
-	timeoutSeconds, err := GetCLITimeoutSecondsFromEnv()
+	timeoutSeconds, err := getCLITimeoutSecondsFromEnv()
 	if err != nil {
 		return err
 	}
@@ -870,7 +870,7 @@ func ApplyCLIEnvironmentOverrides() error {
 	}
 
 	if cliConfig.Server.Address == "" {
-		cliConfig.Server.Address = GetCLIDefaultServerAddress()
+		cliConfig.Server.Address = getCLIDefaultServerAddress()
 	}
 
 	if debugEnvValue := os.Getenv("VIDVEIL_DEBUG"); debugEnvValue != "" {
@@ -880,8 +880,8 @@ func ApplyCLIEnvironmentOverrides() error {
 	return nil
 }
 
-// ValidateCLIServerURL verifies that a server URL is absolute and uses http or https.
-func ValidateCLIServerURL(serverURL string) error {
+// validateCLIServerURL verifies that a server URL is absolute and uses http or https.
+func validateCLIServerURL(serverURL string) error {
 	if serverURL == "" {
 		return fmt.Errorf("server URL is required")
 	}
@@ -900,13 +900,13 @@ func ValidateCLIServerURL(serverURL string) error {
 	return nil
 }
 
-// GetCLIDefaultServerAddress returns the compiled official site when available.
-func GetCLIDefaultServerAddress() string {
+// getCLIDefaultServerAddress returns the compiled official site when available.
+func getCLIDefaultServerAddress() string {
 	return strings.TrimSpace(OfficialSite)
 }
 
-// WriteCLIConfigFile writes the CLI config file to disk using the spec-aligned yaml shape.
-func WriteCLIConfigFile(fileCLIConfig CLIConfig, configFilePath string) error {
+// writeCLIConfigFile writes the CLI config file to disk using the spec-aligned yaml shape.
+func writeCLIConfigFile(fileCLIConfig CLIConfig, configFilePath string) error {
 	configDirPath := filepath.Dir(configFilePath)
 	if err := os.MkdirAll(configDirPath, 0700); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
@@ -971,17 +971,17 @@ func WriteCLIConfigFile(fileCLIConfig CLIConfig, configFilePath string) error {
 	return nil
 }
 
-// InitAPIClient initializes the API client
+// initAPIClient initializes the API client
 // Per AI.md PART 1: Function names MUST reveal intent - "initClient" is ambiguous
-func InitAPIClient() {
-	resolvedServerAddress := ResolveCLIReachableServerAddress()
+func initAPIClient() {
+	resolvedServerAddress := resolveCLIReachableServerAddress()
 	if resolvedServerAddress != "" {
 		cliConfig.Server.Address = resolvedServerAddress
 	}
 	apiClient = api.NewAPIClient(cliConfig.Server.Address, cliConfig.Server.Token, cliConfig.Server.Timeout, cliConfig.Server.APIVersion)
 	// Per AI.md PART 32: User-Agent uses hardcoded project name with version
 	apiClient.SetUserAgent(Version)
-	StartCLIBackgroundDiscovery()
+	startCLIBackgroundDiscovery()
 }
 
 // CheckServerConnection checks if the server is reachable
@@ -994,8 +994,8 @@ func CheckServerConnection() (bool, error) {
 	return apiClient.Health()
 }
 
-// ResolveCLIReachableServerAddress returns the first healthy server from the primary node.
-func ResolveCLIReachableServerAddress() string {
+// resolveCLIReachableServerAddress returns the first healthy server from the primary node.
+func resolveCLIReachableServerAddress() string {
 	if cliConfig == nil {
 		return ""
 	}
@@ -1026,33 +1026,33 @@ func ResolveCLIReachableServerAddress() string {
 	return cliConfig.Server.Address
 }
 
-// StartCLIBackgroundDiscovery refreshes server connection settings from /api/autodiscover.
-func StartCLIBackgroundDiscovery() {
+// startCLIBackgroundDiscovery refreshes server connection settings from /api/autodiscover.
+func startCLIBackgroundDiscovery() {
 	if apiClient == nil || cliConfig == nil || cliConfig.Server.Address == "" {
 		return
 	}
 
 	discoveryClient := apiClient
-	configFilePath := GetCLIConfigFilePath()
+	configFilePath := getCLIConfigFilePath()
 	fileCLIConfig := *cliConfig
 	go func() {
-		discoveredConfig, err := DiscoverCLIServerConfig(discoveryClient, fileCLIConfig)
+		discoveredConfig, err := discoverCLIServerConfig(discoveryClient, fileCLIConfig)
 		if err != nil {
 			return
 		}
-		_ = WriteCLIConfigFile(discoveredConfig, configFilePath)
+		_ = writeCLIConfigFile(discoveredConfig, configFilePath)
 	}()
 }
 
-// DiscoverCLIServerConfig merges autodiscover settings into the current CLI config.
-func DiscoverCLIServerConfig(discoveryClient *api.APIClient, fileCLIConfig CLIConfig) (CLIConfig, error) {
+// discoverCLIServerConfig merges autodiscover settings into the current CLI config.
+func discoverCLIServerConfig(discoveryClient *api.APIClient, fileCLIConfig CLIConfig) (CLIConfig, error) {
 	discoveryResponse, err := discoveryClient.Autodiscover()
 	if err != nil {
 		return fileCLIConfig, err
 	}
 
 	if discoveryResponse.Primary != "" {
-		if err := ValidateCLIServerURL(discoveryResponse.Primary); err == nil {
+		if err := validateCLIServerURL(discoveryResponse.Primary); err == nil {
 			fileCLIConfig.Server.Address = discoveryResponse.Primary
 		}
 	}
@@ -1073,10 +1073,10 @@ func DiscoverCLIServerConfig(discoveryClient *api.APIClient, fileCLIConfig CLICo
 	return fileCLIConfig, nil
 }
 
-// PrintConnectionWarning prints a warning if server is unreachable
+// printConnectionWarning prints a warning if server is unreachable
 // Per AI.md PART 1: Function names MUST reveal intent
 // Per AI.md PART 8: Respects NO_COLOR
-func PrintConnectionWarning(err error) {
+func printConnectionWarning(err error) {
 	fmt.Fprintf(os.Stderr, "%s Cannot reach server at %s\n",
 		terminal.WarningIcon(), cliConfig.Server.Address)
 	if err != nil && debugModeEnabled {
@@ -1084,9 +1084,9 @@ func PrintConnectionWarning(err error) {
 	}
 }
 
-// PrintCLIHelpMessage prints CLI help message
+// printCLIHelpMessage prints CLI help message
 // Per AI.md PART 1: Function names MUST reveal intent - "printHelp" is ambiguous
-func PrintCLIHelpMessage() {
+func printCLIHelpMessage() {
 	fmt.Printf(`%s %s - CLI client for VidVeil video search
 
 Usage:
@@ -1140,7 +1140,7 @@ Run '%s <command> --help' for more information about a command.
 }
 
 func GetCLIHelpServerDefault() string {
-	defaultServerAddress := GetCLIDefaultServerAddress()
+	defaultServerAddress := getCLIDefaultServerAddress()
 	if defaultServerAddress == "" {
 		return "from config"
 	}

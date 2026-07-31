@@ -49,7 +49,7 @@ func TestParseCLILongFlagArgument(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			gotFlagName, gotValue, gotHasValue := ParseCLILongFlagArgument(testCase.argument)
+			gotFlagName, gotValue, gotHasValue := parseCLILongFlagArgument(testCase.argument)
 			if gotFlagName != testCase.wantFlagName {
 				t.Fatalf("flag name = %q, want %q", gotFlagName, testCase.wantFlagName)
 			}
@@ -100,7 +100,7 @@ func TestReadCLILongFlagValue(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			gotValue, gotNextIndex, gotHasValue := ReadCLILongFlagValue(testCase.args, testCase.index)
+			gotValue, gotNextIndex, gotHasValue := readCLILongFlagValue(testCase.args, testCase.index)
 			if gotValue != testCase.wantValue {
 				t.Fatalf("flag value = %q, want %q", gotValue, testCase.wantValue)
 			}
@@ -250,17 +250,17 @@ func TestGetCLIAuthTokenFromEnv(t *testing.T) {
 	os.Unsetenv("VIDVEIL_TOKEN")
 	os.Unsetenv("VIDVEIL_CLI_TOKEN")
 
-	if gotToken := GetCLIAuthTokenFromEnv(); gotToken != "" {
+	if gotToken := getCLIAuthTokenFromEnv(); gotToken != "" {
 		t.Fatalf("token with no env = %q, want empty", gotToken)
 	}
 
 	os.Setenv("VIDVEIL_CLI_TOKEN", "legacy-token")
-	if gotToken := GetCLIAuthTokenFromEnv(); gotToken != "legacy-token" {
+	if gotToken := getCLIAuthTokenFromEnv(); gotToken != "legacy-token" {
 		t.Fatalf("legacy token = %q, want %q", gotToken, "legacy-token")
 	}
 
 	os.Setenv("VIDVEIL_TOKEN", "canonical-token")
-	if gotToken := GetCLIAuthTokenFromEnv(); gotToken != "canonical-token" {
+	if gotToken := getCLIAuthTokenFromEnv(); gotToken != "canonical-token" {
 		t.Fatalf("canonical token = %q, want %q", gotToken, "canonical-token")
 	}
 }
@@ -286,17 +286,17 @@ func TestGetCLIServerAddressFromEnv(t *testing.T) {
 	os.Unsetenv("VIDVEIL_SERVER_PRIMARY")
 	os.Unsetenv("VIDVEIL_SERVER")
 
-	if gotServerAddress := GetCLIServerAddressFromEnv(); gotServerAddress != "" {
+	if gotServerAddress := getCLIServerAddressFromEnv(); gotServerAddress != "" {
 		t.Fatalf("server address with no env = %q, want empty", gotServerAddress)
 	}
 
 	os.Setenv("VIDVEIL_SERVER", "https://legacy.example.com")
-	if gotServerAddress := GetCLIServerAddressFromEnv(); gotServerAddress != "https://legacy.example.com" {
+	if gotServerAddress := getCLIServerAddressFromEnv(); gotServerAddress != "https://legacy.example.com" {
 		t.Fatalf("legacy server address = %q, want %q", gotServerAddress, "https://legacy.example.com")
 	}
 
 	os.Setenv("VIDVEIL_SERVER_PRIMARY", "https://canonical.example.com")
-	if gotServerAddress := GetCLIServerAddressFromEnv(); gotServerAddress != "https://canonical.example.com" {
+	if gotServerAddress := getCLIServerAddressFromEnv(); gotServerAddress != "https://canonical.example.com" {
 		t.Fatalf("canonical server address = %q, want %q", gotServerAddress, "https://canonical.example.com")
 	}
 }
@@ -602,7 +602,7 @@ func TestWriteCLIConfigFilePromotesLegacyServerTokenToAuthSection(t *testing.T) 
 	fileCLIConfig.Output.Format = "table"
 	fileCLIConfig.Output.Color = "auto"
 
-	if err := WriteCLIConfigFile(fileCLIConfig, configFilePath); err != nil {
+	if err := writeCLIConfigFile(fileCLIConfig, configFilePath); err != nil {
 		t.Fatalf("writing config file: %v", err)
 	}
 
@@ -769,7 +769,7 @@ func TestWriteCLIDefaultTokenFileUsesRestrictedPermissions(t *testing.T) {
 	t.Setenv("APPDATA", filepath.Join(homeDir, "AppData", "Roaming"))
 	t.Setenv("LOCALAPPDATA", filepath.Join(homeDir, "AppData", "Local"))
 
-	if err := WriteCLIDefaultTokenFile("saved-token"); err != nil {
+	if err := writeCLIDefaultTokenFile("saved-token"); err != nil {
 		t.Fatalf("writing default token file: %v", err)
 	}
 
@@ -986,7 +986,7 @@ func TestInitializeCLILoggingUsesConfiguredLogFile(t *testing.T) {
 	originalLogWriter := log.Writer()
 	originalLogFlags := log.Flags()
 	t.Cleanup(func() {
-		CloseCLILogging()
+		closeCLILogging()
 		log.SetOutput(originalLogWriter)
 		log.SetFlags(originalLogFlags)
 		cliConfig = originalCLIConfig
@@ -996,12 +996,12 @@ func TestInitializeCLILoggingUsesConfiguredLogFile(t *testing.T) {
 	cliConfig = &CLIConfig{}
 	cliConfig.Logging.File = customLogFilePath
 
-	if err := InitializeCLILogging(); err != nil {
+	if err := initializeCLILogging(); err != nil {
 		t.Fatalf("initializing cli logging: %v", err)
 	}
 
 	log.Print("configured log entry")
-	CloseCLILogging()
+	closeCLILogging()
 
 	logData, err := os.ReadFile(customLogFilePath)
 	if err != nil {
@@ -1022,7 +1022,7 @@ func TestInitializeCLILoggingUsesDefaultLogFile(t *testing.T) {
 	originalLogWriter := log.Writer()
 	originalLogFlags := log.Flags()
 	t.Cleanup(func() {
-		CloseCLILogging()
+		closeCLILogging()
 		log.SetOutput(originalLogWriter)
 		log.SetFlags(originalLogFlags)
 		cliConfig = originalCLIConfig
@@ -1030,7 +1030,7 @@ func TestInitializeCLILoggingUsesDefaultLogFile(t *testing.T) {
 
 	cliConfig = &CLIConfig{}
 
-	if err := InitializeCLILogging(); err != nil {
+	if err := initializeCLILogging(); err != nil {
 		t.Fatalf("initializing cli logging: %v", err)
 	}
 
@@ -1073,7 +1073,7 @@ func TestExecuteCLICreatesClientDirsAfterParsingFlags(t *testing.T) {
 	originalDebugFlagProvided := debugFlagProvided
 	originalOfficialSite := OfficialSite
 	t.Cleanup(func() {
-		CloseCLILogging()
+		closeCLILogging()
 		os.Args = originalArgs
 		cliConfigFilePath = originalCLIConfigFilePath
 		serverAddressFlag = originalServerAddressFlag
@@ -1240,7 +1240,7 @@ func TestPrintCLIHelpMessageShowsOfficialSiteDefault(t *testing.T) {
 	}
 
 	os.Stdout = writePipe
-	PrintCLIHelpMessage()
+	printCLIHelpMessage()
 	writePipe.Close()
 	os.Stdout = originalStdout
 
@@ -1490,7 +1490,7 @@ func TestInitAPIClientUsesConfiguredAPIVersion(t *testing.T) {
 	cliConfig.Server.Timeout = 30
 	cliConfig.Server.APIVersion = "v2"
 
-	InitAPIClient()
+	initAPIClient()
 
 	if apiClient.GetAPIBaseURL() != "https://configured.example.com/api/v2" {
 		t.Fatalf("api base URL = %q, want %q", apiClient.GetAPIBaseURL(), "https://configured.example.com/api/v2")
@@ -1516,7 +1516,7 @@ func TestDiscoverCLIServerConfigMergesAutodiscoverResponse(t *testing.T) {
 	fileCLIConfig.Server.Retry = 3
 	fileCLIConfig.Server.RetryDelay = 1
 
-	discoveredCLIConfig, err := DiscoverCLIServerConfig(discoveryClient, fileCLIConfig)
+	discoveredCLIConfig, err := discoverCLIServerConfig(discoveryClient, fileCLIConfig)
 	if err != nil {
 		t.Fatalf("discovering cli config: %v", err)
 	}
@@ -1549,7 +1549,7 @@ func TestWriteCLIConfigFileWritesDurationTimeoutString(t *testing.T) {
 	fileCLIConfig.Server.Address = "https://configured.example.com"
 	fileCLIConfig.Server.Timeout = 45
 
-	if err := WriteCLIConfigFile(fileCLIConfig, configFilePath); err != nil {
+	if err := writeCLIConfigFile(fileCLIConfig, configFilePath); err != nil {
 		t.Fatalf("writing config file: %v", err)
 	}
 
@@ -1564,7 +1564,7 @@ func TestWriteCLIConfigFileWritesDurationTimeoutString(t *testing.T) {
 }
 
 func TestTUIQuestionMarkTogglesShortcutsHelp(t *testing.T) {
-	model := CreateInitialTUIModel()
+	model := createInitialTUIModel()
 
 	updatedModel, command := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 	if command != nil {
@@ -1594,7 +1594,7 @@ func TestTUIQuestionMarkTogglesShortcutsHelp(t *testing.T) {
 }
 
 func TestTUIViewShowsShortcutsHelp(t *testing.T) {
-	model := CreateInitialTUIModel()
+	model := createInitialTUIModel()
 	model.showShortcutsHelp = true
 
 	viewOutput := model.View()

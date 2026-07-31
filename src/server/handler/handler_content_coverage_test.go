@@ -176,7 +176,7 @@ func TestGetUserIPForwardPreference_WithCookieValue1_ReturnsTrue(t *testing.T) {
 		torSvc:    &testTorChecker{enabled: true, allowIPForward: true},
 	}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: IPForwardCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: iPForwardCookieName, Value: "1"})
 	ok, _ := h.getUserIPForwardPreference(req)
 	if !ok {
 		t.Error("getUserIPForwardPreference(cookie=1): expected true")
@@ -285,7 +285,7 @@ func TestContentRestrictionMiddleware_SoftBlockWithAck_Passes(t *testing.T) {
 		},
 	}
 	result := middlewareCallsNext(h, "/search", func(r *http.Request) {
-		r.AddCookie(&http.Cookie{Name: ContentRestrictionAckCookieName, Value: "1"})
+		r.AddCookie(&http.Cookie{Name: contentRestrictionAckCookieName, Value: "1"})
 	})
 	if !result {
 		t.Error("ContentRestrictionMiddleware soft_block with ack: next not called")
@@ -381,7 +381,7 @@ func TestAgeVerifyPage_AlreadyVerified_BadRedirectParam_RedirectsToRoot(t *testi
 func TestContentRestrictedPage_AlreadyAcked_RedirectsToRoot(t *testing.T) {
 	h := &SearchHandler{appConfig: createTestConfig()}
 	req := httptest.NewRequest(http.MethodGet, "/content-restricted", nil)
-	req.AddCookie(&http.Cookie{Name: ContentRestrictionAckCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: contentRestrictionAckCookieName, Value: "1"})
 	rec := httptest.NewRecorder()
 	h.ContentRestrictedPage(rec, req)
 
@@ -396,7 +396,7 @@ func TestContentRestrictedPage_AlreadyAcked_RedirectsToRoot(t *testing.T) {
 func TestContentRestrictedPage_AlreadyAcked_RedirectParam(t *testing.T) {
 	h := &SearchHandler{appConfig: createTestConfig()}
 	req := httptest.NewRequest(http.MethodGet, "/content-restricted?redirect=/home", nil)
-	req.AddCookie(&http.Cookie{Name: ContentRestrictionAckCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: contentRestrictionAckCookieName, Value: "1"})
 	rec := httptest.NewRecorder()
 	h.ContentRestrictedPage(rec, req)
 

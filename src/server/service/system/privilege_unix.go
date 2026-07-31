@@ -130,9 +130,9 @@ func IsElevated() bool {
 	return os.Geteuid() == 0
 }
 
-// CanEscalate checks if user can escalate privileges per AI.md PART 23
+// canEscalate checks if user can escalate privileges per AI.md PART 23
 // Returns true if user has sudo access (passwordless or with password)
-func CanEscalate() bool {
+func canEscalate() bool {
 	// Already elevated
 	if IsElevated() {
 		return true
@@ -186,7 +186,7 @@ func HandleEscalation(action string) error {
 		return nil
 	}
 
-	if !CanEscalate() {
+	if !canEscalate() {
 		// User CANNOT escalate - don't ask, just inform
 		return fmt.Errorf("%s requires administrator privileges\n\n"+
 			"You do not have sudo/admin access. Contact your system administrator", action)

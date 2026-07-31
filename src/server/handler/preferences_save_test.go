@@ -26,7 +26,7 @@ func TestGetRequestResultsPerPage_ValidCookie_ReturnsValue(t *testing.T) {
 	h := newRenderTestHandler()
 	for _, want := range []string{"20", "50", "100"} {
 		req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
-		req.AddCookie(&http.Cookie{Name: ResultsPerPageCookieName, Value: want})
+		req.AddCookie(&http.Cookie{Name: resultsPerPageCookieName, Value: want})
 
 		if got := h.getRequestResultsPerPage(req); got != want {
 			t.Errorf("getRequestResultsPerPage() with cookie %q = %q, want %q", want, got, want)
@@ -37,7 +37,7 @@ func TestGetRequestResultsPerPage_ValidCookie_ReturnsValue(t *testing.T) {
 func TestGetRequestResultsPerPage_InvalidCookie_ReturnsDefault(t *testing.T) {
 	h := newRenderTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
-	req.AddCookie(&http.Cookie{Name: ResultsPerPageCookieName, Value: "9999"})
+	req.AddCookie(&http.Cookie{Name: resultsPerPageCookieName, Value: "9999"})
 
 	if got := h.getRequestResultsPerPage(req); got != "20" {
 		t.Errorf("getRequestResultsPerPage() with invalid cookie = %q, want %q", got, "20")
@@ -58,7 +58,7 @@ func TestGetRequestOpenNewTab_NoCookie_ReturnsDefaultTrue(t *testing.T) {
 func TestGetRequestOpenNewTab_CookieSetToOne_ReturnsTrue(t *testing.T) {
 	h := newRenderTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
-	req.AddCookie(&http.Cookie{Name: OpenNewTabCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: openNewTabCookieName, Value: "1"})
 
 	if got := h.getRequestOpenNewTab(req); got != true {
 		t.Errorf("getRequestOpenNewTab() with cookie=1 = %v, want true", got)
@@ -68,7 +68,7 @@ func TestGetRequestOpenNewTab_CookieSetToOne_ReturnsTrue(t *testing.T) {
 func TestGetRequestOpenNewTab_CookieSetToZero_ReturnsFalse(t *testing.T) {
 	h := newRenderTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
-	req.AddCookie(&http.Cookie{Name: OpenNewTabCookieName, Value: "0"})
+	req.AddCookie(&http.Cookie{Name: openNewTabCookieName, Value: "0"})
 
 	if got := h.getRequestOpenNewTab(req); got != false {
 		t.Errorf("getRequestOpenNewTab() with cookie=0 = %v, want false", got)
@@ -123,11 +123,11 @@ func TestPreferencesSave_ValidPost_SetsAllCookiesAndRedirects(t *testing.T) {
 	if got["theme"] != "dark" {
 		t.Errorf("PreferencesSave POST: theme cookie = %q, want dark", got["theme"])
 	}
-	if got[ResultsPerPageCookieName] != "50" {
-		t.Errorf("PreferencesSave POST: %s cookie = %q, want 50", ResultsPerPageCookieName, got[ResultsPerPageCookieName])
+	if got[resultsPerPageCookieName] != "50" {
+		t.Errorf("PreferencesSave POST: %s cookie = %q, want 50", resultsPerPageCookieName, got[resultsPerPageCookieName])
 	}
-	if got[OpenNewTabCookieName] != "1" {
-		t.Errorf("PreferencesSave POST: %s cookie = %q, want 1", OpenNewTabCookieName, got[OpenNewTabCookieName])
+	if got[openNewTabCookieName] != "1" {
+		t.Errorf("PreferencesSave POST: %s cookie = %q, want 1", openNewTabCookieName, got[openNewTabCookieName])
 	}
 }
 
@@ -149,8 +149,8 @@ func TestPreferencesSave_OpenNewTabUnchecked_SetsCookieToZero(t *testing.T) {
 	for _, c := range rr.Result().Cookies() {
 		got[c.Name] = c.Value
 	}
-	if got[OpenNewTabCookieName] != "0" {
-		t.Errorf("PreferencesSave POST unchecked: %s cookie = %q, want 0", OpenNewTabCookieName, got[OpenNewTabCookieName])
+	if got[openNewTabCookieName] != "0" {
+		t.Errorf("PreferencesSave POST unchecked: %s cookie = %q, want 0", openNewTabCookieName, got[openNewTabCookieName])
 	}
 }
 
@@ -171,8 +171,8 @@ func TestPreferencesSave_InvalidThemeAndResultsPerPage_SkipsThoseCookies(t *test
 		if c.Name == "theme" {
 			t.Errorf("PreferencesSave POST: expected no theme cookie for invalid value, got %q", c.Value)
 		}
-		if c.Name == ResultsPerPageCookieName {
-			t.Errorf("PreferencesSave POST: expected no %s cookie for invalid value, got %q", ResultsPerPageCookieName, c.Value)
+		if c.Name == resultsPerPageCookieName {
+			t.Errorf("PreferencesSave POST: expected no %s cookie for invalid value, got %q", resultsPerPageCookieName, c.Value)
 		}
 	}
 }

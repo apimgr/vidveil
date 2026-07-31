@@ -219,7 +219,7 @@ func WriteKeypair(configDir string, kp *Keypair, secret []byte) error {
 // become un-decryptable once the private key is gone.
 func DeleteKeypair(configDir string) error {
 	dir := SecurityDir(configDir)
-	for _, name := range []string{PublicKeyFile, PrivateKeyFile, KeyserverStateFile} {
+	for _, name := range []string{PublicKeyFile, PrivateKeyFile, keyserverStateFile} {
 		if err := os.Remove(filepath.Join(dir, name)); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("remove %s: %w", name, err)
 		}

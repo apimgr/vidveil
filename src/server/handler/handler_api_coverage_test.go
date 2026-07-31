@@ -475,7 +475,7 @@ func TestContentRestrictedPage_NoAck_CurlClient_ReturnsText(t *testing.T) {
 func TestContentRestrictedPage_WithAck_Redirects(t *testing.T) {
 	h := newAPITestHandler()
 	r := httptest.NewRequest(http.MethodGet, "/content-restricted", nil)
-	r.AddCookie(&http.Cookie{Name: ContentRestrictionAckCookieName, Value: "1"})
+	r.AddCookie(&http.Cookie{Name: contentRestrictionAckCookieName, Value: "1"})
 	w := httptest.NewRecorder()
 	h.ContentRestrictedPage(w, r)
 	if w.Code != http.StatusFound {
@@ -487,7 +487,7 @@ func TestContentRestrictedPage_WithAck_Redirects(t *testing.T) {
 func TestContentRestrictedPage_WithAckAndRedirect_Redirects(t *testing.T) {
 	h := newAPITestHandler()
 	r := httptest.NewRequest(http.MethodGet, "/content-restricted?redirect=/search", nil)
-	r.AddCookie(&http.Cookie{Name: ContentRestrictionAckCookieName, Value: "1"})
+	r.AddCookie(&http.Cookie{Name: contentRestrictionAckCookieName, Value: "1"})
 	w := httptest.NewRecorder()
 	h.ContentRestrictedPage(w, r)
 	if w.Code != http.StatusFound {

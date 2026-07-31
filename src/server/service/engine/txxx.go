@@ -11,8 +11,8 @@ import (
 // TxxxEngine searches Txxx
 type TxxxEngine struct{ *BaseEngine }
 
-// NewTxxxEngine creates a new Txxx engine
-func NewTxxxEngine(appConfig *config.AppConfig) *TxxxEngine {
+// newTxxxEngine creates a new Txxx engine
+func newTxxxEngine(appConfig *config.AppConfig) *TxxxEngine {
 	return &TxxxEngine{NewBaseEngine("txxx", "Txxx", "https://www.txxx.com", 3, appConfig)}
 }
 

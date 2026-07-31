@@ -10,8 +10,8 @@ type EpornerParser struct {
 	BaseURL string
 }
 
-// NewEpornerParser creates a new Eporner parser
-func NewEpornerParser() *EpornerParser {
+// newEpornerParser creates a new Eporner parser
+func newEpornerParser() *EpornerParser {
 	return &EpornerParser{BaseURL: "https://www.eporner.com"}
 }
 

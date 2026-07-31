@@ -74,8 +74,8 @@ type xhamsterVideo struct {
 	Created  int64  `json:"created"`
 }
 
-// NewXHamsterEngine creates a new xHamster engine
-func NewXHamsterEngine(appConfig *config.AppConfig) *XHamsterEngine {
+// newXHamsterEngine creates a new xHamster engine
+func newXHamsterEngine(appConfig *config.AppConfig) *XHamsterEngine {
 	e := &XHamsterEngine{NewBaseEngine("xhamster", "xHamster", "https://xhamster.com", 1, appConfig)}
 	// Set capabilities per IDEA.md
 	e.SetCapabilities(Capabilities{

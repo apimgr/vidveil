@@ -13,14 +13,14 @@ import (
 	"github.com/apimgr/vidveil/src/path"
 )
 
-// EnvPrefix is the project env var prefix derived from the project name
-var EnvPrefix = strings.ToUpper(path.ProjectName) + "_"
+// envPrefix is the project env var prefix derived from the project name
+var envPrefix = strings.ToUpper(path.ProjectName) + "_"
 
-// ApplyEnvOverrides walks the config struct and applies {PREFIX}_{PATH} env overrides.
+// applyEnvOverrides walks the config struct and applies {PREFIX}_{PATH} env overrides.
 // Two names are checked per field: the full yaml path (VIDVEIL_SERVER_DATABASE_TYPE) and,
 // for fields under the server section, an alias without SERVER_ (VIDVEIL_DATABASE_TYPE).
 // The full name wins when both are set. Invalid values warn and are ignored per AI.md PART 12.
-func ApplyEnvOverrides(cfg *AppConfig) {
+func applyEnvOverrides(cfg *AppConfig) {
 	applyEnvToStruct(reflect.ValueOf(cfg).Elem(), nil)
 }
 
@@ -53,12 +53,12 @@ func applyEnvToStruct(v reflect.Value, path []string) {
 
 // lookupEnvForPath checks the full-path env name, then the SERVER_-less alias
 func lookupEnvForPath(path []string) (string, bool) {
-	full := EnvPrefix + strings.ToUpper(strings.Join(path, "_"))
+	full := envPrefix + strings.ToUpper(strings.Join(path, "_"))
 	if val, ok := os.LookupEnv(full); ok {
 		return val, true
 	}
 	if len(path) > 1 && path[0] == "server" {
-		alias := EnvPrefix + strings.ToUpper(strings.Join(path[1:], "_"))
+		alias := envPrefix + strings.ToUpper(strings.Join(path[1:], "_"))
 		if val, ok := os.LookupEnv(alias); ok {
 			return val, true
 		}
@@ -71,7 +71,7 @@ func setFieldFromEnv(fv reflect.Value, val string, path []string) {
 	if !fv.CanSet() {
 		return
 	}
-	name := EnvPrefix + strings.ToUpper(strings.Join(path, "_"))
+	name := envPrefix + strings.ToUpper(strings.Join(path, "_"))
 	switch fv.Kind() {
 	case reflect.String:
 		fv.SetString(val)

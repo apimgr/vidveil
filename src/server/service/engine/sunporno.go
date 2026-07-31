@@ -11,8 +11,8 @@ import (
 // SunPornoEngine searches SunPorno
 type SunPornoEngine struct{ *BaseEngine }
 
-// NewSunPornoEngine creates a new SunPorno engine
-func NewSunPornoEngine(appConfig *config.AppConfig) *SunPornoEngine {
+// newSunPornoEngine creates a new SunPorno engine
+func newSunPornoEngine(appConfig *config.AppConfig) *SunPornoEngine {
 	return &SunPornoEngine{NewBaseEngine("sunporno", "SunPorno", "https://www.sunporno.com", 3, appConfig)}
 }
 

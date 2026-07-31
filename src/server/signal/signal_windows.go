@@ -46,9 +46,9 @@ func IsShuttingDown() bool {
 	return shuttingDown.Load()
 }
 
-// SetupSignalHandler configures graceful shutdown per AI.md PART 8
+// setupSignalHandler configures graceful shutdown per AI.md PART 8
 // Windows only supports os.Interrupt (Ctrl+C, Ctrl+Break)
-func SetupSignalHandler(server *http.Server, pidFile string) {
+func setupSignalHandler(server *http.Server, pidFile string) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 

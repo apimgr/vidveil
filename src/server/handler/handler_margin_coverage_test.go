@@ -92,7 +92,7 @@ func TestSendErrorWithDetails(t *testing.T) {
 	}
 	for _, tc := range cases {
 		w := httptest.NewRecorder()
-		SendErrorWithDetails(w, tc.code, "boom", map[string]string{"field": "x"})
+		sendErrorWithDetails(w, tc.code, "boom", map[string]string{"field": "x"})
 		if w.Code != tc.wantStatus {
 			t.Errorf("code %s: status = %d, want %d", tc.code, w.Code, tc.wantStatus)
 		}

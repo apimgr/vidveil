@@ -290,7 +290,7 @@ func TestCircuitBreakerRegistry(t *testing.T) {
 		Timeout:          30 * time.Second,
 	}
 
-	registry := NewCircuitBreakerRegistry(cfg)
+	registry := newCircuitBreakerRegistry(cfg)
 
 	// Get creates a new breaker
 	cb1 := registry.Get("engine1")
@@ -316,7 +316,7 @@ func TestCircuitBreakerRegistry(t *testing.T) {
 }
 
 func TestCircuitBreakerRegistryGetAll(t *testing.T) {
-	registry := NewCircuitBreakerRegistry(nil)
+	registry := newCircuitBreakerRegistry(nil)
 
 	registry.Get("engine1")
 	registry.Get("engine2")
@@ -340,7 +340,7 @@ func TestCircuitBreakerRegistryResetAll(t *testing.T) {
 		Timeout:          1 * time.Hour,
 	}
 
-	registry := NewCircuitBreakerRegistry(cfg)
+	registry := newCircuitBreakerRegistry(cfg)
 
 	cb1 := registry.Get("engine1")
 	cb2 := registry.Get("engine2")
@@ -610,7 +610,7 @@ func TestCircuitBreakerTransitionToSameState(t *testing.T) {
 // WLock acquisition, letting a concurrent goroutine insert the key. When Get then
 // acquires the write lock, the double-check finds the key and returns it directly.
 func TestCircuitBreakerRegistryGetDoubleCheck(t *testing.T) {
-	registry := NewCircuitBreakerRegistry(nil)
+	registry := newCircuitBreakerRegistry(nil)
 	const key = "double-check-key"
 
 	inserted := make(chan *CircuitBreaker, 1)

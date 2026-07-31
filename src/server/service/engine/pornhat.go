@@ -11,8 +11,8 @@ import (
 // PornHatEngine searches PornHat
 type PornHatEngine struct{ *BaseEngine }
 
-// NewPornHatEngine creates a new PornHat engine
-func NewPornHatEngine(appConfig *config.AppConfig) *PornHatEngine {
+// newPornHatEngine creates a new PornHat engine
+func newPornHatEngine(appConfig *config.AppConfig) *PornHatEngine {
 	e := &PornHatEngine{NewBaseEngine("pornhat", "PornHat", "https://www.pornhat.com", 4, appConfig)}
 	// PornHat exposes preview MP4s via data-preview-custom on the <a> link element
 	e.SetCapabilities(Capabilities{

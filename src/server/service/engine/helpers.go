@@ -40,7 +40,7 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 	}
 
 	// Log response metadata when debug is enabled (never the raw body)
-	DebugLogEngineResponse(e.Name(), url, len(body))
+	debugLogEngineResponse(e.Name(), url, len(body))
 
 	// Parse HTML from body
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
@@ -71,7 +71,7 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 	})
 
 	// Log parse results when debug is enabled
-	DebugLogEngineParseResult(e.Name(), results, fieldStats)
+	debugLogEngineParseResult(e.Name(), results, fieldStats)
 
 	return results, nil
 }

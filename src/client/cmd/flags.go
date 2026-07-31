@@ -3,8 +3,8 @@ package cmd
 
 import "strings"
 
-// ParseCLILongFlagArgument normalizes a long-form CLI flag and extracts any inline value.
-func ParseCLILongFlagArgument(flagArgument string) (string, string, bool) {
+// parseCLILongFlagArgument normalizes a long-form CLI flag and extracts any inline value.
+func parseCLILongFlagArgument(flagArgument string) (string, string, bool) {
 	if !strings.HasPrefix(flagArgument, "--") {
 		return flagArgument, "", false
 	}
@@ -17,9 +17,9 @@ func ParseCLILongFlagArgument(flagArgument string) (string, string, bool) {
 	return flagParts[0], flagParts[1], true
 }
 
-// ReadCLILongFlagValue reads a long-form CLI flag value from either --flag=value or --flag value syntax.
-func ReadCLILongFlagValue(args []string, currentIndex int) (string, int, bool) {
-	_, inlineFlagValue, hasInlineFlagValue := ParseCLILongFlagArgument(args[currentIndex])
+// readCLILongFlagValue reads a long-form CLI flag value from either --flag=value or --flag value syntax.
+func readCLILongFlagValue(args []string, currentIndex int) (string, int, bool) {
+	_, inlineFlagValue, hasInlineFlagValue := parseCLILongFlagArgument(args[currentIndex])
 	if hasInlineFlagValue {
 		return inlineFlagValue, currentIndex, true
 	}

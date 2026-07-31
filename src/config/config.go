@@ -1479,7 +1479,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 		// Console output is handled in main.go per AI.md PART 7
 
 		// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
-		ApplyEnvOverrides(cfg)
+		applyEnvOverrides(cfg)
 
 		return cfg, configPath, nil
 	}
@@ -1515,7 +1515,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	}
 
 	// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
-	ApplyEnvOverrides(cfg)
+	applyEnvOverrides(cfg)
 
 	return cfg, configPath, nil
 }
@@ -1717,8 +1717,8 @@ func generateToken(length int) string {
 	return hex.EncodeToString(bytes)
 }
 
-// IsRunningInContainer detects if running in a container (tini as PID 1)
-func IsRunningInContainer() bool {
+// isRunningInContainer detects if running in a container (tini as PID 1)
+func isRunningInContainer() bool {
 	// Check if PID 1 is tini
 	if data, err := os.ReadFile("/proc/1/comm"); err == nil {
 		return strings.TrimSpace(string(data)) == "tini"

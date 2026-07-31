@@ -29,12 +29,12 @@ func TestIsElevatedReturnsBool(t *testing.T) {
 	_ = IsElevated()
 }
 
-// ── CanEscalate ──────────────────────────────────────────────────────────────
+// ── canEscalate ──────────────────────────────────────────────────────────────
 
 // TestCanEscalateReturnsBool verifies the function returns without panicking.
 // When running as root, IsElevated() is true and the function returns true immediately.
 func TestCanEscalateReturnsBool(t *testing.T) {
-	result := CanEscalate()
+	result := canEscalate()
 	// Just verify no panic; value depends on the test environment.
 	_ = result
 }

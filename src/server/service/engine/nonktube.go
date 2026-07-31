@@ -11,8 +11,8 @@ import (
 // NonkTubeEngine searches NonkTube
 type NonkTubeEngine struct{ *BaseEngine }
 
-// NewNonkTubeEngine creates a new NonkTube engine
-func NewNonkTubeEngine(appConfig *config.AppConfig) *NonkTubeEngine {
+// newNonkTubeEngine creates a new NonkTube engine
+func newNonkTubeEngine(appConfig *config.AppConfig) *NonkTubeEngine {
 	return &NonkTubeEngine{NewBaseEngine("nonktube", "NonkTube", "https://www.nonktube.com", 4, appConfig)}
 }
 

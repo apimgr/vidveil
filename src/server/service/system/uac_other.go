@@ -73,8 +73,8 @@ func GetWindowsServiceAccount(serviceName string) string {
 	return ""
 }
 
-// IsRunningAsService checks if running as a system service
-func IsRunningAsService() bool {
+// isRunningAsService checks if running as a system service
+func isRunningAsService() bool {
 	// Check if started by systemd or similar
 	return os.Getppid() == 1
 }

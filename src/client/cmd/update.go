@@ -69,7 +69,7 @@ func RunCLIUpdateCommand(args []string) error {
 
 	switch cmd {
 	case "--help", "help", "-h":
-		PrintCLIUpdateHelp()
+		printCLIUpdateHelp()
 		return nil
 	case "check":
 		return runCLIUpdateCheck()
@@ -79,13 +79,13 @@ func RunCLIUpdateCommand(args []string) error {
 		return runCLIUpdateBranch(arg)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown update command: %s\n", cmd)
-		PrintCLIUpdateHelp()
+		printCLIUpdateHelp()
 		return fmt.Errorf("unknown update command: %s", cmd)
 	}
 }
 
-// PrintCLIUpdateHelp prints --update help and exits successfully per AI.md PART 8.
-func PrintCLIUpdateHelp() {
+// printCLIUpdateHelp prints --update help and exits successfully per AI.md PART 8.
+func printCLIUpdateHelp() {
 	fmt.Printf(`Update Commands:
   %s --update              Check and perform in-place update with re-exec
   %s --update yes          Same as --update (default)

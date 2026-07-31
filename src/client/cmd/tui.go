@@ -56,10 +56,10 @@ type TUILayoutConfig struct {
 	VerticalScroll bool
 }
 
-// CreateTUIStylesFromPalette creates TUIStyles from theme.ColorPalette
+// createTUIStylesFromPalette creates TUIStyles from theme.ColorPalette
 // Per AI.md PART 32: TUI Styles from Palette
 // Per AI.md PART 1: Function names MUST reveal intent
-func CreateTUIStylesFromPalette(palette theme.ColorPalette) TUIStyles {
+func createTUIStylesFromPalette(palette theme.ColorPalette) TUIStyles {
 	return TUIStyles{
 		Base: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(palette.Foreground)).
@@ -92,10 +92,10 @@ func CreateTUIStylesFromPalette(palette theme.ColorPalette) TUIStyles {
 	}
 }
 
-// GetTUILayoutConfig returns layout config for a terminal.SizeMode
+// getTUILayoutConfig returns layout config for a terminal.SizeMode
 // Per AI.md PART 32: Responsive Layout
 // Per AI.md PART 1: Function names MUST reveal intent
-func GetTUILayoutConfig(sizeMode terminal.SizeMode) TUILayoutConfig {
+func getTUILayoutConfig(sizeMode terminal.SizeMode) TUILayoutConfig {
 	configs := map[terminal.SizeMode]TUILayoutConfig{
 		terminal.SizeModeMicro: {
 			ShowBorders:    false,
@@ -216,20 +216,20 @@ type TUISearchDoneMsg struct {
 	err     error
 }
 
-// CreateInitialTUIModel creates the initial TUI model
+// createInitialTUIModel creates the initial TUI model
 // Per AI.md PART 1: Function names MUST reveal intent - "initialModel" is ambiguous
-func CreateInitialTUIModel() TUIModel {
+func createInitialTUIModel() TUIModel {
 	// Initialize styles from theme palette
 	// Per AI.md PART 32: TUI uses theme.ColorPalette from src/common/theme
 	themeMode := TUIDefaultTheme
 	if cliConfig != nil && cliConfig.TUI.Theme != "" {
 		themeMode = cliConfig.TUI.Theme
 	}
-	tuiStyles = CreateTUIStylesFromPalette(theme.GetColorPalette(themeMode))
+	tuiStyles = createTUIStylesFromPalette(theme.GetColorPalette(themeMode))
 
 	// Get initial terminal size and layout config
 	termSize := terminal.GetTerminalSize()
-	layoutConfig := GetTUILayoutConfig(termSize.Mode)
+	layoutConfig := getTUILayoutConfig(termSize.Mode)
 
 	return TUIModel{
 		searchQuery:    "",
@@ -266,7 +266,7 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// No results yet, perform search
 				m.isLoading = true
 				m.statusMessage = ""
-				return m, ExecuteTUISearch(m.searchQuery)
+				return m, executeTUISearch(m.searchQuery)
 			}
 			if len(m.searchResults) > 0 && m.selectedIndex < len(m.searchResults) {
 				// Open selected result in browser
@@ -350,7 +350,7 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Recalculate size mode and layout config
 		m.sizeMode = terminal.GetTerminalSize().Mode
-		m.layoutConfig = GetTUILayoutConfig(m.sizeMode)
+		m.layoutConfig = getTUILayoutConfig(m.sizeMode)
 
 	case TUISearchDoneMsg:
 		m.isLoading = false
@@ -475,9 +475,9 @@ func (m TUIModel) View() string {
 	return viewBuilder.String()
 }
 
-// ExecuteTUISearch performs a search from TUI
+// executeTUISearch performs a search from TUI
 // Per AI.md PART 1: Function names MUST reveal intent - "doSearch" is ambiguous
-func ExecuteTUISearch(searchQuery string) tea.Cmd {
+func executeTUISearch(searchQuery string) tea.Cmd {
 	return func() tea.Msg {
 		resp, err := apiClient.Search(searchQuery, 0, 20, nil)
 		if err != nil {
@@ -498,10 +498,10 @@ func ExecuteTUISearch(searchQuery string) tea.Cmd {
 	}
 }
 
-// RunInteractiveTUI runs the interactive TUI
+// runInteractiveTUI runs the interactive TUI
 // Per AI.md PART 1: Function names MUST reveal intent - "runTUI" is ambiguous
-func RunInteractiveTUI() error {
-	tuiProgram := tea.NewProgram(CreateInitialTUIModel(), tea.WithAltScreen())
+func runInteractiveTUI() error {
+	tuiProgram := tea.NewProgram(createInitialTUIModel(), tea.WithAltScreen())
 	_, err := tuiProgram.Run()
 	return err
 }

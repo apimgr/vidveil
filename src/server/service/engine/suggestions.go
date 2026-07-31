@@ -7,7 +7,7 @@ import (
 )
 
 // Search suggestions organized by category for maintainability
-// Combined into SearchSuggestions at init time
+// Combined into searchSuggestions at init time
 // Total: 5000+ unique terms across 37 categories
 
 // suggestionsPopular - Popular general terms (~100 terms)
@@ -1162,10 +1162,10 @@ var suggestionsTrending = []string{
 	"share worthy", "send to friend", "screenshot", "screen record",
 }
 
-// SearchSuggestions contains comprehensive adult content search terms (5000+ terms)
+// searchSuggestions contains comprehensive adult content search terms (5000+ terms)
 // Built into the binary at compile time for privacy and performance
 // Organized by category for easier maintenance
-var SearchSuggestions = func() []string {
+var searchSuggestions = func() []string {
 	// Pre-allocate with estimated capacity
 	all := make([]string, 0, 8000)
 
@@ -1236,7 +1236,7 @@ var (
 )
 
 // SetCustomTerms sets additional search terms from config
-// These are ADDED to the built-in SearchSuggestions
+// These are ADDED to the built-in searchSuggestions
 func SetCustomTerms(terms []string) {
 	customTerms = terms
 }
@@ -1244,11 +1244,11 @@ func SetCustomTerms(terms []string) {
 // getAllSuggestions returns built-in suggestions + custom terms from config
 func getAllSuggestions() []string {
 	if len(customTerms) == 0 {
-		return SearchSuggestions
+		return searchSuggestions
 	}
 	// Merge built-in and custom terms
-	all := make([]string, 0, len(SearchSuggestions)+len(customTerms))
-	all = append(all, SearchSuggestions...)
+	all := make([]string, 0, len(searchSuggestions)+len(customTerms))
+	all = append(all, searchSuggestions...)
 	all = append(all, customTerms...)
 	return all
 }

@@ -11,8 +11,8 @@ import (
 // NubilesPornEngine searches NubilesPorn
 type NubilesPornEngine struct{ *BaseEngine }
 
-// NewNubilesPornEngine creates a new NubilesPorn engine
-func NewNubilesPornEngine(appConfig *config.AppConfig) *NubilesPornEngine {
+// newNubilesPornEngine creates a new NubilesPorn engine
+func newNubilesPornEngine(appConfig *config.AppConfig) *NubilesPornEngine {
 	return &NubilesPornEngine{NewBaseEngine("nubilesporn", "NubilesPorn", "https://nubiles-porn.com", 4, appConfig)}
 }
 

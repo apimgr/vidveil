@@ -65,5 +65,5 @@ func TestGetFQDN_NoDomainReturnsNonEmpty(t *testing.T) {
 func TestIsRunningInContainer_DoesNotPanic(t *testing.T) {
 	// Exercises the /proc/1/comm read path; result is environment-dependent but
 	// the call must be side-effect free and return a bool.
-	_ = IsRunningInContainer()
+	_ = isRunningInContainer()
 }

@@ -30,8 +30,8 @@ type TOTPService struct {
 	issuer string
 }
 
-// NewTOTPService creates a new TOTP service
-func NewTOTPService(issuer string) *TOTPService {
+// newTOTPService creates a new TOTP service
+func newTOTPService(issuer string) *TOTPService {
 	return &TOTPService{
 		issuer: issuer,
 	}
@@ -144,8 +144,8 @@ type TOTPConfig struct {
 	RememberDeviceDays int `yaml:"remember_device_days"`
 }
 
-// DefaultTOTPConfig returns the default 2FA configuration
-func DefaultTOTPConfig() TOTPConfig {
+// defaultTOTPConfig returns the default 2FA configuration
+func defaultTOTPConfig() TOTPConfig {
 	return TOTPConfig{
 		Enabled:            true,
 		Required:           false,

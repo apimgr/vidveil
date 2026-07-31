@@ -18,8 +18,8 @@ type XVideosEngine struct {
 	parser *parser.XVideosParser
 }
 
-// NewXVideosEngine creates a new XVideos engine
-func NewXVideosEngine(appConfig *config.AppConfig) *XVideosEngine {
+// newXVideosEngine creates a new XVideos engine
+func newXVideosEngine(appConfig *config.AppConfig) *XVideosEngine {
 	e := &XVideosEngine{
 		BaseEngine: NewBaseEngine("xvideos", "XVideos", "https://www.xvideos.com", 1, appConfig),
 		parser:     parser.NewXVideosParser(),

@@ -36,7 +36,7 @@ func TestParseCLITimeoutSeconds(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			gotSeconds, gotErr := ParseCLITimeoutSeconds(testCase.input)
+			gotSeconds, gotErr := parseCLITimeoutSeconds(testCase.input)
 			if (gotErr != nil) != testCase.wantErr {
 				t.Fatalf("error = %v, wantErr = %v", gotErr, testCase.wantErr)
 			}
@@ -61,7 +61,7 @@ func TestFormatCLITimeoutDuration(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got := FormatCLITimeoutDuration(testCase.input)
+			got := formatCLITimeoutDuration(testCase.input)
 			if got != testCase.want {
 				t.Fatalf("duration = %q, want %q", got, testCase.want)
 			}
@@ -154,7 +154,7 @@ func TestValidateCLIServerURL(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			gotErr := ValidateCLIServerURL(testCase.input)
+			gotErr := validateCLIServerURL(testCase.input)
 			if (gotErr != nil) != testCase.wantErr {
 				t.Fatalf("error = %v, wantErr = %v", gotErr, testCase.wantErr)
 			}
@@ -167,7 +167,7 @@ func TestGetCLIAuthTokenFromEnvCoverage(t *testing.T) {
 		t.Setenv("VIDVEIL_TOKEN", "primary-token")
 		t.Setenv("VIDVEIL_CLI_TOKEN", "fallback-token")
 
-		got := GetCLIAuthTokenFromEnv()
+		got := getCLIAuthTokenFromEnv()
 		if got != "primary-token" {
 			t.Fatalf("token = %q, want %q", got, "primary-token")
 		}
@@ -177,7 +177,7 @@ func TestGetCLIAuthTokenFromEnvCoverage(t *testing.T) {
 		t.Setenv("VIDVEIL_TOKEN", "")
 		t.Setenv("VIDVEIL_CLI_TOKEN", "fallback-token")
 
-		got := GetCLIAuthTokenFromEnv()
+		got := getCLIAuthTokenFromEnv()
 		if got != "fallback-token" {
 			t.Fatalf("token = %q, want %q", got, "fallback-token")
 		}
@@ -187,7 +187,7 @@ func TestGetCLIAuthTokenFromEnvCoverage(t *testing.T) {
 		t.Setenv("VIDVEIL_TOKEN", "")
 		t.Setenv("VIDVEIL_CLI_TOKEN", "")
 
-		got := GetCLIAuthTokenFromEnv()
+		got := getCLIAuthTokenFromEnv()
 		if got != "" {
 			t.Fatalf("token = %q, want empty", got)
 		}
@@ -199,7 +199,7 @@ func TestGetCLIServerAddressFromEnvCoverage(t *testing.T) {
 		t.Setenv("VIDVEIL_SERVER_PRIMARY", "https://primary.example.com")
 		t.Setenv("VIDVEIL_SERVER", "https://fallback.example.com")
 
-		got := GetCLIServerAddressFromEnv()
+		got := getCLIServerAddressFromEnv()
 		if got != "https://primary.example.com" {
 			t.Fatalf("address = %q, want %q", got, "https://primary.example.com")
 		}
@@ -209,7 +209,7 @@ func TestGetCLIServerAddressFromEnvCoverage(t *testing.T) {
 		t.Setenv("VIDVEIL_SERVER_PRIMARY", "")
 		t.Setenv("VIDVEIL_SERVER", "https://fallback.example.com")
 
-		got := GetCLIServerAddressFromEnv()
+		got := getCLIServerAddressFromEnv()
 		if got != "https://fallback.example.com" {
 			t.Fatalf("address = %q, want %q", got, "https://fallback.example.com")
 		}
@@ -219,7 +219,7 @@ func TestGetCLIServerAddressFromEnvCoverage(t *testing.T) {
 		t.Setenv("VIDVEIL_SERVER_PRIMARY", "")
 		t.Setenv("VIDVEIL_SERVER", "")
 
-		got := GetCLIServerAddressFromEnv()
+		got := getCLIServerAddressFromEnv()
 		if got != "" {
 			t.Fatalf("address = %q, want empty", got)
 		}
@@ -231,7 +231,7 @@ func TestGetCLIOutputFormatFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_OUTPUT_FORMAT", "json")
 		t.Setenv("VIDVEIL_FORMAT", "yaml")
 
-		got := GetCLIOutputFormatFromEnv()
+		got := getCLIOutputFormatFromEnv()
 		if got != "json" {
 			t.Fatalf("format = %q, want %q", got, "json")
 		}
@@ -241,7 +241,7 @@ func TestGetCLIOutputFormatFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_OUTPUT_FORMAT", "")
 		t.Setenv("VIDVEIL_FORMAT", "yaml")
 
-		got := GetCLIOutputFormatFromEnv()
+		got := getCLIOutputFormatFromEnv()
 		if got != "yaml" {
 			t.Fatalf("format = %q, want %q", got, "yaml")
 		}
@@ -251,7 +251,7 @@ func TestGetCLIOutputFormatFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_OUTPUT_FORMAT", "")
 		t.Setenv("VIDVEIL_FORMAT", "")
 
-		got := GetCLIOutputFormatFromEnv()
+		got := getCLIOutputFormatFromEnv()
 		if got != "" {
 			t.Fatalf("format = %q, want empty", got)
 		}
@@ -263,7 +263,7 @@ func TestGetCLIOutputColorFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_OUTPUT_COLOR", "always")
 		t.Setenv("VIDVEIL_COLOR", "never")
 
-		got := GetCLIOutputColorFromEnv()
+		got := getCLIOutputColorFromEnv()
 		if got != "always" {
 			t.Fatalf("color = %q, want %q", got, "always")
 		}
@@ -273,7 +273,7 @@ func TestGetCLIOutputColorFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_OUTPUT_COLOR", "")
 		t.Setenv("VIDVEIL_COLOR", "never")
 
-		got := GetCLIOutputColorFromEnv()
+		got := getCLIOutputColorFromEnv()
 		if got != "never" {
 			t.Fatalf("color = %q, want %q", got, "never")
 		}
@@ -283,7 +283,7 @@ func TestGetCLIOutputColorFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_OUTPUT_COLOR", "")
 		t.Setenv("VIDVEIL_COLOR", "")
 
-		got := GetCLIOutputColorFromEnv()
+		got := getCLIOutputColorFromEnv()
 		if got != "" {
 			t.Fatalf("color = %q, want empty", got)
 		}
@@ -295,7 +295,7 @@ func TestGetCLITimeoutSecondsFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 		t.Setenv("VIDVEIL_TIMEOUT", "")
 
-		got, err := GetCLITimeoutSecondsFromEnv()
+		got, err := getCLITimeoutSecondsFromEnv()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -308,7 +308,7 @@ func TestGetCLITimeoutSecondsFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_SERVER_TIMEOUT", "30")
 		t.Setenv("VIDVEIL_TIMEOUT", "")
 
-		got, err := GetCLITimeoutSecondsFromEnv()
+		got, err := getCLITimeoutSecondsFromEnv()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -321,7 +321,7 @@ func TestGetCLITimeoutSecondsFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 		t.Setenv("VIDVEIL_TIMEOUT", "60")
 
-		got, err := GetCLITimeoutSecondsFromEnv()
+		got, err := getCLITimeoutSecondsFromEnv()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -334,7 +334,7 @@ func TestGetCLITimeoutSecondsFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_SERVER_TIMEOUT", "invalid")
 		t.Setenv("VIDVEIL_TIMEOUT", "")
 
-		_, err := GetCLITimeoutSecondsFromEnv()
+		_, err := getCLITimeoutSecondsFromEnv()
 		if err == nil {
 			t.Fatal("expected error for invalid timeout value, got nil")
 		}
@@ -344,7 +344,7 @@ func TestGetCLITimeoutSecondsFromEnv(t *testing.T) {
 		t.Setenv("VIDVEIL_SERVER_TIMEOUT", "0")
 		t.Setenv("VIDVEIL_TIMEOUT", "")
 
-		_, err := GetCLITimeoutSecondsFromEnv()
+		_, err := getCLITimeoutSecondsFromEnv()
 		if err == nil {
 			t.Fatal("expected error for zero timeout value, got nil")
 		}
@@ -357,7 +357,7 @@ func TestGetCLIDefaultServerAddress(t *testing.T) {
 		t.Cleanup(func() { OfficialSite = orig })
 		OfficialSite = ""
 
-		got := GetCLIDefaultServerAddress()
+		got := getCLIDefaultServerAddress()
 		if got != "" {
 			t.Fatalf("default server address = %q, want empty", got)
 		}
@@ -368,7 +368,7 @@ func TestGetCLIDefaultServerAddress(t *testing.T) {
 		t.Cleanup(func() { OfficialSite = orig })
 		OfficialSite = "https://example.com"
 
-		got := GetCLIDefaultServerAddress()
+		got := getCLIDefaultServerAddress()
 		if got != "https://example.com" {
 			t.Fatalf("default server address = %q, want %q", got, "https://example.com")
 		}
@@ -414,7 +414,7 @@ func TestCloseCLILoggingWithNilFile(t *testing.T) {
 	t.Cleanup(func() { cliLogOutputFile = orig })
 	cliLogOutputFile = nil
 
-	CloseCLILogging()
+	closeCLILogging()
 }
 
 // ── PrintCLIVersionInfo ───────────────────────────────────────────────────────
@@ -512,7 +512,7 @@ func TestPrintConnectionWarning_NilErrNoPanic(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	PrintConnectionWarning(nil)
+	printConnectionWarning(nil)
 
 	w.Close()
 	io.ReadAll(r)

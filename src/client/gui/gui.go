@@ -12,8 +12,8 @@ import (
 	"github.com/apimgr/vidveil/src/common/display"
 )
 
-// ErrGUIUnsupported is returned when the current platform has no GUI launcher.
-var ErrGUIUnsupported = errors.New("GUI not supported on this platform")
+// errGUIUnsupported is returned when the current platform has no GUI launcher.
+var errGUIUnsupported = errors.New("GUI not supported on this platform")
 
 // Config holds the configuration passed to the GUI launcher.
 type Config struct {

@@ -512,9 +512,9 @@ func TestGlobalStateDefaultsAfterPreviousTest(t *testing.T) {
 	}
 }
 
-// --- SetupSignalHandler ---
+// --- setupSignalHandler ---
 
-// TestSetupSignalHandlerNilServerNoPanic verifies that SetupSignalHandler does
+// TestSetupSignalHandlerNilServerNoPanic verifies that setupSignalHandler does
 // not panic when passed a nil *http.Server. The goroutine spawned internally
 // will simply block until a signal arrives — that is acceptable for a test.
 func TestSetupSignalHandlerNilServerNoPanic(t *testing.T) {
@@ -522,14 +522,14 @@ func TestSetupSignalHandlerNilServerNoPanic(t *testing.T) {
 	dir := t.TempDir()
 	pidPath := filepath.Join(dir, "test.pid")
 	// Must not panic; the goroutine blocks but the test does not send signals.
-	SetupSignalHandler(nil, pidPath)
+	setupSignalHandler(nil, pidPath)
 }
 
-// TestSetupSignalHandlerEmptyPidFileNoPanic verifies SetupSignalHandler tolerates
+// TestSetupSignalHandlerEmptyPidFileNoPanic verifies setupSignalHandler tolerates
 // an empty PID file path without panicking.
 func TestSetupSignalHandlerEmptyPidFileNoPanic(t *testing.T) {
 	resetGlobals(t)
-	SetupSignalHandler(nil, "")
+	setupSignalHandler(nil, "")
 }
 
 // TestSetupSignalHandlerUSR1InvokesLogReopen verifies that sending SIGUSR1 to
@@ -539,7 +539,7 @@ func TestSetupSignalHandlerUSR1InvokesLogReopen(t *testing.T) {
 	resetGlobals(t)
 	called := make(chan struct{}, 1)
 	SetLogReopenFunc(func() { called <- struct{}{} })
-	SetupSignalHandler(nil, "")
+	setupSignalHandler(nil, "")
 	syscall.Kill(os.Getpid(), syscall.SIGUSR1)
 	select {
 	case <-called:
@@ -555,7 +555,7 @@ func TestSetupSignalHandlerUSR2InvokesStatusDump(t *testing.T) {
 	resetGlobals(t)
 	called := make(chan struct{}, 1)
 	SetStatusDumpFunc(func() { called <- struct{}{} })
-	SetupSignalHandler(nil, "")
+	setupSignalHandler(nil, "")
 	syscall.Kill(os.Getpid(), syscall.SIGUSR2)
 	select {
 	case <-called:

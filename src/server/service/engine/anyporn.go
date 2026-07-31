@@ -11,8 +11,8 @@ import (
 // AnyPornEngine searches AnyPorn
 type AnyPornEngine struct{ *BaseEngine }
 
-// NewAnyPornEngine creates a new AnyPorn engine
-func NewAnyPornEngine(appConfig *config.AppConfig) *AnyPornEngine {
+// newAnyPornEngine creates a new AnyPorn engine
+func newAnyPornEngine(appConfig *config.AppConfig) *AnyPornEngine {
 	return &AnyPornEngine{NewBaseEngine("anyporn", "AnyPorn", "https://www.anyporn.com", 3, appConfig)}
 }
 

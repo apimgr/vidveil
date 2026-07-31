@@ -27,16 +27,16 @@ func RunShellCommand(args []string) error {
 	case "init":
 		return OutputShellInitSnippet(shellType)
 	case "-h", "--help":
-		PrintShellCommandHelp()
+		printShellCommandHelp()
 		return nil
 	default:
 		return fmt.Errorf("unknown shell command: %s", args[0])
 	}
 }
 
-// PrintShellCommandHelp prints help for the shell command
+// printShellCommandHelp prints help for the shell command
 // Per AI.md PART 1: Function names MUST reveal intent - "shellHelp" is ambiguous
-func PrintShellCommandHelp() {
+func printShellCommandHelp() {
 	fmt.Printf(`Shell completion commands
 
 Usage:
@@ -85,13 +85,13 @@ func OutputShellCompletionScript(shellType string) error {
 
 	switch shellType {
 	case "bash":
-		return OutputBashCompletionScript()
+		return outputBashCompletionScript()
 	case "zsh":
 		return OutputZshCompletionScript()
 	case "fish":
 		return OutputFishCompletionScript()
 	case "sh", "dash", "ksh":
-		return OutputBashCompletionScript()
+		return outputBashCompletionScript()
 	case "powershell", "pwsh":
 		return OutputPowershellCompletionScript()
 	default:
@@ -135,9 +135,9 @@ func DetectCurrentShellType() string {
 	return filepath.Base(shellEnv)
 }
 
-// OutputBashCompletionScript outputs bash completion script
+// outputBashCompletionScript outputs bash completion script
 // Per AI.md PART 1: Function names MUST reveal intent - "bashCompletions" is ambiguous
-func OutputBashCompletionScript() error {
+func outputBashCompletionScript() error {
 	fmt.Printf(`# Bash completion for %s
 # Add to ~/.bashrc or ~/.local/share/bash-completion/completions/%s
 

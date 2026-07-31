@@ -16,8 +16,8 @@ type PornMDEngine struct {
 	parser *parser.PornMDParser
 }
 
-// NewPornMDEngine creates a new PornMD engine
-func NewPornMDEngine(appConfig *config.AppConfig) *PornMDEngine {
+// newPornMDEngine creates a new PornMD engine
+func newPornMDEngine(appConfig *config.AppConfig) *PornMDEngine {
 	e := &PornMDEngine{
 		BaseEngine: NewBaseEngine("pornmd", "PornMD", "https://www.pornmd.com", 2, appConfig),
 		parser:     parser.NewPornMDParser(),

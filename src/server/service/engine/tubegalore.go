@@ -16,8 +16,8 @@ import (
 // TubeGaloreEngine searches TubeGalore
 type TubeGaloreEngine struct{ *BaseEngine }
 
-// NewTubeGaloreEngine creates a new TubeGalore engine
-func NewTubeGaloreEngine(appConfig *config.AppConfig) *TubeGaloreEngine {
+// newTubeGaloreEngine creates a new TubeGalore engine
+func newTubeGaloreEngine(appConfig *config.AppConfig) *TubeGaloreEngine {
 	e := &TubeGaloreEngine{NewBaseEngine("tubegalore", "TubeGalore", "https://www.tubegalore.com", 3, appConfig)}
 	// TubeGalore uses ttcache.com CDN; preview URL is constructed from data-public-id
 	e.SetCapabilities(Capabilities{
@@ -55,7 +55,7 @@ func searchTTCache(ctx context.Context, e *BaseEngine, url string) ([]model.Vide
 		return nil, err
 	}
 
-	DebugLogEngineResponse(e.Name(), url, len(body))
+	debugLogEngineResponse(e.Name(), url, len(body))
 
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
@@ -126,7 +126,7 @@ func searchTTCache(ctx context.Context, e *BaseEngine, url string) ([]model.Vide
 
 	// "preview" equals len(results) because every result gets a
 	// constructed preview; "thumb" matches for the same reason.
-	DebugLogEngineParseResult(e.Name(), results, map[string]int{
+	debugLogEngineParseResult(e.Name(), results, map[string]int{
 		"preview": len(results),
 		"thumb":   len(results),
 	})

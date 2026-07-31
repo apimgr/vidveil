@@ -146,7 +146,7 @@ func TestOutputProbeResultsAsCSV(t *testing.T) {
 
 func TestOutputBashCompletionScriptIncludesYAMLAndCSVFormats(t *testing.T) {
 	outputText := captureStdoutForTest(t, func() error {
-		return OutputBashCompletionScript()
+		return outputBashCompletionScript()
 	})
 
 	if !strings.Contains(outputText, "json yaml csv table plain") {

@@ -13,7 +13,7 @@ import (
 // ── update.go ─────────────────────────────────────────────────────────────────
 
 func TestPrintCLIUpdateHelp_NoPanic(t *testing.T) {
-	PrintCLIUpdateHelp()
+	printCLIUpdateHelp()
 }
 
 func TestRunCLIUpdateCommand_Help_NoPanic(t *testing.T) {
@@ -86,7 +86,7 @@ func TestGetTUILayoutConfig_AllSizeModes_NoPanic(t *testing.T) {
 		terminal.SizeModeMassive,
 	}
 	for _, mode := range modes {
-		cfg := GetTUILayoutConfig(mode)
+		cfg := getTUILayoutConfig(mode)
 		_ = cfg.ShowBorders
 		_ = cfg.ShowHeader
 		_ = cfg.ShowFooter
@@ -99,7 +99,7 @@ func TestGetTUILayoutConfig_AllSizeModes_NoPanic(t *testing.T) {
 }
 
 func TestGetTUILayoutConfig_Micro_NoBordersNoSidebar(t *testing.T) {
-	cfg := GetTUILayoutConfig(terminal.SizeModeMicro)
+	cfg := getTUILayoutConfig(terminal.SizeModeMicro)
 	if cfg.ShowSidebar {
 		t.Error("SizeModeMicro: ShowSidebar should be false")
 	}
@@ -109,7 +109,7 @@ func TestGetTUILayoutConfig_Micro_NoBordersNoSidebar(t *testing.T) {
 }
 
 func TestGetTUILayoutConfig_Massive_NoTruncationHasSidebar(t *testing.T) {
-	cfg := GetTUILayoutConfig(terminal.SizeModeMassive)
+	cfg := getTUILayoutConfig(terminal.SizeModeMassive)
 	if cfg.TruncateAt != 0 {
 		t.Errorf("SizeModeMassive: TruncateAt = %d, want 0", cfg.TruncateAt)
 	}
@@ -119,7 +119,7 @@ func TestGetTUILayoutConfig_Massive_NoTruncationHasSidebar(t *testing.T) {
 }
 
 func TestGetTUILayoutConfig_Wide_HasSidebarWidth(t *testing.T) {
-	cfg := GetTUILayoutConfig(terminal.SizeModeWide)
+	cfg := getTUILayoutConfig(terminal.SizeModeWide)
 	if !cfg.ShowSidebar {
 		t.Error("SizeModeWide: ShowSidebar should be true")
 	}
@@ -129,7 +129,7 @@ func TestGetTUILayoutConfig_Wide_HasSidebarWidth(t *testing.T) {
 }
 
 func TestGetTUILayoutConfig_Compact_HasBordersNoSidebar(t *testing.T) {
-	cfg := GetTUILayoutConfig(terminal.SizeModeCompact)
+	cfg := getTUILayoutConfig(terminal.SizeModeCompact)
 	if !cfg.ShowBorders {
 		t.Error("SizeModeCompact: ShowBorders should be true")
 	}
@@ -139,7 +139,7 @@ func TestGetTUILayoutConfig_Compact_HasBordersNoSidebar(t *testing.T) {
 }
 
 func TestGetTUILayoutConfig_Ultrawide_NotVerticalScroll(t *testing.T) {
-	cfg := GetTUILayoutConfig(terminal.SizeModeUltrawide)
+	cfg := getTUILayoutConfig(terminal.SizeModeUltrawide)
 	if cfg.VerticalScroll {
 		t.Error("SizeModeUltrawide: VerticalScroll should be false")
 	}
@@ -147,8 +147,8 @@ func TestGetTUILayoutConfig_Ultrawide_NotVerticalScroll(t *testing.T) {
 
 func TestGetTUILayoutConfig_UnknownMode_FallsBackToStandard(t *testing.T) {
 	unknown := terminal.SizeMode(99)
-	cfg := GetTUILayoutConfig(unknown)
-	standard := GetTUILayoutConfig(terminal.SizeModeStandard)
+	cfg := getTUILayoutConfig(unknown)
+	standard := getTUILayoutConfig(terminal.SizeModeStandard)
 	if cfg.MaxColumns != standard.MaxColumns {
 		t.Errorf("unknown mode should fall back to Standard: MaxColumns=%d, want %d", cfg.MaxColumns, standard.MaxColumns)
 	}
@@ -156,7 +156,7 @@ func TestGetTUILayoutConfig_UnknownMode_FallsBackToStandard(t *testing.T) {
 
 func TestCreateTUIStylesFromPalette_DarkTheme_NoPanic(t *testing.T) {
 	palette := theme.GetColorPalette("dark")
-	styles := CreateTUIStylesFromPalette(palette)
+	styles := createTUIStylesFromPalette(palette)
 	_ = styles.Base
 	_ = styles.Title
 	_ = styles.Input
@@ -172,17 +172,17 @@ func TestCreateTUIStylesFromPalette_DarkTheme_NoPanic(t *testing.T) {
 
 func TestCreateTUIStylesFromPalette_LightTheme_NoPanic(t *testing.T) {
 	palette := theme.GetColorPalette("light")
-	styles := CreateTUIStylesFromPalette(palette)
+	styles := createTUIStylesFromPalette(palette)
 	_ = styles.Base
 }
 
 func TestCreateInitialTUIModel_NoPanic(t *testing.T) {
-	model := CreateInitialTUIModel()
+	model := createInitialTUIModel()
 	_ = model
 }
 
 func TestTUIModel_Init_ReturnsNil(t *testing.T) {
-	model := CreateInitialTUIModel()
+	model := createInitialTUIModel()
 	cmd := model.Init()
 	if cmd != nil {
 		t.Error("TUIModel.Init: expected nil tea.Cmd")
@@ -235,7 +235,7 @@ func TestSaveSetupWizardConfig_EmptyURLNoSave_ReturnsNil(t *testing.T) {
 // ── login.go ─────────────────────────────────────────────────────────────────
 
 func TestPrintLoginCommandHelp_NoPanic(t *testing.T) {
-	PrintLoginCommandHelp()
+	printLoginCommandHelp()
 }
 
 func TestRunLoginCommand_HelpLong_NoPanic(t *testing.T) {

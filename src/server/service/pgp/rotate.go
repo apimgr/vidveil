@@ -17,9 +17,9 @@ import (
 // "Rotate": "Old key stays valid for 30 days for in-flight reports").
 const RotationGracePeriod = 30 * 24 * time.Hour
 
-// RotatedDir is the subdirectory under {config_dir}/security/ that holds
+// rotatedDir is the subdirectory under {config_dir}/security/ that holds
 // archived keypairs retained through the rotation grace window.
-const RotatedDir = "rotated"
+const rotatedDir = "rotated"
 
 // graceMarkerFile records the UTC RFC 3339 timestamp until which an archived
 // keypair remains valid for in-flight report decryption.
@@ -96,7 +96,7 @@ func ArchiveCurrentKeys(configDir, fingerprint string, rotatedAt time.Time, grac
 		}
 		label = label + "-" + short
 	}
-	archiveDir := filepath.Join(dir, RotatedDir, label)
+	archiveDir := filepath.Join(dir, rotatedDir, label)
 	if err := os.MkdirAll(archiveDir, 0o750); err != nil {
 		return "", fmt.Errorf("create archive dir: %w", err)
 	}

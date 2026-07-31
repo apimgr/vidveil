@@ -18,8 +18,8 @@ type MotherlessEngine struct {
 	parser *parser.MotherlessParser
 }
 
-// NewMotherlessEngine creates a new Motherless engine
-func NewMotherlessEngine(appConfig *config.AppConfig) *MotherlessEngine {
+// newMotherlessEngine creates a new Motherless engine
+func newMotherlessEngine(appConfig *config.AppConfig) *MotherlessEngine {
 	return &MotherlessEngine{
 		BaseEngine: NewBaseEngine("motherless", "Motherless", "https://motherless.com", 3, appConfig),
 		parser:     parser.NewMotherlessParser(),
@@ -73,7 +73,7 @@ func (e *MotherlessEngine) Search(ctx context.Context, query string, page int) (
 	})
 
 	// Log extraction stats for debugging
-	DebugLogEngineParseResult(e.Name(), results, fieldStats)
+	debugLogEngineParseResult(e.Name(), results, fieldStats)
 
 	return results, nil
 }

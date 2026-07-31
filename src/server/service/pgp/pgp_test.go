@@ -191,7 +191,7 @@ func TestDeleteKeypair(t *testing.T) {
 	if err := WriteKeypair(dir, kp, secret); err != nil {
 		t.Fatalf("WriteKeypair: %v", err)
 	}
-	statePath := filepath.Join(SecurityDir(dir), KeyserverStateFile)
+	statePath := filepath.Join(SecurityDir(dir), keyserverStateFile)
 	if err := os.WriteFile(statePath, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestDeleteKeypair(t *testing.T) {
 	if err := DeleteKeypair(dir); err != nil {
 		t.Fatalf("DeleteKeypair: %v", err)
 	}
-	for _, name := range []string{PublicKeyFile, PrivateKeyFile, KeyserverStateFile} {
+	for _, name := range []string{PublicKeyFile, PrivateKeyFile, keyserverStateFile} {
 		if _, err := os.Stat(filepath.Join(SecurityDir(dir), name)); !os.IsNotExist(err) {
 			t.Fatalf("%s still present after delete: %v", name, err)
 		}

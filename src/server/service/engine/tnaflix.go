@@ -15,8 +15,8 @@ import (
 // TNAFlixEngine searches TNAFlix
 type TNAFlixEngine struct{ *BaseEngine }
 
-// NewTNAFlixEngine creates a new TNAFlix engine
-func NewTNAFlixEngine(appConfig *config.AppConfig) *TNAFlixEngine {
+// newTNAFlixEngine creates a new TNAFlix engine
+func newTNAFlixEngine(appConfig *config.AppConfig) *TNAFlixEngine {
 	e := &TNAFlixEngine{NewBaseEngine("tnaflix", "TNAFlix", "https://www.tnaflix.com", 3, appConfig)}
 	// TNAFlix has preview URLs in data attributes
 	e.SetCapabilities(Capabilities{
@@ -47,7 +47,7 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 		return nil, err
 	}
 
-	DebugLogEngineResponse(e.Name(), searchURL, len(body))
+	debugLogEngineResponse(e.Name(), searchURL, len(body))
 
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
@@ -122,7 +122,7 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 		})
 	})
 
-	DebugLogEngineParseResult(e.Name(), results, nil)
+	debugLogEngineParseResult(e.Name(), results, nil)
 	return results, nil
 }
 

@@ -31,7 +31,7 @@ const (
 // | API (authenticated) | 1000 | 1 min |
 // | API (unauthenticated) | 300 | 1 min |
 // | File upload | 10 | 1 hour |
-var DefaultLimits = map[string]struct {
+var defaultLimits = map[string]struct {
 	Requests int
 	Window   time.Duration
 }{
@@ -50,13 +50,13 @@ type EndpointLimiters struct {
 	mu       sync.RWMutex
 }
 
-// NewEndpointLimiters creates endpoint-specific rate limiters per AI.md PART 12
-func NewEndpointLimiters(enabled bool) *EndpointLimiters {
+// newEndpointLimiters creates endpoint-specific rate limiters per AI.md PART 12
+func newEndpointLimiters(enabled bool) *EndpointLimiters {
 	el := &EndpointLimiters{
 		limiters: make(map[string]*RateLimiter),
 	}
 
-	for endpoint, limits := range DefaultLimits {
+	for endpoint, limits := range defaultLimits {
 		el.limiters[endpoint] = NewRateLimiter(enabled, limits.Requests, int(limits.Window.Seconds()))
 	}
 

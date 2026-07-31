@@ -32,29 +32,29 @@ func RunSearchCommand(args []string) error {
 	// Parse search-specific flags
 	var queryParts []string
 	for i := 0; i < len(args); i++ {
-		flagName, _, _ := ParseCLILongFlagArgument(args[i])
+		flagName, _, _ := parseCLILongFlagArgument(args[i])
 
 		switch flagName {
 		case "--limit":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				fmt.Sscanf(flagValue, "%d", &searchResultLimit)
 				i = nextIndex
 			}
 		case "--page":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				fmt.Sscanf(flagValue, "%d", &searchPageNumber)
 				i = nextIndex
 			}
 		case "--engines":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				searchEngineFilter = flagValue
 				i = nextIndex
 			}
 		case "--help", "-h":
-			PrintSearchCommandHelp()
+			printSearchCommandHelp()
 			return nil
 		default:
 			// Skip if it starts with - (unknown flag)
@@ -101,9 +101,9 @@ func RunSearchCommand(args []string) error {
 	}
 }
 
-// PrintSearchCommandHelp prints search command help per AI.md PART 32
+// printSearchCommandHelp prints search command help per AI.md PART 32
 // Per AI.md PART 1: Function names MUST reveal intent - "searchHelp" is ambiguous
-func PrintSearchCommandHelp() {
+func printSearchCommandHelp() {
 	fmt.Printf(`Search for videos
 
 Usage:
@@ -152,7 +152,7 @@ func OutputSearchResultsAsCSV(searchResponse *api.SearchResponse) error {
 		})
 	}
 
-	return OutputDataAsCSV(
+	return outputDataAsCSV(
 		[]string{"title", "url", "duration", "views", "engine", "description", "tags"},
 		csvRows,
 	)

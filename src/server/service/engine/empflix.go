@@ -11,8 +11,8 @@ import (
 // EMPFlixEngine searches EMPFlix
 type EMPFlixEngine struct{ *BaseEngine }
 
-// NewEMPFlixEngine creates a new EMPFlix engine
-func NewEMPFlixEngine(appConfig *config.AppConfig) *EMPFlixEngine {
+// newEMPFlixEngine creates a new EMPFlix engine
+func newEMPFlixEngine(appConfig *config.AppConfig) *EMPFlixEngine {
 	return &EMPFlixEngine{NewBaseEngine("empflix", "EMPFlix", "https://www.empflix.com", 3, appConfig)}
 }
 

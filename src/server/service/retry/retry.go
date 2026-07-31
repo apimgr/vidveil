@@ -26,8 +26,8 @@ type RetryConfig struct {
 	RetryableErrors []error
 }
 
-// DefaultRetryConfig returns default retry configuration
-func DefaultRetryConfig() *RetryConfig {
+// defaultRetryConfig returns default retry configuration
+func defaultRetryConfig() *RetryConfig {
 	return &RetryConfig{
 		MaxAttempts:  3,
 		InitialDelay: 100 * time.Millisecond,
@@ -46,7 +46,7 @@ type OperationWithResult[T any] func() (T, error)
 // ExecuteWithRetry executes an operation with retry logic
 func ExecuteWithRetry(ctx context.Context, cfg *RetryConfig, op Operation) error {
 	if cfg == nil {
-		cfg = DefaultRetryConfig()
+		cfg = defaultRetryConfig()
 	}
 
 	var lastErr error
@@ -103,7 +103,7 @@ func ExecuteWithRetryResult[T any](ctx context.Context, cfg *RetryConfig, op Ope
 	var result T
 
 	if cfg == nil {
-		cfg = DefaultRetryConfig()
+		cfg = defaultRetryConfig()
 	}
 
 	var lastErr error
@@ -185,7 +185,7 @@ func addJitter(d time.Duration, factor float64) time.Duration {
 // Backoff calculates the backoff duration for a given attempt
 func Backoff(attempt int, cfg *RetryConfig) time.Duration {
 	if cfg == nil {
-		cfg = DefaultRetryConfig()
+		cfg = defaultRetryConfig()
 	}
 
 	if attempt <= 0 {

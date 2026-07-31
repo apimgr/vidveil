@@ -11,7 +11,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	if translator == nil {
 		t.Fatal("New() returned nil")
@@ -23,7 +23,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestTranslate(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	// Test existing key
 	result := translator.Translate("en", "nav.home")
@@ -39,7 +39,7 @@ func TestTranslate(t *testing.T) {
 }
 
 func TestTranslateFormat(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	// Test formatted translation with time.minutes (has %d)
 	result := translator.TranslateFormat("en", "time.minutes", 42)
@@ -79,7 +79,7 @@ func TestParseAcceptLanguage(t *testing.T) {
 }
 
 func TestAvailableLocales(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	locales := translator.AvailableLocales()
 
@@ -102,7 +102,7 @@ func TestAvailableLocales(t *testing.T) {
 }
 
 func TestMiddleware(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get locale from request context (set by middleware per AI.md PART 30)
@@ -127,7 +127,7 @@ func TestMiddleware(t *testing.T) {
 }
 
 func TestTemplateFunc(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	fn := translator.TemplateFunc("en")
 
@@ -143,7 +143,7 @@ func TestTemplateFunc(t *testing.T) {
 }
 
 func TestTranslationKeys(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	// Test common keys that should exist
 	keys := []string{
@@ -171,7 +171,7 @@ func TestTranslationKeys(t *testing.T) {
 }
 
 func TestHasLocale(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	if !translator.HasLocale("en") {
 		t.Error("Should have 'en' locale")
@@ -183,7 +183,7 @@ func TestHasLocale(t *testing.T) {
 }
 
 func TestAddTranslation(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	translator.AddTranslation("en", "test.key", "Test Value")
 
@@ -194,7 +194,7 @@ func TestAddTranslation(t *testing.T) {
 }
 
 func TestGetLocale(t *testing.T) {
-	translator := NewTranslator()
+	translator := newTranslator()
 
 	// Test with Accept-Language header
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -406,7 +406,7 @@ func TestLoadEmbeddedTranslations(t *testing.T) {
 // TestTranslateFallback covers the locale-fallback chain in Translate():
 // unknown locale → language-only subtag → fallback locale → key passthrough.
 func TestTranslateFallback(t *testing.T) {
-	tr := NewTranslator()
+	tr := newTranslator()
 
 	t.Run("subtag_falls_back_to_lang", func(t *testing.T) {
 		// "en-US" is not a loaded locale but "en" is; should return English value.
@@ -447,7 +447,7 @@ func TestTranslateFallback(t *testing.T) {
 
 // TestGetLocaleAllPaths exercises all four branches of GetLocale().
 func TestGetLocaleAllPaths(t *testing.T) {
-	tr := NewTranslator()
+	tr := newTranslator()
 
 	t.Run("query_param_known_locale", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/?lang=en", nil)
@@ -507,7 +507,7 @@ func TestGetLocaleAllPaths(t *testing.T) {
 // TestAddTranslationNewLocale checks AddTranslation() for a brand-new locale
 // (the branch where the locale map doesn't exist yet).
 func TestAddTranslationNewLocale(t *testing.T) {
-	tr := NewTranslator()
+	tr := newTranslator()
 
 	tr.AddTranslation("zz", "hello", "Zello")
 
@@ -520,7 +520,7 @@ func TestAddTranslationNewLocale(t *testing.T) {
 // TestAddTranslationOverwrite verifies that a second AddTranslation call
 // overwrites the previous value for the same key.
 func TestAddTranslationOverwrite(t *testing.T) {
-	tr := NewTranslator()
+	tr := newTranslator()
 
 	tr.AddTranslation("en", "test.overwrite", "first")
 	tr.AddTranslation("en", "test.overwrite", "second")
@@ -535,7 +535,7 @@ func TestAddTranslationOverwrite(t *testing.T) {
 // merging into an existing one.
 func TestLoadTranslations(t *testing.T) {
 	t.Run("new_locale", func(t *testing.T) {
-		tr := NewTranslator()
+		tr := newTranslator()
 		tr.LoadTranslations("zz", map[string]string{
 			"greeting": "Hola",
 			"farewell": "Adios",
@@ -549,7 +549,7 @@ func TestLoadTranslations(t *testing.T) {
 	})
 
 	t.Run("merge_into_existing", func(t *testing.T) {
-		tr := NewTranslator()
+		tr := newTranslator()
 		original := tr.Translate("en", "nav.home")
 
 		tr.LoadTranslations("en", map[string]string{
@@ -566,7 +566,7 @@ func TestLoadTranslations(t *testing.T) {
 	})
 
 	t.Run("overwrite_existing_key", func(t *testing.T) {
-		tr := NewTranslator()
+		tr := newTranslator()
 		tr.LoadTranslations("en", map[string]string{
 			"nav.home": "Overwritten",
 		})
@@ -580,7 +580,7 @@ func TestLoadTranslations(t *testing.T) {
 // verifies the result is a copy (not the internal map), and tests the nil
 // return for an unknown locale.
 func TestGetAllTranslations(t *testing.T) {
-	tr := NewTranslator()
+	tr := newTranslator()
 
 	t.Run("known_locale_returns_copy", func(t *testing.T) {
 		got := tr.GetAllTranslations("en")
@@ -608,7 +608,7 @@ func TestGetAllTranslations(t *testing.T) {
 
 // TestMiddlewareAllPaths exercises every locale-resolution branch inside Middleware.
 func TestMiddlewareAllPaths(t *testing.T) {
-	tr := NewTranslator()
+	tr := newTranslator()
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Read locale from context per AI.md PART 30 (middleware stores it there)
@@ -708,7 +708,7 @@ func TestMiddlewareAllPaths(t *testing.T) {
 
 // TestTemplateFuncWithArgs exercises the args branch of TemplateFunc.
 func TestTemplateFuncWithArgs(t *testing.T) {
-	tr := NewTranslator()
+	tr := newTranslator()
 
 	t.Run("with_format_args", func(t *testing.T) {
 		fn := tr.TemplateFunc("en")

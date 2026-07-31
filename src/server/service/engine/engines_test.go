@@ -844,19 +844,19 @@ func containsStr(s, sub string) bool {
 		}())
 }
 
-// DebugLogEngineResponse and DebugLogEngineParseResult smoke tests — just verify no panic
+// debugLogEngineResponse and debugLogEngineParseResult smoke tests — just verify no panic
 
 func TestDebugLogEngineResponse_NoPanic(t *testing.T) {
-	DebugLogEngineResponse("testengine", "https://example.com/search", len("some body"))
+	debugLogEngineResponse("testengine", "https://example.com/search", len("some body"))
 }
 
 func TestDebugLogEngineResponse_EmptyBody(t *testing.T) {
-	DebugLogEngineResponse("testengine", "https://example.com/search", 0)
+	debugLogEngineResponse("testengine", "https://example.com/search", 0)
 }
 
 func TestDebugLogEngineResponse_LargeBody(t *testing.T) {
 	// Must not panic regardless of the reported response size
-	DebugLogEngineResponse("testengine", "https://example.com/search", 4000)
+	debugLogEngineResponse("testengine", "https://example.com/search", 4000)
 }
 
 func TestDebugLogEngineParseResult_NoPanic(t *testing.T) {
@@ -865,9 +865,9 @@ func TestDebugLogEngineParseResult_NoPanic(t *testing.T) {
 	for i := range results {
 		results[i].URL = fmt.Sprintf("https://example.com/video/%d", i)
 	}
-	DebugLogEngineParseResult("testengine", results, stats)
+	debugLogEngineParseResult("testengine", results, stats)
 }
 
 func TestDebugLogEngineParseResult_NilStats(t *testing.T) {
-	DebugLogEngineParseResult("testengine", nil, nil)
+	debugLogEngineParseResult("testengine", nil, nil)
 }

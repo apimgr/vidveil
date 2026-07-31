@@ -15,9 +15,9 @@ import (
 	"time"
 )
 
-// KeyserverStateFile records, per keyserver, the last successful publish so a
+// keyserverStateFile records, per keyserver, the last successful publish so a
 // restore does not double-submit (AI.md PART 21 "Backup Contents").
-const KeyserverStateFile = "keyservers.state"
+const keyserverStateFile = "keyservers.state"
 
 // keyserverMaxAttempts bounds the per-keyserver submission attempts. AI.md
 // PART 12 "Publish to keyservers": failures are retried with exponential
@@ -135,7 +135,7 @@ func WriteKeyserverState(configDir string, states []KeyserverState) error {
 	if err != nil {
 		return fmt.Errorf("encode keyserver state: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, KeyserverStateFile), data, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, keyserverStateFile), data, 0o600); err != nil {
 		return fmt.Errorf("write keyserver state: %w", err)
 	}
 	return nil
@@ -144,7 +144,7 @@ func WriteKeyserverState(configDir string, states []KeyserverState) error {
 // LoadKeyserverState reads the persisted per-keyserver publish state. A missing
 // file returns an empty slice with no error.
 func LoadKeyserverState(configDir string) ([]KeyserverState, error) {
-	data, err := os.ReadFile(filepath.Join(SecurityDir(configDir), KeyserverStateFile))
+	data, err := os.ReadFile(filepath.Join(SecurityDir(configDir), keyserverStateFile))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

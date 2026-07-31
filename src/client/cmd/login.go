@@ -19,7 +19,7 @@ func RunLoginCommand(args []string) error {
 	// Parse args for help
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
-			PrintLoginCommandHelp()
+			printLoginCommandHelp()
 			return nil
 		}
 	}
@@ -49,16 +49,16 @@ func RunLoginCommand(args []string) error {
 
 	// Save token to token file
 	tokenFileLocation := path.TokenFile()
-	if err := WriteCLIDefaultTokenFile(apiTokenInput); err != nil {
+	if err := writeCLIDefaultTokenFile(apiTokenInput); err != nil {
 		return err
 	}
 
-	if err := ValidateCLIServerURL(serverURL); err != nil {
+	if err := validateCLIServerURL(serverURL); err != nil {
 		return fmt.Errorf("invalid server URL: %w", err)
 	}
 
 	// Also update config with server address
-	configFileLocation := GetCLIConfigFilePath()
+	configFileLocation := getCLIConfigFilePath()
 
 	// Load or create config
 	// Ignore unmarshal errors - use defaults if config is invalid
@@ -79,7 +79,7 @@ func RunLoginCommand(args []string) error {
 		fileCLIConfig.Output.Color = "auto"
 	}
 
-	if err := WriteCLIConfigFile(fileCLIConfig, configFileLocation); err != nil {
+	if err := writeCLIConfigFile(fileCLIConfig, configFileLocation); err != nil {
 		return err
 	}
 
@@ -91,9 +91,9 @@ func RunLoginCommand(args []string) error {
 	return nil
 }
 
-// PrintLoginCommandHelp prints help for the login command
+// printLoginCommandHelp prints help for the login command
 // Per AI.md PART 1: Function names MUST reveal intent - "loginHelp" is ambiguous
-func PrintLoginCommandHelp() {
+func printLoginCommandHelp() {
 	fmt.Printf(`Save API token for future use
 
 Usage:

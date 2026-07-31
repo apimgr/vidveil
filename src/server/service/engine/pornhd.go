@@ -11,8 +11,8 @@ import (
 // PornHDEngine searches PornHD
 type PornHDEngine struct{ *BaseEngine }
 
-// NewPornHDEngine creates a new PornHD engine
-func NewPornHDEngine(appConfig *config.AppConfig) *PornHDEngine {
+// newPornHDEngine creates a new PornHD engine
+func newPornHDEngine(appConfig *config.AppConfig) *PornHDEngine {
 	e := &PornHDEngine{NewBaseEngine("pornhd", "PornHD", "https://www.pornhd.com", 4, appConfig)}
 	// PornHD runs on the same ttcache.com CDN platform as TubeGalore
 	e.SetCapabilities(Capabilities{

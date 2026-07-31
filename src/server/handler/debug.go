@@ -24,8 +24,8 @@ func DebugPprofCmdline(w http.ResponseWriter, r *http.Request) {
 	pprof.Cmdline(w, r)
 }
 
-// DebugPprofProfile serves the CPU profile
-func DebugPprofProfile(w http.ResponseWriter, r *http.Request) {
+// debugPprofProfile serves the CPU profile
+func debugPprofProfile(w http.ResponseWriter, r *http.Request) {
 	pprof.Profile(w, r)
 }
 
@@ -34,8 +34,8 @@ func DebugPprofSymbol(w http.ResponseWriter, r *http.Request) {
 	pprof.Symbol(w, r)
 }
 
-// DebugPprofTrace serves the execution trace
-func DebugPprofTrace(w http.ResponseWriter, r *http.Request) {
+// debugPprofTrace serves the execution trace
+func debugPprofTrace(w http.ResponseWriter, r *http.Request) {
 	pprof.Trace(w, r)
 }
 

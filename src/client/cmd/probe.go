@@ -56,19 +56,19 @@ func RunProbeCommand(args []string) error {
 	// Parse probe-specific flags
 	// Per AI.md: Short flags only for -h (help) and -v (version)
 	for i := 0; i < len(args); i++ {
-		flagName, _, _ := ParseCLILongFlagArgument(args[i])
+		flagName, _, _ := parseCLILongFlagArgument(args[i])
 
 		switch flagName {
 		case "--all":
 			probeAllEngines = true
 		case "--engines":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				probeEngineFilter = flagValue
 				i = nextIndex
 			}
 		case "--query":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				probeTestQuery = flagValue
 				i = nextIndex
@@ -76,7 +76,7 @@ func RunProbeCommand(args []string) error {
 		case "--verbose":
 			probeVerboseMode = true
 		case "--help", "-h":
-			PrintProbeCommandHelp()
+			printProbeCommandHelp()
 			return nil
 		}
 	}
@@ -221,10 +221,10 @@ func probeEngineByName(name, query string) EngineProbeResult {
 	return result
 }
 
-// PrintProbeCommandHelp prints probe command help
+// printProbeCommandHelp prints probe command help
 // Per AI.md PART 1: Function names MUST reveal intent
 // Per AI.md: Short flags only for -h (help)
-func PrintProbeCommandHelp() {
+func printProbeCommandHelp() {
 	fmt.Printf(`Probe engine availability, capabilities, and response times
 
 Usage:
@@ -286,7 +286,7 @@ func OutputProbeResultsAsCSV(results []EngineProbeResult) error {
 		})
 	}
 
-	return OutputDataAsCSV(
+	return outputDataAsCSV(
 		[]string{"name", "display_name", "tier", "available", "enabled", "response_time_ms", "result_count", "error", "capabilities", "field_stats"},
 		csvRows,
 	)

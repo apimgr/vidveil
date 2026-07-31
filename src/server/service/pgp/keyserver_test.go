@@ -175,7 +175,7 @@ func TestWriteAndLoadKeyserverState(t *testing.T) {
 	if err := WriteKeyserverState(dir, states); err != nil {
 		t.Fatalf("WriteKeyserverState: %v", err)
 	}
-	info, err := os.Stat(filepath.Join(SecurityDir(dir), KeyserverStateFile))
+	info, err := os.Stat(filepath.Join(SecurityDir(dir), keyserverStateFile))
 	if err != nil {
 		t.Fatalf("stat state file: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestLoadKeyserverStateEmptyAndBad(t *testing.T) {
 	if err := os.MkdirAll(secDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	statePath := filepath.Join(secDir, KeyserverStateFile)
+	statePath := filepath.Join(secDir, keyserverStateFile)
 
 	if err := os.WriteFile(statePath, []byte{}, 0o600); err != nil {
 		t.Fatalf("write empty: %v", err)

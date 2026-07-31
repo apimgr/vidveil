@@ -53,8 +53,8 @@ func (e *AppError) Write(w http.ResponseWriter) {
 	SendError(w, e.Code, e.Message)
 }
 
-// LogError logs an error with context per AI.md PART 9
-func LogError(ctx context.Context, err *AppError, logger *slog.Logger) {
+// logError logs an error with context per AI.md PART 9
+func logError(ctx context.Context, err *AppError, logger *slog.Logger) {
 	attrs := []any{
 		slog.String("error_code", err.Code),
 		slog.Int("http_status", err.HTTPStatus),

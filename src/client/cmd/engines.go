@@ -80,7 +80,7 @@ func RunEnginesCommand(args []string) error {
 
 	// Parse engines-specific flags
 	for i := 0; i < len(args); i++ {
-		flagName, _, _ := ParseCLILongFlagArgument(args[i])
+		flagName, _, _ := parseCLILongFlagArgument(args[i])
 
 		switch flagName {
 		case "--enabled":
@@ -197,7 +197,7 @@ func OutputEnginesAsCSV(engines []EngineInfo) error {
 		})
 	}
 
-	return OutputDataAsCSV(
+	return outputDataAsCSV(
 		[]string{"name", "display_name", "tier", "enabled", "has_preview", "has_download"},
 		csvRows,
 	)
@@ -270,11 +270,11 @@ func RunBangsCommand(args []string) error {
 	// Parse bangs-specific flags
 	var searchFilter string
 	for i := 0; i < len(args); i++ {
-		flagName, _, _ := ParseCLILongFlagArgument(args[i])
+		flagName, _, _ := parseCLILongFlagArgument(args[i])
 
 		switch flagName {
 		case "--search":
-			flagValue, nextIndex, hasFlagValue := ReadCLILongFlagValue(args, i)
+			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
 				searchFilter = flagValue
 				i = nextIndex
@@ -286,7 +286,7 @@ func RunBangsCommand(args []string) error {
 	}
 
 	// Fetch bangs from the dedicated server endpoint
-	bangsData, err := FetchBangsList()
+	bangsData, err := fetchBangsList()
 	if err != nil {
 		return fmt.Errorf("failed to fetch bangs: %w", err)
 	}
@@ -342,9 +342,9 @@ type BangsListResponse struct {
 	Error string     `json:"error,omitempty"`
 }
 
-// FetchBangsList fetches the list of bang shortcuts from the server
+// fetchBangsList fetches the list of bang shortcuts from the server
 // Per AI.md PART 1: Function names MUST reveal intent
-func FetchBangsList() (*BangsListResponse, error) {
+func fetchBangsList() (*BangsListResponse, error) {
 	url := fmt.Sprintf("%s/bangs", apiClient.GetAPIBaseURL())
 	responseBytes, err := apiClient.FetchURLResponseBytes(url)
 	if err != nil {
@@ -414,7 +414,7 @@ func OutputBangsAsCSV(bangs []BangInfo) error {
 		})
 	}
 
-	return OutputDataAsCSV(
+	return outputDataAsCSV(
 		[]string{"bang", "engine_name", "display_name", "short_code"},
 		csvRows,
 	)

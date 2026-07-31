@@ -6,8 +6,8 @@ package system
 
 import "errors"
 
-// WindowsServiceName is the service name for Windows
-const WindowsServiceName = "vidveil"
+// windowsServiceName is the service name for Windows
+const windowsServiceName = "vidveil"
 
 // RunAsWindowsService is a no-op on non-Windows platforms
 func RunAsWindowsService(runFunc func() error) error {

@@ -11,8 +11,8 @@ import (
 // XBabeEngine searches XBabe
 type XBabeEngine struct{ *BaseEngine }
 
-// NewXBabeEngine creates a new XBabe engine
-func NewXBabeEngine(appConfig *config.AppConfig) *XBabeEngine {
+// newXBabeEngine creates a new XBabe engine
+func newXBabeEngine(appConfig *config.AppConfig) *XBabeEngine {
 	return &XBabeEngine{NewBaseEngine("xbabe", "XBabe", "https://xbabe.com", 4, appConfig)}
 }
 

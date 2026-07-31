@@ -8,5 +8,5 @@
 package gui
 
 func launchNativeGUI(_ *Config) error {
-	return ErrGUIUnsupported
+	return errGUIUnsupported
 }

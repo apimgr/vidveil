@@ -50,8 +50,8 @@ func IsShuttingDown() bool {
 	return shuttingDown.Load()
 }
 
-// SetupSignalHandler configures graceful shutdown per AI.md PART 8
-func SetupSignalHandler(server *http.Server, pidFile string) {
+// setupSignalHandler configures graceful shutdown per AI.md PART 8
+func setupSignalHandler(server *http.Server, pidFile string) {
 	sigChan := make(chan os.Signal, 1)
 
 	// Register signals per PART 8

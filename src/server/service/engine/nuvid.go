@@ -11,8 +11,8 @@ import (
 // NuvidEngine searches Nuvid
 type NuvidEngine struct{ *BaseEngine }
 
-// NewNuvidEngine creates a new Nuvid engine
-func NewNuvidEngine(appConfig *config.AppConfig) *NuvidEngine {
+// newNuvidEngine creates a new Nuvid engine
+func newNuvidEngine(appConfig *config.AppConfig) *NuvidEngine {
 	return &NuvidEngine{NewBaseEngine("nuvid", "Nuvid", "https://www.nuvid.com", 3, appConfig)}
 }
 

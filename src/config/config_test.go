@@ -410,7 +410,7 @@ func TestParseBoolEnv(t *testing.T) {
 // TestIsRunningInContainer just calls the function to ensure no panic. The result
 // depends on the runtime environment and is not asserted.
 func TestIsRunningInContainer(t *testing.T) {
-	_ = IsRunningInContainer()
+	_ = isRunningInContainer()
 }
 
 // TestIsProductionMode verifies development mode returns false and production returns true.

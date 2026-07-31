@@ -49,7 +49,7 @@ func init() {
 	RegisterParser("xvideos", NewXVideosParser())
 	RegisterParser("xnxx", NewXNXXParser())
 	RegisterParser("redtube", NewRedTubeParser())
-	RegisterParser("eporner", NewEpornerParser())
+	RegisterParser("eporner", newEpornerParser())
 	RegisterParser("pornmd", NewPornMDParser())
 	RegisterParser("motherless", NewMotherlessParser())
 }

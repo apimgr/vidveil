@@ -11,8 +11,8 @@ import (
 // VJAVEngine searches VJAV
 type VJAVEngine struct{ *BaseEngine }
 
-// NewVJAVEngine creates a new VJAV engine
-func NewVJAVEngine(appConfig *config.AppConfig) *VJAVEngine {
+// newVJAVEngine creates a new VJAV engine
+func newVJAVEngine(appConfig *config.AppConfig) *VJAVEngine {
 	return &VJAVEngine{NewBaseEngine("vjav", "VJAV", "https://vjav.com", 4, appConfig)}
 }
 

@@ -122,7 +122,7 @@ func TestFormatDuration_FullHour(t *testing.T) {
 // ── XNXXEngine.convertToResult ────────────────────────────────────────────────
 
 func TestXNXXConvertToResult_Basic(t *testing.T) {
-	e := NewXNXXEngine(testCfg())
+	e := newXNXXEngine(testCfg())
 	item := &parser.VideoItem{
 		URL:       "https://www.xnxx.com/video-12345/test",
 		Title:     "Test Video",
@@ -143,7 +143,7 @@ func TestXNXXConvertToResult_Basic(t *testing.T) {
 }
 
 func TestXNXXConvertToResult_DownloadURLFallback(t *testing.T) {
-	e := NewXNXXEngine(testCfg())
+	e := newXNXXEngine(testCfg())
 	item := &parser.VideoItem{
 		URL:         "https://www.xnxx.com/video-12345/test",
 		DownloadURL: "",
@@ -155,7 +155,7 @@ func TestXNXXConvertToResult_DownloadURLFallback(t *testing.T) {
 }
 
 func TestXNXXConvertToResult_WithDownloadURL(t *testing.T) {
-	e := NewXNXXEngine(testCfg())
+	e := newXNXXEngine(testCfg())
 	item := &parser.VideoItem{
 		URL:         "https://www.xnxx.com/video",
 		DownloadURL: "https://dl.xnxx.com/video.mp4",
@@ -169,7 +169,7 @@ func TestXNXXConvertToResult_WithDownloadURL(t *testing.T) {
 // ── XVideosEngine.convertToResult ─────────────────────────────────────────────
 
 func TestXVideosConvertToResult_Basic(t *testing.T) {
-	e := NewXVideosEngine(testCfg())
+	e := newXVideosEngine(testCfg())
 	item := &parser.VideoItem{
 		URL:      "https://www.xvideos.com/video12345/test",
 		Title:    "Test XVideos",
@@ -185,7 +185,7 @@ func TestXVideosConvertToResult_Basic(t *testing.T) {
 }
 
 func TestXVideosConvertToResult_DownloadURLFallback(t *testing.T) {
-	e := NewXVideosEngine(testCfg())
+	e := newXVideosEngine(testCfg())
 	item := &parser.VideoItem{URL: "https://www.xvideos.com/video"}
 	r := e.convertToResult(item)
 	if r.DownloadURL != item.URL {
@@ -253,7 +253,7 @@ func TestFormatViews_Zero(t *testing.T) {
 // ── PornMDEngine.convertToResult ──────────────────────────────────────────────
 
 func TestPornMDConvertToResult_Basic(t *testing.T) {
-	e := NewPornMDEngine(testCfg())
+	e := newPornMDEngine(testCfg())
 	item := &parser.VideoItem{
 		URL:   "https://www.pornmd.com/video/123/test",
 		Title: "PornMD Test",
@@ -268,7 +268,7 @@ func TestPornMDConvertToResult_Basic(t *testing.T) {
 }
 
 func TestPornMDConvertToResult_DescriptionWithQuality(t *testing.T) {
-	e := NewPornMDEngine(testCfg())
+	e := newPornMDEngine(testCfg())
 	item := &parser.VideoItem{
 		URL:         "https://www.pornmd.com/video/123/test",
 		Quality:     "HD",
@@ -286,7 +286,7 @@ func TestPornMDConvertToResult_DescriptionWithQuality(t *testing.T) {
 // ── RedTubeEngine.convertToResult ─────────────────────────────────────────────
 
 func TestRedTubeConvertToResult_Basic(t *testing.T) {
-	e := NewRedTubeEngine(testCfg())
+	e := newRedTubeEngine(testCfg())
 	item := &parser.VideoItem{
 		URL:   "https://www.redtube.com/123456",
 		Title: "RedTube Test",
@@ -299,7 +299,7 @@ func TestRedTubeConvertToResult_Basic(t *testing.T) {
 }
 
 func TestRedTubeConvertToResult_Rating(t *testing.T) {
-	e := NewRedTubeEngine(testCfg())
+	e := newRedTubeEngine(testCfg())
 	item := &parser.VideoItem{
 		URL:    "https://www.redtube.com/123456",
 		Rating: "92.5",
@@ -311,7 +311,7 @@ func TestRedTubeConvertToResult_Rating(t *testing.T) {
 }
 
 func TestRedTubeConvertToResult_DownloadURLFallback(t *testing.T) {
-	e := NewRedTubeEngine(testCfg())
+	e := newRedTubeEngine(testCfg())
 	item := &parser.VideoItem{URL: "https://www.redtube.com/123456"}
 	r := e.convertToResult(item)
 	if r.DownloadURL != item.URL {
@@ -322,7 +322,7 @@ func TestRedTubeConvertToResult_DownloadURLFallback(t *testing.T) {
 // ── MotherlessEngine.convertToResult ──────────────────────────────────────────
 
 func TestMotherlessConvertToResult_Basic(t *testing.T) {
-	e := NewMotherlessEngine(testCfg())
+	e := newMotherlessEngine(testCfg())
 	item := &parser.VideoItem{
 		URL:   "https://motherless.com/ABC1234",
 		Title: "Motherless Test",
@@ -442,7 +442,7 @@ func TestSetDebugLogger(t *testing.T) {
 // ── MotherlessEngine.SupportsFeature ────────────────────────────────────────
 
 func TestMotherlessEngine_SupportsFeature(t *testing.T) {
-	e := NewMotherlessEngine(config.DefaultAppConfig())
+	e := newMotherlessEngine(config.DefaultAppConfig())
 
 	if !e.SupportsFeature(FeaturePagination) {
 		t.Error("MotherlessEngine.SupportsFeature(FeaturePagination) = false, want true")

@@ -220,19 +220,19 @@ func TestWithRetry_CancelledContextStops(t *testing.T) {
 	}
 }
 
-// ── LogError ────────────────────────────────────────────────────────────────
+// ── logError ────────────────────────────────────────────────────────────────
 
 func TestLogError_5xxLogsError(t *testing.T) {
 	e := &AppError{Code: CodeServerError, HTTPStatus: 500, Message: "internal error"}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	// Must not panic; we only verify it doesn't crash
-	LogError(context.Background(), e, logger)
+	logError(context.Background(), e, logger)
 }
 
 func TestLogError_4xxLogsWarn(t *testing.T) {
 	e := &AppError{Code: CodeBadRequest, HTTPStatus: 400, Message: "bad request"}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
-	LogError(context.Background(), e, logger)
+	logError(context.Background(), e, logger)
 }
 
 func TestLogError_WithRequestIDAndInternal(t *testing.T) {
@@ -244,7 +244,7 @@ func TestLogError_WithRequestIDAndInternal(t *testing.T) {
 		Internal:   errors.New("internal db error"),
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	LogError(context.Background(), e, logger)
+	logError(context.Background(), e, logger)
 }
 
 // ── debug.go ────────────────────────────────────────────────────────────────
@@ -292,7 +292,7 @@ func TestDebugPprofProfile_ContextCancelled_ReturnsFast(t *testing.T) {
 	cancel()
 	req = req.WithContext(ctx)
 	rr := httptest.NewRecorder()
-	DebugPprofProfile(rr, req)
+	debugPprofProfile(rr, req)
 	// Accept any status — we only care that it doesn't block.
 }
 
@@ -303,7 +303,7 @@ func TestDebugPprofTrace_ContextCancelled_ReturnsFast(t *testing.T) {
 	cancel()
 	req = req.WithContext(ctx)
 	rr := httptest.NewRecorder()
-	DebugPprofTrace(rr, req)
+	debugPprofTrace(rr, req)
 	// Accept any status — we only care that it doesn't block.
 }
 

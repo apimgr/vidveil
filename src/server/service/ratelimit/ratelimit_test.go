@@ -297,7 +297,7 @@ func TestNewDefaults(t *testing.T) {
 
 // TestEndpointLimiters tests endpoint-specific rate limiting per AI.md PART 1
 func TestEndpointLimiters(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 
 	// Verify all endpoint types have limiters
 	endpoints := []string{
@@ -319,7 +319,7 @@ func TestEndpointLimiters(t *testing.T) {
 
 // TestEndpointLimiterDefaults verifies default limits per AI.md PART 1
 func TestEndpointLimiterDefaults(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 
 	tests := []struct {
 		endpoint         string
@@ -346,7 +346,7 @@ func TestEndpointLimiterDefaults(t *testing.T) {
 
 // TestEndpointLimiterLoginLimit tests login rate limit (5 per 15 min per PART 1)
 func TestEndpointLimiterLoginLimit(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 	ip := "192.168.1.1"
 
 	// First 5 login attempts should be allowed
@@ -364,7 +364,7 @@ func TestEndpointLimiterLoginLimit(t *testing.T) {
 
 // TestEndpointLimiterAPIAuthLimit tests authenticated API limit (1000 per min per PART 1)
 func TestEndpointLimiterAPIAuthLimit(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 	ip := "192.168.1.1"
 
 	// All 1000 requests should be allowed
@@ -382,7 +382,7 @@ func TestEndpointLimiterAPIAuthLimit(t *testing.T) {
 
 // TestEndpointLimiterAPIUnauthLimit tests unauthenticated API limit (300 per min per PART 1)
 func TestEndpointLimiterAPIUnauthLimit(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 	ip := "192.168.1.1"
 
 	// First 300 requests should be allowed
@@ -400,7 +400,7 @@ func TestEndpointLimiterAPIUnauthLimit(t *testing.T) {
 
 // TestEndpointLimiterIndependence tests that different endpoints have independent limits
 func TestEndpointLimiterIndependence(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 	ip := "192.168.1.1"
 
 	// Exhaust login limit
@@ -419,7 +419,7 @@ func TestEndpointLimiterIndependence(t *testing.T) {
 
 // TestEndpointLimiterDisabled tests that disabled limiters allow all requests
 func TestEndpointLimiterDisabled(t *testing.T) {
-	el := NewEndpointLimiters(false)
+	el := newEndpointLimiters(false)
 	ip := "192.168.1.1"
 
 	// Should allow unlimited requests when disabled
@@ -465,7 +465,7 @@ func TestRateLimiterSetLoggerNil(t *testing.T) {
 // TestEndpointLimitersSetLogger covers EndpointLimiters.SetLogger (0% coverage).
 // It verifies the logger is propagated to every child limiter.
 func TestEndpointLimitersSetLogger(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 	logger := newTestLogger(t)
 	el.SetLogger(logger)
 
@@ -482,7 +482,7 @@ func TestEndpointLimitersSetLogger(t *testing.T) {
 // TestEndpointLimitersGetUnknownFallsBackToDefault covers the fallback branch in
 // EndpointLimiters.Get when an unknown endpoint key is requested (currently 80%).
 func TestEndpointLimitersGetUnknownFallsBackToDefault(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 	got := el.Get("nonexistent_endpoint_xyz")
 	want := el.Get(EndpointDefault)
 	if got != want {
@@ -493,7 +493,7 @@ func TestEndpointLimitersGetUnknownFallsBackToDefault(t *testing.T) {
 // TestEndpointLimiterAllowPasswordReset covers AllowPasswordReset (0% coverage).
 // Limit per AI.md PART 12: 3 per hour.
 func TestEndpointLimiterAllowPasswordReset(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 	ip := "10.0.0.1"
 
 	for i := 0; i < 3; i++ {
@@ -510,7 +510,7 @@ func TestEndpointLimiterAllowPasswordReset(t *testing.T) {
 // TestEndpointLimiterAllowFileUpload covers AllowFileUpload (0% coverage).
 // Limit per AI.md PART 12: 10 per hour.
 func TestEndpointLimiterAllowFileUpload(t *testing.T) {
-	el := NewEndpointLimiters(true)
+	el := newEndpointLimiters(true)
 	ip := "10.0.0.2"
 
 	for i := 0; i < 10; i++ {

@@ -11,8 +11,8 @@ import (
 // FuxEngine searches Fux
 type FuxEngine struct{ *BaseEngine }
 
-// NewFuxEngine creates a new Fux engine
-func NewFuxEngine(appConfig *config.AppConfig) *FuxEngine {
+// newFuxEngine creates a new Fux engine
+func newFuxEngine(appConfig *config.AppConfig) *FuxEngine {
 	return &FuxEngine{NewBaseEngine("fux", "Fux", "https://www.fux.com", 3, appConfig)}
 }
 

@@ -11,8 +11,8 @@ import (
 // FourTubeEngine searches 4Tube
 type FourTubeEngine struct{ *BaseEngine }
 
-// NewFourTubeEngine creates a new 4Tube engine
-func NewFourTubeEngine(appConfig *config.AppConfig) *FourTubeEngine {
+// newFourTubeEngine creates a new 4Tube engine
+func newFourTubeEngine(appConfig *config.AppConfig) *FourTubeEngine {
 	return &FourTubeEngine{NewBaseEngine("4tube", "4Tube", "https://www.4tube.com", 3, appConfig)}
 }
 

@@ -70,9 +70,9 @@ type csrfContextKeyType struct{}
 // The server package writes the key; the handler package reads it.
 var CSRFTokenKey = csrfContextKeyType{}
 
-// CSRFTokenFromRequest reads the CSRF token from the request context.
+// cSRFTokenFromRequest reads the CSRF token from the request context.
 // Returns an empty string when the CSRF middleware did not run (e.g., bypassed request).
-func CSRFTokenFromRequest(r *http.Request) string {
+func cSRFTokenFromRequest(r *http.Request) string {
 	v, _ := r.Context().Value(CSRFTokenKey).(string)
 	return v
 }
@@ -123,18 +123,18 @@ type GeoIPChecker interface {
 }
 
 // Cookie name for content restriction acknowledgment
-const ContentRestrictionAckCookieName = "content_ack"
+const contentRestrictionAckCookieName = "content_ack"
 
 // Cookie name for user IP forwarding preference
-const IPForwardCookieName = "forward_ip"
+const iPForwardCookieName = "forward_ip"
 
 // Cookie names for no-JS preference persistence. The JS-enabled UI stores
 // these in localStorage instead (see static/js/app.js loadPreferences), but
 // the nojs/preferences.tmpl fallback form has no localStorage available, so
 // it needs a server-side equivalent per AI.md PART 16's progressive
 // enhancement mandate (core features work without JavaScript).
-const ResultsPerPageCookieName = "results_per_page"
-const OpenNewTabCookieName = "open_new_tab"
+const resultsPerPageCookieName = "results_per_page"
+const openNewTabCookieName = "open_new_tab"
 
 // getRequestTheme returns the user's theme preference from their cookie, falling
 // back to the server-configured default. Valid values: "dark", "light", "auto".
@@ -160,7 +160,7 @@ func (h *SearchHandler) getUserIPForwardPreference(r *http.Request) (bool, strin
 	}
 
 	// Check user's preference cookie (defaults to disabled)
-	cookie, err := r.Cookie(IPForwardCookieName)
+	cookie, err := r.Cookie(iPForwardCookieName)
 	if err != nil || cookie.Value != "1" {
 		// User hasn't opted in
 		return false, ""
@@ -216,7 +216,7 @@ func (h *SearchHandler) isTorRequest(r *http.Request) bool {
 
 // hasContentRestrictionAck checks if user has acknowledged content restriction warning
 func (h *SearchHandler) hasContentRestrictionAck(r *http.Request) bool {
-	cookie, err := r.Cookie(ContentRestrictionAckCookieName)
+	cookie, err := r.Cookie(contentRestrictionAckCookieName)
 	if err != nil {
 		return false
 	}
@@ -225,8 +225,8 @@ func (h *SearchHandler) hasContentRestrictionAck(r *http.Request) bool {
 
 // setContentRestrictionAckCookie sets the acknowledgment cookie (30 days)
 func (h *SearchHandler) setContentRestrictionAckCookie(w http.ResponseWriter) {
-	http.SetCookie(w, NewSecureCookie(
-		ContentRestrictionAckCookieName,
+	http.SetCookie(w, newSecureCookie(
+		contentRestrictionAckCookieName,
 		"1",
 		"/",
 		// 30 days
@@ -235,7 +235,7 @@ func (h *SearchHandler) setContentRestrictionAckCookie(w http.ResponseWriter) {
 	))
 }
 
-// SearchSessionCookieName stores an opaque per-search-session identifier for
+// searchSessionCookieName stores an opaque per-search-session identifier for
 // browser HTML requests that arrive without an explicit ?session= override.
 // app.js already generates and forwards its own session token to the JSON/SSE
 // API (see static/js/app.js), but the plain-HTML SearchPage route (used on
@@ -244,7 +244,7 @@ func (h *SearchHandler) setContentRestrictionAckCookie(w http.ResponseWriter) {
 // to it. This cookie closes that gap per AI.md PART 16 progressive
 // enhancement: core search — including cross-page dedup — must work without
 // JavaScript.
-const SearchSessionCookieName = "search_session"
+const searchSessionCookieName = "search_session"
 
 // resolveSearchSessionID returns the session identifier to use for
 // EngineManager cross-page result dedup. An explicit ?session= query
@@ -258,7 +258,7 @@ func (h *SearchHandler) resolveSearchSessionID(w http.ResponseWriter, r *http.Re
 		return s
 	}
 
-	if cookie, err := r.Cookie(SearchSessionCookieName); err == nil && cookie.Value != "" {
+	if cookie, err := r.Cookie(searchSessionCookieName); err == nil && cookie.Value != "" {
 		return cookie.Value
 	}
 
@@ -269,8 +269,8 @@ func (h *SearchHandler) resolveSearchSessionID(w http.ResponseWriter, r *http.Re
 		return ""
 	}
 
-	http.SetCookie(w, NewSecureCookie(
-		SearchSessionCookieName,
+	http.SetCookie(w, newSecureCookie(
+		searchSessionCookieName,
 		sessionID,
 		"/",
 		// 1 hour - long enough to cover a multi-page browsing session
@@ -691,7 +691,7 @@ func (h *SearchHandler) AgeVerifySubmit(w http.ResponseWriter, r *http.Request) 
 // setAgeVerifyCookie sets/renews the age verification cookie per AI.md PART 11
 func (h *SearchHandler) setAgeVerifyCookie(w http.ResponseWriter) {
 	// 30 days, with Secure flag per AI.md PART 11
-	http.SetCookie(w, NewSecureCookie(
+	http.SetCookie(w, newSecureCookie(
 		ageVerifyCookieName,
 		"1",
 		"/",
@@ -1042,7 +1042,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 			"Engines":        engines,
 			"ResultsPerPage": h.getRequestResultsPerPage(r),
 			"OpenNewTab":     h.getRequestOpenNewTab(r),
-			"CSRFToken":      CSRFTokenFromRequest(r),
+			"CSRFToken":      cSRFTokenFromRequest(r),
 			"BuildDateTime":  BuildDateTime(),
 		})
 	}
@@ -1052,7 +1052,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 // their cookie (set by PreferencesSave for no-JS clients), falling back to the
 // JS-UI default of "20" (see static/js/app.js DEFAULT_PREFS.resultsPerPage).
 func (h *SearchHandler) getRequestResultsPerPage(r *http.Request) string {
-	if c, err := r.Cookie(ResultsPerPageCookieName); err == nil {
+	if c, err := r.Cookie(resultsPerPageCookieName); err == nil {
 		switch c.Value {
 		case "20", "50", "100":
 			return c.Value
@@ -1065,7 +1065,7 @@ func (h *SearchHandler) getRequestResultsPerPage(r *http.Request) string {
 // from their cookie (set by PreferencesSave for no-JS clients), falling back
 // to the JS-UI default of true (see static/js/app.js DEFAULT_PREFS.openNewTab).
 func (h *SearchHandler) getRequestOpenNewTab(r *http.Request) bool {
-	if c, err := r.Cookie(OpenNewTabCookieName); err == nil {
+	if c, err := r.Cookie(openNewTabCookieName); err == nil {
 		return c.Value == "1"
 	}
 	return true
@@ -1087,13 +1087,13 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	// Theme — validated against the same allow-list as getRequestTheme.
 	switch r.FormValue("theme") {
 	case "dark", "light", "auto":
-		http.SetCookie(w, NewSecureCookie("theme", r.FormValue("theme"), "/", 365*24*60*60, sslEnabled))
+		http.SetCookie(w, newSecureCookie("theme", r.FormValue("theme"), "/", 365*24*60*60, sslEnabled))
 	}
 
 	// Results per page — validated against the same allow-list as the <select>.
 	switch r.FormValue("resultsPerPage") {
 	case "20", "50", "100":
-		http.SetCookie(w, NewSecureCookie(ResultsPerPageCookieName, r.FormValue("resultsPerPage"), "/", 365*24*60*60, sslEnabled))
+		http.SetCookie(w, newSecureCookie(resultsPerPageCookieName, r.FormValue("resultsPerPage"), "/", 365*24*60*60, sslEnabled))
 	}
 
 	// Open-links-in-new-tab — an absent checkbox means "unchecked" in HTML forms.
@@ -1101,7 +1101,7 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	if r.FormValue("openNewTab") != "" {
 		openNewTab = "1"
 	}
-	http.SetCookie(w, NewSecureCookie(OpenNewTabCookieName, openNewTab, "/", 365*24*60*60, sslEnabled))
+	http.SetCookie(w, newSecureCookie(openNewTabCookieName, openNewTab, "/", 365*24*60*60, sslEnabled))
 
 	http.Redirect(w, r, "/preferences", http.StatusFound)
 }

@@ -515,11 +515,11 @@ func TestGetWindowsServiceAccount_EmptyOnNonWindows(t *testing.T) {
 	}
 }
 
-// TestIsRunningAsService_ReturnsBool verifies IsRunningAsService returns a bool
+// TestIsRunningAsService_ReturnsBool verifies isRunningAsService returns a bool
 // without panicking.
 func TestIsRunningAsService_ReturnsBool(t *testing.T) {
 	// Result depends on whether PPID=1 (init/systemd), so just verify no panic.
-	_ = IsRunningAsService()
+	_ = isRunningAsService()
 }
 
 // TestDropPrivileges_NoopWhenNonRoot verifies DropPrivileges returns nil
@@ -533,10 +533,10 @@ func TestDropPrivileges_NoopWhenNonRoot(t *testing.T) {
 	}
 }
 
-// TestCanEscalate_ReturnsBool verifies CanEscalate returns a bool without
+// TestCanEscalate_ReturnsBool verifies canEscalate returns a bool without
 // panicking (result depends on environment).
 func TestCanEscalate_ReturnsBool(t *testing.T) {
-	_ = CanEscalate()
+	_ = canEscalate()
 }
 
 // ── DetectServiceManager ──────────────────────────────────────────────────────

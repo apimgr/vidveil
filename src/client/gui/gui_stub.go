@@ -8,8 +8,8 @@ package gui
 
 import "errors"
 
-// ErrGUIUnsupported is returned when the binary was not compiled with -tags gui.
-var ErrGUIUnsupported = errors.New("GUI not available: binary was not built with -tags gui")
+// errGUIUnsupported is returned when the binary was not compiled with -tags gui.
+var errGUIUnsupported = errors.New("GUI not available: binary was not built with -tags gui")
 
 // Config holds the configuration passed to the GUI launcher.
 // Defined here (not in gui.go) so both stub and real builds share the same type.
@@ -25,7 +25,7 @@ func IsAvailable() bool {
 	return false
 }
 
-// Launch always returns ErrGUIUnsupported in standard builds.
+// Launch always returns errGUIUnsupported in standard builds.
 func Launch(_ *Config) error {
-	return ErrGUIUnsupported
+	return errGUIUnsupported
 }

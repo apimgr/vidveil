@@ -229,7 +229,9 @@ func (s *Server) setupMiddleware() {
 					"base-uri 'self'; "+
 					"form-action 'self'; "+
 					"object-src 'none'; "+
-					"upgrade-insecure-requests",
+					"upgrade-insecure-requests; "+
+					"report-to default; "+
+					"report-uri /api/v1/server/reports/csp",
 			)
 			// Permissions-Policy per PART 11 spec defaults
 			w.Header().Set("Permissions-Policy",
@@ -736,6 +738,17 @@ func (s *Server) setupRoutes() {
 			r.Post("/contact", server.APIContact)
 			r.Get("/help", server.APIHelp)
 			r.Get("/terms", server.APITerms)
+
+			// Browser-emitted report ingestion per AI.md PART 11 "Reporting API
+			// (Modern + Legacy)". These back the Reporting-Endpoints, Report-To,
+			// and NEL response headers set in the security-headers middleware, and
+			// the CSP report-to/report-uri directives. Each accepts a bounded POST,
+			// logs a sanitized summary to security.log, and returns 204.
+			r.Route("/reports", func(r chi.Router) {
+				r.Post("/default", server.ReportsDefault)
+				r.Post("/nel", server.ReportsNEL)
+				r.Post("/csp", server.ReportsCSP)
+			})
 		})
 
 		// Proxy endpoints (plural per PART 14)

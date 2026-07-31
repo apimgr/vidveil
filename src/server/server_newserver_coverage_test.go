@@ -45,6 +45,10 @@ func newTestServer(t *testing.T) *Server {
 
 	engineMgr := engine.NewEngineManager(cfg)
 	sched := scheduler.NewScheduler()
+	// The scheduler is ALWAYS running in production (AI.md PART 18); start it so
+	// the /server/healthz scheduler check reports healthy, mirroring runtime.
+	sched.Start(context.Background())
+	t.Cleanup(sched.Stop)
 
 	var logger *logging.AppLogger
 	logger, err = logging.NewAppLogger(cfg)

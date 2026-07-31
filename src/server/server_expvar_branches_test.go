@@ -4,6 +4,7 @@
 package server
 
 import (
+	"context"
 	"expvar"
 	"net/http"
 	"net/http/httptest"
@@ -55,6 +56,10 @@ func newTestServerWithCfg(t *testing.T, modify func(cfg *config.AppConfig)) *Ser
 	t.Cleanup(func() { os.RemoveAll(tmp) })
 	engineMgr := engine.NewEngineManager(cfg)
 	sched := scheduler.NewScheduler()
+	// The scheduler is ALWAYS running in production (AI.md PART 18); start it so
+	// the /server/healthz scheduler check reports healthy, mirroring runtime.
+	sched.Start(context.Background())
+	t.Cleanup(sched.Stop)
 	var logger *logging.AppLogger
 	logger, err = logging.NewAppLogger(cfg)
 	if err != nil {

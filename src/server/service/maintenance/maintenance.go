@@ -352,6 +352,13 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 
 // checkDiskSpace aborts the backup per AI.md PART 21 if free space is less than
 // 2x the most recent existing backup's size, or if disk usage exceeds 90%.
+// DiskSpace returns the total and free bytes for the filesystem containing
+// path. Exported for the /server/healthz disk check (AI.md PART 13); the
+// platform-specific implementation lives in diskspace_{unix,windows}.go.
+func DiskSpace(path string) (total, free uint64, err error) {
+	return diskSpace(path)
+}
+
 func (m *MaintenanceManager) checkDiskSpace(backupDir string) error {
 	total, free, err := diskSpace(backupDir)
 	if err != nil {

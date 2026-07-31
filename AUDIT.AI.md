@@ -19,6 +19,7 @@ all are resolved.
 ## Pass 2: Code Quality (flagged — dead/unwired code)
 - [ ] src/notify webhook package is not imported anywhere (dead subsystem). It also carries internal bugs that only matter once wired: pushover drops token/user fields, telegram request body shape mismatch, logWebhookFailed is a no-op. Decision needed: wire it in or remove the package.
 - [ ] ~80 exported symbols across packages have no external callers (dead public API). Unexporting is mechanical but touches many files; batch it deliberately rather than mid-audit.
+- [ ] maintenance.go NO_COLOR: four `fmt.Println("✅ ...")` calls (update up-to-date, update applied, maintenance mode enabled/disabled) emit an emoji without the NO_COLOR/terminal-icon guard used elsewhere. Route through terminal.SuccessIcon() or gate on NO_COLOR.
 
 ## Pass 3: Logic (flagged)
 - [ ] scheduler has no self-execution guard (a task can in principle re-trigger while still running); needs a design decision on overlap policy
@@ -37,7 +38,7 @@ all are resolved.
 - [ ] unified auth-header chain (spec describes a single precedence chain) not implemented as specified
 - [x] /server/terms — FIXED (PART 16: added TermsPage HTML handler + server-terms.tmpl default template with Acceptance/Acceptable Use/Liability/Changes/Governing Law sections per PART 16 spec table; added APITerms JSON+text handler with content negotiation per PART 14; registered /server/terms and /api/v1/server/terms routes; added to sitemap. Footer left unchanged — PART 16 footer list is About/Privacy/Contact/Help only)
 - [ ] token format / IsValidHost validation differ from spec's described format — rewrite would change accepted inputs
-- [ ] health check always returns OK regardless of subsystem state — spec implies real dependency checks
+- [x] health check always returns OK regardless of subsystem state — FIXED (PART 13: checkDatabase now PingContext's the real *sql.DB with a 2s timeout, checkScheduler reflects the always-running scheduler's IsRunning() state, checkDisk uses maintenance.DiskSpace and fails at >=99% usage; cache is process-local so stays "ok". Wired via SetHealthDB/SetScheduler in server.go; a stopped scheduler now drives status=unhealthy/503. Test helpers start the scheduler to mirror production PART 18 always-running invariant)
 - [ ] GeoIP has no IPv6 database wired; IPv6 lookups unsupported
 - [ ] SSL DNS-01 dynamic provider selection not implemented (lego providers present but not surfaced)
 - [ ] server CLI uses manual flag parsing rather than the spec-described structured parser

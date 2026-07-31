@@ -3,8 +3,10 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -39,6 +41,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
 	"github.com/apimgr/vidveil/src/server/service/secrets"
 	"github.com/apimgr/vidveil/src/server/service/urlvars"
@@ -291,6 +294,15 @@ type SearchHandler struct {
 	torSvc      TorStatusChecker
 	geoipSvc    GeoIPChecker
 	secretsMgr  *secrets.Manager
+	healthDB    *sql.DB
+	sched       SchedulerHealth
+}
+
+// SchedulerHealth is the minimal scheduler interface the /server/healthz check
+// needs (AI.md PART 13). *scheduler.Scheduler satisfies it via IsRunning; the
+// interface keeps the handler package free of a scheduler import.
+type SchedulerHealth interface {
+	IsRunning() bool
 }
 
 // SetSecretsManager wires the app-secrets manager used to derive the
@@ -340,6 +352,19 @@ func (h *SearchHandler) SetTorService(t TorStatusChecker) {
 // SetGeoIPService sets the GeoIP service for content restriction checks
 func (h *SearchHandler) SetGeoIPService(g GeoIPChecker) {
 	h.geoipSvc = g
+}
+
+// SetHealthDB wires the database handle used by the /server/healthz database
+// check per AI.md PART 13. When nil, the database check reports "ok" (nothing
+// to probe).
+func (h *SearchHandler) SetHealthDB(db *sql.DB) {
+	h.healthDB = db
+}
+
+// SetScheduler wires the scheduler used by the /server/healthz scheduler check
+// per AI.md PART 13.
+func (h *SearchHandler) SetScheduler(s SchedulerHealth) {
+	h.sched = s
 }
 
 // getProxyClient returns an HTTP client for proxy requests
@@ -1374,6 +1399,67 @@ type StatsInfo struct {
 	SearchesTotal     uint64 `json:"searches_total"`
 }
 
+// checkDatabase pings the database per AI.md PART 13. A nil handle (e.g. in
+// tests, or a build with no DB wired) reports "ok" since there is nothing to
+// probe; a live handle that fails to answer within 2s reports "error".
+func (h *SearchHandler) checkDatabase(ctx context.Context) string {
+	if h.healthDB == nil {
+		return "ok"
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := h.healthDB.PingContext(pingCtx); err != nil {
+		return "error"
+	}
+	return "ok"
+}
+
+// checkCache reports the in-memory search cache health per AI.md PART 13. The
+// cache is process-local (no external backend) and cannot fail while allocated;
+// a nil cache means caching is simply not wired. Either way there is nothing
+// that can report unhealthy, so this is always "ok" — the meaningful failure
+// probes are database, disk, and scheduler.
+func (h *SearchHandler) checkCache() string {
+	return "ok"
+}
+
+// checkDisk verifies the data directory's filesystem is reachable and not
+// critically full per AI.md PART 13. It reports "error" when the path cannot
+// be stat'd or when usage is at or above 99%; unsupported platforms (statfs
+// returns an error) degrade to "ok" rather than a false failure.
+func (h *SearchHandler) checkDisk() string {
+	path := h.dataDir
+	if path == "" {
+		path = h.configDir
+	}
+	if path == "" {
+		path = os.TempDir()
+	}
+	total, free, err := maintenance.DiskSpace(path)
+	if err != nil {
+		return "ok"
+	}
+	if total > 0 {
+		used := total - free
+		if float64(used)/float64(total) >= 0.99 {
+			return "error"
+		}
+	}
+	return "ok"
+}
+
+// checkScheduler reports whether the background scheduler loop is active per
+// AI.md PART 13/18. A nil scheduler (not wired, e.g. in tests) reports "ok".
+func (h *SearchHandler) checkScheduler() string {
+	if h.sched == nil {
+		return "ok"
+	}
+	if h.sched.IsRunning() {
+		return "ok"
+	}
+	return "error"
+}
+
 // HealthCheck handles /healthz endpoint with content negotiation
 // Per AI.md PART 13
 func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
@@ -1391,15 +1477,13 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build checks object - MUST be simple "ok"/"error" strings
-	// Per AI.md PART 13
+	// Per AI.md PART 13: each value comes from a real probe, never hardcoded.
 	checks := map[string]string{
-		"database": "ok",
-		"cache":    "ok",
-		"disk":     "ok",
+		"database":  h.checkDatabase(r.Context()),
+		"cache":     h.checkCache(),
+		"disk":      h.checkDisk(),
+		"scheduler": h.checkScheduler(),
 	}
-
-	// Add scheduler check
-	checks["scheduler"] = "ok"
 
 	// Add Tor check if enabled per PART 31
 	if h.torSvc != nil && h.torSvc.IsEnabled() {

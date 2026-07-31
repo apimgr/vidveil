@@ -513,6 +513,13 @@ func (s *Server) setupRoutes() {
 	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
 	h.SetMetrics(metrics)
 
+	// Wire real dependency probes for /server/healthz (AI.md PART 13): the
+	// database ping and the scheduler running-state check.
+	h.SetHealthDB(s.migrationMgr.GetDB())
+	if s.scheduler != nil {
+		h.SetScheduler(s.scheduler)
+	}
+
 	// Prometheus labeled HTTP metrics per AI.md PART 20 (REQUIRED)
 	s.router.Use(svcmetrics.InstrumentMiddleware)
 

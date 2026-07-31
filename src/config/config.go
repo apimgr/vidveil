@@ -878,9 +878,11 @@ type CSRFConfig struct {
 	ExemptPaths []string `yaml:"exempt_paths"`
 }
 
-// FooterConfig holds footer settings
+// FooterConfig holds footer settings.
+// No analytics/tracking field is defined here: the IDEA.md non-goal "No
+// tracking, logging, or analytics" forbids the analytics-injection point that
+// AI.md PART 12 "Analytics Tracking" describes for the generic template.
 type FooterConfig struct {
-	TrackingID    string              `yaml:"tracking_id"`
 	CookieConsent CookieConsentConfig `yaml:"cookie_consent"`
 	CustomHTML    string              `yaml:"custom_html"`
 }

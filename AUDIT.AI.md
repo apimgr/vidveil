@@ -49,7 +49,7 @@ all are resolved.
 - [ ] GeoIP has no IPv6 database wired; IPv6 lookups unsupported
 - [ ] SSL DNS-01 dynamic provider selection not implemented (lego providers present but not surfaced)
 - [ ] server CLI uses manual flag parsing rather than the spec-described structured parser
-- [ ] Go singular-directory convention: `src/server/service/{secrets,metrics,urlvars,utls}` are plural but their packages are singular — rename dirs + fix all imports (mechanical, touches many files; batch deliberately)
+- [~] Go singular-directory convention — RE-EXAMINED, largely a false positive. The original rationale ("dirs plural but packages singular") is factually wrong: in all four (`secrets`, `metrics`, `urlvars`, `utls`) the package name already equals the directory name, so the AI.md "match package name" rule (lines 948-949) is satisfied. `utls` is the proper name of the uTLS library wrapper (renaming to `utl` would be nonsensical); `urlvars` is a compound utility name ("URL vars"), not a plural of a resource concept. Only `secrets`/`metrics` are borderline against the "singular directory names" rule (lines 1135/1146) — but both are idiomatic Go collective package names and the AI.md violation examples are all pluralized resource types (`handler`->`handlers`, `model`->`models`), not collective nouns. Left as a maintainer judgment call, NOT an auto-fixed rename — an incorrect rename here would break the build and the uTLS semantic.
 
 ## Pass 6: Code Flow Trace (flagged)
 - [ ] see Pass 2 dead-export and src/notify findings (call-graph dead ends)

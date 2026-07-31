@@ -61,6 +61,10 @@ type ScheduledTask struct {
 	fn        TaskFunc
 	// retryCount tracks consecutive failed attempts for exponential backoff per AI.md PART 18
 	retryCount int
+	// running marks a task whose execution is currently in flight, used to
+	// enforce the PART 18 overlap policy (a still-running task is skipped, not
+	// run concurrently). In-memory only, guarded by Scheduler.mu.
+	running bool `json:"-"`
 }
 
 // Retry policy per AI.md PART 18: max 3 retries, 5m base delay, exponential backoff (5m, 10m, 20m)
@@ -647,9 +651,26 @@ func (s *Scheduler) checkAndRunTasks() {
 // Per AI.md PART 18: Task state is persisted to database after each run
 func (s *Scheduler) runTask(task *ScheduledTask) {
 	s.mu.Lock()
+	// Overlap guard per AI.md PART 18: if a prior execution of this task is
+	// still in flight, do not run it again — record a skipped result and move
+	// its next run forward so the trigger does not tight-loop.
+	if task.running {
+		s.mu.Unlock()
+		s.recordSkip(task)
+		return
+	}
+	task.running = true
 	task.LastResult = "running"
 	startTime := s.now()
 	s.mu.Unlock()
+
+	// Always clear the in-flight flag, even on panic, so a crashed task never
+	// permanently blocks its own future triggers.
+	defer func() {
+		s.mu.Lock()
+		task.running = false
+		s.mu.Unlock()
+	}()
 
 	// Emit Prometheus scheduler metrics per AI.md PART 20
 	metrics.SchedulerTasksRunning.WithLabelValues(task.ID).Inc()
@@ -726,6 +747,41 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 
 	// Persist state to database per AI.md PART 18
 	// Done outside lock to avoid blocking other operations
+	s.saveTaskStateToDB(&taskCopy)
+	s.saveHistoryToDB(hist)
+}
+
+// recordSkip records a skipped run for a task whose prior execution is still in
+// flight, per the AI.md PART 18 overlap policy. It advances NextRun (without
+// touching run/fail/retry counters) and appends a "skipped" history entry.
+func (s *Scheduler) recordSkip(task *ScheduledTask) {
+	s.mu.Lock()
+	skipTime := s.now()
+	task.LastResult = "skipped"
+	if task.cronSched != nil {
+		task.NextRun = task.cronSched.Next(skipTime)
+	} else {
+		task.NextRun = skipTime.Add(task.Interval)
+	}
+
+	hist := TaskHistory{
+		TaskID:    task.ID,
+		StartTime: skipTime,
+		EndTime:   skipTime,
+		Duration:  0,
+		Result:    "skipped",
+	}
+	s.history = append(s.history, hist)
+	if len(s.history) > s.maxHist {
+		s.history = s.history[len(s.history)-s.maxHist:]
+	}
+
+	metrics.SchedulerTasksTotal.WithLabelValues(task.ID, "skipped").Inc()
+
+	taskCopy := *task
+	s.mu.Unlock()
+
+	log.Printf("task %s skipped: previous run still in progress", task.ID)
 	s.saveTaskStateToDB(&taskCopy)
 	s.saveHistoryToDB(hist)
 }

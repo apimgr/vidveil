@@ -279,6 +279,70 @@ func TestRegisterTask_DuplicateID(t *testing.T) {
 	// as long as the behaviour is consistent.
 }
 
+// TestRunTask_OverlapGuardSkips verifies the PART 18 overlap policy: when a
+// task's prior execution is still in flight, a second trigger does not run the
+// task function again and records a "skipped" result instead.
+func TestRunTask_OverlapGuardSkips(t *testing.T) {
+	s := NewScheduler()
+	s.ctx = context.Background()
+
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	if err := s.RegisterTask("block", "Blocking Task", "d", "hourly", func(_ context.Context) error {
+		entered <- struct{}{}
+		<-release
+		return nil
+	}); err != nil {
+		t.Fatalf("RegisterTask error: %v", err)
+	}
+	task := s.tasks["block"]
+
+	done := make(chan struct{})
+	go func() {
+		s.runTask(task)
+		close(done)
+	}()
+
+	// Wait until the first execution is actually inside the task function.
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first run never entered the task function")
+	}
+
+	// Second trigger while the first is still blocked: must be skipped.
+	s.runTask(task)
+
+	if got := task.LastResult; got != "skipped" {
+		t.Errorf("overlapping run LastResult = %q, want \"skipped\"", got)
+	}
+	select {
+	case <-entered:
+		t.Error("task function ran a second time during overlap; guard failed")
+	default:
+	}
+	if n := len(s.GetHistory("block", 10)); n == 0 {
+		t.Error("expected a history entry for the skipped run")
+	}
+	foundSkip := false
+	for _, h := range s.GetHistory("block", 10) {
+		if h.Result == "skipped" {
+			foundSkip = true
+		}
+	}
+	if !foundSkip {
+		t.Error("no history entry with Result==\"skipped\" after overlap")
+	}
+
+	// Release the first run and let it complete cleanly.
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first run did not complete after release")
+	}
+}
+
 // TestRegisterTask_InvalidSchedule verifies that an unrecognisable schedule
 // string is rejected.
 func TestRegisterTask_InvalidSchedule(t *testing.T) {

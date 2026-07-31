@@ -730,3 +730,58 @@ func TestHumansTxt_EmptyTitle_UsesVidveilDefault(t *testing.T) {
 		t.Errorf("HumansTxt(empty title): expected 'Vidveil' in body, got %q", body)
 	}
 }
+
+// ── LlmsTxt — AI-agent discovery file per AI.md PART 14 ──────────────────────
+
+func TestLlmsTxt_ServesDiscoveryFile(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Server.Branding.Title = ""
+	cfg.Server.Branding.Description = ""
+	cfg.Server.FQDN = "vidveil.example.com"
+	h := NewSearchHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/llms.txt", nil)
+	h.LlmsTxt(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("LlmsTxt: status = %d, want 200", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("LlmsTxt: Content-Type = %q, want text/plain", ct)
+	}
+	body := rr.Body.String()
+	// Defaults applied when branding is empty.
+	if !strings.Contains(body, "# Vidveil") {
+		t.Errorf("LlmsTxt: expected default name heading, got %q", body)
+	}
+	// Public API section and endpoints must be advertised.
+	for _, want := range []string{"## API", "## Endpoints", "/api/v1/search", "## Contact"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("LlmsTxt: body missing %q", want)
+		}
+	}
+	// The internal-only metrics endpoint must never be advertised (PART 14).
+	if strings.Contains(body, "/metrics") {
+		t.Errorf("LlmsTxt: must not advertise /metrics, got %q", body)
+	}
+}
+
+func TestLlmsTxt_RateLimitShownWhenEnabled(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Server.RateLimit.Enabled = true
+	cfg.Server.RateLimit.Requests = 60
+	cfg.Server.RateLimit.Window = 60
+	h := NewSearchHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/llms.txt", nil)
+	h.LlmsTxt(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("LlmsTxt: status = %d, want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Rate limit:") {
+		t.Errorf("LlmsTxt(rate limit enabled): expected rate-limit line, got %q", rr.Body.String())
+	}
+}

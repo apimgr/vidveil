@@ -33,7 +33,7 @@ all are resolved.
 - [ ] analytics/tracking subsystem described in spec is not implemented
 - [ ] privacy consent configuration + GPC (Global Privacy Control) handling not implemented
 - [ ] reporting endpoints described in spec not implemented
-- [ ] llms.txt not served
+- [x] llms.txt — FIXED (PART 14: served at both /.well-known/llms.txt and /llms.txt, text/plain; charset=utf-8, auto-generated from routes with public+authenticated endpoints only, metrics never advertised, every URL resolved per-request via BuildURL; added to age-verify/content-restriction skip lists like robots.txt)
 - [ ] unified auth-header chain (spec describes a single precedence chain) not implemented as specified
 - [ ] /server/terms page not implemented
 - [ ] token format / IsValidHost validation differ from spec's described format — rewrite would change accepted inputs
@@ -41,6 +41,7 @@ all are resolved.
 - [ ] GeoIP has no IPv6 database wired; IPv6 lookups unsupported
 - [ ] SSL DNS-01 dynamic provider selection not implemented (lego providers present but not surfaced)
 - [ ] server CLI uses manual flag parsing rather than the spec-described structured parser
+- [ ] Go singular-directory convention: `src/server/service/{secrets,metrics,urlvars,utls}` are plural but their packages are singular — rename dirs + fix all imports (mechanical, touches many files; batch deliberately)
 
 ## Pass 6: Code Flow Trace (flagged)
 - [ ] see Pass 2 dead-export and src/notify findings (call-graph dead ends)

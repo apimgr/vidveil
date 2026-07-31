@@ -549,6 +549,9 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/sitemap.xml", h.SitemapXML)
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
 	s.router.Get("/.well-known/pgp-key.asc", h.PGPKeyAsc)
+	// AI.md PART 14: AI-agent discovery file, served at both paths.
+	s.router.Get("/.well-known/llms.txt", h.LlmsTxt)
+	s.router.Get("/llms.txt", h.LlmsTxt)
 	s.router.Get("/humans.txt", h.HumansTxt)
 	s.router.Get("/favicon.ico", h.Favicon)
 	s.router.Get("/apple-touch-icon.png", h.AppleTouchIcon)

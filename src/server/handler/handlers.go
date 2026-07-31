@@ -583,6 +583,8 @@ func (h *SearchHandler) AgeVerifyMiddleware(next http.Handler) http.Handler {
 			strings.HasPrefix(path, "/api/") ||
 			path == "/healthz" ||
 			path == "/robots.txt" ||
+			path == "/llms.txt" ||
+			path == "/.well-known/llms.txt" ||
 			path == "/age-verify" {
 			next.ServeHTTP(w, r)
 			return
@@ -678,6 +680,8 @@ func (h *SearchHandler) ContentRestrictionMiddleware(next http.Handler) http.Han
 			strings.HasPrefix(path, "/api/") ||
 			path == "/healthz" ||
 			path == "/robots.txt" ||
+			path == "/llms.txt" ||
+			path == "/.well-known/llms.txt" ||
 			path == "/age-verify" ||
 			path == "/content-restricted" {
 			next.ServeHTTP(w, r)
@@ -1961,6 +1965,79 @@ Doctype: HTML5
 Standards: WCAG 2.1 AA, RFC 9116
 Components: Go, SQLite, Valkey/Redis
 `, appName, appURL, time.Now().Format("2006-01-02"))))
+}
+
+// LlmsTxt serves the AI-agent discovery file per AI.md PART 14 "llms.txt (AI
+// Discovery)". ALL projects MUST serve it; it is registered at both
+// /.well-known/llms.txt and /llms.txt. Every URL is resolved per request via
+// urlvars.BuildURL (reverse-proxy aware) so the advertised base URL always
+// matches the Host/proto the client actually used. The metrics endpoint is
+// deliberately never advertised (operational/internal only).
+func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	name := h.appConfig.Server.Branding.Title
+	if name == "" {
+		name = "Vidveil"
+	}
+	desc := h.appConfig.Server.Branding.Description
+	if desc == "" {
+		desc = "Privacy-respecting adult video search"
+	}
+
+	apiBase := urlvars.BuildURL(r, "/api/v1")
+
+	// Rate limit: requests per window-seconds, normalized to per-minute.
+	rlReqs := h.appConfig.Server.RateLimit.Requests
+	rlWindow := h.appConfig.Server.RateLimit.Window
+	perMinute := rlReqs
+	if rlWindow > 0 && rlWindow != 60 {
+		perMinute = rlReqs * 60 / rlWindow
+	}
+
+	securityContact := h.appConfig.Web.Security.Contact
+	if securityContact == "" {
+		securityContact = "security@" + h.appConfig.Server.FQDN
+	}
+	securityContact = strings.TrimPrefix(securityContact, "mailto:")
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "# %s\n> %s\n\n", name, desc)
+
+	fmt.Fprintf(&b, "## API\n")
+	fmt.Fprintf(&b, "Base URL: %s\n", apiBase)
+	fmt.Fprintf(&b, "Authentication: Bearer token (server token from server.yml, or resource owner token issued on resource creation)\n")
+	if h.appConfig.Server.RateLimit.Enabled {
+		fmt.Fprintf(&b, "Rate limit: %d requests/minute\n", perMinute)
+	}
+	fmt.Fprintf(&b, "\n")
+
+	// Endpoints: public + authenticated only, never admin-only or metrics.
+	fmt.Fprintf(&b, "## Endpoints\n")
+	fmt.Fprintf(&b, "- GET /api/v1/search?q={query} - Search across engines (public)\n")
+	fmt.Fprintf(&b, "- POST /api/v1/search/batch - Batch search (public)\n")
+	fmt.Fprintf(&b, "- GET /api/v1/bangs - Bang shortcut list (public)\n")
+	fmt.Fprintf(&b, "- GET /api/v1/engines - Available search engines (public)\n")
+	fmt.Fprintf(&b, "- GET /api/v1/engines/health - Engine health (public)\n")
+	fmt.Fprintf(&b, "- GET /api/v1/stats - Server statistics (public)\n")
+	fmt.Fprintf(&b, "- GET /api/v1/version - Version info (public)\n")
+	fmt.Fprintf(&b, "- GET /api/v1/server/healthz - Health check (no auth)\n")
+	fmt.Fprintf(&b, "- GET /api/v1/server/about - Server information (no auth)\n")
+	fmt.Fprintf(&b, "- GET /api/v1/server/swagger - OpenAPI specification (no auth)\n")
+	fmt.Fprintf(&b, "\n")
+
+	fmt.Fprintf(&b, "## Capabilities\n")
+	fmt.Fprintf(&b, "- Privacy-respecting metasearch across multiple video engines\n")
+	fmt.Fprintf(&b, "- No tracking, no query logging, no advertising\n")
+	fmt.Fprintf(&b, "- JSON, SSE streaming, and plain-text result formats via content negotiation\n")
+	fmt.Fprintf(&b, "- Bang shortcuts for direct engine queries\n")
+	fmt.Fprintf(&b, "\n")
+
+	fmt.Fprintf(&b, "## Contact\n")
+	fmt.Fprintf(&b, "API issues: %s\n", urlvars.BuildURL(r, "/server/help"))
+	fmt.Fprintf(&b, "Security: %s\n", securityContact)
+
+	w.Write([]byte(b.String()))
 }
 
 // SitemapXML returns sitemap.xml per AI.md PART 16

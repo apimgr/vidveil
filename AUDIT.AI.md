@@ -21,13 +21,16 @@ all are resolved.
 - [ ] ~80 exported symbols across packages have no external callers (dead public API). Unexporting is mechanical but touches many files; batch it deliberately rather than mid-audit.
 - [x] maintenance.go NO_COLOR — FIXED (PART 8: the four `fmt.Println("✅ ...")` calls now go through terminal.StatusIcon(true), which returns "✅" or the "[OK]" fallback when NO_COLOR/no-emoji is set, matching the rest of the codebase)
 
+## Pass 5b: Docker (discovered during env-var reconciliation)
+- [ ] docker/docker-compose.yml + docker-compose.test.yml set `CACHE_URL: valkey://...` but NOTHING reads a bare CACHE_URL (entrypoint only sets CACHE_DIR; Go reads cache config from cfg.Cache via VIDVEIL_CACHE_* overrides — config uses type/host/port). The Valkey service is therefore never actually wired to the app; it silently falls back to in-memory cache. Fix: replace CACHE_URL with VIDVEIL_CACHE_TYPE=valkey + VIDVEIL_CACHE_HOST + VIDVEIL_CACHE_PORT.
+
 ## Pass 3: Logic (flagged)
 - [ ] scheduler has no self-execution guard (a task can in principle re-trigger while still running); needs a design decision on overlap policy
 - [ ] cache layer has no operation timeout; unbounded under a stalled backend
 - [ ] engine manager fans out under a single RLock held across all engine calls — a slow engine can stall the batch; perf/locking redesign
 
 ## Pass 4: Documentation (flagged)
-- [ ] Several env vars are read in code but not documented in README/docs/configuration.md (env-var inventory vs docs gap). Needs the full read-vs-documented reconciliation before publishing a complete table.
+- [x] env-var inventory vs docs gap — FIXED (full read-vs-documented reconciliation done. User-facing server vars added to docs/configuration.md: BASEURL, DOMAIN, HOSTNAME, TZ, plus a documented VIDVEIL_{SECTION}_{KEY} config-override mechanism with cache/database/smtp examples verified against src/config/env.go. Missing CLI legacy aliases added to docs/cli.md: VIDVEIL_TIMEOUT, VIDVEIL_FORMAT, VIDVEIL_COLOR. The ~24 remaining undocumented vars are system auto-detection reads (DISPLAY, WAYLAND_DISPLAY, SSH_*, container, KUBERNETES_*, APPDATA, XDG_CONFIG_HOME, etc.) and are correctly left undocumented — not user-configurable. VIDVEIL_LANG is internal plumbing (set from --lang, never read as user input). The CACHE_URL discrepancy is logged separately under Pass 5b as a real compose defect.)
 - [x] IDEA.md container-root note — FIXED (added a row to "Security decisions & exceptions" documenting that the container ENTRYPOINT execs as root to bind port 80, then the binary drops to the vidveil user via DropPrivileges after the listener is bound, per PART 23 — the transient-root form of the no-permanent-root default)
 
 ## Pass 5: Spec Compliance (flagged — not-yet-implemented spec subsystems)

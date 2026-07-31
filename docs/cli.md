@@ -62,11 +62,16 @@ The CLI automatically selects the appropriate interface:
 | `VIDVEIL_SERVER_PRIMARY` | Server address (canonical) |
 | `VIDVEIL_SERVER` | Server address compatibility alias |
 | `VIDVEIL_SERVER_TIMEOUT` | Request timeout in seconds (canonical) |
+| `VIDVEIL_TIMEOUT` | Request timeout compatibility alias |
 | `VIDVEIL_TOKEN` | API token (canonical) |
 | `VIDVEIL_CLI_TOKEN` | API token compatibility alias |
 | `VIDVEIL_OUTPUT_FORMAT` | Output format (canonical) |
+| `VIDVEIL_FORMAT` | Output format compatibility alias |
 | `VIDVEIL_OUTPUT_COLOR` | Output color mode (canonical) |
+| `VIDVEIL_COLOR` | Output color compatibility alias |
 | `VIDVEIL_DEBUG` | Enable debug output |
+
+For each pair, the canonical name is checked first; the alias applies only when the canonical variable is unset.
 
 ## Commands
 

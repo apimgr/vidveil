@@ -98,6 +98,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		templateFile = "template/page/server-contact.tmpl"
 	case "server-help":
 		templateFile = "template/page/server-help.tmpl"
+	case "server-terms":
+		templateFile = "template/page/server-terms.tmpl"
 	case "server-security":
 		templateFile = "template/page/server-security.tmpl"
 	case "server-security-policy":
@@ -384,6 +386,13 @@ func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Reque
 // HelpPage renders /server/help web page
 func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-help", nil)
+}
+
+// TermsPage renders the /server/terms web page per AI.md PART 16. A default
+// Terms of Service template is served (acceptance, acceptable use, liability,
+// changes, governing law); the spec allows operator customization via API.
+func (h *ServerHandler) TermsPage(w http.ResponseWriter, r *http.Request) {
+	h.renderServerTemplate(w, r, "server-terms", nil)
 }
 
 // handleSecurityReportSubmit implements the Submission Flow of AI.md PART 11
@@ -872,6 +881,40 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 				"swagger": "/server/docs/swagger",
 				"graphql": "/server/docs/graphql",
 			},
+		},
+	})
+}
+
+// APITerms handles GET /api/v1/server/terms
+// Per AI.md PART 14: content negotiation required on every API route. Serves the
+// default Terms of Service; the spec allows operator customization via API.
+func (h *ServerHandler) APITerms(w http.ResponseWriter, r *http.Request) {
+	updated := version.GetVersionInfo()["build_time"]
+	sections := []string{
+		"acceptance",
+		"eligibility",
+		"acceptable_use",
+		"third_party_content",
+		"no_warranty",
+		"limitation_of_liability",
+		"changes",
+		"governing_law",
+	}
+	if getAPIResponseFormat(r) == "text" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "terms_version: 1.0\nlast_updated: %s\n", updated)
+		for _, s := range sections {
+			fmt.Fprintf(w, "section: %s\n", s)
+		}
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"ok": true,
+		"data": map[string]interface{}{
+			"terms_version": "1.0",
+			"last_updated":  updated,
+			"summary":       "By using this stateless, privacy-first meta search engine you accept these terms. You must be of legal age, use the service lawfully, and acknowledge that all video content comes from independent third-party engines the operator does not host or control.",
+			"sections":      sections,
 		},
 	})
 }

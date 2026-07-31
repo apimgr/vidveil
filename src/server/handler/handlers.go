@@ -2097,6 +2097,11 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
+  <url>
+    <loc>` + baseURL + `/server/terms</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
 </urlset>`
 
 	w.Write([]byte(sitemap))

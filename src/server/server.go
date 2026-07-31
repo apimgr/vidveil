@@ -664,6 +664,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/contact", server.ContactPage)
 		r.Post("/contact", server.ContactPage)
 		r.Get("/help", server.HelpPage)
+		r.Get("/terms", server.TermsPage)
 		r.Get("/security", server.SecurityPage)
 		r.Get("/security/policy", server.SecurityPolicyPage)
 		r.Get("/security/thanks", server.SecurityThanksPage)
@@ -715,6 +716,7 @@ func (s *Server) setupRoutes() {
 			r.Get("/privacy", server.APIPrivacy)
 			r.Post("/contact", server.APIContact)
 			r.Get("/help", server.APIHelp)
+			r.Get("/terms", server.APITerms)
 		})
 
 		// Proxy endpoints (plural per PART 14)

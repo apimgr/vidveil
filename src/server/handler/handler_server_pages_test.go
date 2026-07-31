@@ -101,6 +101,57 @@ func TestServerHandler_HelpPage_Returns200(t *testing.T) {
 	}
 }
 
+// TermsPage renders the server terms-of-service template.
+func TestServerHandler_TermsPage_Returns200(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/server/terms", nil)
+	rr := httptest.NewRecorder()
+	h.TermsPage(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("TermsPage: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Errorf("TermsPage: Content-Type=%q want text/html", ct)
+	}
+	if !strings.Contains(rr.Body.String(), "Terms of Service") {
+		t.Errorf("TermsPage: body missing 'Terms of Service'")
+	}
+}
+
+// APITerms JSON path returns the terms document with sections.
+func TestAPITerms_JSON_ReturnsSections(t *testing.T) {
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/terms", nil)
+	rr := httptest.NewRecorder()
+	h.APITerms(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("APITerms JSON: status=%d want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "terms_version") || !strings.Contains(body, "acceptable_use") {
+		t.Errorf("APITerms JSON: body missing expected fields: %s", body)
+	}
+}
+
+// APITerms text/plain path returns plain text with terms fields.
+func TestAPITerms_TextPlain_ReturnsText(t *testing.T) {
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/terms", nil)
+	req.Header.Set("Accept", "text/plain")
+	rr := httptest.NewRecorder()
+	h.APITerms(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("APITerms text: status=%d want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("APITerms text: Content-Type=%q want text/plain", rr.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(rr.Body.String(), "terms_version:") {
+		t.Errorf("APITerms text: body missing 'terms_version:': %s", rr.Body.String())
+	}
+}
+
 // APIAbout text/plain path returns plain text with name and version.
 func TestAPIAbout_TextPlain_ReturnsText(t *testing.T) {
 	h := newServerHandler(t)

@@ -35,7 +35,7 @@ all are resolved.
 - [ ] reporting endpoints described in spec not implemented
 - [x] llms.txt — FIXED (PART 14: served at both /.well-known/llms.txt and /llms.txt, text/plain; charset=utf-8, auto-generated from routes with public+authenticated endpoints only, metrics never advertised, every URL resolved per-request via BuildURL; added to age-verify/content-restriction skip lists like robots.txt)
 - [ ] unified auth-header chain (spec describes a single precedence chain) not implemented as specified
-- [ ] /server/terms page not implemented
+- [x] /server/terms — FIXED (PART 16: added TermsPage HTML handler + server-terms.tmpl default template with Acceptance/Acceptable Use/Liability/Changes/Governing Law sections per PART 16 spec table; added APITerms JSON+text handler with content negotiation per PART 14; registered /server/terms and /api/v1/server/terms routes; added to sitemap. Footer left unchanged — PART 16 footer list is About/Privacy/Contact/Help only)
 - [ ] token format / IsValidHost validation differ from spec's described format — rewrite would change accepted inputs
 - [ ] health check always returns OK regardless of subsystem state — spec implies real dependency checks
 - [ ] GeoIP has no IPv6 database wired; IPv6 lookups unsupported

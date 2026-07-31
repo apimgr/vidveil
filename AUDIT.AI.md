@@ -28,7 +28,7 @@ all are resolved.
 
 ## Pass 4: Documentation (flagged)
 - [ ] Several env vars are read in code but not documented in README/docs/configuration.md (env-var inventory vs docs gap). Needs the full read-vs-documented reconciliation before publishing a complete table.
-- [ ] IDEA.md: document that the Docker runtime starts as root only to bind port 80, then drops to the `vidveil` user (intentional, worth recording as a deployment note)
+- [x] IDEA.md container-root note — FIXED (added a row to "Security decisions & exceptions" documenting that the container ENTRYPOINT execs as root to bind port 80, then the binary drops to the vidveil user via DropPrivileges after the listener is bound, per PART 23 — the transient-root form of the no-permanent-root default)
 
 ## Pass 5: Spec Compliance (flagged — not-yet-implemented spec subsystems)
 - [ ] analytics/tracking subsystem described in spec is not implemented

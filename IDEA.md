@@ -235,6 +235,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 | Thumbnail proxy is mandatory; cannot be disabled by user | Direct thumbnail URLs would leak the user's IP to source CDNs - core privacy guarantee. The PREFERENCE toggle "Proxy thumbnails through server" is documented as default Yes; disabling it is an operator-level `server.yml` option only — it must NOT silently disable the proxy in normal mode. |
 | Engines are HTML-parsed, not iframed | Iframing untrusted adult content origins would leak referrer + cookies to engines and let them frame us. |
 | Run as dedicated `vidveil` system user (no permanent root) | Default per AI.md PART 5; permanent-root would require an IDEA.md-justified exception, which this product does not have. |
+| Docker runtime starts as root, then drops to `vidveil` | The container `ENTRYPOINT` execs the binary as root so it can bind the privileged default port 80; immediately after the listener is bound the binary calls `system.DropPrivileges("vidveil")` (main.go, only when `uid == 0`), so no request is ever served with root privileges. This is the transient-root form of the "no permanent root" default above, per AI.md PART 23 — not an exception to it. |
 | Engine registry is operator-only | End users have engine toggles in preferences (client-side), but the engine REGISTRY is operator-only via `server.yml` — prevents tampering with which engines are reachable for everyone. |
 
 ---

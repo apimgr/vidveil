@@ -2090,7 +2090,7 @@ func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(&b, "## API\n")
 	fmt.Fprintf(&b, "Base URL: %s\n", apiBase)
-	fmt.Fprintf(&b, "Authentication: Bearer token (server token from server.yml, or resource owner token issued on resource creation)\n")
+	fmt.Fprintf(&b, "Authentication: None - all listed endpoints are public and require no token\n")
 	if h.appConfig.Server.RateLimit.Enabled {
 		fmt.Fprintf(&b, "Rate limit: %d requests/minute\n", perMinute)
 	}

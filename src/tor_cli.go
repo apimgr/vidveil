@@ -217,7 +217,7 @@ func torValidate(configDir, dataDir string) int {
 			fmt.Printf(terminal.StatusIcon(true)+" Tor binary: %s\n", binary)
 		}
 	} else if path, err := exec.LookPath("tor"); err != nil {
-		fmt.Println(terminal.WarningIcon()+" Tor binary: not found in PATH (server runs without Tor)")
+		fmt.Println(terminal.WarningIcon() + " Tor binary: not found in PATH (server runs without Tor)")
 	} else {
 		fmt.Printf(terminal.StatusIcon(true)+" Tor binary: %s (auto-detected)\n", path)
 	}
@@ -228,7 +228,7 @@ func torValidate(configDir, dataDir string) int {
 	} else {
 		fmt.Printf(terminal.StatusIcon(true)+" Tor data dir: %s\n", torDir)
 		if _, err := os.Stat(filepath.Join(siteDir, "hs_ed25519_secret_key")); err != nil {
-			fmt.Println(terminal.WarningIcon()+" Keys: not generated yet")
+			fmt.Println(terminal.WarningIcon() + " Keys: not generated yet")
 		} else if hostname := readHostnameFile(siteDir); hostname == "" {
 			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Keys: secret key exists but hostname file is missing")
 			failures++
@@ -280,7 +280,7 @@ func torRestart(configDir, dataDir string) int {
 		return 1
 	}
 
-	fmt.Println(terminal.StatusIcon(true)+" Tor process stopped - server monitor restarts it within 30 seconds")
+	fmt.Println(terminal.StatusIcon(true) + " Tor process stopped - server monitor restarts it within 30 seconds")
 	return 0
 }
 

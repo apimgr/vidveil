@@ -91,10 +91,10 @@ func GetKeypairMeta(db *sql.DB) (*KeypairMeta, error) {
 		 FROM pgp_keypair ORDER BY id DESC LIMIT 1`,
 	)
 	var (
-		m           KeypairMeta
-		rotated     sql.NullTime
-		published   string
-		revokedInt  int
+		m          KeypairMeta
+		rotated    sql.NullTime
+		published  string
+		revokedInt int
 	)
 	err := row.Scan(&m.Fingerprint, &m.CreatedAt, &m.ExpiresAt, &rotated, &published, &revokedInt)
 	if err == sql.ErrNoRows {

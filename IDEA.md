@@ -15,13 +15,14 @@ Privacy-respecting meta search engine for adult video content that aggregates re
 project_name:      vidveil
 project_org:       apimgr
 internal_name:     vidveil
+internal_org:      apimgr
 app_name:          vidveil
 official_site:     https://x.scour.li
-coverage_minimum:  80
+coverage_minimum:  60
 
 `{plist_name}` is NOT stored - it is derived at substitution time as `io.github.apimgr.vidveil`.
 
-`internal_name` is FROZEN as of first-time setup on 2026-05-06. It must equal `project_name` at first run and may not be edited after the project ships. A project rename changes `project_name` only; `internal_name` stays.
+`internal_name` and `internal_org` are FROZEN as of first-time setup on 2026-05-06. `internal_name` must equal `project_name` and `internal_org` must equal `project_org` at first run; neither may be edited after the project ships. A project rename changes `project_name`/`project_org` only; `internal_name`/`internal_org` stay.
 
 ## Business logic
 

@@ -455,10 +455,6 @@ func TestNewHandler(t *testing.T) {
 		t.Error("Handler should store config reference")
 	}
 
-	if h.searchCache == nil {
-		t.Error("Handler should initialize search cache")
-	}
-
 	// Engine manager can be nil
 	if h.engineMgr != nil {
 		t.Error("Handler should have nil engine manager when passed nil")

@@ -378,14 +378,6 @@ func TestServerMetrics_IncrementSearches(t *testing.T) {
 	}
 }
 
-func TestServerMetrics_IncrementCacheHits(t *testing.T) {
-	m := NewMetrics(config.DefaultAppConfig(), nil)
-	m.IncrementCacheHits()
-	if m.GetCacheHitsTotal() != 1 {
-		t.Errorf("GetCacheHitsTotal after 1 increment = %d, want 1", m.GetCacheHitsTotal())
-	}
-}
-
 func TestServerMetrics_IncrementSearchErrors(t *testing.T) {
 	m := NewMetrics(config.DefaultAppConfig(), nil)
 	m.IncrementSearchErrors()

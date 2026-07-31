@@ -123,33 +123,14 @@ func TestServerMetrics_GetAnalyticsSummary_ZeroState(t *testing.T) {
 	if s.SearchesTotal != 0 {
 		t.Errorf("GetAnalyticsSummary zero: SearchesTotal = %d, want 0", s.SearchesTotal)
 	}
-	if s.CacheHitPct != 0 {
-		t.Errorf("GetAnalyticsSummary zero: CacheHitPct = %v, want 0", s.CacheHitPct)
-	}
 }
 
 func TestServerMetrics_GetAnalyticsSummary_AfterSearches(t *testing.T) {
 	m := newTestMetrics()
 	m.IncrementSearches()
 	m.IncrementSearches()
-	m.IncrementCacheHits()
 	s := m.GetAnalyticsSummary()
 	if s.SearchesTotal != 2 {
 		t.Errorf("GetAnalyticsSummary searches: SearchesTotal = %d, want 2", s.SearchesTotal)
-	}
-	if s.CacheHitsTotal != 1 {
-		t.Errorf("GetAnalyticsSummary searches: CacheHitsTotal = %d, want 1", s.CacheHitsTotal)
-	}
-}
-
-func TestServerMetrics_GetAnalyticsSummary_CacheHitPct(t *testing.T) {
-	m := newTestMetrics()
-	m.IncrementSearches()
-	m.IncrementSearches()
-	m.IncrementCacheHits()
-	m.IncrementCacheHits()
-	s := m.GetAnalyticsSummary()
-	if s.CacheHitPct != 100.0 {
-		t.Errorf("CacheHitPct = %v, want 100.0", s.CacheHitPct)
 	}
 }

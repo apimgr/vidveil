@@ -776,18 +776,6 @@ func TestSetGeoIPService_NoPanic(t *testing.T) {
 	}
 }
 
-// ── GetSearchCache ────────────────────────────────────────────────────────────
-
-// TestGetSearchCache_ReturnsCache verifies GetSearchCache returns the cache
-// set during construction.
-func TestGetSearchCache_ReturnsCache(t *testing.T) {
-	cfg := createTestConfig()
-	h := NewSearchHandler(cfg, nil)
-	if h.GetSearchCache() == nil {
-		t.Error("GetSearchCache() should return non-nil after NewSearchHandler")
-	}
-}
-
 // ── nil-metrics getter paths ──────────────────────────────────────────────────
 
 // TestGetSearchCount_NilMetrics verifies getSearchCount returns 0 when metrics is nil.

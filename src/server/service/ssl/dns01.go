@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 15: DNS-01 challenge implementation via go-acme/lego.
-// Supports: cloudflare, route53, digitalocean, godaddy, namecheap, rfc2136.
+// ALL lego DNS providers are supported; the provider is selected by name at
+// runtime and its credential fields are read from the process environment.
 package ssl
 
 import (
@@ -21,12 +22,7 @@ import (
 	"github.com/go-acme/lego/v4/challenge"
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/lego"
-	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
-	"github.com/go-acme/lego/v4/providers/dns/digitalocean"
-	"github.com/go-acme/lego/v4/providers/dns/godaddy"
-	"github.com/go-acme/lego/v4/providers/dns/namecheap"
-	"github.com/go-acme/lego/v4/providers/dns/rfc2136"
-	"github.com/go-acme/lego/v4/providers/dns/route53"
+	"github.com/go-acme/lego/v4/providers/dns"
 	"github.com/go-acme/lego/v4/registration"
 )
 
@@ -140,9 +136,12 @@ func (m *SSLManager) requestDNS01(domain string) error {
 	return nil
 }
 
-// buildDNSProvider constructs a lego DNS provider from type name and JSON credentials.
-// credsJSON is a JSON object whose fields correspond to the provider's environment variables.
-// If credsJSON is empty, the provider reads credentials from environment variables.
+// buildDNSProvider constructs a lego DNS provider from the provider name and JSON
+// credentials. Per AI.md PART 15, ALL lego DNS providers are supported: the name is
+// dispatched dynamically via lego's provider registry and each provider reads its own
+// credential fields from the process environment. credsJSON is a JSON object whose keys
+// are set as environment variables before the provider is built; if empty, the provider
+// reads pre-existing environment variables.
 func buildDNSProvider(providerType, credsJSON string) (challenge.Provider, error) {
 	// Apply credentials as environment variables if provided
 	if credsJSON != "" {
@@ -151,34 +150,11 @@ func buildDNSProvider(providerType, credsJSON string) (challenge.Provider, error
 		}
 	}
 
-	switch providerType {
-	case "cloudflare":
-		p, err := cloudflare.NewDNSProvider()
-		return p, err
-
-	case "route53":
-		p, err := route53.NewDNSProvider()
-		return p, err
-
-	case "digitalocean":
-		p, err := digitalocean.NewDNSProvider()
-		return p, err
-
-	case "godaddy":
-		p, err := godaddy.NewDNSProvider()
-		return p, err
-
-	case "namecheap":
-		p, err := namecheap.NewDNSProvider()
-		return p, err
-
-	case "rfc2136":
-		p, err := rfc2136.NewDNSProvider()
-		return p, err
-
-	default:
-		return nil, fmt.Errorf("unsupported dns_provider_type %q — supported: cloudflare, route53, digitalocean, godaddy, namecheap, rfc2136", providerType)
+	provider, err := dns.NewDNSChallengeProviderByName(providerType)
+	if err != nil {
+		return nil, fmt.Errorf("dns_provider_type %q: %w", providerType, err)
 	}
+	return provider, nil
 }
 
 // applyCredsFromJSON sets environment variables from a JSON credentials map.

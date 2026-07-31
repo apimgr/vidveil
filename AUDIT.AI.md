@@ -26,7 +26,6 @@ all are resolved.
 
 ## Pass 3: Logic (flagged)
 - [ ] scheduler has no self-execution guard (a task can in principle re-trigger while still running); needs a design decision on overlap policy
-- [ ] cache layer has no operation timeout; unbounded under a stalled backend
 - [ ] engine manager fans out under a single RLock held across all engine calls — a slow engine can stall the batch; perf/locking redesign
 
 ## Pass 4: Documentation (flagged)
@@ -43,7 +42,7 @@ all are resolved.
 - [ ] token format / IsValidHost validation differ from spec's described format — rewrite would change accepted inputs
 - [x] health check always returns OK regardless of subsystem state — FIXED (PART 13: checkDatabase now PingContext's the real *sql.DB with a 2s timeout, checkScheduler reflects the always-running scheduler's IsRunning() state, checkDisk uses maintenance.DiskSpace and fails at >=99% usage; cache is process-local so stays "ok". Wired via SetHealthDB/SetScheduler in server.go; a stopped scheduler now drives status=unhealthy/503. Test helpers start the scheduler to mirror production PART 18 always-running invariant)
 - [ ] GeoIP has no IPv6 database wired; IPv6 lookups unsupported
-- [ ] SSL DNS-01 dynamic provider selection not implemented (lego providers present but not surfaced)
+- [x] SSL DNS-01 — FIXED (PART 15 line 19437 mandates "ALL DNS providers are supported... fields determined dynamically at runtime". buildDNSProvider hardcoded only 6 providers in a switch; replaced with lego's dns.NewDNSChallengeProviderByName, which dispatches every lego provider by name and reads its credential fields from the environment — dns_provider_key JSON is still applied to env first. Regenerated LICENSE.md for the ~160 transitive provider deps go mod tidy pulled in; all permissive/MPL-2.0, no GPL family; re-applied the modernc.org/mathutil BSD-3-Clause label go-licenses can't detect — src/server/service/ssl/dns01.go)
 - [ ] server CLI uses manual flag parsing rather than the spec-described structured parser
 - [~] Go singular-directory convention — RE-EXAMINED, largely a false positive. The original rationale ("dirs plural but packages singular") is factually wrong: in all four (`secrets`, `metrics`, `urlvars`, `utls`) the package name already equals the directory name, so the AI.md "match package name" rule (lines 948-949) is satisfied. `utls` is the proper name of the uTLS library wrapper (renaming to `utl` would be nonsensical); `urlvars` is a compound utility name ("URL vars"), not a plural of a resource concept. Only `secrets`/`metrics` are borderline against the "singular directory names" rule (lines 1135/1146) — but both are idiomatic Go collective package names and the AI.md violation examples are all pluralized resource types (`handler`->`handlers`, `model`->`models`), not collective nouns. Left as a maintainer judgment call, NOT an auto-fixed rename — an incorrect rename here would break the build and the uTLS semantic.
 

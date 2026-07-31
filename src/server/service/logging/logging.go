@@ -49,6 +49,8 @@ type RotatingFile struct {
 	lastRotation time.Time
 	// Number of rotated files to keep (0 = delete immediately)
 	keepCount int
+	// Mode used when creating/reopening the file (0 defaults to 0644)
+	fileMode os.FileMode
 }
 
 // RotationConfig holds rotation settings per PART 11
@@ -61,6 +63,9 @@ type RotationConfig struct {
 	Compress bool
 	// Number of rotated files to keep (0 = delete immediately)
 	Keep int
+	// File mode for the log file (0 defaults to 0644). PART 11 requires
+	// audit.log at 0640; other logs default to 0644.
+	FileMode os.FileMode
 }
 
 // NewRotatingFile creates a new rotating file writer
@@ -70,6 +75,12 @@ func NewRotatingFile(path string, cfg RotationConfig) (*RotatingFile, error) {
 		compress:     cfg.Compress,
 		keepCount:    cfg.Keep,
 		lastRotation: time.Now(),
+		fileMode:     cfg.FileMode,
+	}
+
+	// Default file mode per PART 11 (audit.log is set to 0640 by its caller)
+	if rf.fileMode == 0 {
+		rf.fileMode = 0644
 	}
 
 	// Parse max size (e.g., "50MB", "100KB")
@@ -89,7 +100,7 @@ func NewRotatingFile(path string, cfg RotationConfig) (*RotatingFile, error) {
 	}
 
 	// Open file
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, rf.fileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +216,7 @@ func (rf *RotatingFile) rotate() error {
 	if err := os.Rename(rf.path, rotatedPath); err != nil {
 		// If rename fails, try to reopen original; keep the old handle on failure
 		// rather than storing a nil *os.File that later writes would panic on.
-		if f, openErr := os.OpenFile(rf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); openErr == nil {
+		if f, openErr := os.OpenFile(rf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, rf.fileMode); openErr == nil {
 			rf.file = f
 		}
 		return err
@@ -225,7 +236,7 @@ func (rf *RotatingFile) rotate() error {
 	}
 
 	// Open new file
-	f, err := os.OpenFile(rf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(rf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, rf.fileMode)
 	if err != nil {
 		return err
 	}
@@ -649,6 +660,12 @@ func (l *AppLogger) addFileOutput(name, path, rotate, format string, keep int) e
 	rotCfg := parseRotationString(rotate)
 	rotCfg.Keep = keep
 
+	// PART 11 "Audit Log Integrity": audit.log MUST be 0640 (rw-r-----), not
+	// world-readable. All other logs keep the 0644 default.
+	if name == "audit" {
+		rotCfg.FileMode = 0640
+	}
+
 	if !filepath.IsAbs(path) {
 		appPaths := config.GetAppPaths("", "")
 		path = filepath.Join(appPaths.Log, path)
@@ -658,6 +675,12 @@ func (l *AppLogger) addFileOutput(name, path, rotate, format string, keep int) e
 	rf, err := NewRotatingFile(path, rotCfg)
 	if err != nil {
 		return err
+	}
+
+	// OpenFile's mode only applies on create; explicitly tighten an
+	// already-existing audit.log that a prior run may have left at 0644.
+	if name == "audit" {
+		_ = os.Chmod(path, 0640)
 	}
 
 	l.outputs[name] = rf
@@ -755,7 +778,7 @@ func (rf *RotatingFile) Reopen() error {
 	}
 
 	// Reopen file
-	f, err := os.OpenFile(rf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(rf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, rf.fileMode)
 	if err != nil {
 		return err
 	}

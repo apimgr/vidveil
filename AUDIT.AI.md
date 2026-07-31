@@ -14,7 +14,7 @@ all are resolved.
 - [ ] setup_token stored in plaintext on disk; spec implies hashing — needs a decision on migration/one-time-display flow
 - [ ] metrics endpoint accepts token via query param (`?token=`) which lands in access logs; moving to header-only is a client-facing contract change
 - [ ] install.sh downloads binary without checksum/signature verification — needs published checksums to verify against
-- [ ] audit.log written with 0640; confirm intended perms vs spec (0600) before tightening
+- [x] audit.log perms — FIXED (spec check corrected the flag: PART 11 mandates 0640, not 0600; code created ALL logs at 0644, so audit.log was world-readable — now 0640, others stay 0644)
 
 ## Pass 2: Code Quality (flagged — dead/unwired code)
 - [ ] src/notify webhook package is not imported anywhere (dead subsystem). It also carries internal bugs that only matter once wired: pushover drops token/user fields, telegram request body shape mismatch, logWebhookFailed is a no-op. Decision needed: wire it in or remove the package.

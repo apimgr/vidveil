@@ -15,6 +15,48 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
+// ── File mode (PART 11: audit.log is 0640) ────────────────────────────────────
+
+// A configured FileMode is applied to the created log file.
+func TestNewRotatingFile_HonorsFileMode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.log")
+
+	rf, err := NewRotatingFile(path, RotationConfig{FileMode: 0640})
+	if err != nil {
+		t.Fatalf("NewRotatingFile: %v", err)
+	}
+	defer rf.Close()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0640 {
+		t.Fatalf("audit log mode = %o, want 0640", got)
+	}
+}
+
+// A zero FileMode falls back to the 0644 default.
+func TestNewRotatingFile_DefaultFileMode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "access.log")
+
+	rf, err := NewRotatingFile(path, RotationConfig{})
+	if err != nil {
+		t.Fatalf("NewRotatingFile: %v", err)
+	}
+	defer rf.Close()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0644 {
+		t.Fatalf("default log mode = %o, want 0644", got)
+	}
+}
+
 // ── RotatingFile.rotate ───────────────────────────────────────────────────────
 
 func TestRotate_TriggeredBySecondWrite(t *testing.T) {

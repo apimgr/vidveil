@@ -25,14 +25,21 @@ type EngineManager struct {
 	// Cross-page dedup state for infinite-scroll search sessions (server-side
 	// per AI.md PART 14 "State management -> Server (sessions)")
 	sessionDedup *SessionDedupStore
+	// relatedTermMu guards relatedTermCache, the per-instance result-validation
+	// cache for related/suggested search terms. Per-instance (not package
+	// global) so background validation goroutines only ever mutate the cache of
+	// the manager that spawned them — matching the sessionDedup pattern above.
+	relatedTermMu    sync.Mutex
+	relatedTermCache map[string]relatedTermStatus
 }
 
 // NewEngineManager creates a new engine manager
 func NewEngineManager(appConfig *config.AppConfig) *EngineManager {
 	return &EngineManager{
-		engines:      make(map[string]SearchEngine),
-		appConfig:    appConfig,
-		sessionDedup: NewSessionDedupStore(),
+		engines:          make(map[string]SearchEngine),
+		appConfig:        appConfig,
+		sessionDedup:     NewSessionDedupStore(),
+		relatedTermCache: make(map[string]relatedTermStatus),
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"log"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -30,17 +29,12 @@ type relatedTermStatus struct {
 	checkedAt  time.Time
 }
 
-var (
-	relatedTermMu    sync.Mutex
-	relatedTermCache = make(map[string]relatedTermStatus)
-)
-
 // lookupRelatedTermStatus returns the cached has-results status for term and
 // whether a still-fresh (within relatedTermTTL) entry exists.
-func lookupRelatedTermStatus(term string) (hasResults bool, fresh bool) {
-	relatedTermMu.Lock()
-	defer relatedTermMu.Unlock()
-	st, ok := relatedTermCache[term]
+func (m *EngineManager) lookupRelatedTermStatus(term string) (hasResults bool, fresh bool) {
+	m.relatedTermMu.Lock()
+	defer m.relatedTermMu.Unlock()
+	st, ok := m.relatedTermCache[term]
 	if !ok || time.Since(st.checkedAt) > relatedTermTTL {
 		return false, false
 	}
@@ -49,36 +43,36 @@ func lookupRelatedTermStatus(term string) (hasResults bool, fresh bool) {
 
 // storeRelatedTermStatus records the has-results status for term, evicting
 // the single oldest entry first if the cache is already at capacity.
-func storeRelatedTermStatus(term string, hasResults bool) {
-	relatedTermMu.Lock()
-	defer relatedTermMu.Unlock()
-	if _, exists := relatedTermCache[term]; !exists && len(relatedTermCache) >= relatedTermMaxCache {
+func (m *EngineManager) storeRelatedTermStatus(term string, hasResults bool) {
+	m.relatedTermMu.Lock()
+	defer m.relatedTermMu.Unlock()
+	if _, exists := m.relatedTermCache[term]; !exists && len(m.relatedTermCache) >= relatedTermMaxCache {
 		var oldestTerm string
 		var oldestTime time.Time
-		for t, st := range relatedTermCache {
+		for t, st := range m.relatedTermCache {
 			if oldestTerm == "" || st.checkedAt.Before(oldestTime) {
 				oldestTerm = t
 				oldestTime = st.checkedAt
 			}
 		}
 		if oldestTerm != "" {
-			delete(relatedTermCache, oldestTerm)
+			delete(m.relatedTermCache, oldestTerm)
 		}
 	}
-	relatedTermCache[term] = relatedTermStatus{hasResults: hasResults, checkedAt: time.Now()}
+	m.relatedTermCache[term] = relatedTermStatus{hasResults: hasResults, checkedAt: time.Now()}
 }
 
 // validateRelatedTermsAsync probes each not-yet-cached candidate term against
 // a small, fast engine subset in the background. It never blocks the caller
 // — a term's validated status simply is not available for the current
 // request unless it was already cached from an earlier probe.
-func validateRelatedTermsAsync(mgr *EngineManager, candidates []string) {
+func (m *EngineManager) validateRelatedTermsAsync(candidates []string) {
 	for _, raw := range candidates {
 		term := strings.ToLower(strings.TrimSpace(raw))
 		if term == "" {
 			continue
 		}
-		if _, fresh := lookupRelatedTermStatus(term); fresh {
+		if _, fresh := m.lookupRelatedTermStatus(term); fresh {
 			continue
 		}
 		go func(term string) {
@@ -89,8 +83,8 @@ func validateRelatedTermsAsync(mgr *EngineManager, candidates []string) {
 			}()
 			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 			defer cancel()
-			resp := mgr.Search(ctx, term, 1, quickValidationEngines, "")
-			storeRelatedTermStatus(term, resp != nil && len(resp.Data.Results) > 0)
+			resp := m.Search(ctx, term, 1, quickValidationEngines, "")
+			m.storeRelatedTermStatus(term, resp != nil && len(resp.Data.Results) > 0)
 		}(term)
 	}
 }
@@ -117,7 +111,7 @@ func (m *EngineManager) GetValidatedRelatedSearches(query string, maxResults int
 	var unknown []string
 	for _, term := range candidates {
 		normalized := strings.ToLower(strings.TrimSpace(term))
-		hasResults, fresh := lookupRelatedTermStatus(normalized)
+		hasResults, fresh := m.lookupRelatedTermStatus(normalized)
 		switch {
 		case fresh && hasResults:
 			validated = append(validated, term)
@@ -128,7 +122,7 @@ func (m *EngineManager) GetValidatedRelatedSearches(query string, maxResults int
 		}
 	}
 
-	validateRelatedTermsAsync(m, candidates)
+	m.validateRelatedTermsAsync(candidates)
 
 	if len(validated) >= maxResults {
 		return validated[:maxResults]

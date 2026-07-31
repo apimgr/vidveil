@@ -59,10 +59,8 @@ section also accept the shorter `VIDVEIL_{KEY}` form. Examples:
 
 | Variable | Overrides |
 |---|---|
-| `VIDVEIL_CACHE_TYPE` | `cache.type` (`memory`, `valkey`, or `redis`) |
-| `VIDVEIL_CACHE_HOST` | `cache.host` |
-| `VIDVEIL_CACHE_PORT` | `cache.port` |
 | `VIDVEIL_DATABASE_TYPE` | `database.type` |
+| `VIDVEIL_SESSION_SECRET` | `session.secret` |
 | `VIDVEIL_SMTP_HOST` | `smtp.host` |
 
 Environment overrides win over the config file but lose to explicit CLI flags.

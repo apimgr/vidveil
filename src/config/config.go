@@ -119,9 +119,6 @@ type ServerConfig struct {
 	// Session
 	Session SessionConfig `yaml:"session"`
 
-	// Cache
-	Cache CacheConfig `yaml:"cache"`
-
 	// Database
 	Database DatabaseConfig `yaml:"database"`
 
@@ -743,17 +740,6 @@ type SessionConfig struct {
 	SameSite   string `yaml:"same_site"`
 }
 
-// CacheConfig holds cache settings
-type CacheConfig struct {
-	Type     string `yaml:"type"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Password string `yaml:"password"`
-	DB       int    `yaml:"db"`
-	Prefix   string `yaml:"prefix"`
-	TTL      int    `yaml:"ttl"`
-}
-
 // DatabaseConfig holds database settings per AI.md PART 10.
 // Supported drivers: sqlite (aliases sqlite2/sqlite3/file) and libsql (alias turso).
 type DatabaseConfig struct {
@@ -1284,14 +1270,6 @@ func DefaultAppConfig() *AppConfig {
 				// Strict per AI.md PART 16: blocks cross-site cookie attachment entirely,
 				// neutralizing most CSRF before the token check even runs.
 				SameSite: "strict",
-			},
-			Cache: CacheConfig{
-				Type:   "memory",
-				Host:   "localhost",
-				Port:   6379,
-				DB:     0,
-				Prefix: "vidveil:",
-				TTL:    3600,
 			},
 			Database: DatabaseConfig{
 				Driver: "file",
@@ -1931,7 +1909,6 @@ func (w *ConfigWatcher) reload() {
 	w.appConfig.Server.Compression = newCfg.Server.Compression
 	w.appConfig.Server.Limits = newCfg.Server.Limits
 	w.appConfig.Server.TrustedProxies = newCfg.Server.TrustedProxies
-	w.appConfig.Server.Cache = newCfg.Server.Cache
 	w.appConfig.Server.Security = newCfg.Server.Security
 	w.appConfig.Server.Backup = newCfg.Server.Backup
 	w.appConfig.Server.Tor = newCfg.Server.Tor

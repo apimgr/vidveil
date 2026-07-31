@@ -26,9 +26,6 @@ func createTestConfig() *config.AppConfig {
 			Database: config.DatabaseConfig{
 				Driver: "none",
 			},
-			Cache: config.CacheConfig{
-				Type: "memory",
-			},
 		},
 		Web: config.WebConfig{
 			UI: config.UIConfig{

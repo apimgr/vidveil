@@ -19,7 +19,7 @@ all are resolved.
 ## Pass 2: Code Quality (flagged — dead/unwired code)
 - [ ] src/notify webhook package is not imported anywhere (dead subsystem). It also carries internal bugs that only matter once wired: pushover drops token/user fields, telegram request body shape mismatch, logWebhookFailed is a no-op. Decision needed: wire it in or remove the package.
 - [ ] ~80 exported symbols across packages have no external callers (dead public API). Unexporting is mechanical but touches many files; batch it deliberately rather than mid-audit.
-- [ ] maintenance.go NO_COLOR: four `fmt.Println("✅ ...")` calls (update up-to-date, update applied, maintenance mode enabled/disabled) emit an emoji without the NO_COLOR/terminal-icon guard used elsewhere. Route through terminal.SuccessIcon() or gate on NO_COLOR.
+- [x] maintenance.go NO_COLOR — FIXED (PART 8: the four `fmt.Println("✅ ...")` calls now go through terminal.StatusIcon(true), which returns "✅" or the "[OK]" fallback when NO_COLOR/no-emoji is set, matching the rest of the codebase)
 
 ## Pass 3: Logic (flagged)
 - [ ] scheduler has no self-execution guard (a task can in principle re-trigger while still running); needs a design decision on overlap policy

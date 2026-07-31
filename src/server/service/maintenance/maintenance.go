@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"golang.org/x/crypto/argon2"
@@ -1207,7 +1208,7 @@ func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 			return err
 		}
 		if !info.UpdateAvailable {
-			fmt.Println("✅ Already up to date")
+			fmt.Println(terminal.StatusIcon(true) + " Already up to date")
 			return nil
 		}
 		if info.DownloadURL == "" {
@@ -1283,7 +1284,7 @@ func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 	// Remove backup
 	os.Remove(backupPath)
 
-	fmt.Println("✅ Update applied successfully")
+	fmt.Println(terminal.StatusIcon(true) + " Update applied successfully")
 	fmt.Println("   Please restart the service to use the new version")
 	return nil
 }
@@ -1299,13 +1300,13 @@ func (m *MaintenanceManager) SetMaintenanceMode(enabled bool) error {
 		}
 		file.WriteString(time.Now().Format(time.RFC3339))
 		file.Close()
-		fmt.Println("✅ Maintenance mode enabled")
+		fmt.Println(terminal.StatusIcon(true) + " Maintenance mode enabled")
 		fmt.Println("   Server will return 503 for all requests")
 	} else {
 		if err := os.Remove(modeFile); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to disable maintenance mode: %w", err)
 		}
-		fmt.Println("✅ Maintenance mode disabled")
+		fmt.Println(terminal.StatusIcon(true) + " Maintenance mode disabled")
 	}
 
 	return nil

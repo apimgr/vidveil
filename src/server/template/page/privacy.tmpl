@@ -8,6 +8,12 @@
     {{template "public/header" .}}
     <main class="privacy">
         <h1>{{ t "privacy.title" }}</h1>
+        {{if .GPCHonored}}
+        <section class="gpc-notice" role="status">
+            <h2>{{ t "privacy.gpc_title" }}</h2>
+            <p>{{ t "privacy.gpc_desc" }}</p>
+        </section>
+        {{end}}
         <section>
             <h2>{{ t "privacy.commitment" }}</h2>
             <p>{{ t "privacy.commitment_desc" }}</p>

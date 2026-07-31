@@ -193,6 +193,8 @@
   "privacy.third_party": "Third-Party Sites",
   "privacy.third_party_desc": "When you click on a search result, you will be redirected to the original video site. Those third-party sites have their own privacy policies and may collect data about you. We recommend using a VPN or Tor for additional privacy.",
   "privacy.title": "Datenschutzerklaerung",
+  "privacy.gpc_title": "Global Privacy Control",
+  "privacy.gpc_desc": "Wir haben Ihr Global-Privacy-Control-Signal (Sec-GPC) empfangen und berücksichtigen es für diese Anfrage: keine Personalisierung, keine Verhaltensanalyse und keine nicht notwendigen Cookies.",
   "privacy.tor_desc": "Vidveil fully supports Tor routing for maximum anonymity. When enabled, all search requests to video sites are routed through the Tor network, hiding your IP address from those sites.",
   "privacy.tor_support": "Tor Support",
   "privacy.view_source": "View Source Code on GitHub",

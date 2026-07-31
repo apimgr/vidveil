@@ -8,6 +8,12 @@
     {{template "public/header" .}}
     <main class="privacy">
         <h1>Privacy Policy</h1>
+        {{if .GPCHonored}}
+        <section class="gpc-notice" role="status">
+            <h2>Global Privacy Control</h2>
+            <p>We received your Global Privacy Control (Sec-GPC) signal and are honoring it for this request: no personalization, no behavioral analytics, and no non-essential cookies.</p>
+        </section>
+        {{end}}
         <section>
             <h2>Our Commitment to Privacy</h2>
             <p>Vidveil is built with privacy as its core principle. We believe your search activity is your business, not ours.</p>

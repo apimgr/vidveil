@@ -144,6 +144,8 @@
   "about.source": "Source Code",
   "about.license": "License",
   "privacy.title": "Privacy Policy",
+  "privacy.gpc_title": "Global Privacy Control",
+  "privacy.gpc_desc": "We received your Global Privacy Control (Sec-GPC) signal and are honoring it for this request: no personalization, no behavioral analytics, and no non-essential cookies.",
   "privacy.commitment": "Our Commitment to Privacy",
   "privacy.commitment_desc": "Vidveil is built with privacy as its core principle. We believe your search activity is your business, not ours.",
   "privacy.not_collect": "What We Don't Collect",

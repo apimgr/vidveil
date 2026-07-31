@@ -288,6 +288,10 @@ func (s *Server) setupMiddleware() {
 	// and clickjacking. Present-and-bad reject only; absence is a legacy-browser pass.
 	s.router.Use(secFetchValidationMiddleware)
 
+	// Privacy signal headers per AI.md PART 11 — honor Sec-GPC (and DNT when the
+	// operator opts in) as an opt-out; sets the request-lifecycle opt-out flag.
+	s.router.Use(s.privacySignalsMiddleware)
+
 	// CSRF double-submit cookie middleware per AI.md PART 16 → CSRF Protection.
 	// Runs after Sec-Fetch-* (which blocks cross-site requests from modern browsers)
 	// as the second CSRF layer for legacy browsers without Sec-Fetch-* headers.

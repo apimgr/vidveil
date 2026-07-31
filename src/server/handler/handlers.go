@@ -77,6 +77,22 @@ func CSRFTokenFromRequest(r *http.Request) string {
 	return v
 }
 
+// gpcContextKeyType is an exported struct type for the GPC opt-out context key.
+type gpcContextKeyType struct{}
+
+// GPCOptOutKey is the context key the privacy-signals middleware sets to true
+// when a browser-emitted opt-out signal (Sec-GPC, or DNT when the operator opts
+// in) is honored for the request, per AI.md PART 11 "Privacy Signal Headers".
+var GPCOptOutKey = gpcContextKeyType{}
+
+// GPCOptOut reports whether the current request carried an honored privacy
+// opt-out signal. Handlers use it to skip personalization, behavioral
+// analytics, and any non-essential cookie for the request lifecycle.
+func GPCOptOut(r *http.Request) bool {
+	v, _ := r.Context().Value(GPCOptOutKey).(bool)
+	return v
+}
+
 const (
 	ageVerifyCookieName = "age_verified"
 	ageVerifyCookieDays = 30
@@ -1148,12 +1164,17 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 
 	ver := version.GetVersion()
 
+	// Echo the honored Global Privacy Control signal back on the privacy page
+	// per AI.md PART 11 "Privacy Signal Headers" point 4.
+	gpcHonored := GPCOptOut(r)
+
 	switch format {
 	case "application/json":
 		// JSON response for API clients
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"title":   "Privacy Policy",
-			"version": ver,
+			"title":       "Privacy Policy",
+			"version":     ver,
+			"gpc_honored": gpcHonored,
 		})
 
 	default:
@@ -1164,6 +1185,7 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 			"Theme":         h.getRequestTheme(r),
 			"Version":       ver,
 			"BuildDateTime": BuildDateTime(),
+			"GPCHonored":    gpcHonored,
 		})
 	}
 }

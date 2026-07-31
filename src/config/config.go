@@ -770,6 +770,10 @@ type WebConfig struct {
 	CORS          string              `yaml:"cors"`
 	CSRF          CSRFConfig          `yaml:"csrf"`
 	Footer        FooterConfig        `yaml:"footer"`
+	// HonorDNT opts in to honoring the legacy DNT:1 request header as a privacy
+	// opt-out (default false) per AI.md PART 11 "Privacy Signal Headers". Sec-GPC
+	// is always honored regardless of this setting.
+	HonorDNT bool `yaml:"honor_dnt"`
 }
 
 // UIConfig holds UI settings

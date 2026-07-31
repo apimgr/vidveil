@@ -258,16 +258,16 @@ func (m *ServerMetrics) Handler() http.HandlerFunc {
 	promHandler := promhttp.Handler()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if m.appConfig.Server.Metrics.Token != "" {
-			// Token configured: require it from all clients
+			// Token configured: require it via the Authorization header only.
+			// PART 20 specifies `Authorization: Bearer <token>` as the sole auth
+			// mechanism; a ?token= query param would leak the secret into access
+			// logs and reverse-proxy logs, so it is not accepted.
 			header := r.Header.Get("Authorization")
 			expected := "Bearer " + m.appConfig.Server.Metrics.Token
 			// Constant-time comparison prevents token timing side-channels (PART 1, PART 11)
 			if subtle.ConstantTimeCompare([]byte(header), []byte(expected)) != 1 {
-				query := r.URL.Query().Get("token")
-				if subtle.ConstantTimeCompare([]byte(query), []byte(m.appConfig.Server.Metrics.Token)) != 1 {
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					return
-				}
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
 			}
 		} else {
 			// No token: restrict to loopback only (internal-only per PART 14/20)

@@ -520,8 +520,10 @@ func TestMetricsHandler_CorrectBearerToken_Returns200(t *testing.T) {
 	}
 }
 
-// Wrong Bearer token but correct query-param token → 200.
-func TestMetricsHandler_QueryParamToken_Returns200(t *testing.T) {
+// PART 20: auth is header-only. A correct token supplied only via the
+// ?token= query param (with a wrong/absent Authorization header) must be
+// rejected — the query param is not an accepted auth channel.
+func TestMetricsHandler_QueryParamToken_Rejected(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	cfg.Server.Metrics.Token = "qptoken"
 	mgr := engine.NewEngineManager(cfg)
@@ -534,8 +536,8 @@ func TestMetricsHandler_QueryParamToken_Returns200(t *testing.T) {
 
 	m.Handler()(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("metrics Handler query token: status = %d, want 200", rr.Code)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("metrics Handler query-param token: status = %d, want 401", rr.Code)
 	}
 }
 

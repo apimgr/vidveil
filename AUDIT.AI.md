@@ -12,7 +12,7 @@ all are resolved.
 ## Pass 1: Security (flagged — design/behavior decisions)
 - [ ] handler CSP: policy still allows `unsafe-inline` for styles/scripts; removing it requires refactoring inline handlers/templates to nonces or hashes (would break current UI until templates migrate)
 - [ ] setup_token stored in plaintext on disk; spec implies hashing — needs a decision on migration/one-time-display flow
-- [ ] metrics endpoint accepts token via query param (`?token=`) which lands in access logs; moving to header-only is a client-facing contract change
+- [x] metrics query-param token — FIXED (PART 20 specifies `Authorization: Bearer` as the sole auth channel; the `?token=` fallback leaked the secret into access logs and was never in spec — removed, now header-only; test updated to assert 401)
 - [ ] install.sh downloads binary without checksum/signature verification — needs published checksums to verify against
 - [x] audit.log perms — FIXED (spec check corrected the flag: PART 11 mandates 0640, not 0600; code created ALL logs at 0644, so audit.log was world-readable — now 0640, others stay 0644)
 

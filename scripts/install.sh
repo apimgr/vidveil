@@ -48,6 +48,42 @@ check_deps() {
             error "Required command not found: $cmd"
         fi
     done
+    if ! command -v sha256sum &>/dev/null && ! command -v shasum &>/dev/null; then
+        error "Required SHA-256 tool not found: install sha256sum or shasum"
+    fi
+}
+
+# Compute the SHA-256 of a file (portable: sha256sum on Linux, shasum on macOS/BSD)
+sha256_of() {
+    if command -v sha256sum &>/dev/null; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+# Download the release checksums.txt once (MANDATORY per AI.md PART 8/22)
+fetch_checksums() {
+    CHECKSUMS_URL="https://github.com/$REPO/releases/download/v$VERSION/checksums.txt"
+    CHECKSUMS_FILE=$(mktemp)
+    if ! curl -q -LSsf "$CHECKSUMS_URL" -o "$CHECKSUMS_FILE"; then
+        error "Could not download checksums.txt - refusing to install unverified binary"
+    fi
+}
+
+# Verify a downloaded file against its checksums.txt entry
+# verify_checksum <file> <asset_name>
+verify_checksum() {
+    local file="$1" asset="$2" expected actual
+    expected=$(awk -v a="$asset" '$2 == a {print $1}' "$CHECKSUMS_FILE")
+    if [ -z "$expected" ]; then
+        error "No checksum entry for $asset - refusing to install unverified binary"
+    fi
+    actual=$(sha256_of "$file")
+    if [ "$expected" != "$actual" ]; then
+        error "Checksum mismatch for $asset (expected $expected, got $actual)"
+    fi
+    info "Verified checksum for $asset"
 }
 
 # Get latest release version
@@ -70,6 +106,8 @@ install_binary() {
         error "Server download failed"
     fi
 
+    verify_checksum "$TMP_FILE" "${BINARY_NAME}-${OS}-${ARCH}"
+
     chmod +x "$TMP_FILE"
 
     if [ -w "$INSTALL_DIR" ]; then
@@ -90,6 +128,8 @@ install_binary() {
         warn "CLI download failed - server-only install"
         return
     fi
+
+    verify_checksum "$TMP_FILE" "${BINARY_NAME}-cli-${OS}-${ARCH}"
 
     chmod +x "$TMP_FILE"
 
@@ -120,6 +160,7 @@ main() {
     check_deps
     detect_platform
     get_latest_version
+    fetch_checksums
     install_binary
     verify
 

@@ -129,6 +129,12 @@ jobs:
             --exclude='binaries' --exclude='releases' --exclude='*.tar.gz' \
             -czf binaries/${{ env.PROJECTNAME }}-${{ env.VERSION }}-source.tar.gz .
 
+      - name: Generate checksums
+        run: |
+          cd binaries
+          find . -maxdepth 1 -type f ! -name checksums.txt -printf '%P\n' | sort | xargs sha256sum > checksums.txt
+          cat checksums.txt
+
       - name: Create Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
         with:

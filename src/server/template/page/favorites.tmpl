@@ -12,12 +12,12 @@
             <h1>{{ t "favorites.title" }}</h1>
             <div class="favorites-actions">
                 <span id="favorites-count-label" class="favorites-count"></span>
-                <button type="button" class="btn-secondary btn-sm" id="export-btn" onclick="exportFavs()">{{ t "favorites.export" }}</button>
+                <button type="button" class="btn-secondary btn-sm" id="export-btn" data-action="export-favs">{{ t "favorites.export" }}</button>
                 <label class="btn-secondary btn-sm btn-file">
                     {{ t "favorites.import" }}
-                    <input type="file" accept=".json" onchange="importFavs(this)" hidden>
+                    <input type="file" accept=".json" data-action="import-favs" hidden>
                 </label>
-                <button type="button" class="btn-danger btn-sm" id="clear-btn" onclick="clearFavs()">{{ t "favorites.clear" }}</button>
+                <button type="button" class="btn-danger btn-sm" id="clear-btn" data-action="clear-favs">{{ t "favorites.clear" }}</button>
             </div>
         </div>
 
@@ -37,134 +37,19 @@
         <div id="favorites-grid" class="video-grid" role="list" aria-label="{{ t "favorites.title" }}"></div>
     </main>
     {{template "public/footer" .}}
-    <script>
-    (function() {
-        var FAVORITES_KEY = 'vidveil_favorites';
-        var i18n = {
-            countSingular: '{{ t "favorites.count_singular" }}',
-            countPlural: '{{ t "favorites.count" }}',
-            remove: '{{ t "favorites.remove" }}',
-            exported: '{{ t "favorites.exported" }}',
-            imported: '{{ t "favorites.imported" }}',
-            cleared: '{{ t "favorites.cleared" }}',
-            invalidFile: '{{ t "favorites.invalid_file" }}',
-            confirmClear: '{{ t "favorites.confirm_clear" }}'
-        };
-
-        function getFavs() {
-            try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'); } catch(e) { return []; }
-        }
-
-        function saveFavs(favs) {
-            try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); } catch(e) {}
-        }
-
-        function render() {
-            var favs = getFavs();
-            var grid = document.getElementById('favorites-grid');
-            var empty = document.getElementById('favorites-empty');
-            var label = document.getElementById('favorites-count-label');
-            if (!grid) return;
-
-            grid.innerHTML = '';
-
-            if (favs.length === 0) {
-                empty.hidden = false;
-                label.textContent = '0 favorites';
-                return;
-            }
-
-            empty.hidden = true;
-            label.textContent = favs.length === 1 ? i18n.countSingular : i18n.countPlural.replace('%d', favs.length);
-
-            favs.forEach(function(fav, i) {
-                var card = document.createElement('article');
-                card.className = 'video-card';
-                card.setAttribute('role', 'listitem');
-                card.setAttribute('aria-label', fav.title || 'Favorited video');
-
-                var thumbSrc = '/static/images/placeholder.svg';
-                if (fav.thumbnail) {
-                    thumbSrc = '/api/v1/proxy/thumbnails?url=' + encodeURIComponent(fav.thumbnail);
-                }
-
-                var html = '<a href="' + escHtml(fav.url) + '" target="_blank" rel="noopener noreferrer nofollow" class="card-link">';
-                html += '<div class="thumb-container">';
-                html += '<img class="thumb-static" src="' + escHtml(thumbSrc) + '" alt="' + escHtml(fav.title || 'Favorited video') + '" loading="lazy" onerror="this.src=\'/static/images/placeholder.svg\'">';
-                html += '</div></a>';
-
-                html += '<div class="info">';
-                html += '<h3><a href="' + escHtml(fav.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + escHtml(fav.title || 'Untitled') + '</a></h3>';
-                html += '<div class="meta">';
-                if (fav.source) html += '<span class="source">' + escHtml(fav.source) + '</span>';
-                html += '</div></div>';
-
-                html += '<button type="button" class="fav-remove" aria-label="' + i18n.remove + '" data-idx="' + i + '" title="' + i18n.remove + '">&times;</button>';
-
-                card.innerHTML = html;
-                card.querySelector('.fav-remove').addEventListener('click', function() {
-                    var idx = parseInt(this.dataset.idx, 10);
-                    var cur = getFavs();
-                    cur.splice(idx, 1);
-                    saveFavs(cur);
-                    render();
-                });
-                grid.appendChild(card);
-            });
-        }
-
-        window.exportFavs = function() {
-            var data = JSON.stringify(getFavs(), null, 2);
-            var blob = new Blob([data], {type: 'application/json'});
-            var a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'vidveil-favorites.json';
-            a.click();
-            URL.revokeObjectURL(a.href);
-        };
-
-        window.importFavs = function(input) {
-            var file = input.files[0];
-            if (!file) return;
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    var imported = JSON.parse(e.target.result);
-                    if (!Array.isArray(imported)) { alert(i18n.invalidFile); return; }
-                    var cur = getFavs();
-                    imported.forEach(function(item) {
-                        if (item.url && !cur.some(function(f) { return f.url === item.url; })) {
-                            cur.push(item);
-                        }
-                    });
-                    saveFavs(cur);
-                    render();
-                    input.value = '';
-                } catch(e) {
-                    alert(i18n.invalidFile);
-                }
-            };
-            reader.readAsText(file);
-        };
-
-        window.clearFavs = function() {
-            if (!confirm(i18n.confirmClear)) return;
-            saveFavs([]);
-            render();
-        };
-
-        function escHtml(s) {
-            return String(s)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-
-        render();
-    })();
-    </script>
+    {{/* i18n strings for the favorites logic in app.js. type="application/json" is
+         a non-executable data island (CSP script-src does not block it). */}}
+    <script type="application/json" id="favorites-i18n">{
+        "countSingular": "{{ t "favorites.count_singular" }}",
+        "countPlural": "{{ t "favorites.count" }}",
+        "remove": "{{ t "favorites.remove" }}",
+        "exported": "{{ t "favorites.exported" }}",
+        "imported": "{{ t "favorites.imported" }}",
+        "cleared": "{{ t "favorites.cleared" }}",
+        "invalidFile": "{{ t "favorites.invalid_file" }}",
+        "confirmClear": "{{ t "favorites.confirm_clear" }}"
+    }</script>
+    {{template "public/scripts" .}}
 </body>
 </html>
 {{end}}

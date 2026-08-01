@@ -11,7 +11,7 @@
     </div>
 
     {{/* Compact search form - matches search-form partial styling */}}
-    <form action="/search" method="get" class="search-form search-form--compact" role="search" aria-label="{{ t "a11y.quick_search" }}" onsubmit="return handleSearchSubmit(this)">
+    <form action="/search" method="get" class="search-form search-form--compact" role="search" aria-label="{{ t "a11y.quick_search" }}" data-action="search-submit">
         <label for="nav-search-input" class="visually-hidden">{{ t "a11y.search_query" }}</label>
         <div class="search-wrapper">
             <input type="text"

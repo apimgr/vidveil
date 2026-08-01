@@ -9,7 +9,7 @@
     <main class="preferences">
         <div class="preferences-header">
             <h1>{{ t "prefs.title" }}</h1>
-            <button type="button" class="preferences-close" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'" aria-label="{{ t "prefs.close" }}">&times;</button>
+            <button type="button" class="preferences-close" data-action="close-prefs" aria-label="{{ t "prefs.close" }}">&times;</button>
         </div>
         <form id="preferences-form">
             <section>
@@ -167,12 +167,12 @@
                     </select>
                 </div>
                 <div class="form-group form-group--buttons">
-                    <button type="button" class="btn-secondary" onclick="exportHistory()">{{ t "prefs.export_history" }}</button>
+                    <button type="button" class="btn-secondary" data-action="export-history">{{ t "prefs.export_history" }}</button>
                     <label class="btn-secondary btn-file">
                         {{ t "prefs.import_history" }}
-                        <input type="file" accept=".json" onchange="importHistory(this.files[0])" hidden>
+                        <input type="file" accept=".json" data-action="import-history" hidden>
                     </label>
-                    <button type="button" class="btn-danger" onclick="clearHistory()">{{ t "prefs.clear_history" }}</button>
+                    <button type="button" class="btn-danger" data-action="clear-history">{{ t "prefs.clear_history" }}</button>
                 </div>
             </section>
 
@@ -180,12 +180,12 @@
                 <h2>{{ t "favorites.title" }}</h2>
                 <p class="section-description"><span id="favorites-count" data-format="{{ t "favorites.count" }}">{{ tf "favorites.count" 0 }}</span></p>
                 <div class="form-group form-group--buttons">
-                    <button type="button" class="btn-secondary" onclick="exportFavorites()">{{ t "favorites.export" }}</button>
+                    <button type="button" class="btn-secondary" data-action="export-favorites">{{ t "favorites.export" }}</button>
                     <label class="btn-secondary btn-file">
                         {{ t "favorites.import" }}
-                        <input type="file" accept=".json" onchange="importFavorites(this.files[0])" hidden>
+                        <input type="file" accept=".json" data-action="import-favorites" hidden>
                     </label>
-                    <button type="button" class="btn-danger" onclick="clearFavorites()">{{ t "favorites.clear" }}</button>
+                    <button type="button" class="btn-danger" data-action="clear-favorites">{{ t "favorites.clear" }}</button>
                 </div>
             </section>
 
@@ -219,374 +219,38 @@
                     {{end}}
                 </div>
                 <div class="engine-actions">
-                    <button type="button" onclick="selectAllEngines()">{{ t "search.select_all" }}</button>
-                    <button type="button" onclick="selectNoneEngines()">{{ t "search.deselect_all" }}</button>
+                    <button type="button" data-action="select-all-engines">{{ t "search.select_all" }}</button>
+                    <button type="button" data-action="select-none-engines">{{ t "search.deselect_all" }}</button>
                 </div>
             </section>
 
             <div class="form-actions">
                 <button type="submit" class="primary">{{ t "prefs.save" }}</button>
-                <button type="button" onclick="resetPreferences()">{{ t "prefs.reset" }}</button>
+                <button type="button" data-action="reset-preferences">{{ t "prefs.reset" }}</button>
             </div>
         </form>
     </main>
     {{template "public/footer" .}}
     <div id="toast" class="toast"></div>
-    <script>
-    (function() {
-        const STORAGE_KEY = 'vidveil_prefs';
-        const HISTORY_KEY = 'vidveil_history';
-        const FAVORITES_KEY = 'vidveil_favorites';
-        const form = document.getElementById('preferences-form');
-
-        // Default preferences
-        const defaults = {
-            theme: 'auto',
-            gridDensity: 'default',
-            thumbnailSize: 'medium',
-            autoplayPreview: true,
-            previewDelay: '0',  // Instant
-            resultsPerPage: '0',  // Infinite scroll
-            openNewTab: true,
-            defaultPreviewOnly: true,
-            showAIContent: false,  // AI content hidden by default
-            defaultDuration: '',
-            minQuality: '360',  // Default to 360p+ quality
-            defaultSort: '',
-            minDuration: '600',  // 10 minutes
-            maxHistory: '0',  // Unlimited
-            autoClearHistory: '0',
-            useTor: false,
-            proxyImages: true,
-            engines: []
-        };
-
-        // Load preferences from localStorage on page load
-        function loadPreferences() {
-            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-            const prefs = { ...defaults, ...saved };
-
-            // Appearance
-            document.getElementById('theme').value = prefs.theme;
-            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
-            document.documentElement.classList.add('theme-' + prefs.theme);
-            document.getElementById('grid-density').value = prefs.gridDensity;
-            document.getElementById('thumbnail-size').value = prefs.thumbnailSize;
-
-            // Video Preview
-            document.getElementById('autoplay-preview').checked = prefs.autoplayPreview;
-            document.getElementById('preview-delay').value = prefs.previewDelay;
-
-            // Search Settings
-            document.getElementById('results-per-page').value = prefs.resultsPerPage;
-            document.getElementById('open-new-tab').checked = prefs.openNewTab;
-
-            // Default Filters
-            document.getElementById('default-preview-only').checked = prefs.defaultPreviewOnly;
-            document.getElementById('show-ai-content').checked = prefs.showAIContent;
-            document.getElementById('default-duration').value = prefs.defaultDuration;
-            document.getElementById('min-quality').value = prefs.minQuality;
-            document.getElementById('default-sort').value = prefs.defaultSort;
-            document.getElementById('min-duration').value = prefs.minDuration;
-
-            // History
-            document.getElementById('max-history').value = prefs.maxHistory;
-            document.getElementById('auto-clear-history').value = prefs.autoClearHistory;
-
-            // Privacy
-            document.getElementById('use-tor').checked = prefs.useTor;
-            document.getElementById('proxy-images').checked = prefs.proxyImages;
-
-            // Engines — support both 'enabledEngines' (app.js key) and legacy 'engines' key
-            const savedEngines = prefs.enabledEngines || prefs.engines || [];
-            if (savedEngines.length > 0) {
-                document.querySelectorAll('input[name="engines"]').forEach(cb => {
-                    cb.checked = savedEngines.includes(cb.value);
-                });
-            }
-
-            // Update counts
-            updateFavoritesCount();
-        }
-
-        // Save preferences to localStorage
-        function savePreferences(e) {
-            e.preventDefault();
-
-            const engines = [];
-            document.querySelectorAll('input[name="engines"]:checked').forEach(cb => {
-                engines.push(cb.value);
-            });
-
-            const prefs = {
-                theme: document.getElementById('theme').value,
-                gridDensity: document.getElementById('grid-density').value,
-                thumbnailSize: document.getElementById('thumbnail-size').value,
-                autoplayPreview: document.getElementById('autoplay-preview').checked,
-                previewDelay: document.getElementById('preview-delay').value,
-                resultsPerPage: document.getElementById('results-per-page').value,
-                openNewTab: document.getElementById('open-new-tab').checked,
-                defaultPreviewOnly: document.getElementById('default-preview-only').checked,
-                showAIContent: document.getElementById('show-ai-content').checked,
-                defaultDuration: document.getElementById('default-duration').value,
-                minQuality: document.getElementById('min-quality').value,
-                defaultSort: document.getElementById('default-sort').value,
-                minDuration: document.getElementById('min-duration').value,
-                maxHistory: document.getElementById('max-history').value,
-                autoClearHistory: document.getElementById('auto-clear-history').value,
-                useTor: document.getElementById('use-tor').checked,
-                proxyImages: document.getElementById('proxy-images').checked,
-                enabledEngines: engines  // matches app.js key name
-            };
-
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-
-            // Apply theme immediately and set cookie so server uses correct theme
-            // on next full page load (prevents flicker and corrects SSR class).
-            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
-            document.documentElement.classList.add('theme-' + prefs.theme);
-            var maxAge = 365 * 24 * 3600;
-            document.cookie = 'vidveil-theme=' + encodeURIComponent(prefs.theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
-
-            showToast('{{ t "prefs.saved" }}', 'success');
-            // Auto-close after saving
-            setTimeout(function() {
-                if (window.history.length > 1) {
-                    window.history.back();
-                } else {
-                    window.location.href = '/';
-                }
-            }, 800);
-        }
-
-        function showToast(message, type) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast ' + type + ' show';
-            setTimeout(() => { toast.className = 'toast'; }, 3000);
-        }
-
-        function updateFavoritesCount() {
-            const favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-            const el = document.getElementById('favorites-count');
-            const fmt = el.getAttribute('data-format') || '%d favorites';
-            el.textContent = fmt.replace('%d', favorites.length);
-        }
-
-        // Reset to defaults
-        window.resetPreferences = function() {
-            localStorage.removeItem(STORAGE_KEY);
-            loadPreferences();
-            showToast('{{ t "prefs.reset_done" }}', 'info');
-        };
-
-        // Engine selection
-        window.selectAllEngines = function() {
-            document.querySelectorAll('input[name="engines"]').forEach(cb => cb.checked = true);
-            document.querySelectorAll('.tier-toggle input').forEach(cb => cb.checked = true);
-        };
-        window.selectNoneEngines = function() {
-            document.querySelectorAll('input[name="engines"]').forEach(cb => cb.checked = false);
-            document.querySelectorAll('.tier-toggle input').forEach(cb => cb.checked = false);
-        };
-
-        // History functions
-        window.exportHistory = function() {
-            const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-            downloadJSON(history, 'vidveil-history.json');
-            showToast('History exported', 'success');
-        };
-
-        window.importHistory = function(file) {
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    if (Array.isArray(data)) {
-                        localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
-                        showToast('History imported (' + data.length + ' items)', 'success');
-                    } else {
-                        showToast('Invalid history file', 'error');
-                    }
-                } catch (err) {
-                    showToast('Failed to parse file', 'error');
-                }
-            };
-            reader.readAsText(file);
-        };
-
-        window.clearHistory = function() {
-            // Per AI.md PART 16: use showConfirm modal, never window.confirm.
-            showConfirm('Clear all search history?', function () {
-                localStorage.removeItem(HISTORY_KEY);
-                showToast('History cleared', 'info');
-            });
-        };
-
-        // Favorites functions
-        window.exportFavorites = function() {
-            const favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-            downloadJSON(favorites, 'vidveil-favorites.json');
-            showToast('{{ t "favorites.exported" }}', 'success');
-        };
-
-        window.importFavorites = function(file) {
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    if (Array.isArray(data)) {
-                        // Merge with existing favorites
-                        const existing = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-                        const merged = [...data];
-                        existing.forEach(fav => {
-                            if (!merged.some(f => f.url === fav.url)) {
-                                merged.push(fav);
-                            }
-                        });
-                        localStorage.setItem(FAVORITES_KEY, JSON.stringify(merged));
-                        updateFavoritesCount();
-                        showToast('Favorites imported (' + data.length + ' items)', 'success');
-                    } else {
-                        showToast('{{ t "favorites.invalid_file" }}', 'error');
-                    }
-                } catch (err) {
-                    showToast('Failed to parse file', 'error');
-                }
-            };
-            reader.readAsText(file);
-        };
-
-        window.clearFavorites = function() {
-            // Per AI.md PART 16: use showConfirm modal, never window.confirm.
-            showConfirm('{{ t "favorites.confirm_clear" }}', function () {
-                localStorage.removeItem(FAVORITES_KEY);
-                updateFavoritesCount();
-                showToast('{{ t "favorites.cleared" }}', 'info');
-            });
-        };
-
-        function downloadJSON(data, filename) {
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        // Theme preview
-        document.getElementById('theme').addEventListener('change', function() {
-            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
-            document.documentElement.classList.add('theme-' + this.value);
-        });
-
-        // Tier grouping and toggle logic
-        function initEngineTiers() {
-            const container = document.getElementById('engine-tiers');
-            const engines = container.querySelectorAll('.engine-toggle[data-tier]');
-
-            // Group engines by tier
-            const tiers = {};
-            const tierNames = {
-                1: '{{ t "tier.1" }}',
-                2: '{{ t "tier.2" }}',
-                3: '{{ t "tier.3" }}',
-                4: '{{ t "tier.4" }}',
-                5: '{{ t "tier.5" }}',
-                6: '{{ t "tier.6" }}'
-            };
-
-            engines.forEach(eng => {
-                const tier = eng.dataset.tier;
-                if (!tiers[tier]) tiers[tier] = [];
-                tiers[tier].push(eng);
-            });
-
-            // Clear container and rebuild with tier groups
-            container.innerHTML = '';
-
-            // Sort tier numbers
-            const sortedTiers = Object.keys(tiers).sort((a, b) => parseInt(a) - parseInt(b));
-
-            sortedTiers.forEach(tier => {
-                const tierEngines = tiers[tier];
-                const tierName = tierNames[tier] || 'Tier ' + tier;
-
-                // Create tier group
-                const group = document.createElement('div');
-                group.className = 'tier-group';
-                group.dataset.tier = tier;
-
-                // Tier header with toggle
-                const header = document.createElement('div');
-                header.className = 'tier-header';
-                header.innerHTML = `
-                    <label class="toggle tier-toggle">
-                        <input type="checkbox" data-tier="${tier}" checked>
-                        <span class="slider"></span>
-                        <span class="toggle-label">${tierName} (${tierEngines.length} {{ t "tier.engines" }})</span>
-                    </label>
-                    <button type="button" class="tier-expand" aria-expanded="false" aria-label="{{ t "a11y.expand_tier" }}">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                    </button>
-                `;
-                group.appendChild(header);
-
-                // Engine list (collapsed by default)
-                const list = document.createElement('div');
-                list.className = 'tier-engines collapsed';
-                tierEngines.forEach(eng => {
-                    eng.hidden = false;
-                    list.appendChild(eng);
-                });
-                group.appendChild(list);
-
-                container.appendChild(group);
-
-                // Tier toggle handler
-                const tierToggle = header.querySelector('input[data-tier]');
-                tierToggle.addEventListener('change', function() {
-                    const checked = this.checked;
-                    tierEngines.forEach(eng => {
-                        eng.querySelector('input').checked = checked;
-                    });
-                });
-
-                // Update tier toggle when individual engines change
-                tierEngines.forEach(eng => {
-                    eng.querySelector('input').addEventListener('change', function() {
-                        const allChecked = tierEngines.every(e => e.querySelector('input').checked);
-                        const someChecked = tierEngines.some(e => e.querySelector('input').checked);
-                        tierToggle.checked = allChecked;
-                        tierToggle.indeterminate = someChecked && !allChecked;
-                    });
-                });
-
-                // Expand/collapse handler
-                const expandBtn = header.querySelector('.tier-expand');
-                expandBtn.addEventListener('click', function() {
-                    const expanded = list.classList.toggle('collapsed');
-                    this.setAttribute('aria-expanded', !expanded);
-                });
-            });
-        }
-
-        // Initialize tier UI after DOM ready
-        initEngineTiers();
-
-        form.addEventListener('submit', savePreferences);
-        form.dataset.managed = 'true';  // Mark as handled by inline script
-        loadPreferences();
-    })();
-    </script>
+    {{/* i18n strings for the preferences logic in app.js. type="application/json" is
+         a non-executable data island (CSP script-src does not block it). */}}
+    <script type="application/json" id="preferences-i18n">{
+        "saved": "{{ t "prefs.saved" }}",
+        "resetDone": "{{ t "prefs.reset_done" }}",
+        "favExported": "{{ t "favorites.exported" }}",
+        "favInvalidFile": "{{ t "favorites.invalid_file" }}",
+        "favConfirmClear": "{{ t "favorites.confirm_clear" }}",
+        "favCleared": "{{ t "favorites.cleared" }}",
+        "tier1": "{{ t "tier.1" }}",
+        "tier2": "{{ t "tier.2" }}",
+        "tier3": "{{ t "tier.3" }}",
+        "tier4": "{{ t "tier.4" }}",
+        "tier5": "{{ t "tier.5" }}",
+        "tier6": "{{ t "tier.6" }}",
+        "tierEngines": "{{ t "tier.engines" }}",
+        "expandTier": "{{ t "a11y.expand_tier" }}"
+    }</script>
+    {{template "public/scripts" .}}
 </body>
 </html>
 {{end}}

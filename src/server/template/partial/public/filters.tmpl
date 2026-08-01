@@ -15,7 +15,7 @@
         <div class="filters-grid">
             <div class="filter-group">
                 <label for="filter-duration" class="filter-label">{{ t "filter.duration" }}</label>
-                <select id="filter-duration" name="duration" onchange="handleFilterChange()" class="filter-select">
+                <select id="filter-duration" name="duration" data-action="filter-change" class="filter-select">
                     <option value="">{{ t "filter.any" }}</option>
                     <option value="short">{{ t "filter.under_10" }}</option>
                     <option value="medium">{{ t "filter.10_30" }}</option>
@@ -24,7 +24,7 @@
             </div>
             <div class="filter-group">
                 <label for="filter-quality" class="filter-label">{{ t "filter.quality" }}</label>
-                <select id="filter-quality" name="quality" onchange="handleFilterChange()" class="filter-select">
+                <select id="filter-quality" name="quality" data-action="filter-change" class="filter-select">
                     <option value="">{{ t "filter.any" }}</option>
                     <option value="4k">{{ t "filter.quality_4k" }}</option>
                     <option value="1080">{{ t "filter.quality_1080" }}</option>
@@ -33,7 +33,7 @@
             </div>
             <div class="filter-group">
                 <label for="filter-sort" class="filter-label">{{ t "filter.sort" }}</label>
-                <select id="filter-sort" name="sort" onchange="handleFilterChange()" class="filter-select">
+                <select id="filter-sort" name="sort" data-action="filter-change" class="filter-select">
                     <option value="">{{ t "filter.relevance" }}</option>
                     <option value="duration-desc">{{ t "filter.longest" }}</option>
                     <option value="duration-asc">{{ t "filter.shortest" }}</option>
@@ -44,7 +44,7 @@
             {{if .ShowEngines}}
             <div class="filter-group">
                 <label for="filter-engines" class="filter-label">{{ t "filter.engines" }}</label>
-                <select id="filter-engines" name="engines" onchange="handleFilterChange()" class="filter-select">
+                <select id="filter-engines" name="engines" data-action="filter-change" class="filter-select">
                     <option value="">{{ t "filter.all_engines" }}</option>
                     <option value="tier1">{{ t "filter.tier1_only" }}</option>
                     <option value="tier12">{{ t "filter.tier12" }}</option>
@@ -60,11 +60,11 @@
                     </summary>
                     <div class="source-filter-dropdown" id="source-filter-list" role="group" aria-label="{{ t "a11y.source_filter_options" }}">
                         <label class="source-option source-option--special">
-                            <input type="checkbox" id="filter-preview-first" onchange="updatePreviewFirst(this.checked)">
+                            <input type="checkbox" id="filter-preview-first" data-action="preview-first">
                             <span>{{ t "filter.preview_first" }}</span>
                         </label>
                         <label class="source-option">
-                            <input type="checkbox" id="source-all" checked onchange="toggleAllSources(this.checked)">
+                            <input type="checkbox" id="source-all" checked data-action="toggle-all-sources">
                             <span>{{ t "filter.all_sources" }}</span>
                         </label>
                         <div class="source-options" id="source-options">

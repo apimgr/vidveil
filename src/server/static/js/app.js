@@ -515,9 +515,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Set theme
     setTheme(getTheme());
 
-    // Setup theme selector if present
+    // Setup theme selector if present. The preferences page manages its own
+    // #theme select (live preview + persist on save), so skip binding there to
+    // avoid a duplicate change listener that would persist before the user saves.
     const themeSelect = document.getElementById('theme');
-    if (themeSelect) {
+    if (themeSelect && !document.getElementById('preferences-form')) {
         themeSelect.value = getTheme();
         themeSelect.addEventListener('change', function() {
             setTheme(this.value);
@@ -627,7 +629,7 @@ function showToast(message, type) {
     if (!container) return;
     var toast = document.createElement('div');
     toast.className = 'toast toast-' + type;
-    toast.innerHTML = '<span>' + message + '</span><button class="toast-close" onclick="this.parentElement.remove()">&times;</button>';
+    toast.innerHTML = '<span>' + message + '</span><button type="button" class="toast-close" data-action="close-toast">&times;</button>';
     container.appendChild(toast);
     setTimeout(function() { toast.classList.add('show'); }, 10);
     setTimeout(function() {
@@ -1248,14 +1250,14 @@ if (document.readyState === 'loading') {
         });
         history = deduped;
 
-        var html = '<div class="history-header"><span>Recent Searches</span><button type="button" onclick="Vidveil.Home.clearHistory()" class="history-clear" aria-label="Clear search history">Clear</button></div>';
+        var html = '<div class="history-header"><span>Recent Searches</span><button type="button" data-action="home-clear-history" class="history-clear" aria-label="Clear search history">Clear</button></div>';
         html += '<div class="history-items">';
 
         history.slice(0, 8).forEach(function(item) {
             html += '<div class="history-item">';
-            html += '<a href="/search?q=' + encodeURIComponent(item.query) + '" class="history-link" onclick="showSearchSpinner(this, event)">' + escapeHtmlUtil(item.query) + '</a>';
+            html += '<a href="/search?q=' + encodeURIComponent(item.query) + '" class="history-link" data-action="search-spinner">' + escapeHtmlUtil(item.query) + '</a>';
             html += '<span class="history-time">' + formatTimeAgo(item.timestamp) + '</span>';
-            html += '<button type="button" onclick="event.preventDefault();Vidveil.Home.removeFromHistory(\'' + escapeHtmlUtil(item.query).replace(/'/g, "\\'") + '\')" class="history-remove" aria-label="Remove from history">×</button>';
+            html += '<button type="button" data-action="home-remove-history" data-query="' + escapeHtmlUtil(item.query) + '" class="history-remove" aria-label="Remove from history">×</button>';
             html += '</div>';
         });
 
@@ -1660,7 +1662,7 @@ if (document.readyState === 'loading') {
             isSearching = false;
             var loadingEl = document.getElementById('initial-loading');
             if (loadingEl) {
-                loadingEl.innerHTML = '<p>Connection error. <button onclick="location.reload()" class="retry-btn">Retry</button></p>';
+                loadingEl.innerHTML = '<p>Connection error. <button type="button" data-action="reload" class="retry-btn">Retry</button></p>';
             }
             showToast('Search failed - check your connection', 'error');
             updateSearchStatus();
@@ -1713,7 +1715,7 @@ if (document.readyState === 'loading') {
                 ? '/api/v1/proxy/thumbnails?url=' + encodeURIComponent(r.thumbnail)
                 : r.thumbnail;
         }
-        html += '<img class="thumb-static" src="' + escapeHtmlUtil(thumbSrc) + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" onerror="this.src=\'/static/images/placeholder.svg\'">';
+        html += '<img class="thumb-static" src="' + escapeHtmlUtil(thumbSrc) + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" data-fallback="/static/images/placeholder.svg">';
 
         if (hasPreview) {
             html += '<video class="thumb-preview" src="' + escapeHtmlUtil(proxiedPreviewUrl) + '" muted loop playsinline preload="none"></video>';
@@ -1916,7 +1918,7 @@ if (document.readyState === 'loading') {
         if (!sourceOptions) return;
         var label = document.createElement('label');
         label.className = 'source-option';
-        label.innerHTML = '<input type="checkbox" name="source-filter" value="' + escapeHtmlUtil(source) + '" checked onchange="updateSourceFilter()"><span>' + escapeHtmlUtil(displayName) + '</span>';
+        label.innerHTML = '<input type="checkbox" name="source-filter" value="' + escapeHtmlUtil(source) + '" checked data-action="source-filter-change"><span>' + escapeHtmlUtil(displayName) + '</span>';
         sourceOptions.appendChild(label);
     }
 
@@ -2336,6 +2338,14 @@ function closeAllCardMenus() {
 
 // Delegated event handler for card menu actions
 document.addEventListener('click', function(e) {
+    // Generic data-action dispatch (CSP-safe replacement for inline onclick).
+    // Returns true when it handled the action; card-menu actions (newtab/copy/
+    // favorite) are not claimed here and fall through to the logic below.
+    var actionEl = e.target.closest('[data-action]');
+    if (actionEl && dispatchClickAction(actionEl, e)) {
+        return;
+    }
+
     var btn = e.target.closest('.card-menu-item');
     if (!btn) {
         // Click outside - close all menus
@@ -2539,8 +2549,8 @@ function showUpdateNotification() {
     banner.id = 'update-banner';
     banner.className = 'update-banner';
     banner.innerHTML = '<span>A new version is available</span>'
-        + '<button onclick="updateApp()" class="btn btn-primary btn-sm">Update Now</button>'
-        + '<button onclick="this.parentElement.remove()" class="btn btn-secondary btn-sm">Later</button>';
+        + '<button type="button" data-action="update-app" class="btn btn-primary btn-sm">Update Now</button>'
+        + '<button type="button" data-action="dismiss-update" class="btn btn-secondary btn-sm">Later</button>';
     document.body.appendChild(banner);
 }
 
@@ -2598,5 +2608,723 @@ window.updateApp = updateApp;
                 '; path=/; max-age=31536000; SameSite=Lax';
             banner.remove();
         });
+    });
+})();
+
+// ============================================================================
+// CSP-safe delegated dispatchers (AI.md PART 11: script-src 'self')
+// All inline event handlers were migrated here. Elements carry data-action
+// (plus data-* args) and are wired through these document-level listeners.
+// ============================================================================
+
+// Run fn once the DOM is ready (app.js loads at end of <body>).
+function onReady(fn) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fn);
+    } else {
+        fn();
+    }
+}
+
+// Delegated click actions. Returns true when handled. Card-menu actions
+// (newtab/copy/favorite) are intentionally not claimed here so the existing
+// card-menu dispatcher handles them.
+function dispatchClickAction(el, e) {
+    switch (el.dataset.action) {
+        case 'leave-site':
+            window.location.href = 'https://www.google.com';
+            return true;
+        case 'close-dialog': {
+            var dlg = el.closest('dialog');
+            if (dlg) dlg.close();
+            return true;
+        }
+        case 'toggle-nav':
+            toggleNav();
+            return true;
+        case 'close-nav':
+            closeNav();
+            return true;
+        case 'decline-cookies':
+            if (typeof window.declineCookies === 'function') window.declineCookies();
+            return true;
+        case 'accept-cookies':
+            if (typeof window.acceptCookies === 'function') window.acceptCookies();
+            return true;
+        case 'close-toast': {
+            var toast = el.closest('.toast');
+            if (toast) toast.remove();
+            return true;
+        }
+        case 'reload':
+            location.reload();
+            return true;
+        case 'update-app':
+            updateApp();
+            return true;
+        case 'dismiss-update':
+            if (el.parentElement) el.parentElement.remove();
+            return true;
+        case 'home-clear-history':
+            if (window.Vidveil && window.Vidveil.Home) window.Vidveil.Home.clearHistory();
+            return true;
+        case 'home-remove-history':
+            e.preventDefault();
+            if (window.Vidveil && window.Vidveil.Home) window.Vidveil.Home.removeFromHistory(el.dataset.query || '');
+            return true;
+        case 'search-spinner':
+            // On a history <a>: show spinner, allow navigation to continue.
+            showSearchSpinner(el, e);
+            return true;
+        case 'close-prefs':
+            if (window.history.length > 1) { window.history.back(); } else { window.location.href = '/'; }
+            return true;
+        case 'export-history':
+            if (typeof window.exportHistory === 'function') window.exportHistory();
+            return true;
+        case 'clear-history':
+            if (typeof window.clearHistory === 'function') window.clearHistory();
+            return true;
+        case 'export-favorites':
+            if (typeof window.exportFavorites === 'function') window.exportFavorites();
+            return true;
+        case 'clear-favorites':
+            if (typeof window.clearFavorites === 'function') window.clearFavorites();
+            return true;
+        case 'select-all-engines':
+            if (typeof window.selectAllEngines === 'function') window.selectAllEngines();
+            return true;
+        case 'select-none-engines':
+            if (typeof window.selectNoneEngines === 'function') window.selectNoneEngines();
+            return true;
+        case 'reset-preferences':
+            if (typeof window.resetPreferences === 'function') window.resetPreferences();
+            return true;
+        case 'export-favs':
+            if (typeof window.exportFavs === 'function') window.exportFavs();
+            return true;
+        case 'clear-favs':
+            if (typeof window.clearFavs === 'function') window.clearFavs();
+            return true;
+        default:
+            return false;
+    }
+}
+
+// Delegated change actions (no pre-existing change dispatcher to extend).
+document.addEventListener('change', function(e) {
+    var el = e.target.closest('[data-action]');
+    if (!el) return;
+    switch (el.dataset.action) {
+        case 'filter-change':
+            handleFilterChange();
+            break;
+        case 'preview-first':
+            updatePreviewFirst(el.checked);
+            break;
+        case 'toggle-all-sources':
+            toggleAllSources(el.checked);
+            break;
+        case 'source-filter-change':
+            updateSourceFilter();
+            break;
+        case 'import-favs':
+            if (typeof window.importFavs === 'function') window.importFavs(el);
+            break;
+        case 'import-history':
+            if (typeof window.importHistory === 'function') window.importHistory(el.files[0]);
+            break;
+        case 'import-favorites':
+            if (typeof window.importFavorites === 'function') window.importFavorites(el.files[0]);
+            break;
+    }
+});
+
+// Delegated submit actions.
+document.addEventListener('submit', function(e) {
+    var el = e.target.closest('[data-action]');
+    if (!el) return;
+    if (el.dataset.action === 'search-submit') {
+        if (handleSearchSubmit(el) === false) {
+            e.preventDefault();
+        }
+    }
+});
+
+// Image fallback (replaces inline onerror; error does not bubble, use capture).
+document.addEventListener('error', function(e) {
+    var img = e.target;
+    if (!img || img.tagName !== 'IMG') return;
+    var fb = img.getAttribute('data-fallback');
+    if (!fb || img.getAttribute('data-fallback-applied') === '1') return;
+    img.setAttribute('data-fallback-applied', '1');
+    img.src = fb;
+}, true);
+
+// ============================================================================
+// Cookie Consent (moved from footer.tmpl) — AI.md PART 12
+// cookieConsent is a COOKIE (not localStorage) — server reads it per request
+// to skip the banner and suppress non-essential tracking.
+// ============================================================================
+(function() {
+    function acceptCookies() {
+        saveAndApplyConsent({ essential: true, preferences: true, analytics: false, timestamp: Date.now() });
+    }
+    function declineCookies() {
+        saveAndApplyConsent({ essential: true, preferences: false, analytics: false, timestamp: Date.now() });
+    }
+    function saveAndApplyConsent(consent) {
+        document.cookie = 'cookieConsent=' + encodeURIComponent(JSON.stringify(consent)) +
+            '; path=/; max-age=31536000; SameSite=Lax';
+        var banner = document.getElementById('cookie-consent');
+        if (banner) banner.hidden = true;
+        applyConsent(consent);
+    }
+    function applyConsent(consent) {
+        if (!consent.preferences) {
+            document.cookie = 'theme=; path=/; max-age=0; SameSite=Lax';
+            document.cookie = 'lang=; path=/; max-age=0; SameSite=Lax';
+        }
+    }
+    window.acceptCookies = acceptCookies;
+    window.declineCookies = declineCookies;
+    window.saveAndApplyConsent = saveAndApplyConsent;
+    window.applyConsent = applyConsent;
+
+    onReady(function() {
+        var banner = document.getElementById('cookie-consent');
+        if (!banner) return;
+        var match = document.cookie.match(/(?:^|;\s*)cookieConsent=([^;]*)/);
+        if (!match) {
+            banner.hidden = false;
+            return;
+        }
+        try {
+            applyConsent(JSON.parse(decodeURIComponent(match[1])));
+        } catch (e) {
+            document.cookie = 'cookieConsent=; path=/; max-age=0; SameSite=Lax';
+            banner.hidden = false;
+        }
+    });
+})();
+
+// ============================================================================
+// Health page auto-refresh (moved from healthz.tmpl) — runs only on /healthz
+// ============================================================================
+(function() {
+    onReady(function() {
+        var countdown = document.getElementById('countdown');
+        if (!countdown) return;
+        var seconds = 30;
+
+        function statusClass(val) { return val === 'ok' ? 'status-ok' : 'status-error'; }
+        function statusLabel(val) { return val === 'ok' ? '✅ OK' : '❌ Error'; }
+
+        function applyUpdate(d) {
+            var banner = document.querySelector('.status-banner');
+            if (banner) {
+                banner.className = 'status-banner status-' + (d.status === 'healthy' ? 'healthy' : d.status === 'unhealthy' ? 'unhealthy' : 'degraded');
+                var icon = banner.querySelector('.status-icon');
+                var text = banner.querySelector('.status-text');
+                if (icon) icon.textContent = d.status === 'healthy' ? '✅' : d.status === 'unhealthy' ? '🔴' : '⚠️';
+                if (text) text.textContent = d.status === 'healthy' ? 'All Systems Operational' : d.status === 'unhealthy' ? 'System Unhealthy' : 'System Degraded';
+            }
+            var checks = d.checks || {};
+            var checkMap = {database: '🗄️ Database', cache: '💾 Cache', disk: '💿 Disk', scheduler: '⏰ Scheduler'};
+            document.querySelectorAll('.checks-table tbody tr').forEach(function(row) {
+                var label = row.cells[0] && row.cells[0].textContent.trim();
+                for (var key in checkMap) {
+                    if (checkMap.hasOwnProperty(key) && label === checkMap[key] && row.cells[1]) {
+                        row.cells[1].className = statusClass(checks[key]);
+                        row.cells[1].textContent = statusLabel(checks[key]);
+                    }
+                }
+            });
+            var stats = d.stats || {};
+            var statRows = document.querySelectorAll('.stats-grid dd');
+            if (statRows[0]) statRows[0].textContent = stats.requests_total || 0;
+            if (statRows[1]) statRows[1].textContent = stats.requests_24h || 0;
+            if (statRows[2]) statRows[2].textContent = stats.active_connections || 0;
+            var ts = document.getElementById('hz-timestamp');
+            if (ts && d.timestamp) {
+                var dt = new Date(d.timestamp);
+                ts.setAttribute('datetime', d.timestamp);
+                ts.textContent = dt.toLocaleString();
+            }
+        }
+
+        setInterval(function() {
+            seconds--;
+            if (countdown) countdown.textContent = seconds;
+            if (seconds <= 0) {
+                seconds = 30;
+                fetch('/healthz.json', {cache: 'no-store'})
+                    .then(function(r) { return r.json(); })
+                    .then(applyUpdate)
+                    .catch(function() { location.reload(); });
+            }
+        }, 1000);
+    });
+})();
+
+// ============================================================================
+// Favorites page (moved from favorites.tmpl) — runs only on /favorites
+// i18n strings come from the #favorites-i18n data island.
+// ============================================================================
+(function() {
+    var FAVORITES_KEY = 'vidveil_favorites';
+    var i18n = {};
+
+    function getFavs() {
+        try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'); } catch (e) { return []; }
+    }
+    function saveFavs(favs) {
+        try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); } catch (e) {}
+    }
+    function escHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function render() {
+        var favs = getFavs();
+        var grid = document.getElementById('favorites-grid');
+        var empty = document.getElementById('favorites-empty');
+        var label = document.getElementById('favorites-count-label');
+        if (!grid) return;
+
+        grid.innerHTML = '';
+
+        if (favs.length === 0) {
+            empty.hidden = false;
+            label.textContent = '0 favorites';
+            return;
+        }
+
+        empty.hidden = true;
+        label.textContent = favs.length === 1 ? i18n.countSingular : (i18n.countPlural || '%d favorites').replace('%d', favs.length);
+
+        favs.forEach(function(fav, i) {
+            var card = document.createElement('article');
+            card.className = 'video-card';
+            card.setAttribute('role', 'listitem');
+            card.setAttribute('aria-label', fav.title || 'Favorited video');
+
+            var thumbSrc = '/static/images/placeholder.svg';
+            if (fav.thumbnail) {
+                thumbSrc = '/api/v1/proxy/thumbnails?url=' + encodeURIComponent(fav.thumbnail);
+            }
+
+            var html = '<a href="' + escHtml(fav.url) + '" target="_blank" rel="noopener noreferrer nofollow" class="card-link">';
+            html += '<div class="thumb-container">';
+            html += '<img class="thumb-static" src="' + escHtml(thumbSrc) + '" alt="' + escHtml(fav.title || 'Favorited video') + '" loading="lazy" data-fallback="/static/images/placeholder.svg">';
+            html += '</div></a>';
+
+            html += '<div class="info">';
+            html += '<h3><a href="' + escHtml(fav.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + escHtml(fav.title || 'Untitled') + '</a></h3>';
+            html += '<div class="meta">';
+            if (fav.source) html += '<span class="source">' + escHtml(fav.source) + '</span>';
+            html += '</div></div>';
+
+            html += '<button type="button" class="fav-remove" aria-label="' + i18n.remove + '" data-idx="' + i + '" title="' + i18n.remove + '">&times;</button>';
+
+            card.innerHTML = html;
+            card.querySelector('.fav-remove').addEventListener('click', function() {
+                var idx = parseInt(this.dataset.idx, 10);
+                var cur = getFavs();
+                cur.splice(idx, 1);
+                saveFavs(cur);
+                render();
+            });
+            grid.appendChild(card);
+        });
+    }
+
+    window.exportFavs = function() {
+        var data = JSON.stringify(getFavs(), null, 2);
+        var blob = new Blob([data], {type: 'application/json'});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'vidveil-favorites.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    };
+
+    window.importFavs = function(input) {
+        var file = input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                var imported = JSON.parse(e.target.result);
+                if (!Array.isArray(imported)) { alert(i18n.invalidFile); return; }
+                var cur = getFavs();
+                imported.forEach(function(item) {
+                    if (item.url && !cur.some(function(f) { return f.url === item.url; })) {
+                        cur.push(item);
+                    }
+                });
+                saveFavs(cur);
+                render();
+                input.value = '';
+            } catch (e) {
+                alert(i18n.invalidFile);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    window.clearFavs = function() {
+        if (!confirm(i18n.confirmClear)) return;
+        saveFavs([]);
+        render();
+    };
+
+    onReady(function() {
+        var grid = document.getElementById('favorites-grid');
+        if (!grid) return;
+        var island = document.getElementById('favorites-i18n');
+        if (island) {
+            try { i18n = JSON.parse(island.textContent); } catch (e) { i18n = {}; }
+        }
+        render();
+    });
+})();
+
+// ============================================================================
+// Preferences page (moved from preferences.tmpl) — runs only on /preferences
+// i18n strings come from the #preferences-i18n data island.
+// ============================================================================
+(function() {
+    onReady(function() {
+        var form = document.getElementById('preferences-form');
+        if (!form) return;
+
+        var i18n = {};
+        var island = document.getElementById('preferences-i18n');
+        if (island) {
+            try { i18n = JSON.parse(island.textContent); } catch (e) { i18n = {}; }
+        }
+
+        var STORAGE_KEY = 'vidveil_prefs';
+        var HISTORY_KEY = 'vidveil_history';
+        var FAVORITES_KEY = 'vidveil_favorites';
+
+        var defaults = {
+            theme: 'auto',
+            gridDensity: 'default',
+            thumbnailSize: 'medium',
+            autoplayPreview: true,
+            previewDelay: '0',
+            resultsPerPage: '0',
+            openNewTab: true,
+            defaultPreviewOnly: true,
+            showAIContent: false,
+            defaultDuration: '',
+            minQuality: '360',
+            defaultSort: '',
+            minDuration: '600',
+            maxHistory: '0',
+            autoClearHistory: '0',
+            useTor: false,
+            proxyImages: true,
+            engines: []
+        };
+
+        function loadPreferences() {
+            var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            var prefs = Object.assign({}, defaults, saved);
+
+            document.getElementById('theme').value = prefs.theme;
+            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
+            document.documentElement.classList.add('theme-' + prefs.theme);
+            document.getElementById('grid-density').value = prefs.gridDensity;
+            document.getElementById('thumbnail-size').value = prefs.thumbnailSize;
+
+            document.getElementById('autoplay-preview').checked = prefs.autoplayPreview;
+            document.getElementById('preview-delay').value = prefs.previewDelay;
+
+            document.getElementById('results-per-page').value = prefs.resultsPerPage;
+            document.getElementById('open-new-tab').checked = prefs.openNewTab;
+
+            document.getElementById('default-preview-only').checked = prefs.defaultPreviewOnly;
+            document.getElementById('show-ai-content').checked = prefs.showAIContent;
+            document.getElementById('default-duration').value = prefs.defaultDuration;
+            document.getElementById('min-quality').value = prefs.minQuality;
+            document.getElementById('default-sort').value = prefs.defaultSort;
+            document.getElementById('min-duration').value = prefs.minDuration;
+
+            document.getElementById('max-history').value = prefs.maxHistory;
+            document.getElementById('auto-clear-history').value = prefs.autoClearHistory;
+
+            document.getElementById('use-tor').checked = prefs.useTor;
+            document.getElementById('proxy-images').checked = prefs.proxyImages;
+
+            var savedEngines = prefs.enabledEngines || prefs.engines || [];
+            if (savedEngines.length > 0) {
+                document.querySelectorAll('input[name="engines"]').forEach(function(cb) {
+                    cb.checked = savedEngines.includes(cb.value);
+                });
+            }
+
+            updateFavoritesCount();
+        }
+
+        function savePreferences(e) {
+            e.preventDefault();
+
+            var engines = [];
+            document.querySelectorAll('input[name="engines"]:checked').forEach(function(cb) {
+                engines.push(cb.value);
+            });
+
+            var prefs = {
+                theme: document.getElementById('theme').value,
+                gridDensity: document.getElementById('grid-density').value,
+                thumbnailSize: document.getElementById('thumbnail-size').value,
+                autoplayPreview: document.getElementById('autoplay-preview').checked,
+                previewDelay: document.getElementById('preview-delay').value,
+                resultsPerPage: document.getElementById('results-per-page').value,
+                openNewTab: document.getElementById('open-new-tab').checked,
+                defaultPreviewOnly: document.getElementById('default-preview-only').checked,
+                showAIContent: document.getElementById('show-ai-content').checked,
+                defaultDuration: document.getElementById('default-duration').value,
+                minQuality: document.getElementById('min-quality').value,
+                defaultSort: document.getElementById('default-sort').value,
+                minDuration: document.getElementById('min-duration').value,
+                maxHistory: document.getElementById('max-history').value,
+                autoClearHistory: document.getElementById('auto-clear-history').value,
+                useTor: document.getElementById('use-tor').checked,
+                proxyImages: document.getElementById('proxy-images').checked,
+                enabledEngines: engines
+            };
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+
+            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
+            document.documentElement.classList.add('theme-' + prefs.theme);
+            var maxAge = 365 * 24 * 3600;
+            document.cookie = 'vidveil-theme=' + encodeURIComponent(prefs.theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+
+            showToastLocal(i18n.saved, 'success');
+            setTimeout(function() {
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.href = '/';
+                }
+            }, 800);
+        }
+
+        function showToastLocal(message, type) {
+            var toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(function() { toast.className = 'toast'; }, 3000);
+        }
+
+        function updateFavoritesCount() {
+            var favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+            var el = document.getElementById('favorites-count');
+            var fmt = el.getAttribute('data-format') || '%d favorites';
+            el.textContent = fmt.replace('%d', favorites.length);
+        }
+
+        window.resetPreferences = function() {
+            localStorage.removeItem(STORAGE_KEY);
+            loadPreferences();
+            showToastLocal(i18n.resetDone, 'info');
+        };
+
+        window.selectAllEngines = function() {
+            document.querySelectorAll('input[name="engines"]').forEach(function(cb) { cb.checked = true; });
+            document.querySelectorAll('.tier-toggle input').forEach(function(cb) { cb.checked = true; });
+        };
+        window.selectNoneEngines = function() {
+            document.querySelectorAll('input[name="engines"]').forEach(function(cb) { cb.checked = false; });
+            document.querySelectorAll('.tier-toggle input').forEach(function(cb) { cb.checked = false; });
+        };
+
+        window.exportHistory = function() {
+            var history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            downloadJSON(history, 'vidveil-history.json');
+            showToastLocal('History exported', 'success');
+        };
+
+        window.importHistory = function(file) {
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var data = JSON.parse(e.target.result);
+                    if (Array.isArray(data)) {
+                        localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
+                        showToastLocal('History imported (' + data.length + ' items)', 'success');
+                    } else {
+                        showToastLocal('Invalid history file', 'error');
+                    }
+                } catch (err) {
+                    showToastLocal('Failed to parse file', 'error');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        window.clearHistory = function() {
+            showConfirm('Clear all search history?', function () {
+                localStorage.removeItem(HISTORY_KEY);
+                showToastLocal('History cleared', 'info');
+            });
+        };
+
+        window.exportFavorites = function() {
+            var favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+            downloadJSON(favorites, 'vidveil-favorites.json');
+            showToastLocal(i18n.favExported, 'success');
+        };
+
+        window.importFavorites = function(file) {
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var data = JSON.parse(e.target.result);
+                    if (Array.isArray(data)) {
+                        var existing = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+                        var merged = data.slice();
+                        existing.forEach(function(fav) {
+                            if (!merged.some(function(f) { return f.url === fav.url; })) {
+                                merged.push(fav);
+                            }
+                        });
+                        localStorage.setItem(FAVORITES_KEY, JSON.stringify(merged));
+                        updateFavoritesCount();
+                        showToastLocal('Favorites imported (' + data.length + ' items)', 'success');
+                    } else {
+                        showToastLocal(i18n.favInvalidFile, 'error');
+                    }
+                } catch (err) {
+                    showToastLocal('Failed to parse file', 'error');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        window.clearFavorites = function() {
+            showConfirm(i18n.favConfirmClear, function () {
+                localStorage.removeItem(FAVORITES_KEY);
+                updateFavoritesCount();
+                showToastLocal(i18n.favCleared, 'info');
+            });
+        };
+
+        function downloadJSON(data, filename) {
+            var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('theme').addEventListener('change', function() {
+            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
+            document.documentElement.classList.add('theme-' + this.value);
+        });
+
+        function initEngineTiers() {
+            var container = document.getElementById('engine-tiers');
+            var engines = container.querySelectorAll('.engine-toggle[data-tier]');
+
+            var tiers = {};
+            var tierNames = {
+                1: i18n.tier1,
+                2: i18n.tier2,
+                3: i18n.tier3,
+                4: i18n.tier4,
+                5: i18n.tier5,
+                6: i18n.tier6
+            };
+
+            engines.forEach(function(eng) {
+                var tier = eng.dataset.tier;
+                if (!tiers[tier]) tiers[tier] = [];
+                tiers[tier].push(eng);
+            });
+
+            container.innerHTML = '';
+
+            var sortedTiers = Object.keys(tiers).sort(function(a, b) { return parseInt(a) - parseInt(b); });
+
+            sortedTiers.forEach(function(tier) {
+                var tierEngines = tiers[tier];
+                var tierName = tierNames[tier] || 'Tier ' + tier;
+
+                var group = document.createElement('div');
+                group.className = 'tier-group';
+                group.dataset.tier = tier;
+
+                var header = document.createElement('div');
+                header.className = 'tier-header';
+                header.innerHTML =
+                    '<label class="toggle tier-toggle">' +
+                        '<input type="checkbox" data-tier="' + tier + '" checked>' +
+                        '<span class="slider"></span>' +
+                        '<span class="toggle-label">' + tierName + ' (' + tierEngines.length + ' ' + (i18n.tierEngines || 'engines') + ')</span>' +
+                    '</label>' +
+                    '<button type="button" class="tier-expand" aria-expanded="false" aria-label="' + (i18n.expandTier || 'Expand tier') + '">' +
+                        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                            '<polyline points="6 9 12 15 18 9"></polyline>' +
+                        '</svg>' +
+                    '</button>';
+                group.appendChild(header);
+
+                var list = document.createElement('div');
+                list.className = 'tier-engines collapsed';
+                tierEngines.forEach(function(eng) {
+                    eng.hidden = false;
+                    list.appendChild(eng);
+                });
+                group.appendChild(list);
+
+                container.appendChild(group);
+
+                var tierToggle = header.querySelector('input[data-tier]');
+                tierToggle.addEventListener('change', function() {
+                    var checked = this.checked;
+                    tierEngines.forEach(function(eng) {
+                        eng.querySelector('input').checked = checked;
+                    });
+                });
+
+                tierEngines.forEach(function(eng) {
+                    eng.querySelector('input').addEventListener('change', function() {
+                        var allChecked = tierEngines.every(function(en) { return en.querySelector('input').checked; });
+                        var someChecked = tierEngines.some(function(en) { return en.querySelector('input').checked; });
+                        tierToggle.checked = allChecked;
+                        tierToggle.indeterminate = someChecked && !allChecked;
+                    });
+                });
+
+                var expandBtn = header.querySelector('.tier-expand');
+                expandBtn.addEventListener('click', function() {
+                    var expanded = list.classList.toggle('collapsed');
+                    this.setAttribute('aria-expanded', !expanded);
+                });
+            });
+        }
+
+        initEngineTiers();
+
+        form.addEventListener('submit', savePreferences);
+        form.dataset.managed = 'true';
+        loadPreferences();
     });
 })();

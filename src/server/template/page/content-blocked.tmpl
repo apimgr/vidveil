@@ -20,7 +20,7 @@
             <p>{{.Message}}</p>
             <p>Access to this service is not available from your current location due to regional restrictions or legal requirements.</p>
             <div class="age-buttons">
-                <button class="btn-no" onclick="window.location.href='https://www.google.com'">Leave Site</button>
+                <button type="button" class="btn-no" data-action="leave-site">Leave Site</button>
             </div>
             <p class="legal">
                 If you believe this is an error, you may be using a VPN or proxy that shows an incorrect location.
@@ -28,6 +28,7 @@
             </p>
         </div>
     </div>
+    {{template "public/scripts" .}}
 </body>
 </html>
 {{end}}

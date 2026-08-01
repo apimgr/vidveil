@@ -10,7 +10,7 @@
     <main class="results" id="main-content" role="main" aria-label="{{ t "a11y.search_results" }}">
         {{/* Search header with inline search and collapsible filters */}}
         <div class="search-header" id="search-header">
-            <form action="/search" method="get" class="search-form search-form--inline" role="search" aria-label="{{ t "a11y.refine_search" }}" onsubmit="return handleSearchSubmit(this)">
+            <form action="/search" method="get" class="search-form search-form--inline" role="search" aria-label="{{ t "a11y.refine_search" }}" data-action="search-submit">
                 <div class="search-wrapper search-wrapper--compact">
                     <input type="text"
                            id="results-search-input"

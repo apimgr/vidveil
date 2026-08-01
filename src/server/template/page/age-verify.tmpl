@@ -22,13 +22,14 @@
                     {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
                     <button type="submit" class="btn-yes">I am 18+</button>
                 </form>
-                <button class="btn-no" onclick="window.location.href='https://www.google.com'">Exit</button>
+                <button type="button" class="btn-no" data-action="leave-site">Exit</button>
             </div>
             <p class="legal">
                 By entering, you agree to our Terms of Service and confirm you are of legal age to view adult content in your country/region.
             </p>
         </div>
     </div>
+    {{template "public/scripts" .}}
 </body>
 </html>
 {{end}}

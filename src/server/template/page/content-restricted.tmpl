@@ -30,7 +30,7 @@
                     {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
                     <button type="submit" class="btn-yes">I Understand &amp; Proceed</button>
                 </form>
-                <button class="btn-no" onclick="window.location.href='https://www.google.com'">Exit</button>
+                <button type="button" class="btn-no" data-action="leave-site">Exit</button>
             </div>
             <p class="legal">
                 This notice is provided for informational purposes. VidVeil does not provide legal advice.
@@ -38,6 +38,7 @@
             </p>
         </div>
     </div>
+    {{template "public/scripts" .}}
 </body>
 </html>
 {{end}}

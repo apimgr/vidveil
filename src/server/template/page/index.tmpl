@@ -13,7 +13,7 @@
             <p class="tagline">{{.Description}}</p>
 
             {{/* Large search form - consistent with nav search styling */}}
-            <form action="/search" method="get" class="search-form search-form--large" role="search" aria-label="{{ t "a11y.video_search" }}" onsubmit="return handleSearchSubmit(this)">
+            <form action="/search" method="get" class="search-form search-form--large" role="search" aria-label="{{ t "a11y.video_search" }}" data-action="search-submit">
                 <label for="search-input" class="visually-hidden">{{ t "a11y.search_query" }}</label>
                 <div class="search-wrapper">
                     <input type="text"

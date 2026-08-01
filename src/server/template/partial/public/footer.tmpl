@@ -45,58 +45,10 @@
             <a href="/server/privacy" class="policy-link">Privacy Policy</a>
         </span>
         <div class="cookie-buttons">
-            <button class="btn-decline" onclick="declineCookies()">Decline</button>
-            <button class="btn-accept" onclick="acceptCookies()">Accept</button>
+            <button type="button" class="btn-decline" data-action="decline-cookies">Decline</button>
+            <button type="button" class="btn-accept" data-action="accept-cookies">Accept</button>
         </div>
     </div>
 </div>
-<script>
-// Cookie Consent per AI.md PART 12
-// cookieConsent is a COOKIE (not localStorage) — server reads it per request
-// to skip the banner and suppress non-essential tracking. localStorage is NOT used.
-(function() {
-    var match = document.cookie.match(/(?:^|;\s*)cookieConsent=([^;]*)/);
-    var banner = document.getElementById('cookie-consent');
-    if (!match) {
-        if (banner) banner.hidden = false;
-        return;
-    }
-    try {
-        var consent = JSON.parse(decodeURIComponent(match[1]));
-        applyConsent(consent);
-    } catch (e) {
-        // Corrupt cookie — expire it and show the banner
-        document.cookie = 'cookieConsent=; path=/; max-age=0; SameSite=Lax';
-        if (banner) banner.hidden = false;
-    }
-})();
-
-function acceptCookies() {
-    var consent = { essential: true, preferences: true, analytics: false, timestamp: Date.now() };
-    saveAndApplyConsent(consent);
-}
-
-function declineCookies() {
-    var consent = { essential: true, preferences: false, analytics: false, timestamp: Date.now() };
-    saveAndApplyConsent(consent);
-}
-
-function saveAndApplyConsent(consent) {
-    // Store as cookie — server reads it per request (AI.md PART 12)
-    document.cookie = 'cookieConsent=' + encodeURIComponent(JSON.stringify(consent)) +
-        '; path=/; max-age=31536000; SameSite=Lax';
-    var banner = document.getElementById('cookie-consent');
-    if (banner) banner.hidden = true;
-    applyConsent(consent);
-}
-
-function applyConsent(consent) {
-    // cookieConsent JSON carries all categories; no separate preferencesEnabled cookie needed
-    if (!consent.preferences) {
-        // Expire preference cookies when user declines
-        document.cookie = 'theme=; path=/; max-age=0; SameSite=Lax';
-        document.cookie = 'lang=; path=/; max-age=0; SameSite=Lax';
-    }
-}
-</script>
+{{/* Cookie consent logic lives in static/js/app.js (CSP: script-src 'self') */}}
 {{end}}

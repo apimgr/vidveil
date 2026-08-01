@@ -169,11 +169,17 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, sessionID string) *model.SearchResponse {
 	startTime := time.Now()
 
+	// Capture the engine set under a brief read lock, then release it before any
+	// network I/O. Holding m.mu across the fan-out would keep the manager lock
+	// held for the entire (up to per-engine-timeout) search duration, starving
+	// any writer (engine registration / config update) — the exact "a slow
+	// engine stalls everything" problem. getEnginesToUse only reads the engines
+	// map; the returned slice holds engine references that are safe to use
+	// without the lock. m.appConfig is immutable after construction and
+	// m.sessionDedup is independently synchronized, so neither needs m.mu below.
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	// Determine which engines to use
 	enginesToUse := m.getEnginesToUse(engineNames)
+	m.mu.RUnlock()
 
 	// Search in parallel
 	var wg sync.WaitGroup
@@ -192,8 +198,14 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 					}
 				}
 			}()
+			// Per-engine timeout context so one slow engine cannot exceed its own
+			// budget (Search.EngineTimeouts override or the global
+			// Search.EngineTimeout), keeping the fan-out resilient per AI.md's
+			// graceful-degradation-across-engines principle.
+			engCtx, cancel := context.WithTimeout(ctx, m.engineTimeout(e.Name()))
+			defer cancel()
 			engineStart := time.Now()
-			results, err := e.Search(ctx, query, page)
+			results, err := e.Search(engCtx, query, page)
 			resultsChan <- engineResult{
 				engine:         e.Name(),
 				results:        results,
@@ -227,7 +239,29 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 	}
 	queryIntent := DetectQueryIntent(query)
 
-	for result := range resultsChan {
+	// Collect with a batch deadline so a hung engine (one ignoring context
+	// cancellation) can never block the response: we return whatever arrived by
+	// the deadline. reported tracks which engines answered so the rest can be
+	// marked as timed-out failures afterward.
+	reported := make(map[string]bool, len(enginesToUse))
+	deadline := time.NewTimer(m.batchDeadline(enginesToUse))
+	defer deadline.Stop()
+
+collect:
+	for {
+		var result engineResult
+		select {
+		case r, ok := <-resultsChan:
+			if !ok {
+				break collect
+			}
+			result = r
+		case <-deadline.C:
+			break collect
+		case <-ctx.Done():
+			break collect
+		}
+		reported[result.engine] = true
 		if result.err != nil {
 			enginesFailed = append(enginesFailed, result.engine)
 			engineStats[result.engine] = model.EngineStatInfo{
@@ -296,6 +330,17 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 				ResponseTimeMS: result.responseTimeMS,
 				ResultCount:    resultCount,
 			}
+		}
+	}
+
+	// Any selected engine that never reported (hung past the batch deadline or
+	// the request was cancelled) is recorded as a timed-out failure so the
+	// response honestly reflects degraded coverage instead of silently omitting
+	// it — one slow engine degrades gracefully rather than stalling the batch.
+	for _, e := range enginesToUse {
+		if !reported[e.Name()] {
+			enginesFailed = append(enginesFailed, e.Name())
+			engineStats[e.Name()] = model.EngineStatInfo{Error: "timeout"}
 		}
 	}
 
@@ -607,6 +652,43 @@ func meetsMinQuality(resultQuality string, minQuality int) bool {
 }
 
 // getEnginesToUse returns the engines to use for search
+// engineTimeout returns the per-engine search timeout for the named engine,
+// honoring Search.EngineTimeouts overrides and falling back to the global
+// Search.EngineTimeout (default 15s). Used to bound each engine's context so a
+// single slow engine cannot exceed its own budget.
+func (m *EngineManager) engineTimeout(name string) time.Duration {
+	secs := 15
+	if m.appConfig != nil {
+		if m.appConfig.Search.EngineTimeout > 0 {
+			secs = m.appConfig.Search.EngineTimeout
+		}
+		if m.appConfig.Search.EngineTimeouts != nil {
+			if override, ok := m.appConfig.Search.EngineTimeouts[name]; ok && override > 0 {
+				secs = override
+			}
+		}
+	}
+	return time.Duration(secs) * time.Second
+}
+
+// batchDeadline returns how long the collector waits for the whole fan-out
+// before returning with whatever has arrived. It is the largest per-engine
+// timeout among the selected engines plus a small grace, so one hung engine
+// (e.g. one that ignores context cancellation) can never block the response
+// beyond the slowest engine's own budget.
+func (m *EngineManager) batchDeadline(engines []SearchEngine) time.Duration {
+	longest := time.Duration(0)
+	for _, e := range engines {
+		if t := m.engineTimeout(e.Name()); t > longest {
+			longest = t
+		}
+	}
+	if longest == 0 {
+		longest = 15 * time.Second
+	}
+	return longest + 2*time.Second
+}
+
 func (m *EngineManager) getEnginesToUse(engineNames []string) []SearchEngine {
 	var engines []SearchEngine
 

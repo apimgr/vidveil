@@ -10,6 +10,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -85,232 +86,112 @@ func parseUpdateArgs(rest []string) (cmd, arg string, consumed int) {
 	return cmd, arg, consumed
 }
 
+// valueFlags lists the server flags that consume the following token as their
+// value. The sub-command splitter skips that token so a value that happens to
+// match a verb (e.g. "--data tor") is not mistaken for a sub-command.
+var valueFlags = map[string]bool{
+	"--config": true, "-config": true,
+	"--data": true, "-data": true,
+	"--cache": true, "-cache": true,
+	"--log": true, "-log": true,
+	"--backup": true, "-backup": true,
+	"--pid": true, "-pid": true,
+	"--address": true, "-address": true,
+	"--port": true, "-port": true,
+	"--baseurl": true, "-baseurl": true,
+	"--mode": true, "-mode": true,
+	"--color": true, "-color": true,
+	"--lang": true, "-lang": true,
+}
+
+// isSubcommandVerb reports whether tok begins a sub-command whose remaining
+// operands are handled by a dedicated handler rather than the server flag set.
+func isSubcommandVerb(tok string) bool {
+	switch tok {
+	case "tor", "--status", "--service", "--maintenance", "--update", "--shell":
+		return true
+	}
+	return false
+}
+
+// splitSubcommand separates the leading server flags from a trailing
+// sub-command (verb plus its operands) per AI.md PART 8. It returns the flag
+// args for flag.FlagSet and the sub-command args (nil when there is none). A
+// value-consuming flag's operand is skipped so it is never read as a verb.
+func splitSubcommand(args []string) (global, sub []string) {
+	for i := 0; i < len(args); i++ {
+		tok := args[i]
+		if isSubcommandVerb(tok) {
+			return args[:i], args[i:]
+		}
+		if valueFlags[tok] {
+			i++
+		}
+	}
+	return args, nil
+}
+
 func main() {
 	startTime := time.Now()
-	args := os.Args[1:]
+	rawArgs := os.Args[1:]
 
-	// Parse arguments manually per AI.md spec
-	var (
-		configDir string
-		dataDir   string
-		cacheDir  string
-		logDir    string
-		backupDir string
-		pidFile   string
-		address   string
-		port      string
-		// Per AI.md PART 8: --baseurl PATH (URL path prefix, default "/")
-		baseURL string
-		modeStr string
-		debug   bool
-		daemon  bool
-		// Per AI.md PART 8: --color flag (auto, yes, no)
-		colorFlag string
-		// Per AI.md PART 8: --lang CODE (output language, default "auto")
-		langFlag   string
-		serviceCmd string
-		maintCmd   string
-		maintArg   string
-		updateCmd  string
-		updateArg  string
-		// Per AI.md PART 31: tor subcommand args (status, validate, restart, ...)
-		torArgs []string
-		torCmd  bool
-	)
+	// Per AI.md PART 8: the server binary parses its primary flag set with the
+	// stdlib flag package (no hand-rolled switch/os.Args loop). A thin
+	// pre-dispatch splits off the sub-command verbs whose trailing operands the
+	// flag package cannot model (a bare positional verb like "tor", optional
+	// values, and multi-token operands); everything before the verb is the
+	// server's own flag set.
+	globalArgs, sub := splitSubcommand(rawArgs)
 
-	i := 0
-	for i < len(args) {
-		arg := args[i]
+	fs := flag.NewFlagSet(filepath.Base(os.Args[0]), flag.ExitOnError)
+	configDirF := fs.String("config", "", "Configuration directory")
+	dataDirF := fs.String("data", "", "Data directory")
+	cacheDirF := fs.String("cache", "", "Cache directory")
+	logDirF := fs.String("log", "", "Log directory")
+	backupDirF := fs.String("backup", "", "Backup directory")
+	pidFileF := fs.String("pid", "", "PID file path")
+	addressF := fs.String("address", "", "Listen address")
+	portF := fs.String("port", "", "Listen port")
+	// Per AI.md PART 8: --baseurl PATH (URL path prefix, default "/").
+	baseURLF := fs.String("baseurl", "", "URL path prefix (default \"/\")")
+	modeF := fs.String("mode", "", "Application mode")
+	// Per AI.md PART 8: --color {auto|yes|no}.
+	colorF := fs.String("color", "", "Color output: auto, yes, no")
+	// Per AI.md PART 8: --lang CODE (output language, default auto).
+	langF := fs.String("lang", "", "Output language (default auto)")
+	debugF := fs.Bool("debug", false, "Enable debug logging")
+	daemonF := fs.Bool("daemon", false, "Run as background daemon")
+	versionF := fs.Bool("version", false, "Show version and exit")
+	helpF := fs.Bool("help", false, "Show help and exit")
+	fs.BoolVar(versionF, "v", false, "Show version and exit (alias)")
+	fs.BoolVar(helpF, "h", false, "Show help and exit (alias)")
 
-		switch arg {
-		case "--help", "-h":
-			printHelp()
-			os.Exit(0)
+	fs.Usage = printHelp
+	_ = fs.Parse(globalArgs)
 
-		case "--version", "-v":
-			printVersion()
-			os.Exit(0)
-
-		case "--shell":
-			// Per AI.md PART 8: --shell completions [SHELL] or --shell init [SHELL]
-			if i+1 < len(args) {
-				i++
-				subCmd := args[i]
-				var shell string
-				if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-					i++
-					shell = args[i]
-				}
-				handleShellCommand(subCmd, shell)
-				os.Exit(0)
-			} else {
-				fmt.Fprintln(os.Stderr, "Usage: --shell [completions|init] [SHELL]")
-				os.Exit(1)
-			}
-
-		case "--status":
-			os.Exit(checkStatus())
-
-		case "--config":
-			if i+1 < len(args) {
-				i++
-				configDir = args[i]
-			}
-
-		case "--data":
-			if i+1 < len(args) {
-				i++
-				dataDir = args[i]
-			}
-
-		case "--cache":
-			if i+1 < len(args) {
-				i++
-				cacheDir = args[i]
-			}
-
-		case "--log":
-			if i+1 < len(args) {
-				i++
-				logDir = args[i]
-			}
-
-		case "--backup":
-			if i+1 < len(args) {
-				i++
-				backupDir = args[i]
-			}
-
-		case "--pid":
-			if i+1 < len(args) {
-				i++
-				pidFile = args[i]
-			}
-
-		case "--daemon":
-			daemon = true
-
-		case "--address":
-			if i+1 < len(args) {
-				i++
-				address = args[i]
-			}
-
-		case "--port":
-			if i+1 < len(args) {
-				i++
-				port = args[i]
-			}
-
-		case "--baseurl":
-			// Per AI.md PART 8: URL path prefix, default "/"
-			if i+1 < len(args) {
-				i++
-				baseURL = args[i]
-			}
-
-		case "--lang":
-			// Per AI.md PART 8: language for output, default "auto" (from LANG env)
-			if i+1 < len(args) {
-				i++
-				langFlag = args[i]
-			}
-
-		case "--mode":
-			if i+1 < len(args) {
-				i++
-				modeStr = args[i]
-			}
-
-		case "--debug":
-			debug = true
-
-		case "--color":
-			// Per AI.md PART 8: --color {auto|yes|no}
-			if i+1 < len(args) {
-				i++
-				colorFlag = args[i]
-			}
-
-		case "--service":
-			if i+1 < len(args) {
-				i++
-				serviceCmd = args[i]
-			}
-
-		case "--update":
-			// AI.md PART 22: --update [check|yes|branch {stable|beta|daily}]
-			var consumed int
-			updateCmd, updateArg, consumed = parseUpdateArgs(args[i+1:])
-			i += consumed
-
-		case "tor":
-			// Per AI.md PART 31: tor {status|validate|restart|regenerate|vanity|import-keys}
-			// All remaining args belong to the tor command
-			torCmd = true
-			torArgs = args[i+1:]
-			i = len(args)
-			continue
-
-		case "--maintenance":
-			if i+1 < len(args) {
-				i++
-				maintCmd = args[i]
-				// Per AI.md PART 22: "--maintenance update [cmd]" is an alias for
-				// "--update [cmd]" - it accepts the same subcommands (check, yes,
-				// branch {name}) and the same default (yes). Parse it exactly like
-				// --update so the subcommand and branch name are not lost.
-				if maintCmd == "update" {
-					maintCmd = ""
-					var consumed int
-					updateCmd, updateArg, consumed = parseUpdateArgs(args[i+1:])
-					i += consumed
-					break
-				}
-				// Parse remaining args for maintenance command
-				// Per AI.md PART 21: no --password flag - password is always
-				// prompted for interactively (shell history/process list leakage)
-				for i+1 < len(args) {
-					nextArg := args[i+1]
-					if !strings.HasPrefix(nextArg, "--") && maintArg == "" {
-						i++
-						maintArg = args[i]
-					} else {
-						break
-					}
-				}
-			}
-
-		default:
-			// Check for --flag=value format
-			if strings.HasPrefix(arg, "--config=") {
-				configDir = strings.TrimPrefix(arg, "--config=")
-			} else if strings.HasPrefix(arg, "--data=") {
-				dataDir = strings.TrimPrefix(arg, "--data=")
-			} else if strings.HasPrefix(arg, "--cache=") {
-				cacheDir = strings.TrimPrefix(arg, "--cache=")
-			} else if strings.HasPrefix(arg, "--log=") {
-				logDir = strings.TrimPrefix(arg, "--log=")
-			} else if strings.HasPrefix(arg, "--backup=") {
-				backupDir = strings.TrimPrefix(arg, "--backup=")
-			} else if strings.HasPrefix(arg, "--pid=") {
-				pidFile = strings.TrimPrefix(arg, "--pid=")
-			} else if strings.HasPrefix(arg, "--address=") {
-				address = strings.TrimPrefix(arg, "--address=")
-			} else if strings.HasPrefix(arg, "--port=") {
-				port = strings.TrimPrefix(arg, "--port=")
-			} else if strings.HasPrefix(arg, "--baseurl=") {
-				baseURL = strings.TrimPrefix(arg, "--baseurl=")
-			} else if strings.HasPrefix(arg, "--mode=") {
-				modeStr = strings.TrimPrefix(arg, "--mode=")
-			} else if strings.HasPrefix(arg, "--color=") {
-				colorFlag = strings.TrimPrefix(arg, "--color=")
-			} else if strings.HasPrefix(arg, "--lang=") {
-				langFlag = strings.TrimPrefix(arg, "--lang=")
-			}
-		}
-		i++
+	if *helpF {
+		printHelp()
+		os.Exit(0)
 	}
+	if *versionF {
+		printVersion()
+		os.Exit(0)
+	}
+
+	configDir := *configDirF
+	dataDir := *dataDirF
+	cacheDir := *cacheDirF
+	logDir := *logDirF
+	backupDir := *backupDirF
+	pidFile := *pidFileF
+	address := *addressF
+	port := *portF
+	baseURL := *baseURLF
+	modeStr := *modeF
+	colorFlag := *colorF
+	langFlag := *langF
+	debug := *debugF
+	daemon := *daemonF
 
 	// Per AI.md PART 8: Initialize color mode early (before any output)
 	// Priority: CLI flag > config > NO_COLOR env > auto-detect
@@ -391,26 +272,66 @@ func main() {
 	setPathEnv("BASEURL", baseURL)
 	setPathEnv("LANG", langFlag)
 
-	// Per AI.md PART 31: tor CLI commands
-	if torCmd {
-		os.Exit(handleTorCommand(torArgs, configDir, dataDir))
-	}
+	// Per AI.md PARTS 8/22/31: sub-command dispatch. Each verb runs its handler
+	// and exits; only a bare server invocation falls through to start the server.
+	if len(sub) > 0 {
+		rest := sub[1:]
+		switch sub[0] {
+		case "--status":
+			os.Exit(checkStatus())
 
-	if serviceCmd != "" {
-		handleServiceCommand(serviceCmd, configDir, dataDir)
-		return
-	}
+		case "--shell":
+			// Per AI.md PART 8: --shell completions [SHELL] | --shell init [SHELL].
+			if len(rest) == 0 {
+				fmt.Fprintln(os.Stderr, "Usage: --shell [completions|init] [SHELL]")
+				os.Exit(1)
+			}
+			shell := ""
+			if len(rest) > 1 && !strings.HasPrefix(rest[1], "-") {
+				shell = rest[1]
+			}
+			handleShellCommand(rest[0], shell)
+			os.Exit(0)
 
-	// Handle update command (AI.md PART 23)
-	if updateCmd != "" {
-		handleUpdateCommand(updateCmd, updateArg)
-		return
-	}
+		case "tor":
+			// Per AI.md PART 31: tor {status|validate|restart|regenerate|vanity|import-keys}.
+			os.Exit(handleTorCommand(rest, configDir, dataDir))
 
-	// Handle maintenance command
-	if maintCmd != "" {
-		handleMaintenanceCommand(maintCmd, maintArg, configDir, dataDir)
-		return
+		case "--service":
+			if len(rest) == 0 {
+				fmt.Fprintln(os.Stderr, "Usage: --service [install|uninstall|start|stop|restart|status|enable|disable]")
+				os.Exit(1)
+			}
+			handleServiceCommand(rest[0], configDir, dataDir)
+			return
+
+		case "--update":
+			// AI.md PART 22: --update [check|yes|branch {stable|beta|daily}].
+			uCmd, uArg, _ := parseUpdateArgs(rest)
+			handleUpdateCommand(uCmd, uArg)
+			return
+
+		case "--maintenance":
+			// A bare --maintenance with no sub-command falls through to a normal
+			// server start (matches the prior parser).
+			if len(rest) > 0 {
+				// Per AI.md PART 22: "--maintenance update [cmd]" is an alias for
+				// "--update [cmd]".
+				if rest[0] == "update" {
+					uCmd, uArg, _ := parseUpdateArgs(rest[1:])
+					handleUpdateCommand(uCmd, uArg)
+					return
+				}
+				// Per AI.md PART 21: no --password flag; the password is prompted
+				// interactively, so only a non-flag operand is taken here.
+				maintArg := ""
+				if len(rest) > 1 && !strings.HasPrefix(rest[1], "--") {
+					maintArg = rest[1]
+				}
+				handleMaintenanceCommand(rest[0], maintArg, configDir, dataDir)
+				return
+			}
+		}
 	}
 
 	// Initialize mode and debug per AI.md PART 6

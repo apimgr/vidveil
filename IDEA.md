@@ -42,7 +42,7 @@ coverage_minimum:  60
 
 **Non-goals:**
 - VidVeil has NO user accounts - privacy-first, stateless design.
-- No caching of search results - all searches are real-time. Thumbnail proxy may cache images temporarily to reduce repeated fetches.
+- Search results use a short-lived API-response cache (configurable memory/valkey/redis driver, 30s TTL) per AI.md PART 12; bypass per-request with `?nocache=1`. Thumbnail proxy may cache images temporarily to reduce repeated fetches.
 - No admin web UI. All server configuration is file-only via `server.yml` (per AI.md PART 5).
 - Engine availability is best-effort - some sites may block or rate limit, and the app does not guarantee any specific engine remains reachable.
 
@@ -477,8 +477,8 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 
 - 42 video sites via HTML parsing.
 - Engine definitions embedded at build time (`src/server/engine/engines.go`).
-- Search results fetched in real-time.
-- No local storage of search results (stateless).
+- Search results fetched in real-time, then held in a short-lived API-response cache (30s TTL, per AI.md PART 12).
+- No durable/persistent storage of search results (stateless; the cache is ephemeral and process-local by default).
 - Thumbnails proxied through server on-demand (proxy may cache temporarily to reduce repeated fetches).
 - Engine definitions updated at build time.
 

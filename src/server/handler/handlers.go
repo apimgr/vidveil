@@ -38,6 +38,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
@@ -300,16 +301,17 @@ func getClientIP(r *http.Request) string {
 
 // SearchHandler holds dependencies for HTTP handlers
 type SearchHandler struct {
-	appConfig  *config.AppConfig
-	dataDir    string
-	configDir  string
-	engineMgr  *engine.EngineManager
-	metrics    *ServerMetrics
-	torSvc     TorStatusChecker
-	geoipSvc   GeoIPChecker
-	secretsMgr *secrets.Manager
-	healthDB   *sql.DB
-	sched      SchedulerHealth
+	appConfig   *config.AppConfig
+	dataDir     string
+	configDir   string
+	engineMgr   *engine.EngineManager
+	searchCache cache.SearchResultCache
+	metrics     *ServerMetrics
+	torSvc      TorStatusChecker
+	geoipSvc    GeoIPChecker
+	secretsMgr  *secrets.Manager
+	healthDB    *sql.DB
+	sched       SchedulerHealth
 }
 
 // SchedulerHealth is the minimal scheduler interface the /server/healthz check
@@ -334,9 +336,46 @@ func NewSearchHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManag
 	}
 
 	return &SearchHandler{
-		appConfig: appConfig,
-		engineMgr: engineMgr,
+		appConfig:   appConfig,
+		engineMgr:   engineMgr,
+		searchCache: newSearchResultCache(appConfig.Server.Cache),
 	}
+}
+
+// newSearchResultCache builds the configurable API-response (search) cache per
+// AI.md PART 12 from the server cache config, selecting the memory/valkey/redis
+// driver. On any backend error it falls back to the in-process memory cache so
+// search never hard-fails on a missing external cache.
+func newSearchResultCache(cc config.CacheConfig) cache.SearchResultCache {
+	if cc.Type == "none" {
+		return nil
+	}
+	// Per AI.md PART 12 the url takes precedence; only synthesize an addr from
+	// host/port when no url is supplied.
+	var addr string
+	if cc.URL == "" && cc.Host != "" {
+		addr = net.JoinHostPort(cc.Host, strconv.Itoa(cc.Port))
+	}
+	cfg := cache.CacheConfig{
+		Type:          cache.CacheType(cc.Type),
+		TTL:           cc.TTL,
+		URL:           cc.URL,
+		Addr:          addr,
+		Username:      cc.Username,
+		Password:      cc.Password,
+		DB:            cc.DB,
+		Prefix:        cc.Prefix,
+		TLS:           cc.TLS,
+		TLSSkipVerify: cc.TLSSkipVerify,
+		PoolSize:      cc.PoolSize,
+		MinIdle:       cc.MinIdle,
+	}
+	c, err := cache.NewSearchResultCache(cfg)
+	if err != nil {
+		log.Printf("cache: %s backend unavailable (%v); using in-process memory cache", cc.Type, err)
+		return cache.NewSearchCache(time.Duration(cc.TTL)*time.Second, 1000)
+	}
+	return c
 }
 
 // SetDataDir sets the data directory (used for thumbnail disk cache)
@@ -2282,50 +2321,66 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Searches are always real-time. The project non-goal forbids caching
-	// search results ("No caching of search results - all searches are
-	// real-time"), so every request queries the engines directly.
-	ctx := r.Context()
-	// Add user IP to context if user has opted-in for geo-targeted content
-	if forwardIP, userIP := h.getUserIPForwardPreference(r); forwardIP {
-		ctx = engine.WithUserIP(ctx, userIP, true)
-	}
-	// Add user's Tor network preference to context per PART 31
-	// Cookie "vidveil-use-tor": "1" = always use Tor, "0" = never use Tor, absent = inherit server
-	if cookie, err := r.Cookie("vidveil-use-tor"); err == nil {
-		switch cookie.Value {
-		case "1", "true":
-			useTor := true
-			ctx = engine.WithTorPref(ctx, &useTor)
-		case "0", "false":
-			useTor := false
-			ctx = engine.WithTorPref(ctx, &useTor)
-		}
-	}
-	results := h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, sessionID)
-	results.Data.Cached = false
-	if h.metrics != nil {
-		h.metrics.IncrementSearches()
-	}
-
-	// Build a stable identity string for the HTTP ETag (client-side
-	// conditional requests via If-None-Match — this is response revalidation,
-	// not a server-side result cache). It captures the query, page, engines,
-	// and the result-shaping operators so distinct filtered result sets get
-	// distinct ETags.
-	etagBasis := searchQuery + "|" + strconv.Itoa(page) + "|" + strings.Join(engineNames, ",")
+	// API response cache per AI.md PART 12 (30s TTL, configurable
+	// memory/valkey/redis driver). The cache key captures the query, page,
+	// engines and the result-shaping operators so distinct filtered result
+	// sets never collide; ?nocache=1 bypasses the cache.
+	skipCache := r.URL.Query().Get("nocache") == "1"
+	cacheKey := cache.CacheKey(searchQuery, page, engineNames)
 	if len(parsed.Exclusions) > 0 {
 		sortedExclusions := append([]string(nil), parsed.Exclusions...)
 		sort.Strings(sortedExclusions)
-		etagBasis += "|x:" + strings.Join(sortedExclusions, ",")
+		cacheKey += "|x:" + strings.Join(sortedExclusions, ",")
 	}
 	if len(parsed.ExactPhrases) > 0 {
 		sortedPhrases := append([]string(nil), parsed.ExactPhrases...)
 		sort.Strings(sortedPhrases)
-		etagBasis += "|p:" + strings.Join(sortedPhrases, "\x1f")
+		cacheKey += "|p:" + strings.Join(sortedPhrases, "\x1f")
 	}
 	if sessionID != "" {
-		etagBasis += "|s:" + sessionID
+		// Session-scoped dedup filtering yields different results per session
+		// for the same query/page/engines, so keep each session's entry
+		// separate to avoid serving another session's dedup-filtered results.
+		cacheKey += "|s:" + sessionID
+	}
+
+	var results *model.SearchResponse
+	if !skipCache && h.searchCache != nil {
+		if cached, ok := h.searchCache.Get(cacheKey); ok {
+			results = cached
+			results.Data.Cached = true
+			if h.metrics != nil {
+				h.metrics.IncrementCacheHits()
+			}
+		}
+	}
+
+	if results == nil {
+		ctx := r.Context()
+		// Add user IP to context if user has opted-in for geo-targeted content
+		if forwardIP, userIP := h.getUserIPForwardPreference(r); forwardIP {
+			ctx = engine.WithUserIP(ctx, userIP, true)
+		}
+		// Add user's Tor network preference to context per PART 31
+		// Cookie "vidveil-use-tor": "1" = always use Tor, "0" = never use Tor, absent = inherit server
+		if cookie, err := r.Cookie("vidveil-use-tor"); err == nil {
+			switch cookie.Value {
+			case "1", "true":
+				useTor := true
+				ctx = engine.WithTorPref(ctx, &useTor)
+			case "0", "false":
+				useTor := false
+				ctx = engine.WithTorPref(ctx, &useTor)
+			}
+		}
+		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, sessionID)
+		results.Data.Cached = false
+		if h.searchCache != nil {
+			h.searchCache.Set(cacheKey, results)
+		}
+		if h.metrics != nil {
+			h.metrics.IncrementSearches()
+		}
 	}
 
 	// Add bang info to response
@@ -2339,9 +2394,9 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	// Add related searches
 	results.Data.RelatedSearches = h.engineMgr.GetValidatedRelatedSearches(searchQuery, 8)
 
-	// ETag: SHA-256 of the request identity + result count for conditional GETs
+	// ETag: SHA-256 of the cache key + result count for conditional GETs
 	etag := `"` + func() string {
-		h256 := sha256.Sum256([]byte(etagBasis + strconv.Itoa(len(results.Data.Results))))
+		h256 := sha256.Sum256([]byte(cacheKey + strconv.Itoa(len(results.Data.Results))))
 		return hex.EncodeToString(h256[:16])
 	}() + `"`
 	// Vary: Accept tells caches that response varies by content negotiation

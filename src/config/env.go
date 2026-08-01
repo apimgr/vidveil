@@ -22,6 +22,30 @@ var envPrefix = strings.ToUpper(path.ProjectName) + "_"
 // The full name wins when both are set. Invalid values warn and are ignored per AI.md PART 12.
 func applyEnvOverrides(cfg *AppConfig) {
 	applyEnvToStruct(reflect.ValueOf(cfg).Elem(), nil)
+	applyBareCacheURL(cfg)
+}
+
+// applyBareCacheURL honors the bare CACHE_URL env var used by the shipped
+// docker-compose (AI.md PART 26 compose template) and mirrors the bare
+// MODE/PORT handling in main.go. A CACHE_URL by itself opts into the external
+// cache: it sets server.cache.url and, when the type is still the default
+// memory, promotes the type to valkey so the connection string is actually
+// used. The VIDVEIL_-prefixed overrides always win when both are present.
+func applyBareCacheURL(cfg *AppConfig) {
+	url, ok := os.LookupEnv("CACHE_URL")
+	if !ok || url == "" {
+		return
+	}
+	if _, prefixed := os.LookupEnv(envPrefix + "CACHE_URL"); prefixed {
+		return
+	}
+	if _, prefixed := os.LookupEnv(envPrefix + "SERVER_CACHE_URL"); prefixed {
+		return
+	}
+	cfg.Server.Cache.URL = url
+	if cfg.Server.Cache.Type == "" || cfg.Server.Cache.Type == "memory" {
+		cfg.Server.Cache.Type = "valkey"
+	}
 }
 
 // applyEnvToStruct recurses through struct fields following yaml tags

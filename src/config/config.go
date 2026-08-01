@@ -123,6 +123,9 @@ type ServerConfig struct {
 	// Database
 	Database DatabaseConfig `yaml:"database"`
 
+	// Cache (optional; default memory) per AI.md PART 12
+	Cache CacheConfig `yaml:"cache"`
+
 	// GeoIP
 	GeoIP GeoIPConfig `yaml:"geoip"`
 
@@ -752,6 +755,34 @@ type DatabaseConfig struct {
 	Token string `yaml:"token"`
 }
 
+// CacheConfig holds the optional cache backend settings per AI.md PART 12.
+// Type defaults to "memory" (in-process). "valkey"/"redis" enable an external
+// cache; connect via url OR host/port (url takes precedence).
+type CacheConfig struct {
+	// Type: none (disabled), memory (default), valkey, redis
+	Type string `yaml:"type"`
+	// URL takes precedence over host/port when set (redis:// or valkey://)
+	URL string `yaml:"url"`
+	// Individual connection settings (alternative to url)
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	DB       int    `yaml:"db"`
+	// TLS settings for secure connections
+	TLS           bool `yaml:"tls"`
+	TLSSkipVerify bool `yaml:"tls_skip_verify"`
+	// Connection pool
+	PoolSize int `yaml:"pool_size"`
+	MinIdle  int `yaml:"min_idle"`
+	// Timeout in seconds
+	Timeout int `yaml:"timeout"`
+	// Prefix avoids key collisions across apps
+	Prefix string `yaml:"prefix"`
+	// TTL for the API response (search) cache, in seconds
+	TTL int `yaml:"ttl"`
+}
+
 // SQLiteConfig holds SQLite settings
 type SQLiteConfig struct {
 	Dir         string `yaml:"dir"`
@@ -1286,6 +1317,16 @@ func DefaultAppConfig() *AppConfig {
 					JournalMode: "WAL",
 					BusyTimeout: 5000,
 				},
+			},
+			Cache: CacheConfig{
+				Type:     "memory",
+				Host:     "localhost",
+				Port:     6379,
+				PoolSize: 10,
+				MinIdle:  2,
+				Timeout:  5,
+				Prefix:   "vidveil:",
+				TTL:      30,
 			},
 			GeoIP: GeoIPConfig{
 				Enabled:        true,
@@ -1940,6 +1981,7 @@ func (w *ConfigWatcher) reload() {
 	w.appConfig.Server.Metrics = newCfg.Server.Metrics
 	w.appConfig.Server.Logs = newCfg.Server.Logs
 	w.appConfig.Server.GeoIP = newCfg.Server.GeoIP
+	w.appConfig.Server.Cache = newCfg.Server.Cache
 	w.appConfig.Server.Admin = newCfg.Server.Admin
 	w.appConfig.Server.Session = newCfg.Server.Session
 	w.appConfig.Server.SecurityHeaders = newCfg.Server.SecurityHeaders

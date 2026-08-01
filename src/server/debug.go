@@ -87,15 +87,10 @@ func (s *Server) handleDebugRoutes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDebugCache(w http.ResponseWriter, r *http.Request) {
-	// Search results are never cached (real-time only, per project non-goal).
-	// The only cache is the on-disk thumbnail proxy cache.
-	ttl := s.appConfig.Search.ThumbnailCacheTTL
+	// Search results use the configurable API-response cache per AI.md PART 12.
 	stats := map[string]interface{}{
-		"type":          "disk",
-		"scope":         "thumbnail-proxy",
-		"enabled":       ttl > 0,
-		"ttl_minutes":   ttl,
-		"search_cached": false,
+		"type":   s.appConfig.Server.Cache.Type,
+		"status": "active",
 	}
 
 	handler.WriteJSON(w, http.StatusOK, stats)

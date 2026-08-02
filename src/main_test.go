@@ -1196,3 +1196,84 @@ func TestParseUpdateArgs(t *testing.T) {
 		})
 	}
 }
+
+// TestApplyPortOverride verifies AI.md PART 5 Port Rules: "Once a port is
+// selected (randomly or specified), it is saved to server.yml and persists
+// across restarts." An explicit --port/VIDVEIL_PORT/PORT value must be
+// written to server.yml immediately, not just the randomly-generated
+// first-run port.
+func TestApplyPortOverride(t *testing.T) {
+	dir := t.TempDir()
+	configPath := dir + "/server.yml"
+
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Port = "64903"
+	if err := config.SaveAppConfig(cfg, configPath); err != nil {
+		t.Fatalf("SaveAppConfig() error: %v", err)
+	}
+
+	persisted, err := applyPortOverride(cfg, "8080", configPath)
+	if err != nil {
+		t.Fatalf("applyPortOverride() error: %v", err)
+	}
+	if !persisted {
+		t.Error("applyPortOverride() persisted = false, want true for a changed port")
+	}
+	if cfg.Server.Port != "8080" {
+		t.Errorf("applyPortOverride() cfg.Server.Port = %q, want %q", cfg.Server.Port, "8080")
+	}
+
+	reloaded, _, err := config.LoadAppConfig(dir, dir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig() error: %v", err)
+	}
+	if reloaded.Server.Port != "8080" {
+		t.Errorf("server.yml Port after reload = %q, want %q (explicit --port must be persisted)",
+			reloaded.Server.Port, "8080")
+	}
+}
+
+// TestApplyPortOverride_NoExplicitPort verifies an empty port override
+// leaves the existing config value untouched and does not rewrite the file.
+func TestApplyPortOverride_NoExplicitPort(t *testing.T) {
+	dir := t.TempDir()
+	configPath := dir + "/server.yml"
+
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Port = "64903"
+	if err := config.SaveAppConfig(cfg, configPath); err != nil {
+		t.Fatalf("SaveAppConfig() error: %v", err)
+	}
+
+	persisted, err := applyPortOverride(cfg, "", configPath)
+	if err != nil {
+		t.Fatalf("applyPortOverride() error: %v", err)
+	}
+	if persisted {
+		t.Error("applyPortOverride() persisted = true, want false when no port override given")
+	}
+	if cfg.Server.Port != "64903" {
+		t.Errorf("applyPortOverride() cfg.Server.Port = %q, want unchanged %q", cfg.Server.Port, "64903")
+	}
+}
+
+// TestApplyPortOverride_SamePortNoRewrite verifies passing the port value
+// that already matches config does not trigger an unnecessary rewrite.
+func TestApplyPortOverride_SamePortNoRewrite(t *testing.T) {
+	dir := t.TempDir()
+	configPath := dir + "/server.yml"
+
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Port = "8080"
+	if err := config.SaveAppConfig(cfg, configPath); err != nil {
+		t.Fatalf("SaveAppConfig() error: %v", err)
+	}
+
+	persisted, err := applyPortOverride(cfg, "8080", configPath)
+	if err != nil {
+		t.Fatalf("applyPortOverride() error: %v", err)
+	}
+	if persisted {
+		t.Error("applyPortOverride() persisted = true, want false when port is unchanged")
+	}
+}

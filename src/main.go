@@ -131,6 +131,27 @@ func splitSubcommand(args []string) (global, sub []string) {
 	return args, nil
 }
 
+// applyPortOverride sets cfg.Server.Port from an explicit port value
+// (--port flag, VIDVEIL_PORT, or PORT env var) and persists the change to
+// server.yml immediately. Per AI.md PART 5 Port Rules: "Once a port is
+// selected (randomly or specified), it is saved to server.yml and persists
+// across restarts" - so an explicit override must be written to disk right
+// away, not only the randomly-generated first-run port. Returns true if the
+// config file was rewritten.
+func applyPortOverride(cfg *config.AppConfig, port, configPath string) (bool, error) {
+	priorPort := cfg.Server.Port
+	if port != "" {
+		cfg.Server.Port = port
+	}
+	if cfg.Server.Port == priorPort {
+		return false, nil
+	}
+	if err := config.SaveAppConfig(cfg, configPath); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func main() {
 	startTime := time.Now()
 	rawArgs := os.Args[1:]
@@ -405,8 +426,8 @@ func main() {
 	if address != "" {
 		appConfig.Server.Address = address
 	}
-	if port != "" {
-		appConfig.Server.Port = port
+	if _, err := applyPortOverride(appConfig, port, configPath); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Failed to persist port to config: %v\n", err)
 	}
 	// Per AI.md PART 12: CLI --baseurl overrides server.baseurl config value.
 	if baseURL != "" {

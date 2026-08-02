@@ -3,17 +3,6 @@
 Findings from the full Phase 2 beta-test pass (commit 0d33f978f556), logged for
 triage/fix. Remove each item individually once resolved and committed.
 
-## High
-
-- [ ] `--port` value is not persisted to `server.yml` on first run — a random
-  64xxx port is saved instead of the explicit `--port` flag value, decoupling
-  `server.yml` from the actually-bound port. Breaks `--status` and anything
-  else that trusts the saved config to reach the running instance.
-  Repro: `vidveil --address 0.0.0.0 --port 8080 --config <dir> --data <dir>`
-  binds 8080, but `<dir>/server.yml` has `server.port: "64903"` (or similar
-  random value). Per config-rules.md: "Always persist the selected port
-  (random or specified) to server.yml after first run."
-
 ## Medium
 
 - [ ] Unknown/nonexistent `engines=` filter values are silently accepted by

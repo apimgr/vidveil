@@ -4,9 +4,13 @@ package engine
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/apimgr/vidveil/src/server/model"
@@ -48,6 +52,10 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 		return nil, err
 	}
 
+	// Best-effort schema.org VideoObject data emitted as JSON-LD, keyed by
+	// the video's absolute URL so it can be merged into the matching card.
+	ldIndex := parseJSONLDVideos(doc, e.baseURL)
+
 	var results []model.VideoResult
 	fieldStats := map[string]int{
 		"preview": 0,
@@ -57,6 +65,9 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 	doc.Find(selector).Each(func(i int, s *goquery.Selection) {
 		r := parseGenericVideoItem(s, e.baseURL, e.Name(), e.DisplayName())
 		if r.Title != "" && r.URL != "" {
+			if ld, ok := ldIndex[r.URL]; ok {
+				mergeLDVideoInfo(&r, ld)
+			}
 			results = append(results, r)
 			if r.PreviewURL != "" {
 				fieldStats["preview"]++
@@ -276,6 +287,9 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 	// Extract performer if available
 	r.Performer = extractPerformer(s)
 
+	// Extract published/upload date - common patterns
+	r.Published = extractPublished(s)
+
 	r.Source = sourceName
 	r.SourceDisplay = sourceDisplay
 	r.ID = GenerateResultID(r.URL, sourceName)
@@ -359,4 +373,334 @@ func extractPerformer(s *goquery.Selection) string {
 	}
 
 	return ""
+}
+
+// extractPublished looks for a publish/upload date on a video card using
+// common selectors and data attributes. Best-effort: returns the zero
+// time.Time when no recognizable date is found.
+func extractPublished(s *goquery.Selection) time.Time {
+	dateSelectors := []string{
+		"time[datetime]", ".date", ".added", ".added-date", ".upload-date",
+		".video-date", ".publish-date", ".added_at", ".video-added",
+	}
+	for _, sel := range dateSelectors {
+		d := s.Find(sel).First()
+		if d.Length() == 0 {
+			continue
+		}
+		dateText := parser.ExtractAttr(d, "datetime", "data-date")
+		if dateText == "" {
+			dateText = parser.CleanText(d.Text())
+		}
+		if t := parsePublishedDate(dateText); !t.IsZero() {
+			return t
+		}
+	}
+
+	for _, attr := range []string{"data-upload-date", "data-added", "data-date", "data-published"} {
+		if v := parser.ExtractAttr(s, attr); v != "" {
+			if t := parsePublishedDate(v); !t.IsZero() {
+				return t
+			}
+		}
+	}
+
+	return time.Time{}
+}
+
+// publishedDateLayouts are the date/time formats attempted by
+// parsePublishedDate, in order of preference.
+var publishedDateLayouts = []string{
+	time.RFC3339,
+	time.RFC3339Nano,
+	"2006-01-02T15:04:05",
+	"2006-01-02 15:04:05",
+	"2006-01-02",
+	"01/02/2006",
+	"January 2, 2006",
+	"Jan 2, 2006",
+	"2 January 2006",
+}
+
+// parsePublishedDate attempts to parse a free-form date string against a
+// list of common layouts. Best-effort: returns the zero time.Time on
+// failure rather than an error, since callers treat this as optional data.
+func parsePublishedDate(text string) time.Time {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return time.Time{}
+	}
+	for _, layout := range publishedDateLayouts {
+		if t, err := time.Parse(layout, text); err == nil {
+			return t.UTC()
+		}
+	}
+	return time.Time{}
+}
+
+// iso8601DurationRe matches schema.org/ISO 8601 durations of the form
+// "PT1H2M3S" (hours/minutes/seconds, all optional).
+var iso8601DurationRe = regexp.MustCompile(`^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$`)
+
+// parseISO8601Duration converts an ISO 8601 duration string into seconds.
+// Returns 0 for empty or unrecognized input.
+func parseISO8601Duration(text string) int {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return 0
+	}
+	m := iso8601DurationRe.FindStringSubmatch(text)
+	if m == nil {
+		return 0
+	}
+	hours, _ := strconv.Atoi(m[1])
+	minutes, _ := strconv.Atoi(m[2])
+	seconds, _ := strconv.Atoi(m[3])
+	return hours*3600 + minutes*60 + seconds
+}
+
+// ldVideoInfo holds the best-effort fields extracted from a single
+// schema.org VideoObject JSON-LD node.
+type ldVideoInfo struct {
+	description string
+	thumbnail   string
+	uploadDate  time.Time
+	duration    int
+	tags        []string
+	performer   string
+	rating      float64
+	viewCount   int64
+}
+
+// parseJSONLDVideos scans every `<script type="application/ld+json">` block
+// in the document for schema.org VideoObject data (directly, wrapped in an
+// ItemList, or under "@graph") and returns a map keyed by the video's
+// absolute URL. Best-effort: sites that don't emit JSON-LD simply yield an
+// empty map, never an error.
+func parseJSONLDVideos(doc *goquery.Document, baseURL string) map[string]ldVideoInfo {
+	out := make(map[string]ldVideoInfo)
+	doc.Find(`script[type="application/ld+json"]`).Each(func(i int, sel *goquery.Selection) {
+		raw := strings.TrimSpace(sel.Text())
+		if raw == "" {
+			return
+		}
+		for _, node := range decodeLDNodes([]byte(raw)) {
+			collectLDVideoObjects(node, baseURL, out)
+		}
+	})
+	return out
+}
+
+// decodeLDNodes normalizes a JSON-LD script's contents into a flat list of
+// top-level nodes, handling a bare object, an array of objects, and the
+// "@graph" wrapper form. Malformed JSON yields an empty (non-nil-panicking)
+// result rather than an error.
+func decodeLDNodes(data []byte) []map[string]interface{} {
+	var single map[string]interface{}
+	if err := json.Unmarshal(data, &single); err == nil {
+		if graph, ok := single["@graph"].([]interface{}); ok {
+			var nodes []map[string]interface{}
+			for _, g := range graph {
+				if m, ok := g.(map[string]interface{}); ok {
+					nodes = append(nodes, m)
+				}
+			}
+			return nodes
+		}
+		return []map[string]interface{}{single}
+	}
+
+	var list []map[string]interface{}
+	if err := json.Unmarshal(data, &list); err == nil {
+		return list
+	}
+
+	return nil
+}
+
+// collectLDVideoObjects walks a decoded JSON-LD node, recursing into
+// ItemList/itemListElement wrappers, and records any VideoObject found into
+// out, keyed by every URL-like field it exposes (contentUrl, embedUrl, url,
+// @id) so callers can match against whatever URL form they built.
+func collectLDVideoObjects(node map[string]interface{}, baseURL string, out map[string]ldVideoInfo) {
+	if node == nil {
+		return
+	}
+
+	typ, _ := node["@type"].(string)
+	if typ == "ItemList" {
+		elems, _ := node["itemListElement"].([]interface{})
+		for _, el := range elems {
+			em, ok := el.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if item, ok := em["item"].(map[string]interface{}); ok {
+				collectLDVideoObjects(item, baseURL, out)
+			} else {
+				collectLDVideoObjects(em, baseURL, out)
+			}
+		}
+		return
+	}
+
+	if typ != "VideoObject" {
+		return
+	}
+
+	info := ldVideoInfo{}
+	info.description, _ = node["description"].(string)
+	info.thumbnail = ldFirstString(node["thumbnailUrl"])
+	if uploadDate, ok := node["uploadDate"].(string); ok {
+		info.uploadDate = parsePublishedDate(uploadDate)
+	}
+	if duration, ok := node["duration"].(string); ok {
+		info.duration = parseISO8601Duration(duration)
+	}
+	info.tags = ldStringList(node["keywords"])
+	if len(info.tags) == 0 {
+		info.tags = ldStringList(node["genre"])
+	}
+	info.performer = ldActorName(node["actor"])
+	if rating, ok := node["aggregateRating"].(map[string]interface{}); ok {
+		info.rating = ldFloat(rating["ratingValue"])
+	}
+	info.viewCount = ldInteractionCount(node["interactionCount"])
+
+	for _, key := range []string{"contentUrl", "embedUrl", "url", "@id"} {
+		v, _ := node[key].(string)
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		out[parser.MakeAbsoluteURL(v, baseURL)] = info
+	}
+}
+
+// mergeLDVideoInfo fills any still-empty fields on r from ld. Never
+// overwrites a value already extracted from the HTML card.
+func mergeLDVideoInfo(r *model.VideoResult, ld ldVideoInfo) {
+	if r.Description == "" {
+		r.Description = ld.description
+	}
+	if r.Thumbnail == "" && ld.thumbnail != "" {
+		r.Thumbnail = ld.thumbnail
+	}
+	if r.Published.IsZero() && !ld.uploadDate.IsZero() {
+		r.Published = ld.uploadDate
+	}
+	if r.DurationSeconds == 0 && ld.duration > 0 {
+		r.DurationSeconds = ld.duration
+		r.Duration = formatDuration(ld.duration)
+	}
+	if len(r.Tags) == 0 && len(ld.tags) > 0 {
+		r.Tags = ld.tags
+	}
+	if r.Performer == "" && ld.performer != "" {
+		r.Performer = ld.performer
+	}
+	if r.Rating == 0 && ld.rating > 0 {
+		r.Rating = ld.rating
+	}
+	if r.ViewsCount == 0 && ld.viewCount > 0 {
+		r.ViewsCount = ld.viewCount
+		r.Views = formatViewCount(int(ld.viewCount))
+	}
+}
+
+// ldFirstString returns the first non-empty string from a JSON-LD field
+// that may be either a bare string or an array of strings.
+func ldFirstString(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return strings.TrimSpace(val)
+	case []interface{}:
+		for _, item := range val {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+	}
+	return ""
+}
+
+// ldStringList normalizes a JSON-LD field that may be a comma-separated
+// string or an array of strings into a lowercase string slice.
+func ldStringList(v interface{}) []string {
+	var out []string
+	switch val := v.(type) {
+	case string:
+		for _, part := range strings.Split(val, ",") {
+			part = strings.TrimSpace(strings.ToLower(part))
+			if part != "" {
+				out = append(out, part)
+			}
+		}
+	case []interface{}:
+		for _, item := range val {
+			if s, ok := item.(string); ok {
+				s = strings.TrimSpace(strings.ToLower(s))
+				if s != "" {
+					out = append(out, s)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// ldFloat coerces a JSON-LD numeric field (which may be encoded as either
+// a JSON number or a string) into a float64.
+func ldFloat(v interface{}) float64 {
+	switch val := v.(type) {
+	case float64:
+		return val
+	case string:
+		if f, err := strconv.ParseFloat(strings.TrimSpace(val), 64); err == nil {
+			return f
+		}
+	}
+	return 0
+}
+
+// ldActorName extracts a performer name from a JSON-LD "actor" field, which
+// may be a Person object, an array of Person objects, or a bare string.
+func ldActorName(v interface{}) string {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		if name, ok := val["name"].(string); ok {
+			return strings.TrimSpace(name)
+		}
+	case []interface{}:
+		for _, item := range val {
+			if m, ok := item.(map[string]interface{}); ok {
+				if name, ok := m["name"].(string); ok && strings.TrimSpace(name) != "" {
+					return strings.TrimSpace(name)
+				}
+			}
+		}
+	case string:
+		return strings.TrimSpace(val)
+	}
+	return ""
+}
+
+// ldInteractionCount extracts a view/interaction count from a JSON-LD
+// "interactionCount" field, which may be a bare number, a string (plain or
+// in the "https://schema.org/WatchAction/1234" form), or a nested
+// InteractionCounter object exposing "userInteractionCount".
+func ldInteractionCount(v interface{}) int64 {
+	switch val := v.(type) {
+	case float64:
+		return int64(val)
+	case string:
+		parts := strings.Split(val, "/")
+		last := strings.TrimSpace(parts[len(parts)-1])
+		if n, err := strconv.ParseInt(last, 10, 64); err == nil {
+			return n
+		}
+	case map[string]interface{}:
+		return ldInteractionCount(val["userInteractionCount"])
+	}
+	return 0
 }

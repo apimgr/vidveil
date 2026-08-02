@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
@@ -146,7 +147,7 @@ func (e *XHamsterEngine) Search(ctx context.Context, query string, page int) ([]
 		// Format views
 		views := formatViewCount(v.Views)
 
-		results = append(results, model.VideoResult{
+		result := model.VideoResult{
 			ID:              GenerateResultID(v.PageURL, e.Name()),
 			URL:             v.PageURL,
 			Title:           v.Title,
@@ -157,7 +158,15 @@ func (e *XHamsterEngine) Search(ctx context.Context, query string, page int) ([]
 			ViewsCount:      int64(v.Views),
 			Source:          e.Name(),
 			SourceDisplay:   e.DisplayName(),
-		})
+		}
+
+		// Populate Published from the "created" unix timestamp - the
+		// engine declares HasUploadDate: true so this field MUST be set.
+		if v.Created > 0 {
+			result.Published = time.Unix(v.Created, 0).UTC()
+		}
+
+		results = append(results, result)
 	}
 
 	return results, nil

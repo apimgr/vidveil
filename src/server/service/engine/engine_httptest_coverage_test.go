@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/apimgr/vidveil/src/config"
 )
@@ -378,6 +379,13 @@ func TestXHamsterEngine_Search_HttpTest_Page1(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Error("XHamsterEngine.Search: expected at least one result from JSON extraction")
+	}
+	if results[0].Published.IsZero() {
+		t.Error("XHamsterEngine.Search: expected Published to be set from the created timestamp, got zero time")
+	}
+	wantPublished := time.Unix(1699000000, 0).UTC()
+	if !results[0].Published.Equal(wantPublished) {
+		t.Errorf("XHamsterEngine.Search: Published = %v, want %v", results[0].Published, wantPublished)
 	}
 }
 

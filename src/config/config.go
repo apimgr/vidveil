@@ -961,6 +961,27 @@ type SearchConfig struct {
 	// ThumbnailCacheTTL is the time-to-live for the on-disk thumbnail cache in minutes.
 	// Default 1440 (24 hours). Set to 0 to disable disk caching.
 	ThumbnailCacheTTL int `yaml:"thumbnail_cache_ttl"`
+	// DetailEnrichment fetches each result's own detail page to extract
+	// schema.org VideoObject JSON-LD (description/tags/performer/rating/
+	// published) that listing pages never carry. Disabled by default: it adds
+	// one extra upstream request per enriched result on every search.
+	DetailEnrichment DetailEnrichmentConfig `yaml:"detail_enrichment"`
+}
+
+// DetailEnrichmentConfig controls the optional per-result detail-page fetch
+// used to backfill schema.org VideoObject JSON-LD fields that only appear on
+// individual video pages, never on search/listing pages.
+type DetailEnrichmentConfig struct {
+	// Enabled turns on the extra per-result detail-page fetch. Off by default.
+	Enabled bool `yaml:"enabled"`
+	// MaxResults caps how many of the top results per engine are enriched,
+	// bounding the extra request volume against the upstream site.
+	MaxResults int `yaml:"max_results"`
+	// Timeout in seconds for each individual detail-page fetch. Kept short by
+	// design - enrichment must never make results feel slow to the user; a
+	// slow/unresponsive detail page just misses enrichment, it never delays
+	// the search response beyond this budget.
+	Timeout int `yaml:"timeout"`
 }
 
 // AIFilterConfig holds settings for filtering AI-generated content
@@ -1450,6 +1471,16 @@ func DefaultAppConfig() *AppConfig {
 			},
 			// Thumbnail disk cache TTL: 24 hours by default
 			ThumbnailCacheTTL: 1440,
+			// Detail-page JSON-LD enrichment: off by default (extra upstream
+			// request per enriched result); when enabled, cap to the top 5
+			// results per engine with a 2s per-fetch budget so it can never
+			// make search results feel slow (fetches run concurrently and are
+			// bounded by the per-engine search deadline regardless)
+			DetailEnrichment: DetailEnrichmentConfig{
+				Enabled:    false,
+				MaxResults: 5,
+				Timeout:    2,
+			},
 		},
 		Engines: EnginesConfig{
 			UserAgent: UserAgentConfig{

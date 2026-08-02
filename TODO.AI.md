@@ -3,26 +3,6 @@
 Findings from the full Phase 2 beta-test pass (commit 0d33f978f556), logged for
 triage/fix. Remove each item individually once resolved and committed.
 
-## Medium
-
-- [ ] JSON-LD `VideoObject` metadata enrichment added in commit 0d33f978f556
-  (`parseJSONLDVideos`/`mergeLDVideoInfo` in helpers.go) has no observable
-  effect on any tested engine in practice. Checked 6 genericSearch()-based
-  engines with live traffic (tnaflix, drtuber, sunporno, youjizz, eporner,
-  tube8) — description/tags/performer/rating all null/empty, Published zero
-  on tnaflix/drtuber/sunporno/youjizz. Grepped raw search-page HTML on 10
-  engines (eporner, sunporno, tnaflix, drtuber, youjizz, pornmd, hqporner,
-  alphaporno, empflix, txxx, nuvid, hellporno) for
-  `application/ld+json`/`VideoObject` — only eporner and sunporno emit any
-  JSON-LD on the search page, and both are `BreadcrumbList`, never
-  `VideoObject`. The merge logic itself is safe (non-panicking, never
-  clobbers existing fields), but schema.org VideoObject JSON-LD appears to
-  only exist on individual video detail pages, not search/listing pages, on
-  every site tested — so the new fields are effectively dead code against
-  real upstream listing pages. Needs a decision: either target detail pages
-  (extra fetch per result — cost/latency tradeoff) or drop the JSON-LD path
-  in favor of per-engine specific selectors for these fields.
-
 ## Low
 
 - [ ] `vidveil-cli` fails with an opaque low-level error when run as root on

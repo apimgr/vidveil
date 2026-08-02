@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -81,10 +82,93 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 		}
 	})
 
+	// Best-effort per-result detail-page fetch for schema.org VideoObject
+	// JSON-LD (Search.DetailEnrichment, off by default - see config.go).
+	enrichDetailResults(ctx, e, results)
+
 	// Log parse results when debug is enabled
 	debugLogEngineParseResult(e.Name(), results, fieldStats)
 
 	return results, nil
+}
+
+// enrichDetailResults optionally fetches each result's own detail page to
+// extract schema.org VideoObject JSON-LD (description/tags/performer/
+// rating/published) that listing pages never carry - only individual video
+// pages emit it, on every engine checked. Gated by
+// Search.DetailEnrichment.Enabled (default off) and capped to the first
+// DetailEnrichment.MaxResults items so the extra request volume against the
+// upstream site stays bounded. Runs the capped fetches concurrently, so the
+// added wall-clock cost is one detail-page round trip, not MaxResults of
+// them; each fetch inherits ctx (the caller's per-engine search deadline),
+// so a slow/unresponsive site simply times out without enrichment rather
+// than delaying the search. Best-effort: any fetch/parse failure is silently
+// ignored and the result keeps its selector-derived fields.
+func enrichDetailResults(ctx context.Context, e *BaseEngine, results []model.VideoResult) {
+	cfg := e.appConfig
+	if cfg == nil || !cfg.Search.DetailEnrichment.Enabled || len(results) == 0 {
+		return
+	}
+
+	max := cfg.Search.DetailEnrichment.MaxResults
+	if max <= 0 || max > len(results) {
+		max = len(results)
+	}
+
+	// Kept short by design (see config.go doc comment) - enrichment must
+	// never make search results feel slow to the user.
+	timeout := time.Duration(cfg.Search.DetailEnrichment.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 2 * time.Second
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < max; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			enrichOneDetailResult(ctx, e, &results[idx], timeout)
+		}(i)
+	}
+	wg.Wait()
+}
+
+// enrichOneDetailResult fetches a single result's detail page and merges any
+// VideoObject JSON-LD found into r. See enrichDetailResults for the gating
+// and cost rationale.
+func enrichOneDetailResult(ctx context.Context, e *BaseEngine, r *model.VideoResult, timeout time.Duration) {
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	resp, err := e.MakeRequest(reqCtx, r.URL)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := readEngineBody(resp)
+	if err != nil {
+		return
+	}
+
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+
+	ldIndex := parseJSONLDVideos(doc, e.baseURL)
+	if ld, ok := ldIndex[r.URL]; ok {
+		mergeLDVideoInfo(r, ld)
+		return
+	}
+	// A detail page's own JSON-LD sometimes keys itself off the canonical
+	// URL rather than the exact href used on the listing page - if the page
+	// carries exactly one VideoObject, it can only describe this page.
+	if len(ldIndex) == 1 {
+		for _, ld := range ldIndex {
+			mergeLDVideoInfo(r, ld)
+		}
+	}
 }
 
 // parseGenericVideoItem extracts video data using common patterns

@@ -9,6 +9,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -269,4 +272,96 @@ func TestGenericSearch_MergesJSONLDIntoCard(t *testing.T) {
 	if r.Published.IsZero() {
 		t.Error("genericSearch Published should be set from JSON-LD uploadDate")
 	}
+}
+
+// detailEnrichmentHandler serves a tiny listing page at "/" (two cards, no
+// JSON-LD) and per-video detail pages under "/v/" carrying a VideoObject
+// JSON-LD block keyed to that same URL - the shape enrichDetailResults is
+// meant to backfill from.
+func detailEnrichmentHandler(fetchCount *int32, mu *sync.Mutex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.URL.Path == "/" {
+			_, _ = w.Write([]byte(`<html><body>
+<div class="item"><a href="/v/1" title="Video One"><img src="/thumb1.jpg"></a></div>
+<div class="item"><a href="/v/2" title="Video Two"><img src="/thumb2.jpg"></a></div>
+</body></html>`))
+			return
+		}
+		mu.Lock()
+		*fetchCount++
+		mu.Unlock()
+		id := strings.TrimPrefix(r.URL.Path, "/v/")
+		_, _ = w.Write([]byte(`<html><head><script type="application/ld+json">
+{"@type":"VideoObject","name":"Detail ` + id + `","contentUrl":"` + r.URL.Path + `",
+"actor":{"@type":"Person","name":"Detail Actor ` + id + `"},"duration":"PT1M40S"}
+</script></head><body></body></html>`))
+	}
+}
+
+func TestEnrichDetailResults_DisabledByDefault(t *testing.T) {
+	var fetches int32
+	var mu sync.Mutex
+	srv := httptest.NewServer(detailEnrichmentHandler(&fetches, &mu))
+	t.Cleanup(srv.Close)
+
+	e := NewBaseEngine("test-detail-off", "Test Detail Off", srv.URL, 1, config.DefaultAppConfig())
+	results, err := genericSearch(context.Background(), e, srv.URL, ".item")
+	if err != nil {
+		t.Fatalf("genericSearch error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("genericSearch results = %d, want 2", len(results))
+	}
+	if results[0].Performer != "" {
+		t.Errorf("Performer should stay empty with DetailEnrichment disabled, got %q", results[0].Performer)
+	}
+	if fetches != 0 {
+		t.Errorf("detail pages fetched = %d, want 0 (enrichment disabled)", fetches)
+	}
+}
+
+func TestEnrichDetailResults_MergesFromDetailPageAndRespectsMaxResults(t *testing.T) {
+	var fetches int32
+	var mu sync.Mutex
+	srv := httptest.NewServer(detailEnrichmentHandler(&fetches, &mu))
+	t.Cleanup(srv.Close)
+
+	cfg := config.DefaultAppConfig()
+	cfg.Search.DetailEnrichment.Enabled = true
+	cfg.Search.DetailEnrichment.MaxResults = 1
+	cfg.Search.DetailEnrichment.Timeout = 2
+
+	e := NewBaseEngine("test-detail-on", "Test Detail On", srv.URL, 1, cfg)
+	results, err := genericSearch(context.Background(), e, srv.URL, ".item")
+	if err != nil {
+		t.Fatalf("genericSearch error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("genericSearch results = %d, want 2", len(results))
+	}
+	if results[0].Performer != "Detail Actor 1" {
+		t.Errorf("results[0].Performer = %q, want %q (MaxResults=1 should still enrich the first result)", results[0].Performer, "Detail Actor 1")
+	}
+	if results[0].DurationSeconds != 100 {
+		t.Errorf("results[0].DurationSeconds = %d, want 100", results[0].DurationSeconds)
+	}
+	if results[1].Performer != "" {
+		t.Errorf("results[1].Performer = %q, want empty (MaxResults=1 caps enrichment to the first result)", results[1].Performer)
+	}
+	if got := atomic.LoadInt32(&fetches); got != 1 {
+		t.Errorf("detail pages fetched = %d, want 1 (MaxResults=1)", got)
+	}
+}
+
+func TestEnrichDetailResults_NoopOnNilConfigOrEmptyResults(t *testing.T) {
+	e := &BaseEngine{name: "test-nil-cfg", baseURL: "https://example.com"}
+	// appConfig is nil - must not panic and must not attempt any request.
+	enrichDetailResults(context.Background(), e, []model.VideoResult{{URL: "https://example.com/v/1", Title: "x"}})
+
+	cfg := config.DefaultAppConfig()
+	cfg.Search.DetailEnrichment.Enabled = true
+	e2 := NewBaseEngine("test-empty-results", "Test Empty Results", "https://example.com", 1, cfg)
+	// Empty results slice - must return immediately without blocking.
+	enrichDetailResults(context.Background(), e2, nil)
 }

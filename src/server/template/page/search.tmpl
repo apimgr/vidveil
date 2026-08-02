@@ -38,12 +38,14 @@
             {{template "public/filters" (dict "ShowEngines" false "Compact" true)}}
         </div>
 
-        <div class="initial-loading" id="initial-loading" role="status" aria-live="polite">
+        {{/* Hidden by default: the server already rendered results below, so the
+             spinner only appears if JS later fetches more (infinite scroll). */}}
+        <div class="initial-loading hidden" id="initial-loading" role="status" aria-live="polite">
             <div class="spinner large" aria-hidden="true"></div>
             <p id="loading-text">{{ t "search.connecting_engines" }}</p>
         </div>
-        <p class="meta hidden" id="search-meta" data-query="{{.Query}}" aria-live="polite"><span id="result-count">0</span> results <span id="search-time-container">({{ t "search.streaming" }})</span></p>
-        <div class="status-bar" id="status-bar">
+        <p class="meta" id="search-meta" data-query="{{.Query}}" aria-live="polite"><span id="result-count">{{len .Results}}</span> results <span id="search-time-container">in {{.SearchTime}}ms</span></p>
+        <div class="status-bar hidden" id="status-bar">
             <span id="status-text">{{ t "search.connecting" }}</span>
             <span id="engine-status"></span>
         </div>
@@ -66,30 +68,32 @@
         </nav>
         {{end}}
 
-        <div class="video-grid" id="video-grid" role="list" aria-label="{{ t "a11y.video_results" }}"></div>
+        {{/* Server-rendered results — visible for every client, including no-JS.
+             With JS, app.js hydrates richer cards in place from the inline JSON
+             payload below (single server search, no second request). SSE is used
+             only for infinite scroll beyond this first page. */}}
+        <div class="video-grid" id="video-grid" role="list" aria-label="{{ t "a11y.video_results" }}">
+            {{range .Results}}
+            <div class="video-card" role="listitem" data-source="{{.Source}}">
+                <a href="{{.URL}}" {{if $.OpenNewTab}}target="_blank" {{end}}rel="noopener noreferrer nofollow" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
+                    <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" .Title}}" loading="lazy">
+                    <div class="video-info">
+                        <h3 class="video-title">{{.Title}}</h3>
+                        <p class="video-meta">
+                            <span class="duration">{{.Duration}}</span>
+                            {{if .Views}}<span class="views">{{.Views}} {{ t "time.views" }}</span>{{end}}
+                        </p>
+                        <p class="video-source">{{.Source}}</p>
+                    </div>
+                </a>
+            </div>
+            {{end}}
+        </div>
         <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>{{ t "search.loading_more" }}</span></div>
 
-        {{/* Progressive enhancement: server-rendered results for clients without JavaScript */}}
-        <noscript>
-            <p class="meta" aria-live="polite"><span>{{len .Results}}</span> {{ t "search.results_for" }} "{{.Query}}"</p>
-            <div class="video-grid" role="list" aria-label="{{ t "a11y.video_results" }}">
-                {{range .Results}}
-                <div class="video-card" role="listitem">
-                    <a href="{{.URL}}" {{if $.OpenNewTab}}target="_blank" {{end}}rel="noopener noreferrer" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
-                        <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" .Title}}" loading="lazy">
-                        <div class="video-info">
-                            <h3 class="video-title">{{.Title}}</h3>
-                            <p class="video-meta">
-                                <span class="duration">{{.Duration}}</span>
-                                {{if .Views}}<span class="views">{{.Views}} {{ t "time.views" }}</span>{{end}}
-                            </p>
-                            <p class="video-source">{{.Source}}</p>
-                        </div>
-                    </a>
-                </div>
-                {{end}}
-            </div>
-        </noscript>
+        {{/* Inline JSON payload of the server-computed first page. app.js reads this
+             (never a second /api/v1/search) to build enhanced cards under strict CSP. */}}
+        <script type="application/json" id="search-results-data">{{.ResultsJSON}}</script>
     </main>
     {{template "public/footer" .}}
     {{template "public/scripts" .}}

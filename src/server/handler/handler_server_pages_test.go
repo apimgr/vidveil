@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -317,6 +318,78 @@ func TestAPIHelp_TextPlain_ReturnsText(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "search:") {
 		t.Errorf("APIHelp text: body missing 'search:': %s", rr.Body.String())
+	}
+}
+
+// ── Search page: no-JS / progressive-enhancement render ───────────────────────
+
+// The browser search page MUST render real results into the VISIBLE grid (not
+// hidden behind a spinner or confined to <noscript>) so it works without
+// JavaScript, and MUST embed the results as an inline JSON payload the JS client
+// hydrates from — never gating the first result set on the SSE endpoint. Per
+// AI.md PART 14: "JavaScript enhances, it does not enable."
+func TestSearchPage_NoJS_RendersResultsInVisibleGrid(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := &SearchHandler{appConfig: config.DefaultAppConfig()}
+
+	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "text/html")
+	rr := httptest.NewRecorder()
+
+	data := map[string]interface{}{
+		"Title":       "test - VidVeil",
+		"Query":       "test",
+		"SearchQuery": "test",
+		"ResultsJSON": template.JS(`[{"url":"https://example.com/v","title":"Sample Video","source":"testsrc"}]`),
+		"Results": []map[string]interface{}{
+			{
+				"URL":       "https://example.com/v",
+				"Title":     "Sample Video",
+				"Thumbnail": "https://cdn.example.com/x.jpg",
+				"Duration":  "10:00",
+				"Source":    "testsrc",
+				"Views":     "1000",
+			},
+		},
+		"SearchTime":      int64(42),
+		"RelatedSearches": []string{},
+		"SpellSuggestion": "",
+		"EnginesParam":    "",
+		"OpenNewTab":      true,
+		"Theme":           "dark",
+		"Version":         "test",
+		"BuildDateTime":   "2026-01-01",
+	}
+	h.renderResponse(rr, req, "search", data)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("search render: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+
+	// 1. The server-computed result is visible in the grid (no-JS core content).
+	if !strings.Contains(body, `id="video-grid"`) || !strings.Contains(body, "Sample Video") {
+		t.Errorf("search render: visible #video-grid missing server result; body=%s", body)
+	}
+	if !strings.Contains(body, "video-card") {
+		t.Errorf("search render: no .video-card rendered server-side")
+	}
+	// 2. The inline JSON payload is present so JS hydrates without a second search.
+	if !strings.Contains(body, `id="search-results-data"`) {
+		t.Errorf("search render: inline JSON hydration payload missing")
+	}
+	// 3. The "Connecting to engines" spinner is NOT the default first paint.
+	if !strings.Contains(body, `id="initial-loading"`) || !strings.Contains(body, "initial-loading hidden") {
+		t.Errorf("search render: initial-loading spinner must start hidden; body=%s", body)
+	}
+	// 4. The result count is server-rendered (works without JS).
+	if !strings.Contains(body, `<span id="result-count">1</span>`) {
+		t.Errorf("search render: server-rendered result count missing")
+	}
+	// 5. There must be no <noscript> gating of the results any longer.
+	if strings.Contains(body, "<noscript>") {
+		t.Errorf("search render: results must not be confined to <noscript>")
 	}
 }
 

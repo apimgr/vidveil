@@ -1436,8 +1436,83 @@ if (document.readyState === 'loading') {
         if (searchQuery) {
             searchSessionID = generateSearchSessionID();
             saveSearchPageHistory(searchQuery);
-            streamResults(minDuration);
+            // Hydrate from the server-rendered inline payload (no second search).
+            // Only fall back to SSE streaming if that payload is missing.
+            if (!hydrateServerResults(minDuration)) {
+                streamResults(minDuration);
+            }
         }
+    }
+
+    // Enhance the server-rendered first page: read the inline JSON payload the
+    // server already computed, rebuild richer cards (preview hover, favorites,
+    // filter/sort data attributes) applying localStorage-only prefs, then apply
+    // client-side sort/filter. No network round-trip — the search ran once,
+    // server-side. Returns false when no payload is present (e.g. an old cached
+    // page) so the caller can fall back to SSE streaming.
+    function hydrateServerResults(minDuration) {
+        var dataEl = document.getElementById('search-results-data');
+        if (!dataEl) return false;
+
+        var serverResults;
+        try {
+            serverResults = JSON.parse(dataEl.textContent || '[]');
+        } catch (e) {
+            return false;
+        }
+        if (!Array.isArray(serverResults)) return false;
+
+        isSearching = false;
+        hideSearchElement('initial-loading');
+
+        // Replace the plain no-JS cards with enhanced cards built from the payload.
+        var grid = document.getElementById('video-grid');
+        if (grid) grid.innerHTML = '';
+
+        if (serverResults.length === 0) {
+            var loadingEl = document.getElementById('initial-loading');
+            if (loadingEl) {
+                loadingEl.innerHTML = '<p>No results found.</p>';
+                loadingEl.classList.remove('hidden');
+            }
+            hasMoreResults = false;
+            showSearchElement('search-meta');
+            announce('No results found for ' + searchQuery);
+            updateSearchStatus();
+            return true;
+        }
+
+        showSearchElement('search-meta');
+        showSearchElement('filters');
+
+        for (var i = 0; i < serverResults.length; i++) {
+            var r = serverResults[i];
+            // Client-side min-duration filter (localStorage preference)
+            if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
+                continue;
+            }
+            allResults.push(r);
+            var source = r.source || '';
+            if (source) enginesWithResults.add(source);
+            addResultCard(r);
+            if (source && !sourcesSet.has(source)) {
+                sourcesSet.add(source);
+                addSourceCheckbox(source, r.source_display || source);
+            }
+        }
+
+        var countEl = document.getElementById('result-count');
+        if (countEl) countEl.textContent = allResults.length;
+
+        // The server rendered page 1; infinite scroll fetches further pages via SSE.
+        currentPage = 1;
+        hasMoreResults = true;
+        setupInfiniteScroll();
+        applySearchFiltersAndSort();
+        announce(allResults.length + ' results found');
+        initRelatedSearchesToggle();
+        updateSearchStatus();
+        return true;
     }
 
     function streamResults(minDuration) {

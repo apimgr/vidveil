@@ -987,11 +987,20 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			pageResults = pageResults[:resultsPerPage]
 		}
 
+		// Embed the server-computed first page as an inline JSON payload so the
+		// JS client hydrates from it (no second /api/v1/search round-trip) per
+		// AI.md PART 14 "JavaScript enhances, it does not enable". The same
+		// results are also rendered as visible cards below for no-JS clients.
+		resultsJSON, err := json.Marshal(pageResults)
+		if err != nil || len(pageResults) == 0 {
+			resultsJSON = []byte("[]")
+		}
+
 		h.renderResponse(w, r, "search", map[string]interface{}{
 			"Title":           query + " - " + h.appConfig.Server.Branding.Title,
 			"Query":           query,
 			"SearchQuery":     searchQuery,
-			"ResultsJSON":     template.JS("[]"),
+			"ResultsJSON":     template.JS(resultsJSON),
 			"Results":         pageResults,
 			"EnginesUsed":     results.Data.EnginesUsed,
 			"SearchTime":      results.Data.SearchTimeMS,

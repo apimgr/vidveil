@@ -5,11 +5,6 @@ triage/fix. Remove each item individually once resolved and committed.
 
 ## Medium
 
-- [ ] HTML numeric entity `&#039;` (apostrophe) decodes incorrectly to the
-  literal string `&#'` in scraped titles — reproducible directly from the
-  JSON API. Example: `GET /api/v1/search?q=test&engines=youjizz&limit=20`
-  returns titles like `"Mother&#'s Test Full"`. Points to a bug in shared
-  title/text cleanup (generic parser or an engine-specific extractor).
 - [ ] JSON-LD `VideoObject` metadata enrichment added in commit 0d33f978f556
   (`parseJSONLDVideos`/`mergeLDVideoInfo` in helpers.go) has no observable
   effect on any tested engine in practice. Checked 6 genericSearch()-based

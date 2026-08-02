@@ -2281,6 +2281,12 @@ if (document.readyState === 'loading') {
                         endMsg.textContent = 'No more results';
                         sentinel.replaceWith(endMsg);
                     }
+                } else {
+                    // New page appended raw via addResultCard() above —
+                    // re-apply preview-first / user sort so infinite-scroll
+                    // pages stay ordered the same way the initial page is
+                    // (IDEA.md "Preview First (toggle)" / "Client-Side Sorting").
+                    applySearchFiltersAndSort();
                 }
                 updateSearchStatus();
                 return;

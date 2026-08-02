@@ -969,7 +969,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		enginesParam := r.URL.Query().Get("engines")
 
 		sessionID := h.resolveSearchSessionID(w, r)
-		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, sessionID)
+		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, sessionID)
 		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 		results.Data.InvalidBang = parsed.InvalidBang
 		if h.metrics != nil {
@@ -1018,7 +1018,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-browser clients (CLI, curl, JSON API): perform synchronous search
-	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "")
 	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 	results.Data.InvalidBang = parsed.InvalidBang
 
@@ -2364,6 +2364,12 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		// separate to avoid serving another session's dedup-filtered results.
 		cacheKey += "|s:" + sessionID
 	}
+	if previewFirst {
+		// previewFirst changes result order, not membership — without this a
+		// preview-first request could be served a cached non-preview-first
+		// ordering (or vice versa) from an earlier request for the same query.
+		cacheKey += "|pf:1"
+	}
 
 	var results *model.SearchResponse
 	if !skipCache && h.searchCache != nil {
@@ -2394,7 +2400,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 				ctx = engine.WithTorPref(ctx, &useTor)
 			}
 		}
-		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, sessionID)
+		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, sessionID)
 		results.Data.Cached = false
 		if h.searchCache != nil {
 			h.searchCache.Set(cacheKey, results)
@@ -4014,7 +4020,7 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "")
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchRSS(w, r, results, h.appConfig)
@@ -4034,7 +4040,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "")
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchAtom(w, r, results, h.appConfig)
@@ -4102,7 +4108,7 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 			if len(engineNames) == 0 {
 				engineNames = parsed.Engines
 			}
-			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, "")
+			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "")
 			res.Data.Query = bq.Q
 			res.Data.InvalidBang = parsed.InvalidBang
 			ch <- batchResult{idx: idx, resp: res}

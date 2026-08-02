@@ -45,7 +45,7 @@ func TestEngineManager_Search_WithEngineNames_ReturnsEmpty(t *testing.T) {
 // feeds, batch search) instead of being silently ignored.
 func TestEngineManager_SearchWithOperators_EmptyManager_ReturnsResponse(t *testing.T) {
 	m := newEmptyMgr()
-	resp := m.SearchWithOperators(context.Background(), "test", 1, nil, []string{"exact phrase"}, []string{"excluded"}, nil, "")
+	resp := m.SearchWithOperators(context.Background(), "test", 1, nil, []string{"exact phrase"}, []string{"excluded"}, nil, false, "")
 	if resp == nil {
 		t.Fatal("SearchWithOperators: nil response")
 	}

@@ -156,7 +156,7 @@ func (m *EngineManager) applyConfig() {
 // Server (sessions)") so that page=2, page=3, ... of the same infinite-scroll
 // search never resurface a result already returned on an earlier page.
 func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string, sessionID string) *model.SearchResponse {
-	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, nil, sessionID)
+	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, sessionID)
 }
 
 // SearchWithOperators is identical to Search but additionally applies
@@ -165,8 +165,12 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 // batch), matching the operator support already present in
 // SearchStreamWithOperators. Without this, "-word", "+word", and
 // "\"exact phrase\"" queries silently had no effect on every endpoint except
-// SSE streaming.
-func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, sessionID string) *model.SearchResponse {
+// SSE streaming. previewFirst additionally applies the IDEA.md "Preview
+// First" sort (preview-capable results ranked to the top, relative order
+// otherwise preserved) to the full, deduplicated result set before
+// pagination — giving a definitive global order for JSON/HTML/RSS/Atom/batch
+// clients, unlike the SSE path's necessarily per-engine-only ordering.
+func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, previewFirst bool, sessionID string) *model.SearchResponse {
 	startTime := time.Now()
 
 	// Capture the engine set under a brief read lock, then release it before any
@@ -353,6 +357,9 @@ collect:
 		resultsPerPage = m.appConfig.Search.ResultsPerPage
 	}
 	allResults = sortAndFilterByRelevanceWithOperators(allResults, query, minScore, exactPhrases, exclusions, requiredTerms, nil)
+	if previewFirst {
+		allResults = sortResultsPreviewFirst(allResults)
+	}
 
 	// Slice to the requested page window so the returned data array never
 	// exceeds resultsPerPage, per AI.md PART 14 pagination contract ("data"
@@ -389,6 +396,18 @@ collect:
 			Pages: pages,
 		},
 	}
+}
+
+// sortResultsPreviewFirst stably reorders results so preview-capable results
+// (PreviewURL != "") come first, preserving relative order within each group
+// (IDEA.md: "Preview First ... sort priority, not exclusive filter").
+func sortResultsPreviewFirst(results []model.VideoResult) []model.VideoResult {
+	sort.SliceStable(results, func(i, j int) bool {
+		iHas := results[i].PreviewURL != ""
+		jHas := results[j].PreviewURL != ""
+		return iHas && !jHas
+	})
+	return results
 }
 
 // scoredResult holds a result with its relevance score for sorting
@@ -1629,13 +1648,15 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 				}
 
 				// When preview-first is requested, sort this engine's batch so results with
-				// a preview URL stream before results without one.
+				// a preview URL stream before results without one. This is a per-engine,
+				// best-effort ordering only — engines stream concurrently onto the shared
+				// channel, so it cannot guarantee a globally preview-first order across
+				// engines by itself. The client applies its own final preview-first sort
+				// once the stream completes (per IDEA.md "Client-Side Sorting"), and the
+				// non-streaming path (sortResultsPreviewFirst, used by SearchWithOperators)
+				// gives non-JS/API/CLI clients a fully-ordered, non-partial result set.
 				if previewFirst {
-					sort.SliceStable(accepted, func(i, j int) bool {
-						iHas := accepted[i].PreviewURL != ""
-						jHas := accepted[j].PreviewURL != ""
-						return iHas && !jHas
-					})
+					accepted = sortResultsPreviewFirst(accepted)
 				}
 
 				for _, r := range accepted {

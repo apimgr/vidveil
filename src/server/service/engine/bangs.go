@@ -98,8 +98,13 @@ var BangMapping = map[string]string{
 	"anyporn":    "anyporn",
 	"tg":         "tubegalore",
 	"tubegalore": "tubegalore",
-	"ml":         "motherless",
-	"motherless": "motherless",
+	// motherless intentionally has no bang - engine is implemented
+	// (motherless.go) but not registered in manager.go (aggressive TLS
+	// fingerprinting blocks automated requests), so a !motherless/!ml bang
+	// would advertise a shortcut for an engine that can never actually
+	// search. Per IDEA.md Validation: "Bang shortcuts must exist in bangs
+	// list" implies the inverse too - the bangs list must not advertise a
+	// shortcut for an engine that isn't actually registered/searchable.
 
 	// Tier 6 - Additional engines
 	"3m":    "3movs",
@@ -289,7 +294,6 @@ var EngineDisplayNames = map[string]string{
 	"tube8":        "Tube8",
 	"anyporn":      "AnyPorn",
 	"tubegalore":   "TubeGalore",
-	"motherless":   "Motherless",
 	"3movs":        "3Movs",
 }
 

@@ -479,6 +479,51 @@ func TestEngineManager_GetEngine_Unknown(t *testing.T) {
 	}
 }
 
+func TestEngineManager_UnknownEngineNames_AllValid(t *testing.T) {
+	m := newTestManager()
+	unknown := m.UnknownEngineNames([]string{"pornhub", "xvideos"})
+	if len(unknown) != 0 {
+		t.Errorf("UnknownEngineNames(valid names) = %v, want empty", unknown)
+	}
+}
+
+func TestEngineManager_UnknownEngineNames_TierAliasesAreValid(t *testing.T) {
+	m := newTestManager()
+	unknown := m.UnknownEngineNames([]string{"tier1", "tier12"})
+	if len(unknown) != 0 {
+		t.Errorf("UnknownEngineNames(tier1, tier12) = %v, want empty", unknown)
+	}
+}
+
+func TestEngineManager_UnknownEngineNames_ReturnsUnregistered(t *testing.T) {
+	m := newTestManager()
+	unknown := m.UnknownEngineNames([]string{"pornhub", "nonexistent_engine_xyz"})
+	if len(unknown) != 1 || unknown[0] != "nonexistent_engine_xyz" {
+		t.Errorf("UnknownEngineNames() = %v, want [nonexistent_engine_xyz]", unknown)
+	}
+}
+
+// TestEngineManager_UnknownEngineNames_Motherless verifies motherless (a
+// bang mapping exists in bangs.go but the engine is deliberately not
+// registered in manager.go due to TLS fingerprinting - see TODO.AI.md) is
+// correctly reported as unknown, matching AI.md/IDEA.md's requirement that
+// engine names must be valid registered engines.
+func TestEngineManager_UnknownEngineNames_Motherless(t *testing.T) {
+	m := newTestManager()
+	unknown := m.UnknownEngineNames([]string{"motherless"})
+	if len(unknown) != 1 || unknown[0] != "motherless" {
+		t.Errorf("UnknownEngineNames([motherless]) = %v, want [motherless]", unknown)
+	}
+}
+
+func TestEngineManager_UnknownEngineNames_Empty(t *testing.T) {
+	m := newTestManager()
+	unknown := m.UnknownEngineNames(nil)
+	if len(unknown) != 0 {
+		t.Errorf("UnknownEngineNames(nil) = %v, want empty", unknown)
+	}
+}
+
 func TestEngineManager_SetEngineEnabled_Disable(t *testing.T) {
 	m := newTestManager()
 	before := m.EnabledCount()

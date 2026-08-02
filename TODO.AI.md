@@ -5,18 +5,6 @@ triage/fix. Remove each item individually once resolved and committed.
 
 ## Medium
 
-- [ ] Unknown/nonexistent `engines=` filter values are silently accepted by
-  `GET /api/v1/search`, returning `HTTP 200 {"ok":true,"data":{"results":[],
-  "engines_used":null,"engines_failed":null,...}}` instead of an error or a
-  populated `engines_failed` reason (`unknown_engine`). Indistinguishable
-  from a legitimate zero-result search.
-- [ ] `/api/v1/bangs` advertises `!motherless` (43 bangs total) but
-  `/api/v1/engines` only lists 42 and omits motherless — it's implemented in
-  `src/server/service/engine/motherless.go` but deliberately unregistered in
-  `manager.go` (aggressive TLS fingerprinting blocks automated requests).
-  `engines=motherless` hits the same silent-empty-success bug above. The
-  bangs list should not advertise a bang for an engine that isn't actually
-  registered/searchable.
 - [ ] HTML numeric entity `&#039;` (apostrophe) decodes incorrectly to the
   literal string `&#'` in scraped titles — reproducible directly from the
   JSON API. Example: `GET /api/v1/search?q=test&engines=youjizz&limit=20`

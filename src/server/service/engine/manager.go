@@ -746,6 +746,28 @@ func (m *EngineManager) GetEngine(name string) (SearchEngine, bool) {
 	return engine, ok
 }
 
+// UnknownEngineNames returns the subset of engineNames that are neither a
+// registered engine nor a recognized tier-filter alias ("tier1", "tier12").
+// Per IDEA.md Validation: "Engine names must be valid registered engines" -
+// getEnginesToUse silently drops unrecognized names instead of erroring, so
+// callers (APISearch, batch search, SSE) must validate up front and reject
+// the request rather than returning a misleadingly-empty success response.
+func (m *EngineManager) UnknownEngineNames(engineNames []string) []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var unknown []string
+	for _, name := range engineNames {
+		if name == "tier1" || name == "tier12" {
+			continue
+		}
+		if _, ok := m.engines[name]; !ok {
+			unknown = append(unknown, name)
+		}
+	}
+	return unknown
+}
+
 // ListEngines returns information about all engines
 func (m *EngineManager) ListEngines() []model.EngineInfo {
 	m.mu.RLock()

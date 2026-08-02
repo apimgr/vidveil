@@ -71,12 +71,63 @@ func TestAPISearch_WithPage_ReturnsJSON(t *testing.T) {
 }
 
 func TestAPISearch_WithEnginesParam_ReturnsJSON(t *testing.T) {
-	h := newAPITestHandler()
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&engines=ph,xv", nil)
+	h := newAPITestHandlerWithEngines()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&engines=pornhub,xvideos", nil)
 	w := httptest.NewRecorder()
 	h.APISearch(w, r)
 	if w.Code != http.StatusOK {
 		t.Errorf("APISearch with engines: status = %d, want 200", w.Code)
+	}
+}
+
+// TestAPISearch_UnknownEnginesParam_Returns400 verifies the TODO.AI.md
+// finding: an engines= value that names no registered engine must return a
+// validation error, not a silently-empty HTTP 200 success (indistinguishable
+// from a legitimate zero-result search). Per IDEA.md Validation: "Engine
+// names must be valid registered engines."
+func TestAPISearch_UnknownEnginesParam_Returns400(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&engines=nonexistent_engine_xyz", nil)
+	w := httptest.NewRecorder()
+	h.APISearch(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("APISearch unknown engine: status = %d, want 400", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"ok": false`) {
+		t.Errorf("APISearch unknown engine: body missing ok:false, got %q", body)
+	}
+	if !strings.Contains(body, "VALIDATION_FAILED") {
+		t.Errorf("APISearch unknown engine: body missing VALIDATION_FAILED, got %q", body)
+	}
+	if !strings.Contains(body, "nonexistent_engine_xyz") {
+		t.Errorf("APISearch unknown engine: body missing offending engine name, got %q", body)
+	}
+}
+
+// TestAPISearch_MotherlessEnginesParam_Returns400 verifies engines=motherless
+// (a bang exists in bangs.go's history but the engine is deliberately
+// unregistered in manager.go) is rejected the same as any other unknown
+// engine name, per TODO.AI.md.
+func TestAPISearch_MotherlessEnginesParam_Returns400(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&engines=motherless", nil)
+	w := httptest.NewRecorder()
+	h.APISearch(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("APISearch engines=motherless: status = %d, want 400", w.Code)
+	}
+}
+
+// TestAPISearch_TierFilterEnginesParam_ReturnsJSON verifies the special
+// tier1/tier12 filter aliases are still accepted (not flagged as unknown).
+func TestAPISearch_TierFilterEnginesParam_ReturnsJSON(t *testing.T) {
+	h := newAPITestHandlerWithEngines()
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&engines=tier1", nil)
+	w := httptest.NewRecorder()
+	h.APISearch(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("APISearch engines=tier1: status = %d, want 200", w.Code)
 	}
 }
 

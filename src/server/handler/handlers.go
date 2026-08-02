@@ -2300,6 +2300,18 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Per IDEA.md Validation: "Engine names must be valid registered
+	// engines" and "Bang shortcuts must exist in bangs list." An unknown
+	// engines= value (or a bang for an engine that is mapped in BangMapping
+	// but not actually registered, e.g. !motherless) must reject the request
+	// rather than silently returning an empty-but-"ok" result set.
+	if unknown := h.engineMgr.UnknownEngineNames(engineNames); len(unknown) > 0 {
+		h.jsonErrorDetails(w, "Unknown engine(s): "+strings.Join(unknown, ", "), CodeValidation, http.StatusBadRequest, map[string]interface{}{
+			"unknown_engines": unknown,
+		})
+		return
+	}
+
 	// Check if user wants to show AI content (overrides server default)
 	showAI := r.URL.Query().Get("show_ai") == "1"
 
@@ -3070,6 +3082,19 @@ func (h *SearchHandler) jsonError(w http.ResponseWriter, message, code string, s
 		"ok":      false,
 		"error":   code,
 		"message": message,
+	})
+}
+
+// jsonErrorDetails is jsonError plus the optional "details" field from the
+// canonical error envelope ({"ok":false,"error":"CODE","message":"...",
+// "details":{}}) per AI.md PART 9/14, for errors where the machine-readable
+// cause (e.g. which engine name was unrecognized) is useful to API clients.
+func (h *SearchHandler) jsonErrorDetails(w http.ResponseWriter, message, code string, status int, details map[string]interface{}) {
+	WriteJSON(w, status, map[string]interface{}{
+		"ok":      false,
+		"error":   code,
+		"message": message,
+		"details": details,
 	})
 }
 

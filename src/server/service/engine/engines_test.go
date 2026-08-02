@@ -312,6 +312,26 @@ func TestListBangs(t *testing.T) {
 	}
 }
 
+// TestListBangs_ExcludesMotherless verifies the bangs list never advertises
+// a shortcut for motherless: the engine is implemented (motherless.go) but
+// deliberately unregistered in manager.go (aggressive TLS fingerprinting
+// blocks automated requests). Advertising a bang for an engine that can
+// never actually be searched is the bug tracked in TODO.AI.md.
+func TestListBangs_ExcludesMotherless(t *testing.T) {
+	bangs := ListBangs()
+	for _, b := range bangs {
+		if b.EngineName == "motherless" {
+			t.Errorf("ListBangs includes motherless (bang %q) but motherless is not a registered engine", b.Bang)
+		}
+	}
+	if _, ok := BangMapping["ml"]; ok {
+		t.Error(`BangMapping["ml"] should not exist - motherless is not registered`)
+	}
+	if _, ok := BangMapping["motherless"]; ok {
+		t.Error(`BangMapping["motherless"] should not exist - motherless is not registered`)
+	}
+}
+
 func TestAutocomplete_Empty(t *testing.T) {
 	suggestions := Autocomplete("")
 

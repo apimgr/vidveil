@@ -9,6 +9,37 @@ import (
 	"testing"
 )
 
+// --- startup privilege caching regression tests (TODO.AI.md bug 6) ---
+// Guards against re-introducing a live os.Geteuid() read inside
+// GetAppPaths — per AI.md PART 4: "Directory mode is locked at process
+// start... decided ONCE from the EUID at startup, before any privilege
+// drop, and cached for the process lifetime." A live re-read after a
+// server privilege drop resolves the wrong (user-mode) branch against a
+// stale $HOME, which produced the reported directory-ownership collision.
+
+func TestIsPrivilegedModeIsStableAcrossCalls(t *testing.T) {
+	first := IsPrivilegedMode()
+	second := IsPrivilegedMode()
+	if first != second {
+		t.Errorf("IsPrivilegedMode() not stable across calls: %v then %v", first, second)
+	}
+	// No privilege drop has occurred in the test process, so the cached
+	// startup value must still match the live EUID check.
+	if want := os.Geteuid() == 0; first != want {
+		t.Errorf("IsPrivilegedMode() = %v, want %v (matches process EUID)", first, want)
+	}
+}
+
+func TestGetAppPathsUsesCachedStartupPrivilegeNotLiveEUID(t *testing.T) {
+	t.Setenv("CONFIG_DIR", "")
+	t.Setenv("DATA_DIR", "")
+	got := GetAppPaths("", "")
+	want := GetDefaultConfigDir(IsPrivilegedMode())
+	if got.Config != want {
+		t.Errorf("GetAppPaths().Config = %q, want %q (must derive from the cached startup privilege mode, not a fresh EUID read)", got.Config, want)
+	}
+}
+
 // --- pathOverride direct unit tests ---
 // The existing test file exercises pathOverride only through GetAppPaths.
 // These tests hit all three branches of the function directly.

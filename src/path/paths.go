@@ -39,9 +39,28 @@ func pathOverride(explicit, envName, fallback string) string {
 	return fallback
 }
 
+// startupIsRoot is captured ONCE at package initialization — before main()
+// ever runs and long before any privilege drop — per AI.md PART 4/23:
+// "Directory mode is locked at process start. System vs user paths are
+// decided ONCE from the EUID at startup, before any privilege drop, and
+// cached for the process lifetime." Re-reading os.Geteuid() later (e.g.
+// after DropPrivileges sets euid to the unprivileged service user) would
+// incorrectly flip system-mode paths into user-mode paths nested under a
+// stale $HOME (e.g. the invoking sudo user's /root), which is what
+// produced the CLI/server directory-ownership collision this caches
+// against.
+var startupIsRoot = os.Geteuid() == 0
+
+// IsPrivilegedMode reports the process's cached startup privilege mode —
+// whether system (privileged) or user paths apply — fixed for the process
+// lifetime regardless of any later privilege drop.
+func IsPrivilegedMode() bool {
+	return startupIsRoot
+}
+
 // GetAppPaths returns OS-appropriate paths per AI.md PART 4.
 func GetAppPaths(configDir, dataDir string) *AppPaths {
-	isRoot := os.Geteuid() == 0
+	isRoot := startupIsRoot
 
 	return &AppPaths{
 		Config:   pathOverride(configDir, "CONFIG_DIR", GetDefaultConfigDir(isRoot)),

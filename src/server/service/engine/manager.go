@@ -371,17 +371,9 @@ collect:
 	}
 	total := len(allResults)
 	pages := (total + resultsPerPage - 1) / resultsPerPage
-	pageResults := []model.VideoResult{}
-	if page < 1 {
-		page = 1
-	}
-	start := (page - 1) * resultsPerPage
-	if start < total {
-		end := start + resultsPerPage
-		if end > total {
-			end = total
-		}
-		pageResults = allResults[start:end]
+	pageResults := allResults
+	if resultsPerPage > 0 && total > resultsPerPage {
+		pageResults = allResults[:resultsPerPage]
 	}
 
 	// Build response

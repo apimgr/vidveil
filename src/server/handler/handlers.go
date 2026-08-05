@@ -959,6 +959,29 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 	format := detectResponseFormat(r)
 
+	// Page parameter — server-driven pagination (IDEA.md "Search behavior":
+	// the server decides how/how much to send, not client-side JS).
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
+			page = pn
+		}
+	}
+
+	// Results-per-page preference cookie — server-authoritative (IDEA.md
+	// "Search Settings"). "0" ("Infinite scroll") falls back to the engine's
+	// configured default; JS only decides whether to auto-fetch the next
+	// page, never how many results come back.
+	resultsPerPageOverride := 0
+	infiniteScroll := false
+	if n, err := strconv.Atoi(h.getRequestResultsPerPage(r)); err == nil {
+		if n == 0 {
+			infiniteScroll = true
+		} else {
+			resultsPerPageOverride = n
+		}
+	}
+
 	// For regular browsers: JavaScript streams results into the page via SSE
 	// (/api/v1/search) as an enhancement. To keep core search working WITHOUT
 	// JavaScript (progressive enhancement, AI.md PART 16), also perform a
@@ -969,26 +992,23 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		enginesParam := r.URL.Query().Get("engines")
 
 		sessionID := h.resolveSearchSessionID(w, r)
-		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, sessionID)
+		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, sessionID, resultsPerPageOverride)
 		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 		results.Data.InvalidBang = parsed.InvalidBang
 		if h.metrics != nil {
 			h.metrics.IncrementSearches()
 		}
 
-		// Apply the no-JS/text-browser page-size preference (AI.md PART 16
-		// preferences); JS-enabled clients ignore this and page via SSE instead.
-		resultsPerPage := 20
-		if n, err := strconv.Atoi(h.getRequestResultsPerPage(r)); err == nil {
-			resultsPerPage = n
-		}
 		pageResults := results.Data.Results
-		if len(pageResults) > resultsPerPage {
-			pageResults = pageResults[:resultsPerPage]
-		}
+		// A full page came back, so another page is worth requesting; the
+		// "Load more" link (or, if the visitor's preference is Infinite
+		// scroll, JS auto-fetch) reuses the same search_session cookie so
+		// already-seen results never resurface (forward-only dedup).
+		hasMore := results.Pagination.Limit > 0 && len(pageResults) >= results.Pagination.Limit
+		nextPage := page + 1
 
-		// Embed the server-computed first page as an inline JSON payload so the
-		// JS client hydrates from it (no second /api/v1/search round-trip) per
+		// Embed the server-computed page as an inline JSON payload so the JS
+		// client hydrates from it (no second /api/v1/search round-trip) per
 		// AI.md PART 14 "JavaScript enhances, it does not enable". The same
 		// results are also rendered as visible cards below for no-JS clients.
 		resultsJSON, err := json.Marshal(pageResults)
@@ -1011,6 +1031,10 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"SpellSuggestion": spellSuggestion,
 			"EnginesParam":    enginesParam,
 			"OpenNewTab":      h.getRequestOpenNewTab(r),
+			"Page":            page,
+			"NextPage":        nextPage,
+			"HasMore":         hasMore,
+			"InfiniteScroll":  infiniteScroll,
 			"Version":         version.GetVersion(),
 			"BuildDateTime":   BuildDateTime(),
 		})
@@ -1018,7 +1042,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-browser clients (CLI, curl, JSON API): perform synchronous search
-	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, 1, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", resultsPerPageOverride)
 	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 	results.Data.InvalidBang = parsed.InvalidBang
 
@@ -1097,12 +1121,14 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 }
 
 // getRequestResultsPerPage returns the user's results-per-page preference from
-// their cookie (set by PreferencesSave for no-JS clients), falling back to the
-// JS-UI default of "20" (see static/js/app.js DEFAULT_PREFS.resultsPerPage).
+// their cookie — server-authoritative per IDEA.md "Search Settings" (the
+// server, not client-side JS, decides how many results to send). "0" means
+// "Infinite scroll" (opt-in); default is "20". Set by PreferencesSave for
+// no-JS clients and mirrored into the cookie by the JS preferences form too.
 func (h *SearchHandler) getRequestResultsPerPage(r *http.Request) string {
 	if c, err := r.Cookie(resultsPerPageCookieName); err == nil {
 		switch c.Value {
-		case "20", "50", "100":
+		case "0", "20", "50", "100":
 			return c.Value
 		}
 	}
@@ -1139,8 +1165,9 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Results per page — validated against the same allow-list as the <select>.
+	// "0" is "Infinite scroll" (opt-in, no longer the default).
 	switch r.FormValue("resultsPerPage") {
-	case "20", "50", "100":
+	case "0", "20", "50", "100":
 		http.SetCookie(w, newSecureCookie(resultsPerPageCookieName, r.FormValue("resultsPerPage"), "/", 365*24*60*60, sslEnabled))
 	}
 
@@ -2400,7 +2427,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 				ctx = engine.WithTorPref(ctx, &useTor)
 			}
 		}
-		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, sessionID)
+		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, sessionID, 0)
 		results.Data.Cached = false
 		if h.searchCache != nil {
 			h.searchCache.Set(cacheKey, results)
@@ -4020,7 +4047,7 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0)
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchRSS(w, r, results, h.appConfig)
@@ -4040,7 +4067,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "")
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0)
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchAtom(w, r, results, h.appConfig)
@@ -4108,7 +4135,7 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 			if len(engineNames) == 0 {
 				engineNames = parsed.Engines
 			}
-			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "")
+			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0)
 			res.Data.Query = bq.Q
 			res.Data.InvalidBang = parsed.InvalidBang
 			ch <- batchResult{idx: idx, resp: res}

@@ -11,7 +11,12 @@
             <h1>{{ t "prefs.title" }}</h1>
             <button type="button" class="preferences-close" data-action="close-prefs" aria-label="{{ t "prefs.close" }}">&times;</button>
         </div>
-        <form id="preferences-form">
+        {{/* data-managed="true" tells the generic setupPreferencesForm() in
+             app.js to skip binding its own submit handler — this page's
+             dedicated IIFE (favorites/history/engine-tier aware) already
+             owns #preferences-form, and without this attribute both handlers
+             fired on every submit (double-save). */}}
+        <form id="preferences-form" data-managed="true">
             <section>
                 <h2>{{ t "prefs.appearance" }}</h2>
                 <div class="form-group">
@@ -65,15 +70,15 @@
                 <div class="form-group">
                     <label for="results-per-page">{{ t "prefs.results_page" }}:</label>
                     <select id="results-per-page" name="resultsPerPage">
-                        <option value="0" selected>{{ t "prefs.infinite_scroll" }}</option>
-                        <option value="20">20</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
+                        <option value="20"{{if eq .ResultsPerPage "20"}} selected{{end}}>20</option>
+                        <option value="50"{{if eq .ResultsPerPage "50"}} selected{{end}}>50</option>
+                        <option value="100"{{if eq .ResultsPerPage "100"}} selected{{end}}>100</option>
+                        <option value="0"{{if eq .ResultsPerPage "0"}} selected{{end}}>{{ t "prefs.infinite_scroll" }}</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label class="toggle">
-                        <input type="checkbox" id="open-new-tab" name="openNewTab" checked>
+                        <input type="checkbox" id="open-new-tab" name="openNewTab"{{if .OpenNewTab}} checked{{end}}>
                         <span class="slider"></span>
                         <span class="toggle-label">{{ t "prefs.open_new_tab" }}</span>
                     </label>

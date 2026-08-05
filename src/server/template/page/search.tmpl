@@ -91,6 +91,18 @@
         </div>
         <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>{{ t "search.loading_more" }}</span></div>
 
+        {{/* Server-driven pagination (IDEA.md "Search behavior"/"Search Settings"):
+             the server decides page size via the results_per_page cookie, not JS.
+             This link works with JS disabled. When the visitor's preference is
+             "Infinite scroll", app.js hides the link and auto-clicks it via
+             IntersectionObserver instead — the server still controls page size
+             and content either way. */}}
+        {{if .HasMore}}
+        <nav class="load-more-container" id="load-more-container" data-infinite-scroll="{{.InfiniteScroll}}" aria-label="{{ t "a11y.load_more_results" }}">
+            <a href="/search?q={{urlquery .SearchQuery}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}&amp;page={{.NextPage}}" class="btn btn--secondary load-more-link" id="load-more-link" rel="next">{{ t "search.load_more" }}</a>
+        </nav>
+        {{end}}
+
         {{/* Inline JSON payload of the server-computed first page. app.js reads this
              (never a second /api/v1/search) to build enhanced cards under strict CSP. */}}
         <script type="application/json" id="search-results-data">{{.ResultsJSON}}</script>

@@ -250,7 +250,10 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Autocomplete suggests bang shortcuts as user types `!`.
 - Results are merged from all queried engines.
 - URL deduplication with normalization (removes duplicates across engines).
-- Page parameter supports infinite scroll.
+- Page parameter supports pagination; server decides how many results to
+  send per response based on the visitor's `results_per_page` cookie
+  (server-authoritative, see "Search Settings" below) rather than the
+  client fetching everything and slicing it in JS.
 - No admin web UI — all server configuration is via `server.yml`.
 
 **Semantic Search & AND-Based Filtering (Server-Side):**
@@ -333,12 +336,19 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Real-time status bar (streaming status, engine count).
 - Collapsible filters panel with filter count badge.
 - Related searches section (up to 20 suggestions).
-- Video grid with infinite scroll.
+- Video grid, server-paginated per the `results_per_page` cookie
+  (default 20/page); a server-rendered "Load more" link fetches the next
+  page. If the visitor's preference is explicitly "Infinite scroll",
+  JS auto-fetches the next page via the same link instead of requiring a
+  click — the server still decides page size and content either way.
 - Dynamic loading indicator.
 
 **Preferences Page (`/preferences`):**
-- All settings stored in localStorage (`vidveil_prefs` key).
-- No server-side storage.
+- Most settings stored in localStorage (`vidveil_prefs` key), no
+  server-side storage.
+- Exceptions (server-side cookies, authoritative for both JS and no-JS
+  clients — see "Search Settings" below and `forward_ip` under Privacy):
+  `results_per_page`, `open_new_tab`.
 - Reset to defaults button.
 
 **Other Pages:**
@@ -358,12 +368,21 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Search History: localStorage (`vidveil_history`), max items configurable (default unlimited), auto-clear options (Never / 1d / 7d / 30d), Export/Import JSON.
 - Favorites: localStorage (`vidveil_favorites`), each entry url+title+thumbnail+source+added_at, Export/Import JSON, Clear all with confirm.
 - Related Searches: server-side rendered into HTML, client adds "Show more" toggle, up to 20 (first 8 visible).
-- Infinite Scroll: IntersectionObserver, sentinel 200px, dedup by URL, stops when no more results.
+- Infinite Scroll: opt-in via the `results_per_page` cookie set to
+  "Infinite scroll" (not the default). IntersectionObserver, sentinel
+  200px, dedup by URL, stops when no more results. The server still
+  determines each batch's contents/size (see "Search behavior" above);
+  JS only decides *when* to request the next page.
 - Filter Panel: collapsible with toggle, filter count badge, multi-source checkbox per engine, "All Sources" toggle, persists during session.
 
 ### User preferences (reference detail)
 
-All preferences stored in localStorage (`vidveil_prefs` key). No server-side storage.
+Most preferences stored in localStorage (`vidveil_prefs` key), no
+server-side storage. Exceptions: `results_per_page` and `open_new_tab`
+(see "Search Settings" below) are server-side cookies — the server reads
+them to decide how/how much to send, matching the existing `forward_ip`
+cookie precedent under Privacy. JS mirrors these two into the cookie on
+save so both JS and no-JS clients get identical server-driven behavior.
 
 **Appearance:**
 - Theme: Auto (system), Dark (Dracula), Light - default: Auto.
@@ -374,8 +393,9 @@ All preferences stored in localStorage (`vidveil_prefs` key). No server-side sto
 - Auto-play preview on hover (toggle) - default: Yes.
 - Preview delay: Instant, 200ms, 500ms, 1000ms - default: Instant.
 
-**Search Settings:**
-- Results per page: Infinite scroll, 20, 50, 100 - default: Infinite scroll.
+**Search Settings** (server-side cookies, not localStorage — server is
+authoritative for pagination, see "Search behavior" above):
+- Results per page: 20, 50, 100, Infinite scroll - default: 20.
 - Open links in new tab (toggle) - default: Yes.
 
 **Default Filters (auto-applied to new searches):**

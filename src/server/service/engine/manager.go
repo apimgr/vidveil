@@ -156,7 +156,7 @@ func (m *EngineManager) applyConfig() {
 // Server (sessions)") so that page=2, page=3, ... of the same infinite-scroll
 // search never resurface a result already returned on an earlier page.
 func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string, sessionID string) *model.SearchResponse {
-	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, sessionID)
+	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, sessionID, 0)
 }
 
 // SearchWithOperators is identical to Search but additionally applies
@@ -170,7 +170,12 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 // otherwise preserved) to the full, deduplicated result set before
 // pagination — giving a definitive global order for JSON/HTML/RSS/Atom/batch
 // clients, unlike the SSE path's necessarily per-engine-only ordering.
-func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, previewFirst bool, sessionID string) *model.SearchResponse {
+// resultsPerPage, when > 0, overrides the configured Search.ResultsPerPage
+// default for this call — this is how the server honors a visitor's
+// `results_per_page` preference cookie (IDEA.md "Search Settings": server
+// is authoritative for pagination, not client-side JS). Pass 0 to use the
+// configured default.
+func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, previewFirst bool, sessionID string, resultsPerPage int) *model.SearchResponse {
 	startTime := time.Now()
 
 	// Capture the engine set under a brief read lock, then release it before any
@@ -351,10 +356,17 @@ collect:
 	// Sort results by relevance and filter by minimum score
 	// Default minimum score of 10.0 ensures at least one query word matches
 	minScore := 10.0
-	resultsPerPage := 50
 	if m.appConfig != nil {
 		minScore = m.appConfig.Search.MinRelevanceScore
-		resultsPerPage = m.appConfig.Search.ResultsPerPage
+	}
+	// resultsPerPage > 0 means the caller passed an explicit per-request
+	// override (the visitor's results_per_page preference cookie); otherwise
+	// fall back to the configured default.
+	if resultsPerPage <= 0 {
+		resultsPerPage = 50
+		if m.appConfig != nil {
+			resultsPerPage = m.appConfig.Search.ResultsPerPage
+		}
 	}
 	allResults = sortAndFilterByRelevanceWithOperators(allResults, query, minScore, exactPhrases, exclusions, requiredTerms, nil)
 	if previewFirst {
@@ -366,9 +378,6 @@ collect:
 	// array size must respect "limit"). Cross-page duplicates across
 	// successive calls are already removed above via m.sessionDedup, so this
 	// window is the next resultsPerPage NEW items for this session.
-	if resultsPerPage <= 0 {
-		resultsPerPage = 50
-	}
 	total := len(allResults)
 	pages := (total + resultsPerPage - 1) / resultsPerPage
 	pageResults := allResults

@@ -47,7 +47,7 @@ func TestSearchWithOperators_SlowEngineDoesNotBlockBatch(t *testing.T) {
 
 	start := time.Now()
 	resp := m.SearchWithOperators(context.Background(), "hello world", 1,
-		[]string{"fast", "slow"}, nil, nil, nil, false, "")
+		[]string{"fast", "slow"}, nil, nil, nil, false, "", 20)
 	elapsed := time.Since(start)
 
 	if resp == nil {

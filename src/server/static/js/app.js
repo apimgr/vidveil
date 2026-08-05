@@ -145,7 +145,9 @@ const defaultPrefs = {
     thumbnailSize: 'medium',
     autoplayPreview: true,
     previewDelay: 0,  // Instant
-    resultsPerPage: 0,  // 0 = infinite scroll (no pagination)
+    // Server-authoritative (IDEA.md "Search Settings") — mirrored into the
+    // results_per_page cookie on save; 0 = infinite scroll (opt-in, not default)
+    resultsPerPage: 20,
     openNewTab: true,
     defaultPreviewOnly: true,
     showAIContent: false,  // AI content hidden by default
@@ -437,9 +439,25 @@ function setupPreferencesForm() {
 
         savePreferences(newPrefs);
         setTheme(newPrefs.theme);
+        mirrorServerPrefsToCookies(newPrefs);
 
         showNotification('Preferences saved!', 'success');
     });
+}
+
+// Mirrors the two server-authoritative preferences (IDEA.md "Search Settings":
+// resultsPerPage, openNewTab) into their cookies so the server can decide
+// pagination/link-target for both this JS client and any no-JS client that
+// later loads the same browser profile. Same pattern as the theme cookie
+// above (setTheme) — cookie name/values match resultsPerPageCookieName /
+// openNewTabCookieName in src/server/handler/handlers.go.
+function mirrorServerPrefsToCookies(prefs) {
+    var maxAge = 365 * 24 * 3600; // 1 year
+    var resultsPerPage = parseInt(prefs.resultsPerPage ?? 20, 10);
+    if (![0, 20, 50, 100].includes(resultsPerPage)) resultsPerPage = 20;
+    document.cookie = 'results_per_page=' + resultsPerPage + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+    var openNewTab = prefs.openNewTab !== false;
+    document.cookie = 'open_new_tab=' + (openNewTab ? '1' : '0') + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
 }
 
 // ============================================================================
@@ -2196,8 +2214,21 @@ if (document.readyState === 'loading') {
         tagsContainer.appendChild(showMoreBtn);
     }
 
-    // Infinite scroll - loads more pages as user scrolls
+    // Infinite scroll - loads more pages as user scrolls.
+    // Server-authoritative per IDEA.md "Search Settings": the server always
+    // decides page size/content; JS only decides *when* to request the next
+    // page, and only auto-fetches when the visitor's results_per_page
+    // preference is explicitly "Infinite scroll" (0). Otherwise the
+    // server-rendered "Load more" link (search.tmpl #load-more-link) is the
+    // only way to advance pages, so it must stay visible.
     function setupInfiniteScroll() {
+        var loadMoreContainer = document.getElementById('load-more-container');
+        var resultsPerPage = parseInt((userPrefs && userPrefs.resultsPerPage) ?? 0, 10);
+        if (resultsPerPage !== 0) {
+            return;
+        }
+        if (loadMoreContainer) loadMoreContainer.classList.add('hidden');
+
         var grid = document.getElementById('video-grid');
         if (!grid || infiniteScrollObserver) return;
 
@@ -3101,7 +3132,7 @@ document.addEventListener('error', function(e) {
             thumbnailSize: 'medium',
             autoplayPreview: true,
             previewDelay: '0',
-            resultsPerPage: '0',
+            resultsPerPage: '20',
             openNewTab: true,
             defaultPreviewOnly: true,
             showAIContent: false,
@@ -3189,7 +3220,15 @@ document.addEventListener('error', function(e) {
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
             var maxAge = 365 * 24 * 3600;
-            document.cookie = 'vidveil-theme=' + encodeURIComponent(prefs.theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+            // Cookie name must match getTheme()/setTheme() ("theme") so the
+            // server's theme cookie reader stays authoritative regardless of
+            // which of the two preferences-save handlers ran (see
+            // mirrorServerPrefsToCookies for the same pattern applied to
+            // resultsPerPage/openNewTab).
+            document.cookie = 'theme=' + encodeURIComponent(prefs.theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+            if (typeof mirrorServerPrefsToCookies === 'function') {
+                mirrorServerPrefsToCookies(prefs);
+            }
 
             showToastLocal(i18n.saved, 'success');
             setTimeout(function() {

@@ -123,6 +123,31 @@ func TestResultMatchesIntent_GenericWordsNoLongerInMalePresenceWords(t *testing.
 	}
 }
 
+// TestResultMatchesIntent_StepbrotherCompoundWord is a regression test for
+// the live bug where `GET /search?q=Teen%20lesbian` returned titles like
+// "Invite Stepbrother". Root cause: malePresenceWords/familyMaleWords had
+// the abbreviation "stepbro" but not the full compound word "stepbrother",
+// and containsWholeWord's word-boundary matching means neither "stepbro"
+// nor bare "brother" matches inside "stepbrother".
+func TestResultMatchesIntent_StepbrotherCompoundWord(t *testing.T) {
+	intent := DetectQueryIntent("teen lesbian")
+	if !intent.IsFemaleOnly {
+		t.Fatalf("expected IsFemaleOnly=true for %q", "teen lesbian")
+	}
+
+	rejectTitles := []string{
+		"Invite Stepbrother",
+		"Teen Fucks Her Stepbrother After School",
+	}
+
+	for _, title := range rejectTitles {
+		r := model.VideoResult{Title: title}
+		if ResultMatchesIntent(r, intent) {
+			t.Errorf("expected result to be rejected for female-only query, title=%q", title)
+		}
+	}
+}
+
 // TestResultMatchesIntent_DescriptionAndTagsOutOfScope ensures the intent
 // filter only inspects Title/Performer — Description and Tags must not be
 // able to trigger a false-positive rejection even if they still contained a

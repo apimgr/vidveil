@@ -397,7 +397,7 @@ var malePresenceWords = []string{
 	"cock", "cocks", "dick", "dicks", "penis",
 	"bbc",
 	"dad", "daddy", "father", "son", "brother",
-	"stepbro", "stepfather", "stepdad", "stepdaddy", "stepson",
+	"stepbro", "stepbrother", "stepfather", "stepdad", "stepdaddy", "stepson",
 	"grandpa", "uncle", "nephew",
 	"boyfriend", "bf", "hubby",
 	"blowbang", "facial", "cumshot", "cum shot",
@@ -420,7 +420,7 @@ var familyFemaleWords = []string{
 // prevent the family-combo female-only inference above (e.g. "mom son").
 var familyMaleWords = []string{
 	"dad", "father", "son", "brother",
-	"stepdad", "stepfather", "stepbro", "stepson",
+	"stepdad", "stepfather", "stepbro", "stepbrother", "stepson",
 	"grandpa", "uncle", "nephew",
 }
 

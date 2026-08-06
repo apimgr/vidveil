@@ -34,12 +34,15 @@
                          hidden></div>
                 </div>
                 <button type="submit" aria-label="{{ t "search.button" }}" class="search-btn">{{ t "search.button" }}</button>
+
+                {{/* Filters live inside this form (not a sibling) so the
+                     duration/quality/sort/engines selects submit natively
+                     with the search query when JS is disabled - AI.md PART
+                     16 "JavaScript enhances, it does not enable". */}}
+                {{template "public/filters" (dict "ShowEngines" true "Compact" false)}}
             </form>
 
             <p class="bang-hint">{{ t "search.bang_prefix" }} <code>!ph</code> PornHub, <code>!xv</code> XVideos, <code>!xh</code> xHamster, <code>!rt</code> RedTube</p>
-
-            {{/* Unified filters - collapsible on all screen sizes */}}
-            {{template "public/filters" (dict "ShowEngines" true "Compact" false)}}
         </div>
 
         <div id="search-history" class="search-history" role="region" aria-label="{{ t "a11y.recent_searches" }}"></div>

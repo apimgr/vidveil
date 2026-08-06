@@ -949,10 +949,15 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get engine names - bangs take priority, then URL param
+	// Get engine names - bangs take priority, then URL param. The sources
+	// filter panel (filters.tmpl, no-JS path) submits one repeated
+	// "engines" query value per checked checkbox rather than a single
+	// comma-joined value, so both shapes must be accepted.
 	engineNames := parsed.Engines
 	if len(engineNames) == 0 {
-		if e := r.URL.Query().Get("engines"); e != "" {
+		if vals := r.URL.Query()["engines"]; len(vals) > 1 {
+			engineNames = vals
+		} else if e := r.URL.Query().Get("engines"); e != "" {
 			engineNames = strings.Split(e, ",")
 		}
 	}
@@ -992,7 +997,8 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		enginesParam := r.URL.Query().Get("engines")
 
 		sessionID := h.resolveSearchSessionID(w, r)
-		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, sessionID, resultsPerPageOverride)
+		filterOpts := parseResultFilterOptions(r)
+		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, sessionID, resultsPerPageOverride, filterOpts)
 		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 		results.Data.InvalidBang = parsed.InvalidBang
 		if h.metrics != nil {
@@ -1030,6 +1036,9 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"RelatedSearches": relatedSearches,
 			"SpellSuggestion": spellSuggestion,
 			"EnginesParam":    enginesParam,
+			"FilterDuration":  r.URL.Query().Get("duration"),
+			"FilterQuality":   r.URL.Query().Get("quality"),
+			"FilterSort":      r.URL.Query().Get("sort"),
 			"OpenNewTab":      h.getRequestOpenNewTab(r),
 			"Page":            page,
 			"NextPage":        nextPage,
@@ -1042,7 +1051,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-browser clients (CLI, curl, JSON API): perform synchronous search
-	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", resultsPerPageOverride)
+	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", resultsPerPageOverride, parseResultFilterOptions(r))
 	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 	results.Data.InvalidBang = parsed.InvalidBang
 
@@ -1084,6 +1093,9 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"RelatedSearches": relatedSearches,
 			"SpellSuggestion": spellSuggestion,
 			"EnginesParam":    enginesParam,
+			"FilterDuration":  r.URL.Query().Get("duration"),
+			"FilterQuality":   r.URL.Query().Get("quality"),
+			"FilterSort":      r.URL.Query().Get("sort"),
 			"Version":         version.GetVersion(),
 			"BuildDateTime":   BuildDateTime(),
 		})
@@ -1263,6 +1275,59 @@ func (h *SearchHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 			"GPCHonored":    gpcHonored,
 		})
 	}
+}
+
+// parseResultFilterOptions builds a server-authoritative engine.ResultFilterOptions
+// from the search-results filter panel's GET query params (filters.tmpl:
+// "duration", "quality", "sort"), per AI.md PART 16 "JavaScript enhances, it
+// does not enable" — the filter panel is a plain GET form so this parsing (and
+// the resulting filtering/sorting) is identical whether JS is enabled or not.
+// The legacy numeric "min_quality"/"min_duration" query params (used by the
+// SSE endpoint and the visitor's separate Preferences "minimum duration"
+// setting) are also honored and merged in — the higher/stricter value wins.
+func parseResultFilterOptions(r *http.Request) engine.ResultFilterOptions {
+	opts := engine.ResultFilterOptions{
+		SortBy: r.URL.Query().Get("sort"),
+	}
+
+	if mq := r.URL.Query().Get("min_quality"); mq != "" {
+		if qv, err := strconv.Atoi(mq); err == nil && qv > 0 {
+			opts.MinQuality = qv
+		}
+	}
+	switch r.URL.Query().Get("quality") {
+	case "4k":
+		opts.MinQuality = maxInt(opts.MinQuality, engine.Quality4K)
+	case "1080":
+		opts.MinQuality = maxInt(opts.MinQuality, engine.Quality1080p)
+	case "720":
+		opts.MinQuality = maxInt(opts.MinQuality, engine.Quality720p)
+	}
+
+	if md := r.URL.Query().Get("min_duration"); md != "" {
+		if mv, err := strconv.Atoi(md); err == nil && mv > 0 {
+			opts.UserMinDuration = mv
+		}
+	}
+	switch r.URL.Query().Get("duration") {
+	case "short":
+		opts.MaxDuration = 599
+	case "medium":
+		opts.UserMinDuration = maxInt(opts.UserMinDuration, 600)
+		opts.MaxDuration = 1799
+	case "long":
+		opts.UserMinDuration = maxInt(opts.UserMinDuration, 1800)
+	}
+
+	return opts
+}
+
+// maxInt returns the larger of two ints.
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // detectResponseFormat determines response format per AI.md PART 14 (Content Negotiation)
@@ -2319,10 +2384,13 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get engine names - bangs take priority, then URL param
+	// Get engine names - bangs take priority, then URL param (accepts either
+	// repeated "engines" values or one comma-joined value - see APISearchHTML).
 	engineNames := parsed.Engines
 	if len(engineNames) == 0 {
-		if e := r.URL.Query().Get("engines"); e != "" {
+		if vals := r.URL.Query()["engines"]; len(vals) > 1 {
+			engineNames = vals
+		} else if e := r.URL.Query().Get("engines"); e != "" {
 			engineNames = strings.Split(e, ",")
 		}
 	}
@@ -2345,27 +2413,21 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	// Preview-first: sort each engine batch so preview-capable results stream first
 	previewFirst := r.URL.Query().Get("preview_first") == "1"
 
-	// Parse minimum quality filter (e.g., 360 = 360p+, 720 = 720p+)
-	minQuality := 0
-	if mq := r.URL.Query().Get("min_quality"); mq != "" {
-		if qv, err := strconv.Atoi(mq); err == nil && qv > 0 {
-			minQuality = qv
-		}
-	}
-
-	// Parse user's minimum duration preference (in seconds)
-	userMinDuration := 0
-	if md := r.URL.Query().Get("min_duration"); md != "" {
-		if mv, err := strconv.Atoi(md); err == nil && mv > 0 {
-			userMinDuration = mv
-		}
-	}
+	// Server-authoritative filter-panel options (min_quality/quality, min_duration/
+	// duration, sort — see parseResultFilterOptions); the SSE path below applies
+	// MinQuality/UserMinDuration/MaxDuration per-result the same as the synchronous
+	// SearchWithOperators path, but ignores SortBy (a global reorder is
+	// incompatible with incremental streaming — the no-JS/JS-fallback form
+	// submission uses the synchronous path instead whenever "sort" is set).
+	filterOpts := parseResultFilterOptions(r)
+	minQuality := filterOpts.MinQuality
+	userMinDuration := filterOpts.UserMinDuration
 
 	sessionID := r.URL.Query().Get("session")
 
 	// SSE streaming mode - stream results as they arrive from engines
 	if format == "text/event-stream" {
-		h.handleSearchSSE(w, r, requestStart, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, nil, showAI, minQuality, previewFirst, userMinDuration, sessionID)
+		h.handleSearchSSE(w, r, requestStart, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, nil, showAI, minQuality, previewFirst, userMinDuration, filterOpts.MaxDuration, sessionID)
 		return
 	}
 
@@ -2427,7 +2489,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 				ctx = engine.WithTorPref(ctx, &useTor)
 			}
 		}
-		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, sessionID, 0)
+		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, sessionID, 0, parseResultFilterOptions(r))
 		results.Data.Cached = false
 		if h.searchCache != nil {
 			h.searchCache.Set(cacheKey, results)
@@ -2516,7 +2578,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSearchSSE handles SSE streaming for search results
-func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, requestStart time.Time, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, sessionID string) {
+func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, requestStart time.Time, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, maxDuration int, sessionID string) {
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -2558,7 +2620,7 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	// "0 of N engines had results" rather than the misleading "0 engines".
 	enginesTotal := h.engineMgr.EnginesToUseCount(engineNames)
 
-	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, requiredTerms, performers, showAI, minQuality, previewFirst, userMinDuration, sessionID)
+	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, requiredTerms, performers, showAI, minQuality, previewFirst, userMinDuration, maxDuration, sessionID)
 
 	// Tracked server-side (not left to the client) so the final "N of M
 	// engines had results" count is always authoritative, not re-derived from
@@ -4047,7 +4109,7 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0)
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0, engine.ResultFilterOptions{})
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchRSS(w, r, results, h.appConfig)
@@ -4067,7 +4129,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	parsed := engine.ParseBangs(query)
-	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0)
+	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0, engine.ResultFilterOptions{})
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchAtom(w, r, results, h.appConfig)
@@ -4135,7 +4197,7 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 			if len(engineNames) == 0 {
 				engineNames = parsed.Engines
 			}
-			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0)
+			res := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0, engine.ResultFilterOptions{})
 			res.Data.Query = bq.Q
 			res.Data.InvalidBang = parsed.InvalidBang
 			ch <- batchResult{idx: idx, resp: res}

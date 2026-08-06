@@ -203,40 +203,6 @@ function selectTier(maxTier) {
 // ============================================================================
 // Search Results Sorting/Filtering
 // ============================================================================
-function updateSort(sortBy) {
-    const grid = document.getElementById('results');
-    if (!grid) return;
-
-    const cards = Array.from(grid.querySelectorAll('.video-card'));
-
-    cards.sort((a, b) => {
-        switch (sortBy) {
-            case 'duration-desc':
-                return (parseInt(b.dataset.duration) || 0) - (parseInt(a.dataset.duration) || 0);
-            case 'duration-asc':
-                return (parseInt(a.dataset.duration) || 0) - (parseInt(b.dataset.duration) || 0);
-            case 'views':
-                return (parseInt(b.dataset.views) || 0) - (parseInt(a.dataset.views) || 0);
-            default:
-                return 0; // Keep original order for relevance
-        }
-    });
-
-    // Re-append in sorted order
-    cards.forEach(card => grid.appendChild(card));
-}
-
-function filterBySource(source) {
-    const cards = document.querySelectorAll('.video-card');
-    cards.forEach(card => {
-        if (!source || card.dataset.source === source) {
-            card.style.display = '';
-        } else {
-            card.style.display = 'none';
-        }
-    });
-}
-
 // ============================================================================
 // Unified Filter Panel - Uses HTML5 details/summary for toggle
 // ============================================================================
@@ -261,11 +227,15 @@ function updateFilterCount() {
     }
 }
 
-// Handle filter changes - updates count and applies filters
+// Handle filter changes - records the requested duration/quality/sort, then
+// (on the search-results page) re-runs the search server-side so the server
+// stays authoritative for the actual filtered/sorted set - AI.md PART 16
+// "JavaScript enhances, it does not enable". On the home page (no
+// #filters-form yet, no results to refetch), this only updates the count
+// badge; the values still submit natively with the main search form.
 function handleFilterChange() {
     updateFilterCount();
 
-    // Apply filters to search results (if on search page)
     var duration = document.getElementById('filter-duration');
     var quality = document.getElementById('filter-quality');
     var sort = document.getElementById('filter-sort');
@@ -274,6 +244,10 @@ function handleFilterChange() {
     if (quality) filterByQuality(quality.value);
     // Source filter is now handled independently via updateSourceFilter()
     if (sort) sortResults(sort.value);
+
+    if (document.getElementById('filters-form') && window.Vidveil && window.Vidveil.Search && window.Vidveil.Search.refetch) {
+        window.Vidveil.Search.refetch();
+    }
 }
 
 // Close filters when clicking outside (for compact mode)
@@ -300,29 +274,10 @@ document.addEventListener('click', function(e) {
 window.updateFilterCount = updateFilterCount;
 window.handleFilterChange = handleFilterChange;
 
-function filterByDuration(duration) {
-    const cards = document.querySelectorAll('.video-card');
-    cards.forEach(card => {
-        const seconds = parseInt(card.dataset.duration) || 0;
-        let show = true;
-
-        switch (duration) {
-            case 'short':
-                show = seconds < 600; // < 10 min
-                break;
-            case 'medium':
-                show = seconds >= 600 && seconds <= 1800; // 10-30 min
-                break;
-            case 'long':
-                show = seconds > 1800; // > 30 min
-                break;
-            default:
-                show = true;
-        }
-
-        card.style.display = show ? '' : 'none';
-    });
-}
+// Note: filterByDuration/filterByQuality/sortResults used by
+// handleFilterChange() above resolve to window.filterByDuration etc., which
+// the search-page IIFE assigns further down (window.filterByDuration =
+// searchFilterByDuration, etc.) before any filter-change event can fire.
 
 // Lazy loading: Uses native loading="lazy" attribute on images - no JS needed
 
@@ -1160,15 +1115,10 @@ if (document.readyState === 'loading') {
             saveHomeSearchToHistory(query.value);
         }
 
-        // Include engine tier filter if set (filter bar is outside the form)
-        var engineFilter = document.getElementById('filter-engines');
-        if (engineFilter && engineFilter.value) {
-            var hidden = form.querySelector('input[name="engines"]') || document.createElement('input');
-            hidden.type = 'hidden';
-            hidden.name = 'engines';
-            hidden.value = engineFilter.value;
-            form.appendChild(hidden);
-        }
+        // Note: the engine tier <select name="engines"> (home page filters
+        // panel) is now a DOM descendant of this form - see index.tmpl -
+        // so it submits natively with the query. No manual hidden-field
+        // copy needed (and copying it here would duplicate the param).
 
         return true;
     }
@@ -1428,35 +1378,59 @@ if (document.readyState === 'loading') {
             }
         }
 
-        // Apply default filters from preferences
+        // Apply default filters from preferences. Preview-first stays a
+        // client-side sort priority (mirrors the server's own previewFirst
+        // stream ordering, never a data filter). Duration/quality/sort are
+        // real server-authoritative filters (AI.md PART 16) but the defaults
+        // themselves live in localStorage only (IDEA.md "User preferences" -
+        // only results_per_page/open_new_tab are server-side cookies), so the
+        // server can't have applied them to the page it already rendered. A
+        // saved default takes effect via an in-place refetch (same request
+        // parseResultFilterOptions/SearchWithOperators would apply from a
+        // real query param) - never a full-page navigation, which was
+        // causing a visible second page load (grid reset, scroll jump,
+        // "in Xms" flicker) on every search that had a saved default.
         if (userPrefs.defaultPreviewOnly) {
             searchPreviewFirst = true;
             var previewCheckbox = document.getElementById('filter-preview-first');
             if (previewCheckbox) previewCheckbox.checked = true;
         }
-        if (userPrefs.defaultDuration) {
-            searchCurrentDurationFilter = userPrefs.defaultDuration;
-            var durationSelect = document.getElementById('filter-duration');
-            if (durationSelect) durationSelect.value = userPrefs.defaultDuration;
+        var urlParams = new URLSearchParams(window.location.search);
+        var missingDefaults = new URLSearchParams();
+        if (userPrefs.defaultDuration && !urlParams.get('duration')) {
+            missingDefaults.set('duration', userPrefs.defaultDuration);
         }
-        if (userPrefs.defaultQuality) {
-            searchCurrentQualityFilter = userPrefs.defaultQuality;
-            var qualitySelect = document.getElementById('filter-quality');
-            if (qualitySelect) qualitySelect.value = userPrefs.defaultQuality;
+        if (userPrefs.defaultQuality && !urlParams.get('quality')) {
+            missingDefaults.set('quality', userPrefs.defaultQuality);
         }
-        if (userPrefs.defaultSort) {
-            searchCurrentSort = userPrefs.defaultSort;
-            var sortSelect = document.getElementById('filter-sort');
-            if (sortSelect) sortSelect.value = userPrefs.defaultSort;
+        if (userPrefs.defaultSort && !urlParams.get('sort')) {
+            missingDefaults.set('sort', userPrefs.defaultSort);
         }
+        var hasMissingDefaults = [...missingDefaults.keys()].length > 0;
+        if (hasMissingDefaults) {
+            missingDefaults.forEach(function(value, key) { urlParams.set(key, value); });
+        }
+        searchCurrentDurationFilter = urlParams.get('duration') || '';
+        searchCurrentQualityFilter = urlParams.get('quality') || '';
+        searchCurrentSort = urlParams.get('sort') || '';
+        var durationSelect = document.getElementById('filter-duration');
+        if (durationSelect) durationSelect.value = searchCurrentDurationFilter;
+        var qualitySelect = document.getElementById('filter-quality');
+        if (qualitySelect) qualitySelect.value = searchCurrentQualityFilter;
+        var sortSelect = document.getElementById('filter-sort');
+        if (sortSelect) sortSelect.value = searchCurrentSort;
 
         // Save to search history
         if (searchQuery) {
             searchSessionID = generateSearchSessionID();
             saveSearchPageHistory(searchQuery);
-            // Hydrate from the server-rendered inline payload (no second search).
-            // Only fall back to SSE streaming if that payload is missing.
-            if (!hydrateServerResults(minDuration)) {
+            if (hasMissingDefaults) {
+                // The page the server rendered didn't have these defaults
+                // applied yet - refetch once, in place, with them included.
+                refetchSearchResults();
+            } else if (!hydrateServerResults(minDuration)) {
+                // Hydrate from the server-rendered inline payload (no second
+                // search). Only fall back to SSE streaming if missing.
                 streamResults(minDuration);
             }
         }
@@ -1554,9 +1528,24 @@ if (document.readyState === 'loading') {
             searchUrl += '&preview_first=1';
         }
 
-        // Apply enabled engines from preferences (bangs take priority server-side)
-        if (userPrefs.enabledEngines && userPrefs.enabledEngines.length > 0) {
-            searchUrl += '&engines=' + encodeURIComponent(userPrefs.enabledEngines.join(','));
+        // Engines to query: the filter panel's own source selection (if the
+        // visitor has narrowed it) takes priority over the blanket enabled-
+        // engines preference, same precedence as the no-JS query param path.
+        var streamEngineList = (searchCurrentSourceFilters.size > 0)
+            ? Array.from(searchCurrentSourceFilters)
+            : (userPrefs.enabledEngines || []);
+        if (streamEngineList.length > 0) {
+            searchUrl += '&engines=' + encodeURIComponent(streamEngineList.join(','));
+        }
+
+        // Duration/quality filters are server-authoritative (AI.md PART 16) -
+        // forwarded as real query params, same ones parseResultFilterOptions
+        // reads on a plain no-JS page load.
+        if (searchCurrentDurationFilter) {
+            searchUrl += '&duration=' + encodeURIComponent(searchCurrentDurationFilter);
+        }
+        if (searchCurrentQualityFilter) {
+            searchUrl += '&quality=' + encodeURIComponent(searchCurrentQualityFilter);
         }
 
         // Send minimum duration preference to server for early filtering
@@ -1684,7 +1673,24 @@ if (document.readyState === 'loading') {
         var loadingText = document.getElementById('loading-text');
         if (loadingText) loadingText.textContent = 'Loading results...';
 
-        fetch('/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID), {
+        var fallbackUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID);
+        var fallbackEngineList = (searchCurrentSourceFilters.size > 0)
+            ? Array.from(searchCurrentSourceFilters)
+            : (userPrefs.enabledEngines || []);
+        if (fallbackEngineList.length > 0) {
+            fallbackUrl += '&engines=' + encodeURIComponent(fallbackEngineList.join(','));
+        }
+        if (searchCurrentDurationFilter) {
+            fallbackUrl += '&duration=' + encodeURIComponent(searchCurrentDurationFilter);
+        }
+        if (searchCurrentQualityFilter) {
+            fallbackUrl += '&quality=' + encodeURIComponent(searchCurrentQualityFilter);
+        }
+        if (searchCurrentSort) {
+            fallbackUrl += '&sort=' + encodeURIComponent(searchCurrentSort);
+        }
+
+        fetch(fallbackUrl, {
             headers: { 'Accept': 'application/json' }
         })
         .then(function(response) {
@@ -1982,14 +1988,17 @@ if (document.readyState === 'loading') {
         }
     }
 
+    // Duration/quality/sort/source are server-authoritative filters (AI.md
+    // PART 16 "JavaScript enhances, it does not enable") - these setters only
+    // record the requested value; refetchSearchResults() below is what
+    // actually asks the server for the filtered/sorted set. They never
+    // filter or reorder already-rendered cards themselves.
     function searchFilterByDuration(value) {
         searchCurrentDurationFilter = value;
-        applySearchFiltersAndSort();
     }
 
     function searchFilterByQuality(value) {
         searchCurrentQualityFilter = value;
-        applySearchFiltersAndSort();
     }
 
     function searchFilterBySource(sources) {
@@ -2003,7 +2012,6 @@ if (document.readyState === 'loading') {
         } else {
             searchCurrentSourceFilters = new Set();
         }
-        applySearchFiltersAndSort();
     }
 
     function addSourceCheckbox(source, displayName) {
@@ -2011,7 +2019,10 @@ if (document.readyState === 'loading') {
         if (!sourceOptions) return;
         var label = document.createElement('label');
         label.className = 'source-option';
-        label.innerHTML = '<input type="checkbox" name="source-filter" value="' + escapeHtmlUtil(source) + '" checked data-action="source-filter-change"><span>' + escapeHtmlUtil(displayName) + '</span>';
+        // name="engines" matches the server's <select>/checkbox parsing
+        // (handlers.go accepts repeated "engines" values) so this checkbox
+        // also submits correctly if the filters form is posted without JS.
+        label.innerHTML = '<input type="checkbox" name="engines" value="' + escapeHtmlUtil(source) + '" checked data-action="source-filter-change"><span>' + escapeHtmlUtil(displayName) + '</span>';
         sourceOptions.appendChild(label);
     }
 
@@ -2054,101 +2065,96 @@ if (document.readyState === 'loading') {
             }
         }
 
-        // Apply filter (empty set = show all)
+        // Empty set = query all engines again
         searchCurrentSourceFilters = allChecked ? new Set() : new Set(selectedSources);
-        applySearchFiltersAndSort();
         updateFilterCount();
+        refetchSearchResults();
     }
 
     function updatePreviewFirst(checked) {
         searchPreviewFirst = checked;
+        // Preview-first is a display-order priority, not a data filter - it
+        // mirrors the server's own previewFirst stream ordering, so this can
+        // stay a pure client-side reorder of the already-rendered cards.
         applySearchFiltersAndSort();
         updateFilterCount();
     }
 
     function searchSortResults(value) {
         searchCurrentSort = value;
-        applySearchFiltersAndSort();
     }
 
-    function applySearchFiltersAndSort() {
-        var cards = document.querySelectorAll('.video-card');
+    // Re-runs the search against the server with the current
+    // duration/quality/sort/source filter state (a JS-enhanced equivalent of
+    // submitting #filters-form and letting the browser reload /search with
+    // the same query params - see AI.md PART 16). Never computes the
+    // filtered/sorted result set itself.
+    function refetchSearchResults() {
+        if (!searchQuery) return;
 
-        cards.forEach(function(card) {
-            var duration = parseInt(card.dataset.duration) || 0;
-            var source = card.dataset.source || '';
-            var quality = (card.dataset.quality || '').toUpperCase();
-            var show = true;
+        var params = new URLSearchParams(window.location.search);
+        if (searchCurrentDurationFilter) params.set('duration', searchCurrentDurationFilter); else params.delete('duration');
+        if (searchCurrentQualityFilter) params.set('quality', searchCurrentQualityFilter); else params.delete('quality');
+        if (searchCurrentSort) params.set('sort', searchCurrentSort); else params.delete('sort');
+        params.delete('engines');
+        if (searchCurrentSourceFilters.size > 0) {
+            searchCurrentSourceFilters.forEach(function(s) { params.append('engines', s); });
+        }
+        history.replaceState(null, '', window.location.pathname + '?' + params.toString());
 
-            // Note: AND-based term filtering with synonyms is now handled server-side
-            // Client-side only handles duration/quality/source filters (preview is sort priority, not filter)
+        if (infiniteScrollObserver) {
+            infiniteScrollObserver.disconnect();
+            infiniteScrollObserver = null;
+        }
+        allResults = [];
+        sourcesSet = new Set();
+        enginesWithResults = new Set();
+        enginesWithResultsFinal = null;
+        enginesTotal = 0;
+        enginesCompleted = 0;
+        hasMoreResults = true;
+        currentPage = 1;
+        isLoadingMore = false;
+        isSearching = true;
+        searchSessionID = generateSearchSessionID();
 
-            // Duration filter
-            if (searchCurrentDurationFilter === 'short' && duration >= 600) show = false;
-            else if (searchCurrentDurationFilter === 'medium' && (duration < 600 || duration > 1800)) show = false;
-            else if (searchCurrentDurationFilter === 'long' && duration <= 1800) show = false;
-
-            // Quality filter
-            if (searchCurrentQualityFilter === '4k' && !quality.includes('4K') && !quality.includes('2160')) show = false;
-            else if (searchCurrentQualityFilter === '1080' && !quality.includes('1080') && !quality.includes('HD')) show = false;
-            else if (searchCurrentQualityFilter === '720' && !quality.includes('720')) show = false;
-
-            // Source filter (multiple selection)
-            if (searchCurrentSourceFilters.size > 0 && !searchCurrentSourceFilters.has(source)) show = false;
-
-            // Note: Preview is NOT a filter - it's a sort priority (show first, not only)
-
-            if (show) {
-                card.classList.remove('hidden');
-            } else {
-                card.classList.add('hidden');
-            }
-        });
-
-        // Sorting - always apply (preview first is a sort, plus user's sort preference)
         var grid = document.getElementById('video-grid');
-        var cardArray = Array.from(grid.querySelectorAll('.video-card'));
-
-        cardArray.sort(function(a, b) {
-            // Preview first: prioritize videos with preview capability
-            if (searchPreviewFirst) {
-                var aHasPreview = a.dataset.hasPreview ? 1 : 0;
-                var bHasPreview = b.dataset.hasPreview ? 1 : 0;
-                if (aHasPreview !== bHasPreview) {
-                    return bHasPreview - aHasPreview; // Preview videos first
-                }
-            }
-
-            // Then apply user's sort preference within each group
-            var aDur = parseInt(a.dataset.duration) || 0;
-            var bDur = parseInt(b.dataset.duration) || 0;
-            var aViews = parseInt(a.dataset.views) || 0;
-            var bViews = parseInt(b.dataset.views) || 0;
-            var aQuality = (a.dataset.quality || '').toUpperCase();
-            var bQuality = (b.dataset.quality || '').toUpperCase();
-
-            if (searchCurrentSort === 'duration-desc') return bDur - aDur;
-            if (searchCurrentSort === 'duration-asc') return aDur - bDur;
-            if (searchCurrentSort === 'views') return bViews - aViews;
-            if (searchCurrentSort === 'quality') {
-                var getQualityScore = function(q) {
-                    if (q.includes('4K') || q.includes('2160')) return 4;
-                    if (q.includes('1080')) return 3;
-                    if (q.includes('720')) return 2;
-                    if (q.includes('480')) return 1;
-                    return 0;
-                };
-                return getQualityScore(bQuality) - getQualityScore(aQuality);
-            }
-            return 0;
-        });
-
-        cardArray.forEach(function(card) { grid.appendChild(card); });
-
-        // Update visible count
-        var visibleCards = document.querySelectorAll('.video-card:not(.hidden)');
+        if (grid) grid.innerHTML = '';
         var countEl = document.getElementById('result-count');
-        if (countEl) countEl.textContent = visibleCards.length;
+        if (countEl) countEl.textContent = '0';
+        // initial-loading's spinner/text markup is already server-rendered
+        // (search.tmpl) - just reset the text and reveal it, same pattern
+        // streamResults()/fallbackToJSONSearch() already use.
+        var loadingText = document.getElementById('loading-text');
+        if (loadingText) loadingText.textContent = 'Searching engines...';
+        showSearchElement('initial-loading');
+
+        var minDuration = parseInt(userPrefs.minDuration) || 0;
+        if (searchCurrentSort) {
+            // Global sort requires the synchronous JSON API - the SSE stream
+            // only orders results within each engine's own batch (see
+            // SearchStreamWithOperators, which has no SortBy parameter).
+            fallbackToJSONSearch(minDuration);
+        } else {
+            streamResults(minDuration);
+        }
+    }
+
+    // Preview-first-only reorder of the already-rendered cards. Duration/
+    // quality/source/sort are never applied here - those are always fetched
+    // fresh from the server via refetchSearchResults().
+    function applySearchFiltersAndSort() {
+        var grid = document.getElementById('video-grid');
+        if (!grid) return;
+        if (!searchPreviewFirst) return;
+
+        var cardArray = Array.from(grid.querySelectorAll('.video-card'));
+        cardArray.sort(function(a, b) {
+            var aHasPreview = a.dataset.hasPreview ? 1 : 0;
+            var bHasPreview = b.dataset.hasPreview ? 1 : 0;
+            return bHasPreview - aHasPreview; // Preview videos first
+        });
+        cardArray.forEach(function(card) { grid.appendChild(card); });
     }
 
     function updateSearchStatus() {
@@ -2399,7 +2405,8 @@ if (document.readyState === 'loading') {
         sortResults: searchSortResults,
         toggleAllSources: toggleAllSources,
         updateSourceFilter: updateSourceFilter,
-        updatePreviewFirst: updatePreviewFirst
+        updatePreviewFirst: updatePreviewFirst,
+        refetch: refetchSearchResults
     };
     window.filterByDuration = searchFilterByDuration;
     window.filterByQuality = searchFilterByQuality;
@@ -2859,6 +2866,16 @@ document.addEventListener('submit', function(e) {
     if (el.dataset.action === 'search-submit') {
         if (handleSearchSubmit(el) === false) {
             e.preventDefault();
+        }
+    }
+    if (el.dataset.action === 'filters-submit') {
+        // #filters-form (search-results page only) posts GET /search with
+        // duration/quality/sort/engines - works with JS disabled. With JS,
+        // intercept and re-fetch via the same server-authoritative path
+        // (refetchSearchResults) instead of a full page reload.
+        if (window.Vidveil && window.Vidveil.Search && window.Vidveil.Search.refetch) {
+            e.preventDefault();
+            window.Vidveil.Search.refetch();
         }
     }
 });

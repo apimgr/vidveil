@@ -156,7 +156,28 @@ func (m *EngineManager) applyConfig() {
 // Server (sessions)") so that page=2, page=3, ... of the same infinite-scroll
 // search never resurface a result already returned on an earlier page.
 func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string, sessionID string) *model.SearchResponse {
-	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, sessionID, 0)
+	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, sessionID, 0, ResultFilterOptions{})
+}
+
+// ResultFilterOptions carries the server-authoritative result-shaping filters
+// driven by the visitor's search-results filter panel (duration/quality/sort
+// controls in filters.tmpl). These are applied here, not in client JS, per
+// AI.md PART 16 ("JavaScript enhances, it does not enable") — the filter
+// panel is a GET form so the exact same filtering/sorting works with JS
+// disabled. The zero value applies no additional filtering or sorting.
+type ResultFilterOptions struct {
+	// MinQuality is the minimum acceptable quality level (Quality360p..Quality4K
+	// constants below); 0 means no minimum.
+	MinQuality int
+	// UserMinDuration is the visitor's minimum-duration preference in seconds
+	// (Preferences page "prefs.min_duration"), merged with the config-level
+	// minimum; 0 means none.
+	UserMinDuration int
+	// MaxDuration, in seconds, rejects results longer than this; 0 means no maximum.
+	MaxDuration int
+	// SortBy reorders the final result set: "duration-desc", "duration-asc",
+	// "views", "quality", or "" for relevance (default) order.
+	SortBy string
 }
 
 // SearchWithOperators is identical to Search but additionally applies
@@ -175,7 +196,7 @@ func (m *EngineManager) Search(ctx context.Context, query string, page int, engi
 // `results_per_page` preference cookie (IDEA.md "Search Settings": server
 // is authoritative for pagination, not client-side JS). Pass 0 to use the
 // configured default.
-func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, previewFirst bool, sessionID string, resultsPerPage int) *model.SearchResponse {
+func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, previewFirst bool, sessionID string, resultsPerPage int, filterOpts ResultFilterOptions) *model.SearchResponse {
 	startTime := time.Now()
 
 	// Capture the engine set under a brief read lock, then release it before any
@@ -241,10 +262,15 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 	// Track per-engine stats
 	engineStats := make(map[string]model.EngineStatInfo)
 
-	// Get min duration from config, defaulting to 0 if config is nil
+	// Get min duration from config, defaulting to 0 if config is nil, merged
+	// with the visitor's per-request minimum-duration preference/filter (the
+	// higher of the two wins — server-authoritative, see ResultFilterOptions).
 	minDuration := 0
 	if m.appConfig != nil {
 		minDuration = m.appConfig.Search.MinDurationSeconds
+	}
+	if filterOpts.UserMinDuration > minDuration {
+		minDuration = filterOpts.UserMinDuration
 	}
 	queryIntent := DetectQueryIntent(query)
 
@@ -289,6 +315,14 @@ collect:
 				}
 				// Skip if duration is known and below minimum
 				if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
+					continue
+				}
+				// Skip if duration is known and above the filter panel's maximum
+				if filterOpts.MaxDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds > filterOpts.MaxDuration {
+					continue
+				}
+				// Skip if quality is known and below the filter panel's minimum
+				if filterOpts.MinQuality > 0 && !meetsMinQuality(r.Quality, filterOpts.MinQuality) {
 					continue
 				}
 				// Drop preview URLs a <video> element cannot play (images, HLS, relative paths)
@@ -372,6 +406,11 @@ collect:
 	if previewFirst {
 		allResults = sortResultsPreviewFirst(allResults)
 	}
+	// Server-authoritative sort override from the filter panel (filters.tmpl
+	// "sort" field) — applied to the full deduplicated set before pagination,
+	// same field-value contract the JS enhancement layer used to compute
+	// client-side; the server is now the sole source of ordering.
+	allResults = sortResultsByFilterOption(allResults, filterOpts.SortBy)
 
 	// Slice to the requested page window so the returned data array never
 	// exceeds resultsPerPage, per AI.md PART 14 pagination contract ("data"
@@ -416,6 +455,38 @@ func sortResultsPreviewFirst(results []model.VideoResult) []model.VideoResult {
 		jHas := results[j].PreviewURL != ""
 		return iHas && !jHas
 	})
+	return results
+}
+
+// sortResultsByFilterOption reorders results per the filter panel's "sort"
+// field (filters.tmpl option values: "duration-desc", "duration-asc",
+// "views", "quality", or "" for relevance/default order, left untouched).
+// Results with unknown/zero values for the chosen field are stable-sorted to
+// the end rather than dropped, since the sort is a re-ordering, not a filter.
+func sortResultsByFilterOption(results []model.VideoResult, sortBy string) []model.VideoResult {
+	switch sortBy {
+	case "duration-desc":
+		sort.SliceStable(results, func(i, j int) bool {
+			return results[i].DurationSeconds > results[j].DurationSeconds
+		})
+	case "duration-asc":
+		sort.SliceStable(results, func(i, j int) bool {
+			iZero := results[i].DurationSeconds <= 0
+			jZero := results[j].DurationSeconds <= 0
+			if iZero != jZero {
+				return jZero
+			}
+			return results[i].DurationSeconds < results[j].DurationSeconds
+		})
+	case "views":
+		sort.SliceStable(results, func(i, j int) bool {
+			return results[i].ViewsCount > results[j].ViewsCount
+		})
+	case "quality":
+		sort.SliceStable(results, func(i, j int) bool {
+			return ParseQualityLevel(results[i].Quality) > ParseQualityLevel(results[j].Quality)
+		})
+	}
 	return results
 }
 
@@ -1459,7 +1530,7 @@ func (m *EngineManager) EnginesToUseCount(engineNames []string) int {
 // SearchStream performs a search across enabled engines and streams results via channel
 // Results are deduplicated by URL across all engines
 func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
-	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, nil, false, 0, false, 0, "")
+	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, nil, false, 0, false, 0, 0, "")
 }
 
 // SearchStreamWithOperators performs a streaming search with optional search operators
@@ -1471,11 +1542,15 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 // minQuality filters by minimum quality level (0 = no filter, 360 = 360p+, etc.)
 // previewFirst sorts each engine's result batch so preview-capable results stream first
 // userMinDuration is the user's minimum duration preference in seconds (0 = use server config)
+// maxDuration, in seconds, rejects results longer than this (0 = no maximum); it is
+// the SSE-path equivalent of ResultFilterOptions.MaxDuration used by the synchronous
+// SearchWithOperators, kept as a plain parameter here since streaming callers already
+// pass minQuality/userMinDuration positionally rather than via a struct.
 // sessionID, when non-empty, scopes cross-page result deduplication to a single
 // client search session (see AI.md PART 14 "State management -> Server (sessions)")
 // so that page=2, page=3, ... of the same infinite-scroll search never resurface
 // a result already returned on an earlier page.
-func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, sessionID string) <-chan StreamResult {
+func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, maxDuration int, sessionID string) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
 	go func() {
@@ -1535,6 +1610,10 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 					}
 					// Skip if duration is known and below minimum
 					if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
+						continue
+					}
+					// Skip if duration is known and above the filter panel's maximum
+					if maxDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds > maxDuration {
 						continue
 					}
 

@@ -398,7 +398,7 @@ var malePresenceWords = []string{
 	"bbc",
 	"dad", "daddy", "father", "son", "brother",
 	"stepbro", "stepbrother", "stepfather", "stepdad", "stepdaddy", "stepson",
-	"grandpa", "uncle", "nephew",
+	"grandpa", "grandfather", "granddad", "grandson", "uncle", "nephew",
 	"boyfriend", "bf", "hubby",
 	"blowbang", "facial", "cumshot", "cum shot",
 	"handjob", "hand job",
@@ -413,7 +413,7 @@ var malePresenceWords = []string{
 var familyFemaleWords = []string{
 	"mom", "mother", "mommy", "daughter", "sister",
 	"stepmom", "stepmother", "stepsister", "stepdaughter",
-	"grandma", "granny", "aunt", "aunty", "niece",
+	"grandma", "granny", "granddaughter", "aunt", "aunty", "niece",
 }
 
 // familyMaleWords, if any is present alongside familyFemaleWords matches,
@@ -421,7 +421,7 @@ var familyFemaleWords = []string{
 var familyMaleWords = []string{
 	"dad", "father", "son", "brother",
 	"stepdad", "stepfather", "stepbro", "stepbrother", "stepson",
-	"grandpa", "uncle", "nephew",
+	"grandpa", "grandfather", "granddad", "grandson", "uncle", "nephew",
 }
 
 // teenIndicatorWords / olderIndicatorWords are result-metadata signals used

@@ -148,6 +148,46 @@ func TestResultMatchesIntent_StepbrotherCompoundWord(t *testing.T) {
 	}
 }
 
+// TestResultMatchesIntent_GrandparentCompoundWords is a regression test for
+// the same word-boundary gap as the stepbrother bug: malePresenceWords/
+// familyMaleWords had "grandpa" but not "grandfather"/"granddad", and
+// containsWholeWord's word-boundary matching means neither "father" nor
+// "dad" matches inside "grandfather"/"granddad".
+func TestResultMatchesIntent_GrandparentCompoundWords(t *testing.T) {
+	intent := DetectQueryIntent("teen lesbian")
+	if !intent.IsFemaleOnly {
+		t.Fatalf("expected IsFemaleOnly=true for %q", "teen lesbian")
+	}
+
+	rejectTitles := []string{
+		"Grandfather and Teen",
+		"Granddad Fucks Stepdaughter",
+	}
+
+	for _, title := range rejectTitles {
+		r := model.VideoResult{Title: title}
+		if ResultMatchesIntent(r, intent) {
+			t.Errorf("expected result to be rejected for female-only query, title=%q", title)
+		}
+	}
+}
+
+// TestDetectQueryIntent_GrandparentFamilyCombo covers the family-combo
+// inference gap: familyFemaleWords lacked "granddaughter" and
+// familyMaleWords lacked "grandson", so a "grandma granddaughter" query
+// wasn't inferred female-only the way "mom daughter" already was.
+func TestDetectQueryIntent_GrandparentFamilyCombo(t *testing.T) {
+	intent := DetectQueryIntent("grandma granddaughter")
+	if !intent.IsFemaleOnly {
+		t.Fatalf("expected IsFemaleOnly=true for %q", "grandma granddaughter")
+	}
+
+	mixedIntent := DetectQueryIntent("grandma grandson")
+	if mixedIntent.IsFemaleOnly {
+		t.Fatalf("expected IsFemaleOnly=false for %q (male family term present)", "grandma grandson")
+	}
+}
+
 // TestResultMatchesIntent_DescriptionAndTagsOutOfScope ensures the intent
 // filter only inspects Title/Performer — Description and Tags must not be
 // able to trigger a false-positive rejection even if they still contained a

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
+	"github.com/apimgr/vidveil/src/server/service/urlvars"
 )
 
 // injectLocaleData populates Lang and Dir on template data per AI.md PART 30
@@ -236,6 +237,15 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 	// token in template data so POST forms can include the hidden input automatically.
 	if data["CSRFToken"] == nil {
 		data["CSRFToken"] = cSRFTokenFromRequest(r)
+	}
+
+	// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
+	// startup/config, so og:url/canonical matches the Host/proto the client
+	// actually used, including behind a reverse proxy. Set here (where r is
+	// in scope) so renderTemplate's own fallback is only ever hit by direct
+	// test calls that construct data maps without going through renderResponse.
+	if data["AppURL"] == nil {
+		data["AppURL"] = urlvars.BuildURL(r, "")
 	}
 
 	accept := r.Header.Get("Accept")

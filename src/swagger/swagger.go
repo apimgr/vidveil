@@ -11,6 +11,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/urlvars"
 )
 
 // DetectTheme determines the UI theme (light/dark/auto) from request
@@ -36,7 +37,10 @@ func DetectTheme(r *http.Request) string {
 // adminAPIPath is the spec-canonical admin API prefix per AI.md PART 14
 // (e.g. "server/admin"). Per spec line 4584 the API mirrors the web
 // hierarchy /server/{admin_path}/.
-func GenerateSpec(appConfig *config.AppConfig) string {
+// servers[0].url is resolved per request via BuildURL (AI.md PART 8/12) —
+// never a static/frozen value, so it matches the Host/proto the client
+// actually used, including behind a reverse proxy or over Tor.
+func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 	adminAPIPath := "server/admin"
 	if appConfig != nil {
 		adminAPIPath = strings.TrimPrefix(appConfig.AdminAPIPrefix(), "/")
@@ -54,7 +58,7 @@ func GenerateSpec(appConfig *config.AppConfig) string {
 		},
 		"servers": []map[string]string{
 			{
-				"url":         "/",
+				"url":         urlvars.BuildURL(r, ""),
 				"description": "Current server",
 			},
 		},
@@ -357,15 +361,16 @@ func Handler(appConfig *config.AppConfig) http.HandlerFunc {
 		dir := i18n.Direction(lang)
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(generateSwaggerUI(appConfig, theme, lang, dir)))
+		w.Write([]byte(generateSwaggerUI(appConfig, r, theme, lang, dir)))
 	}
 }
 
 // SpecHandler returns the OpenAPI 3.0 specification in JSON format
 func SpecHandler(appConfig *config.AppConfig) http.HandlerFunc {
-	spec := GenerateSpec(appConfig)
-
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Generated per request (not cached at handler-creation time) so
+		// servers[0].url reflects the resolved Host/proto per AI.md PART 12.
+		spec := GenerateSpec(appConfig, r)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(spec))
 	}
@@ -373,8 +378,8 @@ func SpecHandler(appConfig *config.AppConfig) http.HandlerFunc {
 
 // generateSwaggerUI generates server-side rendered API documentation
 // Per AI.md PART 7: All assets embedded (no CDN). PART 16: Server-side rendered.
-func generateSwaggerUI(appConfig *config.AppConfig, theme, lang, dir string) string {
-	spec := GenerateSpec(appConfig)
+func generateSwaggerUI(appConfig *config.AppConfig, r *http.Request, theme, lang, dir string) string {
+	spec := GenerateSpec(appConfig, r)
 
 	// Parse spec to extract paths for rendering
 	var specData map[string]interface{}

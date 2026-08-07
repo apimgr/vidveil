@@ -193,17 +193,16 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	appName := h.appConfig.Server.Branding.Title
 	// Required fields by head.tmpl: Title
 	// Required fields by nav.tmpl: ActiveNav, Query
-	scheme := "https"
-	if !h.appConfig.Server.SSL.Enabled {
-		scheme = "http"
-	}
+	// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
+	// startup/config, so canonical/OG URLs match the Host/proto the client
+	// actually used, including behind a reverse proxy.
 
 	data := map[string]interface{}{
 		"Title":          appName,
 		"AppName":        appName,
 		"AppTagline":     h.appConfig.Server.Branding.Tagline,
 		"AppDescription": h.appConfig.Server.Branding.Description,
-		"BaseURL":        scheme + "://" + h.appConfig.Server.FQDN,
+		"BaseURL":        urlvars.BuildURL(r, ""),
 		"Version":        versionInfo["version"],
 		"BuildDateTime":  versionInfo["build_time"],
 		"Theme":          "dark",
@@ -369,7 +368,7 @@ func (h *ServerHandler) logSecurityEvent(event string, r *http.Request, details 
 	if h.logger == nil {
 		return
 	}
-	h.logger.Security(event, r.RemoteAddr, details)
+	h.logger.Security(event, urlvars.ResolveClientIP(r), details)
 }
 
 // publicAbuseEmail resolves the abuse-report address shown on /server/contact per

@@ -1985,11 +1985,10 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		data.SEOVerification = h.appConfig.Server.SEO.Verification
 		data.BrandingDescription = h.appConfig.Server.Branding.Description
 		data.BrandingTagline = h.appConfig.Server.Branding.Tagline
-		scheme := "https"
-		if !h.appConfig.Server.SSL.Enabled {
-			scheme = "http"
-		}
-		data.AppURL = scheme + "://" + h.appConfig.Server.FQDN
+		// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
+		// startup/config, so the URL matches the Host/proto the client
+		// actually used, including behind a reverse proxy.
+		data.AppURL = urlvars.BuildURL(r, "")
 	}
 	// Footer onion-address row — dropped entirely unless Tor is both enabled
 	// and actually running (matches renderTemplate's identical gate).
@@ -2089,10 +2088,10 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 func (h *SearchHandler) RobotsTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 
-	baseURL := "https://" + h.appConfig.Server.FQDN
-	if h.appConfig.Server.Port != "443" && h.appConfig.Server.Port != "80" {
-		baseURL = fmt.Sprintf("https://%s:%s", h.appConfig.Server.FQDN, h.appConfig.Server.Port)
-	}
+	// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
+	// startup, so the advertised sitemap URL matches the Host/proto the
+	// client actually used, including behind a reverse proxy.
+	baseURL := urlvars.BuildURL(r, "")
 
 	w.Write([]byte(`User-agent: *
 Disallow: /search
@@ -2178,10 +2177,10 @@ func (h *SearchHandler) HumansTxt(w http.ResponseWriter, r *http.Request) {
 		appName = "Vidveil"
 	}
 
-	appURL := "https://" + h.appConfig.Server.FQDN
-	if h.appConfig.Server.Port != "443" && h.appConfig.Server.Port != "80" {
-		appURL = fmt.Sprintf("https://%s:%s", h.appConfig.Server.FQDN, h.appConfig.Server.Port)
-	}
+	// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
+	// startup, so the advertised URL matches the Host/proto the client
+	// actually used, including behind a reverse proxy.
+	appURL := urlvars.BuildURL(r, "")
 
 	w.Write([]byte(fmt.Sprintf(`/* TEAM */
 Name: %s Team
@@ -2279,10 +2278,10 @@ func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
 func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 
-	baseURL := "https://" + h.appConfig.Server.FQDN
-	if h.appConfig.Server.Port != "443" && h.appConfig.Server.Port != "80" {
-		baseURL = fmt.Sprintf("https://%s:%s", h.appConfig.Server.FQDN, h.appConfig.Server.Port)
-	}
+	// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
+	// startup, so the advertised sitemap URL matches the Host/proto the
+	// client actually used, including behind a reverse proxy.
+	baseURL := urlvars.BuildURL(r, "")
 
 	// Build sitemap with static pages per AI.md PART 16
 	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
@@ -3381,7 +3380,10 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		data["BrandingTagline"] = h.appConfig.Server.Branding.Tagline
 	}
 	if data["AppURL"] == nil {
-		// Build the canonical app URL from config for og:url
+		// Fallback only — renderResponse (the production entry point, which has
+		// the *http.Request in scope) already sets AppURL via urlvars.BuildURL
+		// per AI.md PART 12. This static config-based fallback exists solely for
+		// direct renderTemplate() test calls that construct data maps without r.
 		scheme := "https"
 		if !h.appConfig.Server.SSL.Enabled {
 			scheme = "http"
@@ -3933,8 +3935,11 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 // This endpoint is NOT versioned because clients need it BEFORE they know the API version
 func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 	// Build response per AI.md PART 14
+	// "primary" resolved per request via BuildURL (AI.md PART 12) — never
+	// frozen at startup/config, so autodiscover advertises the Host/proto the
+	// client actually used, including behind a reverse proxy.
 	response := map[string]interface{}{
-		"primary": h.appConfig.GetPublicURL(),
+		"primary": urlvars.BuildURL(r, ""),
 		// Per AI.md PART 14: versioned API
 		"api_version": "v1",
 		// Default timeout in seconds
@@ -3997,7 +4002,7 @@ func renderSearchRSS(w http.ResponseWriter, r *http.Request, results *model.Sear
 		Version: "2.0",
 		Channel: rssBody{
 			Title:       cfg.Server.Branding.Title + " – " + results.Data.Query,
-			Link:        cfg.GetPublicURL() + "/search?q=" + url.QueryEscape(results.Data.Query),
+			Link:        urlvars.BuildURL(r, "/search") + "?q=" + url.QueryEscape(results.Data.Query),
 			Description: "Search results for: " + results.Data.Query,
 			PubDate:     time.Now().UTC().Format(time.RFC1123Z),
 			Items:       items,
@@ -4056,9 +4061,9 @@ func renderSearchAtom(w http.ResponseWriter, r *http.Request, results *model.Sea
 	feed := atomFeed{
 		XMLNS:   "http://www.w3.org/2005/Atom",
 		Title:   cfg.Server.Branding.Title + " – " + results.Data.Query,
-		ID:      cfg.GetPublicURL() + "/search?q=" + url.QueryEscape(results.Data.Query),
+		ID:      urlvars.BuildURL(r, "/search") + "?q=" + url.QueryEscape(results.Data.Query),
 		Updated: now,
-		Link:    atomLink{Href: cfg.GetPublicURL() + "/search?q=" + url.QueryEscape(results.Data.Query)},
+		Link:    atomLink{Href: urlvars.BuildURL(r, "/search") + "?q=" + url.QueryEscape(results.Data.Query)},
 		Entries: entries,
 	}
 

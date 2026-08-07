@@ -99,7 +99,7 @@ func TestDetectThemeEmptyURL(t *testing.T) {
 // TestGenerateSpecNilConfig covers the nil-config path: must return non-empty
 // valid JSON containing the "openapi" key.
 func TestGenerateSpecNilConfig(t *testing.T) {
-	spec := GenerateSpec(nil)
+	spec := GenerateSpec(nil, httptest.NewRequest("GET", "/", nil))
 
 	if spec == "" {
 		t.Fatal("GenerateSpec(nil) returned empty string")
@@ -118,7 +118,7 @@ func TestGenerateSpecNilConfig(t *testing.T) {
 // containing VidVeil branding, the "paths" key, and the two required API paths.
 func TestGenerateSpecWithConfig(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	spec := GenerateSpec(cfg)
+	spec := GenerateSpec(cfg, httptest.NewRequest("GET", "/", nil))
 
 	if spec == "" {
 		t.Fatal("GenerateSpec(DefaultAppConfig()) returned empty string")
@@ -149,7 +149,7 @@ func TestGenerateSpecContainsRequiredPaths(t *testing.T) {
 			label = "default config"
 		}
 
-		spec := GenerateSpec(cfg)
+		spec := GenerateSpec(cfg, httptest.NewRequest("GET", "/", nil))
 		for _, p := range paths {
 			if !strings.Contains(spec, p) {
 				t.Errorf("GenerateSpec(%s) missing path %q", label, p)
@@ -161,7 +161,7 @@ func TestGenerateSpecContainsRequiredPaths(t *testing.T) {
 // TestGenerateSpecAdminPathDefault verifies that a nil config uses "server/admin"
 // as the admin API path in the generated spec.
 func TestGenerateSpecAdminPathDefault(t *testing.T) {
-	spec := GenerateSpec(nil)
+	spec := GenerateSpec(nil, httptest.NewRequest("GET", "/", nil))
 	if !strings.Contains(spec, "server/admin") {
 		t.Errorf("GenerateSpec(nil) missing default admin path \"server/admin\"")
 	}
@@ -173,7 +173,7 @@ func TestGenerateSpecAdminPathCustom(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	cfg.Server.Admin.Path = "myadmin"
 
-	spec := GenerateSpec(cfg)
+	spec := GenerateSpec(cfg, httptest.NewRequest("GET", "/", nil))
 	if !strings.Contains(spec, "server/myadmin") {
 		t.Errorf("GenerateSpec with custom admin path: missing \"server/myadmin\" in spec")
 	}
@@ -183,8 +183,9 @@ func TestGenerateSpecAdminPathCustom(t *testing.T) {
 // same config produces identical output — important for caching correctness.
 func TestGenerateSpecIsIdempotent(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	first := GenerateSpec(cfg)
-	second := GenerateSpec(cfg)
+	req := httptest.NewRequest("GET", "/", nil)
+	first := GenerateSpec(cfg, req)
+	second := GenerateSpec(cfg, req)
 	if first != second {
 		t.Error("GenerateSpec is not idempotent: two calls with the same config produced different output")
 	}

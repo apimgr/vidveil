@@ -63,7 +63,7 @@ function updateMetaThemeColor(theme) {
     }
 
     // Set appropriate theme-color for mobile browser chrome
-    metaTheme.content = effectiveTheme === 'light' ? '#f5f5f5' : '#282a36';
+    metaTheme.content = effectiveTheme === 'light' ? '#ffffff' : '#282a36';
 }
 
 // Listen for system preference changes when in auto mode

@@ -13,19 +13,21 @@ type ColorPalette struct {
 
 var (
 	// Dark is the default dark color palette (Dracula inspired)
+	// Values match AI.md PART 16 "Themes" ThemePaletteDark exactly.
 	Dark = ColorPalette{
 		Background: "#282a36", Foreground: "#f8f8f2",
 		Primary: "#bd93f9", Secondary: "#50fa7b", Accent: "#ff79c6",
 		Success: "#50fa7b", Warning: "#ffb86c", Error: "#ff5555", Info: "#8be9fd",
-		Surface: "#44475a", SurfaceAlt: "#1e1f29", Border: "#44475a", Muted: "#7585b8",
+		Surface: "#2b2d3a", SurfaceAlt: "#21222c", Border: "#44475a", Muted: "#6272a4",
 	}
 
-	// Light is the light color palette
+	// Light is the light color palette (GitHub Light inspired)
+	// Values match AI.md PART 16 "Themes" ThemePaletteLight exactly.
 	Light = ColorPalette{
-		Background: "#ffffff", Foreground: "#1a1b26",
-		Primary: "#2e7de9", Secondary: "#587539", Accent: "#7847bd",
-		Success: "#587539", Warning: "#8c6c3e", Error: "#c64343", Info: "#007197",
-		Surface: "#f5f5f5", SurfaceAlt: "#e9e9ec", Border: "#c0caf5", Muted: "#6172b0",
+		Background: "#ffffff", Foreground: "#1f2328",
+		Primary: "#0969da", Secondary: "#1a7f37", Accent: "#8250df",
+		Success: "#1a7f37", Warning: "#9a6700", Error: "#d1242f", Info: "#0969da",
+		Surface: "#f6f8fa", SurfaceAlt: "#eff2f5", Border: "#d1d9e0", Muted: "#59636e",
 	}
 )
 

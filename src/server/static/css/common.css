@@ -24,21 +24,21 @@
     --color-info: #8be9fd;
     --color-info-bg: rgba(139, 233, 253, 0.15);
     --color-bg: #282a36;
-    --color-bg-secondary: #44475a;
-    --color-bg-tertiary: #1e1f29;
+    --color-bg-secondary: #21222c;
+    --color-bg-tertiary: #21222c;
     --color-text: #f8f8f2;
-    --color-text-secondary: #7585b8;
-    --color-muted: #888;
+    --color-text-secondary: #6272a4;
+    --color-muted: #6272a4;
     --color-border: #44475a;
-    --color-hover: #44475a;
+    --color-hover: #343746;
     --color-favorite: #ff4081;
 
-    /* AI.md PART 16: required custom properties not covered above */
-    --color-bg-card: #383a4a;
-    --color-bg-hover: var(--color-hover);
-    --color-bg-active: color-mix(in srgb, var(--color-primary) 15%, var(--color-bg-hover));
-    --color-code-bg: var(--color-bg-tertiary);
-    --color-border-hover: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+    /* AI.md PART 16 CSS Variable Reference: literal values, dark palette (Dracula) */
+    --color-bg-card: #2b2d3a;
+    --color-bg-hover: #343746;
+    --color-bg-active: #44475a;
+    --color-code-bg: rgba(255, 255, 255, 0.1);
+    --color-border-hover: #6272a4;
 
     /* Legacy aliases (for backward compatibility) */
     --bg-primary: var(--color-bg);
@@ -113,43 +113,43 @@
 /* Auto theme mode - uses system preference via prefers-color-scheme */
 @media (prefers-color-scheme: light) {
     html.theme-auto {
-        /* Colors - Light theme per AI.md PART 16 ThemePaletteLight */
-        --primary-color: #2e7de9;
-        --success-color: #587539;
-        --warning-color: #8c6c3e;
-        --danger-color: #c64343;
+        /* Colors - Light theme per AI.md PART 16 ThemePaletteLight (GitHub Light) */
+        --primary-color: #0969da;
+        --success-color: #1a7f37;
+        --warning-color: #9a6700;
+        --danger-color: #d1242f;
         --bg-color: #ffffff;
-        --text-color: #1a1b26;
-        --border-color: #c0caf5;
+        --text-color: #1f2328;
+        --border-color: #d1d9e0;
 
-        /* AI.md PART 16: Component CSS variables - ThemePaletteLight */
-        --color-primary: #2e7de9;
-        --color-primary-bg: rgba(46, 125, 233, 0.1);
-        --color-success: #587539;
-        --color-success-bg: rgba(88, 117, 57, 0.1);
-        --color-warning: #8c6c3e;
-        --color-warning-bg: rgba(140, 108, 62, 0.1);
-        --color-error: #c64343;
-        --color-error-bg: rgba(198, 67, 67, 0.1);
-        --color-danger: #c64343;
-        --color-info: #007197;
-        --color-info-bg: rgba(0, 113, 151, 0.1);
+        /* AI.md PART 16 CSS Variable Reference: literal values, light palette (GitHub Light) */
+        --color-primary: #0969da;
+        --color-primary-bg: rgba(9, 105, 218, 0.12);
+        --color-success: #1a7f37;
+        --color-success-bg: rgba(26, 127, 55, 0.12);
+        --color-warning: #9a6700;
+        --color-warning-bg: rgba(154, 103, 0, 0.12);
+        --color-error: #d1242f;
+        --color-error-bg: rgba(209, 36, 47, 0.12);
+        --color-danger: #d1242f;
+        --color-info: #0969da;
+        --color-info-bg: rgba(9, 105, 218, 0.12);
         --color-bg: #ffffff;
-        --color-bg-secondary: #f5f5f5;
-        --color-bg-tertiary: #e9e9ec;
-        --color-text: #1a1b26;
-        --color-text-secondary: #6172b0;
-        --color-muted: #6172b0;
-        --color-border: #c0caf5;
-        --color-hover: #e9e9ec;
+        --color-bg-secondary: #f6f8fa;
+        --color-bg-tertiary: #eff2f5;
+        --color-text: #1f2328;
+        --color-text-secondary: #59636e;
+        --color-muted: #59636e;
+        --color-border: #d1d9e0;
+        --color-hover: #eff2f5;
         --color-favorite: #d81b60;
 
-        /* AI.md PART 16: required custom properties not covered above */
-        --color-bg-card: #f5f5f5;
-        --color-bg-hover: var(--color-hover);
-        --color-bg-active: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-hover));
-        --color-code-bg: var(--color-bg-tertiary);
-        --color-border-hover: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+        /* AI.md PART 16 CSS Variable Reference: literal values, light palette (GitHub Light) */
+        --color-bg-card: #ffffff;
+        --color-bg-hover: #eff2f5;
+        --color-bg-active: #e6eaef;
+        --color-code-bg: rgba(0, 0, 0, 0.05);
+        --color-border-hover: #818b98;
 
         /* Legacy aliases */
         --bg-primary: var(--color-bg);
@@ -160,14 +160,14 @@
         --text-secondary: var(--color-text-secondary);
         --text-muted: var(--color-muted);
         --accent: var(--color-primary);
-        --accent-hover: #7847bd;
+        --accent-hover: #0757ba;
         --accent-alt: var(--color-info);
         --success: var(--color-success);
         --warning: var(--color-warning);
         --error: var(--color-error);
         --border: var(--color-border);
         --shadow: rgba(0, 0, 0, 0.1);
-        --focus-ring-shadow: rgba(46, 125, 233, 0.3);
+        --focus-ring-shadow: rgba(9, 105, 218, 0.3);
 
         /* Content color guaranteed readable on top of --color-primary/--color-warning */
         --color-on-warning: #ffffff;
@@ -178,43 +178,43 @@
 }
 
 html.theme-light {
-    /* Colors - Light theme per AI.md PART 16 ThemePaletteLight */
-    --primary-color: #2e7de9;
-    --success-color: #587539;
-    --warning-color: #8c6c3e;
-    --danger-color: #c64343;
+    /* Colors - Light theme per AI.md PART 16 ThemePaletteLight (GitHub Light) */
+    --primary-color: #0969da;
+    --success-color: #1a7f37;
+    --warning-color: #9a6700;
+    --danger-color: #d1242f;
     --bg-color: #ffffff;
-    --text-color: #1a1b26;
-    --border-color: #c0caf5;
+    --text-color: #1f2328;
+    --border-color: #d1d9e0;
 
-    /* AI.md PART 16: Component CSS variables - ThemePaletteLight */
-    --color-primary: #2e7de9;
-    --color-primary-bg: rgba(46, 125, 233, 0.1);
-    --color-success: #587539;
-    --color-success-bg: rgba(88, 117, 57, 0.1);
-    --color-warning: #8c6c3e;
-    --color-warning-bg: rgba(140, 108, 62, 0.1);
-    --color-error: #c64343;
-    --color-error-bg: rgba(198, 67, 67, 0.1);
-    --color-danger: #c64343;
-    --color-info: #007197;
-    --color-info-bg: rgba(0, 113, 151, 0.1);
+    /* AI.md PART 16 CSS Variable Reference: literal values, light palette (GitHub Light) */
+    --color-primary: #0969da;
+    --color-primary-bg: rgba(9, 105, 218, 0.12);
+    --color-success: #1a7f37;
+    --color-success-bg: rgba(26, 127, 55, 0.12);
+    --color-warning: #9a6700;
+    --color-warning-bg: rgba(154, 103, 0, 0.12);
+    --color-error: #d1242f;
+    --color-error-bg: rgba(209, 36, 47, 0.12);
+    --color-danger: #d1242f;
+    --color-info: #0969da;
+    --color-info-bg: rgba(9, 105, 218, 0.12);
     --color-bg: #ffffff;
-    --color-bg-secondary: #f5f5f5;
-    --color-bg-tertiary: #e9e9ec;
-    --color-text: #1a1b26;
-    --color-text-secondary: #6172b0;
-    --color-muted: #6172b0;
-    --color-border: #c0caf5;
-    --color-hover: #e9e9ec;
+    --color-bg-secondary: #f6f8fa;
+    --color-bg-tertiary: #eff2f5;
+    --color-text: #1f2328;
+    --color-text-secondary: #59636e;
+    --color-muted: #59636e;
+    --color-border: #d1d9e0;
+    --color-hover: #eff2f5;
     --color-favorite: #d81b60;
 
-    /* AI.md PART 16: required custom properties not covered above */
-    --color-bg-card: #f5f5f5;
-    --color-bg-hover: var(--color-hover);
-    --color-bg-active: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-hover));
-    --color-code-bg: var(--color-bg-tertiary);
-    --color-border-hover: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+    /* AI.md PART 16 CSS Variable Reference: literal values, light palette (GitHub Light) */
+    --color-bg-card: #ffffff;
+    --color-bg-hover: #eff2f5;
+    --color-bg-active: #e6eaef;
+    --color-code-bg: rgba(0, 0, 0, 0.05);
+    --color-border-hover: #818b98;
 
     /* Legacy aliases */
     --bg-primary: var(--color-bg);
@@ -225,14 +225,14 @@ html.theme-light {
     --text-secondary: var(--color-text-secondary);
     --text-muted: var(--color-muted);
     --accent: var(--color-primary);
-    --accent-hover: #7847bd;
+    --accent-hover: #0757ba;
     --accent-alt: var(--color-info);
     --success: var(--color-success);
     --warning: var(--color-warning);
     --error: var(--color-error);
     --border: var(--color-border);
     --shadow: rgba(0, 0, 0, 0.1);
-    --focus-ring-shadow: rgba(46, 125, 233, 0.3);
+    --focus-ring-shadow: rgba(9, 105, 218, 0.3);
 
     /* Content color guaranteed readable on top of --color-primary/--color-warning */
     --color-on-warning: #ffffff;

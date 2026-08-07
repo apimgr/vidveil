@@ -1306,6 +1306,13 @@ if (document.readyState === 'loading') {
     var RESULTS_PER_BATCH = 20;
     var allResults = [];
     var displayedCount = 0;
+    // True while a refetchSearchResults() background update is in flight and
+    // the still-visible #video-grid content is the OLD (pre-refetch) result
+    // set. The grid is only wiped once new data actually arrives (AI.md PART
+    // 16: "JS enhances only, never enables" - the old, already-correct
+    // server-rendered results stay usable the whole time, same as a real
+    // page navigation leaves the old page intact until the new one is ready).
+    var pendingGridSwap = false;
     var isSearching = true;
     var enginesCompleted = 0;
     // Live tracker, used only while streaming (isSearching)
@@ -1558,12 +1565,33 @@ if (document.readyState === 'loading') {
         var firstResult = true;
         var streamDone = false;
 
+        // Watchdog: some reverse proxies buffer text/event-stream and never
+        // flush the final "done" message or fire onerror, leaving the
+        // connection open indefinitely and the spinner stuck forever (IDEA.md
+        // "SSE -> JSON fallback" error handling requirement). Bound the wait
+        // to the server's own per-search budget (engine timeout, default 15s)
+        // plus margin, then fall back to the JSON API if nothing arrived.
+        var streamWatchdog = setTimeout(function() {
+            if (streamDone) return;
+            eventSource.close();
+            if (allResults.length === 0) {
+                fallbackToJSONSearch(minDuration);
+            } else {
+                isSearching = false;
+                pendingGridSwap = false;
+                updateSearchStatus();
+                hideSearchElement('status-bar');
+                showToast('Some engines failed to respond', 'warning');
+            }
+        }, 25000);
+
         eventSource.onmessage = function(event) {
             var data = JSON.parse(event.data);
 
             // Final done message
             if (data.done && data.engine === 'all') {
                 streamDone = true;
+                clearTimeout(streamWatchdog);
                 eventSource.close();
                 isSearching = false;
                 if (data.engines_total != null) enginesTotal = data.engines_total;
@@ -1572,8 +1600,19 @@ if (document.readyState === 'loading') {
                 var timeContainer = document.getElementById('search-time-container');
                 if (timeContainer) timeContainer.textContent = 'in ' + elapsed + 'ms';
                 updateSearchStatus();
+                hideSearchElement('status-bar');
 
                 if (allResults.length === 0) {
+                    // Confirmed: the new filter/sort truly has zero results -
+                    // now it's safe to clear the old (stale) grid/count and
+                    // replace them with the "no results" state.
+                    if (pendingGridSwap) {
+                        pendingGridSwap = false;
+                        var staleGrid = document.getElementById('video-grid');
+                        if (staleGrid) staleGrid.innerHTML = '';
+                        var staleCountEl = document.getElementById('result-count');
+                        if (staleCountEl) staleCountEl.textContent = '0';
+                    }
                     var loadingEl = document.getElementById('initial-loading');
                     if (loadingEl) {
                         loadingEl.innerHTML = '<p>No results found.</p>';
@@ -1624,6 +1663,16 @@ if (document.readyState === 'loading') {
                     hideSearchElement('initial-loading');
                     showSearchElement('search-meta');
                     showSearchElement('filters');
+                    // First new result of a background refetch - this is the
+                    // moment new data has actually arrived, so it's safe to
+                    // swap out the old (still-valid) grid contents now.
+                    if (pendingGridSwap) {
+                        pendingGridSwap = false;
+                        var oldGrid = document.getElementById('video-grid');
+                        if (oldGrid) oldGrid.innerHTML = '';
+                        var oldCountEl = document.getElementById('result-count');
+                        if (oldCountEl) oldCountEl.textContent = '0';
+                    }
                 }
 
                 // Add to results and display immediately
@@ -1649,6 +1698,7 @@ if (document.readyState === 'loading') {
                 eventSource.close();
                 return;
             }
+            clearTimeout(streamWatchdog);
             eventSource.close();
             // SSE failed - fallback to JSON API
             if (allResults.length === 0) {
@@ -1658,7 +1708,9 @@ if (document.readyState === 'loading') {
             } else {
                 // We have some results, just finish gracefully
                 isSearching = false;
+                pendingGridSwap = false;
                 updateSearchStatus();
+                hideSearchElement('status-bar');
                 showToast('Some engines failed to respond', 'warning');
             }
         };
@@ -1709,6 +1761,15 @@ if (document.readyState === 'loading') {
             if (timeContainer) timeContainer.textContent = 'in ' + elapsed + 'ms';
 
             if (!data.ok || !data.data || !data.data.results || data.data.results.length === 0) {
+                // Confirmed: the new filter/sort truly has zero results - now
+                // it's safe to clear the old (stale) grid/count.
+                if (pendingGridSwap) {
+                    pendingGridSwap = false;
+                    var staleGrid = document.getElementById('video-grid');
+                    if (staleGrid) staleGrid.innerHTML = '';
+                    var staleCountEl = document.getElementById('result-count');
+                    if (staleCountEl) staleCountEl.textContent = '0';
+                }
                 var loadingEl = document.getElementById('initial-loading');
                 if (loadingEl) {
                     loadingEl.innerHTML = '<p>No results found.</p>';
@@ -1717,10 +1778,19 @@ if (document.readyState === 'loading') {
                 hasMoreResults = false;
                 announce('No results found for ' + searchQuery);
                 updateSearchStatus();
+                hideSearchElement('status-bar');
                 return;
             }
 
-            // Process results
+            // Process results. New data has actually arrived - safe to swap
+            // out the old (still-valid) grid contents now.
+            if (pendingGridSwap) {
+                pendingGridSwap = false;
+                var oldGrid = document.getElementById('video-grid');
+                if (oldGrid) oldGrid.innerHTML = '';
+                var oldCountEl = document.getElementById('result-count');
+                if (oldCountEl) oldCountEl.textContent = '0';
+            }
             hideSearchElement('initial-loading');
             showSearchElement('search-meta');
             showSearchElement('filters');
@@ -1756,9 +1826,18 @@ if (document.readyState === 'loading') {
             applySearchFiltersAndSort();
             announce(allResults.length + ' results found');
             updateSearchStatus();
+            hideSearchElement('status-bar');
         })
         .catch(function(err) {
             isSearching = false;
+            if (pendingGridSwap) {
+                // Background refetch failed - the still-visible old results
+                // are still correct, leave them in place; just notify.
+                pendingGridSwap = false;
+                hideSearchElement('status-bar');
+                showToast('Search failed - check your connection', 'error');
+                return;
+            }
             var loadingEl = document.getElementById('initial-loading');
             if (loadingEl) {
                 loadingEl.innerHTML = '<p>Connection error. <button type="button" data-action="reload" class="retry-btn">Retry</button></p>';
@@ -2118,16 +2197,18 @@ if (document.readyState === 'loading') {
         isSearching = true;
         searchSessionID = generateSearchSessionID();
 
-        var grid = document.getElementById('video-grid');
-        if (grid) grid.innerHTML = '';
-        var countEl = document.getElementById('result-count');
-        if (countEl) countEl.textContent = '0';
-        // initial-loading's spinner/text markup is already server-rendered
-        // (search.tmpl) - just reset the text and reveal it, same pattern
-        // streamResults()/fallbackToJSONSearch() already use.
-        var loadingText = document.getElementById('loading-text');
-        if (loadingText) loadingText.textContent = 'Searching engines...';
-        showSearchElement('initial-loading');
+        // Do NOT clear #video-grid/#result-count or show the full-page
+        // #initial-loading spinner here - the currently displayed results are
+        // still correct and usable (AI.md PART 16: JS enhances only, never
+        // blocks/replaces working content). Leave them in place and only
+        // swap them out once the background update actually has new data
+        // (see the firstResult/success branches in streamResults() and
+        // fallbackToJSONSearch()). Surface the in-progress update via the
+        // small, non-blocking status bar instead of a full-page spinner.
+        pendingGridSwap = true;
+        var statusText = document.getElementById('status-text');
+        if (statusText) statusText.textContent = 'Updating results...';
+        showSearchElement('status-bar');
 
         var minDuration = parseInt(userPrefs.minDuration) || 0;
         if (searchCurrentSort) {

@@ -42,7 +42,7 @@
 
 .btn-danger {
   background: var(--error);
-  color: white;
+  color: var(--color-on-accent);
 }
 
 .btn-danger:hover {
@@ -122,7 +122,7 @@ dialog {
 }
 
 dialog::backdrop {
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--color-scrim-70);
 }
 
 .modal-header {
@@ -197,17 +197,17 @@ dialog::backdrop {
 }
 
 .badge-success {
-  background: rgba(80, 250, 123, 0.2);
+  background: color-mix(in srgb, var(--success) 20%, transparent);
   color: var(--success);
 }
 
 .badge-warning {
-  background: rgba(255, 184, 108, 0.2);
+  background: color-mix(in srgb, var(--warning) 20%, transparent);
   color: var(--warning);
 }
 
 .badge-error {
-  background: rgba(255, 85, 85, 0.2);
+  background: color-mix(in srgb, var(--error) 20%, transparent);
   color: var(--error);
 }
 
@@ -268,7 +268,7 @@ dialog::backdrop {
 .textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.2);
+  box-shadow: 0 0 0 2px var(--focus-ring-shadow);
 }
 
 .textarea {
@@ -300,25 +300,25 @@ dialog::backdrop {
 }
 
 .alert-info {
-  background: rgba(139, 233, 253, 0.1);
+  background: var(--color-info-bg);
   border: 1px solid var(--accent-alt);
   color: var(--accent-alt);
 }
 
 .alert-success {
-  background: rgba(80, 250, 123, 0.1);
+  background: var(--color-success-bg);
   border: 1px solid var(--success);
   color: var(--success);
 }
 
 .alert-warning {
-  background: rgba(255, 184, 108, 0.1);
+  background: var(--color-warning-bg);
   border: 1px solid var(--warning);
   color: var(--warning);
 }
 
 .alert-error {
-  background: rgba(255, 85, 85, 0.1);
+  background: var(--color-error-bg);
   border: 1px solid var(--error);
   color: var(--error);
 }
@@ -370,7 +370,7 @@ dialog::backdrop {
   overflow-x: auto;
   white-space: nowrap;
   padding: 0.5rem 0.75rem;
-  background: var(--color-code-bg, rgba(255, 255, 255, 0.1));
+  background: var(--color-code-bg);
   border-radius: 4px;
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 0.875rem;
@@ -383,9 +383,9 @@ dialog::backdrop {
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem;
-  border: 1px solid var(--border, #44475a);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--bg-secondary, #44475a);
+  background: var(--bg-secondary);
   cursor: pointer;
   font-size: 0.875rem;
   transition: background-color 0.2s, border-color 0.2s;
@@ -394,13 +394,13 @@ dialog::backdrop {
 }
 
 .copy-btn:hover {
-  background: var(--bg-tertiary, #1e1f29);
-  border-color: var(--accent, #bd93f9);
+  background: var(--bg-tertiary);
+  border-color: var(--accent);
 }
 
 .copy-btn.copied {
-  background: var(--color-success-bg, rgba(80, 250, 123, 0.15));
-  border-color: var(--color-success, #50fa7b);
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
 }
 
 .copy-text {
@@ -416,7 +416,7 @@ dialog::backdrop {
 /* Multi-line code block - mobile-first per AI.md PART 16 */
 .code-block-multi {
   margin: 1rem 0;
-  border: 1px solid var(--border, #44475a);
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -426,13 +426,13 @@ dialog::backdrop {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 0.75rem;
-  background: var(--bg-secondary, #44475a);
-  border-bottom: 1px solid var(--border, #44475a);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
   font-size: 0.75rem;
 }
 
 .code-lang {
-  color: var(--color-muted, #888);
+  color: var(--color-muted);
   text-transform: uppercase;
 }
 
@@ -469,10 +469,10 @@ dialog::backdrop {
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1.25rem;
-  background: var(--bg-secondary, #44475a);
-  border: 1px solid var(--accent, #bd93f9);
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px var(--shadow);
   z-index: 9998;
   font-size: 0.875rem;
   max-width: calc(100vw - 2rem);

@@ -409,26 +409,16 @@ func generateSwaggerUI(appConfig *config.AppConfig, theme, lang, dir string) str
 		}
 	}
 
-	// Theme colors
-	bg := "#1a1a2e"
-	cardBg := "#16213e"
-	text := "#e0e0e0"
-	accent := "#a78bfa"
-	border := "#333"
-	if theme == "light" {
-		bg = "#f5f5f5"
-		cardBg = "#ffffff"
-		text = "#333"
-		accent = "#6d28d9"
-		border = "#ddd"
-	}
-
+	// Theme is applied via the shared theme-{dark,light,auto} class on <html>
+	// (AI.md PART 16) — colors come from common.css custom properties, never
+	// inline styles or a separate hardcoded palette.
 	return fmt.Sprintf(`<!DOCTYPE html>
-<html lang="%s" dir="%s" style="--sw-bg:%s;--sw-text:%s;--sw-accent:%s;--sw-card-bg:%s;--sw-border:%s">
+<html lang="%s" dir="%s" class="theme-%s">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>API Documentation - VidVeil</title>
+    <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/swagger.css">
 </head>
 <body>
@@ -448,8 +438,7 @@ func generateSwaggerUI(appConfig *config.AppConfig, theme, lang, dir string) str
     </div>
 </body>
 </html>`,
-		lang, dir,
-		bg, text, accent, cardBg, border,
+		lang, dir, theme,
 		endpointRows,
 	)
 }

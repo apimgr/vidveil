@@ -1,21 +1,21 @@
-/* GraphQL Explorer page */
+/* GraphQL Explorer page — theme via CSS custom properties on <html> */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: #1a1a2e;
-    color: #e0e0e0;
+    background: var(--color-bg);
+    color: var(--color-text);
     padding: 10px;
 }
 
 .container { max-width: 900px; margin: 0 auto; }
 
-h1 { margin-bottom: 20px; color: #a78bfa; font-size: 24px; }
-h2 { font-size: 16px; margin-bottom: 8px; color: #c0c0c0; }
+h1 { margin-bottom: 20px; color: var(--color-primary); font-size: 24px; }
+h2 { font-size: 16px; margin-bottom: 8px; color: var(--text-secondary); }
 
 .editor { display: flex; flex-direction: column; gap: 12px; }
 
-label { font-weight: 600; color: #c0c0c0; }
+label { font-weight: 600; color: var(--text-secondary); }
 
 textarea {
     width: 100%;
@@ -23,20 +23,20 @@ textarea {
     padding: 12px;
     font-family: "Fira Code", Consolas, monospace;
     font-size: 13px;
-    background: #16213e;
-    color: #e0e0e0;
-    border: 1px solid #333;
+    background: var(--color-bg-card);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
     resize: vertical;
     tab-size: 2;
 }
 
-textarea:focus { outline: none; border-color: #a78bfa; }
+textarea:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--focus-ring-shadow); }
 
 button {
     padding: 10px 24px;
-    background: #a78bfa;
-    color: #fff;
+    background: var(--color-primary);
+    color: var(--color-on-accent);
     border: none;
     border-radius: 6px;
     font-size: 14px;
@@ -45,12 +45,12 @@ button {
     align-self: flex-start;
 }
 
-button:hover { background: #8b5cf6; }
+button:hover { background: color-mix(in srgb, var(--color-primary) 85%, black); }
 
 .result { margin-top: 20px; }
 
 .result pre {
-    background: #16213e;
+    background: var(--color-bg-card);
     padding: 16px;
     border-radius: 6px;
     overflow-x: auto;
@@ -58,17 +58,17 @@ button:hover { background: #8b5cf6; }
     word-break: break-word;
     font-family: "Fira Code", Consolas, monospace;
     font-size: 13px;
-    border: 1px solid #333;
+    border: 1px solid var(--color-border);
     max-height: 500px;
     overflow-y: auto;
 }
 
-.examples { margin-top: 24px; padding-top: 20px; border-top: 1px solid #333; }
+.examples { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--color-border); }
 .examples ul { list-style: none; margin-top: 8px; }
 .examples li { margin-bottom: 8px; }
 
 .examples code {
-    background: #16213e;
+    background: var(--color-bg-card);
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 13px;

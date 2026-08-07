@@ -179,8 +179,8 @@ func TestDarkToCSSStructure(t *testing.T) {
 // Dark.ToCSS must include the Dark background color as --bg-color.
 func TestDarkToCSSBackgroundColor(t *testing.T) {
 	css := Dark.ToCSS()
-	if !strings.Contains(css, "--bg-color: #1a1b26") {
-		t.Errorf("Dark.ToCSS() = %q, want to contain \"--bg-color: #1a1b26\"", css)
+	if !strings.Contains(css, "--bg-color: #282a36") {
+		t.Errorf("Dark.ToCSS() = %q, want to contain \"--bg-color: #282a36\"", css)
 	}
 }
 

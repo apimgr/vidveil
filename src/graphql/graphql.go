@@ -29,6 +29,25 @@ func NewHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *H
 	}
 }
 
+// DetectTheme determines the UI theme (light/dark/auto) from the request.
+// See AI.md PART 16 for theme detection rules.
+func DetectTheme(r *http.Request) string {
+	// Check cookie first
+	if cookie, err := r.Cookie("theme"); err == nil {
+		if cookie.Value == "light" || cookie.Value == "dark" {
+			return cookie.Value
+		}
+	}
+
+	// Check query parameter
+	if theme := r.URL.Query().Get("theme"); theme == "light" || theme == "dark" {
+		return theme
+	}
+
+	// Default to auto (respects browser preference)
+	return "auto"
+}
+
 // Request represents a GraphQL request
 type Request struct {
 	Query         string                 `json:"query"`
@@ -98,12 +117,17 @@ func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	lang := i18n.DetectLocale(r)
 	dir := i18n.Direction(lang)
+	theme := DetectTheme(r)
+	// Theme is applied via the shared theme-{dark,light,auto} class on <html>
+	// (AI.md PART 16) — colors come from common.css custom properties, never
+	// inline styles or a separate hardcoded palette.
 	fmt.Fprintf(w, `<!DOCTYPE html>
-<html lang="%s" dir="%s">
+<html lang="%s" dir="%s" class="theme-%s">
 <head>
     <meta charset="UTF-8">
     <title>GraphQL Explorer - VidVeil</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="/static/css/graphql.css">
 </head>
 <body>
@@ -127,7 +151,7 @@ func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
         </div>
     </div>
 </body>
-</html>`, lang, dir, html.EscapeString(queryStr), resultHTML)
+</html>`, lang, dir, theme, html.EscapeString(queryStr), resultHTML)
 }
 
 // executeQuery executes a GraphQL query

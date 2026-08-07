@@ -33,11 +33,18 @@
     --color-hover: #44475a;
     --color-favorite: #ff4081;
 
+    /* AI.md PART 16: required custom properties not covered above */
+    --color-bg-card: #383a4a;
+    --color-bg-hover: var(--color-hover);
+    --color-bg-active: color-mix(in srgb, var(--color-primary) 15%, var(--color-bg-hover));
+    --color-code-bg: var(--color-bg-tertiary);
+    --color-border-hover: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+
     /* Legacy aliases (for backward compatibility) */
     --bg-primary: var(--color-bg);
     --bg-secondary: var(--color-bg-secondary);
     --bg-tertiary: var(--color-bg-tertiary);
-    --bg-card: #383a4a;
+    --bg-card: var(--color-bg-card);
     --text-primary: var(--color-text);
     --text-secondary: var(--color-text-secondary);
     --text-muted: var(--color-muted);
@@ -78,6 +85,27 @@
     --color-method-put-bg: rgba(245, 158, 11, 0.13);
     --color-method-delete: #ef4444;
     --color-method-delete-bg: rgba(239, 68, 68, 0.13);
+
+    /* Theme-invariant black scrim/overlay alphas (image/video/modal backdrops) */
+    --color-scrim-20: rgba(0, 0, 0, 0.2);
+    --color-scrim-50: rgba(0, 0, 0, 0.5);
+    --color-scrim-55: rgba(0, 0, 0, 0.55);
+    --color-scrim-70: rgba(0, 0, 0, 0.7);
+    --color-scrim-80: rgba(0, 0, 0, 0.8);
+    --color-scrim-85: rgba(0, 0, 0, 0.85);
+    --color-scrim-90: rgba(0, 0, 0, 0.9);
+
+    /* Content color guaranteed readable on top of --color-primary/--color-warning */
+    --color-on-primary: var(--color-bg);
+    --color-on-warning: #000000;
+
+    /* Fixed white text/icon/track for colored button and badge surfaces - both
+       theme accent colors are vivid mid-tones chosen to work with white content */
+    --color-on-accent: #ffffff;
+    --color-highlight-30: rgba(255, 255, 255, 0.3);
+
+    /* Password/entropy strength indicator - "good" tier, WCAG AA validated per theme */
+    --color-strength-good: #84cc16;
 }
 
 /* AI.md PART 16: Theme class on html element */
@@ -116,11 +144,18 @@
         --color-hover: #e9e9ec;
         --color-favorite: #d81b60;
 
+        /* AI.md PART 16: required custom properties not covered above */
+        --color-bg-card: #f5f5f5;
+        --color-bg-hover: var(--color-hover);
+        --color-bg-active: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-hover));
+        --color-code-bg: var(--color-bg-tertiary);
+        --color-border-hover: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+
         /* Legacy aliases */
         --bg-primary: var(--color-bg);
         --bg-secondary: var(--color-bg-secondary);
         --bg-tertiary: var(--color-bg-tertiary);
-        --bg-card: #f5f5f5;
+        --bg-card: var(--color-bg-card);
         --text-primary: var(--color-text);
         --text-secondary: var(--color-text-secondary);
         --text-muted: var(--color-muted);
@@ -133,6 +168,12 @@
         --border: var(--color-border);
         --shadow: rgba(0, 0, 0, 0.1);
         --focus-ring-shadow: rgba(46, 125, 233, 0.3);
+
+        /* Content color guaranteed readable on top of --color-primary/--color-warning */
+        --color-on-warning: #ffffff;
+
+        /* Password/entropy strength indicator - "good" tier, WCAG AA validated per theme */
+        --color-strength-good: #4d7c0f;
     }
 }
 
@@ -168,11 +209,18 @@ html.theme-light {
     --color-hover: #e9e9ec;
     --color-favorite: #d81b60;
 
+    /* AI.md PART 16: required custom properties not covered above */
+    --color-bg-card: #f5f5f5;
+    --color-bg-hover: var(--color-hover);
+    --color-bg-active: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-hover));
+    --color-code-bg: var(--color-bg-tertiary);
+    --color-border-hover: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+
     /* Legacy aliases */
     --bg-primary: var(--color-bg);
     --bg-secondary: var(--color-bg-secondary);
     --bg-tertiary: var(--color-bg-tertiary);
-    --bg-card: #f5f5f5;
+    --bg-card: var(--color-bg-card);
     --text-primary: var(--color-text);
     --text-secondary: var(--color-text-secondary);
     --text-muted: var(--color-muted);
@@ -185,6 +233,12 @@ html.theme-light {
     --border: var(--color-border);
     --shadow: rgba(0, 0, 0, 0.1);
     --focus-ring-shadow: rgba(46, 125, 233, 0.3);
+
+    /* Content color guaranteed readable on top of --color-primary/--color-warning */
+    --color-on-warning: #ffffff;
+
+    /* Password/entropy strength indicator - "good" tier, WCAG AA validated per theme */
+    --color-strength-good: #4d7c0f;
 }
 
 /* BASE spec: Screens ≥720px get 90% width */
@@ -488,7 +542,7 @@ a:hover {
     transition: right 0.3s ease;
     display: flex;
     flex-direction: column;
-    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+    box-shadow: -4px 0 20px var(--shadow);
 }
 
 .nav-panel.open {
@@ -541,7 +595,7 @@ a:hover {
 .nav-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--color-scrim-50);
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
@@ -623,7 +677,7 @@ header .search-form {
 .search-form input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(189, 147, 249, 0.2);
+    box-shadow: 0 0 0 3px var(--focus-ring-shadow);
 }
 
 .search-form input::placeholder {
@@ -925,7 +979,7 @@ header .search-form {
 }
 
 .warning-banner {
-    background: rgba(255, 85, 85, 0.1);
+    background: var(--color-error-bg);
     border: 1px solid var(--error);
     color: var(--error);
     padding: 0.75rem 1rem;
@@ -1103,7 +1157,7 @@ header .search-form {
     right: 8px;
     width: 24px;
     height: 24px;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--color-scrim-70);
     border-radius: 50%;
     opacity: 0;
     transition: opacity 0.2s;
@@ -1118,7 +1172,7 @@ header .search-form {
     position: absolute;
     bottom: 8px;
     right: 8px;
-    background: rgba(0, 0, 0, 0.85);
+    background: var(--color-scrim-85);
     color: white;
     padding: 3px 8px;
     border-radius: 4px;
@@ -1208,7 +1262,7 @@ header .search-form {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--color-scrim-70);
     border: none;
     border-radius: 50%;
     color: white;
@@ -1231,7 +1285,7 @@ header .search-form {
 }
 
 .card-menu-container > summary:hover {
-    background: rgba(0, 0, 0, 0.9);
+    background: var(--color-scrim-90);
 }
 
 .card-menu {
@@ -2014,7 +2068,7 @@ header .search-form {
     bottom: 0;
     left: 0;
     height: 3px;
-    background: rgba(255,255,255,0.3);
+    background: var(--color-highlight-30);
     border-radius: 0 0 4px 4px;
 }
 
@@ -2051,7 +2105,7 @@ header .search-form {
     bottom: 40px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.8);
+    background: var(--color-scrim-80);
     color: white;
     padding: 4px 10px;
     border-radius: 4px;
@@ -2122,8 +2176,8 @@ header .search-form {
     display: inline-block;
     width: 14px;
     height: 14px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
+    border: 2px solid var(--color-highlight-30);
+    border-top-color: var(--color-on-accent);
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
     vertical-align: middle;
@@ -2148,8 +2202,8 @@ header .search-form {
     width: 14px;
     height: 14px;
     margin: -7px 0 0 -7px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
+    border: 2px solid var(--color-highlight-30);
+    border-top-color: var(--color-on-accent);
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
 }
@@ -2199,7 +2253,7 @@ header .search-form {
 .modal-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--color-scrim-70);
 }
 
 .modal-content {
@@ -2211,7 +2265,7 @@ header .search-form {
     max-width: 90%;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 40px var(--color-scrim-50);
     animation: modalSlideIn 0.3s ease;
 }
 
@@ -2352,7 +2406,7 @@ header .search-form {
 }
 
 .age-buttons .btn-yes:hover {
-    background: #3ed66a;
+    background: color-mix(in srgb, var(--success) 85%, black);
     transform: scale(1.02);
 }
 
@@ -2544,12 +2598,12 @@ a:focus-visible {
 
 /* Performer icon styling */
 .autocomplete-icon--performer {
-    color: var(--accent-alt, #ff69b4);
+    color: var(--accent-alt);
 }
 
 .autocomplete-item:hover .autocomplete-icon--performer,
 .autocomplete-item.selected .autocomplete-icon--performer {
-    color: var(--accent-alt, #ff69b4);
+    color: var(--accent-alt);
 }
 
 /* Suggestion type label (performer badge) */
@@ -2564,8 +2618,8 @@ a:focus-visible {
 }
 
 .suggestion-type--performer {
-    background: rgba(255, 105, 180, 0.15);
-    color: var(--accent-alt, #ff69b4);
+    background: var(--color-info-bg);
+    color: var(--accent-alt);
 }
 
 /* Bang hint below search box */
@@ -2685,7 +2739,7 @@ a:focus-visible {
 }
 
 .history-link.searching .btn-spinner {
-    border-color: rgba(122, 162, 247, 0.3);
+    border-color: color-mix(in srgb, var(--accent) 30%, transparent);
     border-top-color: var(--accent);
 }
 
@@ -2739,7 +2793,7 @@ a:focus-visible {
     left: 0;
     right: 0;
     background: var(--warning);
-    color: #000;
+    color: var(--color-on-warning);
     text-align: center;
     padding: 0.75rem;
     font-weight: 500;
@@ -2779,7 +2833,7 @@ a:focus-visible {
 }
 
 .modal-dialog::backdrop {
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--color-scrim-70);
     backdrop-filter: blur(2px);
 }
 
@@ -3064,7 +3118,7 @@ a:focus-visible {
 
 .strength-weak { background: var(--error); width: 25%; }
 .strength-fair { background: var(--warning); width: 50%; }
-.strength-good { background: #84cc16; width: 75%; }
+.strength-good { background: var(--color-strength-good); width: 75%; }
 .strength-strong { background: var(--success); width: 100%; }
 
 /* Invite Page */
@@ -3379,10 +3433,10 @@ a:focus-visible {
     left: 3px;
     width: 20px;
     height: 20px;
-    background: #fff;
+    background: var(--color-on-accent);
     border-radius: 50%;
     transition: transform 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px var(--color-scrim-20);
 }
 
 .toggle input[type="checkbox"]:checked + .slider {
@@ -3522,7 +3576,7 @@ a:focus-visible {
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border);
     border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px var(--shadow);
     z-index: 1000;
     overflow: hidden;
 }
@@ -3683,7 +3737,7 @@ a:focus-visible {
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border);
     border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px var(--shadow);
     z-index: 1000;
 }
 
@@ -3930,7 +3984,7 @@ a:focus-visible {
 }
 
 .feature-list li.feature-starting {
-    border-left-color: var(--color-warning, #f59e0b);
+    border-left-color: var(--color-warning);
     opacity: 0.85;
 }
 
@@ -3939,7 +3993,7 @@ a:focus-visible {
 }
 
 .status-starting {
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
     font-weight: 600;
 }
 
@@ -4714,10 +4768,10 @@ a:focus-visible {
 
 .related-tag:hover {
     background: var(--color-primary);
-    color: #fff;
+    color: var(--color-on-accent);
     border-color: var(--color-primary);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
 .related-tag:hover .related-icon {
@@ -4832,8 +4886,8 @@ a:focus-visible {
 }
 
 .btn-primary {
-    background: var(--accent, #6c63ff);
-    color: #fff;
+    background: var(--accent);
+    color: var(--color-on-accent);
 }
 
 .btn-primary:hover { opacity: 0.9; }
@@ -4878,7 +4932,7 @@ a:focus-visible {
 
 .favorites-count {
     font-size: 0.875rem;
-    color: var(--muted, #6272a4);
+    color: var(--text-muted);
     margin-right: 0.25rem;
 }
 
@@ -4899,7 +4953,7 @@ a:focus-visible {
     gap: 1rem;
     padding: 4rem 1rem;
     text-align: center;
-    color: var(--muted, #6272a4);
+    color: var(--text-muted);
 }
 
 /* Show empty state only when not hidden - prevents [hidden] specificity conflict */
@@ -4923,15 +4977,15 @@ a:focus-visible {
 .favorites-nojs {
     padding: 2rem;
     text-align: center;
-    color: var(--muted, #6272a4);
+    color: var(--text-muted);
 }
 
 .fav-remove {
     position: absolute;
     top: 0.4rem;
     right: 0.4rem;
-    background: rgba(0,0,0,0.55);
-    color: #fff;
+    background: var(--color-scrim-55);
+    color: var(--color-on-accent);
     border: none;
     border-radius: 50%;
     width: 1.5rem;

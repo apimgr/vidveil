@@ -242,9 +242,11 @@ func TestHandlerThemeFromCookie(t *testing.T) {
 	}
 
 	body := rr.Body.String()
-	// Light theme uses #f5f5f5 as background; absence means theme was ignored.
-	if !strings.Contains(body, "#f5f5f5") {
-		t.Error("Handler() with light theme cookie: light-theme CSS variable not found in body")
+	// Theme is applied via the shared theme-{dark,light,auto} class on <html>
+	// (AI.md PART 16) — colors come from common.css custom properties, not
+	// an inline style attribute or a hardcoded per-page palette.
+	if !strings.Contains(body, `class="theme-light"`) {
+		t.Error("Handler() with light theme cookie: theme-light class not found on <html>")
 	}
 }
 
@@ -259,9 +261,10 @@ func TestHandlerDarkThemeDefault(t *testing.T) {
 	h(rr, r)
 
 	body := rr.Body.String()
-	// Dark theme uses #1a1a2e as background.
-	if !strings.Contains(body, "#1a1a2e") {
-		t.Error("Handler() without cookie: dark-theme CSS variable not found in body")
+	// Without a cookie, DetectTheme falls back to "auto"; the shared
+	// theme-auto class on <html> lets prefers-color-scheme (default dark) apply.
+	if !strings.Contains(body, `class="theme-auto"`) {
+		t.Error("Handler() without cookie: theme-auto class not found on <html>")
 	}
 }
 

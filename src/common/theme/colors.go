@@ -12,12 +12,12 @@ type ColorPalette struct {
 }
 
 var (
-	// Dark is the default dark color palette (Tokyo Night inspired)
+	// Dark is the default dark color palette (Dracula inspired)
 	Dark = ColorPalette{
-		Background: "#1a1b26", Foreground: "#c0caf5",
-		Primary: "#7aa2f7", Secondary: "#9ece6a", Accent: "#bb9af7",
-		Success: "#9ece6a", Warning: "#e0af68", Error: "#f7768e", Info: "#7dcfff",
-		Surface: "#24283b", SurfaceAlt: "#1f2335", Border: "#414868", Muted: "#565f89",
+		Background: "#282a36", Foreground: "#f8f8f2",
+		Primary: "#bd93f9", Secondary: "#50fa7b", Accent: "#ff79c6",
+		Success: "#50fa7b", Warning: "#ffb86c", Error: "#ff5555", Info: "#8be9fd",
+		Surface: "#44475a", SurfaceAlt: "#1e1f29", Border: "#44475a", Muted: "#7585b8",
 	}
 
 	// Light is the light color palette

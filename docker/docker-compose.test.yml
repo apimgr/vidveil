@@ -13,7 +13,7 @@ services:
   vidveil:
     image: ghcr.io/apimgr/vidveil:latest
     pull_policy: always
-    container_name: vidveil-test
+    container_name: vidveil-app
     hostname: vidveil
     restart: "no"
     logging: *default-logging
@@ -29,7 +29,7 @@ services:
     ports:
       - "172.17.0.1:64581:80"
     healthcheck:
-      test: /usr/local/bin/vidveil --status || exit 1
+      test: ['CMD', '/usr/local/bin/vidveil', '--status']
       interval: 10s
       timeout: 5s
       retries: 3
@@ -43,13 +43,13 @@ services:
   vidveil-cache-test:
     image: valkey/valkey:alpine
     pull_policy: always
-    container_name: vidveil-cache-test
+    container_name: vidveil-cache
     restart: "no"
     logging: *default-logging
     tmpfs:
       - /data
     healthcheck:
-      test: valkey-cli ping || exit 1
+      test: ['CMD-SHELL', 'valkey-cli ping || exit 1']
       interval: 10s
       timeout: 5s
       retries: 3

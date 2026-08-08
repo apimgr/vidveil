@@ -2,7 +2,7 @@
 # nginx proxy address - http://172.17.0.1:64893
 # Per AI.md PART 26: Uses temp directory workflow - MUST use image, not build
 
-name: vidveil
+name: vidveil-dev
 
 x-logging: &default-logging
   options:
@@ -30,15 +30,15 @@ services:
       # Development: accessible from all interfaces, no 172.17.0.1 bind
       - '64893:80'
     healthcheck:
-      test: /usr/local/bin/vidveil --status || exit 1
+      test: ['CMD', '/usr/local/bin/vidveil', '--status']
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 90s
     networks:
-      - vidveil
+      - vidveil-dev
 
 networks:
-  vidveil:
-    name: vidveil
+  vidveil-dev:
+    name: vidveil-dev
     external: false

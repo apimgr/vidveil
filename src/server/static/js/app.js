@@ -3282,8 +3282,23 @@ document.addEventListener('error', function(e) {
             updateFavoritesCount();
         }
 
+        // Single-submit-only guard (AI.md PART 16: "Never let a single-submit
+        // form button be clickable twice"). Without this, rapid repeat clicks
+        // on Save each independently queue their own delayed history.back()
+        // call, so the user has to navigate back once per click instead of
+        // once total.
+        var saving = false;
+
         function savePreferences(e) {
             e.preventDefault();
+            if (saving) return;
+            saving = true;
+
+            var saveBtn = document.getElementById('preferences-save-btn');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = i18n.saving;
+            }
 
             var engines = [];
             document.querySelectorAll('input[name="engines"]:checked').forEach(function(cb) {

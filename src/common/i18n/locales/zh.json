@@ -154,6 +154,7 @@
   "prefs.reset_done": "Preferences reset to defaults",
   "prefs.results_page": "每页结果数",
   "prefs.save": "保存偏好",
+  "prefs.saving": "保存中...",
   "prefs.saved": "偏好已保存！",
   "prefs.search_settings": "Search Settings",
   "prefs.show_synthetic_content": "Show synthetic content (deepfakes, computer-rendered)",

@@ -154,6 +154,7 @@
   "prefs.reset_done": "Preferences reset to defaults",
   "prefs.results_page": "Resultados por Pagina",
   "prefs.save": "Guardar Preferencias",
+  "prefs.saving": "Guardando...",
   "prefs.saved": "Preferencias guardadas!",
   "prefs.search_settings": "Search Settings",
   "prefs.show_synthetic_content": "Show synthetic content (deepfakes, computer-rendered)",

@@ -154,6 +154,7 @@
   "prefs.reset_done": "Preferences reset to defaults",
   "prefs.results_page": "1ページあたりの結果数",
   "prefs.save": "設定を保存",
+  "prefs.saving": "保存中...",
   "prefs.saved": "設定が保存されました！",
   "prefs.search_settings": "Search Settings",
   "prefs.show_synthetic_content": "Show synthetic content (deepfakes, computer-rendered)",

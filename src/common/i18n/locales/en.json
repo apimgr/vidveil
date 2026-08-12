@@ -103,6 +103,7 @@
   "prefs.engines": "Search Engines",
   "prefs.engines_desc": "Toggle tiers on/off or select individual engines:",
   "prefs.save": "Save Preferences",
+  "prefs.saving": "Saving...",
   "prefs.saved": "Preferences saved!",
   "prefs.reset": "Reset to Defaults",
   "prefs.reset_done": "Preferences reset to defaults",

@@ -230,7 +230,7 @@
             </section>
 
             <div class="form-actions">
-                <button type="submit" class="primary">{{ t "prefs.save" }}</button>
+                <button type="submit" class="primary" id="preferences-save-btn">{{ t "prefs.save" }}</button>
                 <button type="button" data-action="reset-preferences">{{ t "prefs.reset" }}</button>
             </div>
         </form>
@@ -240,6 +240,7 @@
     {{/* i18n strings for the preferences logic in app.js. type="application/json" is
          a non-executable data island (CSP script-src does not block it). */}}
     <script type="application/json" id="preferences-i18n">{
+        "saving": "{{ t "prefs.saving" }}",
         "saved": "{{ t "prefs.saved" }}",
         "resetDone": "{{ t "prefs.reset_done" }}",
         "favExported": "{{ t "favorites.exported" }}",

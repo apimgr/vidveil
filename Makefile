@@ -7,16 +7,19 @@
 PROJECTNAME := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)(\.git)?$$|\1|' || basename "$$(pwd)")
 PROJECTORG  := $(shell git remote get-url origin 2>/dev/null | sed -E 's|.*/([^/]+)/[^/]+(\.git)?$$|\1|' || basename "$$(dirname "$$(pwd)")")
 
-# Version precedence: env var > release.txt > devel default
-VERSION ?= $(shell cat release.txt 2>/dev/null || echo "devel")
+# Version precedence: release.txt (wins if it exists) > VERSION env var > devel fallback
+VERSION := $(shell cat release.txt 2>/dev/null || echo "$${VERSION:-devel}")
 
 # Build info — ISO 8601 UTC (AI.md PART 25; parseable by BuildDateTime() in handlers.go)
-BUILD_DATE := $(shell date -u +"%%Y-%%m-%%dT%%H:%%M:%%SZ")
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID  := $(shell git rev-parse --short HEAD 2>/dev/null || echo "N/A")
 
 # Official site URL (OPTIONAL — never guess or assume)
-# Sources in priority order: site.txt → OFFICIALSITE env → empty
-OFFICIALSITE := $(shell [ -f site.txt ] && cat site.txt || echo "$${OFFICIALSITE:-}")
+# Sources in priority order: site.txt → OFFICIAL_SITE env → empty
+OFFICIAL_SITE := $(shell [ -f site.txt ] && cat site.txt || echo "$${OFFICIAL_SITE:-}")
+
+# Release tag: add 'v' prefix ONLY to numeric semver VERSION, never to text/timestamp versions
+RELEASE_TAG := $(shell v="$(VERSION)"; case "$$v" in (v*) echo "$$v" ;; ([0-9]*.[0-9]*.[0-9]*) echo "v$$v" ;; (*) echo "$$v" ;; esac)
 
 # go build flags applied to every binary (AI.md PART 7/8: -trimpath is a go build flag, not a linker flag)
 BUILD_FLAGS := -trimpath -buildvcs=false
@@ -26,7 +29,7 @@ LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)' \
-	-X 'main.OfficialSite=$(OFFICIALSITE)'
+	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
 
 # Linker flags for CLI client binary (AI.md PART 8)
 CLI_LDFLAGS := -s -w \
@@ -34,7 +37,7 @@ CLI_LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)' \
-	-X 'main.OfficialSite=$(OFFICIALSITE)'
+	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
 
 # Directories
 BINDIR := binaries
@@ -50,12 +53,17 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 win
 # Registry for Docker target
 REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
 
+# Resource limits for build containers (AI.md PART 25)
+DOCKER_MEM  ?= 4g
+DOCKER_CPUS ?= 2
+
 # Internal: base docker run options without the image.
 # GO_DOCKER (below) is the spec-standard single-command form for simple go commands.
 # _GO_OPTS is used when extra -e or -v flags must appear before the image name
 # (e.g. cross-compile with -e GOOS/-e GOARCH, or temp-dir mounts for test/dev).
 _GO_OPTS = docker run --rm \
 	--name $(PROJECTNAME)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8) \
+	--memory=$(DOCKER_MEM) --cpus=$(DOCKER_CPUS) \
 	-v $(PWD):/app \
 	-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
 	-v $(GO_BUILD):/usr/local/share/go/cache \
@@ -138,14 +146,14 @@ release: build
 	@tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
 		--exclude='binaries' --exclude='releases' --exclude='*.tar.gz' \
 		-czf $(RELDIR)/$(PROJECTNAME)-$(VERSION)-source.tar.gz .
-	@gh release delete $(VERSION) --yes 2>/dev/null || true
-	@git tag -d $(VERSION) 2>/dev/null || true
-	@git push origin :refs/tags/$(VERSION) 2>/dev/null || true
-	@gh release create $(VERSION) $(RELDIR)/* \
-		--title "$(PROJECTNAME) $(VERSION)" \
-		--notes "Release $(VERSION)" \
+	@gh release delete $(RELEASE_TAG) --yes 2>/dev/null || true
+	@git tag -d $(RELEASE_TAG) 2>/dev/null || true
+	@git push origin :refs/tags/$(RELEASE_TAG) 2>/dev/null || true
+	@gh release create $(RELEASE_TAG) $(RELDIR)/* \
+		--title "$(PROJECTNAME) $(RELEASE_TAG)" \
+		--notes "Release $(RELEASE_TAG)" \
 		--latest
-	@echo "Release complete: $(VERSION)"
+	@echo "Release complete: $(RELEASE_TAG)"
 
 # =============================================================================
 # DOCKER — Build and push multi-arch container image to registry
@@ -158,6 +166,7 @@ docker:
 	@docker buildx build \
 		-f docker/Dockerfile \
 		--platform linux/amd64,linux/arm64 \
+		--push \
 		--build-arg VERSION="$(VERSION)" \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--build-arg COMMIT_ID="$(COMMIT_ID)" \
@@ -207,11 +216,11 @@ dev:
 	BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \
 	echo "Quick dev build to $$BUILD_DIR..." && \
 	$(_GO_OPTS) -v "$$BUILD_DIR:$$BUILD_DIR" casjaysdev/go:latest \
-		go build $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" -o "$$BUILD_DIR/$(PROJECTNAME)" ./src && \
+		go build $(BUILD_FLAGS) -o "$$BUILD_DIR/$(PROJECTNAME)" ./src && \
 	echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
 	if [ -d "src/client" ]; then \
 		$(_GO_OPTS) -v "$$BUILD_DIR:$$BUILD_DIR" casjaysdev/go:latest \
-			go build $(BUILD_FLAGS) -ldflags "$(CLI_LDFLAGS)" -o "$$BUILD_DIR/$(PROJECTNAME)-cli" ./src/client && \
+			go build $(BUILD_FLAGS) -o "$$BUILD_DIR/$(PROJECTNAME)-cli" ./src/client && \
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
 	fi && \
 	echo "Test:  docker run --rm -it --name $(PROJECTNAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"

@@ -360,6 +360,11 @@ func TestSearchPage_NoJS_RendersResultsInVisibleGrid(t *testing.T) {
 		"Theme":           "dark",
 		"Version":         "test",
 		"BuildDateTime":   "2026-01-01",
+		"Page":            1,
+		"PrevPage":        0,
+		"NextPage":        2,
+		"HasMore":         true,
+		"InfiniteScroll":  false,
 	}
 	h.renderResponse(rr, req, "search", data)
 

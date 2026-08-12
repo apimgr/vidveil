@@ -69,16 +69,27 @@
             {{end}}
         </div>
 
-        {{if .HasMore}}
-        <div class="pagination">
+        {{if or (gt .Page 1) .HasMore}}
+        <nav class="pagination" aria-label="{{ t "a11y.pagination" }}">
+            {{if gt .Page 1}}
+            <form method="get" action="/search">
+                <input type="hidden" name="q" value="{{.Query}}">
+                <input type="hidden" name="page" value="{{.PrevPage}}">
+                {{if .Duration}}<input type="hidden" name="duration" value="{{.Duration}}">{{end}}
+                {{if .Sort}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+                <button type="submit">{{ t "search.prev_page" }}</button>
+            </form>
+            {{end}}
+            {{if .HasMore}}
             <form method="get" action="/search">
                 <input type="hidden" name="q" value="{{.Query}}">
                 <input type="hidden" name="page" value="{{.NextPage}}">
                 {{if .Duration}}<input type="hidden" name="duration" value="{{.Duration}}">{{end}}
                 {{if .Sort}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
-                <button type="submit">{{ t "search.load_more_results" }}</button>
+                <button type="submit">{{ t "search.next_page" }}</button>
             </form>
-        </div>
+            {{end}}
+        </nav>
         {{end}}
     </main>
     {{template "public/footer" .}}

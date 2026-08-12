@@ -93,14 +93,23 @@
 
         {{/* Server-driven pagination (IDEA.md "Search behavior"/"Search Settings"):
              the server decides page size via the results_per_page cookie, not JS.
-             This link works with JS disabled. When the visitor's preference is
-             "Infinite scroll", app.js hides the link and auto-clicks it via
-             IntersectionObserver instead — the server still controls page size
-             and content either way. */}}
-        {{if .HasMore}}
-        <nav class="load-more-container" id="load-more-container" data-infinite-scroll="{{.InfiniteScroll}}" aria-label="{{ t "a11y.load_more_results" }}">
-            <a href="/search?q={{urlquery .SearchQuery}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}&amp;page={{.NextPage}}" class="btn btn--secondary load-more-link" id="load-more-link" rel="next">{{ t "search.load_more" }}</a>
+             Default preference: real Prev/Next links to ?page=N-1/N+1 — these work
+             with JS fully disabled. "Infinite scroll" preference: no Prev/Next nav
+             is rendered at all; app.js appends a sentinel and auto-fetches the next
+             page via IntersectionObserver instead. Infinite scroll is a pure JS
+             enhancement by design (IDEA.md "Infinite Scroll") — the server still
+             decides page size/content either way. */}}
+        {{if not .InfiniteScroll}}
+        {{if or (gt .Page 1) .HasMore}}
+        <nav class="pagination-container" id="pagination-container" aria-label="{{ t "a11y.pagination" }}">
+            {{if gt .Page 1}}
+            <a href="/search?q={{urlquery .SearchQuery}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}&amp;page={{.PrevPage}}" class="btn btn--secondary pagination-prev" id="pagination-prev-link" rel="prev">{{ t "search.prev_page" }}</a>
+            {{end}}
+            {{if .HasMore}}
+            <a href="/search?q={{urlquery .SearchQuery}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}&amp;page={{.NextPage}}" class="btn btn--secondary pagination-next" id="pagination-next-link" rel="next">{{ t "search.next_page" }}</a>
+            {{end}}
         </nav>
+        {{end}}
         {{end}}
 
         {{/* Inline JSON payload of the server-computed first page. app.js reads this

@@ -2305,16 +2305,14 @@ if (document.readyState === 'loading') {
     // Server-authoritative per IDEA.md "Search Settings": the server always
     // decides page size/content; JS only decides *when* to request the next
     // page, and only auto-fetches when the visitor's results_per_page
-    // preference is explicitly "Infinite scroll" (0). Otherwise the
-    // server-rendered "Load more" link (search.tmpl #load-more-link) is the
-    // only way to advance pages, so it must stay visible.
+    // preference is explicitly "Infinite scroll" (0). Otherwise the server
+    // renders real Prev/Next links (search.tmpl #pagination-container) and
+    // this function returns immediately without touching them.
     function setupInfiniteScroll() {
-        var loadMoreContainer = document.getElementById('load-more-container');
         var resultsPerPage = parseInt((userPrefs && userPrefs.resultsPerPage) ?? 0, 10);
         if (resultsPerPage !== 0) {
             return;
         }
-        if (loadMoreContainer) loadMoreContainer.classList.add('hidden');
 
         var grid = document.getElementById('video-grid');
         if (!grid || infiniteScrollObserver) return;

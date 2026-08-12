@@ -1041,6 +1041,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"FilterSort":      r.URL.Query().Get("sort"),
 			"OpenNewTab":      h.getRequestOpenNewTab(r),
 			"Page":            page,
+			"PrevPage":        page - 1,
 			"NextPage":        nextPage,
 			"HasMore":         hasMore,
 			"InfiniteScroll":  infiniteScroll,

@@ -35,11 +35,12 @@ const reportTokenGrace = 30 * 24 * time.Hour
 
 // Input carries the security-mode contact form fields for a new report.
 type Input struct {
-	Severity                 string
-	Component                string
-	Endpoint                 string
-	Summary                  string
-	Body                     []byte // plaintext: steps to reproduce + impact + suggested fix, encrypted before storage
+	Severity  string
+	Component string
+	Endpoint  string
+	Summary   string
+	// plaintext: steps to reproduce + impact + suggested fix, encrypted before storage
+	Body                     []byte
 	ResearcherEmail          string
 	ResearcherGPGFingerprint string
 	CVERequested             bool

@@ -439,12 +439,13 @@ func parseCronSchedule(schedule string) (cronSchedule, error) {
 		return nil, fmt.Errorf("not a cron expression")
 	}
 
+	// field order: minute, hour, day-of-month, month, day-of-week
 	ranges := [5][2]int{
-		{0, 59}, // minute
-		{0, 23}, // hour
-		{1, 31}, // dom
-		{1, 12}, // month
-		{0, 6},  // dow
+		{0, 59},
+		{0, 23},
+		{1, 31},
+		{1, 12},
+		{0, 6},
 	}
 
 	parsed := make([][]int, 5)

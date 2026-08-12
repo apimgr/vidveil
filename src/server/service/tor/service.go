@@ -35,7 +35,8 @@ type TorService struct {
 	// Full config from server.yml
 	torConfig *config.TorConfig
 	dataDir   string
-	configDir string // {config_dir}/tor/ — for torrc file storage
+	// {config_dir}/tor/ — for torrc file storage
+	configDir string
 	logger    *logging.AppLogger
 
 	// bine Tor instance - manages dedicated Tor process

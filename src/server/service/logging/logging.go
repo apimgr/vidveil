@@ -549,10 +549,11 @@ func auditSeverity(event, result string) string {
 
 // AppLogger handles structured logging
 type AppLogger struct {
-	mu            sync.Mutex
-	level         Level
-	outputs       map[string]io.Writer
-	outputFormats map[string]string // output name → format ("text", "logfmt", "json")
+	mu      sync.Mutex
+	level   Level
+	outputs map[string]io.Writer
+	// output name → format ("text", "logfmt", "json")
+	outputFormats map[string]string
 	appConfig     *config.AppConfig
 }
 

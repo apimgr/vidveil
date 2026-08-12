@@ -35,3 +35,42 @@ Findings from CSS/theming compliance re-audit against AI.md PART 16 (commit
   `utl/` respectively. Found by go-lint during the CSS/theming
   pre-commit gate; out of scope for that commit, needs its own rename
   pass (package rename + all import path updates across the codebase).
+
+Findings from the full audit pass (2026-08-12). The Aug 11 AI.md commit
+(e19f7f1e5ec3, "Updated the SPEC for API servers", 335 lines changed)
+substantially rewrote the API-server spec — chiefly PART 20 (Metrics),
+plus PART 13 (Health), Root-Level Endpoints, HTTP Cache Headers, and
+Scheduler status. Code and the 13 rule-file mirrors predate it. Gaps:
+
+- Metrics endpoints incomplete vs updated AI.md PART 20. Only a single
+  endpoint is mounted (`src/server/server.go:647`, at
+  `Server.Metrics.Endpoint`, default `/metrics`). The updated spec now
+  requires the full set with per-service sub-paths and identical handlers:
+  `/server/metrics[/{service}]`, root alias `/metrics[/{service}]`,
+  `/api/{api_version}/server/metrics[/{service}]`, and unversioned alias
+  `/api/metrics[/{service}]` — each `{service}` gated by its own per-service
+  bearer token, with Prometheus text / Grafana dashboard JSON / Loki stream
+  outputs. No `{service}` path support exists anywhere in `src/server`.
+  Needs: per-service metrics config + token model, handler dispatch on the
+  `{service}` path segment, and the 4-way alias mounting (same handler, no
+  redirects). Cross-cutting; do as one change.
+
+- API version is hardcoded `v1` (AI.md PART 14: "Never hardcode `v1` —
+  always use `{api_version}` / `APIBasePath()`"). No `APIVersion` config
+  field and no `APIBasePath()`/`APIVersion()` accessor exist on
+  `AppConfig` (only `AdminAPIPrefix()` at `src/config/config.go:2220`,
+  whose leader is hardcoded). `src/swagger/swagger.go` hardcodes `/api/v1`
+  (11 occurrences) and `src/config/config.go` defaults a Deny path to
+  `/api/v1/server/admin`. The client side IS versioned
+  (`src/client/api/client.go GetAPIBaseURL`, configurable api version).
+  Needs: add `APIVersion` config field + `APIBasePath()` accessor, thread
+  through swagger and all `src/server` route registration, delete hardcoded
+  `v1`. Cross-cutting; do as one change.
+
+- `.claude/rules/*.md` (13 mirror files) are stale relative to AI.md.
+  AI.md was last modified 2026-08-11 (commit e19f7f1e5ec3); the rule
+  mirrors were last regenerated 2026-05-25. Per ai-rules.md ("create/update
+  `.claude/rules/*.md` at session start if missing or if AI.md is newer"),
+  regenerate all 13 from the current AI.md so the mirrors reflect the Aug 11
+  API-server spec update (esp. api-rules.md PART 13/14 and features-rules.md
+  PART 20).

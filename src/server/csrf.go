@@ -74,12 +74,14 @@ func newCSRFMiddleware(cfg config.CSRFConfig, sessionCookieName string, logger *
 			if token == "" {
 				token = csrfGenToken(cfg.TokenLength)
 				http.SetCookie(w, &http.Cookie{
-					Name:     cfg.CookieName,
-					Value:    token,
-					Path:     "/",
-					MaxAge:   0, // session-scoped (no persistent CSRF cookies)
-					Secure:   secureCookie,
-					HttpOnly: false, // forms must read this value
+					Name:  cfg.CookieName,
+					Value: token,
+					Path:  "/",
+					// session-scoped (no persistent CSRF cookies)
+					MaxAge: 0,
+					Secure: secureCookie,
+					// forms must read this value
+					HttpOnly: false,
 					SameSite: http.SameSiteStrictMode,
 				})
 			}

@@ -1,11 +1,16 @@
 package pgp
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 )
+
+// storeQueryTimeout bounds every keypair-metadata query so a stalled DB cannot
+// hang a caller (backend-rules: never run a DB query without a context timeout).
+const storeQueryTimeout = 5 * time.Second
 
 // KeypairMeta is the on-disk-independent metadata persisted in pgp_keypair.
 type KeypairMeta struct {
@@ -27,10 +32,12 @@ type KeyserverState struct {
 // keypair's details. Any prior row is removed first so the table always
 // reflects the current live keypair.
 func SaveKeypairMeta(db *sql.DB, kp *Keypair) error {
-	if _, err := db.Exec(`DELETE FROM pgp_keypair`); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), storeQueryTimeout)
+	defer cancel()
+	if _, err := db.ExecContext(ctx, `DELETE FROM pgp_keypair`); err != nil {
 		return fmt.Errorf("clear keypair meta: %w", err)
 	}
-	_, err := db.Exec(
+	_, err := db.ExecContext(ctx,
 		`INSERT INTO pgp_keypair (fingerprint, created_at, expires_at, keyservers_published, revoked)
 		 VALUES (?, ?, ?, '[]', 0)`,
 		kp.Fingerprint, kp.CreatedAt.UTC(), kp.ExpiresAt.UTC(),
@@ -45,7 +52,9 @@ func SaveKeypairMeta(db *sql.DB, kp *Keypair) error {
 // recording when the keypair was most recently rotated (AI.md PART 12 keypair
 // field "last_rotated_at"). It returns an error if there is no keypair row.
 func SetLastRotated(db *sql.DB, t time.Time) error {
-	res, err := db.Exec(
+	ctx, cancel := context.WithTimeout(context.Background(), storeQueryTimeout)
+	defer cancel()
+	res, err := db.ExecContext(ctx,
 		`UPDATE pgp_keypair SET last_rotated_at = ?
 		 WHERE id = (SELECT id FROM pgp_keypair ORDER BY id DESC LIMIT 1)`,
 		t.UTC(),
@@ -67,7 +76,9 @@ func SetLastRotated(db *sql.DB, t time.Time) error {
 // field "revoked": set if Delete was used — the key file may be gone but the
 // fingerprint stays in audit history). It returns an error if no row exists.
 func MarkRevoked(db *sql.DB) error {
-	res, err := db.Exec(
+	ctx, cancel := context.WithTimeout(context.Background(), storeQueryTimeout)
+	defer cancel()
+	res, err := db.ExecContext(ctx,
 		`UPDATE pgp_keypair SET revoked = 1
 		 WHERE id = (SELECT id FROM pgp_keypair ORDER BY id DESC LIMIT 1)`,
 	)
@@ -86,7 +97,9 @@ func MarkRevoked(db *sql.DB) error {
 
 // GetKeypairMeta returns the current keypair metadata, or (nil, nil) if none.
 func GetKeypairMeta(db *sql.DB) (*KeypairMeta, error) {
-	row := db.QueryRow(
+	ctx, cancel := context.WithTimeout(context.Background(), storeQueryTimeout)
+	defer cancel()
+	row := db.QueryRowContext(ctx,
 		`SELECT fingerprint, created_at, expires_at, last_rotated_at, keyservers_published, revoked
 		 FROM pgp_keypair ORDER BY id DESC LIMIT 1`,
 	)

@@ -168,7 +168,9 @@ func UpdateKeyserversPublished(db *sql.DB, states []KeyserverState) error {
 	if err != nil {
 		return fmt.Errorf("encode keyservers_published: %w", err)
 	}
-	if _, err := db.Exec(
+	ctx, cancel := context.WithTimeout(context.Background(), storeQueryTimeout)
+	defer cancel()
+	if _, err := db.ExecContext(ctx,
 		`UPDATE pgp_keypair SET keyservers_published = ?
 		 WHERE id = (SELECT id FROM pgp_keypair ORDER BY id DESC LIMIT 1)`,
 		string(data),

@@ -183,14 +183,19 @@
 
             <section>
                 <h2>{{ t "favorites.title" }}</h2>
-                <p class="section-description"><span id="favorites-count" data-format="{{ t "favorites.count" }}">{{ tf "favorites.count" 0 }}</span></p>
+                <p class="section-description"><span id="favorites-count" data-format="{{ t "favorites.count" }}">{{ tf "favorites.count" .FavoritesCount }}</span></p>
                 <div class="form-group form-group--buttons">
-                    <button type="button" class="btn-secondary" data-action="export-favorites">{{ t "favorites.export" }}</button>
-                    <label class="btn-secondary btn-file">
-                        {{ t "favorites.import" }}
-                        <input type="file" accept=".json" data-action="import-favorites" hidden>
-                    </label>
-                    <button type="button" class="btn-danger" data-action="clear-favorites">{{ t "favorites.clear" }}</button>
+                    <a class="btn-secondary" href="/favorites/export">{{ t "favorites.export" }}</a>
+                    <form action="/favorites/import" method="post" enctype="multipart/form-data" class="favorites-import-form">
+                        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                        <input type="file" name="file" accept=".json" class="favorites-import-input" aria-label="{{ t "favorites.import" }}">
+                        <button type="submit" class="btn-secondary">{{ t "favorites.import" }}</button>
+                    </form>
+                    <form action="/favorites" method="post" class="favorites-clear-form" data-action="clear-favorites-form" data-confirm="{{ t "favorites.confirm_clear" }}">
+                        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                        <input type="hidden" name="_method" value="DELETE">
+                        <button type="submit" class="btn-danger">{{ t "favorites.clear" }}</button>
+                    </form>
                 </div>
             </section>
 
@@ -243,9 +248,6 @@
         "saving": "{{ t "prefs.saving" }}",
         "saved": "{{ t "prefs.saved" }}",
         "resetDone": "{{ t "prefs.reset_done" }}",
-        "favExported": "{{ t "favorites.exported" }}",
-        "favInvalidFile": "{{ t "favorites.invalid_file" }}",
-        "favConfirmClear": "{{ t "favorites.confirm_clear" }}",
         "favCleared": "{{ t "favorites.cleared" }}",
         "tier1": "{{ t "tier.1" }}",
         "tier2": "{{ t "tier.2" }}",

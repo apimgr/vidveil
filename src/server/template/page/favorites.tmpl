@@ -11,21 +11,23 @@
         <div class="favorites-toolbar">
             <h1>{{ t "favorites.title" }}</h1>
             <div class="favorites-actions">
-                <span id="favorites-count-label" class="favorites-count"></span>
-                <button type="button" class="btn-secondary btn-sm" id="export-btn" data-action="export-favs">{{ t "favorites.export" }}</button>
-                <label class="btn-secondary btn-sm btn-file">
-                    {{ t "favorites.import" }}
-                    <input type="file" accept=".json" data-action="import-favs" hidden>
-                </label>
-                <button type="button" class="btn-danger btn-sm" id="clear-btn" data-action="clear-favs">{{ t "favorites.clear" }}</button>
+                <span id="favorites-count-label" class="favorites-count">{{tf "favorites.count" (len .Favorites)}}</span>
+                <a class="btn-secondary btn-sm" href="/favorites/export">{{ t "favorites.export" }}</a>
+                <form action="/favorites/import" method="post" enctype="multipart/form-data" class="favorites-import-form">
+                    {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                    <input type="file" name="file" accept=".json" class="favorites-import-input" aria-label="{{ t "favorites.import" }}">
+                    <button type="submit" class="btn-secondary btn-sm">{{ t "favorites.import" }}</button>
+                </form>
+                <form action="/favorites" method="post" class="favorites-clear-form" data-action="clear-favs-form" data-confirm="{{ t "favorites.confirm_clear" }}">
+                    {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                    <input type="hidden" name="_method" value="DELETE">
+                    <button type="submit" class="btn-danger btn-sm" id="clear-btn">{{ t "favorites.clear" }}</button>
+                </form>
             </div>
         </div>
 
-        <noscript>
-            <p class="favorites-nojs">{{ t "favorites.nojs" }}</p>
-        </noscript>
-
-        <div id="favorites-empty" class="favorites-empty" hidden>
+        {{if not .Favorites}}
+        <div id="favorites-empty" class="favorites-empty">
             <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
             </svg>
@@ -33,8 +35,36 @@
             <p class="favorites-empty-hint">{{ t "favorites.empty_hint" | safeHTML }}</p>
             <a href="/search" class="btn-primary">{{ t "favorites.start_search" }}</a>
         </div>
+        {{end}}
 
-        <div id="favorites-grid" class="video-grid" role="list" aria-label="{{ t "favorites.title" }}"></div>
+        {{/* Server-rendered per AI.md PART 16 — view/remove work fully without
+             JS via the per-card DELETE form below; app.js layers instant
+             (no-reload) removal on top via data-action="remove-fav". */}}
+        <div id="favorites-grid" class="video-grid" role="list" aria-label="{{ t "favorites.title" }}">
+            {{$csrf := .CSRFToken}}
+            {{range .Favorites}}
+            <div class="video-card" role="listitem" data-source="{{.Source}}" data-fav-id="{{.ID}}">
+                <a href="{{.URL}}" rel="noopener noreferrer nofollow" aria-label="{{.Title}} - {{.Source}}">
+                    <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" .Title}}" loading="lazy">
+                    <div class="video-info">
+                        <h3 class="video-title">{{.Title}}</h3>
+                        <p class="video-source">{{.Source}}</p>
+                    </div>
+                </a>
+                <form action="/favorites" method="post" class="favorite-remove-form" data-action="remove-fav-form">
+                    {{if $csrf}}<input type="hidden" name="csrf_token" value="{{$csrf}}">{{end}}
+                    <input type="hidden" name="_method" value="DELETE">
+                    <input type="hidden" name="id" value="{{.ID}}">
+                    <button type="submit" class="video-card-fav-btn video-card-fav-btn--active" data-fav-id="{{.ID}}" aria-label="{{ t "favorites.remove" }}" title="{{ t "favorites.remove" }}">&#9733;</button>
+                </form>
+            </div>
+            {{end}}
+        </div>
+
+        {{/* Inline JSON payload of the server-rendered favorites. app.js reads
+             this to build the JS-enhanced remove/count behavior under strict
+             CSP, never a second fetch for the initial render. */}}
+        <script type="application/json" id="favorites-data">{{.Favorites | toJSON}}</script>
     </main>
     {{template "public/footer" .}}
     {{/* i18n strings for the favorites logic in app.js. type="application/json" is
@@ -43,11 +73,8 @@
         "countSingular": "{{ t "favorites.count_singular" }}",
         "countPlural": "{{ t "favorites.count" }}",
         "remove": "{{ t "favorites.remove" }}",
-        "exported": "{{ t "favorites.exported" }}",
-        "imported": "{{ t "favorites.imported" }}",
-        "cleared": "{{ t "favorites.cleared" }}",
-        "invalidFile": "{{ t "favorites.invalid_file" }}",
-        "confirmClear": "{{ t "favorites.confirm_clear" }}"
+        "add": "{{ t "favorites.add" }}",
+        "cleared": "{{ t "favorites.cleared" }}"
     }</script>
     {{template "public/scripts" .}}
 </body>

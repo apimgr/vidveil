@@ -1072,8 +1072,8 @@ func TestFavoritesPage_JSON(t *testing.T) {
 	if !strings.Contains(ct, "application/json") {
 		t.Errorf("FavoritesPage JSON: Content-Type = %q, want application/json", ct)
 	}
-	if !strings.Contains(rr.Body.String(), "Favorites") {
-		t.Errorf("FavoritesPage JSON: body missing 'Favorites': %s", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), "favorites") {
+		t.Errorf("FavoritesPage JSON: body missing 'favorites': %s", rr.Body.String())
 	}
 }
 

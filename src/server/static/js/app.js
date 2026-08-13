@@ -693,127 +693,133 @@ function handleDownloadClick(event, downloadUrl) {
 }
 
 // ============================================================================
-// Local Favorites (IDEA.md: localStorage-only bookmarks)
+// Favorites (AI.md PART 16/32: server-side storage via anonymous visitor
+// cookie; the server-rendered HTML forms on /favorites and the Preferences
+// page are fully functional without JS. This module only layers instant
+// (no-reload) feedback on top by calling the JSON API through fetchAPI().
 // ============================================================================
 (function() {
     'use strict';
-    var FAVORITES_KEY = 'vidveil_favorites';
-    var MAX_FAVORITES = 500;
+    var cache = null;
+    var loadPromise = null;
 
-    function getFavorites() {
-        try {
-            return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-        } catch (e) {
-            return [];
-        }
-    }
-
-    function saveFavorites(favorites) {
-        try {
-            localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
-        } catch (e) {
-            console.error('Failed to save favorites:', e);
-        }
-    }
-
-    function addFavorite(video) {
-        var favorites = getFavorites();
-        // Check for duplicate by URL
-        if (favorites.some(function(f) { return f.url === video.url; })) {
-            showInfo('Already in favorites');
-            return false;
-        }
-        favorites.unshift({
-            id: video.id || '',
-            title: video.title || 'Untitled',
-            url: video.url,
-            thumbnail: video.thumbnail || '',
-            duration: video.duration || '',
-            source: video.source || '',
-            sourceDisplay: video.source_display || video.source || '',
-            savedAt: Date.now()
+    function normalize(list) {
+        return (list || []).map(function(f) {
+            return {
+                id: f.id,
+                url: f.url,
+                title: f.title || 'Untitled',
+                thumbnail: f.thumbnail || '',
+                source: f.source || ''
+            };
         });
-        // Limit favorites
-        if (favorites.length > MAX_FAVORITES) {
-            favorites = favorites.slice(0, MAX_FAVORITES);
-        }
-        saveFavorites(favorites);
-        showSuccess('Added to favorites');
-        return true;
     }
 
-    function removeFavorite(url) {
-        var favorites = getFavorites().filter(function(f) { return f.url !== url; });
-        saveFavorites(favorites);
-        showSuccess('Removed from favorites');
-        return true;
+    function loadFromDataIsland() {
+        var el = document.getElementById('favorites-data');
+        if (!el) {
+            return null;
+        }
+        try {
+            return normalize(JSON.parse(el.textContent || '[]'));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function refresh() {
+        loadPromise = fetchAPI('/v1/favorites').then(function(data) {
+            cache = normalize(data.favorites);
+            return cache;
+        }).catch(function() {
+            cache = cache || [];
+            return cache;
+        });
+        return loadPromise;
+    }
+
+    function ensureLoaded() {
+        if (cache) {
+            return Promise.resolve(cache);
+        }
+        var fromIsland = loadFromDataIsland();
+        if (fromIsland) {
+            cache = fromIsland;
+            return Promise.resolve(cache);
+        }
+        if (loadPromise) {
+            return loadPromise;
+        }
+        return refresh();
     }
 
     function isFavorite(url) {
-        return getFavorites().some(function(f) { return f.url === url; });
+        return !!(cache && cache.some(function(f) { return f.url === url; }));
     }
 
-    function toggleFavorite(video) {
-        if (isFavorite(video.url)) {
-            removeFavorite(video.url);
-            return false;
-        } else {
-            addFavorite(video);
-            return true;
-        }
+    function findByUrl(url) {
+        return cache ? cache.find(function(f) { return f.url === url; }) : null;
     }
 
-    function exportFavorites() {
-        var data = JSON.stringify(getFavorites(), null, 2);
-        var blob = new Blob([data], {type: 'application/json'});
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'vidveil-favorites.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showSuccess('Favorites exported');
-    }
-
-    function importFavorites(file) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                var imported = JSON.parse(e.target.result);
-                if (Array.isArray(imported)) {
-                    saveFavorites(imported);
-                    showSuccess('Favorites imported (' + imported.length + ' items)');
-                } else {
-                    showError('Invalid file format');
-                }
-            } catch (err) {
-                showError('Failed to parse file');
-            }
-        };
-        reader.readAsText(file);
-    }
-
-    function clearFavorites() {
-        showConfirm('Are you sure you want to clear all favorites?', function() {
-            saveFavorites([]);
-            showSuccess('All favorites cleared');
+    function add(video) {
+        return fetchAPI('/v1/favorites', {
+            method: 'POST',
+            body: JSON.stringify({
+                url: video.url,
+                title: video.title || 'Untitled',
+                thumbnail: video.thumbnail || '',
+                source: video.source || ''
+            })
+        }).then(function() {
+            return refresh();
         });
+    }
+
+    function removeByUrl(url) {
+        var existing = findByUrl(url);
+        if (!existing) {
+            return Promise.resolve();
+        }
+        return fetchAPI('/v1/favorites/' + existing.id, { method: 'DELETE' }).then(function() {
+            return refresh();
+        });
+    }
+
+    function removeById(id) {
+        return fetchAPI('/v1/favorites/' + id, { method: 'DELETE' }).then(function() {
+            return refresh();
+        });
+    }
+
+    function clear() {
+        return fetchAPI('/v1/favorites', { method: 'DELETE' }).then(function() {
+            return refresh();
+        });
+    }
+
+    function toggle(video) {
+        if (isFavorite(video.url)) {
+            return removeByUrl(video.url).then(function() { return false; });
+        }
+        return add(video).then(function() { return true; });
     }
 
     // Export to Vidveil namespace
     window.Vidveil = window.Vidveil || {};
     window.Vidveil.Favorites = {
-        get: getFavorites,
-        add: addFavorite,
-        remove: removeFavorite,
+        ensureLoaded: ensureLoaded,
         isFavorite: isFavorite,
-        toggle: toggleFavorite,
-        export: exportFavorites,
-        import: importFavorites,
-        clear: clearFavorites
+        toggle: toggle,
+        add: add,
+        removeByUrl: removeByUrl,
+        removeById: removeById,
+        clear: clear,
+        refresh: refresh
     };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        ensureLoaded();
+    });
 })();
 
 // Admin keyboard shortcuts per AI.md PART 15
@@ -2515,17 +2521,6 @@ function escapeHtmlUtil(str) {
 // ============================================================================
 // Card Menu Functions - uses HTML5 details/summary, minimal JS
 // ============================================================================
-function getFavorites() {
-    try {
-        return JSON.parse(localStorage.getItem('vidveil_favorites') || '[]');
-    } catch (e) {
-        return [];
-    }
-}
-
-function saveFavorites(favorites) {
-    localStorage.setItem('vidveil_favorites', JSON.stringify(favorites));
-}
 
 // Close all open card menus (details elements)
 function closeAllCardMenus() {
@@ -2574,20 +2569,13 @@ document.addEventListener('click', function(e) {
         });
     } else if (action === 'favorite') {
         var videoData = JSON.parse(btn.dataset.video);
-        var favorites = getFavorites();
-        var index = favorites.findIndex(function(f) { return f.url === videoData.url; });
-
-        if (index >= 0) {
-            favorites.splice(index, 1);
-            showNotification('Removed from favorites', 'info');
-            btn.querySelector('span').textContent = 'Add to favorites';
-        } else {
-            videoData.added_at = new Date().toISOString();
-            favorites.unshift(videoData);
-            showNotification('Added to favorites', 'success');
-            btn.querySelector('span').textContent = 'Remove from favorites';
-        }
-        saveFavorites(favorites);
+        var span = btn.querySelector('span');
+        window.Vidveil.Favorites.toggle(videoData).then(function(added) {
+            showNotification(added ? 'Added to favorites' : 'Removed from favorites', added ? 'success' : 'info');
+            if (span) {
+                span.textContent = added ? 'Remove from favorites' : 'Add to favorites';
+            }
+        });
     }
 
     // Close menu after action
@@ -2607,9 +2595,9 @@ document.addEventListener('toggle', function(e) {
     var favBtn = e.target.querySelector('[data-action="favorite"] span');
     if (favBtn) {
         var videoData = JSON.parse(e.target.querySelector('[data-action="favorite"]').dataset.video);
-        var favorites = getFavorites();
-        var isFavorite = favorites.some(function(f) { return f.url === videoData.url; });
-        favBtn.textContent = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+        window.Vidveil.Favorites.ensureLoaded().then(function() {
+            favBtn.textContent = window.Vidveil.Favorites.isFavorite(videoData.url) ? 'Remove from favorites' : 'Add to favorites';
+        });
     }
 }, true);
 
@@ -2883,12 +2871,6 @@ function dispatchClickAction(el, e) {
         case 'clear-history':
             if (typeof window.clearHistory === 'function') window.clearHistory();
             return true;
-        case 'export-favorites':
-            if (typeof window.exportFavorites === 'function') window.exportFavorites();
-            return true;
-        case 'clear-favorites':
-            if (typeof window.clearFavorites === 'function') window.clearFavorites();
-            return true;
         case 'select-all-engines':
             if (typeof window.selectAllEngines === 'function') window.selectAllEngines();
             return true;
@@ -2897,12 +2879,6 @@ function dispatchClickAction(el, e) {
             return true;
         case 'reset-preferences':
             if (typeof window.resetPreferences === 'function') window.resetPreferences();
-            return true;
-        case 'export-favs':
-            if (typeof window.exportFavs === 'function') window.exportFavs();
-            return true;
-        case 'clear-favs':
-            if (typeof window.clearFavs === 'function') window.clearFavs();
             return true;
         default:
             return false;
@@ -2926,19 +2902,39 @@ document.addEventListener('change', function(e) {
         case 'source-filter-change':
             updateSourceFilter();
             break;
-        case 'import-favs':
-            if (typeof window.importFavs === 'function') window.importFavs(el);
-            break;
         case 'import-history':
             if (typeof window.importHistory === 'function') window.importHistory(el.files[0]);
-            break;
-        case 'import-favorites':
-            if (typeof window.importFavorites === 'function') window.importFavorites(el.files[0]);
             break;
     }
 });
 
 // Delegated submit actions.
+function getFavoritesI18n() {
+    var el = document.getElementById('favorites-i18n') || document.getElementById('preferences-i18n');
+    if (!el) return {};
+    try {
+        return JSON.parse(el.textContent || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function updateFavoritesCountLabel(count) {
+    var i18n = getFavoritesI18n();
+    // /favorites page label.
+    var label = document.getElementById('favorites-count-label');
+    if (label) {
+        label.textContent = count === 1 ? (i18n.countSingular || i18n.favCountSingular || String(count)) :
+            (i18n.countPlural || '%d').replace('%d', count);
+    }
+    // Preferences page count span (server-supplied data-format, e.g. "%d favorites").
+    var prefsCount = document.getElementById('favorites-count');
+    if (prefsCount) {
+        var fmt = prefsCount.getAttribute('data-format') || '%d';
+        prefsCount.textContent = fmt.replace('%d', count);
+    }
+}
+
 document.addEventListener('submit', function(e) {
     var el = e.target.closest('[data-action]');
     if (!el) return;
@@ -2956,6 +2952,93 @@ document.addEventListener('submit', function(e) {
             e.preventDefault();
             window.Vidveil.Search.refetch();
         }
+    }
+    if (el.dataset.action === 'remove-fav-form') {
+        // Server-rendered form works without JS via a full POST + redirect.
+        // With JS, intercept and remove the card in place (no reload).
+        e.preventDefault();
+        var idInput = el.querySelector('input[name="id"]');
+        var id = idInput ? idInput.value : '';
+        if (!id) {
+            el.submit();
+            return;
+        }
+        window.Vidveil.Favorites.removeById(id).then(function() {
+            var card = el.closest('.video-card');
+            if (card) card.remove();
+            var grid = document.getElementById('favorites-grid');
+            var count = grid ? grid.querySelectorAll('.video-card').length : 0;
+            updateFavoritesCountLabel(count);
+            if (grid && count === 0) {
+                var empty = document.getElementById('favorites-empty');
+                if (empty) empty.style.removeProperty('display');
+            }
+        }).catch(function() {
+            el.submit();
+        });
+    }
+    if (el.dataset.action === 'favorite-toggle-form') {
+        // Server-rendered form on the search results page works without JS
+        // via a full POST + redirect back to the same results page. With JS,
+        // intercept and toggle the star in place (no reload).
+        e.preventDefault();
+        var urlInput = el.querySelector('input[name="url"]');
+        var titleInput = el.querySelector('input[name="title"]');
+        var thumbInput = el.querySelector('input[name="thumbnail"]');
+        var sourceInput = el.querySelector('input[name="source"]');
+        if (!urlInput) {
+            el.submit();
+            return;
+        }
+        var video = {
+            url: urlInput.value,
+            title: titleInput ? titleInput.value : '',
+            thumbnail: thumbInput ? thumbInput.value : '',
+            source: sourceInput ? sourceInput.value : ''
+        };
+        var btn = el.querySelector('button[type="submit"]');
+        window.Vidveil.Favorites.toggle(video).then(function(added) {
+            var i18n = getFavoritesI18n();
+            if (btn) {
+                btn.classList.toggle('video-card-fav-btn--active', added);
+                var label = added ? (i18n.remove || 'Remove from favorites') : (i18n.add || 'Add to favorites');
+                btn.setAttribute('aria-label', label);
+                btn.setAttribute('title', label);
+            }
+            var methodInput = el.querySelector('input[name="_method"]');
+            if (added) {
+                if (!methodInput) {
+                    methodInput = document.createElement('input');
+                    methodInput.type = 'hidden';
+                    methodInput.name = '_method';
+                    el.appendChild(methodInput);
+                }
+                methodInput.value = 'DELETE';
+            } else if (methodInput) {
+                methodInput.remove();
+            }
+        }).catch(function() {
+            el.submit();
+        });
+    }
+    if (el.dataset.action === 'clear-favs-form' || el.dataset.action === 'clear-favorites-form') {
+        e.preventDefault();
+        var message = el.getAttribute('data-confirm') || 'Remove all favorites?';
+        showConfirm(message, function() {
+            window.Vidveil.Favorites.clear().then(function() {
+                var i18n = getFavoritesI18n();
+                showSuccess(i18n.cleared || i18n.favCleared || 'Favorites cleared');
+                var grid = document.getElementById('favorites-grid');
+                if (grid) {
+                    grid.innerHTML = '';
+                    var empty = document.getElementById('favorites-empty');
+                    if (empty) empty.style.removeProperty('display');
+                }
+                updateFavoritesCountLabel(0);
+            }).catch(function() {
+                el.submit();
+            });
+        });
     }
 });
 
@@ -3076,134 +3159,6 @@ document.addEventListener('error', function(e) {
 })();
 
 // ============================================================================
-// Favorites page (moved from favorites.tmpl) — runs only on /favorites
-// i18n strings come from the #favorites-i18n data island.
-// ============================================================================
-(function() {
-    var FAVORITES_KEY = 'vidveil_favorites';
-    var i18n = {};
-
-    function getFavs() {
-        try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'); } catch (e) { return []; }
-    }
-    function saveFavs(favs) {
-        try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); } catch (e) {}
-    }
-    function escHtml(s) {
-        return String(s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    function render() {
-        var favs = getFavs();
-        var grid = document.getElementById('favorites-grid');
-        var empty = document.getElementById('favorites-empty');
-        var label = document.getElementById('favorites-count-label');
-        if (!grid) return;
-
-        grid.innerHTML = '';
-
-        if (favs.length === 0) {
-            empty.hidden = false;
-            label.textContent = '0 favorites';
-            return;
-        }
-
-        empty.hidden = true;
-        label.textContent = favs.length === 1 ? i18n.countSingular : (i18n.countPlural || '%d favorites').replace('%d', favs.length);
-
-        favs.forEach(function(fav, i) {
-            var card = document.createElement('article');
-            card.className = 'video-card';
-            card.setAttribute('role', 'listitem');
-            card.setAttribute('aria-label', fav.title || 'Favorited video');
-
-            var thumbSrc = '/static/images/placeholder.svg';
-            if (fav.thumbnail) {
-                thumbSrc = '/api/v1/proxy/thumbnails?url=' + encodeURIComponent(fav.thumbnail);
-            }
-
-            var html = '<a href="' + escHtml(fav.url) + '" target="_blank" rel="noopener noreferrer nofollow" class="card-link">';
-            html += '<div class="thumb-container">';
-            html += '<img class="thumb-static" src="' + escHtml(thumbSrc) + '" alt="' + escHtml(fav.title || 'Favorited video') + '" loading="lazy" data-fallback="/static/images/placeholder.svg">';
-            html += '</div></a>';
-
-            html += '<div class="info">';
-            html += '<h3><a href="' + escHtml(fav.url) + '" target="_blank" rel="noopener noreferrer nofollow">' + escHtml(fav.title || 'Untitled') + '</a></h3>';
-            html += '<div class="meta">';
-            if (fav.source) html += '<span class="source">' + escHtml(fav.source) + '</span>';
-            html += '</div></div>';
-
-            html += '<button type="button" class="fav-remove" aria-label="' + i18n.remove + '" data-idx="' + i + '" title="' + i18n.remove + '">&times;</button>';
-
-            card.innerHTML = html;
-            card.querySelector('.fav-remove').addEventListener('click', function() {
-                var idx = parseInt(this.dataset.idx, 10);
-                var cur = getFavs();
-                cur.splice(idx, 1);
-                saveFavs(cur);
-                render();
-            });
-            grid.appendChild(card);
-        });
-    }
-
-    window.exportFavs = function() {
-        var data = JSON.stringify(getFavs(), null, 2);
-        var blob = new Blob([data], {type: 'application/json'});
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'vidveil-favorites.json';
-        a.click();
-        URL.revokeObjectURL(a.href);
-    };
-
-    window.importFavs = function(input) {
-        var file = input.files[0];
-        if (!file) return;
-        var reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                var imported = JSON.parse(e.target.result);
-                if (!Array.isArray(imported)) { alert(i18n.invalidFile); return; }
-                var cur = getFavs();
-                imported.forEach(function(item) {
-                    if (item.url && !cur.some(function(f) { return f.url === item.url; })) {
-                        cur.push(item);
-                    }
-                });
-                saveFavs(cur);
-                render();
-                input.value = '';
-            } catch (e) {
-                alert(i18n.invalidFile);
-            }
-        };
-        reader.readAsText(file);
-    };
-
-    window.clearFavs = function() {
-        if (!confirm(i18n.confirmClear)) return;
-        saveFavs([]);
-        render();
-    };
-
-    onReady(function() {
-        var grid = document.getElementById('favorites-grid');
-        if (!grid) return;
-        var island = document.getElementById('favorites-i18n');
-        if (island) {
-            try { i18n = JSON.parse(island.textContent); } catch (e) { i18n = {}; }
-        }
-        render();
-    });
-})();
-
-// ============================================================================
 // Preferences page (moved from preferences.tmpl) — runs only on /preferences
 // i18n strings come from the #preferences-i18n data island.
 // ============================================================================
@@ -3220,7 +3175,6 @@ document.addEventListener('error', function(e) {
 
         var STORAGE_KEY = 'vidveil_prefs';
         var HISTORY_KEY = 'vidveil_history';
-        var FAVORITES_KEY = 'vidveil_favorites';
 
         var defaults = {
             theme: 'auto',
@@ -3278,8 +3232,6 @@ document.addEventListener('error', function(e) {
                     cb.checked = savedEngines.includes(cb.value);
                 });
             }
-
-            updateFavoritesCount();
         }
 
         // Single-submit-only guard (AI.md PART 16: "Never let a single-submit
@@ -3358,13 +3310,6 @@ document.addEventListener('error', function(e) {
             setTimeout(function() { toast.className = 'toast'; }, 3000);
         }
 
-        function updateFavoritesCount() {
-            var favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-            var el = document.getElementById('favorites-count');
-            var fmt = el.getAttribute('data-format') || '%d favorites';
-            el.textContent = fmt.replace('%d', favorites.length);
-        }
-
         window.resetPreferences = function() {
             localStorage.removeItem(STORAGE_KEY);
             loadPreferences();
@@ -3409,47 +3354,6 @@ document.addEventListener('error', function(e) {
             showConfirm('Clear all search history?', function () {
                 localStorage.removeItem(HISTORY_KEY);
                 showToastLocal('History cleared', 'info');
-            });
-        };
-
-        window.exportFavorites = function() {
-            var favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-            downloadJSON(favorites, 'vidveil-favorites.json');
-            showToastLocal(i18n.favExported, 'success');
-        };
-
-        window.importFavorites = function(file) {
-            if (!file) return;
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    var data = JSON.parse(e.target.result);
-                    if (Array.isArray(data)) {
-                        var existing = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-                        var merged = data.slice();
-                        existing.forEach(function(fav) {
-                            if (!merged.some(function(f) { return f.url === fav.url; })) {
-                                merged.push(fav);
-                            }
-                        });
-                        localStorage.setItem(FAVORITES_KEY, JSON.stringify(merged));
-                        updateFavoritesCount();
-                        showToastLocal('Favorites imported (' + data.length + ' items)', 'success');
-                    } else {
-                        showToastLocal(i18n.favInvalidFile, 'error');
-                    }
-                } catch (err) {
-                    showToastLocal('Failed to parse file', 'error');
-                }
-            };
-            reader.readAsText(file);
-        };
-
-        window.clearFavorites = function() {
-            showConfirm(i18n.favConfirmClear, function () {
-                localStorage.removeItem(FAVORITES_KEY);
-                updateFavoritesCount();
-                showToastLocal(i18n.favCleared, 'info');
             });
         };
 

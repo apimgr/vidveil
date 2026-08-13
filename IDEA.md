@@ -50,7 +50,7 @@ coverage_minimum:  60
 
 | Role | Storage | Authentication | Permissions |
 |------|---------|----------------|-------------|
-| **Anonymous visitor** | None (stateless) | None | Search, browse results, set local preferences/favorites/history (localStorage only) |
+| **Anonymous visitor** | Anonymous `visitor_id` cookie (favorites only) | None | Search, browse results, set local preferences/history (localStorage), manage favorites (server-side, `favorites` table, no JS required) |
 | **Operator** | None (file-only) | OS-level access to server | Edit `server.yml` and restart the server — no web login, no DB accounts |
 
 There are no Regular User accounts (PART 34 NOT implemented). There are no organizations (PART 35 NOT implemented). There are no custom domains (PART 36 NOT implemented). There is no admin web UI — all configuration is file-only (AI.md PART 5).
@@ -163,8 +163,13 @@ type CombinedSuggestion struct {
 - `vidveil-theme`: current theme preference
 - `vidveil_prefs`: complete preferences object
 - `vidveil_history`: search history array
-- `vidveil_favorites`: favorites array
 - Sensitivity: low (local to browser); never written to server, never logged.
+
+**Server-side favorites (per AI.md PART 16/32 - core functionality must work without JS):**
+- `favorites` table in `server.db`, rows keyed by an opaque, randomly generated `visitor_id` cookie (no personal data, not linked to any account).
+- Columns: `id`, `visitor_id`, `url`, `title`, `thumbnail`, `source`, `added_at`.
+- `/favorites` page is fully functional without JS (server-rendered list, POST-based add/remove/export/import/clear via the `_method` hidden-field convention); `app.js` layers instant no-reload feedback on top via `/api/v1/favorites*`.
+- Sensitivity: low (no PII, cookie is opaque); never logged, included in backups only as ordinary DB rows (no special handling required).
 
 ### Trust boundaries & external services
 
@@ -366,7 +371,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Video Preview: desktop hover with delay (Instant / 200ms / 500ms / 1000ms), mobile swipe-right (50px threshold, auto-stop 8s).
 - Autocomplete System: bang mode triggered by `!`, performer mode by `@`, search-term mode otherwise (2+ chars, 150ms debounce, hidden until typing). Multi-bang `!ph !rt lesbian` flow. Suggestion sources: user history (priority 1), static suggestions (priority 2), popular (priority 3).
 - Search History: localStorage (`vidveil_history`), max items configurable (default unlimited), auto-clear options (Never / 1d / 7d / 30d), Export/Import JSON.
-- Favorites: localStorage (`vidveil_favorites`), each entry url+title+thumbnail+source+added_at, Export/Import JSON, Clear all with confirm.
+- Favorites: server-side (`favorites` table, keyed by anonymous `visitor_id` cookie), each entry url+title+thumbnail+source+added_at, Export/Import JSON, Clear all with confirm. Fully functional without JS via server-rendered `/favorites` page; `app.js` layers instant no-reload add/remove/clear on top via `/api/v1/favorites*`.
 - Related Searches: server-side rendered into HTML, client adds "Show more" toggle, up to 20 (first 8 visible).
 - Infinite Scroll: opt-in via the `results_per_page` cookie set to
   "Infinite scroll" (not the default). IntersectionObserver, sentinel

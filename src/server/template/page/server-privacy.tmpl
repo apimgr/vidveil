@@ -26,14 +26,16 @@
         <p>When you search, {{.AppName}} forwards your query to the enabled engines in real time and streams their results back to you. Queries are processed in transit only and are never written to a database or search log. Results are not cached per user; only thumbnail images may be cached briefly on the server to reduce repeated upstream fetches.</p>
 
         <h2>Data Stored in Your Browser Only</h2>
-        <p>Your preferences, search history, and favorites are stored entirely in your browser's local storage and are <strong>never sent to or stored on our server</strong>:</p>
+        <p>Your preferences and search history are stored entirely in your browser's local storage and are <strong>never sent to or stored on our server</strong>:</p>
         <ul>
             <li><code>vidveil-theme</code> — your theme preference (auto/dark/light)</li>
             <li><code>vidveil_prefs</code> — your complete preferences object</li>
             <li><code>vidveil_history</code> — your local search history</li>
-            <li><code>vidveil_favorites</code> — your local favorites</li>
         </ul>
-        <p>You can export, import, or clear this data at any time from the <a href="/preferences">Preferences</a> and <a href="/favorites">Favorites</a> pages. Clearing your browser storage erases it completely.</p>
+        <p>You can export, import, or clear this data at any time from the <a href="/preferences">Preferences</a> page. Clearing your browser storage erases it completely.</p>
+
+        <h2>Favorites</h2>
+        <p>Favorites are stored server-side so they work without JavaScript, but no account is required. An anonymous, randomly generated <code>visitor_id</code> cookie identifies your favorites list — it carries no personal information and cannot be linked to your identity. You can export, import, or clear your favorites at any time from the <a href="/favorites">Favorites</a> page; clearing the cookie or your favorites list erases this data completely.</p>
 
         <h2>Cookies</h2>
         <p>{{.AppName}} uses only strictly necessary cookies — never for tracking:</p>
@@ -41,6 +43,7 @@
             <li><strong>Age verification</strong> — records that you confirmed you are of legal age (required by law)</li>
             <li><strong>Content restriction acknowledgment</strong> — remembers a dismissed regional warning for 30 days (soft-block mode only)</li>
             <li><strong>Geo-forwarding opt-in</strong> (<code>forward_ip</code>) — set only if you explicitly opt in to geo-targeted results, and only if the operator has enabled that feature</li>
+            <li><strong>Visitor ID</strong> (<code>visitor_id</code>) — an opaque, anonymous identifier used only to associate your favorites list with your browser</li>
         </ul>
 
         <h2>Thumbnail &amp; Preview Proxy</h2>

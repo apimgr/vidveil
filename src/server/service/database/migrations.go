@@ -204,6 +204,26 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			closed_at DATETIME
 		)`,
+
+		// Favorites table per AI.md PART 16 progressive-enhancement rule
+		// ("core functionality MUST work without JS") and PART 32's
+		// cookie-vs-localStorage split (cookies are server-read/authoritative;
+		// localStorage is JS-only, never load-bearing). visitor_id is an
+		// opaque value from the visitor_id cookie (no account required) —
+		// the actual favorite data lives here, not in the cookie or in JS
+		// storage.
+		`CREATE TABLE IF NOT EXISTS favorites (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			visitor_id TEXT NOT NULL,
+			url TEXT NOT NULL,
+			title TEXT NOT NULL,
+			thumbnail TEXT,
+			source TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(visitor_id, url)
+		)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_favorites_visitor_id ON favorites(visitor_id)`,
 	}
 }
 

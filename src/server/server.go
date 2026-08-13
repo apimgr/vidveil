@@ -661,6 +661,9 @@ func (s *Server) setupRoutes() {
 		r.Get("/preferences", h.PreferencesPage)
 		r.Post("/preferences/save", h.PreferencesSave)
 		r.Get("/favorites", h.FavoritesPage)
+		r.Post("/favorites", h.FavoritesSave)
+		r.Get("/favorites/export", h.FavoritesExport)
+		r.Post("/favorites/import", h.FavoritesImport)
 		// About/privacy are at /server/* per PART 14 Route Scopes
 	})
 
@@ -754,6 +757,17 @@ func (s *Server) setupRoutes() {
 		// Proxy endpoints (plural per PART 14)
 		r.Get("/proxy/thumbnails", h.ProxyThumbnail)
 		r.Get("/proxy/videos", h.ProxyVideo)
+
+		// Favorites (public, anonymous visitor_id cookie — no account) per
+		// AI.md PART 16 progressive enhancement; server-side storage in
+		// server.db, see favorites.go.
+		r.Route("/favorites", func(r chi.Router) {
+			r.Get("/", h.FavoritesAPIList)
+			r.Post("/", h.FavoritesAPIAdd)
+			r.Post("/import", h.FavoritesImport)
+			r.Delete("/{id}", h.FavoritesAPIRemove)
+			r.Delete("/", h.FavoritesAPIClear)
+		})
 
 	})
 

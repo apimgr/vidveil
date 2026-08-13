@@ -52,7 +52,10 @@
         </div>
 
         <div class="video-grid" role="list" aria-label="{{ t "a11y.video_results" }}">
+            {{$csrf := .CSRFToken}}
+            {{$favs := .FavoriteURLs}}
             {{range .Results}}
+            {{$isFav := index $favs .URL}}
             <div class="video-card" role="listitem">
                 <a href="{{.URL}}" {{if $.OpenNewTab}}target="_blank" {{end}}rel="noopener noreferrer" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
                     <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" .Title}}" loading="lazy">
@@ -65,6 +68,16 @@
                         <p class="video-source">{{.Source}}</p>
                     </div>
                 </a>
+                <form action="/favorites" method="post">
+                    {{if $csrf}}<input type="hidden" name="csrf_token" value="{{$csrf}}">{{end}}
+                    {{if $isFav}}<input type="hidden" name="_method" value="DELETE">{{end}}
+                    <input type="hidden" name="url" value="{{.URL}}">
+                    <input type="hidden" name="title" value="{{.Title}}">
+                    <input type="hidden" name="thumbnail" value="{{.Thumbnail}}">
+                    <input type="hidden" name="source" value="{{.Source}}">
+                    <input type="hidden" name="redirect" value="{{$.CurrentPath}}">
+                    <button type="submit">{{if $isFav}}{{ t "favorites.remove" }}{{else}}{{ t "favorites.add" }}{{end}}</button>
+                </form>
             </div>
             {{end}}
         </div>

@@ -1022,12 +1022,27 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			resultsJSON = []byte("[]")
 		}
 
+		// Server-side favorites (AI.md PART 16/32): the visitor_id cookie
+		// identifies which of these results are already favorited, so the
+		// no-JS add/remove form on each card can render the correct state
+		// without a client-side lookup.
+		favoriteURLs := map[string]bool{}
+		if visitorID := h.getOrCreateVisitorID(w, r); visitorID != "" {
+			if favs, favErr := h.listFavorites(visitorID); favErr == nil {
+				for _, f := range favs {
+					favoriteURLs[f.URL] = true
+				}
+			}
+		}
+
 		h.renderResponse(w, r, "search", map[string]interface{}{
 			"Title":           query + " - " + h.appConfig.Server.Branding.Title,
 			"Query":           query,
 			"SearchQuery":     searchQuery,
 			"ResultsJSON":     template.JS(resultsJSON),
 			"Results":         pageResults,
+			"FavoriteURLs":    favoriteURLs,
+			"CurrentPath":     r.URL.RequestURI(),
 			"EnginesUsed":     results.Data.EnginesUsed,
 			"SearchTime":      results.Data.SearchTimeMS,
 			"Theme":           h.getRequestTheme(r),
@@ -1119,6 +1134,15 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 		})
 
 	default:
+		// Favorites count is server-authoritative (server.db, see favorites.go)
+		// per AI.md PART 16/32 — never derived from client-side localStorage.
+		visitorID := h.getOrCreateVisitorID(w, r)
+		favs, err := h.listFavorites(visitorID)
+		favCount := 0
+		if err == nil {
+			favCount = len(favs)
+		}
+
 		// HTML/text response — renderResponse() applies full content negotiation
 		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 		h.renderResponse(w, r, "preferences", map[string]interface{}{
@@ -1127,6 +1151,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 			"Engines":        engines,
 			"ResultsPerPage": h.getRequestResultsPerPage(r),
 			"OpenNewTab":     h.getRequestOpenNewTab(r),
+			"FavoritesCount": favCount,
 			"CSRFToken":      cSRFTokenFromRequest(r),
 			"BuildDateTime":  BuildDateTime(),
 		})
@@ -1194,29 +1219,9 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, "/preferences", http.StatusFound)
 }
 
-// FavoritesPage renders the favorites page per AI.md PART 16
-// Favorites are localStorage-only; the server provides the HTML shell only.
-func (h *SearchHandler) FavoritesPage(w http.ResponseWriter, r *http.Request) {
-	format := detectResponseFormat(r)
-
-	switch format {
-	case "application/json":
-		WriteJSON(w, http.StatusOK, map[string]interface{}{
-			"title":   "Favorites",
-			"message": "Favorites are stored locally in your browser (localStorage).",
-		})
-
-	default:
-		// HTML/text response — renderResponse() applies full content negotiation
-		// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
-		h.renderResponse(w, r, "favorites", map[string]interface{}{
-			"Title":         "Favorites - " + h.appConfig.Server.Branding.Title,
-			"Theme":         h.getRequestTheme(r),
-			"ActiveNav":     "favorites",
-			"BuildDateTime": BuildDateTime(),
-		})
-	}
-}
+// FavoritesPage, FavoritesSave, FavoritesExport, FavoritesImport, and the
+// FavoritesAPI* handlers live in favorites.go — server-side favorites
+// storage per AI.md PART 16/32 (see that file's header comment).
 
 // AboutPage renders the about page with content negotiation per AI.md PART 16
 func (h *SearchHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
@@ -3425,6 +3430,15 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		// safeHTML marks a string as safe HTML (trusted, not escaped)
 		"safeHTML": func(s string) template.HTML {
 			return template.HTML(s)
+		},
+		// toJSON marshals a value into an inline JSON data island (CSP-safe,
+		// non-executable <script type="application/json"> per AI.md PART 16).
+		"toJSON": func(v interface{}) (template.JS, error) {
+			b, err := json.Marshal(v)
+			if err != nil {
+				return "", err
+			}
+			return template.JS(b), nil
 		},
 	})
 

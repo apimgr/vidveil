@@ -73,7 +73,10 @@
              payload below (single server search, no second request). SSE is used
              only for infinite scroll beyond this first page. */}}
         <div class="video-grid" id="video-grid" role="list" aria-label="{{ t "a11y.video_results" }}">
+            {{$csrf := .CSRFToken}}
+            {{$favs := .FavoriteURLs}}
             {{range .Results}}
+            {{$isFav := index $favs .URL}}
             <div class="video-card" role="listitem" data-source="{{.Source}}">
                 <a href="{{.URL}}" {{if $.OpenNewTab}}target="_blank" {{end}}rel="noopener noreferrer nofollow" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
                     <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" .Title}}" loading="lazy">
@@ -86,6 +89,19 @@
                         <p class="video-source">{{.Source}}</p>
                     </div>
                 </a>
+                {{/* Server-rendered per AI.md PART 16 — add/remove favorite works
+                     fully without JS via this form; app.js layers instant
+                     (no-reload) toggling on top via data-action="favorite-toggle-form". */}}
+                <form action="/favorites" method="post" class="favorite-toggle-form" data-action="favorite-toggle-form">
+                    {{if $csrf}}<input type="hidden" name="csrf_token" value="{{$csrf}}">{{end}}
+                    {{if $isFav}}<input type="hidden" name="_method" value="DELETE">{{end}}
+                    <input type="hidden" name="url" value="{{.URL}}">
+                    <input type="hidden" name="title" value="{{.Title}}">
+                    <input type="hidden" name="thumbnail" value="{{.Thumbnail}}">
+                    <input type="hidden" name="source" value="{{.Source}}">
+                    <input type="hidden" name="redirect" value="{{$.CurrentPath}}">
+                    <button type="submit" class="video-card-fav-btn{{if $isFav}} video-card-fav-btn--active{{end}}" aria-label="{{if $isFav}}{{ t "favorites.remove" }}{{else}}{{ t "favorites.add" }}{{end}}" title="{{if $isFav}}{{ t "favorites.remove" }}{{else}}{{ t "favorites.add" }}{{end}}">&#9733;</button>
+                </form>
             </div>
             {{end}}
         </div>

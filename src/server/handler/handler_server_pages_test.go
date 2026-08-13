@@ -365,6 +365,8 @@ func TestSearchPage_NoJS_RendersResultsInVisibleGrid(t *testing.T) {
 		"NextPage":        2,
 		"HasMore":         true,
 		"InfiniteScroll":  false,
+		"FavoriteURLs":    map[string]bool{},
+		"CurrentPath":     "/search?q=test",
 	}
 	h.renderResponse(rr, req, "search", data)
 

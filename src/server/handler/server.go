@@ -758,7 +758,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nuser_accounts: false\nsearch_queries_logged: false\nip_addresses_stored: false\ntracking_cookies: false\nthird_party_sharing: false\ndata_sold: false\nclient_side_storage_only: true\n",
+		fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nuser_accounts: false\nsearch_queries_logged: false\nip_addresses_stored: false\ntracking_cookies: false\nthird_party_sharing: false\ndata_sold: false\nfavorites_storage: server_side_anonymous_visitor_id\n",
 			time.Now().Format("2006-01-02"))
 		return
 	}
@@ -782,12 +782,15 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 				"vidveil-theme",
 				"vidveil_prefs",
 				"vidveil_history",
-				"vidveil_favorites",
+			},
+			"server_side_storage": []string{
+				"favorites (identified by an anonymous visitor_id cookie, no personal data)",
 			},
 			"cookies": []string{
 				"age_verification (required by law)",
 				"content_restriction_acknowledgment (soft-block regions only)",
 				"forward_ip (opt-in only, when operator enables geo-forwarding)",
+				"visitor_id (anonymous, identifies your favorites list only)",
 			},
 			"thumbnail_proxy":  true,
 			"tor_supported":    true,

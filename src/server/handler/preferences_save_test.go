@@ -17,8 +17,8 @@ func TestGetRequestResultsPerPage_NoCookie_ReturnsDefault(t *testing.T) {
 	h := newRenderTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
 
-	if got := h.getRequestResultsPerPage(req); got != "20" {
-		t.Errorf("getRequestResultsPerPage() = %q, want %q", got, "20")
+	if got := h.getRequestResultsPerPage(req); got != "0" {
+		t.Errorf("getRequestResultsPerPage() = %q, want %q", got, "0")
 	}
 }
 
@@ -39,8 +39,8 @@ func TestGetRequestResultsPerPage_InvalidCookie_ReturnsDefault(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
 	req.AddCookie(&http.Cookie{Name: resultsPerPageCookieName, Value: "9999"})
 
-	if got := h.getRequestResultsPerPage(req); got != "20" {
-		t.Errorf("getRequestResultsPerPage() with invalid cookie = %q, want %q", got, "20")
+	if got := h.getRequestResultsPerPage(req); got != "0" {
+		t.Errorf("getRequestResultsPerPage() with invalid cookie = %q, want %q", got, "0")
 	}
 }
 

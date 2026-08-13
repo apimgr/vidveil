@@ -146,8 +146,8 @@ const defaultPrefs = {
     autoplayPreview: true,
     previewDelay: 0,  // Instant
     // Server-authoritative (IDEA.md "Search Settings") — mirrored into the
-    // results_per_page cookie on save; 0 = infinite scroll (opt-in, not default)
-    resultsPerPage: 20,
+    // results_per_page cookie on save; 0 = infinite scroll (the default)
+    resultsPerPage: 0,
     openNewTab: true,
     defaultPreviewOnly: true,
     showAIContent: false,  // AI content hidden by default
@@ -408,8 +408,8 @@ function setupPreferencesForm() {
 // openNewTabCookieName in src/server/handler/handlers.go.
 function mirrorServerPrefsToCookies(prefs) {
     var maxAge = 365 * 24 * 3600; // 1 year
-    var resultsPerPage = parseInt(prefs.resultsPerPage ?? 20, 10);
-    if (![0, 20, 50, 100].includes(resultsPerPage)) resultsPerPage = 20;
+    var resultsPerPage = parseInt(prefs.resultsPerPage ?? 0, 10);
+    if (![0, 20, 50, 100].includes(resultsPerPage)) resultsPerPage = 0;
     document.cookie = 'results_per_page=' + resultsPerPage + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
     var openNewTab = prefs.openNewTab !== false;
     document.cookie = 'open_new_tab=' + (openNewTab ? '1' : '0') + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
@@ -2310,10 +2310,11 @@ if (document.readyState === 'loading') {
     // Infinite scroll - loads more pages as user scrolls.
     // Server-authoritative per IDEA.md "Search Settings": the server always
     // decides page size/content; JS only decides *when* to request the next
-    // page, and only auto-fetches when the visitor's results_per_page
-    // preference is explicitly "Infinite scroll" (0). Otherwise the server
-    // renders real Prev/Next links (search.tmpl #pagination-container) and
-    // this function returns immediately without touching them.
+    // page, and auto-fetches by default (results_per_page cookie "0",
+    // "Infinite scroll") unless the visitor picks 20/50/100 in Preferences.
+    // In that case the server renders real Prev/Next links
+    // (search.tmpl #pagination-container) and this function returns
+    // immediately without touching them.
     function setupInfiniteScroll() {
         var resultsPerPage = parseInt((userPrefs && userPrefs.resultsPerPage) ?? 0, 10);
         if (resultsPerPage !== 0) {
@@ -3182,7 +3183,7 @@ document.addEventListener('error', function(e) {
             thumbnailSize: 'medium',
             autoplayPreview: true,
             previewDelay: '0',
-            resultsPerPage: '20',
+            resultsPerPage: '0',
             openNewTab: true,
             defaultPreviewOnly: true,
             showAIContent: false,

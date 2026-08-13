@@ -1170,7 +1170,7 @@ func (h *SearchHandler) getRequestResultsPerPage(r *http.Request) string {
 			return c.Value
 		}
 	}
-	return "20"
+	return "0"
 }
 
 // getRequestOpenNewTab returns the user's open-links-in-new-tab preference

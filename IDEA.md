@@ -35,7 +35,7 @@ coverage_minimum:  60
 - Thumbnail Proxy: All thumbnails proxied through server to prevent tracking
 - Video Preview: Hover (desktop) and swipe (mobile) preview support
 - Client-Side Preferences: All settings stored in localStorage, no server storage
-- Favorites & History: Local-only bookmarks and search history with export/import
+- Favorites & History: Server-side favorites (anonymous `visitor_id` cookie, works without JS) and local-only search history, both with export/import
 - Tor Support: Built-in Tor hidden service support for maximum anonymity
 - Geographic Content Restriction: Admin-configurable warnings/blocks for regions with adult content laws
 - Static Binary: Single static binary with all assets embedded
@@ -342,9 +342,9 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Collapsible filters panel with filter count badge.
 - Related searches section (up to 20 suggestions).
 - Video grid, server-paginated per the `results_per_page` cookie
-  (default 20/page); a server-rendered "Load more" link fetches the next
-  page. If the visitor's preference is explicitly "Infinite scroll",
-  JS auto-fetches the next page via the same link instead of requiring a
+  (default "Infinite scroll"); JS auto-fetches the next page as the
+  visitor scrolls. If the visitor's preference is explicitly 20/50/100,
+  a server-rendered "Load more" link is used instead, requiring a
   click — the server still decides page size and content either way.
 - Dynamic loading indicator.
 
@@ -373,11 +373,12 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Search History: localStorage (`vidveil_history`), max items configurable (default unlimited), auto-clear options (Never / 1d / 7d / 30d), Export/Import JSON.
 - Favorites: server-side (`favorites` table, keyed by anonymous `visitor_id` cookie), each entry url+title+thumbnail+source+added_at, Export/Import JSON, Clear all with confirm. Fully functional without JS via server-rendered `/favorites` page; `app.js` layers instant no-reload add/remove/clear on top via `/api/v1/favorites*`.
 - Related Searches: server-side rendered into HTML, client adds "Show more" toggle, up to 20 (first 8 visible).
-- Infinite Scroll: opt-in via the `results_per_page` cookie set to
-  "Infinite scroll" (not the default). IntersectionObserver, sentinel
-  200px, dedup by URL, stops when no more results. The server still
-  determines each batch's contents/size (see "Search behavior" above);
-  JS only decides *when* to request the next page.
+- Infinite Scroll: default via the `results_per_page` cookie, set to
+  "Infinite scroll" unless the visitor picks 20/50/100 in Preferences.
+  IntersectionObserver, sentinel 200px, dedup by URL, stops when no more
+  results. The server still determines each batch's contents/size (see
+  "Search behavior" above); JS only decides *when* to request the next
+  page.
 - Filter Panel: collapsible with toggle, filter count badge, multi-source checkbox per engine, "All Sources" toggle, persists during session.
 
 ### User preferences (reference detail)
@@ -400,7 +401,7 @@ save so both JS and no-JS clients get identical server-driven behavior.
 
 **Search Settings** (server-side cookies, not localStorage — server is
 authoritative for pagination, see "Search behavior" above):
-- Results per page: 20, 50, 100, Infinite scroll - default: 20.
+- Results per page: 20, 50, 100, Infinite scroll - default: Infinite scroll.
 - Open links in new tab (toggle) - default: Yes.
 
 **Default Filters (auto-applied to new searches):**

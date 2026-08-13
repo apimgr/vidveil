@@ -19,7 +19,7 @@ func newNonkTubeEngine(appConfig *config.AppConfig) *NonkTubeEngine {
 // Search performs a search on NonkTube
 func (e *NonkTubeEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/{query}/?p={page}", query, page)
-	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-item, div.thumb")
+	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-block")
 }
 
 // SupportsFeature returns whether the engine supports a feature

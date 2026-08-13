@@ -18,8 +18,8 @@ func newThreeMovsEngine(appConfig *config.AppConfig) *ThreeMovsEngine {
 
 // Search performs a search on 3Movs
 func (e *ThreeMovsEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
-	searchURL := e.BuildSearchURL("/search/{query}/?p={page}", query, page)
-	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-item, div.thumb-item, li.thumb-item")
+	searchURL := e.BuildSearchURL("/search_videos/?q={query}&page={page}", query, page)
+	return genericSearch(ctx, e.BaseEngine, searchURL, "div.item.thumb")
 }
 
 // SupportsFeature returns whether the engine supports a feature

@@ -18,8 +18,8 @@ func newLoveHomePornEngine(appConfig *config.AppConfig) *LoveHomePornEngine {
 
 // Search performs a search on LoveHomePorn
 func (e *LoveHomePornEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
-	searchURL := e.BuildSearchURL("/search/{query}/?page={page}", query, page)
-	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-item, div.item")
+	searchURL := e.BuildSearchURL("/search?q={query}&search_type=videos&page={page}", query, page)
+	return genericSearch(ctx, e.BaseEngine, searchURL, "a.item-thumb")
 }
 
 // SupportsFeature returns whether the engine supports a feature

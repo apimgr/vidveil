@@ -19,7 +19,7 @@ func newHqpornerEngine(appConfig *config.AppConfig) *HqpornerEngine {
 // Search performs a search on Hqporner
 func (e *HqpornerEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/?q={query}&p={page}", query, page)
-	return genericSearch(ctx, e.BaseEngine, searchURL, "div.box, div.video-item")
+	return genericSearch(ctx, e.BaseEngine, searchURL, "section.box.feature")
 }
 
 // SupportsFeature returns whether the engine supports a feature

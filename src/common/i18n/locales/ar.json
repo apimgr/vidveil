@@ -216,6 +216,8 @@
   "search.related_searches": "عمليات بحث ذات صلة",
   "search.results": "النتائج",
   "search.results_for": "نتائج البحث عن",
+  "search.results_count": "{0} نتيجة",
+  "search.results_time": "خلال {0} مللي ثانية",
   "search.select_all": "تحديد الكل",
   "search.streaming": "البث...",
   "status.disabled": "معطّل",

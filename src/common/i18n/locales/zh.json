@@ -216,6 +216,8 @@
   "search.related_searches": "相关搜索",
   "search.results": "结果",
   "search.results_for": "搜索结果：",
+  "search.results_count": "{0} 个结果",
+  "search.results_time": "用时 {0}毫秒",
   "search.select_all": "全选",
   "search.streaming": "正在串流...",
   "status.disabled": "已禁用",

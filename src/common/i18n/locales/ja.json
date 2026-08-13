@@ -216,6 +216,8 @@
   "search.related_searches": "関連する検索",
   "search.results": "結果",
   "search.results_for": "検索結果：",
+  "search.results_count": "{0} 件の結果",
+  "search.results_time": "{0}ms",
   "search.select_all": "すべて選択",
   "search.streaming": "ストリーミング中...",
   "status.disabled": "無効",

@@ -17,6 +17,8 @@
   "search.loading": "Searching...",
   "search.results": "Results",
   "search.results_for": "Results for",
+  "search.results_count": "{0} results",
+  "search.results_time": "in {0}ms",
   "search.load_more": "Load More",
   "search.engines": "Search Engines",
   "search.all_engines": "All Engines",

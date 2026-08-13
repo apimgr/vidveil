@@ -216,6 +216,8 @@
   "search.related_searches": "Recherches associées",
   "search.results": "Resultats",
   "search.results_for": "Resultats pour",
+  "search.results_count": "{0} resultats",
+  "search.results_time": "en {0}ms",
   "search.select_all": "Tout selectionner",
   "search.streaming": "diffusion en cours...",
   "status.disabled": "Desactive",

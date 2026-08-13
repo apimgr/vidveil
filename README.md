@@ -255,7 +255,7 @@ Use bang shortcuts to search specific engines:
 
 #### Tier 4 - Specialty Sites
 
-FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox (`!pbox`), PornerBros (`!pb`), PornHat (`!phat`), PornHD (`!phd`), PornOne (`!p1`), Pornotube (`!pnt`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), VJAV (`!vj`), XBabe (`!xb`)
+FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox (`!pbox`), PornerBros (`!pb`), PornHat (`!phat`), PornHD (`!phd`), PornOne (`!p1`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), VJAV (`!vj`), XBabe (`!xb`)
 
 ### Admin Panel
 

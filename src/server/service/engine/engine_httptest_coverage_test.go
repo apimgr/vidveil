@@ -555,15 +555,6 @@ func TestPornOneEngine_Search_HttpTest(t *testing.T) {
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
-// ── Pornotube ─────────────────────────────────────────────────────────────────
-
-func TestPornotubeEngine_Search_HttpTest(t *testing.T) {
-	srv := newUniversalServer(t)
-	e := newPornotubeEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
-	_, _ = e.Search(context.Background(), "test", 1)
-}
-
 // ── PornTop ───────────────────────────────────────────────────────────────────
 
 func TestPornTopEngine_Search_HttpTest(t *testing.T) {

@@ -101,7 +101,7 @@ func (m *EngineManager) InitializeEngines() {
 	m.engines["nubilesporn"] = newNubilesPornEngine(m.appConfig)
 	m.engines["pornbox"] = newPornboxEngine(m.appConfig)
 	m.engines["porntop"] = newPornTopEngine(m.appConfig)
-	m.engines["pornotube"] = newPornotubeEngine(m.appConfig)
+	// pornotube removed - site returns HTTP 410 Gone (dead)
 	// vporn removed - site inaccessible (geo-blocked/Cloudflare)
 	m.engines["pornhd"] = newPornHDEngine(m.appConfig)
 	m.engines["xbabe"] = newXBabeEngine(m.appConfig)

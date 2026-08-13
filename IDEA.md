@@ -30,7 +30,7 @@ coverage_minimum:  60
 
 **In scope (the WHAT):**
 - Privacy-First Search: No tracking, logging, or analytics - complete privacy
-- Multi-Engine Aggregation: 42 engines with bang shortcuts for targeted searches
+- Multi-Engine Aggregation: 41 engines with bang shortcuts for targeted searches
 - Real-Time Streaming: SSE streaming delivers results as each engine responds
 - Thumbnail Proxy: All thumbnails proxied through server to prevent tracking
 - Video Preview: Hover (desktop) and swipe (mobile) preview support
@@ -176,7 +176,7 @@ type CombinedSuggestion struct {
 | Boundary | Service / Source | Trust assumption | Failure mode |
 |----------|------------------|------------------|--------------|
 | Outbound search | 42 third-party adult video sites (HTML/JSON parsing) | UNTRUSTED - response bodies may be malicious or change shape; never executed, only parsed | Engine drops out of `engines_used`, listed in `engines_failed`; search continues with remaining engines |
-| Outbound thumbnails | Same 42 sites + CDN hosts (e.g., `ttcache.com`) | UNTRUSTED - byte stream is rewritten through proxy, never linked directly into HTML | Thumbnail falls back to `placeholder.svg` |
+| Outbound thumbnails | Same 41 sites + CDN hosts (e.g., `ttcache.com`) | UNTRUSTED - byte stream is rewritten through proxy, never linked directly into HTML | Thumbnail falls back to `placeholder.svg` |
 | Outbound preview videos | Same engines (where supported) | UNTRUSTED - URL only, never inlined as HTML | Preview not shown |
 | Outbound Tor | Local Tor binary if present | TRUSTED inside container/host; auto-detected per AI.md PART 31 | Tor disabled if binary absent; clearnet still works |
 | Outbound GeoIP DB feed | Public GeoIP DB endpoint (per scheduler `geoip_update`) | TRUSTED dataset (publicly published) | Stale GeoIP data continues to be used until next successful refresh |
@@ -333,7 +333,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Search history display (up to 8 recent with timestamps).
 - Per-item remove button and clear all button.
 - Timestamps: "just now", "5m ago", "1h ago", "2d ago".
-- Engine statistics (42 engines, no tracking, Tor support).
+- Engine statistics (41 engines, no tracking, Tor support).
 - Collapsible filters panel.
 
 **Search Results Page (`/search?q={query}`):**
@@ -530,11 +530,11 @@ authoritative for pagination, see "Search behavior" above):
 | youporn | !yp | Preview (data-mediabook), Duration, Views, Rating, Quality |
 | pornmd | !pmd | Duration, Views |
 
-**Tier 3-6 - Additional Sites (34 engines):**
-4tube, fux, porntube, youjizz, sunporno, txxx, nuvid, tnaflix, drtuber, empflix, hellporno, alphaporno, pornflip, gotporn, xxxymovies, lovehomeporn, pornerbros, nonktube, nubilesporn, pornbox, porntop, pornotube, pornhd, xbabe, pornone, pornhat, porntrex, hqporner, vjav, flyflv, tube8, anyporn, tubegalore, 3movs.
+**Tier 3-6 - Additional Sites (33 engines):**
+4tube, fux, porntube, youjizz, sunporno, txxx, nuvid, tnaflix, drtuber, empflix, hellporno, alphaporno, pornflip, gotporn, xxxymovies, lovehomeporn, pornerbros, nonktube, nubilesporn, pornbox, porntop, pornhd, xbabe, pornone, pornhat, porntrex, hqporner, vjav, flyflv, tube8, anyporn, tubegalore, 3movs.
 
 **Engine configuration:**
-- Default: All 42 engines enabled.
+- Default: All 41 engines enabled.
 - SSE streaming behavior: results stream as each engine responds; Tier 1 first; Tier 2-6 fill in below; invalid thumbnails auto-discarded.
 
 **Preview URL sources (generic extraction across engines):**

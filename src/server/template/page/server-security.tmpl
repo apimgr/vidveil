@@ -5,12 +5,12 @@
 {{define "content"}}
 <div class="content">
     <div class="prose">
-        <h1>Security</h1>
+        <h1>{{ t "security.title" }}</h1>
 
-        <p>We take security seriously and welcome responsible disclosure of vulnerabilities.</p>
+        <p>{{ t "security.intro" }}</p>
 
-        <h2>Reporting Channels</h2>
-        <p>In order of preference:</p>
+        <h2>{{ t "security.channels_title" }}</h2>
+        <p>{{ t "security.channels_intro" }}</p>
         <ul>
             {{range .Contacts}}
             <li><a href="{{.}}">{{.}}</a></li>
@@ -18,23 +18,21 @@
         </ul>
 
         {{if .Expires}}
-        <p><strong>Expires:</strong> {{.Expires}}</p>
+        <p><strong>{{ t "security.expires_label" }}</strong> {{.Expires}}</p>
         {{end}}
 
         {{if .HasPGPKey}}
-        <p>Reports can be encrypted with our <a href="/.well-known/pgp-key.asc">PGP public key</a>.</p>
+        <p>{{ t "security.pgp_intro" }} <a href="/.well-known/pgp-key.asc">{{ t "security.pgp_link_text" }}</a>.</p>
         {{end}}
 
-        <h2>How to Report</h2>
-        <p>Use the second contact link above — it opens our contact form in security-report mode
-        (coordinated-disclosure fields, encrypted at rest). We aim to acknowledge new reports promptly
-        and work with you toward a coordinated disclosure window of {{.DisclosureDays}} days.</p>
+        <h2>{{ t "security.how_to_report_title" }}</h2>
+        <p>{{tf "security.how_to_report_body" .DisclosureDays}}</p>
 
-        <h2>More Information</h2>
+        <h2>{{ t "security.more_info_title" }}</h2>
         <ul>
-            <li><a href="/server/security/policy">Disclosure Policy</a></li>
-            <li><a href="/server/security/thanks">Researcher Acknowledgments</a></li>
-            <li><a href="/.well-known/security.txt">security.txt</a> (machine-readable, RFC 9116)</li>
+            <li><a href="/server/security/policy">{{ t "security.policy_link" }}</a></li>
+            <li><a href="/server/security/thanks">{{ t "security.thanks_link" }}</a></li>
+            <li><a href="/.well-known/security.txt">{{ t "security.txt_link" }}</a> {{ t "security.txt_link_suffix" }}</li>
         </ul>
     </div>
 </div>

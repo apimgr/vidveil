@@ -5,130 +5,130 @@
 {{define "content"}}
 <div class="content">
     <div class="prose">
-        <h1>Contact Us</h1>
+        <h1>{{ t "contact.title" }}</h1>
 
         {{if .Message}}
         <div class="alert alert-{{.MessageType}}">{{.Message}}</div>
         {{end}}
 
-        <h2>Get in Touch</h2>
-        <p>Have questions, feedback, or found a bug? We'd love to hear from you.</p>
+        <h2>{{ t "contact.get_in_touch_title" }}</h2>
+        <p>{{ t "contact.get_in_touch_body" }}</p>
 
-        <h2>GitHub</h2>
-        <p>The best way to report bugs or request features is through our GitHub repository:</p>
-        <p><a href="https://github.com/apimgr/vidveil/issues" target="_blank" rel="noopener">Open an Issue on GitHub</a></p>
+        <h2>{{ t "contact.github_title" }}</h2>
+        <p>{{ t "contact.github_body" }}</p>
+        <p><a href="https://github.com/apimgr/vidveil/issues" target="_blank" rel="noopener">{{ t "contact.github_link" }}</a></p>
 
         {{if .SecurityMode}}
-        <h2>Report a Security Vulnerability</h2>
-        <p>This form is a coordinated-disclosure security report. Your submission is encrypted at rest and only maintainers can read it.</p>
+        <h2>{{ t "contact.security_report_title" }}</h2>
+        <p>{{ t "contact.security_report_body" }}</p>
         <form method="POST" action="/server/contact?security_id={{.SecurityID}}" class="preferences-form">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             <input type="hidden" name="security_id" value="{{.SecurityID}}">
             <div class="form-group">
-                <label class="form-label" for="email">Your Email</label>
-                <input class="form-input" type="email" id="email" name="email" required placeholder="your@email.com">
+                <label class="form-label" for="email">{{ t "contact.label_email" }}</label>
+                <input class="form-input" type="email" id="email" name="email" required placeholder="{{ t "contact.placeholder_email" }}">
             </div>
             <div class="form-group">
-                <label class="form-label" for="researcher_gpg">Your GPG Public Key (URL or pasted block, optional)</label>
-                <textarea class="form-input" id="researcher_gpg" name="researcher_gpg" rows="3" placeholder="https://keys.openpgp.org/vks/v1/by-fingerprint/... or a pasted -----BEGIN PGP PUBLIC KEY BLOCK-----"></textarea>
+                <label class="form-label" for="researcher_gpg">{{ t "contact.label_researcher_gpg" }}</label>
+                <textarea class="form-input" id="researcher_gpg" name="researcher_gpg" rows="3" placeholder="{{ t "contact.placeholder_researcher_gpg" }}"></textarea>
             </div>
             <div class="form-group">
-                <label class="form-label" for="component">Affected Component</label>
+                <label class="form-label" for="component">{{ t "contact.label_component" }}</label>
                 <select class="form-input" id="component" name="component" required>
-                    <option value="">Select a component...</option>
+                    <option value="">{{ t "contact.select_component_placeholder" }}</option>
                     {{range .Components}}
                     <option value="{{.}}">{{.}}</option>
                     {{end}}
-                    <option value="other">Other (specify below)</option>
+                    <option value="other">{{ t "contact.option_other" }}</option>
                 </select>
-                <input class="form-input" type="text" id="component_other" name="component_other" placeholder="If Other, specify the affected component">
+                <input class="form-input" type="text" id="component_other" name="component_other" placeholder="{{ t "contact.placeholder_component_other" }}">
             </div>
             <div class="form-group">
-                <label class="form-label" for="endpoint">Affected Endpoint / URL (optional)</label>
+                <label class="form-label" for="endpoint">{{ t "contact.label_endpoint" }}</label>
                 <input class="form-input" type="text" id="endpoint" name="endpoint" placeholder="/api/v1/search">
             </div>
             <div class="form-group">
-                <label class="form-label" for="severity">Severity</label>
+                <label class="form-label" for="severity">{{ t "contact.label_severity" }}</label>
                 <select class="form-input" id="severity" name="severity" required>
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="low">Low</option>
-                    <option value="informational">Informational</option>
+                    <option value="critical">{{ t "contact.severity_critical" }}</option>
+                    <option value="high">{{ t "contact.severity_high" }}</option>
+                    <option value="medium" selected>{{ t "contact.severity_medium" }}</option>
+                    <option value="low">{{ t "contact.severity_low" }}</option>
+                    <option value="informational">{{ t "contact.severity_informational" }}</option>
                 </select>
             </div>
             <div class="form-group">
-                <label class="form-label" for="summary">Vulnerability Summary</label>
-                <input class="form-input" type="text" id="summary" name="summary" required placeholder="One-line summary">
+                <label class="form-label" for="summary">{{ t "contact.label_summary" }}</label>
+                <input class="form-input" type="text" id="summary" name="summary" required placeholder="{{ t "contact.placeholder_summary" }}">
             </div>
             <div class="form-group">
-                <label class="form-label" for="steps">Steps to Reproduce</label>
+                <label class="form-label" for="steps">{{ t "contact.label_steps" }}</label>
                 <textarea class="form-input" id="steps" name="steps" required rows="5"></textarea>
             </div>
             <div class="form-group">
-                <label class="form-label" for="impact">Impact</label>
+                <label class="form-label" for="impact">{{ t "contact.label_impact" }}</label>
                 <textarea class="form-input" id="impact" name="impact" required rows="4"></textarea>
             </div>
             <div class="form-group">
-                <label class="form-label" for="suggested_fix">Suggested Fix (optional)</label>
+                <label class="form-label" for="suggested_fix">{{ t "contact.label_suggested_fix" }}</label>
                 <textarea class="form-input" id="suggested_fix" name="suggested_fix" rows="3"></textarea>
             </div>
             <div class="form-group">
-                <label class="form-label"><input type="checkbox" name="cve_requested" value="1"> Request CVE assignment</label>
+                <label class="form-label"><input type="checkbox" name="cve_requested" value="1"> {{ t "contact.label_cve" }}</label>
             </div>
             <div class="form-group">
-                <label class="form-label" for="disclosure_days">Preferred Disclosure Window (days)</label>
+                <label class="form-label" for="disclosure_days">{{ t "contact.label_disclosure_days" }}</label>
                 <input class="form-input" type="number" id="disclosure_days" name="disclosure_days" min="1" value="{{.DefaultDisclosureDays}}">
             </div>
             <div class="form-group">
-                <label class="form-label" for="credit_preference">Credit Preference</label>
+                <label class="form-label" for="credit_preference">{{ t "contact.label_credit_preference" }}</label>
                 <select class="form-input" id="credit_preference" name="credit_preference" required>
-                    <option value="real_name">Yes, use my real name</option>
-                    <option value="handle">Yes, use my handle</option>
-                    <option value="anonymous">Anonymous</option>
-                    <option value="none">No credit</option>
+                    <option value="real_name">{{ t "contact.credit_real_name" }}</option>
+                    <option value="handle">{{ t "contact.credit_handle" }}</option>
+                    <option value="anonymous">{{ t "contact.credit_anonymous" }}</option>
+                    <option value="none">{{ t "contact.credit_none" }}</option>
                 </select>
             </div>
             <div class="form-group">
-                <label class="form-label" for="credit_name">Name / Handle to Credit (if applicable)</label>
+                <label class="form-label" for="credit_name">{{ t "contact.label_credit_name" }}</label>
                 <input class="form-input" type="text" id="credit_name" name="credit_name">
             </div>
             <div class="form-group">
-                <label class="form-label"><input type="checkbox" name="disclosure_agreement" value="1" required> I agree to coordinated disclosure (no public release until the coordinated date or 90 days, whichever comes first)</label>
+                <label class="form-label"><input type="checkbox" name="disclosure_agreement" value="1" required> {{ t "contact.label_disclosure_agreement" }}</label>
             </div>
-            <button type="submit" class="search-button">Submit Security Report</button>
+            <button type="submit" class="search-button">{{ t "contact.submit_security_report" }}</button>
         </form>
         {{else}}
         {{if .ContactEnabled}}
-        <h2>Contact Form</h2>
+        <h2>{{ t "contact.form_title" }}</h2>
         <form method="POST" action="/server/contact" class="preferences-form">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             <div class="form-group hidden" aria-hidden="true">
-                <label class="form-label" for="contact_hp">Leave this field empty</label>
+                <label class="form-label" for="contact_hp">{{ t "contact.label_honeypot" }}</label>
                 <input class="form-input" type="text" id="contact_hp" name="contact_hp" tabindex="-1" autocomplete="off">
             </div>
             <div class="form-group">
-                <label class="form-label" for="email">Your Email (optional)</label>
-                <input class="form-input" type="email" id="email" name="email" placeholder="your@email.com">
+                <label class="form-label" for="email">{{ t "contact.label_email_optional" }}</label>
+                <input class="form-input" type="email" id="email" name="email" placeholder="{{ t "contact.placeholder_email" }}">
             </div>
             <div class="form-group">
-                <label class="form-label" for="subject">Subject</label>
-                <input class="form-input" type="text" id="subject" name="subject" required placeholder="What is this about?">
+                <label class="form-label" for="subject">{{ t "contact.label_subject" }}</label>
+                <input class="form-input" type="text" id="subject" name="subject" required placeholder="{{ t "contact.placeholder_subject" }}">
             </div>
             <div class="form-group">
-                <label class="form-label" for="message">Message</label>
-                <textarea class="form-input" id="message" name="message" required rows="5" placeholder="Your message..."></textarea>
+                <label class="form-label" for="message">{{ t "contact.label_message" }}</label>
+                <textarea class="form-input" id="message" name="message" required rows="5" placeholder="{{ t "contact.placeholder_message" }}"></textarea>
             </div>
-            <button type="submit" class="search-button">Send Message</button>
+            <button type="submit" class="search-button">{{ t "contact.submit_message" }}</button>
         </form>
         {{end}}
 
-        <h2>Security Issues</h2>
-        <p>To report a security vulnerability, consult our <a href="/server/security">security policy</a>.</p>
+        <h2>{{ t "contact.security_issues_title" }}</h2>
+        <p>{{ t "contact.security_issues_body_pre" }} <a href="/server/security">{{ t "contact.security_issues_link" }}</a>.</p>
         {{end}}
 
-        <h2>Abuse Reports</h2>
-        <p>To report abusive content or policy violations, use this contact form{{if .AbuseEmail}} or email <a href="mailto:{{.AbuseEmail}}">{{.AbuseEmail}}</a>{{end}}.</p>
+        <h2>{{ t "contact.abuse_title" }}</h2>
+        <p>{{ t "contact.abuse_body" }}{{if .AbuseEmail}} {{ t "contact.abuse_body_or_email" }} <a href="mailto:{{.AbuseEmail}}">{{.AbuseEmail}}</a>{{end}}{{ t "contact.abuse_body_end" }}</p>
     </div>
 </div>
 {{end}}

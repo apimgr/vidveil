@@ -5,39 +5,35 @@
 {{define "content"}}
 <div class="content">
     <div class="prose">
-        <h1>Disclosure Policy</h1>
+        <h1>{{ t "security.policy_title" }}</h1>
 
         {{if .PolicyText}}
         <p>{{.PolicyText}}</p>
         {{else}}
-        <h2>Coordinated Disclosure Window</h2>
-        <p>We ask researchers to give us up to {{.DisclosureDays}} days to investigate and remediate a
-        reported vulnerability before any public disclosure. We will communicate progress throughout
-        this window via the tracking link sent in your acknowledgment email.</p>
+        <h2>{{ t "security.policy_window_title" }}</h2>
+        <p>{{tf "security.policy_window_body" .DisclosureDays}}</p>
 
-        <h2>In Scope</h2>
+        <h2>{{ t "security.policy_in_scope_title" }}</h2>
         <ul>
-            <li>This deployed instance and its public API</li>
-            <li>Authentication, authorization, and session handling</li>
-            <li>Data exposure, injection, and request-forgery classes of issues</li>
+            <li>{{ t "security.policy_in_scope_1" }}</li>
+            <li>{{ t "security.policy_in_scope_2" }}</li>
+            <li>{{ t "security.policy_in_scope_3" }}</li>
         </ul>
 
-        <h2>Out of Scope</h2>
+        <h2>{{ t "security.policy_out_of_scope_title" }}</h2>
         <ul>
-            <li>Denial-of-service testing against production infrastructure</li>
-            <li>Social engineering of maintainers or users</li>
-            <li>Automated scanning that generates excessive load</li>
-            <li>Issues already reported and pending remediation</li>
+            <li>{{ t "security.policy_out_of_scope_1" }}</li>
+            <li>{{ t "security.policy_out_of_scope_2" }}</li>
+            <li>{{ t "security.policy_out_of_scope_3" }}</li>
+            <li>{{ t "security.policy_out_of_scope_4" }}</li>
         </ul>
 
-        <h2>Safe Harbor</h2>
-        <p>We will not pursue legal action against researchers who make a good-faith effort to
-        follow this policy: report privately through the channels listed on our
-        <a href="/server/security">security page</a>, avoid privacy violations and service
-        disruption, and give us a reasonable time to remediate before any public disclosure.</p>
+        <h2>{{ t "security.policy_safe_harbor_title" }}</h2>
+        <p>{{ t "security.policy_safe_harbor_body_pre" }}
+        <a href="/server/security">{{ t "security.policy_safe_harbor_link" }}</a>{{ t "security.policy_safe_harbor_body_post" }}</p>
         {{end}}
 
-        <p><a href="/server/security">Back to Security</a></p>
+        <p><a href="/server/security">{{ t "security.back_to_security" }}</a></p>
     </div>
 </div>
 {{end}}

@@ -5,8 +5,8 @@
 {{define "content"}}
 <div class="content">
     <div class="prose">
-        <h1>Researcher Acknowledgments</h1>
-        <p>We thank the following researchers for responsibly disclosing vulnerabilities:</p>
+        <h1>{{ t "security.thanks_title" }}</h1>
+        <p>{{ t "security.thanks_intro" }}</p>
 
         {{if .Credits}}
         <ul>
@@ -15,10 +15,10 @@
             {{end}}
         </ul>
         {{else}}
-        <p>No disclosed reports yet.</p>
+        <p>{{ t "security.thanks_empty" }}</p>
         {{end}}
 
-        <p><a href="/server/security">Back to Security</a></p>
+        <p><a href="/server/security">{{ t "security.back_to_security" }}</a></p>
     </div>
 </div>
 {{end}}

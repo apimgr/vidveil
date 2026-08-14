@@ -1320,6 +1320,13 @@ if (document.readyState === 'loading') {
     // page navigation leaves the old page intact until the new one is ready).
     var pendingGridSwap = false;
     var isSearching = true;
+    // Tracks the in-flight SSE connection (initial stream or infinite-scroll
+    // page fetch) so it can be closed on pagehide. An open EventSource is a
+    // known bfcache blocker (Chrome/Firefox): leaving it open forces a full
+    // network reload instead of an instant snapshot restore on browser
+    // back/forward, which is what made the back button "reload results" or
+    // transiently show "no results found" mid-refetch.
+    var activeEventSource = null;
     var enginesCompleted = 0;
     // Live tracker, used only while streaming (isSearching)
     var enginesWithResults = new Set();
@@ -1565,6 +1572,7 @@ if (document.readyState === 'loading') {
 
         startTime = performance.now();
         var eventSource = new EventSource(searchUrl);
+        activeEventSource = eventSource;
         var firstResult = true;
         var streamDone = false;
 
@@ -2370,6 +2378,7 @@ if (document.readyState === 'loading') {
             pageUrl += '&min_duration=' + parseInt(userPrefs.minDuration);
         }
         var eventSource = new EventSource(pageUrl);
+        activeEventSource = eventSource;
         var gotResults = false;
         var streamDone = false;
 
@@ -2499,6 +2508,18 @@ if (document.readyState === 'loading') {
         var wrapper = document.getElementById('source-filter-wrapper');
         if (wrapper && wrapper.open && !wrapper.contains(e.target)) {
             wrapper.removeAttribute('open');
+        }
+    });
+
+    // Close any in-flight SSE connection before the page is torn down/hidden.
+    // A still-open EventSource makes the search page bfcache-ineligible, so
+    // pressing back forces a full network reload (visible as a results
+    // "reload" or a transient "no results found" flash) instead of an
+    // instant restore of the already-correct previous page state.
+    window.addEventListener('pagehide', function() {
+        if (activeEventSource) {
+            activeEventSource.close();
+            activeEventSource = null;
         }
     });
 })();

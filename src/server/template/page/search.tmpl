@@ -45,6 +45,15 @@
             <p id="loading-text">{{ t "search.connecting_engines" }}</p>
         </div>
         <p class="meta" id="search-meta" data-query="{{.Query}}" aria-live="polite"><span id="result-count">{{len .Results}}</span> results <span id="search-time-container">in {{.SearchTime}}ms</span></p>
+
+        {{/* Server-rendered empty state — visible for every client, including
+             no-JS. app.js reuses/overwrites this same #no-results-message
+             element rather than injecting text elsewhere, so the message
+             always renders inside <main>, never near the footer. */}}
+        {{if eq (len .Results) 0}}
+        <p class="no-results" id="no-results-message" role="status" aria-live="polite">{{ t "search.no_results" }}</p>
+        {{end}}
+
         <div class="status-bar hidden" id="status-bar">
             <span id="status-text">{{ t "search.connecting" }}</span>
             <span id="engine-status"></span>
@@ -133,6 +142,11 @@
         <script type="application/json" id="search-results-data">{{.ResultsJSON}}</script>
     </main>
     {{template "public/footer" .}}
+    {{/* i18n strings for the search results logic in app.js. type="application/json"
+         is a non-executable data island (CSP script-src does not block it). */}}
+    <script type="application/json" id="search-i18n">{
+        "noResults": "{{ t "search.no_results" }}"
+    }</script>
     {{template "public/scripts" .}}
 </body>
 </html>

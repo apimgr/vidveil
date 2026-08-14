@@ -1475,18 +1475,15 @@ if (document.readyState === 'loading') {
         if (grid) grid.innerHTML = '';
 
         if (serverResults.length === 0) {
-            var loadingEl = document.getElementById('initial-loading');
-            if (loadingEl) {
-                loadingEl.innerHTML = '<p>No results found.</p>';
-                loadingEl.classList.remove('hidden');
-            }
+            showNoResultsMessage();
             hasMoreResults = false;
             showSearchElement('search-meta');
-            announce('No results found for ' + searchQuery);
+            announce(getSearchI18n().noResults || 'No results found');
             updateSearchStatus();
             return true;
         }
 
+        hideNoResultsMessage();
         showSearchElement('search-meta');
         showSearchElement('filters');
 
@@ -1619,15 +1616,12 @@ if (document.readyState === 'loading') {
                         var staleCountEl = document.getElementById('result-count');
                         if (staleCountEl) staleCountEl.textContent = '0';
                     }
-                    var loadingEl = document.getElementById('initial-loading');
-                    if (loadingEl) {
-                        loadingEl.innerHTML = '<p>No results found.</p>';
-                        loadingEl.classList.remove('hidden');
-                    }
+                    showNoResultsMessage();
                     hasMoreResults = false;
                     // A11Y: Announce no results to screen readers
-                    announce('No results found for ' + searchQuery);
+                    announce(getSearchI18n().noResults || 'No results found');
                 } else {
+                    hideNoResultsMessage();
                     // Setup infinite scroll after initial results load
                     setupInfiniteScroll();
                     // Apply default filters from preferences
@@ -1776,13 +1770,10 @@ if (document.readyState === 'loading') {
                     var staleCountEl = document.getElementById('result-count');
                     if (staleCountEl) staleCountEl.textContent = '0';
                 }
-                var loadingEl = document.getElementById('initial-loading');
-                if (loadingEl) {
-                    loadingEl.innerHTML = '<p>No results found.</p>';
-                    loadingEl.classList.remove('hidden');
-                }
+                hideSearchElement('initial-loading');
+                showNoResultsMessage();
                 hasMoreResults = false;
-                announce('No results found for ' + searchQuery);
+                announce(getSearchI18n().noResults || 'No results found');
                 updateSearchStatus();
                 hideSearchElement('status-bar');
                 return;
@@ -1798,6 +1789,7 @@ if (document.readyState === 'loading') {
                 if (oldCountEl) oldCountEl.textContent = '0';
             }
             hideSearchElement('initial-loading');
+            hideNoResultsMessage();
             showSearchElement('search-meta');
             showSearchElement('filters');
 
@@ -2920,6 +2912,50 @@ document.addEventListener('change', function(e) {
             break;
     }
 });
+
+// Reads the #search-i18n data island rendered by search.tmpl.
+function getSearchI18n() {
+    var el = document.getElementById('search-i18n');
+    if (!el) return {};
+    try {
+        return JSON.parse(el.textContent || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+// Shows the in-body "no results" state. Reuses the server-rendered
+// #no-results-message element when present (initial zero-result page load);
+// creates it in place, right after #search-meta, when a later client-side
+// re-search (filter/sort change) finds zero results and the element was
+// never server-rendered. Always lands inside <main>, never near the footer.
+function showNoResultsMessage() {
+    var i18n = getSearchI18n();
+    var msg = i18n.noResults || 'No results found';
+    var el = document.getElementById('no-results-message');
+    if (!el) {
+        el = document.createElement('p');
+        el.id = 'no-results-message';
+        el.className = 'no-results';
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        var meta = document.getElementById('search-meta');
+        if (meta && meta.parentNode) {
+            meta.parentNode.insertBefore(el, meta.nextSibling);
+        } else {
+            var main = document.getElementById('main-content');
+            if (main) main.appendChild(el);
+        }
+    }
+    el.textContent = msg;
+    el.classList.remove('hidden');
+}
+
+// Hides/clears the "no results" state left over from a previous search.
+function hideNoResultsMessage() {
+    var el = document.getElementById('no-results-message');
+    if (el) el.classList.add('hidden');
+}
 
 // Delegated submit actions.
 function getFavoritesI18n() {

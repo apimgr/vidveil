@@ -10,6 +10,10 @@
     <main class="results" id="main-content" role="main" aria-label="{{ t "a11y.search_results" }}">
         <p class="meta" aria-live="polite"><span>{{len .Results}}</span> {{ t "search.results_for" }} "{{.Query}}"</p>
 
+        {{if eq (len .Results) 0}}
+        <p class="no-results" role="status" aria-live="polite">{{ t "search.no_results" }}</p>
+        {{end}}
+
         {{if .SpellSuggestion}}
         <p class="spell-suggestion">{{ t "search.did_you_mean" }} <a href="/search?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
         {{end}}

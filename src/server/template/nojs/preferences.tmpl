@@ -12,6 +12,7 @@
         
         <form method="post" action="/preferences/save">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+            {{if .ReturnTo}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">{{end}}
             <section>
                 <h2>Appearance</h2>
                 <div class="form-group">

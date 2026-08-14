@@ -2813,6 +2813,18 @@ function onReady(fn) {
     }
 }
 
+// Where to send the user after closing/saving preferences — the page they
+// arrived from, captured server-side (Referer, validated by safeReturnPath
+// in handlers.go) and threaded onto #preferences-form as data-return-to.
+// Deterministic by design: window.history.back() was tried here previously
+// but silently did nothing useful when history.length was 1 (direct URL,
+// bookmark, new tab) or when the prior entry was /preferences itself.
+function preferencesReturnTo() {
+    var form = document.getElementById('preferences-form');
+    var target = form && form.dataset.returnTo;
+    return target || '/';
+}
+
 // Delegated click actions. Returns true when handled. Card-menu actions
 // (newtab/copy/favorite) are intentionally not claimed here so the existing
 // card-menu dispatcher handles them.
@@ -2864,7 +2876,7 @@ function dispatchClickAction(el, e) {
             showSearchSpinner(el, e);
             return true;
         case 'close-prefs':
-            if (window.history.length > 1) { window.history.back(); } else { window.location.href = '/'; }
+            window.location.href = preferencesReturnTo();
             return true;
         case 'export-history':
             if (typeof window.exportHistory === 'function') window.exportHistory();
@@ -3237,9 +3249,8 @@ document.addEventListener('error', function(e) {
 
         // Single-submit-only guard (AI.md PART 16: "Never let a single-submit
         // form button be clickable twice"). Without this, rapid repeat clicks
-        // on Save each independently queue their own delayed history.back()
-        // call, so the user has to navigate back once per click instead of
-        // once total.
+        // on Save each independently queue their own delayed navigate-away
+        // call, so the redirect fires once per click instead of once total.
         var saving = false;
 
         function savePreferences(e) {
@@ -3296,11 +3307,7 @@ document.addEventListener('error', function(e) {
 
             showToastLocal(i18n.saved, 'success');
             setTimeout(function() {
-                if (window.history.length > 1) {
-                    window.history.back();
-                } else {
-                    window.location.href = '/';
-                }
+                window.location.href = preferencesReturnTo();
             }, 800);
         }
 

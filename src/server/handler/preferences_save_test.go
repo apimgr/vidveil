@@ -176,3 +176,77 @@ func TestPreferencesSave_InvalidThemeAndResultsPerPage_SkipsThoseCookies(t *test
 		}
 	}
 }
+
+// ── safeReturnPath / return_to redirect ─────────────────────────────────────
+
+func TestPreferencesSave_ValidReturnTo_RedirectsToOriginatingPage(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+
+	form := url.Values{}
+	form.Set("theme", "dark")
+	form.Set("return_to", "/search?q=test")
+
+	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	h.PreferencesSave(rr, req)
+
+	if loc := rr.Header().Get("Location"); loc != "/search?q=test" {
+		t.Errorf("PreferencesSave POST return_to: Location = %q, want /search?q=test", loc)
+	}
+}
+
+func TestPreferencesSave_CrossHostReturnTo_FallsBackToPreferences(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+
+	form := url.Values{}
+	form.Set("theme", "dark")
+	form.Set("return_to", "https://evil.example/phish")
+
+	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	h.PreferencesSave(rr, req)
+
+	if loc := rr.Header().Get("Location"); loc != "/preferences" {
+		t.Errorf("PreferencesSave POST cross-host return_to: Location = %q, want /preferences", loc)
+	}
+}
+
+func TestPreferencesSave_ProtocolRelativeReturnTo_FallsBackToPreferences(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+
+	form := url.Values{}
+	form.Set("theme", "dark")
+	form.Set("return_to", "//evil.example/phish")
+
+	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	h.PreferencesSave(rr, req)
+
+	if loc := rr.Header().Get("Location"); loc != "/preferences" {
+		t.Errorf("PreferencesSave POST protocol-relative return_to: Location = %q, want /preferences", loc)
+	}
+}
+
+func TestPreferencesSave_SelfLoopReturnTo_FallsBackToPreferences(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+
+	form := url.Values{}
+	form.Set("theme", "dark")
+	form.Set("return_to", "/preferences")
+
+	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	h.PreferencesSave(rr, req)
+
+	if loc := rr.Header().Get("Location"); loc != "/preferences" {
+		t.Errorf("PreferencesSave POST self-loop return_to: Location = %q, want /preferences", loc)
+	}
+}

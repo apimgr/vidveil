@@ -82,3 +82,15 @@ Scheduler status. Code and the 13 rule-file mirrors predate it. Gaps:
   raw `&#9733;` glyph instead of the designed star icon/active state. Needs
   a `.video-card-fav-btn`/`.video-card-fav-btn--active` rule (hover/focus
   states, WCAG AA contrast, 44x44px touch target per AI.md PART 16/28).
+
+- `src/server/template/nojs/preferences.tmpl` hardcodes English UI strings
+  ("Theme:", "Search Settings", "Results per page:", "Open links in new
+  tab", "Privacy", "Proxy all thumbnails (always enabled for privacy)",
+  "Save Preferences", "Reset", etc.) instead of using i18n translation keys
+  via `{{ t "key" }}` — violates the "no hardcoded user-facing strings"
+  rule (AI.md PART 30 / testing-rules.md). The JS-enhanced counterpart
+  `src/server/template/page/preferences.tmpl` does this correctly
+  (`{{ t "prefs.title" }}` etc.). Found incidentally while fixing the
+  preferences no-JS/JS back-navigation bug. Needs matching `prefs.*`
+  translation keys added to `src/common/i18n/locales/*.json` (all 7
+  languages) and the no-JS template converted to use them.

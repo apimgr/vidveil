@@ -16,7 +16,7 @@
              dedicated IIFE (favorites/history/engine-tier aware) already
              owns #preferences-form, and without this attribute both handlers
              fired on every submit (double-save). */}}
-        <form id="preferences-form" data-managed="true">
+        <form id="preferences-form" data-managed="true" data-return-to="{{.ReturnTo}}">
             <section>
                 <h2>{{ t "prefs.appearance" }}</h2>
                 <div class="form-group">

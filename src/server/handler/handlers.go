@@ -1154,6 +1154,11 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 			"FavoritesCount": favCount,
 			"CSRFToken":      cSRFTokenFromRequest(r),
 			"BuildDateTime":  BuildDateTime(),
+			// ReturnTo is the page the user arrived from (Referer), threaded
+			// through the form (hidden field for no-JS, data attribute for
+			// JS) so saving/closing preferences sends them back there instead
+			// of always landing on bare /preferences. See safeReturnPath.
+			"ReturnTo": safeReturnPath(r.Referer(), r),
 		})
 	}
 }
@@ -1181,6 +1186,39 @@ func (h *SearchHandler) getRequestOpenNewTab(r *http.Request) bool {
 		return c.Value == "1"
 	}
 	return true
+}
+
+// safeReturnPath validates a redirect target taken from either a Referer
+// header (full URL) or a same-origin form/query field (bare path), and
+// returns "" if the target is missing, points at a different host, isn't
+// rooted at "/", or is protocol-relative ("//evil.com") — the standard
+// open-redirect guards. Also rejects bouncing back into the preferences
+// page/save endpoint themselves, which would defeat the point of remembering
+// where the user came from. Used by PreferencesPage (capture) and
+// PreferencesSave (use) so saving/closing preferences returns the user to
+// their prior page for both JS and no-JS clients.
+func safeReturnPath(target string, r *http.Request) string {
+	if target == "" {
+		return ""
+	}
+	u, err := url.Parse(target)
+	if err != nil {
+		return ""
+	}
+	if u.Host != "" && !strings.EqualFold(u.Host, r.Host) {
+		return ""
+	}
+	path := u.Path
+	if path == "" || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") {
+		return ""
+	}
+	if path == "/preferences" || path == "/preferences/save" {
+		return ""
+	}
+	if u.RawQuery != "" {
+		return path + "?" + u.RawQuery
+	}
+	return path
 }
 
 // PreferencesSave handles the nojs/preferences.tmpl form submission, persisting
@@ -1216,7 +1254,11 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	}
 	http.SetCookie(w, newSecureCookie(openNewTabCookieName, openNewTab, "/", 365*24*60*60, sslEnabled))
 
-	http.Redirect(w, r, "/preferences", http.StatusFound)
+	redirectTo := "/preferences"
+	if rt := safeReturnPath(r.FormValue("return_to"), r); rt != "" {
+		redirectTo = rt
+	}
+	http.Redirect(w, r, redirectTo, http.StatusFound)
 }
 
 // FavoritesPage, FavoritesSave, FavoritesExport, FavoritesImport, and the

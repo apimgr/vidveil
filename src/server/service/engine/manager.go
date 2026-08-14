@@ -75,11 +75,11 @@ func (m *EngineManager) InitializeEngines() {
 	// Tier 2 - Popular Sites (enabled by default)
 	m.engines["eporner"] = newEpornerEngine(m.appConfig)
 	m.engines["youporn"] = newYouPornEngine(m.appConfig)
-	m.engines["pornmd"] = newPornMDEngine(m.appConfig)
+	// pornmd removed - site returns HTTP 403 Cloudflare challenge (no bypass)
 
 	// Tier 3 - Additional Sites (all tiers enabled by default per IDEA.md)
-	m.engines["4tube"] = newFourTubeEngine(m.appConfig)
-	m.engines["fux"] = newFuxEngine(m.appConfig)
+	// 4tube removed - site returns HTTP 403 Cloudflare challenge (no bypass)
+	// fux removed - site returns HTTP 403 Cloudflare challenge (no bypass)
 	m.engines["porntube"] = newPornTubeEngine(m.appConfig)
 	m.engines["youjizz"] = newYouJizzEngine(m.appConfig)
 	m.engines["sunporno"] = newSunPornoEngine(m.appConfig)
@@ -87,23 +87,23 @@ func (m *EngineManager) InitializeEngines() {
 	m.engines["nuvid"] = newNuvidEngine(m.appConfig)
 	m.engines["tnaflix"] = newTNAFlixEngine(m.appConfig)
 	m.engines["drtuber"] = newDrTuberEngine(m.appConfig)
-	m.engines["empflix"] = newEMPFlixEngine(m.appConfig)
+	// empflix removed - site returns HTTP 403 Cloudflare challenge (no bypass)
 	m.engines["hellporno"] = newHellPornoEngine(m.appConfig)
 	m.engines["alphaporno"] = newAlphaPornoEngine(m.appConfig)
 	m.engines["pornflip"] = newPornFlipEngine(m.appConfig)
-	m.engines["gotporn"] = newGotPornEngine(m.appConfig)
+	// gotporn removed - site returns HTTP 403 Cloudflare challenge (no bypass)
 	m.engines["xxxymovies"] = newXXXYMoviesEngine(m.appConfig)
 	m.engines["lovehomeporn"] = newLoveHomePornEngine(m.appConfig)
 
 	// Tier 4 - Additional yt-dlp supported sites
-	m.engines["pornerbros"] = newPornerBrosEngine(m.appConfig)
+	// pornerbros removed - site returns HTTP 403 Cloudflare challenge (no bypass)
 	m.engines["nonktube"] = newNonkTubeEngine(m.appConfig)
 	m.engines["nubilesporn"] = newNubilesPornEngine(m.appConfig)
 	m.engines["pornbox"] = newPornboxEngine(m.appConfig)
 	m.engines["porntop"] = newPornTopEngine(m.appConfig)
 	// pornotube removed - site returns HTTP 410 Gone (dead)
 	// vporn removed - site inaccessible (geo-blocked/Cloudflare)
-	m.engines["pornhd"] = newPornHDEngine(m.appConfig)
+	// pornhd removed - site returns HTTP 403 Cloudflare challenge (no bypass)
 	m.engines["xbabe"] = newXBabeEngine(m.appConfig)
 	m.engines["pornone"] = newPornOneEngine(m.appConfig)
 	m.engines["pornhat"] = newPornHatEngine(m.appConfig)
@@ -115,7 +115,7 @@ func (m *EngineManager) InitializeEngines() {
 
 	// Tier 5 - New engines
 	m.engines["anyporn"] = newAnyPornEngine(m.appConfig)
-	m.engines["tubegalore"] = newTubeGaloreEngine(m.appConfig)
+	// tubegalore removed - site returns HTTP 403 Cloudflare challenge (no bypass)
 	// motherless removed - site uses aggressive TLS fingerprinting that blocks automated requests
 
 	// Tier 6 - Additional engines

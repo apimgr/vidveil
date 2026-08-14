@@ -22,7 +22,7 @@ https://x.scour.li
 | Feature | Description |
 |---------|-------------|
 | **Privacy First** | No tracking, no logging, no analytics |
-| **43 Engines** | Aggregates results from 43 adult video sites |
+| **33 Engines** | Aggregates results from 33 adult video sites |
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
 | **SSE Streaming** | Real-time result streaming as engines respond |
@@ -247,15 +247,14 @@ Use bang shortcuts to search specific engines:
 | Engine | Bang | Preview |
 |--------|------|---------|
 | YouPorn | `!yp` | ✓ |
-| PornMD | `!pmd` | |
 
 #### Tier 3 - Additional Sites
 
-3Movs (`!3m`), 4Tube (`!4t`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), EMPFlix (`!emp`), Fux (`!fux`), GotPorn (`!gp`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Motherless (`!ml`), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TubeGalore (`!tg`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
+3Movs (`!3m`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Motherless (`!ml`), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
 
 #### Tier 4 - Specialty Sites
 
-FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox (`!pbox`), PornerBros (`!pb`), PornHat (`!phat`), PornHD (`!phd`), PornOne (`!p1`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), VJAV (`!vj`), XBabe (`!xb`)
+FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox (`!pbox`), PornHat (`!phat`), PornOne (`!p1`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), VJAV (`!vj`), XBabe (`!xb`)
 
 ### Admin Panel
 

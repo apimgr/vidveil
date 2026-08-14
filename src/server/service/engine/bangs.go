@@ -25,13 +25,14 @@ var BangMapping = map[string]string{
 	"eporner": "eporner",
 	"yp":      "youporn",
 	"youporn": "youporn",
-	"pmd":     "pornmd",
-	"pornmd":  "pornmd",
+	// pmd/pornmd intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
 
 	// Tier 3 - Additional Sites
-	"4t":           "4tube",
-	"4tube":        "4tube",
-	"fux":          "fux",
+	// 4t/4tube intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
+	// fux intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
 	"pt":           "porntube",
 	"porntube":     "porntube",
 	"yj":           "youjizz",
@@ -46,24 +47,24 @@ var BangMapping = map[string]string{
 	"tnaflix":      "tnaflix",
 	"dt":           "drtuber",
 	"drtuber":      "drtuber",
-	"emp":          "empflix",
-	"empflix":      "empflix",
+	// emp/empflix intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
 	"hp":           "hellporno",
 	"hellporno":    "hellporno",
 	"ap":           "alphaporno",
 	"alphaporno":   "alphaporno",
 	"pf":           "pornflip",
 	"pornflip":     "pornflip",
-	"gp":           "gotporn",
-	"gotporn":      "gotporn",
+	// gp/gotporn intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
 	"xxxy":         "xxxymovies",
 	"xxxymovies":   "xxxymovies",
 	"lhp":          "lovehomeporn",
 	"lovehomeporn": "lovehomeporn",
 
 	// Tier 4 - Additional yt-dlp supported sites
-	"pb":          "pornerbros",
-	"pornerbros":  "pornerbros",
+	// pb/pornerbros intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
 	"nk":          "nonktube",
 	"nonktube":    "nonktube",
 	"np":          "nubilesporn",
@@ -72,8 +73,8 @@ var BangMapping = map[string]string{
 	"pornbox":     "pornbox",
 	"ptop":        "porntop",
 	"porntop":     "porntop",
-	"phd":         "pornhd",
-	"pornhd":      "pornhd",
+	// phd/pornhd intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
 	"xb":          "xbabe",
 	"xbabe":       "xbabe",
 	"p1":          "pornone",
@@ -94,8 +95,8 @@ var BangMapping = map[string]string{
 	// Tier 5 - New engines
 	"any":        "anyporn",
 	"anyporn":    "anyporn",
-	"tg":         "tubegalore",
-	"tubegalore": "tubegalore",
+	// tg/tubegalore intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
 	// motherless intentionally has no bang - engine is implemented
 	// (motherless.go) but not registered in manager.go (aggressive TLS
 	// fingerprinting blocks automated requests), so a !motherless/!ml bang
@@ -258,9 +259,6 @@ var EngineDisplayNames = map[string]string{
 	"xhamster":     "xHamster",
 	"eporner":      "Eporner",
 	"youporn":      "YouPorn",
-	"pornmd":       "PornMD",
-	"4tube":        "4Tube",
-	"fux":          "Fux",
 	"porntube":     "PornTube",
 	"youjizz":      "YouJizz",
 	"sunporno":     "SunPorno",
@@ -268,19 +266,15 @@ var EngineDisplayNames = map[string]string{
 	"nuvid":        "Nuvid",
 	"tnaflix":      "TNAFlix",
 	"drtuber":      "DrTuber",
-	"empflix":      "EMPFlix",
 	"hellporno":    "HellPorno",
 	"alphaporno":   "AlphaPorno",
 	"pornflip":     "PornFlip",
-	"gotporn":      "GotPorn",
 	"xxxymovies":   "XXXYMovies",
 	"lovehomeporn": "LoveHomePorn",
-	"pornerbros":   "PornerBros",
 	"nonktube":     "NonkTube",
 	"nubilesporn":  "NubilesPorn",
 	"pornbox":      "PornBox",
 	"porntop":      "PornTop",
-	"pornhd":       "PornHD",
 	"xbabe":        "XBabe",
 	"pornone":      "PornOne",
 	"pornhat":      "PornHat",
@@ -290,7 +284,6 @@ var EngineDisplayNames = map[string]string{
 	"flyflv":       "FlyFLV",
 	"tube8":        "Tube8",
 	"anyporn":      "AnyPorn",
-	"tubegalore":   "TubeGalore",
 	"3movs":        "3Movs",
 }
 

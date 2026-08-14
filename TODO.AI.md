@@ -1,5 +1,17 @@
 # TODO.AI.md
 
+Findings from Cloudflare-engine-removal pass (2026-08-14, found incidentally
+while removing 8 blocked engines).
+
+- `README.md` "Tier 3 - Additional Sites" lists `Motherless (\`!ml\`)`, but
+  `src/server/service/engine/bangs.go` has no `ml`/`motherless` bang entry
+  (engine is implemented in `motherless.go` but not registered in
+  `manager.go` due to aggressive TLS fingerprinting blocking automated
+  requests, per the existing comment there). README is stale for this
+  engine independent of the Cloudflare-blocked-engine removal. Needs
+  README's Tier 3 list corrected to drop `Motherless (\`!ml\`)` or note it
+  has no bang shortcut.
+
 Findings from the full Phase 2 beta-test pass (commit 0d33f978f556), logged for
 triage/fix. Remove each item individually once resolved and committed.
 

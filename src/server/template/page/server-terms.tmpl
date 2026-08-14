@@ -5,42 +5,42 @@
 {{define "content"}}
 <div class="content">
     <div class="prose">
-        <h1>Terms of Service</h1>
-        <p class="last-updated">Last updated: {{.BuildDateTime}}</p>
+        <h1>{{ t "terms.title" }}</h1>
+        <p class="last-updated">{{ tf "terms.last_updated" .BuildDateTime }}</p>
 
-        <h2>Acceptance</h2>
-        <p>By accessing or using {{.AppName}}, you agree to these Terms of Service. If you do not agree, do not use the service. {{.AppName}} is a stateless, privacy-first meta search engine with no user accounts; using it constitutes acceptance of these terms.</p>
+        <h2>{{ t "terms.acceptance" }}</h2>
+        <p>{{ tf "terms.acceptance_body" .AppName }}</p>
 
-        <h2>Eligibility</h2>
-        <p>{{.AppName}} aggregates results from adult video engines. You must be of legal age in your jurisdiction to view adult content and must confirm your age when prompted. You are solely responsible for ensuring that accessing such content is lawful where you are.</p>
+        <h2>{{ t "terms.eligibility" }}</h2>
+        <p>{{ tf "terms.eligibility_body" .AppName }}</p>
 
-        <h2>Acceptable Use</h2>
-        <p>You agree to use {{.AppName}} only for lawful purposes. You must not:</p>
+        <h2>{{ t "terms.acceptable_use" }}</h2>
+        <p>{{ tf "terms.acceptable_use_intro" .AppName }}</p>
         <ul>
-            <li>Use the service to search for, access, or distribute content that is illegal in your jurisdiction</li>
-            <li>Attempt to circumvent age verification or geographic content restrictions where they apply by law</li>
-            <li>Overload, scrape at abusive rates, or otherwise disrupt the service or its upstream engines</li>
-            <li>Probe, scan, or attempt to breach the security of the service or its infrastructure</li>
-            <li>Use automated systems in a way that violates the rate limits or the terms of the upstream engines</li>
+            <li>{{ t "terms.rule_illegal_content" }}</li>
+            <li>{{ t "terms.rule_circumvent" }}</li>
+            <li>{{ t "terms.rule_overload" }}</li>
+            <li>{{ t "terms.rule_probe" }}</li>
+            <li>{{ t "terms.rule_automation" }}</li>
         </ul>
 
-        <h2>Third-Party Content</h2>
-        <p>{{.AppName}} does not host, store, or control any of the video content it returns. All results come from independent third-party engines, each governed by its own terms and policies. {{.AppName}} makes no representation about the legality, accuracy, or availability of any third-party result, and forwarding your query to those engines is the service you requested.</p>
+        <h2>{{ t "terms.third_party" }}</h2>
+        <p>{{ tf "terms.third_party_body" .AppName }}</p>
 
-        <h2>No Warranty</h2>
-        <p>The service is provided "as is" and "as available", without warranties of any kind, express or implied, including fitness for a particular purpose, availability, or accuracy of results. The operator does not guarantee uninterrupted or error-free operation.</p>
+        <h2>{{ t "terms.no_warranty" }}</h2>
+        <p>{{ t "terms.no_warranty_body" }}</p>
 
-        <h2>Limitation of Liability</h2>
-        <p>To the maximum extent permitted by applicable law, the operator of {{.AppName}} shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss arising from your use of, or inability to use, the service or any third-party content reached through it.</p>
+        <h2>{{ t "terms.liability" }}</h2>
+        <p>{{ tf "terms.liability_body" .AppName }}</p>
 
-        <h2>Changes to These Terms</h2>
-        <p>These terms may be updated at any time. The "Last updated" date above reflects the current version. Continued use of the service after changes take effect constitutes acceptance of the revised terms.</p>
+        <h2>{{ t "terms.changes" }}</h2>
+        <p>{{ t "terms.changes_body" }}</p>
 
-        <h2>Governing Law</h2>
-        <p>These terms are governed by the laws of the jurisdiction in which the operator of this instance is established, without regard to conflict-of-law provisions. Where the operator has not specified a jurisdiction, any dispute is subject to the laws applicable at the operator's principal place of business.</p>
+        <h2>{{ t "terms.governing_law" }}</h2>
+        <p>{{ t "terms.governing_law_body" }}</p>
 
-        <h2>Questions?</h2>
-        <p>If you have questions about these terms, please <a href="/server/contact">contact us</a>.</p>
+        <h2>{{ t "terms.questions" }}</h2>
+        <p>{{ t "terms.questions_prefix" }} <a href="/server/contact">{{ t "terms.contact_link" }}</a>.</p>
     </div>
 </div>
 {{end}}

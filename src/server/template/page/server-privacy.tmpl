@@ -5,64 +5,64 @@
 {{define "content"}}
 <div class="content">
     <div class="prose">
-        <h1>Privacy Policy</h1>
-        <p class="last-updated">Last updated: {{.BuildDateTime}}</p>
+        <h1>{{ t "privacy.title" }}</h1>
+        <p class="last-updated">{{ tf "privacy.last_updated" .BuildDateTime }}</p>
 
-        <h2>Summary</h2>
-        <p>{{.AppName}} is a stateless, privacy-first meta search engine. It has <strong>no user accounts</strong> and keeps <strong>no record of who searched for what</strong>. There is nothing to log in to, nothing to profile, and nothing to sell — that absence of records is the product itself.</p>
+        <h2>{{ t "privacy.summary" }}</h2>
+        <p>{{ tf "privacy.summary_body" .AppName }}</p>
 
-        <h2>What We Don't Collect</h2>
+        <h2>{{ t "privacy.not_collect" }}</h2>
         <ul>
-            <li>We do not create user accounts — the service is completely anonymous</li>
-            <li>We do not track, log, or analyze your searches</li>
-            <li>We do not store your IP address alongside your queries</li>
-            <li>We do not use tracking or analytics cookies</li>
-            <li>We do not fingerprint your browser</li>
-            <li>We do not sell, share, or transfer any personal data to third parties</li>
-            <li>We do not build user profiles or behavioral records</li>
+            <li>{{ t "privacy.not_collect_accounts" }}</li>
+            <li>{{ t "privacy.not_collect_track" }}</li>
+            <li>{{ t "privacy.not_collect_ip" }}</li>
+            <li>{{ t "privacy.not_collect_cookies" }}</li>
+            <li>{{ t "privacy.not_collect_fingerprint" }}</li>
+            <li>{{ t "privacy.not_collect_sell" }}</li>
+            <li>{{ t "privacy.not_collect_profiles" }}</li>
         </ul>
 
-        <h2>How Searches Are Handled</h2>
-        <p>When you search, {{.AppName}} forwards your query to the enabled engines in real time and streams their results back to you. Queries are processed in transit only and are never written to a database or search log. Results are not cached per user; only thumbnail images may be cached briefly on the server to reduce repeated upstream fetches.</p>
+        <h2>{{ t "privacy.how_handled" }}</h2>
+        <p>{{ tf "privacy.how_handled_body" .AppName }}</p>
 
-        <h2>Data Stored in Your Browser Only</h2>
-        <p>Your preferences and search history are stored entirely in your browser's local storage and are <strong>never sent to or stored on our server</strong>:</p>
+        <h2>{{ t "privacy.browser_only" }}</h2>
+        <p>{{ t "privacy.browser_only_intro" }}</p>
         <ul>
-            <li><code>vidveil-theme</code> — your theme preference (auto/dark/light)</li>
-            <li><code>vidveil_prefs</code> — your complete preferences object</li>
-            <li><code>vidveil_history</code> — your local search history</li>
+            <li><code>vidveil-theme</code> — {{ t "privacy.storage_theme" }}</li>
+            <li><code>vidveil_prefs</code> — {{ t "privacy.storage_prefs" }}</li>
+            <li><code>vidveil_history</code> — {{ t "privacy.storage_history" }}</li>
         </ul>
-        <p>You can export, import, or clear this data at any time from the <a href="/preferences">Preferences</a> page. Clearing your browser storage erases it completely.</p>
+        <p>{{ t "privacy.browser_only_manage" }} <a href="/preferences">{{ t "privacy.preferences_link" }}</a> {{ t "privacy.browser_only_erase" }}</p>
 
-        <h2>Favorites</h2>
-        <p>Favorites are stored server-side so they work without JavaScript, but no account is required. An anonymous, randomly generated <code>visitor_id</code> cookie identifies your favorites list — it carries no personal information and cannot be linked to your identity. You can export, import, or clear your favorites at any time from the <a href="/favorites">Favorites</a> page; clearing the cookie or your favorites list erases this data completely.</p>
+        <h2>{{ t "privacy.favorites" }}</h2>
+        <p>{{ t "privacy.favorites_body_1" }} <a href="/favorites">{{ t "privacy.favorites_link" }}</a> {{ t "privacy.favorites_body_2" }}</p>
 
-        <h2>Cookies</h2>
-        <p>{{.AppName}} uses only strictly necessary cookies — never for tracking:</p>
+        <h2>{{ t "privacy.cookies" }}</h2>
+        <p>{{ tf "privacy.cookies_intro" .AppName }}</p>
         <ul>
-            <li><strong>Age verification</strong> — records that you confirmed you are of legal age (required by law)</li>
-            <li><strong>Content restriction acknowledgment</strong> — remembers a dismissed regional warning for 30 days (soft-block mode only)</li>
-            <li><strong>Geo-forwarding opt-in</strong> (<code>forward_ip</code>) — set only if you explicitly opt in to geo-targeted results, and only if the operator has enabled that feature</li>
-            <li><strong>Visitor ID</strong> (<code>visitor_id</code>) — an opaque, anonymous identifier used only to associate your favorites list with your browser</li>
+            <li><strong>{{ t "privacy.cookie_age" }}</strong> — {{ t "privacy.cookie_age_desc" }}</li>
+            <li><strong>{{ t "privacy.cookie_content_ack" }}</strong> — {{ t "privacy.cookie_content_ack_desc" }}</li>
+            <li><strong>{{ t "privacy.cookie_geo" }}</strong> (<code>forward_ip</code>) — {{ t "privacy.cookie_geo_desc" }}</li>
+            <li><strong>{{ t "privacy.cookie_visitor" }}</strong> (<code>visitor_id</code>) — {{ t "privacy.cookie_visitor_desc" }}</li>
         </ul>
 
-        <h2>Thumbnail &amp; Preview Proxy</h2>
-        <p>All thumbnails, and video previews where supported, are proxied through this server. This prevents the source sites and their CDNs from seeing your IP address when media loads — a core privacy guarantee that cannot be disabled by end users.</p>
+        <h2>{{ t "privacy.thumbnail_proxy" }}</h2>
+        <p>{{ t "privacy.thumbnail_proxy_body" }}</p>
 
-        <h2>Tor Access</h2>
-        <p>{{if .TorOnionAddr}}This server is reachable as a Tor hidden service at <code>{{.TorOnionAddr}}</code> for maximum anonymity.{{else}}When the operator has Tor installed, {{.AppName}} automatically exposes a Tor hidden service (<code>.onion</code>) for maximum anonymity.{{end}} Geographic content restrictions do not apply to Tor users by default.</p>
+        <h2>{{ t "privacy.tor_access" }}</h2>
+        <p>{{if .TorOnionAddr}}{{ tf "privacy.tor_access_reachable" .TorOnionAddr }}{{else}}{{ tf "privacy.tor_access_auto" .AppName }}{{end}} {{ t "privacy.tor_access_geo" }}</p>
 
-        <h2>Geographic Content Restriction</h2>
-        <p>Depending on the operator's configuration and your region, you may see a warning or be blocked from certain content to comply with local adult-content laws. Region is determined from a public GeoIP dataset at request time; non-geolocatable addresses (VPN/Tor) are not restricted. This check is not logged against you.</p>
+        <h2>{{ t "privacy.geo_restriction" }}</h2>
+        <p>{{ t "privacy.geo_restriction_body" }}</p>
 
-        <h2>Server Logs</h2>
-        <p>By default, {{.AppName}} does not log search queries. An operator may enable operational access logs for debugging, but query bodies are redacted from structured logs and rate-limit responses never echo the query.</p>
+        <h2>{{ t "privacy.server_logs" }}</h2>
+        <p>{{ tf "privacy.server_logs_body" .AppName }}</p>
 
-        <h2>Third Parties</h2>
-        <p>{{.AppName}} sends your query to the third-party video engines you search — that is the service you asked for. It does not share your data with any other third party, and it uses no third-party analytics, advertising, or tracking services.</p>
+        <h2>{{ t "privacy.third_parties" }}</h2>
+        <p>{{ tf "privacy.third_parties_body" .AppName }}</p>
 
-        <h2>Questions?</h2>
-        <p>If you have questions about our privacy practices, please <a href="/server/contact">contact us</a>.</p>
+        <h2>{{ t "privacy.questions" }}</h2>
+        <p>{{ t "privacy.questions_prefix" }} <a href="/server/contact">{{ t "privacy.contact_link" }}</a>.</p>
     </div>
 </div>
 {{end}}

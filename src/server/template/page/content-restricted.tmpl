@@ -13,28 +13,27 @@
     <div class="age-gate">
         <div class="age-gate-box">
             <div class="warning-icon">&#127760;</div>
-            <h1>Content Notice</h1>
+            <h1>{{ t "content_restricted.title" }}</h1>
             {{if .Region}}
-            <p class="region-notice">Detected location: <strong>{{.Region}}</strong></p>
+            <p class="region-notice">{{ t "content_blocked.region_notice" }} <strong>{{.Region}}</strong></p>
             {{end}}
             <p>{{.Message}}</p>
-            <p>Some jurisdictions have laws that may restrict or require age verification for adult content. By proceeding, you acknowledge:</p>
+            <p>{{ t "content_restricted.acknowledge_intro" }}</p>
             <ul class="legal-list">
-                <li>You are aware of and comply with the laws in your jurisdiction</li>
-                <li>You are of legal age to view adult content</li>
-                <li>You accept responsibility for accessing this content</li>
+                <li>{{ t "content_restricted.ack_1" }}</li>
+                <li>{{ t "content_restricted.ack_2" }}</li>
+                <li>{{ t "content_restricted.ack_3" }}</li>
             </ul>
             <div class="age-buttons">
                 <form method="POST" action="/content-restricted" class="d-inline">
                     <input type="hidden" name="redirect" value="{{.Redirect}}">
                     {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-                    <button type="submit" class="btn-yes">I Understand &amp; Proceed</button>
+                    <button type="submit" class="btn-yes">{{ t "content_restricted.proceed" }}</button>
                 </form>
-                <button type="button" class="btn-no" data-action="leave-site">Exit</button>
+                <button type="button" class="btn-no" data-action="leave-site">{{ t "age_verify.exit" }}</button>
             </div>
             <p class="legal">
-                This notice is provided for informational purposes. VidVeil does not provide legal advice.
-                Please consult local laws regarding adult content access in your region.
+                {{ t "content_restricted.legal" }}
             </p>
         </div>
     </div>

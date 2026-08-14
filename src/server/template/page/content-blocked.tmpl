@@ -13,18 +13,17 @@
     <div class="age-gate">
         <div class="age-gate-box blocked">
             <div class="warning-icon">&#128683;</div>
-            <h1>Access Restricted</h1>
+            <h1>{{ t "content_blocked.title" }}</h1>
             {{if .Region}}
-            <p class="region-notice">Detected location: <strong>{{.Region}}</strong></p>
+            <p class="region-notice">{{ t "content_blocked.region_notice" }} <strong>{{.Region}}</strong></p>
             {{end}}
             <p>{{.Message}}</p>
-            <p>Access to this service is not available from your current location due to regional restrictions or legal requirements.</p>
+            <p>{{ t "content_blocked.description" }}</p>
             <div class="age-buttons">
-                <button type="button" class="btn-no" data-action="leave-site">Leave Site</button>
+                <button type="button" class="btn-no" data-action="leave-site">{{ t "content_blocked.leave_site" }}</button>
             </div>
             <p class="legal">
-                If you believe this is an error, you may be using a VPN or proxy that shows an incorrect location.
-                This service respects regional content restrictions.
+                {{ t "content_blocked.legal" }}
             </p>
         </div>
     </div>

@@ -4,33 +4,33 @@
     {{/* Onion address - shown only if Tor is enabled and running (AI.md PART 16) */}}
     {{ if and .TorEnabled .TorRunning }}
     <p class="footer-onion">
-        <a href="/server/help#tor-access" aria-label="Tor Support">&#129365;</a>
+        <a href="/server/help#tor-access" aria-label="{{ t "footer.tor_support_label" }}">&#129365;</a>
         <code class="onion-address">{{.TorAddress}}</code>
-        <button type="button" class="copy-btn" data-copy="{{.TorAddress}}" aria-live="polite" aria-label="Copy onion address">&#128203;</button>
+        <button type="button" class="copy-btn" data-copy="{{.TorAddress}}" aria-live="polite" aria-label="{{ t "footer.copy_onion_label" }}">&#128203;</button>
     </p>
     {{ end }}
 
     {{/* Standard page links per spec - /server/* prefix per AI.md PART 14 Route Scopes */}}
     <p>
-        <a href="/server/about">About</a>
+        <a href="/server/about">{{ t "nav.about" }}</a>
         <span>&#8226;</span>
-        <a href="/server/privacy">Privacy</a>
+        <a href="/server/privacy">{{ t "nav.privacy" }}</a>
         <span>&#8226;</span>
-        <a href="/server/contact">Contact</a>
+        <a href="/server/contact">{{ t "nav.contact" }}</a>
         <span>&#8226;</span>
-        <a href="/server/help">Help</a>
+        <a href="/server/help">{{ t "nav.help" }}</a>
     </p>
 
     {{/* Application branding - {project_version} shown with no "v" prefix per AI.md version rules */}}
     <p>
-        <a href="https://github.com/apimgr/vidveil" target="_blank">Made with</a> &#10084;&#65039;
+        <a href="https://github.com/apimgr/vidveil" target="_blank">{{ t "footer.made_with" }}</a> &#10084;&#65039;
         <span>&#8226;</span>
         <span>{{.Version}}</span>
     </p>
 
     {{/* Build stamp */}}
     <p>
-        <a href="/server/healthz">Last update: {{.BuildDateTime}}</a>
+        <a href="/server/healthz">{{ tf "footer.last_update" .BuildDateTime }}</a>
     </p>
 </footer>
 
@@ -41,12 +41,12 @@
 <div id="cookie-consent" class="cookie-banner" data-sold="false" hidden>
     <div class="cookie-banner-content">
         <span class="cookie-message">
-            We use cookies for essential site functionality and, with your consent, for preference-related features. Preference choices are kept in your browser using localStorage and a small theme cookie so pages can render correctly. This data is never sold.
-            <a href="/server/privacy" class="policy-link">Privacy Policy</a>
+            {{ t "footer.cookie_message" }}
+            <a href="/server/privacy" class="policy-link">{{ t "footer.cookie_policy_link" }}</a>
         </span>
         <div class="cookie-buttons">
-            <button type="button" class="btn-decline" data-action="decline-cookies">Decline</button>
-            <button type="button" class="btn-accept" data-action="accept-cookies">Accept</button>
+            <button type="button" class="btn-decline" data-action="decline-cookies">{{ t "footer.cookie_decline" }}</button>
+            <button type="button" class="btn-accept" data-action="accept-cookies">{{ t "footer.cookie_accept" }}</button>
         </div>
     </div>
 </div>

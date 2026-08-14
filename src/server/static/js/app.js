@@ -3386,7 +3386,7 @@ document.addEventListener('error', function(e) {
         window.exportHistory = function() {
             var history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
             downloadJSON(history, 'vidveil-history.json');
-            showToast('History exported', 'success');
+            showToast(i18n.historyExported || 'History exported', 'success');
         };
 
         window.importHistory = function(file) {
@@ -3397,21 +3397,21 @@ document.addEventListener('error', function(e) {
                     var data = JSON.parse(e.target.result);
                     if (Array.isArray(data)) {
                         localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
-                        showToast('History imported (' + data.length + ' items)', 'success');
+                        showToast((i18n.historyImported || '%d items imported').replace('%d', data.length), 'success');
                     } else {
-                        showToast('Invalid history file', 'error');
+                        showToast(i18n.historyInvalidFile || 'Invalid history file', 'error');
                     }
                 } catch (err) {
-                    showToast('Failed to parse file', 'error');
+                    showToast(i18n.historyParseFailed || 'Failed to parse file', 'error');
                 }
             };
             reader.readAsText(file);
         };
 
         window.clearHistory = function() {
-            showConfirm('Clear all search history?', function () {
+            showConfirm(i18n.historyClearConfirm || 'Clear all search history?', function () {
                 localStorage.removeItem(HISTORY_KEY);
-                showToast('History cleared', 'info');
+                showToast(i18n.historyCleared || 'History cleared', 'info');
             });
         };
 

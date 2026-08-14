@@ -95,28 +95,3 @@ Scheduler status. Code and the 13 rule-file mirrors predate it. Gaps:
   a `.video-card-fav-btn`/`.video-card-fav-btn--active` rule (hover/focus
   states, WCAG AA contrast, 44x44px touch target per AI.md PART 16/28).
 
-- `savePreferences()`'s history export/import/clear handlers in
-  `src/server/static/js/app.js` pass hardcoded English strings straight into
-  `showToast()` — `'History exported'`, `'History imported (' + data.length +
-  ' items)'`, `'Invalid history file'`, `'Failed to parse file'`, `'History
-  cleared'` — instead of translation keys, violating the "no hardcoded
-  user-facing strings" rule (AI.md PART 30 / testing-rules.md). Pre-existing;
-  found incidentally while fixing the "clicking save preferences does
-  nothing" bug (which repointed these same calls from a broken local
-  `showToastLocal()` to the standard `showToast()`, without touching the
-  string arguments). Needs matching `history.*` translation keys added to
-  `src/common/i18n/locales/*.json` (all 7 languages) and these 5 call sites
-  converted to use them via the existing `getSearchI18n()`-style data-island
-  pattern.
-
-- `src/server/template/nojs/preferences.tmpl` hardcodes English UI strings
-  ("Theme:", "Search Settings", "Results per page:", "Open links in new
-  tab", "Privacy", "Proxy all thumbnails (always enabled for privacy)",
-  "Save Preferences", "Reset", etc.) instead of using i18n translation keys
-  via `{{ t "key" }}` — violates the "no hardcoded user-facing strings"
-  rule (AI.md PART 30 / testing-rules.md). The JS-enhanced counterpart
-  `src/server/template/page/preferences.tmpl` does this correctly
-  (`{{ t "prefs.title" }}` etc.). Found incidentally while fixing the
-  preferences no-JS/JS back-navigation bug. Needs matching `prefs.*`
-  translation keys added to `src/common/i18n/locales/*.json` (all 7
-  languages) and the no-JS template converted to use them.

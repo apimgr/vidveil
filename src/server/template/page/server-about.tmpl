@@ -5,33 +5,33 @@
 {{define "content"}}
 <div class="content">
     <div class="prose">
-        <h1>About {{.AppName}}</h1>
+        <h1>{{ tf "about.page_title" .AppName }}</h1>
         {{if .AppTagline}}<p class="tagline">{{.AppTagline}}</p>{{end}}
-        <p>{{.AppName}} is a privacy-respecting meta search engine for adult video content. It aggregates results from 42 video sites in real time without tracking, logging, or analytics — searches are stateless and nothing about who searched for what is ever stored.</p>
+        <p>{{ tf "about.intro" .AppName }}</p>
 
-        <h2>Features</h2>
+        <h2>{{ t "about.features" }}</h2>
         <ul>
-            <li><strong>Privacy-first search</strong> — no tracking, logging, or analytics of any kind</li>
-            <li><strong>Multi-engine aggregation</strong> — 42 engines with bang shortcuts (<code>!ph</code>, <code>!xv</code>, …) for targeted searches</li>
-            <li><strong>Real-time streaming</strong> — results stream in via SSE as each engine responds</li>
-            <li><strong>Thumbnail proxy</strong> — all thumbnails are proxied through this server so source sites never see your IP</li>
-            <li><strong>Video preview</strong> — hover to preview on desktop, swipe on mobile, where the engine supports it</li>
-            <li><strong>Client-side preferences</strong> — settings, favorites, and history live in your browser only (localStorage), never on the server</li>
-            <li><strong>Tor support</strong> — built-in Tor hidden service for maximum anonymity</li>
-            <li><strong>Geographic content restriction</strong> — operator-configurable regional warnings and blocks</li>
-            <li><strong>Static binary</strong> — a single self-contained binary with all assets embedded</li>
+            <li><strong>{{ t "about.feature_privacy_label" }}</strong> — {{ t "about.feature_privacy_desc" }}</li>
+            <li><strong>{{ t "about.feature_multi_engine" }}</strong> — {{ t "about.feature_multi_engine_desc" }}</li>
+            <li><strong>{{ t "about.feature_streaming" }}</strong> — {{ t "about.feature_streaming_desc" }}</li>
+            <li><strong>{{ t "about.feature_thumbnail_proxy" }}</strong> — {{ t "about.feature_thumbnail_proxy_desc" }}</li>
+            <li><strong>{{ t "about.feature_preview" }}</strong> — {{ t "about.feature_preview_desc" }}</li>
+            <li><strong>{{ t "about.feature_client_prefs" }}</strong> — {{ t "about.feature_client_prefs_desc" }}</li>
+            <li><strong>{{ t "about.feature_tor_label" }}</strong> — {{ t "about.feature_tor_desc" }}</li>
+            <li><strong>{{ t "about.feature_geo" }}</strong> — {{ t "about.feature_geo_desc" }}</li>
+            <li><strong>{{ t "about.feature_binary" }}</strong> — {{ t "about.feature_binary_desc" }}</li>
         </ul>
 
-        <h2>Version Information</h2>
-        <p><strong>Version:</strong> <code>{{.Version}}</code></p>
-        <p><strong>Build:</strong> {{.BuildDateTime}}</p>
+        <h2>{{ t "about.version_info" }}</h2>
+        <p><strong>{{ t "about.version_label" }}:</strong> <code>{{.Version}}</code></p>
+        <p><strong>{{ t "about.build_label" }}:</strong> {{.BuildDateTime}}</p>
 
-        <h2>Links</h2>
+        <h2>{{ t "about.links" }}</h2>
         <ul>
-            <li><a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">Source code on GitHub</a> — open source, self-hostable</li>
-            <li><a href="https://x.scour.li" target="_blank" rel="noopener">Official instance</a></li>
-            <li><a href="/server/help">Help &amp; API documentation</a></li>
-            <li><a href="/server/privacy">Privacy policy</a></li>
+            <li><a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">{{ t "about.link_source" }}</a> — {{ t "about.link_source_desc" }}</li>
+            <li><a href="https://x.scour.li" target="_blank" rel="noopener">{{ t "about.link_official" }}</a></li>
+            <li><a href="/server/help">{{ t "about.link_help" }}</a></li>
+            <li><a href="/server/privacy">{{ t "about.link_privacy" }}</a></li>
         </ul>
     </div>
 </div>

@@ -7,57 +7,57 @@
 <body>
     {{template "public/header" .}}
     <main class="preferences">
-        <h1>Preferences</h1>
-        <p><em>Note: Preferences are stored in your browser's cookies and local storage. No server-side tracking.</em></p>
-        
+        <h1>{{ t "prefs.title" }}</h1>
+        <p><em>{{ t "prefs.storage_note" }}</em></p>
+
         <form method="post" action="/preferences/save">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             {{if .ReturnTo}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">{{end}}
             <section>
-                <h2>Appearance</h2>
+                <h2>{{ t "prefs.appearance" }}</h2>
                 <div class="form-group">
-                    <label for="theme">Theme:</label>
+                    <label for="theme">{{ t "prefs.theme" }}:</label>
                     <select id="theme" name="theme">
-                        <option value="auto" {{if eq .Theme "auto"}}selected{{end}}>Auto (System)</option>
-                        <option value="dark" {{if eq .Theme "dark"}}selected{{end}}>Dark (Dracula)</option>
-                        <option value="light" {{if eq .Theme "light"}}selected{{end}}>Light</option>
+                        <option value="auto" {{if eq .Theme "auto"}}selected{{end}}>{{ t "prefs.theme.auto" }}</option>
+                        <option value="dark" {{if eq .Theme "dark"}}selected{{end}}>{{ t "prefs.theme.dark" }}</option>
+                        <option value="light" {{if eq .Theme "light"}}selected{{end}}>{{ t "prefs.theme.light" }}</option>
                     </select>
                 </div>
             </section>
 
             <section>
-                <h2>Search Settings</h2>
+                <h2>{{ t "prefs.search_settings" }}</h2>
                 <div class="form-group">
-                    <label for="results-per-page">Results per page:</label>
+                    <label for="results-per-page">{{ t "prefs.results_page" }}:</label>
                     <select id="results-per-page" name="resultsPerPage">
                         <option value="20" {{if eq .ResultsPerPage "20"}}selected{{end}}>20</option>
                         <option value="50" {{if eq .ResultsPerPage "50"}}selected{{end}}>50</option>
                         <option value="100" {{if eq .ResultsPerPage "100"}}selected{{end}}>100</option>
-                        <option value="0" {{if eq .ResultsPerPage "0"}}selected{{end}}>Infinite scroll</option>
+                        <option value="0" {{if eq .ResultsPerPage "0"}}selected{{end}}>{{ t "prefs.infinite_scroll" }}</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label for="open-new-tab">
                         <input type="checkbox" id="open-new-tab" name="openNewTab" {{if .OpenNewTab}}checked{{end}}>
-                        Open links in new tab
+                        {{ t "prefs.open_new_tab" }}
                     </label>
                 </div>
             </section>
 
             <section>
-                <h2>Privacy</h2>
+                <h2>{{ t "prefs.privacy" }}</h2>
                 <div class="form-group">
                     <label for="proxy-thumbnails">
                         <input type="checkbox" id="proxy-thumbnails" name="proxyThumbnails" checked disabled>
-                        Proxy all thumbnails (always enabled for privacy)
+                        {{ t "prefs.proxy_thumbnails_locked" }}
                     </label>
                 </div>
             </section>
 
             <div class="form-actions">
-                <button type="submit" class="btn-primary">Save Preferences</button>
-                <button type="reset" class="btn-secondary">Reset</button>
+                <button type="submit" class="btn-primary">{{ t "prefs.save" }}</button>
+                <button type="reset" class="btn-secondary">{{ t "prefs.reset" }}</button>
             </div>
         </form>
     </main>

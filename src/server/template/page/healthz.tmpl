@@ -16,7 +16,7 @@
             <p class="project-description">{{.ProjectDescription}}</p>
         </header>
 
-        <h2>🏥 System Health</h2>
+        <h2>🏥 {{ t "healthz.system_health" }}</h2>
 
         <!-- Status Banner per AI.md PART 13 -->
         <div class="status-banner status-{{.StatusClass}}">
@@ -26,50 +26,50 @@
 
         <!-- Version & Build Info per AI.md PART 13 -->
         <section class="health-section">
-            <h2>ℹ️ Version</h2>
+            <h2>ℹ️ {{ t "healthz.version_title" }}</h2>
             <dl class="info-grid">
-                <dt>🏷️ Version</dt><dd><code>{{.Version}}</code></dd>
-                <dt>🐹 Go Version</dt><dd><code>{{.GoVersion}}</code></dd>
-                <dt>🔨 Build</dt><dd><code>{{.BuildCommit}}</code> ({{.BuildDate}})</dd>
-                <dt>⏱️ Uptime</dt><dd>{{.Uptime}}</dd>
-                <dt>🚀 Mode</dt><dd><span class="badge badge-{{.Mode}}">{{.ModeDisplay}}</span></dd>
+                <dt>🏷️ {{ t "healthz.version_label" }}</dt><dd><code>{{.Version}}</code></dd>
+                <dt>🐹 {{ t "healthz.go_version_label" }}</dt><dd><code>{{.GoVersion}}</code></dd>
+                <dt>🔨 {{ t "healthz.build_label" }}</dt><dd><code>{{.BuildCommit}}</code> ({{.BuildDate}})</dd>
+                <dt>⏱️ {{ t "healthz.uptime_label" }}</dt><dd>{{.Uptime}}</dd>
+                <dt>🚀 {{ t "healthz.mode_label" }}</dt><dd><span class="badge badge-{{.Mode}}">{{.ModeDisplay}}</span></dd>
             </dl>
         </section>
 
         <!-- Features per AI.md PART 13 (VidVeil: stateless per IDEA.md) -->
         <section class="health-section">
-            <h2>🎛️ Features</h2>
+            <h2>🎛️ {{ t "healthz.features_title" }}</h2>
             <ul class="feature-list">
                 <li class="{{if .Features.TorEnabled}}feature-enabled{{else if .Features.TorStarting}}feature-starting{{else}}feature-disabled{{end}}">
-                    🧅 Tor: {{if .Features.TorEnabled}}<span class="status-ok">✅ {{.Features.TorStatus}}</span> <code>{{.Features.TorOnionAddr}}</code>{{else if .Features.TorStarting}}<span class="status-starting">⏳ Connecting...</span>{{else}}<span class="status-disabled">Disabled</span>{{end}}
+                    🧅 {{ t "healthz.tor_label" }} {{if .Features.TorEnabled}}<span class="status-ok">✅ {{.Features.TorStatus}}</span> <code>{{.Features.TorOnionAddr}}</code>{{else if .Features.TorStarting}}<span class="status-starting">⏳ {{ t "healthz.connecting" }}</span>{{else}}<span class="status-disabled">{{ t "healthz.disabled" }}</span>{{end}}
                 </li>
                 <li class="{{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">
-                    🌍 GeoIP: {{if .Features.GeoIP}}<span class="status-ok">✅ Enabled</span>{{else}}<span class="status-disabled">Disabled</span>{{end}}
+                    🌍 {{ t "healthz.geoip_label" }} {{if .Features.GeoIP}}<span class="status-ok">✅ {{ t "healthz.enabled" }}</span>{{else}}<span class="status-disabled">{{ t "healthz.disabled" }}</span>{{end}}
                 </li>
             </ul>
         </section>
 
         <!-- Component Checks per AI.md PART 13 -->
         <section class="health-section">
-            <h2>🔧 Component Status</h2>
+            <h2>🔧 {{ t "healthz.component_status_title" }}</h2>
             <table class="checks-table">
-                <thead><tr><th>Component</th><th>Status</th></tr></thead>
+                <thead><tr><th>{{ t "healthz.component_header" }}</th><th>{{ t "healthz.status_header" }}</th></tr></thead>
                 <tbody>
                     <tr>
-                        <td>🗄️ Database</td>
-                        <td class="status-{{if eq .Checks.Database "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Database "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
+                        <td>🗄️ {{ t "healthz.database_label" }}</td>
+                        <td class="status-{{if eq .Checks.Database "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Database "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
                     </tr>
                     <tr>
-                        <td>💾 Cache</td>
-                        <td class="status-{{if eq .Checks.Cache "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cache "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
+                        <td>💾 {{ t "healthz.cache_label" }}</td>
+                        <td class="status-{{if eq .Checks.Cache "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cache "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
                     </tr>
                     <tr>
-                        <td>💿 Disk</td>
-                        <td class="status-{{if eq .Checks.Disk "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Disk "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
+                        <td>💿 {{ t "healthz.disk_label" }}</td>
+                        <td class="status-{{if eq .Checks.Disk "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Disk "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
                     </tr>
                     <tr>
-                        <td>⏰ Scheduler</td>
-                        <td class="status-{{if eq .Checks.Scheduler "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Scheduler "ok"}}✅ OK{{else}}❌ Error{{end}}</td>
+                        <td>⏰ {{ t "healthz.scheduler_label" }}</td>
+                        <td class="status-{{if eq .Checks.Scheduler "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Scheduler "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
                     </tr>
                 </tbody>
             </table>
@@ -77,18 +77,18 @@
 
         <!-- Statistics per AI.md PART 13 -->
         <section class="health-section">
-            <h2>📈 Statistics</h2>
+            <h2>📈 {{ t "healthz.statistics_title" }}</h2>
             <dl class="info-grid stats-grid">
-                <dt>📥 Total Requests</dt><dd>{{.Stats.RequestsTotal}}</dd>
-                <dt>📅 Requests (24h)</dt><dd>{{.Stats.Requests24h}}</dd>
-                <dt>🔌 Active Connections</dt><dd>{{.Stats.ActiveConnections}}</dd>
+                <dt>📥 {{ t "healthz.requests_total_label" }}</dt><dd>{{.Stats.RequestsTotal}}</dd>
+                <dt>📅 {{ t "healthz.requests_24h_label" }}</dt><dd>{{.Stats.Requests24h}}</dd>
+                <dt>🔌 {{ t "healthz.active_connections_label" }}</dt><dd>{{.Stats.ActiveConnections}}</dd>
             </dl>
         </section>
 
         <!-- Last Updated per AI.md PART 13 -->
         <footer class="health-footer">
-            <p>Last checked: <time id="hz-timestamp" datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
-            <p class="auto-refresh">Auto-refreshing in <span id="countdown">30</span>s</p>
+            <p>{{ t "healthz.last_checked" }} <time id="hz-timestamp" datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
+            <p class="auto-refresh">{{ t "healthz.auto_refreshing_in" }} <span id="countdown">30</span>{{ t "healthz.seconds_suffix" }}</p>
         </footer>
     </main>
     {{template "public/footer" .}}

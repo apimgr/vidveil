@@ -4098,13 +4098,22 @@ a:focus-visible {
 }
 
 /* Stats grid variant for healthz (single column on mobile, 3 columns on desktop) */
+/* grid-auto-flow: column keeps each dt/dd pair in its own column instead of */
+/* the default row-flow, which splits pairs across rows in a 3-column grid */
 .health-section .stats-grid {
     grid-template-columns: 1fr;
+}
+
+.health-section .stats-grid dt,
+.health-section .stats-grid dd {
+    text-align: center;
 }
 
 @media (min-width: 601px) {
     .health-section .stats-grid {
         grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(2, auto);
+        grid-auto-flow: column;
     }
 }
 

@@ -394,9 +394,15 @@ func main() {
 	}
 
 	// Create user and chown directories (only if running as root)
-	// Include db subdirectory for SQLite database
+	// Include db subdirectory for SQLite database and the Tor data/site
+	// directories per AI.md PART 23 step 8b — Tor dirs must exist and be
+	// owned by the service user before privilege drop, not created later
+	// by the Tor goroutine (which raced the drop and caused permission
+	// errors on the hidden-service key file).
 	dbDir := config.GetDatabaseDir(paths.Data)
-	dirsToOwn := []string{paths.Config, paths.Data, dbDir, paths.Cache, paths.Log}
+	torDataDir := filepath.Join(paths.Data, "tor")
+	torSiteDir := filepath.Join(torDataDir, "site")
+	dirsToOwn := []string{paths.Config, paths.Data, dbDir, paths.Cache, paths.Log, torDataDir, torSiteDir}
 	uid, gid, err := system.EnsureSystemUser(appName, dirsToOwn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Failed to ensure system user: %v\n", err)
@@ -652,39 +658,6 @@ func main() {
 	// Set Tor provider for engine manager per PART 31
 	// This enables Tor outbound network for anonymized engine queries when UseNetwork is true
 	engineMgr.SetTorProvider(torSvc)
-
-	// Start Tor hidden service per PART 31 (in background to not block HTTP server)
-	// Auto-enabled if tor binary is installed - no enable flag needed
-	// Per PART 31: ADD_ONION maps .onion:virtualPort → 127.0.0.1:serverPort (existing HTTP listener)
-	go func() {
-		torCtx := context.Background()
-		// Parse server port from config — Tor forwards .onion traffic to the local
-		// serving port. Per AI.md PART 15 overlays prefer the HTTP port; fall back to
-		// the HTTPS port in HTTPS-only mode. Handles dual "80,443" without a parse error.
-		torHTTPPort, torHTTPSPort := config.ParsePorts(appConfig.Server.Port, appConfig.Server.SSL.Enabled)
-		torTargetPort := torHTTPPort
-		if torTargetPort == "" {
-			torTargetPort = torHTTPSPort
-		}
-		serverPort, portErr := strconv.Atoi(torTargetPort)
-		if portErr != nil {
-			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: invalid target port %q: %v\n", torTargetPort, portErr)
-			return
-		}
-		if err := torSvc.Start(torCtx, serverPort); err != nil {
-			// PART 31: Tor errors are WARN level, server continues without Tor
-			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: %v\n", err)
-		} else {
-			// Wire resolved onion address back to config so PART 12 Tor request
-			// detection (urlvars.isTorRequest) can match the Host header.
-			if addr := torSvc.GetOnionAddress(); addr != "" {
-				appConfig.Server.Tor.OnionAddress = addr
-			}
-			if torSvc.UseNetworkEnabled() && torSvc.OutboundEnabled() {
-				fmt.Println("[INFO] Tor outbound network enabled - engine queries are anonymized")
-			}
-		}
-	}()
 	defer torSvc.Stop()
 
 	// Load scheduler history from database per AI.md PART 18
@@ -754,6 +727,16 @@ func main() {
 	}
 	listenAddr := appConfig.Server.Address + ":" + primaryPort
 
+	// Re-apply ownership immediately before dropping privileges per AI.md PART 23
+	// step 8c — catches files created since the initial EnsureSystemUser call
+	// above (step 15's database file, downloaded GeoIP databases), which the
+	// earlier one-time chown could not have covered since they did not exist yet.
+	if system.IsRunningAsRoot() {
+		if _, _, err := system.EnsureSystemUser(appName, dirsToOwn); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Failed to re-apply ownership before privilege drop: %v\n", err)
+		}
+	}
+
 	// Drop privileges to the vidveil system user after port is bound per AI.md PART 23.
 	// ShouldDropPrivileges() returns true only on Unix when current uid == 0.
 	if system.ShouldDropPrivileges() {
@@ -763,6 +746,44 @@ func main() {
 		}
 		fmt.Printf(terminal.UserIcon()+" Dropped privileges to %s\n", appName)
 	}
+
+	// Start Tor hidden service per PART 31 (in background to not block HTTP server).
+	// Auto-enabled if tor binary is installed - no enable flag needed.
+	// Per PART 31: ADD_ONION maps .onion:virtualPort → 127.0.0.1:serverPort (existing HTTP listener).
+	// Started only after privilege drop above so its directory/key ownership
+	// (self-chowned to os.Getuid()/os.Getgid() inside torSvc.Start) always
+	// targets the final, stable process uid — starting it earlier raced the
+	// drop and intermittently left root-owned files the dropped process
+	// could not write to.
+	go func() {
+		torCtx := context.Background()
+		// Parse server port from config — Tor forwards .onion traffic to the local
+		// serving port. Per AI.md PART 15 overlays prefer the HTTP port; fall back to
+		// the HTTPS port in HTTPS-only mode. Handles dual "80,443" without a parse error.
+		torHTTPPort, torHTTPSPort := config.ParsePorts(appConfig.Server.Port, appConfig.Server.SSL.Enabled)
+		torTargetPort := torHTTPPort
+		if torTargetPort == "" {
+			torTargetPort = torHTTPSPort
+		}
+		serverPort, portErr := strconv.Atoi(torTargetPort)
+		if portErr != nil {
+			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: invalid target port %q: %v\n", torTargetPort, portErr)
+			return
+		}
+		if err := torSvc.Start(torCtx, serverPort); err != nil {
+			// PART 31: Tor errors are WARN level, server continues without Tor
+			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: %v\n", err)
+		} else {
+			// Wire resolved onion address back to config so PART 12 Tor request
+			// detection (urlvars.isTorRequest) can match the Host header.
+			if addr := torSvc.GetOnionAddress(); addr != "" {
+				appConfig.Server.Tor.OnionAddress = addr
+			}
+			if torSvc.UseNetworkEnabled() && torSvc.OutboundEnabled() {
+				fmt.Println("[INFO] Tor outbound network enabled - engine queries are anonymized")
+			}
+		}
+	}()
 
 	// Start server goroutine — serves on the pre-bound listener
 	go func() {
@@ -819,7 +840,7 @@ func main() {
 		})
 
 		if isFirstRun {
-			fmt.Println("[INFO] First run detected. Edit /etc/apimgr/vidveil/server.yml to configure.")
+			fmt.Printf("[INFO] First run detected. Edit %s to configure.\n", configPath)
 		}
 
 		// Log INFO lines per AI.md PART 11

@@ -3362,23 +3362,16 @@ document.addEventListener('error', function(e) {
                 mirrorServerPrefsToCookies(prefs);
             }
 
-            showToastLocal(i18n.saved, 'success');
+            showToast(i18n.saved, 'success');
             setTimeout(function() {
                 window.location.href = preferencesReturnTo();
             }, 800);
         }
 
-        function showToastLocal(message, type) {
-            var toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast ' + type + ' show';
-            setTimeout(function() { toast.className = 'toast'; }, 3000);
-        }
-
         window.resetPreferences = function() {
             localStorage.removeItem(STORAGE_KEY);
             loadPreferences();
-            showToastLocal(i18n.resetDone, 'info');
+            showToast(i18n.resetDone, 'info');
         };
 
         window.selectAllEngines = function() {
@@ -3393,7 +3386,7 @@ document.addEventListener('error', function(e) {
         window.exportHistory = function() {
             var history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
             downloadJSON(history, 'vidveil-history.json');
-            showToastLocal('History exported', 'success');
+            showToast('History exported', 'success');
         };
 
         window.importHistory = function(file) {
@@ -3404,12 +3397,12 @@ document.addEventListener('error', function(e) {
                     var data = JSON.parse(e.target.result);
                     if (Array.isArray(data)) {
                         localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
-                        showToastLocal('History imported (' + data.length + ' items)', 'success');
+                        showToast('History imported (' + data.length + ' items)', 'success');
                     } else {
-                        showToastLocal('Invalid history file', 'error');
+                        showToast('Invalid history file', 'error');
                     }
                 } catch (err) {
-                    showToastLocal('Failed to parse file', 'error');
+                    showToast('Failed to parse file', 'error');
                 }
             };
             reader.readAsText(file);
@@ -3418,7 +3411,7 @@ document.addEventListener('error', function(e) {
         window.clearHistory = function() {
             showConfirm('Clear all search history?', function () {
                 localStorage.removeItem(HISTORY_KEY);
-                showToastLocal('History cleared', 'info');
+                showToast('History cleared', 'info');
             });
         };
 

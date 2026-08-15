@@ -237,3 +237,65 @@ func TestBaseEngine_GetClient_SpoofedTLS_NonNil(t *testing.T) {
 		t.Error("GetClient spoofed TLS: nil HTTP client")
 	}
 }
+
+// ── batchDeadline / WriteTimeout cap ──────────────────────────────────────────
+// Regression coverage for the net::ERR_FAILED beta-test finding: batchDeadline
+// must never return a value that leaves less than writeTimeoutSafetyMargin
+// before the HTTP server's configured Server.Limits.WriteTimeout, otherwise
+// post-collection work (sort/dedup/render/write) can push total handler time
+// past WriteTimeout and net/http aborts the response mid-write.
+
+func TestBatchDeadline_CappedByWriteTimeout(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	// A large per-engine timeout that, uncapped, would put batchDeadline
+	// (timeout+2s) well past a short WriteTimeout.
+	cfg.Search.EngineTimeout = 25
+	cfg.Server.Limits.WriteTimeout = "10s"
+	m := NewEngineManager(cfg)
+
+	e := &mockSearchEngine{name: "test", avail: true, tier: 1}
+	got := m.batchDeadline([]SearchEngine{e})
+
+	maxAllowed := 10*time.Second - writeTimeoutSafetyMargin
+	if got > maxAllowed {
+		t.Errorf("batchDeadline = %v, want <= %v (WriteTimeout %s minus safety margin)", got, maxAllowed, cfg.Server.Limits.WriteTimeout)
+	}
+	if got <= 0 {
+		t.Errorf("batchDeadline = %v, want > 0", got)
+	}
+}
+
+func TestBatchDeadline_UnderWriteTimeout_Unaffected(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	// Default engine timeout (15s) + 2s grace = 17s, comfortably under the
+	// default 30s WriteTimeout minus the safety margin (25s) — should be
+	// returned unchanged.
+	cfg.Search.EngineTimeout = 15
+	cfg.Server.Limits.WriteTimeout = "30s"
+	m := NewEngineManager(cfg)
+
+	e := &mockSearchEngine{name: "test", avail: true, tier: 1}
+	got := m.batchDeadline([]SearchEngine{e})
+
+	want := 17 * time.Second
+	if got != want {
+		t.Errorf("batchDeadline = %v, want %v (uncapped case)", got, want)
+	}
+}
+
+func TestBatchDeadline_InvalidWriteTimeout_FallsBackToDefault(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Search.EngineTimeout = 15
+	cfg.Server.Limits.WriteTimeout = "not-a-duration"
+	m := NewEngineManager(cfg)
+
+	e := &mockSearchEngine{name: "test", avail: true, tier: 1}
+	got := m.batchDeadline([]SearchEngine{e})
+
+	// Falls back to the 30s default WriteTimeout, so the 17s uncapped value
+	// is still under the 25s cap and returned unchanged.
+	want := 17 * time.Second
+	if got != want {
+		t.Errorf("batchDeadline = %v, want %v (invalid WriteTimeout falls back to 30s default)", got, want)
+	}
+}

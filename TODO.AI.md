@@ -95,3 +95,46 @@ Scheduler status. Code and the 13 rule-file mirrors predate it. Gaps:
   a `.video-card-fav-btn`/`.video-card-fav-btn--active` rule (hover/focus
   states, WCAG AA contrast, 44x44px touch target per AI.md PART 16/28).
 
+Beta-test finding (2026-08-15): production `net::ERR_FAILED` on
+`/search?q=...` under load, second/residual cause after the redirect-encoding
+fix (951a480b3ae7) was confirmed still working.
+
+- Reproduced a genuine server-side condition using a Dockerized `devel`
+  build (`casjaysdev/go:latest` build, `alpine:latest` run, real internet
+  engine searches, age-verified session cookie): bursting 150 concurrent
+  requests at `/search?q=...` produced a handful of client-side "Empty
+  reply from server" failures (curl error 52 — the same network-layer
+  symptom as browser `net::ERR_FAILED`), caused by the Go HTTP server's
+  `Server.Limits.WriteTimeout` (default 30s) firing mid-response-write.
+  80-concurrent did not reproduce it; 150-concurrent did, both before and
+  after the fix below.
+- Root-caused one real gap and fixed it: `EngineManager.batchDeadline()`
+  (`src/server/service/engine/manager.go`) computed the fan-out wait budget
+  purely from the largest per-engine timeout (`Search.EngineTimeout`/
+  `EngineTimeouts`, default 15s) plus a 2s grace, with nothing tying that
+  budget to the server's actual `Server.Limits.WriteTimeout`. Under load,
+  or with a higher configured `EngineTimeout`, total handler time could
+  approach/exceed `WriteTimeout` with no safety margin. Fixed by capping
+  `batchDeadline()` at `WriteTimeout - writeTimeoutSafetyMargin` (5s),
+  falling back to the 30s default when `WriteTimeout` is unset/invalid.
+  Covered by `TestBatchDeadline_CappedByWriteTimeout`,
+  `TestBatchDeadline_UnderWriteTimeout_Unaffected`,
+  `TestBatchDeadline_InvalidWriteTimeout_FallsBackToDefault` in
+  `engine_manager_coverage_test.go`.
+- This fix is real and worth keeping, but it did NOT eliminate the
+  reproduced 150-concurrent failures: re-testing after the fix still showed
+  ~4/150 empty replies at ~30-31s, while server access logs for those exact
+  failing requests showed the handler itself completed in 3.9s-20.7s with
+  small but COMPLETE bodies (~1.8KB, not truncated) — well inside the new
+  cap. That means the residual bottleneck is NOT inside
+  `SearchWithOperators`/`batchDeadline`/the search handler at all; it is
+  connection-level queueing or congestion happening either before the
+  handler starts (accept/dispatch delay under 150 simultaneous new TCP
+  connections) or after the handler finishes (writing response bytes over a
+  congested/backed-up socket). Needs follow-up: re-test without Docker
+  port-forwarding in the loop (Incus, per AI.md PART 28 preference) to rule
+  out the test rig itself as a contributor; consider a max-concurrent-
+  connections / listener backlog tuning pass, and/or raising
+  `Server.Limits.WriteTimeout` together with connection-level rate
+  limiting, as the leading fix candidates once the true bottleneck layer is
+  confirmed.

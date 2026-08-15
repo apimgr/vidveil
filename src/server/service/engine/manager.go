@@ -775,6 +775,23 @@ func (m *EngineManager) engineTimeout(name string) time.Duration {
 // timeout among the selected engines plus a small grace, so one hung engine
 // (e.g. one that ignores context cancellation) can never block the response
 // beyond the slowest engine's own budget.
+//
+// The result is additionally hard-capped at the HTTP server's configured
+// Server.Limits.WriteTimeout (default 30s per AI.md PART 5/6) minus a
+// writeTimeoutSafetyMargin. Without this cap, nothing ties the engine-timeout
+// configuration to the server's actual write deadline: under concurrent load
+// (many simultaneous searches contending for goroutine scheduling and
+// outbound network I/O), total handler time — batch collection plus
+// post-processing plus writing the response — can creep past WriteTimeout.
+// When that happens, net/http aborts the response mid-write with a raw
+// connection reset instead of a normal HTTP response; browsers surface this
+// as net::ERR_FAILED / ERR_EMPTY_RESPONSE. Capping batchDeadline guarantees
+// the handler always has margin left to finish sorting/rendering/writing a
+// (possibly degraded) 200 response before the server's write deadline fires.
+// Reproduced live: an 80-way concurrent burst against /search pushed total
+// handler time to ~30-32s (server access log, 200 status but a 2KB truncated
+// body instead of the normal ~17KB), matching curl's "(52) Empty reply from
+// server" on the client side.
 func (m *EngineManager) batchDeadline(engines []SearchEngine) time.Duration {
 	longest := time.Duration(0)
 	for _, e := range engines {
@@ -785,8 +802,25 @@ func (m *EngineManager) batchDeadline(engines []SearchEngine) time.Duration {
 	if longest == 0 {
 		longest = 15 * time.Second
 	}
-	return longest + 2*time.Second
+	deadline := longest + 2*time.Second
+
+	writeTimeout := 30 * time.Second
+	if m.appConfig != nil && m.appConfig.Server.Limits.WriteTimeout != "" {
+		if wt, err := time.ParseDuration(m.appConfig.Server.Limits.WriteTimeout); err == nil && wt > 0 {
+			writeTimeout = wt
+		}
+	}
+	if maxAllowed := writeTimeout - writeTimeoutSafetyMargin; maxAllowed > 0 && deadline > maxAllowed {
+		deadline = maxAllowed
+	}
+	return deadline
 }
+
+// writeTimeoutSafetyMargin is the time reserved, below the server's
+// WriteTimeout, for post-collection work (sort, dedup, filter, template
+// render, response write) to complete after the engine fan-out returns. See
+// batchDeadline above.
+const writeTimeoutSafetyMargin = 5 * time.Second
 
 func (m *EngineManager) getEnginesToUse(engineNames []string) []SearchEngine {
 	var engines []SearchEngine

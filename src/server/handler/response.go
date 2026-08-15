@@ -223,10 +223,22 @@ const (
 // renderResponse renders appropriate response based on client type
 // Per AI.md PART 14: Different clients get different formats
 func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, name string, data map[string]interface{}) {
+	h.renderResponseStatus(w, r, name, data, http.StatusOK)
+}
+
+// renderResponseStatus is renderResponse with an explicit HTTP status code.
+// Needed so overload/error conditions detected after a search runs (e.g. the
+// RATE_LIMITED envelope returned by EngineManager.SearchWithOperators when the
+// searchSem concurrency guard is saturated, AI.md PART 12 "Rate Limiting") can
+// surface as a real 429 instead of always answering 200. The status is set via
+// an explicit w.WriteHeader(status) before handing off to each client-type
+// branch below, so every branch (JSON, text/plain, no-JS HTML, full HTML)
+// honors it without needing its own status parameter.
+func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Request, name string, data map[string]interface{}, status int) {
 	// 1. Our CLI client - INTERACTIVE, receives JSON, renders own TUI/GUI
 	if isOurCliClient(r) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		WriteJSON(w, http.StatusOK, data)
+		WriteJSON(w, status, data)
 		return
 	}
 
@@ -257,6 +269,7 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 		html := h.renderSimpleHTML(name, data)
 		text := convertHTMLToText(html, 80)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(status)
 		w.Write([]byte(text + "\n"))
 		return
 	}
@@ -265,6 +278,7 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 	//    Receive server-rendered HTML that works without JS
 	if isTextBrowser(r) {
 		// Use no-JS templates from template/nojs/ directory per AI.md PART 14
+		w.WriteHeader(status)
 		h.renderTemplate(w, "nojs/"+name, data)
 		return
 	}
@@ -276,11 +290,13 @@ func (h *SearchHandler) renderResponse(w http.ResponseWriter, r *http.Request, n
 		html := h.renderSimpleHTML(name, data)
 		text := convertHTMLToText(html, 80)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(status)
 		w.Write([]byte(text + "\n"))
 		return
 	}
 
 	// 5. Regular browsers (Chrome, Firefox) - full HTML with JavaScript
+	w.WriteHeader(status)
 	h.renderTemplate(w, name, data)
 }
 

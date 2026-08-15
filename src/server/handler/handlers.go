@@ -1005,6 +1005,27 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			h.metrics.IncrementSearches()
 		}
 
+		// Search capacity exceeded (searchSem saturated) — answer fast with a
+		// retryable 429 instead of rendering an empty-results page as if the
+		// query genuinely had none (AI.md PART 12 "Rate Limiting").
+		if isSearchOverloaded(results) {
+			w.Header().Set("Retry-After", strconv.Itoa(searchOverloadRetryAfterSeconds))
+			h.renderResponseStatus(w, r, "search", map[string]interface{}{
+				"Title":       query + " - " + h.appConfig.Server.Branding.Title,
+				"Query":       query,
+				"SearchQuery": searchQuery,
+				"ResultsJSON": template.JS("[]"),
+				"Results":     []model.VideoResult{},
+				"CurrentPath": r.URL.RequestURI(),
+				"Theme":       h.getRequestTheme(r),
+				"ErrorCode":   CodeRateLimited,
+				"ErrorMsg":    MsgRateLimited,
+				"Version":     version.GetVersion(),
+				"BuildDateTime": BuildDateTime(),
+			}, http.StatusTooManyRequests)
+			return
+		}
+
 		pageResults := results.Data.Results
 		// A full page came back, so another page is worth requesting; the
 		// "Load more" link (or, if the visitor's preference is Infinite
@@ -1073,6 +1094,32 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 	if h.metrics != nil {
 		h.metrics.IncrementSearches()
+	}
+
+	// Search capacity exceeded — respond fast and retryable regardless of the
+	// requested format (AI.md PART 12 "Rate Limiting"); JSON callers get the
+	// canonical envelope, everything else goes through the normal content
+	// negotiation in renderResponseStatus (text/plain, HTTP-tool text, HTML)
+	// so a curl/CLI client still gets the format it asked for, just with a
+	// 429 status and Retry-After header instead of a 200.
+	if isSearchOverloaded(results) {
+		w.Header().Set("Retry-After", strconv.Itoa(searchOverloadRetryAfterSeconds))
+		if format == "application/json" {
+			h.writeSearchOverloadJSON(w)
+			return
+		}
+		h.renderResponseStatus(w, r, "search", map[string]interface{}{
+			"Title":       query + " - " + h.appConfig.Server.Branding.Title,
+			"Query":       query,
+			"SearchQuery": searchQuery,
+			"ResultsJSON": template.JS("[]"),
+			"Theme":       h.getRequestTheme(r),
+			"ErrorCode":   CodeRateLimited,
+			"ErrorMsg":    MsgRateLimited,
+			"Version":     version.GetVersion(),
+			"BuildDateTime": BuildDateTime(),
+		}, http.StatusTooManyRequests)
+		return
 	}
 
 	switch format {
@@ -2538,6 +2585,16 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		}
 		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, sessionID, 0, parseResultFilterOptions(r))
 		results.Data.Cached = false
+
+		// Never cache the RATE_LIMITED overload envelope — it reflects a
+		// transient capacity condition, not the actual query result, and
+		// caching it would keep serving 429s for cacheTTL after the server
+		// has recovered (AI.md PART 12 "Rate Limiting").
+		if isSearchOverloaded(results) {
+			h.writeSearchOverloadJSON(w)
+			return
+		}
+
 		if h.searchCache != nil {
 			h.searchCache.Set(cacheKey, results)
 		}
@@ -3238,6 +3295,33 @@ func (h *SearchHandler) jsonErrorDetails(w http.ResponseWriter, message, code st
 		"message": message,
 		"details": details,
 	})
+}
+
+// searchOverloadRetryAfterSeconds is the Retry-After hint (seconds) sent when
+// SearchWithOperators returns the RATE_LIMITED overload envelope. Kept short
+// (matches engine.searchQueueTimeout) since the condition is a transient
+// concurrency-slot wait, not a per-minute counter — a client retrying a
+// couple seconds later is expected to succeed.
+const searchOverloadRetryAfterSeconds = 2
+
+// isSearchOverloaded reports whether results is the RATE_LIMITED envelope
+// EngineManager.SearchWithOperators returns when its searchSem concurrency
+// guard could not be acquired within its queue timeout (AI.md PART 12 "Rate
+// Limiting" — "primary abuse defense"; PART 9 canonical error envelope). Every
+// caller of SearchWithOperators must check this before treating a result as a
+// normal (possibly zero-result) search response, so an overloaded server
+// answers fast with a retryable 429 instead of the connection silently
+// stalling until net/http's WriteTimeout resets it.
+func isSearchOverloaded(results *model.SearchResponse) bool {
+	return results != nil && !results.Ok && results.Error == CodeRateLimited
+}
+
+// writeSearchOverloadJSON writes the canonical RATE_LIMITED error envelope
+// (AI.md PART 9/14) with a 429 status and Retry-After header for JSON/API
+// callers (APISearch, SearchPage's application/json branch, BatchSearch).
+func (h *SearchHandler) writeSearchOverloadJSON(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", strconv.Itoa(searchOverloadRetryAfterSeconds))
+	h.jsonError(w, MsgRateLimited, CodeRateLimited, http.StatusTooManyRequests)
 }
 
 // RenderErrorPage renders a custom error page per AI.md PART 30
@@ -4172,6 +4256,10 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	parsed := engine.ParseBangs(query)
 	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0, engine.ResultFilterOptions{})
+	if isSearchOverloaded(results) {
+		h.writeSearchOverloadJSON(w)
+		return
+	}
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchRSS(w, r, results, h.appConfig)
@@ -4192,6 +4280,10 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	parsed := engine.ParseBangs(query)
 	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, parsed.Engines, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0, engine.ResultFilterOptions{})
+	if isSearchOverloaded(results) {
+		h.writeSearchOverloadJSON(w)
+		return
+	}
 	results.Data.Query = query
 	results.Data.InvalidBang = parsed.InvalidBang
 	renderSearchAtom(w, r, results, h.appConfig)

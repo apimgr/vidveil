@@ -31,15 +31,28 @@ type EngineManager struct {
 	// the manager that spawned them — matching the sessionDedup pattern above.
 	relatedTermMu    sync.Mutex
 	relatedTermCache map[string]relatedTermStatus
+	// searchSem bounds how many SearchWithOperators fan-outs may run at once
+	// (sized from Search.ConcurrentRequests). See searchSem acquisition in
+	// SearchWithOperators for why this exists.
+	searchSem chan struct{}
 }
+
+// defaultSearchConcurrency is used when Search.ConcurrentRequests is unset
+// or invalid (<=0) — matches the documented config default (PART 5/6).
+const defaultSearchConcurrency = 10
 
 // NewEngineManager creates a new engine manager
 func NewEngineManager(appConfig *config.AppConfig) *EngineManager {
+	capacity := defaultSearchConcurrency
+	if appConfig != nil && appConfig.Search.ConcurrentRequests > 0 {
+		capacity = appConfig.Search.ConcurrentRequests
+	}
 	return &EngineManager{
 		engines:          make(map[string]SearchEngine),
 		appConfig:        appConfig,
 		sessionDedup:     NewSessionDedupStore(),
 		relatedTermCache: make(map[string]relatedTermStatus),
+		searchSem:        make(chan struct{}, capacity),
 	}
 }
 
@@ -198,6 +211,33 @@ type ResultFilterOptions struct {
 // configured default.
 func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, previewFirst bool, sessionID string, resultsPerPage int, filterOpts ResultFilterOptions) *model.SearchResponse {
 	startTime := time.Now()
+
+	// Bound the number of simultaneous full multi-engine fan-outs (AI.md PART
+	// 11/12: "rate limiting is the primary abuse defense" against
+	// overload/DDoS). The per-IP request-count rate limiter alone cannot catch
+	// this failure mode: a burst of concurrent searches from many distinct IPs
+	// (or many requests within one rate-limit window) each spawn len(engines)
+	// goroutines doing outbound HTTP, and under enough simultaneous fan-outs
+	// total handler time creeps toward the server's WriteTimeout regardless of
+	// the batchDeadline cap below — the queue itself becomes the bottleneck,
+	// not any single engine or search. Reproduced live: a 150-concurrent burst
+	// against /search still produced empty replies after batchDeadline was
+	// capped, because requests were queuing for CPU/goroutine/socket capacity
+	// before ever reaching the collection loop.
+	//
+	// searchSem turns that silent queue into an immediate, bounded decision:
+	// acquire a slot within searchQueueTimeout, or fail fast with a retryable
+	// 429-style response (matches the canonical RATE_LIMITED envelope, PART
+	// 14) instead of letting net/http's WriteTimeout kill the connection with
+	// a raw reset. The server always answers — degraded, but never silent.
+	select {
+	case m.searchSem <- struct{}{}:
+		defer func() { <-m.searchSem }()
+	case <-time.After(searchQueueTimeout):
+		return overloadedSearchResponse(startTime)
+	case <-ctx.Done():
+		return overloadedSearchResponse(startTime)
+	}
 
 	// Capture the engine set under a brief read lock, then release it before any
 	// network I/O. Holding m.mu across the fan-out would keep the manager lock
@@ -821,6 +861,33 @@ func (m *EngineManager) batchDeadline(engines []SearchEngine) time.Duration {
 // render, response write) to complete after the engine fan-out returns. See
 // batchDeadline above.
 const writeTimeoutSafetyMargin = 5 * time.Second
+
+// searchQueueTimeout bounds how long a request waits for a free searchSem
+// slot before giving up and returning an overload response. Kept short and
+// fixed (not tied to WriteTimeout) so a caller always gets a fast answer —
+// queuing itself must never become the reason a request runs long.
+const searchQueueTimeout = 2 * time.Second
+
+// overloadedSearchResponse builds the canonical error envelope (AI.md PART
+// 14/PART 12 "Rate Limiting") returned when SearchWithOperators cannot
+// acquire a searchSem slot within searchQueueTimeout. Ok:false + a stable
+// RATE_LIMITED error code lets every caller (SearchPage, APISearch,
+// BatchSearch, SSE) react the same way HTTP rate limiting already does
+// elsewhere: fail fast and retryable, never hang until the connection resets.
+func overloadedSearchResponse(startTime time.Time) *model.SearchResponse {
+	return &model.SearchResponse{
+		Ok: false,
+		Data: model.SearchData{
+			Results:       []model.VideoResult{},
+			EnginesUsed:   []string{},
+			EnginesFailed: []string{},
+			SearchTimeMS:  time.Since(startTime).Milliseconds(),
+		},
+		Pagination: model.PaginationData{},
+		Error:      "RATE_LIMITED",
+		Message:    "Search capacity temporarily exceeded, please retry shortly",
+	}
+}
 
 func (m *EngineManager) getEnginesToUse(engineNames []string) []SearchEngine {
 	var engines []SearchEngine

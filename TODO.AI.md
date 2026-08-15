@@ -138,3 +138,27 @@ fix (951a480b3ae7) was confirmed still working.
   `Server.Limits.WriteTimeout` together with connection-level rate
   limiting, as the leading fix candidates once the true bottleneck layer is
   confirmed.
+- Follow-up implemented (2026-08-15): added a `searchSem` concurrency
+  semaphore in `EngineManager` (`src/server/service/engine/manager.go`)
+  bounding simultaneous `SearchWithOperators` fan-outs (wires up the
+  previously-dead `Search.ConcurrentRequests` config field), with a 2s
+  `searchQueueTimeout` before returning the canonical
+  `{"ok":false,"error":"RATE_LIMITED",...}` envelope
+  (`overloadedSearchResponse`) instead of queueing indefinitely. Wired that
+  envelope through to actual HTTP `429 Too Many Requests` + `Retry-After: 2`
+  responses (AI.md PART 12 "Rate Limiting") in every handler calling
+  `SearchWithOperators`: `SearchPage` (both the `text/html` branch and the
+  non-browser content-negotiation branch), `APISearch` (also guarded against
+  caching the transient overload envelope), `SearchRSSFeed`, and
+  `SearchAtomFeed` (`src/server/handler/handlers.go`, new
+  `isSearchOverloaded`/`writeSearchOverloadJSON` helpers; `response.go` split
+  `renderResponse` into a thin wrapper over new `renderResponseStatus` so an
+  explicit status code can be threaded through content negotiation).
+  `BatchSearch` needed no change — its per-item response array already
+  carries the RATE_LIMITED envelope per sub-query correctly.
+- Remaining gap, explicitly out of scope for the above: `handleSearchSSE`
+  uses `SearchStreamWithOperators` (`manager.go`), a materially separate
+  fan-out implementation NOT gated by `searchSem` and not covered by the
+  429 wiring above. Needs the same concurrency-guard + overload-signaling
+  treatment (SSE equivalent, e.g. an `event: error` frame with a
+  RATE_LIMITED payload) as its own follow-up.

@@ -52,14 +52,6 @@ Scheduler status. Code and the 13 rule-file mirrors predate it. Gaps:
   API-server spec update (esp. api-rules.md PART 13/14 and features-rules.md
   PART 20).
 
-- `.video-card-fav-btn` (favorite star button, used in
-  `src/server/template/page/favorites.tmpl` and now also
-  `src/server/template/page/search.tmpl`) has no CSS rule anywhere under
-  `src/server/static/css/` — renders as an unstyled native button with a
-  raw `&#9733;` glyph instead of the designed star icon/active state. Needs
-  a `.video-card-fav-btn`/`.video-card-fav-btn--active` rule (hover/focus
-  states, WCAG AA contrast, 44x44px touch target per AI.md PART 16/28).
-
 Beta-test finding (2026-08-15): production `net::ERR_FAILED` on
 `/search?q=...` under load, second/residual cause after the redirect-encoding
 fix (951a480b3ae7) was confirmed still working.

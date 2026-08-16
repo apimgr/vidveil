@@ -19,19 +19,6 @@ substantially rewrote the API-server spec — chiefly PART 20 (Metrics),
 plus PART 13 (Health), Root-Level Endpoints, HTTP Cache Headers, and
 Scheduler status. Code and the 13 rule-file mirrors predate it. Gaps:
 
-- Metrics endpoints incomplete vs updated AI.md PART 20. Only a single
-  endpoint is mounted (`src/server/server.go:647`, at
-  `Server.Metrics.Endpoint`, default `/metrics`). The updated spec now
-  requires the full set with per-service sub-paths and identical handlers:
-  `/server/metrics[/{service}]`, root alias `/metrics[/{service}]`,
-  `/api/{api_version}/server/metrics[/{service}]`, and unversioned alias
-  `/api/metrics[/{service}]` — each `{service}` gated by its own per-service
-  bearer token, with Prometheus text / Grafana dashboard JSON / Loki stream
-  outputs. No `{service}` path support exists anywhere in `src/server`.
-  Needs: per-service metrics config + token model, handler dispatch on the
-  `{service}` path segment, and the 4-way alias mounting (same handler, no
-  redirects). Cross-cutting; do as one change.
-
 Beta-test finding (2026-08-15): production `net::ERR_FAILED` on
 `/search?q=...` under load, second/residual cause after the redirect-encoding
 fix (951a480b3ae7) was confirmed still working.

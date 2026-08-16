@@ -92,6 +92,42 @@ func createTUIStylesFromPalette(palette theme.ColorPalette) TUIStyles {
 	}
 }
 
+// createTUIStylesFromTerminalPalette creates TUIStyles from the ANSI-mapped
+// theme.TerminalPalette — see AI.md PART 16 "CLI/TUI Color Mapping". This is
+// the REQUIRED baseline for CLI/TUI output; createTUIStylesFromPalette
+// (literal hex) is an opt-in enhancement only, used when the terminal
+// reports true-color support.
+func createTUIStylesFromTerminalPalette(palette theme.TerminalPalette) TUIStyles {
+	return TUIStyles{
+		Base: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Foreground)),
+		Title: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Primary)).
+			Bold(true).
+			Padding(0, 1),
+		Input: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Foreground)).
+			Padding(0, 1),
+		Result: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Foreground)),
+		Selected: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Info)).
+			Bold(true),
+		Help: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Muted)),
+		Status: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Success)),
+		Error: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Error)),
+		Warning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Warning)),
+		Muted: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.Muted)),
+		Border: lipgloss.NewStyle().
+			BorderForeground(lipgloss.Color(palette.Border)),
+	}
+}
+
 // getTUILayoutConfig returns layout config for a terminal.SizeMode
 // Per AI.md PART 32: Responsive Layout
 // Per AI.md PART 1: Function names MUST reveal intent
@@ -220,12 +256,18 @@ type TUISearchDoneMsg struct {
 // Per AI.md PART 1: Function names MUST reveal intent - "initialModel" is ambiguous
 func createInitialTUIModel() TUIModel {
 	// Initialize styles from theme palette
-	// Per AI.md PART 32: TUI uses theme.ColorPalette from src/common/theme
+	// Per AI.md PART 16 "CLI/TUI Color Mapping": ANSI TerminalPalette is the
+	// required baseline; literal hex ColorPalette is an opt-in enhancement
+	// only for terminals that report true-color support.
 	themeMode := TUIDefaultTheme
 	if cliConfig != nil && cliConfig.TUI.Theme != "" {
 		themeMode = cliConfig.TUI.Theme
 	}
-	tuiStyles = createTUIStylesFromPalette(theme.GetColorPalette(themeMode))
+	if theme.SupportsTrueColor() {
+		tuiStyles = createTUIStylesFromPalette(theme.GetColorPalette(themeMode))
+	} else {
+		tuiStyles = createTUIStylesFromTerminalPalette(theme.GetTerminalPalette(themeMode))
+	}
 
 	// Get initial terminal size and layout config
 	termSize := terminal.GetTerminalSize()

@@ -19,7 +19,28 @@ type TUIStyles struct {
 	Border   lipgloss.Style
 }
 
-// TUIStylesFromPalette creates TUI styles from a theme palette
+// StylesFromTerminalPalette creates TUI styles from the ANSI-mapped
+// TerminalPalette — see AI.md PART 16 "CLI/TUI Color Mapping". This is the
+// REQUIRED baseline for CLI/TUI output; TUIStylesFromPalette (literal hex)
+// is an opt-in enhancement only, never the default.
+func StylesFromTerminalPalette(p theme.TerminalPalette) TUIStyles {
+	return TUIStyles{
+		Base: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.Foreground)),
+		Title: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.Primary)).Bold(true),
+		Selected: lipgloss.NewStyle().Reverse(true),
+		Error:    lipgloss.NewStyle().Foreground(lipgloss.Color(p.Error)),
+		Success:  lipgloss.NewStyle().Foreground(lipgloss.Color(p.Success)),
+		Warning:  lipgloss.NewStyle().Foreground(lipgloss.Color(p.Warning)),
+		Muted:    lipgloss.NewStyle().Foreground(lipgloss.Color(p.Muted)),
+		Border:   lipgloss.NewStyle().BorderForeground(lipgloss.Color(p.Border)),
+	}
+}
+
+// TUIStylesFromPalette creates TUI styles from the literal hex ColorPalette.
+// Opt-in enhancement only for terminals that report true-color support
+// (theme.SupportsTrueColor) — never used as the CLI/TUI baseline.
 func TUIStylesFromPalette(p theme.ColorPalette) TUIStyles {
 	return TUIStyles{
 		Base: lipgloss.NewStyle().
@@ -38,12 +59,22 @@ func TUIStylesFromPalette(p theme.ColorPalette) TUIStyles {
 	}
 }
 
-// DefaultTUIStyles returns the default dark theme styles
+// DefaultTUIStyles returns the default dark theme styles — ANSI baseline
+// unless the terminal reports true-color support, in which case the
+// literal hex palette is used as an opt-in enhancement.
 func DefaultTUIStyles() TUIStyles {
-	return TUIStylesFromPalette(theme.Dark)
+	if theme.SupportsTrueColor() {
+		return TUIStylesFromPalette(theme.Dark)
+	}
+	return StylesFromTerminalPalette(theme.TerminalPaletteDark)
 }
 
-// LightTUIStyles returns light theme styles
+// LightTUIStyles returns light theme styles — ANSI baseline unless the
+// terminal reports true-color support, in which case the literal hex
+// palette is used as an opt-in enhancement.
 func LightTUIStyles() TUIStyles {
-	return TUIStylesFromPalette(theme.Light)
+	if theme.SupportsTrueColor() {
+		return TUIStylesFromPalette(theme.Light)
+	}
+	return StylesFromTerminalPalette(theme.TerminalPaletteLight)
 }

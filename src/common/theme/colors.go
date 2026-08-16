@@ -61,3 +61,52 @@ func GetColorPaletteName(mode string) string {
 		return "dark"
 	}
 }
+
+// TerminalPalette holds ANSI 16-color indices (0-15) for CLI/TUI — never
+// the literal hex ColorPalette. lipgloss.Color() and the ESC[38;5;{n}m
+// escape both accept these indices directly. This is the REQUIRED baseline
+// for CLI/TUI output; the literal hex ColorPalette is an opt-in enhancement
+// only for terminals that report true-color support.
+// Values match AI.md PART 16 "Themes" TerminalPalette exactly.
+type TerminalPalette struct {
+	Foreground string
+	Muted      string
+	Primary    string
+	Success    string
+	Warning    string
+	Error      string
+	Info       string
+	Border     string
+}
+
+var (
+	// TerminalPaletteDark is the ANSI-mapped baseline for the dark theme.
+	// Values match AI.md PART 16 "Themes" TerminalPaletteDark exactly.
+	TerminalPaletteDark = TerminalPalette{
+		Foreground: "15", Muted: "7", Primary: "13",
+		Success: "10", Warning: "11", Error: "9", Info: "12", Border: "13",
+	}
+
+	// TerminalPaletteLight is the ANSI-mapped baseline for the light theme.
+	// Values match AI.md PART 16 "Themes" TerminalPaletteLight exactly.
+	TerminalPaletteLight = TerminalPalette{
+		Foreground: "0", Muted: "8", Primary: "4",
+		Success: "2", Warning: "3", Error: "1", Info: "4", Border: "4",
+	}
+)
+
+// GetTerminalPalette returns the ANSI-mapped baseline palette based on mode.
+// Supported modes: "dark", "light", "auto"
+func GetTerminalPalette(mode string) TerminalPalette {
+	switch mode {
+	case "light":
+		return TerminalPaletteLight
+	case "auto":
+		if DetectSystemDark() {
+			return TerminalPaletteDark
+		}
+		return TerminalPaletteLight
+	default:
+		return TerminalPaletteDark
+	}
+}

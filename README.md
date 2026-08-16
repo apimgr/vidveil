@@ -250,7 +250,7 @@ Use bang shortcuts to search specific engines:
 
 #### Tier 3 - Additional Sites
 
-3Movs (`!3m`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Motherless (`!ml`), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
+3Movs (`!3m`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Motherless (no bang shortcut), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
 
 #### Tier 4 - Specialty Sites
 

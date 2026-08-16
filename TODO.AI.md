@@ -80,12 +80,20 @@ fix (951a480b3ae7) was confirmed still working.
   explicit status code can be threaded through content negotiation).
   `BatchSearch` needed no change — its per-item response array already
   carries the RATE_LIMITED envelope per sub-query correctly.
-- Remaining gap, explicitly out of scope for the above: `handleSearchSSE`
-  uses `SearchStreamWithOperators` (`manager.go`), a materially separate
-  fan-out implementation NOT gated by `searchSem` and not covered by the
-  429 wiring above. Needs the same concurrency-guard + overload-signaling
-  treatment (SSE equivalent, e.g. an `event: error` frame with a
-  RATE_LIMITED payload) as its own follow-up.
+- Follow-up implemented (2026-08-15): `handleSearchSSE`'s
+  `SearchStreamWithOperators` fan-out (`manager.go`) now shares the same
+  `searchSem` guard as `SearchWithOperators`. Since SSE cannot set an HTTP
+  status after streaming starts, overload is signaled through the stream
+  itself: a new `StreamResult.Overloaded` field, set when the semaphore
+  wait hits `searchQueueTimeout`/`ctx.Done()`, causes `handleSearchSSE` to
+  emit an `event: error` frame with the canonical RATE_LIMITED envelope and
+  stop. `app.js`'s existing `eventSource.onerror` handler already covers
+  this (SSE named "error" events route through the same handler as
+  connection failures) with no frontend changes needed. Covered by
+  `TestSearchStreamWithOperators_SaturatedSem_ContextCancelled_EmitsOverload`,
+  `TestSearchStreamWithOperators_SaturatedSem_QueueTimeout_EmitsOverload`,
+  `TestSearchStreamWithOperators_UnsaturatedSem_AcquiresSlotAndReleases` in
+  `engine_searchsem_coverage_test.go`.
 
 Finding from go-lint pass during the API-version cross-cutting fix
 (2026-08-15, task 8 completion).

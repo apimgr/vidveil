@@ -1616,6 +1616,13 @@ type StreamResult struct {
 	Engine string            `json:"engine"`
 	Done   bool              `json:"done"`
 	Error  string            `json:"error,omitempty"`
+	// Overloaded is set instead of a normal per-engine Error when the
+	// searchSem concurrency guard could not be acquired within
+	// searchQueueTimeout (see overloadedSearchResponse / SearchWithOperators).
+	// Callers (e.g. handleSearchSSE) must check this first and translate it
+	// into a RATE_LIMITED signal rather than treating Error as an
+	// engine-specific failure.
+	Overloaded bool `json:"-"`
 }
 
 // EnginesToUseCount returns how many engines will be queried for the given
@@ -1656,6 +1663,28 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 
 	go func() {
 		defer close(resultsChan)
+
+		// Same searchSem concurrency guard as SearchWithOperators (AI.md
+		// PART 12 "Rate Limiting" — primary abuse defense). SSE cannot set an
+		// HTTP status after streaming has started, so an overload here is
+		// signaled through the channel itself via Overloaded, rather than a
+		// pre-write 429.
+		select {
+		case m.searchSem <- struct{}{}:
+			defer func() { <-m.searchSem }()
+		case <-time.After(searchQueueTimeout):
+			select {
+			case resultsChan <- StreamResult{Overloaded: true, Error: "RATE_LIMITED", Done: true}:
+			case <-ctx.Done():
+			}
+			return
+		case <-ctx.Done():
+			select {
+			case resultsChan <- StreamResult{Overloaded: true, Error: "RATE_LIMITED", Done: true}:
+			default:
+			}
+			return
+		}
 
 		m.mu.RLock()
 		enginesToUse := m.getEnginesToUse(engineNames)

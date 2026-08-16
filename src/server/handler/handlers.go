@@ -2768,6 +2768,17 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	enginesWithResults := make(map[string]struct{})
 
 	for result := range resultsChan {
+		// searchSem could not be acquired within searchQueueTimeout (AI.md
+		// PART 12 "Rate Limiting") — signal the SSE equivalent of the
+		// non-streaming paths' 429 RATE_LIMITED response via a dedicated
+		// "error" event, then stop; SearchStreamWithOperators sends this as
+		// its only message before closing resultsChan.
+		if result.Overloaded {
+			fmt.Fprintf(w, "event: error\ndata: {\"ok\":false,\"error\":\"%s\",\"message\":\"%s\"}\n\n", CodeRateLimited, MsgRateLimited)
+			rc.Flush()
+			return
+		}
+
 		if result.Engine != "" && result.Engine != "all" && result.Error == "" {
 			enginesWithResults[result.Engine] = struct{}{}
 		}

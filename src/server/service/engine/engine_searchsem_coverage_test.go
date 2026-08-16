@@ -144,3 +144,84 @@ func TestSearchWithOperators_UnsaturatedSem_AcquiresSlotAndReleases(t *testing.T
 		t.Errorf("searchSem not released after SearchWithOperators returned: len = %d, want 0", len(m.searchSem))
 	}
 }
+
+// ── SearchStreamWithOperators (SSE) shares the same searchSem guard ───────
+//
+// Mirrors the SearchWithOperators coverage above: a saturated searchSem must
+// make the SSE fan-out emit a single Overloaded StreamResult (never a normal
+// per-engine result/error) and close the channel, instead of streaming
+// indefinitely or leaking the goroutine.
+
+func drainStream(ch <-chan StreamResult) []StreamResult {
+	var out []StreamResult
+	for r := range ch {
+		out = append(out, r)
+	}
+	return out
+}
+
+func TestSearchStreamWithOperators_SaturatedSem_ContextCancelled_EmitsOverload(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Search.ConcurrentRequests = 1
+	m := NewEngineManager(cfg)
+	release := saturateSearchSem(m)
+	defer release()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	results := drainStream(ch)
+	elapsed := time.Since(start)
+
+	if len(results) != 1 {
+		t.Fatalf("SearchStreamWithOperators with saturated searchSem + cancelled ctx: got %d StreamResults, want exactly 1 (the overload signal)", len(results))
+	}
+	if !results[0].Overloaded || results[0].Error != "RATE_LIMITED" {
+		t.Fatalf("SearchStreamWithOperators overload result = %+v, want Overloaded=true Error=RATE_LIMITED", results[0])
+	}
+	if !results[0].Done {
+		t.Error("SearchStreamWithOperators overload result: Done = false, want true")
+	}
+	if elapsed > searchQueueTimeout {
+		t.Errorf("SearchStreamWithOperators with cancelled ctx took %v, want well under searchQueueTimeout (%v)", elapsed, searchQueueTimeout)
+	}
+}
+
+func TestSearchStreamWithOperators_SaturatedSem_QueueTimeout_EmitsOverload(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Search.ConcurrentRequests = 1
+	m := NewEngineManager(cfg)
+	release := saturateSearchSem(m)
+	defer release()
+
+	start := time.Now()
+	ch := m.SearchStreamWithOperators(context.Background(), "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	results := drainStream(ch)
+	elapsed := time.Since(start)
+
+	if len(results) != 1 || !results[0].Overloaded || results[0].Error != "RATE_LIMITED" {
+		t.Fatalf("SearchStreamWithOperators after searchQueueTimeout: results = %+v, want exactly one Overloaded/RATE_LIMITED result", results)
+	}
+	if elapsed < searchQueueTimeout {
+		t.Errorf("SearchStreamWithOperators returned after %v, want at least searchQueueTimeout (%v)", elapsed, searchQueueTimeout)
+	}
+}
+
+func TestSearchStreamWithOperators_UnsaturatedSem_AcquiresSlotAndReleases(t *testing.T) {
+	m := newEmptyMgr()
+	ch := m.SearchStreamWithOperators(context.Background(), "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	results := drainStream(ch)
+
+	for _, r := range results {
+		if r.Overloaded {
+			t.Fatalf("SearchStreamWithOperators on unsaturated searchSem: unexpected Overloaded result %+v", r)
+		}
+	}
+	// The slot must be released once the fan-out goroutine finishes, leaving
+	// the semaphore empty for the next caller.
+	if len(m.searchSem) != 0 {
+		t.Errorf("searchSem not released after SearchStreamWithOperators drained: len = %d, want 0", len(m.searchSem))
+	}
+}

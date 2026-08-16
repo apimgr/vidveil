@@ -210,7 +210,7 @@ External integrations and failure modes are NOT to be extended at code time with
 | Inject XSS via crafted engine titles / tags / performer names | All result fields are HTML-escaped server-side before render; CSP + escape-on-render templates; no inline JS or CSS |
 | SSRF via thumbnail/preview URL | Thumbnail proxy validates scheme + host against an allowlist of known engine CDN hosts; rejects file://, gopher://, and RFC1918 targets |
 | Path traversal via static asset paths | `PathSecurityMiddleware` (PART 5) blocks `..`, `%2e%2e`, normalizes // -> / |
-| Scraping / abusing the search endpoint as a free unlogged proxy | Configurable rate limiting (`rate_limit.requests`/`window`) + GeoIP allow/deny + IP/domain blocklist (PART 12) |
+| Scraping / abusing the search endpoint as a free unlogged proxy | Configurable rate limiting (`rate_limit.requests`/`window`) + GeoIP allow/deny + IP/domain blocklist (PART 12); a `searchSem` concurrency semaphore additionally bounds simultaneous engine fan-outs (`search.concurrent_requests`), queuing briefly then returning a RATE_LIMITED overload response (HTTP 429 for JSON/HTML/feeds, an `event: error` SSE frame for streaming search) rather than degrading the server under a burst |
 | Abuse via Tor exit nodes | Tor traffic is allowed by default (privacy goal), but operator can blocklist exit nodes in `server.yml` if abuse is observed |
 | Geographic compliance bypass | Operator-configurable restriction modes (off, warn, soft_block, hard_block) via `server.yml`; dismissable acknowledgement cookie (30 days) for soft_block |
 | Restore-to-takeover via `--maintenance restore` | PART 0 / PART 5 authorization flow: empty DB OR root OS user (service user must prompt for credentials) |
@@ -371,7 +371,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Video Preview: desktop hover with delay (Instant / 200ms / 500ms / 1000ms), mobile swipe-right (50px threshold, auto-stop 8s).
 - Autocomplete System: bang mode triggered by `!`, performer mode by `@`, search-term mode otherwise (2+ chars, 150ms debounce, hidden until typing). Multi-bang `!ph !rt lesbian` flow. Suggestion sources: user history (priority 1), static suggestions (priority 2), popular (priority 3).
 - Search History: localStorage (`vidveil_history`), max items configurable (default unlimited), auto-clear options (Never / 1d / 7d / 30d), Export/Import JSON.
-- Favorites: server-side (`favorites` table, keyed by anonymous `visitor_id` cookie), each entry url+title+thumbnail+source+added_at, Export/Import JSON, Clear all with confirm. Fully functional without JS via server-rendered `/favorites` page; `app.js` layers instant no-reload add/remove/clear on top via `/api/v1/favorites*`.
+- Favorites: server-side (`favorites` table, keyed by anonymous `visitor_id` cookie) is the source of truth, each entry url+title+thumbnail+source+added_at, Export/Import JSON, Clear all with confirm. Fully functional without JS via server-rendered `/favorites` page; `app.js` layers instant no-reload add/remove/clear on top via `/api/v1/favorites*`, and mirrors the list into `localStorage` (`vidveil_favorites_mirror`) so favorites survive a server/DB wipe on that browser: on first load each session the mirror and server list are reconciled (mirror-only entries are re-POSTed to the server; entries the server already has are left alone), and every successful server read/write re-writes the mirror.
 - Related Searches: server-side rendered into HTML, client adds "Show more" toggle, up to 20 (first 8 visible).
 - Infinite Scroll: default via the `results_per_page` cookie, set to
   "Infinite scroll" unless the visitor picks 20/50/100 in Preferences.
@@ -420,6 +420,7 @@ authoritative for pagination, see "Search behavior" above):
 **Favorites:**
 - Export/Import/Clear buttons.
 - Count display.
+- Server-side list (`visitor_id` cookie) is authoritative; a `localStorage` mirror (`vidveil_favorites_mirror`) restores favorites on this browser if the server/DB is wiped, reconciled automatically on load.
 
 **Privacy:**
 - Use Tor for all searches (toggle) - default: No (stored in localStorage; Tor routing is server-side).
@@ -448,7 +449,7 @@ authoritative for pagination, see "Search behavior" above):
 - Responsive: Desktop >1024px (4+ col), Tablet <=768px (2 col), Mobile <=600px (1 col), Extra Small <=380px (adjusted padding/font), 44px touch minimum, hamburger nav.
 - A11Y: WCAG 2.1 AA target, ARIA labels, role attributes, aria-expanded, aria-live polite, skip link, semantic HTML5, keyboard nav, focus management.
 - SSE Streaming primary (`text/event-stream`), Tier 1 first, status updates with engine count + elapsed ms; fallback to JSON API (`application/json`).
-- Error handling: image fallback to `placeholder.svg`, JSON parse handling, SSE -> JSON fallback, network retry, missing-pref defaults applied, graceful UI state.
+- Error handling: image fallback to `placeholder.svg`, JSON parse handling, SSE -> JSON fallback (also triggered by a server-side overload signal, an `event: error` SSE frame carrying a RATE_LIMITED payload when the search concurrency limit is hit), network retry, missing-pref defaults applied, graceful UI state.
 
 ### Endpoints (reference detail)
 

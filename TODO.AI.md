@@ -44,14 +44,6 @@ Scheduler status. Code and the 13 rule-file mirrors predate it. Gaps:
   through swagger and all `src/server` route registration, delete hardcoded
   `v1`. Cross-cutting; do as one change.
 
-- `.claude/rules/*.md` (13 mirror files) are stale relative to AI.md.
-  AI.md was last modified 2026-08-11 (commit e19f7f1e5ec3); the rule
-  mirrors were last regenerated 2026-05-25. Per ai-rules.md ("create/update
-  `.claude/rules/*.md` at session start if missing or if AI.md is newer"),
-  regenerate all 13 from the current AI.md so the mirrors reflect the Aug 11
-  API-server spec update (esp. api-rules.md PART 13/14 and features-rules.md
-  PART 20).
-
 Beta-test finding (2026-08-15): production `net::ERR_FAILED` on
 `/search?q=...` under load, second/residual cause after the redirect-encoding
 fix (951a480b3ae7) was confirmed still working.

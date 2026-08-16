@@ -694,14 +694,33 @@ function handleDownloadClick(event, downloadUrl) {
 
 // ============================================================================
 // Favorites (AI.md PART 16/32: server-side storage via anonymous visitor
-// cookie; the server-rendered HTML forms on /favorites and the Preferences
-// page are fully functional without JS. This module only layers instant
-// (no-reload) feedback on top by calling the JSON API through fetchAPI().
+// cookie is the source of truth and keeps /favorites and the Preferences
+// page fully functional without JS. This module layers instant (no-reload)
+// feedback on top via the JSON API through fetchAPI(), AND mirrors the list
+// into localStorage so favorites survive a server/DB wipe on this browser:
+// on first load each session the mirror and the server list are reconciled
+// (any entry present only in the mirror is re-POSTed to the server, so a
+// wiped server is restored from the browser; any entry the server already
+// has is left alone), and every successful server read/write re-writes the
+// mirror so both sides stay in sync going forward.
 // ============================================================================
 (function() {
     'use strict';
     var cache = null;
     var loadPromise = null;
+    var synced = false;
+    var STORAGE_KEY = 'vidveil_favorites_mirror';
+
+    var hasStorage = (function() {
+        try {
+            var t = '__vidveil_storage_test__';
+            window.localStorage.setItem(t, '1');
+            window.localStorage.removeItem(t);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    })();
 
     function normalize(list) {
         return (list || []).map(function(f) {
@@ -713,6 +732,28 @@ function handleDownloadClick(event, downloadUrl) {
                 source: f.source || ''
             };
         });
+    }
+
+    function readMirror() {
+        if (!hasStorage) {
+            return [];
+        }
+        try {
+            return normalize(JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '[]'));
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function writeMirror(list) {
+        if (!hasStorage) {
+            return;
+        }
+        try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list || []));
+        } catch (e) {
+            // Storage full/unavailable mid-session; server stays source of truth.
+        }
     }
 
     function loadFromDataIsland() {
@@ -730,22 +771,84 @@ function handleDownloadClick(event, downloadUrl) {
     function refresh() {
         loadPromise = fetchAPI('/v1/favorites').then(function(data) {
             cache = normalize(data.favorites);
+            writeMirror(cache);
             return cache;
         }).catch(function() {
-            cache = cache || [];
+            cache = cache || readMirror();
             return cache;
         });
         return loadPromise;
+    }
+
+    // restoreMissing re-creates on the server any mirror entries the server
+    // doesn't currently have (e.g. after a server/DB wipe), then re-reads the
+    // server list so cache/mirror end up with real server-assigned ids.
+    function restoreMissing(missing) {
+        return Promise.all(missing.map(function(f) {
+            return fetchAPI('/v1/favorites', {
+                method: 'POST',
+                body: JSON.stringify({
+                    url: f.url,
+                    title: f.title || 'Untitled',
+                    thumbnail: f.thumbnail || '',
+                    source: f.source || ''
+                })
+            }).catch(function() { return null; });
+        })).then(refresh);
+    }
+
+    // reconcileWithMirror runs once per page load: compares the localStorage
+    // mirror against the current server list (preferring the already-fresh
+    // server-rendered data island over an extra fetch when it fully covers
+    // the mirror) and restores anything the server is missing.
+    function reconcileWithMirror() {
+        synced = true;
+        var island = loadFromDataIsland();
+        if (!hasStorage) {
+            if (island) {
+                cache = island;
+                return Promise.resolve(cache);
+            }
+            return refresh();
+        }
+        var mirror = readMirror();
+        if (island) {
+            var islandUrls = {};
+            island.forEach(function(f) { islandUrls[f.url] = true; });
+            var missingFromIsland = mirror.filter(function(f) { return !islandUrls[f.url]; });
+            if (!missingFromIsland.length) {
+                cache = island;
+                writeMirror(cache);
+                return Promise.resolve(cache);
+            }
+            return restoreMissing(missingFromIsland);
+        }
+        if (!mirror.length) {
+            return refresh();
+        }
+        return fetchAPI('/v1/favorites').then(function(data) {
+            var serverList = normalize(data.favorites);
+            var serverUrls = {};
+            serverList.forEach(function(f) { serverUrls[f.url] = true; });
+            var missing = mirror.filter(function(f) { return !serverUrls[f.url]; });
+            if (!missing.length) {
+                cache = serverList;
+                writeMirror(cache);
+                return cache;
+            }
+            return restoreMissing(missing);
+        }).catch(function() {
+            cache = mirror;
+            return cache;
+        });
     }
 
     function ensureLoaded() {
         if (cache) {
             return Promise.resolve(cache);
         }
-        var fromIsland = loadFromDataIsland();
-        if (fromIsland) {
-            cache = fromIsland;
-            return Promise.resolve(cache);
+        if (!synced) {
+            return reconcileWithMirror();
         }
         if (loadPromise) {
             return loadPromise;

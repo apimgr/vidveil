@@ -231,7 +231,7 @@ func (s *Server) setupMiddleware() {
 					"object-src 'none'; "+
 					"upgrade-insecure-requests; "+
 					"report-to default; "+
-					"report-uri /api/v1/server/reports/csp",
+					"report-uri "+s.appConfig.APIBasePath()+"/server/reports/csp",
 			)
 			// Permissions-Policy per PART 11 spec defaults
 			w.Header().Set("Permissions-Policy",
@@ -250,9 +250,8 @@ func (s *Server) setupMiddleware() {
 			}
 			// Reporting-Endpoints + legacy Report-To + NEL per AI.md PART 11
 			// Both modern (Reporting-Endpoints) and legacy (Report-To) formats are required.
-			// api_version is "v1" per IDEA.md project variable.
 			proto, fqdn, _ := urlvar.GlobalResolver().GetURLVars(r)
-			reportsBase := proto + "://" + fqdn + "/api/v1/server/reports"
+			reportsBase := proto + "://" + fqdn + s.appConfig.APIBasePath() + "/server/reports"
 			w.Header().Set("Reporting-Endpoints", `default="`+reportsBase+`/default"`)
 			w.Header().Set("Report-To", `{"group":"default","max_age":10886400,"endpoints":[{"url":"`+reportsBase+`/default"}]}`)
 			w.Header().Set("NEL", `{"report_to":"default","max_age":2592000,"include_subdomains":true}`)
@@ -619,8 +618,9 @@ func (s *Server) setupRoutes() {
 
 	// OpenAPI/Swagger and GraphQL — canonical routes per AI.md PART 14.
 	// Web UI pages: /server/docs/swagger  /server/docs/graphql
-	// Versioned API: /api/v1/server/swagger  /api/v1/server/graphql
+	// Versioned API: {api_version}/server/swagger  {api_version}/server/graphql
 	// Unversioned aliases (same handler, no redirect): /api/swagger  /api/graphql
+	apiBase := s.appConfig.APIBasePath()
 	gql := graphql.NewHandler(s.appConfig, s.engineMgr)
 
 	// Swagger UI (HTML)
@@ -629,14 +629,14 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/server/docs/graphql", gql.GraphiQL)
 
 	// Versioned OpenAPI JSON spec
-	s.router.Get("/api/v1/server/swagger", swagger.SpecHandler(s.appConfig))
+	s.router.Get(apiBase+"/server/swagger", swagger.SpecHandler(s.appConfig))
 	// Versioned GraphQL endpoint
-	s.router.HandleFunc("/api/v1/server/graphql", gql.Handle)
+	s.router.HandleFunc(apiBase+"/server/graphql", gql.Handle)
 
 	// Unversioned aliases — SAME handler, not redirects (PART 14)
 	s.router.Get("/api/swagger", swagger.SpecHandler(s.appConfig))
 	s.router.HandleFunc("/api/graphql", gql.Handle)
-	// /api/healthz is the unversioned direct JSON alias for /api/v1/server/healthz
+	// /api/healthz is the unversioned direct JSON alias for {api_version}/server/healthz
 	s.router.Get("/api/healthz", h.APIHealthCheck)
 
 	// Prometheus metrics
@@ -696,8 +696,8 @@ func (s *Server) setupRoutes() {
 	// Clients need this BEFORE they know the API version
 	s.router.Get("/api/autodiscover", h.Autodiscover)
 
-	// API v1 routes
-	s.router.Route("/api/v1", func(r chi.Router) {
+	// Versioned API routes per AI.md PART 14 ({api_version}, default "v1")
+	s.router.Route(apiBase, func(r chi.Router) {
 		// Search endpoint (public) - content negotiation for JSON, SSE, text
 		// Accept: application/json (default) - JSON response with caching
 		// Accept: text/event-stream - SSE streaming results as engines respond

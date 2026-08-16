@@ -720,7 +720,7 @@ func (h *ServerHandler) SecurityReportStatusPage(w http.ResponseWriter, r *http.
 
 // API Routes per AI.md PART 14
 
-// APIAbout handles GET /api/v1/server/about
+// APIAbout handles GET {api_version}/server/about
 // Per AI.md PART 14: content negotiation required on every API route.
 func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
@@ -753,7 +753,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": data})
 }
 
-// APIPrivacy handles GET /api/v1/server/privacy
+// APIPrivacy handles GET {api_version}/server/privacy
 // Per AI.md PART 14: content negotiation required on every API route.
 func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 	if getAPIResponseFormat(r) == "text" {
@@ -799,7 +799,7 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIContact handles POST /api/v1/server/contact
+// APIContact handles POST {api_version}/server/contact
 // Per AI.md PART 9: error codes must use standard constants from response.go.
 func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -891,18 +891,19 @@ func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.R
 	SendOK(w, map[string]interface{}{"tracking_id": submission.TrackingID})
 }
 
-// APIHelp handles GET /api/v1/server/help
-// Per AI.md PART 14: content negotiation required; health API is at /api/v1/server/healthz.
+// APIHelp handles GET {api_version}/server/help
+// Per AI.md PART 14: content negotiation required; health API is at {api_version}/server/healthz.
 func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
+	apiBase := h.appConfig.APIBasePath()
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "search: GET /api/v1/search  params: q, page, engines (bang shortcuts like !ph supported in q)\n")
-		fmt.Fprintf(w, "bangs: GET /api/v1/bangs\n")
-		fmt.Fprintf(w, "autocomplete: GET /api/v1/bangs/autocomplete?q={partial}\n")
-		fmt.Fprintf(w, "engines: GET /api/v1/engines\n")
-		fmt.Fprintf(w, "engines_health: GET /api/v1/engines/health\n")
-		fmt.Fprintf(w, "thumbnail_proxy: GET /api/v1/proxy/thumbnails?url={url}\n")
-		fmt.Fprintf(w, "health: GET /api/v1/server/healthz\n")
+		fmt.Fprintf(w, "search: GET %s/search  params: q, page, engines (bang shortcuts like !ph supported in q)\n", apiBase)
+		fmt.Fprintf(w, "bangs: GET %s/bangs\n", apiBase)
+		fmt.Fprintf(w, "autocomplete: GET %s/bangs/autocomplete?q={partial}\n", apiBase)
+		fmt.Fprintf(w, "engines: GET %s/engines\n", apiBase)
+		fmt.Fprintf(w, "engines_health: GET %s/engines/health\n", apiBase)
+		fmt.Fprintf(w, "thumbnail_proxy: GET %s/proxy/thumbnails?url={url}\n", apiBase)
+		fmt.Fprintf(w, "health: GET %s/server/healthz\n", apiBase)
 		fmt.Fprintf(w, "swagger: /server/docs/swagger\n")
 		fmt.Fprintf(w, "graphql: /server/docs/graphql\n")
 		return
@@ -911,40 +912,40 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 		"ok": true,
 		"data": map[string]interface{}{
 			"search": map[string]interface{}{
-				"endpoint":    "/api/v1/search",
+				"endpoint":    apiBase + "/search",
 				"method":      "GET",
 				"parameters":  []string{"q (query; bang shortcuts like !ph !xv supported)", "page", "engines"},
 				"description": "Search across 42 video engines; supports JSON, SSE (text/event-stream), and text/plain",
 			},
 			"bangs": map[string]interface{}{
-				"endpoint":    "/api/v1/bangs",
+				"endpoint":    apiBase + "/bangs",
 				"method":      "GET",
 				"description": "List all bang shortcuts",
 			},
 			"autocomplete": map[string]interface{}{
-				"endpoint":    "/api/v1/bangs/autocomplete",
+				"endpoint":    apiBase + "/bangs/autocomplete",
 				"method":      "GET",
 				"parameters":  []string{"q (partial query, bang, or @performer)"},
 				"description": "Autocomplete bangs, performer names, and search terms",
 			},
 			"engines": map[string]interface{}{
-				"endpoint":    "/api/v1/engines",
+				"endpoint":    apiBase + "/engines",
 				"method":      "GET",
 				"description": "List available search engines",
 			},
 			"engines_health": map[string]interface{}{
-				"endpoint":    "/api/v1/engines/health",
+				"endpoint":    apiBase + "/engines/health",
 				"method":      "GET",
 				"description": "Per-engine health/availability status",
 			},
 			"thumbnail_proxy": map[string]interface{}{
-				"endpoint":    "/api/v1/proxy/thumbnails",
+				"endpoint":    apiBase + "/proxy/thumbnails",
 				"method":      "GET",
 				"parameters":  []string{"url (upstream thumbnail URL)"},
 				"description": "Privacy-preserving thumbnail proxy",
 			},
 			"health": map[string]interface{}{
-				"endpoint":    "/api/v1/server/healthz",
+				"endpoint":    apiBase + "/server/healthz",
 				"method":      "GET",
 				"description": "Check server health status",
 			},
@@ -956,7 +957,7 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APITerms handles GET /api/v1/server/terms
+// APITerms handles GET {api_version}/server/terms
 // Per AI.md PART 14: content negotiation required on every API route. Serves the
 // default Terms of Service; the spec allows operator customization via API.
 func (h *ServerHandler) APITerms(w http.ResponseWriter, r *http.Request) {

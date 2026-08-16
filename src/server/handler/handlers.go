@@ -569,12 +569,13 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 		path := r.URL.Path
 		adminPrefix := h.appConfig.AdminURLPrefix()
 		legacyAdminPrefix := "/" + h.appConfig.Server.Admin.Path
-		apiAdminPrefix := "/api/v1" + h.appConfig.AdminAPIPrefix()
-		legacyAPIAdminPrefix := "/api/v1/" + h.appConfig.Server.Admin.Path
+		apiBase := h.appConfig.APIBasePath()
+		apiAdminPrefix := apiBase + h.appConfig.AdminAPIPrefix()
+		legacyAPIAdminPrefix := apiBase + "/" + h.appConfig.Server.Admin.Path
 		if path == "/healthz" ||
 			path == "/server/healthz" || path == "/server/healthz.json" || path == "/server/healthz.txt" ||
-			path == "/api/v1/server/healthz" || path == "/api/healthz" ||
-			path == "/version" || path == "/api/v1/version" ||
+			path == apiBase+"/server/healthz" || path == "/api/healthz" ||
+			path == "/version" || path == apiBase+"/version" ||
 			strings.HasPrefix(path, "/static/") ||
 			strings.HasPrefix(path, adminPrefix) ||
 			strings.HasPrefix(path, legacyAdminPrefix+"/") || path == legacyAdminPrefix ||
@@ -1001,7 +1002,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	previewFirst := h.getRequestPreviewFirst(w, r)
 
 	// For regular browsers: JavaScript streams results into the page via SSE
-	// (/api/v1/search) as an enhancement. To keep core search working WITHOUT
+	// ({api_version}/search) as an enhancement. To keep core search working WITHOUT
 	// JavaScript (progressive enhancement, AI.md PART 16), also perform a
 	// synchronous search and render the results in a <noscript> fallback.
 	if format == "text/html" {
@@ -1048,7 +1049,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		nextPage := page + 1
 
 		// Embed the server-computed page as an inline JSON payload so the JS
-		// client hydrates from it (no second /api/v1/search round-trip) per
+		// client hydrates from it (no second {api_version}/search round-trip) per
 		// AI.md PART 14 "JavaScript enhances, it does not enable". The same
 		// results are also rendered as visible cards below for no-JS clients.
 		resultsJSON, err := json.Marshal(pageResults)
@@ -2348,7 +2349,8 @@ func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
 		desc = "Privacy-respecting adult video search"
 	}
 
-	apiBase := urlvar.BuildURL(r, "/api/v1")
+	apiPath := h.appConfig.APIBasePath()
+	apiBase := urlvar.BuildURL(r, apiPath)
 
 	// Rate limit: requests per window-seconds, normalized to per-minute.
 	rlReqs := h.appConfig.Server.RateLimit.Requests
@@ -2377,16 +2379,16 @@ func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
 
 	// Endpoints: public + authenticated only, never admin-only or metrics.
 	fmt.Fprintf(&b, "## Endpoints\n")
-	fmt.Fprintf(&b, "- GET /api/v1/search?q={query} - Search across engines (public)\n")
-	fmt.Fprintf(&b, "- POST /api/v1/search/batch - Batch search (public)\n")
-	fmt.Fprintf(&b, "- GET /api/v1/bangs - Bang shortcut list (public)\n")
-	fmt.Fprintf(&b, "- GET /api/v1/engines - Available search engines (public)\n")
-	fmt.Fprintf(&b, "- GET /api/v1/engines/health - Engine health (public)\n")
-	fmt.Fprintf(&b, "- GET /api/v1/stats - Server statistics (public)\n")
-	fmt.Fprintf(&b, "- GET /api/v1/version - Version info (public)\n")
-	fmt.Fprintf(&b, "- GET /api/v1/server/healthz - Health check (no auth)\n")
-	fmt.Fprintf(&b, "- GET /api/v1/server/about - Server information (no auth)\n")
-	fmt.Fprintf(&b, "- GET /api/v1/server/swagger - OpenAPI specification (no auth)\n")
+	fmt.Fprintf(&b, "- GET %s/search?q={query} - Search across engines (public)\n", apiPath)
+	fmt.Fprintf(&b, "- POST %s/search/batch - Batch search (public)\n", apiPath)
+	fmt.Fprintf(&b, "- GET %s/bangs - Bang shortcut list (public)\n", apiPath)
+	fmt.Fprintf(&b, "- GET %s/engines - Available search engines (public)\n", apiPath)
+	fmt.Fprintf(&b, "- GET %s/engines/health - Engine health (public)\n", apiPath)
+	fmt.Fprintf(&b, "- GET %s/stats - Server statistics (public)\n", apiPath)
+	fmt.Fprintf(&b, "- GET %s/version - Version info (public)\n", apiPath)
+	fmt.Fprintf(&b, "- GET %s/server/healthz - Health check (no auth)\n", apiPath)
+	fmt.Fprintf(&b, "- GET %s/server/about - Server information (no auth)\n", apiPath)
+	fmt.Fprintf(&b, "- GET %s/server/swagger - OpenAPI specification (no auth)\n", apiPath)
 	fmt.Fprintf(&b, "\n")
 
 	fmt.Fprintf(&b, "## Capabilities\n")
@@ -3098,7 +3100,7 @@ func (h *SearchHandler) APIStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // APIVersion returns server version info
-// Per AI.md PART 13: /api/v1/version returns version, commit, build_date, official_site.
+// Per AI.md PART 13: {api_version}/version returns version, commit, build_date, official_site.
 func (h *SearchHandler) APIVersion(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":            true,
@@ -3111,7 +3113,7 @@ func (h *SearchHandler) APIVersion(w http.ResponseWriter, r *http.Request) {
 
 // APIHealthCheck returns health status as JSON per AI.md PART 13
 // Returns comprehensive health status with checks object for database/cache/disk
-// APIHealthCheck handles /api/v1/healthz endpoint (JSON only)
+// APIHealthCheck handles {api_version}/healthz endpoint (JSON only)
 // Per AI.md PART 13: Same JSON as /healthz
 func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// API routes default to JSON but support text output per AI.md PART 14
@@ -3655,7 +3657,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 }
 
 // DebugEngine probes a specific engine and returns detailed results
-// GET /api/v1/debug/engines/{name}?q={query}
+// GET {api_version}/debug/engines/{name}?q={query}
 // Returns: engine info, capabilities, sample results with all fields
 func (h *SearchHandler) DebugEngine(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
@@ -3763,7 +3765,7 @@ func analyzeResultFields(results []model.VideoResult) map[string]interface{} {
 }
 
 // DebugEnginesList returns all engines with their capabilities
-// GET /api/v1/debug/engines
+// GET {api_version}/debug/engines
 func (h *SearchHandler) DebugEnginesList(w http.ResponseWriter, r *http.Request) {
 	engines := h.engineMgr.ListEngines()
 
@@ -4116,7 +4118,7 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"primary": urlvar.BuildURL(r, ""),
 		// Per AI.md PART 14: versioned API
-		"api_version": "v1",
+		"api_version": h.appConfig.Server.APIVersion,
 		// Default timeout in seconds
 		"timeout": 30,
 		// Default retry attempts
@@ -4323,7 +4325,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 	renderSearchAtom(w, r, results, h.appConfig)
 }
 
-// BatchSearchRequest is the JSON body for POST /api/v1/search/batch
+// BatchSearchRequest is the JSON body for POST {api_version}/search/batch
 type BatchSearchRequest struct {
 	Queries []BatchQuery `json:"queries"`
 }
@@ -4335,7 +4337,7 @@ type BatchQuery struct {
 	Engines string `json:"engines,omitempty"`
 }
 
-// BatchSearch handles POST /api/v1/search/batch
+// BatchSearch handles POST {api_version}/search/batch
 // Runs up to 5 queries concurrently and returns an array of SearchResponse objects.
 func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

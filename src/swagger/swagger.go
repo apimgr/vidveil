@@ -42,8 +42,10 @@ func DetectTheme(r *http.Request) string {
 // actually used, including behind a reverse proxy or over Tor.
 func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 	adminAPIPath := "server/admin"
+	apiBase := "/api/v1"
 	if appConfig != nil {
 		adminAPIPath = strings.TrimPrefix(appConfig.AdminAPIPrefix(), "/")
+		apiBase = appConfig.APIBasePath()
 	}
 	spec := map[string]interface{}{
 		"openapi": "3.0.0",
@@ -63,7 +65,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 			},
 		},
 		"paths": map[string]interface{}{
-			"/api/v1/search": map[string]interface{}{
+			apiBase + "/search": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "Search videos",
 					"description": "Search across multiple adult video engines",
@@ -98,7 +100,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 					},
 				},
 			},
-			"/api/v1/search/batch": map[string]interface{}{
+			apiBase + "/search/batch": map[string]interface{}{
 				"post": map[string]interface{}{
 					"summary":     "Batch search",
 					"description": "Search multiple queries in one request (max 5 queries)",
@@ -133,7 +135,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 					},
 				},
 			},
-			"/api/v1/engines": map[string]interface{}{
+			apiBase + "/engines": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "List engines",
 					"description": "Get all search engines with status and privacy scores",
@@ -149,7 +151,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 					},
 				},
 			},
-			"/api/v1/engines/health": map[string]interface{}{
+			apiBase + "/engines/health": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "Engine health",
 					"description": "Get health status including circuit breaker state for each engine",
@@ -165,7 +167,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 					},
 				},
 			},
-			"/api/v1/server/healthz": map[string]interface{}{
+			apiBase + "/server/healthz": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "Health check",
 					"description": "Get API health status (per AI.md PART 13)",
@@ -258,7 +260,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 					},
 				},
 			},
-			"/api/v1/" + adminAPIPath + "/analytics": map[string]interface{}{
+			apiBase + "/" + adminAPIPath + "/analytics": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "Search analytics",
 					"description": "Aggregate search analytics — privacy-safe (no per-user data). Requires admin token.",
@@ -276,7 +278,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 					},
 				},
 			},
-			"/api/v1/" + adminAPIPath + "/engines/{name}": map[string]interface{}{
+			apiBase + "/" + adminAPIPath + "/engines/{name}": map[string]interface{}{
 				"patch": map[string]interface{}{
 					"summary":     "Toggle engine",
 					"description": "Enable or disable a search engine by name. Requires admin token.",
@@ -314,7 +316,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 					},
 				},
 			},
-			"/api/v1/" + adminAPIPath + "/engines/{name}/reset": map[string]interface{}{
+			apiBase + "/" + adminAPIPath + "/engines/{name}/reset": map[string]interface{}{
 				"post": map[string]interface{}{
 					"summary":     "Reset circuit breaker",
 					"description": "Manually reset the circuit breaker for a search engine. Requires admin token.",

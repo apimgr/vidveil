@@ -23,6 +23,10 @@ import (
 // Version is set at build time via ldflags
 var Version = "dev"
 
+// apiVersionPattern validates Server.APIVersion per AI.md PART 14 ({api_version}
+// examples: "v1", "v2"). Lowercase "v" followed by one or more digits.
+var apiVersionPattern = regexp.MustCompile(`^v[0-9]+$`)
+
 // Config holds all application configuration per AI.md spec
 type AppConfig struct {
 	Server  ServerConfig  `yaml:"server"`
@@ -58,6 +62,11 @@ type ServerConfig struct {
 	// Priority: X-Forwarded-Prefix > X-Forwarded-Path > X-Script-Name > this value > "/"
 	// CLI flag: --baseurl PATH; env var: BASEURL
 	BaseURL string `yaml:"baseurl"`
+
+	// APIVersion is the versioned API path segment per AI.md PART 14
+	// ("Always version ALL API routes: /api/{api_version}/..."). Defaults to "v1".
+	// Access via AppConfig.APIBasePath() ("/api/{version}") - never hardcode "/api/v1".
+	APIVersion string `yaml:"api_version"`
 
 	// Application mode: production or development
 	// Can be overridden by MODE env var or --mode CLI flag
@@ -1113,14 +1122,18 @@ func DefaultAppConfig() *AppConfig {
 	fqdn := getHostname()
 	// Per AI.md PART 5: Default port is random 64xxx (non-privileged, no root required)
 	defaultPort := fmt.Sprintf("%d", findUnusedPort())
+	// Per AI.md PART 14: default {api_version}; never hardcode "/api/v1" elsewhere.
+	defaultAPIVersion := "v1"
+	defaultAPIBase := "/api/" + defaultAPIVersion
 
 	return &AppConfig{
 		Server: ServerConfig{
 			Port:    defaultPort,
 			FQDN:    fqdn,
-			Address: "[::]",
-			BaseURL: "/",
-			Mode:    "production",
+			Address:    "[::]",
+			BaseURL:    "/",
+			APIVersion: defaultAPIVersion,
+			Mode:       "production",
 			Token:   generateToken(32),
 			Security: SecurityConfig{
 				// Per AI.md PART 11 "Cryptographic Keys": canonical 32-byte
@@ -1414,7 +1427,7 @@ func DefaultAppConfig() *AppConfig {
 			},
 			Robots: RobotsConfig{
 				Allow: []string{"/"},
-				Deny:  []string{"/server/admin", "/api/v1/server/admin"},
+				Deny:  []string{"/server/admin", defaultAPIBase + "/server/admin"},
 			},
 			Security: WebSecurityConfig{
 				Contact:              "security@" + fqdn,
@@ -1427,7 +1440,7 @@ func DefaultAppConfig() *AppConfig {
 				CookieName:  "csrf_token",
 				HeaderName:  "X-CSRF-Token",
 				Secure:      "auto",
-				ExemptPaths: []string{"/api/v1/webhooks/*"},
+				ExemptPaths: []string{defaultAPIBase + "/webhooks/*"},
 			},
 			Footer: FooterConfig{
 				CookieConsent: CookieConsentConfig{
@@ -1621,6 +1634,12 @@ func validateConfig(cfg *AppConfig) {
 	if cfg.Server.Mode != "" && cfg.Server.Mode != "production" && cfg.Server.Mode != "development" {
 		fmt.Fprintf(os.Stderr, "Warning: invalid mode %q, using default %q\n", cfg.Server.Mode, defaults.Server.Mode)
 		cfg.Server.Mode = defaults.Server.Mode
+	}
+
+	// Validate API version (must be non-empty, lowercase "v" + digits, per PART 14)
+	if !apiVersionPattern.MatchString(cfg.Server.APIVersion) {
+		fmt.Fprintf(os.Stderr, "Warning: invalid api_version %q, using default %q\n", cfg.Server.APIVersion, defaults.Server.APIVersion)
+		cfg.Server.APIVersion = defaults.Server.APIVersion
 	}
 
 	// Validate rate limit window (must be positive)
@@ -2215,8 +2234,19 @@ func (c *AppConfig) AdminURLPrefix() string {
 	return "/server/" + adminPath
 }
 
+// APIBasePath returns the versioned API base path per AI.md PART 14
+// ("Always version ALL API routes: /api/{api_version}/..."), e.g. "/api/v1".
+// Never hardcode "/api/v1" in route registration or path construction - use this.
+func (c *AppConfig) APIBasePath() string {
+	ver := c.Server.APIVersion
+	if ver == "" {
+		ver = "v1"
+	}
+	return "/api/" + ver
+}
+
 // AdminAPIPrefix returns the canonical admin API prefix without the "/api/{ver}" leader.
-// Used as a relative subpath under "/api/v1": result is "/server/{admin_path}".
+// Used as a relative subpath under APIBasePath(): result is "/server/{admin_path}".
 func (c *AppConfig) AdminAPIPrefix() string {
 	adminPath := c.Server.Admin.Path
 	if adminPath == "" {

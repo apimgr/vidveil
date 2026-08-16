@@ -32,18 +32,6 @@ Scheduler status. Code and the 13 rule-file mirrors predate it. Gaps:
   `{service}` path segment, and the 4-way alias mounting (same handler, no
   redirects). Cross-cutting; do as one change.
 
-- API version is hardcoded `v1` (AI.md PART 14: "Never hardcode `v1` —
-  always use `{api_version}` / `APIBasePath()`"). No `APIVersion` config
-  field and no `APIBasePath()`/`APIVersion()` accessor exist on
-  `AppConfig` (only `AdminAPIPrefix()` at `src/config/config.go:2220`,
-  whose leader is hardcoded). `src/swagger/swagger.go` hardcodes `/api/v1`
-  (11 occurrences) and `src/config/config.go` defaults a Deny path to
-  `/api/v1/server/admin`. The client side IS versioned
-  (`src/client/api/client.go GetAPIBaseURL`, configurable api version).
-  Needs: add `APIVersion` config field + `APIBasePath()` accessor, thread
-  through swagger and all `src/server` route registration, delete hardcoded
-  `v1`. Cross-cutting; do as one change.
-
 Beta-test finding (2026-08-15): production `net::ERR_FAILED` on
 `/search?q=...` under load, second/residual cause after the redirect-encoding
 fix (951a480b3ae7) was confirmed still working.
@@ -111,3 +99,21 @@ fix (951a480b3ae7) was confirmed still working.
   429 wiring above. Needs the same concurrency-guard + overload-signaling
   treatment (SSE equivalent, e.g. an `event: error` frame with a
   RATE_LIMITED payload) as its own follow-up.
+
+Finding from go-lint pass during the API-version cross-cutting fix
+(2026-08-15, task 8 completion).
+
+- `BuildDate` is embedded directly via ldflags instead of `BuildEpoch`
+  (AI.md PART 25: "Always embed `BuildEpoch` (Unix timestamp), `Version`,
+  `CommitID`, `OfficialSite` via `-ldflags -X` at build time — `BuildDate`
+  is derived at runtime from `BuildEpoch`, never embedded directly as its
+  own ldflag"). Violations: `Makefile` line 31 (`LDFLAGS`) and line 39
+  (`CLI_LDFLAGS`) both set `main.BuildDate` via `-X`; `docker/Dockerfile`
+  line 25 does the same. `src/main.go` line 57 and
+  `src/client/cmd/root.go` line 28 declare a `BuildDate` var populated by
+  ldflags instead of a `BuildEpoch` var derived at runtime. Found
+  unrelated to and out of scope for the API-version fix; needs its own fix
+  pass: replace `BUILD_DATE`/`main.BuildDate` with
+  `BUILD_EPOCH`/`main.BuildEpoch` (Unix timestamp) across Makefile and
+  Dockerfile, then compute `BuildDate` at runtime from `BuildEpoch` in
+  `main.go`/`root.go`.

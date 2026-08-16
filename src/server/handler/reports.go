@@ -18,7 +18,7 @@ import (
 // leaves generous headroom while capping abuse.
 const maxReportBodyBytes = 64 * 1024
 
-// ReportsDefault handles POST /api/v1/server/reports/default — the Reporting API
+// ReportsDefault handles POST {api_version}/server/reports/default — the Reporting API
 // (modern Reporting-Endpoints + legacy Report-To) batch endpoint. Browsers post
 // an array of reports (CSP, deprecation, intervention, crash) as
 // application/reports+json.
@@ -26,13 +26,13 @@ func (h *ServerHandler) ReportsDefault(w http.ResponseWriter, r *http.Request) {
 	h.ingestReport(w, r, "security.report")
 }
 
-// ReportsNEL handles POST /api/v1/server/reports/nel — Network Error Logging.
+// ReportsNEL handles POST {api_version}/server/reports/nel — Network Error Logging.
 // Browsers post application/reports+json describing TLS/DNS/TCP/HTTP failures.
 func (h *ServerHandler) ReportsNEL(w http.ResponseWriter, r *http.Request) {
 	h.ingestReport(w, r, "security.nel_report")
 }
 
-// ReportsCSP handles POST /api/v1/server/reports/csp — Content-Security-Policy
+// ReportsCSP handles POST {api_version}/server/reports/csp — Content-Security-Policy
 // violation reports. Accepts both the legacy application/csp-report shape and
 // the modern application/reports+json shape.
 func (h *ServerHandler) ReportsCSP(w http.ResponseWriter, r *http.Request) {

@@ -71,7 +71,8 @@
                     </summary>
                     <div class="source-filter-dropdown" id="source-filter-list" role="group" aria-label="{{ t "a11y.source_filter_options" }}">
                         <label class="source-option source-option--special">
-                            <input type="checkbox" id="filter-preview-first" data-action="preview-first">
+                            <input type="checkbox" id="filter-preview-first" name="preview_first" value="1"{{if .PreviewFirst}} checked{{end}} data-action="preview-first">
+                            <input type="hidden" name="preview_first" value="0">
                             <span>{{ t "filter.preview_first" }}</span>
                         </label>
                         <label class="source-option">

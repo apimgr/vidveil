@@ -35,7 +35,7 @@
                     </button>
                 </div>
             </form>
-            {{template "public/filters" (dict "ShowEngines" false "Compact" true "SelfForm" true "Query" .Query "FilterDuration" .FilterDuration "FilterQuality" .FilterQuality "FilterSort" .FilterSort)}}
+            {{template "public/filters" (dict "ShowEngines" false "Compact" true "SelfForm" true "Query" .Query "FilterDuration" .FilterDuration "FilterQuality" .FilterQuality "FilterSort" .FilterSort "PreviewFirst" .PreviewFirst)}}
         </div>
 
         {{/* Hidden by default: the server already rendered results below, so the

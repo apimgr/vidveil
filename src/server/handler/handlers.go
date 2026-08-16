@@ -137,6 +137,13 @@ const iPForwardCookieName = "forward_ip"
 const resultsPerPageCookieName = "results_per_page"
 const openNewTabCookieName = "open_new_tab"
 
+// previewFirstCookieName persists the filters-panel "preview first" result
+// ordering across searches for no-JS clients (see getRequestPreviewFirst) —
+// unlike duration/quality/sort, which are pure per-request URL state, this
+// preference needs to survive navigating away from the query string it was
+// set on (e.g. clicking through to a fresh search from the homepage).
+const previewFirstCookieName = "preview_first"
+
 // getRequestTheme returns the user's theme preference from their cookie, falling
 // back to the server-configured default. Valid values: "dark", "light", "auto".
 func (h *SearchHandler) getRequestTheme(r *http.Request) string {
@@ -987,6 +994,12 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Preview-first result ordering — no-JS clients only (see
+	// getRequestPreviewFirst); the JS-enabled UI sends this as a
+	// SearchWithOperators-equivalent query param on its own SSE/AJAX calls
+	// (see APISearch), never through this cookie path.
+	previewFirst := h.getRequestPreviewFirst(w, r)
+
 	// For regular browsers: JavaScript streams results into the page via SSE
 	// (/api/v1/search) as an enhancement. To keep core search working WITHOUT
 	// JavaScript (progressive enhancement, AI.md PART 16), also perform a
@@ -998,7 +1011,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 		sessionID := h.resolveSearchSessionID(w, r)
 		filterOpts := parseResultFilterOptions(r)
-		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, sessionID, resultsPerPageOverride, filterOpts)
+		results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, sessionID, resultsPerPageOverride, filterOpts)
 		results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 		results.Data.InvalidBang = parsed.InvalidBang
 		if h.metrics != nil {
@@ -1075,6 +1088,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"FilterDuration":  r.URL.Query().Get("duration"),
 			"FilterQuality":   r.URL.Query().Get("quality"),
 			"FilterSort":      r.URL.Query().Get("sort"),
+			"PreviewFirst":    previewFirst,
 			"OpenNewTab":      h.getRequestOpenNewTab(r),
 			"Page":            page,
 			"PrevPage":        page - 1,
@@ -1088,7 +1102,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-browser clients (CLI, curl, JSON API): perform synchronous search
-	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", resultsPerPageOverride, parseResultFilterOptions(r))
+	results := h.engineMgr.SearchWithOperators(r.Context(), searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, "", resultsPerPageOverride, parseResultFilterOptions(r))
 	results.Data.SearchTimeMS = time.Since(requestStart).Milliseconds()
 	results.Data.InvalidBang = parsed.InvalidBang
 
@@ -1159,6 +1173,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"FilterDuration":  r.URL.Query().Get("duration"),
 			"FilterQuality":   r.URL.Query().Get("quality"),
 			"FilterSort":      r.URL.Query().Get("sort"),
+			"PreviewFirst":    previewFirst,
 			"Version":         version.GetVersion(),
 			"BuildDateTime":   BuildDateTime(),
 		})
@@ -1233,6 +1248,25 @@ func (h *SearchHandler) getRequestOpenNewTab(r *http.Request) bool {
 		return c.Value == "1"
 	}
 	return true
+}
+
+// getRequestPreviewFirst returns the user's "preview first" result-ordering
+// preference for the no-JS/text-browser SearchPage render path. An explicit
+// `preview_first` query param (submitted by the filters.tmpl checkbox+hidden
+// fallback pair — "1" checked, "0" unchecked) always wins and is persisted
+// back into previewFirstCookieName so the choice survives navigating to a
+// fresh search with no query param at all; otherwise falls back to the
+// existing cookie, defaulting to false.
+func (h *SearchHandler) getRequestPreviewFirst(w http.ResponseWriter, r *http.Request) bool {
+	if v := r.URL.Query().Get("preview_first"); v == "0" || v == "1" {
+		previewFirst := v == "1"
+		http.SetCookie(w, newSecureCookie(previewFirstCookieName, v, "/", 365*24*60*60, h.appConfig.Server.SSL.Enabled))
+		return previewFirst
+	}
+	if c, err := r.Cookie(previewFirstCookieName); err == nil {
+		return c.Value == "1"
+	}
+	return false
 }
 
 // safeReturnPath validates a redirect target taken from either a Referer

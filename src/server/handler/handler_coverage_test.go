@@ -1271,47 +1271,6 @@ func TestIsPrivateHost_PrivateRange(t *testing.T) {
 	}
 }
 
-// ── MetricsMiddleware ─────────────────────────────────────────────────────────
-
-// TestMetricsMiddleware_PassThrough verifies the middleware calls the next handler.
-func TestMetricsMiddleware_PassThrough(t *testing.T) {
-	cfg := createTestConfig()
-	mgr := engine.NewEngineManager(config.DefaultAppConfig())
-	m := NewMetrics(cfg, mgr)
-	called := false
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := m.MetricsMiddleware(next)
-	req := httptest.NewRequest("GET", "/", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if !called {
-		t.Error("MetricsMiddleware should call next handler")
-	}
-}
-
-// TestMetricsMiddleware_IncrementsCounters verifies the middleware increments request counters.
-func TestMetricsMiddleware_IncrementsCounters(t *testing.T) {
-	cfg := createTestConfig()
-	mgr := engine.NewEngineManager(config.DefaultAppConfig())
-	m := NewMetrics(cfg, mgr)
-	before := m.GetRequestsTotal()
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := m.MetricsMiddleware(next)
-	req := httptest.NewRequest("GET", "/test", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if m.GetRequestsTotal() <= before {
-		t.Error("MetricsMiddleware should increment requests counter")
-	}
-}
-
 // ── BuildDateTime coverage extension ─────────────────────────────────────────
 
 // TestBuildDateTime_RFC3339 verifies a valid RFC3339 time is formatted correctly.
@@ -1344,37 +1303,6 @@ func TestGetUptime_ContainsTimeUnit(t *testing.T) {
 	got := getUptime()
 	if !strings.Contains(got, "h") && !strings.Contains(got, "d") {
 		t.Errorf("getUptime() = %q, expected 'h' or 'd' time unit", got)
-	}
-}
-
-// ── Metrics Handler ───────────────────────────────────────────────────────────
-
-// TestMetricsHandler_Returns200 verifies the /metrics HTTP handler returns 200 from loopback.
-func TestMetricsHandler_Returns200(t *testing.T) {
-	cfg := createTestConfig()
-	mgr := engine.NewEngineManager(config.DefaultAppConfig())
-	m := NewMetrics(cfg, mgr)
-	req := httptest.NewRequest("GET", "/metrics", nil)
-	req.RemoteAddr = "127.0.0.1:8080"
-	rr := httptest.NewRecorder()
-	m.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("Metrics handler status = %d, want %d", rr.Code, http.StatusOK)
-	}
-}
-
-// TestMetricsHandler_ForbidsNonLoopback verifies the /metrics handler blocks non-loopback when no token.
-func TestMetricsHandler_ForbidsNonLoopback(t *testing.T) {
-	cfg := createTestConfig()
-	mgr := engine.NewEngineManager(config.DefaultAppConfig())
-	m := NewMetrics(cfg, mgr)
-	req := httptest.NewRequest("GET", "/metrics", nil)
-	rr := httptest.NewRecorder()
-	m.Handler().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden && rr.Code != http.StatusUnauthorized {
-		t.Errorf("Metrics handler from non-loopback: status = %d, want 403/401", rr.Code)
 	}
 }
 

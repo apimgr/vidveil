@@ -2,15 +2,9 @@
 package handler
 
 import (
-	"crypto/subtle"
-	"net"
-	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
@@ -234,58 +228,3 @@ func (m *ServerMetrics) GetActiveConnections() int64 {
 	return atomic.LoadInt64(&m.activeConnections)
 }
 
-// isLoopbackRequest reports whether the request originates from localhost.
-// Used to enforce internal-only access when no bearer token is configured.
-func isLoopbackRequest(r *http.Request) bool {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	ip := net.ParseIP(strings.TrimSpace(host))
-	if ip == nil {
-		return false
-	}
-	return ip.IsLoopback()
-}
-
-// Handler returns the Prometheus metrics HTTP handler.
-// Per AI.md PART 20: metrics are internal-only.
-// When a token is configured, it is required for all requests.
-// When no token is configured, access is restricted to loopback (127.x/::1).
-// Responses are served via promhttp.Handler() from the default registry, which
-// includes all promauto-registered vidveil_* metrics (PART 20).
-func (m *ServerMetrics) Handler() http.HandlerFunc {
-	promHandler := promhttp.Handler()
-	return func(w http.ResponseWriter, r *http.Request) {
-		if m.appConfig.Server.Metrics.Token != "" {
-			// Token configured: require it via the Authorization header only.
-			// PART 20 specifies `Authorization: Bearer <token>` as the sole auth
-			// mechanism; a ?token= query param would leak the secret into access
-			// logs and reverse-proxy logs, so it is not accepted.
-			header := r.Header.Get("Authorization")
-			expected := "Bearer " + m.appConfig.Server.Metrics.Token
-			// Constant-time comparison prevents token timing side-channels (PART 1, PART 11)
-			if subtle.ConstantTimeCompare([]byte(header), []byte(expected)) != 1 {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
-		} else {
-			// No token: restrict to loopback only (internal-only per PART 14/20)
-			if !isLoopbackRequest(r) {
-				http.Error(w, "Forbidden: metrics are internal-only", http.StatusForbidden)
-				return
-			}
-		}
-		promHandler.ServeHTTP(w, r)
-	}
-}
-
-// MetricsMiddleware creates middleware that tracks request metrics per AI.md PART 13
-func (m *ServerMetrics) MetricsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.IncrementRequests()
-		m.IncrementActiveConnections()
-		defer m.DecrementActiveConnections()
-		next.ServeHTTP(w, r)
-	})
-}

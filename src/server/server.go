@@ -639,9 +639,22 @@ func (s *Server) setupRoutes() {
 	// /api/healthz is the unversioned direct JSON alias for {api_version}/server/healthz
 	s.router.Get("/api/healthz", h.APIHealthCheck)
 
-	// Prometheus metrics
+	// Metrics — INTERNAL ONLY, per-service bearer token auth, SAME handler at
+	// every alias, never a redirect (AI.md PART 20).
 	if s.appConfig.Server.Metrics.Enabled {
-		s.router.Get(s.appConfig.Server.Metrics.Endpoint, svcmetrics.Handler().ServeHTTP)
+		metricsHandler := svcmetrics.ServiceHandler(s.appConfig, s.logger)
+
+		s.router.Get("/server/metrics", metricsHandler)
+		s.router.Get("/server/metrics/{service}", metricsHandler)
+		s.router.Get(apiBase+"/server/metrics", metricsHandler)
+		s.router.Get(apiBase+"/server/metrics/{service}", metricsHandler)
+		s.router.Get("/api/metrics", metricsHandler)
+		s.router.Get("/api/metrics/{service}", metricsHandler)
+
+		if s.appConfig.Server.Metrics.Root.Enabled {
+			s.router.Get("/metrics", metricsHandler)
+			s.router.Get("/metrics/{service}", metricsHandler)
+		}
 	}
 
 	// Routes that require age verification (project-specific per PART 14)

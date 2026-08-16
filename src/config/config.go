@@ -397,13 +397,41 @@ type LetsEncryptConfig struct {
 
 // MetricsConfig holds Prometheus metrics settings per AI.md PART 20
 type MetricsConfig struct {
-	Enabled         bool      `yaml:"enabled"`
-	Endpoint        string    `yaml:"endpoint"`
-	IncludeSystem   bool      `yaml:"include_system"`
-	IncludeRuntime  bool      `yaml:"include_runtime"`
-	Token           string    `yaml:"token"`
-	DurationBuckets []float64 `yaml:"duration_buckets"`
-	SizeBuckets     []float64 `yaml:"size_buckets"`
+	Enabled         bool               `yaml:"enabled"`
+	Root            MetricsRootConfig  `yaml:"root"`
+	Auth            MetricsAuthConfig  `yaml:"auth"`
+	IncludeSystem   bool               `yaml:"include_system"`
+	IncludeRuntime  bool               `yaml:"include_runtime"`
+	Loki            MetricsLokiConfig  `yaml:"loki"`
+	DurationBuckets []float64          `yaml:"duration_buckets"`
+	SizeBuckets     []float64          `yaml:"size_buckets"`
+}
+
+// MetricsRootConfig gates the /metrics[/{service}] root alias per AI.md PART 20
+type MetricsRootConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// MetricsAuthConfig holds metrics bearer-token auth settings per AI.md PART 20
+type MetricsAuthConfig struct {
+	// AllowUnauthenticated skips token checks for ALL metrics services -
+	// firewalled internal networks only, never on a public server
+	AllowUnauthenticated bool                `yaml:"allow_unauthenticated"`
+	Tokens               MetricsTokensConfig `yaml:"tokens"`
+}
+
+// MetricsTokensConfig holds the per-service metrics bearer tokens per AI.md PART 20.
+// An empty token disables that service's endpoints (403).
+type MetricsTokensConfig struct {
+	Prometheus string `yaml:"prometheus"`
+	Grafana    string `yaml:"grafana"`
+	Loki       string `yaml:"loki"`
+}
+
+// MetricsLokiConfig controls how much recent log the loki metrics service serves
+type MetricsLokiConfig struct {
+	MaxEntries int    `yaml:"max_entries"`
+	MaxAge     string `yaml:"max_age"`
 }
 
 // GeoIPConfig holds GeoIP settings per AI.md PART 19
@@ -1224,10 +1252,20 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			Metrics: MetricsConfig{
-				Enabled:         false,
-				Endpoint:        "/metrics",
-				IncludeSystem:   true,
-				IncludeRuntime:  true,
+				Enabled: false,
+				Root: MetricsRootConfig{
+					Enabled: true,
+				},
+				Auth: MetricsAuthConfig{
+					AllowUnauthenticated: false,
+					Tokens:               MetricsTokensConfig{},
+				},
+				IncludeSystem:  true,
+				IncludeRuntime: true,
+				Loki: MetricsLokiConfig{
+					MaxEntries: 1000,
+					MaxAge:     "1h",
+				},
 				DurationBuckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 				SizeBuckets:     []float64{100, 1000, 10000, 100000, 1000000, 10000000},
 			},

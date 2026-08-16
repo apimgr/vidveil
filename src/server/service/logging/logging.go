@@ -555,6 +555,49 @@ type AppLogger struct {
 	// output name → format ("text", "logfmt", "json")
 	outputFormats map[string]string
 	appConfig     *config.AppConfig
+	// recent holds a bounded in-memory ring of structured log entries,
+	// consumed by the Loki metrics service per AI.md PART 20
+	recent []RecentLogEntry
+}
+
+// RecentLogEntry is a single structured log entry captured for the Loki metrics service.
+type RecentLogEntry struct {
+	Timestamp time.Time
+	Level     string
+	Output    string
+	Message   string
+	Fields    map[string]interface{}
+}
+
+// maxRecentLogEntries caps the in-memory ring buffer regardless of config,
+// so an unbounded/misconfigured loki.max_entries cannot exhaust memory.
+const maxRecentLogEntries = 2000
+
+// RecentEntries returns recent log entries newest-last, filtered by maxAge and
+// capped to maxEntries, for the Loki metrics service per AI.md PART 20.
+// maxEntries <= 0 means no cap; maxAge <= 0 means no age filter.
+func (l *AppLogger) RecentEntries(maxEntries int, maxAge time.Duration) []RecentLogEntry {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	var cutoff time.Time
+	if maxAge > 0 {
+		cutoff = time.Now().Add(-maxAge)
+	}
+
+	result := make([]RecentLogEntry, 0, len(l.recent))
+	for _, entry := range l.recent {
+		if !cutoff.IsZero() && entry.Timestamp.Before(cutoff) {
+			continue
+		}
+		result = append(result, entry)
+	}
+
+	if maxEntries > 0 && len(result) > maxEntries {
+		result = result[len(result)-maxEntries:]
+	}
+
+	return result
 }
 
 // NewAppLogger creates a new logger
@@ -799,10 +842,22 @@ func (l *AppLogger) log(level Level, output string, message string, fields map[s
 		return
 	}
 
-	ts := time.Now().Format("2006-01-02T15:04:05-07:00")
+	now := time.Now()
+	ts := now.Format("2006-01-02T15:04:05-07:00")
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	l.recent = append(l.recent, RecentLogEntry{
+		Timestamp: now,
+		Level:     level.String(),
+		Output:    output,
+		Message:   message,
+		Fields:    fields,
+	})
+	if len(l.recent) > maxRecentLogEntries {
+		l.recent = l.recent[len(l.recent)-maxRecentLogEntries:]
+	}
 
 	w, ok := l.outputs[output]
 	if !ok {

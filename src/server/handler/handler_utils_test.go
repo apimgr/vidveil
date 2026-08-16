@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Coverage tests for standalone utility functions in the handler package:
-// csvEscape, BuildDateTime, isLoopbackRequest,
+// csvEscape, BuildDateTime,
 // ServerMetrics active-connection counters, and GetAnalyticsSummary.
 package handler
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -40,40 +38,6 @@ func TestBuildDateTime_EmptyReturnUnknown(t *testing.T) {
 	got := BuildDateTime()
 	if got == "" {
 		t.Error("BuildDateTime: should never return empty string")
-	}
-}
-
-// ── isLoopbackRequest ─────────────────────────────────────────────────────────
-
-func TestIsLoopbackRequest_Localhost(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.RemoteAddr = "127.0.0.1:12345"
-	if !isLoopbackRequest(req) {
-		t.Error("isLoopbackRequest: 127.0.0.1 should be loopback")
-	}
-}
-
-func TestIsLoopbackRequest_IPv6Loopback(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.RemoteAddr = "[::1]:12345"
-	if !isLoopbackRequest(req) {
-		t.Error("isLoopbackRequest: ::1 should be loopback")
-	}
-}
-
-func TestIsLoopbackRequest_ExternalIP(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.RemoteAddr = "203.0.113.1:12345"
-	if isLoopbackRequest(req) {
-		t.Error("isLoopbackRequest: 203.0.113.1 should not be loopback")
-	}
-}
-
-func TestIsLoopbackRequest_InvalidAddr(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.RemoteAddr = "notanip"
-	if isLoopbackRequest(req) {
-		t.Error("isLoopbackRequest: invalid addr should return false")
 	}
 }
 

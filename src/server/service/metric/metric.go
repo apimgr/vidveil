@@ -3,6 +3,8 @@
 package metric
 
 import (
+	"crypto/subtle"
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -12,6 +14,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/logging"
 )
 
 // uuidPathSegment matches a UUID path segment (any version).
@@ -410,10 +415,229 @@ func InitMetricsAppInfo(ver, commit, buildDate, goVer string) {
 
 // Handler returns the Prometheus text exposition HTTP handler for the
 // registered default metrics registry (AI.md PART 20 "prometheus" service).
-// Per-service sub-paths, per-service bearer tokens, and the grafana/loki
-// service variants are tracked separately (see TODO.AI.md).
+// Used directly by ServiceHandler and kept exported for callers that only
+// ever want the raw Prometheus registry (e.g. tests).
 func Handler() http.Handler {
 	return promhttp.Handler()
+}
+
+// serviceFromRequest resolves the {service} path segment (last segment of the
+// request path), defaulting to "prometheus" per AI.md PART 20 ("/server/metrics"
+// and the root "/metrics" alias with no sub-path both serve prometheus).
+func serviceFromRequest(r *http.Request) string {
+	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(segments) == 0 {
+		return "prometheus"
+	}
+	last := segments[len(segments)-1]
+	switch last {
+	case "prometheus", "grafana", "loki":
+		return last
+	case "metrics":
+		return "prometheus"
+	default:
+		return ""
+	}
+}
+
+// ServiceHandler returns the AI.md PART 20 metrics HTTP handler, dispatching on
+// the {service} path segment (prometheus/grafana/loki) with mandatory per-service
+// bearer-token authentication (constant-time compare, header only). An empty
+// token disables that service (403). logger supplies recent structured log
+// entries for the loki service; nil is treated as an empty log stream.
+// The SAME handler is mounted at every alias route — callers never redirect.
+func ServiceHandler(appConfig *config.AppConfig, logger *logging.AppLogger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if appConfig == nil || !appConfig.Server.Metrics.Enabled {
+			http.NotFound(w, r)
+			return
+		}
+		cfg := appConfig.Server.Metrics
+
+		service := serviceFromRequest(r)
+
+		var token string
+		switch service {
+		case "prometheus":
+			token = cfg.Auth.Tokens.Prometheus
+		case "grafana":
+			token = cfg.Auth.Tokens.Grafana
+		case "loki":
+			token = cfg.Auth.Tokens.Loki
+		default:
+			http.NotFound(w, r)
+			return
+		}
+
+		if !cfg.Auth.AllowUnauthenticated {
+			// Empty token = that service disabled per AI.md PART 20.
+			if token == "" {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			// Header only — query-string tokens are forbidden (they leak into
+			// access logs and reverse-proxy logs).
+			header := r.Header.Get("Authorization")
+			expected := "Bearer " + token
+			if subtle.ConstantTimeCompare([]byte(header), []byte(expected)) != 1 {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+		}
+
+		switch service {
+		case "prometheus":
+			promhttp.Handler().ServeHTTP(w, r)
+		case "grafana":
+			serveGrafanaDashboard(w)
+		case "loki":
+			serveLokiStreams(w, cfg.Loki, logger)
+		}
+	}
+}
+
+// serveGrafanaDashboard writes a complete importable Grafana dashboard JSON
+// definition covering every metric category, datasource left as a template
+// variable, per AI.md PART 20.
+func serveGrafanaDashboard(w http.ResponseWriter) {
+	dashboard := buildGrafanaDashboard()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(dashboard)
+}
+
+// grafanaPanel is a minimal Grafana dashboard panel definition.
+type grafanaPanel struct {
+	ID         int             `json:"id"`
+	Title      string          `json:"title"`
+	Type       string          `json:"type"`
+	Datasource string          `json:"datasource"`
+	Targets    []grafanaTarget `json:"targets"`
+	GridPos    grafanaGridPos  `json:"gridPos"`
+}
+
+type grafanaTarget struct {
+	Expr         string `json:"expr"`
+	LegendFormat string `json:"legendFormat"`
+	RefID        string `json:"refId"`
+}
+
+type grafanaGridPos struct {
+	H int `json:"h"`
+	W int `json:"w"`
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+// buildGrafanaDashboard assembles the panel set, one per metrics category
+// (App, HTTP, Database, Cache, Scheduler, System, Business) per AI.md PART 20.
+func buildGrafanaDashboard() map[string]interface{} {
+	type panelSpec struct {
+		title string
+		expr  string
+	}
+	specs := []panelSpec{
+		{"App Uptime", "vidveil_app_uptime_seconds"},
+		{"HTTP Requests Total", "rate(vidveil_http_requests_total[5m])"},
+		{"HTTP Request Duration", "histogram_quantile(0.95, rate(vidveil_http_request_duration_seconds_bucket[5m]))"},
+		{"Active HTTP Requests", "vidveil_http_active_requests"},
+		{"Database Queries Total", "rate(vidveil_db_queries_total[5m])"},
+		{"Database Errors Total", "rate(vidveil_db_errors_total[5m])"},
+		{"Database Connections Open", "vidveil_db_connections_open"},
+		{"Cache Hit Ratio", "rate(vidveil_cache_hits_total[5m]) / (rate(vidveil_cache_hits_total[5m]) + rate(vidveil_cache_misses_total[5m]))"},
+		{"Scheduler Tasks Total", "rate(vidveil_scheduler_tasks_total[5m])"},
+		{"Scheduler Tasks Running", "vidveil_scheduler_tasks_running"},
+		{"System CPU Usage", "vidveil_system_cpu_usage_percent"},
+		{"System Memory Usage", "vidveil_system_memory_usage_percent"},
+		{"Search Queries Total", "rate(vidveil_search_queries_total[5m])"},
+		{"Search Duration", "histogram_quantile(0.95, rate(vidveil_search_duration_seconds_bucket[5m]))"},
+	}
+
+	panels := make([]grafanaPanel, 0, len(specs))
+	for i, s := range specs {
+		panels = append(panels, grafanaPanel{
+			ID:         i + 1,
+			Title:      s.title,
+			Type:       "timeseries",
+			Datasource: "${DS_PROMETHEUS}",
+			Targets: []grafanaTarget{
+				{Expr: s.expr, LegendFormat: s.title, RefID: "A"},
+			},
+			GridPos: grafanaGridPos{H: 8, W: 12, X: (i % 2) * 12, Y: (i / 2) * 8},
+		})
+	}
+
+	return map[string]interface{}{
+		"__inputs": []map[string]interface{}{
+			{
+				"name":        "DS_PROMETHEUS",
+				"label":       "Prometheus",
+				"description": "",
+				"type":        "datasource",
+				"pluginId":    "prometheus",
+				"pluginName":  "Prometheus",
+			},
+		},
+		"title":         "vidveil",
+		"uid":           "vidveil-metrics",
+		"schemaVersion": 39,
+		"version":       1,
+		"timezone":      "browser",
+		"editable":      true,
+		"panels":        panels,
+		"time": map[string]string{
+			"from": "now-6h",
+			"to":   "now",
+		},
+	}
+}
+
+// serveLokiStreams writes recent structured log entries as Loki push-API JSON
+// streams, bounded by loki.max_entries/max_age, per AI.md PART 20. Credentials
+// are always redacted by the logging subsystem before entries are captured.
+func serveLokiStreams(w http.ResponseWriter, lokiCfg config.MetricsLokiConfig, logger *logging.AppLogger) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if logger == nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"streams": []interface{}{}})
+		return
+	}
+
+	maxAge := time.Hour
+	if parsed, err := time.ParseDuration(lokiCfg.MaxAge); err == nil && parsed > 0 {
+		maxAge = parsed
+	}
+
+	entries := logger.RecentEntries(lokiCfg.MaxEntries, maxAge)
+
+	// Group entries by their label set (level + output) into Loki streams.
+	type streamKey struct {
+		level  string
+		output string
+	}
+	grouped := make(map[streamKey][][2]string)
+	order := make([]streamKey, 0)
+	for _, e := range entries {
+		key := streamKey{level: e.Level, output: e.Output}
+		if _, ok := grouped[key]; !ok {
+			order = append(order, key)
+		}
+		ns := strconv.FormatInt(e.Timestamp.UnixNano(), 10)
+		grouped[key] = append(grouped[key], [2]string{ns, e.Message})
+	}
+
+	streams := make([]map[string]interface{}, 0, len(order))
+	for _, key := range order {
+		streams = append(streams, map[string]interface{}{
+			"stream": map[string]string{
+				"level":  key.level,
+				"output": key.output,
+				"app":    "vidveil",
+			},
+			"values": grouped[key],
+		})
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"streams": streams})
 }
 
 // statusWriter wraps http.ResponseWriter to capture the status code and bytes written.

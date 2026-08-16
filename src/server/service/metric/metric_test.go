@@ -7,7 +7,10 @@ package metric
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/apimgr/vidveil/src/config"
 )
 
 // ---- Application metrics ----
@@ -473,4 +476,200 @@ func TestTorMetricsCanSet(t *testing.T) {
 	TorRunning.Set(1)
 	TorCircuitEstablished.Set(1)
 	TorRequestsTotal.Inc()
+}
+
+// ---- Handler (AI.md PART 20 "prometheus" service) ----
+
+func TestHandlerReturnsPrometheusExposition(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/prometheus", nil)
+	rr := httptest.NewRecorder()
+	Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("Handler status = %d, want 200", rr.Code)
+	}
+	if rr.Body.Len() == 0 {
+		t.Error("Handler wrote an empty body")
+	}
+}
+
+// ---- serviceFromRequest ----
+
+func TestServiceFromRequest(t *testing.T) {
+	cases := map[string]string{
+		"/server/metrics":            "prometheus",
+		"/server/metrics/prometheus": "prometheus",
+		"/server/metrics/grafana":    "grafana",
+		"/server/metrics/loki":       "loki",
+		"/metrics":                   "prometheus",
+		"/server/metrics/bogus":      "",
+	}
+	for path, want := range cases {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if got := serviceFromRequest(req); got != want {
+			t.Errorf("serviceFromRequest(%q) = %q, want %q", path, got, want)
+		}
+	}
+}
+
+// ---- ServiceHandler (AI.md PART 20) ----
+
+func newTestAppConfig() *config.AppConfig {
+	cfg := &config.AppConfig{}
+	cfg.Server.Metrics.Enabled = true
+	cfg.Server.Metrics.Auth.Tokens.Prometheus = "prom-token"
+	cfg.Server.Metrics.Auth.Tokens.Grafana = "grafana-token"
+	cfg.Server.Metrics.Auth.Tokens.Loki = "loki-token"
+	return cfg
+}
+
+func TestServiceHandler_DisabledConfig_ReturnsNotFound(t *testing.T) {
+	cfg := &config.AppConfig{}
+	cfg.Server.Metrics.Enabled = false
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics", nil)
+	rr := httptest.NewRecorder()
+	ServiceHandler(cfg, nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("disabled metrics status = %d, want 404", rr.Code)
+	}
+}
+
+func TestServiceHandler_NilConfig_ReturnsNotFound(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics", nil)
+	rr := httptest.NewRecorder()
+	ServiceHandler(nil, nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("nil config status = %d, want 404", rr.Code)
+	}
+}
+
+func TestServiceHandler_Prometheus_CorrectToken_Returns200(t *testing.T) {
+	cfg := newTestAppConfig()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/prometheus", nil)
+	req.Header.Set("Authorization", "Bearer prom-token")
+	rr := httptest.NewRecorder()
+	ServiceHandler(cfg, nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("prometheus service status = %d, want 200", rr.Code)
+	}
+}
+
+func TestServiceHandler_EmptyToken_ServiceDisabled(t *testing.T) {
+	cfg := newTestAppConfig()
+	cfg.Server.Metrics.Auth.Tokens.Prometheus = ""
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/prometheus", nil)
+	rr := httptest.NewRecorder()
+	ServiceHandler(cfg, nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("empty token status = %d, want 403", rr.Code)
+	}
+}
+
+func TestServiceHandler_WrongToken_Returns403(t *testing.T) {
+	cfg := newTestAppConfig()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/prometheus", nil)
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	rr := httptest.NewRecorder()
+	ServiceHandler(cfg, nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("wrong token status = %d, want 403", rr.Code)
+	}
+}
+
+func TestServiceHandler_AllowUnauthenticated_Returns200(t *testing.T) {
+	cfg := newTestAppConfig()
+	cfg.Server.Metrics.Auth.AllowUnauthenticated = true
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/prometheus", nil)
+	rr := httptest.NewRecorder()
+	ServiceHandler(cfg, nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("allow_unauthenticated status = %d, want 200", rr.Code)
+	}
+}
+
+func TestServiceHandler_UnknownService_Returns404(t *testing.T) {
+	cfg := newTestAppConfig()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/bogus", nil)
+	rr := httptest.NewRecorder()
+	ServiceHandler(cfg, nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("unknown service status = %d, want 404", rr.Code)
+	}
+}
+
+func TestServiceHandler_Grafana_ReturnsJSONDashboard(t *testing.T) {
+	cfg := newTestAppConfig()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/grafana", nil)
+	req.Header.Set("Authorization", "Bearer grafana-token")
+	rr := httptest.NewRecorder()
+	ServiceHandler(cfg, nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("grafana service status = %d, want 200", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("grafana Content-Type = %q, want application/json", ct)
+	}
+	if rr.Body.Len() == 0 {
+		t.Error("grafana service wrote an empty body")
+	}
+}
+
+func TestServiceHandler_Loki_NilLogger_ReturnsEmptyStreams(t *testing.T) {
+	cfg := newTestAppConfig()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/loki", nil)
+	req.Header.Set("Authorization", "Bearer loki-token")
+	rr := httptest.NewRecorder()
+	ServiceHandler(cfg, nil).ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("loki service status = %d, want 200", rr.Code)
+	}
+	if got := rr.Body.String(); !strings.Contains(got, `"streams"`) {
+		t.Errorf("loki body = %q, want it to contain \"streams\"", got)
+	}
+}
+
+// ---- buildGrafanaDashboard ----
+
+func TestBuildGrafanaDashboardNotEmpty(t *testing.T) {
+	dashboard := buildGrafanaDashboard()
+	if len(dashboard) == 0 {
+		t.Error("buildGrafanaDashboard returned an empty map")
+	}
+	panels, ok := dashboard["panels"]
+	if !ok {
+		t.Fatal("buildGrafanaDashboard missing \"panels\" key")
+	}
+	list, ok := panels.([]grafanaPanel)
+	if !ok {
+		t.Fatalf("buildGrafanaDashboard \"panels\" has unexpected type %T", panels)
+	}
+	if len(list) == 0 {
+		t.Error("buildGrafanaDashboard produced zero panels")
+	}
+}
+
+// ---- serveGrafanaDashboard ----
+
+func TestServeGrafanaDashboardWritesJSON(t *testing.T) {
+	rr := httptest.NewRecorder()
+	serveGrafanaDashboard(rr)
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("serveGrafanaDashboard Content-Type = %q, want application/json", ct)
+	}
+	if rr.Body.Len() == 0 {
+		t.Error("serveGrafanaDashboard wrote an empty body")
+	}
+}
+
+// ---- serveLokiStreams ----
+
+func TestServeLokiStreamsNilLogger(t *testing.T) {
+	rr := httptest.NewRecorder()
+	lokiCfg := config.MetricsLokiConfig{MaxEntries: 1000, MaxAge: "1h"}
+	serveLokiStreams(rr, lokiCfg, nil)
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("serveLokiStreams Content-Type = %q, want application/json", ct)
+	}
+	if got := rr.Body.String(); !strings.Contains(got, `"streams"`) {
+		t.Errorf("serveLokiStreams body = %q, want it to contain \"streams\"", got)
+	}
 }

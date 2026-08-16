@@ -18,6 +18,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
+	"github.com/apimgr/vidveil/src/server/service/metric"
 )
 
 // setEmptyTemplatesFS installs a non-nil but empty embed.FS so that tests exercise
@@ -463,100 +464,154 @@ func TestGetUptime_OverOneDayAgo_IncludesDays(t *testing.T) {
 	}
 }
 
-// ── ServerMetrics.Handler ─────────────────────────────────────────────────────
+// ── metric.ServiceHandler (AI.md PART 20) ──────────────────────────────────────
 
-// Loopback request (127.0.0.1) with no token configured → 200 and metrics output.
-func TestMetricsHandler_LoopbackNoToken_Returns200(t *testing.T) {
+// Empty token for a service → that service is disabled, 403, per AI.md PART 20.
+func TestMetricsServiceHandler_EmptyToken_Returns403(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Metrics.Token = ""
-	mgr := engine.NewEngineManager(cfg)
-	m := NewMetrics(cfg, mgr)
+	cfg.Server.Metrics.Enabled = true
+	cfg.Server.Metrics.Auth.Tokens.Prometheus = ""
+	h := metric.ServiceHandler(cfg, nil)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	req.RemoteAddr = "127.0.0.1:1234"
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics", nil)
 
-	m.Handler()(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("metrics Handler loopback: status = %d, want 200", rr.Code)
-	}
-}
-
-// Non-loopback request with no token configured → 403 Forbidden.
-func TestMetricsHandler_NonLoopbackNoToken_Returns403(t *testing.T) {
-	cfg := config.DefaultAppConfig()
-	cfg.Server.Metrics.Token = ""
-	mgr := engine.NewEngineManager(cfg)
-	m := NewMetrics(cfg, mgr)
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	req.RemoteAddr = "192.168.1.100:1234"
-
-	m.Handler()(rr, req)
+	h(rr, req)
 
 	if rr.Code != http.StatusForbidden {
-		t.Errorf("metrics Handler non-loopback: status = %d, want 403", rr.Code)
+		t.Errorf("ServiceHandler empty token: status = %d, want 403", rr.Code)
 	}
 }
 
 // Correct Bearer token → 200.
-func TestMetricsHandler_CorrectBearerToken_Returns200(t *testing.T) {
+func TestMetricsServiceHandler_CorrectBearerToken_Returns200(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Metrics.Token = "secret-token"
-	mgr := engine.NewEngineManager(cfg)
-	m := NewMetrics(cfg, mgr)
+	cfg.Server.Metrics.Enabled = true
+	cfg.Server.Metrics.Auth.Tokens.Prometheus = "secret-token"
+	h := metric.ServiceHandler(cfg, nil)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")
-	req.RemoteAddr = "192.168.1.100:1234"
 
-	m.Handler()(rr, req)
+	h(rr, req)
 
 	if rr.Code != http.StatusOK {
-		t.Errorf("metrics Handler correct token: status = %d, want 200", rr.Code)
+		t.Errorf("ServiceHandler correct token: status = %d, want 200", rr.Code)
 	}
 }
 
 // PART 20: auth is header-only. A correct token supplied only via the
 // ?token= query param (with a wrong/absent Authorization header) must be
 // rejected — the query param is not an accepted auth channel.
-func TestMetricsHandler_QueryParamToken_Rejected(t *testing.T) {
+func TestMetricsServiceHandler_QueryParamToken_Rejected(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Metrics.Token = "qptoken"
-	mgr := engine.NewEngineManager(cfg)
-	m := NewMetrics(cfg, mgr)
+	cfg.Server.Metrics.Enabled = true
+	cfg.Server.Metrics.Auth.Tokens.Prometheus = "qptoken"
+	h := metric.ServiceHandler(cfg, nil)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/metrics?token=qptoken", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics?token=qptoken", nil)
 	req.Header.Set("Authorization", "Bearer wrong")
-	req.RemoteAddr = "10.0.0.1:1234"
 
-	m.Handler()(rr, req)
+	h(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("metrics Handler query-param token: status = %d, want 401", rr.Code)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("ServiceHandler query-param token: status = %d, want 403", rr.Code)
 	}
 }
 
-// Wrong token in both header and query → 401.
-func TestMetricsHandler_WrongToken_Returns401(t *testing.T) {
+// Wrong token in header → 403.
+func TestMetricsServiceHandler_WrongToken_Returns403(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.Metrics.Token = "correct"
-	mgr := engine.NewEngineManager(cfg)
-	m := NewMetrics(cfg, mgr)
+	cfg.Server.Metrics.Enabled = true
+	cfg.Server.Metrics.Auth.Tokens.Prometheus = "correct"
+	h := metric.ServiceHandler(cfg, nil)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics", nil)
 	req.Header.Set("Authorization", "Bearer wrong")
-	req.RemoteAddr = "192.168.1.100:1234"
 
-	m.Handler()(rr, req)
+	h(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("metrics Handler wrong token: status = %d, want 401", rr.Code)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("ServiceHandler wrong token: status = %d, want 403", rr.Code)
+	}
+}
+
+// allow_unauthenticated: true skips token checks for all services.
+func TestMetricsServiceHandler_AllowUnauthenticated_Returns200(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Metrics.Enabled = true
+	cfg.Server.Metrics.Auth.AllowUnauthenticated = true
+	h := metric.ServiceHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics", nil)
+
+	h(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("ServiceHandler allow_unauthenticated: status = %d, want 200", rr.Code)
+	}
+}
+
+// Unknown {service} path segment → 404.
+func TestMetricsServiceHandler_UnknownService_Returns404(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Metrics.Enabled = true
+	cfg.Server.Metrics.Auth.AllowUnauthenticated = true
+	h := metric.ServiceHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/bogus", nil)
+
+	h(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("ServiceHandler unknown service: status = %d, want 404", rr.Code)
+	}
+}
+
+// grafana service returns an importable dashboard JSON body.
+func TestMetricsServiceHandler_Grafana_ReturnsJSON(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Metrics.Enabled = true
+	cfg.Server.Metrics.Auth.Tokens.Grafana = "gtoken"
+	h := metric.ServiceHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/grafana", nil)
+	req.Header.Set("Authorization", "Bearer gtoken")
+
+	h(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("ServiceHandler grafana: status = %d, want 200", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("ServiceHandler grafana: Content-Type = %q, want application/json", ct)
+	}
+}
+
+// loki service with a nil logger returns an empty streams array, not an error.
+func TestMetricsServiceHandler_Loki_NilLogger_ReturnsEmptyStreams(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Metrics.Enabled = true
+	cfg.Server.Metrics.Auth.Tokens.Loki = "ltoken"
+	h := metric.ServiceHandler(cfg, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/loki", nil)
+	req.Header.Set("Authorization", "Bearer ltoken")
+
+	h(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("ServiceHandler loki: status = %d, want 200", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), `"streams"`) {
+		t.Errorf("ServiceHandler loki: body missing streams key: %s", rr.Body.String())
 	}
 }
 

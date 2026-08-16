@@ -6,14 +6,12 @@ triage/fix. Remove each item individually once resolved and committed.
 Findings from CSS/theming compliance re-audit against AI.md PART 16 (commit
 1015f92625d7).
 
-- Go package directory naming: `src/server/service/metrics`,
-  `src/server/service/secrets`, `src/server/service/urlvars`, and
-  `src/server/service/utls` are plural directory names; per Go convention
-  (AI.md/project-rules.md) Go package directories must be singular to
-  match their package names — should be `metric/`, `secret/`, `urlvar/`,
-  `utl/` respectively. Found by go-lint during the CSS/theming
-  pre-commit gate; out of scope for that commit, needs its own rename
-  pass (package rename + all import path updates across the codebase).
+- GOOS string uses "macos" instead of the correct Go GOOS term "darwin" in
+  three places in `src/config/config.go` (line ~1001 OS config comment, line
+  ~1021 and ~1076 `UserAgentConfig`) and one test data string in
+  `src/config/config_coverage_test.go` (line ~358). Found by go-lint during
+  the Go package directory rename pass (task 5); unrelated to that change,
+  out of scope for that commit, needs its own fix pass.
 
 Findings from the full audit pass (2026-08-12). The Aug 11 AI.md commit
 (e19f7f1e5ec3, "Updated the SPEC for API servers", 335 lines changed)

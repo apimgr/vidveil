@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // RotationInterval represents time-based rotation intervals
@@ -1153,7 +1153,7 @@ func (m *AccessLogMiddleware) Handler(next http.Handler) http.Handler {
 			r.Method,
 			r.URL.Path,
 			r.Proto,
-			urlvars.ResolveClientIP(r),
+			urlvar.ResolveClientIP(r),
 			r.Referer(),
 			r.UserAgent(),
 			wrapped.status,

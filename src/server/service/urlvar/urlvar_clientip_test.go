@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 12 "Client IP Detection": deterministic coverage for the client-IP
 // resolution priority chain and the trusted-proxy gate that guards it.
-package urlvars
+package urlvar
 
 import (
 	"net/http"

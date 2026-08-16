@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // injectLocaleData populates Lang and Dir on template data per AI.md PART 30
@@ -257,7 +257,7 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 	// in scope) so renderTemplate's own fallback is only ever hit by direct
 	// test calls that construct data maps without going through renderResponse.
 	if data["AppURL"] == nil {
-		data["AppURL"] = urlvars.BuildURL(r, "")
+		data["AppURL"] = urlvar.BuildURL(r, "")
 	}
 
 	accept := r.Header.Get("Accept")

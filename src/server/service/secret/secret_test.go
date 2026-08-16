@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 28: Unit tests for secrets service
 
-package secrets
+package secret
 
 import (
 	"bytes"

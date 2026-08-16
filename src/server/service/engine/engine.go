@@ -22,7 +22,7 @@ import (
 	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/retry"
-	"github.com/apimgr/vidveil/src/server/service/utls"
+	"github.com/apimgr/vidveil/src/server/service/utl"
 )
 
 // Feature represents optional engine capabilities
@@ -239,7 +239,7 @@ func NewBaseEngine(name, displayName, baseURL string, tier int, appConfig *confi
 		useSpoofedTLS:      appConfig.Search.SpoofTLS,
 		appConfig:          appConfig,
 		httpClient:         createHTTPClient(timeoutSecs),
-		spoofedClient:      utls.CreateHTTPClientWithFingerprint(timeout, "chrome"),
+		spoofedClient:      utl.CreateHTTPClientWithFingerprint(timeout, "chrome"),
 		circuitBreaker:     retry.NewCircuitBreaker(cbConfig),
 		retryConfig:        retryConfig,
 		minRequestInterval: minInterval,

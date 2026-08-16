@@ -31,7 +31,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/logging"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // newCSRFMiddleware returns a middleware that implements the double-submit cookie
@@ -143,7 +143,7 @@ func csrfPathMatches(pattern, urlPath string) bool {
 // and logs the failure to the security log per AI.md PART 11.
 func csrfDeny(w http.ResponseWriter, r *http.Request, reason, endpoint string, logger *logging.AppLogger) {
 	if logger != nil {
-		logger.Security("security.csrf_failure", urlvars.ResolveClientIP(r), map[string]interface{}{
+		logger.Security("security.csrf_failure", urlvar.ResolveClientIP(r), map[string]interface{}{
 			"endpoint": endpoint,
 			"method":   r.Method,
 			"reason":   reason,

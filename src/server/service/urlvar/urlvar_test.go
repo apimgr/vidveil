@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 8: URL Variables & Reverse Proxy Headers - unit tests
-package urlvars
+package urlvar
 
 import (
 	"crypto/tls"

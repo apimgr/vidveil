@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-package utls
+package utl
 
 import (
 	"context"

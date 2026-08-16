@@ -2,7 +2,7 @@
 // Coverage tests for unexplored paths in the utls package:
 // edge/random fingerprint cases, CheckRedirect closure (too-many-redirects +
 // header-preservation), dialTLS error path, dialTLSWithFingerprint error path.
-package utls
+package utl
 
 import (
 	"context"

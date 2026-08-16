@@ -15,7 +15,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	// Register promauto metrics with the default Prometheus registry.
-	_ "github.com/apimgr/vidveil/src/server/service/metrics"
+	_ "github.com/apimgr/vidveil/src/server/service/metric"
 )
 
 // slidingWindowCounter tracks counts in a 24-hour sliding window using hourly buckets.

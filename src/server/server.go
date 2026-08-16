@@ -30,11 +30,11 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
-	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
+	svcmetrics "github.com/apimgr/vidveil/src/server/service/metric"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
-	"github.com/apimgr/vidveil/src/server/service/secrets"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/server/service/secret"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 	"github.com/apimgr/vidveil/src/swagger"
 )
 
@@ -124,7 +124,7 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 
 	// Wire app config into the URL resolver for trusted proxy gate and Tor detection
 	// per AI.md PART 12. Must be called before setupMiddleware uses the resolver.
-	urlvars.GlobalResolver().SetAppConfig(appConfig)
+	urlvar.GlobalResolver().SetAppConfig(appConfig)
 
 	s.setupMiddleware()
 	s.setupRoutes()
@@ -173,12 +173,12 @@ func (s *Server) setupMiddleware() {
 	// r.RemoteAddr from proxy headers unconditionally (no trusted_proxies gate),
 	// which is the same IP-spoofing class as GHSA-3fxj-6jh8-hvhx / GHSA-rjr7-jggh-pgcp
 	// / GHSA-9g5q-2w5x-hmxf and is now deprecated upstream for it. r.RemoteAddr is
-	// left untouched here; urlvars.ResolveClientIP resolves the trusted-gated client
+	// left untouched here; urlvar.ResolveClientIP resolves the trusted-gated client
 	// IP per AI.md PART 12 without rewriting the original TCP peer (see PART 12
 	// "Middleware ordering").
 
 	// URL Variables resolution per AI.md PART 8 (reverse proxy headers)
-	s.router.Use(urlvars.GlobalResolver().Middleware)
+	s.router.Use(urlvar.GlobalResolver().Middleware)
 
 	// 2. Request ID per AI.md PART 5 — must run before Logging so logs carry the ID
 	s.router.Use(middleware.RequestID)
@@ -251,7 +251,7 @@ func (s *Server) setupMiddleware() {
 			// Reporting-Endpoints + legacy Report-To + NEL per AI.md PART 11
 			// Both modern (Reporting-Endpoints) and legacy (Report-To) formats are required.
 			// api_version is "v1" per IDEA.md project variable.
-			proto, fqdn, _ := urlvars.GlobalResolver().GetURLVars(r)
+			proto, fqdn, _ := urlvar.GlobalResolver().GetURLVars(r)
 			reportsBase := proto + "://" + fqdn + "/api/v1/server/reports"
 			w.Header().Set("Reporting-Endpoints", `default="`+reportsBase+`/default"`)
 			w.Header().Set("Report-To", `{"group":"default","max_age":10886400,"endpoints":[{"url":"`+reportsBase+`/default"}]}`)
@@ -341,7 +341,7 @@ func (s *Server) setupMiddleware() {
 	// NOTE: chi's stock middleware.Logger is intentionally NOT used here — its
 	// DefaultLogFormatter logs r.RemoteAddr directly, which is blind to
 	// X-Forwarded-For/X-Real-IP/CF-Connecting-IP and defeats the trusted-proxy
-	// resolution built in urlvars.ResolveClientIP (PART 12 "Client IP Detection").
+	// resolution built in urlvar.ResolveClientIP (PART 12 "Client IP Detection").
 	// requestLogMiddleware below reproduces the same console format but sources
 	// the IP through ResolveClientIP so console logs match the access log file.
 	s.router.Use(requestLogMiddleware)
@@ -350,7 +350,7 @@ func (s *Server) setupMiddleware() {
 // requestLogMiddleware logs each request to the console in the same format as
 // chi's DefaultLogFormatter ("[host/request-id] "METHOD scheme://host/path proto"
 // from <ip> - <status> <size>B in <duration>"), but resolves the client IP via
-// urlvars.ResolveClientIP instead of raw r.RemoteAddr, so console output honors
+// urlvar.ResolveClientIP instead of raw r.RemoteAddr, so console output honors
 // trusted reverse-proxy headers per AI.md PART 12.
 func requestLogMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -366,7 +366,7 @@ func requestLogMiddleware(next http.Handler) http.Handler {
 		log.Printf("[%s/%s] %q from %s - %d %dB in %s",
 			r.Host, reqID,
 			fmt.Sprintf("%s %s://%s%s %s", r.Method, scheme, r.Host, r.RequestURI, r.Proto),
-			urlvars.ResolveClientIP(r),
+			urlvar.ResolveClientIP(r),
 			ww.Status(), ww.BytesWritten(),
 			time.Since(start),
 		)
@@ -512,7 +512,7 @@ func (s *Server) setupRoutes() {
 	// Secrets manager backs the {security_id} rotating token (AI.md PART 11
 	// "Security Reports") for both the security.txt Contact: line and the
 	// /server/contact?security_id={id} mode switch.
-	secretsMgr := secrets.NewManager(s.migrationMgr.GetDB())
+	secretsMgr := secret.NewManager(s.migrationMgr.GetDB())
 	h.SetSecretsManager(secretsMgr)
 	// Set config directory so the PGP public key (/.well-known/pgp-key.asc) can
 	// be served from {config_dir}/security/pgp.pub.asc per AI.md PART 12.
@@ -529,9 +529,6 @@ func (s *Server) setupRoutes() {
 
 	// Prometheus labeled HTTP metrics per AI.md PART 20 (REQUIRED)
 	s.router.Use(svcmetrics.InstrumentMiddleware)
-
-	// Metrics middleware per AI.md PART 13 - tracks requests and active connections
-	s.router.Use(metrics.MetricsMiddleware)
 
 	// Maintenance mode middleware (applied globally, but allows admin access)
 	s.router.Use(h.MaintenanceModeMiddleware)
@@ -644,7 +641,7 @@ func (s *Server) setupRoutes() {
 
 	// Prometheus metrics
 	if s.appConfig.Server.Metrics.Enabled {
-		s.router.Get(s.appConfig.Server.Metrics.Endpoint, metrics.Handler())
+		s.router.Get(s.appConfig.Server.Metrics.Endpoint, svcmetrics.Handler().ServeHTTP)
 	}
 
 	// Routes that require age verification (project-specific per PART 14)
@@ -1092,7 +1089,7 @@ func (s *Server) geoIPMiddleware(next http.Handler) http.Handler {
 // Detection" — proxy headers only honored when the immediate peer passes the
 // trusted_proxies gate, otherwise falls back to the raw TCP peer.
 func extractClientIP(r *http.Request) string {
-	return urlvars.ResolveClientIP(r)
+	return urlvar.ResolveClientIP(r)
 }
 
 // secFetchValidationMiddleware validates Sec-Fetch-* request headers per AI.md PART 11.

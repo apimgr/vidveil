@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/apimgr/vidveil/src/server/service/metrics"
+	"github.com/apimgr/vidveil/src/server/service/metric"
 )
 
 // defaultSchedulerTimezone is applied when the TZ environment variable is not
@@ -674,9 +674,9 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	}()
 
 	// Emit Prometheus scheduler metrics per AI.md PART 20
-	metrics.SchedulerTasksRunning.WithLabelValues(task.ID).Inc()
-	metrics.SchedulerLastRunTimestamp.WithLabelValues(task.ID).Set(float64(startTime.Unix()))
-	defer metrics.SchedulerTasksRunning.WithLabelValues(task.ID).Dec()
+	metric.SchedulerTasksRunning.WithLabelValues(task.ID).Inc()
+	metric.SchedulerLastRunTimestamp.WithLabelValues(task.ID).Set(float64(startTime.Unix()))
+	defer metric.SchedulerTasksRunning.WithLabelValues(task.ID).Dec()
 
 	// Create task context with timeout
 	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Minute)
@@ -732,8 +732,8 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	}
 
 	// Record execution count and duration per AI.md PART 20
-	metrics.SchedulerTasksTotal.WithLabelValues(task.ID, status).Inc()
-	metrics.SchedulerTaskDuration.WithLabelValues(task.ID).Observe(duration.Seconds())
+	metric.SchedulerTasksTotal.WithLabelValues(task.ID, status).Inc()
+	metric.SchedulerTaskDuration.WithLabelValues(task.ID).Observe(duration.Seconds())
 
 	// Add to in-memory history
 	s.history = append(s.history, hist)
@@ -777,7 +777,7 @@ func (s *Scheduler) recordSkip(task *ScheduledTask) {
 		s.history = s.history[len(s.history)-s.maxHist:]
 	}
 
-	metrics.SchedulerTasksTotal.WithLabelValues(task.ID, "skipped").Inc()
+	metric.SchedulerTasksTotal.WithLabelValues(task.ID, "skipped").Inc()
 
 	taskCopy := *task
 	s.mu.Unlock()

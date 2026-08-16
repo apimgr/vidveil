@@ -39,10 +39,10 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/geoip"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
-	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
+	svcmetrics "github.com/apimgr/vidveil/src/server/service/metric"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
-	"github.com/apimgr/vidveil/src/server/service/secrets"
+	"github.com/apimgr/vidveil/src/server/service/secret"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
 	"github.com/apimgr/vidveil/src/server/service/system"
 	"github.com/apimgr/vidveil/src/server/service/tor"
@@ -471,7 +471,7 @@ func main() {
 
 	// Initialize app secrets per AI.md PART 11
 	// Generates installation_secret, cookie_signing_key, csrf_token_secret on first run
-	secretsMgr := secrets.NewManager(migrationMgr.GetDB())
+	secretsMgr := secret.NewManager(migrationMgr.GetDB())
 	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to initialize secrets: %v\n", err)
 		os.Exit(1)
@@ -2557,7 +2557,7 @@ func loadInstallationSecret(dataDir string) ([]byte, error) {
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
-	secretsMgr := secrets.NewManager(dbMgr.GetDB())
+	secretsMgr := secret.NewManager(dbMgr.GetDB())
 	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
 		return nil, fmt.Errorf("ensure secrets: %w", err)
 	}

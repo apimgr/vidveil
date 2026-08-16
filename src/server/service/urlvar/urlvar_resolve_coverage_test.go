@@ -2,7 +2,7 @@
 // AI.md PART 12: deterministic coverage for the trusted-proxy header priority
 // branches of resolvePathPrefix and resolveFQDN. A loopback RemoteAddr is a
 // trusted peer, so the proxy-header branches are reached without any network.
-package urlvars
+package urlvar
 
 import (
 	"net/http"

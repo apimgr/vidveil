@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/mode"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // debugLog logs detailed request information (--debug/DEBUG=true only)
@@ -23,7 +23,7 @@ func (s *Server) debugLog(r *http.Request, status int, duration time.Duration, s
 		"status", status,
 		"duration_ms", duration.Milliseconds(),
 		"size", size,
-		"remote_addr", urlvars.ResolveClientIP(r),
+		"remote_addr", urlvar.ResolveClientIP(r),
 		"user_agent", r.UserAgent(),
 		"referer", r.Referer(),
 		"request_id", r.Header.Get("X-Request-ID"),

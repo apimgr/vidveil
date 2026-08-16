@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 20: Prometheus Metrics
-package metrics
+package metric
 
 import (
 	"net/http"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // uuidPathSegment matches a UUID path segment (any version).
@@ -405,6 +406,14 @@ func InitMetricsAppInfo(ver, commit, buildDate, goVer string) {
 			AppUptimeSeconds.Set(time.Since(start).Seconds())
 		}
 	}()
+}
+
+// Handler returns the Prometheus text exposition HTTP handler for the
+// registered default metrics registry (AI.md PART 20 "prometheus" service).
+// Per-service sub-paths, per-service bearer tokens, and the grafana/loki
+// service variants are tracked separately (see TODO.AI.md).
+func Handler() http.Handler {
+	return promhttp.Handler()
 }
 
 // statusWriter wraps http.ResponseWriter to capture the status code and bytes written.

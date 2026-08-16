@@ -18,12 +18,12 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
-	"github.com/apimgr/vidveil/src/server/service/secrets"
+	"github.com/apimgr/vidveil/src/server/service/secret"
 )
 
 // newSecurityTestHandler wires a ServerHandler with a real tempdir sqlite DB
 // (full schema via database.SchemaManager, matching production) and a
-// secrets.Manager, so the security_id validation and CreateReport paths
+// secret.Manager, so the security_id validation and CreateReport paths
 // exercise real code rather than mocks.
 func newSecurityTestHandler(t *testing.T) (*ServerHandler, string) {
 	t.Helper()
@@ -40,7 +40,7 @@ func newSecurityTestHandler(t *testing.T) (*ServerHandler, string) {
 	t.Cleanup(func() { sm.Close() })
 
 	db := sm.GetDB()
-	secretsMgr := secrets.NewManager(db)
+	secretsMgr := secret.NewManager(db)
 	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
 		t.Fatalf("EnsureSecrets: %v", err)
 	}

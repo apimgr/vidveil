@@ -11,7 +11,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // DetectTheme determines the UI theme (light/dark/auto) from request
@@ -58,7 +58,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 		},
 		"servers": []map[string]string{
 			{
-				"url":         urlvars.BuildURL(r, ""),
+				"url":         urlvar.BuildURL(r, ""),
 				"description": "Current server",
 			},
 		},

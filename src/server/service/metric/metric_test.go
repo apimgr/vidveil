@@ -2,7 +2,7 @@
 // Tests for the metrics package: verifies that every promauto-registered variable
 // is non-nil after package init and that representative metrics can be used without
 // panicking.  All vars are globals initialized at import time.
-package metrics
+package metric
 
 import (
 	"net/http"

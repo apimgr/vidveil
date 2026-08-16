@@ -3,7 +3,7 @@
 // X-Forwarded-* headers are only trusted when the immediate peer IP is in the
 // trusted set (loopback, RFC1918, fc00::/7, link-local, and additional CIDRs).
 // Tor requests (Host matches tor.onion_address) bypass the gate at priority 0.
-package urlvars
+package urlvar
 
 import (
 	"net"

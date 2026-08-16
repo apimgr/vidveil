@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/server/service/logging"
-	svcmetrics "github.com/apimgr/vidveil/src/server/service/metrics"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	svcmetrics "github.com/apimgr/vidveil/src/server/service/metric"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // Endpoint types for rate limiting per AI.md PART 12
@@ -287,7 +287,7 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get client IP per AI.md PART 12 "Client IP Detection" — proxy headers
 		// only honored when the immediate peer passes the trusted_proxies gate.
-		ip := urlvars.ResolveClientIP(r)
+		ip := urlvar.ResolveClientIP(r)
 
 		// Per AI.md PART 12: Call Allow() FIRST, then set headers with accurate remaining count
 		// This ensures X-RateLimit-Remaining reflects the count AFTER this request

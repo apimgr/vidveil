@@ -2,7 +2,7 @@
 // AI.md PART 11: App Secrets Management
 // Manages installation_secret, cookie_signing_key, and csrf_token_secret
 
-package secrets
+package secret
 
 import (
 	"context"

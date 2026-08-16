@@ -43,8 +43,8 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/geoip"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
-	"github.com/apimgr/vidveil/src/server/service/secrets"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/server/service/secret"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // templatesFS holds the embedded templates filesystem
@@ -303,7 +303,7 @@ func generateSearchSessionID() (string, error) {
 // "Client IP Detection" — proxy headers only honored when the immediate
 // peer passes the trusted_proxies gate.
 func getClientIP(r *http.Request) string {
-	return urlvars.ResolveClientIP(r)
+	return urlvar.ResolveClientIP(r)
 }
 
 // SearchHandler holds dependencies for HTTP handlers
@@ -316,7 +316,7 @@ type SearchHandler struct {
 	metrics     *ServerMetrics
 	torSvc      TorStatusChecker
 	geoipSvc    GeoIPChecker
-	secretsMgr  *secrets.Manager
+	secretsMgr  *secret.Manager
 	healthDB    *sql.DB
 	sched       SchedulerHealth
 }
@@ -331,7 +331,7 @@ type SchedulerHealth interface {
 // SetSecretsManager wires the app-secrets manager used to derive the
 // rotating {security_id} token for the security.txt Contact: line per
 // AI.md PART 11 "Security Reports".
-func (h *SearchHandler) SetSecretsManager(m *secrets.Manager) {
+func (h *SearchHandler) SetSecretsManager(m *secret.Manager) {
 	h.secretsMgr = m
 }
 
@@ -2117,7 +2117,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
 		// startup/config, so the URL matches the Host/proto the client
 		// actually used, including behind a reverse proxy.
-		data.AppURL = urlvars.BuildURL(r, "")
+		data.AppURL = urlvar.BuildURL(r, "")
 	}
 	// Footer onion-address row — dropped entirely unless Tor is both enabled
 	// and actually running (matches renderTemplate's identical gate).
@@ -2220,7 +2220,7 @@ func (h *SearchHandler) RobotsTxt(w http.ResponseWriter, r *http.Request) {
 	// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
 	// startup, so the advertised sitemap URL matches the Host/proto the
 	// client actually used, including behind a reverse proxy.
-	baseURL := urlvars.BuildURL(r, "")
+	baseURL := urlvar.BuildURL(r, "")
 
 	w.Write([]byte(`User-agent: *
 Disallow: /search
@@ -2249,7 +2249,7 @@ func (h *SearchHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
 	if h.secretsMgr != nil {
 		if secret, err := h.secretsMgr.GetInstallationSecret(r.Context()); err == nil {
 			id := secreport.GenerateSecurityID(secret, time.Now())
-			contactURL := urlvars.BuildURL(r, "/server/contact") + "?security_id=" + id
+			contactURL := urlvar.BuildURL(r, "/server/contact") + "?security_id=" + id
 			contacts = append(contacts, contactURL)
 		}
 	}
@@ -2309,7 +2309,7 @@ func (h *SearchHandler) HumansTxt(w http.ResponseWriter, r *http.Request) {
 	// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
 	// startup, so the advertised URL matches the Host/proto the client
 	// actually used, including behind a reverse proxy.
-	appURL := urlvars.BuildURL(r, "")
+	appURL := urlvar.BuildURL(r, "")
 
 	w.Write([]byte(fmt.Sprintf(`/* TEAM */
 Name: %s Team
@@ -2333,7 +2333,7 @@ Components: Go, SQLite, Valkey/Redis
 // LlmsTxt serves the AI-agent discovery file per AI.md PART 14 "llms.txt (AI
 // Discovery)". ALL projects MUST serve it; it is registered at both
 // /.well-known/llms.txt and /llms.txt. Every URL is resolved per request via
-// urlvars.BuildURL (reverse-proxy aware) so the advertised base URL always
+// urlvar.BuildURL (reverse-proxy aware) so the advertised base URL always
 // matches the Host/proto the client actually used. The metrics endpoint is
 // deliberately never advertised (operational/internal only).
 func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
@@ -2348,7 +2348,7 @@ func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
 		desc = "Privacy-respecting adult video search"
 	}
 
-	apiBase := urlvars.BuildURL(r, "/api/v1")
+	apiBase := urlvar.BuildURL(r, "/api/v1")
 
 	// Rate limit: requests per window-seconds, normalized to per-minute.
 	rlReqs := h.appConfig.Server.RateLimit.Requests
@@ -2397,7 +2397,7 @@ func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "\n")
 
 	fmt.Fprintf(&b, "## Contact\n")
-	fmt.Fprintf(&b, "API issues: %s\n", urlvars.BuildURL(r, "/server/help"))
+	fmt.Fprintf(&b, "API issues: %s\n", urlvar.BuildURL(r, "/server/help"))
 	fmt.Fprintf(&b, "Security: %s\n", securityContact)
 
 	w.Write([]byte(b.String()))
@@ -2410,7 +2410,7 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
 	// startup, so the advertised sitemap URL matches the Host/proto the
 	// client actually used, including behind a reverse proxy.
-	baseURL := urlvars.BuildURL(r, "")
+	baseURL := urlvar.BuildURL(r, "")
 
 	// Build sitemap with static pages per AI.md PART 16
 	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
@@ -3547,7 +3547,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 	}
 	if data["AppURL"] == nil {
 		// Fallback only — renderResponse (the production entry point, which has
-		// the *http.Request in scope) already sets AppURL via urlvars.BuildURL
+		// the *http.Request in scope) already sets AppURL via urlvar.BuildURL
 		// per AI.md PART 12. This static config-based fallback exists solely for
 		// direct renderTemplate() test calls that construct data maps without r.
 		scheme := "https"
@@ -4114,7 +4114,7 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 	// frozen at startup/config, so autodiscover advertises the Host/proto the
 	// client actually used, including behind a reverse proxy.
 	response := map[string]interface{}{
-		"primary": urlvars.BuildURL(r, ""),
+		"primary": urlvar.BuildURL(r, ""),
 		// Per AI.md PART 14: versioned API
 		"api_version": "v1",
 		// Default timeout in seconds
@@ -4177,7 +4177,7 @@ func renderSearchRSS(w http.ResponseWriter, r *http.Request, results *model.Sear
 		Version: "2.0",
 		Channel: rssBody{
 			Title:       cfg.Server.Branding.Title + " – " + results.Data.Query,
-			Link:        urlvars.BuildURL(r, "/search") + "?q=" + url.QueryEscape(results.Data.Query),
+			Link:        urlvar.BuildURL(r, "/search") + "?q=" + url.QueryEscape(results.Data.Query),
 			Description: "Search results for: " + results.Data.Query,
 			PubDate:     time.Now().UTC().Format(time.RFC1123Z),
 			Items:       items,
@@ -4236,9 +4236,9 @@ func renderSearchAtom(w http.ResponseWriter, r *http.Request, results *model.Sea
 	feed := atomFeed{
 		XMLNS:   "http://www.w3.org/2005/Atom",
 		Title:   cfg.Server.Branding.Title + " – " + results.Data.Query,
-		ID:      urlvars.BuildURL(r, "/search") + "?q=" + url.QueryEscape(results.Data.Query),
+		ID:      urlvar.BuildURL(r, "/search") + "?q=" + url.QueryEscape(results.Data.Query),
 		Updated: now,
-		Link:    atomLink{Href: urlvars.BuildURL(r, "/search") + "?q=" + url.QueryEscape(results.Data.Query)},
+		Link:    atomLink{Href: urlvar.BuildURL(r, "/search") + "?q=" + url.QueryEscape(results.Data.Query)},
 		Entries: entries,
 	}
 

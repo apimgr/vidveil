@@ -24,8 +24,8 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
-	"github.com/apimgr/vidveil/src/server/service/secrets"
-	"github.com/apimgr/vidveil/src/server/service/urlvars"
+	"github.com/apimgr/vidveil/src/server/service/secret"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // ServerHandler handles /server/ routes per AI.md PART 14
@@ -33,7 +33,7 @@ type ServerHandler struct {
 	appConfig  *config.AppConfig
 	torSvc     TorStatusChecker
 	db         *sql.DB
-	secretsMgr *secrets.Manager
+	secretsMgr *secret.Manager
 	configDir  string
 	logger     *logging.AppLogger
 	emailSvc   *email.EmailService
@@ -67,7 +67,7 @@ func (h *ServerHandler) SetDB(db *sql.DB) {
 
 // SetSecretsManager wires the app-secrets manager used to validate the
 // rotating {security_id} token (AI.md PART 11 "Security Reports").
-func (h *ServerHandler) SetSecretsManager(m *secrets.Manager) {
+func (h *ServerHandler) SetSecretsManager(m *secret.Manager) {
 	h.secretsMgr = m
 }
 
@@ -202,7 +202,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"AppName":        appName,
 		"AppTagline":     h.appConfig.Server.Branding.Tagline,
 		"AppDescription": h.appConfig.Server.Branding.Description,
-		"BaseURL":        urlvars.BuildURL(r, ""),
+		"BaseURL":        urlvar.BuildURL(r, ""),
 		"Version":        versionInfo["version"],
 		"BuildDateTime":  versionInfo["build_time"],
 		"Theme":          "dark",
@@ -368,7 +368,7 @@ func (h *ServerHandler) logSecurityEvent(event string, r *http.Request, details 
 	if h.logger == nil {
 		return
 	}
-	h.logger.Security(event, urlvars.ResolveClientIP(r), details)
+	h.logger.Security(event, urlvar.ResolveClientIP(r), details)
 }
 
 // publicAbuseEmail resolves the abuse-report address shown on /server/contact per
@@ -594,7 +594,7 @@ func (h *ServerHandler) acknowledgeResearcher(r *http.Request, to, rawResearcher
 	if h.emailSvc == nil || to == "" {
 		return
 	}
-	statusURL := urlvars.BuildURL(r, "/server/security/report/"+trackingID) + "?token=" + reportToken
+	statusURL := urlvar.BuildURL(r, "/server/security/report/"+trackingID) + "?token=" + reportToken
 	vars := map[string]string{
 		"tracking_id":       trackingID,
 		"report_status_url": statusURL,
@@ -625,7 +625,7 @@ func (h *ServerHandler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 	if h.secretsMgr != nil {
 		if secret, err := h.secretsMgr.GetInstallationSecret(r.Context()); err == nil {
 			id := secreport.GenerateSecurityID(secret, time.Now())
-			contacts = append(contacts, urlvars.BuildURL(r, "/server/contact")+"?security_id="+id)
+			contacts = append(contacts, urlvar.BuildURL(r, "/server/contact")+"?security_id="+id)
 		}
 	}
 	mailto := h.appConfig.Web.Security.Contact

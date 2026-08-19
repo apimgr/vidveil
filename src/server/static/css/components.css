@@ -489,12 +489,3 @@ dialog::backdrop {
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
-
-[role="status"],
-[role="alert"] {
-  position: fixed;
-  bottom: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 9999;
-}

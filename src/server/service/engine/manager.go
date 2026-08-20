@@ -208,7 +208,11 @@ type ResultFilterOptions struct {
 // default for this call — this is how the server honors a visitor's
 // `results_per_page` preference cookie (IDEA.md "Search Settings": server
 // is authoritative for pagination, not client-side JS). Pass 0 to use the
-// configured default.
+// configured default. Collection returns early (first-page-fast) once the
+// accepted pool reaches resultsPerPage*earlyReturnHeadroomFactor candidates:
+// the response is sliced to resultsPerPage regardless, so waiting for the
+// slowest engines past that point only delays the page; remaining engines are
+// cancelled and their stats marked "skipped_page_filled" (not failed).
 func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, previewFirst bool, sessionID string, resultsPerPage int, filterOpts ResultFilterOptions) *model.SearchResponse {
 	startTime := time.Now()
 
@@ -251,7 +255,12 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 	enginesToUse := m.getEnginesToUse(engineNames)
 	m.mu.RUnlock()
 
-	// Search in parallel
+	// Search in parallel. fanCtx lets the collector cancel still-running
+	// engines the moment the page target is filled (first-page-fast early
+	// return below) — outbound work for results the response can never use
+	// is pure waste under load.
+	fanCtx, fanCancel := context.WithCancel(ctx)
+	defer fanCancel()
 	var wg sync.WaitGroup
 	resultsChan := make(chan engineResult, len(enginesToUse))
 
@@ -272,7 +281,7 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 			// budget (Search.EngineTimeouts override or the global
 			// Search.EngineTimeout), keeping the fan-out resilient per AI.md's
 			// graceful-degradation-across-engines principle.
-			engCtx, cancel := context.WithTimeout(ctx, m.engineTimeout(e.Name()))
+			engCtx, cancel := context.WithTimeout(fanCtx, m.engineTimeout(e.Name()))
 			defer cancel()
 			engineStart := time.Now()
 			results, err := e.Search(engCtx, query, page)
@@ -314,11 +323,33 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 	}
 	queryIntent := DetectQueryIntent(query)
 
+	// Resolve the effective page size before collection (it doubles as the
+	// early-return fill target below). resultsPerPage > 0 means the caller
+	// passed an explicit per-request override (the visitor's results_per_page
+	// preference cookie); otherwise fall back to the configured default.
+	if resultsPerPage <= 0 {
+		resultsPerPage = 50
+		if m.appConfig != nil {
+			resultsPerPage = m.appConfig.Search.ResultsPerPage
+		}
+	}
+	// First-page-fast early return: once the accepted (post-filter,
+	// deduplicated) pool reaches this many candidates, stop waiting for
+	// slower engines and respond immediately — the response is sliced to
+	// resultsPerPage anyway, so waiting for the stragglers only delays the
+	// page. The headroom factor keeps enough surplus candidates that the
+	// post-collection relevance filter (MinRelevanceScore) and sorts still
+	// have a meaningful pool to trim from.
+	earlyReturnTarget := resultsPerPage * earlyReturnHeadroomFactor
+
 	// Collect with a batch deadline so a hung engine (one ignoring context
 	// cancellation) can never block the response: we return whatever arrived by
 	// the deadline. reported tracks which engines answered so the rest can be
-	// marked as timed-out failures afterward.
+	// marked as timed-out failures afterward. pageFilled records that
+	// collection stopped because the page target was met, so unreported
+	// engines are marked skipped rather than falsely marked as timeouts.
 	reported := make(map[string]bool, len(enginesToUse))
+	pageFilled := false
 	deadline := time.NewTimer(m.batchDeadline(enginesToUse))
 	defer deadline.Stop()
 
@@ -413,15 +444,29 @@ collect:
 				ResponseTimeMS: result.responseTimeMS,
 				ResultCount:    resultCount,
 			}
+			// First-page-fast: the accepted pool already covers the page plus
+			// relevance-filter headroom — cancel the remaining engines and
+			// respond now instead of waiting out the slowest ones.
+			if len(allResults) >= earlyReturnTarget {
+				pageFilled = true
+				fanCancel()
+				break collect
+			}
 		}
 	}
 
-	// Any selected engine that never reported (hung past the batch deadline or
-	// the request was cancelled) is recorded as a timed-out failure so the
-	// response honestly reflects degraded coverage instead of silently omitting
-	// it — one slow engine degrades gracefully rather than stalling the batch.
+	// Any selected engine that never reported is recorded honestly: if
+	// collection ended because the page filled early, the engine was skipped
+	// (not a failure — it is neither used nor failed, its stat carries a
+	// stable machine code); if collection ran out the batch deadline or the
+	// request was cancelled, it is a timed-out failure so the response
+	// reflects degraded coverage instead of silently omitting it.
 	for _, e := range enginesToUse {
 		if !reported[e.Name()] {
+			if pageFilled {
+				engineStats[e.Name()] = model.EngineStatInfo{Error: "skipped_page_filled"}
+				continue
+			}
 			enginesFailed = append(enginesFailed, e.Name())
 			engineStats[e.Name()] = model.EngineStatInfo{Error: "timeout"}
 		}
@@ -433,15 +478,8 @@ collect:
 	if m.appConfig != nil {
 		minScore = m.appConfig.Search.MinRelevanceScore
 	}
-	// resultsPerPage > 0 means the caller passed an explicit per-request
-	// override (the visitor's results_per_page preference cookie); otherwise
-	// fall back to the configured default.
-	if resultsPerPage <= 0 {
-		resultsPerPage = 50
-		if m.appConfig != nil {
-			resultsPerPage = m.appConfig.Search.ResultsPerPage
-		}
-	}
+	// resultsPerPage was resolved before the collection loop (it doubles as
+	// the early-return fill target).
 	allResults = sortAndFilterByRelevanceWithOperators(allResults, query, minScore, exactPhrases, exclusions, requiredTerms, nil)
 	if previewFirst {
 		allResults = sortResultsPreviewFirst(allResults)
@@ -867,6 +905,14 @@ const writeTimeoutSafetyMargin = 5 * time.Second
 // fixed (not tied to WriteTimeout) so a caller always gets a fast answer —
 // queuing itself must never become the reason a request runs long.
 const searchQueueTimeout = 2 * time.Second
+
+// earlyReturnHeadroomFactor multiplies resultsPerPage to set the accepted-pool
+// size at which SearchWithOperators stops waiting for slower engines and
+// responds (first-page-fast early return). The surplus over one page keeps the
+// post-collection relevance filter (MinRelevanceScore) and preview-first/sort
+// passes working over a meaningful candidate pool, so early return trades
+// almost no ranking quality for a large latency win on broad queries.
+const earlyReturnHeadroomFactor = 2
 
 // overloadedSearchResponse builds the canonical error envelope (AI.md PART
 // 14/PART 12 "Rate Limiting") returned when SearchWithOperators cannot

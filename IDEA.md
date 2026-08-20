@@ -34,7 +34,7 @@ coverage_minimum:  60
 - Real-Time Streaming: SSE streaming delivers results as each engine responds
 - Thumbnail Proxy: All thumbnails proxied through server to prevent tracking
 - Video Preview: Hover (desktop) and swipe (mobile) preview support
-- Client-Side Preferences: All settings stored in localStorage, no server storage
+- Client-Side Preferences: Most settings stored in localStorage; the server-authoritative exceptions per AI.md PART 16 are the `theme`, `results_per_page`, and `open_new_tab` cookies (server-readable so JS and no-JS clients get identical behavior)
 - Favorites & History: Server-side favorites (anonymous `visitor_id` cookie, works without JS) and local-only search history, both with export/import
 - Tor Support: Built-in Tor hidden service support for maximum anonymity
 - Geographic Content Restriction: Admin-configurable warnings/blocks for regions with adult content laws
@@ -159,11 +159,12 @@ type CombinedSuggestion struct {
 | SSL certs | `{config_dir}/ssl/` | High - private keys | Until renewal |
 | Tor onion key | `{data_dir}/tor/` | High | Lifetime of hidden service |
 
-**Client-side data (localStorage only - never sent to server):**
-- `vidveil-theme`: current theme preference
+**Client-side data (localStorage - never sent to server):**
 - `vidveil_prefs`: complete preferences object
 - `vidveil_history`: search history array
+- `vidveil_favorites_mirror`: favorites resilience mirror (reconciled against the server-side `favorites` table)
 - Sensitivity: low (local to browser); never written to server, never logged.
+- The theme preference is NOT localStorage — it lives in the server-readable `theme` cookie per AI.md PART 16 (server renders the `<html>` theme class, no-JS/no-FOUC), alongside the `results_per_page` and `open_new_tab` cookies.
 
 **Server-side favorites (per AI.md PART 16/32 - core functionality must work without JS):**
 - `favorites` table in `server.db`, rows keyed by an opaque, randomly generated `visitor_id` cookie (no personal data, not linked to any account).

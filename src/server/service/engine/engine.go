@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -581,73 +580,6 @@ func (e *BaseEngine) BuildSearchURL(path string, query string, page int) string 
 func GenerateResultID(url, source string) string {
 	hash := sha256.Sum256([]byte(url + source))
 	return hex.EncodeToString(hash[:8])
-}
-
-// ParseDuration parses various duration formats to seconds
-func ParseDuration(duration string) int {
-	duration = strings.TrimSpace(duration)
-	if duration == "" {
-		return 0
-	}
-
-	// Handle formats like "12:34" or "1:23:45"
-	parts := strings.Split(duration, ":")
-	switch len(parts) {
-	// mm:ss
-	case 2:
-		m, _ := strconv.Atoi(parts[0])
-		s, _ := strconv.Atoi(parts[1])
-		return m*60 + s
-	// hh:mm:ss
-	case 3:
-		h, _ := strconv.Atoi(parts[0])
-		m, _ := strconv.Atoi(parts[1])
-		s, _ := strconv.Atoi(parts[2])
-		return h*3600 + m*60 + s
-	}
-
-	// Try to parse "12 min" or "12min" format
-	re := regexp.MustCompile(`(\d+)\s*min`)
-	if matches := re.FindStringSubmatch(duration); len(matches) > 1 {
-		m, _ := strconv.Atoi(matches[1])
-		return m * 60
-	}
-
-	return 0
-}
-
-// ParseViews parses view counts like "1.2M" or "500K" to integers
-func ParseViews(views string) int64 {
-	views = strings.TrimSpace(strings.ToUpper(views))
-	if views == "" {
-		return 0
-	}
-
-	// Remove "views" suffix
-	views = strings.TrimSuffix(views, " VIEWS")
-	views = strings.TrimSuffix(views, "VIEWS")
-
-	multiplier := int64(1)
-	if strings.HasSuffix(views, "K") {
-		multiplier = 1000
-		views = strings.TrimSuffix(views, "K")
-	} else if strings.HasSuffix(views, "M") {
-		multiplier = 1000000
-		views = strings.TrimSuffix(views, "M")
-	} else if strings.HasSuffix(views, "B") {
-		multiplier = 1000000000
-		views = strings.TrimSuffix(views, "B")
-	}
-
-	// Parse the number
-	views = strings.ReplaceAll(views, ",", "")
-	views = strings.ReplaceAll(views, " ", "")
-
-	if f, err := strconv.ParseFloat(views, 64); err == nil {
-		return int64(f * float64(multiplier))
-	}
-
-	return 0
 }
 
 // createHTTPClient creates an HTTP client with timeout and browser-like TLS

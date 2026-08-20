@@ -95,6 +95,30 @@ fix (951a480b3ae7) was confirmed still working.
   `TestSearchStreamWithOperators_UnsaturatedSem_AcquiresSlotAndReleases` in
   `engine_searchsem_coverage_test.go`.
 
+Findings from the engine data-standardization audit (2026-08-19), minor
+items not fixed in that pass — each needs its own small follow-up:
+
+- `src/server/service/engine/pornmd.go` (~line 68-92): quality string is
+  folded into `Description` instead of the `Quality` field (engine declares
+  `HasQuality:false`, so tolerated, but diverges from redtube/pornhub which
+  set `Quality` directly). Decide: populate `Quality` + flip `HasQuality`,
+  or keep as-is deliberately. Note `engine_pure_coverage_test.go`
+  `TestPornMDConvertToResult_DescriptionWithQuality` asserts the current
+  behavior and must change with it.
+- `src/server/service/parser/xvideos.go` (~line 79-86): `PreviewURL` is set
+  from `data-pvv` (a JPG thumbnail sprite), which `sanitizePreviewURL`
+  (`manager.go:1401`, drops image extensions) always discards — so xvideos
+  previews never survive despite `HasPreview:true` in `xvideos.go:28`.
+  Either find a real MP4 rollover source or set `HasPreview:false` and stop
+  assigning the dead value.
+- `src/server/service/engine/xnxx.go:28`: `HasPreview:false`, but xnxx
+  shares the xvideos markup family — investigate whether a usable rollover
+  preview attr (`data-preview`/`data-mediabook`) exists and harvest it.
+- `src/server/service/parser/redtube.go:64` and
+  `src/server/service/parser/youporn.go:89`: redundant manual
+  `strings.ReplaceAll(preview, "&amp;", "&")` — goquery already decodes
+  attribute entities; remove for consistency with other parsers.
+
 Finding from go-lint pass during the API-version cross-cutting fix
 (2026-08-15, task 8 completion).
 

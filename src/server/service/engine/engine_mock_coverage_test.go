@@ -207,7 +207,7 @@ func TestSearchStreamWithOperators_WithMockEngine_ChannelReceivesData(t *testing
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "stream test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, 0, "")
 	if ch == nil {
 		t.Fatal("SearchStreamWithOperators: nil channel")
 	}
@@ -226,7 +226,7 @@ func TestSearchStreamWithOperators_WithMockEngineError_ChannelCloses(t *testing.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, 0, "")
 	if ch == nil {
 		t.Fatal("SearchStreamWithOperators(0, error): nil channel")
 	}
@@ -273,7 +273,7 @@ func TestSearchStreamWithOperators_WithExclusion_FiltersResult(t *testing.T) {
 	defer cancel()
 
 	// Exclude results containing "excluded" in title
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, []string{"excluded"}, nil, nil, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, []string{"excluded"}, nil, nil, false, 0, false, 0, 0, 0, "")
 	for range ch {
 	}
 }
@@ -288,7 +288,7 @@ func TestSearchStreamWithOperators_WithExactPhrase_FiltersResult(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, []string{"exact phrase"}, nil, nil, nil, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, []string{"exact phrase"}, nil, nil, nil, false, 0, false, 0, 0, 0, "")
 	for range ch {
 	}
 }
@@ -315,7 +315,7 @@ func TestSearchStreamWithOperators_WithPerformerFilter_FiltersResult(t *testing.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, []string{"jane"}, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, []string{"jane"}, false, 0, false, 0, 0, 0, "")
 	for range ch {
 	}
 }
@@ -342,7 +342,7 @@ func TestSearchStreamWithOperators_WithMinQuality_FiltersResult(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, nil, false, 480, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, nil, false, 480, false, 0, 0, 0, "")
 	for range ch {
 	}
 }
@@ -376,7 +376,7 @@ func TestSearchStreamWithOperators_AIFilter_FiltersAIContent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, 0, "")
 	for range ch {
 	}
 }
@@ -410,7 +410,7 @@ func TestSearchStreamWithOperators_QualityFilter_FiltersLowQuality(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream quality", 1, nil, nil, nil, nil, nil, false, 480, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "stream quality", 1, nil, nil, nil, nil, nil, false, 480, false, 0, 0, 0, "")
 	for range ch {
 	}
 }
@@ -444,7 +444,7 @@ func TestSearchStreamWithOperators_UserMinDuration_Override(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, nil, false, 0, false, 120, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "stream video", 1, nil, nil, nil, nil, nil, false, 0, false, 120, 0, 0, "")
 	for range ch {
 	}
 }
@@ -581,7 +581,7 @@ func TestSearchStream_PanickingEngine_RecoversPanic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, 0, "")
 	for range ch {
 	}
 }

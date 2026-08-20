@@ -171,7 +171,7 @@ func TestSearchStreamWithOperators_SaturatedSem_ContextCancelled_EmitsOverload(t
 	defer cancel()
 
 	start := time.Now()
-	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(ctx, "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, 0, "")
 	results := drainStream(ch)
 	elapsed := time.Since(start)
 
@@ -197,7 +197,7 @@ func TestSearchStreamWithOperators_SaturatedSem_QueueTimeout_EmitsOverload(t *te
 	defer release()
 
 	start := time.Now()
-	ch := m.SearchStreamWithOperators(context.Background(), "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(context.Background(), "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, 0, "")
 	results := drainStream(ch)
 	elapsed := time.Since(start)
 
@@ -211,7 +211,7 @@ func TestSearchStreamWithOperators_SaturatedSem_QueueTimeout_EmitsOverload(t *te
 
 func TestSearchStreamWithOperators_UnsaturatedSem_AcquiresSlotAndReleases(t *testing.T) {
 	m := newEmptyMgr()
-	ch := m.SearchStreamWithOperators(context.Background(), "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	ch := m.SearchStreamWithOperators(context.Background(), "test", 1, nil, nil, nil, nil, nil, false, 0, false, 0, 0, 0, "")
 	results := drainStream(ch)
 
 	for _, r := range results {

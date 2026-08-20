@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/apimgr/vidveil/src/server/service/parser"
 )
 
 // EpornerEngine searches Eporner using their public JSON API
@@ -91,6 +93,17 @@ func (e *EpornerEngine) Search(ctx context.Context, query string, page int) ([]m
 		// Format view count
 		views := formatViewCount(v.Views)
 
+		// API "rate" is a rating string (e.g. "4.50") — normalize via the shared parser helper
+		_, rating := parser.ParseRating(v.Rate)
+
+		// API "keywords" is a comma-separated list — map into Tags, not Description
+		var tags []string
+		for _, kw := range strings.Split(v.Keywords, ",") {
+			if kw = strings.TrimSpace(kw); kw != "" {
+				tags = append(tags, kw)
+			}
+		}
+
 		results = append(results, model.VideoResult{
 			ID:              GenerateResultID(v.URL, e.Name()),
 			URL:             v.URL,
@@ -100,7 +113,8 @@ func (e *EpornerEngine) Search(ctx context.Context, query string, page int) ([]m
 			DurationSeconds: v.LengthSec,
 			Views:           views,
 			ViewsCount:      int64(v.Views),
-			Description:     v.Keywords,
+			Rating:          rating,
+			Tags:            tags,
 			Source:          e.Name(),
 			SourceDisplay:   e.DisplayName(),
 		})

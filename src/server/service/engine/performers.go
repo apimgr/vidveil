@@ -985,6 +985,25 @@ var performersStudioNaughtyAmerica = []string{
 	"jenna foxx", "chanell heart", "misty stone", "scarlit scandal", "september reign",
 }
 
+// performersExpanded - Additional well-known performers not covered by the
+// category lists above (popular/currently-active names, autocomplete depth)
+var performersExpanded = []string{
+	"janice griffith", "khloe kapri", "abigail mac", "nicolette shea", "kimora quin",
+	"britney amber", "alix lynx", "brett rossi", "izzy lush", "joseline kelly",
+	"natalia queen", "apryl rein", "armani black", "ashley lane", "bunny madison",
+	"camila cortez", "carmela clutch", "cecelia taylor", "chantal danielle", "codi vore",
+	"crystal rush", "emma magnolia", "holly day", "katie kush", "kay lovely",
+	"keira croft", "lauren pixie", "lina bembe", "little caprice", "madison morgan",
+	"mila monet", "nika venom", "penelope kay", "ryan reid", "sage rabbit",
+	"salome gil", "scarlett alexis", "selina bentz", "sirena milano", "summer col",
+	"ximena saenz", "zerella skies", "angel windell", "aria six", "brixley benz",
+	"erin everheart", "gizelle blanco", "jenna starr", "kaiia eve", "kali sudhra",
+	"lolly dames", "london rose", "mandy waters", "michelle anthony", "nade nasty",
+	"nicky rebel", "sarah arabic", "skye blue", "sophia burns", "tokyo lynn",
+	"valentina bellucci", "vivianne desilva", "yhivi", "romy indy", "baby nicols",
+	"angie faith", "blaire ivory", "alyssia kent", "marina maya", "mina moon",
+}
+
 // Performers is the combined list of all performers from all categories
 var Performers = func() []string {
 	// Pre-allocate with estimated capacity
@@ -1019,6 +1038,7 @@ var Performers = func() []string {
 	all = append(all, performersStudioBrazzers...)
 	all = append(all, performersStudioRealityKings...)
 	all = append(all, performersStudioNaughtyAmerica...)
+	all = append(all, performersExpanded...)
 
 	// Deduplicate
 	seen := make(map[string]bool, len(all))

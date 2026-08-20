@@ -1229,7 +1229,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 // getRequestResultsPerPage returns the user's results-per-page preference from
 // their cookie — server-authoritative per IDEA.md "Search Settings" (the
 // server, not client-side JS, decides how many results to send). "0" means
-// "Infinite scroll" (opt-in); default is "20". Set by PreferencesSave for
+// "Infinite scroll" and is the default. Set by PreferencesSave for
 // no-JS clients and mirrored into the cookie by the JS preferences form too.
 func (h *SearchHandler) getRequestResultsPerPage(r *http.Request) string {
 	if c, err := r.Cookie(resultsPerPageCookieName); err == nil {
@@ -2555,9 +2555,18 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := r.URL.Query().Get("session")
 
+	// Honor the user's results-per-page preference server-side on both the
+	// SSE and JSON paths (IDEA.md "Pagination": the server determines each
+	// batch's contents and size, even with infinite scroll enabled; "0" =
+	// infinite scroll, which still uses the config default per batch).
+	resultsPerPage := 0
+	if n, err := strconv.Atoi(h.getRequestResultsPerPage(r)); err == nil {
+		resultsPerPage = n
+	}
+
 	// SSE streaming mode - stream results as they arrive from engines
 	if format == "text/event-stream" {
-		h.handleSearchSSE(w, r, requestStart, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, nil, showAI, minQuality, previewFirst, userMinDuration, filterOpts.MaxDuration, sessionID)
+		h.handleSearchSSE(w, r, requestStart, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, nil, showAI, minQuality, previewFirst, userMinDuration, filterOpts.MaxDuration, resultsPerPage, sessionID)
 		return
 	}
 
@@ -2589,6 +2598,12 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		// ordering (or vice versa) from an earlier request for the same query.
 		cacheKey += "|pf:1"
 	}
+	if resultsPerPage > 0 {
+		// The per-page preference changes the batch size — keep entries for
+		// different preferences separate so a 20-per-page user is never served
+		// another user's cached 100-result batch (or vice versa).
+		cacheKey += "|n:" + strconv.Itoa(resultsPerPage)
+	}
 
 	var results *model.SearchResponse
 	if !skipCache && h.searchCache != nil {
@@ -2619,7 +2634,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 				ctx = engine.WithTorPref(ctx, &useTor)
 			}
 		}
-		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, sessionID, 0, parseResultFilterOptions(r))
+		results = h.engineMgr.SearchWithOperators(ctx, searchQuery, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, previewFirst, sessionID, resultsPerPage, parseResultFilterOptions(r))
 		results.Data.Cached = false
 
 		// Never cache the RATE_LIMITED overload envelope — it reflects a
@@ -2718,7 +2733,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSearchSSE handles SSE streaming for search results
-func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, requestStart time.Time, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, maxDuration int, sessionID string) {
+func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, requestStart time.Time, searchQuery string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, maxDuration int, resultsPerPage int, sessionID string) {
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -2760,7 +2775,7 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	// "0 of N engines had results" rather than the misleading "0 engines".
 	enginesTotal := h.engineMgr.EnginesToUseCount(engineNames)
 
-	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, requiredTerms, performers, showAI, minQuality, previewFirst, userMinDuration, maxDuration, sessionID)
+	resultsChan := h.engineMgr.SearchStreamWithOperators(ctx, searchQuery, page, engineNames, exactPhrases, exclusions, requiredTerms, performers, showAI, minQuality, previewFirst, userMinDuration, maxDuration, resultsPerPage, sessionID)
 
 	// Tracked server-side (not left to the client) so the final "N of M
 	// engines had results" count is always authoritative, not re-derived from
@@ -2927,10 +2942,27 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		// Check for @performer autocomplete (e.g., "teen @mia" or just "@mia")
-		if strings.HasPrefix(lastWord, "@") {
-			// Remove @ prefix
-			prefix := lastWord[1:]
+		// Check for @performer autocomplete anywhere in the query tail
+		// (e.g. "@mia", "teen @mia", "@mia kh" — performer names contain
+		// spaces, so performer mode must survive past the first space; scan
+		// back to the last @-prefixed token and treat everything from it to
+		// the end of the query as the performer prefix, per IDEA.md
+		// "Autocomplete System" performer mode).
+		atIdx := -1
+		for i := len(words) - 1; i >= 0; i-- {
+			// A bang token after the last @ token ends performer mode
+			if strings.HasPrefix(words[i], "!") {
+				break
+			}
+			if strings.HasPrefix(words[i], "@") {
+				atIdx = i
+				break
+			}
+		}
+		if atIdx >= 0 {
+			// The full trailing phrase a selected suggestion replaces
+			replaceToken := strings.Join(words[atIdx:], " ")
+			prefix := strings.TrimPrefix(replaceToken, "@")
 			performerSuggestions := engine.AutocompletePerformers(prefix, 12)
 			// Convert to suggestions with @ prefix
 			var suggestions []map[string]string
@@ -2940,22 +2972,29 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 					"type": "performer",
 				})
 			}
-			if format == "text/plain" {
-				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-				w.WriteHeader(http.StatusOK)
-				fmt.Fprintf(w, "type: performer\nreplace: %s\nsuggestions: %d\n---\n", lastWord, len(suggestions))
-				for _, s := range suggestions {
-					fmt.Fprintf(w, "%s\n", s["term"])
+			// A completed performer name followed by extra search terms
+			// (e.g. "@mia khalifa blonde") matches no performer — fall
+			// through to regular search suggestions instead of returning an
+			// empty performer list; a lone unmatched "@xyz" still returns
+			// the (empty) performer response so the dropdown hides.
+			if len(suggestions) > 0 || atIdx == len(words)-1 {
+				if format == "text/plain" {
+					w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+					w.WriteHeader(http.StatusOK)
+					fmt.Fprintf(w, "type: performer\nreplace: %s\nsuggestions: %d\n---\n", replaceToken, len(suggestions))
+					for _, s := range suggestions {
+						fmt.Fprintf(w, "%s\n", s["term"])
+					}
+					return
 				}
+				h.jsonResponse(w, map[string]interface{}{
+					"ok":          true,
+					"suggestions": suggestions,
+					"type":        "performer",
+					"replace":     replaceToken,
+				})
 				return
 			}
-			h.jsonResponse(w, map[string]interface{}{
-				"ok":          true,
-				"suggestions": suggestions,
-				"type":        "performer",
-				"replace":     lastWord,
-			})
-			return
 		}
 	}
 

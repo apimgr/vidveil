@@ -86,7 +86,7 @@ func (e *XVideosEngine) convertToResult(item *parser.VideoItem) model.VideoResul
 		DurationSeconds: item.DurationSeconds,
 		Views:           item.Views,
 		ViewsCount:      item.ViewsCount,
-		Description:     item.Quality,
+		Quality:         item.Quality,
 		Source:          e.Name(),
 		SourceDisplay:   e.DisplayName(),
 		Tags:            item.Tags,

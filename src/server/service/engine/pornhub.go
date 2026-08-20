@@ -125,14 +125,3 @@ func (e *PornHubEngine) SupportsFeature(feature Feature) bool {
 		return false
 	}
 }
-
-// formatViews formats view count to human readable string
-func formatViews(views int64) string {
-	if views >= 1000000 {
-		return fmt.Sprintf("%.1fM views", float64(views)/1000000)
-	}
-	if views >= 1000 {
-		return fmt.Sprintf("%.1fK views", float64(views)/1000)
-	}
-	return strconv.FormatInt(views, 10) + " views"
-}

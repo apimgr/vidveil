@@ -1487,29 +1487,6 @@ func TestFormatViewCount_Zero(t *testing.T) {
 	}
 }
 
-// ── formatViews (pornhub, package-private) ────────────────────────────────────
-
-func TestFormatViews_Millions(t *testing.T) {
-	got := formatViews(2500000)
-	if !strings.Contains(got, "M") {
-		t.Errorf("formatViews(2500000) = %q, want 'M' suffix", got)
-	}
-}
-
-func TestFormatViews_Thousands(t *testing.T) {
-	got := formatViews(3500)
-	if !strings.Contains(got, "K") {
-		t.Errorf("formatViews(3500) = %q, want 'K' suffix", got)
-	}
-}
-
-func TestFormatViews_Small(t *testing.T) {
-	got := formatViews(7)
-	if !strings.Contains(got, "7") {
-		t.Errorf("formatViews(7) = %q, should contain '7'", got)
-	}
-}
-
 // ── ParseBangs – xvideos mapping ─────────────────────────────────────────────
 
 func TestParseBangs_XVideos(t *testing.T) {

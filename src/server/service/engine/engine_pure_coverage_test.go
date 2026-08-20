@@ -129,6 +129,7 @@ func TestXNXXConvertToResult_Basic(t *testing.T) {
 		Thumbnail: "https://example.com/thumb.jpg",
 		Duration:  "5:30",
 		Views:     "1M",
+		Quality:   "1080p",
 	}
 	r := e.convertToResult(item)
 	if r.URL != item.URL {
@@ -139,6 +140,9 @@ func TestXNXXConvertToResult_Basic(t *testing.T) {
 	}
 	if r.Source != e.Name() {
 		t.Errorf("convertToResult Source = %q, want %q", r.Source, e.Name())
+	}
+	if r.Quality != "1080p" {
+		t.Errorf("convertToResult Quality = %q, want %q (must map to Quality, not Description)", r.Quality, "1080p")
 	}
 }
 
@@ -174,6 +178,7 @@ func TestXVideosConvertToResult_Basic(t *testing.T) {
 		URL:      "https://www.xvideos.com/video12345/test",
 		Title:    "Test XVideos",
 		Duration: "10:00",
+		Quality:  "HD",
 	}
 	r := e.convertToResult(item)
 	if r.Title != item.Title {
@@ -181,6 +186,9 @@ func TestXVideosConvertToResult_Basic(t *testing.T) {
 	}
 	if r.Source != e.Name() {
 		t.Errorf("XVideos convertToResult Source = %q, want %q", r.Source, e.Name())
+	}
+	if r.Quality != "HD" {
+		t.Errorf("XVideos convertToResult Quality = %q, want %q (must map to Quality, not Description)", r.Quality, "HD")
 	}
 }
 
@@ -238,15 +246,6 @@ func TestPornHubConvertToResult_DownloadURLFallback(t *testing.T) {
 	r := e.convertToResult(item)
 	if r.DownloadURL != item.URL {
 		t.Errorf("PornHub DownloadURL fallback = %q, want %q", r.DownloadURL, item.URL)
-	}
-}
-
-// ── PornHubEngine.formatViews ──────────────────────────────────────────────────
-
-func TestFormatViews_Zero(t *testing.T) {
-	got := formatViews(0)
-	if got != "0 views" {
-		t.Errorf("formatViews(0) = %q, want '0 views'", got)
 	}
 }
 

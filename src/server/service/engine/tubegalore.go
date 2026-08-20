@@ -108,8 +108,8 @@ func searchTTCache(ctx context.Context, e *BaseEngine, url string) ([]model.Vide
 		}
 		duration, durationSeconds := parser.ParseDuration(durationText)
 
-		// Rating badge (e.g. "51%") — Rating field is float64, skip for now
-		_ = parser.CleanText(s.Find(".rating-badge, .rating, .score").First().Text())
+		// Rating badge (e.g. "51%") — normalize via the shared parser helper
+		_, rating := parser.ParseRating(parser.CleanText(s.Find(".rating-badge, .rating, .score").First().Text()))
 
 		results = append(results, model.VideoResult{
 			ID:              GenerateResultID(href, e.Name()),
@@ -119,6 +119,7 @@ func searchTTCache(ctx context.Context, e *BaseEngine, url string) ([]model.Vide
 			PreviewURL:      previewURL,
 			Duration:        duration,
 			DurationSeconds: durationSeconds,
+			Rating:          rating,
 			Source:          e.Name(),
 			SourceDisplay:   e.DisplayName(),
 		})

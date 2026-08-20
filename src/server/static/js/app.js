@@ -1013,6 +1013,8 @@ if (document.readyState === 'loading') {
             selectedIndex: -1,
             suggestions: [],
             suggestionType: 'search',
+            // Trailing phrase the autocomplete API says a selection replaces
+            replaceToken: '',
             debounceTimer: null
         };
 
@@ -1089,7 +1091,14 @@ if (document.readyState === 'loading') {
                 input.value = words.join(' ');
             } else {
                 var term = s.term || s.Term || s;
-                if (words.length <= 1) {
+                // Prefer the server's `replace` field: it names the exact
+                // trailing phrase the suggestion should substitute (e.g. the
+                // whole "@mia kh" for a multi-word performer name), so the
+                // suggestion replaces instead of appending.
+                var rep = state.replaceToken;
+                if (rep && val.toLowerCase().endsWith(rep.toLowerCase())) {
+                    input.value = val.slice(0, val.length - rep.length) + term;
+                } else if (words.length <= 1) {
                     input.value = term;
                 } else {
                     words[words.length - 1] = term;
@@ -1113,6 +1122,8 @@ if (document.readyState === 'loading') {
                     if (data.ok && data.suggestions && data.suggestions.length > 0) {
                         state.suggestions = data.suggestions;
                         state.suggestionType = data.type || 'search';
+                        // Trailing phrase the API says a selection should replace
+                        state.replaceToken = data.replace || '';
                         state.selectedIndex = -1;
                         render();
                     } else {
@@ -1811,6 +1822,26 @@ if (document.readyState === 'loading') {
             }
             clearTimeout(streamWatchdog);
             eventSource.close();
+            // A named "event: error" SSE frame (the server's RATE_LIMITED
+            // overload signal) arrives here with a data payload; a transport
+            // drop does not. Don't JSON-fallback a deliberate overload
+            // response into a second search — it would just get a 429 too.
+            if (err && typeof err.data === 'string') {
+                var overloaded = false;
+                try {
+                    overloaded = JSON.parse(err.data).error === 'RATE_LIMITED';
+                } catch (e) {
+                    overloaded = false;
+                }
+                if (overloaded) {
+                    isSearching = false;
+                    pendingGridSwap = false;
+                    updateSearchStatus();
+                    hideSearchElement('status-bar');
+                    showToast('Search is busy — please try again shortly', 'warning');
+                    return;
+                }
+            }
             // SSE failed - fallback to JSON API
             if (allResults.length === 0) {
                 // Show user-friendly error message
@@ -2539,7 +2570,7 @@ if (document.readyState === 'loading') {
             }
         };
 
-        eventSource.onerror = function() {
+        eventSource.onerror = function(event) {
             // EventSource fires onerror when server closes connection (normal after done)
             if (streamDone) {
                 eventSource.close();
@@ -2548,6 +2579,38 @@ if (document.readyState === 'loading') {
             eventSource.close();
             isLoadingMore = false;
             if (loadIndicator) loadIndicator.classList.add('hidden');
+
+            // A named "event: error" SSE frame from the server (the
+            // RATE_LIMITED overload signal) dispatches here with a data
+            // payload; a plain transport drop has no data. Surface the
+            // overload distinctly and revert the page counter so the next
+            // scroll retries this same page.
+            if (event && typeof event.data === 'string') {
+                currentPage--;
+                var overloaded = false;
+                try {
+                    overloaded = JSON.parse(event.data).error === 'RATE_LIMITED';
+                } catch (e) {
+                    overloaded = false;
+                }
+                showToast(overloaded ? 'Search is busy — please try again shortly' : 'Failed to load more results', 'warning');
+                return;
+            }
+
+            // Transport closed without the final done frame. If this page
+            // already streamed results, finish gracefully instead of showing
+            // the false-positive "error loading results" at end of stream —
+            // keep the page counter so the next scroll requests the next page
+            // (server session dedup prevents repeats either way).
+            if (gotResults) {
+                applySearchFiltersAndSort();
+                updateSearchStatus();
+                return;
+            }
+
+            // No results and no done frame: a real failure — revert the page
+            // counter so the next scroll retries this same page.
+            currentPage--;
             // Show subtle error - don't block the user
             showToast('Failed to load more results', 'warning');
         };

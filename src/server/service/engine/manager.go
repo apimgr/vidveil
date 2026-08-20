@@ -1638,7 +1638,7 @@ func (m *EngineManager) EnginesToUseCount(engineNames []string) int {
 // SearchStream performs a search across enabled engines and streams results via channel
 // Results are deduplicated by URL across all engines
 func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
-	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, nil, false, 0, false, 0, 0, "")
+	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, nil, false, 0, false, 0, 0, 0, "")
 }
 
 // SearchStreamWithOperators performs a streaming search with optional search operators
@@ -1654,11 +1654,15 @@ func (m *EngineManager) SearchStream(ctx context.Context, query string, page int
 // the SSE-path equivalent of ResultFilterOptions.MaxDuration used by the synchronous
 // SearchWithOperators, kept as a plain parameter here since streaming callers already
 // pass minQuality/userMinDuration positionally rather than via a struct.
+// resultsPerPage caps how many results this batch may stream in total across
+// all engines, honoring the user's results-per-page preference server-side per
+// IDEA.md "Pagination" ("The server still determines each batch's contents and
+// size"); <=0 falls back to the config default, mirroring SearchWithOperators.
 // sessionID, when non-empty, scopes cross-page result deduplication to a single
 // client search session (see AI.md PART 14 "State management -> Server (sessions)")
 // so that page=2, page=3, ... of the same infinite-scroll search never resurface
 // a result already returned on an earlier page.
-func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, maxDuration int, sessionID string) <-chan StreamResult {
+func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, maxDuration int, resultsPerPage int, sessionID string) <-chan StreamResult {
 	resultsChan := make(chan StreamResult, 100)
 
 	go func() {
@@ -1690,6 +1694,15 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 		enginesToUse := m.getEnginesToUse(engineNames)
 		m.mu.RUnlock()
 
+		// Resolve the per-batch result cap: user preference wins, otherwise the
+		// config default — identical fallback to the sync SearchWithOperators path
+		if resultsPerPage <= 0 {
+			resultsPerPage = 50
+			if m.appConfig != nil && m.appConfig.Search.ResultsPerPage > 0 {
+				resultsPerPage = m.appConfig.Search.ResultsPerPage
+			}
+		}
+
 		var wg sync.WaitGroup
 		// Get min duration from config, defaulting to 0 if config is nil
 		minDuration := 0
@@ -1707,6 +1720,9 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 		seenURLs := make(map[string]bool)
 		// for fuzzy Jaro-Winkler dedup
 		seenTitlesNorm := make([]string, 0, 64)
+		// Total results accepted across ALL engines this batch — enforces the
+		// user's results-per-page preference server-side (guarded by seenMu)
+		acceptedTotal := 0
 
 		for _, engine := range enginesToUse {
 			wg.Add(1)
@@ -1849,6 +1865,15 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 						seenMu.Unlock()
 						continue
 					}
+					// Per-page cap: once this batch has accepted the user's
+					// results-per-page count, stop accepting. Checked BEFORE
+					// CheckAndMark so a capped-out result is never marked as
+					// returned and remains eligible for the next page of the
+					// same session.
+					if acceptedTotal >= resultsPerPage {
+						seenMu.Unlock()
+						break
+					}
 					// Cross-page dedup: skip results already returned on an
 					// earlier page of the same search session
 					if m.sessionDedup.CheckAndMark(sessionID, normalizedURL, normalizedTitle) {
@@ -1860,6 +1885,7 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 					if normalizedTitle != "" {
 						seenTitlesNorm = append(seenTitlesNorm, normalizedTitle)
 					}
+					acceptedTotal++
 					seenMu.Unlock()
 
 					accepted = append(accepted, r)

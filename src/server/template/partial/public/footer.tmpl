@@ -37,18 +37,29 @@
 {{/* Toast container for notifications */}}
 <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
 
-{{/* Cookie Consent Banner per AI.md PART 12 - GDPR/CCPA compliance */}}
-<div id="cookie-consent" class="cookie-banner" data-sold="false" hidden>
+{{/* Cookie Consent Banner per AI.md PART 12 - server-rendered (visible) only
+     when no valid cookie_consent cookie exists; forms work with zero JS and
+     app.js only intercepts the submits to skip the reload */}}
+{{ if not .HasConsentCookie }}
+<div id="cookie-consent" class="cookie-banner" data-sold="false">
     <div class="cookie-banner-content">
         <span class="cookie-message">
             {{ t "footer.cookie_message" }}
             <a href="/server/privacy" class="policy-link">{{ t "footer.cookie_policy_link" }}</a>
         </span>
         <div class="cookie-buttons">
-            <button type="button" class="btn-decline" data-action="decline-cookies">{{ t "footer.cookie_decline" }}</button>
-            <button type="button" class="btn-accept" data-action="accept-cookies">{{ t "footer.cookie_accept" }}</button>
+            <form method="post" action="/server/consent">
+                {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{ end }}
+                <input type="hidden" name="choice" value="decline">
+                <button type="submit" class="btn-decline">{{ t "footer.cookie_decline" }}</button>
+            </form>
+            <form method="post" action="/server/consent">
+                {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{ end }}
+                <input type="hidden" name="choice" value="accept">
+                <button type="submit" class="btn-accept">{{ t "footer.cookie_accept" }}</button>
+            </form>
         </div>
     </div>
 </div>
-{{/* Cookie consent logic lives in static/js/app.js (CSP: script-src 'self') */}}
+{{ end }}
 {{end}}

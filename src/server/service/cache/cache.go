@@ -242,12 +242,14 @@ func (c *SearchCache) cleanup() {
 	}
 }
 
-// CacheKey generates a cache key for a search query
+// CacheKey generates a cache key for a search query.
+// Per AI.md PART 9 key naming: hierarchical colon-separated segments,
+// lowercase (e.g. "search:{query}:{page}:{engines}").
 func CacheKey(query string, page int, engines []string) string {
-	key := query + "|" + strconv.Itoa(page)
+	key := "search:" + strings.ToLower(query) + ":" + strconv.Itoa(page)
 	if len(engines) > 0 {
 		for _, e := range engines {
-			key += "|" + e
+			key += ":" + strings.ToLower(e)
 		}
 	}
 	return key

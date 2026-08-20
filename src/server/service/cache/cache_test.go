@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/server/model"
 )
 
@@ -231,24 +232,33 @@ func TestCacheKeyDiffersOnPage(t *testing.T) {
 	}
 }
 
-func TestCacheKeyEmptyEnginesNoTrailingPipe(t *testing.T) {
+func TestCacheKeyEmptyEnginesNoTrailingSeparator(t *testing.T) {
 	k := CacheKey("query", 1, []string{})
 	if len(k) == 0 {
 		t.Error("expected non-empty key")
 	}
-	// The key must not end with a bare pipe that would indicate a spurious engine entry.
-	if k[len(k)-1] == '|' {
-		t.Errorf("key ends with pipe for empty engines: %q", k)
+	// The key must not end with a bare separator that would indicate a spurious engine entry.
+	if k[len(k)-1] == ':' {
+		t.Errorf("key ends with separator for empty engines: %q", k)
 	}
 }
 
-func TestCacheKeyNilEnginesNoTrailingPipe(t *testing.T) {
+func TestCacheKeyNilEnginesNoTrailingSeparator(t *testing.T) {
 	k := CacheKey("query", 1, nil)
 	if len(k) == 0 {
 		t.Error("expected non-empty key")
 	}
-	if k[len(k)-1] == '|' {
-		t.Errorf("key ends with pipe for nil engines: %q", k)
+	if k[len(k)-1] == ':' {
+		t.Errorf("key ends with separator for nil engines: %q", k)
+	}
+}
+
+func TestCacheKeyHierarchicalColonSeparated(t *testing.T) {
+	// AI.md PART 9: hierarchical colon-separated, lowercase segments.
+	k := CacheKey("Golang Videos", 2, []string{"YouTube"})
+	want := "search:golang videos:2:youtube"
+	if k != want {
+		t.Errorf("CacheKey format: got %q, want %q", k, want)
 	}
 }
 
@@ -532,19 +542,53 @@ func TestNewSearchResultCacheRedisFailsWithoutServer(t *testing.T) {
 
 // ---- SetCacheHeaders ----
 
-func TestSetCacheHeadersStatic(t *testing.T) {
+func TestSetCacheHeadersStaticMatchingStamp(t *testing.T) {
 	w := httptest.NewRecorder()
-	SetCacheHeaders(w, ContentStatic, false)
+	// AI.md PART 9: immutable only when ?v= equals the running build stamp.
+	r := httptest.NewRequest("GET", "/static/app.css?v="+version.AssetStamp(), nil)
+	SetCacheHeaders(w, r, ContentStatic, false)
 	got := w.Header().Get("Cache-Control")
 	want := "public, max-age=31536000, immutable"
 	if got != want {
-		t.Errorf("ContentStatic: got %q, want %q", got, want)
+		t.Errorf("ContentStatic matching stamp: got %q, want %q", got, want)
+	}
+}
+
+func TestSetCacheHeadersStaticMissingStamp(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/static/app.css", nil)
+	SetCacheHeaders(w, r, ContentStatic, false)
+	if got, want := w.Header().Get("Cache-Control"), "no-cache"; got != want {
+		t.Errorf("ContentStatic missing stamp: got %q, want %q", got, want)
+	}
+	if w.Header().Get("ETag") == "" {
+		t.Error("ContentStatic missing stamp: expected ETag to be set")
+	}
+}
+
+func TestSetCacheHeadersStaticMismatchedStamp(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/static/app.css?v=stale-0000000", nil)
+	SetCacheHeaders(w, r, ContentStatic, false)
+	if got, want := w.Header().Get("Cache-Control"), "no-cache"; got != want {
+		t.Errorf("ContentStatic mismatched stamp: got %q, want %q", got, want)
+	}
+}
+
+func TestSetCacheHeadersSW(t *testing.T) {
+	w := httptest.NewRecorder()
+	SetCacheHeaders(w, nil, ContentSW, false)
+	if got, want := w.Header().Get("Cache-Control"), "no-cache"; got != want {
+		t.Errorf("ContentSW: got %q, want %q", got, want)
+	}
+	if w.Header().Get("ETag") == "" {
+		t.Error("ContentSW: expected build-stamp ETag to be set")
 	}
 }
 
 func TestSetCacheHeadersAPI(t *testing.T) {
 	w := httptest.NewRecorder()
-	SetCacheHeaders(w, ContentAPI, false)
+	SetCacheHeaders(w, nil, ContentAPI, false)
 	got := w.Header().Get("Cache-Control")
 	want := "public, max-age=60"
 	if got != want {
@@ -554,7 +598,7 @@ func TestSetCacheHeadersAPI(t *testing.T) {
 
 func TestSetCacheHeadersHTML(t *testing.T) {
 	w := httptest.NewRecorder()
-	SetCacheHeaders(w, ContentHTML, false)
+	SetCacheHeaders(w, nil, ContentHTML, false)
 	got := w.Header().Get("Cache-Control")
 	want := "no-store"
 	if got != want {
@@ -564,7 +608,7 @@ func TestSetCacheHeadersHTML(t *testing.T) {
 
 func TestSetCacheHeadersPrivate(t *testing.T) {
 	w := httptest.NewRecorder()
-	SetCacheHeaders(w, ContentPrivate, false)
+	SetCacheHeaders(w, nil, ContentPrivate, false)
 	got := w.Header().Get("Cache-Control")
 	want := "private, no-store"
 	if got != want {
@@ -574,7 +618,7 @@ func TestSetCacheHeadersPrivate(t *testing.T) {
 
 func TestSetCacheHeadersError(t *testing.T) {
 	w := httptest.NewRecorder()
-	SetCacheHeaders(w, ContentError, false)
+	SetCacheHeaders(w, nil, ContentError, false)
 	got := w.Header().Get("Cache-Control")
 	want := "no-store"
 	if got != want {
@@ -584,7 +628,7 @@ func TestSetCacheHeadersError(t *testing.T) {
 
 func TestSetCacheHeadersUnknownType(t *testing.T) {
 	w := httptest.NewRecorder()
-	SetCacheHeaders(w, ContentType("unknown"), false)
+	SetCacheHeaders(w, nil, ContentType("unknown"), false)
 	got := w.Header().Get("Cache-Control")
 	want := "no-store"
 	if got != want {
@@ -594,7 +638,7 @@ func TestSetCacheHeadersUnknownType(t *testing.T) {
 
 func TestSetCacheHeadersAuthenticatedOverridesStatic(t *testing.T) {
 	w := httptest.NewRecorder()
-	SetCacheHeaders(w, ContentStatic, true)
+	SetCacheHeaders(w, nil, ContentStatic, true)
 	got := w.Header().Get("Cache-Control")
 	want := "private, no-store"
 	if got != want {
@@ -604,7 +648,7 @@ func TestSetCacheHeadersAuthenticatedOverridesStatic(t *testing.T) {
 
 func TestSetCacheHeadersAuthenticatedOverridesAPI(t *testing.T) {
 	w := httptest.NewRecorder()
-	SetCacheHeaders(w, ContentAPI, true)
+	SetCacheHeaders(w, nil, ContentAPI, true)
 	got := w.Header().Get("Cache-Control")
 	want := "private, no-store"
 	if got != want {
@@ -616,7 +660,8 @@ func TestSetCacheHeadersAuthenticatedOverridesAPI(t *testing.T) {
 
 func TestSetStaticCacheHeaders(t *testing.T) {
 	w := httptest.NewRecorder()
-	SetStaticCacheHeaders(w)
+	r := httptest.NewRequest("GET", "/static/app.css?v="+version.AssetStamp(), nil)
+	SetStaticCacheHeaders(w, r)
 	got := w.Header().Get("Cache-Control")
 	want := "public, max-age=31536000, immutable"
 	if got != want {

@@ -262,16 +262,43 @@ func (s *Server) setupMiddleware() {
 			// Cache-Control headers per AI.md PART 9
 			path := r.URL.Path
 			if strings.HasPrefix(path, "/static/") {
-				// Static assets: cache for 1 year
-				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				// Static assets per PART 9 asset version-busting: immutable ONLY
+				// when the ?v= stamp matches the running build; missing or
+				// mismatched stamp gets no-cache + a build-stamp ETag instead.
+				if r.URL.Query().Get("v") == version.AssetStamp() {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else {
+					w.Header().Set("Cache-Control", "no-cache")
+					w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
+				}
 			} else if strings.HasPrefix(path, "/api/") {
 				// API responses: no cache
 				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 				w.Header().Set("Pragma", "no-cache")
 				w.Header().Set("Expires", "0")
 			} else {
-				// HTML pages: no store
+				// HTML pages per PART 9: no-store plus a build-stamp ETag so any
+				// intermediary that ignores no-store still revalidates.
 				w.Header().Set("Cache-Control", "no-store, must-revalidate")
+				w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
+				// Version-change purge per PART 9: every HTML response carries a
+				// vidveil_build cookie with the running stamp. A mismatched cookie
+				// means a stale client — add Clear-Site-Data: "cache", "storage"
+				// (NEVER "cookies") to evict poisoned caches and service workers.
+				// One-shot by design: the re-set cookie stops the purge next time;
+				// first-ever visits (no cookie) never purge.
+				stamp := version.AssetStamp()
+				if c, err := r.Cookie("vidveil_build"); err == nil && c.Value != stamp {
+					w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
+				}
+				http.SetCookie(w, &http.Cookie{
+					Name:     "vidveil_build",
+					Value:    stamp,
+					Path:     "/",
+					MaxAge:   31536000,
+					Secure:   s.appConfig.Server.SSL.Enabled,
+					SameSite: http.SameSiteLaxMode,
+				})
 			}
 			next.ServeHTTP(w, r)
 		})
@@ -362,10 +389,16 @@ func requestLogMiddleware(next http.Handler) http.Handler {
 			scheme = "https"
 		}
 		reqID := middleware.GetReqID(r.Context())
+		// Per AI.md PART 31 never log the Tor daemon's loopback address as a
+		// client identifier — substitute the "tor" sentinel for Tor requests
+		clientIP := urlvar.ResolveClientIP(r)
+		if urlvar.IsTorRequest(r) {
+			clientIP = "tor"
+		}
 		log.Printf("[%s/%s] %q from %s - %d %dB in %s",
 			r.Host, reqID,
 			fmt.Sprintf("%s %s://%s%s %s", r.Method, scheme, r.Host, r.RequestURI, r.Proto),
-			urlvar.ResolveClientIP(r),
+			clientIP,
 			ww.Status(), ww.BytesWritten(),
 			time.Since(start),
 		)
@@ -580,7 +613,10 @@ func (s *Server) setupRoutes() {
 		body := strings.Replace(string(data), "vidveil-cache-v1", swCache, 1)
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Header().Set("Service-Worker-Allowed", "/")
+		// PART 9: /sw.js is no-cache + build-stamp ETag — never long-cached,
+		// or a stale service worker delays every other update mechanism.
 		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
 		w.Write([]byte(body))
 	})
 	s.router.Get("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
@@ -590,7 +626,9 @@ func (s *Server) setupRoutes() {
 			return
 		}
 		w.Header().Set("Content-Type", "application/manifest+json")
+		// PART 9: /manifest.json is no-cache + build-stamp ETag, never immutable.
 		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
 		w.Write(data)
 	})
 	s.router.Get("/offline.html", func(w http.ResponseWriter, r *http.Request) {
@@ -698,6 +736,8 @@ func (s *Server) setupRoutes() {
 		r.Get("/privacy", server.PrivacyPage)
 		r.Get("/contact", server.ContactPage)
 		r.Post("/contact", server.ContactPage)
+		// Zero-JS cookie-consent flow per AI.md PART 12 — banner forms POST here
+		r.Post("/consent", server.ConsentSubmit)
 		r.Get("/help", server.HelpPage)
 		r.Get("/terms", server.TermsPage)
 		r.Get("/security", server.SecurityPage)

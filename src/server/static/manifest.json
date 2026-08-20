@@ -3,6 +3,7 @@
   "short_name": "VidVeil",
   "description": "Privacy-focused video search engine",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#282a36",

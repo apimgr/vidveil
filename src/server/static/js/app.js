@@ -595,21 +595,54 @@ function loadCollapsedState() {
     }
 }
 
-// Admin toast notification system
+// Toast notification system per AI.md PART 16: max 5 stacked, auto-dismiss
+// Success 3s / Info 3s / Warning 5s, Error never auto-dismisses,
+// pause-on-hover, Escape dismisses the topmost toast.
+var TOAST_DISMISS_MS = { success: 3000, info: 3000, warning: 5000, error: 0 };
 function showToast(message, type) {
     type = type || 'info';
     var container = document.getElementById('toast-container');
     if (!container) return;
+    // Max 5 stacked — drop the oldest to make room
+    while (container.children.length >= 5) {
+        container.removeChild(container.firstChild);
+    }
     var toast = document.createElement('div');
     toast.className = 'toast toast-' + type;
-    toast.innerHTML = '<span>' + message + '</span><button type="button" class="toast-close" data-action="close-toast">&times;</button>';
+    // Build via DOM methods so message text can never inject HTML
+    var msgSpan = document.createElement('span');
+    msgSpan.textContent = message;
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'toast-close';
+    closeBtn.setAttribute('data-action', 'close-toast');
+    closeBtn.innerHTML = '&times;';
+    toast.appendChild(msgSpan);
+    toast.appendChild(closeBtn);
     container.appendChild(toast);
     setTimeout(function() { toast.classList.add('show'); }, 10);
-    setTimeout(function() {
+    function dismissToast() {
         toast.classList.remove('show');
         setTimeout(function() { toast.remove(); }, 300);
-    }, 5000);
+    }
+    var dismissMs = TOAST_DISMISS_MS[type] !== undefined ? TOAST_DISMISS_MS[type] : 3000;
+    if (dismissMs > 0) {
+        var dismissTimer = setTimeout(dismissToast, dismissMs);
+        // Pause auto-dismiss while hovered, restart on leave
+        toast.addEventListener('mouseenter', function() { clearTimeout(dismissTimer); });
+        toast.addEventListener('mouseleave', function() { dismissTimer = setTimeout(dismissToast, dismissMs); });
+    }
 }
+
+// Escape dismisses the topmost (newest) toast per AI.md PART 16
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var toastContainer = document.getElementById('toast-container');
+        if (toastContainer && toastContainer.lastElementChild) {
+            toastContainer.lastElementChild.remove();
+        }
+    }
+});
 
 function showSuccess(msg) { showToast(msg, 'success'); }
 function showError(msg) { showToast(msg, 'error'); }
@@ -629,11 +662,13 @@ function showConfirm(message, onConfirm, onCancel) {
         '<h3 class="modal-title" id="' + id + '-title">Confirm Action</h3>' +
         '<button type="button" class="modal-close" aria-label="Close">&times;</button>' +
         '</div>' +
-        '<div class="modal-body"><p id="' + id + '-desc">' + message + '</p></div>' +
+        '<div class="modal-body"><p id="' + id + '-desc"></p></div>' +
         '<div class="modal-footer">' +
         '<button type="button" class="btn btn-secondary cancel-btn">Cancel</button>' +
         '<button type="button" class="btn btn-primary confirm-btn">Confirm</button>' +
         '</div>';
+    // Message set via textContent so it can never inject HTML
+    modal.querySelector('#' + id + '-desc').textContent = message;
     document.body.appendChild(modal);
     var triggerElement = document.activeElement;
     modal.showModal();
@@ -3023,12 +3058,6 @@ function dispatchClickAction(el, e) {
         case 'close-nav':
             closeNav();
             return true;
-        case 'decline-cookies':
-            if (typeof window.declineCookies === 'function') window.declineCookies();
-            return true;
-        case 'accept-cookies':
-            if (typeof window.acceptCookies === 'function') window.acceptCookies();
-            return true;
         case 'close-toast': {
             var toast = el.closest('.toast');
             if (toast) toast.remove();
@@ -3289,22 +3318,18 @@ document.addEventListener('error', function(e) {
 }, true);
 
 // ============================================================================
-// Cookie Consent (moved from footer.tmpl) — AI.md PART 12
-// cookieConsent is a COOKIE (not localStorage) — server reads it per request
-// to skip the banner and suppress non-essential tracking.
+// Cookie Consent — AI.md PART 12
+// Enhancement only: the banner forms POST to /server/consent and work with
+// zero JS (server renders the banner only when no cookie_consent cookie
+// exists). This module intercepts the submits to skip the reload, writing the
+// same cookie_consent cookie the server would set.
 // ============================================================================
 (function() {
-    function acceptCookies() {
-        saveAndApplyConsent({ essential: true, preferences: true, analytics: false, timestamp: Date.now() });
-    }
-    function declineCookies() {
-        saveAndApplyConsent({ essential: true, preferences: false, analytics: false, timestamp: Date.now() });
-    }
     function saveAndApplyConsent(consent) {
-        document.cookie = 'cookieConsent=' + encodeURIComponent(JSON.stringify(consent)) +
+        document.cookie = 'cookie_consent=' + encodeURIComponent(JSON.stringify(consent)) +
             '; path=/; max-age=31536000; SameSite=Lax';
         var banner = document.getElementById('cookie-consent');
-        if (banner) banner.hidden = true;
+        if (banner) banner.remove();
         applyConsent(consent);
     }
     function applyConsent(consent) {
@@ -3313,25 +3338,26 @@ document.addEventListener('error', function(e) {
             document.cookie = 'lang=; path=/; max-age=0; SameSite=Lax';
         }
     }
-    window.acceptCookies = acceptCookies;
-    window.declineCookies = declineCookies;
     window.saveAndApplyConsent = saveAndApplyConsent;
     window.applyConsent = applyConsent;
 
     onReady(function() {
         var banner = document.getElementById('cookie-consent');
         if (!banner) return;
-        var match = document.cookie.match(/(?:^|;\s*)cookieConsent=([^;]*)/);
-        if (!match) {
-            banner.hidden = false;
-            return;
-        }
-        try {
-            applyConsent(JSON.parse(decodeURIComponent(match[1])));
-        } catch (e) {
-            document.cookie = 'cookieConsent=; path=/; max-age=0; SameSite=Lax';
-            banner.hidden = false;
-        }
+        // Intercept the zero-JS form submits so the choice applies in place
+        banner.addEventListener('submit', function(e) {
+            var form = e.target;
+            if (!form || form.getAttribute('action') !== '/server/consent') return;
+            e.preventDefault();
+            var choiceInput = form.querySelector('input[name="choice"]');
+            var accepted = choiceInput && choiceInput.value === 'accept';
+            saveAndApplyConsent({
+                essential: true,
+                preferences: accepted,
+                analytics: false,
+                timestamp: Math.floor(Date.now() / 1000)
+            });
+        });
     });
 })();
 

@@ -651,6 +651,14 @@ func ResolveClientIP(req *http.Request) string {
 	return GlobalResolver().resolveClientIP(req)
 }
 
+// IsTorRequest reports whether req arrived via the Tor hidden service (Host
+// matches tor.onion_address) using the global resolver. Per AI.md PART 31,
+// loggers must never record 127.0.0.1 for Tor requests — callers substitute
+// the "tor" sentinel for the client IP when this returns true.
+func IsTorRequest(req *http.Request) bool {
+	return GlobalResolver().isTorRequest(req)
+}
+
 // Middleware returns HTTP middleware that sets X-Resolved-* headers for templates
 func (r *URLResolver) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

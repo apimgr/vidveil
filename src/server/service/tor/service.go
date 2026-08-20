@@ -1107,7 +1107,7 @@ func findTorBinary(cfg *config.TorConfig) string {
 	var candidates []string
 	switch runtime.GOOS {
 	case "linux":
-		candidates = []string{"/usr/bin/tor", "/usr/local/bin/tor"}
+		candidates = []string{"/usr/bin/tor", "/usr/sbin/tor", "/usr/local/bin/tor"}
 	case "darwin":
 		candidates = []string{"/usr/local/bin/tor", "/opt/homebrew/bin/tor"}
 	case "windows":
@@ -1183,6 +1183,9 @@ DirPort 0
 
 # Hidden service optimizations (actual HS created via ADD_ONION)
 HiddenServiceSingleHopMode 0
+
+# Lightweight vanguards protection for the hidden service (per AI.md PART 31)
+VanguardsLiteEnabled 1
 
 # Faster startup
 FetchDirInfoEarly 1

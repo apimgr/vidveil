@@ -1942,6 +1942,11 @@ type HealthzHTMLData struct {
 	BrandingDescription string
 	BrandingTagline     string
 	AppURL              string
+	// Consent banner gating (AI.md PART 12) — footer.tmpl renders the banner
+	// only when no valid cookie_consent cookie exists
+	HasConsentCookie bool
+	// CSRF token for the consent banner forms in footer.tmpl (AI.md PART 16)
+	CSRFToken string
 
 	// Project info (PART 16 branding)
 	ProjectName        string
@@ -2009,7 +2014,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	lang := resolveLocale(r)
 	data := HealthzHTMLData{
 		Title:         "Vidveil - Health Status",
-		Theme:         "dark",
+		Theme:         h.getRequestTheme(r),
 		Version:       version.GetVersion(),
 		BuildDateTime: version.BuildTime,
 
@@ -2020,6 +2025,10 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		// Nav template compatibility
 		ActiveNav: "healthz",
 		Query:     "",
+
+		// Consent banner gating per AI.md PART 12
+		HasConsentCookie: hasConsentCookie(r),
+		CSRFToken:        cSRFTokenFromRequest(r),
 
 		// Project info (populated from branding config below)
 		ProjectName:        "Vidveil",
@@ -2185,6 +2194,10 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		"safeHTML": func(s string) template.HTML {
 			return template.HTML(s)
 		},
+		// asset appends the version-busting stamp per AI.md PART 9
+		"asset": func(path string) string {
+			return path + "?v=" + version.AssetStamp()
+		},
 	}).ParseFS(templatesFS,
 		"template/page/healthz.tmpl",
 		"template/partial/public/head.tmpl",
@@ -2255,14 +2268,34 @@ func (h *SearchHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	mailto := h.appConfig.Web.Security.Contact
-	if mailto == "" {
-		mailto = "security@" + h.appConfig.Server.FQDN
+	// Tor variant per AI.md PART 31/12: Host matches the onion address. The Tor
+	// response must never leak the clearnet FQDN or a clearnet email address,
+	// and Preferred-Languages is omitted entirely on the Tor variant.
+	onionAddr := h.appConfig.Server.Tor.OnionAddress
+	host := r.Host
+	if idx := strings.LastIndex(host, ":"); idx != -1 && !strings.Contains(host, "]") {
+		host = host[:idx]
 	}
-	if !strings.HasPrefix(mailto, "mailto:") {
-		mailto = "mailto:" + mailto
+	isTor := onionAddr != "" && strings.EqualFold(host, onionAddr)
+
+	if isTor {
+		// Tor: only tor.contact_email may appear — never a clearnet fallback
+		if torMail := h.appConfig.Server.Tor.ContactEmail; torMail != "" {
+			if !strings.HasPrefix(torMail, "mailto:") {
+				torMail = "mailto:" + torMail
+			}
+			contacts = append(contacts, torMail)
+		}
+	} else {
+		mailto := h.appConfig.Web.Security.Contact
+		if mailto == "" {
+			mailto = "security@" + h.appConfig.Server.FQDN
+		}
+		if !strings.HasPrefix(mailto, "mailto:") {
+			mailto = "mailto:" + mailto
+		}
+		contacts = append(contacts, mailto)
 	}
-	contacts = append(contacts, mailto)
 
 	expires := h.appConfig.Web.Security.Expires
 	if expires == "" {
@@ -2273,7 +2306,14 @@ func (h *SearchHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
 	for _, contact := range contacts {
 		fmt.Fprintf(&body, "Contact: %s\n", contact)
 	}
-	fmt.Fprintf(&body, "Expires: %s\nPreferred-Languages: en\n", expires)
+	// Policy: required RFC 9116 field per AI.md PART 11 — human-readable page
+	// at /server/security; BuildURL is per-request so the Tor variant gets the
+	// onion origin, never the clearnet FQDN
+	fmt.Fprintf(&body, "Policy: %s\n", urlvar.BuildURL(r, "/server/security"))
+	fmt.Fprintf(&body, "Expires: %s\n", expires)
+	if !isTor {
+		fmt.Fprintf(&body, "Preferred-Languages: en\n")
+	}
 
 	// Add Encryption field when PGP key is published (AI.md PART 11)
 	if h.appConfig.Web.Security.PGPKeyURL != "" {
@@ -3440,6 +3480,10 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, r *http.Request, 
 		"tf": func(key string, args ...interface{}) string {
 			return i18n.TranslateFormat(locale, key, args...)
 		},
+		// asset appends the version-busting stamp per AI.md PART 9
+		"asset": func(path string) string {
+			return path + "?v=" + version.AssetStamp()
+		},
 	}).ParseFS(templatesFS, "template/page/error.tmpl")
 	if err != nil {
 		// Fallback to plain text error
@@ -3642,6 +3686,11 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		// safeHTML marks a string as safe HTML (trusted, not escaped)
 		"safeHTML": func(s string) template.HTML {
 			return template.HTML(s)
+		},
+		// asset appends the version-busting stamp per AI.md PART 9:
+		// {{ asset "/static/css/app.css" }} → /static/css/app.css?v={version}-{commit}
+		"asset": func(path string) string {
+			return path + "?v=" + version.AssetStamp()
 		},
 		// toJSON marshals a value into an inline JSON data island (CSP-safe,
 		// non-executable <script type="application/json"> per AI.md PART 16).

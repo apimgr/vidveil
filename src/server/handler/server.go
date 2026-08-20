@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -151,6 +152,11 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"tf": func(key string, args ...interface{}) string {
 			return i18n.TranslateFormat(locale, key, args...)
 		},
+		// asset appends the version-busting stamp per AI.md PART 9:
+		// {{ asset "/static/css/app.css" }} → /static/css/app.css?v={version}-{commit}
+		"asset": func(path string) string {
+			return path + "?v=" + version.AssetStamp()
+		},
 	})
 
 	// Load layout and partials first
@@ -197,6 +203,22 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	// startup/config, so canonical/OG URLs match the Host/proto the client
 	// actually used, including behind a reverse proxy.
 
+	// Theme per AI.md PART 16 — server reads the theme cookie and falls back
+	// to the configured default, then dark. Never hardcoded per request.
+	theme := ""
+	if c, err := r.Cookie("theme"); err == nil {
+		switch c.Value {
+		case "dark", "light", "auto":
+			theme = c.Value
+		}
+	}
+	if theme == "" {
+		theme = h.appConfig.Web.UI.Theme
+	}
+	if theme == "" {
+		theme = "dark"
+	}
+
 	data := map[string]interface{}{
 		"Title":          appName,
 		"AppName":        appName,
@@ -205,9 +227,14 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"BaseURL":        urlvar.BuildURL(r, ""),
 		"Version":        versionInfo["version"],
 		"BuildDateTime":  versionInfo["build_time"],
-		"Theme":          "dark",
+		"Theme":          theme,
 		"ActiveNav":      templateName,
 		"Query":          "",
+		// Consent banner gating per AI.md PART 12 — rendered only when no
+		// valid cookie_consent cookie exists (zero-JS flow).
+		"HasConsentCookie": hasConsentCookie(r),
+		// CSRF token for the consent banner forms in footer.tmpl (AI.md PART 16)
+		"CSRFToken": cSRFTokenFromRequest(r),
 	}
 
 	// Footer onion-address row per AI.md PART 16 — dropped entirely unless
@@ -252,6 +279,46 @@ func (h *ServerHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 // PrivacyPage renders /server/privacy web page
 func (h *ServerHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-privacy", nil)
+}
+
+// ConsentSubmit handles POST /server/consent per AI.md PART 12 — the zero-JS
+// consent flow. Reads the choice field, sets the cookie_consent cookie
+// (JSON: granular categories + timestamp), and redirects back to the
+// originating page so the banner form works with JavaScript disabled.
+func (h *ServerHandler) ConsentSubmit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	// "accept" enables the optional preferences category; anything else is
+	// essential-only. Analytics stays false either way — the IDEA.md non-goal
+	// "No tracking, logging, or analytics" means there is no tracker to allow.
+	prefs := r.PostFormValue("choice") == "accept"
+	value := fmt.Sprintf(`{"essential":true,"preferences":%t,"analytics":false,"timestamp":%d}`, prefs, time.Now().Unix())
+
+	// Secure flag when the request arrived over HTTPS (directly or via proxy)
+	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	http.SetCookie(w, &http.Cookie{
+		Name:     "cookie_consent",
+		Value:    url.QueryEscape(value),
+		Path:     "/",
+		MaxAge:   31536000,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// Redirect back to the originating page — path-only, so a forged Referer
+	// can never turn this into an open redirect.
+	target := "/"
+	if ref, err := url.Parse(r.Referer()); err == nil &&
+		strings.HasPrefix(ref.Path, "/") && !strings.HasPrefix(ref.Path, "//") {
+		target = ref.Path
+		if ref.RawQuery != "" {
+			target += "?" + ref.RawQuery
+		}
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 // ContactPage renders /server/contact web page. Per AI.md PART 11

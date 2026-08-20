@@ -260,6 +260,12 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 		data["AppURL"] = urlvar.BuildURL(r, "")
 	}
 
+	// Consent banner gating per AI.md PART 12/16 — the server renders the
+	// banner only when no valid cookie_consent cookie exists (zero-JS flow).
+	if data["HasConsentCookie"] == nil {
+		data["HasConsentCookie"] = hasConsentCookie(r)
+	}
+
 	accept := r.Header.Get("Accept")
 
 	// 2. Accept: text/plain explicitly requested — per AI.md PART 14 returns formatted text
@@ -298,6 +304,13 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 	// 5. Regular browsers (Chrome, Firefox) - full HTML with JavaScript
 	w.WriteHeader(status)
 	h.renderTemplate(w, name, data)
+}
+
+// hasConsentCookie reports whether the request carries a non-empty
+// cookie_consent cookie (AI.md PART 12 — server skips rendering the banner).
+func hasConsentCookie(r *http.Request) bool {
+	c, err := r.Cookie("cookie_consent")
+	return err == nil && c.Value != ""
 }
 
 // Client detection helpers per AI.md PART 14

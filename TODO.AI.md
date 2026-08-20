@@ -136,6 +136,66 @@ gate, error-path guarantee):
   a minimal hardcoded HTML page for browsers, and audit `renderResponse`/
   template execution error paths for the same guaranteed-response fallback.
 
+Findings from the PART 11/31 security compliance pass (2026-08-20), flagged
+but not fixed — each is architecture-sized or spec-contradicted and needs a
+decision before implementation:
+
+- Tor hidden-service architecture: hidden service is published via bine
+  `AddOnion` mapping onion:80 → the clearnet listener
+  (`src/server/service/tor/service.go:213-423`, `src/main.go:752`), but
+  AI.md line ~41397 explicitly requires torrc `HiddenServiceDir` +
+  `HiddenServicePort` (NOT ADD_ONION) with a dedicated PROXY-protocol
+  backend (`github.com/pires/go-proxyproto`, not in go.mod) on a
+  64000-64999 port and `HiddenServiceExportCircuitID haproxy`. The
+  committed `.claude/rules/backend-rules.md` says the opposite ("via
+  ADD_ONION") — the condensed rules file is stale and must be regenerated
+  from AI.md. Multi-file rewrite (tor service, main.go wiring, new
+  dependency, circuit-ID plumbing into logging/rate limiting); needs a
+  live-Tor verification run.
+- torrc persistence: `ensureTorrc` (`tor/service.go:1207-1229`) only writes
+  torrc when absent; spec says regenerate on every startup. Tied to the
+  torrc-driven architecture item above.
+- Tor rate-limit/blocklist keying: Tor traffic keys per-IP on the loopback
+  address (single shared bucket). Correct fix per AI.md ~16013 is
+  per-circuit-ID keying, which depends on `HiddenServiceExportCircuitID`
+  from the architecture item above.
+- Tor key-only mode reporting: `GetInfo()` (`tor/service.go:972`) reports
+  `enabled=true` for `TorServiceStatusNoTorBinary` (keys generated, no
+  binary). Spec: binary absent → INFO log, disable Tor features, continue.
+  `IsEnabled()` is already correct; only the info surface disagrees —
+  changing it alters the reported API contract, needs sign-off.
+- CSP extension model: `src/config/config.go:611-621` exposes a
+  full-replacement `csp` string key (violates "extend via `*_extra`, never
+  replace") and `src/server/server.go:202-305` hardcodes the policy — no
+  `script_src_extra` family, `connect-src` lacks `{learned_origins}`, no
+  dev `Content-Security-Policy-Report-Only` mode. Needs a decision on the
+  `*_extra` config key set (operator-facing config surface redesign).
+- Output Sanitization Pipeline: only log-side redaction exists
+  (`logging.go:392` `SanitizeLogFields`). The PART 11 six-stage RESPONSE
+  pipeline (allow-list → query-param redaction → internal IP/path strip →
+  truncation → dev_only strip → ~100ms constant-time finalize) is not
+  implemented; no auth-failure timing floor found. Large cross-cutting
+  feature touching the response/error-envelope layer.
+
+Findings from the PART 16 frontend/PWA compliance pass (2026-08-20),
+flagged but not fixed:
+
+- `src/server/csrf.go:117-120`: CSRF validation is bypassed when no
+  session cookie is present (a "session_id" cookie that is never set
+  anywhere), effectively disabling browser CSRF enforcement. AI.md PART
+  16's bypass list is closed (Bearer header, safe methods, WS upgrade,
+  exempt_paths — no session-presence bypass), but AI.md's own threat-model
+  row for this open, unauthenticated API says "n/a (no auth, nothing to
+  abuse)". Business-logic decision: either remove the session-cookie
+  bypass and enforce double-submit on all mutating browser requests, or
+  document the deliberate exemption. Consent forms already include the
+  CSRF hidden input either way.
+- Cookie-consent banner text uses i18n keys rather than the
+  `CookieConsentConfig.Message/PolicyText/PolicyURL` config fields —
+  consistent with the hardcoded-strings prohibition (PART 29/30), but
+  decide whether those config fields should feed the template (and be
+  removed if not).
+
 Finding from go-lint pass during the API-version cross-cutting fix
 (2026-08-15, task 8 completion).
 

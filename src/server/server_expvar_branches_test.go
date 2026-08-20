@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
@@ -127,12 +128,28 @@ func TestMiddleware_CacheControl_StaticPath(t *testing.T) {
 	s := newTestServer(t)
 	// Use manifest.json which exists in the embedded static FS (a 404 would clear
 	// Cache-Control in Go 1.22+ via http.Error header cleanup).
-	req := httptest.NewRequest(http.MethodGet, "/static/manifest.json", nil)
+	// AI.md PART 9: immutable ONLY with a matching ?v= build stamp.
+	req := httptest.NewRequest(http.MethodGet, "/static/manifest.json?v="+version.AssetStamp(), nil)
 	rr := httptest.NewRecorder()
 	s.router.ServeHTTP(rr, req)
 	cc := rr.Header().Get("Cache-Control")
 	if !strings.Contains(cc, "max-age=31536000") {
-		t.Errorf("Cache-Control for /static/ want immutable long cache, got %q", cc)
+		t.Errorf("Cache-Control for stamped /static/ want immutable long cache, got %q", cc)
+	}
+}
+
+func TestMiddleware_CacheControl_StaticPathUnstamped(t *testing.T) {
+	s := newTestServer(t)
+	// AI.md PART 9: missing/mismatched ?v= stamp → no-cache + build-stamp ETag.
+	req := httptest.NewRequest(http.MethodGet, "/static/manifest.json", nil)
+	rr := httptest.NewRecorder()
+	s.router.ServeHTTP(rr, req)
+	cc := rr.Header().Get("Cache-Control")
+	if !strings.Contains(cc, "no-cache") {
+		t.Errorf("Cache-Control for unstamped /static/ want no-cache, got %q", cc)
+	}
+	if rr.Header().Get("ETag") == "" {
+		t.Error("unstamped /static/ response missing ETag")
 	}
 }
 

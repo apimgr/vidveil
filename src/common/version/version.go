@@ -105,6 +105,18 @@ func GetShortVersion() string {
 	return Version
 }
 
+// AssetStamp returns the asset version-busting stamp per AI.md PART 9:
+// "{project_version}-{short_commit}". Appended to static asset URLs as
+// ?v={stamp} by the asset() template helper; static responses are only
+// served immutable when the request stamp matches this value.
+func AssetStamp() string {
+	commit := CommitID
+	if len(commit) > 7 {
+		commit = commit[:7]
+	}
+	return Version + "-" + commit
+}
+
 // GetVersionInfo returns version info as a map for JSON responses
 func GetVersionInfo() map[string]string {
 	return map[string]string{

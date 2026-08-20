@@ -1197,18 +1197,45 @@ func (rw *responseWriter) Hijack() (interface{}, interface{}, error) {
 	return nil, nil, fmt.Errorf("hijack not supported")
 }
 
+// isHealthCheckPath reports whether path is a health-check route whose
+// successful hits are suppressed from access.log per AI.md PART 11. Matches
+// /healthz, /server/healthz, /api/healthz, and versioned variants, with or
+// without a .json/.txt extension.
+func isHealthCheckPath(path string) bool {
+	if idx := strings.LastIndex(path, "."); idx != -1 {
+		switch path[idx:] {
+		case ".json", ".txt":
+			path = path[:idx]
+		}
+	}
+	return path == "/healthz" || strings.HasSuffix(path, "/healthz")
+}
+
 // Handler wraps an http.Handler with access logging per AI.md PART 11.
 // Captures method, path, protocol, remote address, referrer, user-agent, status, and size.
+// Successful (2xx) health-check requests are suppressed; failures always log.
 func (m *AccessLogMiddleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		wrapped := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(wrapped, r)
 
+		// Suppress successful health checks from access.log per AI.md PART 11
+		if wrapped.status >= 200 && wrapped.status < 300 && isHealthCheckPath(r.URL.Path) {
+			return
+		}
+
+		// Per AI.md PART 31 the Tor daemon's loopback address is never logged
+		// as a client identifier — use the "tor" sentinel instead
+		clientIP := urlvar.ResolveClientIP(r)
+		if urlvar.IsTorRequest(r) {
+			clientIP = "tor"
+		}
+
 		m.logger.Access(
 			r.Method,
 			r.URL.Path,
 			r.Proto,
-			urlvar.ResolveClientIP(r),
+			clientIP,
 			r.Referer(),
 			r.UserAgent(),
 			wrapped.status,

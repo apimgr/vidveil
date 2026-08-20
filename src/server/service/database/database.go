@@ -135,6 +135,15 @@ func NewAppDatabase(cfg DatabaseConfig) (*AppDatabase, error) {
 	db.SetConnMaxLifetime(cfg.Pool.maxLifetime())
 	db.SetConnMaxIdleTime(cfg.Pool.maxIdleTime())
 
+	// Verify the connection per AI.md PART 10 (NewDB pattern: PingContext
+	// with a bounded timeout before the pool is handed to callers).
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), TimeoutSimpleSelect)
+	defer pingCancel()
+	if err := db.PingContext(pingCtx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to verify database connection: %w", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &AppDatabase{
@@ -354,6 +363,52 @@ func (d *AppDatabase) WithTransaction(ctx context.Context, fn func(*sql.Tx) erro
 	}
 
 	return tx.Commit()
+}
+
+// WithSerializableRetry executes fn in a serializable-isolation transaction,
+// retrying on transient serialization/lock conflicts per AI.md PART 10
+// (SQLITE_BUSY / "database is locked" via isSerializationError). Used for
+// correctness-critical multi-statement writes that need strict consistency.
+func (d *AppDatabase) WithSerializableRetry(ctx context.Context, fn func(*sql.Tx) error) error {
+	const maxAttempts = 3
+
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		// Exponential backoff between attempts: 0ms, 100ms, 200ms
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Duration(attempt) * 100 * time.Millisecond):
+			}
+		}
+
+		err := func() error {
+			txCtx, cancel := context.WithTimeout(ctx, TimeoutTransaction)
+			defer cancel()
+
+			tx, err := d.db.BeginTx(txCtx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+			if err != nil {
+				return err
+			}
+
+			if err := fn(tx); err != nil {
+				tx.Rollback()
+				return err
+			}
+
+			return tx.Commit()
+		}()
+
+		if err == nil {
+			return nil
+		}
+		if !isSerializationError(err) {
+			return err
+		}
+		lastErr = err
+	}
+	return lastErr
 }
 
 // HandleQueryError translates database errors to appropriate error codes

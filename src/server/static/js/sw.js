@@ -76,11 +76,31 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // HTML pages - network first, cache fallback, synthesized last resort
+  // Navigations - network first, cache fallback, offline page, synthesized 503 last resort
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Only cache successful responses — never error pages or the age gate redirect chain
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request)
+          .then(cached => cached || caches.match('/offline.html'))
+          .then(fallback => fallback || offlineFallbackResponse())
+        )
+    );
+    return;
+  }
+
+  // Non-navigation requests - network first, cache fallback, guaranteed 504 (never the offline page)
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Only cache successful responses — never error pages or the age gate redirect chain
+        // Only cache successful responses — never error pages
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
@@ -88,8 +108,8 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(() => caches.match(event.request)
-        .then(cached => cached || caches.match('/offline.html'))
-        .then(fallback => fallback || offlineFallbackResponse())
+        // A failed subresource must never reject respondWith — guaranteed 504
+        .then(cached => cached || new Response('', { status: 504, statusText: 'Gateway Timeout' }))
       )
   );
 });

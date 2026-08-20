@@ -1,14 +1,25 @@
 // Service Worker for VidVeil PWA
 // AI.md PART 16: PWA Support
 
-const CACHE_NAME = 'vidveil-v1';
+const CACHE_NAME = 'vidveil-cache-v1';
 const STATIC_ASSETS = [
   '/',
+  '/offline.html',
   '/static/css/common.css',
   '/static/js/app.js',
   '/manifest.json',
   '/static/images/placeholder.svg'
 ];
+
+// Synthesized last-resort response so respondWith never resolves undefined
+// (undefined would surface as net::ERR_FAILED instead of a readable page)
+function offlineFallbackResponse() {
+  return new Response(
+    '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Offline</title></head>' +
+    '<body><h1>You are offline</h1><p>The request could not be completed. Check your connection and try again.</p></body></html>',
+    { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  );
+}
 
 // Install event - cache static assets
 self.addEventListener('install', event => {
@@ -24,7 +35,7 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(key => key !== CACHE_NAME)
+        keys.filter(key => key.startsWith('vidveil-') && key !== CACHE_NAME)
             .map(key => caches.delete(key))
       ))
       .then(() => self.clients.claim())
@@ -51,24 +62,31 @@ self.addEventListener('fetch', event => {
       caches.match(event.request)
         .then(cached => cached || fetch(event.request)
           .then(response => {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+            // Only cache successful responses — never error pages
+            if (response.ok) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+            }
             return response;
           }))
     );
     return;
   }
 
-  // HTML pages - network first, cache fallback
+  // HTML pages - network first, cache fallback, synthesized last resort
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        // Only cache successful responses — never error pages or the age gate redirect chain
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
         return response;
       })
       .catch(() => caches.match(event.request)
         .then(cached => cached || caches.match('/offline.html'))
+        .then(fallback => fallback || offlineFallbackResponse())
       )
   );
 });

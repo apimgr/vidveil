@@ -575,8 +575,9 @@ func (s *Server) setupRoutes() {
 			return
 		}
 		// Tie the SW cache name to version+commit so every deploy invalidates stale caches
-		swCache := "vidveil-" + version.Version + "-" + version.CommitID
-		body := strings.Replace(string(data), "vidveil-v1", swCache, 1)
+		// AI.md PART 16 format: {app_name}-cache-v{version}
+		swCache := "vidveil-cache-v" + version.Version + "-" + version.CommitID
+		body := strings.Replace(string(data), "vidveil-cache-v1", swCache, 1)
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Header().Set("Service-Worker-Allowed", "/")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -911,7 +912,6 @@ func (s *Server) httpRedirectHandler(httpsPort string) http.Handler {
 	})
 }
 
-// parseDuration parses a duration string, returning the default if parsing fails
 // parseBodySize parses size string like "10MB", "100KB" to bytes per AI.md PART 12
 func parseBodySize(s string, defaultVal int64) int64 {
 	if s == "" {
@@ -945,6 +945,7 @@ func parseBodySize(s string, defaultVal int64) int64 {
 	return val * multiplier
 }
 
+// parseDuration parses a duration string, returning the default if parsing fails
 func parseDuration(s string, defaultVal time.Duration) time.Duration {
 	if s == "" {
 		return defaultVal

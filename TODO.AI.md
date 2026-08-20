@@ -119,6 +119,23 @@ items not fixed in that pass — each needs its own small follow-up:
   `strings.ReplaceAll(preview, "&amp;", "&")` — goquery already decodes
   attribute entities; remove for consistency with other parsers.
 
+Finding from the AI.md spec update sync (2026-08-20, commit bb89070dd479
+"Updated the SPEC for API servers" — SW guaranteed-Response, JS necessity
+gate, error-path guarantee):
+
+- New PART 16 "Error Pages" bullet requires every request to terminate in a
+  rendered response even when the error path itself fails: the panic/recover
+  middleware and template-render failures must fall back to a minimal
+  HARDCODED error response with content negotiation (HTML for browsers,
+  JSON for API clients). Current state: chi `middleware.Recoverer` is wired
+  (`src/server/server.go:189`) so panics do produce a 500, but it is chi's
+  stock plain-text 500 (no content negotiation, no themed-fallback
+  distinction), and there is no audited template-render-failure fallback
+  path. Needs its own pass: replace/wrap Recoverer with a custom recover
+  middleware emitting the canonical JSON envelope for API/JSON clients and
+  a minimal hardcoded HTML page for browsers, and audit `renderResponse`/
+  template execution error paths for the same guaranteed-response fallback.
+
 Finding from go-lint pass during the API-version cross-cutting fix
 (2026-08-15, task 8 completion).
 

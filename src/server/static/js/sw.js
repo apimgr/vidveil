@@ -46,8 +46,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') {
+  // Only same-origin GET is handled; everything else falls through to the
+  // browser untouched (never call respondWith for it)
+  if (event.request.method !== 'GET' || url.origin !== self.location.origin) {
     return;
   }
 
@@ -69,6 +70,8 @@ self.addEventListener('fetch', event => {
             }
             return response;
           }))
+        // A failed subresource must never reject respondWith — guaranteed 504
+        .catch(() => new Response('', { status: 504, statusText: 'Gateway Timeout' }))
     );
     return;
   }

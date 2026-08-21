@@ -1220,7 +1220,7 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 			// ReturnTo is the page the user arrived from (Referer), threaded
 			// through the form (hidden field for no-JS, data attribute for
 			// JS) so saving/closing preferences sends them back there instead
-			// of always landing on bare /preferences. See safeReturnPath.
+			// of always landing on /server/preferences. See safeReturnPath.
 			"ReturnTo": safeReturnPath(r.Referer(), r),
 		})
 	}
@@ -1295,7 +1295,7 @@ func safeReturnPath(target string, r *http.Request) string {
 		return ""
 	}
 	switch path {
-	case "/preferences", "/preferences/save", "/preferences/export", "/preferences/import":
+	case "/server/preferences", "/server/preferences/save", "/server/preferences/export", "/server/preferences/import":
 		return ""
 	}
 	if u.RawQuery != "" {
@@ -1311,7 +1311,7 @@ func safeReturnPath(target string, r *http.Request) string {
 // enhancement mandate (core features, including preferences, work without JS).
 func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/preferences", http.StatusFound)
+		http.Redirect(w, r, "/server/preferences", http.StatusFound)
 		return
 	}
 
@@ -1337,7 +1337,7 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	}
 	http.SetCookie(w, newSecureCookie(openNewTabCookieName, openNewTab, "/", 365*24*60*60, sslEnabled))
 
-	redirectTo := "/preferences"
+	redirectTo := "/server/preferences"
 	if rt := safeReturnPath(r.FormValue("return_to"), r); rt != "" {
 		redirectTo = rt
 	}
@@ -1362,7 +1362,7 @@ func (h *SearchHandler) exportablePreferenceQuery(r *http.Request) string {
 // code/URL IS the preference values, not a lookup key.
 func (h *SearchHandler) PreferencesExport(w http.ResponseWriter, r *http.Request) {
 	query := h.exportablePreferenceQuery(r)
-	importURL := urlvar.BuildURL(r, "/preferences/import") + "?" + query
+	importURL := urlvar.BuildURL(r, "/server/preferences/import") + "?" + query
 	code := base64.RawURLEncoding.EncodeToString([]byte(query))
 
 	switch detectResponseFormat(r) {
@@ -1430,7 +1430,7 @@ func (h *SearchHandler) PreferencesImport(w http.ResponseWriter, r *http.Request
 		http.SetCookie(w, newSecureCookie("lang", lang, "/", 365*24*60*60, sslEnabled))
 	}
 
-	redirectTo := "/preferences"
+	redirectTo := "/server/preferences"
 	if rt := safeReturnPath(r.Referer(), r); rt != "" {
 		redirectTo = rt
 	}
@@ -2567,7 +2567,7 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>` + baseURL + `/preferences</loc>
+    <loc>` + baseURL + `/server/preferences</loc>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>

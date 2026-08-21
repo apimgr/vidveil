@@ -995,7 +995,7 @@ func TestDetectResponseFormat_FormatQueryParam_Text(t *testing.T) {
 func TestPreferencesPage_BrowserDefault_CoversHTMLPath(t *testing.T) {
 	h := newTestHandlerWithEngine()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 	req.Header.Set("Accept", "text/html,*/*")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 

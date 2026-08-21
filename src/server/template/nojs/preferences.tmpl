@@ -10,7 +10,7 @@
         <h1>{{ t "prefs.title" }}</h1>
         <p><em>{{ t "prefs.storage_note" }}</em></p>
 
-        <form method="post" action="/preferences/save">
+        <form method="post" action="/server/preferences/save">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             {{if .ReturnTo}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">{{end}}
             <section>

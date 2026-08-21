@@ -3041,7 +3041,7 @@ function onReady(fn) {
 // in handlers.go) and threaded onto #preferences-form as data-return-to.
 // Deterministic by design: window.history.back() was tried here previously
 // but silently did nothing useful when history.length was 1 (direct URL,
-// bookmark, new tab) or when the prior entry was /preferences itself.
+// bookmark, new tab) or when the prior entry was /server/preferences itself.
 function preferencesReturnTo() {
     var form = document.getElementById('preferences-form');
     var target = form && form.dataset.returnTo;
@@ -3515,7 +3515,7 @@ document.addEventListener('error', function(e) {
 })();
 
 // ============================================================================
-// Preferences page (moved from preferences.tmpl) — runs only on /preferences
+// Preferences page (moved from preferences.tmpl) — runs only on /server/preferences
 // i18n strings come from the #preferences-i18n data island.
 // ============================================================================
 (function() {

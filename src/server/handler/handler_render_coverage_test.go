@@ -209,7 +209,7 @@ func TestSearchPage_JSONFormat_ReturnsJSON(t *testing.T) {
 func TestPreferencesPage_JSONFormat_ReturnsJSON(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 	req.Header.Set("Accept", "application/json")
 
 	h.PreferencesPage(rr, req)
@@ -226,7 +226,7 @@ func TestPreferencesPage_JSONFormat_ReturnsJSON(t *testing.T) {
 func TestPreferencesPage_PlainTextFormat_ReturnsText(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 	req.Header.Set("User-Agent", "curl/7.68.0")
 
 	h.PreferencesPage(rr, req)
@@ -650,7 +650,7 @@ func TestRenderTemplate_NojsPrivacy_Returns500(t *testing.T) {
 func TestPreferencesPage_PlainText_WithEngines_CoversLoop(t *testing.T) {
 	h := newAPITestHandlerWithEngines()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 	req.Header.Set("User-Agent", "curl/7.68.0")
 
 	h.PreferencesPage(rr, req)

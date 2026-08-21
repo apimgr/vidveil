@@ -15,7 +15,7 @@ import (
 
 func TestGetRequestResultsPerPage_NoCookie_ReturnsDefault(t *testing.T) {
 	h := newRenderTestHandler()
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 
 	if got := h.getRequestResultsPerPage(req); got != "0" {
 		t.Errorf("getRequestResultsPerPage() = %q, want %q", got, "0")
@@ -25,7 +25,7 @@ func TestGetRequestResultsPerPage_NoCookie_ReturnsDefault(t *testing.T) {
 func TestGetRequestResultsPerPage_ValidCookie_ReturnsValue(t *testing.T) {
 	h := newRenderTestHandler()
 	for _, want := range []string{"20", "50", "100"} {
-		req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+		req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 		req.AddCookie(&http.Cookie{Name: resultsPerPageCookieName, Value: want})
 
 		if got := h.getRequestResultsPerPage(req); got != want {
@@ -36,7 +36,7 @@ func TestGetRequestResultsPerPage_ValidCookie_ReturnsValue(t *testing.T) {
 
 func TestGetRequestResultsPerPage_InvalidCookie_ReturnsDefault(t *testing.T) {
 	h := newRenderTestHandler()
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 	req.AddCookie(&http.Cookie{Name: resultsPerPageCookieName, Value: "9999"})
 
 	if got := h.getRequestResultsPerPage(req); got != "0" {
@@ -48,7 +48,7 @@ func TestGetRequestResultsPerPage_InvalidCookie_ReturnsDefault(t *testing.T) {
 
 func TestGetRequestOpenNewTab_NoCookie_ReturnsDefaultTrue(t *testing.T) {
 	h := newRenderTestHandler()
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 
 	if got := h.getRequestOpenNewTab(req); got != true {
 		t.Errorf("getRequestOpenNewTab() = %v, want true", got)
@@ -57,7 +57,7 @@ func TestGetRequestOpenNewTab_NoCookie_ReturnsDefaultTrue(t *testing.T) {
 
 func TestGetRequestOpenNewTab_CookieSetToOne_ReturnsTrue(t *testing.T) {
 	h := newRenderTestHandler()
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 	req.AddCookie(&http.Cookie{Name: openNewTabCookieName, Value: "1"})
 
 	if got := h.getRequestOpenNewTab(req); got != true {
@@ -67,7 +67,7 @@ func TestGetRequestOpenNewTab_CookieSetToOne_ReturnsTrue(t *testing.T) {
 
 func TestGetRequestOpenNewTab_CookieSetToZero_ReturnsFalse(t *testing.T) {
 	h := newRenderTestHandler()
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 	req.AddCookie(&http.Cookie{Name: openNewTabCookieName, Value: "0"})
 
 	if got := h.getRequestOpenNewTab(req); got != false {
@@ -80,15 +80,15 @@ func TestGetRequestOpenNewTab_CookieSetToZero_ReturnsFalse(t *testing.T) {
 func TestPreferencesSave_GetMethod_RedirectsWithoutSettingCookies(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/save", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/save", nil)
 
 	h.PreferencesSave(rr, req)
 
 	if rr.Code != http.StatusFound {
 		t.Errorf("PreferencesSave GET: status = %d, want %d", rr.Code, http.StatusFound)
 	}
-	if loc := rr.Header().Get("Location"); loc != "/preferences" {
-		t.Errorf("PreferencesSave GET: Location = %q, want /preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
+		t.Errorf("PreferencesSave GET: Location = %q, want /server/preferences", loc)
 	}
 	if len(rr.Result().Cookies()) != 0 {
 		t.Errorf("PreferencesSave GET: expected no cookies set, got %d", len(rr.Result().Cookies()))
@@ -104,7 +104,7 @@ func TestPreferencesSave_ValidPost_SetsAllCookiesAndRedirects(t *testing.T) {
 	form.Set("resultsPerPage", "50")
 	form.Set("openNewTab", "on")
 
-	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	h.PreferencesSave(rr, req)
@@ -112,8 +112,8 @@ func TestPreferencesSave_ValidPost_SetsAllCookiesAndRedirects(t *testing.T) {
 	if rr.Code != http.StatusFound {
 		t.Errorf("PreferencesSave POST: status = %d, want %d", rr.Code, http.StatusFound)
 	}
-	if loc := rr.Header().Get("Location"); loc != "/preferences" {
-		t.Errorf("PreferencesSave POST: Location = %q, want /preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
+		t.Errorf("PreferencesSave POST: Location = %q, want /server/preferences", loc)
 	}
 
 	got := map[string]string{}
@@ -140,7 +140,7 @@ func TestPreferencesSave_OpenNewTabUnchecked_SetsCookieToZero(t *testing.T) {
 	form.Set("resultsPerPage", "20")
 	// openNewTab intentionally omitted — an absent checkbox means "unchecked".
 
-	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	h.PreferencesSave(rr, req)
@@ -162,7 +162,7 @@ func TestPreferencesSave_InvalidThemeAndResultsPerPage_SkipsThoseCookies(t *test
 	form.Set("theme", "not-a-real-theme")
 	form.Set("resultsPerPage", "not-a-number")
 
-	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	h.PreferencesSave(rr, req)
@@ -187,7 +187,7 @@ func TestPreferencesSave_ValidReturnTo_RedirectsToOriginatingPage(t *testing.T) 
 	form.Set("theme", "dark")
 	form.Set("return_to", "/search?q=test")
 
-	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	h.PreferencesSave(rr, req)
@@ -205,13 +205,13 @@ func TestPreferencesSave_CrossHostReturnTo_FallsBackToPreferences(t *testing.T) 
 	form.Set("theme", "dark")
 	form.Set("return_to", "https://evil.example/phish")
 
-	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	h.PreferencesSave(rr, req)
 
-	if loc := rr.Header().Get("Location"); loc != "/preferences" {
-		t.Errorf("PreferencesSave POST cross-host return_to: Location = %q, want /preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
+		t.Errorf("PreferencesSave POST cross-host return_to: Location = %q, want /server/preferences", loc)
 	}
 }
 
@@ -223,13 +223,13 @@ func TestPreferencesSave_ProtocolRelativeReturnTo_FallsBackToPreferences(t *test
 	form.Set("theme", "dark")
 	form.Set("return_to", "//evil.example/phish")
 
-	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	h.PreferencesSave(rr, req)
 
-	if loc := rr.Header().Get("Location"); loc != "/preferences" {
-		t.Errorf("PreferencesSave POST protocol-relative return_to: Location = %q, want /preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
+		t.Errorf("PreferencesSave POST protocol-relative return_to: Location = %q, want /server/preferences", loc)
 	}
 }
 
@@ -239,14 +239,14 @@ func TestPreferencesSave_SelfLoopReturnTo_FallsBackToPreferences(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("theme", "dark")
-	form.Set("return_to", "/preferences")
+	form.Set("return_to", "/server/preferences")
 
-	req := httptest.NewRequest(http.MethodPost, "/preferences/save", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	h.PreferencesSave(rr, req)
 
-	if loc := rr.Header().Get("Location"); loc != "/preferences" {
-		t.Errorf("PreferencesSave POST self-loop return_to: Location = %q, want /preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
+		t.Errorf("PreferencesSave POST self-loop return_to: Location = %q, want /server/preferences", loc)
 	}
 }

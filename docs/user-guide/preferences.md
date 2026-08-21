@@ -1,6 +1,6 @@
 # Preferences
 
-Access preferences at `https://x.scour.li/preferences`.
+Access preferences at `https://x.scour.li/server/preferences`.
 
 ## Settings
 

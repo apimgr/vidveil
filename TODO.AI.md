@@ -223,3 +223,15 @@ that commit.
   (~lines 1028-1038 and ~1128-1137). Not a CasjaysDev convention
   violation, just gofmt alignment; fix with
   `gofmt -w src/server/handler/handlers.go`.
+
+Finding from the `/preferences` → `/server/preferences` route migration
+(2026-08-21), pre-existing and out of scope for that fix — the sitemap
+generator in `src/server/handler/handlers.go` (~line 2560, 2565) emits
+`<loc>` entries for `/about` and `/privacy` as bare top-level paths, but
+AI.md PART 13's Standard Pages table requires these under `/server/`
+(`/server/about`, `/server/privacy`), same as `/server/preferences` was
+just fixed. Needs its own audit/fix pass across all `/server/*` Standard
+Page routes (about, privacy, help, terms, contact, healthz) to confirm
+whether they are already correctly mounted under `/server/` and only the
+sitemap `<loc>` entries are stale, or whether the routes themselves are
+also bare and need the same route-tree migration `/preferences` just got.

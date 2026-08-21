@@ -16,7 +16,7 @@ import (
 
 func TestExportablePreferenceQuery_DefaultsToThemeAndLang(t *testing.T) {
 	h := newRenderTestHandler()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/export", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/export", nil)
 
 	q := h.exportablePreferenceQuery(req)
 	if q == "" {
@@ -29,7 +29,7 @@ func TestExportablePreferenceQuery_DefaultsToThemeAndLang(t *testing.T) {
 
 func TestExportablePreferenceQuery_ReflectsCookies(t *testing.T) {
 	h := newRenderTestHandler()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/export", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/export", nil)
 	req.AddCookie(&http.Cookie{Name: "theme", Value: "light"})
 	req.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
 
@@ -54,7 +54,7 @@ func TestDecodePreferenceCode_ValidCode_Decodes(t *testing.T) {
 
 func TestDecodePreferenceCode_PastedFullURL_StripsPrefix(t *testing.T) {
 	code := base64.RawURLEncoding.EncodeToString([]byte("theme=dark&lang=fr"))
-	pasted := "https://example.com/preferences/import?" + code
+	pasted := "https://example.com/server/preferences/import?" + code
 	got, ok := decodePreferenceCode(pasted)
 	if !ok {
 		t.Fatal("decodePreferenceCode() ok = false, want true")
@@ -81,7 +81,7 @@ func TestDecodePreferenceCode_InvalidBase64_ReturnsFalse(t *testing.T) {
 func TestPreferencesExport_HTML_RendersWithURLAndCode(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/export", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/export", nil)
 	req.AddCookie(&http.Cookie{Name: "theme", Value: "dark"})
 
 	h.PreferencesExport(rr, req)
@@ -97,7 +97,7 @@ func TestPreferencesExport_HTML_RendersWithURLAndCode(t *testing.T) {
 func TestPreferencesExport_JSON_ReturnsURLAndCode(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/export", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/export", nil)
 	req.Header.Set("Accept", "application/json")
 	req.AddCookie(&http.Cookie{Name: "theme", Value: "dark"})
 
@@ -117,7 +117,7 @@ func TestPreferencesExport_JSON_ReturnsURLAndCode(t *testing.T) {
 func TestPreferencesImport_ValidQueryParams_SetsCookiesAndRedirects(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/import?theme=light&lang=es", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=light&lang=es", nil)
 
 	h.PreferencesImport(rr, req)
 
@@ -140,7 +140,7 @@ func TestPreferencesImport_ValidCode_SetsCookiesAndRedirects(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	code := base64.RawURLEncoding.EncodeToString([]byte("theme=dark&lang=de"))
-	req := httptest.NewRequest(http.MethodGet, "/preferences/import?code="+code, nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?code="+code, nil)
 
 	h.PreferencesImport(rr, req)
 
@@ -159,7 +159,7 @@ func TestPreferencesImport_ValidCode_SetsCookiesAndRedirects(t *testing.T) {
 func TestPreferencesImport_InvalidTheme_DropsThemeSilently(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/import?theme=not-a-theme&lang=en", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=not-a-theme&lang=en", nil)
 
 	h.PreferencesImport(rr, req)
 
@@ -176,7 +176,7 @@ func TestPreferencesImport_InvalidTheme_DropsThemeSilently(t *testing.T) {
 func TestPreferencesImport_UnsupportedLang_DropsLangSilently(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/import?theme=dark&lang=xx-not-real", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=dark&lang=xx-not-real", nil)
 
 	h.PreferencesImport(rr, req)
 
@@ -195,19 +195,19 @@ func TestPreferencesImport_UnsupportedLang_DropsLangSilently(t *testing.T) {
 func TestPreferencesImport_NoReferer_RedirectsToPreferences(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/import?theme=dark", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=dark", nil)
 
 	h.PreferencesImport(rr, req)
 
-	if loc := rr.Header().Get("Location"); loc != "/preferences" {
-		t.Errorf("PreferencesImport no referer: Location = %q, want /preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
+		t.Errorf("PreferencesImport no referer: Location = %q, want /server/preferences", loc)
 	}
 }
 
 func TestPreferencesImport_ValidReferer_RedirectsToReferer(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/import?theme=dark", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=dark", nil)
 	req.Header.Set("Referer", "/search?q=test")
 
 	h.PreferencesImport(rr, req)
@@ -217,42 +217,42 @@ func TestPreferencesImport_ValidReferer_RedirectsToReferer(t *testing.T) {
 	}
 }
 
-// safeReturnPath already rejects /preferences/export and /preferences/import
+// safeReturnPath already rejects /server/preferences/export and /server/preferences/import
 // as bounce-back targets (handlers.go's switch on path) — verify PreferencesImport
-// falls back to /preferences instead of looping back to itself or /export.
+// falls back to /server/preferences instead of looping back to itself or /export.
 func TestPreferencesImport_RefererIsImportPage_FallsBackToPreferences(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/import?theme=dark", nil)
-	req.Header.Set("Referer", "/preferences/import")
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=dark", nil)
+	req.Header.Set("Referer", "/server/preferences/import")
 
 	h.PreferencesImport(rr, req)
 
-	if loc := rr.Header().Get("Location"); loc != "/preferences" {
-		t.Errorf("PreferencesImport referer=self: Location = %q, want /preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
+		t.Errorf("PreferencesImport referer=self: Location = %q, want /server/preferences", loc)
 	}
 }
 
 func TestPreferencesImport_RefererIsExportPage_FallsBackToPreferences(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/preferences/import?theme=dark", nil)
-	req.Header.Set("Referer", "/preferences/export")
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=dark", nil)
+	req.Header.Set("Referer", "/server/preferences/export")
 
 	h.PreferencesImport(rr, req)
 
-	if loc := rr.Header().Get("Location"); loc != "/preferences" {
-		t.Errorf("PreferencesImport referer=export: Location = %q, want /preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
+		t.Errorf("PreferencesImport referer=export: Location = %q, want /server/preferences", loc)
 	}
 }
 
 func TestSafeReturnPath_RejectsPreferencesExportAndImport(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/preferences", nil)
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 
-	if got := safeReturnPath("/preferences/export", req); got != "" {
-		t.Errorf("safeReturnPath(/preferences/export) = %q, want empty", got)
+	if got := safeReturnPath("/server/preferences/export", req); got != "" {
+		t.Errorf("safeReturnPath(/server/preferences/export) = %q, want empty", got)
 	}
-	if got := safeReturnPath("/preferences/import", req); got != "" {
-		t.Errorf("safeReturnPath(/preferences/import) = %q, want empty", got)
+	if got := safeReturnPath("/server/preferences/import", req); got != "" {
+		t.Errorf("safeReturnPath(/server/preferences/import) = %q, want empty", got)
 	}
 }

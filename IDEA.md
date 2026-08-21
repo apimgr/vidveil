@@ -349,23 +349,21 @@ The following are intentional, project-defined deviations or strong defaults. An
   click — the server still decides page size and content either way.
 - Dynamic loading indicator.
 
-**Preferences Page (`/server/preferences`):**
+**Preferences Page** (route and cross-device sync mechanics owned by AI.md
+PART 16 — "Client-Side Preferences" / "Cross-device preference sync";
+not restated here):
 - Most settings stored in localStorage (`vidveil_prefs` key), no
   server-side storage.
 - Exceptions (server-side cookies, authoritative for both JS and no-JS
   clients — see "Search Settings" below and `forward_ip` under Privacy):
   `results_per_page`, `open_new_tab`.
 - Reset to defaults button.
-- Cross-device sync (`/server/preferences/export`, `/server/preferences/import`):
-  stateless theme/lang carry-over to a new browser/device via a full URL
-  or a short base64url code — no account, no DB row, nothing stored
-  server-side. See AI.md PART 16 "Cross-device preference sync".
+- Cross-device sync: stateless theme/lang carry-over to a new
+  browser/device via a full URL or a short base64url code — no account,
+  no DB row, nothing stored server-side.
 
-**Other Pages:**
-- `/server/about` - About page.
-- `/server/privacy` - Privacy policy.
-- `/server/contact` - Contact information.
-- `/server/help` - Help documentation.
+**Other Pages:** About, privacy, contact, and help pages use AI.md's
+Standard Pages (`/server/*`, PART 16) — routes not restated here.
 - NoJS fallback versions of all pages.
 
 ### Video cards / preview / autocomplete / history / favorites / related / infinite scroll / filters
@@ -493,15 +491,12 @@ authoritative for pagination, see "Search behavior" above):
 |-----|-------------|
 | `/` | Home page with search |
 | `/search?q={query}` | Search results page |
-| `/server/preferences` | User preferences |
-| `/server/preferences/export` | Cross-device preference sync — export current theme/lang as a full URL + short code (stateless, no account) |
-| `/server/preferences/import` | Cross-device preference sync — import a theme/lang from a pasted code or URL, sets cookies, 303 redirect |
 | `/age-verify` | Age verification gate |
 | `/content-restricted` | Geographic content restriction acknowledgment |
-| `/server/about` | About page |
-| `/server/privacy` | Privacy policy |
-| `/server/contact` | Contact page |
-| `/server/help` | Help page |
+
+AI.md-owned routes (preferences incl. cross-device sync, about, privacy,
+contact, help — PART 16 Standard Pages / Client-Side Preferences) are not
+restated in this table; see AI.md.
 
 **Server Administration:**
 - All configuration via `server.yml` (file-only) — no admin web routes (AI.md PART 5).

@@ -16,15 +16,21 @@
              dedicated IIFE (favorites/history/engine-tier aware) already
              owns #preferences-form, and without this attribute both handlers
              fired on every submit (double-save). */}}
-        <form id="preferences-form" data-managed="true" data-return-to="{{.ReturnTo}}">
+        {{/* method/action make this form work with JavaScript disabled: the
+             server-side handler persists theme/resultsPerPage/openNewTab as
+             cookies and redirects. The JS path calls preventDefault() first,
+             so the enhanced flow is unchanged. */}}
+        <form id="preferences-form" method="post" action="/server/preferences/save" data-managed="true" data-return-to="{{.ReturnTo}}">
+            {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+            {{if .ReturnTo}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">{{end}}
             <section>
                 <h2>{{ t "prefs.appearance" }}</h2>
                 <div class="form-group">
                     <label for="theme">{{ t "prefs.theme" }}:</label>
                     <select id="theme" name="theme">
-                        <option value="auto">{{ t "prefs.theme.auto" }}</option>
-                        <option value="dark">{{ t "prefs.theme.dark" }}</option>
-                        <option value="light">{{ t "prefs.theme.light" }}</option>
+                        <option value="auto" {{if eq .Theme "auto"}}selected{{end}}>{{ t "prefs.theme.auto" }}</option>
+                        <option value="dark" {{if eq .Theme "dark"}}selected{{end}}>{{ t "prefs.theme.dark" }}</option>
+                        <option value="light" {{if eq .Theme "light"}}selected{{end}}>{{ t "prefs.theme.light" }}</option>
                     </select>
                 </div>
                 <div class="form-group">

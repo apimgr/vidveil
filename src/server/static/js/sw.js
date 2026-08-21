@@ -1,6 +1,9 @@
 // Service Worker for VidVeil PWA
 // AI.md PART 16: PWA Support
 
+// Placeholder only — server.go rewrites this literal at serve time to
+// vidveil-cache-v{version}-{commit}, the AI.md PART 16 cache naming
+// convention. Do not change the literal without updating that rewrite.
 const CACHE_NAME = 'vidveil-cache-v1';
 const STATIC_ASSETS = [
   '/',
@@ -91,6 +94,8 @@ self.addEventListener('fetch', event => {
         .catch(() => caches.match(event.request)
           .then(cached => cached || caches.match('/offline.html'))
           .then(fallback => fallback || offlineFallbackResponse())
+          // A rejecting cache lookup must never reject respondWith either
+          .catch(() => offlineFallbackResponse())
         )
     );
     return;
@@ -110,6 +115,7 @@ self.addEventListener('fetch', event => {
       .catch(() => caches.match(event.request)
         // A failed subresource must never reject respondWith — guaranteed 504
         .then(cached => cached || new Response('', { status: 504, statusText: 'Gateway Timeout' }))
+        .catch(() => new Response('', { status: 504, statusText: 'Gateway Timeout' }))
       )
   );
 });

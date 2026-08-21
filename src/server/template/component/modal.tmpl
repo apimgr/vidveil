@@ -1,8 +1,8 @@
 {{/* Modal dialog component per AI.md PART 16 */}}
 {{define "modal"}}
-<dialog id="{{.ID}}" class="modal">
+<dialog id="{{.ID}}" class="modal" role="dialog" aria-modal="true" aria-labelledby="{{.ID}}-title">
   <div class="modal-header">
-    <h3 class="modal-title">{{.Title}}</h3>
+    <h3 class="modal-title" id="{{.ID}}-title">{{.Title}}</h3>
     <button type="button" class="modal-close" data-action="close-dialog" aria-label="{{ t "a11y.close_dialog" }}">&times;</button>
   </div>
   <div class="modal-body">

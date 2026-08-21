@@ -107,6 +107,13 @@
     /* Password/entropy strength indicator - "good" tier, WCAG AA validated per theme */
     --color-strength-good: #84cc16;
 
+    /* Print-only palette - printed output is always ink on white paper, so
+       these are theme-independent and intentionally not overridden by
+       html.theme-light / prefers-color-scheme */
+    --color-print-muted: #666666;
+    --color-print-border: #cccccc;
+    --color-print-surface: #f0f0f0;
+
     /* Native form controls (file picker button, scrollbars, etc.) render in
        the browser's dark chrome to match the Dracula theme */
     color-scheme: dark;
@@ -3064,7 +3071,7 @@ a:focus-visible {
     a[href]::after {
         content: " (" attr(href) ")";
         font-size: 0.8em;
-        color: #666;
+        color: var(--color-print-muted);
     }
 
     a[href^="#"]::after,
@@ -3088,7 +3095,7 @@ a:focus-visible {
     }
 
     .video-card {
-        border: 1px solid #ccc;
+        border: 1px solid var(--color-print-border);
         margin-bottom: 1rem;
         page-break-inside: avoid;
     }
@@ -3099,14 +3106,14 @@ a:focus-visible {
 
     .video-card .duration,
     .video-card .quality-badge {
-        color: #666;
-        background: #f0f0f0;
+        color: var(--color-print-muted);
+        background: var(--color-print-surface);
     }
 
     /* Preferences/About pages */
     .preferences section,
     .about section {
-        border: 1px solid #ccc;
+        border: 1px solid var(--color-print-border);
     }
 }
 

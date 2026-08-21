@@ -655,6 +655,7 @@ function showConfirm(message, onConfirm, onCancel) {
     var id = 'confirm-modal-' + (++confirmModalCounter);
     var modal = document.createElement('dialog');
     modal.className = 'modal confirm-modal';
+    modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-labelledby', id + '-title');
     modal.setAttribute('aria-describedby', id + '-desc');
@@ -689,6 +690,12 @@ function showConfirm(message, onConfirm, onCancel) {
     modal.querySelector('.cancel-btn').onclick = function() { closeModal(onCancel); };
     modal.querySelector('.confirm-btn').onclick = function() { closeModal(onConfirm); };
     modal.addEventListener('cancel', function() { closeModal(onCancel); });
+    // Backdrop click closes the dialog per AI.md PART 16 — the ::backdrop is
+    // part of the <dialog> element itself, so a click whose target is the
+    // dialog (not its content) landed outside the modal box.
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeModal(onCancel);
+    });
 }
 
 // ============================================================================

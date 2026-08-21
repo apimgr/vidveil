@@ -956,7 +956,16 @@ function handleDownloadClick(event, downloadUrl) {
     };
 
     document.addEventListener('DOMContentLoaded', function() {
-        ensureLoaded();
+        // ensureLoaded() triggers reconcileWithMirror(), which re-POSTs any
+        // mirror-only entries back to the server (restoring a wiped DB) but
+        // only updates the in-memory cache — the /favorites page's grid was
+        // already server-rendered from the (pre-restore) DB state, so without
+        // this it silently shows empty/stale until the visitor reloads.
+        ensureLoaded().then(function(list) {
+            if (typeof window.renderFavoritesGrid === 'function') {
+                window.renderFavoritesGrid(list);
+            }
+        });
     });
 })();
 
@@ -3199,6 +3208,74 @@ function updateFavoritesCountLabel(count) {
         prefsCount.textContent = fmt.replace('%d', count);
     }
 }
+
+// Rebuilds the /favorites page grid from the resolved favorites list.
+// Called after ensureLoaded() so entries restored from the localStorage
+// mirror (server/DB-wipe recovery, see the Favorites module comment above)
+// appear immediately instead of only after a manual page reload — the SSR
+// grid was built from the DB state before restoreMissing() ran.
+function renderFavoritesGrid(list) {
+    var grid = document.getElementById('favorites-grid');
+    if (!grid) {
+        return;
+    }
+    list = list || [];
+
+    // Skip the rebuild when the server-rendered grid already matches —
+    // avoids flicker (thumbnail reload, lost scroll position) on the common
+    // case where nothing needed restoring.
+    var rendered = {};
+    var renderedCount = 0;
+    grid.querySelectorAll('[data-fav-id]').forEach(function(card) {
+        rendered[card.getAttribute('data-fav-id')] = true;
+        renderedCount++;
+    });
+    var same = list.length === renderedCount &&
+        list.every(function(f) { return rendered[String(f.id)]; });
+    if (same) {
+        return;
+    }
+
+    var i18n = getFavoritesI18n();
+    var removeLabel = i18n.remove || 'Remove from favorites';
+    var csrf = getCsrfToken();
+    grid.innerHTML = '';
+    list.forEach(function(f) {
+        var card = document.createElement('div');
+        card.className = 'video-card';
+        card.setAttribute('role', 'listitem');
+        card.setAttribute('data-source', f.source || '');
+        card.setAttribute('data-fav-id', f.id);
+        var html = '<a href="' + escapeHtmlUtil(f.url) + '" rel="noopener noreferrer nofollow" aria-label="' +
+            escapeHtmlUtil((f.title || 'Untitled') + ' - ' + (f.source || '')) + '">';
+        html += '<img src="/api/v1/proxy/thumbnails?url=' + encodeURIComponent(f.thumbnail || '') + '" alt="' +
+            escapeHtmlUtil(f.title || 'Untitled') + '" loading="lazy">';
+        html += '<div class="video-info"><h3 class="video-title">' + escapeHtmlUtil(f.title || 'Untitled') +
+            '</h3><p class="video-source">' + escapeHtmlUtil(f.source || '') + '</p></div></a>';
+        html += '<form action="/favorites" method="post" class="favorite-remove-form" data-action="remove-fav-form">';
+        if (csrf) {
+            html += '<input type="hidden" name="csrf_token" value="' + escapeHtmlUtil(csrf) + '">';
+        }
+        html += '<input type="hidden" name="_method" value="DELETE">';
+        html += '<input type="hidden" name="id" value="' + escapeHtmlUtil(String(f.id)) + '">';
+        html += '<button type="submit" class="video-card-fav-btn video-card-fav-btn--active" data-fav-id="' +
+            escapeHtmlUtil(String(f.id)) + '" aria-label="' + escapeHtmlUtil(removeLabel) + '" title="' +
+            escapeHtmlUtil(removeLabel) + '">&#9733;</button></form>';
+        card.innerHTML = html;
+        grid.appendChild(card);
+    });
+
+    var empty = document.getElementById('favorites-empty');
+    if (empty) {
+        if (list.length) {
+            empty.style.display = 'none';
+        } else {
+            empty.style.removeProperty('display');
+        }
+    }
+    updateFavoritesCountLabel(list.length);
+}
+window.renderFavoritesGrid = renderFavoritesGrid;
 
 document.addEventListener('submit', function(e) {
     var el = e.target.closest('[data-action]');

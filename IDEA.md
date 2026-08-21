@@ -356,6 +356,10 @@ The following are intentional, project-defined deviations or strong defaults. An
   clients — see "Search Settings" below and `forward_ip` under Privacy):
   `results_per_page`, `open_new_tab`.
 - Reset to defaults button.
+- Cross-device sync (`/preferences/export`, `/preferences/import`):
+  stateless theme/lang carry-over to a new browser/device via a full URL
+  or a short base64url code — no account, no DB row, nothing stored
+  server-side. See AI.md PART 16 "Cross-device preference sync".
 
 **Other Pages:**
 - `/server/about` - About page.
@@ -490,6 +494,8 @@ authoritative for pagination, see "Search behavior" above):
 | `/` | Home page with search |
 | `/search?q={query}` | Search results page |
 | `/preferences` | User preferences |
+| `/preferences/export` | Cross-device preference sync — export current theme/lang as a full URL + short code (stateless, no account) |
+| `/preferences/import` | Cross-device preference sync — import a theme/lang from a pasted code or URL, sets cookies, 303 redirect |
 | `/age-verify` | Age verification gate |
 | `/content-restricted` | Geographic content restriction acknowledgment |
 | `/server/about` | About page |

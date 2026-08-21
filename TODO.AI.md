@@ -213,3 +213,13 @@ Finding from go-lint pass during the API-version cross-cutting fix
   `BUILD_EPOCH`/`main.BuildEpoch` (Unix timestamp) across Makefile and
   Dockerfile, then compute `BuildDate` at runtime from `BuildEpoch` in
   `main.go`/`root.go`.
+
+Finding from `go-lint` pass during the cross-device preference sync feature
+(2026-08-21), pre-existing and unrelated to that feature — out of scope for
+that commit.
+
+- `gofmt` reports misaligned map-literal keys in two existing
+  `renderResponseStatus()` calls in `src/server/handler/handlers.go`
+  (~lines 1028-1038 and ~1128-1137). Not a CasjaysDev convention
+  violation, just gofmt alignment; fix with
+  `gofmt -w src/server/handler/handlers.go`.

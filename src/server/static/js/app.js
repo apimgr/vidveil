@@ -3110,6 +3110,23 @@ function dispatchClickAction(el, e) {
         case 'reset-preferences':
             if (typeof window.resetPreferences === 'function') window.resetPreferences();
             return true;
+        case 'copy-field': {
+            var targetId = el.dataset.target;
+            var field = targetId ? document.getElementById(targetId) : null;
+            var copyMsg = 'Copied!';
+            var copyIsland = document.getElementById('preferences-export-i18n');
+            if (copyIsland) {
+                try { copyMsg = JSON.parse(copyIsland.textContent).copied || copyMsg; } catch (e) {}
+            }
+            if (field && navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(field.value).then(function() {
+                    showNotification(copyMsg, 'success');
+                });
+            } else if (field) {
+                field.select();
+            }
+            return true;
+        }
         default:
             return false;
     }

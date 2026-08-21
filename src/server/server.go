@@ -709,6 +709,12 @@ func (s *Server) setupRoutes() {
 		r.Get("/search.atom", h.SearchAtomFeed)
 		r.Get("/preferences", h.PreferencesPage)
 		r.Post("/preferences/save", h.PreferencesSave)
+		// Cross-device preference sync (stateless, no preferences table) per
+		// AI.md PART 16 — sub-routes of /preferences, not a standalone /prefs/*
+		// path (this project's IDEA.md places preferences at top-level, not
+		// under /server/, so these follow the same precedent).
+		r.Get("/preferences/export", h.PreferencesExport)
+		r.Get("/preferences/import", h.PreferencesImport)
 		r.Get("/favorites", h.FavoritesPage)
 		r.Post("/favorites", h.FavoritesSave)
 		r.Get("/favorites/export", h.FavoritesExport)
@@ -818,6 +824,13 @@ func (s *Server) setupRoutes() {
 			r.Post("/import", h.FavoritesImport)
 			r.Delete("/{id}", h.FavoritesAPIRemove)
 			r.Delete("/", h.FavoritesAPIClear)
+		})
+
+		// Cross-device preference sync, API-mirrored per AI.md PART 16 —
+		// same stateless handlers as the frontend /preferences/{export,import}.
+		r.Route("/preferences", func(r chi.Router) {
+			r.Get("/export", h.PreferencesExport)
+			r.Get("/import", h.PreferencesImport)
 		})
 
 	})

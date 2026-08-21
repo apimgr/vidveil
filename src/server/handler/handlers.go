@@ -1275,10 +1275,10 @@ func (h *SearchHandler) getRequestPreviewFirst(w http.ResponseWriter, r *http.Re
 // returns "" if the target is missing, points at a different host, isn't
 // rooted at "/", or is protocol-relative ("//evil.com") — the standard
 // open-redirect guards. Also rejects bouncing back into the preferences
-// page/save endpoint themselves, which would defeat the point of remembering
-// where the user came from. Used by PreferencesPage (capture) and
-// PreferencesSave (use) so saving/closing preferences returns the user to
-// their prior page for both JS and no-JS clients.
+// page/save/export/import endpoints themselves, which would defeat the point
+// of remembering where the user came from. Used by PreferencesPage (capture)
+// and PreferencesSave/PreferencesImport (use) so saving/closing preferences
+// returns the user to their prior page for both JS and no-JS clients.
 func safeReturnPath(target string, r *http.Request) string {
 	if target == "" {
 		return ""
@@ -1294,7 +1294,8 @@ func safeReturnPath(target string, r *http.Request) string {
 	if path == "" || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") {
 		return ""
 	}
-	if path == "/preferences" || path == "/preferences/save" {
+	switch path {
+	case "/preferences", "/preferences/save", "/preferences/export", "/preferences/import":
 		return ""
 	}
 	if u.RawQuery != "" {
@@ -1341,6 +1342,99 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 		redirectTo = rt
 	}
 	http.Redirect(w, r, redirectTo, http.StatusFound)
+}
+
+// exportablePreferenceQuery builds the "theme=X&lang=Y" query string for the
+// current request's effective theme/language, per AI.md's "Cross-device
+// preference sync" spec — only theme and lang are portable; cookie_consent
+// (a per-browser legal acknowledgment) and the build-stamp cookie are never
+// included.
+func (h *SearchHandler) exportablePreferenceQuery(r *http.Request) string {
+	v := url.Values{}
+	v.Set("theme", h.getRequestTheme(r))
+	v.Set("lang", resolveLocale(r))
+	return v.Encode()
+}
+
+// PreferencesExport renders the current theme/lang as a shareable full URL
+// and a short base64url code, so a guest can carry their preferences to a
+// new browser/device with no account and nothing stored server-side — the
+// code/URL IS the preference values, not a lookup key.
+func (h *SearchHandler) PreferencesExport(w http.ResponseWriter, r *http.Request) {
+	query := h.exportablePreferenceQuery(r)
+	importURL := urlvar.BuildURL(r, "/preferences/import") + "?" + query
+	code := base64.RawURLEncoding.EncodeToString([]byte(query))
+
+	switch detectResponseFormat(r) {
+	case "application/json":
+		WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"url":  importURL,
+			"code": code,
+		})
+	default:
+		h.renderResponse(w, r, "preferences_export", map[string]interface{}{
+			"Title":         "Sync Preferences - " + h.appConfig.Server.Branding.Title,
+			"Theme":         h.getRequestTheme(r),
+			"ImportURL":     importURL,
+			"Code":          code,
+			"BuildDateTime": BuildDateTime(),
+			"ReturnTo":      safeReturnPath(r.Referer(), r),
+		})
+	}
+}
+
+// decodePreferenceCode decodes a short sync code back into a "theme=X&lang=Y"
+// style query string. Tolerates a pasted full import URL (strips everything
+// up to and including the last "?") per AI.md's paste-a-code UX note.
+func decodePreferenceCode(code string) (string, bool) {
+	code = strings.TrimSpace(code)
+	if idx := strings.LastIndex(code, "?"); idx != -1 {
+		code = code[idx+1:]
+	}
+	if code == "" {
+		return "", false
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(code)
+	if err != nil {
+		return "", false
+	}
+	return string(decoded), true
+}
+
+// PreferencesImport validates and applies a `theme`/`lang` pair — supplied
+// either directly as query params (the "Full URL" export form) or as a single
+// `code` param (the short base64url code, or a pasted full import URL) — then
+// 303-redirects so the imported values never linger in the visible URL or
+// browser history. Every value is still untrusted input: anything outside
+// the normal theme/locale allow-lists is silently dropped, never an error,
+// per AI.md's "Cross-device preference sync" spec. No account, no DB row,
+// nothing is written or looked up server-side.
+func (h *SearchHandler) PreferencesImport(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	if q.Get("theme") == "" && q.Get("lang") == "" {
+		if raw, ok := decodePreferenceCode(q.Get("code")); ok {
+			if decoded, err := url.ParseQuery(raw); err == nil {
+				q = decoded
+			}
+		}
+	}
+
+	sslEnabled := h.appConfig.Server.SSL.Enabled
+
+	switch q.Get("theme") {
+	case "dark", "light", "auto":
+		http.SetCookie(w, newSecureCookie("theme", q.Get("theme"), "/", 365*24*60*60, sslEnabled))
+	}
+
+	if lang := strings.ToLower(strings.TrimSpace(q.Get("lang"))); lang != "" && i18n.GlobalTranslator().HasLocale(lang) {
+		http.SetCookie(w, newSecureCookie("lang", lang, "/", 365*24*60*60, sslEnabled))
+	}
+
+	redirectTo := "/preferences"
+	if rt := safeReturnPath(r.Referer(), r); rt != "" {
+		redirectTo = rt
+	}
+	http.Redirect(w, r, redirectTo, http.StatusSeeOther)
 }
 
 // FavoritesPage, FavoritesSave, FavoritesExport, FavoritesImport, and the

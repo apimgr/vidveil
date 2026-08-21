@@ -1,0 +1,53 @@
+{{define "preferences_export"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    {{template "public/header" .}}
+    <main class="preferences">
+        <div class="preferences-header">
+            <h1>{{ t "prefs.sync" }}</h1>
+            {{if .ReturnTo}}<a class="preferences-close" href="{{.ReturnTo}}" aria-label="{{ t "prefs.close" }}">&times;</a>{{end}}
+        </div>
+        <section>
+            <p class="section-description">{{ t "prefs.sync_export_desc" }}</p>
+            <div class="form-group">
+                <label for="sync-url">{{ t "prefs.sync_url_label" }}</label>
+                <div class="form-group--buttons">
+                    <input type="text" id="sync-url" readonly value="{{.ImportURL}}">
+                    <button type="button" class="btn-secondary" data-action="copy-field" data-target="sync-url">{{ t "prefs.sync_copy" }}</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="sync-code">{{ t "prefs.sync_code_label" }}</label>
+                <div class="form-group--buttons">
+                    <input type="text" id="sync-code" readonly value="{{.Code}}">
+                    <button type="button" class="btn-secondary" data-action="copy-field" data-target="sync-code">{{ t "prefs.sync_copy" }}</button>
+                </div>
+            </div>
+        </section>
+        <section>
+            <h2>{{ t "prefs.sync_import" }}</h2>
+            <form method="get" action="/preferences/import">
+                <div class="form-group">
+                    <label for="sync-import-code">{{ t "prefs.sync_import_label" }}</label>
+                    <input type="text" id="sync-import-code" name="code" placeholder="{{ t "prefs.sync_import_placeholder" }}">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="primary">{{ t "prefs.sync_import" }}</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{template "public/footer" .}}
+    {{/* i18n strings for the copy-to-clipboard enhancement in app.js — pure
+         JS convenience, the readonly inputs above already work without it. */}}
+    <script type="application/json" id="preferences-export-i18n">{
+        "copied": "{{ t "prefs.sync_copied" }}"
+    }</script>
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

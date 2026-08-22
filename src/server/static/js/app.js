@@ -68,6 +68,15 @@ function updateMetaThemeColor(theme) {
     }
 }
 
+// Header theme-toggle button (AI.md PART 16): cycles dark -> light -> auto -> dark.
+// A real <button> already fires 'click' on Enter/Space per HTML5 semantics, so no
+// extra keyboard wiring is needed beyond the existing data-action click dispatcher.
+function cycleTheme() {
+    var order = ['dark', 'light', 'auto'];
+    var next = order[(order.indexOf(getTheme()) + 1) % order.length];
+    setTheme(next);
+}
+
 // Listen for system preference changes when in auto mode
 function setupThemeMediaListener() {
     var mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
@@ -3071,6 +3080,9 @@ function dispatchClickAction(el, e) {
             return true;
         case 'close-nav':
             closeNav();
+            return true;
+        case 'cycle-theme':
+            cycleTheme();
             return true;
         case 'close-toast': {
             var toast = el.closest('.toast');

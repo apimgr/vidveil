@@ -435,6 +435,62 @@ a:hover {
     display: flex;
 }
 
+/* Theme toggle button - header, right side, last item, per AI.md PART 16.
+   Only one icon is shown at a time, matching the theme class the server
+   already renders on <html> (theme-dark/theme-light/theme-auto), so there
+   is no flash/mismatch between server-rendered state and the icon shown. */
+.theme-toggle {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.theme-button svg {
+    display: none;
+}
+
+.theme-button .icon-dark {
+    display: block;
+}
+
+html.theme-light .theme-button .icon-dark {
+    display: none;
+}
+
+html.theme-light .theme-button .icon-light {
+    display: block;
+}
+
+html.theme-auto .theme-button .icon-dark {
+    display: none;
+}
+
+html.theme-auto .theme-button .icon-auto {
+    display: block;
+}
+
+/* <noscript> theme-switch fallback per AI.md PART 16 - hidden whenever JS
+   runs since the .theme-button above already provides the same action. */
+.theme-noscript-form {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.theme-noscript-btn {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: none;
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.theme-noscript-btn:hover {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
 /* Legacy user-icon class for backward compatibility */
 .user-icon {
     display: flex;

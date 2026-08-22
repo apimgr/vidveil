@@ -24,6 +24,39 @@
                 <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
         </button>
+        {{/* Theme toggle - header, right side, last item, per AI.md PART 16 */}}
+        <div class="theme-toggle" aria-label="{{ t "a11y.theme_toggle" }}">
+            <button type="button" class="header-action theme-button" aria-label="{{ t "a11y.switch_theme" }}" data-action="cycle-theme">
+                <svg class="icon-dark" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+                <svg class="icon-light" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <svg class="icon-auto" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor" stroke="none"></path>
+                </svg>
+            </button>
+            {{/* No-JS fallback per AI.md PART 16 - posts to the existing theme-save endpoint */}}
+            <noscript>
+                <form method="post" action="/server/preferences/save" class="theme-noscript-form">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <input type="hidden" name="return_to" value="{{.CurrentPath}}">
+                    <button type="submit" name="theme" value="dark" class="theme-noscript-btn">{{ t "prefs.theme.dark" }}</button>
+                    <button type="submit" name="theme" value="light" class="theme-noscript-btn">{{ t "prefs.theme.light" }}</button>
+                    <button type="submit" name="theme" value="auto" class="theme-noscript-btn">{{ t "prefs.theme.auto" }}</button>
+                </form>
+            </noscript>
+        </div>
     </div>
 </header>
 

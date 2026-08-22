@@ -7,16 +7,6 @@ Backend, routes, auth, and DB were explicitly out of scope for this pass.
 
 ## Pass 5: Spec Compliance (PART 16)
 
-- [ ] No site-wide theme toggle anywhere. AI.md 22230-22248 requires a header
-      toggle (right side, last item, Dark/Light/Auto, Enter/Space cycles) plus a
-      `<noscript>` form POSTing to the theme endpoint. Today the only way to change
-      theme is the `<select>` on `/server/preferences`. `grep -c noscript
-      src/server/template/` is 0. Fix: add the `.theme-toggle` button to
-      `partial/public/header.tmpl` with a `data-action="cycle-theme"` handler in
-      `app.js`, and a `<noscript>` three-option form POSTing to
-      `/server/preferences/save` (route already exists and already validates
-      `theme`). Requires new i18n keys in all 7 locale files.
-
 - [ ] Hardcoded user-facing English strings in `src/server/static/js/app.js`:
       `showConfirm()` builds `'Confirm Action'` / `'Cancel'` / `'Confirm'` /
       `aria-label="Close"` (lines ~663-670), and the preferences/history IIFEs use
@@ -68,6 +58,23 @@ Backend, routes, auth, and DB were explicitly out of scope for this pass.
   replaced with reading the resolved `--color-bg` CSS custom property off
   `<html>` (already set by the caller before this runs), so the hex now exists
   in exactly one place (the Go palette, mirrored once into `common.css`).
+- No site-wide theme toggle existed anywhere (AI.md 22227-22268 header toggle,
+  right side/last item, Dark/Light/Auto, `<noscript>` fallback). Added
+  `.theme-toggle`/`.theme-button` (`data-action="cycle-theme"`, three
+  `icon-dark`/`icon-light`/`icon-auto` SVGs) as the last item in
+  `partial/public/header.tmpl`'s `.header-actions`, plus a `<noscript>`
+  three-button form posting to the existing `/server/preferences/save` route
+  with `csrf_token`/`return_to` hidden fields. `response.go`'s
+  `renderResponseStatus` now centrally injects `CSRFToken`/`CurrentPath`
+  (guarded, only set if not already present) so every template gets them for
+  free. `app.js` gained a `cycle-theme` dispatch case and a `cycleTheme()`
+  function that rotates dark→light→auto→dark, updates the `theme` cookie and
+  the `<html>` class, with no page reload. `common.css` shows/hides the three
+  icon SVGs purely via `html.theme-{dark,light,auto} .theme-button .icon-*`
+  selectors (matching the class the server already renders, so there's no
+  client/server mismatch or flash) and styles the noscript fallback buttons.
+  Added `a11y.switch_theme`/`a11y.theme_toggle` keys to all 7 locale files.
+  Verified with `go build ./...` in `casjaysdev/go:latest` (exit 0).
 - template/page/preferences.tmpl:239: engine toggle `<label>`s were rendered
   with the `hidden` attribute and only revealed by JS
   (`initEngineTiers()`/`app.js`), so engine selection was unavailable with

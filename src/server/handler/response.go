@@ -251,6 +251,13 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 		data["CSRFToken"] = cSRFTokenFromRequest(r)
 	}
 
+	// Inject the resolved theme per AI.md PART 16 — header.tmpl's theme toggle
+	// and its <noscript> fallback form are rendered on every page and need the
+	// current theme regardless of whether the individual handler already set it.
+	if data["Theme"] == nil {
+		data["Theme"] = h.getRequestTheme(r)
+	}
+
 	// Resolved per request via BuildURL (AI.md PART 12) — never frozen at
 	// startup/config, so og:url/canonical matches the Host/proto the client
 	// actually used, including behind a reverse proxy. Set here (where r is
@@ -258,6 +265,13 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 	// test calls that construct data maps without going through renderResponse.
 	if data["AppURL"] == nil {
 		data["AppURL"] = urlvar.BuildURL(r, "")
+	}
+
+	// The header's <noscript> theme-switch form (AI.md PART 16) posts to
+	// /server/preferences/save with return_to=CurrentPath so a no-JS visitor
+	// lands back on the page they switched theme from, not always /server/preferences.
+	if data["CurrentPath"] == nil {
+		data["CurrentPath"] = r.URL.RequestURI()
 	}
 
 	// Consent banner gating per AI.md PART 12/16 — the server renders the

@@ -366,6 +366,7 @@
   "home.engines": "moteurs",
   "home.no_tracking": "Aucun suivi",
   "home.tor_support": "Prise en charge de Tor",
+  "modal.confirm_title": "Confirmer l'action",
   "nav.about": "A propos",
   "nav.admin": "Admin",
   "nav.contact": "Contact",

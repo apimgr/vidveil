@@ -366,6 +366,7 @@
   "home.engines": "Suchmaschinen",
   "home.no_tracking": "Kein Tracking",
   "home.tor_support": "Tor-Unterstützung",
+  "modal.confirm_title": "Aktion bestätigen",
   "nav.about": "Info",
   "nav.admin": "Admin",
   "nav.contact": "Kontakt",

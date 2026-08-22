@@ -218,3 +218,23 @@ Page routes (about, privacy, help, terms, contact, healthz) to confirm
 whether they are already correctly mounted under `/server/` and only the
 sitemap `<loc>` entries are stale, or whether the routes themselves are
 also bare and need the same route-tree migration `/preferences` just got.
+
+Finding from the app.js hardcoded-strings audit fix (2026-08-22, task 7),
+pre-existing and out of scope for that fix — `addResultCard()` in
+`src/server/static/js/app.js` (~line 2065-2145) and its 2-3 nearby
+favorite-toggle call sites (~line 2836, 2859) build the search-result
+card HTML almost entirely from hardcoded English literals, in violation
+of AI.md's "Never hardcode user-facing strings anywhere" rule: `'Video
+options'` (menu aria-label), `'Open in new tab'`, `'Copy link'`,
+`'Add to favorites'` / `'Remove from favorites'` (3 call sites, not
+reusing the already-translated `favorites.add`/`favorites.remove` keys
+used elsewhere), `'Download'`, `'Swipe to preview'`, `' views'` suffix,
+`'Untitled'` (title fallback, 7 call sites incl. lines 801, 863, 943,
+2135, 2142, 3302, 3304, 3305), `'Video result'` (aria-label fallback,
+line 2077), plus the fetch-failure paths `'Search failed - check your
+connection'` (2 call sites) and `'Connection error.'`/`'Retry'`. Needs
+its own translation-key pass: add `search.card.*` (or similar) keys to
+all 7 locale files and a page-scoped i18n data island (or reuse/extend
+`#app-i18n` if these strings are also needed on non-search pages),
+mirroring the pattern already used for `showConfirm()`/preferences/
+history/favorites.

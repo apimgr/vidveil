@@ -366,6 +366,7 @@
   "home.engines": "エンジン",
   "home.no_tracking": "追跡なし",
   "home.tor_support": "Tor対応",
+  "modal.confirm_title": "操作の確認",
   "nav.about": "について",
   "nav.admin": "管理",
   "nav.contact": "お問い合わせ",

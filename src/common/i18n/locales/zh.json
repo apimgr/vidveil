@@ -366,6 +366,7 @@
   "home.engines": "引擎",
   "home.no_tracking": "无跟踪",
   "home.tor_support": "支持 Tor",
+  "modal.confirm_title": "确认操作",
   "nav.about": "关于",
   "nav.admin": "管理",
   "nav.contact": "联系方式",

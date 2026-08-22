@@ -7,15 +7,6 @@ Backend, routes, auth, and DB were explicitly out of scope for this pass.
 
 ## Pass 5: Spec Compliance (PART 16)
 
-- [ ] Hardcoded user-facing English strings in `src/server/static/js/app.js`:
-      `showConfirm()` builds `'Confirm Action'` / `'Cancel'` / `'Confirm'` /
-      `aria-label="Close"` (lines ~663-670), and the preferences/history IIFEs use
-      `i18n.x || 'English fallback'` throughout. testing-rules.md: "Never hardcode
-      user-facing strings anywhere ... every string MUST use a translation key, no
-      exceptions." Fix: add a global `#app-i18n` JSON data island to
-      `partial/public/head.tmpl` (loaded on every page) and read from it, dropping
-      every English fallback literal.
-
 - [ ] `src/server/handler/handlers.go:2288` and `:3781`: `"safeHTML": func(s string)
       template.HTML { return template.HTML(s) }` is a raw, unsanitized passthrough.
       `bluemonday` is not in `go.mod` at all. Currently it is only applied to
@@ -85,3 +76,28 @@ Backend, routes, auth, and DB were explicitly out of scope for this pass.
   enhances it into collapsible tier groups when JS is available (it
   rebuilds the container and re-appends the same nodes, so no duplicate
   reveal logic was needed).
+- static/js/app.js: `showConfirm()` hardcoded `'Confirm Action'` / `'Cancel'` /
+  `'Confirm'` / `aria-label="Close"`, and the preferences/history/favorites/search
+  IIFEs used `i18n.x || 'English fallback'` throughout. Added a global `#app-i18n`
+  JSON data island to `partial/public/head.tmpl` (loaded on every page, unlike the
+  existing per-page `#{page}-i18n` islands) with `modalConfirmTitle`/`cancel`/
+  `confirm`/`close` keys, plus a new `modal.confirm_title` translation key added to
+  all 7 locale files (`en`/`es`/`zh`/`fr`/`ar`/`de`/`ja`); `close`/`cancel`/
+  `confirm` reuse the existing generic `action.close`/`action.cancel`/
+  `action.confirm` keys rather than duplicating them. `showConfirm()` now reads
+  all its chrome text via a new `getAppI18n()` helper and sets it through
+  `textContent`/`setAttribute` (never `innerHTML`), preserving the existing
+  can-never-inject-HTML property. Removed the redundant `|| 'English fallback'`
+  literals from the preferences/history/favorites/search IIFEs now that every
+  referenced key is confirmed present (non-empty) in all 7 locales — the
+  `'Tier ' + tier` fallback in `initEngineTiers()` and the `data-confirm`
+  attribute fallback in the favorites-clear handler were left as-is: both are
+  legitimate last-resort defaults (the former for an out-of-range tier number
+  the 6 translated tier keys don't cover, the latter because the `data-confirm`
+  attribute is already always server-rendered from the translated
+  `favorites.confirm_clear` key in `preferences.tmpl`/`favorites.tmpl`). A much
+  larger, separate hardcoded-string issue was found in `addResultCard()`
+  (search-result card markup) while doing this pass — out of scope for this
+  finding, logged as its own `TODO.AI.md` item instead of folded in here.
+  Verified with `node --check` (syntax) and `go build ./...` in
+  `casjaysdev/go:latest` (exit 0).

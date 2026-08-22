@@ -660,10 +660,22 @@ function showError(msg) { showToast(msg, 'error'); }
 function showWarning(msg) { showToast(msg, 'warning'); }
 function showInfo(msg) { showToast(msg, 'info'); }
 
+// Reads the #app-i18n data island rendered by partial/public/head.tmpl on every page.
+function getAppI18n() {
+    var el = document.getElementById('app-i18n');
+    if (!el) return {};
+    try {
+        return JSON.parse(el.textContent || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
 // Confirmation modal per AI.md PART 16 & PART 31 (A11Y)
 var confirmModalCounter = 0;
 function showConfirm(message, onConfirm, onCancel) {
     var id = 'confirm-modal-' + (++confirmModalCounter);
+    var i18n = getAppI18n();
     var modal = document.createElement('dialog');
     modal.className = 'modal confirm-modal';
     modal.setAttribute('role', 'dialog');
@@ -671,14 +683,20 @@ function showConfirm(message, onConfirm, onCancel) {
     modal.setAttribute('aria-labelledby', id + '-title');
     modal.setAttribute('aria-describedby', id + '-desc');
     modal.innerHTML = '<div class="modal-header">' +
-        '<h3 class="modal-title" id="' + id + '-title">Confirm Action</h3>' +
-        '<button type="button" class="modal-close" aria-label="Close">&times;</button>' +
+        '<h3 class="modal-title" id="' + id + '-title"></h3>' +
+        '<button type="button" class="modal-close"></button>' +
         '</div>' +
         '<div class="modal-body"><p id="' + id + '-desc"></p></div>' +
         '<div class="modal-footer">' +
-        '<button type="button" class="btn btn-secondary cancel-btn">Cancel</button>' +
-        '<button type="button" class="btn btn-primary confirm-btn">Confirm</button>' +
+        '<button type="button" class="btn btn-secondary cancel-btn"></button>' +
+        '<button type="button" class="btn btn-primary confirm-btn"></button>' +
         '</div>';
+    // Labels set via textContent/aria-label so they can never inject HTML
+    modal.querySelector('.modal-title').textContent = i18n.modalConfirmTitle || '';
+    modal.querySelector('.modal-close').setAttribute('aria-label', i18n.close || '');
+    modal.querySelector('.modal-close').textContent = '×';
+    modal.querySelector('.cancel-btn').textContent = i18n.cancel || '';
+    modal.querySelector('.confirm-btn').textContent = i18n.confirm || '';
     // Message set via textContent so it can never inject HTML
     modal.querySelector('#' + id + '-desc').textContent = message;
     document.body.appendChild(modal);
@@ -1661,7 +1679,7 @@ if (document.readyState === 'loading') {
             showNoResultsMessage();
             hasMoreResults = false;
             showSearchElement('search-meta');
-            announce(getSearchI18n().noResults || 'No results found');
+            announce(getSearchI18n().noResults);
             updateSearchStatus();
             return true;
         }
@@ -1803,7 +1821,7 @@ if (document.readyState === 'loading') {
                     showNoResultsMessage();
                     hasMoreResults = false;
                     // A11Y: Announce no results to screen readers
-                    announce(getSearchI18n().noResults || 'No results found');
+                    announce(getSearchI18n().noResults);
                 } else {
                     hideNoResultsMessage();
                     // Setup infinite scroll after initial results load
@@ -1977,7 +1995,7 @@ if (document.readyState === 'loading') {
                 hideSearchElement('initial-loading');
                 showNoResultsMessage();
                 hasMoreResults = false;
-                announce(getSearchI18n().noResults || 'No results found');
+                announce(getSearchI18n().noResults);
                 updateSearchStatus();
                 hideSearchElement('status-bar');
                 return;
@@ -3190,7 +3208,7 @@ function getSearchI18n() {
 // never server-rendered. Always lands inside <main>, never near the footer.
 function showNoResultsMessage() {
     var i18n = getSearchI18n();
-    var msg = i18n.noResults || 'No results found';
+    var msg = i18n.noResults;
     var el = document.getElementById('no-results-message');
     if (!el) {
         el = document.createElement('p');
@@ -3233,7 +3251,7 @@ function updateFavoritesCountLabel(count) {
     var label = document.getElementById('favorites-count-label');
     if (label) {
         label.textContent = count === 1 ? (i18n.countSingular || i18n.favCountSingular || String(count)) :
-            (i18n.countPlural || '%d').replace('%d', count);
+            i18n.countPlural.replace('%d', count);
     }
     // Preferences page count span (server-supplied data-format, e.g. "%d favorites").
     var prefsCount = document.getElementById('favorites-count');
@@ -3271,7 +3289,7 @@ function renderFavoritesGrid(list) {
     }
 
     var i18n = getFavoritesI18n();
-    var removeLabel = i18n.remove || 'Remove from favorites';
+    var removeLabel = i18n.remove;
     var csrf = getCsrfToken();
     grid.innerHTML = '';
     list.forEach(function(f) {
@@ -3377,7 +3395,7 @@ document.addEventListener('submit', function(e) {
             var i18n = getFavoritesI18n();
             if (btn) {
                 btn.classList.toggle('video-card-fav-btn--active', added);
-                var label = added ? (i18n.remove || 'Remove from favorites') : (i18n.add || 'Add to favorites');
+                var label = added ? i18n.remove : i18n.add;
                 btn.setAttribute('aria-label', label);
                 btn.setAttribute('title', label);
             }
@@ -3403,7 +3421,7 @@ document.addEventListener('submit', function(e) {
         showConfirm(message, function() {
             window.Vidveil.Favorites.clear().then(function() {
                 var i18n = getFavoritesI18n();
-                showSuccess(i18n.cleared || i18n.favCleared || 'Favorites cleared');
+                showSuccess(i18n.cleared || i18n.favCleared);
                 var grid = document.getElementById('favorites-grid');
                 if (grid) {
                     grid.innerHTML = '';
@@ -3689,7 +3707,7 @@ document.addEventListener('error', function(e) {
         window.exportHistory = function() {
             var history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
             downloadJSON(history, 'vidveil-history.json');
-            showToast(i18n.historyExported || 'History exported', 'success');
+            showToast(i18n.historyExported, 'success');
         };
 
         window.importHistory = function(file) {
@@ -3700,21 +3718,21 @@ document.addEventListener('error', function(e) {
                     var data = JSON.parse(e.target.result);
                     if (Array.isArray(data)) {
                         localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
-                        showToast((i18n.historyImported || '%d items imported').replace('%d', data.length), 'success');
+                        showToast(i18n.historyImported.replace('%d', data.length), 'success');
                     } else {
-                        showToast(i18n.historyInvalidFile || 'Invalid history file', 'error');
+                        showToast(i18n.historyInvalidFile, 'error');
                     }
                 } catch (err) {
-                    showToast(i18n.historyParseFailed || 'Failed to parse file', 'error');
+                    showToast(i18n.historyParseFailed, 'error');
                 }
             };
             reader.readAsText(file);
         };
 
         window.clearHistory = function() {
-            showConfirm(i18n.historyClearConfirm || 'Clear all search history?', function () {
+            showConfirm(i18n.historyClearConfirm, function () {
                 localStorage.removeItem(HISTORY_KEY);
-                showToast(i18n.historyCleared || 'History cleared', 'info');
+                showToast(i18n.historyCleared, 'info');
             });
         };
 
@@ -3773,9 +3791,9 @@ document.addEventListener('error', function(e) {
                     '<label class="toggle tier-toggle">' +
                         '<input type="checkbox" data-tier="' + tier + '" checked>' +
                         '<span class="slider"></span>' +
-                        '<span class="toggle-label">' + tierName + ' (' + tierEngines.length + ' ' + (i18n.tierEngines || 'engines') + ')</span>' +
+                        '<span class="toggle-label">' + tierName + ' (' + tierEngines.length + ' ' + i18n.tierEngines + ')</span>' +
                     '</label>' +
-                    '<button type="button" class="tier-expand" aria-expanded="false" aria-label="' + (i18n.expandTier || 'Expand tier') + '">' +
+                    '<button type="button" class="tier-expand" aria-expanded="false" aria-label="' + i18n.expandTier + '">' +
                         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
                             '<polyline points="6 9 12 15 18 9"></polyline>' +
                         '</svg>' +

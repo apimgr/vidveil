@@ -366,6 +366,7 @@
   "home.engines": "motores",
   "home.no_tracking": "Sin rastreo",
   "home.tor_support": "Compatible con Tor",
+  "modal.confirm_title": "Confirmar acción",
   "nav.about": "Acerca de",
   "nav.admin": "Admin",
   "nav.contact": "Contacto",

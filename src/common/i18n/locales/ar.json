@@ -366,6 +366,7 @@
   "home.engines": "محركات",
   "home.no_tracking": "بدون تتبع",
   "home.tor_support": "دعم Tor",
+  "modal.confirm_title": "تأكيد الإجراء",
   "nav.about": "حول",
   "nav.admin": "الإدارة",
   "nav.contact": "تواصل",

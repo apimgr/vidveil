@@ -394,9 +394,24 @@ func TestSearchPage_NoJS_RendersResultsInVisibleGrid(t *testing.T) {
 	if !strings.Contains(body, `<span id="result-count">1</span>`) {
 		t.Errorf("search render: server-rendered result count missing")
 	}
-	// 5. There must be no <noscript> gating of the results any longer.
-	if strings.Contains(body, "<noscript>") {
-		t.Errorf("search render: results must not be confined to <noscript>")
+	// 5. The results themselves must not be gated inside a <noscript> block
+	//    (a page-wide <noscript> fallback for an unrelated control, such as
+	//    the header's no-JS theme toggle, is legitimate progressive
+	//    enhancement and must not trip this check).
+	if gridIdx, dataIdx := strings.Index(body, `id="video-grid"`), strings.Index(body, `id="search-results-data"`); gridIdx == -1 || dataIdx == -1 {
+		t.Errorf("search render: could not locate video-grid/search-results-data to check <noscript> gating; body=%s", body)
+	} else {
+		start := gridIdx
+		if dataIdx < start {
+			start = dataIdx
+		}
+		end := gridIdx
+		if dataIdx > end {
+			end = dataIdx
+		}
+		if strings.Contains(body[start:end], "<noscript>") {
+			t.Errorf("search render: results must not be confined to <noscript>")
+		}
 	}
 }
 

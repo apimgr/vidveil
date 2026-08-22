@@ -2856,10 +2856,6 @@ Object.assign(window.Vidveil, {
     announce: announce
 });
 
-// Make nav functions globally available for onclick handlers
-window.toggleNav = toggleNav;
-window.closeNav = closeNav;
-
 // Export admin functions globally
 window.toggleSection = toggleSection;
 window.showToast = showToast;

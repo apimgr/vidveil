@@ -5,12 +5,6 @@ Started: 2026-08-21
 Scope: theming / CSS / JS only (AI.md PART 16, `.claude/rules/frontend-rules.md`).
 Backend, routes, auth, and DB were explicitly out of scope for this pass.
 
-## Pass 2: Code Quality
-
-- [ ] `src/server/static/js/app.js` (~line 2855): stale comment "Make nav functions
-      globally available for onclick handlers" — no inline `onclick` exists anywhere
-      in the codebase; the comment describes a pattern PART 16 forbids.
-
 ## Pass 4: Documentation
 
 - [ ] `src/server/template/partial/public/head.tmpl:5`: `<meta name="theme-color"
@@ -57,6 +51,12 @@ Backend, routes, auth, and DB were explicitly out of scope for this pass.
 
 ## Completed
 
+- static/js/app.js (~line 2859-2861): removed the dead `window.toggleNav` /
+  `window.closeNav` global exports and their stale "for onclick handlers"
+  comment — nav toggle/close is bound via `data-action="toggle-nav"` /
+  `data-action="close-nav"` in `header.tmpl`, dispatched through the
+  CSP-safe `data-action` handler in `app.js`; no inline `onclick` exists
+  anywhere in the codebase and nothing referenced the `window.*` globals.
 - template/page/preferences.tmpl: JS-only form (no `method`/`action`/CSRF) silently
   discarded all preferences with JS disabled — added
   `method="post" action="/server/preferences/save"`, the CSRF and `return_to`

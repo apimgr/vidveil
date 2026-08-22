@@ -1025,16 +1025,16 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		if isSearchOverloaded(results) {
 			w.Header().Set("Retry-After", strconv.Itoa(searchOverloadRetryAfterSeconds))
 			h.renderResponseStatus(w, r, "search", map[string]interface{}{
-				"Title":       query + " - " + h.appConfig.Server.Branding.Title,
-				"Query":       query,
-				"SearchQuery": searchQuery,
-				"ResultsJSON": template.JS("[]"),
-				"Results":     []model.VideoResult{},
-				"CurrentPath": r.URL.RequestURI(),
-				"Theme":       h.getRequestTheme(r),
-				"ErrorCode":   CodeRateLimited,
-				"ErrorMsg":    MsgRateLimited,
-				"Version":     version.GetVersion(),
+				"Title":         query + " - " + h.appConfig.Server.Branding.Title,
+				"Query":         query,
+				"SearchQuery":   searchQuery,
+				"ResultsJSON":   template.JS("[]"),
+				"Results":       []model.VideoResult{},
+				"CurrentPath":   r.URL.RequestURI(),
+				"Theme":         h.getRequestTheme(r),
+				"ErrorCode":     CodeRateLimited,
+				"ErrorMsg":      MsgRateLimited,
+				"Version":       version.GetVersion(),
 				"BuildDateTime": BuildDateTime(),
 			}, http.StatusTooManyRequests)
 			return
@@ -1124,14 +1124,14 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.renderResponseStatus(w, r, "search", map[string]interface{}{
-			"Title":       query + " - " + h.appConfig.Server.Branding.Title,
-			"Query":       query,
-			"SearchQuery": searchQuery,
-			"ResultsJSON": template.JS("[]"),
-			"Theme":       h.getRequestTheme(r),
-			"ErrorCode":   CodeRateLimited,
-			"ErrorMsg":    MsgRateLimited,
-			"Version":     version.GetVersion(),
+			"Title":         query + " - " + h.appConfig.Server.Branding.Title,
+			"Query":         query,
+			"SearchQuery":   searchQuery,
+			"ResultsJSON":   template.JS("[]"),
+			"Theme":         h.getRequestTheme(r),
+			"ErrorCode":     CodeRateLimited,
+			"ErrorMsg":      MsgRateLimited,
+			"Version":       version.GetVersion(),
 			"BuildDateTime": BuildDateTime(),
 		}, http.StatusTooManyRequests)
 		return

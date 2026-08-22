@@ -6,13 +6,6 @@ triage/fix. Remove each item individually once resolved and committed.
 Findings from CSS/theming compliance re-audit against AI.md PART 16 (commit
 1015f92625d7).
 
-- GOOS string uses "macos" instead of the correct Go GOOS term "darwin" in
-  three places in `src/config/config.go` (line ~1001 OS config comment, line
-  ~1021 and ~1076 `UserAgentConfig`) and one test data string in
-  `src/config/config_coverage_test.go` (line ~358). Found by go-lint during
-  the Go package directory rename pass (task 5); unrelated to that change,
-  out of scope for that commit, needs its own fix pass.
-
 Findings from the full audit pass (2026-08-12). The Aug 11 AI.md commit
 (e19f7f1e5ec3, "Updated the SPEC for API servers", 335 lines changed)
 substantially rewrote the API-server spec — chiefly PART 20 (Metrics),
@@ -213,16 +206,6 @@ Finding from go-lint pass during the API-version cross-cutting fix
   `BUILD_EPOCH`/`main.BuildEpoch` (Unix timestamp) across Makefile and
   Dockerfile, then compute `BuildDate` at runtime from `BuildEpoch` in
   `main.go`/`root.go`.
-
-Finding from `go-lint` pass during the cross-device preference sync feature
-(2026-08-21), pre-existing and unrelated to that feature — out of scope for
-that commit.
-
-- `gofmt` reports misaligned map-literal keys in two existing
-  `renderResponseStatus()` calls in `src/server/handler/handlers.go`
-  (~lines 1028-1038 and ~1128-1137). Not a CasjaysDev convention
-  violation, just gofmt alignment; fix with
-  `gofmt -w src/server/handler/handlers.go`.
 
 Finding from the `/preferences` → `/server/preferences` route migration
 (2026-08-21), pre-existing and out of scope for that fix — the sitemap

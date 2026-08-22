@@ -57,13 +57,15 @@ function updateMetaThemeColor(theme) {
         document.head.appendChild(metaTheme);
     }
 
-    var effectiveTheme = theme;
-    if (theme === 'auto') {
-        effectiveTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    // Read the resolved --color-bg custom property rather than hardcoding a
+    // hex literal here — the theme-{dark,light,auto} class is already applied
+    // to <html> by the caller, so this always matches the single source of
+    // truth (common.css :root / html.theme-light, itself generated from the
+    // Go palette in src/common/theme/colors.go per AUDIT.AI.md Pass 4).
+    var bg = getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim();
+    if (bg) {
+        metaTheme.content = bg;
     }
-
-    // Set appropriate theme-color for mobile browser chrome
-    metaTheme.content = effectiveTheme === 'light' ? '#ffffff' : '#282a36';
 }
 
 // Listen for system preference changes when in auto mode

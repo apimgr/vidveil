@@ -35,6 +35,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
+	"github.com/apimgr/vidveil/src/common/theme"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
@@ -157,6 +158,19 @@ func (h *SearchHandler) getRequestTheme(r *http.Request) string {
 		return h.appConfig.Web.UI.Theme
 	}
 	return "dark"
+}
+
+// getThemeColor resolves the browser-chrome "theme-color" hex for the given
+// theme preference from the single-source-of-truth Go palette
+// (src/common/theme/colors.go), so the value never has to be duplicated as a
+// literal in a template or in JS. "auto" and "dark" both resolve to the dark
+// palette server-side (matching the project default per AI.md PART 16 —
+// prefers-color-scheme is applied client-side once JS runs).
+func getThemeColor(themeName string) string {
+	if themeName == "light" {
+		return theme.Light.Background
+	}
+	return theme.Dark.Background
 }
 
 // getUserIPForwardPreference checks if user has opted-in to IP forwarding via cookie
@@ -2028,6 +2042,7 @@ type HealthzHTMLData struct {
 	TorEnabled          bool
 	TorRunning          bool
 	TorAddress          string
+	ThemeColor          string
 	SEOKeywords         string
 	SEOAuthor           string
 	SEOOGImage          string
@@ -2206,6 +2221,10 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			data.ProjectDescription = h.appConfig.Server.Branding.Description
 		}
 	}
+
+	// Browser-chrome theme-color meta value, resolved from the Go palette
+	// (AUDIT.AI.md Pass 4) — same as renderTemplate()'s ThemeColor injection.
+	data.ThemeColor = getThemeColor(data.Theme)
 
 	// Shared partial data (head.tmpl / footer.tmpl per AI.md PART 16) — same
 	// injection renderTemplate() performs for every other page (handlers.go
@@ -3711,6 +3730,13 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
 			data["TorAddress"] = addr
 		}
+	}
+
+	// Browser-chrome theme-color meta value, resolved from the Go palette
+	// (AUDIT.AI.md Pass 4) — never a hardcoded hex literal in the template.
+	if data["ThemeColor"] == nil {
+		themeName, _ := data["Theme"].(string)
+		data["ThemeColor"] = getThemeColor(themeName)
 	}
 
 	// Inject SEO and branding data per AI.md PART 16

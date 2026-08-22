@@ -5,13 +5,6 @@ Started: 2026-08-21
 Scope: theming / CSS / JS only (AI.md PART 16, `.claude/rules/frontend-rules.md`).
 Backend, routes, auth, and DB were explicitly out of scope for this pass.
 
-## Pass 4: Documentation
-
-- [ ] `src/server/template/partial/public/head.tmpl:5`: `<meta name="theme-color"
-      content="#282a36">` hardcodes the Dracula background hex, duplicating the Go
-      theme palette. Should be rendered from the palette (the JS side already has
-      `updateMetaThemeColor`), so the literal exists in exactly one place.
-
 ## Pass 5: Spec Compliance (PART 16)
 
 - [ ] No site-wide theme toggle anywhere. AI.md 22230-22248 requires a header
@@ -71,3 +64,13 @@ Backend, routes, auth, and DB were explicitly out of scope for this pass.
   non-navigation fallback chains so a rejecting `caches.match` can never reject
   `respondWith` (`net::ERR_FAILED`); documented that `CACHE_NAME` is a placeholder
   rewritten by `server.go` to `vidveil-cache-v{version}-{commit}`.
+- template/partial/public/head.tmpl:5: `<meta name="theme-color" content="#282a36">`
+  hardcoded the Dracula background hex. Added `ThemeColor` (map key in
+  `renderTemplate()`, field in `HealthzHTMLData`) resolved via a new
+  `getThemeColor()` helper reading `theme.Dark.Background` /
+  `theme.Light.Background` from `src/common/theme/colors.go`, and switched the
+  template to `{{.ThemeColor}}`. `static/js/app.js` `updateMetaThemeColor()`
+  also hardcoded `'#ffffff'`/`'#282a36'` for the runtime (auto-mode) update —
+  replaced with reading the resolved `--color-bg` CSS custom property off
+  `<html>` (already set by the caller before this runs), so the hex now exists
+  in exactly one place (the Go palette, mirrored once into `common.css`).

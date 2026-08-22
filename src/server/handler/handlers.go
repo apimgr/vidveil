@@ -35,6 +35,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
+	"github.com/apimgr/vidveil/src/common/sanitize"
 	"github.com/apimgr/vidveil/src/common/theme"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
@@ -2305,7 +2306,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			return i18n.TranslateFormat(lang, key, args...)
 		},
 		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s)
+			return sanitize.HTML(s)
 		},
 		// asset appends the version-busting stamp per AI.md PART 9
 		"asset": func(path string) string {
@@ -3803,9 +3804,10 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, name string, data 
 		"tf": func(key string, args ...interface{}) string {
 			return i18n.TranslateFormat(locale, key, args...)
 		},
-		// safeHTML marks a string as safe HTML (trusted, not escaped)
+		// safeHTML sanitizes s through the strict PART 16 allowlist
+		// policy and marks the result safe for template rendering.
 		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s)
+			return sanitize.HTML(s)
 		},
 		// asset appends the version-busting stamp per AI.md PART 9:
 		// {{ asset "/static/css/app.css" }} → /static/css/app.css?v={version}-{commit}

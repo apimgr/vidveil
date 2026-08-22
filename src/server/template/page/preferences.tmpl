@@ -236,7 +236,7 @@
                 <p class="section-description">{{ t "prefs.engines_desc" }}</p>
                 <div class="engine-tiers" id="engine-tiers">
                     {{range .Engines}}
-                    <label class="engine-toggle" data-tier="{{.Tier}}" data-engine="{{.Name}}" hidden>
+                    <label class="engine-toggle" data-tier="{{.Tier}}" data-engine="{{.Name}}">
                         <input type="checkbox" name="engines" value="{{.Name}}" {{if .Enabled}}checked{{end}}>
                         {{.DisplayName}}
                     </label>

@@ -17,12 +17,6 @@ Backend, routes, auth, and DB were explicitly out of scope for this pass.
       `/server/preferences/save` (route already exists and already validates
       `theme`). Requires new i18n keys in all 7 locale files.
 
-- [ ] `src/server/template/page/preferences.tmpl:238`: engine toggles are rendered
-      `hidden` and only revealed by JavaScript
-      (`<label class="engine-toggle" ... hidden>`). PART 16: "JS enhances only,
-      never enables" — engine selection is currently unavailable with JS disabled.
-      Fix: render them visible server-side and let JS take over filtering/tiering.
-
 - [ ] Hardcoded user-facing English strings in `src/server/static/js/app.js`:
       `showConfirm()` builds `'Confirm Action'` / `'Cancel'` / `'Confirm'` /
       `aria-label="Close"` (lines ~663-670), and the preferences/history IIFEs use
@@ -74,3 +68,13 @@ Backend, routes, auth, and DB were explicitly out of scope for this pass.
   replaced with reading the resolved `--color-bg` CSS custom property off
   `<html>` (already set by the caller before this runs), so the hex now exists
   in exactly one place (the Go palette, mirrored once into `common.css`).
+- template/page/preferences.tmpl:239: engine toggle `<label>`s were rendered
+  with the `hidden` attribute and only revealed by JS
+  (`initEngineTiers()`/`app.js`), so engine selection was unavailable with
+  JS disabled — a "JS enhances only, never enables" violation. Removed
+  `hidden` from the server-rendered markup; the base `.engine-toggle` /
+  `.engine-tiers` CSS in `common.css` already renders a usable flat
+  checkbox grid with no JS, and `initEngineTiers()` still progressively
+  enhances it into collapsible tier groups when JS is available (it
+  rebuilds the container and re-appends the same nodes, so no duplicate
+  reveal logic was needed).

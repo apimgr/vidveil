@@ -1,0 +1,631 @@
+// SPDX-License-Identifier: MIT
+// AI.md PART 19: GeoIP
+package geoip
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+
+	"github.com/oschwald/maxminddb-golang"
+
+	"github.com/apimgr/vidveil/src/config"
+)
+
+// Database URLs per AI.md PART 19 - using ip-location-db via jsDelivr
+const (
+	ASNURL     = "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb"
+	CountryURL = "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"
+	// Per spec (AI.md PART 19, line 9354): dbip city IPv4 and IPv6 are separate
+	// databases — there is no combined MMDB. geolite2-city is the fallback when
+	// dbip returns 403 on jsDelivr.
+	CityURL           = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb"
+	CityURLFallback   = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv4.mmdb"
+	CityURLv6         = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv6.mmdb"
+	CityURLv6Fallback = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv6.mmdb"
+)
+
+// countryDBWarnOnce keeps the missing-country-database warning to a single log
+// line instead of one per request.
+var countryDBWarnOnce sync.Once
+
+// GeoIPResult holds GeoIP lookup results
+type GeoIPResult struct {
+	IP          string  `json:"ip"`
+	Country     string  `json:"country,omitempty"`
+	CountryCode string  `json:"country_code,omitempty"`
+	City        string  `json:"city,omitempty"`
+	Region      string  `json:"region,omitempty"`
+	Postal      string  `json:"postal,omitempty"`
+	Latitude    float64 `json:"latitude,omitempty"`
+	Longitude   float64 `json:"longitude,omitempty"`
+	Timezone    string  `json:"timezone,omitempty"`
+	ASN         uint    `json:"asn,omitempty"`
+	ASNOrg      string  `json:"asn_org,omitempty"`
+}
+
+// GeoIPService provides GeoIP lookup functionality
+type GeoIPService struct {
+	mu        sync.RWMutex
+	appConfig *config.AppConfig
+	dataDir   string
+
+	asnDB     *maxminddb.Reader
+	countryDB *maxminddb.Reader
+	// cityDB serves IPv4 lookups and cityDBv6 serves IPv6 lookups: per AI.md
+	// PART 19 the dbip/geolite2 city databases ship as separate v4/v6 files
+	// with no combined MMDB, so an IPv6 client needs its own reader.
+	cityDB   *maxminddb.Reader
+	cityDBv6 *maxminddb.Reader
+
+	lastUpdate time.Time
+}
+
+// asnRecord for ASN database queries
+type asnRecord struct {
+	AutonomousSystemNumber       uint   `maxminddb:"autonomous_system_number"`
+	AutonomousSystemOrganization string `maxminddb:"autonomous_system_organization"`
+}
+
+// countryRecord for country database queries
+type countryRecord struct {
+	Country struct {
+		ISOCode string            `maxminddb:"iso_code"`
+		Names   map[string]string `maxminddb:"names"`
+	} `maxminddb:"country"`
+}
+
+// cityRecord for city database queries
+type cityRecord struct {
+	City struct {
+		Names map[string]string `maxminddb:"names"`
+	} `maxminddb:"city"`
+	Country struct {
+		ISOCode string            `maxminddb:"iso_code"`
+		Names   map[string]string `maxminddb:"names"`
+	} `maxminddb:"country"`
+	Subdivisions []struct {
+		Names map[string]string `maxminddb:"names"`
+	} `maxminddb:"subdivisions"`
+	Postal struct {
+		Code string `maxminddb:"code"`
+	} `maxminddb:"postal"`
+	Location struct {
+		Latitude  float64 `maxminddb:"latitude"`
+		Longitude float64 `maxminddb:"longitude"`
+		TimeZone  string  `maxminddb:"time_zone"`
+	} `maxminddb:"location"`
+}
+
+// NewGeoIPService creates a new GeoIP service
+// Per AI.md PART 19: Security DBs go in {config}/security/geoip/
+func NewGeoIPService(appConfig *config.AppConfig) *GeoIPService {
+	dataDir := appConfig.Server.GeoIP.Dir
+	if dataDir == "" {
+		paths := config.GetAppPaths("", "")
+		dataDir = filepath.Join(paths.Config, "security", "geoip")
+	}
+
+	return &GeoIPService{
+		appConfig: appConfig,
+		dataDir:   dataDir,
+	}
+}
+
+// Initialize downloads databases if needed and opens them
+func (s *GeoIPService) Initialize() error {
+	if !s.appConfig.Server.GeoIP.Enabled {
+		return nil
+	}
+
+	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create geoip directory: %w", err)
+	}
+
+	// Download databases if not present
+	if err := s.downloadIfMissing(); err != nil {
+		return err
+	}
+
+	// Open databases
+	return s.openDatabases()
+}
+
+// downloadIfMissing downloads databases that don't exist
+func (s *GeoIPService) downloadIfMissing() error {
+	dbs := s.appConfig.Server.GeoIP.Databases
+
+	if dbs.ASN {
+		asnPath := filepath.Join(s.dataDir, "asn.mmdb")
+		if _, err := os.Stat(asnPath); os.IsNotExist(err) {
+			if err := s.downloadFile(ASNURL, asnPath); err != nil {
+				return fmt.Errorf("failed to download ASN database: %w", err)
+			}
+		}
+	}
+
+	if dbs.Country {
+		countryPath := filepath.Join(s.dataDir, "country.mmdb")
+		if _, err := os.Stat(countryPath); os.IsNotExist(err) {
+			if err := s.downloadFile(CountryURL, countryPath); err != nil {
+				return fmt.Errorf("failed to download country database: %w", err)
+			}
+		}
+	}
+
+	if dbs.City {
+		cityPath := filepath.Join(s.dataDir, "city.mmdb")
+		if _, err := os.Stat(cityPath); os.IsNotExist(err) {
+			// Try spec URL first, fall back to alternative if it fails
+			if err := s.downloadFile(CityURL, cityPath); err != nil {
+				if err := s.downloadFile(CityURLFallback, cityPath); err != nil {
+					return fmt.Errorf("failed to download city database: %w", err)
+				}
+			}
+		}
+
+		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
+		if _, err := os.Stat(cityPathV6); os.IsNotExist(err) {
+			if err := s.downloadFile(CityURLv6, cityPathV6); err != nil {
+				if err := s.downloadFile(CityURLv6Fallback, cityPathV6); err != nil {
+					return fmt.Errorf("failed to download city IPv6 database: %w", err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// downloadFile downloads a file from URL to path
+// Uses User-Agent header as jsDelivr requires it for some files
+func (s *GeoIPService) downloadFile(url, path string) error {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	tmpPath := path + ".tmp"
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(out, resp.Body)
+	out.Close()
+	if err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+
+	return os.Rename(tmpPath, path)
+}
+
+// openDatabases opens all configured databases
+func (s *GeoIPService) openDatabases() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dbs := s.appConfig.Server.GeoIP.Databases
+
+	if dbs.ASN {
+		asnPath := filepath.Join(s.dataDir, "asn.mmdb")
+		if _, err := os.Stat(asnPath); err == nil {
+			db, err := maxminddb.Open(asnPath)
+			if err != nil {
+				return fmt.Errorf("failed to open ASN database: %w", err)
+			}
+			s.asnDB = db
+		}
+	}
+
+	if dbs.Country {
+		countryPath := filepath.Join(s.dataDir, "country.mmdb")
+		if _, err := os.Stat(countryPath); err == nil {
+			db, err := maxminddb.Open(countryPath)
+			if err != nil {
+				return fmt.Errorf("failed to open country database: %w", err)
+			}
+			s.countryDB = db
+		}
+	}
+
+	if dbs.City {
+		cityPath := filepath.Join(s.dataDir, "city.mmdb")
+		if _, err := os.Stat(cityPath); err == nil {
+			db, err := maxminddb.Open(cityPath)
+			if err != nil {
+				return fmt.Errorf("failed to open city database: %w", err)
+			}
+			s.cityDB = db
+		}
+
+		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
+		if _, err := os.Stat(cityPathV6); err == nil {
+			db, err := maxminddb.Open(cityPathV6)
+			if err != nil {
+				return fmt.Errorf("failed to open city IPv6 database: %w", err)
+			}
+			s.cityDBv6 = db
+		}
+	}
+
+	s.lastUpdate = time.Now()
+	return nil
+}
+
+// Lookup performs a GeoIP lookup for an IP address
+func (s *GeoIPService) Lookup(ipStr string) *GeoIPResult {
+	if !s.appConfig.Server.GeoIP.Enabled {
+		return &GeoIPResult{IP: ipStr}
+	}
+
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return &GeoIPResult{IP: ipStr}
+	}
+
+	result := &GeoIPResult{IP: ipStr}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// ASN lookup
+	if s.asnDB != nil {
+		var record asnRecord
+		if err := s.asnDB.Lookup(ip, &record); err == nil {
+			result.ASN = record.AutonomousSystemNumber
+			result.ASNOrg = record.AutonomousSystemOrganization
+		}
+	}
+
+	// Country lookup (prefer the family-appropriate city DB if available).
+	// IPv6 clients query cityDBv6; IPv4 clients query cityDB. When the
+	// family-specific reader is missing, cityReader stays nil so the lookup
+	// drops to the family-agnostic country-only DB below rather than probing a
+	// database that cannot contain this address family.
+	var cityReader *maxminddb.Reader
+	if ip.To4() != nil {
+		cityReader = s.cityDB
+	} else {
+		cityReader = s.cityDBv6
+	}
+	if cityReader != nil {
+		var record cityRecord
+		if err := cityReader.Lookup(ip, &record); err == nil {
+			result.CountryCode = record.Country.ISOCode
+			if name, ok := record.Country.Names["en"]; ok {
+				result.Country = name
+			}
+			if name, ok := record.City.Names["en"]; ok {
+				result.City = name
+			}
+			if len(record.Subdivisions) > 0 {
+				if name, ok := record.Subdivisions[0].Names["en"]; ok {
+					result.Region = name
+				}
+			}
+			result.Postal = record.Postal.Code
+			result.Latitude = record.Location.Latitude
+			result.Longitude = record.Location.Longitude
+			result.Timezone = record.Location.TimeZone
+		}
+	} else if s.countryDB != nil {
+		var record countryRecord
+		if err := s.countryDB.Lookup(ip, &record); err == nil {
+			result.CountryCode = record.Country.ISOCode
+			if name, ok := record.Country.Names["en"]; ok {
+				result.Country = name
+			}
+		}
+	}
+
+	return result
+}
+
+// isPrivateIP reports whether ip is an RFC 1918 / RFC 4193 / loopback / link-local address.
+// Private and internal IPs are never subject to country blocking per AI.md PART 19.
+func isPrivateIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	privateRanges := []net.IPNet{
+		{IP: net.ParseIP("10.0.0.0"), Mask: net.CIDRMask(8, 32)},
+		{IP: net.ParseIP("172.16.0.0"), Mask: net.CIDRMask(12, 32)},
+		{IP: net.ParseIP("192.168.0.0"), Mask: net.CIDRMask(16, 32)},
+		{IP: net.ParseIP("fc00::"), Mask: net.CIDRMask(7, 128)},
+		{IP: net.ParseIP("fe80::"), Mask: net.CIDRMask(10, 128)},
+	}
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	for _, r := range privateRanges {
+		if r.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsBlocked checks if an IP is from a blocked country per AI.md PART 19.
+// CountryMode controls behavior: "none" disables blocking, "allow" = allowlist-only,
+// "deny" = blocklist. AllowCountries takes precedence when both are set (allowlist mode).
+// RFC 1918 private and loopback IPs are never blocked.
+func (s *GeoIPService) IsBlocked(ipStr string) bool {
+	if !s.appConfig.Server.GeoIP.Enabled {
+		return false
+	}
+
+	// country_mode: "none" means no country blocking
+	mode := s.appConfig.Server.GeoIP.CountryMode
+	if mode == "none" || mode == "" {
+		// legacy: if CountryMode unset, fall back to list presence
+		if len(s.appConfig.Server.GeoIP.AllowCountries) == 0 &&
+			len(s.appConfig.Server.GeoIP.DenyCountries) == 0 {
+			return false
+		}
+	}
+
+	allowList := s.appConfig.Server.GeoIP.AllowCountries
+	denyList := s.appConfig.Server.GeoIP.DenyCountries
+
+	// Nothing configured — nothing blocked
+	if len(allowList) == 0 && len(denyList) == 0 {
+		return false
+	}
+
+	// Per AI.md PART 19: private/internal IPs are never country-blocked
+	ip := net.ParseIP(ipStr)
+	if isPrivateIP(ip) {
+		return false
+	}
+
+	// Per AI.md PART 19: country blocking requires a country-capable database.
+	// If none is loaded for this address family, the country is unresolvable —
+	// same as a resolvable database returning no record for this IP.
+	countryCode := ""
+	if s.countryLookupAvailable(ip) {
+		countryCode = s.Lookup(ipStr).CountryCode
+	} else {
+		countryDBWarnOnce.Do(func() {
+			log.Printf("geoip: country database unavailable, country blocking skipped")
+		})
+	}
+
+	// Allowlist mode is default-deny: an unresolvable/unknown country is never
+	// explicitly allowed, so it is blocked. This is deliberate fail-closed
+	// behavior for an allowlist the operator opted into — distinct from the
+	// risk-signal fail-open rule, which governs denylist mode below.
+	if len(allowList) > 0 {
+		if countryCode == "" {
+			return true
+		}
+		for _, code := range allowList {
+			if code == countryCode {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Denylist mode is default-allow: an unresolvable/unknown country is never
+	// explicitly denied, so GeoIP fails open per the risk-signal rule.
+	if countryCode == "" {
+		return false
+	}
+	for _, code := range denyList {
+		if code == countryCode {
+			return true
+		}
+	}
+	return false
+}
+
+// countryLookupAvailable reports whether a database able to resolve a country
+// code for this address family is currently open. The family-specific city
+// database also carries country codes, so either one satisfies the check.
+func (s *GeoIPService) countryLookupAvailable(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.countryDB != nil {
+		return true
+	}
+	if ip.To4() != nil {
+		return s.cityDB != nil
+	}
+	return s.cityDBv6 != nil
+}
+
+// RestrictionResult holds the result of a content restriction check
+type RestrictionResult struct {
+	// Restricted indicates if the user is from a restricted region
+	Restricted bool
+	// Mode is the restriction mode: "off", "warn", "soft_block", "hard_block"
+	Mode string
+	// Reason describes why access is restricted (country or region name)
+	Reason string
+	// Message is the warning/block message to display
+	Message string
+	// GeoIP holds the full GeoIP lookup result
+	GeoIP *GeoIPResult
+}
+
+// CheckContentRestriction checks if an IP is from a content-restricted region
+// Returns restriction result with mode and message
+// If bypassTor is true and IP cannot be geolocated, restriction is bypassed
+func (s *GeoIPService) CheckContentRestriction(ipStr string, isTorUser bool) *RestrictionResult {
+	cfg := s.appConfig.Server.GeoIP.ContentRestriction
+
+	// Default result - not restricted
+	result := &RestrictionResult{
+		Restricted: false,
+		Mode:       cfg.Mode,
+		Message:    cfg.WarningMessage,
+	}
+
+	// Mode "off" means no restriction checking
+	if cfg.Mode == "off" || cfg.Mode == "" {
+		return result
+	}
+
+	// Bypass for Tor users if configured
+	if isTorUser && cfg.BypassTor {
+		return result
+	}
+
+	// GeoIP must be enabled
+	if !s.appConfig.Server.GeoIP.Enabled {
+		return result
+	}
+
+	// No restrictions configured
+	if len(cfg.RestrictedCountries) == 0 && len(cfg.RestrictedRegions) == 0 {
+		return result
+	}
+
+	// Perform GeoIP lookup
+	geoResult := s.Lookup(ipStr)
+	result.GeoIP = geoResult
+
+	// Cannot geolocate - bypass (likely VPN/Tor)
+	if geoResult.CountryCode == "" {
+		return result
+	}
+
+	// Check country restrictions
+	for _, country := range cfg.RestrictedCountries {
+		if country == geoResult.CountryCode {
+			result.Restricted = true
+			result.Reason = geoResult.Country
+			if result.Reason == "" {
+				result.Reason = geoResult.CountryCode
+			}
+			return result
+		}
+	}
+
+	// Check region restrictions (format: "COUNTRY:Region Name")
+	if geoResult.Region != "" {
+		regionKey := geoResult.CountryCode + ":" + geoResult.Region
+		for _, restricted := range cfg.RestrictedRegions {
+			if restricted == regionKey {
+				result.Restricted = true
+				result.Reason = geoResult.Region + ", " + geoResult.Country
+				return result
+			}
+		}
+	}
+
+	return result
+}
+
+// GetRestrictionMode returns the current content restriction mode
+func (s *GeoIPService) GetRestrictionMode() string {
+	return s.appConfig.Server.GeoIP.ContentRestriction.Mode
+}
+
+// GetRestrictionConfig returns the content restriction configuration
+func (s *GeoIPService) GetRestrictionConfig() config.ContentRestrictionConfig {
+	return s.appConfig.Server.GeoIP.ContentRestriction
+}
+
+// Update downloads fresh databases
+func (s *GeoIPService) Update() error {
+	if !s.appConfig.Server.GeoIP.Enabled {
+		return nil
+	}
+
+	// Close existing databases
+	s.Close()
+
+	dbs := s.appConfig.Server.GeoIP.Databases
+
+	if dbs.ASN {
+		asnPath := filepath.Join(s.dataDir, "asn.mmdb")
+		if err := s.downloadFile(ASNURL, asnPath); err != nil {
+			return fmt.Errorf("failed to update ASN database: %w", err)
+		}
+	}
+
+	if dbs.Country {
+		countryPath := filepath.Join(s.dataDir, "country.mmdb")
+		if err := s.downloadFile(CountryURL, countryPath); err != nil {
+			return fmt.Errorf("failed to update country database: %w", err)
+		}
+	}
+
+	if dbs.City {
+		cityPath := filepath.Join(s.dataDir, "city.mmdb")
+		// Try spec URL first, fall back to alternative if it fails
+		if err := s.downloadFile(CityURL, cityPath); err != nil {
+			if err := s.downloadFile(CityURLFallback, cityPath); err != nil {
+				return fmt.Errorf("failed to update city database: %w", err)
+			}
+		}
+
+		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
+		if err := s.downloadFile(CityURLv6, cityPathV6); err != nil {
+			if err := s.downloadFile(CityURLv6Fallback, cityPathV6); err != nil {
+				return fmt.Errorf("failed to update city IPv6 database: %w", err)
+			}
+		}
+	}
+
+	return s.openDatabases()
+}
+
+// LastUpdate returns when databases were last updated
+func (s *GeoIPService) LastUpdate() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastUpdate
+}
+
+// IsEnabled returns whether GeoIP is enabled
+func (s *GeoIPService) IsEnabled() bool {
+	return s.appConfig.Server.GeoIP.Enabled
+}
+
+// Close closes all database readers
+func (s *GeoIPService) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.asnDB != nil {
+		s.asnDB.Close()
+		s.asnDB = nil
+	}
+	if s.countryDB != nil {
+		s.countryDB.Close()
+		s.countryDB = nil
+	}
+	if s.cityDB != nil {
+		s.cityDB.Close()
+		s.cityDB = nil
+	}
+	if s.cityDBv6 != nil {
+		s.cityDBv6.Close()
+		s.cityDBv6 = nil
+	}
+}

@@ -1,0 +1,14 @@
+Subject: Backup Failed - {app_name}
+---
+Hello,
+
+A backup attempt has failed.
+
+Time: {timestamp}
+Error: {error_message}
+
+Please check your backup configuration and disk space.
+
+--
+{app_name}
+{app_url}

@@ -1,0 +1,20 @@
+Subject: Security Alert - {app_name}
+---
+SECURITY ALERT
+
+A security event has been detected on your {app_name} instance.
+
+Event Type: {event_type}
+Time: {timestamp}
+IP Address: {ip_address}
+Location: {location}
+Details: {details}
+
+If this activity was not authorized, please take immediate action:
+1. Change your password
+2. Review active sessions
+3. Check security logs
+
+--
+{app_name}
+{app_url}

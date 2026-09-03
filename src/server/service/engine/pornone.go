@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"context"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
+)
+
+// PornOneEngine searches PornOne
+type PornOneEngine struct{ *BaseEngine }
+
+// newPornOneEngine creates a new PornOne engine
+func newPornOneEngine(appConfig *config.AppConfig) *PornOneEngine {
+	return &PornOneEngine{NewBaseEngine("pornone", "PornOne", "https://pornone.com", 4, appConfig)}
+}
+
+// Search performs a search on PornOne
+func (e *PornOneEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
+	searchURL := e.BuildSearchURL("/search/?q={query}&page={page}", query, page)
+	return genericSearch(ctx, e.BaseEngine, searchURL, "a.videocard")
+}
+
+// SupportsFeature returns whether the engine supports a feature
+func (e *PornOneEngine) SupportsFeature(feature Feature) bool {
+	return feature == FeaturePagination
+}

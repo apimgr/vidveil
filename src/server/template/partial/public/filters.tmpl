@@ -1,0 +1,101 @@
+{{define "public/filters"}}
+{{/* Unified filter panel for home and search pages
+     Set .ShowEngines=true on home page to show engine selector
+     Set .Compact=true for inline search bar header style
+     Set .SelfForm=true (search-results page) to wrap the panel in its own
+     GET /search form, so duration/quality/sort/sources work with JS
+     disabled (AI.md PART 16 "JavaScript enhances, it does not enable") -
+     the server applies these via parseResultFilterOptions/SearchWithOperators
+     regardless of whether JS intercepts the submit. On the home page
+     (ShowEngines=true) the caller's own search <form> wraps this panel
+     instead, so no self-form is emitted here.
+     Uses HTML5 details/summary for native collapse/expand */}}
+<details class="filters-panel{{if .Compact}} filters-panel--compact{{end}}" id="filters-panel">
+    <summary class="filters-toggle" id="filters-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+        </svg>
+        <span class="filters-toggle-text">{{ t "filter.filters" }}</span>
+        <span class="filter-count hidden" id="filter-count" aria-live="polite">0</span>
+    </summary>
+    <div class="filters-content" id="filters-content" role="group" aria-label="{{ t "a11y.search_filters" }}">
+        {{if .SelfForm}}
+        <form method="get" action="/search" class="filters-form" id="filters-form" data-action="filters-submit">
+        <input type="hidden" name="q" value="{{.Query}}">
+        {{end}}
+        <div class="filters-grid">
+            <div class="filter-group">
+                <label for="filter-duration" class="filter-label">{{ t "filter.duration" }}</label>
+                <select id="filter-duration" name="duration" data-action="filter-change" class="filter-select">
+                    <option value=""{{if not .FilterDuration}} selected{{end}}>{{ t "filter.any" }}</option>
+                    <option value="short"{{if eq .FilterDuration "short"}} selected{{end}}>{{ t "filter.under_10" }}</option>
+                    <option value="medium"{{if eq .FilterDuration "medium"}} selected{{end}}>{{ t "filter.10_30" }}</option>
+                    <option value="long"{{if eq .FilterDuration "long"}} selected{{end}}>{{ t "filter.over_30" }}</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-quality" class="filter-label">{{ t "filter.quality" }}</label>
+                <select id="filter-quality" name="quality" data-action="filter-change" class="filter-select">
+                    <option value=""{{if not .FilterQuality}} selected{{end}}>{{ t "filter.any" }}</option>
+                    <option value="4k"{{if eq .FilterQuality "4k"}} selected{{end}}>{{ t "filter.quality_4k" }}</option>
+                    <option value="1080"{{if eq .FilterQuality "1080"}} selected{{end}}>{{ t "filter.quality_1080" }}</option>
+                    <option value="720"{{if eq .FilterQuality "720"}} selected{{end}}>{{ t "filter.quality_720" }}</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-sort" class="filter-label">{{ t "filter.sort" }}</label>
+                <select id="filter-sort" name="sort" data-action="filter-change" class="filter-select">
+                    <option value=""{{if not .FilterSort}} selected{{end}}>{{ t "filter.relevance" }}</option>
+                    <option value="duration-desc"{{if eq .FilterSort "duration-desc"}} selected{{end}}>{{ t "filter.longest" }}</option>
+                    <option value="duration-asc"{{if eq .FilterSort "duration-asc"}} selected{{end}}>{{ t "filter.shortest" }}</option>
+                    <option value="views"{{if eq .FilterSort "views"}} selected{{end}}>{{ t "filter.most_viewed" }}</option>
+                    <option value="quality"{{if eq .FilterSort "quality"}} selected{{end}}>{{ t "filter.quality_best" }}</option>
+                </select>
+            </div>
+            {{if .ShowEngines}}
+            <div class="filter-group">
+                <label for="filter-engines" class="filter-label">{{ t "filter.engines" }}</label>
+                <select id="filter-engines" name="engines" data-action="filter-change" class="filter-select">
+                    <option value="">{{ t "filter.all_engines" }}</option>
+                    <option value="tier1">{{ t "filter.tier1_only" }}</option>
+                    <option value="tier12">{{ t "filter.tier12" }}</option>
+                </select>
+            </div>
+            {{else}}
+            <div class="filter-group filter-group--sources">
+                <label class="filter-label">{{ t "filter.sources" }}</label>
+                <details class="source-filter-wrapper" id="source-filter-wrapper">
+                    <summary class="source-filter-toggle" id="source-filter-toggle">
+                        <span id="source-filter-label">{{ t "filter.all_sources" }}</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                    </summary>
+                    <div class="source-filter-dropdown" id="source-filter-list" role="group" aria-label="{{ t "a11y.source_filter_options" }}">
+                        <label class="source-option source-option--special">
+                            <input type="checkbox" id="filter-preview-first" name="preview_first" value="1"{{if .PreviewFirst}} checked{{end}} data-action="preview-first">
+                            <input type="hidden" name="preview_first" value="0">
+                            <span>{{ t "filter.preview_first" }}</span>
+                        </label>
+                        <label class="source-option">
+                            <input type="checkbox" id="source-all" checked data-action="toggle-all-sources">
+                            <span>{{ t "filter.all_sources" }}</span>
+                        </label>
+                        <div class="source-options" id="source-options">
+                            {{/* Source checkboxes (name="engines", value=source) populated
+                                 dynamically by JS as results stream in - see addSourceCheckbox
+                                 in app.js. Without JS this list stays empty (no sources are
+                                 known before the server has already returned results), so the
+                                 "Sources" control is JS-enhancement-only by nature; duration/
+                                 quality/sort remain fully server-authoritative and no-JS-safe. */}}
+                        </div>
+                    </div>
+                </details>
+            </div>
+            {{end}}
+        </div>
+        {{if .SelfForm}}
+        <button type="submit" class="filter-apply-btn" id="filters-apply-btn">{{ t "filter.apply" }}</button>
+        </form>
+        {{end}}
+    </div>
+</details>
+{{end}}

@@ -1,0 +1,285 @@
+{{define "preferences"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
+    <main class="preferences" id="main-content" role="main">
+        <div class="preferences-header">
+            <h1>{{ t "prefs.title" }}</h1>
+            <button type="button" class="preferences-close" data-action="close-prefs" aria-label="{{ t "prefs.close" }}">&times;</button>
+        </div>
+        {{/* data-managed="true" tells the generic setupPreferencesForm() in
+             app.js to skip binding its own submit handler — this page's
+             dedicated IIFE (favorites/history/engine-tier aware) already
+             owns #preferences-form, and without this attribute both handlers
+             fired on every submit (double-save). */}}
+        {{/* method/action make this form work with JavaScript disabled: the
+             server-side handler persists theme/resultsPerPage/openNewTab as
+             cookies and redirects. The JS path calls preventDefault() first,
+             so the enhanced flow is unchanged. */}}
+        <form id="preferences-form" method="post" action="/server/preferences/save" data-managed="true" data-return-to="{{.ReturnTo}}">
+            {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+            {{if .ReturnTo}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">{{end}}
+            <section>
+                <h2>{{ t "prefs.appearance" }}</h2>
+                <div class="form-group">
+                    <label for="theme">{{ t "prefs.theme" }}:</label>
+                    <select id="theme" name="theme">
+                        <option value="auto" {{if eq .Theme "auto"}}selected{{end}}>{{ t "prefs.theme.auto" }}</option>
+                        <option value="dark" {{if eq .Theme "dark"}}selected{{end}}>{{ t "prefs.theme.dark" }}</option>
+                        <option value="light" {{if eq .Theme "light"}}selected{{end}}>{{ t "prefs.theme.light" }}</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="grid-density">{{ t "prefs.grid_density" }}:</label>
+                    <select id="grid-density" name="gridDensity">
+                        <option value="comfortable">{{ t "prefs.grid_comfortable" }}</option>
+                        <option value="default" selected>{{ t "prefs.grid_default" }}</option>
+                        <option value="compact">{{ t "prefs.grid_compact" }}</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="thumbnail-size">{{ t "prefs.thumbnail_size" }}:</label>
+                    <select id="thumbnail-size" name="thumbnailSize">
+                        <option value="small">{{ t "prefs.size_small" }}</option>
+                        <option value="medium" selected>{{ t "prefs.size_medium" }}</option>
+                        <option value="large">{{ t "prefs.size_large" }}</option>
+                    </select>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.video_preview" }}</h2>
+                <div class="form-group">
+                    <label class="toggle">
+                        <input type="checkbox" id="autoplay-preview" name="autoplayPreview" checked>
+                        <span class="slider"></span>
+                        <span class="toggle-label">{{ t "prefs.autoplay_preview" }}</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="preview-delay">{{ t "prefs.preview_delay" }}:</label>
+                    <select id="preview-delay" name="previewDelay">
+                        <option value="0" selected>{{ t "prefs.delay_instant" }}</option>
+                        <option value="200">{{ t "prefs.delay_short" }}</option>
+                        <option value="500">{{ t "prefs.delay_medium" }}</option>
+                        <option value="1000">{{ t "prefs.delay_long" }}</option>
+                    </select>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.search_settings" }}</h2>
+                <div class="form-group">
+                    <label for="results-per-page">{{ t "prefs.results_page" }}:</label>
+                    <select id="results-per-page" name="resultsPerPage">
+                        <option value="20"{{if eq .ResultsPerPage "20"}} selected{{end}}>20</option>
+                        <option value="50"{{if eq .ResultsPerPage "50"}} selected{{end}}>50</option>
+                        <option value="100"{{if eq .ResultsPerPage "100"}} selected{{end}}>100</option>
+                        <option value="0"{{if eq .ResultsPerPage "0"}} selected{{end}}>{{ t "prefs.infinite_scroll" }}</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="toggle">
+                        <input type="checkbox" id="open-new-tab" name="openNewTab"{{if .OpenNewTab}} checked{{end}}>
+                        <span class="slider"></span>
+                        <span class="toggle-label">{{ t "prefs.open_new_tab" }}</span>
+                    </label>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.default_filters" }}</h2>
+                <p class="section-description">{{ t "prefs.default_filters_desc" }}</p>
+                <div class="form-group">
+                    <label class="toggle">
+                        <input type="checkbox" id="default-preview-only" name="defaultPreviewOnly" checked>
+                        <span class="slider"></span>
+                        <span class="toggle-label">{{ t "prefs.preview_only" }}</span>
+                    </label>
+                    <p class="form-hint">{{ t "prefs.preview_only_hint" }}</p>
+                </div>
+                <div class="form-group">
+                    <label class="toggle">
+                        <input type="checkbox" id="show-ai-content" name="showAIContent">
+                        <span class="slider"></span>
+                        <span class="toggle-label">{{ t "prefs.show_synthetic_content" }}</span>
+                    </label>
+                    <p class="form-hint">{{ t "prefs.show_synthetic_hint" }}</p>
+                </div>
+                <div class="form-group">
+                    <label for="default-duration">{{ t "prefs.default_duration" }}:</label>
+                    <select id="default-duration" name="defaultDuration">
+                        <option value="" selected>{{ t "filter.any" }}</option>
+                        <option value="short">{{ t "filter.under_10" }}</option>
+                        <option value="medium">{{ t "filter.10_30" }}</option>
+                        <option value="long">{{ t "filter.over_30" }}</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="min-quality">{{ t "prefs.min_quality" }}:</label>
+                    <select id="min-quality" name="minQuality">
+                        <option value="0">{{ t "prefs.any_quality" }}</option>
+                        <option value="240">240p+</option>
+                        <option value="360" selected>{{ t "prefs.quality_recommended" }}</option>
+                        <option value="480">480p+</option>
+                        <option value="720">{{ t "prefs.quality_hd" }}</option>
+                        <option value="1080">{{ t "prefs.quality_fhd" }}</option>
+                        <option value="2160">{{ t "prefs.quality_4k" }}</option>
+                    </select>
+                    <p class="form-hint">{{ t "prefs.quality_hint" }}</p>
+                </div>
+                <div class="form-group">
+                    <label for="default-sort">{{ t "prefs.default_sort" }}:</label>
+                    <select id="default-sort" name="defaultSort">
+                        <option value="" selected>{{ t "prefs.sort_relevance" }}</option>
+                        <option value="duration-desc">{{ t "prefs.sort_longest" }}</option>
+                        <option value="duration-asc">{{ t "prefs.sort_shortest" }}</option>
+                        <option value="views">{{ t "prefs.sort_views" }}</option>
+                        <option value="quality">{{ t "prefs.sort_quality" }}</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="min-duration">{{ t "prefs.min_duration" }}:</label>
+                    <select id="min-duration" name="minDuration">
+                        <option value="0">{{ t "prefs.no_minimum" }}</option>
+                        <option value="60">1 {{ t "time.minute" }}</option>
+                        <option value="180">3 {{ t "time.minutes_plural" }}</option>
+                        <option value="300">5 {{ t "time.minutes_plural" }}</option>
+                        <option value="600" selected>10 {{ t "time.minutes_plural" }}</option>
+                        <option value="1200">20 {{ t "time.minutes_plural" }}</option>
+                        <option value="1800">30 {{ t "time.minutes_plural" }}</option>
+                    </select>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.history" }}</h2>
+                <div class="form-group">
+                    <label for="max-history">{{ t "prefs.max_history" }}:</label>
+                    <select id="max-history" name="maxHistory">
+                        <option value="0" selected>{{ t "prefs.unlimited" }}</option>
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="auto-clear-history">{{ t "prefs.auto_clear_history" }}:</label>
+                    <select id="auto-clear-history" name="autoClearHistory">
+                        <option value="0" selected>{{ t "prefs.never" }}</option>
+                        <option value="1">{{ t "prefs.after_1_day" }}</option>
+                        <option value="7">{{ t "prefs.after_7_days" }}</option>
+                        <option value="30">{{ t "prefs.after_30_days" }}</option>
+                    </select>
+                </div>
+                <div class="form-group form-group--buttons">
+                    <button type="button" class="btn-secondary" data-action="export-history">{{ t "prefs.export_history" }}</button>
+                    <label class="btn-secondary btn-file">
+                        {{ t "prefs.import_history" }}
+                        <input type="file" accept=".json" data-action="import-history" hidden>
+                    </label>
+                    <button type="button" class="btn-danger" data-action="clear-history">{{ t "prefs.clear_history" }}</button>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "favorites.title" }}</h2>
+                <p class="section-description"><span id="favorites-count" data-format="{{ t "favorites.count" }}">{{ tf "favorites.count" .FavoritesCount }}</span></p>
+                <div class="form-group form-group--buttons">
+                    <a class="btn-secondary" href="/favorites/export">{{ t "favorites.export" }}</a>
+                    <form action="/favorites/import" method="post" enctype="multipart/form-data" class="favorites-import-form">
+                        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                        <input type="file" name="file" accept=".json" class="favorites-import-input" aria-label="{{ t "favorites.import" }}">
+                        <button type="submit" class="btn-secondary" data-loading-text="{{ t "action.importing" }}">{{ t "favorites.import" }}</button>
+                    </form>
+                    <form action="/favorites" method="post" class="favorites-clear-form" data-action="clear-favorites-form" data-confirm="{{ t "favorites.confirm_clear" }}">
+                        {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                        <input type="hidden" name="_method" value="DELETE">
+                        <button type="submit" class="btn-danger">{{ t "favorites.clear" }}</button>
+                    </form>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.sync" }}</h2>
+                <p class="section-description">{{ t "prefs.sync_desc" }}</p>
+                <div class="form-group form-group--buttons">
+                    <a class="btn-secondary" href="/server/preferences/export">{{ t "prefs.sync_export" }}</a>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.privacy" }}</h2>
+                <div class="form-group">
+                    <label class="toggle">
+                        <input type="checkbox" id="use-tor" name="useTor">
+                        <span class="slider"></span>
+                        <span class="toggle-label">{{ t "prefs.use_tor" }}</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="toggle">
+                        <input type="checkbox" id="proxy-images" name="proxyImages" checked>
+                        <span class="slider"></span>
+                        <span class="toggle-label">{{ t "prefs.proxy_images" }}</span>
+                    </label>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.engines" }}</h2>
+                <p class="section-description">{{ t "prefs.engines_desc" }}</p>
+                <div class="engine-tiers" id="engine-tiers">
+                    {{range .Engines}}
+                    <label class="engine-toggle" data-tier="{{.Tier}}" data-engine="{{.Name}}">
+                        <input type="checkbox" name="engines" value="{{.Name}}" {{if .Enabled}}checked{{end}}>
+                        {{.DisplayName}}
+                    </label>
+                    {{end}}
+                </div>
+                <div class="engine-actions">
+                    <button type="button" data-action="select-all-engines">{{ t "search.select_all" }}</button>
+                    <button type="button" data-action="select-none-engines">{{ t "search.deselect_all" }}</button>
+                </div>
+            </section>
+
+            <div class="form-actions">
+                <button type="submit" class="primary" id="preferences-save-btn">{{ t "prefs.save" }}</button>
+                <button type="button" data-action="reset-preferences">{{ t "prefs.reset" }}</button>
+            </div>
+        </form>
+    </main>
+    {{template "public/footer" .}}
+    {{/* i18n strings for the preferences logic in app.js. type="application/json" is
+         a non-executable data island (CSP script-src does not block it). */}}
+    <script type="application/json" id="preferences-i18n">{
+        "saving": "{{ t "prefs.saving" }}",
+        "saved": "{{ t "prefs.saved" }}",
+        "resetDone": "{{ t "prefs.reset_done" }}",
+        "favCleared": "{{ t "favorites.cleared" }}",
+        "tier1": "{{ t "tier.1" }}",
+        "tier2": "{{ t "tier.2" }}",
+        "tier3": "{{ t "tier.3" }}",
+        "tier4": "{{ t "tier.4" }}",
+        "tier5": "{{ t "tier.5" }}",
+        "tier6": "{{ t "tier.6" }}",
+        "tierEngines": "{{ t "tier.engines" }}",
+        "expandTier": "{{ t "a11y.expand_tier" }}",
+        "historyExported": "{{ t "history.exported" }}",
+        "historyImported": "{{ t "history.imported" }}",
+        "historyInvalidFile": "{{ t "history.invalid_file" }}",
+        "historyParseFailed": "{{ t "history.parse_failed" }}",
+        "historyClearConfirm": "{{ t "history.clear_confirm" }}",
+        "historyCleared": "{{ t "history.cleared" }}"
+    }</script>
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

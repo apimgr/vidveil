@@ -1,0 +1,135 @@
+site_name: VIDVEIL
+site_url: https://apimgr-vidveil.readthedocs.io
+site_description: "Privacy-respecting meta search engine for adult video content"
+site_author: apimgr
+
+repo_name: apimgr/vidveil
+repo_url: https://github.com/apimgr/vidveil
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  # Dark/Light/Auto theme toggle - Dark is default
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: pink
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to auto mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  font:
+    text: Roboto
+    code: Roboto Mono
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/dark.css
+  - stylesheets/light.css
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - meta
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: apimgr
+      repo: vidveil
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Configuration: configuration.md
+    - Docker: getting-started/docker.md
+    - Troubleshooting: getting-started/troubleshooting.md
+  - User Guide:
+    - Search: user-guide/search.md
+    - Preferences: user-guide/preferences.md
+    - Bang Syntax: user-guide/bangs.md
+    - CLI Reference: cli.md
+  - API Reference:
+    - Overview: api.md
+    - REST API: api/rest.md
+    - GraphQL: api/graphql.md
+    - Authentication: api/authentication.md
+  - Admin Guide:
+    - Overview: admin.md
+    - Dashboard: admin-guide/dashboard.md
+    - Server Settings: admin-guide/server.md
+    - Security (Operator): admin-guide/security.md
+    - Backup & Restore: admin-guide/backup.md
+  - Security: security.md
+  - Integrations: integrations.md
+  - Development:
+    - Overview: development.md
+    - Contributing: development/contributing.md
+    - Building: development/building.md
+    - Architecture: development/architecture.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/apimgr/vidveil
+  generator: false

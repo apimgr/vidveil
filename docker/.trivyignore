@@ -1,0 +1,3 @@
+# DS-0002: no USER directive — intentional. Binary binds port 80 as root then
+# drops privileges to the vidveil system user at runtime (spec PART 23/24).
+DS-0002

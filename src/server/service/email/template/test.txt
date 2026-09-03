@@ -1,0 +1,13 @@
+Subject: Test Email from {app_name}
+---
+Hello,
+
+This is a test email from {app_name}.
+
+If you received this, your email settings are configured correctly.
+
+Time: {timestamp}
+
+--
+{app_name}
+{app_url}

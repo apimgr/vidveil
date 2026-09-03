@@ -1,0 +1,181 @@
+name: Docker
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+      - '*.*.*'
+  schedule:
+    # 4am UTC daily - keeps :devel fresh with no new commits needed
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ forgejo.ref }}
+  cancel-in-progress: ${{ forgejo.ref == 'refs/heads/main' || forgejo.ref == 'refs/heads/master' || forgejo.ref == 'refs/heads/devel' || forgejo.ref == 'refs/heads/dev' || forgejo.ref == 'refs/heads/beta' }}
+
+env:
+  PROJECT_NAME: vidveil
+  IMAGE_NAME: ${{ forgejo.repository }}
+
+jobs:
+  build-standard:
+    if: forgejo.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+
+      - name: Determine registry
+        run: |
+          REGISTRY="$(echo "${{ forgejo.server_url }}" | sed -e 's#^https://##' -e 's#^http://##')"
+          echo "REGISTRY=${REGISTRY}" >> $FORGEJO_ENV
+
+      - name: Login to registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ forgejo.actor }}
+          password: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        run: |
+          COMMIT_ID=$(git rev-parse --short=7 HEAD)
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${COMMIT_ID}"
+          VERSION="${COMMIT_ID}"
+
+          if [[ "${{ forgejo.ref }}" == refs/tags/* ]]; then
+            VERSION="${FORGEJO_REF_NAME#v}"
+            YYMM=$(date -u +%y%m)
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${YYMM}"
+          fi
+
+          if [[ "${{ forgejo.ref }}" == "refs/heads/beta" ]]; then
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:beta"
+          fi
+
+          echo "tags=${TAGS}" >> "$FORGEJO_OUTPUT"
+          echo "version=${VERSION}" >> "$FORGEJO_OUTPUT"
+          BUILD_EPOCH=$(date -u +%s)
+          echo "build_date=$(date -u -d @${BUILD_EPOCH} +"%Y-%m-%dT%H:%M:%SZ")" >> "$FORGEJO_OUTPUT"
+          echo "revision=${COMMIT_ID}" >> "$FORGEJO_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.vendor=apimgr
+            org.opencontainers.image.authors=apimgr
+            org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            org.opencontainers.image.base.name=alpine:latest
+            org.opencontainers.image.description=vidveil - video-focused self-hosted service
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+            org.opencontainers.image.created=${{ steps.tags.outputs.build_date }}
+            org.opencontainers.image.revision=${{ steps.tags.outputs.revision }}
+            org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}
+          annotations: |
+            manifest:org.opencontainers.image.vendor=apimgr
+            manifest:org.opencontainers.image.authors=apimgr
+            manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            manifest:org.opencontainers.image.base.name=alpine:latest
+            manifest:org.opencontainers.image.description=vidveil - video-focused self-hosted service
+            manifest:org.opencontainers.image.licenses=MIT
+            manifest:org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+            manifest:org.opencontainers.image.created=${{ steps.tags.outputs.build_date }}
+            manifest:org.opencontainers.image.revision=${{ steps.tags.outputs.revision }}
+            manifest:org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}
+
+  build-devel:
+    if: forgejo.event_name == 'schedule' || forgejo.event_name == 'workflow_dispatch' || (forgejo.event_name == 'push' && !startsWith(forgejo.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+
+      - name: Determine registry
+        run: |
+          REGISTRY="$(echo "${{ forgejo.server_url }}" | sed -e 's#^https://##' -e 's#^http://##')"
+          echo "REGISTRY=${REGISTRY}" >> $FORGEJO_ENV
+
+      - name: Login to registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ forgejo.actor }}
+          password: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Compute metadata
+        id: meta
+        run: |
+          COMMIT_ID=$(git rev-parse --short=7 HEAD)
+          BUILD_EPOCH=$(date -u +%s)
+          echo "build_date=$(date -u -d @${BUILD_EPOCH} +"%Y-%m-%dT%H:%M:%SZ")" >> "$FORGEJO_OUTPUT"
+          echo "revision=${COMMIT_ID}" >> "$FORGEJO_OUTPUT"
+
+      - name: Build and push devel image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          file: docker/Dockerfile.dev
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel
+          labels: |
+            org.opencontainers.image.vendor=apimgr
+            org.opencontainers.image.authors=apimgr
+            org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            org.opencontainers.image.base.name=alpine:latest
+            org.opencontainers.image.description=vidveil - development image (alpine, debug mode)
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.created=${{ steps.meta.outputs.build_date }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
+            org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}
+          annotations: |
+            manifest:org.opencontainers.image.vendor=apimgr
+            manifest:org.opencontainers.image.authors=apimgr
+            manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            manifest:org.opencontainers.image.base.name=alpine:latest
+            manifest:org.opencontainers.image.description=vidveil - development image (alpine, debug mode)
+            manifest:org.opencontainers.image.licenses=MIT
+            manifest:org.opencontainers.image.created=${{ steps.meta.outputs.build_date }}
+            manifest:org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
+            manifest:org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
+            manifest:org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}

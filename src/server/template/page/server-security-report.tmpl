@@ -1,0 +1,22 @@
+{{define "server-security-report"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content">
+    <div class="prose">
+        <h1>{{ t "security.report_title" }}</h1>
+
+        <p><strong>{{ t "security.report_tracking_id" }}</strong> {{.TrackingID}}</p>
+        <p><strong>{{ t "security.report_status" }}</strong> {{.Status}}</p>
+        <p><strong>{{ t "security.report_submitted" }}</strong> {{.CreatedAt}}</p>
+
+        {{if .MaintainerComments}}
+        <h2>{{ t "security.report_maintainer_comments" }}</h2>
+        <p>{{.MaintainerComments}}</p>
+        {{end}}
+
+        <p><a href="/server/security">{{ t "security.back_to_security" }}</a></p>
+    </div>
+</div>
+{{end}}

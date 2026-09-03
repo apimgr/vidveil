@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/apimgr/vidveil/src/server/service/parser"
+)
+
+// EpornerEngine searches Eporner using their public JSON API
+type EpornerEngine struct {
+	*BaseEngine
+}
+
+// epornerAPIResponse represents the API response
+type epornerAPIResponse struct {
+	Count int `json:"count"`
+	// API returns string or number
+	TotalCount interface{}    `json:"total_count"`
+	Videos     []epornerVideo `json:"videos"`
+}
+
+type epornerVideo struct {
+	ID           string                 `json:"id"`
+	Title        string                 `json:"title"`
+	Keywords     string                 `json:"keywords"`
+	Views        int                    `json:"views"`
+	Rate         string                 `json:"rate"`
+	URL          string                 `json:"url"`
+	Added        string                 `json:"added"`
+	LengthSec    int                    `json:"length_sec"`
+	LengthMin    string                 `json:"length_min"`
+	DefaultThumb map[string]interface{} `json:"default_thumb"`
+}
+
+// newEpornerEngine creates a new Eporner engine
+func newEpornerEngine(appConfig *config.AppConfig) *EpornerEngine {
+	e := &EpornerEngine{
+		BaseEngine: NewBaseEngine("eporner", "Eporner", "https://www.eporner.com", 2, appConfig),
+	}
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:    false,
+		HasDownload:   false,
+		HasDuration:   true,
+		HasViews:      true,
+		HasRating:     true,
+		HasQuality:    false,
+		HasUploadDate: true,
+		PreviewSource: "",
+		APIType:       "json",
+	})
+	return e
+}
+
+// Search performs a search on Eporner using their public JSON API
+func (e *EpornerEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
+	// Use Eporner's public JSON API
+	// API docs: https://www.eporner.com/api/
+	perPage := 50
+	// Use order=top-rated for search - returns best rated videos matching the query
+	// Available options: latest, longest, shortest, top-rated, most-popular, top-weekly, top-monthly
+	apiURL := fmt.Sprintf("%s/api/v2/video/search/?query=%s&per_page=%d&page=%d&thumbsize=big&order=top-rated&format=json",
+		e.baseURL, url.QueryEscape(query), perPage, page)
+
+	resp, err := e.MakeRequest(ctx, apiURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var apiResp epornerAPIResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return nil, err
+	}
+
+	var results []model.VideoResult
+	for _, v := range apiResp.Videos {
+		// Get thumbnail URL
+		thumb := ""
+		if v.DefaultThumb != nil {
+			if src, ok := v.DefaultThumb["src"].(string); ok {
+				thumb = src
+			}
+		}
+
+		// Format view count
+		views := formatViewCount(v.Views)
+
+		// API "rate" is a rating string (e.g. "4.50") — normalize via the shared parser helper
+		_, rating := parser.ParseRating(v.Rate)
+
+		// API "keywords" is a comma-separated list — map into Tags, not Description
+		var tags []string
+		for _, kw := range strings.Split(v.Keywords, ",") {
+			if kw = strings.TrimSpace(kw); kw != "" {
+				tags = append(tags, kw)
+			}
+		}
+
+		results = append(results, model.VideoResult{
+			ID:              GenerateResultID(v.URL, e.Name()),
+			URL:             v.URL,
+			Title:           v.Title,
+			Thumbnail:       thumb,
+			Duration:        v.LengthMin,
+			DurationSeconds: v.LengthSec,
+			Views:           views,
+			ViewsCount:      int64(v.Views),
+			Rating:          rating,
+			Tags:            tags,
+			Source:          e.Name(),
+			SourceDisplay:   e.DisplayName(),
+			// API "added" is the upload date (format "2006-01-02 15:04:05") -
+			// capabilities declare HasUploadDate:true, so surface it.
+			Published: parsePublishedDate(v.Added),
+		})
+	}
+	return results, nil
+}
+
+// SupportsFeature returns whether the engine supports a feature
+func (e *EpornerEngine) SupportsFeature(feature Feature) bool {
+	return feature == FeaturePagination || feature == FeatureSorting
+}
+
+// formatViewCount formats view count for display
+func formatViewCount(views int) string {
+	if views >= 1000000 {
+		return fmt.Sprintf("%.1fM", float64(views)/1000000)
+	} else if views >= 1000 {
+		return fmt.Sprintf("%.1fK", float64(views)/1000)
+	}
+	return fmt.Sprintf("%d", views)
+}

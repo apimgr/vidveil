@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"context"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
+)
+
+// VJAVEngine searches VJAV
+type VJAVEngine struct{ *BaseEngine }
+
+// newVJAVEngine creates a new VJAV engine
+func newVJAVEngine(appConfig *config.AppConfig) *VJAVEngine {
+	return &VJAVEngine{NewBaseEngine("vjav", "VJAV", "https://vjav.com", 4, appConfig)}
+}
+
+// Search performs a search on VJAV
+func (e *VJAVEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
+	searchURL := e.BuildSearchURL("/search/{query}/?page={page}", query, page)
+	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-item, article.video, div.item")
+}
+
+// SupportsFeature returns whether the engine supports a feature
+func (e *VJAVEngine) SupportsFeature(feature Feature) bool {
+	return feature == FeaturePagination
+}

@@ -1,0 +1,684 @@
+// SPDX-License-Identifier: MIT
+// Coverage tests for maintenance package functions not covered by maintenance_test.go:
+// compareVersions, formatBytes, SetUpdateBranch, GetUpdateBranch, ListBackups,
+// applyRetention, applyRetentionWithOptions, Backup, BackupIncremental,
+// BackupWithOptions, verifyBackup, RestoreWithPassword, Restore, addDirToTar.
+package maintenance
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+// newManagerWithDirs creates a MaintenanceManager whose Config/Data/Backup
+// all live under temp directories so no test writes to real system paths.
+func newManagerWithDirs(t *testing.T) (*MaintenanceManager, string, string) {
+	t.Helper()
+	configDir := t.TempDir()
+	dataDir := t.TempDir()
+	m := NewMaintenanceManager(configDir, dataDir, "1.0.0")
+	return m, configDir, dataDir
+}
+
+// ── compareVersions ───────────────────────────────────────────────────────────
+
+func TestCompareVersions_Equal(t *testing.T) {
+	if got := compareVersions("1.2.3", "1.2.3"); got != 0 {
+		t.Errorf("compareVersions equal = %d, want 0", got)
+	}
+}
+
+func TestCompareVersions_AGreater(t *testing.T) {
+	if got := compareVersions("2.0.0", "1.9.9"); got != 1 {
+		t.Errorf("compareVersions a>b = %d, want 1", got)
+	}
+}
+
+func TestCompareVersions_BGreater(t *testing.T) {
+	if got := compareVersions("1.0.0", "2.0.0"); got != -1 {
+		t.Errorf("compareVersions a<b = %d, want -1", got)
+	}
+}
+
+func TestCompareVersions_MinorDiff(t *testing.T) {
+	if got := compareVersions("1.2.0", "1.3.0"); got != -1 {
+		t.Errorf("compareVersions minor a<b = %d, want -1", got)
+	}
+}
+
+func TestCompareVersions_PatchDiff(t *testing.T) {
+	if got := compareVersions("1.0.5", "1.0.4"); got != 1 {
+		t.Errorf("compareVersions patch a>b = %d, want 1", got)
+	}
+}
+
+// ── formatBytes ──────────────────────────────────────────────────────────────
+
+func TestFormatBytes_Bytes(t *testing.T) {
+	got := formatBytes(512)
+	if got != "512 B" {
+		t.Errorf("formatBytes(512) = %q, want %q", got, "512 B")
+	}
+}
+
+func TestFormatBytes_Kilobytes(t *testing.T) {
+	got := formatBytes(2048)
+	if got != "2.0 KB" {
+		t.Errorf("formatBytes(2048) = %q, want %q", got, "2.0 KB")
+	}
+}
+
+func TestFormatBytes_Megabytes(t *testing.T) {
+	got := formatBytes(1024 * 1024)
+	if got != "1.0 MB" {
+		t.Errorf("formatBytes(1MB) = %q, want %q", got, "1.0 MB")
+	}
+}
+
+func TestFormatBytes_Gigabytes(t *testing.T) {
+	got := formatBytes(1024 * 1024 * 1024)
+	if got != "1.0 GB" {
+		t.Errorf("formatBytes(1GB) = %q, want %q", got, "1.0 GB")
+	}
+}
+
+// ── SetUpdateBranch / GetUpdateBranch ─────────────────────────────────────────
+
+func TestSetUpdateBranch_StableWritesFile(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+	if err := m.SetUpdateBranch("stable"); err != nil {
+		t.Fatalf("SetUpdateBranch stable: %v", err)
+	}
+	if got := m.GetUpdateBranch(); got != "stable" {
+		t.Errorf("GetUpdateBranch = %q, want %q", got, "stable")
+	}
+}
+
+func TestSetUpdateBranch_Beta(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+	if err := m.SetUpdateBranch("beta"); err != nil {
+		t.Fatalf("SetUpdateBranch beta: %v", err)
+	}
+	if got := m.GetUpdateBranch(); got != "beta" {
+		t.Errorf("GetUpdateBranch = %q, want %q", got, "beta")
+	}
+}
+
+func TestSetUpdateBranch_Daily(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+	if err := m.SetUpdateBranch("daily"); err != nil {
+		t.Fatalf("SetUpdateBranch daily: %v", err)
+	}
+	if got := m.GetUpdateBranch(); got != "daily" {
+		t.Errorf("GetUpdateBranch = %q, want %q", got, "daily")
+	}
+}
+
+func TestSetUpdateBranch_InvalidReturnsError(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+	if err := m.SetUpdateBranch("nightly"); err == nil {
+		t.Error("SetUpdateBranch invalid: expected error, got nil")
+	}
+}
+
+func TestGetUpdateBranch_DefaultsToStable(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+	if got := m.GetUpdateBranch(); got != "stable" {
+		t.Errorf("GetUpdateBranch default = %q, want %q", got, "stable")
+	}
+}
+
+// ── ListBackups ───────────────────────────────────────────────────────────────
+
+func TestListBackups_EmptyDir(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+	backups, err := m.ListBackups()
+	if err != nil {
+		t.Fatalf("ListBackups empty: %v", err)
+	}
+	if len(backups) != 0 {
+		t.Errorf("ListBackups empty: count = %d, want 0", len(backups))
+	}
+}
+
+func TestListBackups_WithTarGzFiles(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	f1 := filepath.Join(backupDir, "vidveil_backup_2026-01-01_120000.tar.gz")
+	f2 := filepath.Join(backupDir, "vidveil_backup_2026-01-02_120000.tar.gz")
+	os.WriteFile(f1, []byte("fake"), 0644)
+	time.Sleep(2 * time.Millisecond)
+	os.WriteFile(f2, []byte("fake2"), 0644)
+
+	backups, err := m.ListBackups()
+	if err != nil {
+		t.Fatalf("ListBackups with files: %v", err)
+	}
+	if len(backups) != 2 {
+		t.Errorf("ListBackups with files: count = %d, want 2", len(backups))
+	}
+}
+
+func TestListBackups_FiltersNonBackupFiles(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(backupDir, "readme.txt"), []byte("text"), 0644)
+	os.WriteFile(filepath.Join(backupDir, "vidveil_backup_2026-01-01_120000.tar.gz"), []byte("b"), 0644)
+
+	backups, err := m.ListBackups()
+	if err != nil {
+		t.Fatalf("ListBackups filter: %v", err)
+	}
+	if len(backups) != 1 {
+		t.Errorf("ListBackups filter: count = %d, want 1 (.tar.gz only)", len(backups))
+	}
+}
+
+func TestListBackups_IncludesEncFile(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(backupDir, "vidveil_backup_2026-01-01_120000.tar.gz.enc"), []byte("enc"), 0644)
+
+	backups, err := m.ListBackups()
+	if err != nil {
+		t.Fatalf("ListBackups enc: %v", err)
+	}
+	if len(backups) != 1 {
+		t.Errorf("ListBackups enc: count = %d, want 1", len(backups))
+	}
+}
+
+// ── applyRetention / applyRetentionWithOptions ───────────────────────────────
+
+func TestApplyRetention_KeepOne(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	for i := 0; i < 4; i++ {
+		name := filepath.Join(backupDir, "vidveil_backup_2026-01-0"+string(rune('1'+i))+"_120000.tar.gz")
+		os.WriteFile(name, []byte("data"), 0644)
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	if err := m.applyRetention(1); err != nil {
+		t.Fatalf("applyRetention: %v", err)
+	}
+
+	backups, _ := m.ListBackups()
+	if len(backups) > 1 {
+		t.Errorf("applyRetention keepCount=1: %d backups remain, want ≤1", len(backups))
+	}
+}
+
+func TestApplyRetentionWithOptions_KeepTwo(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	for i := 0; i < 5; i++ {
+		name := filepath.Join(backupDir, "vidveil_backup_2026-01-0"+string(rune('1'+i))+"_120000.tar.gz")
+		os.WriteFile(name, []byte("data"), 0644)
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	if err := m.applyRetentionWithOptions(2, 0, 0, 0, ""); err != nil {
+		t.Fatalf("applyRetentionWithOptions: %v", err)
+	}
+
+	backups, _ := m.ListBackups()
+	if len(backups) > 2 {
+		t.Errorf("applyRetentionWithOptions keep=2: %d backups remain, want ≤2", len(backups))
+	}
+}
+
+func TestApplyRetention_EmptyDirNoPanic(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+	if err := m.applyRetention(1); err != nil {
+		t.Errorf("applyRetention empty dir: %v", err)
+	}
+}
+
+// ── BackupWithOptions / Backup / BackupIncremental ───────────────────────────
+
+func TestBackupWithOptions_CreatesFile(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	outFile := filepath.Join(backupDir, "test_backup.tar.gz")
+	err := m.BackupWithOptions(BackupOptions{
+		Filename:    outFile,
+		IncludeData: true,
+		MaxBackups:  1,
+	})
+	if err != nil {
+		t.Fatalf("BackupWithOptions: %v", err)
+	}
+	if _, err := os.Stat(outFile); err != nil {
+		t.Error("BackupWithOptions: output file missing")
+	}
+}
+
+func TestBackup_CreatesFile(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	outFile := filepath.Join(backupDir, "backup.tar.gz")
+	if err := m.Backup(outFile); err != nil {
+		t.Fatalf("Backup: %v", err)
+	}
+	if _, err := os.Stat(outFile); err != nil {
+		t.Error("Backup: output file missing")
+	}
+}
+
+func TestBackupIncremental_CreatesFile(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	outFile := filepath.Join(backupDir, "hourly.tar.gz")
+	if err := m.BackupIncremental(outFile); err != nil {
+		t.Fatalf("BackupIncremental: %v", err)
+	}
+	if _, err := os.Stat(outFile); err != nil {
+		t.Error("BackupIncremental: output file missing")
+	}
+}
+
+// ── verifyBackup ──────────────────────────────────────────────────────────────
+
+func TestVerifyBackup_ValidBackup(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	outFile := filepath.Join(backupDir, "verify_test.tar.gz")
+	if err := m.Backup(outFile); err != nil {
+		t.Fatalf("Backup for verify: %v", err)
+	}
+
+	data, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("read backup: %v", err)
+	}
+	sum := sha256.Sum256(data)
+	checksum := "sha256:" + hex.EncodeToString(sum[:])
+
+	if err := m.verifyBackup(outFile, checksum, ""); err != nil {
+		t.Errorf("verifyBackup valid: %v", err)
+	}
+}
+
+func TestVerifyBackup_MissingFile(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+	if err := m.verifyBackup("/tmp/nonexistent_backup_xyz.tar.gz", "sha256:abc", ""); err == nil {
+		t.Error("verifyBackup missing: expected error, got nil")
+	}
+}
+
+func TestVerifyBackup_WrongChecksum(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	outFile := filepath.Join(backupDir, "chk_test.tar.gz")
+	if err := m.Backup(outFile); err != nil {
+		t.Fatalf("Backup for checksum test: %v", err)
+	}
+
+	if err := m.verifyBackup(outFile, "sha256:wrongchecksum", ""); err == nil {
+		t.Error("verifyBackup wrong checksum: expected error, got nil")
+	}
+}
+
+// ── RestoreWithPassword / Restore ─────────────────────────────────────────────
+
+func TestRestoreWithPassword_RestoresFromBackup(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(configDir, "restore_test.yml"), []byte("key: value"), 0644)
+
+	outFile := filepath.Join(backupDir, "restore.tar.gz")
+	if err := m.Backup(outFile); err != nil {
+		t.Fatalf("Backup for restore: %v", err)
+	}
+
+	if err := m.RestoreWithPassword(outFile, ""); err != nil {
+		t.Errorf("RestoreWithPassword: %v", err)
+	}
+}
+
+func TestRestore_WrapsRestoreWithPassword(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	outFile := filepath.Join(backupDir, "restore2.tar.gz")
+	if err := m.Backup(outFile); err != nil {
+		t.Fatalf("Backup for restore: %v", err)
+	}
+
+	if err := m.Restore(outFile); err != nil {
+		t.Errorf("Restore: %v", err)
+	}
+}
+
+func TestRestoreWithPassword_MissingFileReturnsError(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+	if err := m.RestoreWithPassword("/tmp/no_such_backup_xyz.tar.gz", ""); err == nil {
+		t.Error("RestoreWithPassword missing: expected error, got nil")
+	}
+}
+
+func TestRestoreWithPassword_EncryptedWrongPasswordReturnsError(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+
+	outFile := filepath.Join(backupDir, "enc.tar.gz.enc")
+	if err := m.Backup(outFile); err != nil {
+		t.Fatalf("Backup for enc restore: %v", err)
+	}
+
+	if err := m.RestoreWithPassword(outFile, "wrongpass"); err == nil {
+		t.Error("RestoreWithPassword encrypted wrong pass: expected error, got nil")
+	}
+}
+
+// ── SetMaintenanceMode disable-when-absent branch ─────────────────────────────
+
+// TestSetMaintenanceMode_DisableWhenNotEnabled verifies that calling
+// SetMaintenanceMode(false) when no flag file exists returns nil (not an error).
+func TestSetMaintenanceMode_DisableWhenNotEnabled(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.SetMaintenanceMode(false); err != nil {
+		t.Fatalf("SetMaintenanceMode(false) on missing flag: got %v, want nil", err)
+	}
+}
+
+// ── SetUpdateBranch invalid branch ────────────────────────────────────────────
+
+// TestSetUpdateBranch_InvalidBranch verifies that SetUpdateBranch rejects
+// unknown branch names with a non-nil error.
+func TestSetUpdateBranch_InvalidBranch(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.SetUpdateBranch("nightly"); err == nil {
+		t.Error("SetUpdateBranch(nightly): expected error for invalid branch, got nil")
+	}
+}
+
+// ── SetUpdateBranch + GetUpdateBranch valid branches ─────────────────────────
+
+// TestSetUpdateBranch_ValidBranches verifies all three valid branches can be set.
+func TestSetUpdateBranch_ValidBranches(t *testing.T) {
+	for _, branch := range []string{"stable", "beta", "daily"} {
+		m, _, _ := newManagerWithDirs(t)
+		if err := m.SetUpdateBranch(branch); err != nil {
+			t.Errorf("SetUpdateBranch(%q): got %v, want nil", branch, err)
+		}
+	}
+}
+
+// TestGetUpdateBranch_ReturnsSetBranch verifies GetUpdateBranch reads back
+// what SetUpdateBranch wrote.
+func TestGetUpdateBranch_ReturnsSetBranch(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+	if err := m.SetUpdateBranch("beta"); err != nil {
+		t.Fatalf("SetUpdateBranch: %v", err)
+	}
+	if got := m.GetUpdateBranch(); got != "beta" {
+		t.Errorf("GetUpdateBranch() = %q, want %q", got, "beta")
+	}
+}
+
+// ── SetMaintenanceMode enable + disable ───────────────────────────────────────
+
+// TestSetMaintenanceMode_EnableCreatesFlag verifies the enable path creates the
+// flag file and IsMaintenanceMode returns true.
+func TestSetMaintenanceMode_EnableCreatesFlag(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.SetMaintenanceMode(true); err != nil {
+		t.Fatalf("SetMaintenanceMode(true): %v", err)
+	}
+	if !m.IsMaintenanceMode() {
+		t.Error("IsMaintenanceMode() = false after enable, want true")
+	}
+}
+
+// TestSetMaintenanceMode_EnableThenDisable verifies the round-trip leaves
+// maintenance mode off.
+func TestSetMaintenanceMode_EnableThenDisable(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.SetMaintenanceMode(true); err != nil {
+		t.Fatalf("SetMaintenanceMode(true): %v", err)
+	}
+	if err := m.SetMaintenanceMode(false); err != nil {
+		t.Fatalf("SetMaintenanceMode(false): %v", err)
+	}
+	if m.IsMaintenanceMode() {
+		t.Error("IsMaintenanceMode() = true after disable, want false")
+	}
+}
+
+// ── BackupWithOptions encrypted path ─────────────────────────────────────────
+
+// TestBackupWithOptions_EncryptedPath verifies BackupWithOptions with a
+// password creates a .enc file and that RestoreWithPassword can decrypt it.
+func TestBackupWithOptions_EncryptedPath(t *testing.T) {
+	backupDir := t.TempDir()
+	m, configDir, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	outFile := filepath.Join(backupDir, "enc_backup.tar.gz.enc")
+	err := m.BackupWithOptions(BackupOptions{
+		Filename:   outFile,
+		Password:   "testpassword123",
+		MaxBackups: 5,
+	})
+	if err != nil {
+		t.Fatalf("BackupWithOptions encrypted: %v", err)
+	}
+	if _, err := os.Stat(outFile); err != nil {
+		t.Error("BackupWithOptions encrypted: output file missing")
+	}
+
+	if err := m.RestoreWithPassword(outFile, "testpassword123"); err != nil {
+		t.Errorf("RestoreWithPassword correct password: %v", err)
+	}
+}
+
+// ── BackupWithOptions IncludeSSL path ────────────────────────────────────────
+
+// TestBackupWithOptions_IncludeSSL verifies IncludeSSL=true runs without error
+// even when the ssl/ subdirectory does not exist (the stat guard skips it).
+func TestBackupWithOptions_IncludeSSL(t *testing.T) {
+	backupDir := t.TempDir()
+	m, configDir, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	outFile := filepath.Join(backupDir, "ssl_backup.tar.gz")
+	err := m.BackupWithOptions(BackupOptions{
+		Filename:   outFile,
+		IncludeSSL: true,
+		MaxBackups: 5,
+	})
+	if err != nil {
+		t.Fatalf("BackupWithOptions IncludeSSL=true: %v", err)
+	}
+}
+
+// ── BackupIncremental timestamp naming ───────────────────────────────────────
+
+// TestBackupIncremental_AutoNaming verifies BackupIncremental uses auto-naming
+// when no filename is given. We pass empty string via Backup(), which delegates
+// to BackupIncremental with an empty path.
+func TestBackupIncremental_AutoNaming(t *testing.T) {
+	m, _, _ := newManagerWithDirs(t)
+
+	if err := m.BackupIncremental(""); err != nil {
+		t.Fatalf("BackupIncremental auto-name: %v", err)
+	}
+
+	entries, err := os.ReadDir(m.paths.Backup)
+	if err != nil {
+		t.Fatalf("reading backup dir: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Error("BackupIncremental auto-name: no files in backup dir")
+	}
+}
+
+// ── verifyBackup empty-size path ─────────────────────────────────────────────
+
+// TestVerifyBackup_ZeroSizeFile verifies verifyBackup rejects an empty file.
+func TestVerifyBackup_ZeroSizeFile(t *testing.T) {
+	backupDir := t.TempDir()
+	m, _, _ := newManagerWithDirs(t)
+
+	emptyFile := filepath.Join(backupDir, "empty.tar.gz")
+	os.WriteFile(emptyFile, []byte{}, 0600)
+
+	if err := m.verifyBackup(emptyFile, "sha256:e3b0", ""); err == nil {
+		t.Error("verifyBackup zero-size: expected error, got nil")
+	}
+}
+
+// ── applyRetentionWithOptions weekly/monthly/yearly paths ────────────────────
+
+// TestApplyRetentionWithOptions_KeepWeekly verifies keepWeekly>0 path does not
+// panic or error when there are fewer files than the keep count.
+func TestApplyRetentionWithOptions_KeepWeeklyMonthlyYearly(t *testing.T) {
+	backupDir := t.TempDir()
+	m, configDir, _ := newManagerWithDirs(t)
+
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("x: 1"), 0644)
+
+	for i := 0; i < 3; i++ {
+		fname := filepath.Join(backupDir, time.Now().Add(-time.Duration(i)*24*time.Hour).Format("vidveil_backup_2006-01-02_150405")+".tar.gz")
+		m.BackupWithOptions(BackupOptions{Filename: fname, MaxBackups: 10})
+	}
+
+	if err := m.applyRetentionWithOptions(10, 2, 1, 1, ""); err != nil {
+		t.Errorf("applyRetentionWithOptions weekly/monthly/yearly: %v", err)
+	}
+}
+
+// ── BackupDailyFull ────────────────────────────────────────────────────────────
+
+// TestBackupDailyFull_CreatesBothFiles verifies the scheduled backup_daily run
+// (AI.md PART 21) produces both the date-stamped full backup and the fixed
+// vidveil-daily incremental file in the same pass.
+func TestBackupDailyFull_CreatesBothFiles(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	if err := m.BackupDailyFull(BackupOptions{IncludeData: true, MaxBackups: 5}); err != nil {
+		t.Fatalf("BackupDailyFull: %v", err)
+	}
+
+	dateStr := time.Now().Format("2006-01-02")
+	fullFile := filepath.Join(backupDir, "vidveil_backup_"+dateStr+".tar.gz")
+	if _, err := os.Stat(fullFile); err != nil {
+		t.Errorf("BackupDailyFull: expected full backup file %s: %v", fullFile, err)
+	}
+
+	dailyFile := filepath.Join(backupDir, "vidveil-daily.tar.gz")
+	if _, err := os.Stat(dailyFile); err != nil {
+		t.Errorf("BackupDailyFull: expected daily incremental file %s: %v", dailyFile, err)
+	}
+}
+
+// TestBackupDailyFull_EncryptedNamesUseEncExtension verifies both files get the
+// .enc suffix when a password is supplied.
+func TestBackupDailyFull_EncryptedNamesUseEncExtension(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	if err := m.BackupDailyFull(BackupOptions{IncludeData: true, MaxBackups: 5, Password: "s3cret"}); err != nil {
+		t.Fatalf("BackupDailyFull encrypted: %v", err)
+	}
+
+	dateStr := time.Now().Format("2006-01-02")
+	fullFile := filepath.Join(backupDir, "vidveil_backup_"+dateStr+".tar.gz.enc")
+	if _, err := os.Stat(fullFile); err != nil {
+		t.Errorf("BackupDailyFull encrypted: expected full backup file %s: %v", fullFile, err)
+	}
+
+	dailyFile := filepath.Join(backupDir, "vidveil-daily.tar.gz.enc")
+	if _, err := os.Stat(dailyFile); err != nil {
+		t.Errorf("BackupDailyFull encrypted: expected daily incremental file %s: %v", dailyFile, err)
+	}
+}
+
+// TestBackupDailyFull_DailyIncrementalSurvivesRetention verifies the fixed
+// vidveil-daily file is never swept by count-based retention even when
+// MaxBackups is small and other backups already exist.
+func TestBackupDailyFull_DailyIncrementalSurvivesRetention(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	for i := 0; i < 3; i++ {
+		fname := filepath.Join(backupDir, time.Now().Add(-time.Duration(i+1)*24*time.Hour).Format("vidveil_backup_2006-01-02")+".tar.gz")
+		if err := m.BackupWithOptions(BackupOptions{Filename: fname, MaxBackups: 10}); err != nil {
+			t.Fatalf("seed backup %d: %v", i, err)
+		}
+	}
+
+	if err := m.BackupDailyFull(BackupOptions{IncludeData: true, MaxBackups: 1}); err != nil {
+		t.Fatalf("BackupDailyFull: %v", err)
+	}
+
+	dailyFile := filepath.Join(backupDir, "vidveil-daily.tar.gz")
+	if _, err := os.Stat(dailyFile); err != nil {
+		t.Errorf("BackupDailyFull: daily incremental should survive retention: %v", err)
+	}
+}
+
+// TestBackupDailyFull_FullBackupErrorPropagates verifies an error from the
+// full-backup step (invalid Filename directory) is returned wrapped.
+func TestBackupDailyFull_FullBackupErrorPropagates(t *testing.T) {
+	m, configDir, _ := newManagerWithDirs(t)
+	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+
+	err := m.BackupDailyFull(BackupOptions{
+		Filename:    filepath.Join(string([]byte{0}), "bad.tar.gz"),
+		IncludeData: true,
+		MaxBackups:  5,
+	})
+	if err == nil {
+		t.Fatal("BackupDailyFull: expected error for invalid full-backup filename, got nil")
+	}
+}

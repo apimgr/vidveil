@@ -1,0 +1,41 @@
+{{define "public/nav"}}
+{{/* Navigation bar - desktop links + compact search per AI.md PART 16
+     Hamburger menu moved to header for consistency */}}
+<nav class="site-nav" id="navigation" role="navigation" aria-label="{{ t "a11y.main_nav" }}">
+    {{/* Desktop: inline links */}}
+    <div class="nav-links">
+        <a href="/" class="nav-link{{if eq .ActiveNav "home"}} active{{end}}">{{ t "nav.home" }}</a>
+        <a href="/favorites" class="nav-link{{if eq .ActiveNav "favorites"}} active{{end}}">{{ t "nav.favorites" }}</a>
+        <a href="/server/about" class="nav-link{{if eq .ActiveNav "about"}} active{{end}}">{{ t "nav.about" }}</a>
+        <a href="/server/help" class="nav-link{{if eq .ActiveNav "help"}} active{{end}}">{{ t "nav.help" }}</a>
+    </div>
+
+    {{/* Compact search form - matches search-form partial styling */}}
+    <form action="/search" method="get" class="search-form search-form--compact" role="search" aria-label="{{ t "a11y.quick_search" }}" data-action="search-submit">
+        <label for="nav-search-input" class="visually-hidden">{{ t "a11y.search_query" }}</label>
+        <div class="search-wrapper">
+            <input type="text"
+                   id="nav-search-input"
+                   name="q"
+                   value="{{.Query}}"
+                   placeholder="{{ t "search.placeholder" }}"
+                   autocomplete="off"
+                   aria-label="{{ t "a11y.search_input" }}"
+                   aria-autocomplete="list"
+                   aria-controls="autocomplete-dropdown-nav">
+            <div id="autocomplete-dropdown-nav"
+                 class="autocomplete-dropdown"
+                 role="listbox"
+                 aria-label="{{ t "a11y.bang_suggestions" }}"
+                 hidden></div>
+        </div>
+        <button type="submit" aria-label="{{ t "search.button" }}" class="search-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <span class="visually-hidden">{{ t "search.button" }}</span>
+        </button>
+    </form>
+</nav>
+{{end}}

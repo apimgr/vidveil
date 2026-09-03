@@ -1,0 +1,20 @@
+{{define "public"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <a href="#navigation" class="skip-link">{{ t "a11y.skip_to_nav" }}</a>
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
+    {{template "public/nav" .}}
+    <main id="main-content" role="main">
+        {{template "content" .}}
+    </main>
+    {{template "public/footer" .}}
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

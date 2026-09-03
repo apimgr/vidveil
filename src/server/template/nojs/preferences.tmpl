@@ -1,0 +1,69 @@
+{{define "nojs/preferences"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
+    <main class="preferences" id="main-content" role="main">
+        <h1>{{ t "prefs.title" }}</h1>
+        <p><em>{{ t "prefs.storage_note" }}</em></p>
+
+        <form method="post" action="/server/preferences/save">
+            {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+            {{if .ReturnTo}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">{{end}}
+            <section>
+                <h2>{{ t "prefs.appearance" }}</h2>
+                <div class="form-group">
+                    <label for="theme">{{ t "prefs.theme" }}:</label>
+                    <select id="theme" name="theme">
+                        <option value="auto" {{if eq .Theme "auto"}}selected{{end}}>{{ t "prefs.theme.auto" }}</option>
+                        <option value="dark" {{if eq .Theme "dark"}}selected{{end}}>{{ t "prefs.theme.dark" }}</option>
+                        <option value="light" {{if eq .Theme "light"}}selected{{end}}>{{ t "prefs.theme.light" }}</option>
+                    </select>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.search_settings" }}</h2>
+                <div class="form-group">
+                    <label for="results-per-page">{{ t "prefs.results_page" }}:</label>
+                    <select id="results-per-page" name="resultsPerPage">
+                        <option value="20" {{if eq .ResultsPerPage "20"}}selected{{end}}>20</option>
+                        <option value="50" {{if eq .ResultsPerPage "50"}}selected{{end}}>50</option>
+                        <option value="100" {{if eq .ResultsPerPage "100"}}selected{{end}}>100</option>
+                        <option value="0" {{if eq .ResultsPerPage "0"}}selected{{end}}>{{ t "prefs.infinite_scroll" }}</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="open-new-tab">
+                        <input type="checkbox" id="open-new-tab" name="openNewTab" {{if .OpenNewTab}}checked{{end}}>
+                        {{ t "prefs.open_new_tab" }}
+                    </label>
+                </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.privacy" }}</h2>
+                <div class="form-group">
+                    <label for="proxy-thumbnails">
+                        <input type="checkbox" id="proxy-thumbnails" name="proxyThumbnails" checked disabled>
+                        {{ t "prefs.proxy_thumbnails_locked" }}
+                    </label>
+                </div>
+            </section>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary" data-loading-text="{{ t "action.saving" }}">{{ t "prefs.save" }}</button>
+                <button type="reset" class="btn-secondary">{{ t "prefs.reset" }}</button>
+            </div>
+        </form>
+    </main>
+    {{template "public/footer" .}}
+</body>
+</html>
+{{end}}

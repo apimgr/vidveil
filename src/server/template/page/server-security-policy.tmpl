@@ -1,0 +1,39 @@
+{{define "server-security-policy"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content">
+    <div class="prose">
+        <h1>{{ t "security.policy_title" }}</h1>
+
+        {{if .PolicyText}}
+        <p>{{.PolicyText}}</p>
+        {{else}}
+        <h2>{{ t "security.policy_window_title" }}</h2>
+        <p>{{tf "security.policy_window_body" .DisclosureDays}}</p>
+
+        <h2>{{ t "security.policy_in_scope_title" }}</h2>
+        <ul>
+            <li>{{ t "security.policy_in_scope_1" }}</li>
+            <li>{{ t "security.policy_in_scope_2" }}</li>
+            <li>{{ t "security.policy_in_scope_3" }}</li>
+        </ul>
+
+        <h2>{{ t "security.policy_out_of_scope_title" }}</h2>
+        <ul>
+            <li>{{ t "security.policy_out_of_scope_1" }}</li>
+            <li>{{ t "security.policy_out_of_scope_2" }}</li>
+            <li>{{ t "security.policy_out_of_scope_3" }}</li>
+            <li>{{ t "security.policy_out_of_scope_4" }}</li>
+        </ul>
+
+        <h2>{{ t "security.policy_safe_harbor_title" }}</h2>
+        <p>{{ t "security.policy_safe_harbor_body_pre" }}
+        <a href="/server/security">{{ t "security.policy_safe_harbor_link" }}</a>{{ t "security.policy_safe_harbor_body_post" }}</p>
+        {{end}}
+
+        <p><a href="/server/security">{{ t "security.back_to_security" }}</a></p>
+    </div>
+</div>
+{{end}}

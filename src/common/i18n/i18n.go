@@ -1,0 +1,524 @@
+// SPDX-License-Identifier: MIT
+// AI.md PART 30: I18N & A11Y - Internationalization Support
+package i18n
+
+import (
+	"context"
+	"embed"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"sync"
+)
+
+// ctxKey is an unexported type for context keys in this package.
+type ctxKey int
+
+// langKey is the context key for the resolved locale.
+const langKey ctxKey = iota
+
+// LocaleFromContext returns the locale stored by LanguageMiddleware,
+// or DefaultLocale ("en") if none is present.
+func LocaleFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(langKey).(string); ok && v != "" {
+		return v
+	}
+	return DefaultLocale
+}
+
+//go:embed locales/*.json
+var localesFS embed.FS
+
+// DefaultLocale is the default locale per AI.md
+const DefaultLocale = "en"
+
+// rtlLocales lists locale prefixes that render right-to-left per AI.md PART 30.
+var rtlLocales = map[string]bool{
+	"ar": true,
+	"fa": true,
+	"he": true,
+	"ur": true,
+	"ps": true,
+	"sd": true,
+	"yi": true,
+}
+
+// Direction returns "rtl" for right-to-left locales and "ltr" otherwise per
+// AI.md PART 30 (<html lang dir> A11Y requirement).
+func Direction(locale string) string {
+	if locale == "" {
+		return "ltr"
+	}
+	base := strings.ToLower(locale)
+	if idx := strings.IndexAny(base, "-_"); idx > 0 {
+		base = base[:idx]
+	}
+	if rtlLocales[base] {
+		return "rtl"
+	}
+	return "ltr"
+}
+
+// DetectLocale picks the best locale from a request without requiring a loaded Translator.
+// It checks the "lang" query parameter, then the "lang" cookie, then the Accept-Language header.
+// Falls back to DefaultLocale ("en") if none match.
+func DetectLocale(r *http.Request) string {
+	if v := strings.TrimSpace(r.URL.Query().Get("lang")); v != "" {
+		return strings.ToLower(v)
+	}
+	for _, c := range r.Cookies() {
+		if c.Name == "lang" && c.Value != "" {
+			return strings.ToLower(c.Value)
+		}
+	}
+	if al := r.Header.Get("Accept-Language"); al != "" {
+		first := al
+		if idx := strings.IndexAny(first, ",;"); idx > 0 {
+			first = first[:idx]
+		}
+		first = strings.TrimSpace(first)
+		if first != "" {
+			return strings.ToLower(first)
+		}
+	}
+	return DefaultLocale
+}
+
+// Translator handles translations per AI.md PART 30
+type Translator struct {
+	// translations: locale -> key -> translation
+	translations map[string]map[string]string
+	fallback     string
+	mu           sync.RWMutex
+}
+
+// newTranslator creates a new translator
+func newTranslator() *Translator {
+	t := &Translator{
+		translations: make(map[string]map[string]string),
+		fallback:     DefaultLocale,
+	}
+
+	// Load embedded translations
+	t.loadEmbeddedTranslations()
+
+	return t
+}
+
+// loadEmbeddedTranslations loads translations from embedded files
+func (t *Translator) loadEmbeddedTranslations() {
+	files, err := localesFS.ReadDir("locales")
+	if err != nil {
+		// No embedded translations, use defaults
+		t.loadDefaultTranslations()
+		return
+	}
+
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
+
+		locale := strings.TrimSuffix(file.Name(), ".json")
+		data, err := localesFS.ReadFile("locales/" + file.Name())
+		if err != nil {
+			continue
+		}
+
+		var trans map[string]string
+		if err := json.Unmarshal(data, &trans); err != nil {
+			continue
+		}
+
+		t.translations[locale] = trans
+	}
+
+	// Ensure English exists
+	if _, ok := t.translations["en"]; !ok {
+		t.loadDefaultTranslations()
+	}
+}
+
+// loadDefaultTranslations loads default English translations
+func (t *Translator) loadDefaultTranslations() {
+	t.translations["en"] = map[string]string{
+		// Common
+		"app.name":        "Vidveil",
+		"app.tagline":     "Privacy-respecting adult video meta search",
+		"app.description": "Search across multiple adult video sites without tracking",
+
+		// Navigation
+		"nav.home":        "Home",
+		"nav.search":      "Search",
+		"nav.preferences": "Preferences",
+		"nav.about":       "About",
+		"nav.privacy":     "Privacy",
+		"nav.admin":       "Admin",
+		"nav.favorites":   "Favorites",
+		"nav.help":        "Help",
+		"nav.menu":        "Menu",
+
+		// Search
+		"search.placeholder":        "Search for videos...",
+		"search.button":             "Search",
+		"search.no_results":         "No results found",
+		"search.loading":            "Searching...",
+		"search.results":            "Results",
+		"search.results_for":        "Results for",
+		"search.load_more":          "Load More",
+		"search.engines":            "Search Engines",
+		"search.all_engines":        "All Engines",
+		"search.select_all":         "Select All",
+		"search.deselect_all":       "Deselect All",
+		"search.bang_prefix":        "Use bangs:",
+		"search.connecting_engines": "Connecting to engines...",
+		"search.streaming":          "streaming...",
+		"search.did_you_mean":       "Did you mean:",
+		"search.related_searches":   "Related searches",
+		"search.loading_more":       "Loading more...",
+		"search.connecting":         "Connecting...",
+		"search.load_more_results":  "Load More Results",
+
+		// Filters
+		"filter.duration":    "Duration:",
+		"filter.any":         "Any",
+		"filter.under_10":    "Under 10 min",
+		"filter.10_30":       "10-30 min",
+		"filter.over_30":     "Over 30 min",
+		"filter.sort":        "Sort:",
+		"filter.relevance":   "Relevance",
+		"filter.longest":     "Longest",
+		"filter.shortest":    "Shortest",
+		"filter.most_viewed": "Most Viewed",
+		"filter.apply":       "Apply Filters",
+
+		// Age verification
+		"age.title":    "Age Verification Required",
+		"age.question": "Are you 18 years of age or older?",
+		"age.yes":      "Yes, I am 18 or older",
+		"age.no":       "No, I am under 18",
+		"age.warning":  "This website contains adult content. You must be 18 years or older to enter.",
+		"age.remember": "Remember my choice for 30 days",
+
+		// Preferences
+		"prefs.title":        "Preferences",
+		"prefs.theme":        "Theme",
+		"prefs.theme.dark":   "Dark",
+		"prefs.theme.light":  "Light",
+		"prefs.theme.auto":   "Auto (System)",
+		"prefs.engines":      "Search Engines",
+		"prefs.results_page": "Results per Page",
+		"prefs.save":         "Save Preferences",
+		"prefs.saved":        "Preferences saved!",
+		"prefs.reset":        "Reset to Defaults",
+
+		// About
+		"about.title":       "About Vidveil",
+		"about.description": "Vidveil is a privacy-respecting adult video meta search engine.",
+		"about.features":    "Features",
+		"about.source":      "Source Code",
+		"about.license":     "License",
+
+		// Privacy
+		"privacy.title":   "Privacy Policy",
+		"privacy.summary": "We do not track you. We do not store your searches. We do not use cookies for tracking.",
+
+		// Admin
+		"admin.login":           "Login",
+		"admin.logout":          "Logout",
+		"admin.username":        "Username",
+		"admin.password":        "Password",
+		"admin.remember":        "Remember me",
+		"admin.dashboard":       "Dashboard",
+		"admin.settings":        "Settings",
+		"admin.engines":         "Engines",
+		"admin.logs":            "Logs",
+		"admin.system":          "System",
+		"admin.backup":          "Backup",
+		"admin.invalid_creds":   "Invalid username or password",
+		"admin.session_expired": "Session expired, please login again",
+
+		// Common actions
+		"action.save":    "Save",
+		"action.cancel":  "Cancel",
+		"action.delete":  "Delete",
+		"action.edit":    "Edit",
+		"action.confirm": "Confirm",
+		"action.close":   "Close",
+		"action.back":    "Back",
+		"action.next":    "Next",
+		"action.submit":  "Submit",
+		"action.reset":   "Reset",
+		"action.refresh": "Refresh",
+		"action.copy":    "Copy",
+		"action.copied":  "Copied!",
+
+		// Status
+		"status.enabled":   "Enabled",
+		"status.disabled":  "Disabled",
+		"status.online":    "Online",
+		"status.offline":   "Offline",
+		"status.healthy":   "Healthy",
+		"status.unhealthy": "Unhealthy",
+		"status.loading":   "Loading...",
+		"status.error":     "Error",
+		"status.success":   "Success",
+		"status.warning":   "Warning",
+
+		// Errors
+		"error.generic":       "An error occurred",
+		"error.not_found":     "Page not found",
+		"error.server":        "Server error",
+		"error.unauthorized":  "Unauthorized",
+		"error.forbidden":     "Access denied",
+		"error.rate_limited":  "Too many requests, please try again later",
+		"error.invalid_input": "Invalid input",
+		"error.go_home":       "Go Home",
+		"error.go_back":       "Go Back",
+
+		// Time
+		"time.now":      "Just now",
+		"time.minutes":  "%d minutes ago",
+		"time.hours":    "%d hours ago",
+		"time.days":     "%d days ago",
+		"time.duration": "Duration",
+		"time.views":    "views",
+
+		// Footer
+		"footer.copyright": "All rights reserved",
+		"footer.powered":   "Powered by Vidveil",
+	}
+}
+
+// Translate translates a key for the given locale
+func (t *Translator) Translate(locale, key string) string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	// Try exact locale
+	if trans, ok := t.translations[locale]; ok {
+		if val, ok := trans[key]; ok {
+			return val
+		}
+	}
+
+	// Try language part only (e.g., "en" from "en-US")
+	if idx := strings.Index(locale, "-"); idx > 0 {
+		lang := locale[:idx]
+		if trans, ok := t.translations[lang]; ok {
+			if val, ok := trans[key]; ok {
+				return val
+			}
+		}
+	}
+
+	// Fall back to default locale
+	if trans, ok := t.translations[t.fallback]; ok {
+		if val, ok := trans[key]; ok {
+			return val
+		}
+	}
+
+	// Return key if no translation found
+	return key
+}
+
+// TranslateFormat translates with format arguments
+func (t *Translator) TranslateFormat(locale, key string, args ...interface{}) string {
+	return fmt.Sprintf(t.Translate(locale, key), args...)
+}
+
+// GetLocale extracts the preferred locale from an HTTP request per AI.md
+func (t *Translator) GetLocale(r *http.Request) string {
+	// Check query parameter first
+	if locale := r.URL.Query().Get("lang"); locale != "" {
+		if t.HasLocale(locale) {
+			return locale
+		}
+	}
+
+	// Check cookie (name: "lang" per AI.md PART 30)
+	if cookie, err := r.Cookie("lang"); err == nil && cookie.Value != "" {
+		if t.HasLocale(cookie.Value) {
+			return cookie.Value
+		}
+	}
+
+	// Parse Accept-Language header per AI.md PART 30
+	acceptLang := r.Header.Get("Accept-Language")
+	if acceptLang != "" {
+		locales := parseAcceptLanguage(acceptLang)
+		for _, locale := range locales {
+			if t.HasLocale(locale) {
+				return locale
+			}
+			// Try language part
+			if idx := strings.Index(locale, "-"); idx > 0 {
+				if t.HasLocale(locale[:idx]) {
+					return locale[:idx]
+				}
+			}
+		}
+	}
+
+	return t.fallback
+}
+
+// parseAcceptLanguage parses the Accept-Language header
+func parseAcceptLanguage(header string) []string {
+	var locales []string
+	parts := strings.Split(header, ",")
+	for _, part := range parts {
+		// Remove quality value
+		if idx := strings.Index(part, ";"); idx > 0 {
+			part = part[:idx]
+		}
+		locale := strings.TrimSpace(part)
+		if locale != "" {
+			locales = append(locales, strings.ToLower(locale))
+		}
+	}
+	return locales
+}
+
+// HasLocale checks if a locale is available
+func (t *Translator) HasLocale(locale string) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	_, ok := t.translations[locale]
+	return ok
+}
+
+// AvailableLocales returns all available locales
+func (t *Translator) AvailableLocales() []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	locales := make([]string, 0, len(t.translations))
+	for locale := range t.translations {
+		locales = append(locales, locale)
+	}
+	return locales
+}
+
+// AddTranslation adds or updates a translation
+func (t *Translator) AddTranslation(locale, key, value string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if _, ok := t.translations[locale]; !ok {
+		t.translations[locale] = make(map[string]string)
+	}
+	t.translations[locale][key] = value
+}
+
+// LoadTranslations loads translations from a map
+func (t *Translator) LoadTranslations(locale string, trans map[string]string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if _, ok := t.translations[locale]; !ok {
+		t.translations[locale] = make(map[string]string)
+	}
+
+	for k, v := range trans {
+		t.translations[locale][k] = v
+	}
+}
+
+// GetAllTranslations returns all translations for a locale
+func (t *Translator) GetAllTranslations(locale string) map[string]string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if trans, ok := t.translations[locale]; ok {
+		// Return a copy
+		result := make(map[string]string)
+		for k, v := range trans {
+			result[k] = v
+		}
+		return result
+	}
+
+	return nil
+}
+
+// Middleware returns an HTTP middleware that detects the request language, persists
+// it via cookie when ?lang= is provided, and adds the locale to the request context
+// per AI.md PART 30: ?lang= → lang cookie → Accept-Language → default (en).
+func (t *Translator) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		locale := ""
+
+		// 1. ?lang= query parameter — highest priority; also sets the lang cookie
+		if q := strings.TrimSpace(r.URL.Query().Get("lang")); q != "" {
+			if t.HasLocale(q) {
+				locale = q
+				http.SetCookie(w, &http.Cookie{
+					Name:  "lang",
+					Value: locale,
+					Path:  "/",
+					// 1 year retention
+					MaxAge:   365 * 24 * 60 * 60,
+					SameSite: http.SameSiteLaxMode,
+					Secure:   r.TLS != nil,
+					HttpOnly: true,
+				})
+			}
+		}
+
+		// 2. lang cookie
+		if locale == "" {
+			if c, err := r.Cookie("lang"); err == nil && t.HasLocale(c.Value) {
+				locale = c.Value
+			}
+		}
+
+		// 3. Accept-Language header
+		if locale == "" {
+			locale = t.GetLocale(r)
+		}
+
+		// 4. Default
+		if locale == "" {
+			locale = t.fallback
+		}
+
+		// Store resolved locale in request context per AI.md PART 30.
+		ctx := context.WithValue(r.Context(), langKey, locale)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// TemplateFunc returns a template function for use in Go templates
+func (t *Translator) TemplateFunc(locale string) func(key string, args ...interface{}) string {
+	return func(key string, args ...interface{}) string {
+		if len(args) > 0 {
+			return t.TranslateFormat(locale, key, args...)
+		}
+		return t.Translate(locale, key)
+	}
+}
+
+// Global translator instance
+var globalTranslator *Translator
+var translatorOnce sync.Once
+
+// GlobalTranslator returns the global translator instance
+func GlobalTranslator() *Translator {
+	translatorOnce.Do(func() {
+		globalTranslator = newTranslator()
+	})
+	return globalTranslator
+}
+
+// Translate is a convenience function for the global translator
+func Translate(locale, key string) string {
+	return GlobalTranslator().Translate(locale, key)
+}
+
+// TranslateFormat is a convenience function for the global translator with formatting
+func TranslateFormat(locale, key string, args ...interface{}) string {
+	return GlobalTranslator().TranslateFormat(locale, key, args...)
+}

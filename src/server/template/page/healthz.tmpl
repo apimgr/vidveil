@@ -1,0 +1,101 @@
+{{define "healthz"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <a href="#navigation" class="skip-link">{{ t "a11y.skip_to_nav" }}</a>
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
+    {{template "public/nav" .}}
+    <main id="main-content" role="main" class="content-area health-status">
+        <!-- Project Info per AI.md PART 13 -->
+        <header class="health-header">
+            <h1>📦 {{.ProjectName}}</h1>
+            <p class="tagline">{{.ProjectTagline}}</p>
+            <p class="project-description">{{.ProjectDescription}}</p>
+        </header>
+
+        <h2>🏥 {{ t "healthz.system_health" }}</h2>
+
+        <!-- Status Banner per AI.md PART 13 -->
+        <div class="status-banner status-{{.StatusClass}}">
+            <span class="status-icon">{{.StatusIcon}}</span>
+            <span class="status-text">{{.StatusText}}</span>
+        </div>
+
+        <!-- Version & Build Info per AI.md PART 13 -->
+        <section class="health-section">
+            <h2>ℹ️ {{ t "healthz.version_title" }}</h2>
+            <dl class="info-grid">
+                <dt>🏷️ {{ t "healthz.version_label" }}</dt><dd><code>{{.Version}}</code></dd>
+                <dt>🐹 {{ t "healthz.go_version_label" }}</dt><dd><code>{{.GoVersion}}</code></dd>
+                <dt>🔨 {{ t "healthz.build_label" }}</dt><dd><code>{{.BuildCommit}}</code> ({{.BuildDate}})</dd>
+                <dt>⏱️ {{ t "healthz.uptime_label" }}</dt><dd>{{.Uptime}}</dd>
+                <dt>🚀 {{ t "healthz.mode_label" }}</dt><dd><span class="badge badge-{{.Mode}}">{{.ModeDisplay}}</span></dd>
+            </dl>
+        </section>
+
+        <!-- Features per AI.md PART 13 (VidVeil: stateless per IDEA.md) -->
+        <section class="health-section">
+            <h2>🎛️ {{ t "healthz.features_title" }}</h2>
+            <ul class="feature-list">
+                <li class="{{if .Features.TorEnabled}}feature-enabled{{else if .Features.TorStarting}}feature-starting{{else}}feature-disabled{{end}}">
+                    🧅 {{ t "healthz.tor_label" }} {{if .Features.TorEnabled}}<span class="status-ok">✅ {{.Features.TorStatus}}</span> <code>{{.Features.TorOnionAddr}}</code>{{else if .Features.TorStarting}}<span class="status-starting">⏳ {{ t "healthz.connecting" }}</span>{{else}}<span class="status-disabled">{{ t "healthz.disabled" }}</span>{{end}}
+                </li>
+                <li class="{{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">
+                    🌍 {{ t "healthz.geoip_label" }} {{if .Features.GeoIP}}<span class="status-ok">✅ {{ t "healthz.enabled" }}</span>{{else}}<span class="status-disabled">{{ t "healthz.disabled" }}</span>{{end}}
+                </li>
+            </ul>
+        </section>
+
+        <!-- Component Checks per AI.md PART 13 -->
+        <section class="health-section">
+            <h2>🔧 {{ t "healthz.component_status_title" }}</h2>
+            <table class="checks-table">
+                <thead><tr><th>{{ t "healthz.component_header" }}</th><th>{{ t "healthz.status_header" }}</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>🗄️ {{ t "healthz.database_label" }}</td>
+                        <td class="status-{{if eq .Checks.Database "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Database "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
+                    </tr>
+                    <tr>
+                        <td>💾 {{ t "healthz.cache_label" }}</td>
+                        <td class="status-{{if eq .Checks.Cache "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Cache "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
+                    </tr>
+                    <tr>
+                        <td>💿 {{ t "healthz.disk_label" }}</td>
+                        <td class="status-{{if eq .Checks.Disk "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Disk "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
+                    </tr>
+                    <tr>
+                        <td>⏰ {{ t "healthz.scheduler_label" }}</td>
+                        <td class="status-{{if eq .Checks.Scheduler "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Scheduler "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Statistics per AI.md PART 13 -->
+        <section class="health-section">
+            <h2>📈 {{ t "healthz.statistics_title" }}</h2>
+            <dl class="info-grid stats-grid">
+                <dt>📥 {{ t "healthz.requests_total_label" }}</dt><dd>{{.Stats.RequestsTotal}}</dd>
+                <dt>📅 {{ t "healthz.requests_24h_label" }}</dt><dd>{{.Stats.Requests24h}}</dd>
+                <dt>🔌 {{ t "healthz.active_connections_label" }}</dt><dd>{{.Stats.ActiveConnections}}</dd>
+            </dl>
+        </section>
+
+        <!-- Last Updated per AI.md PART 13 -->
+        <footer class="health-footer">
+            <p>{{ t "healthz.last_checked" }} <time id="hz-timestamp" datetime="{{.Timestamp}}">{{.TimestampDisplay}}</time></p>
+            <p class="auto-refresh">{{ t "healthz.auto_refreshing_in" }} <span id="countdown">30</span>{{ t "healthz.seconds_suffix" }}</p>
+        </footer>
+    </main>
+    {{template "public/footer" .}}
+    {{template "public/scripts" .}}
+    {{/* Health auto-refresh logic lives in static/js/app.js (CSP: script-src 'self') */}}
+</body>
+</html>
+{{end}}

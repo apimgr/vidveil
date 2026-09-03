@@ -1,0 +1,82 @@
+/* Swagger / API Documentation page — theme via CSS custom properties on <html> */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text);
+    padding: 10px;
+}
+
+.container { max-width: 960px; margin: 0 auto; }
+
+h1 { margin-bottom: 8px; color: var(--color-primary); font-size: 24px; }
+
+.subtitle {
+    color: var(--color-text);
+    opacity: 0.7;
+    margin-bottom: 24px;
+    font-size: 14px;
+}
+
+.card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+h2 { font-size: 18px; margin-bottom: 12px; color: var(--color-primary); }
+
+table { width: 100%; border-collapse: collapse; }
+
+th, td {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 13px;
+}
+
+th {
+    font-weight: 600;
+    color: var(--color-text);
+    opacity: 0.8;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+code { font-family: "Fira Code", Consolas, monospace; font-size: 13px; }
+
+.method {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-family: monospace;
+}
+
+.method-get    { background: var(--color-method-get-bg); color: var(--color-method-get); }
+.method-post   { background: var(--color-method-post-bg); color: var(--color-method-post); }
+.method-put    { background: var(--color-method-put-bg); color: var(--color-method-put); }
+.method-delete { background: var(--color-method-delete-bg); color: var(--color-method-delete); }
+
+.spec-link { margin-top: 16px; font-size: 13px; }
+
+.spec-link a { color: var(--color-primary); text-decoration: none; }
+.spec-link a:hover { text-decoration: underline; }
+
+/* Desktop: expand padding and table cell sizing */
+@media (min-width: 601px) {
+    body {
+        padding: 20px;
+    }
+
+    th, td {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+}

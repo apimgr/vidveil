@@ -1,0 +1,37 @@
+{{define "age-verify"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <meta name="robots" content="noindex,nofollow">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="{{ asset "/static/css/common.css" }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128269;</text></svg>">
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <main class="age-gate" id="main-content" role="main">
+        <div class="age-gate-box">
+            <div class="warning-icon">&#9888;&#65039;</div>
+            <h1>{{ t "age_verify.title" }}</h1>
+            <p>{{ t "age_verify.notice" }} <strong>{{ t "age_verify.min_age" }}</strong>.</p>
+            <p>{{ t "age_verify.confirm_text" }}</p>
+            <div class="age-buttons">
+                <form method="POST" action="/age-verify" class="d-inline">
+                    <input type="hidden" name="redirect" value="{{.Redirect}}">
+                    {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                    <button type="submit" class="btn-yes">{{ t "age_verify.confirm_button" }}</button>
+                </form>
+                <button type="button" class="btn-no" data-action="leave-site">{{ t "age_verify.exit" }}</button>
+            </div>
+            <p class="legal">
+                {{ t "age_verify.legal" }}
+            </p>
+        </div>
+    </main>
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

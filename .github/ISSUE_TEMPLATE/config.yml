@@ -1,0 +1,18 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Documentation
+    url: https://apimgr-vidveil.readthedocs.io
+    about: User and admin guides for self-hosting and configuring VidVeil.
+
+  - name: Public health & contact
+    url: https://x.scour.li/server/contact
+    about: General contact and status page.
+
+  - name: Security vulnerability
+    url: https://github.com/apimgr/vidveil/security/advisories/new
+    about: Report a security issue PRIVATELY. Do not file a public bug for vulnerabilities — see SECURITY.md.
+
+  - name: Discussions
+    url: https://github.com/apimgr/vidveil/discussions
+    about: Questions, ideas, and "is this a bug or me?" — start here before opening a bug report.

@@ -1,0 +1,25 @@
+{{define "error"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>{{.Code}} - {{.Title}} | {{.SiteTitle}}</title>
+    <link rel="stylesheet" href="{{ asset "/static/css/common.css" }}">
+    {{/* Styles moved to common.css per AI.md PART 16 */}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <main class="error-page" id="main-content" role="main">
+        <div class="error-code">{{.Code}}</div>
+        <h1 class="error-title">{{.Title}}</h1>
+        <p class="error-message">{{.Message}}</p>
+        <div class="error-actions">
+            <a href="/" class="btn-primary">{{ t "error.go_home" }}</a>
+            <button type="button" class="btn-secondary" data-action="back" data-js-only hidden>{{ t "error.go_back" }}</button>
+        </div>
+    </main>
+</body>
+</html>
+{{end}}

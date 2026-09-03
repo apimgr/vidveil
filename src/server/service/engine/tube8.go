@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"context"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
+)
+
+// Tube8Engine searches Tube8
+type Tube8Engine struct{ *BaseEngine }
+
+// newTube8Engine creates a new Tube8 engine
+func newTube8Engine(appConfig *config.AppConfig) *Tube8Engine {
+	return &Tube8Engine{NewBaseEngine("tube8", "Tube8", "https://www.tube8.com", 4, appConfig)}
+}
+
+// Search performs a search on Tube8
+func (e *Tube8Engine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
+	searchURL := e.BuildSearchURL("/searches.html?q={query}&page={page}", query, page)
+	return genericSearch(ctx, e.BaseEngine, searchURL, "article.video-box")
+}
+
+// SupportsFeature returns whether the engine supports a feature
+func (e *Tube8Engine) SupportsFeature(feature Feature) bool {
+	return feature == FeaturePagination
+}

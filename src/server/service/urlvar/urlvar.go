@@ -1,0 +1,714 @@
+// SPDX-License-Identifier: MIT
+// AI.md PART 8/12: URL Variables & Reverse Proxy Headers
+// X-Forwarded-* headers are only trusted when the immediate peer IP is in the
+// trusted set (loopback, RFC1918, fc00::/7, link-local, and additional CIDRs).
+// Tor requests (Host matches tor.onion_address) bypass the gate at priority 0.
+package urlvar
+
+import (
+	"net"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/apimgr/vidveil/src/config"
+)
+
+// URLVarsConfig holds URL detection configuration per AI.md
+type URLVarsConfig struct {
+	Learning     bool          `yaml:"learning" json:"learning"`
+	MinSamples   int           `yaml:"min_samples" json:"min_samples"`
+	SampleWindow time.Duration `yaml:"sample_window" json:"sample_window"`
+	LogChanges   bool          `yaml:"log_changes" json:"log_changes"`
+	LiveReload   bool          `yaml:"live_reload" json:"live_reload"`
+}
+
+// DefaultURLVarsConfig returns sane defaults per AI.md
+func DefaultURLVarsConfig() URLVarsConfig {
+	return URLVarsConfig{
+		Learning:     true,
+		MinSamples:   3,
+		SampleWindow: 5 * time.Minute,
+		LogChanges:   true,
+		LiveReload:   true,
+	}
+}
+
+// domainObservation tracks domain observations for learning
+type domainObservation struct {
+	domain    string
+	count     int
+	firstSeen time.Time
+	lastSeen  time.Time
+}
+
+// URLResolver handles URL variable resolution per AI.md PART 8/12
+type URLResolver struct {
+	mu           sync.RWMutex
+	config       URLVarsConfig
+	observations map[string]*domainObservation
+	baseDomain   string
+	wildcard     string
+	logger       func(format string, args ...interface{})
+	// appCfg provides trusted_proxies.additional and tor.onion_address
+	appCfg *config.AppConfig
+}
+
+// NewURLResolver creates a new URL resolver
+func NewURLResolver(cfg URLVarsConfig) *URLResolver {
+	return &URLResolver{
+		config:       cfg,
+		observations: make(map[string]*domainObservation),
+	}
+}
+
+// SetAppConfig updates the app config reference used for trusted proxy and Tor detection.
+// Must be called before the resolver handles requests. Safe to call concurrently.
+func (r *URLResolver) SetAppConfig(cfg *config.AppConfig) {
+	r.mu.Lock()
+	r.appCfg = cfg
+	r.mu.Unlock()
+}
+
+// isTorRequest returns true when the request Host matches tor.onion_address per AI.md PART 12.
+// Tor requests bypass the trusted_proxies gate entirely — priority 0 in FQDN resolution.
+func (r *URLResolver) isTorRequest(req *http.Request) bool {
+	r.mu.RLock()
+	cfg := r.appCfg
+	r.mu.RUnlock()
+	if cfg == nil || cfg.Server.Tor.OnionAddress == "" {
+		return false
+	}
+	host := req.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return host == cfg.Server.Tor.OnionAddress
+}
+
+// isTrustedProxy returns true when the request's immediate peer IP is in the trusted set
+// per AI.md PART 12: loopback, RFC1918, fc00::/7, link-local, and additional CIDRs.
+func (r *URLResolver) isTrustedProxy(remoteAddr string) bool {
+	host := remoteAddr
+	if h, _, err := net.SplitHostPort(remoteAddr); err == nil {
+		host = h
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	// Always trusted: loopback (127.0.0.0/8, ::1)
+	if ip.IsLoopback() {
+		return true
+	}
+	// Always trusted: link-local (169.254.0.0/16, fe80::/10)
+	if ip.IsLinkLocalUnicast() {
+		return true
+	}
+	// Always trusted: private ranges (RFC1918 + fc00::/7)
+	if ip.IsPrivate() {
+		return true
+	}
+	// Check additional CIDRs from config
+	r.mu.RLock()
+	cfg := r.appCfg
+	r.mu.RUnlock()
+	if cfg != nil {
+		for _, cidr := range cfg.Server.TrustedProxies.Additional {
+			if cidrContains(cidr, ip) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// cidrContains returns true when ip falls within the given CIDR or equals the given IP.
+func cidrContains(cidr string, ip net.IP) bool {
+	if !strings.Contains(cidr, "/") {
+		peer := net.ParseIP(cidr)
+		return peer != nil && peer.Equal(ip)
+	}
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false
+	}
+	return network.Contains(ip)
+}
+
+// SetLogger sets the logger function
+func (r *URLResolver) SetLogger(logger func(format string, args ...interface{})) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.logger = logger
+}
+
+// log logs a message if logger is set and LogChanges is enabled
+func (r *URLResolver) log(format string, args ...interface{}) {
+	if r.logger != nil && r.config.LogChanges {
+		r.logger(format, args...)
+	}
+}
+
+// GetURLVars returns resolved URL variables from request per AI.md
+// Checks reverse proxy headers first, triggers live reload on detection
+// Port is empty string for 80/443 (always stripped)
+func (r *URLResolver) GetURLVars(req *http.Request) (proto, fqdn, port string) {
+	proto = r.resolveProto(req)
+	fqdn = r.resolveFQDN(req)
+	port = r.resolvePort(req, proto)
+
+	// Record observation for learning
+	if r.config.Learning && fqdn != "localhost" {
+		r.recordObservation(fqdn)
+	}
+
+	return
+}
+
+// resolvePathPrefix resolves the base URL path prefix per AI.md PART 12 priority order.
+// Priority 1: X-Forwarded-Prefix (from trusted proxy)
+// Priority 2: X-Forwarded-Path (alternative, from trusted proxy)
+// Priority 3: X-Script-Name (WSGI-style, from trusted proxy)
+// Priority 4: server.baseurl config / BASEURL env var / --baseurl CLI flag
+// Priority 5: "/"
+func (r *URLResolver) resolvePathPrefix(req *http.Request) string {
+	// Reverse proxy headers only trusted from known-good peers
+	if r.isTrustedProxy(req.RemoteAddr) {
+		if prefix := req.Header.Get("X-Forwarded-Prefix"); prefix != "" {
+			return normalizePathPrefix(prefix)
+		}
+		if prefix := req.Header.Get("X-Forwarded-Path"); prefix != "" {
+			return normalizePathPrefix(prefix)
+		}
+		if prefix := req.Header.Get("X-Script-Name"); prefix != "" {
+			return normalizePathPrefix(prefix)
+		}
+	}
+
+	// Config value (populated from server.baseurl YAML or --baseurl CLI flag via BASEURL env)
+	r.mu.RLock()
+	cfg := r.appCfg
+	r.mu.RUnlock()
+	if cfg != nil && cfg.Server.BaseURL != "" && cfg.Server.BaseURL != "/" {
+		return normalizePathPrefix(cfg.Server.BaseURL)
+	}
+
+	// BASEURL env var (set by main.go from --baseurl or env)
+	if baseurl := os.Getenv("BASEURL"); baseurl != "" && baseurl != "/" {
+		return normalizePathPrefix(baseurl)
+	}
+
+	return "/"
+}
+
+// normalizePathPrefix ensures the prefix starts with "/" and has no trailing slash.
+// "/" is returned as-is. Empty string becomes "/".
+func normalizePathPrefix(s string) string {
+	s = strings.TrimRight(s, "/")
+	if s == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(s, "/") {
+		s = "/" + s
+	}
+	return s
+}
+
+// GetPathPrefix returns the resolved path prefix for the given request.
+func (r *URLResolver) GetPathPrefix(req *http.Request) string {
+	return r.resolvePathPrefix(req)
+}
+
+// resolveProto resolves protocol per AI.md PART 12 priority order.
+// X-Forwarded-* headers are only honored from trusted proxy peers.
+// Tor requests always return "http" — TLS terminates in the Tor layer.
+func (r *URLResolver) resolveProto(req *http.Request) string {
+	// Priority 0: Tor exception — always http, no proxy header inspection
+	if r.isTorRequest(req) {
+		return "http"
+	}
+
+	// Proxy headers only trusted from known-good peers
+	if r.isTrustedProxy(req.RemoteAddr) {
+		// Priority 1: X-Forwarded-Proto
+		if proto := req.Header.Get("X-Forwarded-Proto"); proto != "" {
+			return strings.ToLower(proto)
+		}
+
+		// Priority 2: X-Forwarded-Ssl
+		if ssl := req.Header.Get("X-Forwarded-Ssl"); strings.EqualFold(ssl, "on") {
+			return "https"
+		}
+
+		// Priority 3: X-Url-Scheme
+		if scheme := req.Header.Get("X-Url-Scheme"); scheme != "" {
+			return strings.ToLower(scheme)
+		}
+	}
+
+	// Priority 4: TLS on connection
+	if req.TLS != nil {
+		return "https"
+	}
+
+	// Priority 5: Default
+	return "http"
+}
+
+// resolveFQDN resolves FQDN per AI.md PART 12 priority order.
+// Priority 0 (Tor) is evaluated before any proxy headers — no IP check required.
+// Reverse proxy headers (priority 1) are only honored from trusted peers.
+func (r *URLResolver) resolveFQDN(req *http.Request) string {
+	// Priority 0: Tor request detection — always trusted, bypasses proxy gate
+	if r.isTorRequest(req) {
+		r.mu.RLock()
+		onion := r.appCfg.Server.Tor.OnionAddress
+		r.mu.RUnlock()
+		return onion
+	}
+
+	// Priority 1: Reverse Proxy Headers — only from trusted peers
+	if r.isTrustedProxy(req.RemoteAddr) {
+		if host := req.Header.Get("X-Forwarded-Host"); host != "" {
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				return h
+			}
+			return host
+		}
+		if host := req.Header.Get("X-Real-Host"); host != "" {
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				return h
+			}
+			return host
+		}
+		if host := req.Header.Get("X-Original-Host"); host != "" {
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				return h
+			}
+			return host
+		}
+	}
+
+	// Priority 2: DOMAIN env var (first in comma-separated list)
+	if domain := os.Getenv("DOMAIN"); domain != "" {
+		parts := strings.Split(domain, ",")
+		if len(parts) > 0 && parts[0] != "" {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+
+	// Priority 3: os.Hostname()
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		return hostname
+	}
+
+	// Priority 4: $HOSTNAME env var
+	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
+		return hostname
+	}
+
+	// Priority 5 & 6: Public IP detection
+	if publicIP := getPublicIP(); publicIP != "" {
+		return publicIP
+	}
+
+	// Priority 7: localhost
+	return "localhost"
+}
+
+// resolvePort resolves port per AI.md PART 12 priority order.
+// Returns empty string for 80/443 (always stripped).
+// Tor requests always return empty — port is never appended to onion URLs.
+func (r *URLResolver) resolvePort(req *http.Request, proto string) string {
+	// Tor exception: no port in onion URLs
+	if r.isTorRequest(req) {
+		return ""
+	}
+
+	var port string
+
+	// Priority 1: X-Forwarded-Port — only from trusted peers
+	if r.isTrustedProxy(req.RemoteAddr) {
+		if p := req.Header.Get("X-Forwarded-Port"); p != "" {
+			port = p
+		}
+	}
+
+	// Priority 2: Host header port
+	if port == "" {
+		if _, p, err := net.SplitHostPort(req.Host); err == nil && p != "" {
+			port = p
+		}
+	}
+
+	// Priority 3: Server listen port
+	if port == "" {
+		if addr := req.Context().Value(http.LocalAddrContextKey); addr != nil {
+			if tcpAddr, ok := addr.(*net.TCPAddr); ok {
+				port = strings.TrimPrefix(strings.TrimPrefix(tcpAddr.String(), "[::]:"), ":")
+			}
+		}
+	}
+
+	// Priority 4: Proto default
+	if port == "" {
+		if proto == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+
+	// Port stripping: 80 and 443 are NEVER included per AI.md
+	if port == "80" || port == "443" {
+		return ""
+	}
+
+	return port
+}
+
+// getPublicIP returns first public IP (IPv6 preferred, then IPv4)
+func getPublicIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+
+	var ipv6, ipv4 string
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+
+		ip := ipNet.IP
+
+		// Skip loopback, link-local, private
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate() {
+			continue
+		}
+
+		// Must be global unicast
+		if !ip.IsGlobalUnicast() {
+			continue
+		}
+
+		// Prefer IPv6
+		if ip.To4() == nil {
+			if ipv6 == "" {
+				ipv6 = ip.String()
+			}
+		} else {
+			if ipv4 == "" {
+				ipv4 = ip.String()
+			}
+		}
+	}
+
+	// IPv6 preferred per AI.md
+	if ipv6 != "" {
+		return ipv6
+	}
+	return ipv4
+}
+
+// recordObservation records a domain observation for learning
+func (r *URLResolver) recordObservation(domain string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now()
+
+	// Clean old observations outside sample window
+	for d, obs := range r.observations {
+		if now.Sub(obs.lastSeen) > r.config.SampleWindow {
+			delete(r.observations, d)
+		}
+	}
+
+	// Record or update observation
+	if obs, ok := r.observations[domain]; ok {
+		obs.count++
+		obs.lastSeen = now
+	} else {
+		r.observations[domain] = &domainObservation{
+			domain:    domain,
+			count:     1,
+			firstSeen: now,
+			lastSeen:  now,
+		}
+	}
+
+	// Check if we can infer patterns
+	r.inferPatterns()
+}
+
+// inferPatterns infers base domain and wildcard from observations
+func (r *URLResolver) inferPatterns() {
+	if len(r.observations) < r.config.MinSamples {
+		return
+	}
+
+	// Group by base domain (extract TLD+1)
+	domainCounts := make(map[string]int)
+	for _, obs := range r.observations {
+		base := extractBaseDomain(obs.domain)
+		domainCounts[base] += obs.count
+	}
+
+	// Find most common base domain
+	var mostCommon string
+	var maxCount int
+	for base, count := range domainCounts {
+		if count > maxCount {
+			maxCount = count
+			mostCommon = base
+		}
+	}
+
+	// Check for wildcard pattern (multiple subdomains of same base)
+	subdomains := 0
+	for _, obs := range r.observations {
+		base := extractBaseDomain(obs.domain)
+		if base == mostCommon && obs.domain != base {
+			subdomains++
+		}
+	}
+
+	oldBase := r.baseDomain
+	oldWildcard := r.wildcard
+
+	r.baseDomain = mostCommon
+
+	if subdomains >= 2 {
+		r.wildcard = "*." + mostCommon
+	}
+
+	// Log changes if enabled
+	if r.config.LogChanges {
+		if oldBase != r.baseDomain {
+			r.log("URL detection: base domain changed from %s to %s", oldBase, r.baseDomain)
+		}
+		if oldWildcard != r.wildcard && r.wildcard != "" {
+			r.log("URL detection: wildcard inferred as %s", r.wildcard)
+		}
+	}
+}
+
+// extractBaseDomain extracts base domain (TLD+1) from hostname
+func extractBaseDomain(hostname string) string {
+	parts := strings.Split(hostname, ".")
+	if len(parts) <= 2 {
+		return hostname
+	}
+	// Return last two parts (e.g., example.com from www.example.com)
+	return strings.Join(parts[len(parts)-2:], ".")
+}
+
+// BuildURL constructs full URL with automatic port stripping per AI.md
+// :80 and :443 are NEVER included
+func (r *URLResolver) BuildURL(req *http.Request, path string) string {
+	proto, fqdn, port := r.GetURLVars(req)
+	prefix := r.resolvePathPrefix(req)
+	// Avoid double-slash: if prefix is "/" treat as empty path component.
+	var base string
+	if port == "" {
+		base = proto + "://" + fqdn
+	} else {
+		base = proto + "://" + fqdn + ":" + port
+	}
+	if prefix == "/" {
+		return base + path
+	}
+	return base + prefix + path
+}
+
+// GetBaseDomain returns inferred base domain from learning
+// Returns: "myapp.com" even if accessed via "www.myapp.com"
+func (r *URLResolver) GetBaseDomain() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.baseDomain
+}
+
+// GetWildcardDomain returns inferred wildcard if detected
+// Returns: "*.myapp.com" or empty if no wildcard pattern
+func (r *URLResolver) GetWildcardDomain() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.wildcard
+}
+
+// GetAllDomains returns all domains from DOMAIN env var
+func GetAllDomains() []string {
+	domain := os.Getenv("DOMAIN")
+	if domain == "" {
+		return nil
+	}
+
+	parts := strings.Split(domain, ",")
+	domains := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if d := strings.TrimSpace(p); d != "" {
+			domains = append(domains, d)
+		}
+	}
+	return domains
+}
+
+// Global resolver instance
+var (
+	globalResolver *URLResolver
+	globalOnce     sync.Once
+)
+
+// GlobalResolver returns the global resolver instance
+func GlobalResolver() *URLResolver {
+	globalOnce.Do(func() {
+		globalResolver = NewURLResolver(DefaultURLVarsConfig())
+	})
+	return globalResolver
+}
+
+// GetURLVars is a convenience function using global resolver
+func GetURLVars(req *http.Request) (proto, fqdn, port string) {
+	return GlobalResolver().GetURLVars(req)
+}
+
+// BuildURL is a convenience function using global resolver
+func BuildURL(req *http.Request, path string) string {
+	return GlobalResolver().BuildURL(req, path)
+}
+
+// GetBaseDomain is a convenience function using global resolver
+func GetBaseDomain() string {
+	return GlobalResolver().GetBaseDomain()
+}
+
+// GetWildcardDomain is a convenience function using global resolver
+func GetWildcardDomain() string {
+	return GlobalResolver().GetWildcardDomain()
+}
+
+// GetPathPrefix is a convenience function using global resolver
+func GetPathPrefix(req *http.Request) string {
+	return GlobalResolver().GetPathPrefix(req)
+}
+
+// resolveClientIP resolves the client IP per AI.md PART 12 "Client IP Detection"
+// priority order. Headers are only honored when the immediate TCP peer passes
+// isTrustedProxy — evaluated against req.RemoteAddr, which this resolver never
+// mutates. Otherwise resolution falls straight to req.RemoteAddr (priority 6).
+func (r *URLResolver) resolveClientIP(req *http.Request) string {
+	if r.isTrustedProxy(req.RemoteAddr) {
+		// Priority 1: CF-Connecting-IP (Cloudflare)
+		if ip := strings.TrimSpace(req.Header.Get("CF-Connecting-IP")); ip != "" {
+			return ip
+		}
+		// Priority 2: True-Client-IP (Akamai / Cloudflare Enterprise)
+		if ip := strings.TrimSpace(req.Header.Get("True-Client-IP")); ip != "" {
+			return ip
+		}
+		// Priority 3: X-Real-IP (nginx)
+		if ip := strings.TrimSpace(req.Header.Get("X-Real-IP")); ip != "" {
+			return ip
+		}
+		// Priority 4: X-Forwarded-For — leftmost entry of "client, proxy1, proxy2"
+		if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
+			leftmost := xff
+			if idx := strings.Index(xff, ","); idx != -1 {
+				leftmost = xff[:idx]
+			}
+			if ip := strings.TrimSpace(leftmost); ip != "" {
+				return ip
+			}
+		}
+		// Priority 5: X-Client-IP
+		if ip := strings.TrimSpace(req.Header.Get("X-Client-IP")); ip != "" {
+			return ip
+		}
+	}
+
+	// Priority 6: r.RemoteAddr fallback
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return req.RemoteAddr
+	}
+	return host
+}
+
+// ResolveClientIP returns the resolved client IP for req using the global
+// resolver, per AI.md PART 12 "Client IP Detection" priority order. This is
+// the canonical client-IP source for access logs, rate limiting, blocklists,
+// and GeoIP — it never mutates req.RemoteAddr, so trust-gate checks elsewhere
+// (isTrustedProxy, BuildURL, X-Forwarded-Prefix, domain/CORS/CSP learning)
+// keep evaluating the original TCP peer.
+func ResolveClientIP(req *http.Request) string {
+	return GlobalResolver().resolveClientIP(req)
+}
+
+// IsTorRequest reports whether req arrived via the Tor hidden service (Host
+// matches tor.onion_address) using the global resolver. Per AI.md PART 31,
+// loggers must never record 127.0.0.1 for Tor requests — callers substitute
+// the "tor" sentinel for the client IP when this returns true.
+func IsTorRequest(req *http.Request) bool {
+	return GlobalResolver().isTorRequest(req)
+}
+
+// torCircuitIDNet is the fc00::/8 range Tor's HiddenServiceExportCircuitID
+// haproxy setting uses to encode the 64-bit rendezvous circuit ID in the
+// PROXY-protocol v1 source address (AI.md PART 31 "Circuit-ID Export &
+// PROXY-Protocol Backend Listener").
+var torCircuitIDNet = &net.IPNet{IP: net.ParseIP("fc00::"), Mask: net.CIDRMask(8, 128)}
+
+// TorClientLabel returns the opaque per-session client label for a Tor
+// hidden-service request: "tor:{circuit_id}" when the dedicated PROXY-
+// protocol backend listener resolved a circuit ID from req.RemoteAddr (an
+// fc00::/8 address), or the literal sentinel "tor" when circuit-ID export
+// is unavailable. Callers substitute this for the client IP in access logs,
+// audit trails, and rate-limit keys — never 127.0.0.1, never deanonymizing.
+func TorClientLabel(req *http.Request) string {
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		host = req.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	if ip != nil && torCircuitIDNet.Contains(ip) {
+		circuitID := strings.TrimLeft(strings.ReplaceAll(ip.String(), ":", ""), "0")
+		if circuitID == "" {
+			circuitID = "0"
+		}
+		return "tor:" + circuitID
+	}
+	return "tor"
+}
+
+// Middleware returns HTTP middleware that sets X-Resolved-* headers for templates
+func (r *URLResolver) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		proto, fqdn, port := r.GetURLVars(req)
+		prefix := r.resolvePathPrefix(req)
+		// Set resolved values as headers for downstream handlers
+		req.Header.Set("X-Resolved-Proto", proto)
+		req.Header.Set("X-Resolved-Host", fqdn)
+		if port != "" {
+			req.Header.Set("X-Resolved-Port", port)
+		}
+		// X-Resolved-PathPrefix: "/" means root (no prefix)
+		req.Header.Set("X-Resolved-PathPrefix", prefix)
+		// Set full base URL including path prefix for convenience
+		baseURL := proto + "://" + fqdn
+		if port != "" {
+			baseURL += ":" + port
+		}
+		if prefix != "/" {
+			baseURL += prefix
+		}
+		req.Header.Set("X-Resolved-BaseURL", baseURL)
+		next.ServeHTTP(w, req)
+	})
+}

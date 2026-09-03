@@ -1,0 +1,407 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"strings"
+)
+
+// BangMapping maps bang shortcuts to engine names
+// Supports both full names (!pornhub) and short codes (!ph)
+var BangMapping = map[string]string{
+	// Tier 1 - Major Sites
+	"ph":       "pornhub",
+	"pornhub":  "pornhub",
+	"xv":       "xvideos",
+	"xvideos":  "xvideos",
+	"xn":       "xnxx",
+	"xnxx":     "xnxx",
+	"rt":       "redtube",
+	"redtube":  "redtube",
+	"xh":       "xhamster",
+	"xhamster": "xhamster",
+
+	// Tier 2 - Popular Sites
+	"ep":      "eporner",
+	"eporner": "eporner",
+	"yp":      "youporn",
+	"youporn": "youporn",
+	// pmd/pornmd intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
+
+	// Tier 3 - Additional Sites
+	// 4t/4tube intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
+	// fux intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
+	"pt":       "porntube",
+	"porntube": "porntube",
+	"yj":       "youjizz",
+	"youjizz":  "youjizz",
+	"sp":       "sunporno",
+	"sunporno": "sunporno",
+	"tx":       "txxx",
+	"txxx":     "txxx",
+	"nv":       "nuvid",
+	"nuvid":    "nuvid",
+	"tna":      "tnaflix",
+	"tnaflix":  "tnaflix",
+	"dt":       "drtuber",
+	"drtuber":  "drtuber",
+	// emp/empflix intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
+	"hp":         "hellporno",
+	"hellporno":  "hellporno",
+	"ap":         "alphaporno",
+	"alphaporno": "alphaporno",
+	"pf":         "pornflip",
+	"pornflip":   "pornflip",
+	// gp/gotporn intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
+	"xxxy":         "xxxymovies",
+	"xxxymovies":   "xxxymovies",
+	"lhp":          "lovehomeporn",
+	"lovehomeporn": "lovehomeporn",
+
+	// Tier 4 - Additional yt-dlp supported sites
+	// pb/pornerbros intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
+	"nk":          "nonktube",
+	"nonktube":    "nonktube",
+	"np":          "nubilesporn",
+	"nubilesporn": "nubilesporn",
+	"pbox":        "pornbox",
+	"pornbox":     "pornbox",
+	"ptop":        "porntop",
+	"porntop":     "porntop",
+	// phd/pornhd intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
+	"xb":       "xbabe",
+	"xbabe":    "xbabe",
+	"p1":       "pornone",
+	"pornone":  "pornone",
+	"phat":     "pornhat",
+	"pornhat":  "pornhat",
+	"ptrex":    "porntrex",
+	"porntrex": "porntrex",
+	"hq":       "hqporner",
+	"hqporner": "hqporner",
+	"vj":       "vjav",
+	"vjav":     "vjav",
+	"ff":       "flyflv",
+	"flyflv":   "flyflv",
+	"t8":       "tube8",
+	"tube8":    "tube8",
+
+	// Tier 5 - New engines
+	"any":     "anyporn",
+	"anyporn": "anyporn",
+	// tg/tubegalore intentionally has no bang - engine removed, site returns
+	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
+	// motherless intentionally has no bang - engine is implemented
+	// (motherless.go) but not registered in manager.go (aggressive TLS
+	// fingerprinting blocks automated requests), so a !motherless/!ml bang
+	// would advertise a shortcut for an engine that can never actually
+	// search. Per IDEA.md Validation: "Bang shortcuts must exist in bangs
+	// list" implies the inverse too - the bangs list must not advertise a
+	// shortcut for an engine that isn't actually registered/searchable.
+
+	// Tier 6 - Additional engines
+	"3m":    "3movs",
+	"3movs": "3movs",
+}
+
+// ParsedQuery represents a query after bang parsing
+type ParsedQuery struct {
+	// The search query without bangs, quotes, exclusions, and required terms
+	Query string
+	// Engine names to search (empty = all)
+	Engines []string
+	// Whether a bang was detected
+	HasBang bool
+	// If a bang was not recognized
+	InvalidBang string
+	// Exact phrases to require (from "quoted text")
+	ExactPhrases []string
+	// Words to exclude from results (from -word)
+	Exclusions []string
+	// Words required in results (from +word)
+	RequiredTerms []string
+}
+
+// ParseBangs extracts bang commands from a query
+// Supports:
+//   - !ph query -> search pornhub for "query"
+//   - !rt !ph query -> search redtube and pornhub for "query"
+//   - query !ph -> search pornhub for "query"
+//   - !pornhub query -> search pornhub for "query"
+//   - "exact phrase" -> require exact phrase match
+//   - -word -> exclude results containing word
+//   - +word -> require results to contain word
+//   - @word -> strips @ prefix (used for autocomplete, word kept in query)
+//   - !unknownbang -> stripped from query, recorded in InvalidBang
+func ParseBangs(query string) ParsedQuery {
+	result := ParsedQuery{
+		Query:         query,
+		Engines:       []string{},
+		HasBang:       false,
+		ExactPhrases:  []string{},
+		Exclusions:    []string{},
+		RequiredTerms: []string{},
+	}
+
+	if query == "" {
+		return result
+	}
+
+	// First, extract quoted phrases
+	remaining := query
+	for {
+		start := strings.Index(remaining, "\"")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(remaining[start+1:], "\"")
+		if end == -1 {
+			break
+		}
+		// Extract the phrase (without quotes)
+		phrase := strings.TrimSpace(remaining[start+1 : start+1+end])
+		if phrase != "" {
+			result.ExactPhrases = append(result.ExactPhrases, phrase)
+		}
+		// Remove the quoted phrase from the query
+		remaining = remaining[:start] + remaining[start+1+end+1:]
+	}
+
+	words := strings.Fields(remaining)
+	var queryWords []string
+	// Retain phrase words in the base search query (in addition to
+	// ExactPhrases) so a fully-quoted query still yields non-empty
+	// search text for engines to match against; ExactPhrases still
+	// drives exact-match post-filtering.
+	for _, phrase := range result.ExactPhrases {
+		queryWords = append(queryWords, strings.Fields(phrase)...)
+	}
+	// Deduplicate engines
+	engineSet := make(map[string]bool)
+
+	for _, word := range words {
+		if strings.HasPrefix(word, "!") && len(word) > 1 {
+			bang := strings.ToLower(word[1:])
+			if engineName, ok := BangMapping[bang]; ok {
+				result.HasBang = true
+				if !engineSet[engineName] {
+					engineSet[engineName] = true
+					result.Engines = append(result.Engines, engineName)
+				}
+			} else {
+				// Unknown bang - strip it from the query and note it so
+				// the rest of the query still searches cleanly; the
+				// caller can surface InvalidBang as a warning.
+				result.InvalidBang = word
+			}
+		} else if strings.HasPrefix(word, "@") && len(word) > 1 {
+			// @ prefix is for autocomplete only - strip it and keep word in query
+			// e.g., "@dakota skye" becomes "dakota skye" in search
+			queryWords = append(queryWords, word[1:])
+		} else if strings.HasPrefix(word, "-") && len(word) > 1 {
+			// Exclusion term
+			exclusion := strings.ToLower(word[1:])
+			result.Exclusions = append(result.Exclusions, exclusion)
+		} else if strings.HasPrefix(word, "+") && len(word) > 1 {
+			// Required term - must be present in every result
+			required := strings.ToLower(word[1:])
+			result.RequiredTerms = append(result.RequiredTerms, required)
+		} else {
+			queryWords = append(queryWords, word)
+		}
+	}
+
+	result.Query = strings.TrimSpace(strings.Join(queryWords, " "))
+
+	return result
+}
+
+// GetEngineBangs returns all bangs for a given engine name
+func GetEngineBangs(engineName string) []string {
+	var bangs []string
+	for bang, engine := range BangMapping {
+		if engine == engineName {
+			bangs = append(bangs, "!"+bang)
+		}
+	}
+	return bangs
+}
+
+// GetAllBangs returns a map of engine names to their bangs
+func GetAllBangs() map[string][]string {
+	result := make(map[string][]string)
+	for bang, engine := range BangMapping {
+		result[engine] = append(result[engine], "!"+bang)
+	}
+	return result
+}
+
+// BangInfo holds information about a bang shortcut
+type BangInfo struct {
+	Bang        string `json:"bang"`
+	EngineName  string `json:"engine_name"`
+	DisplayName string `json:"display_name"`
+	ShortCode   string `json:"short_code"`
+}
+
+// EngineDisplayNames maps engine names to display names
+var EngineDisplayNames = map[string]string{
+	"pornhub":      "PornHub",
+	"xvideos":      "XVideos",
+	"xnxx":         "XNXX",
+	"redtube":      "RedTube",
+	"xhamster":     "xHamster",
+	"eporner":      "Eporner",
+	"youporn":      "YouPorn",
+	"porntube":     "PornTube",
+	"youjizz":      "YouJizz",
+	"sunporno":     "SunPorno",
+	"txxx":         "TXXX",
+	"nuvid":        "Nuvid",
+	"tnaflix":      "TNAFlix",
+	"drtuber":      "DrTuber",
+	"hellporno":    "HellPorno",
+	"alphaporno":   "AlphaPorno",
+	"pornflip":     "PornFlip",
+	"xxxymovies":   "XXXYMovies",
+	"lovehomeporn": "LoveHomePorn",
+	"nonktube":     "NonkTube",
+	"nubilesporn":  "NubilesPorn",
+	"pornbox":      "PornBox",
+	"porntop":      "PornTop",
+	"xbabe":        "XBabe",
+	"pornone":      "PornOne",
+	"pornhat":      "PornHat",
+	"porntrex":     "PornTrex",
+	"hqporner":     "HQPorner",
+	"vjav":         "VJAV",
+	"flyflv":       "FlyFLV",
+	"tube8":        "Tube8",
+	"anyporn":      "AnyPorn",
+	"3movs":        "3Movs",
+}
+
+// ListBangs returns a sorted list of all available bangs
+func ListBangs() []BangInfo {
+	seen := make(map[string]bool)
+	var result []BangInfo
+
+	// Get unique engine names first
+	for _, engine := range BangMapping {
+		if !seen[engine] {
+			seen[engine] = true
+			// Find the short code (shortest bang for this engine)
+			shortCode := engine
+			for bang, eng := range BangMapping {
+				if eng == engine && len(bang) < len(shortCode) {
+					shortCode = bang
+				}
+			}
+			displayName := EngineDisplayNames[engine]
+			if displayName == "" {
+				displayName = engine
+			}
+			result = append(result, BangInfo{
+				Bang:        "!" + engine,
+				EngineName:  engine,
+				DisplayName: displayName,
+				ShortCode:   "!" + shortCode,
+			})
+		}
+	}
+
+	return result
+}
+
+// AutocompleteSuggestion represents a single autocomplete suggestion
+type AutocompleteSuggestion struct {
+	Bang        string `json:"bang"`
+	EngineName  string `json:"engine_name"`
+	DisplayName string `json:"display_name"`
+	ShortCode   string `json:"short_code"`
+	// For sorting, not exposed
+	Score int `json:"-"`
+}
+
+// Autocomplete returns bang suggestions for a partial input
+// prefix should be the text after "!" (e.g., "po" for "!po")
+func Autocomplete(prefix string) []AutocompleteSuggestion {
+	prefix = strings.ToLower(prefix)
+	if prefix == "" {
+		return nil
+	}
+
+	// Track best score per engine across all its bang aliases
+	bestScore := make(map[string]int)
+
+	for bang, engine := range BangMapping {
+		bangLower := strings.ToLower(bang)
+		engineLower := strings.ToLower(engine)
+
+		score := 0
+		// Shorter bang = higher score; bang prefix match beats engine name match
+		if strings.HasPrefix(bangLower, prefix) {
+			score = 100 - len(bang)
+		} else if strings.HasPrefix(engineLower, prefix) {
+			score = 50 - len(engine)
+		} else if strings.Contains(bangLower, prefix) || strings.Contains(engineLower, prefix) {
+			score = 10
+		}
+
+		if score > bestScore[engine] {
+			bestScore[engine] = score
+		}
+	}
+
+	// Build suggestions from best scores, one entry per engine
+	seen := make(map[string]bool)
+	var suggestions []AutocompleteSuggestion
+
+	for engine, score := range bestScore {
+		if score <= 0 || seen[engine] {
+			continue
+		}
+		seen[engine] = true
+
+		// Find shortest bang for this engine
+		shortCode := engine
+		for b, e := range BangMapping {
+			if e == engine && len(b) < len(shortCode) {
+				shortCode = b
+			}
+		}
+		displayName := EngineDisplayNames[engine]
+		if displayName == "" {
+			displayName = engine
+		}
+		suggestions = append(suggestions, AutocompleteSuggestion{
+			Bang:        "!" + engine,
+			EngineName:  engine,
+			DisplayName: displayName,
+			ShortCode:   "!" + shortCode,
+			Score:       score,
+		})
+	}
+
+	// Sort by score (descending)
+	for i := 0; i < len(suggestions)-1; i++ {
+		for j := i + 1; j < len(suggestions); j++ {
+			if suggestions[j].Score > suggestions[i].Score {
+				suggestions[i], suggestions[j] = suggestions[j], suggestions[i]
+			}
+		}
+	}
+
+	// Limit results
+	if len(suggestions) > 10 {
+		suggestions = suggestions[:10]
+	}
+
+	return suggestions
+}

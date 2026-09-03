@@ -1,0 +1,60 @@
+{{define "nojs/about"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
+    <main class="about" id="main-content" role="main">
+        <h1>{{ t "about.title" }}</h1>
+        <section>
+            <h2>{{ t "about.what_is" }}</h2>
+            <p>{{ t "about.description" }}</p>
+        </section>
+        <section>
+            <h2>{{ t "about.features" }}</h2>
+            <ul>
+                <li>{{ t "about.feature_engines" }}</li>
+                <li>{{ t "about.feature_tor" }}</li>
+                <li>{{ t "about.feature_privacy" }}</li>
+                <li>{{ t "about.feature_parallel" }}</li>
+                <li>{{ t "about.feature_thumbnails" }}</li>
+                <li>{{ t "about.feature_config" }}</li>
+                <li>{{ t "about.feature_themes" }}</li>
+                <li>{{ t "about.feature_api" }}</li>
+                <li>{{ t "about.feature_selfhost" }}</li>
+            </ul>
+        </section>
+        <section>
+            <h2>{{ t "about.api" }}</h2>
+            <p>{{ t "about.api_desc" }}</p>
+            <div class="api-endpoints">
+                <code>GET /api/v1/search?q={query}&amp;page={page}</code>
+                <code>GET /api/v1/engines</code>
+                <code>GET /api/v1/healthz</code>
+                <code>POST /graphql</code>
+            </div>
+            <p><a href="/server/docs/swagger">{{ t "about.api_docs" }}</a></p>
+        </section>
+        <section>
+            <h2>{{ t "about.selfhost" }}</h2>
+            <p>{{ t "about.selfhost_desc" }}</p>
+            <pre><code># Direct run
+./vidveil --port 64893
+
+# Docker
+docker run -p 64580:80 ghcr.io/apimgr/vidveil</code></pre>
+        </section>
+        <section>
+            <h2>{{ t "about.legal" }}</h2>
+            <p>{{ t "about.legal_desc" }}</p>
+            <p>{{ t "about.age_requirement" }}</p>
+        </section>
+    </main>
+    {{template "public/footer" .}}
+</body>
+</html>
+{{end}}

@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"context"
+	"fmt"
+	"net/url"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/apimgr/vidveil/src/server/service/parser"
+)
+
+// XVideosEngine implements the XVideos search engine
+type XVideosEngine struct {
+	*BaseEngine
+	parser *parser.XVideosParser
+}
+
+// newXVideosEngine creates a new XVideos engine
+func newXVideosEngine(appConfig *config.AppConfig) *XVideosEngine {
+	e := &XVideosEngine{
+		BaseEngine: NewBaseEngine("xvideos", "XVideos", "https://www.xvideos.com", 1, appConfig),
+		parser:     parser.NewXVideosParser(),
+	}
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:    true,
+		HasDownload:   true,
+		HasDuration:   true,
+		HasViews:      true,
+		HasRating:     false,
+		HasQuality:    true,
+		HasUploadDate: false,
+		PreviewSource: "data-preview",
+		APIType:       "html",
+	})
+	return e
+}
+
+// Search performs a search on XVideos
+func (e *XVideosEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
+	// XVideos uses 0-based pagination
+	// URL-encode the query to handle spaces and special characters
+	searchURL := fmt.Sprintf("%s/?k=%s&p=%d", e.baseURL, url.QueryEscape(query), page-1)
+
+	resp, err := e.MakeRequest(ctx, searchURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []model.VideoResult
+
+	doc.Find(e.parser.ItemSelector()).Each(func(i int, s *goquery.Selection) {
+		item := e.parser.Parse(s)
+		if item != nil && item.Title != "" && item.URL != "" && !item.IsPremium {
+			results = append(results, e.convertToResult(item))
+		}
+	})
+
+	return results, nil
+}
+
+// convertToResult converts VideoItem to model.VideoResult
+func (e *XVideosEngine) convertToResult(item *parser.VideoItem) model.VideoResult {
+	// Use video page URL as download URL (works with yt-dlp)
+	downloadURL := item.DownloadURL
+	if downloadURL == "" {
+		downloadURL = item.URL
+	}
+	return model.VideoResult{
+		ID:              GenerateResultID(item.URL, e.Name()),
+		URL:             item.URL,
+		Title:           item.Title,
+		Thumbnail:       item.Thumbnail,
+		PreviewURL:      item.PreviewURL,
+		DownloadURL:     downloadURL,
+		Duration:        item.Duration,
+		DurationSeconds: item.DurationSeconds,
+		Views:           item.Views,
+		ViewsCount:      item.ViewsCount,
+		Quality:         item.Quality,
+		Source:          e.Name(),
+		SourceDisplay:   e.DisplayName(),
+		Tags:            item.Tags,
+		Performer:       item.Uploader,
+	}
+}
+
+// SupportsFeature checks if XVideos supports a specific feature
+func (e *XVideosEngine) SupportsFeature(feature Feature) bool {
+	switch feature {
+	case FeaturePagination:
+		return true
+	case FeatureSorting:
+		return true
+	default:
+		return false
+	}
+}

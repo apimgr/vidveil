@@ -1,0 +1,35 @@
+{{define "content-blocked"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <meta name="robots" content="noindex,nofollow">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="{{ asset "/static/css/common.css" }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128683;</text></svg>">
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <main class="age-gate" id="main-content" role="main">
+        <div class="age-gate-box blocked">
+            <div class="warning-icon">&#128683;</div>
+            <h1>{{ t "content_blocked.title" }}</h1>
+            {{if .Region}}
+            <p class="region-notice">{{ t "content_blocked.region_notice" }} <strong>{{.Region}}</strong></p>
+            {{end}}
+            <p>{{.Message}}</p>
+            <p>{{ t "content_blocked.description" }}</p>
+            <div class="age-buttons">
+                <button type="button" class="btn-no" data-action="leave-site">{{ t "content_blocked.leave_site" }}</button>
+            </div>
+            <p class="legal">
+                {{ t "content_blocked.legal" }}
+            </p>
+        </div>
+    </main>
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

@@ -1,0 +1,170 @@
+{{define "server-help"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content">
+    <div class="prose">
+        <h1>{{ t "help.title" }}</h1>
+        <p>{{ tf "help.intro" .AppName }}</p>
+
+        <h2>{{ t "help.basic_search" }}</h2>
+        <p>{{ t "help.basic_search_body" }}</p>
+
+        <h2>{{ t "help.search_operators" }}</h2>
+        <p>{{ t "help.search_operators_intro" }}</p>
+        <ul>
+            <li><code>+word</code> - {{ t "help.op_require" }}</li>
+            <li><code>-word</code> - {{ t "help.op_exclude" }}</li>
+            <li><code>"exact phrase"</code> - {{ t "help.op_phrase" }}</li>
+        </ul>
+        <p>{{ t "help.search_operators_example" }} <code>+lesbian -amateur "hot tub"</code></p>
+
+        <h2>{{ t "help.bang_shortcuts" }}</h2>
+        <p>{{ t "help.bang_shortcuts_intro" }}</p>
+        <ul>
+            <li><code>!ph nature</code> - {{ t "help.bang_example_ph" }}</li>
+            <li><code>!xv sunset</code> - {{ t "help.bang_example_xv" }}</li>
+            <li><code>!ph !rt beach</code> - {{ t "help.bang_example_multi" }}</li>
+        </ul>
+        <p>{{ t "help.bang_shortcuts_body" }}</p>
+
+        <h2>{{ t "help.available_bangs" }}</h2>
+        <p>{{ t "help.available_bangs_intro_1" }} <a href="/search?q=!">{{ t "help.search_page_link" }}</a> {{ t "help.available_bangs_intro_2" }}</p>
+        <pre><code>curl {{.BaseURL}}{{.APIBase}}/bangs</code></pre>
+
+        <h2>{{ t "help.autocomplete" }}</h2>
+        <p>{{ t "help.autocomplete_body" }}</p>
+        <pre><code>curl "{{.BaseURL}}{{.APIBase}}/bangs/autocomplete?q=!p"</code></pre>
+
+        <h2>{{ t "help.preferences" }}</h2>
+        <p>{{ t "help.preferences_intro" }} <a href="/server/preferences">{{ t "help.preferences_link" }}</a>:</p>
+        <ul>
+            <li>{{ t "help.pref_theme" }}</li>
+            <li>{{ t "help.pref_results_page" }}</li>
+            <li>{{ t "help.pref_new_tab" }}</li>
+            <li>{{ t "help.pref_engines" }}</li>
+        </ul>
+        <p>{{ t "help.preferences_storage" }}</p>
+
+        <h2>{{ t "help.history_favorites" }}</h2>
+        <p><a href="/favorites">{{ t "help.favorites_link" }}</a> {{ t "help.history_favorites_body" }}</p>
+
+        <h2>{{ t "help.video_preview" }}</h2>
+        <p>{{ t "help.video_preview_body" }}</p>
+
+        <h2>{{ t "help.thumbnail_proxy" }}</h2>
+        <p>{{ t "help.thumbnail_proxy_body" }}</p>
+        <pre><code>curl "{{.BaseURL}}{{.APIBase}}/proxy/thumbnails?url=https://example.com/thumb.jpg"</code></pre>
+
+        <h2>{{ t "help.tor_hidden_service" }}</h2>
+        <p>{{if .TorOnionAddr}}{{ tf "help.tor_reachable" .TorOnionAddr }}{{else}}{{ t "help.tor_auto" }}{{end}}</p>
+
+        <h2>{{ t "help.age_verification" }}</h2>
+        <p>{{ t "help.age_verification_body" }}</p>
+
+        <h2>{{ t "help.keyboard_shortcuts" }}</h2>
+        <ul>
+            <li><kbd>/</kbd> - {{ t "help.kbd_focus_search" }}</li>
+            <li><kbd>Esc</kbd> - {{ t "help.kbd_close" }}</li>
+            <li><kbd>?</kbd> - {{ t "help.kbd_show_help" }}</li>
+        </ul>
+
+        <h2>{{ t "help.api_access" }}</h2>
+        <p>{{ tf "help.api_access_body" .AppName }}</p>
+
+        <table>
+            <thead><tr><th>{{ t "help.table_endpoint" }}</th><th>{{ t "help.table_purpose" }}</th></tr></thead>
+            <tbody>
+                <tr><td><code>GET {{.APIBase}}/search?q={query}</code></td><td>{{ t "help.endpoint_search" }}</td></tr>
+                <tr><td><code>POST {{.APIBase}}/search/batch</code></td><td>{{ t "help.endpoint_batch" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/bangs</code></td><td>{{ t "help.endpoint_bangs" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/bangs/autocomplete?q={partial}</code></td><td>{{ t "help.endpoint_autocomplete" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/engines</code></td><td>{{ t "help.endpoint_engines" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/engines/{name}</code></td><td>{{ t "help.endpoint_engine_detail" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/engines/health</code></td><td>{{ t "help.endpoint_engine_health" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/stats</code></td><td>{{ t "help.endpoint_stats" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/proxy/thumbnails?url={url}</code></td><td>{{ t "help.endpoint_proxy_thumbnails" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/proxy/videos?url={url}</code></td><td>{{ t "help.endpoint_proxy_videos" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/server/healthz</code></td><td>{{ t "help.endpoint_healthz" }}</td></tr>
+                <tr><td><code>GET {{.APIBase}}/version</code></td><td>{{ t "help.endpoint_version" }}</td></tr>
+            </tbody>
+        </table>
+
+        <h3>{{ t "help.examples" }}</h3>
+        <pre><code>curl "{{.BaseURL}}{{.APIBase}}/search?q=+lesbian+-amateur"
+
+curl -H "Accept: text/event-stream" "{{.BaseURL}}{{.APIBase}}/search?q=sunset"
+
+curl "{{.BaseURL}}{{.APIBase}}/search?q=sunset&engines=ph,xv"
+
+curl "{{.BaseURL}}{{.APIBase}}/engines"
+
+curl "{{.BaseURL}}{{.APIBase}}/server/healthz"
+
+curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
+
+        <h3>{{ t "help.api_documentation" }}</h3>
+        <p>{{ tf "help.api_documentation_intro" .AppName }}</p>
+        <ul>
+            <li><a href="/server/docs/swagger">{{ t "help.swagger_link" }}</a> — {{ t "help.swagger_desc" }} <code>/api/swagger</code></li>
+            <li><a href="/server/docs/graphql">{{ t "help.graphiql_link" }}</a> — {{ t "help.graphiql_desc" }} <code>/api/graphql</code></li>
+        </ul>
+
+        <h2>{{ t "help.faq" }}</h2>
+
+        <h3>{{ tf "help.faq_hosts_q" .AppName }}</h3>
+        <p>{{ tf "help.faq_hosts_a" .AppName }}</p>
+
+        <h3>{{ t "help.faq_account_q" }}</h3>
+        <p>{{ tf "help.faq_account_a" .AppName }}</p>
+
+        <h3>{{ t "help.faq_no_results_q" }}</h3>
+        <p>{{ t "help.faq_no_results_a" }}</p>
+
+        <h3>{{ t "help.faq_logged_q" }}</h3>
+        <p>{{ t "help.faq_logged_a" }}</p>
+
+        <h3>{{ t "help.faq_js_q" }}</h3>
+        <p>{{ t "help.faq_js_a" }}</p>
+
+        <h3>{{ t "help.faq_specific_sites_q" }}</h3>
+        <p>{{ t "help.faq_specific_sites_a" }} <a href="/server/preferences">{{ t "help.preferences_link" }}</a>.</p>
+
+        <h2>{{ t "help.troubleshooting" }}</h2>
+
+        <h3>{{ t "help.ts_no_results_q" }}</h3>
+        <p>{{ t "help.ts_no_results_a" }}</p>
+
+        <h3>{{ t "help.ts_rate_limited_q" }}</h3>
+        <p>{{ t "help.ts_rate_limited_a" }}</p>
+
+        <h3>{{ t "help.ts_thumbnails_q" }}</h3>
+        <p>{{ t "help.ts_thumbnails_a" }}</p>
+
+        <h3>{{ t "help.ts_preview_q" }}</h3>
+        <p>{{ t "help.ts_preview_a" }}</p>
+
+        <h3>{{ t "help.ts_sse_q" }}</h3>
+        <p>{{ t "help.ts_sse_a" }}</p>
+
+        <h3>{{ t "help.ts_restricted_q" }}</h3>
+        <p>{{ t "help.ts_restricted_a" }}</p>
+
+        <h3>{{ t "help.ts_age_loop_q" }}</h3>
+        <p>{{ t "help.ts_age_loop_a" }}</p>
+
+        <h3>{{ t "help.ts_favorites_q" }}</h3>
+        <p>{{ t "help.ts_favorites_a" }} <a href="/favorites">{{ t "help.favorites_link" }}</a>.</p>
+
+        <h3>{{ t "help.ts_prefs_q" }}</h3>
+        <p>{{ t "help.ts_prefs_a" }}</p>
+
+        <h3>{{ t "help.ts_tor_q" }}</h3>
+        <p>{{ t "help.ts_tor_a" }}</p>
+
+        <h2>{{ t "help.need_more_help" }}</h2>
+        <p>{{ t "help.need_more_help_body_1" }} <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">{{ t "help.github_link" }}</a> {{ t "help.need_more_help_body_2" }} <a href="/server/contact">{{ t "help.contact_link" }}</a>.</p>
+    </div>
+</div>
+{{end}}

@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: MIT
+//go:build windows
+
+// Package display provides display/terminal detection
+// See AI.md PART 7 for specification
+package display
+
+import (
+	"os"
+)
+
+// detectPlatformDisplay detects the display environment for Windows
+func (e *DisplayEnv) detectPlatformDisplay() {
+	e.detectWindowsDisplay()
+}
+
+// detectWindowsDisplay detects display on Windows
+func (e *DisplayEnv) detectWindowsDisplay() {
+	// Windows: check for console vs GUI session
+	e.DisplayType = "windows"
+	// Windows desktop always available unless service
+	e.HasDisplay = true
+
+	// Detect Windows service mode (no display)
+	if os.Getenv("USERPROFILE") == "" {
+		e.DisplayType = "none"
+		e.HasDisplay = false
+	}
+}

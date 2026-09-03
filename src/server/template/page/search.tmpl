@@ -1,0 +1,164 @@
+{{define "search"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body class="search-page">
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
+    <main class="results" id="main-content" role="main" aria-label="{{ t "a11y.search_results" }}">
+        {{/* Search header with inline search and collapsible filters */}}
+        <div class="search-header" id="search-header">
+            <form action="/search" method="get" class="search-form search-form--inline" role="search" aria-label="{{ t "a11y.refine_search" }}" data-action="search-submit">
+                <div class="search-wrapper search-wrapper--compact">
+                    <input type="text"
+                           id="results-search-input"
+                           name="q"
+                           value="{{.Query}}"
+                           placeholder="{{ t "a11y.refine_search" }}..."
+                           autocomplete="off"
+                           class="search-input--compact"
+                           aria-label="{{ t "a11y.search_query" }}"
+                           aria-autocomplete="list"
+                           aria-controls="autocomplete-dropdown-results">
+                    <div id="autocomplete-dropdown-results"
+                         class="autocomplete-dropdown"
+                         role="listbox"
+                         aria-label="{{ t "a11y.search_suggestions" }}"
+                         hidden></div>
+                    <button type="submit" class="search-btn--compact" aria-label="{{ t "search.button" }}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+            {{template "public/filters" (dict "ShowEngines" false "Compact" true "SelfForm" true "Query" .Query "FilterDuration" .FilterDuration "FilterQuality" .FilterQuality "FilterSort" .FilterSort "PreviewFirst" .PreviewFirst)}}
+        </div>
+
+        {{/* Hidden by default: the server already rendered results below, so the
+             spinner only appears if JS later fetches more (infinite scroll). */}}
+        <div class="initial-loading hidden" id="initial-loading" role="status" aria-live="polite">
+            <div class="spinner large" aria-hidden="true"></div>
+            <p id="loading-text">{{ t "search.connecting_engines" }}</p>
+        </div>
+        <p class="meta" id="search-meta" data-query="{{.Query}}" aria-live="polite"><span id="result-count">{{ len .Results }}</span> {{ t "search.results_word" }} <span id="search-time-container">{{ tf "search.results_time" .SearchTime }}</span></p>
+
+        {{/* Server-rendered empty state — visible for every client, including
+             no-JS. app.js reuses/overwrites this same #no-results-message
+             element rather than injecting text elsewhere, so the message
+             always renders inside <main>, never near the footer. */}}
+        {{if eq (len .Results) 0}}
+        <div class="empty-state no-results" id="no-results-message" role="status" aria-live="polite">
+            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <h3 class="empty-state-title">{{ t "search.no_results" }}</h3>
+            <p class="empty-state-message">{{ t "search.no_results_hint" }}</p>
+        </div>
+        {{end}}
+
+        <div class="status-bar hidden" id="status-bar">
+            <span id="status-text">{{ t "search.connecting" }}</span>
+            <span id="engine-status"></span>
+        </div>
+
+        {{if .SpellSuggestion}}
+        <p class="spell-suggestion" id="spell-suggestion">{{ t "search.did_you_mean" }} <a href="/search?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
+        {{end}}
+
+        {{if .RelatedSearches}}
+        <nav class="related-searches" id="related-searches" role="navigation" aria-label="{{ t "a11y.related_searches" }}">
+            <span class="related-label">{{ t "search.related_searches" }}</span>
+            <div class="related-tags" id="related-tags">
+                {{range $i, $term := .RelatedSearches}}
+                <a class="related-tag{{if ge $i 6}} related-tag--hidden{{end}}" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="{{tf "a11y.search_for" $term}}">
+                    <svg class="related-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <span>{{$term}}</span>
+                </a>
+                {{end}}
+            </div>
+        </nav>
+        {{end}}
+
+        {{/* Server-rendered results — visible for every client, including no-JS.
+             With JS, app.js hydrates richer cards in place from the inline JSON
+             payload below (single server search, no second request). SSE is used
+             only for infinite scroll beyond this first page. */}}
+        <div class="video-grid" id="video-grid" role="list" aria-label="{{ t "a11y.video_results" }}">
+            {{$csrf := .CSRFToken}}
+            {{$favs := .FavoriteURLs}}
+            {{range .Results}}
+            {{$isFav := index $favs .URL}}
+            <div class="video-card" role="listitem" data-source="{{.Source}}">
+                <a href="{{.URL}}" {{if $.OpenNewTab}}target="_blank" {{end}}rel="noopener noreferrer nofollow" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
+                    <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" .Title}}" loading="lazy">
+                    <div class="video-info">
+                        <h3 class="video-title">{{.Title}}</h3>
+                        <p class="video-meta">
+                            <span class="duration">{{.Duration}}</span>
+                            {{if .Views}}<span class="views">{{.Views}} {{ t "time.views" }}</span>{{end}}
+                        </p>
+                        <p class="video-source">{{.Source}}</p>
+                    </div>
+                </a>
+                {{/* Server-rendered per AI.md PART 16 — add/remove favorite works
+                     fully without JS via this form; app.js layers instant
+                     (no-reload) toggling on top via data-action="favorite-toggle-form". */}}
+                <form action="/favorites" method="post" class="favorite-toggle-form" data-action="favorite-toggle-form">
+                    {{if $csrf}}<input type="hidden" name="csrf_token" value="{{$csrf}}">{{end}}
+                    {{if $isFav}}<input type="hidden" name="_method" value="DELETE">{{end}}
+                    <input type="hidden" name="url" value="{{.URL}}">
+                    <input type="hidden" name="title" value="{{.Title}}">
+                    <input type="hidden" name="thumbnail" value="{{.Thumbnail}}">
+                    <input type="hidden" name="source" value="{{.Source}}">
+                    <input type="hidden" name="redirect" value="{{$.CurrentPath}}">
+                    <button type="submit" class="video-card-fav-btn{{if $isFav}} video-card-fav-btn--active{{end}}" aria-label="{{if $isFav}}{{ t "favorites.remove" }}{{else}}{{ t "favorites.add" }}{{end}}" title="{{if $isFav}}{{ t "favorites.remove" }}{{else}}{{ t "favorites.add" }}{{end}}">&#9733;</button>
+                </form>
+            </div>
+            {{end}}
+        </div>
+        <div class="loading hidden" id="loading" role="status" aria-live="polite"><div class="spinner" aria-hidden="true"></div><span>{{ t "search.loading_more" }}</span></div>
+
+        {{/* Server-driven pagination (IDEA.md "Search behavior"/"Search Settings"):
+             the server decides page size via the results_per_page cookie, not JS.
+             Default preference: real Prev/Next links to ?page=N-1/N+1 — these work
+             with JS fully disabled. "Infinite scroll" preference: no Prev/Next nav
+             is rendered at all; app.js appends a sentinel and auto-fetches the next
+             page via IntersectionObserver instead. Infinite scroll is a pure JS
+             enhancement by design (IDEA.md "Infinite Scroll") — the server still
+             decides page size/content either way. */}}
+        {{if not .InfiniteScroll}}
+        {{if or (gt .Page 1) .HasMore}}
+        <nav class="pagination-container" id="pagination-container" aria-label="{{ t "a11y.pagination" }}">
+            {{if gt .Page 1}}
+            <a href="/search?q={{urlquery .SearchQuery}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}&amp;page={{.PrevPage}}" class="btn btn--secondary pagination-prev" id="pagination-prev-link" rel="prev">{{ t "search.prev_page" }}</a>
+            {{end}}
+            {{if .HasMore}}
+            <a href="/search?q={{urlquery .SearchQuery}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}&amp;page={{.NextPage}}" class="btn btn--secondary pagination-next" id="pagination-next-link" rel="next">{{ t "search.next_page" }}</a>
+            {{end}}
+        </nav>
+        {{end}}
+        {{end}}
+
+        {{/* Inline JSON payload of the server-computed first page. app.js reads this
+             (never a second /api/v1/search) to build enhanced cards under strict CSP. */}}
+        <script type="application/json" id="search-results-data">{{.ResultsJSON}}</script>
+    </main>
+    {{template "public/footer" .}}
+    {{/* i18n strings for the search results logic in app.js. type="application/json"
+         is a non-executable data island (CSP script-src does not block it). */}}
+    <script type="application/json" id="search-i18n">{
+        "noResults": "{{ t "search.no_results" }}",
+        "noResultsHint": "{{ t "search.no_results_hint" }}",
+        "resultsCount": "{{ t "search.results_count" }}",
+        "resultsTime": "{{ t "search.results_time" }}"
+    }</script>
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

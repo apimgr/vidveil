@@ -1,0 +1,2013 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
+)
+
+// EngineManager manages all search engines
+// Per PART 31: Supports Tor outbound network for anonymized engine queries
+type EngineManager struct {
+	engines   map[string]SearchEngine
+	appConfig *config.AppConfig
+	// Per PART 31: Tor client provider for outbound
+	torProvider TorClientProvider
+	mu          sync.RWMutex
+	// Cross-page dedup state for infinite-scroll search sessions (server-side
+	// per AI.md PART 14 "State management -> Server (sessions)")
+	sessionDedup *SessionDedupStore
+	// relatedTermMu guards relatedTermCache, the per-instance result-validation
+	// cache for related/suggested search terms. Per-instance (not package
+	// global) so background validation goroutines only ever mutate the cache of
+	// the manager that spawned them — matching the sessionDedup pattern above.
+	relatedTermMu    sync.Mutex
+	relatedTermCache map[string]relatedTermStatus
+	// searchSem bounds how many SearchWithOperators fan-outs may run at once
+	// (sized from Search.ConcurrentRequests). See searchSem acquisition in
+	// SearchWithOperators for why this exists.
+	searchSem chan struct{}
+}
+
+// defaultSearchConcurrency is used when Search.ConcurrentRequests is unset
+// or invalid (<=0) — matches the documented config default (PART 5/6).
+const defaultSearchConcurrency = 10
+
+// NewEngineManager creates a new engine manager
+func NewEngineManager(appConfig *config.AppConfig) *EngineManager {
+	capacity := defaultSearchConcurrency
+	if appConfig != nil && appConfig.Search.ConcurrentRequests > 0 {
+		capacity = appConfig.Search.ConcurrentRequests
+	}
+	return &EngineManager{
+		engines:          make(map[string]SearchEngine),
+		appConfig:        appConfig,
+		sessionDedup:     NewSessionDedupStore(),
+		relatedTermCache: make(map[string]relatedTermStatus),
+		searchSem:        make(chan struct{}, capacity),
+	}
+}
+
+// SetTorProvider sets the Tor client provider for all engines
+// Per PART 31: When set and UseNetwork is enabled, engine queries are anonymized through Tor
+func (m *EngineManager) SetTorProvider(provider TorClientProvider) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.torProvider = provider
+
+	// Update all existing engines with the Tor provider
+	for _, engine := range m.engines {
+		// Use the TorConfigurableEngine interface
+		if torEngine, ok := engine.(TorConfigurableEngine); ok {
+			torEngine.SetTorProvider(provider)
+		}
+	}
+}
+
+// InitializeEngines sets up all available engines
+func (m *EngineManager) InitializeEngines() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Tier 1 - Major Sites (always enabled by default)
+	m.engines["pornhub"] = NewPornHubEngine(m.appConfig)
+	m.engines["xvideos"] = newXVideosEngine(m.appConfig)
+	m.engines["xnxx"] = newXNXXEngine(m.appConfig)
+	m.engines["redtube"] = newRedTubeEngine(m.appConfig)
+	m.engines["xhamster"] = newXHamsterEngine(m.appConfig)
+
+	// Tier 2 - Popular Sites (enabled by default)
+	m.engines["eporner"] = newEpornerEngine(m.appConfig)
+	m.engines["youporn"] = newYouPornEngine(m.appConfig)
+	// pornmd removed - site returns HTTP 403 Cloudflare challenge (no bypass)
+
+	// Tier 3 - Additional Sites (all tiers enabled by default per IDEA.md)
+	// 4tube removed - site returns HTTP 403 Cloudflare challenge (no bypass)
+	// fux removed - site returns HTTP 403 Cloudflare challenge (no bypass)
+	m.engines["porntube"] = newPornTubeEngine(m.appConfig)
+	m.engines["youjizz"] = newYouJizzEngine(m.appConfig)
+	m.engines["sunporno"] = newSunPornoEngine(m.appConfig)
+	m.engines["txxx"] = newTxxxEngine(m.appConfig)
+	m.engines["nuvid"] = newNuvidEngine(m.appConfig)
+	m.engines["tnaflix"] = newTNAFlixEngine(m.appConfig)
+	m.engines["drtuber"] = newDrTuberEngine(m.appConfig)
+	// empflix removed - site returns HTTP 403 Cloudflare challenge (no bypass)
+	m.engines["hellporno"] = newHellPornoEngine(m.appConfig)
+	m.engines["alphaporno"] = newAlphaPornoEngine(m.appConfig)
+	m.engines["pornflip"] = newPornFlipEngine(m.appConfig)
+	// gotporn removed - site returns HTTP 403 Cloudflare challenge (no bypass)
+	m.engines["xxxymovies"] = newXXXYMoviesEngine(m.appConfig)
+	m.engines["lovehomeporn"] = newLoveHomePornEngine(m.appConfig)
+
+	// Tier 4 - Additional yt-dlp supported sites
+	// pornerbros removed - site returns HTTP 403 Cloudflare challenge (no bypass)
+	m.engines["nonktube"] = newNonkTubeEngine(m.appConfig)
+	m.engines["nubilesporn"] = newNubilesPornEngine(m.appConfig)
+	m.engines["pornbox"] = newPornboxEngine(m.appConfig)
+	m.engines["porntop"] = newPornTopEngine(m.appConfig)
+	// pornotube removed - site returns HTTP 410 Gone (dead)
+	// vporn removed - site inaccessible (geo-blocked/Cloudflare)
+	// pornhd removed - site returns HTTP 403 Cloudflare challenge (no bypass)
+	m.engines["xbabe"] = newXBabeEngine(m.appConfig)
+	m.engines["pornone"] = newPornOneEngine(m.appConfig)
+	m.engines["pornhat"] = newPornHatEngine(m.appConfig)
+	m.engines["porntrex"] = newPornTrexEngine(m.appConfig)
+	m.engines["hqporner"] = newHqpornerEngine(m.appConfig)
+	m.engines["vjav"] = newVJAVEngine(m.appConfig)
+	m.engines["flyflv"] = newFlyflvEngine(m.appConfig)
+	m.engines["tube8"] = newTube8Engine(m.appConfig)
+
+	// Tier 5 - New engines
+	m.engines["anyporn"] = newAnyPornEngine(m.appConfig)
+	// tubegalore removed - site returns HTTP 403 Cloudflare challenge (no bypass)
+	// motherless removed - site uses aggressive TLS fingerprinting that blocks automated requests
+
+	// Tier 6 - Additional engines
+	m.engines["3movs"] = newThreeMovsEngine(m.appConfig)
+
+	// Apply configuration
+	m.applyConfig()
+}
+
+// applyConfig applies engine-specific configuration
+func (m *EngineManager) applyConfig() {
+	if m.appConfig == nil {
+		return
+	}
+	// All engines are enabled by default
+	// DefaultEngines config can limit which engines to use
+	defaultEngines := m.appConfig.Search.DefaultEngines
+
+	// If default_engines is specified, only enable those
+	if len(defaultEngines) > 0 {
+		enabledSet := make(map[string]bool)
+		for _, name := range defaultEngines {
+			enabledSet[name] = true
+		}
+
+		for name, engine := range m.engines {
+			if configurable, ok := engine.(ConfigurableSearchEngine); ok {
+				configurable.SetEnabled(enabledSet[name])
+			}
+		}
+	}
+
+}
+
+// Search performs a search across enabled engines.
+// sessionID, when non-empty, scopes cross-page result deduplication to a
+// single client search session (see AI.md PART 14 "State management ->
+// Server (sessions)") so that page=2, page=3, ... of the same infinite-scroll
+// search never resurface a result already returned on an earlier page.
+func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string, sessionID string) *model.SearchResponse {
+	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, sessionID, 0, ResultFilterOptions{})
+}
+
+// ResultFilterOptions carries the server-authoritative result-shaping filters
+// driven by the visitor's search-results filter panel (duration/quality/sort
+// controls in filters.tmpl). These are applied here, not in client JS, per
+// AI.md PART 16 ("JavaScript enhances, it does not enable") — the filter
+// panel is a GET form so the exact same filtering/sorting works with JS
+// disabled. The zero value applies no additional filtering or sorting.
+type ResultFilterOptions struct {
+	// MinQuality is the minimum acceptable quality level (Quality360p..Quality4K
+	// constants below); 0 means no minimum.
+	MinQuality int
+	// UserMinDuration is the visitor's minimum-duration preference in seconds
+	// (Preferences page "prefs.min_duration"), merged with the config-level
+	// minimum; 0 means none.
+	UserMinDuration int
+	// MaxDuration, in seconds, rejects results longer than this; 0 means no maximum.
+	MaxDuration int
+	// SortBy reorders the final result set: "duration-desc", "duration-asc",
+	// "views", "quality", or "" for relevance (default) order.
+	SortBy string
+}
+
+// SearchWithOperators is identical to Search but additionally applies
+// exact-phrase, exclusion, and required-term operators (parsed via
+// engine.ParseBangs) to the non-streaming search paths (JSON/HTML/RSS/Atom/
+// batch), matching the operator support already present in
+// SearchStreamWithOperators. Without this, "-word", "+word", and
+// "\"exact phrase\"" queries silently had no effect on every endpoint except
+// SSE streaming. previewFirst additionally applies the IDEA.md "Preview
+// First" sort (preview-capable results ranked to the top, relative order
+// otherwise preserved) to the full, deduplicated result set before
+// pagination — giving a definitive global order for JSON/HTML/RSS/Atom/batch
+// clients, unlike the SSE path's necessarily per-engine-only ordering.
+// resultsPerPage, when > 0, overrides the configured Search.ResultsPerPage
+// default for this call — this is how the server honors a visitor's
+// `results_per_page` preference cookie (IDEA.md "Search Settings": server
+// is authoritative for pagination, not client-side JS). Pass 0 to use the
+// configured default. Collection returns early (first-page-fast) once the
+// accepted pool reaches resultsPerPage*earlyReturnHeadroomFactor candidates:
+// the response is sliced to resultsPerPage regardless, so waiting for the
+// slowest engines past that point only delays the page; remaining engines are
+// cancelled and their stats marked "skipped_page_filled" (not failed).
+func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, previewFirst bool, sessionID string, resultsPerPage int, filterOpts ResultFilterOptions) *model.SearchResponse {
+	startTime := time.Now()
+
+	// Bound the number of simultaneous full multi-engine fan-outs (AI.md PART
+	// 11/12: "rate limiting is the primary abuse defense" against
+	// overload/DDoS). The per-IP request-count rate limiter alone cannot catch
+	// this failure mode: a burst of concurrent searches from many distinct IPs
+	// (or many requests within one rate-limit window) each spawn len(engines)
+	// goroutines doing outbound HTTP, and under enough simultaneous fan-outs
+	// total handler time creeps toward the server's WriteTimeout regardless of
+	// the batchDeadline cap below — the queue itself becomes the bottleneck,
+	// not any single engine or search. Reproduced live: a 150-concurrent burst
+	// against /search still produced empty replies after batchDeadline was
+	// capped, because requests were queuing for CPU/goroutine/socket capacity
+	// before ever reaching the collection loop.
+	//
+	// searchSem turns that silent queue into an immediate, bounded decision:
+	// acquire a slot within searchQueueTimeout, or fail fast with a retryable
+	// 429-style response (matches the canonical RATE_LIMITED envelope, PART
+	// 14) instead of letting net/http's WriteTimeout kill the connection with
+	// a raw reset. The server always answers — degraded, but never silent.
+	select {
+	case m.searchSem <- struct{}{}:
+		defer func() { <-m.searchSem }()
+	case <-time.After(searchQueueTimeout):
+		return overloadedSearchResponse(startTime)
+	case <-ctx.Done():
+		return overloadedSearchResponse(startTime)
+	}
+
+	// Capture the engine set under a brief read lock, then release it before any
+	// network I/O. Holding m.mu across the fan-out would keep the manager lock
+	// held for the entire (up to per-engine-timeout) search duration, starving
+	// any writer (engine registration / config update) — the exact "a slow
+	// engine stalls everything" problem. getEnginesToUse only reads the engines
+	// map; the returned slice holds engine references that are safe to use
+	// without the lock. m.appConfig is immutable after construction and
+	// m.sessionDedup is independently synchronized, so neither needs m.mu below.
+	m.mu.RLock()
+	enginesToUse := m.getEnginesToUse(engineNames)
+	m.mu.RUnlock()
+
+	// Search in parallel. fanCtx lets the collector cancel still-running
+	// engines the moment the page target is filled (first-page-fast early
+	// return below) — outbound work for results the response can never use
+	// is pure waste under load.
+	fanCtx, fanCancel := context.WithCancel(ctx)
+	defer fanCancel()
+	var wg sync.WaitGroup
+	resultsChan := make(chan engineResult, len(enginesToUse))
+
+	for _, engine := range enginesToUse {
+		wg.Add(1)
+		go func(e SearchEngine) {
+			defer wg.Done()
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("[engine] panic in %s.Search: %v", e.Name(), rec)
+					resultsChan <- engineResult{
+						engine: e.Name(),
+						err:    fmt.Errorf("engine panic: %v", rec),
+					}
+				}
+			}()
+			// Per-engine timeout context so one slow engine cannot exceed its own
+			// budget (Search.EngineTimeouts override or the global
+			// Search.EngineTimeout), keeping the fan-out resilient per AI.md's
+			// graceful-degradation-across-engines principle.
+			engCtx, cancel := context.WithTimeout(fanCtx, m.engineTimeout(e.Name()))
+			defer cancel()
+			engineStart := time.Now()
+			results, err := e.Search(engCtx, query, page)
+			resultsChan <- engineResult{
+				engine:         e.Name(),
+				results:        results,
+				err:            err,
+				responseTimeMS: time.Since(engineStart).Milliseconds(),
+			}
+		}(engine)
+	}
+
+	// Wait for all searches to complete
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
+
+	// Collect results with deduplication
+	var allResults []model.VideoResult
+	var enginesUsed []string
+	var enginesFailed []string
+	// Track seen URLs and titles for deduplication
+	seenURLs := make(map[string]bool)
+	// for fuzzy Jaro-Winkler dedup
+	seenTitlesNorm := make([]string, 0, 64)
+	// Track per-engine stats
+	engineStats := make(map[string]model.EngineStatInfo)
+
+	// Get min duration from config, defaulting to 0 if config is nil, merged
+	// with the visitor's per-request minimum-duration preference/filter (the
+	// higher of the two wins — server-authoritative, see ResultFilterOptions).
+	minDuration := 0
+	if m.appConfig != nil {
+		minDuration = m.appConfig.Search.MinDurationSeconds
+	}
+	if filterOpts.UserMinDuration > minDuration {
+		minDuration = filterOpts.UserMinDuration
+	}
+	queryIntent := DetectQueryIntent(query)
+
+	// Resolve the effective page size before collection (it doubles as the
+	// early-return fill target below). resultsPerPage > 0 means the caller
+	// passed an explicit per-request override (the visitor's results_per_page
+	// preference cookie); otherwise fall back to the configured default.
+	if resultsPerPage <= 0 {
+		resultsPerPage = 50
+		if m.appConfig != nil {
+			resultsPerPage = m.appConfig.Search.ResultsPerPage
+		}
+	}
+	// First-page-fast early return: once the accepted (post-filter,
+	// deduplicated) pool reaches this many candidates, stop waiting for
+	// slower engines and respond immediately — the response is sliced to
+	// resultsPerPage anyway, so waiting for the stragglers only delays the
+	// page. The headroom factor keeps enough surplus candidates that the
+	// post-collection relevance filter (MinRelevanceScore) and sorts still
+	// have a meaningful pool to trim from.
+	earlyReturnTarget := resultsPerPage * earlyReturnHeadroomFactor
+
+	// Collect with a batch deadline so a hung engine (one ignoring context
+	// cancellation) can never block the response: we return whatever arrived by
+	// the deadline. reported tracks which engines answered so the rest can be
+	// marked as timed-out failures afterward. pageFilled records that
+	// collection stopped because the page target was met, so unreported
+	// engines are marked skipped rather than falsely marked as timeouts.
+	reported := make(map[string]bool, len(enginesToUse))
+	pageFilled := false
+	deadline := time.NewTimer(m.batchDeadline(enginesToUse))
+	defer deadline.Stop()
+
+collect:
+	for {
+		var result engineResult
+		select {
+		case r, ok := <-resultsChan:
+			if !ok {
+				break collect
+			}
+			result = r
+		case <-deadline.C:
+			break collect
+		case <-ctx.Done():
+			break collect
+		}
+		reported[result.engine] = true
+		if result.err != nil {
+			enginesFailed = append(enginesFailed, result.engine)
+			engineStats[result.engine] = model.EngineStatInfo{
+				ResponseTimeMS: result.responseTimeMS,
+				ResultCount:    0,
+				Error:          result.err.Error(),
+			}
+		} else {
+			enginesUsed = append(enginesUsed, result.engine)
+			resultCount := 0
+			// Filter results by thumbnail validity, minimum duration, term matching, and deduplicate
+			for _, r := range result.results {
+				// Skip results with empty/invalid thumbnails
+				if !isValidThumbnail(r.Thumbnail) {
+					continue
+				}
+				// Skip if duration is known and below minimum
+				if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
+					continue
+				}
+				// Skip if duration is known and above the filter panel's maximum
+				if filterOpts.MaxDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds > filterOpts.MaxDuration {
+					continue
+				}
+				// Skip if quality is known and below the filter panel's minimum
+				if filterOpts.MinQuality > 0 && !meetsMinQuality(r.Quality, filterOpts.MinQuality) {
+					continue
+				}
+				// Drop preview URLs a <video> element cannot play (images, HLS, relative paths)
+				r.PreviewURL = sanitizePreviewURL(r.PreviewURL)
+				// AND-based term filter: result must match ALL search terms (using synonyms)
+				if !resultMatchesAllTerms(r, query) {
+					continue
+				}
+				// Semantic intent filter: reject results that contradict query intent
+				// (e.g. male-presence indicators in a lesbian/female-only query)
+				if !ResultMatchesIntent(r, queryIntent) {
+					continue
+				}
+				// Deduplicate by normalized URL and title
+				normalizedURL := normalizeURL(r.URL)
+				normalizedTitle := normalizeTitle(r.Title)
+				// Check URL first
+				if seenURLs[normalizedURL] {
+					continue
+				}
+				// Fuzzy title dedup: check against all previously seen titles
+				isDupTitle := false
+				if normalizedTitle != "" {
+					for _, seen := range seenTitlesNorm {
+						if titlesAreFuzzyDuplicates(normalizedTitle, seen) {
+							isDupTitle = true
+							break
+						}
+					}
+				}
+				if isDupTitle {
+					continue
+				}
+				// Cross-page dedup: skip results already returned on an
+				// earlier page of the same search session
+				if m.sessionDedup.CheckAndMark(sessionID, normalizedURL, normalizedTitle) {
+					continue
+				}
+				// Mark as seen
+				seenURLs[normalizedURL] = true
+				if normalizedTitle != "" {
+					seenTitlesNorm = append(seenTitlesNorm, normalizedTitle)
+				}
+				allResults = append(allResults, r)
+				resultCount++
+			}
+			engineStats[result.engine] = model.EngineStatInfo{
+				ResponseTimeMS: result.responseTimeMS,
+				ResultCount:    resultCount,
+			}
+			// First-page-fast: the accepted pool already covers the page plus
+			// relevance-filter headroom — cancel the remaining engines and
+			// respond now instead of waiting out the slowest ones.
+			if len(allResults) >= earlyReturnTarget {
+				pageFilled = true
+				fanCancel()
+				break collect
+			}
+		}
+	}
+
+	// Any selected engine that never reported is recorded honestly: if
+	// collection ended because the page filled early, the engine was skipped
+	// (not a failure — it is neither used nor failed, its stat carries a
+	// stable machine code); if collection ran out the batch deadline or the
+	// request was cancelled, it is a timed-out failure so the response
+	// reflects degraded coverage instead of silently omitting it.
+	for _, e := range enginesToUse {
+		if !reported[e.Name()] {
+			if pageFilled {
+				engineStats[e.Name()] = model.EngineStatInfo{Error: "skipped_page_filled"}
+				continue
+			}
+			enginesFailed = append(enginesFailed, e.Name())
+			engineStats[e.Name()] = model.EngineStatInfo{Error: "timeout"}
+		}
+	}
+
+	// Sort results by relevance and filter by minimum score
+	// Default minimum score of 10.0 ensures at least one query word matches
+	minScore := 10.0
+	if m.appConfig != nil {
+		minScore = m.appConfig.Search.MinRelevanceScore
+	}
+	// resultsPerPage was resolved before the collection loop (it doubles as
+	// the early-return fill target).
+	allResults = sortAndFilterByRelevanceWithOperators(allResults, query, minScore, exactPhrases, exclusions, requiredTerms, nil)
+	if previewFirst {
+		allResults = sortResultsPreviewFirst(allResults)
+	}
+	// Server-authoritative sort override from the filter panel (filters.tmpl
+	// "sort" field) — applied to the full deduplicated set before pagination,
+	// same field-value contract the JS enhancement layer used to compute
+	// client-side; the server is now the sole source of ordering.
+	allResults = sortResultsByFilterOption(allResults, filterOpts.SortBy)
+
+	// Slice to the requested page window so the returned data array never
+	// exceeds resultsPerPage, per AI.md PART 14 pagination contract ("data"
+	// array size must respect "limit"). Cross-page duplicates across
+	// successive calls are already removed above via m.sessionDedup, so this
+	// window is the next resultsPerPage NEW items for this session.
+	total := len(allResults)
+	pages := (total + resultsPerPage - 1) / resultsPerPage
+	pageResults := allResults
+	if resultsPerPage > 0 && total > resultsPerPage {
+		pageResults = allResults[:resultsPerPage]
+	}
+
+	// Build response
+	elapsed := time.Since(startTime)
+
+	return &model.SearchResponse{
+		Ok: true,
+		Data: model.SearchData{
+			Query:         query,
+			Results:       pageResults,
+			EnginesUsed:   enginesUsed,
+			EnginesFailed: enginesFailed,
+			SearchTimeMS:  elapsed.Milliseconds(),
+			EngineStats:   engineStats,
+		},
+		Pagination: model.PaginationData{
+			Page:  page,
+			Limit: resultsPerPage,
+			Total: total,
+			Pages: pages,
+		},
+	}
+}
+
+// sortResultsPreviewFirst stably reorders results so preview-capable results
+// (PreviewURL != "") come first, preserving relative order within each group
+// (IDEA.md: "Preview First ... sort priority, not exclusive filter").
+func sortResultsPreviewFirst(results []model.VideoResult) []model.VideoResult {
+	sort.SliceStable(results, func(i, j int) bool {
+		iHas := results[i].PreviewURL != ""
+		jHas := results[j].PreviewURL != ""
+		return iHas && !jHas
+	})
+	return results
+}
+
+// sortResultsByFilterOption reorders results per the filter panel's "sort"
+// field (filters.tmpl option values: "duration-desc", "duration-asc",
+// "views", "quality", or "" for relevance/default order, left untouched).
+// Results with unknown/zero values for the chosen field are stable-sorted to
+// the end rather than dropped, since the sort is a re-ordering, not a filter.
+func sortResultsByFilterOption(results []model.VideoResult, sortBy string) []model.VideoResult {
+	switch sortBy {
+	case "duration-desc":
+		sort.SliceStable(results, func(i, j int) bool {
+			return results[i].DurationSeconds > results[j].DurationSeconds
+		})
+	case "duration-asc":
+		sort.SliceStable(results, func(i, j int) bool {
+			iZero := results[i].DurationSeconds <= 0
+			jZero := results[j].DurationSeconds <= 0
+			if iZero != jZero {
+				return jZero
+			}
+			return results[i].DurationSeconds < results[j].DurationSeconds
+		})
+	case "views":
+		sort.SliceStable(results, func(i, j int) bool {
+			return results[i].ViewsCount > results[j].ViewsCount
+		})
+	case "quality":
+		sort.SliceStable(results, func(i, j int) bool {
+			return ParseQualityLevel(results[i].Quality) > ParseQualityLevel(results[j].Quality)
+		})
+	}
+	return results
+}
+
+// scoredResult holds a result with its relevance score for sorting
+type scoredResult struct {
+	result model.VideoResult
+	score  float64
+}
+
+// sortAndFilterByRelevance sorts results by relevance score and filters by minimum score
+// Returns filtered results that meet the minimum relevance threshold
+func sortAndFilterByRelevance(results []model.VideoResult, query string, minScore float64) []model.VideoResult {
+	return sortAndFilterByRelevanceWithOperators(results, query, minScore, nil, nil, nil, nil)
+}
+
+// sortAndFilterByRelevanceWithOperators sorts results by relevance and applies search operators
+// exactPhrases requires results to contain all specified phrases
+// exclusions removes results containing any excluded word
+// requiredTerms requires results to contain every specified term (AND match)
+// performers filters by performer name (OR match)
+func sortAndFilterByRelevanceWithOperators(results []model.VideoResult, query string, minScore float64, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string) []model.VideoResult {
+	queryLower := strings.ToLower(query)
+	queryWords := strings.Fields(queryLower)
+
+	// First, apply search operators (exclusions, exact phrases, required terms, performers)
+	if len(exactPhrases) > 0 || len(exclusions) > 0 || len(requiredTerms) > 0 || len(performers) > 0 {
+		var operatorFiltered []model.VideoResult
+		for _, r := range results {
+			titleLower := strings.ToLower(r.Title)
+
+			// Check exclusions - skip if any excluded word is found
+			excluded := false
+			for _, ex := range exclusions {
+				if strings.Contains(titleLower, ex) {
+					excluded = true
+					break
+				}
+			}
+			if excluded {
+				continue
+			}
+
+			// Check exact phrases - require all phrases to be present
+			hasAllPhrases := true
+			for _, phrase := range exactPhrases {
+				if !strings.Contains(titleLower, strings.ToLower(phrase)) {
+					hasAllPhrases = false
+					break
+				}
+			}
+			if !hasAllPhrases {
+				continue
+			}
+
+			// Check required terms - every term must be present (AND)
+			hasAllRequired := true
+			for _, rt := range requiredTerms {
+				if !strings.Contains(titleLower, rt) {
+					hasAllRequired = false
+					break
+				}
+			}
+			if !hasAllRequired {
+				continue
+			}
+
+			// Check performer filter - at least one performer must match (OR)
+			if len(performers) > 0 {
+				performerLower := strings.ToLower(r.Performer)
+				matchesPerformer := false
+				for _, p := range performers {
+					if strings.Contains(performerLower, p) {
+						matchesPerformer = true
+						break
+					}
+				}
+				if !matchesPerformer {
+					continue
+				}
+			}
+
+			operatorFiltered = append(operatorFiltered, r)
+		}
+		results = operatorFiltered
+	}
+
+	// If no query words, return operator-filtered results without scoring
+	if len(queryWords) == 0 {
+		return results
+	}
+
+	// Calculate scores and create scored results
+	scored := make([]scoredResult, len(results))
+	for i, r := range results {
+		scored[i] = scoredResult{
+			result: r,
+			score:  calculateRelevanceScore(r, queryLower, queryWords),
+		}
+	}
+
+	// Sort by score descending
+	sort.SliceStable(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
+	})
+
+	// Filter by minimum score and extract results
+	filtered := make([]model.VideoResult, 0, len(scored))
+	for _, sr := range scored {
+		if minScore <= 0 || sr.score >= minScore {
+			filtered = append(filtered, sr.result)
+		}
+	}
+
+	return filtered
+}
+
+// calculateRelevanceScore computes a relevance score for a result
+func calculateRelevanceScore(r model.VideoResult, queryLower string, queryWords []string) float64 {
+	titleLower := strings.ToLower(r.Title)
+	score := 0.0
+
+	// Exact match bonus (highest priority)
+	if strings.Contains(titleLower, queryLower) {
+		score += 100.0
+	}
+
+	// Word match scoring
+	matchedWords := 0
+	for _, word := range queryWords {
+		if len(word) < 2 {
+			continue
+		}
+		if strings.Contains(titleLower, word) {
+			matchedWords++
+			// Bonus for word at start of title
+			if strings.HasPrefix(titleLower, word) {
+				score += 5.0
+			}
+		}
+	}
+
+	// Percentage of query words matched
+	if len(queryWords) > 0 {
+		matchRatio := float64(matchedWords) / float64(len(queryWords))
+		score += matchRatio * 50.0
+	}
+
+	// Quality bonus (HD/4K content ranked higher)
+	quality := strings.ToUpper(r.Quality)
+	if strings.Contains(quality, "4K") || strings.Contains(quality, "2160") {
+		score += 10.0
+	} else if strings.Contains(quality, "1080") || strings.Contains(quality, "HD") {
+		score += 5.0
+	} else if strings.Contains(quality, "720") {
+		score += 2.0
+	}
+
+	// Views bonus (logarithmic scale to prevent domination)
+	if r.ViewsCount > 0 {
+		// log10(1000) = 3, log10(1000000) = 6
+		viewScore := 0.0
+		if r.ViewsCount >= 1000000 {
+			viewScore = 6.0
+		} else if r.ViewsCount >= 100000 {
+			viewScore = 5.0
+		} else if r.ViewsCount >= 10000 {
+			viewScore = 4.0
+		} else if r.ViewsCount >= 1000 {
+			viewScore = 3.0
+		} else if r.ViewsCount >= 100 {
+			viewScore = 2.0
+		} else {
+			viewScore = 1.0
+		}
+		score += viewScore
+	}
+
+	// Duration preference (mid-length videos often preferred)
+	if r.DurationSeconds > 0 {
+		// Prefer 5-30 minute videos
+		if r.DurationSeconds >= 300 && r.DurationSeconds <= 1800 {
+			score += 2.0
+		}
+	}
+
+	// Shorter titles often more relevant (less filler)
+	if len(r.Title) > 0 && len(r.Title) < 60 {
+		score += 1.0
+	}
+
+	return score
+}
+
+// QualityLevel represents video quality as a numeric value for comparison
+// Higher values = better quality
+const (
+	QualityUnknown = 0
+	Quality240p    = 240
+	Quality360p    = 360
+	Quality480p    = 480
+	Quality720p    = 720
+	Quality1080p   = 1080
+	Quality1440p   = 1440
+	Quality4K      = 2160
+)
+
+// ParseQualityLevel converts a quality string to a numeric level
+// Returns QualityUnknown (0) if quality cannot be determined
+func ParseQualityLevel(quality string) int {
+	if quality == "" {
+		return QualityUnknown
+	}
+
+	q := strings.ToUpper(quality)
+
+	// Check for explicit resolution numbers
+	if strings.Contains(q, "4K") || strings.Contains(q, "2160") || strings.Contains(q, "UHD") {
+		return Quality4K
+	}
+	if strings.Contains(q, "1440") || strings.Contains(q, "2K") || strings.Contains(q, "QHD") {
+		return Quality1440p
+	}
+	if strings.Contains(q, "1080") || strings.Contains(q, "FHD") {
+		return Quality1080p
+	}
+	if strings.Contains(q, "720") {
+		return Quality720p
+	}
+	if strings.Contains(q, "480") || strings.Contains(q, "SD") {
+		return Quality480p
+	}
+	if strings.Contains(q, "360") {
+		return Quality360p
+	}
+	if strings.Contains(q, "240") {
+		return Quality240p
+	}
+
+	// "HD" without specific resolution typically means 720p+
+	if strings.Contains(q, "HD") {
+		return Quality720p
+	}
+
+	return QualityUnknown
+}
+
+// meetsMinQuality checks if a result meets the minimum quality requirement
+// Unknown quality (0) passes the filter to avoid excluding videos without quality info
+func meetsMinQuality(resultQuality string, minQuality int) bool {
+	if minQuality <= 0 {
+		// No minimum set
+		return true
+	}
+
+	level := ParseQualityLevel(resultQuality)
+	if level == QualityUnknown {
+		// Unknown quality passes (we don't want to filter videos without quality info)
+		return true
+	}
+
+	return level >= minQuality
+}
+
+// getEnginesToUse returns the engines to use for search
+// engineTimeout returns the per-engine search timeout for the named engine,
+// honoring Search.EngineTimeouts overrides and falling back to the global
+// Search.EngineTimeout (default 15s). Used to bound each engine's context so a
+// single slow engine cannot exceed its own budget.
+func (m *EngineManager) engineTimeout(name string) time.Duration {
+	secs := 15
+	if m.appConfig != nil {
+		if m.appConfig.Search.EngineTimeout > 0 {
+			secs = m.appConfig.Search.EngineTimeout
+		}
+		if m.appConfig.Search.EngineTimeouts != nil {
+			if override, ok := m.appConfig.Search.EngineTimeouts[name]; ok && override > 0 {
+				secs = override
+			}
+		}
+	}
+	return time.Duration(secs) * time.Second
+}
+
+// batchDeadline returns how long the collector waits for the whole fan-out
+// before returning with whatever has arrived. It is the largest per-engine
+// timeout among the selected engines plus a small grace, so one hung engine
+// (e.g. one that ignores context cancellation) can never block the response
+// beyond the slowest engine's own budget.
+//
+// The result is additionally hard-capped at the HTTP server's configured
+// Server.Limits.WriteTimeout (default 30s per AI.md PART 5/6) minus a
+// writeTimeoutSafetyMargin. Without this cap, nothing ties the engine-timeout
+// configuration to the server's actual write deadline: under concurrent load
+// (many simultaneous searches contending for goroutine scheduling and
+// outbound network I/O), total handler time — batch collection plus
+// post-processing plus writing the response — can creep past WriteTimeout.
+// When that happens, net/http aborts the response mid-write with a raw
+// connection reset instead of a normal HTTP response; browsers surface this
+// as net::ERR_FAILED / ERR_EMPTY_RESPONSE. Capping batchDeadline guarantees
+// the handler always has margin left to finish sorting/rendering/writing a
+// (possibly degraded) 200 response before the server's write deadline fires.
+// Reproduced live: an 80-way concurrent burst against /search pushed total
+// handler time to ~30-32s (server access log, 200 status but a 2KB truncated
+// body instead of the normal ~17KB), matching curl's "(52) Empty reply from
+// server" on the client side.
+func (m *EngineManager) batchDeadline(engines []SearchEngine) time.Duration {
+	longest := time.Duration(0)
+	for _, e := range engines {
+		if t := m.engineTimeout(e.Name()); t > longest {
+			longest = t
+		}
+	}
+	if longest == 0 {
+		longest = 15 * time.Second
+	}
+	deadline := longest + 2*time.Second
+
+	writeTimeout := 30 * time.Second
+	if m.appConfig != nil && m.appConfig.Server.Limits.WriteTimeout != "" {
+		if wt, err := time.ParseDuration(m.appConfig.Server.Limits.WriteTimeout); err == nil && wt > 0 {
+			writeTimeout = wt
+		}
+	}
+	if maxAllowed := writeTimeout - writeTimeoutSafetyMargin; maxAllowed > 0 && deadline > maxAllowed {
+		deadline = maxAllowed
+	}
+	return deadline
+}
+
+// writeTimeoutSafetyMargin is the time reserved, below the server's
+// WriteTimeout, for post-collection work (sort, dedup, filter, template
+// render, response write) to complete after the engine fan-out returns. See
+// batchDeadline above.
+const writeTimeoutSafetyMargin = 5 * time.Second
+
+// searchQueueTimeout bounds how long a request waits for a free searchSem
+// slot before giving up and returning an overload response. Kept short and
+// fixed (not tied to WriteTimeout) so a caller always gets a fast answer —
+// queuing itself must never become the reason a request runs long.
+const searchQueueTimeout = 2 * time.Second
+
+// earlyReturnHeadroomFactor multiplies resultsPerPage to set the accepted-pool
+// size at which SearchWithOperators stops waiting for slower engines and
+// responds (first-page-fast early return). The surplus over one page keeps the
+// post-collection relevance filter (MinRelevanceScore) and preview-first/sort
+// passes working over a meaningful candidate pool, so early return trades
+// almost no ranking quality for a large latency win on broad queries.
+const earlyReturnHeadroomFactor = 2
+
+// overloadedSearchResponse builds the canonical error envelope (AI.md PART
+// 14/PART 12 "Rate Limiting") returned when SearchWithOperators cannot
+// acquire a searchSem slot within searchQueueTimeout. Ok:false + a stable
+// RATE_LIMITED error code lets every caller (SearchPage, APISearch,
+// BatchSearch, SSE) react the same way HTTP rate limiting already does
+// elsewhere: fail fast and retryable, never hang until the connection resets.
+func overloadedSearchResponse(startTime time.Time) *model.SearchResponse {
+	return &model.SearchResponse{
+		Ok: false,
+		Data: model.SearchData{
+			Results:       []model.VideoResult{},
+			EnginesUsed:   []string{},
+			EnginesFailed: []string{},
+			SearchTimeMS:  time.Since(startTime).Milliseconds(),
+		},
+		Pagination: model.PaginationData{},
+		Error:      "RATE_LIMITED",
+		Message:    "Search capacity temporarily exceeded, please retry shortly",
+	}
+}
+
+func (m *EngineManager) getEnginesToUse(engineNames []string) []SearchEngine {
+	var engines []SearchEngine
+
+	if len(engineNames) == 0 {
+		// Use all enabled engines
+		for _, engine := range m.engines {
+			if engine.IsAvailable() {
+				engines = append(engines, engine)
+			}
+		}
+		return engines
+	}
+
+	// Check for special tier-based filter values ("tier1", "tier12")
+	maxTier := 0
+	tierFilter := false
+	for _, name := range engineNames {
+		switch name {
+		case "tier1":
+			tierFilter = true
+			if maxTier == 0 || maxTier > 1 {
+				maxTier = 1
+			}
+		case "tier12":
+			tierFilter = true
+			if maxTier == 0 || maxTier > 2 {
+				maxTier = 2
+			}
+		}
+	}
+	if tierFilter {
+		for _, engine := range m.engines {
+			if engine.IsAvailable() && engine.Tier() <= maxTier {
+				engines = append(engines, engine)
+			}
+		}
+		return engines
+	}
+
+	// Use specified engines by name
+	for _, name := range engineNames {
+		if engine, ok := m.engines[name]; ok && engine.IsAvailable() {
+			engines = append(engines, engine)
+		}
+	}
+
+	return engines
+}
+
+// GetEngine returns a specific engine by name
+func (m *EngineManager) GetEngine(name string) (SearchEngine, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	engine, ok := m.engines[name]
+	return engine, ok
+}
+
+// UnknownEngineNames returns the subset of engineNames that are neither a
+// registered engine nor a recognized tier-filter alias ("tier1", "tier12").
+// Per IDEA.md Validation: "Engine names must be valid registered engines" -
+// getEnginesToUse silently drops unrecognized names instead of erroring, so
+// callers (APISearch, batch search, SSE) must validate up front and reject
+// the request rather than returning a misleadingly-empty success response.
+func (m *EngineManager) UnknownEngineNames(engineNames []string) []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var unknown []string
+	for _, name := range engineNames {
+		if name == "tier1" || name == "tier12" {
+			continue
+		}
+		if _, ok := m.engines[name]; !ok {
+			unknown = append(unknown, name)
+		}
+	}
+	return unknown
+}
+
+// ListEngines returns information about all engines
+func (m *EngineManager) ListEngines() []model.EngineInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var infos []model.EngineInfo
+	for _, engine := range m.engines {
+		caps := engine.Capabilities()
+		infos = append(infos, model.EngineInfo{
+			Name:        engine.Name(),
+			DisplayName: engine.DisplayName(),
+			Enabled:     engine.IsAvailable(),
+			Available:   engine.IsAvailable(),
+			Tier:        engine.Tier(),
+			Features:    getFeatures(engine),
+			Capabilities: &model.EngineCapabilities{
+				HasPreview:  caps.HasPreview,
+				HasDownload: caps.HasDownload,
+			},
+			Privacy: getEnginePrivacyScore(engine.Name()),
+		})
+	}
+	return infos
+}
+
+// ListEnginesWithHealth returns engine info combined with runtime health stats
+func (m *EngineManager) ListEnginesWithHealth() []model.EngineHealthInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	infos := make([]model.EngineHealthInfo, 0, len(m.engines))
+	for _, eng := range m.engines {
+		caps := eng.Capabilities()
+		info := model.EngineHealthInfo{
+			EngineInfo: model.EngineInfo{
+				Name:        eng.Name(),
+				DisplayName: eng.DisplayName(),
+				Enabled:     eng.IsAvailable(),
+				Available:   eng.IsAvailable(),
+				Tier:        eng.Tier(),
+				Features:    getFeatures(eng),
+				Capabilities: &model.EngineCapabilities{
+					HasPreview:  caps.HasPreview,
+					HasDownload: caps.HasDownload,
+				},
+				Privacy: getEnginePrivacyScore(eng.Name()),
+			},
+		}
+		if ht, ok := eng.(HealthTracker); ok {
+			info.Health = ht.GetStats()
+		}
+		infos = append(infos, info)
+	}
+	return infos
+}
+
+// ResetEngine resets the circuit breaker for a named engine.
+// Returns true if the engine was found.
+func (m *EngineManager) ResetEngine(name string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, eng := range m.engines {
+		if eng.Name() == name {
+			if cr, ok := eng.(CircuitResetter); ok {
+				cr.ResetCircuitBreaker()
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// SetEngineEnabled enables or disables a named engine at runtime.
+// Returns true if the engine was found.
+func (m *EngineManager) SetEngineEnabled(name string, enabled bool) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, eng := range m.engines {
+		if eng.Name() == name {
+			if c, ok := eng.(ConfigurableSearchEngine); ok {
+				c.SetEnabled(enabled)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// EnabledCount returns the number of enabled engines
+func (m *EngineManager) EnabledCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	count := 0
+	for _, engine := range m.engines {
+		if engine.IsAvailable() {
+			count++
+		}
+	}
+	return count
+}
+
+// SpellCorrect returns a spelling suggestion for the query, or "" if none.
+// It uses Levenshtein distance against engine bang names and a small built-in
+// word list. A suggestion is only returned when edit distance is 1-2 AND the
+// suggestion differs from the input. Queries longer than 4 words are skipped.
+func (m *EngineManager) SpellCorrect(query string) string {
+	words := strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+	if len(words) == 0 || len(words) > 4 {
+		return ""
+	}
+
+	// Build word list from engine bang names + common search terms
+	candidates := m.spellWordList()
+
+	// Try to suggest correction for each word independently
+	suggested := make([]string, len(words))
+	anyChanged := false
+	for i, word := range words {
+		if len(word) <= 2 {
+			suggested[i] = word
+			continue
+		}
+		best := word
+		// threshold: only suggest if dist <= 2
+		bestDist := 3
+		for _, candidate := range candidates {
+			d := levenshtein(word, candidate)
+			if d > 0 && d < bestDist {
+				bestDist = d
+				best = candidate
+			}
+		}
+		suggested[i] = best
+		if best != word {
+			anyChanged = true
+		}
+	}
+
+	if !anyChanged {
+		return ""
+	}
+	return strings.Join(suggested, " ")
+}
+
+// spellWordList builds the spell correction vocabulary from engine names + builtins.
+func (m *EngineManager) spellWordList() []string {
+	m.mu.RLock()
+	names := make([]string, 0, len(m.engines)+50)
+	for _, eng := range m.engines {
+		names = append(names, strings.ToLower(eng.Name()))
+		names = append(names, strings.ToLower(eng.DisplayName()))
+	}
+	m.mu.RUnlock()
+
+	// Common adult video search terms
+	builtins := []string{
+		"amateur", "amateur", "blonde", "brunette", "redhead", "milf", "teen",
+		"lesbian", "threesome", "hardcore", "softcore", "solo", "couple",
+		"anal", "blowjob", "handjob", "creampie", "cumshot", "facial",
+		"interracial", "asian", "latina", "ebony", "european", "japanese",
+		"german", "french", "british", "russian", "casting", "audition",
+		"homemade", "pov", "hd", "4k", "compilation", "massage", "shower",
+		"outdoor", "public", "office", "college", "babysitter", "stepsister",
+		"stepbrother", "stepmother", "stepfather", "teacher", "doctor",
+		"nurse", "secretary", "maid", "cheerleader", "yoga", "gym",
+		"lingerie", "stockings", "heels", "tattoo", "piercing",
+		"big", "huge", "tiny", "natural", "fake", "real", "perfect",
+		"boobs", "tits", "ass", "butt", "booty", "legs",
+	}
+	return append(names, builtins...)
+}
+
+// levenshtein computes the Levenshtein edit distance between two strings.
+func levenshtein(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	la, lb := len(ra), len(rb)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+	// Use two rows to save memory
+	prev := make([]int, lb+1)
+	curr := make([]int, lb+1)
+	for j := 0; j <= lb; j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			curr[j] = min(min(prev[j]+1, curr[j-1]+1), prev[j-1]+cost)
+		}
+		prev, curr = curr, prev
+	}
+	return prev[lb]
+}
+
+// EngineDebugInfo contains detailed debug information for a single engine
+type EngineDebugInfo struct {
+	Name           string   `json:"name"`
+	DisplayName    string   `json:"display_name"`
+	Tier           int      `json:"tier"`
+	Enabled        bool     `json:"enabled"`
+	ResponseTimeMS int64    `json:"response_time_ms"`
+	Error          string   `json:"error,omitempty"`
+	RawResults     int      `json:"raw_results"`
+	AfterThumbnail int      `json:"after_thumbnail_filter"`
+	AfterDuration  int      `json:"after_duration_filter"`
+	AfterANDMatch  int      `json:"after_and_match_filter"`
+	FinalResults   int      `json:"final_results"`
+	SampleTitles   []string `json:"sample_titles,omitempty"`
+	SampleTags     []string `json:"sample_tags,omitempty"`
+}
+
+// DebugSearchResult contains comprehensive debug info for all engines
+type DebugSearchResult struct {
+	Query          string            `json:"query"`
+	MinDuration    int               `json:"min_duration_seconds"`
+	TotalEngines   int               `json:"total_engines"`
+	EnabledEngines int               `json:"enabled_engines"`
+	SuccessEngines int               `json:"success_engines"`
+	FailedEngines  int               `json:"failed_engines"`
+	TotalRaw       int               `json:"total_raw_results"`
+	TotalFinal     int               `json:"total_final_results"`
+	SearchTimeMS   int64             `json:"search_time_ms"`
+	Engines        []EngineDebugInfo `json:"engines"`
+}
+
+// DebugSearch performs a search across ALL engines (ignoring disabled state) and returns detailed debug info
+// This helps identify why results are low by showing filtering at each stage
+func (m *EngineManager) DebugSearch(ctx context.Context, query string, page int) *DebugSearchResult {
+	startTime := time.Now()
+
+	m.mu.RLock()
+	allEngines := make([]SearchEngine, 0, len(m.engines))
+	for _, e := range m.engines {
+		allEngines = append(allEngines, e)
+	}
+	m.mu.RUnlock()
+
+	// Count enabled
+	enabledCount := 0
+	for _, e := range allEngines {
+		if e.IsAvailable() {
+			enabledCount++
+		}
+	}
+
+	// Search all engines concurrently
+	type debugResult struct {
+		engine         SearchEngine
+		results        []model.VideoResult
+		err            error
+		responseTimeMS int64
+	}
+
+	resultsChan := make(chan debugResult, len(allEngines))
+	var wg sync.WaitGroup
+
+	for _, engine := range allEngines {
+		wg.Add(1)
+		go func(e SearchEngine) {
+			defer wg.Done()
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("[engine] panic in debug %s.Search: %v", e.Name(), rec)
+					resultsChan <- debugResult{
+						engine: e,
+						err:    fmt.Errorf("engine panic: %v", rec),
+					}
+				}
+			}()
+			engineStart := time.Now()
+			results, err := e.Search(ctx, query, page)
+			resultsChan <- debugResult{
+				engine:         e,
+				results:        results,
+				err:            err,
+				responseTimeMS: time.Since(engineStart).Milliseconds(),
+			}
+		}(engine)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
+
+	// Process results
+	minDuration := 0
+	if m.appConfig != nil {
+		minDuration = m.appConfig.Search.MinDurationSeconds
+	}
+	var engineInfos []EngineDebugInfo
+	successCount := 0
+	failedCount := 0
+	totalRaw := 0
+	totalFinal := 0
+
+	for result := range resultsChan {
+		info := EngineDebugInfo{
+			Name:           result.engine.Name(),
+			DisplayName:    result.engine.DisplayName(),
+			Tier:           result.engine.Tier(),
+			Enabled:        result.engine.IsAvailable(),
+			ResponseTimeMS: result.responseTimeMS,
+		}
+
+		if result.err != nil {
+			info.Error = result.err.Error()
+			failedCount++
+		} else {
+			successCount++
+			info.RawResults = len(result.results)
+			totalRaw += len(result.results)
+
+			// Apply filters step by step to see where results are lost
+			afterThumbnail := 0
+			afterDuration := 0
+			afterAND := 0
+			var sampleTitles []string
+			var sampleTags []string
+
+			for _, r := range result.results {
+				// Collect sample data (first 3)
+				if len(sampleTitles) < 3 {
+					sampleTitles = append(sampleTitles, r.Title)
+				}
+				if len(sampleTags) < 5 && len(r.Tags) > 0 {
+					for _, t := range r.Tags {
+						if len(sampleTags) < 5 {
+							sampleTags = append(sampleTags, t)
+						}
+					}
+				}
+
+				// Step 1: Thumbnail filter
+				if !isValidThumbnail(r.Thumbnail) {
+					continue
+				}
+				afterThumbnail++
+
+				// Step 2: Duration filter
+				if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
+					continue
+				}
+				afterDuration++
+
+				// Step 3: AND-match filter
+				if !resultMatchesAllTerms(r, query) {
+					continue
+				}
+				afterAND++
+			}
+
+			info.AfterThumbnail = afterThumbnail
+			info.AfterDuration = afterDuration
+			info.AfterANDMatch = afterAND
+			info.FinalResults = afterAND
+			info.SampleTitles = sampleTitles
+			info.SampleTags = sampleTags
+			totalFinal += afterAND
+		}
+
+		engineInfos = append(engineInfos, info)
+	}
+
+	// Sort by tier, then by name
+	sort.Slice(engineInfos, func(i, j int) bool {
+		if engineInfos[i].Tier != engineInfos[j].Tier {
+			return engineInfos[i].Tier < engineInfos[j].Tier
+		}
+		return engineInfos[i].Name < engineInfos[j].Name
+	})
+
+	return &DebugSearchResult{
+		Query:          query,
+		MinDuration:    minDuration,
+		TotalEngines:   len(allEngines),
+		EnabledEngines: enabledCount,
+		SuccessEngines: successCount,
+		FailedEngines:  failedCount,
+		TotalRaw:       totalRaw,
+		TotalFinal:     totalFinal,
+		SearchTimeMS:   time.Since(startTime).Milliseconds(),
+		Engines:        engineInfos,
+	}
+}
+
+// engineResult holds the result from a single engine search
+type engineResult struct {
+	engine         string
+	results        []model.VideoResult
+	err            error
+	responseTimeMS int64
+}
+
+// isValidThumbnail checks if a thumbnail URL is valid and usable
+// Discards empty, placeholder, or invalid thumbnails per IDEA.md
+func isValidThumbnail(thumbnail string) bool {
+	if thumbnail == "" {
+		return false
+	}
+	// Check for common placeholder patterns
+	lower := strings.ToLower(thumbnail)
+	if strings.Contains(lower, "placeholder") ||
+		strings.Contains(lower, "no-image") ||
+		strings.Contains(lower, "noimage") ||
+		strings.Contains(lower, "default_thumb") ||
+		strings.Contains(lower, "blank.") ||
+		strings.Contains(lower, "missing") {
+		return false
+	}
+	// Must be a valid URL
+	if !strings.HasPrefix(thumbnail, "http://") && !strings.HasPrefix(thumbnail, "https://") {
+		return false
+	}
+	return true
+}
+
+// sanitizePreviewURL validates a preview URL for browser <video> playback
+// Returns "" when the URL is not absolute http(s) or points at a resource a
+// <video> element cannot play (image rollovers, HLS playlists), so the frontend
+// never shows a swipe/hover preview affordance that is guaranteed to fail
+func sanitizePreviewURL(preview string) string {
+	preview = strings.TrimSpace(preview)
+	if preview == "" {
+		return ""
+	}
+	// Protocol-relative URLs default to https
+	if strings.HasPrefix(preview, "//") {
+		preview = "https:" + preview
+	}
+	if !strings.HasPrefix(preview, "http://") && !strings.HasPrefix(preview, "https://") {
+		return ""
+	}
+	// Strip query string and fragment to inspect the path extension
+	pathOnly := preview
+	if idx := strings.IndexAny(pathOnly, "?#"); idx != -1 {
+		pathOnly = pathOnly[:idx]
+	}
+	lower := strings.ToLower(pathOnly)
+	// Extensions a <video> element cannot play natively: static/animated images and HLS playlists
+	unplayable := []string{".gif", ".jpg", ".jpeg", ".png", ".webp", ".avif", ".m3u8"}
+	for _, ext := range unplayable {
+		if strings.HasSuffix(lower, ext) {
+			return ""
+		}
+	}
+	return preview
+}
+
+// normalizeURL normalizes a URL for deduplication purposes
+// Handles: http/https, www/non-www, trailing slashes, query params
+func normalizeURL(urlStr string) string {
+	if urlStr == "" {
+		return ""
+	}
+
+	// Lowercase the URL
+	normalized := strings.ToLower(urlStr)
+
+	// Remove protocol prefix for comparison
+	normalized = strings.TrimPrefix(normalized, "https://")
+	normalized = strings.TrimPrefix(normalized, "http://")
+
+	// Remove www. prefix
+	normalized = strings.TrimPrefix(normalized, "www.")
+
+	// Remove trailing slash
+	normalized = strings.TrimSuffix(normalized, "/")
+
+	// Remove common tracking parameters but keep essential ones
+	// Split at ? to handle query params
+	if idx := strings.Index(normalized, "?"); idx != -1 {
+		basePath := normalized[:idx]
+		// For video sites, the path usually contains the video ID
+		// Remove query params for deduplication
+		normalized = basePath
+	}
+
+	// Remove fragment
+	if idx := strings.Index(normalized, "#"); idx != -1 {
+		normalized = normalized[:idx]
+	}
+
+	return normalized
+}
+
+// normalizeTitle normalizes a title for fuzzy deduplication
+// Removes special characters, normalizes whitespace, sorts words alphabetically
+// This catches cross-engine duplicates with identical or near-identical titles
+func normalizeTitle(title string) string {
+	if title == "" {
+		return ""
+	}
+
+	// Lowercase
+	normalized := strings.ToLower(title)
+
+	// Remove special characters (keep only alphanumeric and spaces)
+	var result strings.Builder
+	for _, r := range normalized {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == ' ' {
+			result.WriteRune(r)
+		}
+	}
+	normalized = result.String()
+
+	// Split into words and filter out short words (likely noise)
+	words := strings.Fields(normalized)
+	var significantWords []string
+	for _, w := range words {
+		// Keep words with > 2 chars
+		if len(w) > 2 {
+			significantWords = append(significantWords, w)
+		}
+	}
+
+	// Title too short after filtering - return empty to skip title dedup
+	if len(significantWords) < 3 {
+		return ""
+	}
+
+	// Sort words for position-independent matching
+	sort.Strings(significantWords)
+
+	return strings.Join(significantWords, " ")
+}
+
+// jaroSimilarity computes the Jaro string similarity between two strings.
+// Returns a value in [0, 1], where 1 = identical.
+func jaroSimilarity(s1, s2 string) float64 {
+	if s1 == s2 {
+		return 1.0
+	}
+	if len(s1) == 0 || len(s2) == 0 {
+		return 0.0
+	}
+
+	matchDist := max(len(s1), len(s2))/2 - 1
+	if matchDist < 0 {
+		matchDist = 0
+	}
+
+	s1Matches := make([]bool, len(s1))
+	s2Matches := make([]bool, len(s2))
+
+	var matches, transpositions int
+	for i, c1 := range s1 {
+		lo := max(0, i-matchDist)
+		hi := min(len(s2)-1, i+matchDist)
+		for j := lo; j <= hi; j++ {
+			if s2Matches[j] || rune(s2[j]) != c1 {
+				continue
+			}
+			s1Matches[i] = true
+			s2Matches[j] = true
+			matches++
+			break
+		}
+	}
+	if matches == 0 {
+		return 0.0
+	}
+
+	k := 0
+	for i := 0; i < len(s1); i++ {
+		if !s1Matches[i] {
+			continue
+		}
+		for k < len(s2) && !s2Matches[k] {
+			k++
+		}
+		if k < len(s2) && s1[i] != s2[k] {
+			transpositions++
+		}
+		k++
+	}
+
+	m := float64(matches)
+	return (m/float64(len(s1)) + m/float64(len(s2)) + (m-float64(transpositions)/2)/m) / 3.0
+}
+
+// jaroWinklerSimilarity extends Jaro with a prefix bonus for titles that share a common prefix.
+// p is the scaling factor (standard = 0.1, max 0.25). Returns [0, 1].
+func jaroWinklerSimilarity(s1, s2 string) float64 {
+	jaro := jaroSimilarity(s1, s2)
+	if jaro < 0.7 {
+		return jaro
+	}
+
+	prefixLen := 0
+	for i := 0; i < min(4, min(len(s1), len(s2))); i++ {
+		if s1[i] != s2[i] {
+			break
+		}
+		prefixLen++
+	}
+
+	return jaro + float64(prefixLen)*0.1*(1-jaro)
+}
+
+// titlesAreFuzzyDuplicates returns true when two normalized titles are nearly identical
+// using Jaro-Winkler similarity with a threshold of 0.92.
+func titlesAreFuzzyDuplicates(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return jaroWinklerSimilarity(a, b) >= 0.92
+}
+
+// resultMatchesAllTerms checks if a video result matches ALL search terms using synonym expansion
+// This implements AND logic: "pregnant teen lesbian" only returns results containing ALL three terms
+// Each term can match via any of its synonyms (e.g., "teen" matches "18", "young", "barely legal", etc.)
+func resultMatchesAllTerms(r model.VideoResult, query string) bool {
+	// Expand query terms using taxonomy
+	expandedTerms := ExpandSearchTerms(query)
+	if len(expandedTerms) == 0 {
+		// No terms to match
+		return true
+	}
+
+	// Build combined text from title, tags, and performer
+	combinedText := strings.ToLower(r.Title)
+	if len(r.Tags) > 0 {
+		combinedText += " " + strings.ToLower(strings.Join(r.Tags, " "))
+	}
+	if r.Performer != "" {
+		combinedText += " " + strings.ToLower(r.Performer)
+	}
+
+	// Use taxonomy's MatchesAllTerms to check AND logic with synonyms
+	return MatchesAllTerms(combinedText, expandedTerms)
+}
+
+// StreamResult represents a single result sent via SSE
+type StreamResult struct {
+	Result model.VideoResult `json:"result,omitempty"`
+	Engine string            `json:"engine"`
+	Done   bool              `json:"done"`
+	Error  string            `json:"error,omitempty"`
+	// Overloaded is set instead of a normal per-engine Error when the
+	// searchSem concurrency guard could not be acquired within
+	// searchQueueTimeout (see overloadedSearchResponse / SearchWithOperators).
+	// Callers (e.g. handleSearchSSE) must check this first and translate it
+	// into a RATE_LIMITED signal rather than treating Error as an
+	// engine-specific failure.
+	Overloaded bool `json:"-"`
+}
+
+// EnginesToUseCount returns how many engines will be queried for the given
+// engine name filter, without performing a search. SSE handlers use this to
+// report an accurate "engines queried" total, distinct from "engines that
+// returned results" (which can legitimately be 0 for a zero-match query).
+func (m *EngineManager) EnginesToUseCount(engineNames []string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.getEnginesToUse(engineNames))
+}
+
+// SearchStream performs a search across enabled engines and streams results via channel
+// Results are deduplicated by URL across all engines
+func (m *EngineManager) SearchStream(ctx context.Context, query string, page int, engineNames []string) <-chan StreamResult {
+	return m.SearchStreamWithOperators(ctx, query, page, engineNames, nil, nil, nil, nil, false, 0, false, 0, 0, 0, "")
+}
+
+// SearchStreamWithOperators performs a streaming search with optional search operators
+// exactPhrases requires results to contain all specified phrases
+// exclusions removes results containing any excluded word
+// requiredTerms requires results to contain every specified term (AND match)
+// performers filters by performer name (OR match)
+// showAI overrides server AI filter setting (true = show AI content)
+// minQuality filters by minimum quality level (0 = no filter, 360 = 360p+, etc.)
+// previewFirst sorts each engine's result batch so preview-capable results stream first
+// userMinDuration is the user's minimum duration preference in seconds (0 = use server config)
+// maxDuration, in seconds, rejects results longer than this (0 = no maximum); it is
+// the SSE-path equivalent of ResultFilterOptions.MaxDuration used by the synchronous
+// SearchWithOperators, kept as a plain parameter here since streaming callers already
+// pass minQuality/userMinDuration positionally rather than via a struct.
+// resultsPerPage caps how many results this batch may stream in total across
+// all engines, honoring the user's results-per-page preference server-side per
+// IDEA.md "Pagination" ("The server still determines each batch's contents and
+// size"); <=0 falls back to the config default, mirroring SearchWithOperators.
+// sessionID, when non-empty, scopes cross-page result deduplication to a single
+// client search session (see AI.md PART 14 "State management -> Server (sessions)")
+// so that page=2, page=3, ... of the same infinite-scroll search never resurface
+// a result already returned on an earlier page.
+func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, performers []string, showAI bool, minQuality int, previewFirst bool, userMinDuration int, maxDuration int, resultsPerPage int, sessionID string) <-chan StreamResult {
+	resultsChan := make(chan StreamResult, 100)
+
+	go func() {
+		defer close(resultsChan)
+
+		// Same searchSem concurrency guard as SearchWithOperators (AI.md
+		// PART 12 "Rate Limiting" — primary abuse defense). SSE cannot set an
+		// HTTP status after streaming has started, so an overload here is
+		// signaled through the channel itself via Overloaded, rather than a
+		// pre-write 429.
+		select {
+		case m.searchSem <- struct{}{}:
+			defer func() { <-m.searchSem }()
+		case <-time.After(searchQueueTimeout):
+			select {
+			case resultsChan <- StreamResult{Overloaded: true, Error: "RATE_LIMITED", Done: true}:
+			case <-ctx.Done():
+			}
+			return
+		case <-ctx.Done():
+			select {
+			case resultsChan <- StreamResult{Overloaded: true, Error: "RATE_LIMITED", Done: true}:
+			default:
+			}
+			return
+		}
+
+		m.mu.RLock()
+		enginesToUse := m.getEnginesToUse(engineNames)
+		m.mu.RUnlock()
+
+		// Resolve the per-batch result cap: user preference wins, otherwise the
+		// config default — identical fallback to the sync SearchWithOperators path
+		if resultsPerPage <= 0 {
+			resultsPerPage = 50
+			if m.appConfig != nil && m.appConfig.Search.ResultsPerPage > 0 {
+				resultsPerPage = m.appConfig.Search.ResultsPerPage
+			}
+		}
+
+		var wg sync.WaitGroup
+		// Get min duration from config, defaulting to 0 if config is nil
+		minDuration := 0
+		if m.appConfig != nil {
+			minDuration = m.appConfig.Search.MinDurationSeconds
+		}
+		// User's preference overrides config minimum duration
+		if userMinDuration > minDuration {
+			minDuration = userMinDuration
+		}
+
+		// Shared deduplication maps with mutex for concurrent access
+		// Check both URL and normalized title to catch cross-engine duplicates
+		var seenMu sync.Mutex
+		seenURLs := make(map[string]bool)
+		// for fuzzy Jaro-Winkler dedup
+		seenTitlesNorm := make([]string, 0, 64)
+		// Total results accepted across ALL engines this batch — enforces the
+		// user's results-per-page preference server-side (guarded by seenMu)
+		acceptedTotal := 0
+
+		for _, engine := range enginesToUse {
+			wg.Add(1)
+			go func(e SearchEngine) {
+				defer wg.Done()
+				defer func() {
+					if rec := recover(); rec != nil {
+						log.Printf("[engine] panic in SSE %s.Search: %v", e.Name(), rec)
+						select {
+						case resultsChan <- StreamResult{Engine: e.Name(), Error: fmt.Sprintf("engine panic: %v", rec)}:
+						case <-ctx.Done():
+						}
+					}
+				}()
+
+				results, err := e.Search(ctx, query, page)
+				if err != nil {
+					select {
+					case resultsChan <- StreamResult{Engine: e.Name(), Error: err.Error()}:
+					case <-ctx.Done():
+					}
+					return
+				}
+
+				// Stream each result individually with thumbnail validation and deduplication
+				accepted := make([]model.VideoResult, 0, len(results))
+				for _, r := range results {
+					// Skip results with empty/invalid thumbnails
+					if !isValidThumbnail(r.Thumbnail) {
+						continue
+					}
+					// Skip if duration is known and below minimum
+					if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
+						continue
+					}
+					// Skip if duration is known and above the filter panel's maximum
+					if maxDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds > maxDuration {
+						continue
+					}
+
+					// Drop preview URLs a <video> element cannot play (images, HLS, relative paths)
+					r.PreviewURL = sanitizePreviewURL(r.PreviewURL)
+
+					// Apply search operators
+					titleLower := strings.ToLower(r.Title)
+
+					// Check exclusions - skip if any excluded word is found
+					excluded := false
+					for _, ex := range exclusions {
+						if strings.Contains(titleLower, ex) {
+							excluded = true
+							break
+						}
+					}
+					if excluded {
+						continue
+					}
+
+					// Check exact phrases - require all phrases to be present
+					hasAllPhrases := true
+					for _, phrase := range exactPhrases {
+						if !strings.Contains(titleLower, strings.ToLower(phrase)) {
+							hasAllPhrases = false
+							break
+						}
+					}
+					if !hasAllPhrases {
+						continue
+					}
+
+					// Check required terms - every term must be present (AND)
+					hasAllRequired := true
+					for _, rt := range requiredTerms {
+						if !strings.Contains(titleLower, rt) {
+							hasAllRequired = false
+							break
+						}
+					}
+					if !hasAllRequired {
+						continue
+					}
+
+					// Check performer filter - at least one performer must match (OR)
+					if len(performers) > 0 {
+						performerLower := strings.ToLower(r.Performer)
+						matchesPerformer := false
+						for _, p := range performers {
+							if strings.Contains(performerLower, p) {
+								matchesPerformer = true
+								break
+							}
+						}
+						if !matchesPerformer {
+							continue
+						}
+					}
+
+					// Synthetic content filter - skip deepfake/computer-rendered content unless user overrides
+					// showAI=true means user wants to see synthetic content (overrides server default)
+					if m.appConfig != nil && m.appConfig.Search.AIFilter.Enabled && !showAI {
+						if isAIGeneratedContent(titleLower, r.Tags, m.appConfig.Search.AIFilter.Keywords) {
+							continue
+						}
+					}
+
+					// Quality filter - skip if below minimum quality
+					// Unknown quality passes to avoid filtering videos without quality info
+					if !meetsMinQuality(r.Quality, minQuality) {
+						continue
+					}
+
+					// AND-based term filter: result must match ALL search terms (using synonyms)
+					if !resultMatchesAllTerms(r, query) {
+						continue
+					}
+
+					// Deduplicate by normalized URL and title
+					// URL handles: http/https, www, trailing slash differences
+					// Title handles: cross-engine duplicates with matching content
+					normalizedURL := normalizeURL(r.URL)
+					normalizedTitle := normalizeTitle(r.Title)
+
+					seenMu.Lock()
+					// Check URL first
+					if seenURLs[normalizedURL] {
+						seenMu.Unlock()
+						continue
+					}
+					// Fuzzy title dedup: check against all previously seen titles
+					isDupTitle := false
+					if normalizedTitle != "" {
+						for _, seen := range seenTitlesNorm {
+							if titlesAreFuzzyDuplicates(normalizedTitle, seen) {
+								isDupTitle = true
+								break
+							}
+						}
+					}
+					if isDupTitle {
+						seenMu.Unlock()
+						continue
+					}
+					// Per-page cap: once this batch has accepted the user's
+					// results-per-page count, stop accepting. Checked BEFORE
+					// CheckAndMark so a capped-out result is never marked as
+					// returned and remains eligible for the next page of the
+					// same session.
+					if acceptedTotal >= resultsPerPage {
+						seenMu.Unlock()
+						break
+					}
+					// Cross-page dedup: skip results already returned on an
+					// earlier page of the same search session
+					if m.sessionDedup.CheckAndMark(sessionID, normalizedURL, normalizedTitle) {
+						seenMu.Unlock()
+						continue
+					}
+					// Mark as seen
+					seenURLs[normalizedURL] = true
+					if normalizedTitle != "" {
+						seenTitlesNorm = append(seenTitlesNorm, normalizedTitle)
+					}
+					acceptedTotal++
+					seenMu.Unlock()
+
+					accepted = append(accepted, r)
+				}
+
+				// When preview-first is requested, sort this engine's batch so results with
+				// a preview URL stream before results without one. This is a per-engine,
+				// best-effort ordering only — engines stream concurrently onto the shared
+				// channel, so it cannot guarantee a globally preview-first order across
+				// engines by itself. The client applies its own final preview-first sort
+				// once the stream completes (per IDEA.md "Client-Side Sorting"), and the
+				// non-streaming path (sortResultsPreviewFirst, used by SearchWithOperators)
+				// gives non-JS/API/CLI clients a fully-ordered, non-partial result set.
+				if previewFirst {
+					accepted = sortResultsPreviewFirst(accepted)
+				}
+
+				for _, r := range accepted {
+					select {
+					case resultsChan <- StreamResult{Result: r, Engine: e.Name()}:
+					case <-ctx.Done():
+						return
+					}
+				}
+
+				// Signal engine completion
+				select {
+				case resultsChan <- StreamResult{Engine: e.Name(), Done: true}:
+				case <-ctx.Done():
+				}
+			}(engine)
+		}
+
+		wg.Wait()
+	}()
+
+	return resultsChan
+}
+
+// getFeatures returns the features supported by an engine
+func getFeatures(engine SearchEngine) []string {
+	var features []string
+	if engine.SupportsFeature(FeaturePagination) {
+		features = append(features, "pagination")
+	}
+	if engine.SupportsFeature(FeatureSorting) {
+		features = append(features, "sorting")
+	}
+	if engine.SupportsFeature(FeatureFiltering) {
+		features = append(features, "filtering")
+	}
+	if engine.SupportsFeature(FeatureThumbnailPreview) {
+		features = append(features, "thumbnail_preview")
+	}
+	return features
+}
+
+// isAIGeneratedContent checks if a video result appears to be AI-generated content
+// by matching against keywords in title and tags
+func isAIGeneratedContent(titleLower string, tags []string, keywords []string) bool {
+	// Check title for AI keywords
+	for _, keyword := range keywords {
+		if strings.Contains(titleLower, strings.ToLower(keyword)) {
+			return true
+		}
+	}
+
+	// Check tags for AI keywords
+	for _, tag := range tags {
+		tagLower := strings.ToLower(tag)
+		for _, keyword := range keywords {
+			if strings.Contains(tagLower, strings.ToLower(keyword)) {
+				return true
+			}
+		}
+	}
+
+	return false
+}

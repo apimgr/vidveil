@@ -1,0 +1,60 @@
+{{define "privacy"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
+    <main class="privacy" id="main-content" role="main">
+        <h1>{{ t "privacy.title" }}</h1>
+        {{if .GPCHonored}}
+        <section class="gpc-notice" role="status">
+            <h2>{{ t "privacy.gpc_title" }}</h2>
+            <p>{{ t "privacy.gpc_desc" }}</p>
+        </section>
+        {{end}}
+        <section>
+            <h2>{{ t "privacy.commitment" }}</h2>
+            <p>{{ t "privacy.commitment_desc" }}</p>
+        </section>
+        <section>
+            <h2>{{ t "privacy.not_collect" }}</h2>
+            <ul>
+                <li>{{ t "privacy.no_search_logs" }}</li>
+                <li>{{ t "privacy.no_accounts" }}</li>
+                <li>{{ t "privacy.no_cookies" }}</li>
+                <li>{{ t "privacy.no_ip" }}</li>
+                <li>{{ t "privacy.no_fingerprint" }}</li>
+                <li>{{ t "privacy.no_trackers" }}</li>
+            </ul>
+        </section>
+        <section>
+            <h2>{{ t "privacy.what_store" }}</h2>
+            <p>{{ t "privacy.store_desc" }}</p>
+        </section>
+        <section>
+            <h2>{{ t "privacy.third_party" }}</h2>
+            <p>{{ t "privacy.third_party_desc" }}</p>
+        </section>
+        <section>
+            <h2>{{ t "privacy.tor_support" }}</h2>
+            <p>{{ t "privacy.tor_desc" }}</p>
+        </section>
+        <section>
+            <h2>{{ t "privacy.selfhost" }}</h2>
+            <p>{{ t "privacy.selfhost_desc" }}</p>
+        </section>
+        <section>
+            <h2>{{ t "privacy.open_source" }}</h2>
+            <p>{{ t "privacy.open_source_desc" }}</p>
+            <p><a href="https://github.com/apimgr/vidveil" target="_blank">{{ t "privacy.view_source" }}</a></p>
+        </section>
+    </main>
+    {{template "public/footer" .}}
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

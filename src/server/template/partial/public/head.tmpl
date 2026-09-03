@@ -1,0 +1,104 @@
+{{define "public/head"}}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="{{.ThemeColor}}">
+{{- if .BrandingDescription}}<meta name="description" content="{{.BrandingDescription}}">
+{{- else}}<meta name="description" content="Privacy-focused video search engine">
+{{- end}}
+{{- if .SEOKeywords}}<meta name="keywords" content="{{.SEOKeywords}}">
+{{- end}}
+{{- if .SEOAuthor}}<meta name="author" content="{{.SEOAuthor}}">
+{{- end}}
+<meta name="robots" content="{{if .Robots}}{{.Robots}}{{else}}noindex,nofollow{{end}}">
+{{- if .CanonicalURL}}
+<link rel="canonical" href="{{.CanonicalURL}}">
+{{- end}}
+<title>{{.Title}}</title>
+
+<!-- OpenGraph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{.Title}}">
+{{- if .BrandingDescription}}
+<meta property="og:description" content="{{.BrandingDescription}}">
+{{- else}}
+<meta property="og:description" content="Privacy-focused video search engine">
+{{- end}}
+{{- if .SEOOGImage}}<meta property="og:image" content="{{.SEOOGImage}}">{{- end}}
+{{- if .AppURL}}<meta property="og:url" content="{{.AppURL}}">{{- end}}
+{{- if .ProjectName}}<meta property="og:site_name" content="{{.ProjectName}}">{{- end}}
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{.Title}}">
+{{- if .BrandingDescription}}
+<meta name="twitter:description" content="{{.BrandingDescription}}">
+{{- else}}
+<meta name="twitter:description" content="Privacy-focused video search engine">
+{{- end}}
+{{- if .SEOOGImage}}<meta name="twitter:image" content="{{.SEOOGImage}}">{{- end}}
+{{- if .SEOTwitterHandle}}<meta name="twitter:site" content="{{.SEOTwitterHandle}}">{{- end}}
+
+{{/* Structured data per AI.md PART 16 — application/ld+json is a non-executable
+     data island, so CSP script-src 'self' does not block it. */}}
+<script type="application/ld+json">{
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "{{.Title}}",
+    "description": "{{if .BrandingDescription}}{{.BrandingDescription}}{{else}}Privacy-focused video search engine{{end}}",
+    "url": "{{if .CanonicalURL}}{{.CanonicalURL}}{{else}}{{.AppURL}}{{end}}"
+}</script>
+
+{{- if .SEOVerification}}
+{{- with .SEOVerification}}
+{{- if .Google}}<meta name="google-site-verification" content="{{.Google}}">{{- end}}
+{{- if .Bing}}<meta name="msvalidate.01" content="{{.Bing}}">{{- end}}
+{{- if .Yandex}}<meta name="yandex-verification" content="{{.Yandex}}">{{- end}}
+{{- if .Baidu}}<meta name="baidu-site-verification" content="{{.Baidu}}">{{- end}}
+{{- if .Pinterest}}<meta name="p:domain_verify" content="{{.Pinterest}}">{{- end}}
+{{- if .Facebook}}<meta property="fb:domain_verification" content="{{.Facebook}}">{{- end}}
+{{- range .Custom}}
+{{- if .Name}}<meta name="{{.Name}}" content="{{.Content}}">
+{{- else if .Property}}<meta property="{{.Property}}" content="{{.Content}}">{{- end}}
+{{- end}}
+{{- end}}
+{{- end}}
+
+<link rel="stylesheet" href="{{ asset "/static/css/common.css" }}">
+<link rel="stylesheet" href="{{ asset "/static/css/components.css" }}">
+<link rel="stylesheet" href="{{ asset "/static/css/public.css" }}">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="{{if .BrandingFavicon}}{{.BrandingFavicon}}{{else}}/static/images/favicon.ico{{end}}">
+<link rel="apple-touch-icon" href="/static/icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VidVeil">
+<link rel="apple-touch-startup-image" href="/static/splash/iphone-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="/static/splash/iphone-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)">
+{{/* Global i18n strings for app.js code shared across every page (e.g. showConfirm()).
+     type="application/json" is a non-executable data island (CSP script-src does not
+     block it). Page-specific strings live in their own #{page}-i18n islands instead. */}}
+<script type="application/json" id="app-i18n">{
+    "modalConfirmTitle": "{{ t "modal.confirm_title" }}",
+    "cancel": "{{ t "action.cancel" }}",
+    "confirm": "{{ t "action.confirm" }}",
+    "close": "{{ t "action.close" }}",
+    "retry": "{{ t "action.retry" }}",
+    "favoritesAdd": "{{ t "favorites.add" }}",
+    "favoritesAdded": "{{ t "favorites.added" }}",
+    "favoritesRemove": "{{ t "favorites.remove" }}",
+    "favoritesRemoved": "{{ t "favorites.removed" }}",
+    "timeViews": "{{ t "time.views" }}",
+    "searchCardCopyLink": "{{ t "search.card_copy_link" }}",
+    "searchCardDownload": "{{ t "search.card_download" }}",
+    "searchCardLinkCopied": "{{ t "search.card_link_copied" }}",
+    "searchCardOpenNewTab": "{{ t "search.card_open_new_tab" }}",
+    "searchCardSwipePreview": "{{ t "search.card_swipe_preview" }}",
+    "searchCardUntitled": "{{ t "search.card_untitled" }}",
+    "searchCardVideoOptions": "{{ t "search.card_video_options" }}",
+    "searchCardVideoResultLabel": "{{ t "search.card_video_result_label" }}",
+    "searchConnectionError": "{{ t "search.connection_error" }}",
+    "searchFailed": "{{ t "search.failed" }}"
+}</script>
+{{/* Service worker registration lives in static/js/app.js (CSP: script-src 'self') */}}
+{{end}}

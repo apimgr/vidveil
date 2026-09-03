@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: MIT
+package model
+
+import (
+	"time"
+)
+
+// VideoResult represents a single video search result
+// Per AI.md PART 1: "Result" alone is ambiguous - result of what?
+type VideoResult struct {
+	ID              string    `json:"id"`
+	Title           string    `json:"title"`
+	URL             string    `json:"url"`
+	Thumbnail       string    `json:"thumbnail"`
+	PreviewURL      string    `json:"preview_url,omitempty"`
+	DownloadURL     string    `json:"download_url,omitempty"`
+	Duration        string    `json:"duration"`
+	DurationSeconds int       `json:"duration_seconds"`
+	Views           string    `json:"views"`
+	ViewsCount      int64     `json:"views_count"`
+	Rating          float64   `json:"rating,omitempty"`
+	Quality         string    `json:"quality,omitempty"`
+	Source          string    `json:"source"`
+	SourceDisplay   string    `json:"source_display"`
+	Published       time.Time `json:"published,omitempty"`
+	Description     string    `json:"description,omitempty"`
+	Tags            []string  `json:"tags,omitempty"`
+	Performer       string    `json:"performer,omitempty"`
+}
+
+// SearchResponse represents the API response for a search
+// Per AI.md PART 14: Error response format uses error (code) + message (human-readable)
+type SearchResponse struct {
+	Ok         bool           `json:"ok"`
+	Data       SearchData     `json:"data"`
+	Pagination PaginationData `json:"pagination"`
+	// ERROR_CODE (machine-readable)
+	Error string `json:"error,omitempty"`
+	// Human-readable message
+	Message string `json:"message,omitempty"`
+}
+
+// EngineStatInfo holds per-engine statistics from a search
+type EngineStatInfo struct {
+	ResponseTimeMS int64  `json:"response_time_ms"`
+	ResultCount    int    `json:"result_count"`
+	Error          string `json:"error,omitempty"`
+}
+
+// SearchData holds the search results and metadata
+// SearchQuery is the query after bang parsing
+// HasBang indicates whether bangs were used
+// BangEngines contains engines from bang parsing
+// Cached indicates whether results came from cache
+type SearchData struct {
+	Query           string                    `json:"query"`
+	SearchQuery     string                    `json:"search_query,omitempty"`
+	Results         []VideoResult             `json:"results"`
+	EnginesUsed     []string                  `json:"engines_used"`
+	EnginesFailed   []string                  `json:"engines_failed"`
+	SearchTimeMS    int64                     `json:"search_time_ms"`
+	HasBang         bool                      `json:"has_bang,omitempty"`
+	BangEngines     []string                  `json:"bang_engines,omitempty"`
+	Cached          bool                      `json:"cached,omitempty"`
+	EngineStats     map[string]EngineStatInfo `json:"engine_stats,omitempty"`
+	RelatedSearches []string                  `json:"related_searches,omitempty"`
+	SpellSuggestion string                    `json:"spell_suggestion,omitempty"`
+	InvalidBang     string                    `json:"invalid_bang,omitempty"`
+}
+
+// PaginationData holds pagination information
+type PaginationData struct {
+	Page  int `json:"page"`
+	Limit int `json:"limit"`
+	Total int `json:"total"`
+	Pages int `json:"pages"`
+}
+
+// EnginePrivacyScore holds static privacy metadata for an engine
+type EnginePrivacyScore struct {
+	// engine needs JS to return results
+	RequiresJS bool `json:"requires_js"`
+	// engine sets tracking cookies
+	SetsCookies bool `json:"sets_cookies"`
+	// engine embeds third-party trackers
+	HasTracking bool `json:"has_tracking"`
+}
+
+// EngineInfo represents information about a search engine
+type EngineInfo struct {
+	Name         string              `json:"name"`
+	DisplayName  string              `json:"display_name"`
+	Enabled      bool                `json:"enabled"`
+	Available    bool                `json:"available"`
+	Features     []string            `json:"features"`
+	Tier         int                 `json:"tier"`
+	Capabilities *EngineCapabilities `json:"capabilities,omitempty"`
+	Privacy      EnginePrivacyScore  `json:"privacy"`
+}
+
+// EngineCapabilities represents engine feature support
+type EngineCapabilities struct {
+	HasPreview  bool `json:"has_preview"`
+	HasDownload bool `json:"has_download"`
+}
+
+// EnginesResponse represents the API response for engines list
+type EnginesResponse struct {
+	Ok   bool         `json:"ok"`
+	Data []EngineInfo `json:"data"`
+}
+
+// EngineHealthStats holds runtime circuit-breaker and latency stats for one engine
+type EngineHealthStats struct {
+	// closed, open, half-open
+	CircuitState string `json:"circuit_state"`
+	// failures toward threshold
+	CircuitFailures int `json:"circuit_failures"`
+	// zero if never failed
+	LastFailureAt  time.Time `json:"last_failure_at"`
+	TotalSuccesses uint64    `json:"total_successes"`
+	TotalFailures  uint64    `json:"total_failures"`
+	// zero if never succeeded
+	LastSuccessAt time.Time `json:"last_success_at"`
+	AvgLatencyMs  int64     `json:"avg_latency_ms"`
+	// 0-100
+	UptimePct float64 `json:"uptime_pct"`
+	// zero value means not rate-limited
+	RateLimitedUntil time.Time `json:"rate_limited_until"`
+	// true when engine is in rate limit cooldown
+	IsRateLimited bool `json:"is_rate_limited"`
+}
+
+// EngineHealthInfo combines EngineInfo with runtime health stats
+type EngineHealthInfo struct {
+	EngineInfo
+	Health EngineHealthStats `json:"health"`
+}

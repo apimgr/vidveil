@@ -1,0 +1,713 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"context"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/mode"
+	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/apimgr/vidveil/src/server/service/retry"
+	"github.com/apimgr/vidveil/src/server/service/utl"
+)
+
+// Feature represents optional engine capabilities
+type Feature int
+
+const (
+	FeaturePagination Feature = iota
+	FeatureSorting
+	FeatureFiltering
+	FeatureThumbnailPreview
+)
+
+// Capabilities describes what data an engine can provide
+// Per IDEA.md Engine Capability Declaration
+type Capabilities struct {
+	// Can provide PreviewURL
+	HasPreview bool `json:"has_preview"`
+	// Can provide DownloadURL
+	HasDownload bool `json:"has_download"`
+	// Can provide duration
+	HasDuration bool `json:"has_duration"`
+	// Can provide view count
+	HasViews bool `json:"has_views"`
+	// Can provide rating
+	HasRating bool `json:"has_rating"`
+	// Can provide quality badge
+	HasQuality bool `json:"has_quality"`
+	// Can provide upload date
+	HasUploadDate bool `json:"has_upload_date"`
+	// e.g., "data-preview", "data-mediabook", "api"
+	PreviewSource string `json:"preview_source"`
+	// "api", "html", "json_extraction"
+	APIType string `json:"api_type"`
+}
+
+// TorClientProvider provides HTTP clients that can route through Tor
+// Per PART 31: Used when UseNetwork is enabled to anonymize engine queries
+type TorClientProvider interface {
+	// GetHTTPClient returns an HTTP client, optionally routed through Tor
+	// useTor: true = route through Tor, false = direct connection
+	GetHTTPClient(useTor bool) *http.Client
+	// OutboundEnabled returns true if Tor outbound is available
+	OutboundEnabled() bool
+	// UseNetworkEnabled returns true if Tor network routing is configured server-wide
+	UseNetworkEnabled() bool
+	// AllowUserPreference returns true if users may override the server's Tor outbound setting
+	AllowUserPreference() bool
+	// AllowUserIPForward returns true if admin allows users to forward their IP
+	AllowUserIPForward() bool
+	// ShouldUseTor determines if Tor should be used given an optional user preference override
+	// userPref: nil = inherit server setting, true = force Tor, false = force direct
+	ShouldUseTor(userPref *bool) bool
+}
+
+// Context keys for user IP forwarding and Tor preference
+type contextKey string
+
+const (
+	// UserIPContextKey is used to pass user's IP through context for optional forwarding
+	UserIPContextKey contextKey = "user_ip"
+	// ForwardIPContextKey indicates user has opted-in to IP forwarding (via cookie/preference)
+	ForwardIPContextKey contextKey = "forward_ip"
+	// TorPrefContextKey carries the user's optional Tor network preference (*bool)
+	// nil = inherit server default, true = always use Tor, false = never use Tor
+	TorPrefContextKey contextKey = "tor_user_pref"
+)
+
+// WithUserIP adds user IP to context for potential forwarding to video sites
+func WithUserIP(ctx context.Context, ip string, forwardEnabled bool) context.Context {
+	ctx = context.WithValue(ctx, UserIPContextKey, ip)
+	ctx = context.WithValue(ctx, ForwardIPContextKey, forwardEnabled)
+	return ctx
+}
+
+// GetUserIPFromContext retrieves user IP from context if forwarding is enabled
+func GetUserIPFromContext(ctx context.Context) (string, bool) {
+	forwardEnabled, ok := ctx.Value(ForwardIPContextKey).(bool)
+	if !ok || !forwardEnabled {
+		return "", false
+	}
+	ip, ok := ctx.Value(UserIPContextKey).(string)
+	return ip, ok && ip != ""
+}
+
+// WithTorPref adds the user's Tor network preference to context
+// pref: nil = inherit server default, true = always use Tor, false = never use Tor
+func WithTorPref(ctx context.Context, pref *bool) context.Context {
+	return context.WithValue(ctx, TorPrefContextKey, pref)
+}
+
+// GetTorPrefFromContext retrieves the user's Tor network preference from context
+// Returns nil if no preference is set (meaning: inherit server default)
+func GetTorPrefFromContext(ctx context.Context) *bool {
+	pref, _ := ctx.Value(TorPrefContextKey).(*bool)
+	return pref
+}
+
+// SearchEngine interface defines what a search engine must implement
+type SearchEngine interface {
+	Name() string
+	DisplayName() string
+	Search(ctx context.Context, query string, page int) ([]model.VideoResult, error)
+	IsAvailable() bool
+	SupportsFeature(feature Feature) bool
+	Tier() int
+	Capabilities() Capabilities
+}
+
+// ConfigurableSearchEngine interface for engines that support configuration
+type ConfigurableSearchEngine interface {
+	SearchEngine
+	SetEnabled(enabled bool)
+}
+
+// HealthTracker interface for engines that expose runtime health stats
+type HealthTracker interface {
+	GetStats() model.EngineHealthStats
+}
+
+// CircuitResetter is implemented by engines that support circuit breaker reset.
+type CircuitResetter interface {
+	ResetCircuitBreaker()
+}
+
+// TorConfigurableEngine interface for engines that support Tor outbound
+// Per PART 31: Engines implementing this can route queries through Tor
+type TorConfigurableEngine interface {
+	SetTorProvider(provider TorClientProvider)
+}
+
+// BaseEngine provides common functionality for all engines
+// Per PART 31: Supports Tor outbound network for anonymized queries
+type BaseEngine struct {
+	name          string
+	displayName   string
+	baseURL       string
+	tier          int
+	enabled       bool
+	timeout       time.Duration
+	useSpoofedTLS bool
+	appConfig     *config.AppConfig
+	httpClient    *http.Client
+	spoofedClient *http.Client
+	// Per PART 31: Provides Tor-routed HTTP clients
+	torProvider    TorClientProvider
+	circuitBreaker *retry.CircuitBreaker
+	retryConfig    *retry.RetryConfig
+	capabilities   Capabilities
+
+	// Runtime health stats (protected by statsMu)
+	statsMu        sync.Mutex
+	totalSuccesses uint64
+	totalFailures  uint64
+	lastSuccessAt  time.Time
+	// Rolling average latency in ms (exponential moving average, alpha=0.2)
+	avgLatencyMs float64
+	// rateLimitedUntil tracks when this engine may be queried again after a 429
+	rateLimitedUntil time.Time
+
+	// Per-engine outbound throttle: enforce a minimum interval between requests
+	// to avoid triggering engine-side rate limits.
+	throttleMu         sync.Mutex
+	lastRequestAt      time.Time
+	minRequestInterval time.Duration
+}
+
+// NewBaseEngine creates a new base engine
+func NewBaseEngine(name, displayName, baseURL string, tier int, appConfig *config.AppConfig) *BaseEngine {
+	timeoutSecs := appConfig.Search.EngineTimeout
+	// Apply per-engine timeout override if configured
+	if appConfig.Search.EngineTimeouts != nil {
+		if override, ok := appConfig.Search.EngineTimeouts[name]; ok && override > 0 {
+			timeoutSecs = override
+		}
+	}
+	timeout := time.Duration(timeoutSecs) * time.Second
+
+	// Create circuit breaker for this engine
+	cbConfig := retry.DefaultCircuitBreakerConfig(name)
+	// Open after 5 failures
+	cbConfig.FailureThreshold = 5
+	// Close after 2 successes in half-open
+	cbConfig.SuccessThreshold = 2
+	cbConfig.Timeout = 30 * time.Second
+
+	// Create retry config for transient errors
+	retryConfig := &retry.RetryConfig{
+		MaxAttempts:  3,
+		InitialDelay: 100 * time.Millisecond,
+		MaxDelay:     2 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       0.1,
+		RetryableErrors: []error{
+			retry.ErrTemporary,
+			retry.ErrTimeout,
+			retry.ErrNetworkError,
+			retry.ErrServerError,
+		},
+	}
+
+	// Determine per-engine throttle interval
+	minInterval := time.Duration(appConfig.Search.EngineRequestInterval) * time.Millisecond
+	if override, ok := appConfig.Search.EngineRequestIntervals[name]; ok {
+		minInterval = time.Duration(override) * time.Millisecond
+	}
+
+	return &BaseEngine{
+		name:               name,
+		displayName:        displayName,
+		baseURL:            baseURL,
+		tier:               tier,
+		enabled:            true,
+		timeout:            timeout,
+		useSpoofedTLS:      appConfig.Search.SpoofTLS,
+		appConfig:          appConfig,
+		httpClient:         createHTTPClient(timeoutSecs),
+		spoofedClient:      utl.CreateHTTPClientWithFingerprint(timeout, "chrome"),
+		circuitBreaker:     retry.NewCircuitBreaker(cbConfig),
+		retryConfig:        retryConfig,
+		minRequestInterval: minInterval,
+	}
+}
+
+// Name returns the engine identifier
+func (e *BaseEngine) Name() string {
+	return e.name
+}
+
+// DisplayName returns the human-readable name
+func (e *BaseEngine) DisplayName() string {
+	return e.displayName
+}
+
+// Tier returns the engine tier (1=major, 2=popular, 3=additional)
+func (e *BaseEngine) Tier() int {
+	return e.tier
+}
+
+// IsAvailable checks if the engine is currently enabled and not rate-limited
+func (e *BaseEngine) IsAvailable() bool {
+	if !e.enabled {
+		return false
+	}
+	e.statsMu.Lock()
+	defer e.statsMu.Unlock()
+	return time.Now().After(e.rateLimitedUntil)
+}
+
+// SetEnabled sets the enabled state
+func (e *BaseEngine) SetEnabled(enabled bool) {
+	e.enabled = enabled
+}
+
+// SetUseSpoofedTLS sets whether to use spoofed TLS fingerprint for Cloudflare bypass
+func (e *BaseEngine) SetUseSpoofedTLS(use bool) {
+	e.useSpoofedTLS = use
+}
+
+// Capabilities returns the engine's data capabilities
+func (e *BaseEngine) Capabilities() Capabilities {
+	return e.capabilities
+}
+
+// SetCapabilities sets the engine's data capabilities
+func (e *BaseEngine) SetCapabilities(caps Capabilities) {
+	e.capabilities = caps
+}
+
+// BaseURL returns the engine's base URL
+func (e *BaseEngine) BaseURL() string {
+	return e.baseURL
+}
+
+// SetTorProvider sets the Tor client provider for outbound connections
+// Per PART 31: When set and UseNetwork is enabled, engine queries are anonymized
+func (e *BaseEngine) SetTorProvider(provider TorClientProvider) {
+	e.torProvider = provider
+}
+
+// GetClient returns the appropriate HTTP client (context-unaware, server-wide settings only)
+// For context-aware routing (user Tor preference), use getClientForCtx instead
+func (e *BaseEngine) GetClient() *http.Client {
+	// Check if Tor outbound is enabled server-wide
+	if e.torProvider != nil && e.torProvider.UseNetworkEnabled() && e.torProvider.OutboundEnabled() {
+		return e.torProvider.GetHTTPClient(true)
+	}
+
+	// Standard behavior: use spoofed TLS if enabled, otherwise regular client
+	if e.useSpoofedTLS && e.spoofedClient != nil {
+		return e.spoofedClient
+	}
+	return e.httpClient
+}
+
+// getClientForCtx returns the appropriate HTTP client considering user Tor preference from context
+// Per PART 31: user pref in context overrides server-wide UseNetwork when AllowUserPreference is true
+func (e *BaseEngine) getClientForCtx(ctx context.Context) *http.Client {
+	if e.torProvider != nil && e.torProvider.OutboundEnabled() {
+		userPref := GetTorPrefFromContext(ctx)
+		if e.torProvider.ShouldUseTor(userPref) {
+			return e.torProvider.GetHTTPClient(true)
+		}
+	}
+
+	// Fall back to standard client selection
+	if e.useSpoofedTLS && e.spoofedClient != nil {
+		return e.spoofedClient
+	}
+	return e.httpClient
+}
+
+// RequestModifier is a function that can modify a request before it's sent
+type RequestModifier func(*http.Request)
+
+// MakeRequest performs an HTTP request with proper headers
+func (e *BaseEngine) MakeRequest(ctx context.Context, reqURL string) (*http.Response, error) {
+	return e.MakeRequestWithMod(ctx, reqURL, nil)
+}
+
+// MakeRequestWithMod performs an HTTP request with optional modifier
+// Uses circuit breaker and retry logic for resilience
+func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod RequestModifier) (*http.Response, error) {
+	// Check circuit breaker first
+	if !e.circuitBreaker.AllowRequest() {
+		return nil, retry.ErrCircuitOpen
+	}
+
+	// Enforce per-engine minimum request interval (outbound throttle)
+	if e.minRequestInterval > 0 {
+		e.throttleMu.Lock()
+		if !e.lastRequestAt.IsZero() {
+			if wait := e.minRequestInterval - time.Since(e.lastRequestAt); wait > 0 {
+				e.throttleMu.Unlock()
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(wait):
+				}
+				e.throttleMu.Lock()
+			}
+		}
+		e.lastRequestAt = time.Now()
+		e.throttleMu.Unlock()
+	}
+
+	var resp *http.Response
+	var lastErr error
+	start := time.Now()
+
+	// Execute with retry logic
+	err := retry.ExecuteWithRetry(ctx, e.retryConfig, func() error {
+		req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+		if err != nil {
+			return err
+		}
+
+		// Set browser headers using configured user agent
+		req.Header.Set("User-Agent", e.GetUserAgent())
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Upgrade-Insecure-Requests", "1")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		req.Header.Set("Sec-Fetch-Site", "none")
+		req.Header.Set("Sec-Fetch-User", "?1")
+		// Sec-Ch-* headers only for Chromium-based browsers
+		if e.appConfig != nil && e.appConfig.Engines.UserAgent.IsChromiumBased() {
+			req.Header.Set("Sec-Ch-Ua", e.appConfig.Engines.UserAgent.SecChUa())
+			req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
+			req.Header.Set("Sec-Ch-Ua-Platform", e.appConfig.Engines.UserAgent.SecChUaPlatform())
+		} else if e.appConfig == nil {
+			// Fallback to Chrome defaults
+			req.Header.Set("Sec-Ch-Ua", `"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"`)
+			req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
+			req.Header.Set("Sec-Ch-Ua-Platform", `"Windows"`)
+		}
+
+		// Add X-Forwarded-For if user opted in and admin allows it
+		// This allows users to get geo-targeted content while server remains anonymous
+		if e.torProvider != nil && e.torProvider.AllowUserIPForward() {
+			if userIP, ok := GetUserIPFromContext(ctx); ok {
+				req.Header.Set("X-Forwarded-For", userIP)
+			}
+		}
+
+		// Apply custom modifier if provided
+		if mod != nil {
+			mod(req)
+		}
+
+		client := e.getClientForCtx(ctx)
+		resp, lastErr = client.Do(req)
+		if lastErr != nil {
+			// Classify error for retry logic
+			return classifyHTTPError(lastErr)
+		}
+
+		// Check for server errors that should trigger retry
+		if resp.StatusCode >= 500 {
+			// Close the body to allow retry
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			return retry.ErrServerError
+		}
+
+		// Check for rate limiting
+		if resp.StatusCode == 429 {
+			// Respect Retry-After header if present; default to 60s cooldown
+			cooldown := 60 * time.Second
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				if secs, parseErr := strconv.Atoi(ra); parseErr == nil && secs > 0 {
+					cooldown = time.Duration(secs) * time.Second
+				}
+			}
+			e.statsMu.Lock()
+			e.rateLimitedUntil = time.Now().Add(cooldown)
+			e.statsMu.Unlock()
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			return retry.ErrRateLimit
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		e.circuitBreaker.RecordFailure()
+		e.recordFailureStat()
+		if lastErr != nil {
+			return nil, lastErr
+		}
+		return nil, err
+	}
+
+	e.circuitBreaker.RecordSuccess()
+	e.recordSuccessStat(time.Since(start).Milliseconds())
+	return resp, nil
+}
+
+// recordSuccessStat updates runtime health stats on a successful request
+func (e *BaseEngine) recordSuccessStat(latencyMs int64) {
+	e.statsMu.Lock()
+	defer e.statsMu.Unlock()
+	e.totalSuccesses++
+	e.lastSuccessAt = time.Now()
+	// Exponential moving average (alpha = 0.2)
+	if e.avgLatencyMs == 0 {
+		e.avgLatencyMs = float64(latencyMs)
+	} else {
+		e.avgLatencyMs = 0.8*e.avgLatencyMs + 0.2*float64(latencyMs)
+	}
+}
+
+// recordFailureStat updates runtime health stats on a failed request
+func (e *BaseEngine) recordFailureStat() {
+	e.statsMu.Lock()
+	defer e.statsMu.Unlock()
+	e.totalFailures++
+}
+
+// GetStats returns runtime health statistics for this engine
+func (e *BaseEngine) GetStats() model.EngineHealthStats {
+	e.statsMu.Lock()
+	successes := e.totalSuccesses
+	failures := e.totalFailures
+	lastSuccess := e.lastSuccessAt
+	avgLatency := e.avgLatencyMs
+	rateLimitedUntil := e.rateLimitedUntil
+	e.statsMu.Unlock()
+
+	cbState := e.circuitBreaker.GetState()
+	cbFailures := e.circuitBreaker.FailureCount()
+	lastFailure := e.circuitBreaker.LastFailureTime()
+
+	var uptimePct float64
+	total := successes + uint64(failures)
+	if total > 0 {
+		uptimePct = float64(successes) / float64(total) * 100
+	}
+
+	now := time.Now()
+	return model.EngineHealthStats{
+		CircuitState:     cbState.String(),
+		CircuitFailures:  cbFailures,
+		LastFailureAt:    lastFailure,
+		TotalSuccesses:   successes,
+		TotalFailures:    failures,
+		LastSuccessAt:    lastSuccess,
+		AvgLatencyMs:     int64(avgLatency),
+		UptimePct:        uptimePct,
+		RateLimitedUntil: rateLimitedUntil,
+		IsRateLimited:    now.Before(rateLimitedUntil),
+	}
+}
+
+// classifyHTTPError converts an HTTP error to a retryable error type
+func classifyHTTPError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	errStr := err.Error()
+
+	// Check for timeout errors
+	if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
+		return fmt.Errorf("%w: %v", retry.ErrTimeout, err)
+	}
+
+	// Check for network errors
+	if strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "network is unreachable") ||
+		strings.Contains(errStr, "connection reset") {
+		return fmt.Errorf("%w: %v", retry.ErrNetworkError, err)
+	}
+
+	// Check for temporary errors
+	if retry.IsTemporaryError(err) {
+		return fmt.Errorf("%w: %v", retry.ErrTemporary, err)
+	}
+
+	return err
+}
+
+// GetCircuitBreakerState returns the current circuit breaker state for this engine
+func (e *BaseEngine) GetCircuitBreakerState() retry.CircuitBreakerState {
+	return e.circuitBreaker.GetState()
+}
+
+// ResetCircuitBreaker resets the circuit breaker to closed state
+func (e *BaseEngine) ResetCircuitBreaker() {
+	e.circuitBreaker.Reset()
+}
+
+// IsCircuitOpen returns true if the circuit breaker is open
+func (e *BaseEngine) IsCircuitOpen() bool {
+	return e.circuitBreaker.GetState() == retry.CircuitBreakerStateOpen
+}
+
+// AddCookies is a helper to add cookies to a request
+func AddCookies(cookies map[string]string) RequestModifier {
+	return func(req *http.Request) {
+		for name, value := range cookies {
+			req.AddCookie(&http.Cookie{Name: name, Value: value})
+		}
+	}
+}
+
+// BuildSearchURL builds the search URL with query and page
+func (e *BaseEngine) BuildSearchURL(path string, query string, page int) string {
+	return fmt.Sprintf("%s%s", e.baseURL, strings.ReplaceAll(strings.ReplaceAll(path, "{query}", url.QueryEscape(query)), "{page}", strconv.Itoa(page)))
+}
+
+// GenerateResultID generates a unique ID for a result
+func GenerateResultID(url, source string) string {
+	hash := sha256.Sum256([]byte(url + source))
+	return hex.EncodeToString(hash[:8])
+}
+
+// createHTTPClient creates an HTTP client with timeout and browser-like TLS
+func createHTTPClient(timeoutSecs int) *http.Client {
+	// Create a cookie jar to persist cookies across requests
+	jar, _ := cookiejar.New(nil)
+
+	// Use a transport with browser-like TLS settings
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			MaxVersion: tls.VersionTLS13,
+			// Use cipher suites that match Chrome
+			CipherSuites: []uint16{
+				tls.TLS_AES_128_GCM_SHA256,
+				tls.TLS_AES_256_GCM_SHA384,
+				tls.TLS_CHACHA20_POLY1305_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+			},
+		},
+		MaxIdleConns:        100,
+		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  false,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
+	return &http.Client{
+		Timeout:   time.Duration(timeoutSecs) * time.Second,
+		Transport: transport,
+		Jar:       jar,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("too many redirects")
+			}
+			// Preserve headers on redirect
+			for key, val := range via[0].Header {
+				if _, ok := req.Header[key]; !ok {
+					req.Header[key] = val
+				}
+			}
+			return nil
+		},
+	}
+}
+
+// DefaultUserAgent is the fallback user agent when config is nil
+// Windows 11 Chrome x86_64 - most common browser/OS combination for best compatibility
+const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+// GetUserAgent returns the configured user agent string
+// Uses search.useragent config for customizable user agent without rebuild
+func (e *BaseEngine) GetUserAgent() string {
+	if e.appConfig != nil {
+		return e.appConfig.Engines.UserAgent.String()
+	}
+	return DefaultUserAgent
+}
+
+// DebugLogger is the minimal logging interface engines need to route debug
+// output through the governed debug.log pipeline (AI.md PART 11 - rotation,
+// retention, and text format) instead of bare stdlib log.Printf, which
+// writes straight to stderr and bypasses all of that.
+type DebugLogger interface {
+	Debug(message string, fields map[string]interface{})
+}
+
+// debugLogger is wired in by main.go via SetDebugLogger once the
+// application's AppLogger is constructed. Nil until then (e.g. in tests),
+// in which case logDebug falls back to stdlib log.Printf.
+var debugLogger DebugLogger
+
+// SetDebugLogger wires the application logger into the engine package so
+// engine debug output is written to the governed debug.log file instead of
+// stderr, per AI.md PART 11.
+func SetDebugLogger(l DebugLogger) {
+	debugLogger = l
+}
+
+// logDebug routes a debug-level log line through the wired AppLogger when
+// available, falling back to stdlib log.Printf otherwise.
+func logDebug(message string, fields map[string]interface{}) {
+	if debugLogger != nil {
+		debugLogger.Debug(message, fields)
+		return
+	}
+	log.Printf("[DEBUG ENGINE] %s %v", message, fields)
+}
+
+// debugLogEngineResponse logs response metadata when --debug is enabled.
+// Per AI.md PART 11 debug logs must be raw text, one event per line - never
+// dump the full HTML body, which is noisy and not useful for diagnosis.
+func debugLogEngineResponse(engineName, requestURL string, bodyLen int) {
+	if !mode.IsDebugEnabled() {
+		return
+	}
+	logDebug("engine response received", map[string]interface{}{
+		"engine":         engineName,
+		"request_url":    requestURL,
+		"response_bytes": bodyLen,
+	})
+}
+
+// debugLogEngineParseResult logs the parsed video URLs when --debug is
+// enabled. Helps identify extraction successes/failures and missing fields
+// without dumping raw HTML - per AI.md PART 11 we log just the parsed URLs.
+func debugLogEngineParseResult(engineName string, results []model.VideoResult, fieldStats map[string]int) {
+	if !mode.IsDebugEnabled() {
+		return
+	}
+
+	urls := make([]string, 0, len(results))
+	for _, r := range results {
+		urls = append(urls, r.URL)
+	}
+
+	fields := map[string]interface{}{
+		"engine": engineName,
+		"count":  len(results),
+		"urls":   strings.Join(urls, ","),
+	}
+	for field, count := range fieldStats {
+		fields[field] = count
+	}
+
+	logDebug("engine parsed results", fields)
+}

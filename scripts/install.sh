@@ -1,0 +1,171 @@
+#!/bin/bash
+# @@License : WTFPL
+# Vidveil Install Script
+# OS/distro agnostic installer
+
+set -e
+
+BINARY_NAME="vidveil"
+REPO="apimgr/vidveil"
+INSTALL_DIR="/usr/local/bin"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+
+# Detect OS and architecture
+detect_platform() {
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    ARCH=$(uname -m)
+
+    case "$ARCH" in
+        x86_64|amd64) ARCH="amd64" ;;
+        aarch64|arm64) ARCH="arm64" ;;
+        *) error "Unsupported architecture: $ARCH" ;;
+    esac
+
+    case "$OS" in
+        linux) OS="linux" ;;
+        darwin) OS="darwin" ;;
+        freebsd) OS="freebsd" ;;
+        openbsd) OS="openbsd" ;;
+        *) error "Unsupported OS: $OS" ;;
+    esac
+
+    info "Detected platform: $OS/$ARCH"
+}
+
+# Check for required tools
+check_deps() {
+    for cmd in curl tar; do
+        if ! command -v $cmd &>/dev/null; then
+            error "Required command not found: $cmd"
+        fi
+    done
+    if ! command -v sha256sum &>/dev/null && ! command -v shasum &>/dev/null; then
+        error "Required SHA-256 tool not found: install sha256sum or shasum"
+    fi
+}
+
+# Compute the SHA-256 of a file (portable: sha256sum on Linux, shasum on macOS/BSD)
+sha256_of() {
+    if command -v sha256sum &>/dev/null; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+# Download the release checksums.txt once (MANDATORY per AI.md PART 8/22)
+fetch_checksums() {
+    CHECKSUMS_URL="https://github.com/$REPO/releases/download/v$VERSION/checksums.txt"
+    CHECKSUMS_FILE=$(mktemp)
+    if ! curl -q -LSsf "$CHECKSUMS_URL" -o "$CHECKSUMS_FILE"; then
+        error "Could not download checksums.txt - refusing to install unverified binary"
+    fi
+}
+
+# Verify a downloaded file against its checksums.txt entry
+# verify_checksum <file> <asset_name>
+verify_checksum() {
+    local file="$1" asset="$2" expected actual
+    expected=$(awk -v a="$asset" '$2 == a {print $1}' "$CHECKSUMS_FILE")
+    if [ -z "$expected" ]; then
+        error "No checksum entry for $asset - refusing to install unverified binary"
+    fi
+    actual=$(sha256_of "$file")
+    if [ "$expected" != "$actual" ]; then
+        error "Checksum mismatch for $asset (expected $expected, got $actual)"
+    fi
+    info "Verified checksum for $asset"
+}
+
+# Get latest release version
+get_latest_version() {
+    VERSION=$(curl -q -LSsf "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+    if [ -z "$VERSION" ]; then
+        error "Could not determine latest version"
+    fi
+    info "Latest version: $VERSION"
+}
+
+# Download and install binaries (server + CLI per AI.md PART 8)
+install_binary() {
+    # Install server binary
+    DOWNLOAD_URL="https://github.com/$REPO/releases/download/v$VERSION/${BINARY_NAME}-${OS}-${ARCH}"
+    info "Downloading server from: $DOWNLOAD_URL"
+
+    TMP_FILE=$(mktemp)
+    if ! curl -q -LSsf "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+        error "Server download failed"
+    fi
+
+    verify_checksum "$TMP_FILE" "${BINARY_NAME}-${OS}-${ARCH}"
+
+    chmod +x "$TMP_FILE"
+
+    if [ -w "$INSTALL_DIR" ]; then
+        mv "$TMP_FILE" "$INSTALL_DIR/$BINARY_NAME"
+    else
+        info "Elevated permissions required for installation"
+        sudo mv "$TMP_FILE" "$INSTALL_DIR/$BINARY_NAME"
+    fi
+
+    info "Installed server to $INSTALL_DIR/$BINARY_NAME"
+
+    # Install CLI binary (required per AI.md PART 8)
+    CLI_URL="https://github.com/$REPO/releases/download/v$VERSION/${BINARY_NAME}-cli-${OS}-${ARCH}"
+    info "Downloading CLI from: $CLI_URL"
+
+    TMP_FILE=$(mktemp)
+    if ! curl -q -LSsf "$CLI_URL" -o "$TMP_FILE"; then
+        warn "CLI download failed - server-only install"
+        return
+    fi
+
+    verify_checksum "$TMP_FILE" "${BINARY_NAME}-cli-${OS}-${ARCH}"
+
+    chmod +x "$TMP_FILE"
+
+    if [ -w "$INSTALL_DIR" ]; then
+        mv "$TMP_FILE" "$INSTALL_DIR/${BINARY_NAME}-cli"
+    else
+        sudo mv "$TMP_FILE" "$INSTALL_DIR/${BINARY_NAME}-cli"
+    fi
+
+    info "Installed CLI to $INSTALL_DIR/${BINARY_NAME}-cli"
+}
+
+# Verify installation
+verify() {
+    if command -v $BINARY_NAME &>/dev/null; then
+        info "Installation successful!"
+        $BINARY_NAME --version
+    else
+        warn "Binary installed but not in PATH"
+        info "You may need to add $INSTALL_DIR to your PATH"
+    fi
+}
+
+# Main
+main() {
+    info "Installing $BINARY_NAME..."
+
+    check_deps
+    detect_platform
+    get_latest_version
+    fetch_checksums
+    install_binary
+    verify
+
+    echo ""
+    info "Run '$BINARY_NAME --help' for usage information"
+}
+
+main "$@"

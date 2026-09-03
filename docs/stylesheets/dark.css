@@ -1,0 +1,33 @@
+/* VidVeil ReadTheDocs Dark Theme Customization */
+/* Per AI.md PART 30 - Optional dark theme overrides */
+
+/* Dark theme is default in mkdocs.yml via palette configuration */
+/* This file provides additional customizations beyond Material theme defaults */
+
+[data-md-color-scheme="slate"] {
+  /* Project-specific accent colors matching main app */
+  --md-primary-fg-color: #bd93f9;
+  --md-accent-fg-color: #8be9fd;
+  
+  /* Custom background shades */
+  --md-default-bg-color: #282a36;
+  --md-default-fg-color: #f8f8f2;
+  
+  /* Code block styling */
+  --md-code-bg-color: #1e1f29;
+  --md-code-fg-color: #f8f8f2;
+  
+  /* Link colors */
+  --md-typeset-a-color: #8be9fd;
+}
+
+/* Additional custom styles for dark mode */
+[data-md-color-scheme="slate"] .md-typeset h1,
+[data-md-color-scheme="slate"] .md-typeset h2 {
+  color: #bd93f9;
+}
+
+[data-md-color-scheme="slate"] .md-typeset code {
+  background-color: #44475a;
+  color: #f1fa8c;
+}

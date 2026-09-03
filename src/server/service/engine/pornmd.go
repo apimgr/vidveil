@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"context"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/apimgr/vidveil/src/server/service/parser"
+)
+
+// PornMDEngine searches PornMD (meta-search)
+type PornMDEngine struct {
+	*BaseEngine
+	parser *parser.PornMDParser
+}
+
+// newPornMDEngine creates a new PornMD engine
+func newPornMDEngine(appConfig *config.AppConfig) *PornMDEngine {
+	e := &PornMDEngine{
+		BaseEngine: NewBaseEngine("pornmd", "PornMD", "https://www.pornmd.com", 2, appConfig),
+		parser:     parser.NewPornMDParser(),
+	}
+	// Set capabilities per IDEA.md
+	e.SetCapabilities(Capabilities{
+		HasPreview:  false,
+		HasDownload: true,
+		HasDuration: true,
+		// PornMD doesn't show view counts on search results
+		HasViews: false,
+		// PornMD shows rating percentage
+		HasRating:     true,
+		HasQuality:    true,
+		HasUploadDate: false,
+		PreviewSource: "",
+		APIType:       "html",
+	})
+	return e
+}
+
+// Search performs a search on PornMD
+func (e *PornMDEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
+	searchURL := e.BuildSearchURL("/straight/{query}?page={page}", query, page)
+	resp, err := e.MakeRequest(ctx, searchURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []model.VideoResult
+	doc.Find(e.parser.ItemSelector()).Each(func(i int, s *goquery.Selection) {
+		item := e.parser.Parse(s)
+		if item != nil && item.Title != "" && item.URL != "" && !item.IsPremium {
+			results = append(results, e.convertToResult(item))
+		}
+	})
+	return results, nil
+}
+
+func (e *PornMDEngine) convertToResult(item *parser.VideoItem) model.VideoResult {
+	// Use video page URL as download URL (works with yt-dlp)
+	downloadURL := item.DownloadURL
+	if downloadURL == "" {
+		downloadURL = item.URL
+	}
+	return model.VideoResult{
+		ID:              GenerateResultID(item.URL, e.Name()),
+		URL:             item.URL,
+		Title:           item.Title,
+		Thumbnail:       item.Thumbnail,
+		PreviewURL:      item.PreviewURL,
+		DownloadURL:     downloadURL,
+		Duration:        item.Duration,
+		DurationSeconds: item.DurationSeconds,
+		Views:           item.Views,
+		ViewsCount:      item.ViewsCount,
+		Description:     item.Description,
+		Quality:         item.Quality,
+		Source:          e.Name(),
+		SourceDisplay:   e.DisplayName(),
+		Tags:            item.Tags,
+		Performer:       item.Uploader,
+	}
+}
+
+// SupportsFeature returns whether the engine supports a feature
+func (e *PornMDEngine) SupportsFeature(feature Feature) bool {
+	return feature == FeaturePagination
+}

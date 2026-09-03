@@ -1,0 +1,14 @@
+Subject: SSL Certificate Renewed - {app_name}
+---
+Hello,
+
+Your SSL certificate for {domain} has been renewed successfully.
+
+New Expiry Date: {expiry_date}
+Certificate Type: {cert_type}
+
+No action is required.
+
+--
+{app_name}
+{app_url}

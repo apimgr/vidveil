@@ -1,0 +1,24 @@
+{{define "server-security-thanks"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content">
+    <div class="prose">
+        <h1>{{ t "security.thanks_title" }}</h1>
+        <p>{{ t "security.thanks_intro" }}</p>
+
+        {{if .Credits}}
+        <ul>
+            {{range .Credits}}
+            <li>{{.Name}} ({{.Year}})</li>
+            {{end}}
+        </ul>
+        {{else}}
+        <p>{{ t "security.thanks_empty" }}</p>
+        {{end}}
+
+        <p><a href="/server/security">{{ t "security.back_to_security" }}</a></p>
+    </div>
+</div>
+{{end}}

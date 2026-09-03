@@ -1,0 +1,67 @@
+# =============================================================================
+# Dockerfile.dev - Development/debug image (tagged :devel)
+# Per AI.md PART 26: Same as production release but runs in debug mode (DEBUG=true)
+# =============================================================================
+
+# Build Stage - Compile Go binary
+FROM casjaysdev/go:latest AS builder
+
+RUN apk add --no-cache git bash
+
+ARG TARGETARCH
+ARG VERSION=dev
+ARG BUILD_EPOCH
+ARG COMMIT_ID
+ARG OFFICIAL_SITE
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+# BuildDate is NOT embedded - it is derived from BuildEpoch at process start
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
+    -buildvcs=false -trimpath \
+    -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildEpoch=${BUILD_EPOCH}' -X 'main.OfficialSite=${OFFICIAL_SITE}'" \
+    -o /app/binary/vidveil ./src
+
+# =============================================================================
+# Runtime Stage - Minimal Alpine image with debug mode enabled
+# =============================================================================
+FROM alpine:latest
+
+# ARGs for build-time values (set by docker build --build-arg)
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG COMMIT_ID
+
+# Upgrade first so preinstalled base-image packages (e.g. libcrypto3/openssl)
+# pick up security fixes published after the alpine:latest image was last built.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache \
+    git \
+    curl \
+    bash \
+    tini \
+    tor
+
+COPY --from=builder /app/binary/vidveil /usr/local/bin/vidveil
+COPY docker/rootfs/ /
+COPY docker/Dockerfile.dev /root/Dockerfile
+
+RUN chmod 755 /usr/local/bin/*
+
+ENV MODE=development \
+    DEBUG=true \
+    TZ=America/New_York \
+    DATABASE_DIR=/data/db/sqlite
+
+EXPOSE 80
+
+STOPSIGNAL SIGRTMIN+3
+
+HEALTHCHECK --start-period=10m --interval=5m --timeout=15s --retries=3 \
+    CMD /usr/local/bin/vidveil --status || exit 1
+
+ENTRYPOINT [ "tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh" ]

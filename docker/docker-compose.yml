@@ -1,0 +1,62 @@
+# vidveil - Production compose
+# nginx proxy address - http://172.17.0.1:64893
+# Per AI.md PART 26: Production compose — App + Valkey for persistent session/rate-limit cache
+
+name: vidveil
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  vidveil:
+    image: ghcr.io/apimgr/vidveil:latest
+    container_name: vidveil-app
+    hostname: vidveil
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      PORT: 80
+      TZ: America/New_York
+      CACHE_URL: valkey://vidveil-cache:6379
+    volumes:
+      - './volumes/config:/config:z'
+      - './volumes/data:/data:z'
+    ports:
+      - '172.17.0.1:64893:80'
+    depends_on:
+      vidveil-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', '/usr/local/bin/vidveil', '--status']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - vidveil
+
+  vidveil-cache:
+    image: valkey/valkey:alpine
+    container_name: vidveil-cache
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    volumes:
+      - './volumes/data/db/valkey:/data:z'
+    healthcheck:
+      test: ['CMD-SHELL', 'valkey-cli ping || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - vidveil
+
+networks:
+  vidveil:
+    name: vidveil
+    external: false

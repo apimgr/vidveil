@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: MIT
+package engine
+
+import (
+	"context"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
+)
+
+// AlphaPornoEngine searches AlphaPorno
+type AlphaPornoEngine struct{ *BaseEngine }
+
+// newAlphaPornoEngine creates a new AlphaPorno engine
+func newAlphaPornoEngine(appConfig *config.AppConfig) *AlphaPornoEngine {
+	return &AlphaPornoEngine{NewBaseEngine("alphaporno", "AlphaPorno", "https://www.alphaporno.com", 3, appConfig)}
+}
+
+// Search performs a search on AlphaPorno
+func (e *AlphaPornoEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
+	searchURL := e.BuildSearchURL("/search/?q={query}&page={page}", query, page)
+	return genericSearch(ctx, e.BaseEngine, searchURL, "li.thumb")
+}
+
+// SupportsFeature returns whether the engine supports a feature
+func (e *AlphaPornoEngine) SupportsFeature(feature Feature) bool {
+	return feature == FeaturePagination
+}

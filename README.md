@@ -1,0 +1,353 @@
+# Vidveil
+
+[![CI](https://github.com/apimgr/vidveil/actions/workflows/ci.yml/badge.svg)](https://github.com/apimgr/vidveil/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
+[![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
+[![Documentation](https://readthedocs.org/projects/apimgr-vidveil/badge/?version=latest)](https://apimgr-vidveil.readthedocs.io)
+
+## About
+
+Privacy-respecting meta search for adult video content. No tracking, no logging, no analytics. Aggregates results from 43 video sites with bang shortcuts for targeted searches.
+
+## Official Site
+
+https://x.scour.li
+
+**Repository**: https://github.com/apimgr/vidveil
+
+---
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| **Privacy First** | No tracking, no logging, no analytics |
+| **33 Engines** | Aggregates results from 33 adult video sites |
+| **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
+| **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
+| **SSE Streaming** | Real-time result streaming as engines respond |
+| **Video Previews** | Hover (desktop) and swipe (mobile) preview for 8+ engines |
+| **Thumbnail Proxy** | All thumbnails proxied to prevent engine tracking |
+| **Autocomplete** | Bang shortcuts, performer names, and search terms autocomplete |
+| **Related Searches** | Server-generated related search suggestions |
+| **Semantic Search** | AND-based filtering with synonym expansion across 27 categories |
+| **Tor Support** | Built-in Tor hidden service support |
+| **Content Restriction** | Geographic warnings/blocks for regions with adult content laws |
+| **Admin Panel** | Full web-based administration |
+| **Single Binary** | No external dependencies, embedded assets |
+| **Docker Ready** | Alpine-based container with tini |
+
+---
+
+## Production
+
+### Docker (Recommended)
+
+```bash
+docker run -d \
+  --name vidveil \
+  -p 64580:80 \
+  -v ./volumes/config:/config:z \
+  -v ./volumes/data:/data:z \
+  ghcr.io/apimgr/vidveil:latest
+```
+
+### Docker Compose
+
+```bash
+curl -q -LSsfO https://raw.githubusercontent.com/apimgr/vidveil/main/docker/docker-compose.yml
+docker compose up -d
+```
+
+### Binary Download
+
+Download the latest binary for your platform from [Releases](https://github.com/apimgr/vidveil/releases).
+
+```bash
+# Linux (amd64)
+curl -q -LSsfO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-linux-amd64
+chmod +x vidveil-linux-amd64
+./vidveil-linux-amd64
+```
+
+---
+
+## Client
+
+A companion CLI client (`vidveil-cli`) is available for interacting with the server API from the terminal.
+
+### Install
+
+```bash
+# Download latest release
+curl -q -LSsfO https://github.com/apimgr/vidveil/releases/latest/download/vidveil-cli-linux-amd64
+chmod +x vidveil-cli-linux-amd64
+sudo mv vidveil-cli-linux-amd64 /usr/local/bin/vidveil-cli
+```
+
+### Configure
+
+```bash
+# Connect to server (creates the default cli.yml)
+vidveil-cli --server https://x.scour.li --token YOUR_API_TOKEN
+```
+
+### Usage
+
+```bash
+# Show help
+vidveil-cli --help
+
+# Search (launches interactive TUI)
+vidveil-cli search "query"
+
+# List engines
+vidveil-cli engines
+
+# View bangs
+vidveil-cli bangs
+```
+
+The CLI automatically launches an interactive TUI (Terminal User Interface) with keyboard navigation, dark theme, and real-time updates.
+
+---
+
+## Configuration
+
+Configuration file location (created on first run):
+
+| Platform | Path |
+|----------|------|
+| Linux (root) | `/etc/apimgr/vidveil/server.yml` |
+| Linux (user) | `~/.config/apimgr/vidveil/server.yml` |
+| macOS | `~/Library/Application Support/apimgr/vidveil/server.yml` |
+| Windows | `%AppData%\apimgr\vidveil\server.yml` |
+| Docker | `/config/vidveil/server.yml` |
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MODE` | `production` or `development` | `production` |
+| `LISTEN` | Listen address | `0.0.0.0` |
+| `PORT` | Listen port | Random `64xxx` (`80` in containers) |
+| `CONFIG_DIR` | Config directory | Platform-specific |
+| `DATA_DIR` | Data directory | Platform-specific |
+
+---
+
+## API
+
+### Search
+
+```
+GET https://x.scour.li/api/v1/search?q={query}&page={page}&engines={engines}
+```
+
+**Parameters:**
+- `q` - Search query (supports bangs like `!ph amateur`)
+- `page` - Page number (default: 1)
+- `engines` - Comma-separated engine names, or `tier1` (top 5), `tier12` (top 8) (optional)
+- `show_ai` - `1` to include AI-generated results
+- `min_quality` - Minimum result quality score (integer)
+- `preview_first` - `1` to prioritise results with video preview URLs
+- `min_duration` - Minimum video duration in seconds
+
+**Response:**
+```json
+{
+  "ok": true,
+  "data": {
+    "query": "!ph amateur",
+    "search_query": "amateur",
+    "has_bang": true,
+    "bang_engines": ["pornhub"],
+    "results": [...],
+    "engines_used": ["pornhub"],
+    "search_time_ms": 450
+  }
+}
+```
+
+### Search Stream (SSE)
+
+```
+GET https://x.scour.li/api/v1/search?q={query}
+Accept: text/event-stream
+```
+
+Returns Server-Sent Events with results as each engine responds. The same `https://x.scour.li/api/v1/search` endpoint switches to SSE mode when the `Accept: text/event-stream` header is present.
+
+### Bangs
+
+```
+GET https://x.scour.li/api/v1/bangs
+GET https://x.scour.li/api/v1/bangs/autocomplete?q={partial}
+```
+
+### Engines
+
+```
+GET https://x.scour.li/api/v1/engines
+GET https://x.scour.li/api/v1/engines/{name}
+```
+
+### Health
+
+```
+GET https://x.scour.li/healthz
+GET https://x.scour.li/api/v1/healthz
+```
+
+### Documentation
+
+| Endpoint | Description |
+|----------|-------------|
+| `https://x.scour.li/openapi` | Swagger UI |
+| `https://x.scour.li/openapi.json` | OpenAPI 3.0 spec (JSON) |
+| `https://x.scour.li/graphql` | GraphQL endpoint |
+| `https://x.scour.li/graphiql` | GraphQL playground |
+
+---
+
+## Other
+
+### Bang Search
+
+Use bang shortcuts to search specific engines:
+
+| Bang | Engine | Example |
+|------|--------|---------|
+| `!ph` | PornHub | `!ph amateur` |
+| `!xh` | xHamster | `!xh milf` |
+| `!rt` | RedTube | `!rt blonde` |
+| `!xv` | XVideos | `!xv teen` |
+| `!ep` | Eporner | `!ep hd` |
+| `!yp` | YouPorn | `!yp pov` |
+
+**Multiple bangs**: `!ph !rt amateur` searches both PornHub and RedTube.
+
+**Full list**: See `https://x.scour.li/api/v1/bangs` for all 43 engine shortcuts.
+
+### Supported Engines
+
+#### Tier 1 - Major Sites (API-based)
+
+| Engine | Bang | Method | Preview |
+|--------|------|--------|---------|
+| PornHub | `!ph` | Webmasters API | ✓ |
+| RedTube | `!rt` | Public API | ✓ |
+| Eporner | `!ep` | v2 JSON API | ✓ |
+| XVideos | `!xv` | HTML parsing | ✓ |
+| XNXX | `!xn` | HTML parsing | |
+| xHamster | `!xh` | JSON extraction | ✓ |
+
+#### Tier 2 - Popular Sites
+
+| Engine | Bang | Preview |
+|--------|------|---------|
+| YouPorn | `!yp` | ✓ |
+
+#### Tier 3 - Additional Sites
+
+3Movs (`!3m`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Motherless (no bang shortcut), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
+
+#### Tier 4 - Specialty Sites
+
+FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox (`!pbox`), PornHat (`!phat`), PornOne (`!p1`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), VJAV (`!vj`), XBabe (`!xb`)
+
+### Admin Panel
+
+Access at `https://x.scour.li/admin` (setup token shown on first run).
+
+| Route | Section | Description |
+|-------|---------|-------------|
+| `https://x.scour.li/admin` | Dashboard | Overview and statistics |
+| `https://x.scour.li/admin/server/settings` | Settings | Server configuration |
+| `https://x.scour.li/admin/server/branding` | Branding | Logo, title, themes |
+| `https://x.scour.li/admin/server/ssl` | SSL/TLS | Let's Encrypt, certificates |
+| `https://x.scour.li/admin/server/email` | Email | SMTP configuration |
+| `https://x.scour.li/admin/server/scheduler` | Scheduler | Scheduled tasks |
+| `https://x.scour.li/admin/server/logs` | Logs | Access and error logs |
+| `https://x.scour.li/admin/server/database` | Database | Database management (SQLite/libsql-Turso) |
+| `https://x.scour.li/admin/server/security/*` | Security | Auth, tokens, rate limiting, firewall |
+| `https://x.scour.li/admin/server/network/*` | Network | Tor, GeoIP, content restriction, blocklists |
+| `https://x.scour.li/admin/server/system/*` | System | Backup, maintenance, updates |
+| `https://x.scour.li/admin/server/users/*` | Users | Admin management |
+| `https://x.scour.li/admin/server/engines` | Engines | Search engine configuration |
+
+### Server CLI
+
+```bash
+vidveil [options]
+
+Options:
+  --help                    Show help
+  --version                 Show version
+  --status                  Show server status
+  --mode <mode>             Set mode (production/development)
+  --port <port>             Set listen port
+  --address <addr>          Set listen address
+  --config <dir>            Set config directory
+  --data <dir>              Set data directory
+  --service <cmd>           Service management (start/stop/restart/install/uninstall)
+  --maintenance <cmd>       Maintenance (backup/restore)
+  --update [check|yes]      Check for or perform updates
+```
+
+---
+
+## Development
+
+### Requirements
+
+- Docker (required for builds)
+- Make
+- Incus or Docker (for testing)
+
+### Build
+
+```bash
+make dev            # Quick build to temp directory
+make local          # Build with version to binaries/
+make build          # Full cross-platform build
+make test           # Run unit tests
+```
+
+### Test
+
+```bash
+./tests/run_tests.sh    # Auto-detects incus/docker
+./tests/incus.sh        # Full OS test with systemd (PREFERRED)
+./tests/docker.sh       # Quick Docker test
+```
+
+### Platforms
+
+| OS | Architecture |
+|----|--------------|
+| Linux | amd64, arm64 |
+| macOS | amd64, arm64 |
+| Windows | amd64, arm64 |
+| FreeBSD | amd64, arm64 |
+
+---
+
+## Disclaimer
+
+This software is provided "as is" without warranty of any kind. Use at your own risk.
+
+- **No Warranty**: The authors are not responsible for any damages, data loss, or issues arising from use of this software
+- **Legal Compliance**: This software is a search aggregator. Users are responsible for ensuring compliance with applicable laws and regulations in their jurisdiction
+- **Third-Party Services**: This software connects to external adult video sites; their terms of service and content policies apply separately
+- **Content**: VidVeil does not host, store, or distribute any content — it only indexes metadata from third-party sites
+- **Security**: While we strive to follow security best practices, no software is guaranteed to be free of vulnerabilities
+- **Production Use**: Evaluate thoroughly before deploying in production environments
+
+By using this software, you acknowledge that you have read and understood this disclaimer.
+
+---
+
+## License
+
+MIT License - see [LICENSE.md](LICENSE.md)

@@ -1,0 +1,65 @@
+{{define "public/footer"}}
+{{/* AI.md PART 16: Footer contains About, Privacy, Contact, Help, GitHub, version */}}
+<footer class="footer" role="contentinfo">
+    {{/* Onion address - shown only if Tor is enabled, running, and published (AI.md PART 16) */}}
+    {{ if and .TorEnabled .TorRunning .OnionAddress }}
+    <p class="footer-onion">
+        <a href="/server/help#tor-access" aria-label="{{ t "footer.tor_support_label" }}">&#129365;</a>
+        <code class="onion-address">{{.OnionAddress}}</code>
+        <button type="button" class="copy-btn" data-copy="{{.OnionAddress}}" aria-live="polite" aria-label="{{ t "footer.copy_onion_label" }}">&#128203;</button>
+    </p>
+    {{ end }}
+
+    {{/* Standard page links per spec - /server/* prefix per AI.md PART 14 Route Scopes */}}
+    <p>
+        <a href="/server/about">{{ t "nav.about" }}</a>
+        <span>&#8226;</span>
+        <a href="/server/privacy">{{ t "nav.privacy" }}</a>
+        <span>&#8226;</span>
+        <a href="/server/contact">{{ t "nav.contact" }}</a>
+        <span>&#8226;</span>
+        <a href="/server/help">{{ t "nav.help" }}</a>
+    </p>
+
+    {{/* Application branding - {project_version} shown with no "v" prefix per AI.md version rules */}}
+    <p>
+        <a href="https://github.com/apimgr/vidveil" target="_blank">{{ t "footer.made_with" }}</a> &#10084;&#65039;
+        <span>&#8226;</span>
+        <span>{{.Version}}</span>
+    </p>
+
+    {{/* Build stamp */}}
+    <p>
+        <a href="/server/healthz">{{ tf "footer.last_update" .BuildDateTime }}</a>
+    </p>
+</footer>
+
+{{/* Toast container for notifications */}}
+<div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
+
+{{/* Cookie Consent Banner per AI.md PART 12 - server-rendered (visible) only
+     when no valid cookie_consent cookie exists; forms work with zero JS and
+     app.js only intercepts the submits to skip the reload */}}
+{{ if not .HasConsentCookie }}
+<div id="cookie-consent" class="cookie-banner" data-sold="{{.ConsentDataSold}}">
+    <div class="cookie-banner-content">
+        <span class="cookie-message">
+            {{.ConsentMessage}} -
+            <a href="{{.ConsentPolicyURL}}" class="policy-link">{{.ConsentPolicyText}}</a>
+        </span>
+        <div class="cookie-buttons">
+            <form method="post" action="/server/consent">
+                {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{ end }}
+                <input type="hidden" name="choice" value="decline">
+                <button type="submit" class="btn-decline">{{.ConsentDeclineText}}</button>
+            </form>
+            <form method="post" action="/server/consent">
+                {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{ end }}
+                <input type="hidden" name="choice" value="accept">
+                <button type="submit" class="btn-accept">{{.ConsentAcceptText}}</button>
+            </form>
+        </div>
+    </div>
+</div>
+{{ end }}
+{{end}}

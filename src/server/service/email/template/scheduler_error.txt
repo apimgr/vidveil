@@ -1,0 +1,16 @@
+Subject: Scheduled Task Failed - {app_name}
+---
+Hello,
+
+A scheduled task has failed on your {app_name} instance.
+
+Task Name: {task_name}
+Scheduled Time: {scheduled_time}
+Error: {error_message}
+Attempts: {attempts}
+
+Please check the scheduler logs for more details.
+
+--
+{app_name}
+{app_url}

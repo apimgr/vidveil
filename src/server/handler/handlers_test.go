@@ -1,0 +1,477 @@
+// SPDX-License-Identifier: MIT
+// AI.md PART 23: Test coverage for handlers
+package handler
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/apimgr/vidveil/src/config"
+)
+
+// createTestConfig returns a test configuration
+func createTestConfig() *config.AppConfig {
+	return &config.AppConfig{
+		Server: config.ServerConfig{
+			Branding: config.ServerBrandingConfig{
+				Title:       "Test Vidveil",
+				Description: "Test Description",
+			},
+			FQDN: "test.example.com",
+			Port: "8080",
+			Mode: "development",
+			Database: config.DatabaseConfig{
+				Driver: "none",
+			},
+		},
+		Web: config.WebConfig{
+			UI: config.UIConfig{
+				Theme: "dark",
+			},
+			Security: config.WebSecurityConfig{
+				Contact: "security@test.example.com",
+				Expires: "2025-12-31T00:00:00Z",
+			},
+		},
+	}
+}
+
+func TestHealthCheck(t *testing.T) {
+	// Skip this test as HealthCheck requires engineMgr
+	t.Skip("Requires engine manager initialization")
+}
+
+func TestRobotsTxt(t *testing.T) {
+	cfg := createTestConfig()
+	// robots.txt is generated from web.robots per AI.md PART 11 — the admin
+	// prefix is appended by the handler even when absent from the deny list.
+	cfg.Web.Robots = config.RobotsConfig{
+		Allow: []string{"/"},
+		Deny:  []string{"/search", "/api/"},
+		AIBots: config.AIBotsConfig{
+			Default: "allow",
+			Bots:    map[string]string{"GPTBot": "deny"},
+		},
+	}
+	h := &SearchHandler{appConfig: cfg}
+
+	req := httptest.NewRequest("GET", "/robots.txt", nil)
+	rr := httptest.NewRecorder()
+
+	h.RobotsTxt(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("RobotsTxt returned status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "User-agent: *") {
+		t.Error("RobotsTxt should contain 'User-agent: *'")
+	}
+
+	if !strings.Contains(body, "Disallow: /search") {
+		t.Error("RobotsTxt should disallow /search")
+	}
+
+	if !strings.Contains(body, "Disallow: /api/") {
+		t.Error("RobotsTxt should disallow /api/")
+	}
+
+	if !strings.Contains(body, "Disallow: /server/admin/") {
+		t.Error("RobotsTxt should disallow /server/admin/")
+	}
+
+	if !strings.Contains(body, "Sitemap:") {
+		t.Error("RobotsTxt should contain Sitemap directive")
+	}
+
+	if !strings.Contains(body, "User-agent: GPTBot\nDisallow: /") {
+		t.Error("RobotsTxt should render a Disallow stanza for a denied AI bot")
+	}
+
+	if strings.Contains(body, "User-agent: ClaudeBot") {
+		t.Error("RobotsTxt should not render a stanza for an allowed AI bot")
+	}
+
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "text/plain" {
+		t.Errorf("RobotsTxt Content-Type = %s, want text/plain", contentType)
+	}
+}
+
+func TestSecurityTxt(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	req := httptest.NewRequest("GET", "/.well-known/security.txt", nil)
+	rr := httptest.NewRecorder()
+
+	h.SecurityTxt(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("SecurityTxt returned status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "Contact:") {
+		t.Error("SecurityTxt should contain 'Contact:'")
+	}
+
+	if !strings.Contains(body, "Expires:") {
+		t.Error("SecurityTxt should contain 'Expires:'")
+	}
+
+	if !strings.Contains(body, "Preferred-Languages:") {
+		t.Error("SecurityTxt should contain 'Preferred-Languages:'")
+	}
+
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "text/plain" {
+		t.Errorf("SecurityTxt Content-Type = %s, want text/plain", contentType)
+	}
+}
+
+func TestSitemapXML(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	req := httptest.NewRequest("GET", "/sitemap.xml", nil)
+	rr := httptest.NewRecorder()
+
+	h.SitemapXML(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("SitemapXML returned status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "<?xml") {
+		t.Error("SitemapXML should be valid XML")
+	}
+
+	if !strings.Contains(body, "<urlset") {
+		t.Error("SitemapXML should contain <urlset>")
+	}
+
+	if !strings.Contains(body, "<url>") {
+		t.Error("SitemapXML should contain <url> elements")
+	}
+
+	if !strings.Contains(body, "<loc>") {
+		t.Error("SitemapXML should contain <loc> elements")
+	}
+
+	contentType := rr.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "application/xml") {
+		t.Errorf("SitemapXML Content-Type = %s, want application/xml", contentType)
+	}
+}
+
+func TestJSONResponse(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	rr := httptest.NewRecorder()
+	h.jsonResponse(rr, map[string]interface{}{
+		"ok":   true,
+		"data": "test",
+	})
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("jsonResponse returned status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("jsonResponse Content-Type = %s, want application/json", contentType)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Errorf("jsonResponse returned invalid JSON: %v", err)
+	}
+
+	// Per model.SearchResponse: API uses "ok" field, not "success"
+	if response["ok"] != true {
+		t.Error("jsonResponse should contain ok: true")
+	}
+}
+
+func TestJSONError(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	rr := httptest.NewRecorder()
+	h.jsonError(rr, "Test error", "TEST_ERROR", http.StatusBadRequest)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("jsonError returned status %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("jsonError Content-Type = %s, want application/json", contentType)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Errorf("jsonError returned invalid JSON: %v", err)
+	}
+
+	// Per AI.md PART 14: Error response format
+	if response["ok"] != false {
+		t.Error("jsonError should contain ok: false")
+	}
+
+	// Per AI.md PART 14: error field contains the ERROR_CODE
+	if response["error"] != "TEST_ERROR" {
+		t.Errorf("jsonError error = %s, want 'TEST_ERROR'", response["error"])
+	}
+
+	// Per AI.md PART 14: message field contains human-readable message
+	if response["message"] != "Test error" {
+		t.Errorf("jsonError message = %s, want 'Test error'", response["message"])
+	}
+}
+
+func TestAPISearch_MissingQuery(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	req := httptest.NewRequest("GET", "/api/v1/search", nil)
+	rr := httptest.NewRecorder()
+
+	h.APISearch(rr, req)
+
+	// Missing query should return bad request before hitting engine manager
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("APISearch returned status %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Errorf("APISearch returned invalid JSON: %v", err)
+	}
+
+	// Per AI.md PART 9: standard error code for validation failures
+	if response["error"] != "VALIDATION_FAILED" {
+		t.Errorf("APISearch error = %s, want 'VALIDATION_FAILED'", response["error"])
+	}
+}
+
+func TestAPISearch_TextFormat_MissingQuery(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	req := httptest.NewRequest("GET", "/api/v1/search", nil)
+	req.Header.Set("Accept", "text/plain")
+	rr := httptest.NewRecorder()
+
+	h.APISearch(rr, req)
+
+	// Missing query should return bad request (JSON error response)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("APISearch returned status %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAPIAutocomplete_Empty(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	req := httptest.NewRequest("GET", "/api/v1/autocomplete", nil)
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+
+	h.APIAutocomplete(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("APIAutocomplete returned status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Errorf("APIAutocomplete returned invalid JSON: %v", err)
+	}
+
+	// Per model.SearchResponse: API uses "ok" field, not "success"
+	if response["ok"] != true {
+		t.Error("APIAutocomplete should return ok: true")
+	}
+
+	suggestions, ok := response["suggestions"].([]interface{})
+	if !ok {
+		t.Error("APIAutocomplete should return suggestions array")
+	}
+
+	// Empty query returns popular searches
+	if len(suggestions) == 0 {
+		t.Error("APIAutocomplete should return popular suggestions for empty query")
+	}
+
+	// Check type is "popular"
+	if response["type"] != "popular" {
+		t.Errorf("APIAutocomplete should return type 'popular' for empty query, got %v", response["type"])
+	}
+}
+
+func TestAgeVerifyMiddleware_StaticBypass(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	// Test that static files bypass age verification
+	handler := h.AgeVerifyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	}))
+
+	testPaths := []string{
+		"/static/css/style.css",
+		"/static/js/app.js",
+		"/api/v1/search",
+		"/healthz",
+		"/robots.txt",
+		"/age-verify",
+	}
+
+	for _, path := range testPaths {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest("GET", path, nil)
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Errorf("Path %s should bypass age verify, got status %d", path, rr.Code)
+			}
+		})
+	}
+}
+
+func TestAgeVerifyMiddleware_RequiresVerification(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	handler := h.AgeVerifyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Request without cookie should redirect
+	req := httptest.NewRequest("GET", "/search?q=test", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Expected redirect status %d, got %d", http.StatusFound, rr.Code)
+	}
+
+	location := rr.Header().Get("Location")
+	if !strings.HasPrefix(location, "/age-verify") {
+		t.Errorf("Expected redirect to /age-verify, got %s", location)
+	}
+}
+
+func TestAgeVerifyMiddleware_WithCookie(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	handler := h.AgeVerifyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Request with valid cookie should pass through
+	req := httptest.NewRequest("GET", "/search?q=test", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  "age_verified",
+		Value: "1",
+	})
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status %d with valid cookie, got %d", http.StatusOK, rr.Code)
+	}
+}
+
+func TestAgeVerifySubmit(t *testing.T) {
+	cfg := createTestConfig()
+	h := &SearchHandler{appConfig: cfg}
+
+	// GET request should redirect
+	req := httptest.NewRequest("GET", "/age-verify/submit", nil)
+	rr := httptest.NewRecorder()
+	h.AgeVerifySubmit(rr, req)
+	if rr.Code != http.StatusFound {
+		t.Errorf("GET AgeVerifySubmit should redirect, got %d", rr.Code)
+	}
+
+	// POST request should set cookie and redirect
+	req = httptest.NewRequest("POST", "/age-verify/submit", strings.NewReader("redirect=/"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr = httptest.NewRecorder()
+	h.AgeVerifySubmit(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("POST AgeVerifySubmit should redirect, got %d", rr.Code)
+	}
+
+	// Check that cookie was set
+	cookies := rr.Result().Cookies()
+	found := false
+	for _, c := range cookies {
+		if c.Name == "age_verified" && c.Value == "1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("AgeVerifySubmit should set age_verified cookie")
+	}
+}
+
+func TestGetUptime(t *testing.T) {
+	uptime := getUptime()
+	if uptime == "" {
+		t.Error("getUptime should return a non-empty string")
+	}
+
+	// Should contain time units
+	hasTimeUnit := strings.Contains(uptime, "h") ||
+		strings.Contains(uptime, "m") ||
+		strings.Contains(uptime, "s") ||
+		strings.Contains(uptime, "d")
+	if !hasTimeUnit {
+		t.Errorf("getUptime should contain time units, got %s", uptime)
+	}
+}
+
+func TestSetTemplatesFS(t *testing.T) {
+	// Just test that it doesn't panic
+	// SetTemplatesFS(embed.FS{})
+	// This is a basic smoke test
+}
+
+func TestNewHandler(t *testing.T) {
+	cfg := createTestConfig()
+
+	// Test handler creation
+	h := NewSearchHandler(cfg, nil)
+
+	if h == nil {
+		t.Fatal("New should return non-nil handler")
+	}
+
+	if h.appConfig != cfg {
+		t.Error("Handler should store config reference")
+	}
+
+	// Engine manager can be nil
+	if h.engineMgr != nil {
+		t.Error("Handler should have nil engine manager when passed nil")
+	}
+}

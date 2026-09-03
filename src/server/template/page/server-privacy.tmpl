@@ -1,0 +1,178 @@
+{{define "server-privacy"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content">
+    <div class="prose">
+        <h1>{{ t "privacy.title" }}</h1>
+        <p class="last-updated">{{ tf "privacy.last_updated" .BuildDateTime }}</p>
+
+        <h2>{{ t "privacy.summary" }}</h2>
+        <p>{{ tf "privacy.summary_body" .AppName }}</p>
+        <ul class="privacy-key-points">
+            {{ if .Privacy.Data.StoredOnServer }}
+            <li><strong>{{ t "privacy.summary_stored_title" }}</strong> — {{ t "privacy.summary_stored_desc" }}</li>
+            {{ end }}
+            {{ if .Privacy.Data.Sold }}
+            <li><strong>{{ t "privacy.summary_sold_title" }}</strong> — {{ t "privacy.summary_sold_desc" }} <a href="#ccpa-opt-out">{{ t "privacy.summary_sold_link" }}</a></li>
+            {{ else }}
+            <li><strong>{{ t "privacy.summary_not_sold_title" }}</strong> — {{ t "privacy.summary_not_sold_desc" }}</li>
+            {{ end }}
+            <li><strong>{{ t "privacy.summary_control_title" }}</strong> — {{ t "privacy.summary_control_desc" }}</li>
+        </ul>
+
+        <h2>{{ t "privacy.not_collect" }}</h2>
+        <ul>
+            <li>{{ t "privacy.not_collect_accounts" }}</li>
+            <li>{{ t "privacy.not_collect_track" }}</li>
+            <li>{{ t "privacy.not_collect_ip" }}</li>
+            <li>{{ t "privacy.not_collect_cookies" }}</li>
+            <li>{{ t "privacy.not_collect_fingerprint" }}</li>
+            <li>{{ t "privacy.not_collect_sell" }}</li>
+            <li>{{ t "privacy.not_collect_profiles" }}</li>
+        </ul>
+
+        <h2>{{ t "privacy.how_handled" }}</h2>
+        <p>{{ tf "privacy.how_handled_body" .AppName }}</p>
+
+        <h2>{{ t "privacy.browser_only" }}</h2>
+        <p>{{ t "privacy.browser_only_intro" }}</p>
+        <ul>
+            <li><code>vidveil-theme</code> — {{ t "privacy.storage_theme" }}</li>
+            <li><code>vidveil_prefs</code> — {{ t "privacy.storage_prefs" }}</li>
+            <li><code>vidveil_history</code> — {{ t "privacy.storage_history" }}</li>
+        </ul>
+        <p>{{ t "privacy.browser_only_manage" }} <a href="/server/preferences">{{ t "privacy.preferences_link" }}</a> {{ t "privacy.browser_only_erase" }}</p>
+
+        <h2>{{ t "privacy.favorites" }}</h2>
+        <p>{{ t "privacy.favorites_body_1" }} <a href="/favorites">{{ t "privacy.favorites_link" }}</a> {{ t "privacy.favorites_body_2" }}</p>
+
+        <h2>{{ t "privacy.cookies" }}</h2>
+        <p>{{ tf "privacy.cookies_intro" .AppName }}</p>
+        <ul>
+            <li><strong>{{ t "privacy.cookie_age" }}</strong> — {{ t "privacy.cookie_age_desc" }}</li>
+            <li><strong>{{ t "privacy.cookie_content_ack" }}</strong> — {{ t "privacy.cookie_content_ack_desc" }}</li>
+            <li><strong>{{ t "privacy.cookie_geo" }}</strong> (<code>forward_ip</code>) — {{ t "privacy.cookie_geo_desc" }}</li>
+            <li><strong>{{ t "privacy.cookie_visitor" }}</strong> (<code>visitor_id</code>) — {{ t "privacy.cookie_visitor_desc" }}</li>
+        </ul>
+
+        <h3>{{ t "privacy.cookie_categories" }}</h3>
+        <ul>
+            {{ if .Privacy.Cookies.Essential.Enabled }}
+            <li><strong>{{ t "privacy.cookie_essential" }}</strong> — {{ .Privacy.Cookies.Essential.Description }}</li>
+            {{ end }}
+            {{ if .Privacy.Cookies.Preferences.Enabled }}
+            <li><strong>{{ t "privacy.cookie_preferences" }}</strong> — {{ .Privacy.Cookies.Preferences.Description }}</li>
+            {{ end }}
+            {{ if .Privacy.Cookies.Analytics.Enabled }}
+            <li><strong>{{ t "privacy.cookie_analytics" }}</strong> — {{ .Privacy.GetAnalyticsDescription }}</li>
+            {{ else }}
+            <li><strong>{{ t "privacy.cookie_analytics" }}</strong> — {{ t "privacy.analytics_none" }}</li>
+            {{ end }}
+        </ul>
+        <p><a href="/server/preferences#cookies">{{ t "privacy.manage_cookies" }}</a></p>
+
+        {{ with .Privacy.Content.DataCollection }}
+        <h2>{{ t "privacy.data_collection" }}</h2>
+        {{ . | markdownToHTML }}
+        {{ end }}
+
+        {{ with .Privacy.GetDataUsageContent }}
+        <h2>{{ t "privacy.data_usage" }}</h2>
+        {{ . | markdownToHTML }}
+        {{ end }}
+
+        {{ with .Privacy.Content.DataSecurity }}
+        <h2>{{ t "privacy.data_security" }}</h2>
+        {{ . | markdownToHTML }}
+        {{ end }}
+
+        {{ if .Privacy.Data.Sharing }}
+        <h2>{{ t "privacy.sharing" }}</h2>
+        <ul>
+            {{ range .Privacy.Data.Sharing }}
+            <li><strong>{{ .Condition }}:</strong> {{ .When }} — {{ .Data }}</li>
+            {{ end }}
+        </ul>
+        {{ end }}
+
+        <h2>{{ t "privacy.retention" }}</h2>
+        <p>{{ tf "privacy.retention_period" .Privacy.Retention.Period }}</p>
+
+        <h2>{{ t "privacy.your_rights" }}</h2>
+        <ul>
+            {{ if .Privacy.Retention.ExportAvailable }}
+            <li>{{ t "privacy.rights_export" }}</li>
+            {{ end }}
+            {{ if .Privacy.Retention.DeletionAvailable }}
+            <li>{{ t "privacy.rights_deletion" }}</li>
+            {{ end }}
+            <li><a href="/server/preferences#cookies">{{ t "privacy.manage_cookies" }}</a></li>
+        </ul>
+
+        <h2>{{ t "privacy.thumbnail_proxy" }}</h2>
+        <p>{{ t "privacy.thumbnail_proxy_body" }}</p>
+
+        <h2>{{ t "privacy.tor_access" }}</h2>
+        <p>{{if .TorOnionAddr}}{{ tf "privacy.tor_access_reachable" .TorOnionAddr }}{{else}}{{ tf "privacy.tor_access_auto" .AppName }}{{end}} {{ t "privacy.tor_access_geo" }}</p>
+
+        <h2>{{ t "privacy.geo_restriction" }}</h2>
+        <p>{{ t "privacy.geo_restriction_body" }}</p>
+
+        <h2>{{ t "privacy.server_logs" }}</h2>
+        <p>{{ tf "privacy.server_logs_body" .AppName }}</p>
+
+        <h2>{{ t "privacy.third_parties" }}</h2>
+        <p>{{ tf "privacy.third_parties_body" .AppName }}</p>
+        {{ if .Privacy.ThirdParty.Services }}
+        <table class="privacy-third-parties">
+            <thead>
+                <tr>
+                    <th>{{ t "privacy.tp_name" }}</th>
+                    <th>{{ t "privacy.tp_purpose" }}</th>
+                    <th>{{ t "privacy.tp_data" }}</th>
+                    <th>{{ t "privacy.tp_policy" }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .Privacy.ThirdParty.Services }}
+                <tr>
+                    <td>{{ .Name }}</td>
+                    <td>{{ .Purpose }}</td>
+                    <td>{{ .DataSent }}</td>
+                    <td><a href="{{ .PolicyURL }}" rel="noopener noreferrer">{{ t "privacy.tp_policy" }}</a></td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+        {{ else }}
+        <p>{{ t "privacy.third_party_none" }}</p>
+        {{ end }}
+
+        {{ if .Privacy.Data.Sold }}
+        <section id="ccpa-opt-out" class="ccpa-section">
+            <h2>{{ t "privacy.ccpa_title" }}</h2>
+            <p>{{ t "privacy.ccpa_body" }}</p>
+            {{ if .CCPAOptedOut }}
+            <p role="status">{{ t "privacy.ccpa_status_opted_out" }}</p>
+            <form method="post" action="/server/ccpa">
+                {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+                <input type="hidden" name="choice" value="opt-in">
+                <button type="submit" class="btn-secondary">{{ t "privacy.ccpa_opt_in" }}</button>
+            </form>
+            {{ else }}
+            <form method="post" action="/server/ccpa">
+                {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
+                <input type="hidden" name="choice" value="opt-out">
+                <button type="submit" class="btn-primary">{{ t "privacy.ccpa_opt_out" }}</button>
+            </form>
+            {{ end }}
+        </section>
+        {{ end }}
+
+        <h2>{{ t "privacy.questions" }}</h2>
+        <p>{{ t "privacy.questions_prefix" }} <a href="/server/contact">{{ t "privacy.contact_link" }}</a>.</p>
+    </div>
+</div>
+{{end}}

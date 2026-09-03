@@ -1,0 +1,44 @@
+# vidveil - Development compose (devel image, debug mode)
+# nginx proxy address - http://172.17.0.1:64893
+# Per AI.md PART 26: Uses temp directory workflow - MUST use image, not build
+
+name: vidveil-dev
+
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  vidveil:
+    image: ghcr.io/apimgr/vidveil:devel
+    container_name: vidveil-app
+    hostname: vidveil
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      MODE: development
+      PORT: 80
+      DEBUG: true
+      TZ: America/New_York
+    volumes:
+      - './volumes/config:/config:z'
+      - './volumes/data:/data:z'
+    ports:
+      # Development: accessible from all interfaces, no 172.17.0.1 bind
+      - '64893:80'
+    healthcheck:
+      test: ['CMD', '/usr/local/bin/vidveil', '--status']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - vidveil-dev
+
+networks:
+  vidveil-dev:
+    name: vidveil-dev
+    external: false

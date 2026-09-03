@@ -1,0 +1,2693 @@
+// SPDX-License-Identifier: MIT
+package config
+
+import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"github.com/apimgr/vidveil/src/path"
+	"golang.org/x/net/publicsuffix"
+	"gopkg.in/yaml.v3"
+)
+
+// path.ProjectOrg and path.ProjectName are defined in paths package
+
+// Version is set at build time via ldflags
+var Version = "dev"
+
+// apiVersionPattern validates Server.APIVersion per AI.md PART 14 ({api_version}
+// examples: "v1", "v2"). Lowercase "v" followed by one or more digits.
+var apiVersionPattern = regexp.MustCompile(`^v[0-9]+$`)
+
+// Config holds all application configuration per AI.md spec
+type AppConfig struct {
+	Server  ServerConfig  `yaml:"server"`
+	Web     WebConfig     `yaml:"web"`
+	Search  SearchConfig  `yaml:"search"`
+	Engines EnginesConfig `yaml:"engines"`
+
+	// Runtime-only state (never serialised to YAML)
+	// Set by ConfigWatcher when port/address changes require a restart.
+	PendingRestart bool     `yaml:"-" json:"-"`
+	RestartReasons []string `yaml:"-" json:"-"`
+}
+
+// EnginesConfig holds engine-specific settings
+type EnginesConfig struct {
+	UserAgent UserAgentConfig `yaml:"useragent"`
+}
+
+// ServerBrandingConfig holds branding settings per AI.md PART 16
+type ServerBrandingConfig struct {
+	Title       string `yaml:"title"`
+	Tagline     string `yaml:"tagline"`
+	Description string `yaml:"description"`
+	// Logo is a local file path or remote URL for the header logo; empty = embedded default.
+	Logo string `yaml:"logo"`
+	// Favicon is a local file path or remote URL for the favicon; empty = embedded default.
+	Favicon string `yaml:"favicon"`
+}
+
+// ServerConfig holds server-related settings per AI.md
+type ServerConfig struct {
+	// Port: single (HTTP) or dual (HTTP,HTTPS) e.g., "8090" or "8090,64453"
+	Port    string `yaml:"port"`
+	FQDN    string `yaml:"fqdn"`
+	Address string `yaml:"address"`
+	// BaseURL is the URL path prefix per AI.md PART 12.
+	// Priority: X-Forwarded-Prefix > X-Forwarded-Path > X-Script-Name > this value > "/"
+	// CLI flag: --baseurl PATH; env var: BASEURL
+	BaseURL string `yaml:"baseurl"`
+
+	// APIVersion is the versioned API path segment per AI.md PART 14
+	// ("Always version ALL API routes: /api/{api_version}/..."). Defaults to "v1".
+	// Access via AppConfig.APIBasePath() ("/api/{version}") - never hardcode "/api/v1".
+	APIVersion string `yaml:"api_version"`
+
+	// Application mode: production or development
+	// Can be overridden by MODE env var or --mode CLI flag
+	Mode string `yaml:"mode"`
+
+	// Token is the global operator token per AI.md PART 11 ("server.token").
+	// Auto-generated and written to server.yml on first run if absent or empty.
+	// Grants full access to every resource and every sensitive server management
+	// operation (PART 5 "Sensitive Operations": restore, mode change, PGP key ops).
+	// Validated by SHA-256-hashing the inbound value and comparing against
+	// SHA-256(server.token) with crypto/subtle.ConstantTimeCompare - never with ==.
+	Token string `yaml:"token"`
+
+	// Application branding per AI.md PART 16
+	Branding ServerBrandingConfig `yaml:"branding"`
+
+	// System user/group
+	User  string `yaml:"user"`
+	Group string `yaml:"group"`
+
+	// PID file
+	PIDFile bool `yaml:"pidfile"`
+
+	// Admin panel configuration
+	Admin AdminConfig `yaml:"admin"`
+
+	// Contact routing: admin/security/abuse/general roles with email + webhooks
+	Contact ContactConfig `yaml:"contact"`
+
+	// Notifications (email SMTP lives here per AI.md PART 17)
+	Notifications NotificationsConfig `yaml:"notifications"`
+
+	// Scheduler
+	Schedule ScheduleConfig `yaml:"schedule"`
+
+	// SSL/TLS
+	SSL SSLConfig `yaml:"ssl"`
+
+	// Metrics
+	Metrics MetricsConfig `yaml:"metrics"`
+
+	// Logging
+	Logs LogsConfig `yaml:"logs"`
+
+	// Rate limiting
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
+
+	// Request limits
+	Limits LimitsConfig `yaml:"limits"`
+
+	// Compression
+	Compression CompressionConfig `yaml:"compression"`
+
+	// Trusted proxies
+	TrustedProxies TrustedProxiesConfig `yaml:"trusted_proxies"`
+
+	// Security headers
+	SecurityHeaders SecurityHeadersConfig `yaml:"security_headers"`
+
+	// Session
+	Session SessionConfig `yaml:"session"`
+
+	// Database
+	Database DatabaseConfig `yaml:"database"`
+
+	// Cache (optional; default memory) per AI.md PART 12
+	Cache CacheConfig `yaml:"cache"`
+
+	// GeoIP
+	GeoIP GeoIPConfig `yaml:"geoip"`
+
+	// Security (PART 11) - Blocklists, CVE, etc
+	Security SecurityConfig `yaml:"security"`
+
+	// Backup (PART 21) - Backup & Restore settings
+	Backup BackupConfig `yaml:"backup"`
+
+	// Compliance holds regulatory-standard toggles per AI.md "Compliance Standards".
+	// All disabled by default; enable individually as needed.
+	Compliance ComplianceConfig `yaml:"compliance"`
+
+	// Tor (PART 31) - Hidden service and outbound network settings
+	Tor TorConfig `yaml:"tor"`
+
+	// Healthz (PART 13) - Optional root-level alias for /server/healthz
+	// Canonical route is /server/healthz; root /healthz is opt-in
+	Healthz HealthzConfig `yaml:"healthz"`
+
+	// SEO holds SEO and social metadata settings per AI.md PART 16
+	SEO SEOConfig `yaml:"seo"`
+
+	// Update holds release-channel and auto-install settings per AI.md PART 22
+	Update UpdateConfig `yaml:"update"`
+
+	// Privacy holds the cookie-consent banner text and data-sale disclosure
+	// per AI.md PART 12 "Cookie Consent Banner" (server.privacy.consent.*,
+	// server.privacy.data.sold)
+	Privacy PrivacyConfig `yaml:"privacy"`
+}
+
+// PrivacyConfig holds cookie-consent and data-sale disclosure settings per
+// AI.md PART 12 "Cookie Consent Banner → Implementation" (server.privacy.*)
+type PrivacyConfig struct {
+	Consent    ConsentConfig          `yaml:"consent"`
+	Data       PrivacyDataConfig      `yaml:"data"`
+	Retention  PrivacyRetentionConfig `yaml:"retention"`
+	Cookies    CookieCategoriesConfig `yaml:"cookies"`
+	ThirdParty ThirdPartyConfig       `yaml:"third_party"`
+	Content    PrivacyContentConfig   `yaml:"content"`
+}
+
+// PrivacyDataConfig holds data-handling disclosures per AI.md PART 12/16.
+// Sold gates the CCPA "Do Not Sell" opt-out section and selects the
+// cookie-consent banner message (MessageIfSold vs Message).
+type PrivacyDataConfig struct {
+	Sold bool `yaml:"sold"`
+	// StoredOnServer records whether user data stays on this server rather
+	// than a third-party cloud; surfaced in the privacy page summary.
+	StoredOnServer bool `yaml:"stored_on_server"`
+	// Sharing lists the conditions under which data may reach a third party.
+	Sharing []SharingCondition `yaml:"sharing"`
+}
+
+// SharingCondition describes one situation where data may be shared
+// (AI.md PART 12 "Privacy & Consent" → data.sharing)
+type SharingCondition struct {
+	Condition string `yaml:"condition"`
+	When      string `yaml:"when"`
+	Data      string `yaml:"data"`
+}
+
+// PrivacyRetentionConfig holds the data-retention disclosure and the
+// export/deletion rights advertised on the privacy page (AI.md PART 12)
+type PrivacyRetentionConfig struct {
+	Period            string `yaml:"period"`
+	ExportAvailable   bool   `yaml:"export_available"`
+	DeletionAvailable bool   `yaml:"deletion_available"`
+}
+
+// CookieCategoriesConfig holds the three consent categories rendered in the
+// privacy page Cookie Policy section (AI.md PART 12)
+type CookieCategoriesConfig struct {
+	Essential   CookieCategoryConfig  `yaml:"essential"`
+	Preferences CookieCategoryConfig  `yaml:"preferences"`
+	Analytics   AnalyticsCookieConfig `yaml:"analytics"`
+}
+
+// CookieCategoryConfig holds one cookie category's state and description
+type CookieCategoryConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	Description string `yaml:"description"`
+}
+
+// AnalyticsCookieConfig extends a cookie category with the two data-sale
+// dependent description suffixes selected by GetAnalyticsDescription
+type AnalyticsCookieConfig struct {
+	Enabled                  bool   `yaml:"enabled"`
+	Description              string `yaml:"description"`
+	DescriptionSuffixNotSold string `yaml:"description_suffix_not_sold"`
+	DescriptionSuffixSold    string `yaml:"description_suffix_sold"`
+}
+
+// ThirdPartyConfig lists third-party services that receive user data
+type ThirdPartyConfig struct {
+	Services []ThirdPartyService `yaml:"services"`
+}
+
+// ThirdPartyService describes one third-party recipient of user data
+type ThirdPartyService struct {
+	Name      string `yaml:"name"`
+	Purpose   string `yaml:"purpose"`
+	DataSent  string `yaml:"data_sent"`
+	PolicyURL string `yaml:"policy_url"`
+}
+
+// PrivacyContentConfig holds the Markdown bodies rendered into the privacy
+// page sections, with sold/not-sold variants for data usage (AI.md PART 12)
+type PrivacyContentConfig struct {
+	DataCollection  string `yaml:"data_collection"`
+	DataUsage       string `yaml:"data_usage"`
+	DataUsageIfSold string `yaml:"data_usage_if_sold"`
+	DataSecurity    string `yaml:"data_security"`
+}
+
+// ConsentConfig holds the cookie-consent banner text per AI.md PART 12
+// "Cookie Consent Banner → Implementation" table (server.privacy.consent.*)
+type ConsentConfig struct {
+	Message         string               `yaml:"message"`
+	MessageIfSold   string               `yaml:"message_if_sold"`
+	Policy          ConsentPolicyConfig  `yaml:"policy"`
+	Buttons         ConsentButtonsConfig `yaml:"buttons"`
+	PreferencesText string               `yaml:"preferences_text"`
+}
+
+// ConsentPolicyConfig holds the privacy-policy link shown in the consent banner
+type ConsentPolicyConfig struct {
+	URL  string `yaml:"url"`
+	Text string `yaml:"text"`
+}
+
+// ConsentButtonsConfig holds the accept/decline button labels for the consent banner
+type ConsentButtonsConfig struct {
+	Decline string `yaml:"decline"`
+	Accept  string `yaml:"accept"`
+}
+
+// GetConsentMessage returns the cookie-consent banner message, selecting
+// Consent.MessageIfSold when Data.Sold is true, otherwise Consent.Message,
+// per AI.md PART 12 "Cookie Consent Banner → Dynamic Message Selection".
+func (p PrivacyConfig) GetConsentMessage() string {
+	if p.Data.Sold && p.Consent.MessageIfSold != "" {
+		return p.Consent.MessageIfSold
+	}
+	return p.Consent.Message
+}
+
+// GetAnalyticsDescription returns the analytics cookie description with the
+// data-sale suffix appended, selecting the sold suffix when Data.Sold is true,
+// per AI.md PART 12 "Dynamic Privacy Messaging".
+func (p PrivacyConfig) GetAnalyticsDescription() string {
+	suffix := p.Cookies.Analytics.DescriptionSuffixNotSold
+	if p.Data.Sold {
+		suffix = p.Cookies.Analytics.DescriptionSuffixSold
+	}
+	if suffix == "" {
+		return p.Cookies.Analytics.Description
+	}
+	if p.Cookies.Analytics.Description == "" {
+		return suffix
+	}
+	return p.Cookies.Analytics.Description + " " + suffix
+}
+
+// GetDataUsageContent returns the data-usage Markdown body, selecting
+// Content.DataUsageIfSold when Data.Sold is true, per AI.md PART 12
+// "Dynamic Privacy Messaging".
+func (p PrivacyConfig) GetDataUsageContent() string {
+	if p.Data.Sold && p.Content.DataUsageIfSold != "" {
+		return p.Content.DataUsageIfSold
+	}
+	return p.Content.DataUsage
+}
+
+// HealthzConfig holds health-check route configuration per AI.md PART 13
+type HealthzConfig struct {
+	// Optional root-level /healthz alias to the canonical /server/healthz handler
+	Root HealthzRootConfig `yaml:"root"`
+}
+
+// HealthzRootConfig gates the optional /healthz route per AI.md PART 5/13
+type HealthzRootConfig struct {
+	// When true, mount /healthz to the SAME handler as /server/healthz (NEVER redirect)
+	// Default: false. Spec: "Optional root health alias"
+	Enabled bool `yaml:"enabled"`
+}
+
+// TorConfig holds Tor-related configuration per AI.md PART 31
+type TorConfig struct {
+	// Binary path (empty = auto-detect from PATH)
+	Binary string `yaml:"binary"`
+
+	// --- Outbound Network Settings ---
+	// Use Tor network for outbound connections (engine queries)
+	// Per PART 31: Particularly relevant for VidVeil to anonymize search queries
+	UseNetwork bool `yaml:"use_network"`
+
+	// Allow users to set their own Tor network preference (override server default)
+	// Per PART 31: Users can set via cookie to always use Tor, never use Tor, or inherit server default
+	AllowUserPreference bool `yaml:"allow_user_preference"`
+
+	// Allow users to opt-in to forwarding their IP address to video sites
+	// When enabled, users can set a preference (via cookie) to include their IP
+	// in X-Forwarded-For header - useful for geo-targeted content
+	// Default: true (feature available), but user preference defaults to disabled
+	AllowUserIPForward bool `yaml:"allow_user_ip_forward"`
+
+	// --- Performance Settings ---
+	// Maximum circuits to keep open (1-128, default 32)
+	MaxCircuits int `yaml:"max_circuits"`
+
+	// Circuit timeout in seconds (10-300, default 60)
+	CircuitTimeout int `yaml:"circuit_timeout"`
+
+	// Bootstrap timeout in seconds (30-600, default 180)
+	BootstrapTimeout int `yaml:"bootstrap_timeout"`
+
+	// --- Security Settings ---
+	// Scrub sensitive info from Tor logs (default true)
+	SafeLogging bool `yaml:"safe_logging"`
+
+	// Maximum concurrent streams per circuit (10-500, default 100)
+	MaxStreamsPerCircuit int `yaml:"max_streams_per_circuit"`
+
+	// Close circuit when max streams exceeded (default true)
+	CloseCircuitOnStreamLimit bool `yaml:"close_circuit_on_stream_limit"`
+
+	// --- Bandwidth Settings ---
+	// Maximum bandwidth rate per second (e.g., "1 MB", "500 KB")
+	BandwidthRate string `yaml:"bandwidth_rate"`
+
+	// Maximum bandwidth burst per second (e.g., "2 MB", "1 MB")
+	BandwidthBurst string `yaml:"bandwidth_burst"`
+
+	// Maximum monthly bandwidth (e.g., "100 GB", "50 TB", "unlimited")
+	// AccountingMax in torrc - resets on 1st of each month
+	MaxMonthlyBandwidth string `yaml:"max_monthly_bandwidth"`
+
+	// --- Hidden Service Settings ---
+	// Number of introduction points (3-10, default 3)
+	NumIntroPoints int `yaml:"num_intro_points"`
+
+	// Virtual port for hidden service (1-65535, default 80)
+	VirtualPort int `yaml:"virtual_port"`
+
+	// OnionAddress is the .onion hostname for this service (without http:// prefix).
+	// When set, requests whose Host header matches this value are treated as Tor requests.
+	// Set automatically by the Tor service on startup; can also be set manually.
+	OnionAddress string `yaml:"onion_address"`
+
+	// ContactEmail is the contact address shown in Tor responses (security.txt, contact pages).
+	// If unset, no email is shown on Tor responses — never falls back to the clearnet email.
+	ContactEmail string `yaml:"contact_email"`
+}
+
+// DefaultTorConfig returns the default Tor configuration per PART 31
+func DefaultTorConfig() TorConfig {
+	return TorConfig{
+		// auto-detect
+		Binary: "",
+		// disabled by default, user can enable for privacy
+		UseNetwork: false,
+		// allow users to override outbound Tor routing per PART 31
+		AllowUserPreference: true,
+		// feature available, but user must opt-in via preferences
+		AllowUserIPForward:        true,
+		MaxCircuits:               32,
+		CircuitTimeout:            60,
+		BootstrapTimeout:          180,
+		SafeLogging:               true,
+		MaxStreamsPerCircuit:      100,
+		CloseCircuitOnStreamLimit: true,
+		BandwidthRate:             "1 MB",
+		BandwidthBurst:            "2 MB",
+		MaxMonthlyBandwidth:       "100 GB",
+		NumIntroPoints:            3,
+		VirtualPort:               80,
+	}
+}
+
+// AdminConfig holds admin panel settings
+type AdminConfig struct {
+	// Path is the admin panel URL path (default: "admin") per PART 12
+	Path      string          `yaml:"path"`
+	Email     string          `yaml:"email"`
+	Username  string          `yaml:"username"`
+	Password  string          `yaml:"password"`
+	Token     string          `yaml:"token"`
+	TwoFactor TwoFactorConfig `yaml:"two_factor"`
+}
+
+// TwoFactorConfig holds 2FA settings per AI.md PART 11
+type TwoFactorConfig struct {
+	// 2FA is enabled for this admin
+	Enabled bool `yaml:"enabled"`
+	// TOTP secret (stored securely)
+	Secret string `yaml:"secret,omitempty"`
+	// One-time backup codes
+	BackupCodes []string `yaml:"backup_codes,omitempty"`
+	// Trust device for N days
+	RememberDeviceDays int `yaml:"remember_device_days"`
+}
+
+// SMTPConfig holds SMTP connection settings per AI.md PART 17
+type SMTPConfig struct {
+	// If empty: autodetect on first run. If set: test connection on every startup.
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	// TLS mode: auto, starttls, tls, none
+	TLS string `yaml:"tls"`
+}
+
+// EmailFromConfig holds sender address settings per AI.md PART 17
+type EmailFromConfig struct {
+	// Default: app title (Branding.Title)
+	Name string `yaml:"name"`
+	// Default: no-reply@{fqdn}
+	Email string `yaml:"email"`
+}
+
+// EmailNotificationsConfig holds email notification config per AI.md PART 17.
+// SMTP detection is automatic: empty Host triggers autodetect; a set Host triggers connection test.
+// Enabled is set at runtime (true when SMTP test passes); it is never stored in YAML.
+type EmailNotificationsConfig struct {
+	// Enabled is set at runtime by the startup SMTP check. Not stored in config file.
+	Enabled bool            `yaml:"-"`
+	SMTP    SMTPConfig      `yaml:"smtp"`
+	From    EmailFromConfig `yaml:"from"`
+	// ReplyTo is optional. If set, it is included as a Reply-To header on all emails.
+	ReplyTo string `yaml:"reply_to,omitempty"`
+}
+
+// NotificationsConfig holds notification settings per AI.md PART 17
+type NotificationsConfig struct {
+	Email EmailNotificationsConfig `yaml:"email"`
+}
+
+// ContactRoleConfig holds contact settings for one notification role per AI.md PART 12.
+// Each role has an email address and an open map of named webhook transports.
+// Empty fields fall back to the admin role values at dispatch time.
+type ContactRoleConfig struct {
+	// Email address for this role. Empty string triggers fallback chain.
+	Email string `yaml:"email"`
+	// Webhooks maps transport name (telegram, discord, slack, mattermost,
+	// pushover, gotify, generic, …) to the destination URL/token.
+	// Each key also has a companion "<name>_secret" key that holds the
+	// per-webhook HMAC-SHA256 signing secret (auto-generated on first save).
+	Webhooks map[string]string `yaml:"webhooks,omitempty"`
+}
+
+// ContactConfig holds the unified notification-routing tree per AI.md PART 12.
+// One config tree for every "where do messages go" decision.
+type ContactConfig struct {
+	Admin    ContactRoleConfig `yaml:"admin"`
+	Security ContactRoleConfig `yaml:"security"`
+	Abuse    ContactRoleConfig `yaml:"abuse"`
+	General  ContactRoleConfig `yaml:"general"`
+}
+
+// ScheduleConfig holds scheduler settings per AI.md PART 18.
+// The scheduler is ALWAYS running — there is no top-level enable/disable.
+// Individual tasks can be toggled via Tasks[id].Enabled.
+type ScheduleConfig struct {
+	Timezone      string                        `yaml:"timezone"`
+	CatchUpWindow string                        `yaml:"catch_up_window"`
+	Tasks         map[string]ScheduleTaskConfig `yaml:"tasks"`
+}
+
+// ScheduleTaskConfig holds per-task scheduler settings per AI.md PART 18
+type ScheduleTaskConfig struct {
+	Schedule      string                   `yaml:"schedule"`
+	Enabled       bool                     `yaml:"enabled"`
+	RetryOnFail   bool                     `yaml:"retry_on_fail,omitempty"`
+	RetryDelay    string                   `yaml:"retry_delay,omitempty"`
+	Verify        bool                     `yaml:"verify,omitempty"`
+	RestartOnFail bool                     `yaml:"restart_on_fail,omitempty"`
+	Retention     *ScheduleRetentionConfig `yaml:"retention,omitempty"`
+}
+
+// ScheduleRetentionConfig holds backup retention settings per AI.md PART 18
+type ScheduleRetentionConfig struct {
+	MaxBackups   int    `yaml:"max_backups"`
+	KeepWeekly   int    `yaml:"keep_weekly"`
+	KeepMonthly  int    `yaml:"keep_monthly"`
+	KeepYearly   int    `yaml:"keep_yearly"`
+	MaxTotalSize string `yaml:"max_total_size"`
+}
+
+// SSLConfig holds SSL/TLS settings
+type SSLConfig struct {
+	Enabled     bool              `yaml:"enabled"`
+	CertPath    string            `yaml:"cert_path"`
+	LetsEncrypt LetsEncryptConfig `yaml:"letsencrypt"`
+}
+
+// LetsEncryptConfig holds Let's Encrypt settings
+type LetsEncryptConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	Domain          string `yaml:"domain"`
+	Email           string `yaml:"email"`
+	Challenge       string `yaml:"challenge"`
+	DNSProviderType string `yaml:"dns_provider_type"`
+	DNSProviderKey  string `yaml:"dns_provider_key"`
+}
+
+// MetricsConfig holds Prometheus metrics settings per AI.md PART 20
+type MetricsConfig struct {
+	Enabled         bool              `yaml:"enabled"`
+	Root            MetricsRootConfig `yaml:"root"`
+	Auth            MetricsAuthConfig `yaml:"auth"`
+	IncludeSystem   bool              `yaml:"include_system"`
+	IncludeRuntime  bool              `yaml:"include_runtime"`
+	Loki            MetricsLokiConfig `yaml:"loki"`
+	DurationBuckets []float64         `yaml:"duration_buckets"`
+	SizeBuckets     []float64         `yaml:"size_buckets"`
+}
+
+// MetricsRootConfig gates the /metrics[/{service}] root alias per AI.md PART 20
+type MetricsRootConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// MetricsAuthConfig holds metrics bearer-token auth settings per AI.md PART 20
+type MetricsAuthConfig struct {
+	// AllowUnauthenticated skips token checks for ALL metrics services -
+	// firewalled internal networks only, never on a public server
+	AllowUnauthenticated bool                `yaml:"allow_unauthenticated"`
+	Tokens               MetricsTokensConfig `yaml:"tokens"`
+}
+
+// MetricsTokensConfig holds the per-service metrics bearer tokens per AI.md PART 20.
+// An empty token disables that service's endpoints (403).
+type MetricsTokensConfig struct {
+	Prometheus string `yaml:"prometheus"`
+	Grafana    string `yaml:"grafana"`
+	Loki       string `yaml:"loki"`
+}
+
+// MetricsLokiConfig controls how much recent log the loki metrics service serves
+type MetricsLokiConfig struct {
+	MaxEntries int    `yaml:"max_entries"`
+	MaxAge     string `yaml:"max_age"`
+}
+
+// GeoIPConfig holds GeoIP settings per AI.md PART 19
+type GeoIPConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Dir     string `yaml:"dir"`
+	Update  string `yaml:"update"`
+	// CountryMode is "none" (default), "deny" (blocklist), or "allow" (allowlist-only)
+	CountryMode    string               `yaml:"country_mode"`
+	DenyCountries  []string             `yaml:"deny_countries"`
+	AllowCountries []string             `yaml:"allow_countries"`
+	// Presets are named, operator-authored country lists (name -> []code) kept
+	// purely for reuse across allow/deny fields and environments. Per AI.md
+	// PART 19 they ship empty, are never auto-applied, and never drive
+	// enforcement — only deny_countries/allow_countries do.
+	Presets   map[string][]string  `yaml:"presets"`
+	Databases GeoIPDatabasesConfig `yaml:"databases"`
+	// Content restriction for adult content laws
+	ContentRestriction ContentRestrictionConfig `yaml:"content_restriction"`
+}
+
+// GeoIPDatabasesConfig holds which GeoIP databases to use per AI.md PART 19
+type GeoIPDatabasesConfig struct {
+	ASN     bool `yaml:"asn"`
+	Country bool `yaml:"country"`
+	City    bool `yaml:"city"`
+	// Whois enables combined WHOIS/ASN/country lookup (same source as Country)
+	Whois bool `yaml:"whois"`
+}
+
+// ContentRestrictionConfig holds settings for geographic content restrictions
+// Some jurisdictions have laws restricting adult content access
+type ContentRestrictionConfig struct {
+	// Mode: "off", "warn", "soft_block", "hard_block" (default: "warn")
+	// - off: no restriction checks
+	// - warn: show dismissable warning banner
+	// - soft_block: interstitial page requiring acknowledgment
+	// - hard_block: completely block access
+	Mode string `yaml:"mode"`
+	// RestrictedCountries is a list of ISO country codes (e.g., ["IN", "PK"])
+	RestrictedCountries []string `yaml:"restricted_countries"`
+	// RestrictedRegions is a list of "COUNTRY:REGION" codes (e.g., ["US:TX", "US:UT"])
+	// Region names should match GeoIP subdivision names
+	RestrictedRegions []string `yaml:"restricted_regions"`
+	// BypassTor allows Tor users to bypass restriction checks (default: true)
+	BypassTor bool `yaml:"bypass_tor"`
+	// WarningMessage is the message shown for warn/soft_block modes
+	WarningMessage string `yaml:"warning_message"`
+}
+
+// LogsConfig holds logging settings per AI.md PART 11
+type LogsConfig struct {
+	Level  string          `yaml:"level"`
+	Debug  DebugLogConfig  `yaml:"debug"`
+	Access AccessLogConfig `yaml:"access"`
+	Server ServerLogConfig `yaml:"server"`
+	// AI.md PART 11: error.log
+	Error    ErrorLogConfig    `yaml:"error"`
+	Audit    AuditLogConfig    `yaml:"audit"`
+	Security SecurityLogConfig `yaml:"security"`
+	// AI.md PART 11: auth.log (authentication events, syslog format)
+	Auth AuthLogConfig `yaml:"auth"`
+	// AI.md PART 11: app.log / vidveil.log (general info/warn, logfmt format)
+	App AppLogConfig `yaml:"app"`
+}
+
+// DebugLogConfig holds debug log settings
+type DebugLogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Filename string `yaml:"filename"`
+	Format   string `yaml:"format"`
+	Keep     string `yaml:"keep"`
+	Rotate   string `yaml:"rotate"`
+}
+
+// AccessLogConfig holds access log settings
+type AccessLogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Filename string `yaml:"filename"`
+	Format   string `yaml:"format"`
+	Keep     string `yaml:"keep"`
+	Rotate   string `yaml:"rotate"`
+}
+
+// ServerLogConfig holds server log settings
+type ServerLogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Filename string `yaml:"filename"`
+	Format   string `yaml:"format"`
+	Keep     string `yaml:"keep"`
+	Rotate   string `yaml:"rotate"`
+}
+
+// ErrorLogConfig holds error log settings per AI.md PART 11
+type ErrorLogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Filename string `yaml:"filename"`
+	Format   string `yaml:"format"`
+	Keep     string `yaml:"keep"`
+	Rotate   string `yaml:"rotate"`
+}
+
+// AuditLogEventsConfig controls which event categories are written to audit.log
+type AuditLogEventsConfig struct {
+	Configuration bool `yaml:"configuration"`
+	Security      bool `yaml:"security"`
+	Backup        bool `yaml:"backup"`
+	Server        bool `yaml:"server"`
+}
+
+// AuditLogConfig holds audit log settings per AI.md PART 11
+type AuditLogConfig struct {
+	Enabled          bool                 `yaml:"enabled"`
+	Filename         string               `yaml:"filename"`
+	Format           string               `yaml:"format"`
+	Keep             string               `yaml:"keep"`
+	Rotate           string               `yaml:"rotate"`
+	Compress         bool                 `yaml:"compress"`
+	Events           AuditLogEventsConfig `yaml:"events"`
+	IncludeUserAgent bool                 `yaml:"include_user_agent"`
+}
+
+// SecurityLogConfig holds security log settings
+type SecurityLogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Filename string `yaml:"filename"`
+	Format   string `yaml:"format"`
+	Keep     string `yaml:"keep"`
+	Rotate   string `yaml:"rotate"`
+}
+
+// AuthLogConfig holds authentication log settings per AI.md PART 11
+// Default format: syslog (RFC 3164) for Fail2ban/SIEM integration
+type AuthLogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Filename string `yaml:"filename"`
+	// Format: syslog (default), json
+	Format string `yaml:"format"`
+	Keep   string `yaml:"keep"`
+	Rotate string `yaml:"rotate"`
+}
+
+// AppLogConfig holds general application log settings per AI.md PART 11
+// Default format: logfmt (key=value pairs)
+// Also known as {project_name}.log
+type AppLogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Filename string `yaml:"filename"`
+	// Format: logfmt (default), json
+	Format string `yaml:"format"`
+	Keep   string `yaml:"keep"`
+	Rotate string `yaml:"rotate"`
+}
+
+// RateLimitConfig holds rate limiting settings
+type RateLimitConfig struct {
+	Enabled  bool `yaml:"enabled"`
+	Requests int  `yaml:"requests"`
+	Window   int  `yaml:"window"`
+}
+
+// LimitsConfig holds request limit settings
+type LimitsConfig struct {
+	MaxBodySize  string `yaml:"max_body_size"`
+	ReadTimeout  string `yaml:"read_timeout"`
+	WriteTimeout string `yaml:"write_timeout"`
+	IdleTimeout  string `yaml:"idle_timeout"`
+}
+
+// CompressionConfig holds compression settings
+type CompressionConfig struct {
+	Enabled bool     `yaml:"enabled"`
+	Level   int      `yaml:"level"`
+	Types   []string `yaml:"types"`
+}
+
+// TrustedProxiesConfig holds trusted proxy settings
+type TrustedProxiesConfig struct {
+	Additional []string `yaml:"additional"`
+}
+
+// SecurityHeadersConfig holds security header settings
+type SecurityHeadersConfig struct {
+	Enabled             bool   `yaml:"enabled"`
+	HSTS                bool   `yaml:"hsts"`
+	HSTSMaxAge          int    `yaml:"hsts_max_age"`
+	XFrameOptions       string `yaml:"x_frame_options"`
+	XContentTypeOptions string `yaml:"x_content_type_options"`
+	XXSSProtection      string `yaml:"x_xss_protection"`
+	ReferrerPolicy      string `yaml:"referrer_policy"`
+}
+
+// CSPConfig holds Content-Security-Policy settings per AI.md PART 11
+// "Content Security Policy". The default policy (see server.buildCSPHeader)
+// already covers typical apps (CDN images, web fonts, PWA workers) with zero
+// config. Operators extend individual directives via the *_extra keys below —
+// these values are APPENDED to the fixed default, never replacing it. The
+// *_override keys REPLACE a directive entirely and should be used sparingly
+// (e.g. nonce-based script-src tightening).
+type CSPConfig struct {
+	// Enabled toggles CSP header emission entirely (default true)
+	Enabled bool `yaml:"enabled"`
+	// Mode is "enforce" (Content-Security-Policy) or "report-only"
+	// (Content-Security-Policy-Report-Only)
+	Mode string `yaml:"mode"`
+	// Per-directive append — added to the fixed default value.
+	ScriptSrcExtra  string `yaml:"script_src_extra"`
+	StyleSrcExtra   string `yaml:"style_src_extra"`
+	ImgSrcExtra     string `yaml:"img_src_extra"`
+	FontSrcExtra    string `yaml:"font_src_extra"`
+	ConnectSrcExtra string `yaml:"connect_src_extra"`
+	FrameSrcExtra   string `yaml:"frame_src_extra"`
+	FormActionExtra string `yaml:"form_action_extra"`
+	// Override-style — REPLACES the directive instead of appending.
+	ScriptSrcOverride string `yaml:"script_src_override"`
+	StyleSrcOverride  string `yaml:"style_src_override"`
+	// ReportsEnabled controls POSTing violations to /api/{api_version}/server/reports/csp
+	ReportsEnabled bool `yaml:"reports_enabled"`
+	// ReportsSampleRate is 0.0..1.0 — sample to control volume on busy sites
+	ReportsSampleRate float64 `yaml:"reports_sample_rate"`
+}
+
+// AllowlistEntry represents a trusted IP/CIDR entry per AI.md PART 11
+type AllowlistEntry struct {
+	// CIDR is an IP or CIDR notation (e.g., "192.168.1.0/24", "2001:db8::1")
+	// Single IPs without a prefix are auto-expanded: /32 for IPv4, /128 for IPv6
+	CIDR string `yaml:"cidr" json:"cidr"`
+	// Description is a human-readable label (required for clarity)
+	Description string `yaml:"description" json:"description"`
+}
+
+// SecurityConfig holds security-related settings per PART 11
+type SecurityConfig struct {
+	Dir        string           `yaml:"dir"`
+	Allowlist  []AllowlistEntry `yaml:"allowlist"`
+	Blocklists BlocklistsConfig `yaml:"blocklists"`
+	CVE        CVEConfig        `yaml:"cve"`
+	// EncryptionKey is the canonical 32-byte AES-256-GCM at-rest key (hex-encoded).
+	// Per AI.md PART 11 "Cryptographic Keys": auto-generated on first run and
+	// persisted in server.yml; used for ALL at-rest encryption of sensitive
+	// server data (API token hashes, security report bodies as the AES
+	// fallback when no PGP keypair exists, and any future at-rest data).
+	EncryptionKey string `yaml:"encryption_key"`
+}
+
+// BlocklistsConfig holds IP/domain blocklist settings per PART 11
+type BlocklistsConfig struct {
+	Enabled bool              `yaml:"enabled"`
+	Sources []BlocklistSource `yaml:"sources"`
+}
+
+// BlocklistSource represents a blocklist source per PART 11
+type BlocklistSource struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
+	// Type is "ip" or "domain"
+	Type    string `yaml:"type"`
+	Enabled bool   `yaml:"enabled"`
+}
+
+// CVEConfig holds CVE database settings per PART 11
+type CVEConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	Source      string `yaml:"source"`
+	FilterByCPE bool   `yaml:"filter_by_cpe"`
+}
+
+// BackupConfig holds backup settings per AI.md PART 21
+type BackupConfig struct {
+	Retention  BackupRetentionConfig  `yaml:"retention"`
+	Encryption BackupEncryptionConfig `yaml:"encryption"`
+}
+
+// BackupRetentionConfig holds backup retention settings per AI.md PART 21
+type BackupRetentionConfig struct {
+	// MaxBackups: daily full backups to keep (default: 1)
+	MaxBackups int `yaml:"max_backups"`
+	// KeepWeekly: weekly backups (Sunday) to keep (0 = disabled)
+	KeepWeekly int `yaml:"keep_weekly"`
+	// KeepMonthly: monthly backups (1st of month) to keep (0 = disabled)
+	KeepMonthly int `yaml:"keep_monthly"`
+	// KeepYearly: yearly backups (Jan 1st) to keep (0 = disabled)
+	KeepYearly int `yaml:"keep_yearly"`
+	// MaxTotalSize: hard cap on total backup directory size; percent ("10%") or absolute ("50G"); "" or "0" = disabled
+	MaxTotalSize string `yaml:"max_total_size"`
+}
+
+// BackupEncryptionConfig holds backup encryption settings per AI.md PART 21
+type BackupEncryptionConfig struct {
+	// Enabled: true if backup password was set
+	Enabled bool `yaml:"enabled"`
+	// PasswordHint: optional hint for password (never store actual password)
+	PasswordHint string `yaml:"password_hint,omitempty"`
+}
+
+// ComplianceConfig holds regulatory-standard toggles per AI.md "Compliance Standards".
+// All standards are disabled by default; enable individually as needed. When any
+// standard is enabled, PART 21's "server.compliance.enabled" backup-encryption
+// enforcement (Backup Encryption / Compliance Mode Enforcement) is active - see
+// IsEnabled().
+type ComplianceConfig struct {
+	GDPR     bool `yaml:"gdpr"`
+	CCPA     bool `yaml:"ccpa"`
+	HIPAA    bool `yaml:"hipaa"`
+	SOC2     bool `yaml:"soc2"`
+	PCIDSS   bool `yaml:"pci_dss"`
+	ISO27001 bool `yaml:"iso27001"`
+	FedRAMP  bool `yaml:"fedramp"`
+	LGPD     bool `yaml:"lgpd"`
+	PIPEDA   bool `yaml:"pipeda"`
+	APPI     bool `yaml:"appi"`
+	PDPA     bool `yaml:"pdpa"`
+}
+
+// IsEnabled reports whether "compliance mode" is active - true when any single
+// regulatory standard is enabled. Per AI.md PART 21, this is what gates backup
+// encryption being mandatory ("server.compliance.enabled: true").
+func (c ComplianceConfig) IsEnabled() bool {
+	return c.GDPR || c.CCPA || c.HIPAA || c.SOC2 || c.PCIDSS || c.ISO27001 ||
+		c.FedRAMP || c.LGPD || c.PIPEDA || c.APPI || c.PDPA
+}
+
+// ComplianceStandard pairs a regulatory standard's config key with its display
+// name and whether it is currently enabled. Used by the
+// "--maintenance compliance report" summary (AI.md PART 5 "Compliance Routes").
+type ComplianceStandard struct {
+	Key     string
+	Name    string
+	Enabled bool
+}
+
+// Standards returns every regulatory standard with its enabled state, in a
+// stable order matching the AI.md "Compliance-Specific Behaviors" section. The
+// order is deterministic so the compliance report is reproducible.
+func (c ComplianceConfig) Standards() []ComplianceStandard {
+	return []ComplianceStandard{
+		{"gdpr", "GDPR (EU General Data Protection Regulation)", c.GDPR},
+		{"ccpa", "CCPA (California Consumer Privacy Act)", c.CCPA},
+		{"hipaa", "HIPAA (US Health Insurance Portability and Accountability Act)", c.HIPAA},
+		{"soc2", "SOC 2 (Service Organization Control 2)", c.SOC2},
+		{"pci_dss", "PCI-DSS (Payment Card Industry Data Security Standard)", c.PCIDSS},
+		{"iso27001", "ISO 27001 (Information Security Management)", c.ISO27001},
+		{"fedramp", "FedRAMP (US Federal Risk and Authorization Management)", c.FedRAMP},
+		{"lgpd", "LGPD (Brazil Lei Geral de Proteção de Dados)", c.LGPD},
+		{"pipeda", "PIPEDA (Canada Personal Information Protection)", c.PIPEDA},
+		{"appi", "APPI (Japan Act on Protection of Personal Information)", c.APPI},
+		{"pdpa", "PDPA (Singapore Personal Data Protection Act)", c.PDPA},
+	}
+}
+
+// EnabledStandards returns the display names of the standards that are enabled,
+// in the same stable order as Standards.
+func (c ComplianceConfig) EnabledStandards() []string {
+	var names []string
+	for _, s := range c.Standards() {
+		if s.Enabled {
+			names = append(names, s.Name)
+		}
+	}
+	return names
+}
+
+// UpdateConfig holds update settings per AI.md PART 22
+type UpdateConfig struct {
+	// Branch: release channel — stable | beta | daily (default: stable)
+	Branch string `yaml:"branch"`
+	// AutoInstall: when true the update_check scheduler task installs eligible updates automatically
+	// Default: false — the task notifies only; installing is always an explicit operator decision
+	AutoInstall bool `yaml:"auto_install"`
+	// DeferDays: a release must be at least this many days old before the task considers it eligible
+	// 0 = immediately eligible; 30 = adopt only after 30 days of public availability
+	DeferDays int `yaml:"defer_days"`
+}
+
+// SessionConfig holds session settings
+type SessionConfig struct {
+	CookieName string `yaml:"cookie_name"`
+	MaxAge     int    `yaml:"max_age"`
+	Secure     string `yaml:"secure"`
+	HTTPOnly   bool   `yaml:"http_only"`
+	SameSite   string `yaml:"same_site"`
+}
+
+// DatabaseConfig holds database settings per AI.md PART 10.
+// Supported drivers: sqlite (aliases sqlite2/sqlite3/file) and libsql (alias turso).
+type DatabaseConfig struct {
+	Driver string       `yaml:"driver"`
+	SQLite SQLiteConfig `yaml:"sqlite"`
+	// URL is the connection URL for libsql/Turso (remote-only)
+	URL string `yaml:"url"`
+	// Token is the libsql/Turso auth token; appended as authToken when not in URL
+	Token string `yaml:"token"`
+}
+
+// CacheConfig holds the optional cache backend settings per AI.md PART 12.
+// Type defaults to "memory" (in-process). "valkey"/"redis" enable an external
+// cache; connect via url OR host/port (url takes precedence).
+type CacheConfig struct {
+	// Type: none (disabled), memory (default), valkey, redis
+	Type string `yaml:"type"`
+	// URL takes precedence over host/port when set (redis:// or valkey://)
+	URL string `yaml:"url"`
+	// Individual connection settings (alternative to url)
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	DB       int    `yaml:"db"`
+	// TLS settings for secure connections
+	TLS           bool `yaml:"tls"`
+	TLSSkipVerify bool `yaml:"tls_skip_verify"`
+	// Connection pool
+	PoolSize int `yaml:"pool_size"`
+	MinIdle  int `yaml:"min_idle"`
+	// Timeout in seconds
+	Timeout int `yaml:"timeout"`
+	// Prefix avoids key collisions across apps
+	Prefix string `yaml:"prefix"`
+	// TTL for the API response (search) cache, in seconds
+	TTL int `yaml:"ttl"`
+}
+
+// SQLiteConfig holds SQLite settings
+type SQLiteConfig struct {
+	Dir         string `yaml:"dir"`
+	ServerDB    string `yaml:"server_db"`
+	JournalMode string `yaml:"journal_mode"`
+	BusyTimeout int    `yaml:"busy_timeout"`
+}
+
+// WebConfig holds frontend settings per AI.md
+// Note: Branding is under server.branding per AI.md PART 5/16, not here
+type WebConfig struct {
+	UI            UIConfig            `yaml:"ui"`
+	Announcements AnnouncementsConfig `yaml:"announcements"`
+	Robots        RobotsConfig        `yaml:"robots"`
+	Security      WebSecurityConfig   `yaml:"security"`
+	CORS          string              `yaml:"cors"`
+	CSP           CSPConfig           `yaml:"csp"`
+	CSRF          CSRFConfig          `yaml:"csrf"`
+	Footer        FooterConfig        `yaml:"footer"`
+	// HonorDNT opts in to honoring the legacy DNT:1 request header as a privacy
+	// opt-out (default false) per AI.md PART 11 "Privacy Signal Headers". Sec-GPC
+	// is always honored regardless of this setting.
+	HonorDNT bool `yaml:"honor_dnt"`
+}
+
+// UIConfig holds UI settings
+type UIConfig struct {
+	Theme string `yaml:"theme"`
+}
+
+// AnnouncementsConfig holds announcement settings per AI.md PART 16/25 "Announcements".
+type AnnouncementsConfig struct {
+	Enabled  bool           `yaml:"enabled"`
+	Messages []Announcement `yaml:"messages"`
+}
+
+// Announcement is a single site-wide banner message per AI.md PART 16 "Site Banner".
+type Announcement struct {
+	ID string `yaml:"id"`
+	// Type is one of: info, warning, error, success.
+	Type    string `yaml:"type"`
+	Title   string `yaml:"title"`
+	Message string `yaml:"message"`
+	// Start is the ISO 8601 UTC time the banner begins showing; empty = always active from the start.
+	Start string `yaml:"start"`
+	// End is the ISO 8601 UTC time the banner stops showing; empty = no end.
+	End string `yaml:"end"`
+	// Dismissible allows visitors to close the banner (tracked via the dismissed_announcements cookie).
+	Dismissible bool `yaml:"dismissible"`
+}
+
+// RobotsConfig holds robots.txt settings
+type RobotsConfig struct {
+	Allow []string `yaml:"allow"`
+	Deny  []string `yaml:"deny"`
+	// AIBots controls per-AI-crawler access per AI.md PART 11 "robots.txt".
+	AIBots AIBotsConfig `yaml:"ai_bots"`
+}
+
+// AIBotsConfig holds per-AI-crawler robots.txt policy. Default posture is
+// allow: a bot only gets its own Disallow stanza when it (or Default) is deny.
+type AIBotsConfig struct {
+	// Default applies to any recognized AI bot not listed in Bots ("allow" or "deny").
+	Default string `yaml:"default"`
+	// Bots holds explicit per-bot overrides, which always beat Default.
+	Bots map[string]string `yaml:"bots"`
+}
+
+// KnownAIBots lists the AI crawler user agents recognized by robots.txt
+// generation, in the order they are rendered (AI.md PART 11).
+var KnownAIBots = []string{
+	"GPTBot",
+	"ChatGPT-User",
+	"ClaudeBot",
+	"anthropic-ai",
+	"Claude-Web",
+	"CCBot",
+	"Google-Extended",
+	"Bytespider",
+	"PerplexityBot",
+	"Applebot-Extended",
+	"Amazonbot",
+	"Diffbot",
+	"FacebookBot",
+	"cohere-ai",
+}
+
+// DeniedAIBots returns the recognized AI crawlers that must receive their own
+// "Disallow: /" stanza, resolving explicit per-bot entries over the default.
+func (r RobotsConfig) DeniedAIBots() []string {
+	denyByDefault := strings.EqualFold(strings.TrimSpace(r.AIBots.Default), "deny")
+	var denied []string
+	for _, bot := range KnownAIBots {
+		policy := ""
+		for name, value := range r.AIBots.Bots {
+			if strings.EqualFold(name, bot) {
+				policy = strings.ToLower(strings.TrimSpace(value))
+				break
+			}
+		}
+		switch policy {
+		case "deny":
+			denied = append(denied, bot)
+		case "allow":
+		default:
+			if denyByDefault {
+				denied = append(denied, bot)
+			}
+		}
+	}
+	return denied
+}
+
+// WebSecurityConfig holds security.txt settings
+type WebSecurityConfig struct {
+	Contact string `yaml:"contact"`
+	Expires string `yaml:"expires"`
+	// PGPKeyURL is the URL of the published PGP public key (set when a keypair is generated).
+	// When non-empty, an Encryption: line is added to security.txt.
+	PGPKeyURL string `yaml:"pgp_key_url"`
+	// Keyservers lists the OpenPGP keyservers the public key is published to
+	// via `--maintenance pgp publish` (AI.md PART 12 "GPG Keypair Management").
+	Keyservers []string `yaml:"keyservers"`
+	// PublishPGPKey is set true once a keypair has been generated and the public
+	// key is being served, gating the security.txt Encryption line and endpoints.
+	PublishPGPKey bool `yaml:"publish_pgp_key"`
+	// ReportURL is the repo-level (source-code) vulnerability reporting channel
+	// (e.g. GitHub private vulnerability reporting). Per AI.md PART 11
+	// "Security Reports": this is the FIRST entry in the security.txt Contact
+	// preference order, ahead of the /server/contact security-id mode and the
+	// mailto CC address.
+	ReportURL string `yaml:"report_url"`
+	// DisclosureWindowDays is the default coordinated-disclosure window (days)
+	// offered to researchers; researcher-submitted preference may differ and
+	// is negotiated by maintainers. Per AI.md PART 11 "Security-mode form
+	// fields" default 90.
+	DisclosureWindowDays int `yaml:"disclosure_window_days"`
+	// PolicyText overrides the default /server/security/policy body when set
+	// (config-file-driven per AI.md PART 11 "Security Administration" — there
+	// is no admin web route/API for this content).
+	PolicyText string `yaml:"policy_text"`
+}
+
+// SEOCustomTag holds a custom site verification meta tag per AI.md PART 16
+type SEOCustomTag struct {
+	Name     string `yaml:"name"`
+	Property string `yaml:"property"`
+	Content  string `yaml:"content"`
+}
+
+// SEOVerificationConfig holds search engine verification codes per AI.md PART 16
+// All codes are validated before rendering (empty = skip, invalid = error logged, not rendered)
+type SEOVerificationConfig struct {
+	// Google: alphanumeric+hyphen+underscore, max 43 chars
+	Google string `yaml:"google"`
+	// Bing: uppercase hex, max 32 chars
+	Bing string `yaml:"bing"`
+	// Yandex: lowercase hex, max 32 chars
+	Yandex string `yaml:"yandex"`
+	// Baidu: alphanumeric, max 32 chars
+	Baidu string `yaml:"baidu"`
+	// Pinterest: lowercase hex, max 32 chars
+	Pinterest string `yaml:"pinterest"`
+	// Facebook: lowercase alphanumeric, max 64 chars
+	Facebook string `yaml:"facebook"`
+	// Custom: additional verification tags (validated before rendering)
+	Custom []SEOCustomTag `yaml:"custom"`
+}
+
+// SEOConfig holds SEO/social metadata per AI.md PART 16
+type SEOConfig struct {
+	// Keywords for <meta name="keywords"> (if non-empty)
+	Keywords []string `yaml:"keywords"`
+	// Author for <meta name="author"> (if non-empty)
+	Author string `yaml:"author"`
+	// OGImage is the OpenGraph/Twitter card image URL
+	OGImage string `yaml:"og_image"`
+	// TwitterHandle is the @handle for twitter:site card
+	TwitterHandle string `yaml:"twitter_handle"`
+	// Verification holds search engine verification codes
+	Verification SEOVerificationConfig `yaml:"verification"`
+}
+
+// CSRFConfig holds CSRF settings per AI.md PART 16 → CSRF Protection
+type CSRFConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	TokenLength int    `yaml:"token_length"`
+	CookieName  string `yaml:"cookie_name"`
+	HeaderName  string `yaml:"header_name"`
+	// Secure sets the Secure cookie flag: "auto" (https only), "true", or "false"
+	Secure string `yaml:"secure"`
+	// ExemptPaths lists endpoints exempt from CSRF (OAuth callbacks, webhook receivers).
+	// Glob patterns supported. Default exempts /api/{api_version}/webhooks/*.
+	ExemptPaths []string `yaml:"exempt_paths"`
+}
+
+// FooterConfig holds footer settings.
+// Cookie-consent banner text lives at server.privacy.consent (PrivacyConfig)
+// per AI.md PART 12 "Cookie Consent Banner", not here. No analytics/tracking
+// field is defined here: the IDEA.md non-goal "No tracking, logging, or
+// analytics" forbids the analytics-injection point that AI.md PART 12
+// "Analytics Tracking" describes for the generic template.
+type FooterConfig struct {
+	CustomHTML string `yaml:"custom_html"`
+}
+
+// SearchConfig holds search-specific settings (project-specific)
+// Per PART 31: Tor supports hidden service and optional outbound network routing
+type SearchConfig struct {
+	DefaultEngines     []string `yaml:"default_engines"`
+	ConcurrentRequests int      `yaml:"concurrent_requests"`
+	EngineTimeout      int      `yaml:"engine_timeout"`
+	ResultsPerPage     int      `yaml:"results_per_page"`
+	MaxPages           int      `yaml:"max_pages"`
+	// Minimum video duration in seconds (default 600 = 10 minutes)
+	MinDurationSeconds int `yaml:"min_duration_seconds"`
+	// Minimum relevance score for results (default 10.0 = at least one word match)
+	// Results below this score are filtered out. Set to 0 to disable filtering.
+	MinRelevanceScore float64 `yaml:"min_relevance_score"`
+	// Filter out premium/gold content
+	FilterPremium bool `yaml:"filter_premium"`
+	// Use spoofed TLS fingerprint (Chrome) to bypass Cloudflare
+	SpoofTLS        bool                  `yaml:"spoof_tls"`
+	AgeVerification AgeVerificationConfig `yaml:"age_verification"`
+	// Custom autocomplete terms to ADD to built-in suggestions
+	CustomTerms []string `yaml:"custom_terms"`
+	// AI content filter (deepfakes, AI-generated)
+	AIFilter AIFilterConfig `yaml:"ai_filter"`
+	// Per-engine timeout overrides in seconds (e.g., pornhub: 20)
+	// Engines not listed use the global engine_timeout
+	EngineTimeouts map[string]int `yaml:"engine_timeouts"`
+	// EngineRequestInterval is the minimum time in milliseconds between outbound
+	// requests to the same engine. Prevents triggering engine rate limits.
+	// Default 0 (no throttle). Recommended: 500-2000ms.
+	EngineRequestInterval int `yaml:"engine_request_interval"`
+	// Per-engine request interval overrides in milliseconds.
+	// Engines not listed use EngineRequestInterval.
+	EngineRequestIntervals map[string]int `yaml:"engine_request_intervals"`
+	// ThumbnailCacheTTL is the time-to-live for the on-disk thumbnail cache in minutes.
+	// Default 1440 (24 hours). Set to 0 to disable disk caching.
+	ThumbnailCacheTTL int `yaml:"thumbnail_cache_ttl"`
+	// DetailEnrichment fetches each result's own detail page to extract
+	// schema.org VideoObject JSON-LD (description/tags/performer/rating/
+	// published) that listing pages never carry. Disabled by default: it adds
+	// one extra upstream request per enriched result on every search.
+	DetailEnrichment DetailEnrichmentConfig `yaml:"detail_enrichment"`
+}
+
+// DetailEnrichmentConfig controls the optional per-result detail-page fetch
+// used to backfill schema.org VideoObject JSON-LD fields that only appear on
+// individual video pages, never on search/listing pages.
+type DetailEnrichmentConfig struct {
+	// Enabled turns on the extra per-result detail-page fetch. Off by default.
+	Enabled bool `yaml:"enabled"`
+	// MaxResults caps how many of the top results per engine are enriched,
+	// bounding the extra request volume against the upstream site.
+	MaxResults int `yaml:"max_results"`
+	// Timeout in seconds for each individual detail-page fetch. Kept short by
+	// design - enrichment must never make results feel slow to the user; a
+	// slow/unresponsive detail page just misses enrichment, it never delays
+	// the search response beyond this budget.
+	Timeout int `yaml:"timeout"`
+}
+
+// AIFilterConfig holds settings for filtering AI-generated content
+type AIFilterConfig struct {
+	// Enabled: server-wide default for AI content filtering (default: true = blocked)
+	Enabled bool `yaml:"enabled"`
+	// AllowUserOverride: let users enable AI content via preferences (default: true)
+	AllowUserOverride bool `yaml:"allow_user_override"`
+	// Keywords to detect AI-generated content in titles/tags
+	// Default includes: ai generated, ai porn, deepfake, etc.
+	Keywords []string `yaml:"keywords"`
+}
+
+// UserAgentConfig holds user agent settings for engine requests
+// Configurable to allow updating without rebuild
+type UserAgentConfig struct {
+	// OS: windows, macos, linux (default: windows)
+	OS string `yaml:"os"`
+	// Version: OS version number (default: 11 for Windows)
+	Version string `yaml:"version"`
+	// Browser: chrome, firefox, edge (default: chrome)
+	Browser string `yaml:"browser"`
+	// BrowserVersion: browser version (default: latest stable)
+	BrowserVersion string `yaml:"browser_version"`
+}
+
+// String returns the formatted user agent string
+// Generates Chrome/Firefox/Edge user agent based on config
+func (ua UserAgentConfig) String() string {
+	// Map OS to NT version
+	var osString string
+	switch ua.OS {
+	case "windows":
+		// Windows 11 = NT 10.0, Windows 10 = NT 10.0
+		// Windows versions 10 and 11 both report as NT 10.0
+		osString = "Windows NT 10.0; Win64; x64"
+	case "macos":
+		// macOS version format: 10_15_7
+		version := ua.Version
+		if version == "" {
+			version = "14_0"
+		}
+		osString = "Macintosh; Intel Mac OS X " + version
+	case "linux":
+		osString = "X11; Linux x86_64"
+	default:
+		osString = "Windows NT 10.0; Win64; x64"
+	}
+
+	// Map browser to user agent format
+	browserVersion := ua.BrowserVersion
+	if browserVersion == "" {
+		browserVersion = "131"
+	}
+
+	switch ua.Browser {
+	case "firefox":
+		return "Mozilla/5.0 (" + osString + "; rv:" + browserVersion + ".0) Gecko/20100101 Firefox/" + browserVersion + ".0"
+	case "edge":
+		return "Mozilla/5.0 (" + osString + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + browserVersion + ".0.0.0 Safari/537.36 Edg/" + browserVersion + ".0.0.0"
+	case "chrome":
+		fallthrough
+	default:
+		return "Mozilla/5.0 (" + osString + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + browserVersion + ".0.0.0 Safari/537.36"
+	}
+}
+
+// SecChUa returns the Sec-Ch-Ua header value for Chrome/Edge
+// Returns empty string for Firefox (doesn't send this header)
+func (ua UserAgentConfig) SecChUa() string {
+	browserVersion := ua.BrowserVersion
+	if browserVersion == "" {
+		browserVersion = "131"
+	}
+
+	switch ua.Browser {
+	case "firefox":
+		// Firefox doesn't send Sec-Ch-Ua
+		return ""
+	case "edge":
+		return `"Microsoft Edge";v="` + browserVersion + `", "Chromium";v="` + browserVersion + `", "Not_A Brand";v="24"`
+	case "chrome":
+		fallthrough
+	default:
+		return `"Google Chrome";v="` + browserVersion + `", "Chromium";v="` + browserVersion + `", "Not_A Brand";v="24"`
+	}
+}
+
+// SecChUaPlatform returns the Sec-Ch-Ua-Platform header value
+func (ua UserAgentConfig) SecChUaPlatform() string {
+	switch ua.OS {
+	case "macos":
+		return `"macOS"`
+	case "linux":
+		return `"Linux"`
+	case "windows":
+		fallthrough
+	default:
+		return `"Windows"`
+	}
+}
+
+// IsChromiumBased returns true if the browser is Chromium-based (Chrome, Edge)
+// Used to determine if Sec-Ch-* headers should be sent
+func (ua UserAgentConfig) IsChromiumBased() bool {
+	return ua.Browser != "firefox"
+}
+
+// AgeVerificationConfig holds age verification settings
+type AgeVerificationConfig struct {
+	Enabled    bool `yaml:"enabled"`
+	CookieDays int  `yaml:"cookie_days"`
+}
+
+// AppPaths holds resolved directory paths
+// AppPaths is now defined in paths package
+type AppPaths = path.AppPaths
+
+// envDefault returns the value of env var key when set and non-empty, else def
+func envDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// DefaultAppConfig returns an AppConfig with sensible defaults per AI.md
+func DefaultAppConfig() *AppConfig {
+	fqdn := getHostname()
+	// Per AI.md PART 5: Default port is random 64xxx (non-privileged, no root required)
+	defaultPort := fmt.Sprintf("%d", findUnusedPort())
+	// Per AI.md PART 14: default {api_version}; never hardcode "/api/v1" elsewhere.
+	defaultAPIVersion := "v1"
+	defaultAPIBase := "/api/" + defaultAPIVersion
+
+	return &AppConfig{
+		Server: ServerConfig{
+			Port:       defaultPort,
+			FQDN:       fqdn,
+			Address:    "[::]",
+			BaseURL:    "/",
+			APIVersion: defaultAPIVersion,
+			Mode:       "production",
+			Token:      generateToken(32),
+			Security: SecurityConfig{
+				// Per AI.md PART 11 "Cryptographic Keys": canonical 32-byte
+				// AES-256-GCM at-rest key, auto-generated on first run and
+				// persisted in server.yml.
+				EncryptionKey: generateToken(32),
+			},
+			Branding: ServerBrandingConfig{
+				// Per AI.md PART 5 Init-Only Variables: APPLICATION_NAME /
+				// APPLICATION_TAGLINE seed branding on first run; the written
+				// config file wins on subsequent loads (env then ignored)
+				Title:       envDefault("APPLICATION_NAME", "Vidveil"),
+				Tagline:     envDefault("APPLICATION_TAGLINE", "Privacy-first video search"),
+				Description: "Privacy-respecting adult video search",
+			},
+			User:    "",
+			Group:   "",
+			PIDFile: true,
+			Admin: AdminConfig{
+				Path:     "admin",
+				Email:    "admin@" + fqdn,
+				Username: "administrator",
+				Password: generateToken(16),
+				Token:    generateToken(32),
+				TwoFactor: TwoFactorConfig{
+					Enabled:            false,
+					RememberDeviceDays: 30,
+				},
+			},
+			Contact: ContactConfig{
+				Admin: ContactRoleConfig{
+					Email:    "admin@" + fqdn,
+					Webhooks: map[string]string{},
+				},
+				Security: ContactRoleConfig{
+					Email:    "security@" + fqdn,
+					Webhooks: map[string]string{},
+				},
+				Abuse: ContactRoleConfig{
+					Email:    "",
+					Webhooks: map[string]string{},
+				},
+				General: ContactRoleConfig{
+					Email:    "",
+					Webhooks: map[string]string{},
+				},
+			},
+			Notifications: NotificationsConfig{
+				Email: EmailNotificationsConfig{
+					SMTP: SMTPConfig{
+						Port: 587,
+						TLS:  "auto",
+					},
+					From: EmailFromConfig{
+						Email: "no-reply@" + fqdn,
+					},
+				},
+			},
+			Schedule: ScheduleConfig{
+				Timezone:      "America/New_York",
+				CatchUpWindow: "1h",
+				Tasks: map[string]ScheduleTaskConfig{
+					"ssl_renewal":      {Schedule: "0 3 * * *", Enabled: true},
+					"geoip_update":     {Schedule: "0 3 * * 0", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+					"blocklist_update": {Schedule: "0 4 * * *", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+					"cve_update":       {Schedule: "0 5 * * *", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+					"update_check":     {Schedule: "0 6 * * *", Enabled: true},
+					"token_cleanup":    {Schedule: "@every 15m", Enabled: true},
+					"log_rotation":     {Schedule: "0 0 * * *", Enabled: true},
+					"backup_daily": {
+						Schedule: "0 2 * * *", Enabled: true, Verify: true,
+						Retention: &ScheduleRetentionConfig{
+							MaxBackups: 1, KeepWeekly: 0, KeepMonthly: 0, KeepYearly: 0,
+							MaxTotalSize: "10%",
+						},
+					},
+					"backup_hourly":    {Schedule: "@hourly", Enabled: false},
+					"healthcheck_self": {Schedule: "@every 5m", Enabled: true},
+					"tor_health":       {Schedule: "@every 10m", Enabled: true, RestartOnFail: true},
+				},
+			},
+			SSL: SSLConfig{
+				Enabled:  false,
+				CertPath: "",
+				LetsEncrypt: LetsEncryptConfig{
+					Enabled:   false,
+					Challenge: "http-01",
+				},
+			},
+			Metrics: MetricsConfig{
+				Enabled: false,
+				Root: MetricsRootConfig{
+					Enabled: true,
+				},
+				Auth: MetricsAuthConfig{
+					AllowUnauthenticated: false,
+					Tokens:               MetricsTokensConfig{},
+				},
+				IncludeSystem:  true,
+				IncludeRuntime: true,
+				Loki: MetricsLokiConfig{
+					MaxEntries: 1000,
+					MaxAge:     "1h",
+				},
+				DurationBuckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+				SizeBuckets:     []float64{100, 1000, 10000, 100000, 1000000, 10000000},
+			},
+			Logs: LogsConfig{
+				Level: "info",
+				Debug: DebugLogConfig{
+					Enabled:  false,
+					Filename: "debug.log",
+					Format:   "text",
+					Keep:     "none",
+					Rotate:   "monthly",
+				},
+				Access: AccessLogConfig{
+					Filename: "access.log",
+					Format:   "apache",
+					Keep:     "none",
+					Rotate:   "monthly",
+				},
+				Server: ServerLogConfig{
+					Filename: "server.log",
+					Format:   "text",
+					Keep:     "none",
+					Rotate:   "weekly,50MB",
+				},
+				Error: ErrorLogConfig{
+					Filename: "error.log",
+					Format:   "text",
+					Keep:     "none",
+					Rotate:   "weekly,50MB",
+				},
+				Audit: AuditLogConfig{
+					Enabled:  true,
+					Filename: "audit.log",
+					Format:   "json",
+					Keep:     "none",
+					// AI.md PART 11: audit.log rotates daily
+					Rotate:           "daily",
+					Compress:         false,
+					IncludeUserAgent: true,
+					Events: AuditLogEventsConfig{
+						Configuration: true,
+						Security:      true,
+						Backup:        true,
+						Server:        true,
+					},
+				},
+				Security: SecurityLogConfig{
+					Enabled:  true,
+					Filename: "security.log",
+					Format:   "fail2ban",
+					Keep:     "none",
+					Rotate:   "weekly,50MB",
+				},
+				Auth: AuthLogConfig{
+					Enabled:  true,
+					Filename: "auth.log",
+					// AI.md PART 11: auth.log default format syslog (RFC 3164)
+					Format: "syslog",
+					Keep:   "none",
+					Rotate: "weekly,50MB",
+				},
+				App: AppLogConfig{
+					Enabled:  true,
+					Filename: "vidveil.log",
+					// AI.md PART 11: app.log default format logfmt
+					Format: "logfmt",
+					Keep:   "none",
+					Rotate: "weekly,50MB",
+				},
+			},
+			RateLimit: RateLimitConfig{
+				Enabled:  true,
+				Requests: 500,
+				Window:   60,
+			},
+			Limits: LimitsConfig{
+				MaxBodySize:  "10MB",
+				ReadTimeout:  "30s",
+				WriteTimeout: "30s",
+				IdleTimeout:  "120s",
+			},
+			Compression: CompressionConfig{
+				Enabled: true,
+				Level:   5,
+				Types: []string{
+					"text/html",
+					"text/css",
+					"text/javascript",
+					"application/json",
+					"application/xml",
+				},
+			},
+			TrustedProxies: TrustedProxiesConfig{
+				Additional: []string{},
+			},
+			SecurityHeaders: SecurityHeadersConfig{
+				Enabled:             true,
+				HSTS:                true,
+				HSTSMaxAge:          31536000,
+				XFrameOptions:       "SAMEORIGIN",
+				XContentTypeOptions: "nosniff",
+				XXSSProtection:      "1; mode=block",
+				ReferrerPolicy:      "strict-origin-when-cross-origin",
+			},
+			Session: SessionConfig{
+				CookieName: "session_id",
+				// 30 days
+				MaxAge:   2592000,
+				Secure:   "auto",
+				HTTPOnly: true,
+				// Strict per AI.md PART 16: blocks cross-site cookie attachment entirely,
+				// neutralizing most CSRF before the token check even runs.
+				SameSite: "strict",
+			},
+			Database: DatabaseConfig{
+				Driver: "file",
+				SQLite: SQLiteConfig{
+					Dir:         "",
+					ServerDB:    "server.db",
+					JournalMode: "WAL",
+					BusyTimeout: 5000,
+				},
+			},
+			Cache: CacheConfig{
+				Type:     "memory",
+				Host:     "localhost",
+				Port:     6379,
+				PoolSize: 10,
+				MinIdle:  2,
+				Timeout:  5,
+				Prefix:   "vidveil:",
+				TTL:      30,
+			},
+			GeoIP: GeoIPConfig{
+				Enabled:        true,
+				Dir:            "",
+				Update:         "weekly",
+				CountryMode:    "none",
+				DenyCountries:  []string{},
+				AllowCountries: []string{},
+				Presets:        map[string][]string{},
+				Databases: GeoIPDatabasesConfig{
+					ASN:     true,
+					Country: true,
+					// Need city for region-level restriction
+					City:  true,
+					Whois: true,
+				},
+				ContentRestriction: ContentRestrictionConfig{
+					Mode:      "warn",
+					BypassTor: true,
+					// Default restricted regions based on adult content laws
+					// US states with age verification laws
+					RestrictedRegions: []string{
+						"US:Texas", "US:Utah", "US:Louisiana", "US:Arkansas",
+						"US:Montana", "US:Mississippi", "US:Virginia", "US:North Carolina",
+					},
+					// Countries with strict adult content bans
+					RestrictedCountries: []string{},
+					WarningMessage:      "Adult content may be restricted or require age verification in your region.",
+				},
+			},
+			// Backup settings per AI.md PART 21
+			// Default per PART 21: 1 daily backup, weekly/monthly/yearly disabled
+			Backup: BackupConfig{
+				Retention: BackupRetentionConfig{
+					MaxBackups:   1,
+					KeepWeekly:   0,
+					KeepMonthly:  0,
+					KeepYearly:   0,
+					MaxTotalSize: "10%",
+				},
+				Encryption: BackupEncryptionConfig{
+					// Not encrypted by default
+					Enabled: false,
+				},
+			},
+			// Tor settings per AI.md PART 31
+			// Hidden service auto-enabled if tor binary found
+			// Outbound network disabled by default - can be enabled for privacy
+			Tor: DefaultTorConfig(),
+			// Update settings per AI.md PART 22
+			// Branch: stable by default; auto_install: false (notify-only); defer_days: 0
+			Update: UpdateConfig{
+				Branch:      "stable",
+				AutoInstall: false,
+				DeferDays:   0,
+			},
+			// Privacy/cookie-consent banner text per AI.md PART 12.
+			// Data.Sold defaults false (VidVeil per IDEA.md does not sell data);
+			// MessageIfSold is left empty since GetConsentMessage() only uses it
+			// when Data.Sold is true.
+			Privacy: PrivacyConfig{
+				Consent: ConsentConfig{
+					Message: "This site uses cookies for age verification and to improve your experience.",
+					Policy: ConsentPolicyConfig{
+						URL:  "/server/privacy",
+						Text: "Privacy Policy",
+					},
+					Buttons: ConsentButtonsConfig{
+						Decline: "Decline",
+						Accept:  "Accept",
+					},
+					PreferencesText: "Cookie Preferences",
+				},
+				Data: PrivacyDataConfig{
+					Sold:           false,
+					StoredOnServer: true,
+					Sharing:        []SharingCondition{},
+				},
+				Retention: PrivacyRetentionConfig{
+					Period:            "Not retained — preferences live in your browser only",
+					ExportAvailable:   false,
+					DeletionAvailable: true,
+				},
+				Cookies: CookieCategoriesConfig{
+					Essential: CookieCategoryConfig{
+						Enabled:     true,
+						Description: "Required for the site to function: age acknowledgement, cookie consent state and CSRF protection.",
+					},
+					Preferences: CookieCategoryConfig{
+						Enabled:     true,
+						Description: "Remember your theme, language and search settings between visits.",
+					},
+					Analytics: AnalyticsCookieConfig{
+						Enabled:                  false,
+						Description:              "Measure aggregate usage of the site.",
+						DescriptionSuffixNotSold: "This data is anonymized and never sold.",
+						DescriptionSuffixSold:    "This data may be shared with third parties.",
+					},
+				},
+				ThirdParty: ThirdPartyConfig{
+					Services: []ThirdPartyService{},
+				},
+				Content: PrivacyContentConfig{},
+			},
+		},
+		Web: WebConfig{
+			UI: UIConfig{
+				Theme: "dark",
+			},
+			Announcements: AnnouncementsConfig{
+				Enabled:  true,
+				Messages: []Announcement{},
+			},
+			Robots: RobotsConfig{
+				Allow: []string{"/"},
+				Deny:  []string{"/search", "/api/", "/server/admin", defaultAPIBase + "/server/admin"},
+				// Default posture per AI.md PART 11: no AI crawler is blocked
+				// unless the operator explicitly denies it.
+				AIBots: AIBotsConfig{
+					Default: "allow",
+					Bots:    map[string]string{},
+				},
+			},
+			Security: WebSecurityConfig{
+				Contact:              "security@" + fqdn,
+				DisclosureWindowDays: 90,
+			},
+			CORS: "*",
+			CSP: CSPConfig{
+				Enabled:           true,
+				Mode:              "enforce",
+				ReportsEnabled:    true,
+				ReportsSampleRate: 1.0,
+			},
+			CSRF: CSRFConfig{
+				Enabled:     true,
+				TokenLength: 32,
+				CookieName:  "csrf_token",
+				HeaderName:  "X-CSRF-Token",
+				Secure:      "auto",
+				ExemptPaths: []string{defaultAPIBase + "/webhooks/*"},
+			},
+			Footer: FooterConfig{},
+		},
+		Search: SearchConfig{
+			DefaultEngines:     []string{},
+			ConcurrentRequests: 10,
+			EngineTimeout:      15,
+			ResultsPerPage:     50,
+			MaxPages:           10,
+			// Default minimum duration: 10 minutes (600 seconds)
+			MinDurationSeconds: 600,
+			// Default minimum relevance: 10.0 ensures at least one query word matches
+			MinRelevanceScore: 10.0,
+			FilterPremium:     true,
+			// Disabled by default - can cause issues with some engines
+			// Enable only for Cloudflare-protected sites
+			SpoofTLS: false,
+			AgeVerification: AgeVerificationConfig{
+				Enabled:    true,
+				CookieDays: 30,
+			},
+			// AI content filter - block deepfakes/AI-generated by default
+			AIFilter: AIFilterConfig{
+				Enabled:           true,
+				AllowUserOverride: true,
+				Keywords: []string{
+					"ai generated", "ai-generated", "ai porn", "ai-porn",
+					"deepfake", "deep fake", "deep-fake",
+					"ai model", "ai celebrity", "ai fake",
+					"generated porn", "synthetic", "artificially generated",
+					"neural network", "machine learning porn",
+					"fake celebrity", "celebrity deepfake",
+				},
+			},
+			// Thumbnail disk cache TTL: 24 hours by default
+			ThumbnailCacheTTL: 1440,
+			// Detail-page JSON-LD enrichment: off by default (extra upstream
+			// request per enriched result); when enabled, cap to the top 5
+			// results per engine with a 2s per-fetch budget so it can never
+			// make search results feel slow (fetches run concurrently and are
+			// bounded by the per-engine search deadline regardless)
+			DetailEnrichment: DetailEnrichmentConfig{
+				Enabled:    false,
+				MaxResults: 5,
+				Timeout:    2,
+			},
+		},
+		Engines: EnginesConfig{
+			UserAgent: UserAgentConfig{
+				OS:             "windows",
+				Version:        "11",
+				Browser:        "chrome",
+				BrowserVersion: "131",
+			},
+		},
+	}
+}
+
+// GetAppPaths returns OS-appropriate paths (delegated to paths package)
+func GetAppPaths(configDir, dataDir string) *AppPaths {
+	return path.GetAppPaths(configDir, dataDir)
+}
+
+// GetDatabaseDir returns the SQLite database directory.
+func GetDatabaseDir(dataDir string) string {
+	return path.GetDatabaseDir(dataDir)
+}
+
+// LoadAppConfig loads configuration from file or creates default
+func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
+	paths := GetAppPaths(configDir, dataDir)
+	dbDir := GetDatabaseDir(paths.Data)
+
+	// Ensure directories exist per AI.md PART 8 and PART 23
+	// Binary handles ALL directory creation with proper permissions
+	// Permissions: root=0755, user=0700 per AI.md PART 4
+	dirPerm := os.FileMode(0755)
+	if os.Getuid() != 0 {
+		dirPerm = 0700
+	}
+	for _, dir := range []string{paths.Config, paths.Data, paths.Cache, paths.Log, dbDir} {
+		if err := os.MkdirAll(dir, dirPerm); err != nil {
+			return nil, "", fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+
+	configPath := filepath.Join(paths.Config, "server.yml")
+
+	// Check for .yaml migration
+	yamlPath := filepath.Join(paths.Config, "server.yaml")
+	if _, err := os.Stat(yamlPath); err == nil {
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			if renameErr := os.Rename(yamlPath, configPath); renameErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to migrate server.yaml to server.yml: %v\n", renameErr)
+			} else {
+				fmt.Printf("Migrated server.yaml to server.yml\n")
+			}
+		}
+	}
+
+	// Check if config exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		// Create default config
+		cfg := DefaultAppConfig()
+
+		// Set paths in config
+		cfg.Server.SSL.CertPath = filepath.Join(paths.Config, "ssl", "certs")
+		cfg.Server.Database.SQLite.Dir = dbDir
+
+		if err := SaveAppConfig(cfg, configPath); err != nil {
+			return nil, "", fmt.Errorf("failed to save default config: %w", err)
+		}
+
+		// Console output is handled in main.go per AI.md PART 7
+
+		// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
+		applyEnvOverrides(cfg)
+
+		return cfg, configPath, nil
+	}
+
+	// Load existing config
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read config: %w", err)
+	}
+
+	// Start with defaults; unknown YAML keys are errors per AI.md PART 5
+	cfg := DefaultAppConfig()
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(cfg); err != nil {
+		return nil, "", fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	// Validate and fix invalid config values per AI.md PART 12
+	validateConfig(cfg)
+
+	if cfg.Server.Database.SQLite.Dir == "" || os.Getenv("DATABASE_DIR") != "" {
+		cfg.Server.Database.SQLite.Dir = dbDir
+	}
+
+	// Per AI.md PART 5 Runtime Variables (Always Checked): bare DATABASE_DRIVER
+	// and DATABASE_URL override the config file's database driver/connection URL
+	if driver := os.Getenv("DATABASE_DRIVER"); driver != "" {
+		cfg.Server.Database.Driver = driver
+	}
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		cfg.Server.Database.URL = dbURL
+	}
+
+	// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
+	applyEnvOverrides(cfg)
+
+	return cfg, configPath, nil
+}
+
+// validateConfig validates all config values, replacing invalid with defaults per AI.md PART 12
+// Rule: If config setting is invalid, warn and replace with default. Never fail startup.
+func validateConfig(cfg *AppConfig) {
+	defaults := DefaultAppConfig()
+
+	// Validate port (must be valid or use random per PART 8/12)
+	if cfg.Server.Port != "" {
+		// Parse port(s) - could be "8080" or "8080,8443"
+		ports := strings.Split(cfg.Server.Port, ",")
+		for _, p := range ports {
+			port := strings.TrimSpace(p)
+			if port == "" {
+				continue
+			}
+			portNum := 0
+			fmt.Sscanf(port, "%d", &portNum)
+			if portNum < 1 || portNum > 65535 {
+				randomPort := findUnusedPort()
+				fmt.Fprintf(os.Stderr, "Warning: invalid port %s, using random port %d\n", port, randomPort)
+				cfg.Server.Port = fmt.Sprintf("%d", randomPort)
+				break
+			}
+		}
+	}
+
+	// Validate mode (must be production or development)
+	if cfg.Server.Mode != "" && cfg.Server.Mode != "production" && cfg.Server.Mode != "development" {
+		fmt.Fprintf(os.Stderr, "Warning: invalid mode %q, using default %q\n", cfg.Server.Mode, defaults.Server.Mode)
+		cfg.Server.Mode = defaults.Server.Mode
+	}
+
+	// Validate API version (must be non-empty, lowercase "v" + digits, per PART 14)
+	if !apiVersionPattern.MatchString(cfg.Server.APIVersion) {
+		fmt.Fprintf(os.Stderr, "Warning: invalid api_version %q, using default %q\n", cfg.Server.APIVersion, defaults.Server.APIVersion)
+		cfg.Server.APIVersion = defaults.Server.APIVersion
+	}
+
+	// Validate rate limit window (must be positive)
+	if cfg.Server.RateLimit.Window < 0 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid rate_limit.window %d, using default 60\n", cfg.Server.RateLimit.Window)
+		cfg.Server.RateLimit.Window = 60
+	}
+
+	// Validate rate limit requests (must be positive)
+	if cfg.Server.RateLimit.Requests < 0 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid rate_limit.requests %d, using default 500\n", cfg.Server.RateLimit.Requests)
+		cfg.Server.RateLimit.Requests = 500
+	}
+
+	// Validate SSL settings
+	if cfg.Server.SSL.Enabled && cfg.Server.SSL.LetsEncrypt.Enabled {
+		if cfg.Server.SSL.LetsEncrypt.Email == "" {
+			fmt.Fprintf(os.Stderr, "Warning: SSL Let's Encrypt enabled but no email configured\n")
+		}
+	}
+
+	// Validate session same_site (must be strict, lax, or none)
+	sameSite := strings.ToLower(cfg.Server.Session.SameSite)
+	if sameSite != "" && sameSite != "strict" && sameSite != "lax" && sameSite != "none" {
+		fmt.Fprintf(os.Stderr, "Warning: invalid session.same_site %q, using default 'strict'\n", cfg.Server.Session.SameSite)
+		cfg.Server.Session.SameSite = "strict"
+	}
+
+	// Validate compression level (1-9)
+	if cfg.Server.Compression.Level < 0 || cfg.Server.Compression.Level > 9 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid compression.level %d, using default 5\n", cfg.Server.Compression.Level)
+		cfg.Server.Compression.Level = 5
+	}
+
+	// Enforce audit log format as JSON only per AI.md PART 11
+	// "audit: format: json only (text not supported for audit - must be machine-parseable)"
+	if cfg.Server.Logs.Audit.Format != "" && cfg.Server.Logs.Audit.Format != "json" {
+		fmt.Fprintf(os.Stderr, "Warning: audit log format must be 'json', ignoring %q\n", cfg.Server.Logs.Audit.Format)
+		cfg.Server.Logs.Audit.Format = "json"
+	}
+
+	// Validate backup retention settings (warn, don't error - server must start) per AI.md PART 21
+	validateBackupRetention(cfg)
+}
+
+// validateBackupRetention validates cfg.Server.Backup.Retention per AI.md PART 21.
+// Invalid values (negative, or max_backups == 0) are reset to their defaults with a WARN.
+// Values above the recommended threshold are accepted but still generate a WARN.
+func validateBackupRetention(cfg *AppConfig) {
+	r := &cfg.Server.Backup.Retention
+
+	if r.MaxBackups < 0 {
+		fmt.Fprintf(os.Stderr, "WARN: max_backups: %d invalid, using default 1\n", r.MaxBackups)
+		r.MaxBackups = 1
+	} else if r.MaxBackups == 0 {
+		fmt.Fprintf(os.Stderr, "WARN: max_backups: 0 invalid, using default 1\n")
+		r.MaxBackups = 1
+	} else if r.MaxBackups > 7 {
+		fmt.Fprintf(os.Stderr, "WARN: max_backups: %d exceeds recommended 7 (30 days of daily backups)\n", r.MaxBackups)
+	}
+
+	if r.KeepWeekly < 0 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_weekly: %d invalid, using default 0\n", r.KeepWeekly)
+		r.KeepWeekly = 0
+	} else if r.KeepWeekly > 8 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_weekly: %d exceeds recommended 8 (2 months of weekly backups)\n", r.KeepWeekly)
+	}
+
+	if r.KeepMonthly < 0 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_monthly: %d invalid, using default 0\n", r.KeepMonthly)
+		r.KeepMonthly = 0
+	} else if r.KeepMonthly > 12 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_monthly: %d exceeds recommended 12 (2 years of monthly backups)\n", r.KeepMonthly)
+	}
+
+	if r.KeepYearly < 0 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_yearly: %d invalid, using default 0\n", r.KeepYearly)
+		r.KeepYearly = 0
+	} else if r.KeepYearly > 2 {
+		fmt.Fprintf(os.Stderr, "WARN: keep_yearly: %d exceeds recommended 2 (2 years of yearly backups)\n", r.KeepYearly)
+	}
+}
+
+// SaveAppConfig saves configuration to file
+func SaveAppConfig(cfg *AppConfig, path string) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Add header comment
+	header := `# =============================================================================
+# Vidveil Configuration
+# =============================================================================
+# This file follows the apimgr AI.md specification
+# Documentation: https://github.com/apimgr/vidveil
+# =============================================================================
+
+`
+	fullData := []byte(header + string(data))
+
+	// Write atomically: write to a temp file in the same directory, then rename
+	// over the target so a crash mid-write never leaves a truncated config.
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, fullData, 0644); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// Helper functions
+
+// ParseBoolEnv parses a boolean value from an environment variable
+// Uses the full truthy/falsy value set from bool.go per AI.md PART 5
+func ParseBoolEnv(key string, defaultVal bool) bool {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	result, err := ParseBool(val, defaultVal)
+	if err != nil {
+		return defaultVal
+	}
+	return result
+}
+
+func getHostname() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "localhost"
+	}
+	return hostname
+}
+
+func findUnusedPort() int {
+	// Spec (AI.md PART 5): random unused port in 64000-64999, never sequential
+	const portMin = 64000
+	const portRange = 1000
+	var startOffset int
+	b := make([]byte, 2)
+	if _, err := rand.Read(b); err == nil {
+		startOffset = (int(b[0])<<8 | int(b[1])) % portRange
+	}
+	for i := 0; i < portRange; i++ {
+		port := portMin + (startOffset+i)%portRange
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err == nil {
+			ln.Close()
+			return port
+		}
+	}
+	return 64080
+}
+
+func generateToken(length int) string {
+	bytes := make([]byte, length)
+	// A CSPRNG failure must never silently produce a predictable token
+	if _, err := rand.Read(bytes); err != nil {
+		panic(fmt.Sprintf("config: failed to read from crypto/rand: %v", err))
+	}
+	return hex.EncodeToString(bytes)
+}
+
+// isRunningInContainer detects if running in a container (tini as PID 1)
+func isRunningInContainer() bool {
+	// Check if PID 1 is tini
+	if data, err := os.ReadFile("/proc/1/comm"); err == nil {
+		return strings.TrimSpace(string(data)) == "tini"
+	}
+	// Check for container environment variables
+	if os.Getenv("container") != "" {
+		return true
+	}
+	return false
+}
+
+// IsDevelopmentMode returns true if running in development mode
+func (c *AppConfig) IsDevelopmentMode() bool {
+	mode := strings.ToLower(c.Server.Mode)
+	return mode == "development" || mode == "dev"
+}
+
+// IsProductionMode returns true if running in production mode
+func (c *AppConfig) IsProductionMode() bool {
+	return !c.IsDevelopmentMode()
+}
+
+// current holds the process-wide active AppConfig, set once at startup via
+// SetCurrent and mutated in place by the config watcher on hot-reload (see
+// ConfigWatcher.reload). It exists so packages outside the request path
+// that own the *AppConfig (e.g. src/server/handler) can answer "are we in
+// production mode?" without threading a config pointer through every call
+// site — needed by the Output Sanitization Pipeline (AI.md PART 11 stage 5:
+// "In production mode, drop fields tagged dev_only").
+var current atomic.Pointer[AppConfig]
+
+// SetCurrent registers c as the process-wide active AppConfig. Call once
+// after the initial config load; subsequent hot-reloads mutate the same
+// pointer in place, so SetCurrent does not need to be called again.
+func SetCurrent(c *AppConfig) {
+	current.Store(c)
+}
+
+// IsProductionMode reports whether the process-wide active AppConfig (set
+// via SetCurrent) is in production mode. Returns true (fail-safe: strip
+// dev-only fields) if no config has been registered yet.
+func IsProductionMode() bool {
+	c := current.Load()
+	if c == nil {
+		return true
+	}
+	return c.IsProductionMode()
+}
+
+// NormalizeMode normalizes the mode string to "production" or "development"
+func NormalizeMode(mode string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case "dev", "development":
+		return "development"
+	case "prod", "production", "":
+		return "production"
+	default:
+		return "production"
+	}
+}
+
+// AI.md PART 8: URL/FQDN Detection
+
+// devOnlyTLDs are public-suffix labels allowed only in development mode per AI.md
+// PART 8. Keys are the bare suffix as returned by publicsuffix.PublicSuffix.
+var devOnlyTLDs = map[string]bool{
+	"localhost": true, "test": true, "example": true, "invalid": true,
+	"local": true, "lan": true, "internal": true, "home": true,
+	"localdomain": true, "home.arpa": true, "intranet": true,
+	"corp": true, "private": true,
+}
+
+// IsValidHost validates a host per AI.md PART 8 (Go reference implementation).
+// In production, only real ICANN eTLD+1 domains are allowed (no IPs, no localhost,
+// no dev TLDs, no suffix-only hosts). In development, localhost, dev TLDs, and the
+// dynamic ".{projectName}" TLD are additionally allowed. Overlay-network hosts
+// (.onion/.i2p/.exit) are always valid since they are app-managed, not DOMAIN-set.
+func IsValidHost(host string, devMode bool, projectName string) bool {
+	lower := strings.ToLower(strings.TrimSpace(host))
+
+	// Reject empty
+	if lower == "" {
+		return false
+	}
+
+	// Reject IP addresses always
+	if net.ParseIP(lower) != nil {
+		return false
+	}
+
+	// Handle localhost - only valid in dev mode
+	if lower == "localhost" {
+		return devMode
+	}
+
+	// Must contain at least one dot
+	if !strings.Contains(lower, ".") {
+		return false
+	}
+
+	// Overlay network TLDs - valid but app-managed (not set via DOMAIN)
+	if strings.HasSuffix(lower, ".onion") ||
+		strings.HasSuffix(lower, ".i2p") ||
+		strings.HasSuffix(lower, ".exit") {
+		return true
+	}
+
+	// Dynamic project-specific dev TLD (e.g. app.vidveil) - dev mode only
+	if projectName != "" && strings.HasSuffix(lower, "."+strings.ToLower(projectName)) {
+		return devMode
+	}
+
+	// Get the public suffix (TLD or eTLD like co.uk)
+	suffix, icann := publicsuffix.PublicSuffix(lower)
+
+	// Dev-only TLDs are valid in dev mode only
+	if devOnlyTLDs[suffix] {
+		return devMode
+	}
+
+	// In production, require a valid ICANN TLD
+	if !devMode && !icann {
+		return false
+	}
+
+	// Require at least eTLD+1 (e.g. "domain.co.uk", not bare "co.uk")
+	etldPlusOne, err := publicsuffix.EffectiveTLDPlusOne(lower)
+	if err != nil {
+		return false
+	}
+	return len(etldPlusOne) > 0
+}
+
+// IsValidSSLHost validates host for SSL/Let's Encrypt per AI.md
+// SSL always requires production-valid host (devMode=false)
+func IsValidSSLHost(host string) bool {
+	return IsValidHost(host, false, path.ProjectName)
+}
+
+// LiveReload per AI.md PART 8 NON-NEGOTIABLE
+// Watches config file and reloads on changes
+
+// ReloadCallback is called when configuration is reloaded
+type ReloadCallback func(*AppConfig)
+
+// ConfigWatcher watches for config file changes
+type ConfigWatcher struct {
+	configPath string
+	appConfig  *AppConfig
+	callbacks  []ReloadCallback
+	stopChan   chan struct{}
+	lastMod    int64
+}
+
+// NewWatcher creates a new config watcher
+func NewWatcher(configPath string, appConfig *AppConfig) *ConfigWatcher {
+	info, _ := os.Stat(configPath)
+	var lastMod int64
+	if info != nil {
+		lastMod = info.ModTime().UnixNano()
+	}
+
+	return &ConfigWatcher{
+		configPath: configPath,
+		appConfig:  appConfig,
+		callbacks:  make([]ReloadCallback, 0),
+		stopChan:   make(chan struct{}),
+		lastMod:    lastMod,
+	}
+}
+
+// OnReload registers a callback for config reload events
+func (w *ConfigWatcher) OnReload(callback ReloadCallback) {
+	w.callbacks = append(w.callbacks, callback)
+}
+
+// Start begins watching for config changes
+func (w *ConfigWatcher) Start() {
+	go w.watch()
+}
+
+// Stop stops watching for config changes
+func (w *ConfigWatcher) Stop() {
+	close(w.stopChan)
+}
+
+// watch polls the config file for changes
+func (w *ConfigWatcher) watch() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-w.stopChan:
+			return
+		case <-ticker.C:
+			info, err := os.Stat(w.configPath)
+			if err != nil {
+				continue
+			}
+
+			modTime := info.ModTime().UnixNano()
+			if modTime > w.lastMod {
+				w.lastMod = modTime
+				w.reload()
+			}
+		}
+	}
+}
+
+// reload reloads the configuration and notifies callbacks
+func (w *ConfigWatcher) reload() {
+	data, err := os.ReadFile(w.configPath)
+	if err != nil {
+		fmt.Printf("⚠️  Failed to read config for reload: %v\n", err)
+		return
+	}
+
+	// Unknown YAML keys are errors per AI.md PART 5
+	newCfg := DefaultAppConfig()
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(newCfg); err != nil {
+		fmt.Printf("⚠️  Failed to parse config for reload: %v\n", err)
+		return
+	}
+
+	// Update the shared config — all settings that can live-reload without restart.
+	// Port and Address changes are intentionally excluded: they require a listener
+	// rebind and must log a pending-restart notice instead.
+	var restartReasons []string
+	if newCfg.Server.Port != w.appConfig.Server.Port {
+		restartReasons = append(restartReasons, "server.port")
+	}
+	if newCfg.Server.Address != w.appConfig.Server.Address {
+		restartReasons = append(restartReasons, "server.address")
+	}
+	pendingRestart := len(restartReasons) > 0
+
+	w.appConfig.Server.Branding = newCfg.Server.Branding
+	w.appConfig.Server.RateLimit = newCfg.Server.RateLimit
+	w.appConfig.Server.Notifications = newCfg.Server.Notifications
+	w.appConfig.Server.Schedule = newCfg.Server.Schedule
+	w.appConfig.Server.SSL = newCfg.Server.SSL
+	w.appConfig.Server.Metrics = newCfg.Server.Metrics
+	w.appConfig.Server.Logs = newCfg.Server.Logs
+	w.appConfig.Server.GeoIP = newCfg.Server.GeoIP
+	w.appConfig.Server.Cache = newCfg.Server.Cache
+	w.appConfig.Server.Admin = newCfg.Server.Admin
+	w.appConfig.Server.Session = newCfg.Server.Session
+	w.appConfig.Server.SecurityHeaders = newCfg.Server.SecurityHeaders
+	w.appConfig.Server.Compression = newCfg.Server.Compression
+	w.appConfig.Server.Limits = newCfg.Server.Limits
+	w.appConfig.Server.TrustedProxies = newCfg.Server.TrustedProxies
+	w.appConfig.Server.Security = newCfg.Server.Security
+	w.appConfig.Server.Backup = newCfg.Server.Backup
+	w.appConfig.Server.Tor = newCfg.Server.Tor
+	w.appConfig.Server.Healthz = newCfg.Server.Healthz
+	w.appConfig.Server.FQDN = newCfg.Server.FQDN
+	w.appConfig.Server.Mode = newCfg.Server.Mode
+	w.appConfig.Web = newCfg.Web
+	w.appConfig.Search = newCfg.Search
+
+	w.appConfig.PendingRestart = pendingRestart
+	w.appConfig.RestartReasons = restartReasons
+
+	if pendingRestart {
+		fmt.Printf("⚠️  Port/address change detected (%s) — restart required for network changes to take effect\n",
+			strings.Join(restartReasons, ", "))
+	}
+	fmt.Printf("🔄 Configuration reloaded\n")
+
+	// Notify callbacks
+	for _, callback := range w.callbacks {
+		callback(w.appConfig)
+	}
+}
+
+// Reload forces a configuration reload
+func (w *ConfigWatcher) Reload() error {
+	w.reload()
+	return nil
+}
+
+// GetDisplayHost returns the appropriate host for display per AI.md PART 8
+// Never shows: 0.0.0.0, 127.0.0.1, localhost, [::]
+// Uses global IP if dev TLD or localhost detected
+// ParsePorts splits the configured Server.Port into the HTTP and HTTPS ports
+// per AI.md PART 15 "Port Configuration (Project-Wide, NON-NEGOTIABLE)".
+//
+// Rules:
+//   - Two comma-separated ports: first = HTTP, second = HTTPS ("80,443").
+//   - Single port: HTTP by default.
+//   - Single port 443: HTTPS-only mode.
+//   - CONFIG(ssl.enabled) overrides a single port from HTTP to HTTPS.
+//
+// An empty return value for either port means that protocol is not served.
+func ParsePorts(portStr string, sslEnabled bool) (httpPort, httpsPort string) {
+	parts := make([]string, 0, 2)
+	for _, p := range strings.Split(portStr, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+
+	switch {
+	case len(parts) == 0:
+		return "", ""
+	case len(parts) >= 2:
+		return parts[0], parts[1]
+	default:
+		single := parts[0]
+		if single == "443" || sslEnabled {
+			return "", single
+		}
+		return single, ""
+	}
+}
+
+func GetDisplayHost(_ *AppConfig) string {
+	fqdn := GetFQDN()
+
+	// If valid production FQDN and not localhost, use it (lines 2443-2445)
+	if !isDevTLD(fqdn) && !isLoopback(fqdn) {
+		return fqdn
+	}
+
+	// Dev TLD or localhost - use global IP instead (lines 2448-2454)
+	if ipv6 := getGlobalIPv6(); ipv6 != "" {
+		return "[" + ipv6 + "]"
+	}
+	if ipv4 := getGlobalIPv4(); ipv4 != "" {
+		return ipv4
+	}
+
+	// Last resort (line 2457)
+	return fqdn
+}
+
+// GetFQDN returns the FQDN per AI.md PART 8
+func GetFQDN() string {
+	// 1. DOMAIN env var (explicit user override)
+	if domain := os.Getenv("DOMAIN"); domain != "" {
+		return domain
+	}
+
+	// 2. os.Hostname() - cross-platform
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		if !isLoopback(hostname) {
+			return hostname
+		}
+	}
+
+	// 3. $HOSTNAME env var (skip loopback)
+	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
+		if !isLoopback(hostname) {
+			return hostname
+		}
+	}
+
+	// 4. Global IPv6 (preferred for modern networks)
+	if ipv6 := getGlobalIPv6(); ipv6 != "" {
+		return ipv6
+	}
+
+	// 5. Global IPv4
+	if ipv4 := getGlobalIPv4(); ipv4 != "" {
+		return ipv4
+	}
+
+	// Last resort (not recommended)
+	return "localhost"
+}
+
+// isLoopback checks if host is a loopback address per AI.md PART 8
+func isLoopback(host string) bool {
+	lower := strings.ToLower(host)
+	if lower == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
+// isDevTLD checks if FQDN is a dev TLD per AI.md PART 8
+func isDevTLD(fqdn string) bool {
+	lower := strings.ToLower(fqdn)
+	if lower == "localhost" {
+		return true
+	}
+
+	// Development TLD suffixes including dynamic project TLD
+	devSuffixes := []string{
+		".local", ".test", ".example", ".invalid",
+		".localhost", ".lan", ".internal", ".home", ".localdomain",
+		".home.arpa", ".intranet", ".corp", ".private",
+		"." + path.ProjectName,
+	}
+	for _, suffix := range devSuffixes {
+		if strings.HasSuffix(lower, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// getGlobalIPv6 returns first global unicast IPv6 address per AI.md PART 8
+func getGlobalIPv6() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			if ipnet.IP.To4() == nil && ipnet.IP.IsGlobalUnicast() {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return ""
+}
+
+// getGlobalIPv4 returns first global unicast IPv4 address per AI.md PART 8
+func getGlobalIPv4() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			if ip4 := ipnet.IP.To4(); ip4 != nil && ipnet.IP.IsGlobalUnicast() {
+				return ip4.String()
+			}
+		}
+	}
+	return ""
+}
+
+// AdminURLPrefix returns the spec-canonical admin route prefix per AI.md PART 14/17.
+// Form: "/server/{admin_path}". The legacy form (without "/server/") is no longer accepted.
+func (c *AppConfig) AdminURLPrefix() string {
+	adminPath := c.Server.Admin.Path
+	if adminPath == "" {
+		adminPath = "admin"
+	}
+	return "/server/" + adminPath
+}
+
+// APIBasePath returns the versioned API base path per AI.md PART 14
+// ("Always version ALL API routes: /api/{api_version}/..."), e.g. "/api/v1".
+// Never hardcode "/api/v1" in route registration or path construction - use this.
+func (c *AppConfig) APIBasePath() string {
+	ver := c.Server.APIVersion
+	if ver == "" {
+		ver = "v1"
+	}
+	return "/api/" + ver
+}
+
+// AdminAPIPrefix returns the canonical admin API prefix without the "/api/{ver}" leader.
+// Used as a relative subpath under APIBasePath(): result is "/server/{admin_path}".
+func (c *AppConfig) AdminAPIPrefix() string {
+	adminPath := c.Server.Admin.Path
+	if adminPath == "" {
+		adminPath = "admin"
+	}
+	return "/server/" + adminPath
+}
+
+// GetPublicURL returns the public-facing URL for this server
+// Used by /api/autodiscover endpoint per AI.md PART 14
+func (c *AppConfig) GetPublicURL() string {
+	// Use FQDN if configured
+	if c.Server.FQDN != "" {
+		return fmt.Sprintf("https://%s", c.Server.FQDN)
+	}
+
+	// Otherwise, build from address and port
+	scheme := "http"
+	host := c.Server.Address
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "localhost"
+	}
+
+	// Port is a string, parse it
+	port := c.Server.Port
+
+	return fmt.Sprintf("%s://%s:%s", scheme, host, port)
+}
+
+// validateSEOVerification validates SEO verification codes per AI.md PART 16.
+// Returns a list of fields with invalid values; empty = all OK.
+// Invalid codes are logged but NOT rejected (server continues with them skipped).
+func validateSEOVerification(v SEOVerificationConfig) []string {
+	var bad []string
+	if v.Google != "" && !seoVerifyPattern(`^[a-zA-Z0-9_-]{1,43}$`, v.Google) {
+		bad = append(bad, "seo.verification.google")
+	}
+	if v.Bing != "" && !seoVerifyPattern(`^[A-F0-9]{1,32}$`, v.Bing) {
+		bad = append(bad, "seo.verification.bing")
+	}
+	if v.Yandex != "" && !seoVerifyPattern(`^[a-f0-9]{1,32}$`, v.Yandex) {
+		bad = append(bad, "seo.verification.yandex")
+	}
+	if v.Baidu != "" && !seoVerifyPattern(`^[a-zA-Z0-9]{1,32}$`, v.Baidu) {
+		bad = append(bad, "seo.verification.baidu")
+	}
+	if v.Pinterest != "" && !seoVerifyPattern(`^[a-f0-9]{1,32}$`, v.Pinterest) {
+		bad = append(bad, "seo.verification.pinterest")
+	}
+	if v.Facebook != "" && !seoVerifyPattern(`^[a-z0-9]{1,64}$`, v.Facebook) {
+		bad = append(bad, "seo.verification.facebook")
+	}
+	for i, ct := range v.Custom {
+		key := fmt.Sprintf("seo.verification.custom[%d]", i)
+		if ct.Name == "" && ct.Property == "" {
+			bad = append(bad, key+".name_or_property")
+			continue
+		}
+		nameOrProp := ct.Name
+		if nameOrProp == "" {
+			nameOrProp = ct.Property
+		}
+		if !seoVerifyPattern(`^[a-zA-Z0-9_:-]{1,64}$`, nameOrProp) {
+			bad = append(bad, key+".name_or_property")
+		}
+		if ct.Content == "" || len(ct.Content) > 256 {
+			bad = append(bad, key+".content")
+		}
+	}
+	return bad
+}
+
+func seoVerifyPattern(pattern, value string) bool {
+	matched, err := regexp.MatchString(pattern, value)
+	return err == nil && matched
+}

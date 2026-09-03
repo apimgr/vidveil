@@ -1,0 +1,217 @@
+// SPDX-License-Identifier: MIT
+package server
+
+import (
+	"expvar"
+	"net/http"
+	"net/http/pprof"
+	"runtime"
+
+	"github.com/apimgr/vidveil/src/mode"
+	"github.com/apimgr/vidveil/src/server/handler"
+	"github.com/go-chi/chi/v5"
+)
+
+// registerDebugRoutes registers debug endpoints (--debug/DEBUG=true only)
+func (s *Server) registerDebugRoutes(r chi.Router) {
+	if !mode.IsDebugEnabled() {
+		return
+	}
+
+	r.Route("/debug", func(r chi.Router) {
+		// pprof endpoints
+		r.HandleFunc("/pprof/", pprof.Index)
+		r.HandleFunc("/pprof/cmdline", pprof.Cmdline)
+		r.HandleFunc("/pprof/profile", pprof.Profile)
+		r.HandleFunc("/pprof/symbol", pprof.Symbol)
+		r.HandleFunc("/pprof/trace", pprof.Trace)
+		r.Handle("/pprof/heap", pprof.Handler("heap"))
+		r.Handle("/pprof/goroutine", pprof.Handler("goroutine"))
+		r.Handle("/pprof/allocs", pprof.Handler("allocs"))
+		r.Handle("/pprof/block", pprof.Handler("block"))
+		r.Handle("/pprof/mutex", pprof.Handler("mutex"))
+		r.Handle("/pprof/threadcreate", pprof.Handler("threadcreate"))
+
+		// expvar
+		r.Handle("/vars", expvar.Handler())
+
+		// Custom debug endpoints
+		r.Get("/config", s.handleDebugConfig)
+		r.Get("/routes", s.handleDebugRoutes)
+		r.Get("/cache", s.handleDebugCache)
+		r.Get("/db", s.handleDebugDB)
+		r.Get("/scheduler", s.handleDebugScheduler)
+		r.Get("/memory", s.handleDebugMemory)
+		r.Get("/goroutines", s.handleDebugGoroutines)
+		r.Get("/engines", s.handleDebugEngines)
+		r.Get("/engine/{name}", s.handleDebugEngine)
+	})
+}
+
+func (s *Server) handleDebugConfig(w http.ResponseWriter, r *http.Request) {
+	cfg := map[string]interface{}{
+		"server": map[string]interface{}{
+			"address": s.appConfig.Server.Address,
+			"port":    s.appConfig.Server.Port,
+			"mode":    s.appConfig.Server.Mode,
+			"debug":   mode.IsDebugEnabled(),
+		},
+		"database": map[string]interface{}{
+			"driver":     s.appConfig.Server.Database.Driver,
+			"sqlite_dir": s.appConfig.Server.Database.SQLite.Dir,
+		},
+		"search": map[string]interface{}{
+			"concurrent_requests":  s.appConfig.Search.ConcurrentRequests,
+			"engine_timeout":       s.appConfig.Search.EngineTimeout,
+			"results_per_page":     s.appConfig.Search.ResultsPerPage,
+			"min_duration_seconds": s.appConfig.Search.MinDurationSeconds,
+		},
+	}
+
+	// Per AI.md PART 14: Use 2-space indent JSON with trailing newline
+	handler.WriteJSON(w, http.StatusOK, cfg)
+}
+
+func (s *Server) handleDebugRoutes(w http.ResponseWriter, r *http.Request) {
+	routes := []map[string]string{}
+
+	chi.Walk(s.router, func(method string, route string, h http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		routes = append(routes, map[string]string{
+			"method": method,
+			"route":  route,
+		})
+		return nil
+	})
+
+	handler.WriteJSON(w, http.StatusOK, routes)
+}
+
+func (s *Server) handleDebugCache(w http.ResponseWriter, r *http.Request) {
+	// Search results use the configurable API-response cache per AI.md PART 12.
+	stats := map[string]interface{}{
+		"type":   s.appConfig.Server.Cache.Type,
+		"status": "active",
+	}
+
+	handler.WriteJSON(w, http.StatusOK, stats)
+}
+
+func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
+	// Get database stats from migration manager if available
+	db := s.migrationMgr.GetDB()
+	if db == nil {
+		data := map[string]interface{}{
+			"status": "database not available",
+		}
+		handler.WriteJSON(w, http.StatusOK, data)
+		return
+	}
+
+	stats := db.Stats()
+	data := map[string]interface{}{
+		"open_connections":    stats.OpenConnections,
+		"in_use":              stats.InUse,
+		"idle":                stats.Idle,
+		"wait_count":          stats.WaitCount,
+		"wait_duration":       stats.WaitDuration.String(),
+		"max_idle_closed":     stats.MaxIdleClosed,
+		"max_lifetime_closed": stats.MaxLifetimeClosed,
+	}
+
+	handler.WriteJSON(w, http.StatusOK, data)
+}
+
+func (s *Server) handleDebugScheduler(w http.ResponseWriter, r *http.Request) {
+	data := s.scheduler.Stats()
+
+	tasks := s.scheduler.ListTasks()
+	taskList := make([]map[string]interface{}, 0, len(tasks))
+	for _, t := range tasks {
+		taskList = append(taskList, map[string]interface{}{
+			"id":          t.ID,
+			"name":        t.Name,
+			"schedule":    t.Schedule,
+			"enabled":     t.Enabled,
+			"last_run":    t.LastRun,
+			"last_result": t.LastResult,
+			"next_run":    t.NextRun,
+			"run_count":   t.RunCount,
+			"fail_count":  t.FailCount,
+		})
+	}
+	data["tasks"] = taskList
+
+	handler.WriteJSON(w, http.StatusOK, data)
+}
+
+func (s *Server) handleDebugMemory(w http.ResponseWriter, r *http.Request) {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	data := map[string]interface{}{
+		"alloc_mb":       m.Alloc / 1024 / 1024,
+		"total_alloc_mb": m.TotalAlloc / 1024 / 1024,
+		"sys_mb":         m.Sys / 1024 / 1024,
+		"num_gc":         m.NumGC,
+		"goroutines":     runtime.NumGoroutine(),
+	}
+
+	handler.WriteJSON(w, http.StatusOK, data)
+}
+
+func (s *Server) handleDebugGoroutines(w http.ResponseWriter, r *http.Request) {
+	data := map[string]interface{}{
+		"count": runtime.NumGoroutine(),
+	}
+
+	handler.WriteJSON(w, http.StatusOK, data)
+}
+
+// handleDebugEngines tests all engines with a query and shows detailed filtering stats
+// Usage: /debug/engines?q=teen+lesbians (default query: "test")
+func (s *Server) handleDebugEngines(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		query = "test"
+	}
+
+	// Run debug search
+	result := s.engineMgr.DebugSearch(r.Context(), query, 1)
+
+	handler.WriteJSON(w, http.StatusOK, result)
+}
+
+// handleDebugEngine tests a single engine and returns raw results
+// Usage: /debug/engine/xvideos?q=test
+func (s *Server) handleDebugEngine(w http.ResponseWriter, r *http.Request) {
+	engineName := chi.URLParam(r, "name")
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		query = "test"
+	}
+
+	eng, ok := s.engineMgr.GetEngine(engineName)
+	if !ok {
+		handler.WriteJSON(w, http.StatusNotFound, map[string]interface{}{
+			"error": "engine not found",
+			"name":  engineName,
+		})
+		return
+	}
+
+	results, err := eng.Search(r.Context(), query, 1)
+	if err != nil {
+		handler.WriteJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"error":  err.Error(),
+			"engine": engineName,
+		})
+		return
+	}
+
+	handler.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"engine":  engineName,
+		"query":   query,
+		"count":   len(results),
+		"results": results,
+	})
+}

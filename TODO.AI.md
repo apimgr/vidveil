@@ -335,3 +335,23 @@ Tor Circuit-ID/PROXY-protocol implementation pass, not yet fixed:
   `go:embed` read fails. Those reads cannot realistically fail; 500 would
   arguably be more correct, but the status was left unchanged rather than
   altering behavior unprompted.
+
+## Decisions needed (surfaced during the PART 0-4 compliance audit)
+
+- `.claude/rules/admin-rules.md` exists but is not one of the 13 rule files
+  AI.md PART 0 enumerates, and its header claims "PART 17" while AI.md PART
+  17 is EMAIL & NOTIFICATIONS (admin-panel content has no matching PART).
+  Deleting a file is never done without confirmation, and its content is
+  clearly in use, so the mapping question is left for the main session:
+  either fold the admin content into an existing rule file or accept a 14th
+  file that AI.md's table does not list.
+- `.claude/rules/binary-rules.md` carries an "Agent Binary (PART 33,
+  OPTIONAL)" section, but AI.md PART 33 is the IDEA.md reference and no
+  agent-binary PART exists in AI.md. The file header/footer PART numbers
+  were corrected to 7, 8, 32, but whether the agent section itself should
+  stay, move, or be dropped needs a human call.
+- 10 of the 14 `.claude/rules/*.md` files predate AI.md's current mtime
+  (2026-09-03). PART 0's trigger says "AI.md modified more recently than
+  rule files -> update all files", so a full regeneration pass of the rule
+  set against the current AI.md is owed. Regenerating 14 summary files is
+  not a mechanical edit and is deliberately not attempted here.

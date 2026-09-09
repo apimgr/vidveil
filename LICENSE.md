@@ -291,3 +291,37 @@ The following open-source libraries are used:
 - **modernc.org/sqlite** - BSD-3-Clause
 
 Full license texts for each dependency can be found in their respective repositories.
+
+Full license texts by SPDX identifier: https://spdx.org/licenses/
+
+---
+
+### BSD-3-Clause Non-Endorsement Notice
+
+The following notice applies to every dependency listed above under the
+BSD-3-Clause license, including `modernc.org/sqlite`, `golang.org/x/crypto`,
+`golang.org/x/net`, `golang.org/x/text`, `golang.org/x/sys`, `github.com/miekg/dns`,
+`github.com/google/uuid`, and all other BSD-3-Clause entries:
+
+Neither the name of the copyright holder nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+Full license: https://spdx.org/licenses/BSD-3-Clause.html
+
+---
+
+### Apache-2.0 NOTICE
+
+Dependencies listed above under Apache-2.0 are redistributed under the terms of
+the Apache License, Version 2.0. Where an upstream project ships a `NOTICE`
+file, that notice is preserved in the dependency's own repository.
+
+Full license: https://spdx.org/licenses/Apache-2.0.html
+
+---
+
+### MPL-2.0
+
+Dependencies listed above under MPL-2.0 are governed by the Mozilla Public
+License 2.0: https://mozilla.org/MPL/2.0/

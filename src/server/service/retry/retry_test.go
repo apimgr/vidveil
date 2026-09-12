@@ -11,12 +11,12 @@ import (
 func TestDefaultRetryConfig(t *testing.T) {
 	cfg := defaultRetryConfig()
 
-	if cfg.MaxAttempts != 3 {
-		t.Errorf("Expected MaxAttempts 3, got %d", cfg.MaxAttempts)
+	if cfg.MaxAttempts != 5 {
+		t.Errorf("Expected MaxAttempts 5, got %d", cfg.MaxAttempts)
 	}
 
-	if cfg.InitialDelay != 100*time.Millisecond {
-		t.Errorf("Expected InitialDelay 100ms, got %v", cfg.InitialDelay)
+	if cfg.InitialDelay != 1*time.Second {
+		t.Errorf("Expected InitialDelay 1s, got %v", cfg.InitialDelay)
 	}
 
 	if cfg.MaxDelay != 30*time.Second {
@@ -29,6 +29,10 @@ func TestDefaultRetryConfig(t *testing.T) {
 
 	if cfg.Jitter != 0.1 {
 		t.Errorf("Expected Jitter 0.1, got %f", cfg.Jitter)
+	}
+
+	if len(cfg.RetryableErrors) != 4 {
+		t.Errorf("Expected 4 default retryable errors, got %d", len(cfg.RetryableErrors))
 	}
 }
 
@@ -54,11 +58,12 @@ func TestExecuteWithRetryRetryThenSuccess(t *testing.T) {
 	ctx := context.Background()
 	attempts := 0
 	cfg := &RetryConfig{
-		MaxAttempts:  3,
-		InitialDelay: 10 * time.Millisecond,
-		MaxDelay:     100 * time.Millisecond,
-		Multiplier:   2.0,
-		Jitter:       0,
+		MaxAttempts:     3,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		Multiplier:      2.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
 	}
 
 	err := ExecuteWithRetry(ctx, cfg, func() error {
@@ -82,11 +87,12 @@ func TestExecuteWithRetryMaxAttemptsExceeded(t *testing.T) {
 	ctx := context.Background()
 	attempts := 0
 	cfg := &RetryConfig{
-		MaxAttempts:  3,
-		InitialDelay: 10 * time.Millisecond,
-		MaxDelay:     100 * time.Millisecond,
-		Multiplier:   2.0,
-		Jitter:       0,
+		MaxAttempts:     3,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		Multiplier:      2.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
 	}
 
 	err := ExecuteWithRetry(ctx, cfg, func() error {
@@ -135,11 +141,12 @@ func TestExecuteWithRetryContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	attempts := 0
 	cfg := &RetryConfig{
-		MaxAttempts:  5,
-		InitialDelay: 100 * time.Millisecond,
-		MaxDelay:     1 * time.Second,
-		Multiplier:   2.0,
-		Jitter:       0,
+		MaxAttempts:     5,
+		InitialDelay:    100 * time.Millisecond,
+		MaxDelay:        1 * time.Second,
+		Multiplier:      2.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
 	}
 
 	// Cancel after a short delay
@@ -227,9 +234,11 @@ func TestBackoffMaxDelay(t *testing.T) {
 }
 
 func TestIsRetryableEmpty(t *testing.T) {
-	// When no retryable errors defined, all errors are retryable
-	if !isRetryable(errors.New("any error"), nil) {
-		t.Error("Expected all errors to be retryable when list is empty")
+	// When no retryable errors defined, nothing is retryable (safe-by-default
+	// per AI.md PART 9: never retry a 4xx or a non-idempotent write on
+	// transient failure).
+	if isRetryable(errors.New("any error"), nil) {
+		t.Error("Expected no errors to be retryable when list is empty")
 	}
 }
 
@@ -296,11 +305,12 @@ func TestExecuteWithRetryContextCancelledDuringWait(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	attempts := 0
 	cfg := &RetryConfig{
-		MaxAttempts:  10,
-		InitialDelay: 200 * time.Millisecond,
-		MaxDelay:     5 * time.Second,
-		Multiplier:   2.0,
-		Jitter:       0,
+		MaxAttempts:     10,
+		InitialDelay:    200 * time.Millisecond,
+		MaxDelay:        5 * time.Second,
+		Multiplier:      2.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
 	}
 
 	// Cancel after the first attempt has returned an error but before the sleep ends.
@@ -381,11 +391,12 @@ func TestExecuteWithRetryResultNonRetryableError(t *testing.T) {
 func TestExecuteWithRetryResultContextCancelledDuringWait(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cfg := &RetryConfig{
-		MaxAttempts:  10,
-		InitialDelay: 200 * time.Millisecond,
-		MaxDelay:     5 * time.Second,
-		Multiplier:   2.0,
-		Jitter:       0,
+		MaxAttempts:     10,
+		InitialDelay:    200 * time.Millisecond,
+		MaxDelay:        5 * time.Second,
+		Multiplier:      2.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
 	}
 
 	go func() {
@@ -435,11 +446,12 @@ func TestExecuteWithRetryDelayCapExceeded(t *testing.T) {
 	ctx := context.Background()
 	attempts := 0
 	cfg := &RetryConfig{
-		MaxAttempts:  3,
-		InitialDelay: 10 * time.Millisecond,
-		MaxDelay:     11 * time.Millisecond,
-		Multiplier:   100.0,
-		Jitter:       0,
+		MaxAttempts:     3,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        11 * time.Millisecond,
+		Multiplier:      100.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
 	}
 
 	err := ExecuteWithRetry(ctx, cfg, func() error {
@@ -463,11 +475,12 @@ func TestExecuteWithRetryContextCancelledAtLoopTop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	attempts := 0
 	cfg := &RetryConfig{
-		MaxAttempts:  5,
-		InitialDelay: 1 * time.Millisecond,
-		MaxDelay:     5 * time.Millisecond,
-		Multiplier:   1.0,
-		Jitter:       0,
+		MaxAttempts:     5,
+		InitialDelay:    1 * time.Millisecond,
+		MaxDelay:        5 * time.Millisecond,
+		Multiplier:      1.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
 	}
 
 	err := ExecuteWithRetry(ctx, cfg, func() error {
@@ -491,11 +504,12 @@ func TestExecuteWithRetryResultMaxAttemptsExhausted(t *testing.T) {
 	ctx := context.Background()
 	attempts := 0
 	cfg := &RetryConfig{
-		MaxAttempts:  3,
-		InitialDelay: 10 * time.Millisecond,
-		MaxDelay:     11 * time.Millisecond,
-		Multiplier:   100.0,
-		Jitter:       0,
+		MaxAttempts:     3,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        11 * time.Millisecond,
+		Multiplier:      100.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
 	}
 
 	result, err := ExecuteWithRetryResult(ctx, cfg, func() (string, error) {
@@ -522,11 +536,12 @@ func TestExecuteWithRetryResultContextCancelledAtLoopTop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	attempts := 0
 	cfg := &RetryConfig{
-		MaxAttempts:  5,
-		InitialDelay: 1 * time.Millisecond,
-		MaxDelay:     5 * time.Millisecond,
-		Multiplier:   1.0,
-		Jitter:       0,
+		MaxAttempts:     5,
+		InitialDelay:    1 * time.Millisecond,
+		MaxDelay:        5 * time.Millisecond,
+		Multiplier:      1.0,
+		Jitter:          0,
+		RetryableErrors: []error{ErrTemporary},
 	}
 
 	_, err := ExecuteWithRetryResult(ctx, cfg, func() (int, error) {

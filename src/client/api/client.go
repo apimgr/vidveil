@@ -233,7 +233,7 @@ func (c *APIClient) FetchURLResponseBytes(url string) ([]byte, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("cannot connect to server at %s: %w", c.baseURL, err)
+		return nil, &ConnectionError{BaseURL: c.baseURL, Err: err}
 	}
 	defer resp.Body.Close()
 
@@ -243,7 +243,7 @@ func (c *APIClient) FetchURLResponseBytes(url string) ([]byte, error) {
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+		return nil, &StatusError{StatusCode: resp.StatusCode, Body: string(body)}
 	}
 
 	return body, nil
@@ -264,13 +264,13 @@ func (c *APIClient) get(url string, result interface{}) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("cannot connect to server at %s: %w", c.baseURL, err)
+		return &ConnectionError{BaseURL: c.baseURL, Err: err}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+		return &StatusError{StatusCode: resp.StatusCode, Body: string(body)}
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {

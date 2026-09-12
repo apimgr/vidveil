@@ -10,15 +10,25 @@ import (
 
 // ── LoadAppConfig: YAML parse error ──────────────────────────────────────────
 
-func TestLoadAppConfig_InvalidYAML_ReturnsError(t *testing.T) {
+func TestLoadAppConfig_InvalidYAML_FallsBackToDefault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "server.yml")
 	if err := os.WriteFile(cfgPath, []byte(":\nbroken: [\nyaml"), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	_, _, err := LoadAppConfig(dir, t.TempDir())
-	if err == nil {
-		t.Error("LoadAppConfig with invalid YAML: expected error, got nil")
+	// Per AI.md PART 5: never fail startup on invalid config — warn and
+	// replace with default. LoadAppConfig must return the default config
+	// (no error) when server.yml is unparseable.
+	cfg, _, err := LoadAppConfig(dir, t.TempDir())
+	if err != nil {
+		t.Errorf("LoadAppConfig with invalid YAML: expected no error (default fallback), got %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("LoadAppConfig with invalid YAML: expected non-nil default config")
+	}
+	defaultCfg := DefaultAppConfig()
+	if cfg.Server.Mode != defaultCfg.Server.Mode {
+		t.Errorf("LoadAppConfig with invalid YAML: expected default mode %q, got %q", defaultCfg.Server.Mode, cfg.Server.Mode)
 	}
 }
 

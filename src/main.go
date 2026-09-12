@@ -437,7 +437,9 @@ func main() {
 	// - Checks if PID file exists and process is running
 	// - Verifies process is actually our binary (not PID reuse)
 	// - Removes stale PID files automatically
-	if pidFile != "" {
+	// Containers never get a PID file per AI.md PART 8: the runtime supervises the
+	// process and PIDs are namespace-local, so a shared-volume PID file is misleading
+	if pidFile != "" && !system.IsRunningInContainer() {
 		if err := signalpkg.WritePIDFile(pidFile, appName); err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 			os.Exit(1)
@@ -1043,7 +1045,7 @@ Shell Integration:
 --shell help                           - Show shell help
 
 Server Configuration:
---mode {production|development}        - Application mode (default: production)
+--mode {production|development|debug}  - Application mode (default: production)
 --config DIR                           - Config directory
 --data DIR                             - Data directory
 --cache DIR                            - Cache directory

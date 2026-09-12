@@ -39,7 +39,7 @@ trap cleanup SIGTERM SIGINT SIGQUIT
 # Log startup info
 # =============================================================================
 log "Container starting..."
-log "MODE: ${MODE:-development}"
+log "MODE: ${MODE:-production}"
 log "DEBUG: ${DEBUG:-false}"
 log "TZ: ${TZ}"
 log "ADDRESS: ${ADDRESS:-0.0.0.0}"

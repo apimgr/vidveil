@@ -40,8 +40,8 @@ func TestCsrfDeny(t *testing.T) {
 	if rec.Code != 403 {
 		t.Errorf("csrfDeny: status = %d, want 403", rec.Code)
 	}
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
-		t.Errorf("csrfDeny: Content-Type = %q, want application/json", ct)
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json; charset=utf-8" {
+		t.Errorf("csrfDeny: Content-Type = %q, want application/json; charset=utf-8", ct)
 	}
 
 	var body map[string]interface{}

@@ -167,11 +167,14 @@ func canEscalate() bool {
 		}
 	}
 
-	// Check for doas as alternative
+	// Check for doas as alternative per AI.md PART 23 (BSD/Alpine escalation
+	// tool). execElevated() below is willing to use doas whenever it is on
+	// PATH, so canEscalate() must report the same capability here — a doas
+	// binary present is treated as sufficient, matching the sudo -n check
+	// above (doas has no standard non-interactive probe equivalent to
+	// `sudo -n true`, so presence on PATH is the best available signal).
 	if _, err := exec.LookPath("doas"); err == nil {
-		// Check if user is in doas.conf
-		// For simplicity, just check if doas exists and user is in wheel
-		return false
+		return true
 	}
 
 	return false

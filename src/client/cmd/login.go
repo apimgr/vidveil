@@ -33,7 +33,7 @@ func RunLoginCommand(args []string) error {
 		input, _ := reader.ReadString('\n')
 		serverURL = strings.TrimSpace(input)
 		if serverURL == "" {
-			return fmt.Errorf("server URL is required")
+			return NewExitError(ExitUsage, fmt.Errorf("server URL is required"))
 		}
 	} else {
 		fmt.Printf("Server URL: %s\n", serverURL)
@@ -44,7 +44,7 @@ func RunLoginCommand(args []string) error {
 	input, _ := reader.ReadString('\n')
 	apiTokenInput := strings.TrimSpace(input)
 	if apiTokenInput == "" {
-		return fmt.Errorf("token is required")
+		return NewExitError(ExitUsage, fmt.Errorf("token is required"))
 	}
 
 	// Save token to token file

@@ -124,7 +124,8 @@ func SafeFilePath(baseDir, userPath string) (string, error) {
 }
 
 // PathSecurityMiddleware normalizes paths and blocks traversal attempts per AI.md PART 5
-// This middleware MUST be first in the chain - before auth, before routing.
+// Runs at execution position #3 in the middleware chain (after URL normalization
+// and RequestID, before security headers, allowlist, rate limiting and auth).
 func PathSecurityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		original := r.URL.Path

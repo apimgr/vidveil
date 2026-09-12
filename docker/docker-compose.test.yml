@@ -43,7 +43,7 @@ services:
   vidveil-cache-test:
     image: valkey/valkey:alpine
     pull_policy: always
-    container_name: vidveil-cache
+    container_name: vidveil-cache-test
     restart: "no"
     logging: *default-logging
     tmpfs:

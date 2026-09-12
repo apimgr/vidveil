@@ -355,3 +355,12 @@ Tor Circuit-ID/PROXY-protocol implementation pass, not yet fixed:
   rule files -> update all files", so a full regeneration pass of the rule
   set against the current AI.md is owed. Regenerating 14 summary files is
   not a mechanical edit and is deliberately not attempted here.
+
+## Pre-existing lint finding (surfaced by go-lint during the 2026-09-11 commit gate)
+
+- `src/common/version/version.go:22`: variable named `BuildTime` should be
+  `BuildEpoch` per AI.md PART 7 (`BuildEpoch` is the Unix timestamp embedded
+  via ldflags; `BuildDate` is derived from it at runtime, never embedded
+  directly). Not touched by this session's changes — pre-existing,
+  non-blocking. Rename `BuildTime` -> `BuildEpoch` and fix any call sites/
+  ldflags references accordingly.

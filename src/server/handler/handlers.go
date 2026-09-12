@@ -1828,6 +1828,7 @@ type BuildInfo struct {
 // /metrics is internal-only (PART 20) and must NOT appear here.
 type FeaturesInfo struct {
 	Tor   TorInfo `json:"tor"`
+	I2P   I2PInfo `json:"i2p"`
 	GeoIP bool    `json:"geoip"`
 }
 
@@ -1837,6 +1838,16 @@ type TorInfo struct {
 	Running  bool   `json:"running"`
 	Status   string `json:"status"`
 	Hostname string `json:"hostname"`
+}
+
+// I2PInfo is the I2P eepsite block of FeaturesInfo per AI.md PART 31.2.
+// I2P is opt-in (server.i2p.enabled) and off by default; no I2P config or
+// service is currently wired up, so this always reports disabled.
+type I2PInfo struct {
+	Enabled bool   `json:"enabled"`
+	Running bool   `json:"running"`
+	Status  string `json:"status"`
+	Address string `json:"address"`
 }
 
 // ChecksInfo holds component health checks — "ok"/"error" only, no details,
@@ -1963,6 +1974,13 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// restart_required per AI.md PART 13 status->HTTP table: HTTP 200,
+	// carries pending_restart+restart_reason. Only applies when checks
+	// are otherwise healthy - an unhealthy check always takes priority.
+	if status == "healthy" && h.appConfig != nil && h.appConfig.PendingRestart {
+		status = "restart_required"
+	}
+
 	// Get project info from config per PART 16 branding
 	projectName := "VidVeil"
 	projectTagline := "Privacy-first video search"
@@ -2006,6 +2024,9 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 					Running:  h.torSvc != nil && h.torSvc.IsRunning(),
 					Status:   h.getTorStatus(),
 					Hostname: h.getTorHostname(),
+				},
+				I2P: I2PInfo{
+					Status: "disabled",
 				},
 				GeoIP: h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 			},
@@ -3502,11 +3523,13 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build checks object - MUST be simple "ok"/"error" strings
-	// Per AI.md PART 13
+	// Per AI.md PART 13 - real probes, must match HealthCheck's checks
+	// (this handler backs the /api/{api_version}/server/healthz alias,
+	// which per AI.md PART 13/14 must return the same data as /healthz)
 	checks := map[string]string{
-		"database": "ok",
-		"cache":    "ok",
-		"disk":     "ok",
+		"database": h.checkDatabase(r.Context()),
+		"cache":    h.checkCache(),
+		"disk":     h.checkDisk(),
 	}
 
 	// Overall status - per AI.md PART 13: derive from checks
@@ -3523,8 +3546,12 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := getAPIResponseFormat(r)
 
-	// Add scheduler check
-	checks["scheduler"] = "ok"
+	// Add scheduler check - per AI.md PART 13: real probe, must match HealthCheck
+	checks["scheduler"] = h.checkScheduler()
+	if checks["scheduler"] != "ok" {
+		status = "unhealthy"
+		httpStatus = http.StatusServiceUnavailable
+	}
 
 	// Tor status for features and checks
 	torEnabled := h.torSvc != nil && h.torSvc.IsEnabled()
@@ -3537,6 +3564,13 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 			status = "unhealthy"
 			httpStatus = http.StatusServiceUnavailable
 		}
+	}
+
+	// restart_required per AI.md PART 13 status->HTTP table: HTTP 200,
+	// carries pending_restart+restart_reason. Only applies when checks
+	// are otherwise healthy - an unhealthy check always takes priority.
+	if status == "healthy" && h.appConfig != nil && h.appConfig.PendingRestart {
+		status = "restart_required"
 	}
 
 	// Project branding from config
@@ -3628,6 +3662,9 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 				Running:  torRunning,
 				Status:   h.getTorStatus(),
 				Hostname: h.getTorHostname(),
+			},
+			I2P: I2PInfo{
+				Status: "disabled",
 			},
 			GeoIP: h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled,
 		},

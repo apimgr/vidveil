@@ -1916,12 +1916,14 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 		return nil, "", fmt.Errorf("failed to read config: %w", err)
 	}
 
-	// Start with defaults; unknown YAML keys are errors per AI.md PART 5
+	// Start with defaults and overlay the file contents.
+	// Per AI.md PART 5: never fail startup on invalid config - warn and use defaults.
+	// Unknown or legacy keys are ignored rather than treated as fatal.
 	cfg := DefaultAppConfig()
 	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
 	if err := dec.Decode(cfg); err != nil {
-		return nil, "", fmt.Errorf("failed to parse config: %w", err)
+		fmt.Fprintf(os.Stderr, "Warning: failed to parse %s (%v), using default configuration\n", configPath, err)
+		cfg = DefaultAppConfig()
 	}
 
 	// Validate and fix invalid config values per AI.md PART 12
@@ -1971,10 +1973,22 @@ func validateConfig(cfg *AppConfig) {
 		}
 	}
 
-	// Validate mode (must be production or development)
-	if cfg.Server.Mode != "" && cfg.Server.Mode != "production" && cfg.Server.Mode != "development" {
-		fmt.Fprintf(os.Stderr, "Warning: invalid mode %q, using default %q\n", cfg.Server.Mode, defaults.Server.Mode)
-		cfg.Server.Mode = defaults.Server.Mode
+	// Validate mode per AI.md PART 6 Mode Shortcuts.
+	// Accepted: production (prod), development (dev, devel), debug.
+	// Shortcuts normalize to the canonical name; "debug" is preserved because
+	// it also defaults the debug flag on (PART 6).
+	if cfg.Server.Mode != "" {
+		switch strings.ToLower(cfg.Server.Mode) {
+		case "prod", "production":
+			cfg.Server.Mode = "production"
+		case "dev", "devel", "development":
+			cfg.Server.Mode = "development"
+		case "debug":
+			cfg.Server.Mode = "debug"
+		default:
+			fmt.Fprintf(os.Stderr, "Warning: invalid mode %q, using default %q\n", cfg.Server.Mode, defaults.Server.Mode)
+			cfg.Server.Mode = defaults.Server.Mode
+		}
 	}
 
 	// Validate API version (must be non-empty, lowercase "v" + digits, per PART 14)
@@ -2370,14 +2384,18 @@ func (w *ConfigWatcher) reload() {
 		return
 	}
 
-	// Unknown YAML keys are errors per AI.md PART 5
+	// Start from defaults and overlay the file; unknown or legacy keys are
+	// ignored rather than fatal (AI.md PART 5 never declares them errors).
+	// A genuine parse failure keeps the currently loaded config.
 	newCfg := DefaultAppConfig()
 	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
 	if err := dec.Decode(newCfg); err != nil {
 		fmt.Printf("⚠️  Failed to parse config for reload: %v\n", err)
 		return
 	}
+
+	// Invalid values are warned about and replaced with defaults, same as startup
+	validateConfig(newCfg)
 
 	// Update the shared config — all settings that can live-reload without restart.
 	// Port and Address changes are intentionally excluded: they require a listener

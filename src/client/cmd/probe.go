@@ -82,7 +82,7 @@ func RunProbeCommand(args []string) error {
 	}
 
 	if !probeAllEngines && probeEngineFilter == "" {
-		return fmt.Errorf("specify --all to probe all engines or --engines=name to probe specific engines")
+		return NewExitError(ExitUsage, fmt.Errorf("specify --all to probe all engines or --engines=name to probe specific engines"))
 	}
 
 	// Get list of engines to probe

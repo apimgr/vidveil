@@ -993,6 +993,9 @@ type BuiltinTaskFuncs struct {
 	HealthcheckSelf TaskFunc
 	// tor.health - Every 10 minutes, check Tor connectivity
 	TorHealth TaskFunc
+	// i2p_health - Every 10 minutes per AI.md PART 18: only registered when the
+	// I2P opt-in is enabled and a provider resolved (PART 31.2); nil otherwise
+	I2PHealth TaskFunc
 	// update_check - Daily at 06:00 per AI.md PART 18/22: notify-only unless auto_install is true
 	UpdateCheck TaskFunc
 }

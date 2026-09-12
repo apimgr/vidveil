@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 28: Retry Logic with Exponential Backoff
+// AI.md PART 9: Retry Logic with Exponential Backoff
 package retry
 
 import (
@@ -12,9 +12,9 @@ import (
 
 // RetryConfig holds retry configuration
 type RetryConfig struct {
-	// Maximum number of attempts (default: 3)
+	// Maximum number of attempts (default: 5)
 	MaxAttempts int
-	// Initial delay between retries (default: 100ms)
+	// Initial delay between retries (default: 1s)
 	InitialDelay time.Duration
 	// Maximum delay between retries (default: 30s)
 	MaxDelay time.Duration
@@ -26,14 +26,22 @@ type RetryConfig struct {
 	RetryableErrors []error
 }
 
-// defaultRetryConfig returns default retry configuration
+// defaultRetryConfig returns default retry configuration.
+// Only network errors, timeouts, and server errors are retryable by default
+// (AI.md PART 9: never retry a 4xx or a non-idempotent write on transient failure).
 func defaultRetryConfig() *RetryConfig {
 	return &RetryConfig{
-		MaxAttempts:  3,
-		InitialDelay: 100 * time.Millisecond,
+		MaxAttempts:  5,
+		InitialDelay: 1 * time.Second,
 		MaxDelay:     30 * time.Second,
 		Multiplier:   2.0,
 		Jitter:       0.1,
+		RetryableErrors: []error{
+			ErrTemporary,
+			ErrTimeout,
+			ErrNetworkError,
+			ErrServerError,
+		},
 	}
 }
 
@@ -155,11 +163,13 @@ func ExecuteWithRetryResult[T any](ctx context.Context, cfg *RetryConfig, op Ope
 	return result, lastErr
 }
 
-// isRetryable checks if an error should trigger a retry
+// isRetryable checks if an error should trigger a retry.
+// If no specific errors are defined, nothing is retried — safe-by-default
+// per AI.md PART 9 (only network errors/timeouts/503 are retryable; never
+// retry a 4xx or a non-idempotent write on transient failure).
 func isRetryable(err error, retryableErrors []error) bool {
-	// If no specific errors defined, retry all errors
 	if len(retryableErrors) == 0 {
-		return true
+		return false
 	}
 
 	for _, retryable := range retryableErrors {

@@ -47,8 +47,10 @@ func main() {
 	cmd.OfficialSite = OfficialSite
 	cmd.BinaryName = filepath.Base(os.Args[0])
 
+	// AI.md PART 32: failures exit with the classified code (2 config,
+	// 3 connection, 4 auth, 5 not found, 64 usage), not a blanket 1
 	if err := cmd.ExecuteCLI(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(cmd.ExitCodeForError(err))
 	}
 }

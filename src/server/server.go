@@ -735,13 +735,19 @@ func (s *Server) setupRoutes() {
 			http.Error(w, i18n.Translate(i18n.DetectLocale(r), "error.not_found"), http.StatusNotFound)
 			return
 		}
-		// Per AI.md PART 30: <html lang dir> must never be hardcoded — execute as template
-		tmpl, err := template.New("offline").Parse(string(data))
+		// Per AI.md PART 30: <html lang dir> must never be hardcoded — execute as template.
+		// The "t" FuncMap entry is required here too — offline.html's strings are
+		// translation keys, not hardcoded English, per AI.md PART 30 i18n rules.
+		lang := i18n.DetectLocale(r)
+		tmpl, err := template.New("offline").Funcs(template.FuncMap{
+			"t": func(key string) string {
+				return i18n.Translate(lang, key)
+			},
+		}).Parse(string(data))
 		if err != nil {
 			writeGuaranteedError(w, r, http.StatusInternalServerError)
 			return
 		}
-		lang := i18n.DetectLocale(r)
 		// Buffer the render so a mid-execute failure never leaks a partial
 		// body — errors caught before any bytes reach the client, per AI.md
 		// PART 16 "Error Pages" guaranteed-response fallback.

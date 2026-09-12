@@ -172,6 +172,39 @@ Next run: {next_run}
 {app_name}
 {app_url}`,
 
+	"update_available": `Subject: Update Available - {app_name}
+---
+UPDATE AVAILABLE
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+A new version of {app_name} is available.
+
+Current version: {current_version}
+New version: {new_version}
+Channel: {channel}
+
+--
+{app_name}
+{app_url}`,
+
+	"update_installed": `Subject: Update Installed - {app_name}
+---
+UPDATE INSTALLED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+{app_name} has been updated.
+
+Previous version: {previous_version}
+New version: {new_version}
+
+--
+{app_name}
+{app_url}`,
+
 	"test": `Subject: Test Email - {app_name}
 ---
 Hello,
@@ -390,15 +423,16 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 		return fmt.Errorf("no SMTP server configured")
 	}
 
-	// Build RFC 5321-compliant From header: "Name <email>" or just "email"
-	from := fromAddr
+	// Build the RFC 5322 From header: "Name <email>" or just "email".
+	// The SMTP envelope sender (MAIL FROM) must stay the bare address.
+	fromHeader := fromAddr
 	if fromName != "" {
-		from = fmt.Sprintf("%s <%s>", fromName, fromAddr)
+		fromHeader = fmt.Sprintf("%s <%s>", fromName, fromAddr)
 	}
 
 	// Build message
 	var msg bytes.Buffer
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
 	if replyTo := strings.TrimSpace(s.appConfig.Server.Notifications.Email.ReplyTo); replyTo != "" {
 		msg.WriteString(fmt.Sprintf("Reply-To: %s\r\n", replyTo))
@@ -428,11 +462,11 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 
 	if tlsMode == "tls" {
 		// Implicit TLS (port 465)
-		return s.sendTLS(addr, host, auth, from, to, msg.Bytes())
+		return s.sendTLS(addr, host, auth, fromAddr, to, msg.Bytes())
 	}
 
 	// Standard SMTP with optional STARTTLS (tlsMode == "starttls" or "none")
-	return smtp.SendMail(addr, auth, from, []string{to}, msg.Bytes())
+	return smtp.SendMail(addr, auth, fromAddr, []string{to}, msg.Bytes())
 }
 
 // sendTLS sends email over implicit TLS

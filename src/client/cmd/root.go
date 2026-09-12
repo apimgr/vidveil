@@ -623,6 +623,10 @@ func LoadCLIConfigFromFile() error {
 	}
 	cliConfigHasSavedServerAddress = cliConfig.Server.Address != ""
 	fileCLIConfig := *cliConfig
+	// fileCLIConfig mirrors what is on disk, so restore the raw legacy server token.
+	// Without this, a token resolved from auth.token_file would be written back into
+	// server.token whenever a flag triggers a config save.
+	fileCLIConfig.Server.Token = legacyServerToken
 	debugModeEnabled = cliConfig.Debug
 
 	// Per AI.md PART 32: Token priority
@@ -884,7 +888,7 @@ func applyCLIEnvironmentOverrides() error {
 // validateCLIServerURL verifies that a server URL is absolute and uses http or https.
 func validateCLIServerURL(serverURL string) error {
 	if serverURL == "" {
-		return fmt.Errorf("server URL is required")
+		return NewExitError(ExitConfig, fmt.Errorf("server URL is required"))
 	}
 
 	parsedServerURL, err := url.ParseRequestURI(serverURL)

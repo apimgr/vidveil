@@ -158,6 +158,10 @@ release: build
 	@tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
 		--exclude='binaries' --exclude='releases' --exclude='*.tar.gz' \
 		-czf $(RELDIR)/$(PROJECTNAME)-$(VERSION)-source.tar.gz .
+	@echo "Generating checksums..."
+	@cd $(RELDIR) && rm -f sha256.txt sha512.txt && \
+		sha256sum $$(ls | grep -v -e '^sha256.txt$$' -e '^sha512.txt$$') > sha256.txt && \
+		sha512sum $$(ls | grep -v -e '^sha256.txt$$' -e '^sha512.txt$$') > sha512.txt
 	@gh release delete $(RELEASE_TAG) --yes 2>/dev/null || true
 	@git tag -d $(RELEASE_TAG) 2>/dev/null || true
 	@git push origin :refs/tags/$(RELEASE_TAG) 2>/dev/null || true
@@ -204,8 +208,8 @@ docker:
 test:
 	@echo "Running tests with coverage..."
 	@mkdir -p $(GO_CACHE) $(GO_BUILD)
-	@mkdir -p "/tmp/$(PROJECTORG)"
-	@COVDIR=$$(mktemp -d "/tmp/$(PROJECTORG)/$(INTERNAL_NAME)-XXXXXX") && \
+	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECTORG)"
+	@COVDIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(INTERNAL_NAME)-XXXXXX") && \
 	$(_GO_OPTS) -v "$$COVDIR:$$COVDIR" casjaysdev/go:latest \
 		go test -v -cover -coverprofile="$$COVDIR/coverage.out" ./... && \
 	PCT=$$($(_GO_OPTS) -v "$$COVDIR:$$COVDIR" casjaysdev/go:latest \

@@ -661,7 +661,7 @@ html.theme-auto .theme-button .icon-auto {
     display: flex;
     flex: 1;
     max-width: none;
-    margin-left: 0;
+    margin-inline-start: 0;
 }
 
 .nav-search input {
@@ -712,7 +712,7 @@ html.theme-auto .theme-button .icon-auto {
 .nav-panel {
     position: fixed;
     top: 0;
-    right: -280px;
+    inset-inline-end: -280px;
     width: 280px;
     height: 100vh;
     background: var(--bg-secondary);
@@ -724,7 +724,7 @@ html.theme-auto .theme-button .icon-auto {
 }
 
 .nav-panel.open {
-    right: 0;
+    inset-inline-end: 0;
 }
 
 .nav-panel-header {
@@ -804,7 +804,7 @@ html.theme-auto .theme-button .icon-auto {
     .search-form--compact {
         flex: 0 0 auto;
         max-width: 400px;
-        margin-left: auto;
+        margin-inline-start: auto;
     }
 }
 
@@ -926,7 +926,7 @@ header .search-form {
 .search-form--compact {
     flex: 1;
     max-width: 400px;
-    margin-left: auto;
+    margin-inline-start: auto;
 }
 
 .search-form--compact .search-wrapper input {
@@ -1300,7 +1300,7 @@ header .search-form {
 .video-card .thumb-preview {
     position: absolute;
     top: 0;
-    left: 0;
+    inset-inline-start: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -1332,7 +1332,7 @@ header .search-form {
     content: "";
     position: absolute;
     top: 8px;
-    right: 8px;
+    inset-inline-end: 8px;
     width: 24px;
     height: 24px;
     background: var(--color-scrim-70);
@@ -1349,7 +1349,7 @@ header .search-form {
 .video-card .duration {
     position: absolute;
     bottom: 8px;
-    right: 8px;
+    inset-inline-end: 8px;
     background: var(--color-scrim-85);
     color: white;
     padding: 3px 8px;
@@ -1361,7 +1361,7 @@ header .search-form {
 .video-card .quality-badge {
     position: absolute;
     top: 8px;
-    left: 8px;
+    inset-inline-start: 8px;
     background: var(--accent);
     color: var(--bg-primary);
     padding: 2px 6px;
@@ -1414,7 +1414,7 @@ header .search-form {
     text-decoration: none;
     font-size: 1rem;
     transition: background 0.2s, color 0.2s;
-    margin-left: auto;
+    margin-inline-start: auto;
 }
 
 .video-card .download-link:hover {
@@ -1430,7 +1430,7 @@ header .search-form {
 .card-menu-container {
     position: absolute;
     top: 8px;
-    right: 8px;
+    inset-inline-end: 8px;
     z-index: 10;
 }
 
@@ -1477,7 +1477,7 @@ header .search-form {
 .video-card-fav-btn {
     position: absolute;
     top: 8px;
-    right: 8px;
+    inset-inline-end: 8px;
     z-index: 10;
     display: flex;
     align-items: center;
@@ -1519,7 +1519,7 @@ header .search-form {
 .card-menu {
     position: absolute;
     top: 32px;
-    right: 0;
+    inset-inline-end: 0;
     min-width: 160px;
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -1538,7 +1538,7 @@ header .search-form {
     color: var(--text-primary);
     font-size: 0.875rem;
     cursor: pointer;
-    text-align: left;
+    text-align: start;
     transition: background 0.1s;
 }
 
@@ -1967,7 +1967,7 @@ header .search-form {
 
 .about ul {
     list-style: none;
-    padding-left: 0;
+    padding-inline-start: 0;
 }
 
 .about li {
@@ -2052,7 +2052,7 @@ header .search-form {
 
 .privacy ul {
     list-style: none;
-    padding-left: 0;
+    padding-inline-start: 0;
     color: var(--text-secondary);
 }
 
@@ -2237,7 +2237,7 @@ header .search-form {
 #toast-container {
     position: fixed;
     top: 1rem;
-    right: 1rem;
+    inset-inline-end: 1rem;
     z-index: 10000;
     display: flex;
     /* column-reverse stacks the newest toast on top per AI.md PART 16 */
@@ -2253,7 +2253,7 @@ header .search-form {
 #toast {
     position: fixed;
     top: 1rem;
-    right: 1rem;
+    inset-inline-end: 1rem;
     z-index: 10000;
     opacity: 0;
     transform: translateX(100%);
@@ -2322,7 +2322,7 @@ header .search-form {
 .toast-progress {
     position: absolute;
     bottom: 0;
-    left: 0;
+    inset-inline-start: 0;
     height: 3px;
     width: 100%;
     background: var(--color-highlight-30);
@@ -2548,7 +2548,7 @@ header .search-form {
 .modal-close {
     position: absolute;
     top: 1rem;
-    right: 1rem;
+    inset-inline-end: 1rem;
     background: none;
     border: none;
     font-size: 1.5rem;
@@ -2706,7 +2706,7 @@ header .search-form {
 .skip-link {
     position: absolute;
     top: -40px;
-    left: 0;
+    inset-inline-start: 0;
     background: var(--accent);
     color: var(--bg-primary);
     padding: 0.5rem 1rem;
@@ -2876,7 +2876,7 @@ a:focus-visible {
     font-size: 0.65rem;
     padding: 0.1rem 0.4rem;
     border-radius: 3px;
-    margin-left: auto;
+    margin-inline-start: auto;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 500;
@@ -3597,7 +3597,7 @@ a:focus-visible {
 @media (min-width: 601px) {
     .cookie-banner-content {
         flex-direction: row;
-        text-align: left;
+        text-align: start;
     }
 
     .cookie-buttons {
@@ -3872,7 +3872,7 @@ a:focus-visible {
 .notification-bell .badge {
     position: absolute;
     top: 0;
-    right: 0;
+    inset-inline-end: 0;
     background: var(--color-danger);
     color: white;
     font-size: 0.7rem;
@@ -3888,7 +3888,7 @@ a:focus-visible {
 .notification-dropdown {
     position: absolute;
     top: 100%;
-    right: 0;
+    inset-inline-end: 0;
     margin-top: 0.5rem;
     width: 360px;
     max-height: 400px;
@@ -4050,7 +4050,7 @@ a:focus-visible {
 .profile-dropdown {
     position: absolute;
     top: 100%;
-    right: 0;
+    inset-inline-end: 0;
     margin-top: 0.5rem;
     min-width: 200px;
     background: var(--color-bg-secondary);
@@ -4113,7 +4113,7 @@ a:focus-visible {
 
 .profile-dropdown .logout {
     width: 100%;
-    text-align: left;
+    text-align: start;
     background: none;
     border: none;
     cursor: pointer;
@@ -4253,7 +4253,7 @@ a:focus-visible {
 
 .health-section .info-grid dd {
     margin: 0;
-    text-align: left;
+    text-align: start;
     padding: 0;
     color: var(--text-primary);
 }
@@ -4351,7 +4351,7 @@ a:focus-visible {
 .checks-table th,
 .checks-table td {
     padding: 0.75rem 1rem;
-    text-align: left;
+    text-align: start;
     border-bottom: 1px solid var(--border);
 }
 
@@ -4810,7 +4810,7 @@ a:focus-visible {
     color: var(--text-primary);
     font-size: 0.875rem;
     cursor: pointer;
-    text-align: left;
+    text-align: start;
     list-style: none;
 }
 
@@ -4973,7 +4973,7 @@ a:focus-visible {
     .filters-panel--compact .filters-content {
         position: absolute;
         z-index: 100;
-        right: 0;
+        inset-inline-end: 0;
         top: 100%;
         min-width: 320px;
         margin-top: 0.5rem;

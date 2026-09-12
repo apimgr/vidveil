@@ -23,6 +23,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -56,8 +57,13 @@ func newCSRFMiddleware(cfg config.CSRFConfig, logger *logging.AppLogger) func(ht
 				// Accept token from header or form field (double-submit pattern).
 				submitted := r.Header.Get(cfg.HeaderName)
 				if submitted == "" {
-					// Parse form to get the field value (r.ParseForm is idempotent).
-					_ = r.ParseForm()
+					// r.FormValue self-dispatches to ParseMultipartForm (multipart
+					// bodies, e.g. the favorites-import form) or ParseForm
+					// (urlencoded bodies) as needed. It must NOT be preceded by an
+					// explicit r.ParseForm() call — that would set r.Form from the
+					// (empty) URL query alone and permanently block the multipart
+					// fallback (FormValue only self-parses when r.Form == nil),
+					// causing every multipart CSRF submission to be rejected.
 					submitted = r.FormValue(cfg.CookieName)
 				}
 				// Constant-time comparison per AI.md PART 11 (CSRF tokens are credentials).
@@ -150,13 +156,31 @@ func csrfDeny(w http.ResponseWriter, r *http.Request, reason, endpoint string, l
 			"reason":   reason,
 		})
 	}
-	w.Header().Set("Content-Type", "application/json")
+	const message = "CSRF token validation failed"
+	accept := r.Header.Get("Accept")
+	// Per AI.md PART 16 → CSRF Protection: JSON only for API/Bearer-style
+	// clients; browser/frontend requests get content-negotiated text or HTML
+	// instead of a raw JSON body (no-JS-first, PART 16).
+	wantsJSON := strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(accept, "application/json")
+	if wantsJSON {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":      false,
+			"error":   "CSRF_FAILED",
+			"message": message,
+		})
+		return
+	}
+	if strings.Contains(accept, "text/plain") {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintf(w, "403 Forbidden: %s\n", message)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusForbidden)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":      false,
-		"error":   "CSRF_FAILED",
-		"message": "CSRF token validation failed",
-	})
+	fmt.Fprintf(w, `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1><p>%s</p></body></html>`, message)
 }
 
 // csrfGenToken generates a random hex-encoded CSRF token of tokenLength bytes.

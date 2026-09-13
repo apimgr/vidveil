@@ -356,6 +356,50 @@ Tor Circuit-ID/PROXY-protocol implementation pass, not yet fixed:
   set against the current AI.md is owed. Regenerating 14 summary files is
   not a mechanical edit and is deliberately not attempted here.
 
+## Decisions needed (GUI toolkit cgo-free verification, PART 32)
+
+- AI.md PART 32 claims Gio and Fyne are pure-Go/cgo-free GUI toolkits. Both
+  claims are false on Linux, confirmed by direct source inspection of their
+  own package code (not marketing text) — Gio and Fyne were each adopted
+  into go.mod in turn and each failed this same check post-hoc. AI.md is
+  READ-ONLY and cannot be corrected there; `.claude/rules/binary-rules.md`
+  still names Gio/Fyne and needs updating once a final toolkit is chosen.
+- Full transitive-dependency cgo verification (Dockerized `go mod download
+  all` + `grep -rl '^import "C"'` across every module, then reading each
+  hit's `//go:build` tag) was run against two further candidates:
+  - `github.com/gogpu/ui@v0.1.54` — CLEAN. Own source and its entire
+    transitive graph (gpucontext, wgpu, gg, gputypes, gogpu core, naga,
+    go-webgpu/goffi, go-webgpu/webgpu) contain no cgo import active on a
+    default `CGO_ENABLED=0` Linux build. Only cgo hit found anywhere in the
+    graph is `go-webgpu/goffi`'s `dl_android_cgo.go`, gated
+    `android && cgo && arm64` (irrelevant to Linux). This is the strongest
+    verified candidate so far.
+  - `github.com/go-gui-org/go-gui@v0.75.0` — DISQUALIFIED. Its hard,
+    unconditional dependency `gopxl/beep/v2` -> `ebitengine/oto/v3`
+    (`speaker.go` imports oto unconditionally) has an ALSA-backed Linux
+    driver (`driver_unix.go`) that carries `#cgo pkg-config: alsa` +
+    `import "C"` under the build tag
+    `!android && !darwin && !js && !windows && !nintendosdk && !playstation5`
+    — satisfied on default Linux, and NOT gated behind the `cgo` build
+    constraint itself (unlike `ebitengine/purego`'s internal cgo files,
+    which are safely gated `cgo && (...)` and excluded under
+    `CGO_ENABLED=0`). No way to exclude this via build tags without patching
+    upstream.
+  - `github.com/go-gtk/gtk4` and `modernc.org/tk9.0` were not deep-verified
+    for cgo because both fail on a more basic ground first: each requires a
+    system GTK4 or Tcl/Tk runtime installed on the target machine, which
+    conflicts with AI.md's global "Single self-contained binary" /
+    "First-run works with zero config" defaults — a disqualifying
+    architectural tradeoff independent of cgo status.
+- Pending human decision: adopt `gogpu/ui` (pre-v1.0, "Phase 4 Production
+  v1.0 in progress" per its own repo, ~459 GitHub stars) as the third GUI
+  toolkit choice, given the prior two choices both failed; or drop the
+  native GUI mode requirement for vidveil entirely (documented exception in
+  IDEA.md); or accept a CGO exception for GUI builds only (also requires an
+  explicit IDEA.md exception, contradicts PART 32's "no exceptions" wording).
+  `src/client/gui/gui.go` still imports Gio and needs a full rewrite once
+  this is resolved.
+
 ## Pre-existing lint finding (surfaced by go-lint during the 2026-09-11 commit gate)
 
 - `src/common/version/version.go:22`: variable named `BuildTime` should be

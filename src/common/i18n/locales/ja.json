@@ -639,6 +639,7 @@
   "search.results_for": "検索結果：",
   "search.results_time": "%dms",
   "search.results_word": "件の結果",
+  "search.updating_results": "結果を更新中...",
   "search.select_all": "すべて選択",
   "search.streaming": "ストリーミング中...",
   "security.back_to_security": "セキュリティに戻る",

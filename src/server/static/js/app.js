@@ -39,6 +39,25 @@ function getTheme() {
     return 'auto';
 }
 
+// results_per_page is server-authoritative (IDEA.md "Search Settings"), so the
+// cookie wins over the localStorage mirror — the same cookie-first shape as
+// getTheme() above. Reading only localStorage let a visitor who set 20/50/100
+// with JS disabled (or who cleared localStorage) get the server-rendered
+// "Load more" link while JS still armed infinite scroll, running both at once.
+// Cookie values are constrained to 0/20/50/100 server-side
+// (getRequestResultsPerPage in src/server/handler/handlers.go); mirror that
+// validation and fall back to the caller's localStorage value only when the
+// cookie is absent or out of range.
+function getServerResultsPerPage(localFallback) {
+    var match = document.cookie.match(/(?:^|;\s*)results_per_page=([^;]*)/);
+    if (match) {
+        var n = parseInt(decodeURIComponent(match[1]), 10);
+        if ([0, 20, 50, 100].indexOf(n) !== -1) return n;
+    }
+    var fb = parseInt(localFallback ?? 0, 10);
+    return [0, 20, 50, 100].indexOf(fb) !== -1 ? fb : 0;
+}
+
 // Get the effective theme (resolves 'auto' to actual light/dark)
 function getEffectiveTheme() {
     var theme = getTheme();
@@ -334,7 +353,9 @@ function setupPreferencesForm() {
     if (previewDelaySelect) previewDelaySelect.value = prefs.previewDelay ?? 0;
 
     const resultsSelect = document.getElementById('results-per-page');
-    if (resultsSelect) resultsSelect.value = prefs.resultsPerPage || 0;
+    // Cookie is server-authoritative (IDEA.md "Search Settings"); the server
+    // already rendered `selected` from it, so only fall back to localStorage.
+    if (resultsSelect) resultsSelect.value = getServerResultsPerPage(prefs.resultsPerPage);
 
     const openNewTabCheckbox = document.getElementById('open-new-tab');
     if (openNewTabCheckbox) openNewTabCheckbox.checked = prefs.openNewTab !== false;
@@ -2494,7 +2515,7 @@ if (document.readyState === 'loading') {
         // small, non-blocking status bar instead of a full-page spinner.
         pendingGridSwap = true;
         var statusText = document.getElementById('status-text');
-        if (statusText) statusText.textContent = 'Updating results...';
+        if (statusText) statusText.textContent = getSearchI18n().updatingResults;
         showSearchElement('status-bar');
 
         var minDuration = parseInt(userPrefs.minDuration) || 0;
@@ -2597,7 +2618,7 @@ if (document.readyState === 'loading') {
     // (search.tmpl #pagination-container) and this function returns
     // immediately without touching them.
     function setupInfiniteScroll() {
-        var resultsPerPage = parseInt((userPrefs && userPrefs.resultsPerPage) ?? 0, 10);
+        var resultsPerPage = getServerResultsPerPage(userPrefs && userPrefs.resultsPerPage);
         if (resultsPerPage !== 0) {
             return;
         }
@@ -2615,7 +2636,7 @@ if (document.readyState === 'loading') {
         var loadIndicator = document.createElement('div');
         loadIndicator.className = 'load-more-indicator hidden';
         loadIndicator.id = 'load-more-indicator';
-        loadIndicator.innerHTML = '<div class="spinner"></div><span>Loading more results...</span>';
+        loadIndicator.innerHTML = '<div class="spinner"></div><span>' + getSearchI18n().loadingMore + '</span>';
         grid.parentNode.insertBefore(loadIndicator, sentinel);
 
         // Setup intersection observer
@@ -3761,7 +3782,7 @@ document.addEventListener('error', function(e) {
             document.getElementById('autoplay-preview').checked = prefs.autoplayPreview;
             document.getElementById('preview-delay').value = prefs.previewDelay;
 
-            document.getElementById('results-per-page').value = prefs.resultsPerPage;
+            document.getElementById('results-per-page').value = getServerResultsPerPage(prefs.resultsPerPage);
             document.getElementById('open-new-tab').checked = prefs.openNewTab;
 
             document.getElementById('default-preview-only').checked = prefs.defaultPreviewOnly;

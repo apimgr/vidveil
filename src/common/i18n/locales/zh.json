@@ -639,6 +639,7 @@
   "search.results_for": "搜索结果：",
   "search.results_time": "用时 %d毫秒",
   "search.results_word": "个结果",
+  "search.updating_results": "正在更新结果...",
   "search.select_all": "全选",
   "search.streaming": "正在串流...",
   "security.back_to_security": "返回安全",

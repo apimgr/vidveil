@@ -639,6 +639,7 @@
   "search.results_for": "Results for",
   "search.results_time": "in %dms",
   "search.results_word": "results",
+  "search.updating_results": "Updating results...",
   "search.select_all": "Select All",
   "search.streaming": "streaming...",
   "security.back_to_security": "Back to Security",

@@ -9,7 +9,7 @@
     {{template "public/site-banner" .}}
     {{template "public/header" .}}
     <main class="home" id="main-content" role="main">
-        <h1>Vidveil</h1>
+        <h1>{{.Title}}</h1>
         <p>{{.Description}}</p>
         <form action="/search" method="get" class="search-form" role="search" aria-label="{{ t "a11y.video_search" }}">
             <label for="search-input" class="visually-hidden">{{ t "a11y.search_query" }}</label>

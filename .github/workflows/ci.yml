@@ -8,6 +8,7 @@ on:
   schedule:
     # Weekly security run (Monday 06:00 UTC) — only security jobs run on schedule
     - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read

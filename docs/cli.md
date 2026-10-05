@@ -52,6 +52,7 @@ The CLI automatically selects the appropriate interface:
 | `--color <mode>` | Color output: `always`, `never`, `auto` |
 | `--timeout <seconds>` | Request timeout (default: 30) |
 | `--debug` | Enable debug output |
+| `--lang <code>` | Language tag (e.g. `en`, `de-DE`) sent as the `Accept-Language` request header. Values containing anything other than letters, digits, `-`, or `_` are ignored |
 | `-h, --help` | Show help |
 | `-v, --version` | Show version |
 
@@ -70,6 +71,7 @@ The CLI automatically selects the appropriate interface:
 | `VIDVEIL_OUTPUT_COLOR` | Output color mode (canonical) |
 | `VIDVEIL_COLOR` | Output color compatibility alias |
 | `VIDVEIL_DEBUG` | Enable debug output |
+| `VIDVEIL_LANG` | Language tag sent as the `Accept-Language` header (set by `--lang`) |
 
 For each pair, the canonical name is checked first; the alias applies only when the canonical variable is unset.
 

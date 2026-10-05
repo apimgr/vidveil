@@ -12,11 +12,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -881,16 +883,21 @@ func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) er
 
 	// Phase 2: all checks passed - write buffered contents to real paths.
 	for _, f := range entry.files {
-		var targetPath string
+		var targetRoot, relative string
 		switch {
 		case strings.HasPrefix(f.name, "config/"):
-			targetPath = filepath.Join(m.paths.Config, strings.TrimPrefix(f.name, "config/"))
+			targetRoot, relative = m.paths.Config, strings.TrimPrefix(f.name, "config/")
 		case strings.HasPrefix(f.name, "data/"):
-			targetPath = filepath.Join(m.paths.Data, strings.TrimPrefix(f.name, "data/"))
+			targetRoot, relative = m.paths.Data, strings.TrimPrefix(f.name, "data/")
 		case strings.HasPrefix(f.name, "ssl/"):
-			targetPath = filepath.Join(m.paths.SSL, strings.TrimPrefix(f.name, "ssl/"))
+			targetRoot, relative = m.paths.SSL, strings.TrimPrefix(f.name, "ssl/")
 		default:
 			continue
+		}
+
+		targetPath, err := resolveRestoreTarget(targetRoot, relative)
+		if err != nil {
+			return fmt.Errorf("refusing to extract %q: %w", f.name, err)
 		}
 
 		if f.isDir {
@@ -918,6 +925,51 @@ type restoreFileEntry struct {
 	isDir   bool
 	mode    int64
 	content []byte
+}
+
+// validateArchiveEntryName rejects tar entry names that are absolute, contain a
+// ".." traversal element, or use backslash separators (a Windows traversal
+// vector that path.Clean on Linux would not strip). Called while parsing, before
+// any entry is buffered, so a malicious archive never reaches the filesystem.
+func validateArchiveEntryName(name string) error {
+	if name == "" {
+		return errors.New("empty entry name")
+	}
+	if strings.ContainsRune(name, '\x00') {
+		return errors.New("entry name contains a null byte")
+	}
+	if strings.Contains(name, `\`) {
+		return errors.New("entry name contains a backslash separator")
+	}
+	if path.IsAbs(name) || filepath.IsAbs(name) {
+		return errors.New("entry name is absolute")
+	}
+	if volume := filepath.VolumeName(name); volume != "" {
+		return errors.New("entry name carries a volume name")
+	}
+	for _, segment := range strings.Split(name, "/") {
+		if segment == ".." {
+			return errors.New("entry name contains a parent-directory reference")
+		}
+	}
+	return nil
+}
+
+// resolveRestoreTarget joins an archive entry name onto its extraction root and
+// re-checks that the result stays inside that root. This is defense in depth
+// behind validateArchiveEntryName: it holds even if a new entry name form is
+// introduced upstream.
+func resolveRestoreTarget(root, entryName string) (string, error) {
+	cleanRoot := filepath.Clean(root)
+	target := filepath.Clean(filepath.Join(cleanRoot, entryName))
+	rel, err := filepath.Rel(cleanRoot, target)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve %q under %q: %w", entryName, root, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("entry %q escapes %q", entryName, root)
+	}
+	return target, nil
 }
 
 // restoreArchive holds a fully-parsed, validated backup archive prior to extraction.
@@ -967,6 +1019,13 @@ func loadRestoreArchive(data []byte) (*restoreArchive, error) {
 			strings.HasPrefix(header.Name, "ssl/")
 		if !relevant {
 			continue
+		}
+
+		// Reject any entry whose name could escape its extraction root. A name
+		// like "config/../../etc/cron.d/x" passes the prefix test above but
+		// resolves outside {config_dir} once joined, so validate the whole name.
+		if err := validateArchiveEntryName(header.Name); err != nil {
+			return nil, fmt.Errorf("invalid backup entry %q: %w", header.Name, err)
 		}
 
 		if header.Typeflag == tar.TypeDir {

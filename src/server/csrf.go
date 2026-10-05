@@ -190,9 +190,9 @@ func csrfGenToken(tokenLength int) string {
 	}
 	b := make([]byte, tokenLength)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback: generate a shorter token to avoid panicking.
-		b = make([]byte, 16)
-		_, _ = rand.Read(b)
+		// Never emit a predictable token if the system CSPRNG fails. Returning an
+		// empty token causes protected requests to fail closed in the middleware.
+		return ""
 	}
 	return hex.EncodeToString(b)
 }

@@ -84,6 +84,7 @@ The following open-source libraries are used:
 - **github.com/aws/smithy-go** - Apache-2.0
 - **github.com/aws/smithy-go/internal/sync/singleflight** - BSD-3-Clause
 - **github.com/aymanbagabas/go-osc52/v2** - MIT
+- **github.com/aymerick/douceur** - MIT
 - **github.com/aziontech/azionapi-go-sdk/idns** - MIT
 - **github.com/baidubce/bce-sdk-go** - Apache-2.0
 - **github.com/benbjohnson/clock** - MIT
@@ -98,8 +99,10 @@ The following open-source libraries are used:
 - **github.com/charmbracelet/x/ansi** - MIT
 - **github.com/charmbracelet/x/term** - MIT
 - **github.com/clbanning/mxj/v2** - MIT
+- **github.com/clipperhouse/uax29/v2** - MIT
 - **github.com/cloudflare/circl** - BSD-3-Clause
 - **github.com/coder/websocket** - ISC
+- **github.com/coregx/signals** - MIT
 - **github.com/cretz/bine** - MIT
 - **github.com/davecgh/go-spew/spew** - ISC
 - **github.com/dgryski/go-rendezvous** - MIT
@@ -131,9 +134,16 @@ The following open-source libraries are used:
 - **github.com/go-playground/validator/v10** - MIT
 - **github.com/go-resty/resty/v2** - MIT
 - **github.com/go-viper/mapstructure/v2** - MIT
+- **github.com/go-webgpu/goffi** - MIT
 - **github.com/goccy/go-yaml** - MIT
 - **github.com/gofrs/flock** - BSD-3-Clause
 - **github.com/gofrs/uuid** - MIT
+- **github.com/gogpu/gg** - MIT
+- **github.com/gogpu/gogpu** - MIT
+- **github.com/gogpu/gpucontext** - MIT
+- **github.com/gogpu/gputypes** - MIT
+- **github.com/gogpu/ui** - MIT
+- **github.com/gogpu/wgpu** - MIT
 - **github.com/golang-jwt/jwt/v4** - MIT
 - **github.com/golang-jwt/jwt/v5** - MIT
 - **github.com/golang/protobuf/proto** - BSD-3-Clause
@@ -144,6 +154,7 @@ The following open-source libraries are used:
 - **github.com/googleapis/gax-go/v2** - BSD-3-Clause
 - **github.com/gophercloud/gophercloud** - Apache-2.0
 - **github.com/gophercloud/utils** - Apache-2.0
+- **github.com/gorilla/css** - BSD-3-Clause
 - **github.com/hashicorp/errwrap** - MPL-2.0
 - **github.com/hashicorp/go-cleanhttp** - MPL-2.0
 - **github.com/hashicorp/go-multierror** - MPL-2.0
@@ -177,6 +188,7 @@ The following open-source libraries are used:
 - **github.com/magiconair/properties** - BSD-2-Clause
 - **github.com/mattn/go-isatty** - MIT
 - **github.com/mattn/go-runewidth** - MIT
+- **github.com/microcosm-cc/bluemonday** - BSD-3-Clause
 - **github.com/miekg/dns** - BSD-3-Clause
 - **github.com/mimuret/golang-iij-dpf/pkg** - MIT
 - **github.com/mitchellh/go-homedir** - MIT
@@ -207,6 +219,7 @@ The following open-source libraries are used:
 - **github.com/ovh/go-ovh/ovh** - BSD-3-Clause
 - **github.com/pelletier/go-toml/v2** - MIT
 - **github.com/peterhellberg/link** - MIT
+- **github.com/pires/go-proxyproto** - Apache-2.0
 - **github.com/pkg/browser** - BSD-2-Clause
 - **github.com/pkg/errors** - BSD-2-Clause
 - **github.com/pmezard/go-difflib/difflib** - BSD-3-Clause

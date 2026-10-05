@@ -337,30 +337,34 @@ func (d *AppDatabase) QueryContext(ctx context.Context, query string, args ...in
 	return rows, err
 }
 
-// QueryRow executes a query that returns at most one row
+// QueryRow executes a query that returns at most one row.
 // Per AI.md PART 10: All queries MUST have timeouts (5s for reads).
 // The returned *sql.Row is scanned by the caller after this function
 // returns, so cancel is fired by the timeout timer rather than deferred
 // (a deferred cancel would cancel the context before the caller scans).
-func (d *AppDatabase) QueryRow(query string, args ...interface{}) *sql.Row {
+//
+// As with database/sql, the statement's error is reported by row.Scan: a
+// non-nil error here means the query produced no row at all and the caller must
+// not call Scan on it.
+func (d *AppDatabase) QueryRow(query string, args ...interface{}) (*sql.Row, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	time.AfterFunc(5*time.Second, cancel)
-	var row *sql.Row
-	_ = instrumentQuery(query, func() error {
-		row = d.db.QueryRowContext(ctx, query, args...)
-		return row.Err()
-	})
-	return row
+	return d.QueryRowContext(ctx, query, args...)
 }
 
-// QueryRowContext executes a query that returns at most one row with context
-func (d *AppDatabase) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+// QueryRowContext executes a query that returns at most one row with context.
+// The error is non-nil only when the underlying query could not be issued; an
+// empty result is a successful query that row.Scan reports as sql.ErrNoRows.
+func (d *AppDatabase) QueryRowContext(ctx context.Context, query string, args ...interface{}) (*sql.Row, error) {
 	var row *sql.Row
 	_ = instrumentQuery(query, func() error {
 		row = d.db.QueryRowContext(ctx, query, args...)
-		return row.Err()
+		return nil
 	})
-	return row
+	if row == nil {
+		return nil, sql.ErrNoRows
+	}
+	return row, nil
 }
 
 // Begin starts a new transaction.
@@ -416,14 +420,22 @@ func (d *AppDatabase) TableExists(tableName string) (bool, error) {
 	query := "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
 
 	var exists int
-	err := d.QueryRow(query, tableName).Scan(&exists)
+	row, err := d.QueryRow(query, tableName)
+	if err != nil {
+		return false, err
+	}
+	err = row.Scan(&exists)
 	return exists > 0, err
 }
 
 // Version returns the database server version
 func (d *AppDatabase) Version() (string, error) {
 	var version string
-	err := d.QueryRow("SELECT sqlite_version()").Scan(&version)
+	row, err := d.QueryRow("SELECT sqlite_version()")
+	if err != nil {
+		return "", err
+	}
+	err = row.Scan(&version)
 	return version, err
 }
 

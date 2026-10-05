@@ -11,11 +11,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
@@ -423,6 +425,146 @@ func SanitizeLogFields(fields map[string]interface{}) map[string]interface{} {
 		}
 	}
 	return sanitized
+}
+
+// cefVersion returns the version string used in the CEF deviceVersion field.
+// "dev" is not a valid CEF version, so it degrades to "0" per the CEF spec.
+func cefVersion() string {
+	v := version.GetVersion()
+	if v == "" || v == "dev" {
+		return "0"
+	}
+	return v
+}
+
+// cefExtensions renders a CEF extension list ("key=value key2=value2") from the
+// masked client IP and the sanitized detail fields per AI.md PART 11. CEF
+// extension values may contain "=" and escaped pipes, so they go through
+// cefEscape; control characters are stripped (the log-file raw-text rule in
+// AI.md PART 11).
+func cefExtensions(ip string, details map[string]interface{}) string {
+	parts := []string{"src=" + cefEscape(ip)}
+	sanitized := SanitizeLogFields(details)
+	// Sorted so the rendered line is deterministic; Go map order is random.
+	keys := make([]string, 0, len(sanitized))
+	for k := range sanitized {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		parts = append(parts, cefEscape(k)+"="+cefEscape(fmt.Sprintf("%v", sanitized[k])))
+	}
+	return strings.Join(parts, " ")
+}
+
+// cefEscape sanitizes a CEF extension key or value: control characters are
+// stripped (the log-file raw-text rule per AI.md PART 11), the backslash is
+// doubled, and a pipe is replaced with an underscore, since a pipe terminates
+// the CEF header and a value must never be able to forge a boundary.
+func cefEscape(s string) string {
+	var sb strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\\':
+			sb.WriteString(`\\`)
+		case r == '|':
+			sb.WriteByte('_')
+		case r == 0x7f || r < 0x20:
+			// control characters are dropped
+		default:
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
+}
+
+// cefHeaderEscape sanitizes a CEF header field (version, signature, name,
+// severity). Pipes are escaped as "\|" rather than replaced, so an event name
+// containing a pipe can never forge an extra header boundary and desync a
+// SIEM parser. Control characters are stripped per AI.md PART 11.
+func cefHeaderEscape(s string) string {
+	var sb strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\\':
+			sb.WriteString(`\\`)
+		case r == '|':
+			sb.WriteString(`\|`)
+		case r == 0x7f || r < 0x20:
+			// stripped
+		default:
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
+}
+
+// stripLogControl removes ANSI escape sequences and control characters from a
+// rendered log line, per AI.md PART 11 "All log files (every log listed above) —
+// raw text only": no ANSI escape codes, no emojis, no control characters except
+// the newlines the writers append themselves.
+//
+// This is defense-in-depth at the write boundary: request-controlled values
+// (path, referer, user agent) reach the access log verbatim, so a crafted
+// request could otherwise inject cursor codes into a file an operator tails.
+func stripLogControl(s string) string {
+	// Consume escape sequences first, so the sequence body does not survive as
+	// harmless-looking text once the ESC byte itself is removed.
+	if strings.IndexByte(s, 0x1b) >= 0 {
+		s = dropEscapeSequences(s)
+	}
+	// Tab is dropped too: the raw-text rule allows only newlines as separators.
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// dropEscapeSequences removes ESC-initiated sequences: CSI (ESC [ ... final
+// byte) and OSC (ESC ] ... BEL or ST), plus any other bare ESC byte.
+func dropEscapeSequences(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); {
+		if s[i] != 0x1b {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		// Step past the ESC; a trailing ESC at end of string ends the walk.
+		i++
+		if i >= len(s) {
+			break
+		}
+		switch s[i] {
+		case '[':
+			// CSI: parameter and intermediate bytes, then a final byte.
+			i++
+			for i < len(s) && (s[i] < 0x40 || s[i] > 0x7e) {
+				i++
+			}
+			if i < len(s) {
+				// Skip the final byte that closes the sequence.
+				i++
+			}
+		case ']':
+			// OSC: runs until BEL, or until the ESC backslash terminator.
+			i++
+			for i < len(s) && s[i] != 0x07 && s[i] != 0x1b {
+				i++
+			}
+			if i < len(s) && s[i] == 0x1b {
+				// Skip the ESC and its backslash terminator.
+				i += 2
+			} else if i < len(s) {
+				// Skip the BEL terminator.
+				i++
+			}
+		}
+	}
+	return b.String()
 }
 
 // Level represents log severity
@@ -913,7 +1055,7 @@ func (l *AppLogger) log(level Level, output string, message string, fields map[s
 		line = sb.String()
 	}
 
-	w.Write([]byte(line + "\n"))
+	w.Write([]byte(stripLogControl(line) + "\n"))
 }
 
 // Debug logs a debug message
@@ -1012,7 +1154,7 @@ func (l *AppLogger) Access(method, path, proto, remoteAddr, referer, userAgent s
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	w := l.outputs["access"]
-	w.Write([]byte(line))
+	w.Write([]byte(stripLogControl(line)))
 	w.Write([]byte("\n"))
 }
 
@@ -1100,7 +1242,7 @@ func (l *AppLogger) Auth(user, remoteAddr, result, reason string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	w := l.outputs["auth"]
-	w.Write([]byte(line))
+	w.Write([]byte(stripLogControl(line)))
 	w.Write([]byte("\n"))
 }
 
@@ -1112,10 +1254,16 @@ func (l *AppLogger) Auth(user, remoteAddr, result, reason string) {
 func (l *AppLogger) Security(event, remoteAddr string, details map[string]interface{}) {
 	w, ok := l.outputs["security"]
 	if !ok {
-		// Fall back to server log so the event is never silently dropped
-		l.log(LevelWarn, "security", event, map[string]interface{}{
-			"remote_addr": MaskIP(remoteAddr),
-		})
+		// Fall back to server log so the event is never silently dropped.
+		// The output name must be one that actually exists — "security" is
+		// absent by definition here, and log() silently returns for an
+		// unknown output, which dropped the event entirely.
+		fields := map[string]interface{}{"remote_addr": MaskIP(remoteAddr)}
+		for k, v := range SanitizeLogFields(details) {
+			fields[k] = v
+		}
+		l.log(LevelWarn, "server", "security: "+event, fields)
+		l.log(LevelWarn, "app", "security: "+event, fields)
 		return
 	}
 
@@ -1150,13 +1298,22 @@ func (l *AppLogger) Security(event, remoteAddr string, details map[string]interf
 		line = string(b)
 	case "text":
 		line = fmt.Sprintf("%s [WARN] security event=%s ip=%s", ts, event, maskedIP)
+	case "cef":
+		// Common Event Format per AI.md PART 11: "CEF:0|Vendor|Product|Version|
+		// SignatureID|Name|Severity|extensions" for SIEM tools (ArcSight, Splunk).
+		// Extensions are a space-joined key=value list; the "=" inside a value is
+		// legal in CEF. Header fields (signature, name) are escaped with "\|" so
+		// an event name can never forge a header boundary.
+		ext := cefExtensions(maskedIP, details)
+		line = fmt.Sprintf("CEF:0|vidveil|vidveil|%s|%s|%s|5|%s",
+			cefVersion(), cefHeaderEscape(event), cefHeaderEscape(event), ext)
 	default:
 		line = fmt.Sprintf("%s [security] %s from %s", ts, event, maskedIP)
 	}
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	w.Write([]byte(line + "\n"))
+	w.Write([]byte(stripLogControl(line) + "\n"))
 }
 
 // AccessLogMiddleware creates middleware for access logging

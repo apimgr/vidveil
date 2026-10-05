@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -42,11 +41,18 @@ type Favorite struct {
 // getOrCreateVisitorID returns the caller's visitor_id, issuing and setting a
 // new cookie when absent. Called at the top of every favorites handler so
 // GET (list) and POST (mutate) requests share identity consistently.
+// It returns "" when no usable identifier exists (CSPRNG failure and no
+// usable cookie). Callers fail closed on "" rather than substituting a shared
+// value — a constant fallback would make every such visitor read and write
+// the same favorite rows.
 func (h *SearchHandler) getOrCreateVisitorID(w http.ResponseWriter, r *http.Request) string {
 	if c, err := r.Cookie(favoritesVisitorCookieName); err == nil && c.Value != "" {
 		return c.Value
 	}
 	id := newVisitorID()
+	if id == "" {
+		return ""
+	}
 	sslEnabled := h.appConfig != nil && h.appConfig.Server.SSL.Enabled
 	http.SetCookie(w, newSecureCookie(favoritesVisitorCookieName, id, "/", 365*24*60*60, sslEnabled))
 	return id
@@ -54,15 +60,19 @@ func (h *SearchHandler) getOrCreateVisitorID(w http.ResponseWriter, r *http.Requ
 
 // newVisitorID returns a random 32-hex-char opaque identifier — carries no
 // personal data, cannot be reversed to derive anything about the visitor.
+// Returns "" when the system CSPRNG fails, matching csrfGenToken's fail-closed
+// behavior: never issue a guessable or all-zero identifier.
 func newVisitorID() string {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
 	return hex.EncodeToString(b)
 }
 
 // listFavorites reads all favorites for a visitor, newest first.
 func (h *SearchHandler) listFavorites(visitorID string) ([]Favorite, error) {
-	if h.healthDB == nil {
+	if h.healthDB == nil || visitorID == "" {
 		return nil, sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -94,7 +104,7 @@ func (h *SearchHandler) listFavorites(visitorID string) ([]Favorite, error) {
 // UNIQUE(visitor_id, url) constraint) is treated as success — favoriting an
 // already-favorited video is idempotent, not an error.
 func (h *SearchHandler) addFavorite(visitorID, url, title, thumbnail, source string) error {
-	if h.healthDB == nil {
+	if h.healthDB == nil || visitorID == "" {
 		return sql.ErrConnDone
 	}
 	if url == "" || title == "" {
@@ -112,7 +122,7 @@ func (h *SearchHandler) addFavorite(visitorID, url, title, thumbnail, source str
 // removeFavorite deletes one favorite by id, scoped to the visitor so one
 // visitor can never delete another visitor's row via a guessed id.
 func (h *SearchHandler) removeFavorite(visitorID string, id int64) error {
-	if h.healthDB == nil {
+	if h.healthDB == nil || visitorID == "" {
 		return sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -127,7 +137,7 @@ func (h *SearchHandler) removeFavorite(visitorID string, id int64) error {
 // used by the no-JS favorite-toggle form on the search results page, which
 // only knows the video URL, not the row id.
 func (h *SearchHandler) removeFavoriteByURL(visitorID, url string) error {
-	if h.healthDB == nil {
+	if h.healthDB == nil || visitorID == "" {
 		return sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -140,7 +150,7 @@ func (h *SearchHandler) removeFavoriteByURL(visitorID, url string) error {
 
 // clearFavorites deletes every favorite belonging to a visitor.
 func (h *SearchHandler) clearFavorites(visitorID string) error {
-	if h.healthDB == nil {
+	if h.healthDB == nil || visitorID == "" {
 		return sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -156,6 +166,10 @@ func (h *SearchHandler) clearFavorites(visitorID string) error {
 // markup afterward via the JSON data island for instant add/remove feedback.
 func (h *SearchHandler) FavoritesPage(w http.ResponseWriter, r *http.Request) {
 	visitorID := h.getOrCreateVisitorID(w, r)
+	if visitorID == "" {
+		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+		return
+	}
 	favs, err := h.listFavorites(visitorID)
 	if err != nil {
 		favs = nil
@@ -193,6 +207,10 @@ func (h *SearchHandler) FavoritesSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	visitorID := h.getOrCreateVisitorID(w, r)
+	if visitorID == "" {
+		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+		return
+	}
 
 	var opErr error
 	switch r.FormValue("_method") {
@@ -222,9 +240,10 @@ func (h *SearchHandler) FavoritesSave(w http.ResponseWriter, r *http.Request) {
 	// The favorite-toggle form on the search results page (and any other
 	// non-/favorites page) submits a same-origin relative "redirect" field so
 	// the visitor lands back where they were, not on /favorites. Only a
-	// same-origin relative path is ever honored (open-redirect guard).
+	// same-origin relative path is ever honored (open-redirect guard);
+	// safeLocalRedirect also rejects protocol-relative "//host" and "/\host".
 	redirectTo := "/favorites"
-	if rt := r.FormValue("redirect"); rt != "" && strings.HasPrefix(rt, "/") && !strings.HasPrefix(rt, "//") {
+	if rt := safeLocalRedirect(r.FormValue("redirect")); rt != "/" {
 		redirectTo = rt
 	}
 	http.Redirect(w, r, redirectTo, http.StatusFound)
@@ -234,6 +253,10 @@ func (h *SearchHandler) FavoritesSave(w http.ResponseWriter, r *http.Request) {
 // favorites as a JSON file, matching the shape FavoritesImport accepts.
 func (h *SearchHandler) FavoritesExport(w http.ResponseWriter, r *http.Request) {
 	visitorID := h.getOrCreateVisitorID(w, r)
+	if visitorID == "" {
+		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+		return
+	}
 	favs, err := h.listFavorites(visitorID)
 	if err != nil {
 		favs = nil
@@ -263,6 +286,10 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	visitorID := h.getOrCreateVisitorID(w, r)
+	if visitorID == "" {
+		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+		return
+	}
 
 	var entries []importFavoriteEntry
 	if file, _, err := r.FormFile("file"); err == nil {
@@ -286,6 +313,10 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 // FavoritesAPIList handles GET /api/{api_version}/favorites.
 func (h *SearchHandler) FavoritesAPIList(w http.ResponseWriter, r *http.Request) {
 	visitorID := h.getOrCreateVisitorID(w, r)
+	if visitorID == "" {
+		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+		return
+	}
 	favs, err := h.listFavorites(visitorID)
 	if err != nil {
 		SendError(w, "SERVER_ERROR", "failed to load favorites")
@@ -302,6 +333,10 @@ func (h *SearchHandler) FavoritesAPIAdd(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	visitorID := h.getOrCreateVisitorID(w, r)
+	if visitorID == "" {
+		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+		return
+	}
 	if err := h.addFavorite(visitorID, in.URL, in.Title, in.Thumbnail, in.Source); err != nil {
 		SendError(w, "VALIDATION_FAILED", "url and title are required")
 		return
@@ -317,6 +352,10 @@ func (h *SearchHandler) FavoritesAPIRemove(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	visitorID := h.getOrCreateVisitorID(w, r)
+	if visitorID == "" {
+		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+		return
+	}
 	if err := h.removeFavorite(visitorID, id); err != nil {
 		SendError(w, "SERVER_ERROR", "failed to remove favorite")
 		return
@@ -327,6 +366,10 @@ func (h *SearchHandler) FavoritesAPIRemove(w http.ResponseWriter, r *http.Reques
 // FavoritesAPIClear handles DELETE /api/{api_version}/favorites.
 func (h *SearchHandler) FavoritesAPIClear(w http.ResponseWriter, r *http.Request) {
 	visitorID := h.getOrCreateVisitorID(w, r)
+	if visitorID == "" {
+		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+		return
+	}
 	if err := h.clearFavorites(visitorID); err != nil {
 		SendError(w, "SERVER_ERROR", "failed to clear favorites")
 		return

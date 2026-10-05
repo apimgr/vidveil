@@ -1,6 +1,6 @@
 {{/* Modal dialog component per AI.md PART 16 */}}
 {{define "modal"}}
-<dialog id="{{.ID}}" class="modal" role="dialog" aria-modal="true" aria-labelledby="{{.ID}}-title">
+<dialog id="{{.ID}}" class="modal-dialog" aria-modal="true" aria-labelledby="{{.ID}}-title">
   <div class="modal-header">
     <h3 class="modal-title" id="{{.ID}}-title">{{.Title}}</h3>
     {{/* form method="dialog" closes natively — zero JS, CSP-safe per AI.md PART 16 */}}

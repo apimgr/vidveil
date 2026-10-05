@@ -748,7 +748,9 @@ function showConfirm(message, onConfirm, onCancel) {
     var id = 'confirm-modal-' + (++confirmModalCounter);
     var i18n = getAppI18n();
     var modal = document.createElement('dialog');
-    modal.className = 'modal confirm-modal';
+    // Native dialogs use the top layer and must not inherit the legacy
+    // overlay class, whose hidden state is controlled by `.modal.show`.
+    modal.className = 'modal-dialog confirm-modal';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-labelledby', id + '-title');

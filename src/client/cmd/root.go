@@ -986,6 +986,10 @@ func initAPIClient() {
 	apiClient = api.NewAPIClient(cliConfig.Server.Address, cliConfig.Server.Token, cliConfig.Server.Timeout, cliConfig.Server.APIVersion)
 	// Per AI.md PART 32: User-Agent uses hardcoded project name with version
 	apiClient.SetUserAgent(Version)
+	// Per AI.md PART 8: --lang {code} selects the Accept-Language header sent
+	// with every CLI API request. Read from the environment so both the flag
+	// and a pre-set env var apply.
+	apiClient.SetLanguage(os.Getenv("VIDVEIL_LANG"))
 	startCLIBackgroundDiscovery()
 }
 

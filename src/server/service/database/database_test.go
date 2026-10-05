@@ -5,6 +5,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 )
@@ -151,7 +152,11 @@ func TestAppDatabase_QueryContext_Rows(t *testing.T) {
 func TestAppDatabase_QueryRow(t *testing.T) {
 	db := newSQLiteDB(t)
 	var n int
-	if err := db.QueryRow("SELECT 42").Scan(&n); err != nil {
+	row, err := db.QueryRow("SELECT 42")
+	if err != nil {
+		t.Fatalf("QueryRow SELECT 42 = %v, want nil", err)
+	}
+	if err := row.Scan(&n); err != nil {
 		t.Fatalf("QueryRow SELECT 42 Scan = %v", err)
 	}
 	if n != 42 {
@@ -162,12 +167,30 @@ func TestAppDatabase_QueryRow(t *testing.T) {
 // TestAppDatabase_QueryRowContext verifies QueryRowContext scans a value.
 func TestAppDatabase_QueryRowContext(t *testing.T) {
 	db := newSQLiteDB(t)
+	row, err := db.QueryRowContext(context.Background(), "SELECT 7")
+	if err != nil {
+		t.Fatalf("QueryRowContext SELECT 7 = %v, want nil", err)
+	}
 	var n int
-	if err := db.QueryRowContext(context.Background(), "SELECT 7").Scan(&n); err != nil {
+	if err := row.Scan(&n); err != nil {
 		t.Fatalf("QueryRowContext SELECT 7 Scan = %v", err)
 	}
 	if n != 7 {
 		t.Errorf("QueryRowContext result = %d, want 7", n)
+	}
+}
+
+// TestAppDatabase_QueryRow_NoRows verifies an empty result is a successful
+// query reported by Scan as sql.ErrNoRows, not as a pre-Scan error.
+func TestAppDatabase_QueryRow_NoRows(t *testing.T) {
+	db := newSQLiteDB(t)
+	row, err := db.QueryRow("SELECT 7 WHERE 0")
+	if err != nil {
+		t.Fatalf("QueryRow empty result = %v, want nil", err)
+	}
+	var n int
+	if err := row.Scan(&n); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("QueryRow empty result Scan = %v, want sql.ErrNoRows", err)
 	}
 }
 

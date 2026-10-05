@@ -27,6 +27,7 @@ type APIClient struct {
 	token      string
 	httpClient *http.Client
 	userAgent  string
+	language   string
 }
 
 // SearchResult represents a single search result
@@ -139,6 +140,44 @@ func (c *APIClient) SetUserAgent(version string) {
 	c.userAgent = fmt.Sprintf("vidveil-cli/%s", version)
 }
 
+// SetLanguage sets the Accept-Language value sent with every request.
+// An empty or invalid value is ignored so no header is sent, which lets the
+// server fall back to its configured default locale.
+func (c *APIClient) SetLanguage(language string) {
+	if normalized := normalizeAcceptLanguage(language); normalized != "" {
+		c.language = normalized
+	}
+}
+
+// normalizeAcceptLanguage validates a language tag before it is placed in an
+// HTTP header. Header values must not contain CR, LF, or other control
+// characters, and only a conservative BCP 47 subset is accepted.
+func normalizeAcceptLanguage(language string) string {
+	language = strings.TrimSpace(language)
+	if language == "" || len(language) > 35 {
+		return ""
+	}
+	for _, r := range language {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '_':
+		default:
+			return ""
+		}
+	}
+	return language
+}
+
+// applyCommonHeaders sets the headers shared by every outgoing request.
+func (c *APIClient) applyCommonHeaders(req *http.Request) {
+	req.Header.Set("User-Agent", c.userAgent)
+	if c.language != "" {
+		req.Header.Set("Accept-Language", c.language)
+	}
+}
+
 // Search performs a video search
 func (c *APIClient) Search(query string, page, limit int, engines []string) (*SearchResponse, error) {
 	params := url.Values{}
@@ -197,7 +236,7 @@ func (c *APIClient) Health() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	req.Header.Set("User-Agent", c.userAgent)
+	c.applyCommonHeaders(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -225,7 +264,7 @@ func (c *APIClient) FetchURLResponseBytes(url string) ([]byte, error) {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	req.Header.Set("User-Agent", c.userAgent)
+	c.applyCommonHeaders(req)
 	req.Header.Set("Accept", "application/json")
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
@@ -256,7 +295,7 @@ func (c *APIClient) get(url string, result interface{}) error {
 		return fmt.Errorf("creating request: %w", err)
 	}
 
-	req.Header.Set("User-Agent", c.userAgent)
+	c.applyCommonHeaders(req)
 	req.Header.Set("Accept", "application/json")
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)

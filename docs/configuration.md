@@ -46,10 +46,20 @@ Vidveil auto-enables the built-in Tor hidden service when a compatible `tor` bin
 | `LOG_DIR` | Override log root |
 | `LISTEN` | Override listen address |
 | `PORT` | Initial listen port (default: random `64xxx`, `80` in containers) |
+| `VIDVEIL_PORT` | Listen port; wins over `PORT` and the config file (port chain: `--port` > `VIDVEIL_PORT` > `PORT` > config > random) |
 | `BASEURL` | Serve under a URL path prefix (e.g. `/app`); ignored when unset or `/` |
 | `DOMAIN` | Force the server FQDN used to build absolute URLs (highest priority) |
 | `HOSTNAME` | Fallback FQDN when `DOMAIN` is unset; also the node id for distributed cache locks |
 | `TZ` | Time zone for scheduler timestamps (any IANA zone, e.g. `America/New_York`) |
+| `CACHE_URL` | External cache connection string; sets `server.cache.url` and promotes the cache type from `memory` to `valkey` so it is actually used. Ignored when `VIDVEIL_SERVER_CACHE_URL` or `VIDVEIL_CACHE_URL` is set |
+
+### CLI environment variables
+
+Read by the CLI rather than the server configuration tree:
+
+| Variable | Description |
+|---|---|
+| `VIDVEIL_LANG` | Language tag sent as the `Accept-Language` request header (set by the `--lang` flag). Invalid or empty values send no header, letting the server use its default locale |
 
 ### Config-file overrides
 
@@ -60,7 +70,9 @@ section also accept the shorter `VIDVEIL_{KEY}` form. Examples:
 | Variable | Overrides |
 |---|---|
 | `VIDVEIL_DATABASE_TYPE` | `database.type` |
-| `VIDVEIL_SESSION_SECRET` | `session.secret` |
+| `VIDVEIL_SESSION_SECRET` | `session.sessionSecret` |
 | `VIDVEIL_SMTP_HOST` | `smtp.host` |
+| `VIDVEIL_SERVER_CACHE_TYPE` | `server.cache.type` |
+| `VIDVEIL_SERVER_CACHE_URL` | `server.cache.url` |
 
 Environment overrides win over the config file but lose to explicit CLI flags.

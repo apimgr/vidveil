@@ -29,8 +29,9 @@
     --color-bg-secondary: #21222c;
     --color-bg-tertiary: #21222c;
     --color-text: #f8f8f2;
-    --color-text-secondary: #6272a4;
-    --color-muted: #6272a4;
+    /* Secondary text meets WCAG AA on the dark background and cards. */
+    --color-text-secondary: #8b95bd;
+    --color-muted: #8b95bd;
     --color-border: #44475a;
     --color-hover: #343746;
     --color-favorite: #ff4081;
@@ -431,6 +432,8 @@ main {
     font-size: 1rem;
     color: var(--link-color);
     padding: 0;
+    min-width: 44px;
+    min-height: 44px;
 }
 
 .text-red {
@@ -677,6 +680,7 @@ html.theme-auto .theme-button .icon-auto {
 .nav-search input:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--focus-ring-shadow);
 }
 
 .nav-search button {
@@ -1020,6 +1024,7 @@ header .search-form {
 .home-filters .filter-group select:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--focus-ring-shadow);
 }
 
 /* Home Page */

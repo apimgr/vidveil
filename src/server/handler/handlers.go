@@ -736,17 +736,12 @@ func (h *SearchHandler) AgeVerifyPage(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(ageVerifyCookieName)
 	if err == nil && cookie.Value == "1" {
 		redirect := r.URL.Query().Get("redirect")
-		if redirect == "" || !strings.HasPrefix(redirect, "/") {
-			redirect = "/"
-		}
+		redirect = safeLocalRedirect(redirect)
 		http.Redirect(w, r, redirect, http.StatusFound)
 		return
 	}
 
-	redirect := r.URL.Query().Get("redirect")
-	if redirect == "" {
-		redirect = "/"
-	}
+	redirect := safeLocalRedirect(r.URL.Query().Get("redirect"))
 
 	h.renderResponse(w, r, "age-verify", map[string]interface{}{
 		"Title":    "Age Verification - " + h.appConfig.Server.Branding.Title,
@@ -767,9 +762,7 @@ func (h *SearchHandler) AgeVerifySubmit(w http.ResponseWriter, r *http.Request) 
 
 	// Redirect to the original destination
 	redirect := r.FormValue("redirect")
-	if redirect == "" || !strings.HasPrefix(redirect, "/") {
-		redirect = "/"
-	}
+	redirect = safeLocalRedirect(redirect)
 
 	http.Redirect(w, r, redirect, http.StatusFound)
 }
@@ -907,18 +900,13 @@ func (h *SearchHandler) ContentRestrictedPage(w http.ResponseWriter, r *http.Req
 	// If already acknowledged, redirect to home or specified redirect
 	if h.hasContentRestrictionAck(r) {
 		redirect := r.URL.Query().Get("redirect")
-		if redirect == "" || !strings.HasPrefix(redirect, "/") {
-			redirect = "/"
-		}
+		redirect = safeLocalRedirect(redirect)
 		http.Redirect(w, r, redirect, http.StatusFound)
 		return
 	}
 
 	// Get redirect destination
-	redirect := r.URL.Query().Get("redirect")
-	if redirect == "" || !strings.HasPrefix(redirect, "/") {
-		redirect = "/"
-	}
+	redirect := safeLocalRedirect(r.URL.Query().Get("redirect"))
 
 	// Get restriction info for display
 	restriction := h.checkContentRestriction(r)
@@ -950,9 +938,7 @@ func (h *SearchHandler) ContentRestrictedSubmit(w http.ResponseWriter, r *http.R
 
 	// Redirect to the original destination
 	redirect := r.FormValue("redirect")
-	if redirect == "" || !strings.HasPrefix(redirect, "/") {
-		redirect = "/"
-	}
+	redirect = safeLocalRedirect(redirect)
 
 	http.Redirect(w, r, redirect, http.StatusFound)
 }
@@ -1351,6 +1337,27 @@ func (h *SearchHandler) getRequestPreviewFirst(w http.ResponseWriter, r *http.Re
 		return c.Value == "1"
 	}
 	return false
+}
+
+// safeLocalRedirect returns target only when it is a same-site, absolute-path
+// redirect target, and "/" otherwise. A bare strings.HasPrefix(target, "/")
+// check is not enough: "//evil.com" and "/\evil.com" are both protocol-relative
+// (browsers normalize the backslash) and would send the visitor off-site, so
+// any target starting with "/", "//", or "/\" is rejected. Also rejects
+// control characters, which can truncate the Location header in intermediaries.
+// Used for every user-supplied ?redirect=/redirect form field (age verify and
+// content-restricted acknowledgment flows).
+func safeLocalRedirect(target string) string {
+	if target == "" || !strings.HasPrefix(target, "/") {
+		return "/"
+	}
+	if strings.HasPrefix(target, "//") || strings.HasPrefix(target, "/\\") {
+		return "/"
+	}
+	if strings.ContainsAny(target, "\r\n\t\x00") {
+		return "/"
+	}
+	return target
 }
 
 // safeReturnPath validates a redirect target taken from either a Referer

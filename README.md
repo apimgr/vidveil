@@ -7,7 +7,7 @@
 
 ## About
 
-Privacy-respecting meta search for adult video content. No tracking, no logging, no analytics. Aggregates results from 43 video sites with bang shortcuts for targeted searches.
+Privacy-respecting meta search for adult video content. No tracking, no logging, no analytics. Aggregates results from 33 video sites with bang shortcuts for targeted searches.
 
 ## Official Site
 
@@ -227,7 +227,7 @@ Use bang shortcuts to search specific engines:
 
 **Multiple bangs**: `!ph !rt amateur` searches both PornHub and RedTube.
 
-**Full list**: See `https://x.scour.li/api/v1/bangs` for all 43 engine shortcuts.
+**Full list**: See `https://x.scour.li/api/v1/bangs` for all 66 engine shortcuts (short code and full name for each of the 33 engines).
 
 ### Supported Engines
 
@@ -250,7 +250,7 @@ Use bang shortcuts to search specific engines:
 
 #### Tier 3 - Additional Sites
 
-3Movs (`!3m`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Motherless (no bang shortcut), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
+3Movs (`!3m`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
 
 #### Tier 4 - Specialty Sites
 

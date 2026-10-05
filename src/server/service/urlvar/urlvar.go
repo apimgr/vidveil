@@ -116,6 +116,11 @@ func (r *URLResolver) isTrustedProxy(remoteAddr string) bool {
 	cfg := r.appCfg
 	r.mu.RUnlock()
 	if cfg != nil {
+		// Same /24 as the configured listen address (containerized reverse-proxy
+		// sidecar pattern) per AI.md PART 12 trusted-proxy table.
+		if sameSubnetAsListen(ip, cfg.Server.Address) {
+			return true
+		}
 		for _, cidr := range cfg.Server.TrustedProxies.Additional {
 			if cidrContains(cidr, ip) {
 				return true
@@ -123,6 +128,43 @@ func (r *URLResolver) isTrustedProxy(remoteAddr string) bool {
 		}
 	}
 	return false
+}
+
+// sameSubnetAsListen reports whether ip shares the /24 network of the configured
+// listen address. IPv6 listen addresses are matched on their /64 prefix instead,
+// since a /24 equivalent is far too narrow for a container network.
+// An unset or unparseable listen address trusts nothing extra.
+func sameSubnetAsListen(ip net.IP, listenAddr string) bool {
+	// Configured IPv6 addresses may be written in bracketed form ("[::1]"),
+	// which ParseIP rejects, so strip the brackets before parsing.
+	listenIP := net.ParseIP(strings.Trim(strings.TrimSpace(listenAddr), "[]"))
+	if listenIP == nil {
+		return false
+	}
+	// A wildcard bind ("[::]" / "0.0.0.0", the default) names no single host, so
+	// deriving a /24 from it would trust an arbitrary subnet. Trust nothing extra.
+	if listenIP.IsUnspecified() {
+		return false
+	}
+	// Compare in a single address family; a v4-mapped peer must not match a v6
+	// listen address (and vice versa).
+	if (listenIP.To4() != nil) != (ip.To4() != nil) {
+		return false
+	}
+	// net.CIDRMask takes (prefix length, total address bits) — (24, 32) for IPv4
+	// and (64, 128) for IPv6. Deriving the first argument from the second (e.g.
+	// CIDRMask(32, 32*8)) returns a nil mask, and Mask(nil) is nil for every
+	// address, which would make every same-family peer compare equal.
+	var mask net.IPMask
+	if listenIP.To4() != nil {
+		mask = net.CIDRMask(24, 32)
+	} else {
+		if listenIP.To16() == nil || ip.To16() == nil {
+			return false
+		}
+		mask = net.CIDRMask(64, 128)
+	}
+	return listenIP.Mask(mask).Equal(ip.Mask(mask))
 }
 
 // cidrContains returns true when ip falls within the given CIDR or equals the given IP.

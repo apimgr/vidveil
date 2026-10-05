@@ -432,14 +432,22 @@ func main() {
 		paths.Log = logDir
 	}
 
-	// Write PID file if specified per AI.md PART 8
+	// Write PID file per AI.md PART 8. The default path comes from paths.PIDFile
+	// (already resolved from --pid > PID_FILE > OS default by GetAppPaths), so a
+	// bare `vidveil server` still gets the documented PID file rather than none.
+	// A --pid/PID_FILE value is an explicit operator request and always wins;
+	// otherwise the server.pidfile config key decides (default true).
 	// Uses signal package which handles stale PID detection per AI.md PART 8
 	// - Checks if PID file exists and process is running
 	// - Verifies process is actually our binary (not PID reuse)
 	// - Removes stale PID files automatically
 	// Containers never get a PID file per AI.md PART 8: the runtime supervises the
 	// process and PIDs are namespace-local, so a shared-volume PID file is misleading
-	if pidFile != "" && !system.IsRunningInContainer() {
+	pidFileExplicit := *pidFileF != "" || os.Getenv("PID_FILE") != ""
+	if pidFile == "" {
+		pidFile = paths.PIDFile
+	}
+	if (pidFileExplicit || appConfig.Server.PIDFile) && pidFile != "" && !system.IsRunningInContainer() {
 		if err := signalpkg.WritePIDFile(pidFile, appName); err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 			os.Exit(1)

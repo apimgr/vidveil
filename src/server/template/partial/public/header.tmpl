@@ -4,8 +4,8 @@
     {{/* Operator-configured logo (local path or remote URL) per AI.md PART 16
          "Image Sources"; empty falls back to the built-in wordmark. */}}
     <a href="/" class="site-brand">
-        {{- if .BrandingLogo}}<img src="{{.BrandingLogo}}" alt="{{if .ProjectName}}{{.ProjectName}}{{else}}Vidveil{{end}}" class="site-brand-logo">
-        {{- else}}{{if .ProjectName}}{{.ProjectName}}{{else}}Vidveil{{end}}
+        {{- if .BrandingLogo}}<img src="{{.BrandingLogo}}" alt="{{if .ProjectName}}{{.ProjectName}}{{else}}{{ t "app.name" }}{{end}}" class="site-brand-logo">
+        {{- else}}{{if .ProjectName}}{{.ProjectName}}{{else}}{{ t "app.name" }}{{end}}
         {{- end}}
     </a>
     <div class="header-actions">

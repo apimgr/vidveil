@@ -234,14 +234,14 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"BaseURL":        urlvar.BuildURL(r, ""),
 		// Versioned API prefix ("/api/{api_version}") so pages never hardcode
 		// "v1" in documented routes or curl examples (AI.md PART 14)
-		"APIBase":        h.appConfig.APIBasePath(),
-		"Version":        versionInfo["version"],
-		"BuildDateTime":  versionInfo["build_time"],
-		"Theme":          theme,
+		"APIBase":       h.appConfig.APIBasePath(),
+		"Version":       versionInfo["version"],
+		"BuildDateTime": versionInfo["build_time"],
+		"Theme":         theme,
 		// Next mode in the toggle cycle per AI.md PART 16 "Theme Cycle Logic".
-		"NextTheme":      nextTheme(theme),
-		"ActiveNav":      templateName,
-		"Query":          "",
+		"NextTheme": nextTheme(theme),
+		"ActiveNav": templateName,
+		"Query":     "",
 		// Consent banner gating per AI.md PART 12 — rendered only when no
 		// valid cookie_consent cookie exists (zero-JS flow).
 		"HasConsentCookie": hasConsentCookie(r),

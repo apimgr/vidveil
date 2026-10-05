@@ -80,30 +80,32 @@ Findings from the PART 11/31 security compliance pass (2026-08-20), flagged
 but not fixed — each is architecture-sized or spec-contradicted and needs a
 decision before implementation:
 
-- Tor hidden-service architecture: hidden service is published via bine
-  `AddOnion` mapping onion:80 → the clearnet listener
-  (`src/server/service/tor/service.go:213-423`, `src/main.go:752`), but
-  AI.md line ~41397 explicitly requires torrc `HiddenServiceDir` +
-  `HiddenServicePort` (NOT ADD_ONION) with a dedicated PROXY-protocol
-  backend (`github.com/pires/go-proxyproto`, not in go.mod) on a
-  64000-64999 port and `HiddenServiceExportCircuitID haproxy`. The
-  committed `.claude/rules/backend-rules.md` says the opposite ("via
-  ADD_ONION") — the condensed rules file is stale and must be regenerated
-  from AI.md. Multi-file rewrite (tor service, main.go wiring, new
-  dependency, circuit-ID plumbing into logging/rate limiting); needs a
-  live-Tor verification run.
-- torrc persistence: `ensureTorrc` (`tor/service.go:1207-1229`) only writes
-  torrc when absent; spec says regenerate on every startup. Tied to the
-  torrc-driven architecture item above.
-- Tor rate-limit/blocklist keying: Tor traffic keys per-IP on the loopback
-  address (single shared bucket). Correct fix per AI.md ~16013 is
-  per-circuit-ID keying, which depends on `HiddenServiceExportCircuitID`
-  from the architecture item above.
-- Tor key-only mode reporting: `GetInfo()` (`tor/service.go:972`) reports
-  `enabled=true` for `TorServiceStatusNoTorBinary` (keys generated, no
-  binary). Spec: binary absent → INFO log, disable Tor features, continue.
-  `IsEnabled()` is already correct; only the info surface disagrees —
-  changing it alters the reported API contract, needs sign-off.
+- Tor hidden-service architecture — RESOLVED (verified 2026-09-28, stale entry
+  from 2026-08-20). The architecture is now torrc-driven exactly as AI.md
+  PART 31.1 requires, NOT `AddOnion`. `buildTorrc`
+  (`src/server/service/tor/service.go:1189`) emits `ControlPort 127.0.0.1:auto`,
+  `HiddenServiceDir`, `HiddenServicePort 80 127.0.0.1:{port}` and
+  `HiddenServiceExportCircuitID haproxy`; `newTorBackendListener()`
+  (`tor/service.go:1330`) allocates the dedicated PROXY-protocol loopback
+  listener on a fresh random 64000-64999 port every process start and wraps
+  it in `&proxyproto.Listener{}` (`tor/service.go:1347`).
+  `github.com/pires/go-proxyproto` v0.15.0 IS in go.mod. `.onion:80` therefore
+  maps to the dedicated backend port, never the clearnet listener.
+- torrc persistence — RESOLVED. `ensureTorrc`
+  (`src/server/service/tor/service.go:1301`) unconditionally rewrites the file
+  on every startup (it only uses the `os.Stat` to report whether the file
+  pre-existed), and re-chowns/chmods 0600 on non-Windows.
+- Tor rate-limit/blocklist keying — RESOLVED. `urlvar.TorClientLabel(req)`
+  (`src/server/service/urlvar/urlvar.go:675`) returns `tor:{circuit_id}` when
+  `req.RemoteAddr` falls in the fc00::/8 range Tor uses to encode the rendezvous
+  circuit ID, and the literal sentinel `tor` when circuit-ID export is
+  unavailable — never `127.0.0.1`, never deanonymizing. Callers substitute this
+  for the client IP in access logs, audit trails and rate-limit keys.
+- Tor key-only mode reporting: `GetInfo()` reports `enabled=true` for
+  `TorServiceStatusNoTorBinary` (keys generated, no binary). Spec: binary
+  absent → INFO log, disable Tor features, continue. `IsEnabled()` is already
+  correct; only the info surface disagrees — changing it alters the reported
+  API contract, needs sign-off.
 - CSP extension model: `src/config/config.go:611-621` exposes a
   full-replacement `csp` string key (violates "extend via `*_extra`, never
   replace") and `src/server/server.go:202-305` hardcodes the policy — no
@@ -400,11 +402,64 @@ Tor Circuit-ID/PROXY-protocol implementation pass, not yet fixed:
   `src/client/gui/gui.go` still imports Gio and needs a full rewrite once
   this is resolved.
 
-## Pre-existing lint finding (surfaced by go-lint during the 2026-09-11 commit gate)
+## Resolved finding: `version.BuildTime` naming (was flagged by go-lint, 2026-09-11)
 
-- `src/common/version/version.go:22`: variable named `BuildTime` should be
-  `BuildEpoch` per AI.md PART 7 (`BuildEpoch` is the Unix timestamp embedded
-  via ldflags; `BuildDate` is derived from it at runtime, never embedded
-  directly). Not touched by this session's changes — pre-existing,
-  non-blocking. Rename `BuildTime` -> `BuildEpoch` and fix any call sites/
-  ldflags references accordingly.
+- `src/common/version/version.go:22` was flagged as "rename `BuildTime` ->
+  `BuildEpoch` per AI.md PART 7". That suggestion is a **false positive** and
+  is NOT to be applied. Do not rename.
+- The flag conflated two different variables in two different packages:
+  - `main.BuildEpoch` — the Unix-seconds ldflags target, the single embedded
+    time source (Makefile:42,51 and docker/Dockerfile{,dev}:26 all pass
+    `-X 'main.BuildEpoch=...'`).
+  - `version.BuildTime` — a *derived display string*, assigned exactly once at
+    `src/main.go:82` from the already-formatted `main.BuildDate`
+    (`time.Unix(n,0).UTC().Format("2006-01-02T15:04:05Z")`). It is never an
+    ldflags target; `go build -X` cannot and does not reach it.
+- Renaming it to `BuildEpoch` would make the code strictly wrong: the value
+  it holds is an RFC 3339 date string, not a Unix timestamp. The name would
+  then contradict the value at all 11 read sites
+  (`version.go:96` `--version` output, `version.go:125` `build_time` map key,
+  and `handlers.go:963,2016,2076,2237,2270,3502,3612,3654`). Two of those
+  (`BuildDateTime()` at `handlers.go:962` and the `build.date` YAML emitter at
+  `handlers.go:2076`/`3612`) parse it back as a date.
+- AI.md never names `version.BuildTime` or the `build_time` JSON key anywhere;
+  the PART 7 constraint it was flagged against governs the *ldflags* surface
+  only, and the `version` package is outside that surface.
+- No action required. The naming is intentional: `BuildEpoch` (embedded
+  input) vs `BuildDate`/`BuildTime` (derived display output).
+
+## Deferred: `--maintenance secret|token|data` subcommands unimplemented (audit, 2026-09-30)
+
+AI.md PART 5 (`:918`) lists the accepted `--maintenance` subcommands as
+`{backup,restore,update,mode,setup,pgp,secret,token,data,compliance,--help}`.
+`src/main.go` `handleMaintenanceCommand` (`:1706-1815`) implements `backup`,
+`restore`, `mode`, `setup`, `compliance`, `pgp`, and `--help`; `update` is
+intercepted earlier at `:352-361` as an alias for `--update`. The remaining three
+hit the `default:` branch at `:1811` and exit 1 with "Unknown maintenance
+command". The `--maintenance --help` text (`:1777-1800`) does not list them either,
+so the gap is consistent between code and help text, but both contradict AI.md.
+
+Not fixed in the audit run because each is a Red Flag requiring a spec decision
+rather than a mechanical fix:
+
+- `--maintenance token revoke|list` (AI.md `:11864-11867`) has no data model to
+  act on: there is no `api_tokens` / resource-token table in
+  `src/server/service/database/migrations.go` (`getTablesDDL` creates only
+  `audit_log`, `settings`, `scheduled_tasks`, `task_history`, `app_secrets`,
+  `notifications`, `pgp_keypair`, `security_reports`, `favorites`), and no
+  token package under `src/server/service/`. Building this means designing the
+  token storage schema, not filling in a missing branch.
+- `--maintenance secret rotate <name>` (AI.md `:14036-14041`) has a partial
+  backing service: `secret.Manager.Rotate` exists at
+  `src/server/service/secret/secret.go:87` and keeps the previous value for 7
+  days, but the spec's surrounding behaviour (re-encrypt the PGP private key,
+  re-base live HMACs, 30-day grace for `encryption_key`, typed confirmation,
+  `security.*_rotated` audit events) is not implemented, and
+  `encryption_key` is not a `SecretKey` in the `app_secrets` table at all — it
+  lives in `server.yml`. This needs a decision on how much of the rotation
+  semantics to build now.
+- `--maintenance data export|delete` (AI.md `:15479-15480`) has no spec text
+  describing the export format or what "delete" covers (which tables, what
+  confirmation, whether it must satisfy the GDPR flow at `:15526-15528`).
+
+`--maintenance --help` should be extended to list these three once implemented.

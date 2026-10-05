@@ -314,10 +314,23 @@ func (s *EmailService) parseTemplate(template string) (subject, body string) {
 	return
 }
 
-// applyVars replaces {var} placeholders with values
+// sanitizeEmailHeader removes CRLF sequences that could enable header injection.
+// Header values must never contain line breaks; message bodies are not passed here.
+func sanitizeEmailHeader(v string) string {
+	return strings.NewReplacer("\r", "", "\n", "").Replace(v)
+}
+
+// sanitizeEmailVar removes CRLF sequences from template variables. Variables
+// may appear in the Subject header as well as the text body, so they use the
+// same header-safe representation.
+func sanitizeEmailVar(v string) string {
+	return sanitizeEmailHeader(v)
+}
+
+// applyVars replaces {var} placeholders with values, sanitizing to prevent header injection
 func (s *EmailService) applyVars(text string, vars map[string]string) string {
 	for k, v := range vars {
-		text = strings.ReplaceAll(text, "{"+k+"}", v)
+		text = strings.ReplaceAll(text, "{"+k+"}", sanitizeEmailVar(v))
 	}
 	return text
 }
@@ -425,19 +438,20 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 
 	// Build the RFC 5322 From header: "Name <email>" or just "email".
 	// The SMTP envelope sender (MAIL FROM) must stay the bare address.
-	fromHeader := fromAddr
+	fromHeader := sanitizeEmailHeader(fromAddr)
 	if fromName != "" {
-		fromHeader = fmt.Sprintf("%s <%s>", fromName, fromAddr)
+		fromHeader = fmt.Sprintf("%s <%s>", sanitizeEmailHeader(fromName), fromHeader)
 	}
 
-	// Build message
+	// Build message. Sanitize every caller/config-derived header value here as
+	// the final defense, including SendRaw subjects that bypass applyVars.
 	var msg bytes.Buffer
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
-	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeEmailHeader(to)))
 	if replyTo := strings.TrimSpace(s.appConfig.Server.Notifications.Email.ReplyTo); replyTo != "" {
-		msg.WriteString(fmt.Sprintf("Reply-To: %s\r\n", replyTo))
+		msg.WriteString(fmt.Sprintf("Reply-To: %s\r\n", sanitizeEmailHeader(replyTo)))
 	}
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeEmailHeader(subject)))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
 	msg.WriteString("\r\n")

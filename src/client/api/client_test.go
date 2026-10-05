@@ -2,6 +2,7 @@
 package api
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -243,5 +244,107 @@ func TestConstants_Defaults(t *testing.T) {
 	}
 	if APIClientDefaultTimeoutSeconds <= 0 {
 		t.Errorf("APIClientDefaultTimeoutSeconds = %d, must be positive", APIClientDefaultTimeoutSeconds)
+	}
+}
+
+// --- Accept-Language header ---
+
+// TestNormalizeAcceptLanguage_Accepted verifies valid BCP 47-style tags survive
+// normalization with surrounding whitespace trimmed.
+func TestNormalizeAcceptLanguage_Accepted(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"en", "en"},
+		{"de-DE", "de-DE"},
+		{"pt_BR", "pt_BR"},
+		{"  fr-CA  ", "fr-CA"},
+		{"zh-Hans-CN", "zh-Hans-CN"},
+	}
+	for _, tt := range tests {
+		if got := normalizeAcceptLanguage(tt.in); got != tt.want {
+			t.Errorf("normalizeAcceptLanguage(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestNormalizeAcceptLanguage_Rejected verifies header-injection attempts and
+// otherwise invalid values are dropped so no header is sent.
+func TestNormalizeAcceptLanguage_Rejected(t *testing.T) {
+	tests := []string{
+		"",
+		"   ",
+		"en\r\nX-Injected: 1",
+		"en\nX-Injected",
+		"en,de",
+		"en;q=0.8",
+		"en;us",
+		"../etc/passwd",
+		strings.Repeat("a", 36),
+	}
+	for _, in := range tests {
+		if got := normalizeAcceptLanguage(in); got != "" {
+			t.Errorf("normalizeAcceptLanguage(%q) = %q, want empty", in, got)
+		}
+	}
+}
+
+// TestSetLanguage_DefaultEmpty verifies a fresh client sends no Accept-Language
+// header unless one is configured.
+func TestSetLanguage_DefaultEmpty(t *testing.T) {
+	if got := (&APIClient{}).language; got != "" {
+		t.Errorf("language = %q, want empty", got)
+	}
+}
+
+// TestSetLanguage_Valid verifies a valid tag is stored.
+func TestSetLanguage_Valid(t *testing.T) {
+	c := &APIClient{}
+	c.SetLanguage("fr-CA")
+	if c.language != "fr-CA" {
+		t.Errorf("language = %q, want %q", c.language, "fr-CA")
+	}
+}
+
+// TestSetLanguage_Invalid verifies an invalid tag is discarded rather than
+// stored, leaving the previous valid value in place.
+func TestSetLanguage_Invalid(t *testing.T) {
+	c := &APIClient{}
+	c.SetLanguage("de")
+	c.SetLanguage("en\r\nX-Injected: 1")
+	if c.language != "de" {
+		t.Errorf("language = %q, want %q (invalid value should be ignored)", c.language, "de")
+	}
+}
+
+// TestApplyCommonHeaders verifies User-Agent is always sent and
+// Accept-Language is sent only when a language is configured.
+func TestApplyCommonHeaders(t *testing.T) {
+	c := &APIClient{}
+	req, err := http.NewRequest("GET", "http://example.com", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	c.applyCommonHeaders(req)
+	if got := req.Header.Get("User-Agent"); got != "" {
+		t.Errorf("User-Agent = %q, want empty (unset client)", got)
+	}
+	if _, ok := req.Header["Accept-Language"]; ok {
+		t.Error("Accept-Language must be absent when no language is configured")
+	}
+
+	c.userAgent = "vidveil-cli/1.2.3"
+	c.SetLanguage("es")
+	req2, err := http.NewRequest("GET", "http://example.com", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	c.applyCommonHeaders(req2)
+	if got := req2.Header.Get("User-Agent"); got != "vidveil-cli/1.2.3" {
+		t.Errorf("User-Agent = %q, want %q", got, "vidveil-cli/1.2.3")
+	}
+	if got := req2.Header.Get("Accept-Language"); got != "es" {
+		t.Errorf("Accept-Language = %q, want %q", got, "es")
 	}
 }

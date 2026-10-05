@@ -593,9 +593,9 @@ type GeoIPConfig struct {
 	Dir     string `yaml:"dir"`
 	Update  string `yaml:"update"`
 	// CountryMode is "none" (default), "deny" (blocklist), or "allow" (allowlist-only)
-	CountryMode    string               `yaml:"country_mode"`
-	DenyCountries  []string             `yaml:"deny_countries"`
-	AllowCountries []string             `yaml:"allow_countries"`
+	CountryMode    string   `yaml:"country_mode"`
+	DenyCountries  []string `yaml:"deny_countries"`
+	AllowCountries []string `yaml:"allow_countries"`
 	// Presets are named, operator-authored country lists (name -> []code) kept
 	// purely for reuse across allow/deny fields and environments. Per AI.md
 	// PART 19 they ship empty, are never auto-applied, and never drive

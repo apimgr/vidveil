@@ -44,8 +44,15 @@ Vidveil auto-enables the built-in Tor hidden service when a compatible `tor` bin
 | `CONFIG_DIR` | Override config root |
 | `DATA_DIR` | Override data root |
 | `LOG_DIR` | Override log root |
-| `LISTEN` | Override listen address |
+| `LISTEN` | Override listen address (wins over `ADDRESS`) |
+| `ADDRESS` | Fallback listen address, used only when `LISTEN` is unset |
 | `PORT` | Initial listen port (default: random `64xxx`, `80` in containers) |
+| `CACHE_DIR` | Override cache directory (default: `/var/cache/apimgr/vidveil` when root, else `~/.cache/apimgr/vidveil`) |
+| `BACKUP_DIR` | Override backup directory (default: `/mnt/Backups/apimgr/vidveil` when root, else `~/.local/share/Backups/apimgr/vidveil`) |
+| `DATABASE_DIR` | Override SQLite database directory (default: `<data-dir>/db`); always overrides `server.database.sqlite.dir` in the config file |
+| `SSL_DIR` | Override TLS certificate directory (default: `/etc/apimgr/vidveil/ssl` when root, else `~/.config/apimgr/vidveil/ssl`) |
+| `SECURITY_DIR` | Override secret/key material directory (default: `/var/lib/apimgr/vidveil/security` when root, else `~/.local/share/apimgr/vidveil/security`) |
+| `PID_FILE` | Override the pid file location (default: `/var/run/apimgr/vidveil.pid` when root, else `~/.local/share/apimgr/vidveil/vidveil.pid`) |
 | `VIDVEIL_PORT` | Listen port; wins over `PORT` and the config file (port chain: `--port` > `VIDVEIL_PORT` > `PORT` > config > random) |
 | `BASEURL` | Serve under a URL path prefix (e.g. `/app`); ignored when unset or `/` |
 | `DOMAIN` | Force the server FQDN used to build absolute URLs (highest priority) |

@@ -37,6 +37,29 @@ enabled only for a specific origin, never with `*`. CORS preflight allows the
 documented API methods and authentication headers, and defaults to a 24-hour
 preflight cache.
 
+Restore uploads use independent compressed and expanded archive limits. The
+server validates advertised archive metadata before writing each entry and
+enforces the same limits while streaming. The defaults follow AI.md PART 21:
+
+```yaml
+server:
+  restore:
+    max_archive_size: "1G"
+    max_expanded_size: "4G"
+    max_files: 10000
+    max_file_size: "512M"
+    max_ratio: 100
+```
+
+`max_archive_size`, `max_expanded_size`, and `max_file_size` accept bytes or
+binary `K`, `KB`, `M`, `MB`, `G`, `GB`, `T`, or `TB` values. `max_files` and
+`max_ratio` must be positive integers. Archives exceeding a limit are rejected
+and partial extracted files are removed.
+
+Set `server.update.cli_min_version` to require a minimum companion CLI version.
+The value is returned by `/api/autodiscover`; an empty value disables the
+minimum-version check.
+
 The companion CLI updater checks `/api/autodiscover` and downloads platform
 binaries through the server. By default downloads are public; private
 deployments can require the configured operator token:

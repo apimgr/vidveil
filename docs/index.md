@@ -51,4 +51,4 @@ See [Configuration](configuration.md) for details.
 
 ## License
 
-MIT License - see [LICENSE.md](../LICENSE.md)
+MIT License - see [LICENSE.md](https://github.com/apimgr/vidveil/blob/main/LICENSE.md)

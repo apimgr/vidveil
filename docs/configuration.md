@@ -22,7 +22,66 @@ If `server.port` is omitted, Vidveil selects a random unused port in the `64xxx`
 server:
   address: "0.0.0.0"
   port: "64893"
+  cors:
+    allowed_origins:
+      - "*"
+    allow_credentials: true
+    max_age: 86400
 ```
+
+`server.cors.allowed_origins` accepts `"*"` (the default), one or more exact
+HTTP(S) origins, or the single empty string (`[""]`) to disable CORS headers.
+When the list is empty, origins from `DOMAIN` and trusted reverse-proxy hosts
+are used; if none are available, the server falls back to `*`. Credentials are
+enabled only for a specific origin, never with `*`. CORS preflight allows the
+documented API methods and authentication headers, and defaults to a 24-hour
+preflight cache.
+
+The companion CLI updater checks `/api/autodiscover` and downloads platform
+binaries through the server. By default downloads are public; private
+deployments can require the configured operator token:
+
+```yaml
+cli:
+  binary_download:
+    require_auth: false
+```
+
+When `require_auth` is `true`, the download endpoint accepts the configured
+`server.token` through the documented token headers or `?token=` query value.
+
+## Branding and SEO Images
+
+Branding images accept local file paths or remote HTTPS URLs. The server stores
+generated variants in its data directory and refreshes configured sources on
+startup and daily by default. Set `server.branding.refresh_interval` to a Go
+duration such as `12h` to change the internal scheduler interval.
+
+```yaml
+server:
+  branding:
+    logo: /etc/apimgr/vidveil/logo.png
+    favicon: https://assets.example.org/favicon.png
+    refresh_interval: 24h
+  seo:
+    og_image: https://assets.example.org/social-card.jpg
+    sitemap:
+      enabled: true
+      max_urls: 50000
+      include_images: false
+```
+
+Remote sources must use HTTPS, resolve only to public IP addresses, and return
+PNG, JPEG, GIF, WebP, or icon content under 10 MiB. Generated PNG variants
+include 200px and 50px logos, favicons at 16/32/48/180/192/512px, and a
+1200×630 OpenGraph image. A failed refresh retains the last cached image;
+without a cached custom image, templates use the embedded default asset.
+
+The generated `/sitemap.xml` includes public pages and the Swagger/GraphQL
+documentation. It omits visitor-specific preferences and favorites pages.
+`server.seo.sitemap.max_urls` is limited to the sitemap protocol maximum of
+50,000 URLs, and `include_images` adds the configured OpenGraph image (or the
+embedded default icon) to each listed page.
 
 ## Runtime Data Paths
 
@@ -35,6 +94,28 @@ server:
 ## Tor
 
 Vidveil auto-enables the built-in Tor hidden service when a compatible `tor` binary is available. The server manages its own Tor data under the Vidveil data directory.
+
+## I2P
+
+The I2P eepsite is opt-in and stays disabled unless `server.i2p.enabled`,
+`I2P_ENABLED`, or `--i2p` enables it. The server prefers a dedicated `i2pd`
+process and falls back to a reachable SAM bridge. Its destination key is stored
+under the data directory and the backend listener is loopback-only.
+
+```yaml
+server:
+  i2p:
+    enabled: false
+    binary: ""
+    sam_address: "127.0.0.1:7656"
+    virtual_port: 80
+    inbound_length: 3
+    outbound_length: 3
+    inbound_quantity: 5
+    outbound_quantity: 5
+    signature_type: 7
+    bootstrap_timeout: 5m
+```
 
 ## Environment Variables
 
@@ -59,6 +140,7 @@ Vidveil auto-enables the built-in Tor hidden service when a compatible `tor` bin
 | `HOSTNAME` | Fallback FQDN when `DOMAIN` is unset; also the node id for distributed cache locks |
 | `TZ` | Time zone for scheduler timestamps (any IANA zone, e.g. `America/New_York`) |
 | `CACHE_URL` | External cache connection string; sets `server.cache.url` and promotes the cache type from `memory` to `valkey` so it is actually used. Ignored when `VIDVEIL_SERVER_CACHE_URL` or `VIDVEIL_CACHE_URL` is set |
+| `I2P_ENABLED` | Opt in to the I2P eepsite; project-prefixed `VIDVEIL_SERVER_I2P_ENABLED` and `VIDVEIL_I2P_ENABLED` take precedence |
 
 ### CLI environment variables
 

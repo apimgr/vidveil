@@ -288,6 +288,7 @@ Options:
   --mode <mode>             Set mode (production/development)
   --port <port>             Set listen port
   --address <addr>          Set listen address
+  --i2p                     Enable the optional I2P eepsite
   --config <dir>            Set config directory
   --data <dir>              Set data directory
   --service <cmd>           Service management (start/stop/restart/install/uninstall)

@@ -26,23 +26,16 @@ fix (951a480b3ae7) was confirmed still working.
   `TestBatchDeadline_UnderWriteTimeout_Unaffected`,
   `TestBatchDeadline_InvalidWriteTimeout_FallsBackToDefault` in
   `engine_manager_coverage_test.go`.
-- This fix is real and worth keeping, but it did NOT eliminate the
-  reproduced 150-concurrent failures: re-testing after the fix still showed
-  ~4/150 empty replies at ~30-31s, while server access logs for those exact
-  failing requests showed the handler itself completed in 3.9s-20.7s with
-  small but COMPLETE bodies (~1.8KB, not truncated) — well inside the new
-  cap. That means the residual bottleneck is NOT inside
-  `SearchWithOperators`/`batchDeadline`/the search handler at all; it is
-  connection-level queueing or congestion happening either before the
-  handler starts (accept/dispatch delay under 150 simultaneous new TCP
-  connections) or after the handler finishes (writing response bytes over a
-  congested/backed-up socket). Needs follow-up: re-test without Docker
-  port-forwarding in the loop (Incus, per AI.md PART 28 preference) to rule
-  out the test rig itself as a contributor; consider a max-concurrent-
-  connections / listener backlog tuning pass, and/or raising
-  `Server.Limits.WriteTimeout` together with connection-level rate
-  limiting, as the leading fix candidates once the true bottleneck layer is
-  confirmed.
+- Resolved after the fan-out semaphore and rate-limit handling landed. A
+  150-request search burst in Incus (direct container loopback, without
+  Docker port forwarding) produced 150 HTTP responses (4 × 200, 146 × 429)
+  and zero empty replies. It exposed a separate overload-page bug: the HTML
+  429 response omitted required pagination fields, causing a template error
+  and showing the generic empty-results state. Search overload rendering now
+  supplies the complete template model and displays the localized busy
+  message. The regression test and full `make test` pass; after rebuilding,
+  a second Incus burst again returned 150 responses (4 × 200, 146 × 429),
+  with no empty replies and no overload-template errors in the journal.
 - Follow-up implemented (2026-08-15): added a `searchSem` concurrency
   semaphore in `EngineManager` (`src/server/service/engine/manager.go`)
   bounding simultaneous `SearchWithOperators` fan-outs (wires up the
@@ -75,6 +68,9 @@ fix (951a480b3ae7) was confirmed still working.
   `TestSearchStreamWithOperators_SaturatedSem_QueueTimeout_EmitsOverload`,
   `TestSearchStreamWithOperators_UnsaturatedSem_AcquiresSlotAndReleases` in
   `engine_searchsem_coverage_test.go`.
+- Resolved: the rate-limiter cleanup goroutine now has an explicit stop signal;
+  `Server.Shutdown` stops and joins it after HTTP shutdown, and endpoint
+  limiter collections expose the same lifecycle hook.
 
 Findings from the PART 11/31 security compliance pass (2026-08-20), flagged
 but not fixed — each is architecture-sized or spec-contradicted and needs a
@@ -101,42 +97,35 @@ decision before implementation:
   circuit ID, and the literal sentinel `tor` when circuit-ID export is
   unavailable — never `127.0.0.1`, never deanonymizing. Callers substitute this
   for the client IP in access logs, audit trails and rate-limit keys.
-- Tor key-only mode reporting: `GetInfo()` reports `enabled=true` for
-  `TorServiceStatusNoTorBinary` (keys generated, no binary). Spec: binary
-  absent → INFO log, disable Tor features, continue. `IsEnabled()` is already
-  correct; only the info surface disagrees — changing it alters the reported
-  API contract, needs sign-off.
-- CSP extension model: `src/config/config.go:611-621` exposes a
-  full-replacement `csp` string key (violates "extend via `*_extra`, never
-  replace") and `src/server/server.go:202-305` hardcodes the policy — no
-  `script_src_extra` family, `connect-src` lacks `{learned_origins}`, no
-  dev `Content-Security-Policy-Report-Only` mode. Needs a decision on the
-  `*_extra` config key set (operator-facing config surface redesign).
-- Output Sanitization Pipeline: only log-side redaction exists
-  (`logging.go:392` `SanitizeLogFields`). The PART 11 six-stage RESPONSE
-  pipeline (allow-list → query-param redaction → internal IP/path strip →
-  truncation → dev_only strip → ~100ms constant-time finalize) is not
-  implemented; no auth-failure timing floor found. Large cross-cutting
-  feature touching the response/error-envelope layer.
+- Resolved: Tor status reports `enabled=false` and omits the onion address
+  when the Tor binary is missing, matching PART 31's instruction to disable
+  Tor features and continue. The generated key remains available internally.
+- Resolved: CSP now uses fixed default directives with per-directive `*_extra`
+  extension fields, a limited `*_override` surface, learned origins, and an
+  enforce/report-only mode. See `src/config/config.go` and
+  `src/server/server.go`.
+- Output sanitization is now applied by `WriteJSON` and by the canonical
+  `SendOK`, `SendError`, and detailed-error envelope helpers. Direct JSON
+  response paths in Grafana and Loki metrics output now pass through the same
+  sanitizer. A static inventory found no other direct public JSON encoder in
+  server source. CSRF token comparisons now hash both values to fixed-length
+  inputs and apply the required timing floor to both accepted and rejected
+  mutating browser requests. A common response middleware now delays
+  state-changing responses until the same floor before committing headers or
+  body bytes, including handlers that return without writing; operator-token
+  diagnostic reads are padded on success and failure. Regression tests and the
+  full Go suite plus browser E2E suite pass.
 
 Findings from the PART 16 frontend/PWA compliance pass (2026-08-20),
 flagged but not fixed:
 
-- `src/server/csrf.go:117-120`: CSRF validation is bypassed when no
-  session cookie is present (a "session_id" cookie that is never set
-  anywhere), effectively disabling browser CSRF enforcement. AI.md PART
-  16's bypass list is closed (Bearer header, safe methods, WS upgrade,
-  exempt_paths — no session-presence bypass), but AI.md's own threat-model
-  row for this open, unauthenticated API says "n/a (no auth, nothing to
-  abuse)". Business-logic decision: either remove the session-cookie
-  bypass and enforce double-submit on all mutating browser requests, or
-  document the deliberate exemption. Consent forms already include the
-  CSRF hidden input either way.
-- Cookie-consent banner text uses i18n keys rather than the
-  `CookieConsentConfig.Message/PolicyText/PolicyURL` config fields —
-  consistent with the hardcoded-strings prohibition (PART 29/30), but
-  decide whether those config fields should feed the template (and be
-  removed if not).
+- Resolved: `csrfBypass` no longer skips validation based on a session cookie;
+  it follows the closed AI.md list (safe methods, bearer/API token, WebSocket,
+  configured exempt paths). CSRF JSON failures also use the shared sanitized
+  response writer.
+- Resolved: cookie-consent message, policy link, and button labels are read
+from `server.privacy.consent` settings, including the sold/not-sold
+message selection required by PART 12.
 
 Finding from the app.js hardcoded-strings audit fix (2026-08-22, task 7)
 — RESOLVED. `addResultCard()` in `src/server/static/js/app.js` and its
@@ -152,177 +141,173 @@ keys `favorites.added`, `favorites.removed`, `search.card_link_copied`
 favorites-list page via a new `untitled` key in the `#favorites-i18n`
 island (`favorites.tmpl`).
 
-Newly discovered while doing the above (2026-08-22) — pre-existing, NOT
-introduced by this session's edits, and far larger in scope than the
-finding it was found alongside: comparing every non-English locale file
-in `src/common/i18n/locales/` against `en.json` line-for-line shows a
-large fraction of values are byte-identical to the English text, i.e.
-silently untranslated content that still passes the build-time
-key-parity check (PART 30) because the *keys* match — only the
-*values* don't. Counts (identical-to-English / 651 total keys):
-es=125, zh=116, fr=137, ar=119, de=137, ja=118 — roughly 18-21% of
-every non-English locale file, not limited to any one section (the
-`favorites.*` section was 100% untranslated before this fix). This
-needs a dedicated translation pass per language (a native/reviewed
-translation, not a mechanical script) and is too large and
-judgment-laden to fold into an unrelated fix — needs its own scoped
-session: `grep -Fxf <(comm -12 <(jq -r 'to_entries[]|"\(.key)=\(.value)"' en.json|sort) <(jq -r 'to_entries[]|"\(.key)=\(.value)"' {lang}.json|sort))` (or the diff approach already used to find the counts above) to enumerate the untranslated keys per language, then translate each.
+Resolved 2026-10-14: compared all seven current locale files (817 keys each)
+and translated every remaining identical-to-English human-readable value in
+Arabic, German, Spanish, French, Japanese, and Simplified Chinese. Identical
+values remaining are product names, proper names, service-manager names,
+standard resolution labels, technical identifiers, punctuation, units, or
+placeholder-only content. Locale parity and placeholder validation pass as
+part of `make test` (72% overall coverage). The translation pass has not had
+independent native-speaker review.
 
-Found during the "make code match AI.md" compliance sweep (2026-08-29),
-NOT fixed in that sweep — deliberately deferred as too large/risky to
-apply as a mechanical inline edit: `.github/workflows/daily.yml`,
-`.gitea/workflows/daily.yml`, `.forgejo/workflows/daily.yml`, and the
-matching `beta.yml` in all three providers each compute
-`VERSION`/`COMMIT_ID`/`BUILD_EPOCH` inside the "Set build info" step of
-the `build` job, which runs under an 8-way platform `strategy.matrix` —
-meaning all three values are recomputed redundantly on every matrix leg
-instead of once. `cicd-rules.md` (PART 27) requires a dedicated `version`
-job that computes these once and exposes them via job outputs, consumed
-by the matrix job via `needs:`. Fixing this requires restructuring the
-job graph in six workflow files (add a `version` job, wire
-`needs: version` + `${{ needs.version.outputs.* }}` into the existing
-`build` job, matching the pattern used for `release`/`daily` version
-jobs elsewhere) and MUST be validated with `act --list -W {file}` per
-file before committing, per the CI/CD workflow-gate rule — not something
-to do as a blind sed/Edit pass. Confirmed present via
-`grep -n "strategy:\|Set build info" .github/workflows/daily.yml`
-(Set build info at line 52 sits inside the matrixed `build` job, line 23).
+Resolved: all six GitHub/Gitea/Forgejo daily and beta workflows now compute
+version, commit ID, and build epoch in a single `version` job and pass them
+through `needs.version` outputs to their matrix build jobs. `act --list` passes
+for both GitHub workflows. `act` rejects Gitea/Forgejo-specific context names
+(`gitea`/`forgejo`), so those workflows require provider-native validation;
+the same command cannot validate them.
 
 AI.md diff implementation follow-ups (2026-09-03), flagged during the
 Tor Circuit-ID/PROXY-protocol implementation pass, not yet fixed:
 
-- `src/main.go` (two occurrences, ~line 400 and ~line 1295): system
-  service-user name and service-manager identity are derived from
-  `filepath.Base(os.Args[0])` (the actual, possibly-renamed binary
-  filename), with a normalize-to-"vidveil" fallback that only triggers
-  when the name contains a `-` and doesn't start with `vidveil-`. A
-  binary renamed to something with no dash (e.g. `myapp`) would create
-  a system user/group named `myapp` instead of the frozen
-  `{internal_name}` (`vidveil`), violating binary-rules.md ("Never
-  hardcode... to the actual (possibly renamed) binary filename — always
-  the compiled-in `{project_name}`") and service-rules.md ("Always use
-  `{internal_name}` (frozen) for service identity... never
-  `{project_name}`"). AI.md's diff also renamed `{project_name}` →
-  `{internal_name}` in the Tor privilege-drop narrative (PART 31,
-  "Tor Process Ownership" step 2), reinforcing this. Left unfixed this
-  pass because the existing code's stated intent (a renamed
-  `vidveil-cli`/`vidveil-agent` binary installing a matching *service*)
-  may be intentional multi-binary behavior worth preserving for
-  dash-prefixed names — needs a decision on whether ALL binary renames
-  should fall back to the frozen `vidveil` identity, or only non-`vidveil*`
-  ones, before editing.
-- Verify Docker Compose files (`docker/docker-compose*.yml`) against the
-  `${VAR:-default}` inline-fallback env-var syntax vs. hardcoded values
-  mentioned in the AI.md diff — not yet checked this pass.
-- Verify items #6-#12 from the original diff review (Go stdlib import
-  list additions, CSS variable/button/toggle/empty-state/skip-link/
-  reduced-motion additions, `showToast()` JS reference implementation,
-  Site Banner dismissal form `csrf_token`+`return_to` hidden fields,
-  Theme Toggle JS, HTTP 304/410/502 status handling) against actual
-  `static/css/`, `static/js/app.js`, and template files — not yet
-  checked this pass.
+- Resolved: the runtime account identity comes from
+`system.ServiceUserName()` and is frozen as `vidveil`; `NewServiceManager`
+also stores the frozen identity for service, user, and group paths. The raw
+executable name is used only for the user-facing service description.
+- Resolved: Compose files use `${TZ:-America/New_York}` and no env files.
+  Production Compose no longer overrides `MODE`; per AI.md PART 26 it sets
+  neither `DEBUG` nor `MODE`, allowing the binary's production default to apply.
+- Resolved: verified the original items #6-#12 against the current imports,
+  CSS, JavaScript, templates, and handlers: UI/a11y styles and `showToast()`
+  are present; site-banner dismissal includes CSRF and same-site return
+  fields; theme switching has its form and JS support; conditional 304
+  responses are implemented; dead 410 engines are excluded; proxy failures
+  use the canonical 500/404 errors. `make test` and browser E2E pass.
 
 ## Browser E2E suite (AI.md PART 28)
 
-- Add the E2E test dependencies to `go.mod`:
-  `github.com/chromedp/chromedp` and `github.com/chromedp/cdproto`.
-  `tests/e2e/*_test.go` (build tag `e2e`) import them and will not compile
-  until `go mod tidy` is run in Docker (`casjaysdev/go:latest`). Subagents
-  are not permitted to edit `go.mod`, so this must be done by the main
-  session. The suite is on-demand only (`./tests/e2e.sh`) and is never part
-  of `make test`, so this does not block the commit gate.
-- Once the dependencies resolve, run `./tests/e2e.sh` once and reconcile any
-  selector assumptions in `tests/e2e/nojs_test.go` /
-  `tests/e2e/browser_test.go` (e.g. `select[name="results_per_page"]`,
-  `form input[name="q"]`) against the real templates.
+- Resolved: E2E dependencies are in `go.mod`, and the complete
+  `tests/e2e.sh` suite passes in the Go/Chromium containers.
+- Fixed stale selectors and routes in the E2E tests, including the actual
+  `resultsPerPage` preference control and API routes.
+- Fixed browser form submission tests that typed Enter before clicking, which
+  triggered navigation before the click action.
+- Fixed the development HTTP CSP to emit `upgrade-insecure-requests` only when
+  SSL is enabled or the request is HTTPS, as specified by PART 11. The prior
+  unconditional directive upgraded HTTP pages' CSS, API calls, and form
+  submissions to HTTPS.
+- Fixed the browser startup exception from exporting undefined `updateSort`,
+  and constrained mobile horizontal overflow from the closed navigation panel.
 
 ## Decisions needed (surfaced during the PART 17-22 features audit)
 
-- PART 21 defines a `400 VALIDATION_FAILED` response for a restore request
-  that supplies a password by a non-interactive channel, but vidveil exposes
-  restore only through the CLI (`--maintenance restore`, interactive prompt
-  via `term.ReadPassword`). There is no WebUI or API restore surface to
-  attach that error path to. Decide whether an API/WebUI restore surface is
-  in scope for this project, or whether the CLI-only path satisfies PART 21.
-- The scheduler emits a third `status` label value `"skipped"`
-  (`src/server/service/scheduler/scheduler.go:780`) in addition to the
-  `success`/`error` pair PART 20 enumerates. Confirm whether `"skipped"` is
-  an accepted extension or the metric should fold skipped runs into one of
-  the two spec'd values.
+- Resolved: PART 21 now has an operator-token-protected multipart restore API
+  (`POST /api/{api_version}/server/restore`) and a no-JS WebUI upload form at
+  `/server/restore`; encrypted API restores without the separate backup
+  password return the specified 400 `VALIDATION_FAILED` response. Browser
+  writes use the configured double-submit CSRF middleware. The UI uses an
+  explicit operator-token field because PART 16 says HTML routes remain
+  public and there are no admin sessions; see the exact PART 16/PART 21
+  tension recorded in `AUDIT.AI.md`.
+- Resolved: skipped overlapping scheduler runs remain in task history and
+  scheduler state, but no longer use a third Prometheus status label. PART 20
+  restricts the metric labels to `success` and `error`.
+- Resolved: maintenance managers created by the API and scheduler now
+  serialize full/incremental backup and restore operations with a process-wide
+  mutex and an OS-backed lock file in a service-owned directory adjacent to
+  the data root, so restore replacement cannot remove the active lock. Server,
+  scheduler, and standalone CLI processes sharing that directory now coordinate
+  before creating backups or replacing shared roots. Lock contention and
+  release are covered by a regression test; `make test` passes at 72% coverage.
+- Resolved: backup path resolution now prefers the system backup location when
+  it or its nearest existing ancestor is writable; otherwise system mode uses
+  `{data_dir}/backup/` and user mode uses its user backup path, per AI.md PART 8.
+  The resolved backup directory is created and assigned to the service account
+  before privilege drop, so scheduled backups remain writable.
+- Restore archive size policy remains unspecified: `server.limits.max_body_size`
+  limits the compressed HTTP body, but neither AI.md PART 21 nor IDEA.md sets a
+  decompressed-size, entry-count, or compression-ratio ceiling. Production
+  restore now streams expanded entries to private temp files instead of keeping
+  them in memory, but the temp disk and compressed/decrypted input remain
+  unbounded by restore-specific limits. Define the resource-limit policy; see
+  `AUDIT.AI.md`.
+- Resolved: CLI restore stops and restarts a detected managed service and refuses
+  to alter live data when the PID file identifies an unmanaged running server.
+  Successful API/WebUI restores now drain every HTTP listener and restart the
+  server in-process so all service managers and foreground deployments reload
+  restored configuration; see `AUDIT.AI.md`.
 
 ## Decisions needed (surfaced during the CI/CD audit)
 
-- SBOM on Gitea/Forgejo: `.claude/rules/cicd-rules.md` prose says Gitea and
-  Forgejo carry no SBOM step, but AI.md PART 27's own Gitea spec blocks
-  (`gt-release.yml:145`, `gt-beta.yml:146`, `gt-daily.yml:148`) include the
-  `cyclonedx-gomod` step. The repo is split: `.forgejo/{release,beta,daily}.yml`
-  have SBOM steps, `.gitea/*` do not. Neither side was changed. The
-  "platform capability gap" argument applies only to attestation (a
-  GitHub-only API); `cyclonedx-gomod` runs anywhere. Rule one way and square
-  the `.gitea` vs `.forgejo` divergence.
+- Resolved: added the AI.md PART 27 CycloneDX SBOM generation step to the
+  Gitea release, beta, and daily workflows, matching the existing Forgejo
+  workflows.
 - AI.md PART 27 has no Gitea/Forgejo `ci.yml` spec block (only release, beta,
   daily, docker), yet `cicd-rules.md` requires `ci.yml` everywhere. Both files
   exist and are sound but have no authority to be judged against.
-- `Jenkinsfile`: the `Docker` and `Docker: Devel` stages have no `when {}`
-  guard, so both cron triggers (3am, 4am) run both stages and the standard
-  image rebuilds in the devel slot. Jenkins cannot cleanly tell which cron
-  line fired, so fixing it means choosing a mechanism (a `TimerTriggerCause`
-  hour check, or splitting into two jobs) — a design call.
-- `.gitlab-ci.yml` uses the bashism `${CI_COMMIT_SHA:0:7}` in `script:`
-  blocks. Safe under the bash-defaulting images in use, but it breaks under a
-  strict `sh`. AI.md carries the same construct.
+- Jenkins identifies timer-triggered builds by their UTC start
+  hour. The 3am build runs the normal build, test, daily release, and standard
+  Docker stages while skipping the devel image; the 4am timer skips those
+  stages and runs only the devel image; pushes and other non-timer builds keep
+  both Docker stages. This uses Jenkins' documented `currentBuild.getBuildCauses`
+  and `startTimeInMillis` APIs. It has not been exercised on a Jenkins
+  controller; long queue delays crossing an hour can misclassify a scheduled
+  run. Jenkins core's `TimerTriggerCause` exposes no scheduled-time method
+  ([Javadoc](https://javadoc.jenkins.io/hudson/triggers/TimerTrigger.TimerTriggerCause.html));
+  parameterizing separate cron lines requires the optional Parameterized
+  Scheduler plugin ([plugin documentation](https://plugins.jenkins.io/parameterized-scheduler/)).
+  Resolve the controller/plugin contract before replacing the current heuristic.
+- Resolved: `.gitlab-ci.yml` now derives the daily version with POSIX
+  `printf | cut` instead of Bash substring syntax. The daily source archive,
+  artifact path, and release link use the `RELEASE_VERSION` dotenv value, so
+  the artifact filename matches the binaries and SBOM without relying on
+  unsupported substring expansion. YAML parsing and the version extraction
+  under `/usr/bin/sh` passed.
 
 ## Decisions needed (surfaced during the service/Docker/Tor audit)
 
-- Spec contradiction: `.claude/rules/docker-rules.md` says to create a
-  non-root user in the runtime stage and set `USER app`, but AI.md PART 26
-  (line 33313, authoritative) says the opposite — no `USER` directive and no
-  user creation in the Dockerfile. The Dockerfiles follow AI.md, so the rules
-  file is the side that needs correcting.
-- Port drift: the project compose files use 64893/64581 while AI.md's example
-  uses 64580. Left as-is on the assumption the spec value is a template
-  placeholder.
-- Every `--service` command output string in `src/main.go` is hardcoded
-  English rather than an i18n key, which the no-hardcoded-strings rule
-  forbids. Needs a pass converting them to `i18n.Translate` keys added to all
-  7 locale files.
+- Resolved: `.claude/rules/docker-rules.md` now follows AI.md PART 26 and
+  prohibits creating a user or setting `USER` in the Dockerfile; the binary
+  owns service-account creation and privilege dropping.
+- Resolved compose host-port collision: production keeps its distinct 64893 bridge port,
+  development now uses the PART 26 example port 64580 on all interfaces, and
+  testing uses the specified 64581 bridge port. The host ports are distinct,
+  and the test container has its own `{project_name}-test` name. PART 26 also
+  requires the same `{project_name}-app` container name for production and
+  development while saying the stacks can coexist, which Docker does not allow.
+  The implementation preserves the explicit container-name rule pending a
+  source-of-truth resolution for that internal PART 26 conflict.
+- Resolved Makefile target discrepancy using AI.md PART 0 precedence: FINAL is
+  reference-only, while PART 25 explicitly defines exactly six targets (`dev`,
+  `local`, `build`, `test`, `release`, `docker`). Obsolete FINAL checklist
+  entries for `clean` and `all` do not add targets. The Makefile and rule file
+  follow the PART 25 contract.
+- Resolved locale-validation target discrepancy using AI.md PART 0 precedence:
+  FINAL is reference-only, PART 25 allows exactly six targets, and PART 30
+  requires build-time locale-key validation. Locale integrity checks run in
+  the i18n package tests under `make test`; no separate `i18n-validate` target
+  is required.
+- Resolved: `--service` output and Unix/Windows privilege-escalation prompts
+  use locale keys in all seven locale files.
+- Resolved: user-level service control now matches user-level installation:
+  Linux uses `systemctl --user`, and macOS uses the LaunchAgents plist path
+  for status/control. Unit tests, `go vet`, all eight cross-builds, and Incus
+  systemd integration pass.
 
 ## Frontend (PART 16) items deferred during the CSS/JS/a11y verification pass
 
-- AI.md PART 16 "Image Scaling" / "Remote URL Fetching" (lines 25821-25840)
-  is unimplemented. `server.branding.logo`/`.favicon` are now wired through
-  to the templates, but there is no multi-size generation (logo 200/50px,
-  favicon 16/32/48/180/192/512, OG 1200x630), no local cache of scaled
-  variants, no daily re-fetch of remote URLs, and no
-  `src/common/urlutil/fetch.go` with the specified `FetchRemoteImageConfig`
-  (10MB max, 30s timeout, image/png|jpeg|gif|webp|x-icon, https-only). This
-  needs a new package plus an image-resize dependency, so it requires a
-  `go.mod` change.
-- `src/server/static/js/app.js` passes hardcoded English strings to
-  `showToast(...)` in several places (around lines 1802, 1934, 1941, 1949,
-  2073, 2089, 2701, 2720 and in `handleDownloadClick`), violating the
-  no-hardcoded-strings rule. They should be moved into the `#app-i18n` data
-  island in `partial/public/head.tmpl`.
-- `src/server/static/js/app.js` (around line 2545) still builds the status
-  bar from hardcoded English: `allResults.length + ' results (streaming...)'`,
-  `' results found'`, `' (min ' + N + ' min)'`, and
-  `enginesWithResults.size + ' engines responding'`. The `search.streaming`
-  key already exists; the rest need new keys in all 7 locales plus entries in
-  the `#search-i18n` data island in `src/server/template/page/search.tmpl`.
+- Resolved: AI.md PART 16 branding images now use the secure fetcher, decode
+  supported raster formats, generate the required logo/favicon/OpenGraph
+  variants, and store them in the data directory. Same-origin routes serve
+  cached files; templates use the mobile logo and scaled favicon variants;
+  failed refreshes retain prior files and embedded defaults provide fallback.
+  Startup and the internal daily scheduler refresh sources, with a configurable
+  `server.branding.refresh_interval`; config hot-reload refreshes the cache too.
+- Resolved for the known app.js strings: search loading/errors, all-sources,
+  related-search toggles, end-of-results, offline status, and the update banner
+  now use locale keys through the global or search-page i18n data islands.
+- Resolved: the search status bar uses translated result counts, streaming status, engine response counts, and minimum-duration text with named tokens.
 
-## Decisions needed (i18n interpolation scheme)
+## Resolved: named i18n interpolation (AI.md PART 30)
 
-- AI.md 40804-40816 mandates LITERAL `{token}` interpolation and explicitly
-  forbids using a translation as a `fmt` format string ("no %s/%d verbs, no
-  positional {0}"), but `src/common/i18n/i18n.go:329` implements
-  `TranslateFormat` as `fmt.Sprintf(t.Translate(locale, key), args...)`. The
-  whole codebase follows the code, not the spec. Converting to the spec'd
-  form touches 37 `%`-verb keys x 7 locale files (~259 value edits), 34
-  template `tf` call sites, and 12 Go `TranslateFormat` call sites, and
-  AI.md's own example (`{{tf .Lang "health.ssl_expires_in" "days" .Days}}`)
-  shows the target call shape is variadic key/value pairs. A mis-converted
-  site fails silently in 7 languages, so this needs a build+test cycle in
-  Docker — main session decision, not an unverifiable bulk edit.
+- Translation values and all seven locale files use literal `{token}`
+  placeholders. Template calls pass token/value pairs, and
+  `Translator.TranslateFormat` supports both the AI.md `map[string]string`
+  form and the template-friendly pair form without treating translations as
+  Go format strings.
+- Locale validation now checks named-token parity. Browser-side count and
+  search updates use the same named placeholders. Verified by `make test`
+  in the project Go container (75% coverage).
 
 ## Decisions needed (surfaced during the handler/status-code audit)
 
@@ -338,34 +323,12 @@ Tor Circuit-ID/PROXY-protocol implementation pass, not yet fixed:
   arguably be more correct, but the status was left unchanged rather than
   altering behavior unprompted.
 
-## Decisions needed (surfaced during the PART 0-4 compliance audit)
+## Resolved finding: GUI toolkit selection (PART 32)
 
-- `.claude/rules/admin-rules.md` exists but is not one of the 13 rule files
-  AI.md PART 0 enumerates, and its header claims "PART 17" while AI.md PART
-  17 is EMAIL & NOTIFICATIONS (admin-panel content has no matching PART).
-  Deleting a file is never done without confirmation, and its content is
-  clearly in use, so the mapping question is left for the main session:
-  either fold the admin content into an existing rule file or accept a 14th
-  file that AI.md's table does not list.
-- `.claude/rules/binary-rules.md` carries an "Agent Binary (PART 33,
-  OPTIONAL)" section, but AI.md PART 33 is the IDEA.md reference and no
-  agent-binary PART exists in AI.md. The file header/footer PART numbers
-  were corrected to 7, 8, 32, but whether the agent section itself should
-  stay, move, or be dropped needs a human call.
-- 10 of the 14 `.claude/rules/*.md` files predate AI.md's current mtime
-  (2026-09-03). PART 0's trigger says "AI.md modified more recently than
-  rule files -> update all files", so a full regeneration pass of the rule
-  set against the current AI.md is owed. Regenerating 14 summary files is
-  not a mechanical edit and is deliberately not attempted here.
-
-## Decisions needed (GUI toolkit cgo-free verification, PART 32)
-
-- AI.md PART 32 claims Gio and Fyne are pure-Go/cgo-free GUI toolkits. Both
-  claims are false on Linux, confirmed by direct source inspection of their
-  own package code (not marketing text) — Gio and Fyne were each adopted
-  into go.mod in turn and each failed this same check post-hoc. AI.md is
-  READ-ONLY and cannot be corrected there; `.claude/rules/binary-rules.md`
-  still names Gio/Fyne and needs updating once a final toolkit is chosen.
+- AI.md PART 32 now selects `gogpu/ui` + `gogpu/gogpu` for Linux/macOS/Windows
+  and specifies TUI/CLI fallback on BSD. `src/client/gui/gui.go` and
+  `.claude/rules/binary-rules.md` now follow that contract; Gio and Fyne are
+  not compliant choices.
 - Full transitive-dependency cgo verification (Dockerized `go mod download
   all` + `grep -rl '^import "C"'` across every module, then reading each
   hit's `//go:build` tag) was run against two further candidates:
@@ -393,14 +356,7 @@ Tor Circuit-ID/PROXY-protocol implementation pass, not yet fixed:
     conflicts with AI.md's global "Single self-contained binary" /
     "First-run works with zero config" defaults — a disqualifying
     architectural tradeoff independent of cgo status.
-- Pending human decision: adopt `gogpu/ui` (pre-v1.0, "Phase 4 Production
-  v1.0 in progress" per its own repo, ~459 GitHub stars) as the third GUI
-  toolkit choice, given the prior two choices both failed; or drop the
-  native GUI mode requirement for vidveil entirely (documented exception in
-  IDEA.md); or accept a CGO exception for GUI builds only (also requires an
-  explicit IDEA.md exception, contradicts PART 32's "no exceptions" wording).
-  `src/client/gui/gui.go` still imports Gio and needs a full rewrite once
-  this is resolved.
+- No implementation work remains for this decision.
 
 ## Resolved finding: `version.BuildTime` naming (was flagged by go-lint, 2026-09-11)
 
@@ -428,38 +384,33 @@ Tor Circuit-ID/PROXY-protocol implementation pass, not yet fixed:
 - No action required. The naming is intentional: `BuildEpoch` (embedded
   input) vs `BuildDate`/`BuildTime` (derived display output).
 
-## Deferred: `--maintenance secret|token|data` subcommands unimplemented (audit, 2026-09-30)
+## Maintenance CLI implementation status
 
-AI.md PART 5 (`:918`) lists the accepted `--maintenance` subcommands as
-`{backup,restore,update,mode,setup,pgp,secret,token,data,compliance,--help}`.
-`src/main.go` `handleMaintenanceCommand` (`:1706-1815`) implements `backup`,
-`restore`, `mode`, `setup`, `compliance`, `pgp`, and `--help`; `update` is
-intercepted earlier at `:352-361` as an alias for `--update`. The remaining three
-hit the `default:` branch at `:1811` and exit 1 with "Unknown maintenance
-command". The `--maintenance --help` text (`:1777-1800`) does not list them either,
-so the gap is consistent between code and help text, but both contradict AI.md.
+Resolved since the 2026-09-30 audit: `--maintenance secret`, `token`, and
+`data` now have dispatch paths and are listed in `--maintenance --help`.
+`api_tokens` follows the schema in AI.md PART 5, and token list/revoke commands
+are operator-authorized. Secret rotation and personal-data export/erasure have
+initial implementations in `src/maint_secret.go` and `src/maint_data.go`.
 
-Not fixed in the audit run because each is a Red Flag requiring a spec decision
-rather than a mechanical fix:
+PART 5/11 review update: secret rotation has typed confirmation and sensitive-
+operation authorization; installation-secret rotation re-encrypts the PGP key
+and preserves the prior secret for seven days; encryption-key rotation
+re-encrypts API-token digests and AES-encrypted security reports transactionally
+and preserves the prior key. Startup upgrades legacy plaintext token digests
+before serving. Data export uses fixed explicit column lists, omits secret
+material and encrypted report bodies, and now records correlated compliance
+request / completion events. Erasure records compliance events and redacts
+retained audit-log user IDs.
 
-- `--maintenance token revoke|list` (AI.md `:11864-11867`) has no data model to
-  act on: there is no `api_tokens` / resource-token table in
-  `src/server/service/database/migrations.go` (`getTablesDDL` creates only
-  `audit_log`, `settings`, `scheduled_tasks`, `task_history`, `app_secrets`,
-  `notifications`, `pgp_keypair`, `security_reports`, `favorites`), and no
-  token package under `src/server/service/`. Building this means designing the
-  token storage schema, not filling in a missing branch.
-- `--maintenance secret rotate <name>` (AI.md `:14036-14041`) has a partial
-  backing service: `secret.Manager.Rotate` exists at
-  `src/server/service/secret/secret.go:87` and keeps the previous value for 7
-  days, but the spec's surrounding behaviour (re-encrypt the PGP private key,
-  re-base live HMACs, 30-day grace for `encryption_key`, typed confirmation,
-  `security.*_rotated` audit events) is not implemented, and
-  `encryption_key` is not a `SecretKey` in the `app_secrets` table at all — it
-  lives in `server.yml`. This needs a decision on how much of the rotation
-  semantics to build now.
-- `--maintenance data export|delete` (AI.md `:15479-15480`) has no spec text
-  describing the export format or what "delete" covers (which tables, what
-  confirmation, whether it must satisfy the GDPR flow at `:15526-15528`).
+Remaining decision: IDEA.md says VidVeil has no user accounts and favorites
+belong to an opaque visitor cookie, but AI.md PART 11 describes per-subject
+export/deletion requests. The maintenance commands take no subject identifier;
+`data delete` therefore affects every visitor's favorites and every resource
+owner token. Do not change that scope until the product defines how a request
+identifies its subject.
 
-`--maintenance --help` should be extended to list these three once implemented.
+Resolved using AI.md's explicit data-protection and rotation requirement:
+`api_tokens.token_hash` contains an authenticated-encryption encoding of the
+SHA-256 digest, never the raw token. Legacy plaintext digests are upgraded at
+startup, and key rotation re-encrypts them in the same transaction as the
+AES-backed security-report bodies. SHA-256 remains the token digest algorithm.

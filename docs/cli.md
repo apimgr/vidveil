@@ -53,8 +53,30 @@ The CLI automatically selects the appropriate interface:
 | `--timeout <seconds>` | Request timeout (default: 30) |
 | `--debug` | Enable debug output |
 | `--lang <code>` | Language tag (e.g. `en`, `de-DE`) sent as the `Accept-Language` request header. Values containing anything other than letters, digits, `-`, or `_` are ignored |
+| `--update [check|yes|branch <stable|beta|daily>]` | Check for updates, install the latest update, or select the release branch. With no subcommand, performs `yes`. |
 | `-h, --help` | Show help |
 | `-v, --version` | Show version |
+
+`--update check` checks for a release without installing it. `--update yes`
+downloads and installs the latest eligible release, then restarts the service.
+`--update branch <stable|beta|daily>` changes the configured update branch.
+The equivalent maintenance command is `--maintenance update [check|yes|branch
+<stable|beta|daily>]`.
+
+With a configured server, the CLI checks for updates before normal commands.
+Interactive runs ask before installing; non-interactive runs install silently
+only when `update.auto` is enabled. If a server advertises a minimum CLI
+version through autodiscover, clients below that minimum stop before making
+normal API requests and must be updated explicitly.
+
+The CLI config file supports:
+
+```yaml
+update:
+  auto: false
+  check_interval: per_invocation
+  channel: stable
+```
 
 ## Environment Variables
 

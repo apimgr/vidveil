@@ -214,13 +214,12 @@ executable name is used only for the user-facing service description.
   `{data_dir}/backup/` and user mode uses its user backup path, per AI.md PART 8.
   The resolved backup directory is created and assigned to the service account
   before privilege drop, so scheduled backups remain writable.
-- Restore archive size policy remains unspecified: `server.limits.max_body_size`
-  limits the compressed HTTP body, but neither AI.md PART 21 nor IDEA.md sets a
-  decompressed-size, entry-count, or compression-ratio ceiling. Production
-  restore now streams expanded entries to private temp files instead of keeping
-  them in memory, but the temp disk and compressed/decrypted input remain
-  unbounded by restore-specific limits. Define the resource-limit policy; see
-  `AUDIT.AI.md`.
+- Resolved by AI.md PART 21 update (2026-10-15): `server.restore` now defines
+  archive (1G), expanded-size (4G), entry-count (10000), per-file (512M), and
+  compression-ratio (100:1) defaults. Configuration validates and normalizes
+  these values; restore checks archive and tar metadata before each write,
+  counts decompressed bytes while streaming, and removes staged entries after a
+  limit failure.
 - Resolved: CLI restore stops and restarts a detected managed service and refuses
   to alter live data when the PID file identifies an unmanaged running server.
   Successful API/WebUI restores now drain every HTTP listener and restart the
@@ -259,14 +258,11 @@ executable name is used only for the user-facing service description.
 - Resolved: `.claude/rules/docker-rules.md` now follows AI.md PART 26 and
   prohibits creating a user or setting `USER` in the Dockerfile; the binary
   owns service-account creation and privilege dropping.
-- Resolved compose host-port collision: production keeps its distinct 64893 bridge port,
-  development now uses the PART 26 example port 64580 on all interfaces, and
-  testing uses the specified 64581 bridge port. The host ports are distinct,
-  and the test container has its own `{project_name}-test` name. PART 26 also
-  requires the same `{project_name}-app` container name for production and
-  development while saying the stacks can coexist, which Docker does not allow.
-  The implementation preserves the explicit container-name rule pending a
-  source-of-truth resolution for that internal PART 26 conflict.
+- Resolved compose host-port and fixed-name conflicts using the AI.md PART 26
+  update (2026-10-15): production, development, and test compose files use the
+  same fixed app/cache container names. The spec explicitly says dev and test
+  never run on a production host, and their project/network names isolate their
+  stacks. Production uses port 64893, development 64580, and testing 64581.
 - Resolved Makefile target discrepancy using AI.md PART 0 precedence: FINAL is
   reference-only, while PART 25 explicitly defines exactly six targets (`dev`,
   `local`, `build`, `test`, `release`, `docker`). Obsolete FINAL checklist

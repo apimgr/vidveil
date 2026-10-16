@@ -32,8 +32,9 @@ https://x.scour.li
 | **Related Searches** | Server-generated related search suggestions |
 | **Semantic Search** | AND-based filtering with synonym expansion across 27 categories |
 | **Tor Support** | Built-in Tor hidden service support |
+| **AI Integration** | OpenAPI-generated MCP tools and configurable `llms.txt` discovery |
 | **Content Restriction** | Geographic warnings/blocks for regions with adult content laws |
-| **Admin Panel** | Full web-based administration |
+| **Operator Management** | Configure through `server.yml` and the CLI; the protected API supports backup restore |
 | **Single Binary** | No external dependencies, embedded assets |
 | **Docker Ready** | Alpine-based container with tini |
 
@@ -195,18 +196,22 @@ GET https://x.scour.li/api/v1/engines/{name}
 ### Health
 
 ```
-GET https://x.scour.li/healthz
-GET https://x.scour.li/api/v1/healthz
+GET https://x.scour.li/api/v1/server/healthz
 ```
+
+The canonical frontend health route is `https://x.scour.li/server/healthz`.
+The root `/healthz` alias is disabled by default.
 
 ### Documentation
 
 | Endpoint | Description |
 |----------|-------------|
-| `https://x.scour.li/openapi` | Swagger UI |
-| `https://x.scour.li/openapi.json` | OpenAPI 3.0 spec (JSON) |
-| `https://x.scour.li/graphql` | GraphQL endpoint |
-| `https://x.scour.li/graphiql` | GraphQL playground |
+| `https://x.scour.li/server/docs/swagger` | Swagger UI |
+| `https://x.scour.li/api/v1/server/swagger` | OpenAPI JSON (`/api/swagger` alias) |
+| `https://x.scour.li/api/v1/server/graphql` | GraphQL endpoint (`/api/graphql` alias) |
+| `https://x.scour.li/server/docs/graphql` | GraphiQL playground |
+| `https://x.scour.li/.well-known/llms.txt` | AI-agent discovery (`/llms.txt` alias) |
+| `https://x.scour.li/mcp` | MCP Streamable HTTP endpoint |
 
 ---
 
@@ -256,25 +261,12 @@ Use bang shortcuts to search specific engines:
 
 FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox (`!pbox`), PornHat (`!phat`), PornOne (`!p1`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), VJAV (`!vj`), XBabe (`!xb`)
 
-### Admin Panel
+### Operator Management
 
-Access at `https://x.scour.li/admin` (setup token shown on first run).
-
-| Route | Section | Description |
-|-------|---------|-------------|
-| `https://x.scour.li/admin` | Dashboard | Overview and statistics |
-| `https://x.scour.li/admin/server/settings` | Settings | Server configuration |
-| `https://x.scour.li/admin/server/branding` | Branding | Logo, title, themes |
-| `https://x.scour.li/admin/server/ssl` | SSL/TLS | Let's Encrypt, certificates |
-| `https://x.scour.li/admin/server/email` | Email | SMTP configuration |
-| `https://x.scour.li/admin/server/scheduler` | Scheduler | Scheduled tasks |
-| `https://x.scour.li/admin/server/logs` | Logs | Access and error logs |
-| `https://x.scour.li/admin/server/database` | Database | Database management (SQLite/libsql-Turso) |
-| `https://x.scour.li/admin/server/security/*` | Security | Auth, tokens, rate limiting, firewall |
-| `https://x.scour.li/admin/server/network/*` | Network | Tor, GeoIP, content restriction, blocklists |
-| `https://x.scour.li/admin/server/system/*` | System | Backup, maintenance, updates |
-| `https://x.scour.li/admin/server/users/*` | Users | Admin management |
-| `https://x.scour.li/admin/server/engines` | Engines | Search engine configuration |
+VidVeil has no admin web UI. Operators manage the server through `server.yml`,
+CLI maintenance commands, and operator-token-protected API endpoints. See the
+[configuration guide](docs/configuration.md), [CLI reference](docs/cli.md),
+and [API reference](docs/api/rest.md).
 
 ### Server CLI
 

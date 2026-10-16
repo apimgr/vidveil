@@ -69,4 +69,6 @@ sudo service vidveil start
 
 ## First Run
 
-On first run Vidveil creates its config/data paths, initializes the database, and prints the setup token or setup URL needed to complete admin setup.
+On first run VidVeil creates its config and data paths, initializes the database,
+and prints the configuration file location. Operators configure the service in
+`server.yml`; there is no web-based admin setup flow.

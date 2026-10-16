@@ -4,30 +4,27 @@
 
 Most search and engine endpoints are public and don't require authentication.
 
-## Admin API
+## Operator-Protected API
 
-Admin API endpoints require an API token.
+Operator endpoints require the server-wide operator token configured in
+`server.yml` as `server.token`. Public search endpoints do not require a token.
+Resource ownership tokens, where supported, authorize only access to resources
+owned by that token.
 
 ### Token Authentication
 
-Include the token in the `Authorization` header:
+Include the operator token in the `Authorization` header:
 
 ```
 Authorization: Bearer YOUR_API_TOKEN
 ```
 
-Or use the `X-API-Token` header:
+### Using the Operator Token
 
-```
-X-API-Token: YOUR_API_TOKEN
-```
-
-### Generating Tokens
-
-1. Log in to the admin panel at `https://x.scour.li/admin`
-2. Go to Security > API Tokens (`https://x.scour.li/admin/server/security/tokens`)
-3. Click "Generate New Token"
-4. Copy and securely store the token (shown only once)
+Read the operator token from the protected server configuration and provide it
+as a bearer credential. The server does not provide an admin web login or a
+token-generation page. Use the CLI maintenance commands for supported token
+and secret operations; see the [CLI reference](../cli.md).
 
 ## Rate Limiting
 

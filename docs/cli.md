@@ -278,7 +278,6 @@ server:
   primary: "https://x.scour.li"
   cluster: []
   api_version: v1
-  admin_path: admin
   timeout: 30s
   retry: 3
   retry_delay: 1s

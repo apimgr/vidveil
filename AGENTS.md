@@ -91,6 +91,6 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-09-03
-- Current task: compliance audit against AI.md PART 0, PART 1
-- Relevant PARTs: 0, 1
+- Last read AI.md: 2026-10-15
+- Current task: close PART 16 preference and progressive-enhancement gaps; verify PART 31 per-request Tor preference handling
+- Relevant PARTs: 16, 31

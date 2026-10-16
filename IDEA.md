@@ -34,7 +34,7 @@ coverage_minimum:  60
 - Real-Time Streaming: SSE streaming delivers results as each engine responds
 - Thumbnail Proxy: All thumbnails proxied through server to prevent tracking
 - Video Preview: Hover (desktop) and swipe (mobile) preview support
-- Client-Side Preferences: Most settings stored in localStorage; the server-authoritative exceptions per AI.md PART 16 are the `theme`, `results_per_page`, and `open_new_tab` cookies (server-readable so JS and no-JS clients get identical behavior)
+- Client-Side Preferences: Guest preferences use `theme`, `lang`, and `vidveil_pref_*` cookies per AI.md PART 16; values are readable by the server and work with or without JavaScript
 - Favorites & History: Server-side favorites (anonymous `visitor_id` cookie, works without JS) and local-only search history, both with export/import
 - Tor Support: Built-in Tor hidden service support for maximum anonymity
 - Geographic Content Restriction: Admin-configurable warnings/blocks for regions with adult content laws
@@ -50,10 +50,10 @@ coverage_minimum:  60
 
 | Role | Storage | Authentication | Permissions |
 |------|---------|----------------|-------------|
-| **Anonymous visitor** | Anonymous `visitor_id` cookie (favorites only) | None | Search, browse results, set local preferences/history (localStorage), manage favorites (server-side, `favorites` table, no JS required) |
+| **Anonymous visitor** | Anonymous `visitor_id` cookie (favorites only) | None | Search, browse results, set cookie-based preferences, manage local search history and server-side favorites |
 | **Operator** | None (file-only) | OS-level access to server | Edit `server.yml` and restart the server — no web login, no DB accounts |
 
-There are no Regular User accounts (PART 34 NOT implemented). There are no organizations (PART 35 NOT implemented). There are no custom domains (PART 36 NOT implemented). There is no admin web UI — all configuration is file-only (AI.md PART 5).
+There are no regular user accounts, organizations, or custom domains. There is no admin web UI; server administration uses `server.yml` and CLI commands. Token-protected APIs are limited to operations explicitly defined by AI.md.
 
 ### Data model & sensitivity
 
@@ -159,12 +159,11 @@ type CombinedSuggestion struct {
 | SSL certs | `{config_dir}/ssl/` | High - private keys | Until renewal |
 | Tor onion key | `{data_dir}/tor/` | High | Lifetime of hidden service |
 
-**Client-side data (localStorage - never sent to server):**
-- `vidveil_prefs`: complete preferences object
+**Browser storage:**
 - `vidveil_history`: search history array
 - `vidveil_favorites_mirror`: favorites resilience mirror (reconciled against the server-side `favorites` table)
-- Sensitivity: low (local to browser); never written to server, never logged.
-- The theme preference is NOT localStorage — it lives in the server-readable `theme` cookie per AI.md PART 16 (server renders the `<html>` theme class, no-JS/no-FOUC), alongside the `results_per_page` and `open_new_tab` cookies.
+- Search history remains in localStorage. The favorites mirror is sent to the server during reconciliation.
+- Theme, language, and app-specific preferences live in server-readable cookies per AI.md PART 16.
 
 **Server-side favorites (per AI.md PART 16/32 - core functionality must work without JS):**
 - `favorites` table in `server.db`, rows keyed by an opaque, randomly generated `visitor_id` cookie (no personal data, not linked to any account).
@@ -231,14 +230,14 @@ The following are intentional, project-defined deviations or strong defaults. An
 
 | Decision | Rationale |
 |----------|-----------|
-| No user accounts (PART 34 NOT implemented) | Stateless privacy-first design; user accounts would create a record of who searched what, defeating the product purpose. |
-| No organizations (PART 35 NOT implemented) | Same reason; multi-tenant search has no product fit here. |
-| No custom domains (PART 36 NOT implemented) | No per-user/per-org branding requirement. |
+| No regular user accounts | Stateless privacy-first design; user accounts would create a record of who searched what, defeating the product purpose. |
+| No organizations | Same reason; multi-tenant search has no product fit here. |
+| No custom domains | No per-user/per-org branding requirement. |
 | Tor users bypass GeoIP/restriction by default | Tor anonymizes IP, so geo-checks are not actionable. Operator can flip this on in `server.yml` if local law requires. |
 | Server-side AI content filter ON by default | Default-on protects all visitors including ones who never open preferences; user opt-in (preference) overrides. |
 | Default `min_duration` = 10 minutes | Reduces accidental thumbnail count for shorter clips - usability default, not a security control. |
 | `forward_ip` is server-cookie opt-in, not localStorage | LocalStorage is per-browser; geo-forwarding affects requests the server makes, so it must be readable on the request. |
-| Thumbnail proxy is mandatory; cannot be disabled by user | Direct thumbnail URLs would leak the user's IP to source CDNs - core privacy guarantee. The PREFERENCE toggle "Proxy thumbnails through server" is documented as default Yes; disabling it is an operator-level `server.yml` option only — it must NOT silently disable the proxy in normal mode. |
+| Thumbnail proxy is mandatory; cannot be disabled by user | Direct thumbnail URLs would leak the user's IP to source CDNs - core privacy guarantee. The preferences page may show the setting as locked, but it must not be a guest preference. |
 | Engines are HTML-parsed, not iframed | Iframing untrusted adult content origins would leak referrer + cookies to engines and let them frame us. |
 | Run as dedicated `vidveil` system user (no permanent root) | Default per AI.md PART 5; permanent-root would require an IDEA.md-justified exception, which this product does not have. |
 | Docker runtime starts as root, then drops to `vidveil` | The container `ENTRYPOINT` execs the binary as root so it can bind the privileged default port 80; immediately after the listener is bound the binary calls `system.DropPrivileges("vidveil")` (main.go, only when `uid == 0`), so no request is ever served with root privileges. This is the transient-root form of the "no permanent root" default above, per AI.md PART 23 — not an exception to it. |
@@ -257,7 +256,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Results are merged from all queried engines.
 - URL deduplication with normalization (removes duplicates across engines).
 - Page parameter supports pagination; server decides how many results to
-  send per response based on the visitor's `results_per_page` cookie
+  send per response based on the visitor's `vidveil_pref_results_per_page` cookie
   (server-authoritative, see "Search Settings" below) rather than the
   client fetching everything and slicing it in JS.
 - No admin web UI — all server configuration is via `server.yml`.
@@ -342,7 +341,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Real-time status bar (streaming status, engine count).
 - Collapsible filters panel with filter count badge.
 - Related searches section (up to 20 suggestions).
-- Video grid, server-paginated per the `results_per_page` cookie
+- Video grid, server-paginated per the `vidveil_pref_results_per_page` cookie
   (default "Infinite scroll"); JS auto-fetches the next page as the
   visitor scrolls. If the visitor's preference is explicitly 20/50/100,
   a server-rendered "Load more" link is used instead, requiring a
@@ -352,13 +351,12 @@ The following are intentional, project-defined deviations or strong defaults. An
 **Preferences Page** (route and cross-device sync mechanics owned by AI.md
 PART 16 — "Client-Side Preferences" / "Cross-device preference sync";
 not restated here):
-- Most settings stored in localStorage (`vidveil_prefs` key), no
-  server-side storage.
-- Exceptions (server-side cookies, authoritative for both JS and no-JS
-  clients — see "Search Settings" below and `forward_ip` under Privacy):
-  `results_per_page`, `open_new_tab`.
+- Theme, language, and every guest-scoped app preference use cookies and are
+  never persisted server-side.
+- Search results and open-new-tab settings use the
+  `vidveil_pref_results_per_page` and `vidveil_pref_open_new_tab` cookies.
 - Reset to defaults button.
-- Cross-device sync: stateless theme/lang carry-over to a new
+- Cross-device sync: stateless theme, language, and app-preference carry-over to a new
   browser/device via a full URL or a short base64url code — no account,
   no DB row, nothing stored server-side.
 
@@ -376,7 +374,7 @@ Standard Pages (`/server/*`, PART 16) — routes not restated here.
 - Search History: localStorage (`vidveil_history`), max items configurable (default unlimited), auto-clear options (Never / 1d / 7d / 30d), Export/Import JSON.
 - Favorites: server-side (`favorites` table, keyed by anonymous `visitor_id` cookie) is the source of truth, each entry url+title+thumbnail+source+added_at, Export/Import JSON, Clear all with confirm. Fully functional without JS via server-rendered `/favorites` page; `app.js` layers instant no-reload add/remove/clear on top via `/api/v1/favorites*`, and mirrors the list into `localStorage` (`vidveil_favorites_mirror`) so favorites survive a server/DB wipe on that browser: on first load each session the mirror and server list are reconciled (mirror-only entries are re-POSTed to the server; entries the server already has are left alone), and every successful server read/write re-writes the mirror.
 - Related Searches: server-side rendered into HTML, client adds "Show more" toggle, up to 20 (first 8 visible).
-- Infinite Scroll: default via the `results_per_page` cookie, set to
+- Infinite Scroll: default via the `vidveil_pref_results_per_page` cookie, set to
   "Infinite scroll" unless the visitor picks 20/50/100 in Preferences.
   IntersectionObserver, sentinel 200px, dedup by URL, stops when no more
   results. The server still determines each batch's contents/size (see
@@ -386,12 +384,10 @@ Standard Pages (`/server/*`, PART 16) — routes not restated here.
 
 ### User preferences (reference detail)
 
-Most preferences stored in localStorage (`vidveil_prefs` key), no
-server-side storage. Exceptions: `results_per_page` and `open_new_tab`
-(see "Search Settings" below) are server-side cookies — the server reads
-them to decide how/how much to send, matching the existing `forward_ip`
-cookie precedent under Privacy. JS mirrors these two into the cookie on
-save so both JS and no-JS clients get identical server-driven behavior.
+Guest preferences use cookies as required by AI.md PART 16 and are not stored
+server-side. Search results and link-target preferences are
+`vidveil_pref_results_per_page` and `vidveil_pref_open_new_tab`; both the
+server and browser read the same cookies.
 
 **Appearance:**
 - Theme: Auto (system), Dark (Dracula), Light - default: Auto.
@@ -426,8 +422,8 @@ authoritative for pagination, see "Search behavior" above):
 - Server-side list (`visitor_id` cookie) is authoritative; a `localStorage` mirror (`vidveil_favorites_mirror`) restores favorites on this browser if the server/DB is wiped, reconciled automatically on load.
 
 **Privacy:**
-- Use Tor for all searches (toggle) - default: No (stored in localStorage; Tor routing is server-side).
-- Proxy thumbnails through server (toggle) - default: Yes.
+- Use Tor for all searches (toggle) - default: No (stored in a guest preference cookie; Tor routing is server-side).
+- Proxy thumbnails through server (locked on; not a guest preference).
 - Show AI-generated content (toggle) - default: No (AI content filtered out).
 - Forward IP for geo-targeted results - admin-controlled feature; when enabled by admin, users opt in via a server-side cookie (`forward_ip=1`); not a localStorage preference.
 

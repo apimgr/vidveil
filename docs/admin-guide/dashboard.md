@@ -1,24 +1,8 @@
-# Admin Dashboard
+# Operator Status
 
-Access at `https://x.scour.li/admin`
+VidVeil does not provide an admin dashboard. Operators can inspect service
+health with the server status CLI command and public health endpoints. Protected
+diagnostics require the operator token configured in `server.yml`.
 
-## Overview
-
-The dashboard shows:
-
-- Server status
-- Total searches
-- Active engines
-- System health
-
-## Navigation
-
-Per AI.md PART 17, all server management is under `https://x.scour.li/admin/server/*`:
-
-- **Server** (`https://x.scour.li/admin/server/`): Settings, Branding, SSL, Scheduler, Email, Logs, Database
-- **Security** (`https://x.scour.li/admin/server/security/`): Authentication, API Tokens, Rate Limiting, Firewall
-- **Network** (`https://x.scour.li/admin/server/network/`): Tor, GeoIP, Blocklists
-- **System** (`https://x.scour.li/admin/server/system/`): Backup, Maintenance, Updates, System Info
-- **Users** (`https://x.scour.li/admin/server/users/`): Administrators
-- **Engines** (`https://x.scour.li/admin/server/engines`): Search engine management
-- **Help** (`https://x.scour.li/admin/server/help`): Documentation
+See the [CLI reference](../cli.md), [configuration guide](../configuration.md),
+and [API reference](../api/rest.md).

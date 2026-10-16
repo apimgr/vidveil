@@ -1,25 +1,13 @@
-# Server Settings
+# Server Configuration
 
-## General Settings
+VidVeil has no server settings page. Configure the server in `server.yml` and
+restart or reload the service as supported by the setting. See the
+[configuration guide](../configuration.md) for keys, defaults, and environment
+variable precedence, and the [CLI reference](../cli.md) for service commands.
 
-Configure server address, port, and mode at `https://x.scour.li/admin/server/settings`.
-
-## SSL/TLS
-
-Manage SSL certificates at `https://x.scour.li/admin/server/ssl`.
-
-- Automatic Let's Encrypt renewal
-- Custom certificate upload
-- Force HTTPS
-
-## Email
-
-Configure SMTP at `https://x.scour.li/admin/server/email`.
-
-- Auto-detection of common SMTP servers
-- Test email functionality
-- Email templates
-
-## Scheduler
-
-Manage scheduled tasks at `https://x.scour.li/admin/server/scheduler`.
+MCP is enabled by default at `/api/{api_version}/server/mcp`, `/api/mcp`, and
+`/mcp`; it uses the existing API Bearer token. Set `server.mcp.enabled: false`
+to disable it. AI-agent discovery is served at `/.well-known/llms.txt` and
+`/llms.txt`; its endpoint list is generated from OpenAPI and can be adjusted
+with `web.llms` settings. See the [REST API guide](../api/rest.md) for routes
+and the [configuration guide](../configuration.md) for YAML options.

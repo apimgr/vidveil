@@ -15,17 +15,16 @@ by VidVeil:
 
 - **OIDC / LDAP / external identity providers.** VidVeil has no end-user
   accounts. Server admins authenticate locally with Argon2id + optional
-  TOTP. PART 34 of `AI.md` is not implemented for this project — see
-  `IDEA.md`.
+  TOTP, as defined in `IDEA.md`.
 - **OAuth providers (GitHub, Google, …).** Same reason as above.
 - **Email user-onboarding flows.** No registration, no verification email
   loop. The email subsystem exists only for admin notifications.
 - **Payment processors / billing systems.** VidVeil is fully free; there
   are no premium tiers, license keys, or paid features.
-- **Custom user / org domains (PART 36).** Not implemented.
+- **Custom user / org domains.** These are outside VidVeil's product scope.
 
-If you operate VidVeil and need any of the above, you would need to fork
-and adopt the corresponding `AI.md` PART (and update `IDEA.md` to match).
+These are excluded by VidVeil's project definition in `IDEA.md`; they are
+not features left pending implementation from the current `AI.md`.
 
 ## External Services VidVeil Calls
 

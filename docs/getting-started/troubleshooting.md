@@ -67,56 +67,13 @@ Common issues and their solutions.
 
 ---
 
-## Admin Panel Issues
+## Operator Access
 
-### Can't log in
-
-**Symptoms:** Login fails with "Invalid credentials"
-
-**Solutions:**
-
-1. **Reset admin password:**
-   ```bash
-   vidveil --maintenance setup
-   # Follow prompts to create new admin
-   ```
-
-2. **Check setup token:**
-   - On first run, check console for setup token
-   - Navigate to `https://your-domain.example/admin` and enter the token
-
-3. **Clear browser cache:**
-   - Clear cookies for the site
-   - Try incognito/private window
-
-### Lost setup token
-
-**Symptoms:** Can't complete initial setup
-
-**Solution:**
-
-```bash
-# Regenerate setup token
-vidveil --maintenance setup
-
-# Token will be displayed in console
-```
-
-### 2FA locked out
-
-**Symptoms:** Can't access account after losing 2FA device
-
-**Solutions:**
-
-1. **Use recovery key:**
-   - Enter one of your 8 backup codes
-   - Each code works once
-
-2. **Reset via command line:**
-   ```bash
-   # If recovery keys are unavailable, reset admin credentials
-   vidveil --maintenance setup
-   ```
+VidVeil has no admin login, setup token, or admin web panel. Operators manage
+settings in `server.yml` and use the CLI. For configuration and service
+troubleshooting, see the [configuration guide](../configuration.md) and
+[CLI reference](../cli.md). Operator-protected API endpoints require the
+`server.token` value from the protected configuration file.
 
 ---
 
@@ -129,9 +86,7 @@ vidveil --maintenance setup
 **Check:**
 
 1. **Engine status:**
-   - Go to Admin → Engines
-   - Check if engines are enabled
-   - Test individual engine connectivity
+   - Check the engine list and health endpoints in the API documentation.
 
 2. **Network issues:**
    ```bash
@@ -150,7 +105,7 @@ vidveil --maintenance setup
 **Solutions:**
 
 1. **Enable caching:**
-   - Go to Admin → Server → Settings
+   - Review the relevant settings in `server.yml`.
    - Enable search result caching
    - Set appropriate cache TTL
 
@@ -178,7 +133,7 @@ vidveil --maintenance setup
    - Check from different network
 
 2. **Update engine:**
-   - Admin → Updates
+   - Use the documented CLI update command.
    - Check for engine updates
 
 3. **View logs:**
@@ -203,7 +158,7 @@ vidveil --maintenance setup
    ```
 
 2. **Renew certificate:**
-   - Admin → Server → SSL
+   - Review the SSL settings in `server.yml` and the service logs.
    - Click "Renew Now"
 
 3. **Check DNS:**
@@ -251,7 +206,7 @@ vidveil --maintenance setup
    ```
 
 2. **Enable rate limiting:**
-   - Admin → Security → Rate Limiting
+   - Review the rate-limit settings in `server.yml`.
    - Set appropriate limits
 
 3. **Reduce concurrent engines:**
@@ -265,11 +220,11 @@ vidveil --maintenance setup
 **Solutions:**
 
 1. **Clear cache:**
-   - Open Admin → Server → Maintenance
+   - Use the CLI maintenance commands.
    - Use **Clear Search Cache** or **Clear All Caches**
 
 2. **Reduce cache size:**
-   - Admin → Server → Settings
+   - Review the relevant settings in `server.yml`.
    - Lower cache max entries
 
 3. **Restart server:**
@@ -279,7 +234,7 @@ vidveil --maintenance setup
 
 ### Slow page loads
 
-**Symptoms:** Admin panel or pages load slowly
+**Symptoms:** Pages load slowly
 
 **Check:**
 
@@ -287,8 +242,7 @@ vidveil --maintenance setup
    ```bash
    ls -lh ~/.local/share/apimgr/vidveil/db/server.db
    ```
-   - If large, open Admin → Server → Database or Admin → Server → Maintenance
-   - Run **Vacuum Database**
+   - If large, inspect the database and service logs using the documented CLI tools.
 
 2. **Log rotation:**
    - Review `server.logs.*` rotation settings in `server.yml`

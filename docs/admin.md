@@ -1,12 +1,12 @@
 # Administration
 
-Vidveil is operator-administered through the config file, CLI flags, and
-the admin API. There is no self-service admin web UI for editing config;
-operators edit `server.yml` directly.
+VidVeil has no admin web UI or operator account login. Operators manage the
+server through `server.yml`, CLI maintenance commands, and operator-token-
+protected API endpoints.
 
 ## Detailed Pages
 
-- [Dashboard](admin-guide/dashboard.md) — admin dashboard overview
-- [Server Settings](admin-guide/server.md) — runtime server configuration
-- [Security](admin-guide/security.md) — operator security controls
-- [Backup & Restore](admin-guide/backup.md) — backup, restore, retention
+- [Configuration](configuration.md) — server configuration and environment variables
+- [CLI reference](cli.md) — service, maintenance, backup, restore, and update commands
+- [API reference](api/rest.md) — public and operator-protected API endpoints
+- [Security](security.md) — public endpoints and operator security guidance

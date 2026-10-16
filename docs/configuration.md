@@ -14,6 +14,30 @@ Vidveil uses `server.yml` for runtime configuration.
 
 Override the detected config root with `--config`.
 
+## MCP and agent discovery
+
+MCP and the generated `llms.txt` document are enabled by default. MCP routes
+use the existing Bearer authentication rules; disabling the feature returns
+404 from all MCP aliases. The discovery document includes endpoint metadata
+from OpenAPI and omits metrics and operator-only actions.
+
+```yaml
+server:
+  mcp:
+    enabled: true
+web:
+  api_contact: api@example.org
+  llms:
+    enabled: true
+    include_endpoints: true
+    include_schemas: false
+    custom_sections: []
+```
+
+MCP is available at `/api/{api_version}/server/mcp`, `/api/mcp`, and `/mcp`.
+The discovery file is available at `/.well-known/llms.txt` and `/llms.txt`.
+`web.api_contact` and `web.security.contact` populate the contact section.
+
 ## Minimal Example
 
 If `server.port` is omitted, Vidveil selects a random unused port in the `64xxx` range on first run and saves it to `server.yml`.

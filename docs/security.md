@@ -11,10 +11,10 @@ VidVeil is internet-facing by default and assumes hostile traffic.
 - The server **does not** track, log, or analyze user search queries beyond
   what is required to serve a single in-flight request.
 - The server **does not** store user accounts. There is no registration,
-  no profiles, no per-user history. (PART 34 of `AI.md` is intentionally
-  not adopted by this project — see `IDEA.md`.)
-- Server admins manage configuration via the admin panel; their accounts
-  use Argon2id password hashing and support TOTP.
+  no profiles, and no server-side search history.
+- Operators manage configuration through `server.yml`, the CLI, and
+  operator-token-protected API endpoints. There is no admin web UI or
+  operator account login.
 - Tor hidden service support auto-enables when the `tor` binary is
   present on the host or in the container.
 
@@ -66,7 +66,7 @@ disclosure: fix, advisory, release notes, version bump.
 | Validation       | All inbound paths run through `SafePath` / path-traversal middleware. |
 | CSRF             | Tokens on every state-changing form.                               |
 | Headers          | CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`. |
-| Rate limiting    | Per-IP, per-endpoint, configurable in the admin panel.             |
+| Rate limiting    | Per-IP and per-endpoint, configurable in `server.yml`.             |
 | Country blocking | `deny_countries` / `allow_countries` via GeoIP (PART 19).          |
 | Blocklists       | Domain and IP blocklists, refreshed by the internal scheduler.     |
 | Argon2id         | Server admin password hashing.                                     |
@@ -86,7 +86,8 @@ When self-hosting, follow this minimum baseline:
 
 - Run behind HTTPS (Let's Encrypt or your own CA).
 - Configure `server.fqdn` to your real domain so emitted links match.
-- Enable TOTP for the primary admin account.
+- Keep the operator token in `server.yml` private and use it only for
+  operator-protected API and maintenance actions.
 - Enable rate limiting (defaults are sane; tighten for high-risk surfaces).
 - Configure GeoIP / blocklist updates (defaults run via the internal
   scheduler).

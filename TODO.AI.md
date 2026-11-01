@@ -267,8 +267,8 @@ executable name is used only for the user-facing service description.
 - Resolved from the first post-push security scan: upgraded `golang.org/x/net`
   to v0.62.0 for both reachable govulncheck findings, `github.com/klauspost/compress`
   to v1.18.7, and `github.com/go-jose/go-jose/v4` to v4.1.6 for Trivy findings.
-  The local govulncheck scan now reports no reachable vulnerabilities; the
-  updated GitHub security scan and image scan remain pending.
+  The follow-up CI run passed govulncheck and Trivy with no findings; all other
+  CI checks, the 8-target release build, and both Docker image builds passed.
 - Resolved: `.gitlab-ci.yml` now derives the daily version with POSIX
   `printf | cut` instead of Bash substring syntax. The daily source archive,
   artifact path, and release link use the `RELEASE_VERSION` dotenv value, so

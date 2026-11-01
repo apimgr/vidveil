@@ -24,6 +24,9 @@ func TestAppModeConstants(t *testing.T) {
 	if Development != AppMode(1) {
 		t.Errorf("Development = %d, want 1", Development)
 	}
+	if Debug != AppMode(2) {
+		t.Errorf("Debug = %d, want 2", Debug)
+	}
 }
 
 // --- AppMode.String ---
@@ -35,6 +38,7 @@ func TestAppModeString(t *testing.T) {
 	}{
 		{Production, "production"},
 		{Development, "development"},
+		{Debug, "debug"},
 		// Any unrecognised value falls through to the default branch.
 		{AppMode(99), "production"},
 	}
@@ -147,6 +151,7 @@ func TestIsAppModeDevelopmentAndProduction(t *testing.T) {
 	}{
 		{"production", Production, false, true},
 		{"development", Development, true, false},
+		{"debug", Debug, false, false},
 	}
 
 	for _, tt := range tests {
@@ -160,6 +165,17 @@ func TestIsAppModeDevelopmentAndProduction(t *testing.T) {
 				t.Errorf("IsAppModeProduction() = %v, want %v", got, tt.wantProd)
 			}
 		})
+	}
+}
+
+func TestIsAppModeDebug(t *testing.T) {
+	resetState(t)
+	currentMode = Debug
+	if !IsAppModeDebug() {
+		t.Fatal("IsAppModeDebug() = false, want true")
+	}
+	if IsAppModeDevelopment() || IsAppModeProduction() {
+		t.Fatal("debug mode was incorrectly reported as development or production")
 	}
 }
 
@@ -189,6 +205,8 @@ func TestAppModeStringVariants(t *testing.T) {
 		{"prod with debug", Production, true, "production [debugging]"},
 		{"dev no debug", Development, false, "development"},
 		{"dev with debug", Development, true, "development [debugging]"},
+		{"debug without endpoints", Debug, false, "debug"},
+		{"debug with endpoints", Debug, true, "debug [debugging]"},
 	}
 
 	for _, tt := range tests {
@@ -268,11 +286,11 @@ func TestSetAppModeDevelVariant(t *testing.T) {
 	}
 }
 
-func TestSetAppModeDebugAliasEnablesDevelopmentAndDebug(t *testing.T) {
+func TestSetAppModeDebugSelectsDebugAndEnablesDebug(t *testing.T) {
 	resetState(t)
 	SetAppMode("debug")
-	if currentMode != Development {
-		t.Errorf("SetAppMode(debug): currentMode = %v, want Development", currentMode)
+	if currentMode != Debug {
+		t.Errorf("SetAppMode(debug): currentMode = %v, want Debug", currentMode)
 	}
 	if !debugEnabled {
 		t.Error("SetAppMode(debug): debugEnabled = false, want true")
@@ -280,13 +298,13 @@ func TestSetAppModeDebugAliasEnablesDevelopmentAndDebug(t *testing.T) {
 }
 
 func TestSetAppModeFromEnvDebugAliasOverriddenByExplicitDEBUG(t *testing.T) {
-	// PART 6: MODE=debug DEBUG=false runs development mode with debug off.
+	// PART 6: MODE=debug DEBUG=false stays in debug mode with endpoints off.
 	resetState(t)
 	t.Setenv("MODE", "debug")
 	t.Setenv("DEBUG", "false")
 	SetAppModeFromEnv()
-	if currentMode != Development {
-		t.Errorf("MODE=debug DEBUG=false: currentMode = %v, want Development", currentMode)
+	if currentMode != Debug {
+		t.Errorf("MODE=debug DEBUG=false: currentMode = %v, want Debug", currentMode)
 	}
 	if debugEnabled {
 		t.Error("MODE=debug DEBUG=false: debugEnabled = true, want false")
@@ -377,8 +395,8 @@ func TestInitializeAppModeDebugModeRespectsExplicitDebugEnvironment(t *testing.T
 	t.Setenv("MODE", "production")
 	t.Setenv("DEBUG", "false")
 	InitializeAppModeWithDebugOverride("debug", false, false)
-	if currentMode != Development {
-		t.Fatalf("mode = %v, want Development", currentMode)
+	if currentMode != Debug {
+		t.Fatalf("mode = %v, want Debug", currentMode)
 	}
 	if debugEnabled {
 		t.Fatal("explicit DEBUG=false was overridden by --mode debug")
@@ -390,8 +408,8 @@ func TestInitializeAppModeExplicitFalseDebugFlagOverridesDebugMode(t *testing.T)
 	t.Setenv("MODE", "")
 	t.Setenv("DEBUG", "")
 	InitializeAppModeWithDebugOverride("debug", false, true)
-	if currentMode != Development {
-		t.Fatalf("mode = %v, want Development", currentMode)
+	if currentMode != Debug {
+		t.Fatalf("mode = %v, want Debug", currentMode)
 	}
 	if debugEnabled {
 		t.Fatal("explicit --debug=false was ignored")
@@ -440,6 +458,8 @@ func TestConsoleModeMessageFormat(t *testing.T) {
 		{"prod with debug", Production, true, "🔒", "production [debugging]"},
 		{"dev no debug", Development, false, "🔧", "development"},
 		{"dev with debug", Development, true, "🔧", "development [debugging]"},
+		{"debug without endpoints", Debug, false, "🐛", "debug"},
+		{"debug with endpoints", Debug, true, "🐛", "debug [debugging]"},
 	}
 
 	for _, tt := range tests {

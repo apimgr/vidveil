@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// --- startup privilege caching regression tests (TODO.AI.md bug 6) ---
+// --- startup privilege caching regression tests (AI.md PART 4) ---
 // Guards against re-introducing a live os.Geteuid() read inside
 // GetAppPaths — per AI.md PART 4: "Directory mode is locked at process
 // start... decided ONCE from the EUID at startup, before any privilege

@@ -129,6 +129,7 @@ type I2PStatusChecker interface {
 	Status() string
 	Address() string
 	Provider() string
+	CheckHealth(context.Context) error
 }
 
 // GeoIPChecker is a minimal interface for GeoIP content restriction checks
@@ -423,6 +424,16 @@ func (h *SearchHandler) i2pStatus() string {
 		return "disabled"
 	}
 	return h.i2pSvc.Status()
+}
+
+func (h *SearchHandler) i2pHealthStatus(check string) string {
+	if h.i2pSvc == nil || !h.i2pSvc.Enabled() {
+		return "disabled"
+	}
+	if check != "ok" {
+		return "error:provider_unhealthy"
+	}
+	return h.i2pStatus()
 }
 
 func (h *SearchHandler) i2pAddress() string {
@@ -2103,6 +2114,7 @@ type ChecksInfo struct {
 	Disk      string `json:"disk"`
 	Scheduler string `json:"scheduler"`
 	Tor       string `json:"tor,omitempty"`
+	I2P       string `json:"i2p,omitempty"`
 }
 
 // StatsInfo holds public-safe aggregate statistics per AI.md PART 13.
@@ -2174,6 +2186,17 @@ func (h *SearchHandler) checkScheduler() string {
 	return "error"
 }
 
+// checkI2P probes the enabled I2P provider and exposes only its health state.
+func (h *SearchHandler) checkI2P(ctx context.Context) string {
+	if h.i2pSvc == nil || !h.i2pSvc.Enabled() {
+		return ""
+	}
+	if h.i2pSvc.CheckHealth(ctx) != nil {
+		return "error"
+	}
+	return "ok"
+}
+
 // HealthCheck handles /healthz endpoint with content negotiation
 // Per AI.md PART 13
 func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
@@ -2186,8 +2209,8 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 	// Get mode from config
 	appMode := "production"
-	if h.appConfig != nil && h.appConfig.IsDevelopmentMode() {
-		appMode = "development"
+	if h.appConfig != nil {
+		appMode = config.NormalizeMode(h.appConfig.Server.Mode)
 	}
 
 	// Build checks object - MUST be simple "ok"/"error" strings
@@ -2206,6 +2229,9 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		} else {
 			checks["tor"] = "error"
 		}
+	}
+	if i2pCheck := h.checkI2P(r.Context()); i2pCheck != "" {
+		checks["i2p"] = i2pCheck
 	}
 
 	// Overall status - per AI.md PART 13: derive from checks
@@ -2277,7 +2303,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				I2P: I2PInfo{
 					Enabled:  h.i2pSvc != nil && h.i2pSvc.Enabled(),
 					Running:  h.i2pSvc != nil && h.i2pSvc.IsRunning(),
-					Status:   h.i2pStatus(),
+					Status:   h.i2pHealthStatus(checks["i2p"]),
 					Hostname: h.i2pAddress(),
 					Provider: h.i2pProvider(),
 				},
@@ -2289,6 +2315,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				Disk:      checks["disk"],
 				Scheduler: checks["scheduler"],
 				Tor:       checks["tor"],
+				I2P:       checks["i2p"],
 			},
 			Stats: StatsInfo{
 				RequestsTotal:     h.getRequestsTotal(),
@@ -2344,7 +2371,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = fmt.Fprintf(w, "features.i2p.enabled: %v\n", i2pEnabled)
 		_, _ = fmt.Fprintf(w, "features.i2p.running: %v\n", i2pRunning)
-		_, _ = fmt.Fprintf(w, "features.i2p.status: %s\n", h.i2pStatus())
+		_, _ = fmt.Fprintf(w, "features.i2p.status: %s\n", h.i2pHealthStatus(checks["i2p"]))
 		if i2pRunning {
 			_, _ = fmt.Fprintf(w, "features.i2p.hostname: %s\n", h.i2pAddress())
 		}
@@ -2357,6 +2384,9 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "checks.scheduler: %s\n", checks["scheduler"])
 		if _, ok := checks["tor"]; ok {
 			_, _ = fmt.Fprintf(w, "checks.tor: %s\n", checks["tor"])
+		}
+		if _, ok := checks["i2p"]; ok {
+			_, _ = fmt.Fprintf(w, "checks.i2p: %s\n", checks["i2p"])
 		}
 		// 8. Stats
 		_, _ = fmt.Fprintf(w, "stats.requests_total: %d\n", h.getRequestsTotal())
@@ -2474,6 +2504,11 @@ type FeaturesData struct {
 	// TorStatus is "healthy", "unhealthy", "starting", or empty
 	TorStatus    string
 	TorOnionAddr string
+	I2PEnabled   bool
+	I2PRunning   bool
+	I2PStatus    string
+	I2PAddress   string
+	I2PProvider  string
 	GeoIP        bool
 }
 
@@ -2482,6 +2517,7 @@ type ChecksData struct {
 	Cache     string
 	Disk      string
 	Scheduler string
+	I2P       string
 }
 
 // StatsData holds statistics for healthz display per AI.md PART 13
@@ -2545,6 +2581,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			Cache:     checks["cache"],
 			Disk:      checks["disk"],
 			Scheduler: checks["scheduler"],
+			I2P:       checks["i2p"],
 		},
 
 		// Stats per AI.md PART 13
@@ -2591,9 +2628,12 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	}
 
 	// Mode display
-	if appMode == "production" {
+	switch appMode {
+	case "production":
 		data.ModeDisplay = "Production"
-	} else {
+	case "debug":
+		data.ModeDisplay = "Debug"
+	default:
 		data.ModeDisplay = "Development"
 	}
 
@@ -2610,8 +2650,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Browser-chrome theme-color meta value, resolved from the Go palette
-	// (AUDIT.AI.md Pass 4) — same as renderTemplate()'s ThemeColor injection.
+	// Browser-chrome theme color uses the shared Go palette, as in renderTemplate().
 	data.ThemeColor = getThemeColor(data.Theme)
 	data.NextTheme = nextTheme(data.Theme)
 	data.Robots = robotsDirective(r)
@@ -2672,6 +2711,13 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			}
 		}
 		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
+	}
+	if h.i2pSvc != nil {
+		data.Features.I2PEnabled = h.i2pSvc.Enabled()
+		data.Features.I2PRunning = h.i2pSvc.IsRunning()
+		data.Features.I2PStatus = h.i2pHealthStatus(checks["i2p"])
+		data.Features.I2PAddress = h.i2pAddress()
+		data.Features.I2PProvider = h.i2pProvider()
 	}
 
 	// Guard against uninitialized template filesystem
@@ -3905,8 +3951,8 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 
 	// Get mode from config
 	appMode := "production"
-	if h.appConfig != nil && h.appConfig.IsDevelopmentMode() {
-		appMode = "development"
+	if h.appConfig != nil {
+		appMode = config.NormalizeMode(h.appConfig.Server.Mode)
 	}
 
 	// Build checks object - MUST be simple "ok"/"error" strings
@@ -3948,6 +3994,13 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 			checks["tor"] = "ok"
 		} else {
 			checks["tor"] = "error"
+			status = "unhealthy"
+			httpStatus = http.StatusServiceUnavailable
+		}
+	}
+	if i2pCheck := h.checkI2P(r.Context()); i2pCheck != "" {
+		checks["i2p"] = i2pCheck
+		if i2pCheck != "ok" {
 			status = "unhealthy"
 			httpStatus = http.StatusServiceUnavailable
 		}
@@ -4016,7 +4069,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		i2pRunning := h.i2pSvc != nil && h.i2pSvc.IsRunning()
 		_, _ = fmt.Fprintf(w, "features.i2p.enabled: %v\n", i2pEnabled)
 		_, _ = fmt.Fprintf(w, "features.i2p.running: %v\n", i2pRunning)
-		_, _ = fmt.Fprintf(w, "features.i2p.status: %s\n", h.i2pStatus())
+		_, _ = fmt.Fprintf(w, "features.i2p.status: %s\n", h.i2pHealthStatus(checks["i2p"]))
 		if i2pRunning {
 			_, _ = fmt.Fprintf(w, "features.i2p.hostname: %s\n", h.i2pAddress())
 		}
@@ -4028,6 +4081,9 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, ok := checks["tor"]; ok {
 			_, _ = fmt.Fprintf(w, "checks.tor: %s\n", checks["tor"])
+		}
+		if _, ok := checks["i2p"]; ok {
+			_, _ = fmt.Fprintf(w, "checks.i2p: %s\n", checks["i2p"])
 		}
 		// 8. Stats
 		_, _ = fmt.Fprintf(w, "stats.requests_total: %d\n", h.getRequestsTotal())
@@ -4066,7 +4122,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 			I2P: I2PInfo{
 				Enabled:  h.i2pSvc != nil && h.i2pSvc.Enabled(),
 				Running:  h.i2pSvc != nil && h.i2pSvc.IsRunning(),
-				Status:   h.i2pStatus(),
+				Status:   h.i2pHealthStatus(checks["i2p"]),
 				Hostname: h.i2pAddress(),
 				Provider: h.i2pProvider(),
 			},
@@ -4078,6 +4134,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 			Disk:      checks["disk"],
 			Scheduler: checks["scheduler"],
 			Tor:       checks["tor"],
+			I2P:       checks["i2p"],
 		},
 		Stats: StatsInfo{
 			RequestsTotal:     h.getRequestsTotal(),
@@ -4382,8 +4439,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 		data["I2PAddress"] = h.i2pSvc.Address()
 	}
 
-	// Browser-chrome theme-color meta value, resolved from the Go palette
-	// (AUDIT.AI.md Pass 4) — never a hardcoded hex literal in the template.
+	// Browser-chrome theme color uses the shared Go palette, never a hardcoded hex.
 	if data["ThemeColor"] == nil {
 		themeName, _ := data["Theme"].(string)
 		data["ThemeColor"] = getThemeColor(themeName)

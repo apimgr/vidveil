@@ -89,6 +89,15 @@ func TestFavoritesIssueOwnerTokenAndScopeFavorites(t *testing.T) {
 	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), "Saved video") {
 		t.Fatalf("owner favorite list = %d %q", listed.Code, listed.Body.String())
 	}
+	setRealTemplatesFS(t)
+	webList := httptest.NewRequest(http.MethodGet, "/favorites", nil)
+	webList.Header.Set("Accept", "text/html")
+	webList.AddCookie(ownerCookie)
+	webListed := httptest.NewRecorder()
+	h.FavoritesPage(webListed, webList)
+	if webListed.Code != http.StatusOK || !strings.Contains(webListed.Body.String(), "Saved video") {
+		t.Fatalf("server-rendered owner favorite list = %d %q", webListed.Code, webListed.Body.String())
+	}
 
 	other := httptest.NewRequest(http.MethodGet, "/favorites", nil)
 	other.Header.Set("Accept", "application/json")

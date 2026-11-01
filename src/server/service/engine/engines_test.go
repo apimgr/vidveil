@@ -316,7 +316,7 @@ func TestListBangs(t *testing.T) {
 // a shortcut for motherless: the engine is implemented (motherless.go) but
 // deliberately unregistered in manager.go (aggressive TLS fingerprinting
 // blocks automated requests). Advertising a bang for an engine that can
-// never actually be searched is the bug tracked in TODO.AI.md.
+// never actually be searched would violate IDEA.md's registered-engine rule.
 func TestListBangs_ExcludesMotherless(t *testing.T) {
 	bangs := ListBangs()
 	for _, b := range bangs {

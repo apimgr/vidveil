@@ -25,6 +25,8 @@ const (
 	Production AppMode = iota
 	// Development mode - relaxed security, verbose logging
 	Development
+	// Debug mode - explicit diagnostics mode with development behavior.
+	Debug
 )
 
 // String returns the mode as a string
@@ -32,21 +34,22 @@ func (m AppMode) String() string {
 	switch m {
 	case Development:
 		return "development"
+	case Debug:
+		return "debug"
 	default:
 		return "production"
 	}
 }
 
 // SetAppMode sets the application mode from a string
-// Accepts (PART 6 Mode Shortcuts): dev/devel/development, prod/production, debug
-// "debug" is an alias for development mode with debug enabled; an explicit
-// --debug flag or DEBUG env var still wins over this alias.
+// Accepts PART 6 mode shortcuts and preserves debug as a distinct mode.
+// An explicit --debug flag or DEBUG env var still takes priority over its default.
 func SetAppMode(m string) {
 	switch strings.ToLower(m) {
 	case "dev", "devel", "development":
 		currentMode = Development
 	case "debug":
-		currentMode = Development
+		currentMode = Debug
 		SetDebug(true)
 	default:
 		currentMode = Production
@@ -84,6 +87,11 @@ func CurrentAppMode() AppMode {
 // Per AI.md PART 1: Boolean functions must be specific about what they check
 func IsAppModeDevelopment() bool {
 	return currentMode == Development
+}
+
+// IsAppModeDebug returns true only when the distinct debug mode is selected.
+func IsAppModeDebug() bool {
+	return currentMode == Debug
 }
 
 // IsAppModeProduction returns true if in production mode
@@ -139,8 +147,10 @@ func InitializeAppModeWithDebugOverride(modeFlag string, debugFlag, debugFlagSet
 
 	modeIsDebug := strings.EqualFold(strings.TrimSpace(selectedMode), "debug")
 	switch strings.ToLower(strings.TrimSpace(selectedMode)) {
-	case "dev", "devel", "development", "debug":
+	case "dev", "devel", "development":
 		currentMode = Development
+	case "debug":
+		currentMode = Debug
 	default:
 		currentMode = Production
 	}
@@ -158,6 +168,9 @@ func InitializeAppModeWithDebugOverride(modeFlag string, debugFlag, debugFlagSet
 // ConsoleIcon returns an emoji icon for the current mode
 // Used for console output per AI.md
 func ConsoleIcon() string {
+	if currentMode == Debug {
+		return "🐛"
+	}
 	if IsAppModeProduction() {
 		return "🔒"
 	}
@@ -173,7 +186,7 @@ func ConsoleModeMessage() string {
 // ShouldLogVerbose returns true if verbose logging should be enabled
 // Verbose in development mode OR when debug is enabled
 func ShouldLogVerbose() bool {
-	return IsAppModeDevelopment() || IsDebugEnabled()
+	return IsAppModeDevelopment() || IsAppModeDebug() || IsDebugEnabled()
 }
 
 // ShouldCacheTemplates returns true if templates should be cached
@@ -191,7 +204,7 @@ func ShouldCacheStatic() bool {
 // ShouldShowStackTraces returns true if stack traces should be shown in errors
 // Shown in development mode or when debug is enabled
 func ShouldShowStackTraces() bool {
-	return IsAppModeDevelopment() || IsDebugEnabled()
+	return IsAppModeDevelopment() || IsAppModeDebug() || IsDebugEnabled()
 }
 
 // ShouldEnableDebugEndpoints returns true if debug endpoints should be registered

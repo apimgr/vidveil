@@ -225,9 +225,12 @@ func TestNormalizeMode(t *testing.T) {
 		expected string
 	}{
 		{"dev", "development"},
+		{"devel", "development"},
 		{"DEV", "development"},
 		{"development", "development"},
 		{"DEVELOPMENT", "development"},
+		{"debug", "debug"},
+		{" DEBUG ", "debug"},
 		{"prod", "production"},
 		{"PROD", "production"},
 		{"production", "production"},
@@ -420,6 +423,11 @@ func TestIsDevelopmentMode(t *testing.T) {
 	cfg.Server.Mode = "development"
 	if !cfg.IsDevelopmentMode() {
 		t.Error("Expected development mode, got production")
+	}
+
+	cfg.Server.Mode = "debug"
+	if cfg.IsDevelopmentMode() || !cfg.IsDebugMode() || cfg.IsProductionMode() {
+		t.Error("Expected debug to remain a distinct non-production mode")
 	}
 }
 

@@ -505,7 +505,7 @@ func TestEngineManager_UnknownEngineNames_ReturnsUnregistered(t *testing.T) {
 
 // TestEngineManager_UnknownEngineNames_Motherless verifies motherless (a
 // bang mapping exists in bangs.go but the engine is deliberately not
-// registered in manager.go due to TLS fingerprinting - see TODO.AI.md) is
+// registered in manager.go due to TLS fingerprinting) is
 // correctly reported as unknown, matching AI.md/IDEA.md's requirement that
 // engine names must be valid registered engines.
 func TestEngineManager_UnknownEngineNames_Motherless(t *testing.T) {

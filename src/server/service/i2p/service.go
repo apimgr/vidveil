@@ -453,6 +453,9 @@ func (s *Service) Status() string {
 
 // CheckHealth verifies that the active provider still owns its destination.
 func (s *Service) CheckHealth(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.listener == nil || s.address == "" {
@@ -479,6 +482,7 @@ func (s *Service) CheckHealth(ctx context.Context) error {
 	if err := s.sam.SetDeadline(deadline); err != nil {
 		return fmt.Errorf("set SAM health deadline: %w", err)
 	}
+	defer func() { _ = s.sam.SetDeadline(time.Time{}) }()
 	if _, err := io.WriteString(s.sam, "PING\n"); err != nil {
 		return fmt.Errorf("ping SAM provider: %w", err)
 	}
@@ -488,9 +492,6 @@ func (s *Service) CheckHealth(ctx context.Context) error {
 	}
 	if strings.TrimSpace(line) != "PONG" {
 		return fmt.Errorf("unexpected SAM health response %q", strings.TrimSpace(line))
-	}
-	if err := s.sam.SetDeadline(time.Time{}); err != nil {
-		return fmt.Errorf("clear SAM health deadline: %w", err)
 	}
 	return nil
 }

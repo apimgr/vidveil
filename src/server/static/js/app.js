@@ -66,8 +66,8 @@ function updateMetaThemeColor(theme) {
     // Read the resolved --color-bg custom property rather than hardcoding a
     // hex literal here — the theme-{dark,light,auto} class is already applied
     // to <html> by the caller, so this always matches the single source of
-    // truth (common.css :root / html.theme-light, itself generated from the
-    // Go palette in src/common/theme/colors.go per AUDIT.AI.md Pass 4).
+    // truth (common.css :root / html.theme-light, generated from the Go
+    // palette in src/common/theme/colors.go per AI.md PART 16).
     var bg = getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim();
     if (bg) {
         metaTheme.content = bg;

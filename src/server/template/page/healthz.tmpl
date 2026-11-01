@@ -43,8 +43,13 @@
             <h2>🎛️ {{ t "healthz.features_title" }}</h2>
             <ul class="feature-list">
                 <li class="{{if .Features.TorEnabled}}feature-enabled{{else if .Features.TorStarting}}feature-starting{{else}}feature-disabled{{end}}">
-                    🧅 {{ t "healthz.tor_label" }} {{if .Features.TorEnabled}}<span class="status-ok">✅ {{.Features.TorStatus}}</span> <code>{{.Features.TorOnionAddr}}</code>{{else if .Features.TorStarting}}<span class="status-starting">⏳ {{ t "healthz.connecting" }}</span>{{else}}<span class="status-disabled">{{ t "healthz.disabled" }}</span>{{end}}
+                    🧅 {{ t "healthz.tor_label" }} {{if .Features.TorEnabled}}<span class="status-ok">✅ {{.Features.TorStatus}}</span> <div class="code-block"><code class="code-content">{{.Features.TorOnionAddr}}</code><button type="button" class="copy-btn" data-copy="{{.Features.TorOnionAddr}}" aria-label="Copy Tor address"><span class="copy-icon">📋</span><span class="copy-text" aria-live="polite">Copy</span></button></div>{{else if .Features.TorStarting}}<span class="status-starting">⏳ {{ t "healthz.connecting" }}</span>{{else}}<span class="status-disabled">{{ t "healthz.disabled" }}</span>{{end}}
                 </li>
+                {{if .Features.I2PEnabled}}
+                <li class="feature-enabled">
+                    🔗 I2P: <span class="status-{{if eq .Features.I2PStatus "healthy"}}ok{{else}}error{{end}}">{{if eq .Features.I2PStatus "healthy"}}✅{{else}}❌{{end}} {{.Features.I2PStatus}}</span>{{if .Features.I2PRunning}} <div class="code-block"><code class="code-content">{{.Features.I2PAddress}}</code><button type="button" class="copy-btn" data-copy="{{.Features.I2PAddress}}" aria-label="Copy I2P address"><span class="copy-icon">📋</span><span class="copy-text" aria-live="polite">Copy</span></button></div>{{end}}
+                </li>
+                {{end}}
                 <li class="{{if .Features.GeoIP}}feature-enabled{{else}}feature-disabled{{end}}">
                     🌍 {{ t "healthz.geoip_label" }} {{if .Features.GeoIP}}<span class="status-ok">✅ {{ t "healthz.enabled" }}</span>{{else}}<span class="status-disabled">{{ t "healthz.disabled" }}</span>{{end}}
                 </li>
@@ -73,6 +78,12 @@
                         <td>⏰ {{ t "healthz.scheduler_label" }}</td>
                         <td class="status-{{if eq .Checks.Scheduler "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.Scheduler "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
                     </tr>
+                    {{if .Checks.I2P}}
+                    <tr>
+                        <td>🧅 I2P</td>
+                        <td class="status-{{if eq .Checks.I2P "ok"}}ok{{else}}error{{end}}">{{if eq .Checks.I2P "ok"}}✅ {{ t "healthz.check_ok" }}{{else}}❌ {{ t "healthz.check_error" }}{{end}}</td>
+                    </tr>
+                    {{end}}
                 </tbody>
             </table>
         </section>

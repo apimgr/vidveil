@@ -80,8 +80,8 @@ func TestAPISearch_WithEnginesParam_ReturnsJSON(t *testing.T) {
 	}
 }
 
-// TestAPISearch_UnknownEnginesParam_Returns400 verifies the TODO.AI.md
-// finding: an engines= value that names no registered engine must return a
+// TestAPISearch_UnknownEnginesParam_Returns400 verifies that an engines=
+// value that names no registered engine must return a
 // validation error, not a silently-empty HTTP 200 success (indistinguishable
 // from a legitimate zero-result search). Per IDEA.md Validation: "Engine
 // names must be valid registered engines."
@@ -108,7 +108,7 @@ func TestAPISearch_UnknownEnginesParam_Returns400(t *testing.T) {
 // TestAPISearch_MotherlessEnginesParam_Returns400 verifies engines=motherless
 // (a bang exists in bangs.go's history but the engine is deliberately
 // unregistered in manager.go) is rejected the same as any other unknown
-// engine name, per TODO.AI.md.
+// engine name, per IDEA.md validation.
 func TestAPISearch_MotherlessEnginesParam_Returns400(t *testing.T) {
 	h := newAPITestHandlerWithEngines()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&engines=motherless", nil)

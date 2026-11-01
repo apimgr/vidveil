@@ -2453,15 +2453,20 @@ func isRunningInContainer() bool {
 	return false
 }
 
-// IsDevelopmentMode returns true if running in development mode
+// IsDevelopmentMode returns true if the configured mode is development.
 func (c *AppConfig) IsDevelopmentMode() bool {
 	mode := strings.ToLower(c.Server.Mode)
-	return mode == "development" || mode == "dev"
+	return mode == "development" || mode == "dev" || mode == "devel"
+}
+
+// IsDebugMode returns true only when the distinct debug mode is selected.
+func (c *AppConfig) IsDebugMode() bool {
+	return strings.EqualFold(strings.TrimSpace(c.Server.Mode), "debug")
 }
 
 // IsProductionMode returns true if running in production mode
 func (c *AppConfig) IsProductionMode() bool {
-	return !c.IsDevelopmentMode()
+	return !c.IsDevelopmentMode() && !c.IsDebugMode()
 }
 
 // current holds the process-wide active AppConfig, set once at startup via
@@ -2491,14 +2496,16 @@ func IsProductionMode() bool {
 	return c.IsProductionMode()
 }
 
-// NormalizeMode normalizes the mode string to "production" or "development"
+// NormalizeMode normalizes the mode string to its canonical application mode.
 func NormalizeMode(mode string) string {
 	mode = strings.ToLower(strings.TrimSpace(mode))
 	switch mode {
-	case "dev", "development":
+	case "dev", "devel", "development":
 		return "development"
 	case "prod", "production", "":
 		return "production"
+	case "debug":
+		return "debug"
 	default:
 		return "production"
 	}
